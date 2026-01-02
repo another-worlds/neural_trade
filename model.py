@@ -1101,7 +1101,12 @@ class CustomTrainModel(models.Model):
         sign_h1 = tf.sign(y_true_raw_h1)
         sign_h2 = tf.sign(y_true_raw_h2)
         # Penalize if h1 doesn't match the trend from h0 to h2
-        coherence_penalty = tf.reduce_mean(tf.cast(tf.logical_xor(sign_h1 == sign_h0, sign_h1 == sign_h2), tf.float32))
+        # XOR implemented as: (a and not b) or (not a and b)
+        cond_a = sign_h1 == sign_h0
+        cond_b = sign_h1 == sign_h2
+        logical_xor = tf.logical_or(tf.logical_and(cond_a, tf.logical_not(cond_b)), 
+                                     tf.logical_and(tf.logical_not(cond_a), cond_b))
+        coherence_penalty = tf.reduce_mean(tf.cast(logical_xor, tf.float32))
         
         local_trend_h0 = tf.constant(0.0, dtype=tf.float32)
         global_trend_h0 = tf.constant(0.0, dtype=tf.float32)
