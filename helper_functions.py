@@ -24,7 +24,14 @@ def normalize_variance(variance, variance_rolling_mean, variance_rolling_std, ep
 
 def calculate_profit_targets(entry_price, price_predictions):
     """Use price predictions as profit targets"""
+    # Validate inputs
+    if len(price_predictions) < 3:
+        raise ValueError(f"Need at least 3 price predictions, got {len(price_predictions)}")
+
     entry_price = float(entry_price)
+    if abs(entry_price) < 1e-10:
+        raise ValueError(f"Invalid entry_price: {entry_price} (too close to zero)")
+
     tp1 = float(price_predictions[0])
     tp2 = float(price_predictions[1])
     tp3 = float(price_predictions[2])
@@ -66,6 +73,11 @@ def calculate_position_size_multiplier(confidence, size_high=1.2, size_normal=1.
 def check_multi_horizon_agreement(price_predictions, current_price, agreement_threshold=0.67):
     """Check if multiple horizons agree on direction"""
     price_predictions = np.asarray(price_predictions)
+
+    # Validate inputs
+    if len(price_predictions) == 0:
+        raise ValueError("price_predictions cannot be empty")
+
     current_price = float(current_price)
     up_count = np.sum(price_predictions > current_price)
     down_count = np.sum(price_predictions < current_price)
