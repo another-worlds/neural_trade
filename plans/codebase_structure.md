@@ -124,6 +124,38 @@ Gradient optimization: Uses Adam with custom train step for potential gradient m
 Regularization: Includes dropout, L2 penalties, and early stopping based on MCC metric.
 Suggestions for improvement: Add explicit gradient clipping, adaptive learning rates, and batch normalization for better stability.
 
+## Identified Issues and Refactoring Plan
+
+### Worst Issues in Loss Calculation and Choice
+- Overly complex multi-component loss with numerous lambdas, leading to tuning difficulties and potential instability.
+- Gaussian NLL assumes normal distribution, unsuitable for fat-tailed financial returns; underestimates risks.
+- Fixed focal loss parameters without dynamic adjustment for varying class imbalance across horizons.
+- Lack of asymmetry in price loss; downside errors should be penalized more in trading contexts.
+
+### Issues in Training and Optimization Logic
+- Custom gradient boosting for indicators may cause exploding gradients or uneven learning.
+- Heuristic lambda calibration instead of systematic optimization.
+- Early stopping on MCC good but could include multi-metric monitoring.
+- No advanced optimizers like AdamW or learning rate warm-up.
+
+### Issues in Architecture
+- Excessive learnable parameters in indicators increase overfitting risk on noisy data.
+- Shared dense layers across horizons may not capture unique dynamics.
+- Complex mix of GRU, attention, conv, transformer may be overkill; potential for simplification.
+- Missing batch normalization in some paths, leading to internal covariate shift.
+
+### Refactoring Plan to Extend Features and Remove Obsolete
+- Simplify loss: Use quantile loss for prices to handle asymmetry; switch to Student's t for variance.
+- Implement automated hyperparam tuning for lambdas using validation metrics.
+- Streamline indicators: Reduce parameters, add pruning or feature importance checks.
+- Enhance optimization: Integrate AdamW, cosine annealing scheduler, explicit clipping.
+- Refactor architecture: Add horizon-specific branches, incorporate batch norm, remove redundant layers.
+- Extend: Add multi-asset support, integrate transaction costs into loss/backtesting.
+- Remove: Eliminate custom gradient mods if standard optim suffices; drop unused trend losses.
+- Implementation: Rewrite CustomTrainModel to use standard Keras; add modular components.
+
+To proceed with implementation, switch to Code mode for editing model.py.
+
 ## Feedback Response: Issues and Refactoring Plan
 
 ### Worst Issues Identified
