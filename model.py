@@ -71,6 +71,8 @@ class Config:
     LAMBDA_SHORT = 1  # For multi-horizon short-term
     LAMBDA_LONG = 1  # For multi-horizon long-term
     LAMBDA_VAR = 1  # For variance NLL
+    DF_VAR = 3.0  # Degrees of freedom for Student's t in variance NLL
+    TAU_PRICE = 0.4  # Quantile for pinball loss in price prediction
 
 # paths
     # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
@@ -1439,23 +1441,20 @@ class CustomTrainModel(models.Model):
     # Point loss (log-cosh)
     # -------------------------
     def point_huber(self, y_true_scaled, y_pred_scaled, last_close_scaled=None, delta=None):
-        """Point loss in scaled space.
-
+        """Point loss in scaled space using pinball (quantile) loss for asymmetry.
+    
         For delta-target training, the natural pivot is 0 (not last_close).
         `last_close_scaled` is kept optional for API compatibility.
         """
         # Squeeze explicitly on axis=1 to be shape-safe
         y_true = tf.squeeze(y_true_scaled, axis=1)
         y_pred = tf.squeeze(y_pred_scaled, axis=1)
-
-        # Compute differences in scaled domain
-        diffs = y_true - y_pred
-
-        # Delta-target loss: symmetric log-cosh in scaled domain.
-        per_elem = tf.math.log(tf.cosh(diffs))
-        # Clip log-cosh to prevent unbounded growth when |diffs| is large
-        per_elem = tf.clip_by_value(per_elem, -10.0, 10.0)
-
+    
+        # Pinball loss
+        tau = tf.constant(self.config.TAU_PRICE, dtype=tf.float32)
+        error = y_true - y_pred
+        per_elem = tf.maximum(tau * error, (tau - 1.0) * error)
+    
         result = self._reduce_mean(per_elem)
         # Guard against NaN/Inf contamination
         result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
@@ -1687,14 +1686,29 @@ class CustomTrainModel(models.Model):
         var_h0_c = tf.clip_by_value(var_h0, var_floor, var_cap)
         var_h1_c = tf.clip_by_value(var_h1, var_floor, var_cap)
         var_h2_c = tf.clip_by_value(var_h2, var_floor, var_cap)
-
-        nll_h0 = 0.5 * tf.math.log(var_h0_c + self.eps) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + self.eps)
+        
+        # Student's t NLL for robustness to heavy tails
+        nu = tf.constant(self.config.DF_VAR, dtype=tf.float32)
+        error_h0 = y_true_h0 - price_h0
+        error_h1 = y_true_h1 - price_h1
+        error_h2 = y_true_h2 - price_h2
+        
+        term1 = tf.math.lgamma((nu + 1.0)/2.0) - tf.math.lgamma(nu/2.0)
+        term2_h0 = -0.5 * tf.math.log(tf.constant(math.pi) * nu * var_h0_c)
+        term2_h1 = -0.5 * tf.math.log(tf.constant(math.pi) * nu * var_h1_c)
+        term2_h2 = -0.5 * tf.math.log(tf.constant(math.pi) * nu * var_h2_c)
+        
+        term3_h0 = - (nu + 1.0)/2.0 * tf.math.log(1.0 + tf.square(error_h0) / (nu * var_h0_c + self.eps))
+        term3_h1 = - (nu + 1.0)/2.0 * tf.math.log(1.0 + tf.square(error_h1) / (nu * var_h1_c + self.eps))
+        term3_h2 = - (nu + 1.0)/2.0 * tf.math.log(1.0 + tf.square(error_h2) / (nu * var_h2_c + self.eps))
+        
+        nll_h0 = -(term1 + term2_h0 + term3_h0)
         nll_h0_val = tf.reduce_mean(nll_h0)
         
-        nll_h1 = 0.5 * tf.math.log(var_h1_c + self.eps) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + self.eps)
+        nll_h1 = -(term1 + term2_h1 + term3_h1)
         nll_h1_val = tf.reduce_mean(nll_h1)
         
-        nll_h2 = 0.5 * tf.math.log(var_h2_c + self.eps) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + self.eps)
+        nll_h2 = -(term1 + term2_h2 + term3_h2)
         nll_h2_val = tf.reduce_mean(nll_h2)
         
         total_nll = self.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
