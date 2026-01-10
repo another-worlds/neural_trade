@@ -7,7 +7,7 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-
+Bitcoin_BTCUSDT.csv
 # Testing
 .coverage
 .pytest_cache/
@@ -23,7 +23,7 @@ htmlcov/
 *.pickle
 
 # CSV outputs
-test_params.csv
+test_params.csvs
 indicator_params_history.csv
 
 # Jupyter

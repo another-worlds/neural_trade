@@ -23,7 +23,14 @@ def normalize_variance(variance, variance_rolling_mean, variance_rolling_std, ep
     return result
 
 def calculate_profit_targets(entry_price, price_predictions):
-    """Use price predictions as profit targets"""
+    """Use predictions as profit targets.
+
+    Historical note: the model's regression heads in this repo predict multi-horizon
+    deltas (future_price - last_close), but some callers may pass absolute prices.
+
+    This function preserves the original behavior (treat inputs as absolute prices),
+    and supports delta inputs via an optional keyword.
+    """
     entry_price = float(entry_price)
     tp1 = float(price_predictions[0])
     tp2 = float(price_predictions[1])
@@ -35,6 +42,21 @@ def calculate_profit_targets(entry_price, price_predictions):
         'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
         'tp1_pct': tp1_pct, 'tp2_pct': tp2_pct, 'tp3_pct': tp3_pct,
     }
+
+
+def calculate_profit_targets_from_deltas(entry_price, delta_predictions):
+    """Convert delta predictions into absolute take-profit targets.
+
+    `delta_predictions[h]` is interpreted as future_price - entry_price.
+    """
+
+    entry_price = float(entry_price)
+    delta_predictions = np.asarray(delta_predictions, dtype=float).reshape(-1)
+    if delta_predictions.size < 3:
+        raise ValueError(f"Expected at least 3 deltas (1m/5m/15m), got shape {delta_predictions.shape}")
+
+    price_predictions = entry_price + delta_predictions[:3]
+    return calculate_profit_targets(entry_price, price_predictions)
 
 def calculate_dynamic_stop_loss(entry_price, position_type, variance, variance_rolling_mean, 
                                base_stop_pct=0.02, max_variance_multiplier=2.0):
@@ -63,10 +85,15 @@ def calculate_position_size_multiplier(confidence, size_high=1.2, size_normal=1.
     else:
         return size_low
 
-def check_multi_horizon_agreement(price_predictions, current_price, agreement_threshold=0.67):
-    """Check if multiple horizons agree on direction"""
-    price_predictions = np.asarray(price_predictions)
+def check_multi_horizon_agreement(price_predictions, current_price, agreement_threshold=0.67, *, predictions_are_deltas=False):
+    """Check if multiple horizons agree on direction.
+
+    If `predictions_are_deltas=True`, predictions are interpreted as deltas relative to current_price.
+    """
+    price_predictions = np.asarray(price_predictions, dtype=float).reshape(-1)
     current_price = float(current_price)
+    if predictions_are_deltas:
+        price_predictions = current_price + price_predictions
     up_count = np.sum(price_predictions > current_price)
     down_count = np.sum(price_predictions < current_price)
     agreement = max(up_count, down_count) / len(price_predictions)

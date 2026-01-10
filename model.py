@@ -6,6 +6,8 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import layers, models, optimizers, callbacks, losses, initializers, regularizers
 import math
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percentage_error, f1_score, accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
@@ -14,6 +16,16 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator, FuncFormatter
 import time
 from tqdm import tqdm
+
+try:
+    # Optional local utilities (kept lightweight). If missing, fall back to sklearn MAPE only.
+    from metrics_utils import safe_mape, smape, wape, reconstruct_prices, mask_by_min_abs_y
+except Exception:
+    safe_mape = None
+    smape = None
+    wape = None
+    reconstruct_prices = None
+    mask_by_min_abs_y = None
 
 # -----------------------------
 class Config:
@@ -26,8 +38,8 @@ class Config:
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = None  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 144
-    EPOCHS = 40
+    BATCH_SIZE = 144 * 4
+    EPOCHS = 8
     LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
     MAX_SEQUENCE_COUNT = 144 * 20  # Limit most recent sequences to bound training size
@@ -45,8 +57,8 @@ class Config:
 # Loss Function Weights
     DAMPING = 1
     LAMBDA_POINT = 1  
-    LAMBDA_LOCAL_TREND  = 1
-    LAMBDA_GLOBAL_TREND =  1
+    LAMBDA_LOCAL_TREND  = 0.1
+    LAMBDA_GLOBAL_TREND =  0.1
     LAMBDA_EXTENDED_TREND = 0.1
     LAMBDA_QUANTILE = 1
     REG_MOMENTUM_L2 = 1e-4
@@ -113,13 +125,21 @@ class Config:
 class DataProcessor:
     def __init__(self, config):
         self.config = config
+        self.target_scaler = None
+        self.input_scaler = None
 
     def clean_numeric(self, series):
         return series.astype(str).str.replace(r'[\$,]', '', regex=True).replace('', np.nan).astype(float)
 
-    def load_and_prepare_data(self):
-        """Load and prep minute-level Bitcoin data with optional resampling."""
-        df = pd.read_csv(self.config.CSV_PATH)
+    def load_and_prepare_data(self, read_csv_kwargs: Optional[dict] = None):
+        """Load and prep minute-level Bitcoin data with optional resampling.
+
+        `read_csv_kwargs` is passed through to `pd.read_csv`.
+        This makes ingestion robust in notebooks where the CSV may require
+        non-default parsing settings.
+        """
+        read_csv_kwargs = dict(read_csv_kwargs or {})
+        df = pd.read_csv(self.config.CSV_PATH, **read_csv_kwargs)
 
         # Parse timestamp column (minute-level data format)
         df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
@@ -316,9 +336,539 @@ class DataProcessor:
         joblib.dump(target_scaler, self.config.SCALER_PATH)
         joblib.dump(input_scaler, self.config.SCALER_PATH.replace('.joblib', '_input.joblib'))
 
+        # Keep references for programmatic use without changing the return signature.
+        self.target_scaler = target_scaler
+        self.input_scaler = input_scaler
+
         return (X_train_seq_scaled, y_train_scaled, last_close_train, extended_trends_train,
                 X_test_seq_scaled, y_test_scaled, last_close_test, extended_trends_test,
                 y_train, y_test, target_scaler)
+
+
+@dataclass
+class TrainResult:
+    """Single-source-of-truth training + inference output bundle."""
+
+    config: 'Config'
+    model: 'CustomTrainModel'
+    target_scaler: StandardScaler
+    input_scaler: Optional[StandardScaler]
+
+    X_test_seq: np.ndarray
+    y_test: np.ndarray  # raw deltas [N,3]
+    last_close_test: np.ndarray
+    extended_trends_test: np.ndarray
+    history: Any
+
+    # Predictions are raw (inverse-scaled) deltas and head outputs.
+    predictions: Dict[str, Dict[str, np.ndarray]]
+    metrics: Dict[str, Any]
+
+
+def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
+    if not overrides:
+        return config
+    for k, v in dict(overrides).items():
+        setattr(config, k, v)
+    return config
+
+
+def _compute_all_horizon_metrics(
+    *,
+    config: 'Config',
+    y_true_deltas: np.ndarray,
+    y_pred_deltas: Dict[str, np.ndarray],
+    last_close: np.ndarray,
+    dir_probs: Optional[Dict[str, np.ndarray]] = None,
+) -> Dict[str, Any]:
+    """Compute consistent metrics for all horizons.
+
+    Returns a dict with per-horizon delta-space metrics, price-space metrics, and direction metrics.
+    """
+
+    horizons = ("h0", "h1", "h2")
+    horizon_names = ("1-min", "5-min", "15-min")
+    y_true_deltas = np.asarray(y_true_deltas)
+    if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != 3:
+        raise ValueError(f"Expected y_true_deltas shape (N,3), got {y_true_deltas.shape}")
+    lc = np.asarray(last_close, dtype=float).reshape(-1)
+
+    out: Dict[str, Any] = {
+        "delta": {},
+        "price": {},
+        "direction": {},
+    }
+
+    deadband_bps = float(getattr(config, 'DIR_DEADBAND_BPS', 0.0))
+    deadband = deadband_bps / 10000.0
+    threshold_delta = deadband * (lc + 1e-12)
+    min_abs_delta_for_mape = float(getattr(config, 'DELTA_MAPE_MIN_ABS', 1.0))
+
+    for idx, (h_key, h_label) in enumerate(zip(horizons, horizon_names)):
+        y_t = np.asarray(y_true_deltas[:, idx], dtype=float).reshape(-1)
+        y_p = np.asarray(y_pred_deltas[h_key], dtype=float).reshape(-1)
+        thr = np.asarray(threshold_delta, dtype=float).reshape(-1)
+        n = min(len(y_t), len(y_p), len(lc), len(thr))
+        y_t = y_t[:n]
+        y_p = y_p[:n]
+        lc_h = lc[:n]
+        thr = thr[:n]
+
+        mse = mean_squared_error(y_t, y_p)
+        rmse = float(np.sqrt(mse))
+        r2 = r2_score(y_t, y_p)
+
+        delta_metrics = {
+            "mse": float(mse),
+            "rmse": float(rmse),
+            "r2": float(r2),
+        }
+        if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
+            delta_metrics.update({
+                "mape_delta": float(mean_absolute_percentage_error(y_t, y_p)),
+                "safe_mape_delta": float(safe_mape(y_t, y_p, min_abs_y=min_abs_delta_for_mape)),
+                "smape_delta": float(smape(y_t, y_p)),
+                "wape_delta": float(wape(y_t, y_p)),
+            })
+
+        out["delta"][h_key] = delta_metrics
+
+        if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
+            y_true_price = reconstruct_prices(lc_h, y_t)
+            y_pred_price = reconstruct_prices(lc_h, y_p)
+            out["price"][h_key] = {
+                "mse": float(mean_squared_error(y_true_price, y_pred_price)),
+                "rmse": float(np.sqrt(mean_squared_error(y_true_price, y_pred_price))),
+                "r2": float(r2_score(y_true_price, y_pred_price)),
+                "mape": float(safe_mape(y_true_price, y_pred_price)),
+                "smape": float(smape(y_true_price, y_pred_price)),
+                "wape": float(wape(y_true_price, y_pred_price)),
+            }
+
+        true_dir = (y_t > thr)
+        if dir_probs is not None and h_key in dir_probs and dir_probs[h_key] is not None:
+            p = np.asarray(dir_probs[h_key], dtype=float).reshape(-1)[:n]
+            pred_dir = (p >= 0.5)
+        else:
+            pred_dir = (y_p > thr)
+
+        out["direction"][h_key] = {
+            "acc": float(accuracy_score(true_dir.astype(int), pred_dir.astype(int))),
+            "f1": float(f1_score(true_dir.astype(int), pred_dir.astype(int), zero_division=0)),
+        }
+
+    out["meta"] = {
+        "horizon_keys": list(horizons),
+        "horizon_labels": list(horizon_names),
+        "deadband_bps": float(deadband_bps),
+        "delta_safe_mape_min_abs": float(min_abs_delta_for_mape),
+    }
+    return out
+
+
+def make_interactive_plot_callback(
+    *,
+    config: 'Config',
+    loss_output,
+    metrics_output,
+    progress_widget,
+    total_epochs: int,
+    batch_metrics_output=None,
+    primary_horizon: str = "h1",
+    prefer_gauss: bool = True,
+    should_pause=None,
+    should_stop=None,
+):
+    """Notebook-friendly interactive Plotly callback.
+
+    This is a rewrite/encapsulation of the notebook's Cell 3 callback so notebooks can
+    depend on `model.py` as the single source of truth.
+    """
+    from IPython.display import clear_output, display
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    import ipywidgets as widgets
+
+    import time
+
+    def _bool_call(maybe_callable) -> bool:
+        try:
+            return bool(maybe_callable()) if callable(maybe_callable) else bool(maybe_callable)
+        except Exception:
+            return False
+
+    class _InteractivePlotCallback(tf.keras.callbacks.Callback):
+        def __init__(self):
+            super().__init__()
+            self.history = {}
+            self.epoch_count = 0
+            self.batch_history = {}
+            self.total_batches = None
+            self.batch_count = 0
+
+        def on_epoch_begin(self, epoch, logs=None):
+            self.batch_history.clear()
+            self.batch_count = 0
+            self.total_batches = self.params.get('steps') if self.params is not None else None
+            if batch_metrics_output is not None:
+                with batch_metrics_output:
+                    clear_output(wait=True)
+
+        def on_train_batch_end(self, batch, logs=None):
+            logs = logs or {}
+            logs = add_plot_aliases(logs, primary_horizon=primary_horizon, prefer_gauss=prefer_gauss)
+            batch_idx = (batch or 0) + 1
+            self.batch_history.setdefault('batch', []).append(batch_idx)
+            for key, value in logs.items():
+                if value is None:
+                    continue
+                try:
+                    self.batch_history.setdefault(key, []).append(float(value))
+                except Exception:
+                    pass
+
+            # Batch plot (loss + a couple key metrics)
+            if batch_metrics_output is not None and self.batch_count % 10 == 0:
+                with batch_metrics_output:
+                    clear_output(wait=True)
+                    batches = self.batch_history.get('batch', [])
+                    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                        subplot_titles=("Batch Loss", "Batch Direction Metrics"))
+                    if 'loss' in self.batch_history:
+                        fig.add_trace(go.Scatter(x=batches, y=self.batch_history['loss'], mode='lines', name='loss'), row=1, col=1)
+                    if 'dir_acc' in self.batch_history:
+                        fig.add_trace(go.Scatter(x=batches, y=self.batch_history['dir_acc'], mode='lines', name='dir_acc'), row=2, col=1)
+                    if 'f1' in self.batch_history:
+                        fig.add_trace(go.Scatter(x=batches, y=self.batch_history['f1'], mode='lines', name='f1'), row=2, col=1)
+                    fig.update_layout(height=450, showlegend=True)
+                    display(fig)
+
+            self.batch_count += 1
+
+        def on_epoch_end(self, epoch, logs=None):
+            # Optional notebook controls.
+            # Keep this inside the callback so the notebook can remain a thin UI wrapper.
+            if _bool_call(should_stop):
+                try:
+                    self.model.stop_training = True
+                except Exception:
+                    pass
+                return
+
+            # Cooperative pause loop (safe no-op if not provided)
+            while _bool_call(should_pause) and not _bool_call(should_stop):
+                time.sleep(0.1)
+            if _bool_call(should_stop):
+                try:
+                    self.model.stop_training = True
+                except Exception:
+                    pass
+                return
+
+            logs = add_plot_aliases(logs or {}, primary_horizon=primary_horizon, prefer_gauss=prefer_gauss)
+            self.epoch_count += 1
+            for k, v in (logs or {}).items():
+                if v is None:
+                    continue
+                try:
+                    self.history.setdefault(k, []).append(float(v))
+                except Exception:
+                    pass
+
+            try:
+                progress_widget.value = min(total_epochs, epoch + 1)
+            except Exception:
+                pass
+
+            # Epoch plots
+            with loss_output:
+                clear_output(wait=True)
+                fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                                    subplot_titles=("Epoch Loss", "Epoch Direction Metrics"))
+                epochs = list(range(1, self.epoch_count + 1))
+                if 'loss' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['loss'], mode='lines+markers', name='loss'), row=1, col=1)
+                if 'val_loss' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['val_loss'], mode='lines+markers', name='val_loss'), row=1, col=1)
+                if 'dir_acc_avg' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['dir_acc_avg'], mode='lines+markers', name='dir_acc_avg'), row=2, col=1)
+                if 'val_dir_acc_avg' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['val_dir_acc_avg'], mode='lines+markers', name='val_dir_acc_avg'), row=2, col=1)
+                if 'f1_avg' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['f1_avg'], mode='lines+markers', name='f1_avg'), row=2, col=1)
+                if 'val_f1_avg' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['val_f1_avg'], mode='lines+markers', name='val_f1_avg'), row=2, col=1)
+                fig.update_layout(height=520, showlegend=True)
+                display(fig)
+
+            with metrics_output:
+                clear_output(wait=True)
+                keys = [
+                    'loss', 'val_loss',
+                    'point_loss', 'trend_loss', 'dir_loss', 'nll_loss',
+                    'dir_acc_avg', 'val_dir_acc_avg', 'f1_avg', 'val_f1_avg'
+                ]
+                for k in keys:
+                    if k in logs:
+                        print(f"{k}: {logs[k]}")
+
+    return _InteractivePlotCallback()
+
+
+def train_and_evaluate(
+    *,
+    config: Optional['Config'] = None,
+    config_overrides: Optional[dict] = None,
+    csv_path: Optional[str] = None,
+    read_csv_kwargs: Optional[dict] = None,
+    epochs: Optional[int] = None,
+    force: bool = False,
+    calibrate: bool = True,
+    extra_callbacks: Optional[List[tf.keras.callbacks.Callback]] = None,
+) -> TrainResult:
+    """Train (optionally) and evaluate, returning a rich result bundle.
+
+    This is intended to be the notebook's single source of truth for:
+    - data prep + scaling
+    - model heads and extraction
+    - metrics and evaluation semantics
+    """
+
+    tf.keras.utils.set_random_seed(42)
+    os.environ["TF_DETERMINISTIC_OPS"] = "1"
+
+    cfg = config or Config()
+    if csv_path is not None:
+        cfg.CSV_PATH = csv_path
+    cfg = _apply_config_overrides(cfg, config_overrides)
+
+    print("Starting enhanced model training with extended trend features...")
+    data_processor = DataProcessor(cfg)
+    df, close_values = data_processor.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
+
+    (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
+     X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
+     y_train, y_test, target_scaler) = data_processor.prepare_datasets(df, close_values)
+
+    input_scaler = getattr(data_processor, 'input_scaler', None)
+    predictor = PricePredictor(cfg)
+    base_model = predictor.build_model()
+    pred_scale = np.std(y_train) if np.std(y_train) > 0 else 1.0
+    pred_mean = np.mean(y_train)
+    custom_model = CustomTrainModel(
+        base_model=base_model,
+        pred_scale=pred_scale,
+        pred_mean=pred_mean,
+        lambda_point=cfg.LAMBDA_POINT,
+        lambda_local_trend=cfg.LAMBDA_LOCAL_TREND,
+        lambda_global_trend=cfg.LAMBDA_GLOBAL_TREND,
+        lambda_extended_trend=cfg.LAMBDA_EXTENDED_TREND,
+        lambda_dir=cfg.LAMBDA_DIR,
+        config=cfg,
+        inputs=base_model.inputs,
+        outputs=base_model.outputs,
+    )
+
+    train_ds, val_ds = predictor.create_datasets(
+        X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
+        X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
+    )
+
+    # Optional calibration (kept identical to train_model behavior)
+    if calibrate is True:
+        try:
+            orig_lambda_point = custom_model.lambda_point
+            orig_lambda_local = custom_model.lambda_local_trend
+            orig_lambda_global = custom_model.lambda_global_trend
+            orig_lambda_ext = custom_model.lambda_extended_trend
+            orig_lambda_dir = custom_model.lambda_dir
+            orig_lambda_var = custom_model.lambda_var
+
+            custom_model.lambda_point = 1.0
+            custom_model.lambda_local_trend = 1.0
+            custom_model.lambda_global_trend = 1.0
+            custom_model.lambda_extended_trend = 1.0
+            custom_model.lambda_dir = 1.0
+            custom_model.lambda_var = 1.0
+
+            n_calib_batches = 256
+            print("Warming up BatchNorm statistics for accurate calibration...")
+            for batch in train_ds.take(n_calib_batches):
+                x_batch, _, _, _ = batch
+                _ = custom_model(x_batch, training=True)
+
+            point_losses, local_losses, global_losses, ext_losses, dir_losses, var_losses = [], [], [], [], [], []
+            for batch in train_ds.take(n_calib_batches):
+                x_batch, y_batch, last_batch, ext_batch = batch
+                y_pred_batch = custom_model(x_batch, training=False)
+                (total,
+                 point_h0, point_h1, point_h2,
+                 local_h0, global_h0, ext_h0,
+                 local_h1, global_h1, ext_h1,
+                 local_h2, global_h2, ext_h2,
+                 dir_h0, dir_h1, dir_h2,
+                 nll_h0, nll_h1, nll_h2,
+                 reg_val, inter_reg, vol_loss) = custom_model.custom_loss(
+                    x_batch, y_batch, y_pred_batch, last_batch, ext_batch
+                )
+
+                point_losses.append(float(point_h0 + point_h1 + point_h2))
+                local_losses.append(float(local_h0 + local_h1 + local_h2))
+                global_losses.append(float(global_h0 + global_h1 + global_h2))
+                ext_losses.append(float(ext_h0 + ext_h1 + ext_h2))
+                dir_losses.append(float(dir_h0 + dir_h1 + dir_h2))
+                var_losses.append(float(nll_h0 + nll_h1 + nll_h2))
+
+            med_point = float(np.median(np.array(point_losses))) if point_losses else 0.0
+            med_local = float(np.median(np.array(local_losses))) if local_losses else 0.0
+            med_global = float(np.median(np.array(global_losses))) if global_losses else 0.0
+            med_ext = float(np.median(np.array(ext_losses))) if ext_losses else 0.0
+            med_dir = float(np.median(np.array(dir_losses))) if dir_losses else 0.0
+            med_var = float(np.median(np.array(var_losses))) if var_losses else 0.0
+
+            non_zero_medians = [m for m in [med_point, med_local, med_global, med_ext, med_dir, med_var] if m > 1e-8]
+            ref_loss = float(np.mean(non_zero_medians)) if non_zero_medians else 1.0
+
+            eps = 1e-8
+            damping = Config.DAMPING
+            new_point = orig_lambda_point * (ref_loss / (med_point + eps)) ** damping if med_point > eps else orig_lambda_point
+            new_local = orig_lambda_local * (ref_loss / (med_local + eps)) ** damping if med_local > eps else orig_lambda_local
+            new_global = orig_lambda_global * (ref_loss / (med_global + eps)) ** damping if med_global > eps else orig_lambda_global
+            new_ext = orig_lambda_ext * (ref_loss / (med_ext + eps)) ** damping if med_ext > eps else orig_lambda_ext
+            new_dir = orig_lambda_dir * (ref_loss / (med_dir + eps)) ** damping if med_dir > eps else orig_lambda_dir
+            new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
+
+            min_lambda = 1e-3
+            max_lambda = 1000.0
+            custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
+            custom_model.lambda_local_trend = float(np.clip(new_local, min_lambda, max_lambda))
+            custom_model.lambda_global_trend = float(np.clip(new_global, min_lambda, max_lambda))
+            custom_model.lambda_extended_trend = float(np.clip(new_ext, min_lambda, max_lambda))
+            custom_model.lambda_dir = float(np.clip(new_dir, min_lambda, max_lambda))
+            custom_model.lambda_var = float(np.clip(new_var, min_lambda, max_lambda))
+
+            print(f"Calibration (multi-batch median with actual losses): "
+                  f"med_point={med_point:.6f}, med_local={med_local:.6f}, "
+                  f"med_global={med_global:.6f}, med_ext={med_ext:.6f}, med_dir={med_dir:.6f}, med_var={med_var:.6f}, ref_loss={ref_loss:.6f}")
+            print(f"New lambdas (damped+clamped): "
+                  f"point={custom_model.lambda_point:.6f}, local={custom_model.lambda_local_trend:.6f}, "
+                  f"global={custom_model.lambda_global_trend:.6f}, ext={custom_model.lambda_extended_trend:.6f}, dir={custom_model.lambda_dir:.6f}, var={custom_model.lambda_var:.6f}")
+        except Exception as e:
+            print("Calibration pass failed, proceeding with default lambdas:", e)
+
+    opt = optimizers.Adam(learning_rate=cfg.LR)
+    custom_model.compile(optimizer=opt)
+
+    csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
+    es = callbacks.EarlyStopping(monitor='val_loss', patience=cfg.PATIENCE, restore_best_weights=True)
+    ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
+    es_mcc = callbacks.EarlyStopping(
+        monitor='val_gauss_dir_mcc_h1',
+        patience=15,
+        mode='max',
+        restore_best_weights=False
+    )
+    tqdm_callback = TqdmCallback()
+    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.99, patience=Config.EPOCHS//2)
+
+    learnable_layer = None
+    for layer in custom_model.layers:
+        if getattr(layer, 'name', '').startswith('learnable_indicators'):
+            learnable_layer = layer
+            break
+    params_logger = ParamsLogger(layer=learnable_layer, out_csv='indicator_params_history.csv')
+
+    callbacks_list = [csv_logger, es, ckpt, es_mcc, tqdm_callback, params_logger, lr_scheduler]
+    if extra_callbacks:
+        callbacks_list += list(extra_callbacks)
+
+    actual_epochs = int(epochs) if epochs is not None else int(cfg.EPOCHS)
+    history = None
+    if os.path.exists(cfg.MODEL_PATH) and not force:
+        print(f"Loading existing model weights from {cfg.MODEL_PATH}...")
+        try:
+            custom_model.load_weights(cfg.MODEL_PATH)
+        except Exception as e:
+            print(f"Warning: failed to load existing weights but continuing: {e}")
+    else:
+        if os.path.exists(cfg.MODEL_PATH) and force:
+            try:
+                custom_model.load_weights(cfg.MODEL_PATH)
+            except Exception:
+                pass
+        print(f"Training for {actual_epochs} epochs...")
+        history = custom_model.fit(
+            train_ds,
+            validation_data=val_ds,
+            epochs=actual_epochs,
+            callbacks=callbacks_list,
+            verbose=0,
+        )
+        print(f"Enhanced model weights saved to {cfg.MODEL_PATH}")
+        try:
+            joblib.dump(target_scaler, cfg.SCALER_PATH)
+            if input_scaler is not None:
+                joblib.dump(input_scaler, cfg.SCALER_PATH.replace('.joblib', '_input.joblib'))
+        except Exception:
+            pass
+
+    print("Evaluating enhanced model...")
+    X_test_simple = tf.data.Dataset.from_tensor_slices(X_test_seq).batch(cfg.BATCH_SIZE)
+    y_pred_all = custom_model.predict(X_test_simple)
+
+    # Extract 3 price heads (scaled deltas)
+    y_pred_price_all = np.column_stack([
+        y_pred_all[0][:, 0],
+        y_pred_all[3][:, 0],
+        y_pred_all[6][:, 0],
+    ])
+    y_pred_price_all = y_pred_price_all[:len(y_test)]
+
+    y_pred_h0_raw = target_scaler.inverse_transform(y_pred_price_all[:, 0].reshape(-1, 1)).ravel()
+    y_pred_h1_raw = target_scaler.inverse_transform(y_pred_price_all[:, 1].reshape(-1, 1)).ravel()
+    y_pred_h2_raw = target_scaler.inverse_transform(y_pred_price_all[:, 2].reshape(-1, 1)).ravel()
+
+    dir_pred_h0 = np.asarray(y_pred_all[1]).reshape(-1)[:len(y_test)]
+    dir_pred_h1 = np.asarray(y_pred_all[4]).reshape(-1)[:len(y_test)]
+    dir_pred_h2 = np.asarray(y_pred_all[7]).reshape(-1)[:len(y_test)]
+
+    var_pred_h0 = np.asarray(y_pred_all[2]).reshape(-1)[:len(y_test)]
+    var_pred_h1 = np.asarray(y_pred_all[5]).reshape(-1)[:len(y_test)]
+    var_pred_h2 = np.asarray(y_pred_all[8]).reshape(-1)[:len(y_test)]
+
+    predictions = {
+        "delta": {"h0": y_pred_h0_raw, "h1": y_pred_h1_raw, "h2": y_pred_h2_raw},
+        "direction_prob": {"h0": dir_pred_h0, "h1": dir_pred_h1, "h2": dir_pred_h2},
+        "variance": {"h0": var_pred_h0, "h1": var_pred_h1, "h2": var_pred_h2},
+    }
+
+    metrics = _compute_all_horizon_metrics(
+        config=cfg,
+        y_true_deltas=np.asarray(y_test),
+        y_pred_deltas=predictions["delta"],
+        last_close=np.asarray(last_close_test),
+        dir_probs=predictions["direction_prob"],
+    )
+
+    # Attach a back-compat attribute
+    try:
+        custom_model.predictions_dict = predictions
+    except Exception:
+        pass
+
+    return TrainResult(
+        config=cfg,
+        model=custom_model,
+        target_scaler=target_scaler,
+        input_scaler=input_scaler,
+        X_test_seq=X_test_seq,
+        y_test=np.asarray(y_test),
+        last_close_test=np.asarray(last_close_test),
+        extended_trends_test=np.asarray(extended_trends_test),
+        history=history,
+        predictions=predictions,
+        metrics=metrics,
+    )
 
 # -----------------------------
 def differentiable_past_sample(x_seq, fractional_lag, sigma=1.0):
@@ -1101,7 +1651,7 @@ class CustomTrainModel(models.Model):
         sign_h1 = tf.sign(y_true_raw_h1)
         sign_h2 = tf.sign(y_true_raw_h2)
         # Penalize if h1 doesn't match the trend from h0 to h2
-        coherence_penalty = tf.reduce_mean(tf.cast(tf.logical_xor(sign_h1 == sign_h0, sign_h1 == sign_h2), tf.float32))
+        coherence_penalty = tf.reduce_mean(tf.cast(tf.math.logical_xor(sign_h1 == sign_h0, sign_h1 == sign_h2), tf.float32))
         
         local_trend_h0 = tf.constant(0.0, dtype=tf.float32)
         global_trend_h0 = tf.constant(0.0, dtype=tf.float32)
@@ -1459,9 +2009,10 @@ class CustomTrainModel(models.Model):
         deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
         deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
 
-        ret_h0 = (y_true_raw[:, 0] - last_close_squeeze) / (last_close_squeeze + self.eps)
-        ret_h1 = (y_true_raw[:, 1] - last_close_squeeze) / (last_close_squeeze + self.eps)
-        ret_h2 = (y_true_raw[:, 2] - last_close_squeeze) / (last_close_squeeze + self.eps)
+        # Targets are deltas; compute returns as delta / last_close (matches train_step)
+        ret_h0 = (y_true_raw[:, 0]) / (last_close_squeeze + self.eps)
+        ret_h1 = (y_true_raw[:, 1]) / (last_close_squeeze + self.eps)
+        ret_h2 = (y_true_raw[:, 2]) / (last_close_squeeze + self.eps)
 
         mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
         mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
@@ -1485,10 +2036,11 @@ class CustomTrainModel(models.Model):
         mu_h0 = tf.squeeze(price_h0, axis=1)
         mu_h1 = tf.squeeze(price_h1, axis=1)
         mu_h2 = tf.squeeze(price_h2, axis=1)
-        last_close_scaled = self._to_scaled(last_close_squeeze)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - last_close_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - last_close_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - last_close_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+        # Threshold for "UP" in scaled-delta space, consistent with direction labeling
+        deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
+        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
+        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
+        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.
@@ -1596,6 +2148,162 @@ class CustomTrainModel(models.Model):
                        config=config_instance,
                        **config)
         return instance
+
+def _first_present(mapping, keys):
+    for k in keys:
+        if k in mapping and mapping[k] is not None:
+            return mapping[k]
+    return None
+
+def _sum_present(mapping, keys):
+    total = None
+    for k in keys:
+        if k not in mapping or mapping[k] is None:
+            continue
+        total = mapping[k] if total is None else (total + mapping[k])
+    return total
+
+def _mean_present(mapping, keys):
+    total = None
+    count = 0
+    for k in keys:
+        if k not in mapping or mapping[k] is None:
+            continue
+        total = mapping[k] if total is None else (total + mapping[k])
+        count += 1
+    if total is None or count == 0:
+        return None
+    return total / float(count)
+
+def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
+    """Add plotting-friendly aliases into a Keras `logs` dict.
+
+    The training code emits per-horizon metrics (e.g., `val_dir_f1_h1`, `train_dir_acc_h1`)
+    and uses `nll_loss` for variance NLL. The notebook historically plotted legacy keys
+    like `val_f1`, `val_dir_acc`, `var_nll`, and aggregated `*_trend_loss` fields.
+
+    This helper keeps plotting code stable by:
+    - Mapping per-horizon direction metrics to horizon-agnostic keys.
+    - Computing legacy aggregate trend-loss keys from available components.
+    - Aliasing `var_nll` -> `nll_loss`.
+
+    It is safe to call on batch logs or epoch logs.
+    """
+    if logs is None:
+        return {}
+    out = dict(logs)
+
+    def set_if_missing(key, value):
+        if key not in out and value is not None:
+            out[key] = value
+
+    # --- Loss aliases (legacy plotting names) ---
+    set_if_missing("var_nll", _first_present(out, ["nll_loss"]))
+    set_if_missing("val_var_nll", _first_present(out, ["val_nll_loss"]))
+
+    set_if_missing("local_trend_loss", _sum_present(out, ["local_h0", "local_h1", "local_h2"]))
+    set_if_missing("val_local_trend_loss", _sum_present(out, ["val_local_h0", "val_local_h1", "val_local_h2"]))
+
+    set_if_missing("global_trend_loss", _sum_present(out, ["global_h0", "global_h1", "global_h2"]))
+    set_if_missing("val_global_trend_loss", _sum_present(out, ["val_global_h0", "val_global_h1", "val_global_h2"]))
+
+    set_if_missing("extended_trend_loss", _sum_present(out, ["extended_h0", "extended_h1", "extended_h2"]))
+    set_if_missing("val_extended_trend_loss", _sum_present(out, ["val_extended_h0", "val_extended_h1", "val_extended_h2"]))
+
+    # --- Direction metric aliases (primary horizon, head vs gauss preference) ---
+    train_pref = "train_gauss_" if prefer_gauss else "train_"
+    train_fallback = "train_" if prefer_gauss else "train_gauss_"
+
+    val_pref = "val_gauss_" if prefer_gauss else "val_"
+    val_fallback = "val_" if prefer_gauss else "val_gauss_"
+
+    # Average across horizons (h0/h1/h2)
+    horizons = ("h0", "h1", "h2")
+
+    train_acc_keys = [f"{train_pref}dir_acc_{h}" for h in horizons]
+    train_f1_keys = [f"{train_pref}dir_f1_{h}" for h in horizons]
+    train_sens_keys = [f"{train_pref}dir_sensitivity_{h}" for h in horizons]
+    train_spec_keys = [f"{train_pref}dir_specificity_{h}" for h in horizons]
+
+    train_acc_fb = [f"{train_fallback}dir_acc_{h}" for h in horizons]
+    train_f1_fb = [f"{train_fallback}dir_f1_{h}" for h in horizons]
+    train_sens_fb = [f"{train_fallback}dir_sensitivity_{h}" for h in horizons]
+    train_spec_fb = [f"{train_fallback}dir_specificity_{h}" for h in horizons]
+
+    val_acc_keys = [f"{val_pref}dir_acc_{h}" for h in horizons]
+    val_f1_keys = [f"{val_pref}dir_f1_{h}" for h in horizons]
+    val_sens_keys = [f"{val_pref}dir_sensitivity_{h}" for h in horizons]
+    val_spec_keys = [f"{val_pref}dir_specificity_{h}" for h in horizons]
+
+    val_acc_fb = [f"{val_fallback}dir_acc_{h}" for h in horizons]
+    val_f1_fb = [f"{val_fallback}dir_f1_{h}" for h in horizons]
+    val_sens_fb = [f"{val_fallback}dir_sensitivity_{h}" for h in horizons]
+    val_spec_fb = [f"{val_fallback}dir_specificity_{h}" for h in horizons]
+
+    set_if_missing("dir_acc_avg", _first_present({"v": _mean_present(out, train_acc_keys), "v2": _mean_present(out, train_acc_fb)}, ["v", "v2"]))
+    set_if_missing("f1_avg", _first_present({"v": _mean_present(out, train_f1_keys), "v2": _mean_present(out, train_f1_fb)}, ["v", "v2"]))
+    set_if_missing("dir_sensitivity_avg", _first_present({"v": _mean_present(out, train_sens_keys), "v2": _mean_present(out, train_sens_fb)}, ["v", "v2"]))
+    set_if_missing("dir_specificity_avg", _first_present({"v": _mean_present(out, train_spec_keys), "v2": _mean_present(out, train_spec_fb)}, ["v", "v2"]))
+
+    set_if_missing("val_dir_acc_avg", _first_present({"v": _mean_present(out, val_acc_keys), "v2": _mean_present(out, val_acc_fb)}, ["v", "v2"]))
+    set_if_missing("val_f1_avg", _first_present({"v": _mean_present(out, val_f1_keys), "v2": _mean_present(out, val_f1_fb)}, ["v", "v2"]))
+    set_if_missing("val_dir_sensitivity_avg", _first_present({"v": _mean_present(out, val_sens_keys), "v2": _mean_present(out, val_sens_fb)}, ["v", "v2"]))
+    set_if_missing("val_dir_specificity_avg", _first_present({"v": _mean_present(out, val_spec_keys), "v2": _mean_present(out, val_spec_fb)}, ["v", "v2"]))
+
+    # Batch-level aliases used by batch plot
+    set_if_missing(
+        "dir_acc",
+        _first_present(out, [f"{train_pref}dir_acc_{primary_horizon}", f"{train_fallback}dir_acc_{primary_horizon}"]),
+    )
+    set_if_missing(
+        "f1",
+        _first_present(out, [f"{train_pref}dir_f1_{primary_horizon}", f"{train_fallback}dir_f1_{primary_horizon}"]),
+    )
+    set_if_missing(
+        "dir_mcc",
+        _first_present(out, [f"{train_pref}dir_mcc_{primary_horizon}", f"{train_fallback}dir_mcc_{primary_horizon}"]),
+    )
+    set_if_missing(
+        "dir_sensitivity",
+        _first_present(out, [f"{train_pref}dir_sensitivity_{primary_horizon}", f"{train_fallback}dir_sensitivity_{primary_horizon}"]),
+    )
+    set_if_missing(
+        "dir_specificity",
+        _first_present(out, [f"{train_pref}dir_specificity_{primary_horizon}", f"{train_fallback}dir_specificity_{primary_horizon}"]),
+    )
+
+    # Epoch-level aliases used by validation metrics plot
+    set_if_missing(
+        "val_dir_acc",
+        _first_present(out, [f"{val_pref}dir_acc_{primary_horizon}", f"{val_fallback}dir_acc_{primary_horizon}", "val_dir_acc"]),
+    )
+    set_if_missing(
+        "val_f1",
+        _first_present(out, [f"{val_pref}dir_f1_{primary_horizon}", f"{val_fallback}dir_f1_{primary_horizon}", "val_f1"]),
+    )
+    set_if_missing(
+        "val_dir_mcc",
+        _first_present(out, [f"{val_pref}dir_mcc_{primary_horizon}", f"{val_fallback}dir_mcc_{primary_horizon}"]),
+    )
+    set_if_missing(
+        "val_dir_sensitivity",
+        _first_present(out, [f"{val_pref}dir_sensitivity_{primary_horizon}", f"{val_fallback}dir_sensitivity_{primary_horizon}"]),
+    )
+    set_if_missing(
+        "val_dir_specificity",
+        _first_present(out, [f"{val_pref}dir_specificity_{primary_horizon}", f"{val_fallback}dir_specificity_{primary_horizon}"]),
+    )
+
+    # Back-compat: treat recall as sensitivity for UP class
+    set_if_missing("val_recall", out.get("val_dir_sensitivity"))
+
+    # Prefer avg metrics for legacy val_* keys if present
+    set_if_missing("val_f1", out.get("val_f1_avg"))
+    set_if_missing("val_dir_acc", out.get("val_dir_acc_avg"))
+    set_if_missing("val_dir_sensitivity", out.get("val_dir_sensitivity_avg"))
+    set_if_missing("val_dir_specificity", out.get("val_dir_specificity_avg"))
+
+    return out
 
 
 # -----------------------------
@@ -1802,362 +2510,50 @@ class ParamsLogger(tf.keras.callbacks.Callback):
                     print(f"Final Std Change: {convergence_info['std_param_change_pct']:.2f}%")
 
 def train_model(extra_callbacks=None, epochs=None, force=False, calibrate=True):
-    tf.keras.utils.set_random_seed(42)
-    os.environ["TF_DETERMINISTIC_OPS"] = "1"
-    print("Starting enhanced model training with extended trend features...")
-    config = Config()
-    data_processor = DataProcessor(config)
-    df, close_values = data_processor.load_and_prepare_data()
-
-    (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
-     X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
-     y_train, y_test, target_scaler) = data_processor.prepare_datasets(df, close_values)
-
-    # Calculate training statistics for time estimation
-    train_batches = math.ceil(X_train_seq.shape[0] / config.BATCH_SIZE)
-    actual_epochs = int(epochs) if epochs is not None else int(config.EPOCHS)
-
-    # Estimate training time based on hardware
-    gpus = tf.config.list_physical_devices('GPU')
-    if gpus:
-        time_per_batch = 0.15  # seconds per batch on GPU (conservative estimate)
-        device_type = "GPU"
-    else:
-        time_per_batch = 2.0   # seconds per batch on CPU (conservative estimate)
-        device_type = "CPU"
-
-    estimated_time_per_epoch = train_batches * time_per_batch
-    estimated_total_time = estimated_time_per_epoch * actual_epochs
-
-    print(f"\n⏱️  Training Time Estimation ({device_type}):")
-    print(f"   Batches per epoch: {train_batches}")
-    print(f"   Time per batch: ~{time_per_batch:.2f}s")
-    print(f"   Time per epoch: ~{estimated_time_per_epoch/60:.1f} minutes")
-    print(f"   Total time ({actual_epochs} epochs): ~{estimated_total_time/3600:.1f} hours")
-
-    predictor = PricePredictor(config)
-    base_model = predictor.build_model()
-    pred_scale = np.std(y_train) if np.std(y_train) > 0 else 1.0
-    pred_mean = np.mean(y_train)
-    custom_model = CustomTrainModel(
-        base_model=base_model,
-        pred_scale=pred_scale,
-        pred_mean=pred_mean,
-        lambda_point=config.LAMBDA_POINT,
-        lambda_local_trend=config.LAMBDA_LOCAL_TREND,
-        lambda_global_trend=config.LAMBDA_GLOBAL_TREND,
-        lambda_extended_trend=config.LAMBDA_EXTENDED_TREND,
-        lambda_dir=config.LAMBDA_DIR,
-        config=config,
-        inputs=base_model.inputs,
-        outputs=base_model.outputs
+    # Backward-compatible wrapper; prefer `train_and_evaluate()` for new code.
+    result = train_and_evaluate(
+        config=Config(),
+        config_overrides=None,
+        csv_path=None,
+        read_csv_kwargs=None,
+        epochs=epochs,
+        force=force,
+        calibrate=calibrate,
+        extra_callbacks=list(extra_callbacks) if extra_callbacks else None,
     )
 
-    # Create datasets before compilation so we can calibrate lambdas on multiple batches
-    predictor = PricePredictor(config)
-    train_ds, val_ds = predictor.create_datasets(
-        X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
-        X_test_seq, y_test_scaled, last_close_test, extended_trends_test
+    custom_model = result.model
+    target_scaler = result.target_scaler
+    X_test_seq = result.X_test_seq
+    y_test = result.y_test
+    last_close_test = result.last_close_test
+    history = result.history
+    extended_trends_test = result.extended_trends_test
+
+    # For legacy callers, keep `y_pred` as the 5-min horizon delta series.
+    # The full set of head outputs is exposed via `predictions_dict`.
+    y_pred = np.asarray(result.predictions["delta"]["h1"], dtype=float).reshape(-1)
+    predictions_dict = result.predictions
+
+    # Provide a horizon-wide summary (no "primary horizon" framing).
+    try:
+        m = result.metrics
+        if isinstance(m, dict) and 'delta' in m:
+            print("\n[Summary: Per-Horizon Delta Metrics]")
+            for h_key, label in zip(m.get('meta', {}).get('horizon_keys', ['h0','h1','h2']), m.get('meta', {}).get('horizon_labels', ['1-min','5-min','15-min'])):
+                hm = m['delta'].get(h_key, {})
+                print(f"  {label}: MSE={hm.get('mse'):.6f}, RMSE={hm.get('rmse'):.6f}, R2={hm.get('r2'):.6f}")
+    except Exception:
+        pass
+
+    return (
+        custom_model,
+        target_scaler,
+        X_test_seq,
+        y_test,
+        y_pred,
+        last_close_test,
+        history,
+        extended_trends_test,
+        predictions_dict,
     )
-
-    if calibrate == True:
-        # Robust multi-batch median calibration to scale all lambdas relative to their loss magnitudes
-        try:
-            # Save original lambdas
-            orig_lambda_point = custom_model.lambda_point
-            orig_lambda_local = custom_model.lambda_local_trend
-            orig_lambda_global = custom_model.lambda_global_trend
-            orig_lambda_ext = custom_model.lambda_extended_trend
-            orig_lambda_dir = custom_model.lambda_dir
-            orig_lambda_var = custom_model.lambda_var
-
-            # Temporarily set all lambdas to 1.0 for unweighted loss computation
-            custom_model.lambda_point = 1.0
-            custom_model.lambda_local_trend = 1.0
-            custom_model.lambda_global_trend = 1.0
-            custom_model.lambda_extended_trend = 1.0
-            custom_model.lambda_dir = 1.0
-            custom_model.lambda_var = 1.0
-
-            n_calib_batches = 256  # Number of batches for robust sampling
-
-            # Warm-up pass to update BatchNorm statistics
-            print("Warming up BatchNorm statistics for accurate calibration...")
-            for batch in train_ds.take(n_calib_batches):
-                x_batch, _, _, _ = batch
-                _ = custom_model(x_batch, training=True)  # Forward pass to update BN running stats
-
-            point_losses, local_losses, global_losses, ext_losses, dir_losses, var_losses = [], [], [], [], [], []
-
-            for i, batch in enumerate(train_ds.take(n_calib_batches)):
-                x_batch, y_batch, last_batch, ext_batch = batch
-                y_pred_batch = custom_model(x_batch, training=False)
-                # === Updated unpacking for 22-component tuple (per-horizon losses) ===
-                (total, 
-                 point_h0, point_h1, point_h2,
-                 local_h0, global_h0, ext_h0,
-                 local_h1, global_h1, ext_h1,
-                 local_h2, global_h2, ext_h2,
-                 dir_h0, dir_h1, dir_h2,
-                 nll_h0, nll_h1, nll_h2,
-                 reg_val, inter_reg, vol_loss) = custom_model.custom_loss(
-                    x_batch, y_batch, y_pred_batch, last_batch, ext_batch
-                )
-                # Aggregate across horizons
-                point_val = point_h0 + point_h1 + point_h2
-                local_val = local_h0 + local_h1 + local_h2
-                global_val = global_h0 + global_h1 + global_h2
-                ext_val = ext_h0 + ext_h1 + ext_h2
-                dir_val = dir_h0 + dir_h1 + dir_h2
-                nll_val = nll_h0 + nll_h1 + nll_h2
-                
-                point_losses.append(float(point_val))
-                local_losses.append(float(local_val))
-                global_losses.append(float(global_val))
-                ext_losses.append(float(ext_val))
-                dir_losses.append(float(dir_val))
-                var_losses.append(float(nll_val))
-
-            # Use median to reduce sensitivity to outliers
-            med_point = float(np.median(np.array(point_losses))) if point_losses else 0.0
-            med_local = float(np.median(np.array(local_losses))) if local_losses else 0.0
-            med_global = float(np.median(np.array(global_losses))) if global_losses else 0.0
-            med_ext = float(np.median(np.array(ext_losses))) if ext_losses else 0.0
-            med_dir = float(np.median(np.array(dir_losses))) if dir_losses else 0.0
-            med_var = float(np.median(np.array(var_losses))) if var_losses else 0.0
-
-            # Compute reference loss as the mean of non-zero median losses
-            non_zero_medians = [m for m in [med_point, med_local, med_global, med_ext, med_dir, med_var] if m > 1e-8]
-            ref_loss = float(np.mean(non_zero_medians)) if non_zero_medians else 1.0
-
-            eps = 1e-8
-            damping = Config.DAMPING  # Square root adjustment to avoid overreaction
-
-            # Adjust all lambdas to balance contributions relative to reference loss
-            new_point = orig_lambda_point * (ref_loss / (med_point + eps)) ** damping if med_point > eps else orig_lambda_point
-            new_local = orig_lambda_local * (ref_loss / (med_local + eps)) ** damping if med_local > eps else orig_lambda_local
-            new_global = orig_lambda_global * (ref_loss / (med_global + eps)) ** damping if med_global > eps else orig_lambda_global
-            new_ext = orig_lambda_ext * (ref_loss / (med_ext + eps)) ** damping if med_ext > eps else orig_lambda_ext
-            new_dir = orig_lambda_dir * (ref_loss / (med_dir + eps)) ** damping if med_dir > eps else orig_lambda_dir
-            new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
-
-            # Clamp lambdas for stability
-            min_lambda = 1e-3
-            max_lambda = 1000.0
-            custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
-            custom_model.lambda_local_trend = float(np.clip(new_local, min_lambda, max_lambda))
-            custom_model.lambda_global_trend = float(np.clip(new_global, min_lambda, max_lambda))
-            custom_model.lambda_extended_trend = float(np.clip(new_ext, min_lambda, max_lambda))
-            custom_model.lambda_dir = float(np.clip(new_dir, min_lambda, max_lambda))
-            custom_model.lambda_var = float(np.clip(new_var, min_lambda, max_lambda))
-
-            print(f"Calibration (multi-batch median with actual losses): "
-                  f"med_point={med_point:.6f}, med_local={med_local:.6f}, "
-                  f"med_global={med_global:.6f}, med_ext={med_ext:.6f}, med_dir={med_dir:.6f}, med_var={med_var:.6f}, ref_loss={ref_loss:.6f}")
-            print(f"New lambdas (damped+clamped): "
-                  f"point={custom_model.lambda_point:.6f}, local={custom_model.lambda_local_trend:.6f}, "
-                  f"global={custom_model.lambda_global_trend:.6f}, ext={custom_model.lambda_extended_trend:.6f}, dir={custom_model.lambda_dir:.6f}, var={custom_model.lambda_var:.6f}")
-        except Exception as e:
-            print("Calibration pass failed, proceeding with default lambdas:", e)
-
-
-    opt = optimizers.Adam(learning_rate=config.LR)
-    custom_model.compile(optimizer=opt)
-    csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
-    es = callbacks.EarlyStopping(monitor='val_loss', patience=config.PATIENCE, restore_best_weights=True)
-    ckpt = callbacks.ModelCheckpoint(config.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
-    # === STEP 7: Add per-horizon MCC-based early stopping (primary horizon h1) ===
-    # Monitor the Matthews Correlation Coefficient for the primary 5-min horizon (h1)
-    # MCC provides balanced metric for imbalanced classification; maximized not minimized
-    es_mcc = callbacks.EarlyStopping(
-        monitor='val_gauss_dir_mcc_h1',  # Primary horizon (5-min) MCC from (mu,var)
-        patience=15,
-        mode='max',  # MCC is maximized (higher is better)
-        restore_best_weights=False  # Rely on ckpt checkpoint, not this callback
-    )
-    simple_logger = SimpleLoggingCallback()
-    tqdm_callback = TqdmCallback()
-    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.99, patience=Config.EPOCHS//2)
-    learnable_layer = None
-    for layer in custom_model.layers:
-        if getattr(layer, 'name', '').startswith('learnable_indicators'):
-            learnable_layer = layer
-            break
-    params_logger = ParamsLogger(layer=learnable_layer, out_csv='indicator_params_history.csv')
-
-    # Decide how many epochs to run (allow caller to override)
-    actual_epochs = int(epochs) if epochs is not None else int(config.EPOCHS)
-
-    if os.path.exists(config.MODEL_PATH):
-        print(f"Loading existing model weights from {config.MODEL_PATH}...")
-        try:
-            custom_model.load_weights(config.MODEL_PATH)
-        except Exception as e:
-            print(f"Warning: failed to load existing weights but continuing: {e}")
-        if os.path.exists(config.SCALER_PATH):
-            try:
-                target_scaler = joblib.load(config.SCALER_PATH)
-                print(f"Loaded scaler from {config.SCALER_PATH}")
-            except Exception as e:
-                print(f"Warning: failed to load scaler: {e}")
-        else:
-            print(f"Scaler file not found at {config.SCALER_PATH}.")
-            # proceed — scaler will be saved after training
-
-        if not force:
-            print("Model weights loaded. Skipping training (pass force=True to override).")
-            history = None
-        else:
-            print("Force flag set: continuing to train despite existing weights.")
-            callbacks_list = [csv_logger, es, ckpt, es_mcc, tqdm_callback, params_logger, lr_scheduler]
-            if extra_callbacks:
-                callbacks_list += list(extra_callbacks)
-            print(f"Training for {actual_epochs} epochs (force mode)...")
-            history = custom_model.fit(
-                train_ds,
-                validation_data=val_ds,
-                epochs=actual_epochs,
-                callbacks=callbacks_list,
-                verbose=1,  # Set to 0 to let tqdm handle progress display
-            )
-            print(f"Enhanced model weights saved to {config.MODEL_PATH}")
-            try:
-                joblib.dump(target_scaler, config.SCALER_PATH)
-                print(f"Scaler saved to {config.SCALER_PATH}")
-            except Exception:
-                pass
-    else:
-        print("No saved weights found. Training a new model with extended trend features...")
-        callbacks_list = [csv_logger, es, ckpt, es_mcc, tqdm_callback, params_logger, lr_scheduler]
-        if extra_callbacks:
-            callbacks_list += list(extra_callbacks)
-        print(f"Training for {actual_epochs} epochs...")
-        history = custom_model.fit(
-            train_ds,
-            validation_data=val_ds,
-            epochs=actual_epochs,
-            callbacks=callbacks_list,
-            verbose=0,  # Set to 0 to let tqdm handle progress display
-        )
-        print(f"Enhanced model weights saved to {config.MODEL_PATH}")
-        try:
-            joblib.dump(target_scaler, config.SCALER_PATH)
-            print(f"Scaler saved to {config.SCALER_PATH}")
-        except Exception:
-            pass
-
-    print("Evaluating enhanced model...")
-    train_ds, val_ds = predictor.create_datasets(
-        X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
-        X_test_seq, y_test_scaled, last_close_test, extended_trends_test
-    )
-    X_test_simple = tf.data.Dataset.from_tensor_slices(X_test_seq).batch(config.BATCH_SIZE)
-    y_pred_all = custom_model.predict(X_test_simple)
-    # Model returns 9 outputs (interleaved): price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, price_h2, dir_h2, var_h2
-    y_pred_price_all = np.column_stack([
-        y_pred_all[0][:, 0],  # price_h0
-        y_pred_all[3][:, 0],  # price_h1
-        y_pred_all[6][:, 0]   # price_h2
-    ])  # Shape: [test_len, 3] for (h0=1min, h1=5min, h2=15min)
-
-    # Only keep predictions for actual test samples (remove padding from last batch if any)
-    y_pred_price_all = y_pred_price_all[:len(y_test)]  # [test_len, 3]
-
-    # Extract per-horizon predictions
-    y_pred_h0 = y_pred_price_all[:, 0]  # 1-min horizon
-    y_pred_h1 = y_pred_price_all[:, 1]  # 5-min horizon (primary)
-    y_pred_h2 = y_pred_price_all[:, 2]  # 15-min horizon
-
-    # Inverse transform each horizon (target_scaler expects [n, 1] shape)
-    y_pred_h0_raw = target_scaler.inverse_transform(y_pred_h0.reshape(-1, 1)).ravel()
-    y_pred_h1_raw = target_scaler.inverse_transform(y_pred_h1.reshape(-1, 1)).ravel()  # Primary
-    y_pred_h2_raw = target_scaler.inverse_transform(y_pred_h2.reshape(-1, 1)).ravel()
-
-    # Targets are multi-horizon deltas: y_test[:,0]=h0, y_test[:,1]=h1, y_test[:,2]=h2
-    y_test = np.asarray(y_test)
-    if y_test.ndim != 2 or y_test.shape[1] != 3:
-        raise ValueError(f"Expected y_test shape (N,3) for delta targets, got {y_test.shape}")
-
-    # Use h1 (5-min primary) for main evaluation metrics
-    y_pred = y_pred_h1_raw
-    y_true_primary = y_test[:, 1]
-
-    # Compute regression metrics for all horizons (delta space)
-    print("\n[Per-Horizon Delta Evaluation]")
-    y_true_h0 = y_test[:, 0]
-    y_true_h1 = y_test[:, 1]
-    y_true_h2 = y_test[:, 2]
-    for h_name, h_pred, h_true in [
-        ("h0_1min", y_pred_h0_raw, y_true_h0),
-        ("h1_5min", y_pred_h1_raw, y_true_h1),
-        ("h2_15min", y_pred_h2_raw, y_true_h2),
-    ]:
-        mse_h = mean_squared_error(h_true, h_pred)
-        r2_h = r2_score(h_true, h_pred)
-        mape_h = mean_absolute_percentage_error(h_true, h_pred)
-        print(f"  {h_name}: MSE={mse_h:.6f}, R2={r2_h:.6f}, MAPE={mape_h:.4f}")
-
-    # Extract direction predictions from 9-output list
-    dir_pred_h0 = np.asarray(y_pred_all[1]).reshape(-1)
-    dir_pred_h1 = np.asarray(y_pred_all[4]).reshape(-1)
-    dir_pred_h2 = np.asarray(y_pred_all[7]).reshape(-1)
-    dir_pred_h0 = dir_pred_h0[:len(y_true_h0)]
-    dir_pred_h1 = dir_pred_h1[:len(y_true_h1)]
-    dir_pred_h2 = dir_pred_h2[:len(y_true_h2)]
-
-    # Compute regression metrics for primary horizon (h1)
-    mse_val = mean_squared_error(y_true_primary, y_pred)
-    r2_val = r2_score(y_true_primary, y_pred)
-    mape_val = mean_absolute_percentage_error(y_true_primary, y_pred)
-
-    # Compute direction metrics for all 3 horizons
-    print("\n[Per-Horizon Direction Metrics]")
-    print(f"{'Horizon':<12} {'Accuracy':<10} {'F1':<10} {'Sensitivity':<12} {'Specificity':<12} {'MCC':<10}")
-    print("-" * 66)
-    
-    direction_results = {}
-    deadband_bps = float(getattr(config, 'DIR_DEADBAND_BPS', 0.0))
-    deadband = deadband_bps / 10000.0
-    threshold_delta = deadband * (np.asarray(last_close_test, dtype=float) + 1e-12)
-
-    for h_idx, (h_name, h_delta_pred, h_delta_true, h_dir_prob) in enumerate([
-        ("h0_1min", y_pred_h0_raw, y_true_h0, dir_pred_h0),
-        ("h1_5min", y_pred_h1_raw, y_true_h1, dir_pred_h1),
-        ("h2_15min", y_pred_h2_raw, y_true_h2, dir_pred_h2),
-    ]):
-        # Binary direction: UP if delta > deadband * last_close, DOWN otherwise
-        pred_dir = (h_delta_pred > threshold_delta)  # bool
-        true_dir = (h_delta_true > threshold_delta)  # bool
-        
-        # Confusion matrix components
-        tp = np.sum((pred_dir == 1) & (true_dir == 1))
-        tn = np.sum((pred_dir == 0) & (true_dir == 0))
-        fp = np.sum((pred_dir == 1) & (true_dir == 0))
-        fn = np.sum((pred_dir == 0) & (true_dir == 1))
-        
-        # Metrics
-        accuracy = (tp + tn) / (tp + tn + fp + fn) if (tp + tn + fp + fn) > 0 else 0.0
-        f1_score_val = f1_score(true_dir, pred_dir, zero_division=0)
-        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0.0  # TPR
-        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0.0  # TNR
-        
-        # Matthews Correlation Coefficient
-        denominator = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-        mcc = (tp * tn - fp * fn) / denominator if denominator > 0 else 0.0
-        
-        print(f"{h_name:<12} {accuracy:<10.4f} {f1_score_val:<10.4f} {sensitivity:<12.4f} {specificity:<12.4f} {mcc:<10.4f}")
-        
-        direction_results[h_name] = {
-            "accuracy": float(accuracy),
-            "f1": float(f1_score_val),
-            "sensitivity": float(sensitivity),
-            "specificity": float(specificity),
-            "mcc": float(mcc),
-            "tp": int(tp), "tn": int(tn), "fp": int(fp), "fn": int(fn)
-        }
-
-    print(f"\n[Primary Horizon (h1_5min)] MSE: {mse_val:.6f}, R2: {r2_val:.6f}, MAPE: {mape_val:.4f}")
-
-    return (custom_model, target_scaler, X_test_seq, y_test, y_pred,
-            last_close_test, history, extended_trends_test,
-            {"h0": y_pred_h0_raw, "h1": y_pred_h1_raw, "h2": y_pred_h2_raw})
