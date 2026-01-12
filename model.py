@@ -39,7 +39,7 @@ class Config:
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = None  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
     BATCH_SIZE = 360
-    EPOCHS = 80
+    EPOCHS = 8
     LR = 1e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
     MAX_SEQUENCE_COUNT = 1440  # Limit most recent sequences to bound training size
@@ -58,7 +58,7 @@ class Config:
     DAMPING = 0.5
     LAMBDA_POINT = 1.0  
     LAMBDA_LOCAL_TREND  = 1.0
-    LAMBDA_GLOBAL_TREND =  1.0
+    LAMBDA_GLOBAL_TREND =  0.5
     LAMBDA_EXTENDED_TREND = 1.0
     LAMBDA_QUANTILE = 1.0
     REG_MOMENTUM_L2 = 1e-4
@@ -72,13 +72,13 @@ class Config:
     # - h0 (1-min): Short-term noise, harder to predict, may need lower weight to avoid overfitting noise
     # - h1 (5-min): Primary horizon, balanced signal/noise, standard weight
     # - h2 (15-min): Long-term trend, more stable, higher weight to enforce consistency
-    LAMBDA_SHORT = 0.8   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
+    LAMBDA_SHORT = 1.0   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
     LAMBDA_POINT = 1.0   # h1 (5-min):  Primary horizon baseline
-    LAMBDA_LONG = 1.2    # h2 (15-min): Increased from 1.0 to enforce long-term consistency
+    LAMBDA_LONG = 1.0   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
     
     # Auxiliary loss weights
     LAMBDA_DIR = 1.0  # Direction classification (focal loss)
-    LAMBDA_INTER = 1.0  # Interconnection regularization between horizons
+    LAMBDA_INTER = 0.5  # Interconnection regularization between horizons
     LAMBDA_VOL = 1.0  # Volatility penalty (weak constraint)
     LAMBDA_VAR = 1.0  # Variance NLL (confidence estimation)
 
@@ -111,7 +111,7 @@ class Config:
     SIGMOID_SCALE = 1.0
 
 # Training stability controls
-    INDICATOR_GRAD_MULT = 10.0
+    INDICATOR_GRAD_MULT = 1.0
     GRAD_CLIP_NORM = 5.0
 
 # Focal loss hyperparameters for direction classification
@@ -135,7 +135,7 @@ class Config:
 
     # Align direction head with distribution-implied P(up) from (mu, var).
     # Setting this > 0 helps avoid degenerate constant direction probabilities.
-    LAMBDA_DIR_ALIGN = 0.1
+    LAMBDA_DIR_ALIGN = 0.5
 # -----------------------------
 class DataProcessor:
     def __init__(self, config):
@@ -767,10 +767,12 @@ def make_interactive_plot_callback(
                     fig.add_trace(go.Scatter(x=epochs, y=self.history['dir_acc_avg'], mode='lines+markers', name='dir_acc_avg', line=dict(color='#81C784')), row=2, col=1)
                 if 'val_dir_acc_avg' in self.history:
                     fig.add_trace(go.Scatter(x=epochs, y=self.history['val_dir_acc_avg'], mode='lines+markers', name='val_dir_acc_avg', line=dict(color='#66BB6A')), row=2, col=1)
-                if 'f1_avg' in self.history:
-                    fig.add_trace(go.Scatter(x=epochs, y=self.history['f1_avg'], mode='lines+markers', name='f1_avg', line=dict(color='#FFB74D')), row=2, col=1)
-                if 'val_f1_avg' in self.history:
-                    fig.add_trace(go.Scatter(x=epochs, y=self.history['val_f1_avg'], mode='lines+markers', name='val_f1_avg', line=dict(color='#FFA726')), row=2, col=1)
+                # Balanced Accuracy: (Sensitivity + Specificity) / 2
+                # Range [0, 1], 50% = random, class-imbalance robust (unlike accuracy)
+                if 'bal_acc_avg' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['bal_acc_avg'], mode='lines+markers', name='bal_acc_avg', line=dict(color='#FFB74D')), row=2, col=1)
+                if 'val_bal_acc_avg' in self.history:
+                    fig.add_trace(go.Scatter(x=epochs, y=self.history['val_bal_acc_avg'], mode='lines+markers', name='val_bal_acc_avg', line=dict(color='#FFA726')), row=2, col=1)
                 
                 # Add 50% dotted lines to metrics subplot (row 2)
                 if epochs:
@@ -845,12 +847,25 @@ def make_interactive_plot_callback(
                 if loss_hist and val_loss_hist:
                     gen_gap = val_loss_hist[-1] - loss_hist[-1]
                 
-                # Coherence: correlation between train and val metrics
+                # Coherence: How well train/val losses track each other (moving in same direction)
+                # High coherence (>0.8) = model generalizes well, losses move together
+                # Low/negative coherence = overfitting (train improves, val doesn't) or noise
+                # Note: This measures train/val alignment, not cross-horizon consistency
                 coherence = 0.0
                 if len(loss_hist) >= 3 and len(val_loss_hist) >= 3:
                     try:
-                        coherence = np.corrcoef(loss_hist[-10:], val_loss_hist[-10:])[0, 1]
-                        coherence = coherence if not np.isnan(coherence) else 0.0
+                        # Use direction agreement instead of correlation for robustness
+                        # Direction: did loss increase or decrease between epochs?
+                        train_diffs = np.diff(loss_hist[-10:])
+                        val_diffs = np.diff(val_loss_hist[-10:])
+                        if len(train_diffs) > 0 and len(val_diffs) > 0:
+                            # Direction agreement: both increasing or both decreasing
+                            train_dirs = np.sign(train_diffs)
+                            val_dirs = np.sign(val_diffs)
+                            agreement = np.mean(train_dirs == val_dirs)
+                            coherence = agreement  # Range [0, 1], 1 = perfect agreement
+                        else:
+                            coherence = 0.5  # Neutral if not enough data
                     except Exception:
                         coherence = 0.0
                 
@@ -896,8 +911,10 @@ def make_interactive_plot_callback(
                         <div style="margin-left: 15px;">
                             <span style="display: inline-block; width: 180px;">dir_acc_avg:</span> <span style="color: #81C784;">{logs.get('dir_acc_avg', 0):.4f}</span><br>
                             <span style="display: inline-block; width: 180px;">val_dir_acc_avg:</span> <span style="color: #66BB6A;">{logs.get('val_dir_acc_avg', 0):.4f}</span><br>
-                            <span style="display: inline-block; width: 180px;">f1_avg:</span> <span style="color: #FFB74D;">{logs.get('f1_avg', 0):.4f}</span><br>
-                            <span style="display: inline-block; width: 180px;">val_f1_avg:</span> <span style="color: #FFA726;">{logs.get('val_f1_avg', 0):.4f}</span><br>
+                            <span style="display: inline-block; width: 180px;">bal_acc_avg:</span> <span style="color: #FFB74D;">{logs.get('bal_acc_avg', 0):.4f}</span> <span style="color: #888;">(50%=random)</span><br>
+                            <span style="display: inline-block; width: 180px;">val_bal_acc_avg:</span> <span style="color: #FFA726;">{logs.get('val_bal_acc_avg', 0):.4f}</span><br>
+                            <span style="display: inline-block; width: 180px;">brier_avg:</span> <span style="color: #CE93D8;">{logs.get('brier_avg', 0):.4f}</span><br>
+                            <span style="display: inline-block; width: 180px;">ece_avg:</span> <span style="color: #BA68C8;">{logs.get('ece_avg', 0):.4f}</span><br>
                         </div>
                     </div>
                     
@@ -1065,8 +1082,12 @@ def train_and_evaluate(
     csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
     es = callbacks.EarlyStopping(monitor='val_loss', patience=Config.PATIENCE, restore_best_weights=True)
     ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
+    # MCC-based early stopping for direction head (class-imbalance robust)
+    # MCC = (TP×TN - FP×FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
+    # Range: [-1, 1], where 1 = perfect, 0 = random, -1 = inverse
+    # Unlike accuracy, MCC is balanced even with severe class imbalance
     es_dir = callbacks.EarlyStopping(
-        monitor='val_dir_acc_h1',
+        monitor='val_dir_mcc_h1',
         patience=Config.PATIENCE,
         mode='max',
         restore_best_weights=False
@@ -1774,6 +1795,108 @@ class CustomTrainModel(models.Model):
         return focal
 
     # -------------------------
+    # Dice Loss for F1-like optimization (differentiable)
+    # -------------------------
+    def dice_loss(self, true_labels, logits, smooth=1.0, reduce=True):
+        """
+        Dice Loss: 1 - (2×TP + smooth) / (2×TP + FP + FN + smooth)
+        
+        Directly optimizes F1-like metric. Differentiable approximation using soft predictions.
+        
+        Args:
+            true_labels: Binary labels [B] (0 or 1)
+            logits: Predicted probabilities [B] from sigmoid (0 to 1)
+            smooth: Smoothing factor to prevent division by zero (default 1.0)
+            reduce: If True, return scalar mean; if False, return per-example
+        
+        Returns:
+            Dice loss value (0 = perfect, 1 = worst)
+        """
+        true_labels = tf.cast(true_labels, tf.float32)
+        logits = tf.cast(logits, tf.float32)
+        smooth = tf.cast(smooth, tf.float32)
+        
+        # Soft TP, FP, FN using probabilities
+        # TP: true=1, pred=high → true × pred
+        # FP: true=0, pred=high → (1-true) × pred
+        # FN: true=1, pred=low → true × (1-pred)
+        intersection = true_labels * logits  # Soft TP
+        
+        # Dice = 2×intersection / (sum(true) + sum(pred))
+        # Loss = 1 - Dice
+        numerator = 2.0 * intersection + smooth
+        denominator = true_labels + logits + smooth
+        
+        dice_per_sample = numerator / (denominator + 1e-8)
+        dice_loss_per_sample = 1.0 - dice_per_sample
+        
+        if reduce:
+            return tf.reduce_mean(dice_loss_per_sample)
+        return dice_loss_per_sample
+
+    # -------------------------
+    # Combined Focal + Dice Loss for balanced optimization
+    # -------------------------
+    def combined_direction_loss(self, true_labels, logits, alpha=None, gamma=None, 
+                                 focal_weight=0.5, dice_weight=0.5, reduce=True):
+        """
+        Combined Focal + Dice loss for direction classification.
+        
+        - Focal loss: Handles class imbalance by focusing on hard examples
+        - Dice loss: Directly optimizes F1-like metric
+        
+        Args:
+            true_labels: Binary labels [B]
+            logits: Predicted probabilities [B]
+            alpha: Focal loss class weight (dynamic if None)
+            gamma: Focal loss focusing parameter
+            focal_weight: Weight for focal loss component (default 0.5)
+            dice_weight: Weight for dice loss component (default 0.5)
+            reduce: If True, return scalar; if False, return per-example
+        
+        Returns:
+            Combined loss value
+        """
+        focal = self.focal_loss(true_labels, logits, alpha=alpha, gamma=gamma, reduce=reduce)
+        dice = self.dice_loss(true_labels, logits, reduce=reduce)
+        
+        return focal_weight * focal + dice_weight * dice
+
+    # -------------------------
+    # Dynamic Alpha Computation for Class Balancing
+    # -------------------------
+    def compute_dynamic_alpha(self, true_labels, min_alpha=0.3, max_alpha=0.7):
+        """
+        Compute dynamic focal alpha based on actual class distribution in batch.
+        
+        Alpha weights the DOWN class (label=0), so:
+        - If batch has more UP (label=1), alpha should be higher (weight DOWN more)
+        - If batch has more DOWN (label=0), alpha should be lower (weight UP more)
+        
+        Args:
+            true_labels: Binary labels [B]
+            min_alpha: Minimum alpha (clips to prevent instability)
+            max_alpha: Maximum alpha (clips to prevent instability)
+        
+        Returns:
+            Dynamic alpha value clipped to [min_alpha, max_alpha]
+        """
+        true_labels = tf.cast(true_labels, tf.float32)
+        
+        # Compute proportion of UP class (label=1)
+        up_ratio = tf.reduce_mean(true_labels)
+        
+        # Alpha = up_ratio means: weight DOWN inversely to its frequency
+        # If up_ratio=0.6 (60% UP), alpha=0.6 → DOWN gets 0.6 weight, UP gets 0.4
+        # This balances the classes
+        alpha = up_ratio
+        
+        # Clip for stability
+        alpha = tf.clip_by_value(alpha, min_alpha, max_alpha)
+        
+        return alpha
+
+    # -------------------------
     # Point loss (log-cosh)
     # -------------------------
     def point_huber(self, y_true_scaled, y_pred_scaled, last_close_scaled=None, delta=None):
@@ -2062,15 +2185,27 @@ class CustomTrainModel(models.Model):
         
         trend_loss_val = extended_trend_h0 + extended_trend_h1 + extended_trend_h2 + coherence_penalty * 0.01  # small weight for coherence
 
-        # === DIRECTION LOSSES (3 horizons × focal loss = 3 components) ===
+        # === DIRECTION LOSSES (3 horizons × combined focal+dice loss = 3 components) ===
         # Apply deadband masks: ignore neutral samples (mask=0). Guard against empty masks.
         dir_pred_h0 = tf.squeeze(dir_h0, axis=1)
         dir_pred_h1 = tf.squeeze(dir_h1, axis=1)
         dir_pred_h2 = tf.squeeze(dir_h2, axis=1)
 
-        per_ex_h0 = self.focal_loss(true_dir_h0, dir_pred_h0, reduce=False)
-        per_ex_h1 = self.focal_loss(true_dir_h1, dir_pred_h1, reduce=False)
-        per_ex_h2 = self.focal_loss(true_dir_h2, dir_pred_h2, reduce=False)
+        # Compute dynamic alpha per horizon based on batch class distribution
+        # This automatically balances focal loss weighting based on actual UP/DOWN ratio
+        alpha_h0 = self.compute_dynamic_alpha(true_dir_h0, min_alpha=0.3, max_alpha=0.7)
+        alpha_h1 = self.compute_dynamic_alpha(true_dir_h1, min_alpha=0.3, max_alpha=0.7)
+        alpha_h2 = self.compute_dynamic_alpha(true_dir_h2, min_alpha=0.3, max_alpha=0.7)
+
+        # Combined Focal + Dice loss for each horizon
+        # Focal: handles class imbalance via dynamic alpha + hard example focusing
+        # Dice: directly optimizes F1-like metric (differentiable TP/FP/FN)
+        per_ex_h0 = self.combined_direction_loss(true_dir_h0, dir_pred_h0, alpha=alpha_h0, 
+                                                  focal_weight=0.5, dice_weight=0.5, reduce=False)
+        per_ex_h1 = self.combined_direction_loss(true_dir_h1, dir_pred_h1, alpha=alpha_h1,
+                                                  focal_weight=0.5, dice_weight=0.5, reduce=False)
+        per_ex_h2 = self.combined_direction_loss(true_dir_h2, dir_pred_h2, alpha=alpha_h2,
+                                                  focal_weight=0.5, dice_weight=0.5, reduce=False)
 
         dir_loss_h0 = tf.reduce_sum(per_ex_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + self.eps)
         dir_loss_h1 = tf.reduce_sum(per_ex_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + self.eps)
@@ -2079,20 +2214,27 @@ class CustomTrainModel(models.Model):
 
         # === VARIANCE NLL LOSSES (3 horizons × 1 = 3 components) ===
         # Clip variance to prevent log/div blow-ups and stabilize gradients.
+        # NLL formula: 0.5 * log(2πσ²) + 0.5 * (y-μ)²/σ²
+        # The log(2π) ≈ 1.838 constant ensures NLL is always positive for proper interpretation.
+        # We also floor the final NLL at 0 to prevent negative display values.
         var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
         var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
         var_h0_c = tf.clip_by_value(var_h0, var_floor, var_cap)
         var_h1_c = tf.clip_by_value(var_h1, var_floor, var_cap)
         var_h2_c = tf.clip_by_value(var_h2, var_floor, var_cap)
+        
+        # log(2π) constant for proper Gaussian NLL (≈ 1.838)
+        log_2pi = tf.constant(1.8378770664093453, dtype=tf.float32)  # tf.math.log(2π)
 
-        nll_h0 = 0.5 * tf.math.log(var_h0_c + self.eps) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + self.eps)
-        nll_h0_val = tf.reduce_mean(nll_h0)
+        # Full Gaussian NLL: 0.5 * log(2πσ²) + 0.5 * (y-μ)²/σ²
+        nll_h0 = 0.5 * (log_2pi + tf.math.log(var_h0_c + self.eps)) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + self.eps)
+        nll_h0_val = tf.maximum(tf.reduce_mean(nll_h0), 0.0)  # Floor at 0 for display
         
-        nll_h1 = 0.5 * tf.math.log(var_h1_c + self.eps) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + self.eps)
-        nll_h1_val = tf.reduce_mean(nll_h1)
+        nll_h1 = 0.5 * (log_2pi + tf.math.log(var_h1_c + self.eps)) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + self.eps)
+        nll_h1_val = tf.maximum(tf.reduce_mean(nll_h1), 0.0)  # Floor at 0 for display
         
-        nll_h2 = 0.5 * tf.math.log(var_h2_c + self.eps) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + self.eps)
-        nll_h2_val = tf.reduce_mean(nll_h2)
+        nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + self.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + self.eps)
+        nll_h2_val = tf.maximum(tf.reduce_mean(nll_h2), 0.0)  # Floor at 0 for display
         
         total_nll = self.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
 
@@ -2401,6 +2543,14 @@ class CustomTrainModel(models.Model):
             specificity = TN / (TN + FP + 1e-8)
             metrics[f"{prefix}dir_specificity_{h_name}"] = specificity
 
+            # Balanced Accuracy: (Sensitivity + Specificity) / 2
+            # Range: [0, 1] (displayable as 0-100%)
+            # Random classifier: 50%
+            # Perfect classifier: 100%
+            # Class-imbalance robust: biased classifier → ~50% (unlike accuracy)
+            balanced_acc = (sensitivity + specificity) / 2.0
+            metrics[f"{prefix}dir_bal_acc_{h_name}"] = balanced_acc
+
             # F1 Score (harmonic mean of precision and recall)
             precision = TP / (TP + FP + 1e-8)
             recall = TP / (TP + FN + 1e-8)
@@ -2408,10 +2558,53 @@ class CustomTrainModel(models.Model):
             metrics[f"{prefix}dir_f1_{h_name}"] = f1
 
             # Matthews Correlation Coefficient (balanced metric for binary classification)
+            # MCC = (TP×TN - FP×FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
+            # Range: [-1, +1] where:
+            #   +1 = perfect classification
+            #    0 = random guessing
+            #   -1 = perfect inverse (always wrong)
+            # IMPORTANT: MCC < 0 is a diagnostic signal, not a bug!
+            # It means the model is worse than random (e.g., biased to always predict one class)
             mcc_numerator = (TP * TN) - (FP * FN)
-            mcc_denominator = tf.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + 1e-8)
-            mcc = mcc_numerator / mcc_denominator
+            # Handle degenerate cases where one marginal is zero
+            marginal_product = (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)
+            # If any marginal is 0, MCC is undefined → return 0 (equivalent to random)
+            mcc_denominator = tf.sqrt(marginal_product + 1e-8)
+            mcc = tf.where(
+                marginal_product > 1e-8,
+                mcc_numerator / mcc_denominator,
+                tf.constant(0.0, dtype=tf.float32)  # Undefined → 0 (random equivalent)
+            )
             metrics[f"{prefix}dir_mcc_{h_name}"] = mcc
+
+            # ========== CALIBRATION METRICS ==========
+            # Brier Score: Mean squared error between predicted probability and actual outcome
+            # Range: [0, 1], lower is better (0 = perfect calibration)
+            # Brier = mean((p - y)^2) where p is predicted prob, y is true label
+            brier_per_sample = tf.square(dir_pred - true_dir)
+            brier_score = tf.reduce_sum(brier_per_sample * m) / (tf.reduce_sum(m) + 1e-8)
+            metrics[f"{prefix}dir_brier_{h_name}"] = brier_score
+
+            # Expected Calibration Error (ECE): Weighted average of |accuracy - confidence| per bin
+            # Approximated using a simple 10-bin approach
+            # Lower is better (0 = perfectly calibrated)
+            n_bins = 10
+            ece_sum = tf.constant(0.0, dtype=tf.float32)
+            total_masked = tf.reduce_sum(m) + 1e-8
+            for bin_idx in range(n_bins):
+                bin_lower = tf.cast(bin_idx, tf.float32) / n_bins
+                bin_upper = tf.cast(bin_idx + 1, tf.float32) / n_bins
+                # Samples in this probability bin
+                in_bin = tf.cast((dir_pred >= bin_lower) & (dir_pred < bin_upper), tf.float32) * m
+                bin_count = tf.reduce_sum(in_bin)
+                # Accuracy in bin: fraction of correct predictions
+                bin_correct = tf.reduce_sum(tf.cast(pred_dir_binary == true_dir, tf.float32) * in_bin)
+                bin_acc = bin_correct / (bin_count + 1e-8)
+                # Confidence in bin: mean predicted probability
+                bin_conf = tf.reduce_sum(dir_pred * in_bin) / (bin_count + 1e-8)
+                # Weighted contribution to ECE
+                ece_sum = ece_sum + (bin_count / total_masked) * tf.abs(bin_acc - bin_conf)
+            metrics[f"{prefix}dir_ece_{h_name}"] = ece_sum
 
             # CALIBRATION METRICS: Per-class prediction rates to detect bias
             # pred_up_rate: % of predictions that are UP (should be ~50% for balanced predictions)
@@ -2681,15 +2874,48 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     val_sens_fb = [f"{val_fallback}dir_sensitivity_{h}" for h in horizons]
     val_spec_fb = [f"{val_fallback}dir_specificity_{h}" for h in horizons]
 
+    # MCC, Brier, ECE keys for averaging
+    train_mcc_keys = [f"{train_pref}dir_mcc_{h}" for h in horizons]
+    train_mcc_fb = [f"{train_fallback}dir_mcc_{h}" for h in horizons]
+    train_brier_keys = [f"{train_pref}dir_brier_{h}" for h in horizons]
+    train_brier_fb = [f"{train_fallback}dir_brier_{h}" for h in horizons]
+    train_ece_keys = [f"{train_pref}dir_ece_{h}" for h in horizons]
+    train_ece_fb = [f"{train_fallback}dir_ece_{h}" for h in horizons]
+    # Balanced Accuracy keys for averaging
+    train_bal_acc_keys = [f"{train_pref}dir_bal_acc_{h}" for h in horizons]
+    train_bal_acc_fb = [f"{train_fallback}dir_bal_acc_{h}" for h in horizons]
+
+    val_mcc_keys = [f"{val_pref}dir_mcc_{h}" for h in horizons]
+    val_mcc_fb = [f"{val_fallback}dir_mcc_{h}" for h in horizons]
+    val_brier_keys = [f"{val_pref}dir_brier_{h}" for h in horizons]
+    val_brier_fb = [f"{val_fallback}dir_brier_{h}" for h in horizons]
+    val_ece_keys = [f"{val_pref}dir_ece_{h}" for h in horizons]
+    val_ece_fb = [f"{val_fallback}dir_ece_{h}" for h in horizons]
+    # Balanced Accuracy keys for validation
+    val_bal_acc_keys = [f"{val_pref}dir_bal_acc_{h}" for h in horizons]
+    val_bal_acc_fb = [f"{val_fallback}dir_bal_acc_{h}" for h in horizons]
+
     set_if_missing("dir_acc_avg", _first_present({"v": _mean_present(out, train_acc_keys), "v2": _mean_present(out, train_acc_fb)}, ["v", "v2"]))
     set_if_missing("f1_avg", _first_present({"v": _mean_present(out, train_f1_keys), "v2": _mean_present(out, train_f1_fb)}, ["v", "v2"]))
     set_if_missing("dir_sensitivity_avg", _first_present({"v": _mean_present(out, train_sens_keys), "v2": _mean_present(out, train_sens_fb)}, ["v", "v2"]))
     set_if_missing("dir_specificity_avg", _first_present({"v": _mean_present(out, train_spec_keys), "v2": _mean_present(out, train_spec_fb)}, ["v", "v2"]))
+    # MCC, Brier, ECE averages (class-imbalance robust metrics)
+    set_if_missing("mcc_avg", _first_present({"v": _mean_present(out, train_mcc_keys), "v2": _mean_present(out, train_mcc_fb)}, ["v", "v2"]))
+    set_if_missing("brier_avg", _first_present({"v": _mean_present(out, train_brier_keys), "v2": _mean_present(out, train_brier_fb)}, ["v", "v2"]))
+    set_if_missing("ece_avg", _first_present({"v": _mean_present(out, train_ece_keys), "v2": _mean_present(out, train_ece_fb)}, ["v", "v2"]))
+    # Balanced Accuracy average (class-imbalance robust, 50% = random, range [0,1])
+    set_if_missing("bal_acc_avg", _first_present({"v": _mean_present(out, train_bal_acc_keys), "v2": _mean_present(out, train_bal_acc_fb)}, ["v", "v2"]))
 
     set_if_missing("val_dir_acc_avg", _first_present({"v": _mean_present(out, val_acc_keys), "v2": _mean_present(out, val_acc_fb)}, ["v", "v2"]))
     set_if_missing("val_f1_avg", _first_present({"v": _mean_present(out, val_f1_keys), "v2": _mean_present(out, val_f1_fb)}, ["v", "v2"]))
     set_if_missing("val_dir_sensitivity_avg", _first_present({"v": _mean_present(out, val_sens_keys), "v2": _mean_present(out, val_sens_fb)}, ["v", "v2"]))
     set_if_missing("val_dir_specificity_avg", _first_present({"v": _mean_present(out, val_spec_keys), "v2": _mean_present(out, val_spec_fb)}, ["v", "v2"]))
+    # Validation MCC, Brier, ECE averages
+    set_if_missing("val_mcc_avg", _first_present({"v": _mean_present(out, val_mcc_keys), "v2": _mean_present(out, val_mcc_fb)}, ["v", "v2"]))
+    set_if_missing("val_brier_avg", _first_present({"v": _mean_present(out, val_brier_keys), "v2": _mean_present(out, val_brier_fb)}, ["v", "v2"]))
+    set_if_missing("val_ece_avg", _first_present({"v": _mean_present(out, val_ece_keys), "v2": _mean_present(out, val_ece_fb)}, ["v", "v2"]))
+    # Validation Balanced Accuracy average
+    set_if_missing("val_bal_acc_avg", _first_present({"v": _mean_present(out, val_bal_acc_keys), "v2": _mean_present(out, val_bal_acc_fb)}, ["v", "v2"]))
 
     # Batch-level aliases used by batch plot
     set_if_missing(
