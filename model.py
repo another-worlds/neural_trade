@@ -9,7 +9,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_percentage_error, f1_score, accuracy_score
+from sklearn.metrics import mean_squared_error, explained_variance_score, mean_absolute_percentage_error, f1_score, accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
 import joblib
 import matplotlib.pyplot as plt
@@ -37,12 +37,12 @@ class Config:
     CSV_PATH = csv
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
-    RESAMPLE_MINUTES = None  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 360
-    EPOCHS = 8
-    LR = 1e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
+    BATCH_SIZE = 540
+    EPOCHS = 20
+    LR = 1e-2  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 1440  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 30  # Limit most recent sequences to bound training size
 
 
 
@@ -56,10 +56,9 @@ class Config:
 
 # Loss Function Weights
     DAMPING = 0.5
-    LAMBDA_POINT = 1.0  
     LAMBDA_LOCAL_TREND  = 1.0
-    LAMBDA_GLOBAL_TREND =  0.5
-    LAMBDA_EXTENDED_TREND = 1.0
+    LAMBDA_GLOBAL_TREND =  0.1
+    LAMBDA_EXTENDED_TREND = 0.5
     LAMBDA_QUANTILE = 1.0
     REG_MOMENTUM_L2 = 1e-4
     MOMENTUM_CLIP_MIN = 1.0
@@ -72,15 +71,19 @@ class Config:
     # - h0 (1-min): Short-term noise, harder to predict, may need lower weight to avoid overfitting noise
     # - h1 (5-min): Primary horizon, balanced signal/noise, standard weight
     # - h2 (15-min): Long-term trend, more stable, higher weight to enforce consistency
-    LAMBDA_SHORT = 1.0   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
+    LAMBDA_SHORT = 0.8   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
     LAMBDA_POINT = 1.0   # h1 (5-min):  Primary horizon baseline
-    LAMBDA_LONG = 1.0   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
+    LAMBDA_LONG = 0.8    # h2 (15-min): Increased from 1.0 to enforce long-term consistency
     
     # Auxiliary loss weights
-    LAMBDA_DIR = 1.0  # Direction classification (focal loss)
-    LAMBDA_INTER = 0.5  # Interconnection regularization between horizons
+    LAMBDA_DIR = 0.3  # Direction classification (focal loss)
+    LAMBDA_INTER = 0.05  # Interconnection regularization between horizons
     LAMBDA_VOL = 1.0  # Volatility penalty (weak constraint)
     LAMBDA_VAR = 1.0  # Variance NLL (confidence estimation)
+
+    # Variance calibration bounds (in scaled space)
+    VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
+    VAR_CAP = 1e4   # Maximum variance = 10000 (allows high uncertainty)
 
 # paths
     # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
@@ -100,8 +103,6 @@ class Config:
         {'fast': 45, 'slow': 60, 'signal': 30},
         {'fast': 30, 'slow': 45, 'signal': 15}
     ]
-    CUSTOM_MACD_PAIRS = [(30, 60), (15, 30), (25, 45)] 
-    MOMENTUM_PERIODS = [1, 2, 3]  
     RSI_PERIODS = [9, 21, 30]  
     BB_PERIODS = [10, 20, 50]  
 
@@ -111,8 +112,8 @@ class Config:
     SIGMOID_SCALE = 1.0
 
 # Training stability controls
-    INDICATOR_GRAD_MULT = 1.0
-    GRAD_CLIP_NORM = 5.0
+    INDICATOR_GRAD_MULT = 20.0
+    GRAD_CLIP_NORM = 10.0
 
 # Focal loss hyperparameters for direction classification
     # NOTE: alpha weights DOWN class (label=0), (1-alpha) weights UP (label=1)
@@ -120,13 +121,13 @@ class Config:
     # 1. Weak direction loss weight (fixed: 0.2 → 0.5)
     # 2. Zero deadband creating label noise (fixed: 5 bps)
     FOCAL_ALPHA = 0.5  # Balanced class weights (was 0.7, now neutral)
-    FOCAL_GAMMA = 2.0  # Focus parameter for hard examples
+    FOCAL_GAMMA = 2  # Focus parameter for hard examples
 
     # Trade-aware direction labeling deadband.
     # If > 0, direction loss/metrics treat returns within +/- deadband as neutral.
     # Units: basis points (bps). Example: 10 bps = 0.10%.
     # CRITICAL FIX: Non-zero deadband filters label noise from tiny price moves
-    DIR_DEADBAND_BPS = 5.0  # 5 bps = 0.05% minimum move for UP classification
+    DIR_DEADBAND_BPS = 0.0  # 5 bps = 0.05% minimum move for UP classification
 
     # Stabilize NLL and prevent variance head from dominating early.
     # Variance is in SCALED units^2.
@@ -135,7 +136,7 @@ class Config:
 
     # Align direction head with distribution-implied P(up) from (mu, var).
     # Setting this > 0 helps avoid degenerate constant direction probabilities.
-    LAMBDA_DIR_ALIGN = 0.5
+    LAMBDA_DIR_ALIGN = 0.7
 # -----------------------------
 class DataProcessor:
     def __init__(self, config):
@@ -206,6 +207,7 @@ class DataProcessor:
         """Compute extended trend features as ABSOLUTE DELTAS (not percent-changes).
 
         CRITICAL: Extended trends must be in the same units as prediction targets (absolute deltas in $).
+        Note: `periods` are expressed in numbers of resampled bars (i.e., multiples of `config.RESAMPLE_MINUTES` minutes).
         This ensures semantic consistency in the trend loss function.
         
         Previously computed as percent-changes (returns), which caused:
@@ -415,7 +417,23 @@ def _compute_all_horizon_metrics(
     """
 
     horizons = ("h0", "h1", "h2")
-    horizon_names = ("1-min", "5-min", "15-min")
+    # Compute human-readable horizon labels based on HORIZON_STEPS and RESAMPLE_MINUTES.
+    def _format_tf(minutes: int) -> str:
+        # Prefer days/hours when evenly divisible, otherwise show minutes
+        if minutes % 1440 == 0:
+            days = minutes // 1440
+            return f"{days}d" if days > 1 else "1d"
+        if minutes % 60 == 0:
+            hours = minutes // 60
+            return f"{hours}h"
+        return f"{minutes}min"
+
+    try:
+        horizon_steps = list(getattr(config, 'HORIZON_STEPS', [1, 5, 15]))
+    except Exception:
+        horizon_steps = [1, 5, 15]
+
+    horizon_names = tuple(_format_tf(int(step * getattr(config, 'RESAMPLE_MINUTES', 1))) for step in horizon_steps)
     y_true_deltas = np.asarray(y_true_deltas)
     if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != 3:
         raise ValueError(f"Expected y_true_deltas shape (N,3), got {y_true_deltas.shape}")
@@ -445,14 +463,21 @@ def _compute_all_horizon_metrics(
         # Delta-space metrics (raw price differences)
         mse_delta = mean_squared_error(y_t, y_p)
         rmse_delta = float(np.sqrt(mse_delta))
-        # Note: R2 in delta space can be negative (worse than predicting mean).
-        # This is expected when predictions are poor relative to delta variance.
-        r2_delta = r2_score(y_t, y_p)
+        mae_delta = float(np.mean(np.abs(y_t - y_p)))
+        # Note: Explained Variance CAN be negative when predictions are poor (like R²)
+        # EV < 0 means predictions are worse than predicting the mean
+        ev_delta = explained_variance_score(y_t, y_p)
+        # Correlation coefficient is bounded [-1, 1] and measures linear relationship
+        # More robust than EV for evaluating prediction quality
+        corr_delta = float(np.corrcoef(y_t, y_p)[0, 1]) if len(y_t) > 1 else 0.0
+        corr_delta = 0.0 if np.isnan(corr_delta) else corr_delta
 
         delta_metrics = {
             "mse": float(mse_delta),
             "rmse": float(rmse_delta),
-            "r2": float(r2_delta),
+            "mae": float(mae_delta),
+            "ev": float(ev_delta),  # Can be negative if predictions are poor
+            "corr": corr_delta,  # Pearson correlation [-1, 1]
         }
         if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
             delta_metrics.update({
@@ -464,22 +489,25 @@ def _compute_all_horizon_metrics(
 
         out["delta"][h_key] = delta_metrics
 
-        # CRITICAL: Price-space R2 is the most interpretable metric for price prediction.
+        # CRITICAL: Price-space EV is the most interpretable metric for price prediction.
         # Reconstruct prices: price[t+h] = last_close[t] + delta[t, t+h]
-        # R2 in price space measures how well cumulative predictions track actual future prices.
+        # EV in price space measures how well cumulative predictions track actual future prices.
         y_true_price = lc_h + y_t  # Simple reconstruction: last_close + delta
         y_pred_price = lc_h + y_p
 
-        # In price space, R2 is more stable because:
+        # In price space, EV is more stable because:
         # 1. Price levels have larger variance than deltas
-        # 2. R2 measures the fraction of price-level variance explained
+        # 2. EV measures the fraction of price-level variance explained
         # 3. This aligns with trading objectives (predicting future prices, not just changes)
-        r2_price_simple = r2_score(y_true_price, y_pred_price)
+        ev_price_simple = explained_variance_score(y_true_price, y_pred_price)
+        corr_price = float(np.corrcoef(y_true_price, y_pred_price)[0, 1]) if len(y_true_price) > 1 else 0.0
+        corr_price = 0.0 if np.isnan(corr_price) else corr_price
         
         price_metrics = {
-            "r2": float(r2_price_simple),  # R2 in price space (primary metric)
+            "ev": float(ev_price_simple),  # Explained variance in price space
             "mse": float(mean_squared_error(y_true_price, y_pred_price)),
             "rmse": float(np.sqrt(mean_squared_error(y_true_price, y_pred_price))),
+            "corr": corr_price,  # Pearson correlation in price space
         }
         
         if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
@@ -487,7 +515,7 @@ def _compute_all_horizon_metrics(
             y_true_price_soph = reconstruct_prices(lc_h, y_t)
             y_pred_price_soph = reconstruct_prices(lc_h, y_p)
             price_metrics.update({
-                "r2_soph": float(r2_score(y_true_price_soph, y_pred_price_soph)),
+                "ev_soph": float(explained_variance_score(y_true_price_soph, y_pred_price_soph)),
                 "mape": float(safe_mape(y_true_price_soph, y_pred_price_soph)),
                 "smape": float(smape(y_true_price_soph, y_pred_price_soph)),
                 "wape": float(wape(y_true_price_soph, y_pred_price_soph)),
@@ -1157,8 +1185,22 @@ def train_and_evaluate(
 
     # === DIAGNOSTIC: Check prediction quality ===
     # Print statistics to help diagnose issues
+    # Diagnostic: construct horizon labels from config.HORIZON_STEPS and RESAMPLE_MINUTES
+    def _format_tf_local(minutes: int) -> str:
+        if minutes % 1440 == 0:
+            days = minutes // 1440
+            return f"{days}d" if days > 1 else "1d"
+        if minutes % 60 == 0:
+            hours = minutes // 60
+            return f"{hours}h"
+        return f"{minutes}min"
+
+    resample = int(getattr(cfg, 'RESAMPLE_MINUTES', 1))
+    horizon_steps = list(getattr(cfg, 'HORIZON_STEPS', [1, 5, 15]))
+    horizon_labels = [f"{k}(" + _format_tf_local(int(k_step * resample)) + ")" for k, k_step in zip(['h0','h1','h2'], horizon_steps)]
+
     print("\n[Diagnostic: Prediction Statistics]")
-    for h_idx, (h_name, y_pred_raw) in enumerate([('h0(1m)', y_pred_h0_raw), ('h1(5m)', y_pred_h1_raw), ('h2(15m)', y_pred_h2_raw)]):
+    for h_idx, (h_name, y_pred_raw) in enumerate(zip(horizon_labels, [y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw])):
         y_true_raw = y_test[:, h_idx]
         pred_mean = np.mean(y_pred_raw)
         pred_std = np.std(y_pred_raw)
@@ -1214,32 +1256,15 @@ def train_and_evaluate(
     )
 
 # -----------------------------
-def differentiable_past_sample(x_seq, fractional_lag, sigma=1.0):
-    batch = tf.shape(x_seq)[0]
-    time = tf.shape(x_seq)[1]
-    positions = tf.cast(tf.range(time), tf.float32)
-    T_minus_1 = tf.cast(time - 1, tf.float32)
-    pos_target = T_minus_1 - fractional_lag
-    pos_target_exp = tf.expand_dims(pos_target, axis=1)
-    positions_exp = tf.reshape(positions, (1, -1))
-    dists = positions_exp - pos_target_exp
-    weights = tf.exp(-0.5 * tf.square(dists / sigma))
-    weights = weights / (tf.reduce_sum(weights, axis=1, keepdims=True) + 1e-12)
-    sampled = tf.reduce_sum(weights * x_seq, axis=1)
-    return sampled
-
-# -----------------------------
 class LearnableIndicators(layers.Layer):
-    def __init__(self, config: Config, gaussian_sigma=1.0, **kwargs):
+    def __init__(self, config: Config, **kwargs):
         super().__init__(**kwargs)
         self.config = config
         self.epsilon = 1e-8
-        self.gaussian_sigma = gaussian_sigma
         self.alpha_vars_ma = []
         self.macd_alpha_vars = {}
         self.rsi_alpha_vars = []
         self.bb_alpha_vars = []
-        self.momentum_raw = []
         self.all_logit_vars = []  # New: collect all for metacalibration
         self.meta_scale = 0.5  # Increased from 0.1 for stronger adjustments
         self.grad_multiplier = config.INDICATOR_GRAD_MULT  # Apply gradient boost
@@ -1295,30 +1320,6 @@ class LearnableIndicators(layers.Layer):
             self.macd_alpha_vars[f'macd_{i}_signal'] = v_signal
             self.all_logit_vars.extend([v_fast, v_slow, v_signal])
 
-        for i, (s, l) in enumerate(self.config.CUSTOM_MACD_PAIRS):
-            v_short = self.add_weight(
-                shape=(),
-                initializer=initializers.Constant(self._logit_from_period(s)),
-                trainable=True,
-                name=f'pair_{i}_short',
-                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
-            v_long = self.add_weight(
-                shape=(),
-                initializer=initializers.Constant(self._logit_from_period(l)),
-                trainable=True,
-                name=f'pair_{i}_long',
-                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
-            v_sig = self.add_weight(
-                shape=(),
-                initializer=initializers.Constant(self._logit_from_period(9)),
-                trainable=True,
-                name=f'pair_{i}_sig',
-                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
-            self.macd_alpha_vars[f'pair_{i}_short'] = v_short
-            self.macd_alpha_vars[f'pair_{i}_long'] = v_long
-            self.macd_alpha_vars[f'pair_{i}_sig'] = v_sig
-            self.all_logit_vars.extend([v_short, v_long, v_sig])
-
         for i, p in enumerate(self.config.RSI_PERIODS):
             v = self.add_weight(shape=(),
                                 initializer=initializers.Constant(self._logit_from_period(p)),
@@ -1335,16 +1336,6 @@ class LearnableIndicators(layers.Layer):
                                 name=f'bb_alpha_{i}',
                                 regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
             self.bb_alpha_vars.append(v)
-            self.all_logit_vars.append(v)
-
-        for i, p in enumerate(self.config.MOMENTUM_PERIODS):
-            init_raw = np.log(min(p, 200.0))
-            v = self.add_weight(shape=(),
-                                initializer=initializers.Constant(init_raw),
-                                trainable=True,
-                                name=f'momentum_raw_{i}',
-                                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
-            self.momentum_raw.append(v)
             self.all_logit_vars.append(v)
 
         super().build(input_shape)
@@ -1405,28 +1396,6 @@ class LearnableIndicators(layers.Layer):
             features.append(macd_cross)
             idx += 3
 
-        for i in range(len(self.config.CUSTOM_MACD_PAIRS)):
-            short_var = self.macd_alpha_vars[f'pair_{i}_short']
-            long_var = self.macd_alpha_vars[f'pair_{i}_long']
-            sig_var = self.macd_alpha_vars[f'pair_{i}_sig']
-            # Boost gradients
-            short_boosted = short_var + tf.stop_gradient(short_var) * (self.grad_multiplier - 1.0)
-            long_boosted = long_var + tf.stop_gradient(long_var) * (self.grad_multiplier - 1.0)
-            sig_boosted = sig_var + tf.stop_gradient(sig_var) * (self.grad_multiplier - 1.0)
-            short_logit = short_boosted + meta_adjust[:, idx] * self.meta_scale
-            long_logit = long_boosted + meta_adjust[:, idx+1] * self.meta_scale
-            sig_logit = sig_boosted + meta_adjust[:, idx+2] * self.meta_scale
-            a_s = self._alpha_from_logit(short_logit)
-            a_l = self._alpha_from_logit(long_logit)
-            a_sig = self._alpha_from_logit(sig_logit)
-            ema_s = self.ewma_seq(x, a_s)
-            ema_l = self.ewma_seq(x, a_l)
-            macd_line_pair = ema_s - ema_l
-            macd_sig_pair = self.ewma_seq(macd_line_pair, a_sig)
-            macd_hist_pair = macd_line_pair - macd_sig_pair
-            features.extend([macd_line_pair, macd_sig_pair, macd_hist_pair])
-            idx += 3
-
         diffs = x[:, 1:] - x[:, :-1]
         gains = tf.where(diffs > 0, diffs, tf.zeros_like(diffs))
         losses = tf.where(diffs < 0, -diffs, tf.zeros_like(diffs))
@@ -1460,15 +1429,6 @@ class LearnableIndicators(layers.Layer):
             features.append(bb_percent)
             idx += 1
 
-        for raw in self.momentum_raw:
-            adjusted_raw = raw + meta_adjust[:, idx] * self.meta_scale
-            period = tf.nn.softplus(adjusted_raw) + 1.0
-            batch_period = tf.broadcast_to(period, [tf.shape(x)[0]])
-            sampled_past = differentiable_past_sample(x, batch_period, sigma=self.gaussian_sigma)
-            momentum_val = x - tf.expand_dims(sampled_past, axis=1)  # Full seq approximation by repeating
-            features.append(momentum_val)
-            idx += 1
-
         features.append(x)  # Add raw close as a "indicator" sequence
 
         output = tf.stack(features, axis=-1)  # [B, LOOKBACK, num_features]
@@ -1491,9 +1451,6 @@ class LearnableIndicators(layers.Layer):
         for i, v in enumerate(self.bb_alpha_vars):
             period = self._period_from_logit(v).numpy()
             learned[f'bb_period_{i}'] = float(period)
-        for i, raw in enumerate(self.momentum_raw):
-            p = (tf.nn.softplus(raw) + 1.0).numpy()
-            learned[f'momentum_period_{i}'] = float(p)
         return learned
 
 class PositionalEncodingLayer(layers.Layer):
@@ -1529,10 +1486,8 @@ class PricePredictor:
         ])
         num_logits = (len(self.config.MA_SPANS) +
                       len(self.config.MACD_SETTINGS) * 3 +
-                      len(self.config.CUSTOM_MACD_PAIRS) * 3 +
                       len(self.config.RSI_PERIODS) +
-                      len(self.config.BB_PERIODS) +
-                      len(self.config.MOMENTUM_PERIODS))
+                      len(self.config.BB_PERIODS))
         meta_adjust = layers.Dense(num_logits, activation='tanh')(meta_inp)
 
         # Enhanced Learnable Indicators: Now takes [inp, meta_adjust], outputs sequences [B, LOOKBACK, num_ind]
@@ -1540,7 +1495,7 @@ class PricePredictor:
 
         # Memory-Supplemented Layers: Capture temporal interconnections
         memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
-        memory = layers.Dropout(0.1)(memory)
+        memory = layers.Dropout(0.5)(memory)
 
         # Interconnection Attention: Model relations between indicators
         att_key_dim = 32
@@ -1565,11 +1520,11 @@ class PricePredictor:
 
         # Transformer-style blocks (reduced to 2 for speed)
         for _ in range(2):
-            att = layers.MultiHeadAttention(num_heads=4, key_dim=16, dropout=0.1)(x, x)
+            att = layers.MultiHeadAttention(num_heads=4, key_dim=16, dropout=0.5)(x, x)
             x = layers.Add()([x, att])
             x = layers.LayerNormalization()(x)
             ff = layers.Dense(32, activation='gelu')(x)
-            ff = layers.Dropout(0.1)(ff)
+            ff = layers.Dropout(0.5)(ff)
             ff = layers.Dense(x.shape[-1])(ff)
             x = layers.Add()([x, ff])
             x = layers.LayerNormalization()(x)
@@ -1589,9 +1544,9 @@ class PricePredictor:
         # Each horizon has its own price, direction, and confidence (variance) head
         
         # Variance bias initialization: softplus(x) ≈ x for x > 0
-        # Initialize bias so initial variance ≈ 1.0 (unit variance in scaled space)
+        # Initialize bias so initial variance ≈ 1.3 (higher than unit variance for calibration learning)
         # softplus(0) ≈ 0.693, softplus(0.5) ≈ 0.97, softplus(1.0) ≈ 1.31
-        var_bias_init = tf.keras.initializers.Constant(0.5)  # Initial variance ≈ 0.97
+        var_bias_init = tf.keras.initializers.Constant(1.0)  # Initial variance ≈ 1.31
         
         # Direction bias initialization: sigmoid(0) = 0.5 (unbiased)
         # Keep at 0 for balanced initial predictions
@@ -2216,7 +2171,7 @@ class CustomTrainModel(models.Model):
         # Clip variance to prevent log/div blow-ups and stabilize gradients.
         # NLL formula: 0.5 * log(2πσ²) + 0.5 * (y-μ)²/σ²
         # The log(2π) ≈ 1.838 constant ensures NLL is always positive for proper interpretation.
-        # We also floor the final NLL at 0 to prevent negative display values.
+        # Note: NLL can be negative due to numerical precision, but we allow it for proper gradient flow.
         var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
         var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
         var_h0_c = tf.clip_by_value(var_h0, var_floor, var_cap)
@@ -2228,13 +2183,13 @@ class CustomTrainModel(models.Model):
 
         # Full Gaussian NLL: 0.5 * log(2πσ²) + 0.5 * (y-μ)²/σ²
         nll_h0 = 0.5 * (log_2pi + tf.math.log(var_h0_c + self.eps)) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + self.eps)
-        nll_h0_val = tf.maximum(tf.reduce_mean(nll_h0), 0.0)  # Floor at 0 for display
+        nll_h0_val = tf.reduce_mean(nll_h0)  # Remove flooring to allow proper gradients
         
         nll_h1 = 0.5 * (log_2pi + tf.math.log(var_h1_c + self.eps)) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + self.eps)
-        nll_h1_val = tf.maximum(tf.reduce_mean(nll_h1), 0.0)  # Floor at 0 for display
+        nll_h1_val = tf.reduce_mean(nll_h1)  # Remove flooring to allow proper gradients
         
         nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + self.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + self.eps)
-        nll_h2_val = tf.maximum(tf.reduce_mean(nll_h2), 0.0)  # Floor at 0 for display
+        nll_h2_val = tf.reduce_mean(nll_h2)  # Remove flooring to allow proper gradients
         
         total_nll = self.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
 
@@ -2283,42 +2238,18 @@ class CustomTrainModel(models.Model):
         vol_loss = vol_diff_clipped * self.lambda_vol
         vol_loss = tf.where(tf.math.is_finite(vol_loss), vol_loss, tf.constant(0.0, dtype=tf.float32))
 
-        # === TOTAL LOSS ===
-        # Principle: Point loss (delta prediction) is the PRIMARY task.
-        # Other losses (direction, trend, variance, coherence) are auxiliary constraints.
-        # Weight them such that point loss drives ~60-70% of optimization, with strong cross-horizon constraints.
-        #
-        # UPDATED WEIGHTING (Post-audit):
-        # - Point loss: DOMINANT (weight=1.0) - Delta prediction is the core task
-        # - Trend loss: MODERATE (weight=0.3) - Penalizes predictions deviating from trend baseline
-        # - Direction loss: AUXILIARY (weight=0.2) - Secondary task, classification-based
-        # - Coherence loss: STRENGTHENED (weight=0.1) - Cross-horizon consistency now significant
-        # - Other losses: WEAK (weight≤0.1) - Regularization and constraints
-        #
-        # Point loss: log-cosh in scaled space; typical magnitude ~0.1-1.0 per epoch
-        # Trend loss: Now penalizes predictions vs trend baseline; typical ~0.01-0.1
-        # Coherence loss: STRENGTHENED from 0.01 to 0.1; combines direction/magnitude/smoothness
-        # Direction loss: Focal loss on classification; typical ~0.1-0.5
-        # Variance NLL: Log-likelihood penalty; can be negative or large; typical ~-1 to +2
-        # Regularization: L2 on indicators; small, typically ~0.001-0.01
-        #
-        # Strategy: Use relative scaling to ensure point_loss drives optimization while strengthening
-        # cross-horizon coherence to prevent contradictory predictions across horizons.
         total = (
             point_loss_val +
-            0.3 * trend_loss_val +      # Trend baseline consistency (auxiliary)
+            0.5 * trend_loss_val +      # Trend baseline consistency (auxiliary)
             0.5 * total_dir_loss +      # Direction classification (INCREASED from 0.2)
-            0.15 * dir_align_loss +     # Distribution alignment (increased for better calibration)
+            0.5 * dir_align_loss +     # Distribution alignment (increased for better calibration)
             reg_loss +
             0.1 * inter_reg +           # Indicator correlation (weak regularization)
-            0.01 * vol_loss +           # Volatility penalty (very weak)
-            0.1 * coherence_penalty +   # STRENGTHENED: Cross-horizon coherence (0.01 → 0.1)
-            0.5 * total_nll             # Variance NLL (moderate contribution)
+            0.1 * vol_loss +           # Volatility penalty (very weak)
+            1 * coherence_penalty +   # STRENGTHENED: Cross-horizon coherence (0.01 → 0.1)
+            1.0 * total_nll             # Variance NLL (INCREASED from 0.5 for better calibration)
         )
 
-        # === RETURN 22-COMPONENT TUPLE for comprehensive logging ===
-        # CORRECTED: Actually 22 components, not 29 (fixed documentation)
-        # 
         # Format breakdown (22 components total):
         # [0] total_loss (single scalar)
         # [1-3] point_h0, point_h1, point_h2 (3 point loss components)
@@ -2524,6 +2455,9 @@ class CustomTrainModel(models.Model):
             pred_dir_binary = tf.cast(dir_pred > 0.5, tf.float32)
 
             m = masks[h_name]
+            mask_sum = tf.reduce_sum(m)
+            no_samples = mask_sum < 1e-8
+            nan = tf.constant(np.nan, dtype=tf.float32)
 
             # Confusion matrix elements
             TP = tf.reduce_sum(pred_dir_binary * true_dir * m)
@@ -2533,89 +2467,82 @@ class CustomTrainModel(models.Model):
 
             # Accuracy
             accuracy = (TP + TN) / (TP + TN + FP + FN + 1e-8)
+            accuracy = tf.where(no_samples, nan, accuracy)
             metrics[f"{prefix}dir_acc_{h_name}"] = accuracy
 
             # Sensitivity (True Positive Rate / Recall for UP class)
             sensitivity = TP / (TP + FN + 1e-8)
+            sensitivity = tf.where(no_samples, nan, sensitivity)
             metrics[f"{prefix}dir_sensitivity_{h_name}"] = sensitivity
 
             # Specificity (True Negative Rate)
             specificity = TN / (TN + FP + 1e-8)
+            specificity = tf.where(no_samples, nan, specificity)
             metrics[f"{prefix}dir_specificity_{h_name}"] = specificity
 
             # Balanced Accuracy: (Sensitivity + Specificity) / 2
-            # Range: [0, 1] (displayable as 0-100%)
-            # Random classifier: 50%
-            # Perfect classifier: 100%
-            # Class-imbalance robust: biased classifier → ~50% (unlike accuracy)
             balanced_acc = (sensitivity + specificity) / 2.0
+            balanced_acc = tf.where(no_samples, nan, balanced_acc)
             metrics[f"{prefix}dir_bal_acc_{h_name}"] = balanced_acc
 
             # F1 Score (harmonic mean of precision and recall)
             precision = TP / (TP + FP + 1e-8)
             recall = TP / (TP + FN + 1e-8)
             f1 = 2.0 * (precision * recall) / (precision + recall + 1e-8)
+            f1 = tf.where(no_samples, nan, f1)
             metrics[f"{prefix}dir_f1_{h_name}"] = f1
 
             # Matthews Correlation Coefficient (balanced metric for binary classification)
-            # MCC = (TP×TN - FP×FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
-            # Range: [-1, +1] where:
-            #   +1 = perfect classification
-            #    0 = random guessing
-            #   -1 = perfect inverse (always wrong)
-            # IMPORTANT: MCC < 0 is a diagnostic signal, not a bug!
-            # It means the model is worse than random (e.g., biased to always predict one class)
             mcc_numerator = (TP * TN) - (FP * FN)
-            # Handle degenerate cases where one marginal is zero
             marginal_product = (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)
-            # If any marginal is 0, MCC is undefined → return 0 (equivalent to random)
             mcc_denominator = tf.sqrt(marginal_product + 1e-8)
-            mcc = tf.where(
+            mcc_raw = tf.where(
                 marginal_product > 1e-8,
                 mcc_numerator / mcc_denominator,
-                tf.constant(0.0, dtype=tf.float32)  # Undefined → 0 (random equivalent)
+                tf.constant(0.0, dtype=tf.float32)
             )
+            mcc = tf.where(no_samples, nan, mcc_raw)
             metrics[f"{prefix}dir_mcc_{h_name}"] = mcc
 
             # ========== CALIBRATION METRICS ==========
             # Brier Score: Mean squared error between predicted probability and actual outcome
-            # Range: [0, 1], lower is better (0 = perfect calibration)
-            # Brier = mean((p - y)^2) where p is predicted prob, y is true label
             brier_per_sample = tf.square(dir_pred - true_dir)
-            brier_score = tf.reduce_sum(brier_per_sample * m) / (tf.reduce_sum(m) + 1e-8)
+            brier_score = tf.reduce_sum(brier_per_sample * m) / (mask_sum + 1e-8)
+            brier_score = tf.where(no_samples, nan, brier_score)
             metrics[f"{prefix}dir_brier_{h_name}"] = brier_score
 
-            # Expected Calibration Error (ECE): Weighted average of |accuracy - confidence| per bin
-            # Approximated using a simple 10-bin approach
-            # Lower is better (0 = perfectly calibrated)
+            # Expected Calibration Error (ECE): partition [0,1] into inclusive bins
             n_bins = 10
             ece_sum = tf.constant(0.0, dtype=tf.float32)
-            total_masked = tf.reduce_sum(m) + 1e-8
+            total_masked = mask_sum + 1e-8
+            dir_pred_clipped = tf.clip_by_value(dir_pred, 0.0, 1.0)
             for bin_idx in range(n_bins):
                 bin_lower = tf.cast(bin_idx, tf.float32) / n_bins
                 bin_upper = tf.cast(bin_idx + 1, tf.float32) / n_bins
-                # Samples in this probability bin
-                in_bin = tf.cast((dir_pred >= bin_lower) & (dir_pred < bin_upper), tf.float32) * m
+                if bin_idx == n_bins - 1:
+                    in_bin = tf.cast((dir_pred_clipped >= bin_lower) & (dir_pred_clipped <= bin_upper), tf.float32) * m
+                else:
+                    in_bin = tf.cast((dir_pred_clipped >= bin_lower) & (dir_pred_clipped < bin_upper), tf.float32) * m
                 bin_count = tf.reduce_sum(in_bin)
-                # Accuracy in bin: fraction of correct predictions
                 bin_correct = tf.reduce_sum(tf.cast(pred_dir_binary == true_dir, tf.float32) * in_bin)
                 bin_acc = bin_correct / (bin_count + 1e-8)
-                # Confidence in bin: mean predicted probability
-                bin_conf = tf.reduce_sum(dir_pred * in_bin) / (bin_count + 1e-8)
-                # Weighted contribution to ECE
+                bin_conf = tf.reduce_sum(dir_pred_clipped * in_bin) / (bin_count + 1e-8)
                 ece_sum = ece_sum + (bin_count / total_masked) * tf.abs(bin_acc - bin_conf)
+            ece_sum = tf.where(no_samples, nan, ece_sum)
             metrics[f"{prefix}dir_ece_{h_name}"] = ece_sum
 
             # CALIBRATION METRICS: Per-class prediction rates to detect bias
-            # pred_up_rate: % of predictions that are UP (should be ~50% for balanced predictions)
             total_samples = TP + TN + FP + FN + 1e-8
-            pred_up_rate = (TP + FP) / total_samples  # Predictions that are UP
-            true_up_rate = (TP + FN) / total_samples  # Ground truth that is UP
+            pred_up_rate = (TP + FP) / total_samples
+            true_up_rate = (TP + FN) / total_samples
+            pred_up_rate = tf.where(no_samples, nan, pred_up_rate)
+            true_up_rate = tf.where(no_samples, nan, true_up_rate)
             metrics[f"{prefix}pred_up_rate_{h_name}"] = pred_up_rate
             metrics[f"{prefix}true_up_rate_{h_name}"] = true_up_rate
-            
+
             # Mean predicted probability (should be ~0.5 for calibrated model)
-            mean_prob = tf.reduce_sum(dir_pred * m) / (tf.reduce_sum(m) + 1e-8)
+            mean_prob = tf.reduce_sum(dir_pred_clipped * m) / (mask_sum + 1e-8)
+            mean_prob = tf.where(no_samples, nan, mean_prob)
             metrics[f"{prefix}mean_dir_prob_{h_name}"] = mean_prob
 
         return metrics
@@ -2831,6 +2758,33 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
         if key not in out and value is not None:
             out[key] = value
 
+    def set_agg(key, value):
+        """Set aggregate-style aliases robustly.
+        If value is None, remove any stale key from output to avoid carrying old values forward.
+        Converts tensors/arrays to scalar floats by taking mean when needed.
+        """
+        if value is None:
+            # Remove stale aggregate if no data present
+            out.pop(key, None)
+            return
+        # Normalize to a scalar float when possible
+        try:
+            # TensorFlow tensors
+            if hasattr(value, "numpy"):
+                v = value.numpy()
+            else:
+                v = value
+            v = np.asarray(v)
+            if v.size == 1:
+                out[key] = float(v.item())
+            else:
+                out[key] = float(np.mean(v))
+        except Exception:
+            try:
+                out[key] = float(value)
+            except Exception:
+                out[key] = value
+
     # --- Loss aliases (legacy plotting names) ---
     set_if_missing("var_nll", _first_present(out, ["nll_loss"]))
     set_if_missing("val_var_nll", _first_present(out, ["val_nll_loss"]))
@@ -2895,27 +2849,27 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     val_bal_acc_keys = [f"{val_pref}dir_bal_acc_{h}" for h in horizons]
     val_bal_acc_fb = [f"{val_fallback}dir_bal_acc_{h}" for h in horizons]
 
-    set_if_missing("dir_acc_avg", _first_present({"v": _mean_present(out, train_acc_keys), "v2": _mean_present(out, train_acc_fb)}, ["v", "v2"]))
-    set_if_missing("f1_avg", _first_present({"v": _mean_present(out, train_f1_keys), "v2": _mean_present(out, train_f1_fb)}, ["v", "v2"]))
-    set_if_missing("dir_sensitivity_avg", _first_present({"v": _mean_present(out, train_sens_keys), "v2": _mean_present(out, train_sens_fb)}, ["v", "v2"]))
-    set_if_missing("dir_specificity_avg", _first_present({"v": _mean_present(out, train_spec_keys), "v2": _mean_present(out, train_spec_fb)}, ["v", "v2"]))
+    set_agg("dir_acc_avg", _first_present({"v": _mean_present(out, train_acc_keys), "v2": _mean_present(out, train_acc_fb)}, ["v", "v2"]))
+    set_agg("f1_avg", _first_present({"v": _mean_present(out, train_f1_keys), "v2": _mean_present(out, train_f1_fb)}, ["v", "v2"]))
+    set_agg("dir_sensitivity_avg", _first_present({"v": _mean_present(out, train_sens_keys), "v2": _mean_present(out, train_sens_fb)}, ["v", "v2"]))
+    set_agg("dir_specificity_avg", _first_present({"v": _mean_present(out, train_spec_keys), "v2": _mean_present(out, train_spec_fb)}, ["v", "v2"]))
     # MCC, Brier, ECE averages (class-imbalance robust metrics)
-    set_if_missing("mcc_avg", _first_present({"v": _mean_present(out, train_mcc_keys), "v2": _mean_present(out, train_mcc_fb)}, ["v", "v2"]))
-    set_if_missing("brier_avg", _first_present({"v": _mean_present(out, train_brier_keys), "v2": _mean_present(out, train_brier_fb)}, ["v", "v2"]))
-    set_if_missing("ece_avg", _first_present({"v": _mean_present(out, train_ece_keys), "v2": _mean_present(out, train_ece_fb)}, ["v", "v2"]))
+    set_agg("mcc_avg", _first_present({"v": _mean_present(out, train_mcc_keys), "v2": _mean_present(out, train_mcc_fb)}, ["v", "v2"]))
+    set_agg("brier_avg", _first_present({"v": _mean_present(out, train_brier_keys), "v2": _mean_present(out, train_brier_fb)}, ["v", "v2"]))
+    set_agg("ece_avg", _first_present({"v": _mean_present(out, train_ece_keys), "v2": _mean_present(out, train_ece_fb)}, ["v", "v2"]))
     # Balanced Accuracy average (class-imbalance robust, 50% = random, range [0,1])
-    set_if_missing("bal_acc_avg", _first_present({"v": _mean_present(out, train_bal_acc_keys), "v2": _mean_present(out, train_bal_acc_fb)}, ["v", "v2"]))
+    set_agg("bal_acc_avg", _first_present({"v": _mean_present(out, train_bal_acc_keys), "v2": _mean_present(out, train_bal_acc_fb)}, ["v", "v2"]))
 
-    set_if_missing("val_dir_acc_avg", _first_present({"v": _mean_present(out, val_acc_keys), "v2": _mean_present(out, val_acc_fb)}, ["v", "v2"]))
-    set_if_missing("val_f1_avg", _first_present({"v": _mean_present(out, val_f1_keys), "v2": _mean_present(out, val_f1_fb)}, ["v", "v2"]))
-    set_if_missing("val_dir_sensitivity_avg", _first_present({"v": _mean_present(out, val_sens_keys), "v2": _mean_present(out, val_sens_fb)}, ["v", "v2"]))
-    set_if_missing("val_dir_specificity_avg", _first_present({"v": _mean_present(out, val_spec_keys), "v2": _mean_present(out, val_spec_fb)}, ["v", "v2"]))
+    set_agg("val_dir_acc_avg", _first_present({"v": _mean_present(out, val_acc_keys), "v2": _mean_present(out, val_acc_fb)}, ["v", "v2"]))
+    set_agg("val_f1_avg", _first_present({"v": _mean_present(out, val_f1_keys), "v2": _mean_present(out, val_f1_fb)}, ["v", "v2"]))
+    set_agg("val_dir_sensitivity_avg", _first_present({"v": _mean_present(out, val_sens_keys), "v2": _mean_present(out, val_sens_fb)}, ["v", "v2"]))
+    set_agg("val_dir_specificity_avg", _first_present({"v": _mean_present(out, val_spec_keys), "v2": _mean_present(out, val_spec_fb)}, ["v", "v2"]))
     # Validation MCC, Brier, ECE averages
-    set_if_missing("val_mcc_avg", _first_present({"v": _mean_present(out, val_mcc_keys), "v2": _mean_present(out, val_mcc_fb)}, ["v", "v2"]))
-    set_if_missing("val_brier_avg", _first_present({"v": _mean_present(out, val_brier_keys), "v2": _mean_present(out, val_brier_fb)}, ["v", "v2"]))
-    set_if_missing("val_ece_avg", _first_present({"v": _mean_present(out, val_ece_keys), "v2": _mean_present(out, val_ece_fb)}, ["v", "v2"]))
+    set_agg("val_mcc_avg", _first_present({"v": _mean_present(out, val_mcc_keys), "v2": _mean_present(out, val_mcc_fb)}, ["v", "v2"]))
+    set_agg("val_brier_avg", _first_present({"v": _mean_present(out, val_brier_keys), "v2": _mean_present(out, val_brier_fb)}, ["v", "v2"]))
+    set_agg("val_ece_avg", _first_present({"v": _mean_present(out, val_ece_keys), "v2": _mean_present(out, val_ece_fb)}, ["v", "v2"]))
     # Validation Balanced Accuracy average
-    set_if_missing("val_bal_acc_avg", _first_present({"v": _mean_present(out, val_bal_acc_keys), "v2": _mean_present(out, val_bal_acc_fb)}, ["v", "v2"]))
+    set_agg("val_bal_acc_avg", _first_present({"v": _mean_present(out, val_bal_acc_keys), "v2": _mean_present(out, val_bal_acc_fb)}, ["v", "v2"]))
 
     # Batch-level aliases used by batch plot
     set_if_missing(
@@ -3265,7 +3219,7 @@ def train_model(extra_callbacks=None, epochs=None, force=False, calibrate=True):
         m = result.metrics
         if isinstance(m, dict) and 'delta' in m:
             print("\n[Summary: Per-Horizon Delta Metrics]")
-            for h_key, label in zip(m.get('meta', {}).get('horizon_keys', ['h0','h1','h2']), m.get('meta', {}).get('horizon_labels', ['1-min','5-min','15-min'])):
+            for h_key, label in zip(m.get('meta', {}).get('horizon_keys', ['h0','h1','h2']), m.get('meta', {}).get('horizon_labels', ['1min','5min','15min'])):
                 hm = m['delta'].get(h_key, {})
                 pm = m['price'].get(h_key, {})
                 print(f"  {label}: MSE={hm.get('mse'):.6f}, RMSE={hm.get('rmse'):.6f}, R2={pm.get('r2', hm.get('r2')):.6f}")
