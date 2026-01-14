@@ -12,6 +12,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_squared_error, explained_variance_score, mean_absolute_percentage_error, f1_score, accuracy_score
 from sklearn.model_selection import TimeSeriesSplit
 import joblib
+from losses import Losses
+import losses as _losses
+# Loss functions (custom) are implemented centrally in `losses.py` to
+# maintain a single authoritative source and avoid duplication.
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator, FuncFormatter
 import time
@@ -1702,120 +1706,24 @@ class CustomTrainModel(models.Model):
     # Focal Loss for imbalanced binary classification
     # -------------------------
     def focal_loss(self, true_labels, logits, alpha=None, gamma=None, reduce=True):
-        """
-        Focal Loss: -α(1-p_t)^γ * log(p_t)
-        Addresses class imbalance by down-weighting easy examples and focusing on hard ones.
-        
-        Args:
-            true_labels: Binary labels [B] (0 or 1)
-            logits: Predicted probabilities [B] from sigmoid (0 to 1)
-            alpha: Class weight for minority class (default 0.7 weights DOWN class)
-            gamma: Focusing parameter (default 2.0; higher = more focus on hard examples)
-        
-        Returns:
-            If reduce=True: scalar mean focal loss.
-            If reduce=False: per-example focal loss vector.
-        """
-        if alpha is None:
-            alpha = self.config.FOCAL_ALPHA
-        if gamma is None:
-            gamma = self.config.FOCAL_GAMMA
-        
-        alpha = tf.cast(alpha, tf.float32)
-        gamma = tf.cast(gamma, tf.float32)
-        
-        # Ensure inputs are float32
-        true_labels = tf.cast(true_labels, tf.float32)
-        logits = tf.cast(logits, tf.float32)
-        
-        # Clamp logits to prevent log(0)
-        logits = tf.clip_by_value(logits, 1e-7, 1.0 - 1e-7)
-        
-        # Compute focal weight: (1 - p_t)^γ where p_t is the probability of true class
-        p_t = true_labels * logits + (1.0 - true_labels) * (1.0 - logits)
-        focal_weight = tf.pow(1.0 - p_t, gamma)
-        
-        # Compute base cross-entropy
-        bce = -true_labels * tf.math.log(logits) - (1.0 - true_labels) * tf.math.log(1.0 - logits)
-        
-        # Apply focal weighting and class weighting.
-        # alpha weights DOWN class (label=0), (1-alpha) weights UP (label=1)
-        # With alpha=0.5, both classes are weighted equally
-        class_weight = alpha * (1.0 - true_labels) + (1.0 - alpha) * true_labels
-        
-        focal = class_weight * focal_weight * bce
-
-        if reduce:
-            return tf.reduce_mean(focal)
-        return focal
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.focal_loss(self, true_labels, logits, alpha=alpha, gamma=gamma, reduce=reduce)
 
     # -------------------------
     # Dice Loss for F1-like optimization (differentiable)
     # -------------------------
     def dice_loss(self, true_labels, logits, smooth=1.0, reduce=True):
-        """
-        Dice Loss: 1 - (2×TP + smooth) / (2×TP + FP + FN + smooth)
-        
-        Directly optimizes F1-like metric. Differentiable approximation using soft predictions.
-        
-        Args:
-            true_labels: Binary labels [B] (0 or 1)
-            logits: Predicted probabilities [B] from sigmoid (0 to 1)
-            smooth: Smoothing factor to prevent division by zero (default 1.0)
-            reduce: If True, return scalar mean; if False, return per-example
-        
-        Returns:
-            Dice loss value (0 = perfect, 1 = worst)
-        """
-        true_labels = tf.cast(true_labels, tf.float32)
-        logits = tf.cast(logits, tf.float32)
-        smooth = tf.cast(smooth, tf.float32)
-        
-        # Soft TP, FP, FN using probabilities
-        # TP: true=1, pred=high → true × pred
-        # FP: true=0, pred=high → (1-true) × pred
-        # FN: true=1, pred=low → true × (1-pred)
-        intersection = true_labels * logits  # Soft TP
-        
-        # Dice = 2×intersection / (sum(true) + sum(pred))
-        # Loss = 1 - Dice
-        numerator = 2.0 * intersection + smooth
-        denominator = true_labels + logits + smooth
-        
-        dice_per_sample = numerator / (denominator + 1e-8)
-        dice_loss_per_sample = 1.0 - dice_per_sample
-        
-        if reduce:
-            return tf.reduce_mean(dice_loss_per_sample)
-        return dice_loss_per_sample
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.dice_loss(self, true_labels, logits, smooth=smooth, reduce=reduce)
 
     # -------------------------
     # Combined Focal + Dice Loss for balanced optimization
     # -------------------------
     def combined_direction_loss(self, true_labels, logits, alpha=None, gamma=None, 
                                  focal_weight=0.5, dice_weight=0.5, reduce=True):
-        """
-        Combined Focal + Dice loss for direction classification.
-        
-        - Focal loss: Handles class imbalance by focusing on hard examples
-        - Dice loss: Directly optimizes F1-like metric
-        
-        Args:
-            true_labels: Binary labels [B]
-            logits: Predicted probabilities [B]
-            alpha: Focal loss class weight (dynamic if None)
-            gamma: Focal loss focusing parameter
-            focal_weight: Weight for focal loss component (default 0.5)
-            dice_weight: Weight for dice loss component (default 0.5)
-            reduce: If True, return scalar; if False, return per-example
-        
-        Returns:
-            Combined loss value
-        """
-        focal = self.focal_loss(true_labels, logits, alpha=alpha, gamma=gamma, reduce=reduce)
-        dice = self.dice_loss(true_labels, logits, reduce=reduce)
-        
-        return focal_weight * focal + dice_weight * dice
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.combined_direction_loss(self, true_labels, logits, alpha=alpha, gamma=gamma,
+                                               focal_weight=focal_weight, dice_weight=dice_weight, reduce=reduce)
 
     # -------------------------
     # Dynamic Alpha Computation for Class Balancing
@@ -1855,167 +1763,31 @@ class CustomTrainModel(models.Model):
     # Point loss (log-cosh)
     # -------------------------
     def point_huber(self, y_true_scaled, y_pred_scaled, last_close_scaled=None, delta=None):
-        """Point loss in scaled space.
-
-        For delta-target training, the natural pivot is 0 (not last_close).
-        `last_close_scaled` is kept optional for API compatibility.
-        """
-        # Squeeze explicitly on axis=1 to be shape-safe
-        y_true = tf.squeeze(y_true_scaled, axis=1)
-        y_pred = tf.squeeze(y_pred_scaled, axis=1)
-
-        # Compute differences in scaled domain
-        diffs = y_true - y_pred
-
-        # Delta-target loss: symmetric log-cosh in scaled domain.
-        per_elem = tf.math.log(tf.cosh(diffs))
-        # Clip log-cosh to prevent unbounded growth when |diffs| is large
-        per_elem = tf.clip_by_value(per_elem, -10.0, 10.0)
-
-        result = self._reduce_mean(per_elem)
-        # Guard against NaN/Inf contamination
-        result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
-        return result
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.point_huber(self, y_true_scaled, y_pred_scaled, last_close_scaled=last_close_scaled, delta=delta)
 
 
     # -------------------------
     # Local trend loss
     # -------------------------
     def local_trend_loss(self, x_window, y_true_raw, y_pred_raw, last_close_raw):
-        """
-        Local trend = difference (scaled) between y_true and last_close vs
-                      y_pred and last_close.
-        Now applies Huber on diffs, then tanh bounding on the loss.
-        """
-        last_close = tf.squeeze(last_close_raw, axis=1)
-        last_close_scaled = self._to_scaled_static(last_close, self.pred_mean, self.pred_scale, self.eps)
-
-        y_true_scaled = self._to_scaled_static(y_true_raw, self.pred_mean, self.pred_scale, self.eps)
-        y_pred_scaled = self._to_scaled_static(y_pred_raw, self.pred_mean, self.pred_scale, self.eps)
-
-        actual_trend = y_true_scaled - last_close_scaled
-        pred_trend = y_pred_scaled - last_close_scaled
-
-        # Difference of trends
-        trend_diffs = actual_trend - pred_trend
-
-        # Apply log-cosh for soft quadratic loss with clipping
-        per_elem = tf.math.log(tf.cosh(trend_diffs))
-        per_elem = tf.clip_by_value(per_elem, -10.0, 10.0)
-
-        result = self._reduce_mean(per_elem)
-        # Guard against NaN/Inf contamination
-        result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
-        return result
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.local_trend_loss(self, x_window, y_true_raw, y_pred_raw, last_close_raw)
 
 
     # -------------------------
     # Extended & global trends
     # -------------------------
     def extended_trend_loss(self, x_window, y_true_raw, y_pred_raw, extended_trends, last_close_raw):
-        """
-        Returns tuple: (global_loss_scalar, extended_loss_scalar).
-        Now huber -> then tanh bounding.
-        """
-        start_of_window = tf.squeeze(x_window[:, 0:1], axis=1)
-        start_scaled = self._to_scaled_static(start_of_window, self.pred_mean, self.pred_scale, self.eps)
-
-        y_true_scaled = self._to_scaled_static(y_true_raw, self.pred_mean, self.pred_scale, self.eps)
-        y_pred_scaled = self._to_scaled_static(y_pred_raw, self.pred_mean, self.pred_scale, self.eps)
-
-        # ---- Global trend (target vs start of window) ----
-        global_diffs = (y_true_scaled - start_scaled) - (y_pred_scaled - start_scaled)
-        global_logcosh = tf.math.log(tf.cosh(global_diffs))
-        # Clip to prevent unbounded growth
-        global_logcosh = tf.clip_by_value(global_logcosh, -10.0, 10.0)
-        global_loss = self._reduce_mean(global_logcosh)
-        # Guard against NaN/Inf
-        global_loss = tf.where(tf.math.is_finite(global_loss), global_loss, tf.constant(0.0, dtype=tf.float32))
-
-        # ---- Extended / multi-scale trend ----
-        last_close = tf.squeeze(last_close_raw, axis=1)
-        last_close_scaled = self._to_scaled(last_close)
-        pred_trend_scaled = y_pred_scaled - last_close_scaled
-
-        n_trend_features = tf.shape(extended_trends)[1]
-
-        def compute_extended():
-            eps = tf.cast(1e-8, tf.float32)
-
-            # --- Long-term trend ---
-            long_term_trend = tf.cast(extended_trends[:, -1], tf.float32)
-            long_term_trend = tf.clip_by_value(long_term_trend, -0.999, 1e6)
-            past_price_long = last_close / (1.0 + long_term_trend + eps)
-            long_price_diff_raw = last_close - past_price_long
-            long_price_diff_scaled = long_price_diff_raw / (self.pred_scale + self.eps)
-
-            long_diffs = pred_trend_scaled - long_price_diff_scaled
-            long_logcosh = tf.math.log(tf.cosh(long_diffs))
-            # Clip to prevent unbounded growth
-            long_logcosh = tf.clip_by_value(long_logcosh, -10.0, 10.0)
-            extended_loss_long = self._reduce_mean(long_logcosh)
-            # Guard against NaN/Inf
-            extended_loss_long = tf.where(tf.math.is_finite(extended_loss_long), extended_loss_long, tf.constant(0.0, dtype=tf.float32))
-
-            # --- Multi-scale short-term trends ---
-            def compute_multi():
-                short_trends = tf.cast(extended_trends[:, :-1], tf.float32)
-                short_trends = tf.clip_by_value(short_trends, -0.999, 1e6)
-
-                past_prices = last_close[:, None] / (1.0 + short_trends + eps)
-                short_price_diff_raw = last_close[:, None] - past_prices
-                short_price_diff_scaled = short_price_diff_raw / (self.pred_scale + self.eps)
-
-                short_diffs = tf.expand_dims(pred_trend_scaled, 1) - short_price_diff_scaled
-                logcosh_losses = tf.math.log(tf.cosh(short_diffs))
-                # Clip to prevent unbounded growth
-                logcosh_losses = tf.clip_by_value(logcosh_losses, -10.0, 10.0)
-
-                # Normalize across scales
-                per_scale_mean = tf.reduce_mean(logcosh_losses, axis=0)
-                denom = tf.reduce_mean(per_scale_mean) + self.eps
-                normalized_per_scale = per_scale_mean / denom
-                result = tf.reduce_mean(normalized_per_scale)
-                # Guard against NaN/Inf
-                result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
-                return result
-
-            def no_multi():
-                return tf.constant(0.0, dtype=tf.float32)
-
-            multi_scale_loss = tf.cond(tf.greater(tf.shape(extended_trends)[1], 1), compute_multi, no_multi)
-            return extended_loss_long + multi_scale_loss
-
-        def no_extended():
-            return tf.constant(0.0, dtype=tf.float32)
-
-        extended_loss = tf.cond(tf.greater(n_trend_features, 0), compute_extended, no_extended)
-
-        return global_loss, extended_loss
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.extended_trend_loss(self, x_window, y_true_raw, y_pred_raw, extended_trends, last_close_raw)
 
     # -------------------------
     # Combined custom loss (NEW: Per-horizon outputs with focal loss)
     # -------------------------
     def custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends):
-        """
-        Multi-horizon, multi-task loss computation.
-        
-        y_pred now has 9 outputs: [price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, price_h2, dir_h2, var_h2]
-        Each horizon (h0=1min, h1=5min, h2=15min) has independent price, direction, and confidence outputs.
-        
-        Losses computed:
-        - 3 point losses (one per horizon)
-        - 3×3 trend losses (local, global, extended for each horizon)
-        - 3 focal direction losses (per horizon, replacing BCE)
-        - 3 variance NLL losses (per horizon)
-        - Regularization and volatility penalties
-        
-        Returns: 29-component tuple for comprehensive loss tracking
-        """
-        
-        # Unpack 9 outputs
-        price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, price_h2, dir_h2, var_h2 = y_pred
-        
+        """Delegate to centralized implementation in `losses.py`."""
+        return _losses.custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends)        
         # Prepare targets (multi-horizon)
         # Option A: y_true is DELTA in scaled space, so y_true_raw is DELTA in raw (price units).
         y_true = tf.cast(y_true, tf.float32)  # [B, 3]
