@@ -27,6 +27,9 @@ except Exception:
     reconstruct_prices = None
     mask_by_min_abs_y = None
 
+# Import mathematical helper functions
+import math_helpers as mh
+
 # -----------------------------
 class Config:
 
@@ -955,19 +958,16 @@ class LearnableIndicators(layers.Layer):
         self.grad_multiplier = config.INDICATOR_GRAD_MULT  # Apply gradient boost
 
     def _logit_from_alpha(self, alpha):
-        return tf.math.log(alpha + self.epsilon) - tf.math.log(1.0 - alpha + self.epsilon)
+        return mh.logit_from_alpha(alpha, self.epsilon)
 
     def _alpha_from_logit(self, logit):
-        return tf.sigmoid(logit)
+        return mh.alpha_from_logit(logit)
 
     def _logit_from_period(self, period):
-        alpha = 2.0 / (period + 1.0)
-        return self._logit_from_alpha(alpha)
+        return mh.logit_from_period(period, self.epsilon)
 
     def _period_from_logit(self, logit):
-        alpha = self._alpha_from_logit(logit)
-        period = (2.0 / (alpha + self.epsilon)) - 1.0
-        return tf.maximum(period, 0.0)
+        return mh.period_from_logit(logit, self.epsilon)
 
     def build(self, input_shape):
         # input_shape[0] is close_seq, [1] is meta_adjust [B, num_logits]
@@ -1060,20 +1060,7 @@ class LearnableIndicators(layers.Layer):
         super().build(input_shape)
 
     def ewma_seq(self, x_seq, alpha_scalar):
-        x_seq = tf.cast(x_seq, tf.float32)
-        def step(prev, cur):
-            return alpha_scalar * cur + (1.0 - alpha_scalar) * prev
-        first = x_seq[:, 0]
-        rest = x_seq[:, 1:]
-        ema_rest = tf.scan(
-            fn=lambda prev, cur: step(prev, cur),
-            elems=tf.transpose(rest, perm=[1, 0]),
-            initializer=first,
-            parallel_iterations=1
-        )
-        ema_rest = tf.transpose(ema_rest, perm=[1, 0])
-        ema_full = tf.concat([tf.expand_dims(first, axis=1), ema_rest], axis=1)
-        return ema_full
+        return mh.ewma_sequence(x_seq, alpha_scalar)
 
     def call(self, inputs, training=None):
         x, meta_adjust = inputs
@@ -1387,40 +1374,34 @@ class CustomTrainModel(models.Model):
 
         # NOTE: We no longer use tf.keras.losses.Huber; point loss will call self.point_huber.
         # This yields identical math but keeps a single implementation.
-    def _logit_from_alpha(self, alpha): return tf.math.log(alpha + self.epsilon) - tf.math.log(1.0 - alpha + self.epsilon)
-    def _alpha_from_logit(self, logit): return tf.sigmoid(logit)
+    def _logit_from_alpha(self, alpha):
+        return mh.logit_from_alpha(alpha, self.epsilon)
+
+    def _alpha_from_logit(self, logit):
+        return mh.alpha_from_logit(logit)
+
     def _logit_from_period(self, period):
-        alpha = 2.0 / (period + 1.0)
-        return self._logit_from_alpha(alpha)
+        return mh.logit_from_period(period, self.epsilon)
+
     def _period_from_logit(self, logit):
-        alpha = self._alpha_from_logit(logit)
-        period = (2.0 / (alpha + self.epsilon)) - 1.0
-        return tf.maximum(period, 0.0)
+        return mh.period_from_logit(logit, self.epsilon)
     # -------------------------
     # Unified element-wise Huber
     # -------------------------
     def huber(self, x, delta=None):
         """Element-wise Huber (returns same-shape tensor). Works on scaled differences."""
         if delta is None:
-            delta = tf.cast(self.huber_delta, tf.float32)
-        else:
-            delta = tf.cast(delta, tf.float32)
-
-        x = tf.cast(x, tf.float32)
-        abs_x = tf.abs(x)
-        quadratic = 0.5 * tf.square(x)
-        linear = delta * (abs_x - 0.5 * delta)
-        return tf.where(abs_x <= delta, quadratic, linear)
+            delta = self.huber_delta
+        return mh.huber_loss(x, delta)
 
     # Small utility: reduce-mean with safe casting
     def _reduce_mean(self, x):
-        return tf.reduce_mean(tf.cast(x, tf.float32))
+        return mh.safe_reduce_mean(x)
 
     @staticmethod
     def _normal_cdf(z):
         """Standard Normal CDF using erf; z can be any float tensor."""
-        z = tf.cast(z, tf.float32)
-        return 0.5 * (1.0 + tf.math.erf(z / tf.constant(np.sqrt(2.0), dtype=tf.float32)))
+        return mh.normal_cdf(z)
 
     # -------------------------
     # Utility / transforms (moved outside class to avoid tracing issues)
@@ -1428,12 +1409,11 @@ class CustomTrainModel(models.Model):
     @staticmethod
     def _to_scaled_static(raw, pred_mean, pred_scale, eps=1e-8):
         """Convert raw prices to scaled units (same domain as dataset scaling)."""
-        raw = tf.cast(raw, tf.float32)
-        return (raw - pred_mean) / (pred_scale + eps)
+        return mh.to_scaled(raw, pred_mean, pred_scale, eps)
 
     def _to_scaled(self, raw):
         """Instance helper that uses the stored scaling parameters."""
-        return self._to_scaled_static(raw, self.pred_mean, self.pred_scale, self.eps)
+        return mh.to_scaled(raw, self.pred_mean, self.pred_scale, self.eps)
 
     def call(self, inputs, training=None):
         return self.base_model(inputs, training=training)
@@ -1445,13 +1425,13 @@ class CustomTrainModel(models.Model):
         """
         Focal Loss: -α(1-p_t)^γ * log(p_t)
         Addresses class imbalance by down-weighting easy examples and focusing on hard ones.
-        
+
         Args:
             true_labels: Binary labels [B] (0 or 1)
             logits: Predicted probabilities [B] from sigmoid (0 to 1)
             alpha: Class weight for minority class (default 0.7 weights DOWN class)
             gamma: Focusing parameter (default 2.0; higher = more focus on hard examples)
-        
+
         Returns:
             If reduce=True: scalar mean focal loss.
             If reduce=False: per-example focal loss vector.
@@ -1460,56 +1440,24 @@ class CustomTrainModel(models.Model):
             alpha = self.config.FOCAL_ALPHA
         if gamma is None:
             gamma = self.config.FOCAL_GAMMA
-        
-        alpha = tf.cast(alpha, tf.float32)
-        gamma = tf.cast(gamma, tf.float32)
-        
-        # Ensure inputs are float32
-        true_labels = tf.cast(true_labels, tf.float32)
-        logits = tf.cast(logits, tf.float32)
-        
-        # Clamp logits to prevent log(0)
-        logits = tf.clip_by_value(logits, 1e-7, 1.0 - 1e-7)
-        
-        # Compute focal weight: (1 - p_t)^γ where p_t is the probability of true class
-        p_t = true_labels * logits + (1.0 - true_labels) * (1.0 - logits)
-        focal_weight = tf.pow(1.0 - p_t, gamma)
-        
-        # Compute base cross-entropy
-        bce = -true_labels * tf.math.log(logits) - (1.0 - true_labels) * tf.math.log(1.0 - logits)
-        
-        # Apply focal weighting and class weighting.
-        # Here alpha is the weight for the DOWN class (label=0), and (1-alpha) weights UP (label=1).
-        class_weight = alpha * (1.0 - true_labels) + (1.0 - alpha) * true_labels
-        
-        focal = class_weight * focal_weight * bce
 
-        if reduce:
-            return tf.reduce_mean(focal)
-        return focal
+        return mh.focal_loss(true_labels, logits, alpha, gamma, reduce)
 
     # -------------------------
-    # Point loss (log-cosh)
+    # Point loss (pinball/quantile)
     # -------------------------
     def point_huber(self, y_true_scaled, y_pred_scaled, last_close_scaled=None, delta=None):
         """Point loss in scaled space using pinball (quantile) loss for asymmetry.
-    
+
         For delta-target training, the natural pivot is 0 (not last_close).
         `last_close_scaled` is kept optional for API compatibility.
         """
         # Squeeze explicitly on axis=1 to be shape-safe
         y_true = tf.squeeze(y_true_scaled, axis=1)
         y_pred = tf.squeeze(y_pred_scaled, axis=1)
-    
-        # Pinball loss
-        tau = tf.constant(self.config.TAU_PRICE, dtype=tf.float32)
-        error = y_true - y_pred
-        per_elem = tf.maximum(tau * error, (tau - 1.0) * error)
-    
-        result = self._reduce_mean(per_elem)
-        # Guard against NaN/Inf contamination
-        result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
-        return result
+
+        # Use pinball loss from math_helpers
+        return mh.pinball_loss(y_true, y_pred, tau=self.config.TAU_PRICE)
 
 
     # -------------------------
