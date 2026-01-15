@@ -44,9 +44,9 @@ class Config:
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
     BATCH_SIZE = 540
     EPOCHS = 20
-    LR = 1e-2  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 1440 * 30  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 7  # Limit most recent sequences to bound training size
 
 
 
@@ -60,10 +60,10 @@ class Config:
 
 # Loss Function Weights
     DAMPING = 0.5
-    LAMBDA_LOCAL_TREND  = 1.0
-    LAMBDA_GLOBAL_TREND =  0.1
-    LAMBDA_EXTENDED_TREND = 0.5
-    LAMBDA_QUANTILE = 1.0
+    LAMBDA_LOCAL_TREND  = 0.2
+    LAMBDA_GLOBAL_TREND =  0.2
+    LAMBDA_EXTENDED_TREND = 1.0
+    LAMBDA_QUANTILE = 0.1
     REG_MOMENTUM_L2 = 1e-4
     MOMENTUM_CLIP_MIN = 1.0
     MOMENTUM_CLIP_MAX = LOOKBACK
@@ -75,15 +75,15 @@ class Config:
     # - h0 (1-min): Short-term noise, harder to predict, may need lower weight to avoid overfitting noise
     # - h1 (5-min): Primary horizon, balanced signal/noise, standard weight
     # - h2 (15-min): Long-term trend, more stable, higher weight to enforce consistency
-    LAMBDA_SHORT = 0.8   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
+    LAMBDA_SHORT = 0.5   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
     LAMBDA_POINT = 1.0   # h1 (5-min):  Primary horizon baseline
-    LAMBDA_LONG = 0.8    # h2 (15-min): Increased from 1.0 to enforce long-term consistency
+    LAMBDA_LONG = 0.5   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
     
     # Auxiliary loss weights
-    LAMBDA_DIR = 0.3  # Direction classification (focal loss)
+    LAMBDA_DIR = 1.0  # Direction classification (focal loss)
     LAMBDA_INTER = 0.05  # Interconnection regularization between horizons
-    LAMBDA_VOL = 1.0  # Volatility penalty (weak constraint)
-    LAMBDA_VAR = 1.0  # Variance NLL (confidence estimation)
+    LAMBDA_VOL = 0.1  # Volatility penalty (weak constraint)
+    LAMBDA_VAR = 0.1  # Variance NLL (confidence estimation)
 
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
@@ -111,13 +111,13 @@ class Config:
     BB_PERIODS = [10, 20, 50]  
 
 # Activation function settings
-    TANH_SCALE = 1.0
-    HUBER_DELTA = 1.0
-    SIGMOID_SCALE = 1.0
+    TANH_SCALE = 3.0
+    HUBER_DELTA = 3.0
+    SIGMOID_SCALE = 3.0
 
 # Training stability controls
     INDICATOR_GRAD_MULT = 20.0
-    GRAD_CLIP_NORM = 10.0
+    GRAD_CLIP_NORM = 20.0
 
 # Focal loss hyperparameters for direction classification
     # NOTE: alpha weights DOWN class (label=0), (1-alpha) weights UP (label=1)
@@ -581,6 +581,218 @@ def make_interactive_plot_callback(
         except Exception:
             return False
 
+    # --- Metric classification helpers (module-level so they can be tested) ---
+    def classify_by_threshold(val, good, stable, higher_better=True):
+        try:
+            v = float(val)
+        except Exception:
+            return 'bad'
+        if higher_better:
+            if v >= good:
+                return 'good'
+            elif v >= stable:
+                return 'stable'
+            else:
+                return 'bad'
+        else:
+            if v <= good:
+                return 'good'
+            elif v <= stable:
+                return 'stable'
+            else:
+                return 'bad'
+
+    def classify_dir_acc(acc):
+        return classify_by_threshold(acc, good=0.6, stable=0.55, higher_better=True)
+
+    def classify_ece(ece):
+        return classify_by_threshold(ece, good=0.05, stable=0.1, higher_better=False)
+
+    def classify_brier(brier):
+        return classify_by_threshold(brier, good=0.05, stable=0.1, higher_better=False)
+
+    def classify_stability_metric(stab):
+        try:
+            s = float(stab)
+        except Exception:
+            return 'bad'
+        return 'good' if s > 0.8 else ('stable' if s > 0.5 else 'bad')
+
+    def classify_convergence_metric(conv):
+        try:
+            c = float(conv)
+        except Exception:
+            return 'bad'
+        return 'good' if c > 0.001 else ('stable' if abs(c) < 0.001 else 'bad')
+
+    def classify_gen_gap_metric(gap):
+        try:
+            g = float(gap)
+        except Exception:
+            return 'bad'
+        return 'good' if g < 0.1 else ('stable' if g < 0.3 else 'bad')
+
+    def classify_coherence_metric(coh):
+        try:
+            c = float(coh)
+        except Exception:
+            return 'bad'
+        return 'good' if c > 0.8 else ('stable' if c > 0.5 else 'bad')
+
+    def classify_epoch_loss(curr_val_loss, val_history=None, improvement_threshold=0.01, stable_threshold=0.002):
+        """Classify epoch loss trend based on the current validation loss and history.
+
+        Returns: ('good'|'stable'|'bad', explanation_dict)
+        Explanation dict contains: prev_val, delta_pct, best_val, best_idx
+        """
+        try:
+            curr = float(curr_val_loss)
+        except Exception:
+            return 'bad', {'reason': 'invalid_current_loss'}
+
+        hist = list(val_history) if val_history is not None else []
+        prev = None
+        if len(hist) >= 2:
+            prev = float(hist[-2])
+        elif len(hist) == 1:
+            prev = float(hist[0])
+
+        best_val = min(hist) if hist else curr
+        best_idx = int(hist.index(best_val)) if hist else 0
+
+        delta_pct = None
+        if prev is None or prev == 0:
+            # Not enough history — mark as stable
+            status = 'stable'
+            delta_pct = 0.0
+        else:
+            delta_pct = (prev - curr) / prev
+            if delta_pct >= improvement_threshold:
+                status = 'good'
+            elif abs(delta_pct) < stable_threshold:
+                status = 'stable'
+            else:
+                status = 'bad'
+
+        explanation = {
+            'prev_val': prev,
+            'delta_pct': delta_pct,
+            'best_val': best_val,
+            'best_idx': best_idx,
+        }
+        return status, explanation
+
+    def metric_limits_text(name: str) -> str:
+        """Return a short human-readable string describing the Good/Stable boundaries for a named metric.
+
+        This is used by the dashboard legend to always show the numerical limits next to each tracked metric.
+        """
+        if not isinstance(name, str):
+            return ''
+        n = name.strip().lower()
+        if 'dir' in n and 'acc' in n:
+            return 'Good: ≥0.60; Stable: ≥0.55'
+        if 'ece' in n:
+            return 'Good: ≤0.05; Stable: ≤0.10'
+        if 'brier' in n:
+            return 'Good: ≤0.05; Stable: ≤0.10'
+        if 'stability' in n:
+            return 'Good: >0.80; Stable: >0.50'
+        if 'gen gap' in n or ('gap' in n and 'gen' in n) or (n == 'gen gap'):
+            return 'Good: <0.10; Stable: <0.30'
+        if 'coherence' in n:
+            return 'Good: >0.80; Stable: >0.50'
+        if 'epoch loss' in n or ('epoch' in n and 'loss' in n) or n == 'loss':
+            # Uses classify_epoch_loss thresholds: improvement_threshold=1%, stable_threshold=0.2%
+            return 'Good: ≥1.00% improvement; Stable: |Δ| <0.20%'
+        return ''
+
+    def summarize_indicator_params(csv_path: str = 'indicator_params_history.csv', last_n: int = 3):
+        """Read indicator params CSV and return a compact summary useful for the dashboard.
+
+        Returns a dict with keys:
+            - 'convergence_score' (float or None)
+            - 'mean_param_change_pct' (float or None)
+            - 'top_changes' : list of (param_name, change_pct, current_value)
+            - 'group_stats' : dict mapping group -> {avg, min, max, count}
+            - 'csv_path'
+        The function is resilient to missing files and non-numeric columns.
+        """
+        try:
+            import pandas as pd
+            if not os.path.exists(csv_path):
+                return {'convergence_score': None, 'mean_param_change_pct': None, 'top_changes': [], 'group_stats': {}, 'csv_path': csv_path}
+            df = pd.read_csv(csv_path)
+            if df.empty:
+                return {'convergence_score': None, 'mean_param_change_pct': None, 'top_changes': [], 'group_stats': {}, 'csv_path': csv_path}
+
+            # Consider last row as most recent values
+            last = df.iloc[-1]
+            # Collect change_* columns
+            change_cols = [c for c in df.columns if c.startswith('change_')]
+            top_changes = []
+            changes = []
+            if change_cols:
+                for c in change_cols:
+                    try:
+                        val = float(last.get(c, 0.0))
+                    except Exception:
+                        val = 0.0
+                    param_name = c[len('change_'):]
+                    curr_val = None
+                    if param_name in df.columns:
+                        try:
+                            curr_val = float(last.get(param_name))
+                        except Exception:
+                            curr_val = None
+                    changes.append((param_name, float(val), curr_val))
+                # Sort by absolute change descending
+                changes.sort(key=lambda x: x[1], reverse=True)
+                top_changes = changes[:min(len(changes), 5)]
+
+            # Group statistics: group by prefix before first underscore (e.g., 'ma_period_0' -> 'ma')
+            group_stats = {}
+            for pname, change_pct, curr_val in changes:
+                grp = pname.split('_')[0] if pname and isinstance(pname, str) else 'other'
+                lst = group_stats.setdefault(grp, [])
+                lst.append(float(change_pct))
+
+            # compute avg/min/max per group
+            for grp, lst in list(group_stats.items()):
+                if not lst:
+                    group_stats[grp] = {'avg': None, 'min': None, 'max': None, 'count': 0}
+                else:
+                    arr = np.array(lst, dtype=float)
+                    group_stats[grp] = {
+                        'avg': float(np.mean(arr)),
+                        'min': float(np.min(arr)),
+                        'max': float(np.max(arr)),
+                        'count': int(len(arr)),
+                    }
+
+            conv_score = None
+            mean_change = None
+            if 'convergence_score' in df.columns:
+                try:
+                    conv_score = float(last.get('convergence_score'))
+                except Exception:
+                    conv_score = None
+            if 'mean_param_change_pct' in df.columns:
+                try:
+                    mean_change = float(last.get('mean_param_change_pct'))
+                except Exception:
+                    mean_change = None
+
+            return {
+                'convergence_score': conv_score,
+                'mean_param_change_pct': mean_change,
+                'top_changes': top_changes,
+                'group_stats': group_stats,
+                'csv_path': csv_path,
+            }
+        except Exception:
+            return {'convergence_score': None, 'mean_param_change_pct': None, 'top_changes': [], 'group_stats': {}, 'csv_path': csv_path}
+
     class _InteractivePlotCallback(tf.keras.callbacks.Callback):
         def __init__(self):
             super().__init__()
@@ -921,43 +1133,204 @@ def make_interactive_plot_callback(
                 coh_status = "aligned" if coherence > 0.8 else ("moderate" if coherence > 0.5 else "misaligned")
                 coh_color = "#81C784" if coherence > 0.8 else ("#FFB74D" if coherence > 0.5 else "#EF5350")
                 
+                # --- Evaluate metrics and prepare suggestions / legend highlighting
+                # Direction quality
+                dir_acc = logs.get('val_dir_acc_avg', logs.get('dir_acc_avg', 0.0))
+                dir_status = classify_dir_acc(dir_acc)
+
+                # Calibration / confidence metrics
+                ece = logs.get('ece_avg', 0.0)
+                ece_status = classify_ece(ece)
+
+                brier = logs.get('brier_avg', 0.0)
+                brier_status = classify_brier(brier)
+
+                # Training health
+                stab_status_calc = classify_stability_metric(stability)
+                conv_status_calc = classify_convergence_metric(convergence_rate)
+                gap_status_calc = classify_gen_gap_metric(gen_gap)
+                coh_status_calc = classify_coherence_metric(coherence)
+
+                # Compose suggestions (simple heuristic rules)
+                suggestions = []
+                if dir_status == 'bad':
+                    suggestions.append('Improve direction calibration: increase training data, adjust class weights, or tune thresholds.')
+                elif dir_status == 'stable':
+                    suggestions.append('Direction metrics are acceptable; consider minor calibration improvements (ECE / Brier).')
+                else:
+                    suggestions.append('Direction predictions look healthy. Consider collecting more validation cases for robustness checks.')
+
+                if gap_status_calc == 'bad':
+                    suggestions.append('Large generalization gap → consider stronger regularization or early stopping.')
+                elif gap_status_calc == 'stable':
+                    suggestions.append('Moderate generalization gap → watch for overfitting and try small reg increases.')
+
+                if stab_status_calc == 'bad':
+                    suggestions.append('Unstable training → reduce learning rate or increase batch size.')
+
+                if conv_status_calc == 'bad':
+                    suggestions.append('Diverging training → try reducing learning rate / check data preprocessing.')
+
+                if ece_status == 'bad' or brier_status == 'bad':
+                    suggestions.append('Calibration is poor → consider temperature scaling or calibration layer.')
+
+                # Epoch loss evaluation (fourth column)
+                val_history = self.history.get('val_loss', [])
+                curr_val_loss = logs.get('val_loss', 0.0)
+                loss_status, loss_expl = classify_epoch_loss(curr_val_loss, val_history=val_history)
+                loss_prev = loss_expl.get('prev_val')
+                loss_delta = loss_expl.get('delta_pct')
+                loss_best = loss_expl.get('best_val')
+                best_epoch = loss_expl.get('best_idx') + 1 if loss_expl.get('best_idx') is not None else None
+
+                loss_suggestions = []
+                if loss_status == 'good':
+                    loss_suggestions.append('Validation loss improving — consider longer training or reduced LR decay for more gains.')
+                elif loss_status == 'stable':
+                    loss_suggestions.append('Loss plateau — try reducing LR schedule, increase capacity, or train longer.')
+                else:
+                    loss_suggestions.append('Validation loss increasing — check learning rate, data pipeline, and overfitting signs (regularize, augment).')
+
+                # Try to read recent indicator params summary (CSV produced by ParamsLogger)
+                try:
+                    params_summary = summarize_indicator_params(csv_path='indicator_params_history.csv')
+                except Exception:
+                    params_summary = {'convergence_score': None, 'mean_param_change_pct': None, 'top_changes': [], 'csv_path': 'indicator_params_history.csv'}
+
+                # Compute a fallback progress color variable to avoid placing '#' inside f-string expressions
+                progress_color = '#81C784' if progress > 0 else '#EF5350'
+
+                # Prepare small HTML pieces that can be safely embedded into the main f-string
+                point_loss_html = f"<span style='display: inline-block; width: 180px;'>point_loss:</span> <span style='color: #90CAF9;'>{logs.get('point_loss', 0):.6f}</span><br>" if 'point_loss' in logs else ''
+                dir_loss_html = f"<span style='display: inline-block; width: 180px;'>dir_loss:</span> <span style='color: #90CAF9;'>{logs.get('dir_loss', 0):.6f}</span><br>" if 'dir_loss' in logs else ''
+                nll_loss_html = f"<span style='display: inline-block; width: 180px;'>nll_loss:</span> <span style='color: #90CAF9;'>{logs.get('nll_loss', 0):.6f}</span><br>" if 'nll_loss' in logs else ''
+
+                # Build a small HTML snippet summarizing params CSV (keep it out of the big f-string to avoid nested f-string parsing issues)
+                ps = params_summary or {}
+                conv_val = ps.get('convergence_score')
+                conv_text = f"{conv_val:.3f}" if conv_val is not None else 'n/a'
+                mean_val = ps.get('mean_param_change_pct')
+                mean_text = f"{mean_val:.2f}%" if mean_val is not None else 'n/a'
+                top = ps.get('top_changes', []) or []
+                if top:
+                    top_text = ', '.join([f"{p}:{c:.2f}% (val={v if v is not None else 'n/a'})" for p, c, v in top])
+                else:
+                    top_text = 'n/a'
+                group_stats = ps.get('group_stats', {}) or {}
+                if group_stats:
+                    group_text = ', '.join([f"{g}:{v['avg']:.2f}/{v['min']:.2f}/{v['max']:.2f}" for g, v in group_stats.items()])
+                else:
+                    group_text = 'n/a'
+
+                params_html = (
+                    f"<div style='margin-bottom:6px;'><b>Convergence:</b> {conv_text}; <b>Mean Δ:</b> {mean_text}</div>"
+                    f"<div style='font-size:12px; color:#bdbdbd; margin-bottom:6px;'><b>Top changes:</b> {top_text}</div>"
+                    f"<div style='font-size:12px; color:#bdbdbd; margin-bottom:6px;'><b>Group stats (avg/min/max %):</b> {group_text}</div>"
+                )
+
+                # Helper to make legend row with highlighting when currently in that status
+                def _legend_row(name, status, label_color, bounds_text=""):
+                    """Return an HTML row containing the name, status and the human-readable bounds_text.
+                    The row is visually highlighted when the metric is currently in the given status.
+                    """
+                    is_active = 'box-shadow: 0 0 8px ' + label_color + '; background-color: rgba(255,255,255,0.02);' if status == 'good' else ('box-shadow: 0 0 8px ' + label_color + '; background-color: rgba(255,255,255,0.01);' if status == 'stable' else '')
+                    text_color = label_color if status == 'good' else ('#FFB74D' if status == 'stable' else '#EF5350')
+                    return (f"<div style='padding:6px; margin-bottom:6px; border-radius:4px; {is_active}'>"
+                            f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+                            f"<span style='display:inline-block; width:140px;'>{name}</span>"
+                            f"<span style='font-weight:bold; color:{text_color};'>{status.upper()}</span>"
+                            f"</div>"
+                            f"<div style='font-size:11px; color:#9e9e9e; margin-top:3px;'>{bounds_text}</div>"
+                            f"</div>")
+
+                # Build 4-column layout: existing left + evaluation middle + legend + epoch-loss column
                 html_content = f"""
-                <div style="font-family: monospace; color: #e0e0e0; background-color: #0d0d0d; padding: 15px; border-radius: 5px;">
-                    <div style="text-align: center; font-size: 16px; font-weight: bold; border-bottom: 2px solid #444; padding-bottom: 10px; margin-bottom: 15px;">
-                        📊 EPOCH METRICS DASHBOARD
-                    </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: #64B5F6; font-weight: bold; margin-bottom: 8px;">📉 LOSSES</div>
-                        <div style="margin-left: 15px;">
-                            <span style="display: inline-block; width: 180px;">loss:</span> <span style="color: #64B5F6;">{logs.get('loss', 0):.6f}</span><br>
-                            <span style="display: inline-block; width: 180px;">val_loss:</span> <span style="color: #42A5F5;">{logs.get('val_loss', 0):.6f}</span><br>
-                            {'<span style="display: inline-block; width: 180px;">point_loss:</span> <span style="color: #90CAF9;">' + f"{logs.get('point_loss', 0):.6f}" + '</span><br>' if 'point_loss' in logs else ''}
-                            {'<span style="display: inline-block; width: 180px;">dir_loss:</span> <span style="color: #90CAF9;">' + f"{logs.get('dir_loss', 0):.6f}" + '</span><br>' if 'dir_loss' in logs else ''}
-                            {'<span style="display: inline-block; width: 180px;">nll_loss:</span> <span style="color: #90CAF9;">' + f"{logs.get('nll_loss', 0):.6f}" + '</span><br>' if 'nll_loss' in logs else ''}
+                <div style="font-family: monospace; color: #e0e0e0; background-color: #0d0d0d; padding: 15px; border-radius: 5px; display:flex; gap:20px;">
+                    <div style="flex:0 0 420px;">
+                        <div style="text-align: center; font-size: 16px; font-weight: bold; border-bottom: 2px solid #444; padding-bottom: 10px; margin-bottom: 15px;">
+                            📊 EPOCH METRICS DASHBOARD
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <div style="color: #64B5F6; font-weight: bold; margin-bottom: 8px;">📉 LOSSES</div>
+                            <div style="margin-left: 15px;">
+                                <span style="display: inline-block; width: 180px;">loss:</span> <span style="color: #64B5F6;">{logs.get('loss', 0):.6f}</span><br>
+                                <span style="display: inline-block; width: 180px;">val_loss:</span> <span style="color: #42A5F5;">{logs.get('val_loss', 0):.6f}</span><br>
+                                {point_loss_html}
+                                {dir_loss_html}
+                                {nll_loss_html}
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 15px;">
+                            <div style="color: #81C784; font-weight: bold; margin-bottom: 8px;">🎯 DIRECTION METRICS</div>
+                            <div style="margin-left: 15px;">
+                                <span style="display: inline-block; width: 180px;">dir_acc_avg:</span> <span style="color: #81C784;">{logs.get('dir_acc_avg', 0):.4f}</span><br>
+                                <span style="display: inline-block; width: 180px;">val_dir_acc_avg:</span> <span style="color: #66BB6A;">{logs.get('val_dir_acc_avg', 0):.4f}</span><br>
+                                <span style="display: inline-block; width: 180px;">bal_acc_avg:</span> <span style="color: #FFB74D;">{logs.get('bal_acc_avg', 0):.4f}</span> <span style="color: #888;">(50%=random)</span><br>
+                                <span style="display: inline-block; width: 180px;">val_bal_acc_avg:</span> <span style="color: #FFA726;">{logs.get('val_bal_acc_avg', 0):.4f}</span><br>
+                                <span style="display: inline-block; width: 180px;">brier_avg:</span> <span style="color: #CE93D8;">{logs.get('brier_avg', 0):.4f}</span><br>
+                                <span style="display: inline-block; width: 180px;">ece_avg:</span> <span style="color: #BA68C8;">{logs.get('ece_avg', 0):.4f}</span><br>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <div style="color: #CE93D8; font-weight: bold; margin-bottom: 8px;">📈 TRAINING HEALTH</div>
+                            <div style="margin-left: 15px;">
+                                <span style="display: inline-block; width: 180px;">Convergence:</span> <span style="color: {conv_color};">{convergence_rate:+.6f} ({conv_status})</span><br>
+                                <span style="display: inline-block; width: 180px;">Stability:</span> <span style="color: {stab_color};">{stability:.4f} ({stab_status})</span><br>
+                                <span style="display: inline-block; width: 180px;">Gen. Gap:</span> <span style="color: {gap_color};">{gen_gap:+.6f} ({gap_status})</span><br>
+                                <span style="display: inline-block; width: 180px;">Coherence:</span> <span style="color: {coh_color};">{coherence:.4f} ({coh_status})</span><br>
+                                <span style="display: inline-block; width: 180px;">Progress:</span> <span style="color: {progress_color};">{progress*100:+.2f}%</span><br>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div style="margin-bottom: 15px;">
-                        <div style="color: #81C784; font-weight: bold; margin-bottom: 8px;">🎯 DIRECTION METRICS</div>
-                        <div style="margin-left: 15px;">
-                            <span style="display: inline-block; width: 180px;">dir_acc_avg:</span> <span style="color: #81C784;">{logs.get('dir_acc_avg', 0):.4f}</span><br>
-                            <span style="display: inline-block; width: 180px;">val_dir_acc_avg:</span> <span style="color: #66BB6A;">{logs.get('val_dir_acc_avg', 0):.4f}</span><br>
-                            <span style="display: inline-block; width: 180px;">bal_acc_avg:</span> <span style="color: #FFB74D;">{logs.get('bal_acc_avg', 0):.4f}</span> <span style="color: #888;">(50%=random)</span><br>
-                            <span style="display: inline-block; width: 180px;">val_bal_acc_avg:</span> <span style="color: #FFA726;">{logs.get('val_bal_acc_avg', 0):.4f}</span><br>
-                            <span style="display: inline-block; width: 180px;">brier_avg:</span> <span style="color: #CE93D8;">{logs.get('brier_avg', 0):.4f}</span><br>
-                            <span style="display: inline-block; width: 180px;">ece_avg:</span> <span style="color: #BA68C8;">{logs.get('ece_avg', 0):.4f}</span><br>
+
+                    <div style="flex:0 0 320px; background-color:#0b0b0b; border-radius:6px; padding:10px;">
+                        <div style="font-weight:bold; color:#FFD54F; margin-bottom:8px;">💡 Epoch Metrics Evaluation</div>
+                        <div style="color:#e0e0e0; font-size:13px; line-height:1.35;">
+                            <div style="margin-bottom:8px;"><b>Direction health:</b> {dir_status.upper()} (val_dir_acc={dir_acc:.3f}, ECE={ece:.3f})</div>
+                            <div style="margin-bottom:8px;"><b>Training health:</b> Convergence={conv_status_calc.upper()}, Stability={stab_status_calc.upper()}, Gap={gap_status_calc.upper()}</div>
+                            <div style="margin-bottom:6px;"><b>Coherence:</b> {coh_status_calc.upper()} ({coherence:.3f})</div>
+                            <div style="margin-top:8px; font-weight:bold; color:#BDBDBD;">Suggestions:</div>
+                            <ul style="margin:6px 0 0 16px; color:#bdbdbd;">
+                                {''.join([f'<li>{s}</li>' for s in suggestions])}
+                            </ul>
                         </div>
                     </div>
-                    
-                    <div style="margin-bottom: 10px;">
-                        <div style="color: #CE93D8; font-weight: bold; margin-bottom: 8px;">📈 TRAINING HEALTH</div>
-                        <div style="margin-left: 15px;">
-                            <span style="display: inline-block; width: 180px;">Convergence:</span> <span style="color: {conv_color};">{convergence_rate:+.6f} ({conv_status})</span><br>
-                            <span style="display: inline-block; width: 180px;">Stability:</span> <span style="color: {stab_color};">{stability:.4f} ({stab_status})</span><br>
-                            <span style="display: inline-block; width: 180px;">Gen. Gap:</span> <span style="color: {gap_color};">{gen_gap:+.6f} ({gap_status})</span><br>
-                            <span style="display: inline-block; width: 180px;">Coherence:</span> <span style="color: {coh_color};">{coherence:.4f} ({coh_status})</span><br>
-                            <span style="display: inline-block; width: 180px;">Progress:</span> <span style="color: {'#81C784' if progress > 0 else '#EF5350'};">{progress*100:+.2f}%</span><br>
+
+                    <div style="flex:0 0 280px; background-color:#0b0b0b; border-radius:6px; padding:10px;">
+                        <div style="font-weight:bold; color:#90CAF9; margin-bottom:8px;">🔖 Dashboard Legend (оценкой)</div>
+                        <div style="color:#e0e0e0; font-size:13px; line-height:1.35;">
+                            <div style="margin-bottom:8px; color:#9e9e9e;">Entries are highlighted when metric is currently in the corresponding assessment boundaries (границы оценки).</div>
+                            {_legend_row('Val Dir Acc', dir_status, '#66BB6A', metric_limits_text('Val Dir Acc'))}
+                            {_legend_row('ECE', ece_status, '#BA68C8', metric_limits_text('ECE'))}
+                            {_legend_row('Brier', brier_status, '#CE93D8', metric_limits_text('Brier'))}
+                            {_legend_row('Stability', stab_status_calc, '#81C784', metric_limits_text('Stability'))}
+                            {_legend_row('Gen Gap', gap_status_calc, '#64B5F6', metric_limits_text('Gen Gap'))}
+                            {_legend_row('Coherence', coh_status_calc, '#FFA726', metric_limits_text('Coherence'))}
+                            {_legend_row('Epoch Loss', loss_status, '#FF7043', metric_limits_text('Epoch Loss'))}
+                        </div>
+                    </div>
+
+                    <div style="flex:0 0 320px; background-color:#0b0b0b; border-radius:6px; padding:10px;">
+                        <div style="font-weight:bold; color:#FF7043; margin-bottom:8px;">🔬 Epoch Loss & Indicator Params</div>
+                        <div style="color:#e0e0e0; font-size:13px; line-height:1.35;">
+                            <div style="margin-bottom:6px;"><b>Current Val Loss:</b> {curr_val_loss:.6f}</div>
+                            <div style="margin-bottom:6px;"><b>Previous Val Loss:</b> {'n/a' if loss_prev is None else f'{loss_prev:.6f}'}</div>
+                            <div style="margin-bottom:6px;"><b>Delta:</b> {'n/a' if loss_delta is None else f'{loss_delta*100:+.2f}%'} </div>
+                            <div style="margin-bottom:6px;"><b>Best Val Loss:</b> {loss_best:.6f} (epoch: {best_epoch})</div>
+
+                            <hr style="border:0; height:1px; background:#222; margin:8px 0;">
+                            <div style="font-weight:bold; color:#FFD54F; margin-bottom:6px;">🔧 Indicator Params (recent)</div>
+                            {params_html}
+                            <div style="font-size:11px; color:#9e9e9e; margin-top:6px;">Detailed CSV: {params_summary.get('csv_path')}</div>
+
+                            <div style="margin-top:8px; font-weight:bold; color:#BDBDBD;">Status & Suggestions:</div>
+                            <div style="margin-top:6px; margin-bottom:6px;">{_legend_row('Epoch Loss', loss_status, '#FF7043', metric_limits_text('Epoch Loss'))}</div>
+                            <ul style="margin:6px 0 0 16px; color:#bdbdbd;">
+                                {''.join([f'<li>{s}</li>' for s in loss_suggestions])}
+                            </ul>
                         </div>
                     </div>
                 </div>
@@ -1091,7 +1464,7 @@ def train_and_evaluate(
             new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
 
             min_lambda = 0.1
-            max_lambda = 20
+            max_lambda = 2.0
             custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
             custom_model.lambda_local_trend = float(np.clip(new_local, min_lambda, max_lambda))
             custom_model.lambda_global_trend = float(np.clip(new_global, min_lambda, max_lambda))
@@ -1642,6 +2015,9 @@ class CustomTrainModel(models.Model):
         self.lambda_long = config.LAMBDA_LONG
         self.lambda_var = config.LAMBDA_VAR
         self.config = config or Config()
+        # Accumulator for per-batch gradient stats (appended each training batch)
+        # Each entry is a dict: {'avg_pre': float, 'avg_post': float, 'frac_zero_pre': float, 'frac_zero_post': float}
+        self._grad_batch_stats = []
 
         # Single source-of-truth for Huber delta (in *scaled* units)
         self.huber_delta = float(self.config.HUBER_DELTA)
@@ -2059,17 +2435,65 @@ class CustomTrainModel(models.Model):
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
-        # Build list of (grad, var) excluding None grads
+        # --- Compute gradient diagnostics for indicator-related variables (pre-scaling) ---
+        def _is_indicator_var(name: str) -> bool:
+            name = (name or '').lower()
+            return ('alpha_ma' in name or 'macd_' in name or 'pair_' in name or
+                    'rsi_alpha' in name or 'bb_alpha' in name or 'momentum_raw' in name)
+
+        pre_norms = []
+        for g, v in zip(grads, self.trainable_variables):
+            if g is None:
+                continue
+            if _is_indicator_var(v.name):
+                try:
+                    # Safe eager check
+                    if tf.executing_eagerly():
+                        pre_norms.append(float(tf.norm(g).numpy()))
+                    else:
+                        pre_norms.append(float(tf.norm(g)))
+                except Exception:
+                    pre_norms.append(0.0)
+
+        # Build list of (grad, var) excluding None grads and apply indicator grad multiplier
         grads_and_vars = []
         for g, v in zip(grads, self.trainable_variables):
             if g is None:
                 continue
             name = v.name.lower()
             # Scale indicator-related variable grads
-            if ('alpha_ma' in name or 'macd_' in name or 'pair_' in name or
-                'rsi_alpha' in name or 'bb_alpha' in name or 'momentum_raw' in name):
+            if _is_indicator_var(name):
                 g = g * self.config.INDICATOR_GRAD_MULT
             grads_and_vars.append((g, v))
+
+        # --- Compute post-scaling norms for diagnostics ---
+        post_norms = []
+        for g, v in grads_and_vars:
+            if _is_indicator_var(v.name):
+                try:
+                    if tf.executing_eagerly():
+                        post_norms.append(float(tf.norm(g).numpy()))
+                    else:
+                        post_norms.append(float(tf.norm(g)))
+                except Exception:
+                    post_norms.append(0.0)
+
+        # Aggregate per-batch stats and append (safe, minimal memory)
+        try:
+            avg_pre = float(np.mean(pre_norms)) if pre_norms else 0.0
+        except Exception:
+            avg_pre = 0.0
+        try:
+            avg_post = float(np.mean(post_norms)) if post_norms else 0.0
+        except Exception:
+            avg_post = 0.0
+        frac_zero_pre = float(sum(1 for x in pre_norms if x <= 1e-12) / len(pre_norms)) if pre_norms else 1.0
+        frac_zero_post = float(sum(1 for x in post_norms if x <= 1e-12) / len(post_norms)) if post_norms else 1.0
+        try:
+            self._grad_batch_stats.append({'avg_pre': avg_pre, 'avg_post': avg_post, 'frac_zero_pre': frac_zero_pre, 'frac_zero_post': frac_zero_post})
+        except Exception:
+            # be defensive: ignore if model removed/disabled
+            pass
 
         # Optional global-norm clipping
         if getattr(self.config, 'GRAD_CLIP_NORM', 0.0) and self.config.GRAD_CLIP_NORM > 0.0:
@@ -2923,6 +3347,21 @@ class ParamsLogger(tf.keras.callbacks.Callback):
                     params[f'log_{k}'] = float(v)
                 except Exception:
                     params[f'log_{k}'] = v
+
+        # Aggregate gradient diagnostics if model accumulated them during training
+        try:
+            grad_stats = getattr(self.model, '_grad_batch_stats', None)
+            if grad_stats:
+                avg_pre = float(np.mean([s.get('avg_pre', 0.0) for s in grad_stats]))
+                avg_post = float(np.mean([s.get('avg_post', 0.0) for s in grad_stats]))
+                frac_zero_pre = float(np.mean([s.get('frac_zero_pre', 1.0) for s in grad_stats]))
+                frac_zero_post = float(np.mean([s.get('frac_zero_post', 1.0) for s in grad_stats]))
+                params['grad_indicator_avg_pre'] = avg_pre
+                params['grad_indicator_avg_post'] = avg_post
+                params['grad_indicator_frac_zero_pre'] = frac_zero_pre
+                params['grad_indicator_frac_zero_post'] = frac_zero_post
+        except Exception:
+            pass
 
         self.rows.append(params)
         self.prev_params = params.copy()

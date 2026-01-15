@@ -434,14 +434,14 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     vol_loss = tf.where(tf.math.is_finite(vol_loss), vol_loss, tf.constant(0.0, dtype=tf.float32))
 
     total = (
-        point_loss_val +
-        0.5 * trend_loss_val +      # Trend baseline consistency (auxiliary)
-        0.5 * total_dir_loss +      # Direction classification (INCREASED from 0.2)
-        0.5 * dir_align_loss +     # Distribution alignment (increased for better calibration)
+        0.2 * point_loss_val +
+        0.1 * trend_loss_val +      # Trend baseline consistency (auxiliary)
+        1.0 * total_dir_loss +      # Direction classification (INCREASED from 0.2)
+        0.1 * dir_align_loss +     # Distribution alignment (increased for better calibration)
         reg_loss +
-        0.1 * inter_reg +           # Indicator correlation (weak regularization)
-        0.1 * vol_loss +           # Volatility penalty (very weak)
-        1 * coherence_penalty +   # STRENGTHENED: Cross-horizon coherence (0.01 → 0.1)
+        0.05 * inter_reg +           # Indicator correlation (weak regularization)
+        0.05 * vol_loss +           # Volatility penalty (very weak)
+        0.05 * coherence_penalty +   # STRENGTHENED: Cross-horizon coherence (0.01 → 0.1)
         1.0 * total_nll             # Variance NLL (INCREASED from 0.5 for better calibration)
     )
 
