@@ -64,7 +64,7 @@ class Config:
     LAMBDA_GLOBAL_TREND =  0.2
     LAMBDA_EXTENDED_TREND = 1.0
     LAMBDA_QUANTILE = 0.1
-    REG_MOMENTUM_L2 = 1e-4
+    REG_MOMENTUM_L2 = 0
     MOMENTUM_CLIP_MIN = 1.0
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True
@@ -88,6 +88,10 @@ class Config:
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
     VAR_CAP = 1e4   # Maximum variance = 10000 (allows high uncertainty)
+    
+    # Calibration setup
+    MAX_LAMBDA = 1.0
+    MIN_LAMBDA = 0.1
 
 # paths
     # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
@@ -104,11 +108,11 @@ class Config:
     MA_SPANS = [5, 15, 30] 
     MACD_SETTINGS = [
         {'fast': 15, 'slow': 30, 'signal': 5},
-        {'fast': 45, 'slow': 60, 'signal': 30},
-        {'fast': 30, 'slow': 45, 'signal': 15}
+        {'fast': 21, 'slow': 30, 'signal': 14},
+        {'fast': 30, 'slow': 45, 'signal': 21}
     ]
-    RSI_PERIODS = [9, 21, 30]  
-    BB_PERIODS = [10, 20, 50]  
+    RSI_PERIODS = [9, 21, 45]  
+    BB_PERIODS = [10, 20, 45]  
 
 # Activation function settings
     TANH_SCALE = 3.0
@@ -639,6 +643,61 @@ def make_interactive_plot_callback(
             return 'bad'
         return 'good' if c > 0.8 else ('stable' if c > 0.5 else 'bad')
 
+    def compute_metrics_y_range(history: dict, keys=None, center: float = 0.5, min_half: float = 0.02, pad_frac: float = 0.1):
+        """Compute a y-axis (min,max) range for direction-like metrics so small oscillations around center are visible.
+
+        - history: dict of lists (same structure as callback.history)
+        - keys: list of metric keys to consider; defaults to direction & balanced-accuracy metrics
+        - center: baseline center (0.5)
+        - min_half: minimum half-range around center
+        - pad_frac: fractional padding applied to half-range
+        """
+        if keys is None:
+            keys = ['dir_acc_avg', 'val_dir_acc_avg', 'bal_acc_avg', 'val_bal_acc_avg']
+        metric_values = []
+        for k in keys:
+            vals = history.get(k)
+            if vals:
+                try:
+                    metric_values.extend([float(v) for v in vals if v is not None])
+                except Exception:
+                    pass
+        if metric_values:
+            min_v = min(metric_values)
+            max_v = max(metric_values)
+            half_range = max(abs(center - min_v), abs(max_v - center), float(min_half))
+            padding = max(0.01, half_range * float(pad_frac))
+            y_min = max(0.0, center - half_range - padding)
+            y_max = min(1.0, center + half_range + padding)
+            return y_min, y_max
+        return -0.05, 1.05
+
+    def compute_loss_y_range(loss_sequence, pad_frac: float = 0.1, min_pad: float = 1e-6):
+        """Compute a y-axis range for loss sequences with proportional padding.
+
+        - loss_sequence: iterable of loss values (numbers)
+        - pad_frac: fractional padding applied to the span
+        - min_pad: minimum absolute padding
+        Returns (y_min, y_max)
+        """
+        try:
+            arr = np.array([float(x) for x in loss_sequence if x is not None])
+            if arr.size == 0:
+                return None
+            min_v = float(np.min(arr))
+            max_v = float(np.max(arr))
+            span = max_v - min_v
+            if span <= 0.0:
+                # Single-valued series; provide a small symmetric padding
+                pad = max(min_pad, max(abs(min_v) * 0.01, 1e-3))
+            else:
+                pad = max(min_pad, span * float(pad_frac))
+            y_min = max(0.0, min_v - pad)
+            y_max = max_v + pad
+            return y_min, y_max
+        except Exception:
+            return None
+
     def classify_epoch_loss(curr_val_loss, val_history=None, improvement_threshold=0.01, stable_threshold=0.002):
         """Classify epoch loss trend based on the current validation loss and history.
 
@@ -793,6 +852,83 @@ def make_interactive_plot_callback(
         except Exception:
             return {'convergence_score': None, 'mean_param_change_pct': None, 'top_changes': [], 'group_stats': {}, 'csv_path': csv_path}
 
+    def load_indicator_params_df(csv_path: str = 'indicator_params_history.csv'):
+        """Load the full indicator params CSV as a pandas DataFrame and normalize change columns.
+
+        Returns an empty DataFrame if CSV is missing or empty.
+        """
+        try:
+            import pandas as pd
+            if not os.path.exists(csv_path):
+                return pd.DataFrame()
+            df = pd.read_csv(csv_path)
+            if df.empty:
+                return pd.DataFrame()
+            # Normalize change_* columns to floats and rename them to parameter names
+            change_cols = [c for c in df.columns if c.startswith('change_')]
+            # Create a df_changes with columns param_name -> change_pct
+            df_changes = pd.DataFrame()
+            for c in change_cols:
+                pname = c[len('change_'):]
+                try:
+                    df_changes[pname] = pd.to_numeric(df[c], errors='coerce').fillna(0.0)
+                except Exception:
+                    df_changes[pname] = 0.0
+            # Attach epoch index if present
+            if 'epoch' in df.columns:
+                df_changes['epoch'] = df['epoch'].astype(int)
+            else:
+                df_changes['epoch'] = list(range(len(df_changes)))
+            return df_changes
+        except Exception:
+            import pandas as pd
+            return pd.DataFrame()
+
+    def plot_indicator_movements(df_changes, max_params_per_group: int = 6):
+        """Return a plotly Figure with group mean change and per-parameter movement lines.
+
+        df_changes: DataFrame with columns for params and 'epoch'
+        """
+        try:
+            import plotly.graph_objects as go
+            from plotly.subplots import make_subplots
+            if df_changes is None or df_changes.empty:
+                return None
+
+            epoch = df_changes['epoch'] if 'epoch' in df_changes else df_changes.index
+            # identify groups
+            param_cols = [c for c in df_changes.columns if c != 'epoch']
+            groups = {}
+            for p in param_cols:
+                grp = p.split('_')[0] if isinstance(p, str) and '_' in p else 'other'
+                groups.setdefault(grp, []).append(p)
+
+            # Build subplots: first row = group means, following rows per group show param lines (limited to max_params_per_group)
+            nrows = 1 + len(groups)
+            fig = make_subplots(rows=nrows, cols=1, shared_xaxes=True, vertical_spacing=0.03,
+                                subplot_titles=['Group mean abs change'] + [f"{g} params" for g in groups.keys()])
+
+            # Group mean abs change
+            for gidx, (g, cols) in enumerate(groups.items()):
+                # mean abs change for group
+                arr = df_changes[cols].abs().mean(axis=1)
+                fig.add_trace(go.Scatter(x=epoch, y=arr, mode='lines+markers', name=f"{g} mean abs change", line=dict(width=2)), row=1, col=1)
+
+            # Per-group parameter lines
+            row = 2
+            for g, cols in groups.items():
+                # rank params by max abs change
+                ranks = sorted(cols, key=lambda c: df_changes[c].abs().max(), reverse=True)
+                for c in ranks[:max_params_per_group]:
+                    fig.add_trace(go.Scatter(x=epoch, y=df_changes[c], mode='lines', name=f"{g}/{c}"), row=row, col=1)
+                row += 1
+
+            fig.update_layout(height=220 * nrows, showlegend=True, template='plotly_dark', title_text='Indicator Parameter Movements')
+            fig.update_xaxes(title_text='Epoch', row=nrows, col=1)
+            return fig
+        except Exception:
+            return None
+
     class _InteractivePlotCallback(tf.keras.callbacks.Callback):
         def __init__(self):
             super().__init__()
@@ -875,8 +1011,19 @@ def make_interactive_plot_callback(
                     # Set x-axis range with padding (shared x-axis, only xaxis2 controls both)
                     fig.update_xaxes(range=[x_min - x_padding, x_max + x_padding])
                     
-                    # Set y-axis range for metrics subplot with padding
-                    fig.update_yaxes(range=[-0.05, 1.05], row=2, col=1)
+                    # Autoscale loss y-range if available
+                    loss_range = None
+                    if 'loss' in self.batch_history and self.batch_history.get('loss'):
+                        loss_range = compute_loss_y_range(self.batch_history.get('loss', []))
+                    if loss_range:
+                        fig.update_yaxes(range=list(loss_range), row=1, col=1)
+                    else:
+                        # fallback to automatic padding
+                        pass
+
+                    # Autoscale metrics subplot (centered around 0.5)
+                    y_min, y_max = compute_metrics_y_range(self.batch_history, keys=['dir_acc', 'f1'])
+                    fig.update_yaxes(range=[y_min, y_max], row=2, col=1)
                     
                     # Update axes styling
                     fig.update_xaxes(showline=True, linewidth=1, linecolor='#444444', mirror=False, zeroline=False)
@@ -1055,8 +1202,9 @@ def make_interactive_plot_callback(
                 # Set x-axis range with padding
                 fig.update_xaxes(range=[x_min - x_padding, x_max + x_padding])
                 
-                # Set y-axis range for metrics subplot with padding
-                fig.update_yaxes(range=[-0.05, 1.05], row=2, col=1)
+                # Compute y-axis range using helper so small oscillations around 50% are visible
+                y_min, y_max = compute_metrics_y_range(self.history)
+                fig.update_yaxes(range=[y_min, y_max], row=2, col=1)
                 
                 # Update axes styling
                 fig.update_xaxes(showline=True, linewidth=1, linecolor='#444444', mirror=False, zeroline=False)
@@ -1337,6 +1485,16 @@ def make_interactive_plot_callback(
                 """
                 display(HTML(html_content))
 
+                # --- Indicator movement plots (below the dashboard) ---
+                try:
+                    df_changes = load_indicator_params_df(csv_path='indicator_params_history.csv')
+                    fig = plot_indicator_movements(df_changes)
+                    if fig is not None:
+                        display(fig)
+                except Exception:
+                    # Non-fatal, dashboard should not break if plotting fails
+                    pass
+
     return _InteractivePlotCallback()
 
 
@@ -1463,8 +1621,8 @@ def train_and_evaluate(
             new_dir = orig_lambda_dir * (ref_loss / (med_dir + eps)) ** damping if med_dir > eps else orig_lambda_dir
             new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
 
-            min_lambda = 0.1
-            max_lambda = 2.0
+            min_lambda = Config.MIN_LAMBDA 
+            max_lambda = Config.MAX_LAMBDA
             custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
             custom_model.lambda_local_trend = float(np.clip(new_local, min_lambda, max_lambda))
             custom_model.lambda_global_trend = float(np.clip(new_global, min_lambda, max_lambda))
