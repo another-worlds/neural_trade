@@ -46,7 +46,7 @@ class Config:
     EPOCHS = 20
     LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 1440 * 7  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 2  # Limit most recent sequences to bound training size
 
 
 
@@ -80,10 +80,10 @@ class Config:
     LAMBDA_LONG = 0.5   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
     
     # Auxiliary loss weights
-    LAMBDA_DIR = 1.0  # Direction classification (focal loss)
-    LAMBDA_INTER = 0.05  # Interconnection regularization between horizons
+    LAMBDA_DIR = 5.0  # Direction classification (focal loss)
+    LAMBDA_INTER = 0.1  # Interconnection regularization between horizons
     LAMBDA_VOL = 0.1  # Volatility penalty (weak constraint)
-    LAMBDA_VAR = 0.1  # Variance NLL (confidence estimation)
+    LAMBDA_VAR = 5.0  # Variance NLL (confidence estimation)
 
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
@@ -120,8 +120,8 @@ class Config:
     SIGMOID_SCALE = 3.0
 
 # Training stability controls
-    INDICATOR_GRAD_MULT = 20.0
-    GRAD_CLIP_NORM = 20.0
+    INDICATOR_GRAD_MULT = 1.0
+    GRAD_CLIP_NORM = 10.0
 
 # Focal loss hyperparameters for direction classification
     # NOTE: alpha weights DOWN class (label=0), (1-alpha) weights UP (label=1)
@@ -135,7 +135,7 @@ class Config:
     # If > 0, direction loss/metrics treat returns within +/- deadband as neutral.
     # Units: basis points (bps). Example: 10 bps = 0.10%.
     # CRITICAL FIX: Non-zero deadband filters label noise from tiny price moves
-    DIR_DEADBAND_BPS = 0.0  # 5 bps = 0.05% minimum move for UP classification
+    DIR_DEADBAND_BPS = 0.05  # 5 bps = 0.05% minimum move for UP classification
 
     # Stabilize NLL and prevent variance head from dominating early.
     # Variance is in SCALED units^2.
@@ -874,6 +874,17 @@ def make_interactive_plot_callback(
                     df_changes[pname] = pd.to_numeric(df[c], errors='coerce').fillna(0.0)
                 except Exception:
                     df_changes[pname] = 0.0
+
+            # Also include parameter value columns (if present in CSV) as 'val_<param>' so plots
+            # can show the actual indicator values over time. We keep original names for change
+            # columns and add 'val_' prefixed columns for values to avoid collisions.
+            for pname in list(df_changes.columns):
+                if pname in df.columns:
+                    try:
+                        df_changes['val_' + pname] = pd.to_numeric(df[pname], errors='coerce')
+                    except Exception:
+                        df_changes['val_' + pname] = np.nan
+
             # Attach epoch index if present
             if 'epoch' in df.columns:
                 df_changes['epoch'] = df['epoch'].astype(int)
@@ -887,6 +898,10 @@ def make_interactive_plot_callback(
     def plot_indicator_movements(df_changes, max_params_per_group: int = 6):
         """Return a plotly Figure with group mean change and per-parameter movement lines.
 
+        Changes are interpreted as signed deltas (not absolute). If the original parameter
+        values are present in the DataFrame they are expected as columns named 'val_<param>'
+        and will be plotted under the corresponding movements subplot for each group.
+
         df_changes: DataFrame with columns for params and 'epoch'
         """
         try:
@@ -896,31 +911,44 @@ def make_interactive_plot_callback(
                 return None
 
             epoch = df_changes['epoch'] if 'epoch' in df_changes else df_changes.index
-            # identify groups
-            param_cols = [c for c in df_changes.columns if c != 'epoch']
+            # identify groups (ignore 'val_' prefixed columns when determining param groups)
+            param_cols = [c for c in df_changes.columns if c != 'epoch' and not c.startswith('val_')]
             groups = {}
             for p in param_cols:
                 grp = p.split('_')[0] if isinstance(p, str) and '_' in p else 'other'
                 groups.setdefault(grp, []).append(p)
 
-            # Build subplots: first row = group means, following rows per group show param lines (limited to max_params_per_group)
-            nrows = 1 + len(groups)
+            # Build subplots: first row = overall group mean change, then for each group two rows:
+            # (a) parameter movements and (b) parameter values (if available)
+            nrows = 1 + len(groups) * 2
+            subplot_titles = ['Group mean change']
+            for g in groups.keys():
+                subplot_titles.append(f"{g} movements")
+                subplot_titles.append(f"{g} values")
+
             fig = make_subplots(rows=nrows, cols=1, shared_xaxes=True, vertical_spacing=0.03,
-                                subplot_titles=['Group mean abs change'] + [f"{g} params" for g in groups.keys()])
+                                subplot_titles=subplot_titles)
 
-            # Group mean abs change
+            # Group mean change (signed mean across parameters in group)
             for gidx, (g, cols) in enumerate(groups.items()):
-                # mean abs change for group
-                arr = df_changes[cols].abs().mean(axis=1)
-                fig.add_trace(go.Scatter(x=epoch, y=arr, mode='lines+markers', name=f"{g} mean abs change", line=dict(width=2)), row=1, col=1)
+                arr = df_changes[cols].mean(axis=1)
+                fig.add_trace(go.Scatter(x=epoch, y=arr, mode='lines+markers', name=f"{g} mean change", line=dict(width=2)), row=1, col=1)
 
-            # Per-group parameter lines
+            # Per-group parameter movements and values
             row = 2
             for g, cols in groups.items():
-                # rank params by max abs change
-                ranks = sorted(cols, key=lambda c: df_changes[c].abs().max(), reverse=True)
+                # rank params by signed max change (largest positive first)
+                ranks = sorted(cols, key=lambda c: df_changes[c].max(), reverse=True)
+                # parameter movement lines
                 for c in ranks[:max_params_per_group]:
                     fig.add_trace(go.Scatter(x=epoch, y=df_changes[c], mode='lines', name=f"{g}/{c}"), row=row, col=1)
+                row += 1
+
+                # parameter value lines (if 'val_<param>' columns exist)
+                for c in ranks[:max_params_per_group]:
+                    val_col = 'val_' + c
+                    if val_col in df_changes.columns:
+                        fig.add_trace(go.Scatter(x=epoch, y=df_changes[val_col], mode='lines', name=f"{g}/{c} value"), row=row, col=1)
                 row += 1
 
             fig.update_layout(height=220 * nrows, showlegend=True, template='plotly_dark', title_text='Indicator Parameter Movements')
