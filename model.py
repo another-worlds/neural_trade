@@ -54,8 +54,10 @@ class Config:
     # Extended trend features are computed as percent-change over these lags (in minutes)
     EXTENDED_TREND_PERIODS = [1, 5, 15]  # 1m, 5m, 15m
 
-    # Supervision horizons (in minutes ahead from last_close). These define the 3 output towers.
-    # h0=1m, h1=5m, h2=15m.
+    # Supervision horizons (in minutes ahead from last_close).
+    # These define the output towers dynamically (one tower per horizon).
+    # Example: [1, 5, 15] creates 3 towers for 1min, 5min, 15min horizons
+    # The model architecture scales automatically to len(HORIZON_STEPS) towers.
     HORIZON_STEPS = [1, 5, 15]
 
 # Loss Function Weights
@@ -94,13 +96,13 @@ class Config:
     MIN_LAMBDA = 0.1
 
 # paths
-    # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
-    # - 3 independent output towers (h0_1min, h1_5min, h2_15min) instead of shared heads
-    # - 9 outputs (3 price + 3 direction + 3 variance) vs 3 outputs (price, direction, variance)
-    # - Focal loss for direction heads with α=0.7 focusing on minority class (DOWN moves)
+    # MODEL_PATH v3: Modular multi-horizon architecture with dynamic tower generation
+    # - N independent output towers (one per horizon in HORIZON_STEPS)
+    # - 3N outputs total (price + direction + variance per horizon)
+    # - Example: [1, 5, 15] → 9 outputs (3 horizons × 3 heads each)
+    # - Focal loss for direction heads with dynamic alpha tuning
     # - Per-horizon direction metrics: accuracy, F1, sensitivity, specificity, MCC
-    # - MCC-based early stopping monitors val_dir_mcc_h1 (primary horizon) for optimal trade-off
-    # v3: true multi-horizon supervision (separate targets per tower)
+    # - True multi-horizon supervision with validated extended trend alignment
     MODEL_PATH = "nn_learnable_indicators_v3.weights.h5"
     SCALER_PATH = "scaler_v3.joblib"
 
@@ -145,6 +147,101 @@ class Config:
     # Align direction head with distribution-implied P(up) from (mu, var).
     # Setting this > 0 helps avoid degenerate constant direction probabilities.
     LAMBDA_DIR_ALIGN = 0.7
+
+    # === HORIZON MODULARITY: Dynamic Properties ===
+    def __init__(self):
+        """Initialize and validate configuration."""
+        self.validate()
+
+    @property
+    def num_horizons(self):
+        """Number of prediction horizons (dynamically computed from HORIZON_STEPS)."""
+        return len(self.HORIZON_STEPS)
+
+    @property
+    def horizon_keys(self):
+        """Generate horizon keys dynamically: ('h0', 'h1', 'h2', ..., 'hN').
+
+        These keys are used throughout the codebase to reference specific horizons
+        in a modular way, avoiding hardcoded literals like "h0", "h1", "h2".
+        """
+        return tuple(f"h{i}" for i in range(self.num_horizons))
+
+    @property
+    def horizon_lambda_weights(self):
+        """Get per-horizon loss weights as a list [lambda_h0, lambda_h1, lambda_h2, ...].
+
+        For backward compatibility, maps the first 3 horizons to LAMBDA_SHORT, LAMBDA_POINT, LAMBDA_LONG.
+        For additional horizons beyond 3, defaults to LAMBDA_POINT (1.0).
+
+        This allows the model to work with any number of horizons while preserving
+        the existing 3-horizon weight configuration.
+        """
+        weights = []
+        for i in range(self.num_horizons):
+            if i == 0:
+                weights.append(self.LAMBDA_SHORT)
+            elif i == 1:
+                weights.append(self.LAMBDA_POINT)
+            elif i == 2:
+                weights.append(self.LAMBDA_LONG)
+            else:
+                # Default to LAMBDA_POINT for any additional horizons
+                weights.append(self.LAMBDA_POINT)
+        return weights
+
+    def validate(self):
+        """Validate horizon configuration for consistency and correctness.
+
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        # 1. HORIZON_STEPS must be non-empty
+        if not self.HORIZON_STEPS:
+            raise ValueError("Config.HORIZON_STEPS must be a non-empty list")
+
+        # 2. All horizon steps must be positive integers
+        if not all(isinstance(h, int) and h > 0 for h in self.HORIZON_STEPS):
+            raise ValueError(
+                f"All HORIZON_STEPS must be positive integers, got {self.HORIZON_STEPS}"
+            )
+
+        # 3. Horizons must be in ascending order (for coherence constraints to make sense)
+        if self.HORIZON_STEPS != sorted(self.HORIZON_STEPS):
+            raise ValueError(
+                f"HORIZON_STEPS must be in ascending order, got {self.HORIZON_STEPS}"
+            )
+
+        # 4. CRITICAL: EXTENDED_TREND_PERIODS must exactly match HORIZON_STEPS
+        # This is required because the loss function assumes extended_trends[:, i]
+        # corresponds to HORIZON_STEPS[i]. Any mismatch will cause semantic errors.
+        if self.EXTENDED_TREND_PERIODS != self.HORIZON_STEPS:
+            raise ValueError(
+                f"EXTENDED_TREND_PERIODS {self.EXTENDED_TREND_PERIODS} must exactly match "
+                f"HORIZON_STEPS {self.HORIZON_STEPS} for target-feature alignment in loss computation. "
+                f"These two lists define the same time scales for extended trend features and prediction targets."
+            )
+
+        # 5. Horizon steps must fit within the lookback window
+        max_horizon = max(self.HORIZON_STEPS)
+        if max_horizon >= self.LOOKBACK:
+            raise ValueError(
+                f"Maximum horizon step ({max_horizon}) must be less than "
+                f"LOOKBACK ({self.LOOKBACK}) to ensure valid sequences"
+            )
+
+        # 6. All lambda weights must be non-negative
+        lambda_attrs = [
+            'LAMBDA_SHORT', 'LAMBDA_POINT', 'LAMBDA_LONG', 'LAMBDA_DIR',
+            'LAMBDA_INTER', 'LAMBDA_VOL', 'LAMBDA_VAR', 'LAMBDA_EXTENDED_TREND',
+            'LAMBDA_LOCAL_TREND', 'LAMBDA_GLOBAL_TREND'
+        ]
+        for attr in lambda_attrs:
+            if hasattr(self, attr):
+                value = getattr(self, attr)
+                if value < 0:
+                    raise ValueError(f"{attr} must be non-negative, got {value}")
+
 # -----------------------------
 class DataProcessor:
     def __init__(self, config):
@@ -2103,57 +2200,58 @@ class PricePredictor:
                                    kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(seq_flat)
         shared_dense = layers.Concatenate()([shared_dense, context])
 
-        # === THREE INDEPENDENT OUTPUT TOWERS (h0, h1, h2) ===
+        # === DYNAMIC OUTPUT TOWER GENERATION ===
+        # Generate N independent towers (one per horizon in HORIZON_STEPS)
         # Each horizon has its own price, direction, and confidence (variance) head
-        
+
         # Variance bias initialization: softplus(x) ≈ x for x > 0
         # Initialize bias so initial variance ≈ 1.3 (higher than unit variance for calibration learning)
         # softplus(0) ≈ 0.693, softplus(0.5) ≈ 0.97, softplus(1.0) ≈ 1.31
         var_bias_init = tf.keras.initializers.Constant(1.0)  # Initial variance ≈ 1.31
-        
+
         # Direction bias initialization: sigmoid(0) = 0.5 (unbiased)
         # Keep at 0 for balanced initial predictions
         dir_bias_init = tf.keras.initializers.Zeros()
-        
-        # ---- TOWER 0 (1-minute horizon) ----
-        tower_h0 = layers.Dense(16, activation='gelu',
-                               kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(shared_dense)
-        price_h0 = layers.Dense(1, name='price_h0')(tower_h0)
-        direction_h0 = layers.Dense(1, activation='sigmoid', name='direction_h0',
-                                   bias_initializer=dir_bias_init)(tower_h0)
-        variance_h0 = layers.Dense(1, activation='softplus', name='variance_h0',
-                                  bias_initializer=var_bias_init)(tower_h0)
-        # Variance initialized to ~1.0 via softplus(0.5) for stable NLL training
 
-        # ---- TOWER 1 (5-minute horizon - PRIMARY) ----
-        tower_h1 = layers.Dense(16, activation='gelu',
-                               kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(shared_dense)
-        price_h1 = layers.Dense(1, name='price_h1')(tower_h1)
-        direction_h1 = layers.Dense(1, activation='sigmoid', name='direction_h1',
-                                   bias_initializer=dir_bias_init)(tower_h1)
-        variance_h1 = layers.Dense(1, activation='softplus', name='variance_h1',
-                                  bias_initializer=var_bias_init)(tower_h1)
-        # Variance initialized to ~1.0 via softplus(0.5) for stable NLL training
+        outputs = []
+        for i, horizon_step in enumerate(self.config.HORIZON_STEPS):
+            h_key = f"h{i}"
+            # Comment indicating what this horizon represents in minutes
+            horizon_minutes = horizon_step * self.config.RESAMPLE_MINUTES
 
-        # ---- TOWER 2 (15-minute horizon) ----
-        tower_h2 = layers.Dense(16, activation='gelu',
-                               kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(shared_dense)
-        price_h2 = layers.Dense(1, name='price_h2')(tower_h2)
-        direction_h2 = layers.Dense(1, activation='sigmoid', name='direction_h2',
-                                   bias_initializer=dir_bias_init)(tower_h2)
-        variance_h2 = layers.Dense(1, activation='softplus', name='variance_h2',
-                                  bias_initializer=var_bias_init)(tower_h2)
-        # Variance initialized to ~1.0 via softplus(0.5) for stable NLL training
+            # Create tower for this horizon
+            tower = layers.Dense(
+                16,
+                activation='gelu',
+                kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2),
+                name=f'tower_{h_key}'
+            )(shared_dense)
 
-        # === FINAL MODEL: 9 outputs (3 horizons × 3 heads each) ===
-        return models.Model(
-            inputs=inp,
-            outputs=[
-                price_h0, direction_h0, variance_h0,
-                price_h1, direction_h1, variance_h1,
-                price_h2, direction_h2, variance_h2
-            ]
-        )
+            # Price prediction head (scaled delta from last_close)
+            price = layers.Dense(1, name=f'price_{h_key}')(tower)
+
+            # Direction classification head (P(up) given features)
+            direction = layers.Dense(
+                1,
+                activation='sigmoid',
+                name=f'direction_{h_key}',
+                bias_initializer=dir_bias_init
+            )(tower)
+
+            # Variance estimation head (predictive uncertainty)
+            variance = layers.Dense(
+                1,
+                activation='softplus',
+                name=f'variance_{h_key}',
+                bias_initializer=var_bias_init
+            )(tower)
+
+            # Add this horizon's outputs (order matters: price, direction, variance)
+            outputs.extend([price, direction, variance])
+
+        # === FINAL MODEL: 3N outputs (N horizons × 3 heads each) ===
+        # Example: N=3 → 9 outputs (price_h0, direction_h0, variance_h0, ...)
+        return models.Model(inputs=inp, outputs=outputs)
 
     def create_datasets(self, X_train, y_train, last_close_train, extended_trends_train,
                         X_test, y_test, last_close_test, extended_trends_test):
@@ -2607,17 +2705,10 @@ class CustomTrainModel(models.Model):
         x_window, y_true, last_close, extended_trends = data
         with tf.GradientTape() as tape:
             y_pred = self(x_window, training=True)
-            loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
+            loss_dict = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
 
-        # Unpack 22-component tuple from custom_loss
-        (total_loss_val,
-         point_h0, point_h1, point_h2,
-         local_h0, global_h0, extended_h0,
-         local_h1, global_h1, extended_h1,
-         local_h2, global_h2, extended_h2,
-         dir_h0, dir_h1, dir_h2,
-         nll_h0, nll_h1, nll_h2,
-         reg_val, inter_reg, vol_loss) = loss_components
+        # Extract total loss for gradient computation
+        total_loss_val = loss_dict['total']
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -2772,48 +2863,56 @@ class CustomTrainModel(models.Model):
         magnitude_bps_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
         magnitude_bps_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
 
-        # Add all loss components to metrics
-        point_loss_total = point_h0 + point_h1 + point_h2
-        trend_loss_h0 = local_h0 + global_h0 + extended_h0
-        trend_loss_h1 = local_h1 + global_h1 + extended_h1
-        trend_loss_h2 = local_h2 + global_h2 + extended_h2
-        trend_loss_total = trend_loss_h0 + trend_loss_h1 + trend_loss_h2
-        dir_loss_total = dir_h0 + dir_h1 + dir_h2
-        nll_total = nll_h0 + nll_h1 + nll_h2
+        # Extract loss components from dict for metrics
+        # Build aggregates dynamically based on number of horizons
+        horizon_keys = self.config.horizon_keys
 
-        return {
+        point_losses_list = [loss_dict.get(f'point_loss_{h}', 0.0) for h in horizon_keys]
+        dir_losses_list = [loss_dict.get(f'dir_loss_{h}', 0.0) for h in horizon_keys]
+        nll_list = [loss_dict.get(f'nll_{h}', 0.0) for h in horizon_keys]
+        extended_trend_list = [loss_dict.get(f'extended_trend_{h}', 0.0) for h in horizon_keys]
+        local_trend_list = [loss_dict.get(f'local_trend_{h}', 0.0) for h in horizon_keys]
+        global_trend_list = [loss_dict.get(f'global_trend_{h}', 0.0) for h in horizon_keys]
+
+        point_loss_total = tf.add_n(point_losses_list) if point_losses_list else tf.constant(0.0, dtype=tf.float32)
+        dir_loss_total = tf.add_n(dir_losses_list) if dir_losses_list else tf.constant(0.0, dtype=tf.float32)
+        nll_total = tf.add_n(nll_list) if nll_list else tf.constant(0.0, dtype=tf.float32)
+
+        # Build per-horizon trend totals
+        trend_totals_list = []
+        for i in range(len(horizon_keys)):
+            h = horizon_keys[i]
+            trend_h = local_trend_list[i] + global_trend_list[i] + extended_trend_list[i]
+            trend_totals_list.append(trend_h)
+        trend_loss_total = tf.add_n(trend_totals_list) if trend_totals_list else tf.constant(0.0, dtype=tf.float32)
+
+        # Build metrics dict with dynamic horizon support
+        metrics_dict = {
             "loss": total_loss_val,
             "point_loss": point_loss_total,
-            "point_h0": point_h0,
-            "point_h1": point_h1,
-            "point_h2": point_h2,
             "trend_loss": trend_loss_total,
-            "trend_h0": trend_loss_h0,
-            "trend_h1": trend_loss_h1,
-            "trend_h2": trend_loss_h2,
-            "local_h0": local_h0,
-            "global_h0": global_h0,
-            "extended_h0": extended_h0,
-            "local_h1": local_h1,
-            "global_h1": global_h1,
-            "extended_h1": extended_h1,
-            "local_h2": local_h2,
-            "global_h2": global_h2,
-            "extended_h2": extended_h2,
             "dir_loss": dir_loss_total,
-            "dir_loss_h0": dir_h0,
-            "dir_loss_h1": dir_h1,
-            "dir_loss_h2": dir_h2,
             "nll_loss": nll_total,
-            "nll_h0": nll_h0,
-            "nll_h1": nll_h1,
-            "nll_h2": nll_h2,
-            "reg_loss": reg_val,
-            "inter_reg": inter_reg,
-            "vol_loss": vol_loss,
-            **metrics_head,
-            **metrics_gauss
+            "reg_loss": loss_dict.get('reg_loss', 0.0),
+            "inter_reg": loss_dict.get('inter_reg', 0.0),
+            "vol_loss": loss_dict.get('vol_loss', 0.0),
         }
+
+        # Add per-horizon components
+        for i, h in enumerate(horizon_keys):
+            metrics_dict[f'point_{h}'] = point_losses_list[i]
+            metrics_dict[f'trend_{h}'] = trend_totals_list[i]
+            metrics_dict[f'local_{h}'] = local_trend_list[i]
+            metrics_dict[f'global_{h}'] = global_trend_list[i]
+            metrics_dict[f'extended_{h}'] = extended_trend_list[i]
+            metrics_dict[f'dir_loss_{h}'] = dir_losses_list[i]
+            metrics_dict[f'nll_{h}'] = nll_list[i]
+
+        # Add direction metrics
+        metrics_dict.update(metrics_head)
+        metrics_dict.update(metrics_gauss)
+
+        return metrics_dict
 
     def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):
         """
