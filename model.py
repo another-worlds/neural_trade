@@ -249,6 +249,15 @@ class DataProcessor:
         self.target_scaler = None
         self.input_scaler = None
 
+        # Validate horizon configuration (critical for data processing correctness)
+        if hasattr(config, 'EXTENDED_TREND_PERIODS') and hasattr(config, 'HORIZON_STEPS'):
+            if config.EXTENDED_TREND_PERIODS != config.HORIZON_STEPS:
+                raise ValueError(
+                    f"DataProcessor requires EXTENDED_TREND_PERIODS {config.EXTENDED_TREND_PERIODS} "
+                    f"to match HORIZON_STEPS {config.HORIZON_STEPS} for target-feature alignment. "
+                    f"These two lists define the same time scales for extended trend features and prediction targets."
+                )
+
     def clean_numeric(self, series):
         return series.astype(str).str.replace(r'[\$,]', '', regex=True).replace('', np.nan).astype(float)
 
@@ -521,7 +530,8 @@ def _compute_all_horizon_metrics(
     Returns a dict with per-horizon delta-space metrics, price-space metrics, and direction metrics.
     """
 
-    horizons = ("h0", "h1", "h2")
+    horizon_keys = config.horizon_keys
+    num_horizons = config.num_horizons
     # Compute human-readable horizon labels based on HORIZON_STEPS and RESAMPLE_MINUTES.
     def _format_tf(minutes: int) -> str:
         # Prefer days/hours when evenly divisible, otherwise show minutes
@@ -540,8 +550,8 @@ def _compute_all_horizon_metrics(
 
     horizon_names = tuple(_format_tf(int(step * getattr(config, 'RESAMPLE_MINUTES', 1))) for step in horizon_steps)
     y_true_deltas = np.asarray(y_true_deltas)
-    if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != 3:
-        raise ValueError(f"Expected y_true_deltas shape (N,3), got {y_true_deltas.shape}")
+    if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != num_horizons:
+        raise ValueError(f"Expected y_true_deltas shape (N,{num_horizons}), got {y_true_deltas.shape}")
     lc = np.asarray(last_close, dtype=float).reshape(-1)
 
     out: Dict[str, Any] = {
@@ -555,7 +565,7 @@ def _compute_all_horizon_metrics(
     threshold_delta = deadband * (lc + 1e-12)
     min_abs_delta_for_mape = float(getattr(config, 'DELTA_MAPE_MIN_ABS', 1.0))
 
-    for idx, (h_key, h_label) in enumerate(zip(horizons, horizon_names)):
+    for idx, (h_key, h_label) in enumerate(zip(horizon_keys, horizon_names)):
         y_t = np.asarray(y_true_deltas[:, idx], dtype=float).reshape(-1)
         y_p = np.asarray(y_pred_deltas[h_key], dtype=float).reshape(-1)
         thr = np.asarray(threshold_delta, dtype=float).reshape(-1)
@@ -1873,18 +1883,36 @@ def train_and_evaluate(
         print(f"  {h_name}: pred_mean={pred_mean:.6f}, true_mean={true_mean:.6f} | pred_std={pred_std:.6f}, true_std={true_std:.6f}")
         print(f"         pred_range=[{pred_min:.6f}, {pred_max:.6f}], true_range=[{true_min:.6f}, {true_max:.6f}]")
 
-    dir_pred_h0 = np.asarray(y_pred_all[1]).reshape(-1)[:len(y_test)]
-    dir_pred_h1 = np.asarray(y_pred_all[4]).reshape(-1)[:len(y_test)]
-    dir_pred_h2 = np.asarray(y_pred_all[7]).reshape(-1)[:len(y_test)]
+    # Dynamically build predictions dict for all horizons
+    # y_pred_all contains [price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, ...]
+    num_horizons = cfg.num_horizons
+    horizon_keys = cfg.horizon_keys
 
-    var_pred_h0 = np.asarray(y_pred_all[2]).reshape(-1)[:len(y_test)]
-    var_pred_h1 = np.asarray(y_pred_all[5]).reshape(-1)[:len(y_test)]
-    var_pred_h2 = np.asarray(y_pred_all[8]).reshape(-1)[:len(y_test)]
+    delta_preds = {}
+    dir_preds = {}
+    var_preds = {}
+
+    for i, h_key in enumerate(horizon_keys):
+        base_idx = i * 3
+        # Price (delta) predictions were already extracted above as y_pred_hX_raw
+        # We need to access them from the locals() dict or rebuild
+        # Since we already have y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw from earlier loop,
+        # let's rebuild here for consistency
+        price_pred = np.asarray(y_pred_all[base_idx]).reshape(-1)[:len(y_test)]
+        dir_pred = np.asarray(y_pred_all[base_idx + 1]).reshape(-1)[:len(y_test)]
+        var_pred = np.asarray(y_pred_all[base_idx + 2]).reshape(-1)[:len(y_test)]
+
+        # Unscale price predictions (same as earlier loop)
+        y_pred_raw = price_pred * target_scaler_std + target_scaler_mean
+
+        delta_preds[h_key] = y_pred_raw
+        dir_preds[h_key] = dir_pred
+        var_preds[h_key] = var_pred
 
     predictions = {
-        "delta": {"h0": y_pred_h0_raw, "h1": y_pred_h1_raw, "h2": y_pred_h2_raw},
-        "direction_prob": {"h0": dir_pred_h0, "h1": dir_pred_h1, "h2": dir_pred_h2},
-        "variance": {"h0": var_pred_h0, "h1": var_pred_h1, "h2": var_pred_h2},
+        "delta": delta_preds,
+        "direction_prob": dir_preds,
+        "variance": var_preds,
     }
 
     metrics = _compute_all_horizon_metrics(
@@ -2798,70 +2826,72 @@ class CustomTrainModel(models.Model):
                 raw = tf.math.asinh((clipped - 1.0) / 2.0)
                 var.assign(raw)
 
-        # === COMPUTE DIRECTION METRICS FOR ALL 3 HORIZONS ===
+        # === COMPUTE DIRECTION METRICS FOR ALL N HORIZONS (DYNAMIC) ===
+        num_horizons = self.config.num_horizons
         y_true = tf.cast(y_true, tf.float32)
-        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, 3] (delta_raw)
+        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, N] (delta_raw)
         last_close_squeeze = tf.squeeze(last_close, axis=1)
+
         # Match training direction labeling (including deadband if enabled)
         deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
         deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
 
-        ret_h0 = (y_true_raw[:, 0]) / (last_close_squeeze + self.eps)
-        ret_h1 = (y_true_raw[:, 1]) / (last_close_squeeze + self.eps)
-        ret_h2 = (y_true_raw[:, 2]) / (last_close_squeeze + self.eps)
+        # Compute returns, masks, and direction labels for all horizons dynamically
+        rets = []
+        masks = []
+        true_dirs = []
+        dir_preds_head = []
+        gauss_p_ups = []
 
-        mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-        mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-        mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
+        # Extract predictions dynamically (3 outputs per horizon: price, direction, variance)
+        for i in range(num_horizons):
+            base_idx = i * 3
+            price_h = y_pred[base_idx]
+            dir_h = y_pred[base_idx + 1]
+            var_h = y_pred[base_idx + 2]
 
-        true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-        true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-        true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
+            # Compute return for this horizon
+            ret_h = (y_true_raw[:, i]) / (last_close_squeeze + self.eps)
+            rets.append(ret_h)
 
-        # Extract direction predictions for all 3 horizons
-        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred
-        dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)
-        dir_pred_h1 = tf.squeeze(dir_pred_h1, axis=1)
-        dir_pred_h2 = tf.squeeze(dir_pred_h2, axis=1)
+            # Compute mask (deadband filtering)
+            mask_h = tf.cast(tf.abs(ret_h) > deadband, tf.float32)
+            masks.append(mask_h)
 
-        # Gaussian-implied P(up) from (mu, var): interpretable and consistent with regression.
-        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
-        var_h0_c = tf.clip_by_value(tf.squeeze(var_h0, axis=1), var_floor, var_cap)
-        var_h1_c = tf.clip_by_value(tf.squeeze(var_h1, axis=1), var_floor, var_cap)
-        var_h2_c = tf.clip_by_value(tf.squeeze(var_h2, axis=1), var_floor, var_cap)
-        mu_h0 = tf.squeeze(price_h0, axis=1)
-        mu_h1 = tf.squeeze(price_h1, axis=1)
-        mu_h2 = tf.squeeze(price_h2, axis=1)
-        deadband_delta_scaled = (deadband * tf.squeeze(last_close, axis=1)) / (self.pred_scale + self.eps)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+            # Compute true direction label
+            true_dir_h = tf.cast(ret_h > deadband, tf.float32)
+            true_dirs.append(true_dir_h)
+
+            # Extract direction prediction (squeeze to 1D)
+            dir_pred_h = tf.squeeze(dir_h, axis=1)
+            dir_preds_head.append(dir_pred_h)
+
+            # Gaussian-implied P(up) from (mu, var)
+            var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
+            var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
+            var_h_clipped = tf.clip_by_value(tf.squeeze(var_h, axis=1), var_floor, var_cap)
+            mu_h = tf.squeeze(price_h, axis=1)
+            deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
+            z_up = (mu_h - deadband_delta_scaled) / (tf.sqrt(var_h_clipped) + self.eps)
+            gauss_p_up_h = self._normal_cdf(z_up)
+            gauss_p_ups.append(gauss_p_up_h)
 
         # Compute per-horizon metrics (masked if deadband is set)
         metrics_head = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            dir_pred_h0, dir_pred_h1, dir_pred_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
+            true_dirs=true_dirs,
+            dir_preds=dir_preds_head,
+            masks=masks,
             prefix="train_"
         )
         metrics_gauss = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
+            true_dirs=true_dirs,
+            dir_preds=gauss_p_ups,
+            masks=masks,
             prefix="train_gauss_"
         )
 
-        # Trend metrics: margins (bps), agreement rates, magnitudes (bps)
-        trend_margin_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0] - extended_trends[:, 0] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1] - extended_trends[:, 1] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2] - extended_trends[:, 2] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        agreement_rate_h0 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 0]), tf.sign(extended_trends[:, 0])), tf.float32))
-        agreement_rate_h1 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 1]), tf.sign(extended_trends[:, 1])), tf.float32))
-        agreement_rate_h2 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 2]), tf.sign(extended_trends[:, 2])), tf.float32))
-        magnitude_bps_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
+        # Trend metrics: margins (bps), agreement rates, magnitudes (bps) - computed dynamically
+        # These metrics are diagnostic only - not used in loss computation
 
         # Extract loss components from dict for metrics
         # Build aggregates dynamically based on number of horizons
@@ -2914,28 +2944,44 @@ class CustomTrainModel(models.Model):
 
         return metrics_dict
 
-    def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):
+    def _compute_direction_metrics(self, true_dirs, dir_preds, masks=None, prefix=""):
         """
-        Compute per-horizon direction classification metrics.
-        Returns dict with accuracy, F1, sensitivity, specificity, MCC for each horizon.
+        Compute per-horizon direction classification metrics for N horizons.
+
+        Args:
+            true_dirs: List of N tensors containing true direction labels (0/1)
+            dir_preds: List of N tensors containing predicted direction probabilities
+            masks: Optional list of N tensors for masking (e.g., deadband filtering)
+            prefix: Metric name prefix (e.g., "train_", "val_")
+
+        Returns:
+            Dict with accuracy, F1, sensitivity, specificity, MCC, Brier, ECE for each horizon.
         """
         metrics = {}
+        horizon_keys = self.config.horizon_keys
+        num_horizons = self.config.num_horizons
 
-        masks = {
-            "h0": tf.ones_like(true_dir_h0) if mask_h0 is None else tf.cast(mask_h0, tf.float32),
-            "h1": tf.ones_like(true_dir_h1) if mask_h1 is None else tf.cast(mask_h1, tf.float32),
-            "h2": tf.ones_like(true_dir_h2) if mask_h2 is None else tf.cast(mask_h2, tf.float32),
-        }
+        # Validate inputs
+        if len(true_dirs) != num_horizons or len(dir_preds) != num_horizons:
+            raise ValueError(
+                f"Expected {num_horizons} horizons, got true_dirs={len(true_dirs)}, "
+                f"dir_preds={len(dir_preds)}"
+            )
 
-        for horizon_idx, (h_name, true_dir, dir_pred) in enumerate([
-            ("h0", true_dir_h0, dir_pred_h0),
-            ("h1", true_dir_h1, dir_pred_h1),
-            ("h2", true_dir_h2, dir_pred_h2)
-        ]):
+        # Default masks to all ones if not provided
+        if masks is None:
+            masks = [tf.ones_like(td) for td in true_dirs]
+        elif len(masks) != num_horizons:
+            raise ValueError(f"Expected {num_horizons} masks, got {len(masks)}")
+
+        # Cast masks to float32
+        masks = [tf.cast(m, tf.float32) for m in masks]
+
+        for horizon_idx, (h_name, true_dir, dir_pred, m) in enumerate(
+            zip(horizon_keys, true_dirs, dir_preds, masks)
+        ):
             # Binary predictions
             pred_dir_binary = tf.cast(dir_pred > 0.5, tf.float32)
-
-            m = masks[h_name]
             mask_sum = tf.reduce_sum(m)
             no_samples = mask_sum < 1e-8
             nan = tf.constant(np.nan, dtype=tf.float32)
@@ -3031,128 +3077,122 @@ class CustomTrainModel(models.Model):
     def test_step(self, data):
         x_window, y_true, last_close, extended_trends = data
         y_pred = self(x_window, training=False)
-        loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
+        loss_dict = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
 
-        # Unpack 22-component tuple
-        (total_loss_val,
-         point_h0, point_h1, point_h2,
-         local_h0, global_h0, extended_h0,
-         local_h1, global_h1, extended_h1,
-         local_h2, global_h2, extended_h2,
-         dir_h0, dir_h1, dir_h2,
-         nll_h0, nll_h1, nll_h2,
-         reg_val, inter_reg, vol_loss) = loss_components
+        # Extract total loss
+        total_loss_val = loss_dict['total']
 
-        # Compute direction labels with the same trade-aware deadband used in training loss.
+        # === COMPUTE DIRECTION METRICS FOR ALL N HORIZONS (DYNAMIC) ===
+        num_horizons = self.config.num_horizons
+        horizon_keys = self.config.horizon_keys
+
         y_true = tf.cast(y_true, tf.float32)
-        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, 3]
+        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, N]
         last_close_squeeze = tf.squeeze(last_close, axis=1)
 
         deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
         deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
 
-        # Targets are deltas; compute returns as delta / last_close (matches train_step)
-        ret_h0 = (y_true_raw[:, 0]) / (last_close_squeeze + self.eps)
-        ret_h1 = (y_true_raw[:, 1]) / (last_close_squeeze + self.eps)
-        ret_h2 = (y_true_raw[:, 2]) / (last_close_squeeze + self.eps)
+        # Compute returns, masks, and direction labels for all horizons dynamically
+        true_dirs = []
+        dir_preds_head = []
+        gauss_p_ups = []
+        masks = []
 
-        mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-        mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-        mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
+        # Extract predictions dynamically (3 outputs per horizon)
+        for i in range(num_horizons):
+            base_idx = i * 3
+            price_h = y_pred[base_idx]
+            dir_h = y_pred[base_idx + 1]
+            var_h = y_pred[base_idx + 2]
 
-        true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-        true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-        true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
+            # Compute return for this horizon
+            ret_h = (y_true_raw[:, i]) / (last_close_squeeze + self.eps)
 
-        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred
-        dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)
-        dir_pred_h1 = tf.squeeze(dir_pred_h1, axis=1)
-        dir_pred_h2 = tf.squeeze(dir_pred_h2, axis=1)
+            # Compute mask (deadband filtering)
+            mask_h = tf.cast(tf.abs(ret_h) > deadband, tf.float32)
+            masks.append(mask_h)
 
-        # Gaussian-implied P(up) from (mu, var)
-        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
-        var_h0_c = tf.clip_by_value(tf.squeeze(var_h0, axis=1), var_floor, var_cap)
-        var_h1_c = tf.clip_by_value(tf.squeeze(var_h1, axis=1), var_floor, var_cap)
-        var_h2_c = tf.clip_by_value(tf.squeeze(var_h2, axis=1), var_floor, var_cap)
-        mu_h0 = tf.squeeze(price_h0, axis=1)
-        mu_h1 = tf.squeeze(price_h1, axis=1)
-        mu_h2 = tf.squeeze(price_h2, axis=1)
-        # Threshold for "UP" in scaled-delta space, consistent with direction labeling
-        deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+            # Compute true direction label
+            true_dir_h = tf.cast(ret_h > deadband, tf.float32)
+            true_dirs.append(true_dir_h)
+
+            # Extract direction prediction (squeeze to 1D)
+            dir_pred_h = tf.squeeze(dir_h, axis=1)
+            dir_preds_head.append(dir_pred_h)
+
+            # Gaussian-implied P(up) from (mu, var)
+            var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
+            var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
+            var_h_clipped = tf.clip_by_value(tf.squeeze(var_h, axis=1), var_floor, var_cap)
+            mu_h = tf.squeeze(price_h, axis=1)
+            deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
+            z_up = (mu_h - deadband_delta_scaled) / (tf.sqrt(var_h_clipped) + self.eps)
+            gauss_p_up_h = self._normal_cdf(z_up)
+            gauss_p_ups.append(gauss_p_up_h)
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.
         metrics_head = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            dir_pred_h0, dir_pred_h1, dir_pred_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
+            true_dirs=true_dirs,
+            dir_preds=dir_preds_head,
+            masks=masks,
             prefix=""
         )
         metrics_gauss = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
+            true_dirs=true_dirs,
+            dir_preds=gauss_p_ups,
+            masks=masks,
             prefix="gauss_"
         )
 
-        # Trend metrics: margins (bps), agreement rates, magnitudes (bps)
-        trend_margin_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0] - extended_trends[:, 0] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1] - extended_trends[:, 1] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2] - extended_trends[:, 2] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        agreement_rate_h0 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 0]), tf.sign(extended_trends[:, 0])), tf.float32))
-        agreement_rate_h1 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 1]), tf.sign(extended_trends[:, 1])), tf.float32))
-        agreement_rate_h2 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 2]), tf.sign(extended_trends[:, 2])), tf.float32))
-        magnitude_bps_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
+        # Extract loss components from dict for metrics
+        point_losses_list = [loss_dict.get(f'point_loss_{h}', 0.0) for h in horizon_keys]
+        dir_losses_list = [loss_dict.get(f'dir_loss_{h}', 0.0) for h in horizon_keys]
+        nll_list = [loss_dict.get(f'nll_{h}', 0.0) for h in horizon_keys]
+        extended_trend_list = [loss_dict.get(f'extended_trend_{h}', 0.0) for h in horizon_keys]
+        local_trend_list = [loss_dict.get(f'local_trend_{h}', 0.0) for h in horizon_keys]
+        global_trend_list = [loss_dict.get(f'global_trend_{h}', 0.0) for h in horizon_keys]
 
-        # Test step
-        # Loss components
-        point_loss_total = point_h0 + point_h1 + point_h2
-        trend_loss_h0 = local_h0 + global_h0 + extended_h0
-        trend_loss_h1 = local_h1 + global_h1 + extended_h1
-        trend_loss_h2 = local_h2 + global_h2 + extended_h2
-        trend_loss_total = trend_loss_h0 + trend_loss_h1 + trend_loss_h2
-        dir_loss_total = dir_h0 + dir_h1 + dir_h2
-        nll_total = nll_h0 + nll_h1 + nll_h2
+        point_loss_total = tf.add_n(point_losses_list) if point_losses_list else tf.constant(0.0, dtype=tf.float32)
+        dir_loss_total = tf.add_n(dir_losses_list) if dir_losses_list else tf.constant(0.0, dtype=tf.float32)
+        nll_total = tf.add_n(nll_list) if nll_list else tf.constant(0.0, dtype=tf.float32)
 
-        return {
+        # Build per-horizon trend totals
+        trend_totals_list = []
+        for i in range(len(horizon_keys)):
+            h = horizon_keys[i]
+            trend_h = local_trend_list[i] + global_trend_list[i] + extended_trend_list[i]
+            trend_totals_list.append(trend_h)
+        trend_loss_total = tf.add_n(trend_totals_list) if trend_totals_list else tf.constant(0.0, dtype=tf.float32)
+
+        # Build metrics dict with dynamic horizon support
+        metrics_dict = {
             "loss": total_loss_val,
             "point_loss": point_loss_total,
-            "point_h0": point_h0,
-            "point_h1": point_h1,
-            "point_h2": point_h2,
             "trend_loss": trend_loss_total,
-            "trend_h0": trend_loss_h0,
-            "trend_h1": trend_loss_h1,
-            "trend_h2": trend_loss_h2,
-            "local_h0": local_h0,
-            "global_h0": global_h0,
-            "extended_h0": extended_h0,
-            "local_h1": local_h1,
-            "global_h1": global_h1,
-            "extended_h1": extended_h1,
-            "local_h2": local_h2,
-            "global_h2": global_h2,
-            "extended_h2": extended_h2,
             "dir_loss": dir_loss_total,
-            "dir_loss_h0": dir_h0,
-            "dir_loss_h1": dir_h1,
-            "dir_loss_h2": dir_h2,
             "nll_loss": nll_total,
-            "nll_h0": nll_h0,
-            "nll_h1": nll_h1,
-            "nll_h2": nll_h2,
-            "reg_loss": reg_val,
-            "inter_reg": inter_reg,
-            "vol_loss": vol_loss,
-            **metrics_head,
-            **metrics_gauss
+            "reg_loss": loss_dict.get('reg_loss', 0.0),
+            "inter_reg": loss_dict.get('inter_reg', 0.0),
+            "vol_loss": loss_dict.get('vol_loss', 0.0),
         }
+
+        # Add per-horizon components
+        for i, h in enumerate(horizon_keys):
+            metrics_dict[f'point_{h}'] = point_losses_list[i]
+            metrics_dict[f'trend_{h}'] = trend_totals_list[i]
+            metrics_dict[f'local_{h}'] = local_trend_list[i]
+            metrics_dict[f'global_{h}'] = global_trend_list[i]
+            metrics_dict[f'extended_{h}'] = extended_trend_list[i]
+            metrics_dict[f'dir_loss_{h}'] = dir_losses_list[i]
+            metrics_dict[f'nll_{h}'] = nll_list[i]
+
+        # Add direction metrics
+        metrics_dict.update(metrics_head)
+        metrics_dict.update(metrics_gauss)
+
+        return metrics_dict
 
     def get_config(self):
         cfg = super().get_config()
@@ -3270,14 +3310,30 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     set_if_missing("var_nll", _first_present(out, ["nll_loss"]))
     set_if_missing("val_var_nll", _first_present(out, ["val_nll_loss"]))
 
-    set_if_missing("local_trend_loss", _sum_present(out, ["local_h0", "local_h1", "local_h2"]))
-    set_if_missing("val_local_trend_loss", _sum_present(out, ["val_local_h0", "val_local_h1", "val_local_h2"]))
+    # Detect horizons from available keys (dynamic)
+    available_horizons = set()
+    for key in out.keys():
+        for h_key in ['local_', 'global_', 'extended_']:
+            if h_key in key:
+                parts = key.replace(h_key, '').replace('val_', '').split('_')
+                for part in parts:
+                    if part.startswith('h') and len(part) > 1 and part[1:].isdigit():
+                        available_horizons.add(part)
 
-    set_if_missing("global_trend_loss", _sum_present(out, ["global_h0", "global_h1", "global_h2"]))
-    set_if_missing("val_global_trend_loss", _sum_present(out, ["val_global_h0", "val_global_h1", "val_global_h2"]))
+    if not available_horizons:
+        # Fallback to default h0, h1, h2
+        available_horizons = {'h0', 'h1', 'h2'}
 
-    set_if_missing("extended_trend_loss", _sum_present(out, ["extended_h0", "extended_h1", "extended_h2"]))
-    set_if_missing("val_extended_trend_loss", _sum_present(out, ["val_extended_h0", "val_extended_h1", "val_extended_h2"]))
+    horizons_for_agg = sorted(available_horizons, key=lambda h: int(h[1:]))
+
+    set_if_missing("local_trend_loss", _sum_present(out, [f"local_{h}" for h in horizons_for_agg]))
+    set_if_missing("val_local_trend_loss", _sum_present(out, [f"val_local_{h}" for h in horizons_for_agg]))
+
+    set_if_missing("global_trend_loss", _sum_present(out, [f"global_{h}" for h in horizons_for_agg]))
+    set_if_missing("val_global_trend_loss", _sum_present(out, [f"val_global_{h}" for h in horizons_for_agg]))
+
+    set_if_missing("extended_trend_loss", _sum_present(out, [f"extended_{h}" for h in horizons_for_agg]))
+    set_if_missing("val_extended_trend_loss", _sum_present(out, [f"val_extended_{h}" for h in horizons_for_agg]))
 
     # --- Direction metric aliases (primary horizon, head vs gauss preference) ---
     train_pref = "train_gauss_" if prefer_gauss else "train_"
@@ -3286,8 +3342,22 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     val_pref = "val_gauss_" if prefer_gauss else "val_"
     val_fallback = "val_" if prefer_gauss else "val_gauss_"
 
-    # Average across horizons (h0/h1/h2)
-    horizons = ("h0", "h1", "h2")
+    # Detect available horizons from logs (dynamic discovery)
+    # Look for keys like "dir_acc_h0", "dir_acc_h1", etc.
+    detected_horizons = set()
+    for key in out.keys():
+        if 'dir_acc_' in key:
+            parts = key.split('_')
+            for part in parts:
+                if part.startswith('h') and part[1:].isdigit():
+                    detected_horizons.add(part)
+
+    # Fallback to default if no horizons detected
+    if not detected_horizons:
+        horizons = ("h0", "h1", "h2")
+    else:
+        # Sort by horizon index (h0, h1, h2, ...)
+        horizons = tuple(sorted(detected_horizons, key=lambda h: int(h[1:])))
 
     train_acc_keys = [f"{train_pref}dir_acc_{h}" for h in horizons]
     train_f1_keys = [f"{train_pref}dir_f1_{h}" for h in horizons]
