@@ -66,7 +66,10 @@ class Config:
     LAMBDA_GLOBAL_TREND =  0.2
     LAMBDA_EXTENDED_TREND = 1.0
     LAMBDA_QUANTILE = 0.1
-    REG_MOMENTUM_L2 = 0
+    # CRITICAL FIX: Enable L2 regularization for indicator parameters (was 0)
+    # Small L2 penalty keeps indicator parameters from drifting too far from initialization
+    # and provides gentle exploration incentive
+    REG_MOMENTUM_L2 = 0.001  # Gentle L2 regularization for indicator parameters
     MOMENTUM_CLIP_MIN = 1.0
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True
@@ -83,7 +86,10 @@ class Config:
     
     # Auxiliary loss weights
     LAMBDA_DIR = 5.0  # Direction classification (focal loss)
-    LAMBDA_INTER = 0.1  # Interconnection regularization between horizons
+    # CLARIFICATION: LAMBDA_INTER is a scale factor for model.losses (L2 regularization)
+    # NOT inter-horizon or inter-indicator correlation - just general regularization scaling
+    # Renamed mentally but kept variable name for backward compatibility
+    LAMBDA_INTER = 0.1  # L2 regularization scale factor (applied to model.losses)
     LAMBDA_VOL = 0.1  # Volatility penalty (weak constraint)
     LAMBDA_VAR = 5.0  # Variance NLL (confidence estimation)
 
@@ -122,7 +128,10 @@ class Config:
     SIGMOID_SCALE = 3.0
 
 # Training stability controls
-    INDICATOR_GRAD_MULT = 1.0
+    # CRITICAL FIX: Enable indicator gradient boost (was 1.0, which disabled it)
+    # Indicator parameters need stronger gradients to learn effectively
+    # Value > 1.0 multiplies gradients for indicator-related variables
+    INDICATOR_GRAD_MULT = 2.0  # 2x boost for indicator parameter learning
     GRAD_CLIP_NORM = 10.0
 
 # Focal loss hyperparameters for direction classification

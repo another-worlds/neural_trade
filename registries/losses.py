@@ -444,7 +444,11 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     dir_align_loss = tf.constant(float(getattr(model.config, 'LAMBDA_DIR_ALIGN', 0.0)), dtype=tf.float32) * tf.add_n(dir_align_losses)
 
     # === REGULARIZATION LOSSES ===
+    # model.losses contains L2 regularization from all layers with regularizers
+    # This includes indicator parameters (with REG_MOMENTUM_L2) and dense layers
     reg_loss = tf.add_n(model.losses) if model.losses else tf.constant(0.0, dtype=tf.float32)
+    # inter_reg is a scaled version of L2 regularization (LAMBDA_INTER is just a scale factor)
+    # Note: Despite the name "INTER", this is NOT inter-horizon or inter-indicator correlation
     inter_reg = model.config.LAMBDA_INTER * reg_loss
 
     # === VOLATILITY LOSS (using primary horizon - index 1 if available, else 0) ===
@@ -459,15 +463,18 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     vol_loss = tf.where(tf.math.is_finite(vol_loss), vol_loss, tf.constant(0.0, dtype=tf.float32))
 
     # === TOTAL LOSS ===
+    # CRITICAL FIX: Rebalanced loss weights to prioritize price prediction (primary task)
+    # Previous: point_loss had only 0.2 weight, causing model to focus on direction/variance
+    # New: point_loss gets 1.0 weight (equal to direction and NLL) for balanced optimization
     total = (
-        0.2 * point_loss_val +       # Point prediction accuracy
+        1.0 * point_loss_val +       # Point prediction accuracy (INCREASED from 0.2)
         0.1 * trend_loss_val +        # Trend baseline consistency + coherence
         1.0 * total_dir_loss +        # Direction classification
         0.1 * dir_align_loss +        # Distribution-direction alignment
-        reg_loss +                    # L2 regularization
-        0.05 * inter_reg +            # Indicator correlation penalty
+        reg_loss +                    # L2 regularization (now includes indicator params with REG_MOMENTUM_L2=0.001)
+        0.1 * inter_reg +             # L2 regularization scaling (INCREASED from 0.05 for stronger regularization signal)
         0.05 * vol_loss +             # Volatility matching
-        0.05 * coherence_penalty +    # Cross-horizon coherence
+        0.1 * coherence_penalty +     # Cross-horizon coherence (INCREASED from 0.05)
         1.0 * total_nll               # Variance NLL
     )
 
