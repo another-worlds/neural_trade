@@ -447,23 +447,21 @@ class TestShapeConsistency:
 
     def test_multi_output_shapes(self):
         """Test shapes for multi-output model."""
+        from model import Config
+        cfg = Config()
         batch_size = 32
+        num_horizons = cfg.num_horizons
 
-        # Three horizons, three outputs each
-        price_h0 = np.random.randn(batch_size, 1)
-        dir_h0 = np.random.randn(batch_size, 1)
-        var_h0 = np.random.randn(batch_size, 1)
-
-        price_h1 = np.random.randn(batch_size, 1)
-        dir_h1 = np.random.randn(batch_size, 1)
-        var_h1 = np.random.randn(batch_size, 1)
-
-        price_h2 = np.random.randn(batch_size, 1)
-        dir_h2 = np.random.randn(batch_size, 1)
-        var_h2 = np.random.randn(batch_size, 1)
+        # Generate outputs dynamically: N horizons, three outputs each (price, dir, var)
+        outputs = []
+        for i in range(num_horizons):
+            price = np.random.randn(batch_size, 1)
+            direction = np.random.randn(batch_size, 1)
+            variance = np.random.randn(batch_size, 1)
+            outputs.extend([price, direction, variance])
 
         # Check all have correct batch dimension
-        for output in [price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, price_h2, dir_h2, var_h2]:
+        for output in outputs:
             assert output.shape == (batch_size, 1)
 
 

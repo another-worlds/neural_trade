@@ -70,9 +70,17 @@ class TestConfigValidation:
         """Test that horizon steps are in ascending order."""
         cfg = Config()
 
-        assert len(cfg.HORIZON_STEPS) == 3, "Should have 3 horizons"
+        assert len(cfg.HORIZON_STEPS) >= 1, "Should have at least 1 horizon"
         assert cfg.HORIZON_STEPS == sorted(cfg.HORIZON_STEPS), "Horizons should be ascending"
         assert all(h > 0 for h in cfg.HORIZON_STEPS), "All horizons must be positive"
+
+        # Test dynamic properties
+        assert cfg.num_horizons == len(cfg.HORIZON_STEPS), "num_horizons should match HORIZON_STEPS length"
+        assert len(cfg.horizon_keys) == cfg.num_horizons, "horizon_keys should have num_horizons elements"
+
+        # Verify horizon keys are correctly formatted
+        for i, h_key in enumerate(cfg.horizon_keys):
+            assert h_key == f"h{i}", f"Horizon key {i} should be 'h{i}', got '{h_key}'"
 
     def test_config_horizon_trend_alignment(self):
         """Test that extended trend periods match or align with horizons."""
@@ -84,6 +92,25 @@ class TestConfigValidation:
         # Trend periods should be in ascending order
         assert cfg.EXTENDED_TREND_PERIODS == sorted(cfg.EXTENDED_TREND_PERIODS), \
             "Trend periods should be ascending"
+
+        # CRITICAL: Extended trend periods must exactly match horizon steps
+        assert cfg.EXTENDED_TREND_PERIODS == cfg.HORIZON_STEPS, \
+            f"EXTENDED_TREND_PERIODS {cfg.EXTENDED_TREND_PERIODS} must equal HORIZON_STEPS {cfg.HORIZON_STEPS}"
+
+    def test_config_horizon_lambda_weights(self):
+        """Test that horizon lambda weights are correctly configured."""
+        cfg = Config()
+
+        weights = cfg.horizon_lambda_weights
+        assert len(weights) == cfg.num_horizons, \
+            f"Should have {cfg.num_horizons} weights, got {len(weights)}"
+        assert all(w >= 0 for w in weights), "All lambda weights must be non-negative"
+
+        # For default 3-horizon config, verify specific weights
+        if cfg.num_horizons == 3:
+            assert weights[0] == cfg.LAMBDA_SHORT, "First horizon should use LAMBDA_SHORT"
+            assert weights[1] == cfg.LAMBDA_POINT, "Second horizon should use LAMBDA_POINT"
+            assert weights[2] == cfg.LAMBDA_LONG, "Third horizon should use LAMBDA_LONG"
 
 
 @pytest.mark.skipif(not MODEL_AVAILABLE, reason="model.py not available")
