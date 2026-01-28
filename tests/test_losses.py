@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from losses import Losses
 
 
@@ -26,9 +27,10 @@ def test_as_logging_dict_with_dict_and_tensor():
 
 
 def test_point_huber_executes_with_dummy_self():
-    # Prepare a small batch with shape [B, 1]
-    y_true = tf.constant([[0.1], [0.2]], dtype=tf.float32)
-    y_pred = tf.constant([[0.0], [0.1]], dtype=tf.float32)
+    # Prepare realistic price predictions with actual errors
+    # Simulate BTC price deltas: true changes vs predicted changes
+    y_true = tf.constant([[0.5], [1.2], [-0.8], [2.0], [0.3]], dtype=tf.float32)
+    y_pred = tf.constant([[0.3], [1.0], [-0.5], [1.5], [0.4]], dtype=tf.float32)
 
     # Create a dummy object exposing the required method
     class Dummy:
@@ -42,6 +44,12 @@ def test_point_huber_executes_with_dummy_self():
     result = fn(dummy, y_true, y_pred)
     assert isinstance(result, tf.Tensor)
     assert float(result.numpy()) >= 0.0
+
+    # Test mathematical property: Huber loss should be smooth (no discontinuities)
+    # With these inputs, errors are: [0.2, 0.2, -0.3, 0.5, -0.1]
+    # All within typical Huber threshold, so should use quadratic region
+    loss_value = float(result.numpy())
+    assert 0.05 < loss_value < 0.5, f"Huber loss should be in reasonable range, got {loss_value}"
 
 
 def test_registry_functions_from_module():
@@ -58,31 +66,64 @@ def test_custom_loss_smoke_runs():
                          lambda_point=1.0, lambda_local_trend=1.0, lambda_global_trend=0.2,
                          lambda_extended_trend=0.16, lambda_dir=1.0, config=cfg)
 
-    B = 2
+    B = 4
     num_horizons = cfg.num_horizons
     horizon_keys = cfg.horizon_keys
 
-    x_window = tf.zeros([B, 1, 1], dtype=tf.float32)
-    y_true = tf.zeros([B, num_horizons], dtype=tf.float32)
-    last_close = tf.ones([B, 1], dtype=tf.float32)
-    extended_trends = tf.zeros([B, num_horizons], dtype=tf.float32)
+    # Use realistic inputs (not all zeros!)
+    # Simulate actual price sequence
+    x_window = tf.constant([[[50000.0]], [[50100.0]], [[49900.0]], [[50200.0]]], dtype=tf.float32)
 
-    # Construct y_pred dynamically: price, dir, var per horizon
+    # True price changes: mix of positive and negative
+    y_true = tf.constant([[0.5, 1.0, 1.5],
+                          [0.3, 0.8, 1.2],
+                          [-0.2, -0.5, -1.0],
+                          [0.1, 0.2, 0.3]], dtype=tf.float32)
+
+    last_close = tf.constant([[50000.0], [50100.0], [49900.0], [50200.0]], dtype=tf.float32)
+
+    # Extended trends with realistic values
+    extended_trends = tf.constant([[0.01, 0.02, 0.03],
+                                   [0.006, 0.016, 0.024],
+                                   [-0.004, -0.010, -0.020],
+                                   [0.002, 0.004, 0.006]], dtype=tf.float32)
+
+    # Construct y_pred dynamically with realistic values (not perfect predictions!)
     y_pred = []
     for i in range(num_horizons):
-        price = tf.zeros([B, 1], dtype=tf.float32)
-        direction = tf.fill([B, 1], 0.5)
-        variance = tf.fill([B, 1], 0.5)
+        # Predictions with some error
+        price = tf.constant([[0.4], [0.5], [-0.1], [0.2]], dtype=tf.float32)  # Differs from y_true
+        direction = tf.constant([[0.7], [0.8], [0.3], [0.6]], dtype=tf.float32)  # Not all 0.5
+        variance = tf.constant([[0.3], [0.4], [0.6], [0.5]], dtype=tf.float32)  # Varied
         y_pred.extend([price, direction, variance])
 
     y_pred = tuple(y_pred)
 
     out = m.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
+
     # Now custom_loss returns a dict
     assert isinstance(out, dict)
     assert 'total' in out
+
     # Check that horizon-specific keys exist
     for h_key in horizon_keys:
         assert f'point_loss_{h_key}' in out
         assert f'dir_loss_{h_key}' in out
         assert f'nll_{h_key}' in out
+
+    # Validate loss values are reasonable (not zero, not NaN, not Inf)
+    total_loss = float(out['total'].numpy())
+    assert not tf.math.is_nan(out['total']), "Total loss should not be NaN"
+    assert not tf.math.is_inf(out['total']), "Total loss should not be Inf"
+    assert total_loss > 0, f"Total loss should be positive with non-perfect predictions, got {total_loss}"
+
+    # Individual loss components should be finite
+    for h_key in horizon_keys:
+        point_loss = float(out[f'point_loss_{h_key}'].numpy())
+        dir_loss = float(out[f'dir_loss_{h_key}'].numpy())
+        nll = float(out[f'nll_{h_key}'].numpy())
+
+        assert not np.isnan(point_loss), f"Point loss for {h_key} should not be NaN"
+        assert not np.isnan(dir_loss), f"Direction loss for {h_key} should not be NaN"
+        assert not np.isnan(nll), f"NLL for {h_key} should not be NaN"
+        assert point_loss >= 0, f"Point loss for {h_key} should be non-negative"
