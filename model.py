@@ -1926,8 +1926,8 @@ def train_and_evaluate(
         dir_pred = np.asarray(y_pred_all[base_idx + 1]).reshape(-1)[:len(y_test)]
         var_pred = np.asarray(y_pred_all[base_idx + 2]).reshape(-1)[:len(y_test)]
 
-        # Unscale price predictions (same as earlier loop)
-        y_pred_raw = price_pred * target_scaler_std + target_scaler_mean
+        # Unscale price predictions using inverse_transform
+        y_pred_raw = target_scaler.inverse_transform(price_pred.reshape(-1, 1)).ravel()
 
         delta_preds[h_key] = y_pred_raw
         dir_preds[h_key] = dir_pred
