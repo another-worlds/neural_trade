@@ -14,6 +14,32 @@ This document describes the comprehensive test suite for validating the mathemat
 
 ## Test Suites
 
+### 0. **test_backend_gru_selection.py** (3 tests - ALL PASSING)
+
+Validates runtime-aware recurrent configuration for CUDA and non-CUDA backends.
+
+#### Coverage
+- **test_runtime_gru_overrides_cuda**
+  - Confirms CUDA mode selects cuDNN-eligible GRU settings.
+  - Verifies non-CUDA-only knobs are not applied in CUDA mode.
+
+- **test_runtime_gru_overrides_non_cuda**
+  - Confirms non-CUDA mode selects DirectML-safe GRU settings.
+  - Verifies cuDNN is explicitly disabled for non-CUDA runtimes.
+
+- **test_build_runtime_aware_gru_falls_back_when_use_cudnn_unsupported**
+  - Simulates runtimes that reject GRU use_cudnn argument.
+  - Verifies graceful retry with compatible fallback kwargs.
+
+#### Result
+```
+3 tests collected
+3 passed
+0 failed
+
+Status: PASS
+```
+
 ### 1. **test_pipeline_integrity.py** (26 tests - ALL PASSING ✓)
 
 Validates foundational mathematical operations and data processing logic.

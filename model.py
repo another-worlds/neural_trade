@@ -31,6 +31,58 @@ except Exception:
     reconstruct_prices = None
     mask_by_min_abs_y = None
 
+
+def _tf_build_info() -> Dict[str, Any]:
+    """Best-effort TensorFlow build metadata.
+
+    Returns an empty dict if build info cannot be read.
+    """
+    try:
+        info = tf.sysconfig.get_build_info()
+        return dict(info) if info is not None else {}
+    except Exception:
+        return {}
+
+
+def _is_cuda_build() -> bool:
+    """Return True only when the runtime explicitly reports a CUDA build.
+
+    DirectML may expose GPU devices but is not a CUDA build, so we gate cuDNN
+    usage on TensorFlow build metadata rather than GPU enumeration.
+    """
+    info = _tf_build_info()
+    return bool(info.get("is_cuda_build", False))
+
+
+def _runtime_gru_overrides() -> Dict[str, Any]:
+    """Runtime-specific GRU kwargs for CUDA vs non-CUDA backends."""
+    if _is_cuda_build():
+        # Keep cuDNN path for CUDA builds.
+        return {"use_cudnn": "auto"}
+
+    # Non-CUDA (including DirectML): avoid cuDNN-only paths.
+    return {
+        "use_cudnn": False,
+        "recurrent_dropout": 0.1,
+    }
+
+
+def _build_runtime_aware_gru(*, units: int, return_sequences: bool) -> layers.Layer:
+    """Construct GRU with backend-aware kwargs and graceful compatibility fallback."""
+    base_kwargs: Dict[str, Any] = {
+        "units": int(units),
+        "return_sequences": bool(return_sequences),
+    }
+    runtime_kwargs = _runtime_gru_overrides()
+
+    try:
+        return layers.GRU(**base_kwargs, **runtime_kwargs)
+    except TypeError:
+        # Some TF/Keras builds may not expose `use_cudnn`; keep non-CUDA-safe
+        # recurrent_dropout path and retry.
+        runtime_kwargs.pop("use_cudnn", None)
+        return layers.GRU(**base_kwargs, **runtime_kwargs)
+
 # -----------------------------
 class Config:
 
@@ -1498,7 +1550,9 @@ class PricePredictor:
         ind_seq = LearnableIndicators(self.config, name='learnable_indicators')([inp, meta_adjust])
 
         # Memory-Supplemented Layers: Capture temporal interconnections
-        memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
+        memory = layers.Bidirectional(
+            _build_runtime_aware_gru(units=64, return_sequences=True)
+        )(ind_seq)
         memory = layers.Dropout(0.5)(memory)
 
         # Interconnection Attention: Model relations between indicators
