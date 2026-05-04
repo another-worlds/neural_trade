@@ -35,7 +35,7 @@ indicator_params_history.csv
 *.swp
 *.swo
 *~
-
+*.csv
 # OS
 .DS_Store
 Thumbs.db

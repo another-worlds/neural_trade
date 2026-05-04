@@ -40,12 +40,12 @@ class Config:
     CSV_PATH = csv
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
-    RESAMPLE_MINUTES = None  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 144 * 4
-    EPOCHS = 8
-    LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
+    BATCH_SIZE = 1440
+    EPOCHS = 20
+    LR = 1e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 144 * 20  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 30  # Limit most recent sequences to bound training size
 
 
 
