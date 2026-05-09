@@ -122,3 +122,39 @@ def mask_by_min_abs_y(y_true, *, min_abs_y: float) -> Tuple[np.ndarray, Coverage
     used = int(np.sum(keep))
     total = int(len(y_t))
     return keep, Coverage(used=used, total=total)
+
+
+def pit_uniformity(
+    y_true,
+    mu,
+    sigma,
+    *,
+    eps: float = 1e-8,
+) -> float:
+    """Kolmogorov-Smirnov statistic between PIT values and Uniform[0,1].
+
+    For a well-calibrated Gaussian predictive distribution N(mu, sigma^2),
+    the probability integral transform (PIT) u_i = Phi((y_i - mu_i) / sigma_i)
+    should be Uniform[0,1].  The KS statistic measures the maximum absolute
+    deviation between the empirical CDF of u and the ideal diagonal.
+
+    Returns a value in [0, 1]; 0 = perfectly calibrated, 1 = maximally off.
+    Smaller is better.
+    """
+    from scipy.special import ndtr  # normal CDF
+
+    y = np.asarray(y_true, dtype=float).reshape(-1)
+    m = np.asarray(mu, dtype=float).reshape(-1)
+    s = np.asarray(sigma, dtype=float).reshape(-1)
+    n = min(len(y), len(m), len(s))
+    y, m, s = y[:n], m[:n], s[:n]
+
+    s = np.maximum(s, float(eps))
+    u = ndtr((y - m) / s)              # PIT values in [0, 1]
+    u_sorted = np.sort(u)
+    n_f = float(n)
+    # Empirical CDF at each sorted point
+    ecdf = np.arange(1, n + 1) / n_f
+    # KS statistic: max deviation from uniform diagonal
+    ks = float(np.max(np.abs(ecdf - u_sorted)))
+    return ks

@@ -276,6 +276,70 @@ def extended_trend_loss(model, x_window, y_true_raw, y_pred_raw, extended_trends
     return global_loss, extended_loss
 
 
+@Losses.register(name="crps_gaussian_loss", tags=["calibration", "regression", "probabilistic"])
+def crps_gaussian_loss(model, y_true_scaled, mu_scaled, var_scaled):
+    """Continuous Ranked Probability Score for a Gaussian predictive distribution.
+
+    CRPS(N(mu, sigma^2), y) = sigma * [omega*(2*Phi(omega)-1) + 2*phi(omega) - 1/sqrt(pi)]
+    where omega = (y - mu) / sigma.
+
+    Unlike NLL, CRPS simultaneously rewards both sharpness and reliability, making it
+    harder for the variance head to collapse sigma to game the loss.
+    Operates in the same scaled space as regression targets.
+    """
+    y = tf.cast(tf.squeeze(y_true_scaled, axis=1), tf.float32)
+    mu = tf.cast(tf.squeeze(mu_scaled, axis=1), tf.float32)
+    var = tf.cast(tf.squeeze(var_scaled, axis=1), tf.float32)
+    sigma = tf.sqrt(tf.maximum(var, 1e-8))
+
+    sqrt_2 = tf.constant(1.4142135623730951, dtype=tf.float32)
+    inv_sqrt_pi = tf.constant(0.5641895835477563, dtype=tf.float32)
+    inv_sqrt_2pi = tf.constant(0.3989422804014327, dtype=tf.float32)
+
+    omega = (y - mu) / (sigma + 1e-8)
+    Phi_omega = 0.5 * (1.0 + tf.math.erf(omega / sqrt_2))
+    phi_omega = inv_sqrt_2pi * tf.exp(-0.5 * tf.square(omega))
+
+    crps_per_sample = sigma * (omega * (2.0 * Phi_omega - 1.0) + 2.0 * phi_omega - inv_sqrt_pi)
+    crps_per_sample = tf.clip_by_value(crps_per_sample, 0.0, 100.0)
+    return tf.reduce_mean(crps_per_sample)
+
+
+@Losses.register(name="soft_ece_loss", tags=["calibration", "classification", "ece"])
+def soft_ece_loss(model, true_dir, dir_pred, mask, n_bins=10, bandwidth=None):
+    """Differentiable Expected Calibration Error via Gaussian kernel soft binning.
+
+    Standard ECE uses hard histogram bins whose discontinuities block gradient flow.
+    This replaces hard membership with a Gaussian kernel:
+        w_{bi} = exp(-(p_i - c_b)^2 / (2*h^2))
+    where c_b are bin centers and h is the bandwidth (default = half bin width).
+
+    soft_ece = sum_b |acc_b - conf_b| * (sum_w_b / N_eff)
+
+    Applied with the deadband mask so neutral samples are excluded, consistent
+    with direction loss treatment.
+    """
+    p = tf.cast(dir_pred, tf.float32)
+    y = tf.cast(true_dir, tf.float32)
+    m = tf.cast(mask, tf.float32)
+
+    if bandwidth is None:
+        bandwidth = 1.0 / (2.0 * n_bins)
+    h2 = tf.constant(2.0 * bandwidth ** 2, dtype=tf.float32)
+
+    total_eff = tf.reduce_sum(m) + 1e-8
+    ece = tf.constant(0.0, dtype=tf.float32)
+    for i in range(n_bins):
+        c = tf.constant((float(i) + 0.5) / float(n_bins), dtype=tf.float32)
+        w = tf.exp(-tf.square(p - c) / h2) * m
+        sum_w = tf.reduce_sum(w) + 1e-8
+        soft_acc = tf.reduce_sum(w * y) / sum_w
+        soft_conf = tf.reduce_sum(w * p) / sum_w
+        bin_weight = tf.reduce_sum(w) / total_eff
+        ece = ece + bin_weight * tf.abs(soft_acc - soft_conf)
+    return ece
+
+
 @Losses.register(name="custom_loss", tags=["composite", "default", "multi_output"])
 def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     # Convert to expected types and shapes exactly as original model implementation
@@ -433,6 +497,26 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     vol_loss = vol_diff_clipped * model.lambda_vol
     vol_loss = tf.where(tf.math.is_finite(vol_loss), vol_loss, tf.constant(0.0, dtype=tf.float32))
 
+    # === CRPS LOSSES (Gaussian Continuous Ranked Probability Score) ===
+    # Controlled by lambda_crps (default 0 → no effect on existing runs).
+    # CRPS is a proper scoring rule that jointly rewards sharpness and calibration,
+    # preventing the variance head from collapsing sigma to game NLL.
+    lambda_crps = tf.constant(float(getattr(model, 'lambda_crps', 0.0)), dtype=tf.float32)
+    crps_h0_val = crps_gaussian_loss(model, y_true_h0, price_h0, var_h0_c)
+    crps_h1_val = crps_gaussian_loss(model, y_true_h1, price_h1, var_h1_c)
+    crps_h2_val = crps_gaussian_loss(model, y_true_h2, price_h2, var_h2_c)
+    total_crps = lambda_crps * (crps_h0_val + crps_h1_val + crps_h2_val)
+
+    # === SOFT-ECE LOSSES (differentiable Expected Calibration Error) ===
+    # Directly minimizes direction-head calibration error w.r.t. realized outcomes.
+    # Complements dir-align (which aligns dir_head to Gaussian-implied P(up)) by also
+    # aligning to actual labels. Controlled by lambda_soft_ece (default 0).
+    lambda_soft_ece = tf.constant(float(getattr(model, 'lambda_soft_ece', 0.0)), dtype=tf.float32)
+    soft_ece_h0_val = soft_ece_loss(model, true_dir_h0, dir_pred_h0, mask_h0)
+    soft_ece_h1_val = soft_ece_loss(model, true_dir_h1, dir_pred_h1, mask_h1)
+    soft_ece_h2_val = soft_ece_loss(model, true_dir_h2, dir_pred_h2, mask_h2)
+    total_soft_ece = lambda_soft_ece * (soft_ece_h0_val + soft_ece_h1_val + soft_ece_h2_val)
+
     total = (
         point_loss_val +
         model.lambda_trend_outer * trend_loss_val +
@@ -442,9 +526,20 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
         0.1 * inter_reg +           # Indicator correlation (weak regularization)
         0.1 * vol_loss +           # Volatility penalty (very weak)
         model.lambda_coherence_outer * coherence_penalty +
-        model.lambda_nll_outer * total_nll
+        model.lambda_nll_outer * total_nll +
+        total_crps +                # CRPS calibration (active only when lambda_crps > 0)
+        total_soft_ece              # Soft-ECE calibration (active only when lambda_soft_ece > 0)
     )
 
+    # Return tuple: 28 components total
+    # [0]    total_loss
+    # [1-3]  point_h0, point_h1, point_h2
+    # [4-12] local_h0, global_h0, extended_h0, ..., extended_h2
+    # [13-15] dir_h0, dir_h1, dir_h2
+    # [16-18] nll_h0, nll_h1, nll_h2
+    # [19-21] reg_loss, inter_reg, vol_loss
+    # [22-24] crps_h0, crps_h1, crps_h2
+    # [25-27] soft_ece_h0, soft_ece_h1, soft_ece_h2
     return (
         total,
         point_loss_h0_val, point_loss_h1_val, point_loss_h2_val,
@@ -453,5 +548,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
         local_trend_h2, global_trend_h2, extended_trend_h2,
         dir_loss_h0, dir_loss_h1, dir_loss_h2,
         nll_h0_val, nll_h1_val, nll_h2_val,
-        reg_loss, inter_reg, vol_loss
+        reg_loss, inter_reg, vol_loss,
+        crps_h0_val, crps_h1_val, crps_h2_val,
+        soft_ece_h0_val, soft_ece_h1_val, soft_ece_h2_val,
     )

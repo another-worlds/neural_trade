@@ -27,6 +27,8 @@ from registries.losses import (
     point_huber,
     local_trend_loss,
     extended_trend_loss,
+    crps_gaussian_loss,
+    soft_ece_loss,
     custom_loss,
 )
 
@@ -40,5 +42,7 @@ __all__ = [
     'point_huber',
     'local_trend_loss',
     'extended_trend_loss',
+    'crps_gaussian_loss',
+    'soft_ece_loss',
     'custom_loss',
 ]

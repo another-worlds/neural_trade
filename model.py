@@ -25,13 +25,18 @@ pio.renderers.default = 'colab'
 
 try:
     # Optional local utilities (kept lightweight). If missing, fall back to sklearn MAPE only.
-    from metrics_utils import safe_mape, smape, wape, reconstruct_prices, mask_by_min_abs_y
+    from metrics_utils import safe_mape, smape, wape, reconstruct_prices, mask_by_min_abs_y, pit_uniformity
 except Exception:
     safe_mape = None
     smape = None
     wape = None
     reconstruct_prices = None
     mask_by_min_abs_y = None
+
+try:
+    from calibration import CalibrationPipeline as _CalibrationPipeline
+except Exception:  # calibration package missing — non-fatal
+    _CalibrationPipeline = None
 
 # -----------------------------
 class Config:
@@ -44,12 +49,12 @@ class Config:
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 144#0 / 10
+    BATCH_SIZE = 1440#0 / 10
     EPOCHS = 2 * 10
     LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
     EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
-    MAX_SEQUENCE_COUNT = 144 * 8 #(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 150 * 4#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
     
 
     
@@ -101,6 +106,8 @@ class Config:
     LAMBDA_DIR_ALIGN_OUTER = 1.0  # Weight for dir_align_loss in total
     LAMBDA_COHERENCE = 1.0        # Weight for coherence_penalty in total
     LAMBDA_NLL_OUTER = 1.0        # Weight for total_nll in total
+    LAMBDA_CRPS = 0.2             # CRPS calibration loss (0 = off; try 0.1–1.0)
+    LAMBDA_SOFT_ECE = 0.1        # Soft-ECE direction calibration loss (0 = off; try 0.05–0.5)
 
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
@@ -415,6 +422,7 @@ class TrainResult:
     # Predictions are raw (inverse-scaled) deltas and head outputs.
     predictions: Dict[str, Dict[str, np.ndarray]]
     metrics: Dict[str, Any]
+    calibration_pipeline: Optional[Any] = None  # CalibrationPipeline, None if not fitted
 
 
 def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
@@ -994,6 +1002,7 @@ def train_and_evaluate(
     epochs: Optional[int] = None,
     force: bool = False,
     calibrate: bool = True,
+    fit_calibration: bool = True,
     extra_callbacks: Optional[List[tf.keras.callbacks.Callback]] = None,
 ) -> TrainResult:
     """Train (optionally) and evaluate, returning a rich result bundle.
@@ -1080,7 +1089,9 @@ def train_and_evaluate(
                  local_h2, global_h2, ext_h2,
                  dir_h0, dir_h1, dir_h2,
                  nll_h0, nll_h1, nll_h2,
-                 reg_val, inter_reg, vol_loss_val) = custom_model.custom_loss(
+                 reg_val, inter_reg, vol_loss_val,
+                 crps_h0_c, crps_h1_c, crps_h2_c,
+                 soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c) = custom_model.custom_loss(
                     x_batch, y_batch, y_pred_batch, last_batch, ext_batch
                 )
 
@@ -1270,6 +1281,30 @@ def train_and_evaluate(
     except Exception:
         pass
 
+    # Post-hoc calibration pipeline (temperature scaling + conformal intervals)
+    cal_pipeline = None
+    if fit_calibration and _CalibrationPipeline is not None:
+        try:
+            print("\nFitting CalibrationPipeline on test split...")
+            _draft = TrainResult(
+                config=cfg,
+                model=custom_model,
+                target_scaler=target_scaler,
+                input_scaler=input_scaler,
+                X_test_seq=X_test_seq,
+                y_test=np.asarray(y_test),
+                last_close_test=np.asarray(last_close_test),
+                extended_trends_test=np.asarray(extended_trends_test),
+                history=history,
+                predictions=predictions,
+                metrics=metrics,
+            )
+            cal_pipeline = _CalibrationPipeline()
+            cal_pipeline.fit(_draft)
+        except Exception as _cal_err:
+            print(f"CalibrationPipeline fit skipped: {_cal_err}")
+            cal_pipeline = None
+
     return TrainResult(
         config=cfg,
         model=custom_model,
@@ -1282,6 +1317,7 @@ def train_and_evaluate(
         history=history,
         predictions=predictions,
         metrics=metrics,
+        calibration_pipeline=cal_pipeline,
     )
 
 # -----------------------------
@@ -1679,6 +1715,8 @@ class CustomTrainModel(models.Model):
         self.lambda_dir_align_outer = float(getattr(config, 'LAMBDA_DIR_ALIGN_OUTER', 0.5))
         self.lambda_coherence_outer = float(getattr(config, 'LAMBDA_COHERENCE', 1.0))
         self.lambda_nll_outer = float(getattr(config, 'LAMBDA_NLL_OUTER', 1.0))
+        self.lambda_crps = float(getattr(config, 'LAMBDA_CRPS', 0.0))
+        self.lambda_soft_ece = float(getattr(config, 'LAMBDA_SOFT_ECE', 0.0))
         self.config = config or Config()
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
@@ -1831,259 +1869,7 @@ class CustomTrainModel(models.Model):
     # -------------------------
     def custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends):
         """Delegate to centralized implementation in `losses.py`."""
-        return _losses.custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends)        
-        # Prepare targets (multi-horizon)
-        # Option A: y_true is DELTA in scaled space, so y_true_raw is DELTA in raw (price units).
-        y_true = tf.cast(y_true, tf.float32)  # [B, 3]
-        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, 3]  (delta_raw)
-        last_close_squeeze = tf.squeeze(last_close, axis=1)  # [B] (raw price)
-
-        y_true_h0 = y_true[:, 0:1]
-        y_true_h1 = y_true[:, 1:2]
-        y_true_h2 = y_true[:, 2:3]
-
-        y_true_raw_h0 = y_true_raw[:, 0]
-        y_true_raw_h1 = y_true_raw[:, 1]
-        y_true_raw_h2 = y_true_raw[:, 2]
-
-        # Trade-aware direction labeling with optional deadband.
-        # Use returns for labeling/masking even though regression target is delta:
-        #   ret = delta / last_close
-        deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
-        deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
-
-        ret_h0 = (y_true_raw_h0) / (last_close_squeeze + self.eps)
-        ret_h1 = (y_true_raw_h1) / (last_close_squeeze + self.eps)
-        ret_h2 = (y_true_raw_h2) / (last_close_squeeze + self.eps)
-
-        mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-        mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-        mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
-
-        true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-        true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-        true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
-
-        # === POINT LOSSES (3 horizons × 1 = 3 components) ===
-        # CRITICAL: Training operates in SCALED delta space.
-        # y_true_h* are SCALED deltas: (raw_delta - mean) / std
-        # price_h* are SCALED predictions (unbounded, optimized in scaled space)
-        # Compute Huber loss in scaled space where the model was trained.
-        point_loss_h0_val = self.lambda_short * self.point_huber(y_true_h0, price_h0)
-        point_loss_h1_val = self.lambda_point * self.point_huber(y_true_h1, price_h1)
-        point_loss_h2_val = self.lambda_long * self.point_huber(y_true_h2, price_h2)
-        point_loss_val = point_loss_h0_val + point_loss_h1_val + point_loss_h2_val
-
-        # === TREND LOSSES ===
-        # CRITICAL REWRITE: Trend loss now directly supervises PREDICTIONS to respect historical trends.
-        # 
-        # OLD (INCORRECT): Penalized targets for not aligning with extended_trends
-        #   trend_diff = (y_true_raw - extended_trends × last_close) / pred_scale
-        #   This imposed regularization on the TARGETS, not predictions—semantically backwards.
-        #
-        # NEW (CORRECT): Extended trends act as baseline predictions; penalize prediction deviation from baseline.
-        # 
-        # Semantic: Extended trends represent "what a simple historical-trend model would predict"
-        # We penalize the learned model for diverging too far from this strong baseline.
-        # If the learned model can't beat the trend baseline, its prediction should be close to it.
-        #
-        # Extended trends are now absolute deltas (dollars), matching prediction targets exactly.
-        
-        pred_scale = tf.cast(self.pred_scale + self.eps, tf.float32)
-        
-        # Convert extended trends from raw deltas to scaled space (same space as predictions)
-        extended_trends_scaled_h0 = extended_trends[:, 0:1] / pred_scale  # [B, 1] scaled
-        extended_trends_scaled_h1 = extended_trends[:, 1:2] / pred_scale  # [B, 1] scaled
-        extended_trends_scaled_h2 = extended_trends[:, 2:3] / pred_scale  # [B, 1] scaled
-        
-        # Trend loss: Penalize predictions for deviating from trend baseline
-        # If model predictions are unreasonably far from trends, this acts as regularization
-        # If model predictions match/beat trends, this loss is near zero
-        trend_loss_h0 = tf.reduce_mean(tf.square(price_h0 - extended_trends_scaled_h0))
-        trend_loss_h1 = tf.reduce_mean(tf.square(price_h1 - extended_trends_scaled_h1))
-        trend_loss_h2 = tf.reduce_mean(tf.square(price_h2 - extended_trends_scaled_h2))
-        
-        # === CROSS-HORIZON COHERENCE CONSTRAINTS ===
-        # STRENGTHENED: Enforce consistency across horizons (h0 → h1 → h2)
-        # Multiple constraints ensure multi-horizon predictions form a coherent picture:
-        # 1. Direction consistency: All three horizons should agree on UP/DOWN
-        # 2. Magnitude consistency: |pred_h0| ≤ |pred_h1| ≤ |pred_h2| (longer horizons = larger moves)
-        # 3. Smoothness: No abrupt sign changes across consecutive horizons
-        
-        # Constraint 1: Direction consistency (all signs should match)
-        sign_pred_h0 = tf.sign(price_h0)
-        sign_pred_h1 = tf.sign(price_h1)
-        sign_pred_h2 = tf.sign(price_h2)
-        
-        # Penalize disagreement in direction predictions
-        dir_agree_h01 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h0, sign_pred_h1), tf.float32))
-        dir_agree_h12 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h1, sign_pred_h2), tf.float32))
-        dir_disagree_loss = 1.0 - (dir_agree_h01 + dir_agree_h12) / 2.0  # Loss when disagreement occurs
-        
-        # Constraint 2: Magnitude monotonicity: |h0| ≤ |h1| ≤ |h2| (longer horizons = larger absolute moves)
-        # This enforces that 5-min predictions are at least as large as 1-min, etc.
-        abs_pred_h0 = tf.abs(price_h0)
-        abs_pred_h1 = tf.abs(price_h1)
-        abs_pred_h2 = tf.abs(price_h2)
-        
-        # Penalize violations of monotonic magnitude increase
-        magnitude_h01_violation = tf.nn.relu(abs_pred_h0 - abs_pred_h1)  # Penalize if h0 > h1
-        magnitude_h12_violation = tf.nn.relu(abs_pred_h1 - abs_pred_h2)  # Penalize if h1 > h2
-        magnitude_loss = tf.reduce_mean(magnitude_h01_violation + magnitude_h12_violation)
-        
-        # Constraint 3: Smoothness penalty on target signs (should be consistent across horizons)
-        sign_target_h0 = tf.sign(y_true_raw_h0)
-        sign_target_h1 = tf.sign(y_true_raw_h1)
-        sign_target_h2 = tf.sign(y_true_raw_h2)
-        target_smoothness_loss = tf.reduce_mean(
-            tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0, 
-                                         sign_target_h1 == sign_target_h2), tf.float32)
-        )
-        
-        # Combine all coherence constraints (STRENGTHENED: increased weight from 0.01 to 0.1)
-        # This makes cross-horizon consistency a significant part of the optimization
-        coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
-        
-        local_trend_h0 = tf.constant(0.0, dtype=tf.float32)
-        global_trend_h0 = tf.constant(0.0, dtype=tf.float32)
-        extended_trend_h0 = self.lambda_extended_trend * trend_loss_h0
-        local_trend_h1 = tf.constant(0.0, dtype=tf.float32)
-        global_trend_h1 = tf.constant(0.0, dtype=tf.float32)
-        extended_trend_h1 = self.lambda_extended_trend * trend_loss_h1
-        local_trend_h2 = tf.constant(0.0, dtype=tf.float32)
-        global_trend_h2 = tf.constant(0.0, dtype=tf.float32)
-        extended_trend_h2 = self.lambda_extended_trend * trend_loss_h2
-        
-        trend_loss_val = extended_trend_h0 + extended_trend_h1 + extended_trend_h2 + coherence_penalty * 0.01  # small weight for coherence
-
-        # === DIRECTION LOSSES (3 horizons × combined focal+dice loss = 3 components) ===
-        # Apply deadband masks: ignore neutral samples (mask=0). Guard against empty masks.
-        dir_pred_h0 = tf.squeeze(dir_h0, axis=1)
-        dir_pred_h1 = tf.squeeze(dir_h1, axis=1)
-        dir_pred_h2 = tf.squeeze(dir_h2, axis=1)
-
-        # Compute dynamic alpha per horizon based on batch class distribution
-        # This automatically balances focal loss weighting based on actual UP/DOWN ratio
-        alpha_h0 = self.compute_dynamic_alpha(true_dir_h0, min_alpha=0.3, max_alpha=0.7)
-        alpha_h1 = self.compute_dynamic_alpha(true_dir_h1, min_alpha=0.3, max_alpha=0.7)
-        alpha_h2 = self.compute_dynamic_alpha(true_dir_h2, min_alpha=0.3, max_alpha=0.7)
-
-        # Combined Focal + Dice loss for each horizon
-        # Focal: handles class imbalance via dynamic alpha + hard example focusing
-        # Dice: directly optimizes F1-like metric (differentiable TP/FP/FN)
-        per_ex_h0 = self.combined_direction_loss(true_dir_h0, dir_pred_h0, alpha=alpha_h0, 
-                                                  focal_weight=0.5, dice_weight=0.5, reduce=False)
-        per_ex_h1 = self.combined_direction_loss(true_dir_h1, dir_pred_h1, alpha=alpha_h1,
-                                                  focal_weight=0.5, dice_weight=0.5, reduce=False)
-        per_ex_h2 = self.combined_direction_loss(true_dir_h2, dir_pred_h2, alpha=alpha_h2,
-                                                  focal_weight=0.5, dice_weight=0.5, reduce=False)
-
-        dir_loss_h0 = tf.reduce_sum(per_ex_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + self.eps)
-        dir_loss_h1 = tf.reduce_sum(per_ex_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + self.eps)
-        dir_loss_h2 = tf.reduce_sum(per_ex_h2 * mask_h2) / (tf.reduce_sum(mask_h2) + self.eps)
-        total_dir_loss = self.lambda_dir * (dir_loss_h0 + dir_loss_h1 + dir_loss_h2)
-
-        # === VARIANCE NLL LOSSES (3 horizons × 1 = 3 components) ===
-        # Clip variance to prevent log/div blow-ups and stabilize gradients.
-        # NLL formula: 0.5 * log(2πσ²) + 0.5 * (y-μ)²/σ²
-        # The log(2π) ≈ 1.838 constant ensures NLL is always positive for proper interpretation.
-        # Note: NLL can be negative due to numerical precision, but we allow it for proper gradient flow.
-        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
-        var_h0_c = tf.clip_by_value(var_h0, var_floor, var_cap)
-        var_h1_c = tf.clip_by_value(var_h1, var_floor, var_cap)
-        var_h2_c = tf.clip_by_value(var_h2, var_floor, var_cap)
-        
-        # log(2π) constant for proper Gaussian NLL (≈ 1.838)
-        log_2pi = tf.constant(1.8378770664093453, dtype=tf.float32)  # tf.math.log(2π)
-
-        # Full Gaussian NLL: 0.5 * log(2πσ²) + 0.5 * (y-μ)²/σ²
-        nll_h0 = 0.5 * (log_2pi + tf.math.log(var_h0_c + self.eps)) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + self.eps)
-        nll_h0_val = tf.reduce_mean(nll_h0)  # Remove flooring to allow proper gradients
-        
-        nll_h1 = 0.5 * (log_2pi + tf.math.log(var_h1_c + self.eps)) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + self.eps)
-        nll_h1_val = tf.reduce_mean(nll_h1)  # Remove flooring to allow proper gradients
-        
-        nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + self.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + self.eps)
-        nll_h2_val = tf.reduce_mean(nll_h2)  # Remove flooring to allow proper gradients
-        
-        total_nll = self.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
-
-        # === GAUSSIAN-IMPLIED DIRECTION PROBABILITIES (from mu/var) ===
-        # Delta-target: interpret mu as expected delta. Define P(up) consistent with deadband:
-        #   P(ret > deadband)  <=>  P(delta > deadband * last_close)
-        mu_h0 = tf.squeeze(price_h0, axis=1)
-        mu_h1 = tf.squeeze(price_h1, axis=1)
-        mu_h2 = tf.squeeze(price_h2, axis=1)
-        sigma_h0 = tf.sqrt(tf.squeeze(var_h0_c, axis=1) + self.eps)
-        sigma_h1 = tf.sqrt(tf.squeeze(var_h1_c, axis=1) + self.eps)
-        sigma_h2 = tf.sqrt(tf.squeeze(var_h2_c, axis=1) + self.eps)
-        deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
-        z_up_h0 = (mu_h0 - deadband_delta_scaled) / (sigma_h0 + self.eps)
-        z_up_h1 = (mu_h1 - deadband_delta_scaled) / (sigma_h1 + self.eps)
-        z_up_h2 = (mu_h2 - deadband_delta_scaled) / (sigma_h2 + self.eps)
-        gauss_p_up_h0 = self._normal_cdf(z_up_h0)
-        gauss_p_up_h1 = self._normal_cdf(z_up_h1)
-        gauss_p_up_h2 = self._normal_cdf(z_up_h2)
-
-        # Optional alignment: encourage direction head to match distribution-implied P(up)
-        # IMPORTANT: keep this graph-safe (no Python `if` on tensors).
-        lambda_dir_align = tf.constant(float(getattr(self.config, 'LAMBDA_DIR_ALIGN', 0.0)), dtype=tf.float32)
-
-        align_h0 = tf.keras.losses.binary_crossentropy(gauss_p_up_h0, dir_pred_h0)
-        align_h1 = tf.keras.losses.binary_crossentropy(gauss_p_up_h1, dir_pred_h1)
-        align_h2 = tf.keras.losses.binary_crossentropy(gauss_p_up_h2, dir_pred_h2)
-        # Apply deadband mask to alignment too (avoid pushing on neutral/noise moves)
-        align_h0 = tf.reduce_sum(align_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + self.eps)
-        align_h1 = tf.reduce_sum(align_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + self.eps)
-        align_h2 = tf.reduce_sum(align_h2 * mask_h2) / (tf.reduce_sum(mask_h2) + self.eps)
-        dir_align_loss = lambda_dir_align * (align_h0 + align_h1 + align_h2)
-
-        # === REGULARIZATION (unchanged) ===
-        reg_loss = tf.add_n(self.losses) if self.losses else tf.constant(0.0, dtype=tf.float32)
-        inter_reg = self.config.LAMBDA_INTER * reg_loss
-
-        # === VOLATILITY PENALTY (use primary horizon h1) ===
-        # Delta-target: compare dispersion of predicted vs true deltas (scaled space).
-        actual_trend = y_true[:, 1]
-        pred_trend_scaled = tf.squeeze(price_h1, axis=1)
-        actual_std = tf.math.reduce_std(actual_trend)
-        pred_std = tf.math.reduce_std(pred_trend_scaled)
-        vol_diff = tf.abs(pred_std - actual_std)
-        vol_diff_clipped = tf.minimum(vol_diff, 10.0)
-        vol_loss = vol_diff_clipped * self.lambda_vol
-        vol_loss = tf.where(tf.math.is_finite(vol_loss), vol_loss, tf.constant(0.0, dtype=tf.float32))
-
-        total = (
-            point_loss_val +
-            self.lambda_trend_outer * trend_loss_val +
-            self.lambda_dir_outer * total_dir_loss +
-            self.lambda_dir_align_outer * dir_align_loss +
-            #reg_loss +
-            0.1 * inter_reg +           # Indicator correlation (weak regularization)
-            0.1 * vol_loss +           # Volatility penalty (very weak)
-            self.lambda_coherence_outer * coherence_penalty +
-            self.lambda_nll_outer * total_nll
-        )
-
-        # Format breakdown (22 components total):
-        # [0] total_loss (single scalar)
-        # [1-3] point_h0, point_h1, point_h2 (3 point loss components)
-        # [4-12] local_h0, global_h0, extended_h0, local_h1, global_h1, extended_h1, 
-        #        local_h2, global_h2, extended_h2 (9 trend loss components; local/global are 0)
-        # [13-15] dir_h0, dir_h1, dir_h2 (3 direction loss components)
-        # [16-18] nll_h0, nll_h1, nll_h2 (3 variance NLL components)
-        # [19-21] reg_loss, inter_reg, vol_loss (3 regularization components)
-        return (
-            total,
-            point_loss_h0_val, point_loss_h1_val, point_loss_h2_val,
-            local_trend_h0, global_trend_h0, extended_trend_h0,
-            local_trend_h1, global_trend_h1, extended_trend_h1,
-            local_trend_h2, global_trend_h2, extended_trend_h2,
-            dir_loss_h0, dir_loss_h1, dir_loss_h2,
-            nll_h0_val, nll_h1_val, nll_h2_val,
-            reg_loss, inter_reg, vol_loss
-        )
+        return _losses.custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends)
 
     def train_step(self, data):
         x_window, y_true, last_close, extended_trends = data
@@ -2091,7 +1877,7 @@ class CustomTrainModel(models.Model):
             y_pred = self(x_window, training=True)
             loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
 
-        # Unpack 22-component tuple from custom_loss
+        # Unpack 28-component tuple from custom_loss
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -2099,7 +1885,9 @@ class CustomTrainModel(models.Model):
          local_h2, global_h2, extended_h2,
          dir_h0, dir_h1, dir_h2,
          nll_h0, nll_h1, nll_h2,
-         reg_val, inter_reg, vol_loss) = loss_components
+         reg_val, inter_reg, vol_loss,
+         crps_h0, crps_h1, crps_h2,
+         soft_ece_h0, soft_ece_h1, soft_ece_h2) = loss_components
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -2216,6 +2004,36 @@ class CustomTrainModel(models.Model):
         trend_loss_total = trend_loss_h0 + trend_loss_h1 + trend_loss_h2
         dir_loss_total = dir_h0 + dir_h1 + dir_h2
         nll_total = nll_h0 + nll_h1 + nll_h2
+        crps_total = crps_h0 + crps_h1 + crps_h2
+        soft_ece_total = soft_ece_h0 + soft_ece_h1 + soft_ece_h2
+
+        # PIT uniformity (KS statistic) — computed in numpy from the batch tensors.
+        # Smaller KS → more uniform PIT → better calibrated variance head.
+        pit_ks_h0 = tf.constant(float('nan'), dtype=tf.float32)
+        pit_ks_h1 = tf.constant(float('nan'), dtype=tf.float32)
+        pit_ks_h2 = tf.constant(float('nan'), dtype=tf.float32)
+        if pit_uniformity is not None:
+            try:
+                sigma_h0_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred[2], axis=1),
+                                                        float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
+                                                        float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
+                sigma_h1_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred[5], axis=1),
+                                                        float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
+                                                        float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
+                sigma_h2_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred[8], axis=1),
+                                                        float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
+                                                        float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
+                y_true_h0_np = y_true[:, 0].numpy()
+                y_true_h1_np = y_true[:, 1].numpy()
+                y_true_h2_np = y_true[:, 2].numpy()
+                mu_h0_np = tf.squeeze(y_pred[0], axis=1).numpy()
+                mu_h1_np = tf.squeeze(y_pred[3], axis=1).numpy()
+                mu_h2_np = tf.squeeze(y_pred[6], axis=1).numpy()
+                pit_ks_h0 = tf.constant(pit_uniformity(y_true_h0_np, mu_h0_np, sigma_h0_np), dtype=tf.float32)
+                pit_ks_h1 = tf.constant(pit_uniformity(y_true_h1_np, mu_h1_np, sigma_h1_np), dtype=tf.float32)
+                pit_ks_h2 = tf.constant(pit_uniformity(y_true_h2_np, mu_h2_np, sigma_h2_np), dtype=tf.float32)
+            except Exception:
+                pass
 
         return {
             "loss": total_loss_val,
@@ -2244,6 +2062,17 @@ class CustomTrainModel(models.Model):
             "nll_h0": nll_h0,
             "nll_h1": nll_h1,
             "nll_h2": nll_h2,
+            "crps_loss": crps_total,
+            "crps_h0": crps_h0,
+            "crps_h1": crps_h1,
+            "crps_h2": crps_h2,
+            "soft_ece_loss": soft_ece_total,
+            "soft_ece_h0": soft_ece_h0,
+            "soft_ece_h1": soft_ece_h1,
+            "soft_ece_h2": soft_ece_h2,
+            "pit_ks_h0": pit_ks_h0,
+            "pit_ks_h1": pit_ks_h1,
+            "pit_ks_h2": pit_ks_h2,
             "reg_loss": reg_val,
             "inter_reg": inter_reg,
             "vol_loss": vol_loss,
@@ -2370,7 +2199,7 @@ class CustomTrainModel(models.Model):
         y_pred = self(x_window, training=False)
         loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
 
-        # Unpack 22-component tuple
+        # Unpack 28-component tuple
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -2378,7 +2207,9 @@ class CustomTrainModel(models.Model):
          local_h2, global_h2, extended_h2,
          dir_h0, dir_h1, dir_h2,
          nll_h0, nll_h1, nll_h2,
-         reg_val, inter_reg, vol_loss) = loss_components
+         reg_val, inter_reg, vol_loss,
+         crps_h0, crps_h1, crps_h2,
+         soft_ece_h0, soft_ece_h1, soft_ece_h2) = loss_components
 
         # Compute direction labels with the same trade-aware deadband used in training loss.
         y_true = tf.cast(y_true, tf.float32)
@@ -2456,6 +2287,8 @@ class CustomTrainModel(models.Model):
         trend_loss_total = trend_loss_h0 + trend_loss_h1 + trend_loss_h2
         dir_loss_total = dir_h0 + dir_h1 + dir_h2
         nll_total = nll_h0 + nll_h1 + nll_h2
+        crps_total = crps_h0 + crps_h1 + crps_h2
+        soft_ece_total = soft_ece_h0 + soft_ece_h1 + soft_ece_h2
 
         return {
             "loss": total_loss_val,
@@ -2484,6 +2317,14 @@ class CustomTrainModel(models.Model):
             "nll_h0": nll_h0,
             "nll_h1": nll_h1,
             "nll_h2": nll_h2,
+            "crps_loss": crps_total,
+            "crps_h0": crps_h0,
+            "crps_h1": crps_h1,
+            "crps_h2": crps_h2,
+            "soft_ece_loss": soft_ece_total,
+            "soft_ece_h0": soft_ece_h0,
+            "soft_ece_h1": soft_ece_h1,
+            "soft_ece_h2": soft_ece_h2,
             "reg_loss": reg_val,
             "inter_reg": inter_reg,
             "vol_loss": vol_loss,
