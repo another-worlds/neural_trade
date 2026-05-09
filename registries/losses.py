@@ -435,14 +435,14 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
 
     total = (
         point_loss_val +
-        0.5 * trend_loss_val +      # Trend baseline consistency (auxiliary)
-        0.5 * total_dir_loss +      # Direction classification (INCREASED from 0.2)
-        0.5 * dir_align_loss +     # Distribution alignment (increased for better calibration)
-        reg_loss +
+        model.lambda_trend_outer * trend_loss_val +
+        model.lambda_dir_outer * total_dir_loss +
+        model.lambda_dir_align_outer * dir_align_loss +
+        0  * reg_loss +
         0.1 * inter_reg +           # Indicator correlation (weak regularization)
         0.1 * vol_loss +           # Volatility penalty (very weak)
-        1 * coherence_penalty +   # STRENGTHENED: Cross-horizon coherence (0.01 → 0.1)
-        1.0 * total_nll             # Variance NLL (INCREASED from 0.5 for better calibration)
+        model.lambda_coherence_outer * coherence_penalty +
+        model.lambda_nll_outer * total_nll
     )
 
     return (

@@ -44,33 +44,34 @@ class Config:
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 1439#0 / 10
+    BATCH_SIZE = 144#0 / 10
     EPOCHS = 2 * 10
-    LR = 1e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
-    PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 1440 * 90# / 10  # Limit most recent sequences to bound training size
+    LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    PATIENCE = EPOCHS //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
+    EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
+    MAX_SEQUENCE_COUNT = 144 * 8 #(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
     
 
     
 
     # Use integer periods to avoid float indexing issues
     # Extended trend features are computed as percent-change over these lags (in minutes)
-    EXTENDED_TREND_PERIODS = [1, 15, 30]  # 1m, 5m, 15m
+    EXTENDED_TREND_PERIODS = [5, 15, 30]  # 1m, 5m, 15m
 
     # Supervision horizons (in minutes ahead from last_close). These define the 3 output towers.
     # h0=1m, h1=5m, h2=15m.
-    HORIZON_STEPS = [1, 15, 30]
+    HORIZON_STEPS = [5, 15, 20]
 
 
 #1 - 15
 # Loss Function Weights
     DAMPING = 0.5
     LAMBDA_LOCAL_TREND  = 1.0
-    LAMBDA_GLOBAL_TREND =  0.1
-    LAMBDA_EXTENDED_TREND = 0.5
+    LAMBDA_GLOBAL_TREND =  1.0
+    LAMBDA_EXTENDED_TREND = 1.0
     LAMBDA_QUANTILE = 1.0
-    REG_MOMENTUM_L2 = 1e-30
-    INDICATOR_L2 = 5e-3     # Dedicated L2 for indicator logit vars (separate from NN Dense weights)
+    REG_MOMENTUM_L2 = 0
+    INDICATOR_L2 = 0     # Dedicated L2 for indicator logit vars (separate from NN Dense weights)
     INDICATOR_LR_MULT = 10.0  # Indicator optimizer LR = LR * INDICATOR_LR_MULT
     MOMENTUM_CLIP_MIN = 1.0
     MOMENTUM_CLIP_MAX = LOOKBACK
@@ -82,19 +83,28 @@ class Config:
     # - h0 (1-min): Short-term noise, harder to predict, may need lower weight to avoid overfitting noise
     # - h1 (5-min): Primary horizon, balanced signal/noise, standard weight
     # - h2 (15-min): Long-term trend, more stable, higher weight to enforce consistency
-    LAMBDA_SHORT = 0.8   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
+    LAMBDA_SHORT = 1.0  # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
     LAMBDA_POINT = 1.0   # h1 (5-min):  Primary horizon baseline
-    LAMBDA_LONG = 0.8   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
+    LAMBDA_LONG = 1.0   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
     
     # Auxiliary loss weights
-    LAMBDA_DIR = 0.3  # Direction classification (focal loss)
-    LAMBDA_INTER = 0.05  # Interconnection regularization between horizons
+    LAMBDA_DIR = 1.0  # Direction classification (focal loss)
+    LAMBDA_INTER =1.0  # Interconnection regularization between horizons
     LAMBDA_VOL = 1.0  # Volatility penalty (weak constraint)
     LAMBDA_VAR = 1.0  # Variance NLL (confidence estimation)
 
+    # Outer multipliers for combined loss terms in total= expression.
+    # These are separate from the per-component lambda weights above (which scale inside custom_loss),
+    # and allow calibration or manual tuning of each grouped term independently.
+    LAMBDA_TREND_OUTER = 1.0      # Weight for trend_loss_val in total
+    LAMBDA_DIR_OUTER = 1.0        # Weight for total_dir_loss in total
+    LAMBDA_DIR_ALIGN_OUTER = 1.0  # Weight for dir_align_loss in total
+    LAMBDA_COHERENCE = 1.0        # Weight for coherence_penalty in total
+    LAMBDA_NLL_OUTER = 1.0        # Weight for total_nll in total
+
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
-    VAR_CAP = 1e4   # Maximum variance = 10000 (allows high uncertainty)
+    VAR_CAP = 1e3   # Maximum variance = 10000 (allows high uncertainty)
 
 # paths
     # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
@@ -115,7 +125,7 @@ class Config:
       {'fast': 8, 'slow': 17, 'signal': 9}
     ]
     RSI_PERIODS = [9, 14, 21]
-    BB_PERIODS = [10, 20, 50]
+    BB_PERIODS = [10, 20, 25]
 
 # Activation function settings
     TANH_SCALE = 1.0
@@ -143,7 +153,7 @@ class Config:
     # Stabilize NLL and prevent variance head from dominating early.
     # Variance is in SCALED units^2.
     VAR_FLOOR = 1e-4
-    VAR_CAP = 1e4
+    VAR_CAP = 1e3
 
     # Align direction head with distribution-implied P(up) from (mu, var).
     # Setting this > 0 helps avoid degenerate constant direction probabilities.
@@ -1038,29 +1048,31 @@ def train_and_evaluate(
     if calibrate is True:
         try:
             orig_lambda_point = custom_model.lambda_point
-            orig_lambda_local = custom_model.lambda_local_trend
-            orig_lambda_global = custom_model.lambda_global_trend
+            orig_lambda_short = custom_model.lambda_short
+            orig_lambda_long = custom_model.lambda_long
             orig_lambda_ext = custom_model.lambda_extended_trend
             orig_lambda_dir = custom_model.lambda_dir
             orig_lambda_var = custom_model.lambda_var
+            orig_lambda_vol = custom_model.lambda_vol
 
             custom_model.lambda_point = 1.0
-            custom_model.lambda_local_trend = 1.0
-            custom_model.lambda_global_trend = 1.0
+            custom_model.lambda_short = 1.0
+            custom_model.lambda_long = 1.0
             custom_model.lambda_extended_trend = 1.0
             custom_model.lambda_dir = 1.0
             custom_model.lambda_var = 1.0
+            custom_model.lambda_vol = 1.0
 
-            n_calib_batches = Config.BATCH_SIZE
+            n_calib_batches = 20
             print("Warming up BatchNorm statistics for accurate calibration...")
             for batch in train_ds.take(n_calib_batches):
                 x_batch, _, _, _ = batch
                 _ = custom_model(x_batch, training=True)
 
-            point_losses, local_losses, global_losses, ext_losses, dir_losses, var_losses = [], [], [], [], [], []
+            short_losses, point_losses, long_losses, ext_losses, dir_losses, var_losses, vol_losses = [], [], [], [], [], [], []
             for batch in train_ds.take(n_calib_batches):
                 x_batch, y_batch, last_batch, ext_batch = batch
-                y_pred_batch = custom_model(x_batch, training=False)
+                y_pred_batch = custom_model(x_batch, training=True)
                 (total,
                  point_h0, point_h1, point_h2,
                  local_h0, global_h0, ext_h0,
@@ -1068,51 +1080,56 @@ def train_and_evaluate(
                  local_h2, global_h2, ext_h2,
                  dir_h0, dir_h1, dir_h2,
                  nll_h0, nll_h1, nll_h2,
-                 reg_val, inter_reg, vol_loss) = custom_model.custom_loss(
+                 reg_val, inter_reg, vol_loss_val) = custom_model.custom_loss(
                     x_batch, y_batch, y_pred_batch, last_batch, ext_batch
                 )
 
-                point_losses.append(float((point_h0 + point_h1 + point_h2) / 3.0))
-                local_losses.append(float((local_h0 + local_h1 + local_h2) / 3.0))
-                global_losses.append(float((global_h0 + global_h1 + global_h2) / 3.0))
+                short_losses.append(float(point_h0))
+                point_losses.append(float(point_h1))
+                long_losses.append(float(point_h2))
                 ext_losses.append(float((ext_h0 + ext_h1 + ext_h2) / 3.0))
                 dir_losses.append(float((dir_h0 + dir_h1 + dir_h2) / 3.0))
                 var_losses.append(float((nll_h0 + nll_h1 + nll_h2) / 3.0))
+                vol_losses.append(float(vol_loss_val))
 
+            med_short = float(np.median(np.array(short_losses))) if short_losses else 0.0
             med_point = float(np.median(np.array(point_losses))) if point_losses else 0.0
-            med_local = float(np.median(np.array(local_losses))) if local_losses else 0.0
-            med_global = float(np.median(np.array(global_losses))) if global_losses else 0.0
+            med_long = float(np.median(np.array(long_losses))) if long_losses else 0.0
             med_ext = float(np.median(np.array(ext_losses))) if ext_losses else 0.0
             med_dir = float(np.median(np.array(dir_losses))) if dir_losses else 0.0
             med_var = float(np.median(np.array(var_losses))) if var_losses else 0.0
+            med_vol = float(np.median(np.array(vol_losses))) if vol_losses else 0.0
 
-            non_zero_medians = [m for m in [med_point, med_local, med_global, med_ext, med_dir, med_var] if m > 1e-8]
+            non_zero_medians = [m for m in [med_short, med_point, med_long, med_ext, med_dir, med_var, med_vol] if m > 1e-8]
             ref_loss = float(np.mean(non_zero_medians)) if non_zero_medians else 1.0
 
             eps = 1e-8
             damping = Config.DAMPING
+            new_short = orig_lambda_short * (ref_loss / (med_short + eps)) ** damping if med_short > eps else orig_lambda_short
             new_point = orig_lambda_point * (ref_loss / (med_point + eps)) ** damping if med_point > eps else orig_lambda_point
-            new_local = orig_lambda_local * (ref_loss / (med_local + eps)) ** damping if med_local > eps else orig_lambda_local
-            new_global = orig_lambda_global * (ref_loss / (med_global + eps)) ** damping if med_global > eps else orig_lambda_global
+            new_long = orig_lambda_long * (ref_loss / (med_long + eps)) ** damping if med_long > eps else orig_lambda_long
             new_ext = orig_lambda_ext * (ref_loss / (med_ext + eps)) ** damping if med_ext > eps else orig_lambda_ext
             new_dir = orig_lambda_dir * (ref_loss / (med_dir + eps)) ** damping if med_dir > eps else orig_lambda_dir
             new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
+            new_vol = orig_lambda_vol * (ref_loss / (med_vol + eps)) ** damping if med_vol > eps else orig_lambda_vol
 
             min_lambda = 0.1
             max_lambda = 20
+            custom_model.lambda_short = float(np.clip(new_short, min_lambda, max_lambda))
             custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
-            custom_model.lambda_local_trend = float(np.clip(new_local, min_lambda, max_lambda))
-            custom_model.lambda_global_trend = float(np.clip(new_global, min_lambda, max_lambda))
+            custom_model.lambda_long = float(np.clip(new_long, min_lambda, max_lambda))
             custom_model.lambda_extended_trend = float(np.clip(new_ext, min_lambda, max_lambda))
             custom_model.lambda_dir = float(np.clip(new_dir, min_lambda, max_lambda))
             custom_model.lambda_var = float(np.clip(new_var, min_lambda, max_lambda))
+            custom_model.lambda_vol = float(np.clip(new_vol, min_lambda, max_lambda))
 
-            print(f"Calibration (multi-batch median with actual losses): "
-                  f"med_point={med_point:.6f}, med_local={med_local:.6f}, "
-                  f"med_global={med_global:.6f}, med_ext={med_ext:.6f}, med_dir={med_dir:.6f}, med_var={med_var:.6f}, ref_loss={ref_loss:.6f}")
+            print(f"Calibration medians: "
+                  f"short={med_short:.6f}, point={med_point:.6f}, long={med_long:.6f}, "
+                  f"ext={med_ext:.6f}, dir={med_dir:.6f}, var={med_var:.6f}, vol={med_vol:.6f}, ref={ref_loss:.6f}")
             print(f"New lambdas (damped+clamped): "
-                  f"point={custom_model.lambda_point:.6f}, local={custom_model.lambda_local_trend:.6f}, "
-                  f"global={custom_model.lambda_global_trend:.6f}, ext={custom_model.lambda_extended_trend:.6f}, dir={custom_model.lambda_dir:.6f}, var={custom_model.lambda_var:.6f}")
+                  f"short={custom_model.lambda_short:.6f}, point={custom_model.lambda_point:.6f}, "
+                  f"long={custom_model.lambda_long:.6f}, ext={custom_model.lambda_extended_trend:.6f}, "
+                  f"dir={custom_model.lambda_dir:.6f}, var={custom_model.lambda_var:.6f}, vol={custom_model.lambda_vol:.6f}")
         except Exception as e:
             print("Calibration pass failed, proceeding with default lambdas:", e)
 
@@ -1120,7 +1137,7 @@ def train_and_evaluate(
     custom_model.compile(optimizer=opt)
 
     csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
-    es = callbacks.EarlyStopping(monitor='val_loss', patience=Config.PATIENCE, restore_best_weights=True)
+    es = callbacks.EarlyStopping(monitor='val_loss', patience=Config.EARLY, restore_best_weights=True)
     ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
     # MCC-based early stopping for direction head (class-imbalance robust)
     # MCC = (TP×TN - FP×FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
@@ -1657,6 +1674,11 @@ class CustomTrainModel(models.Model):
         self.lambda_short = config.LAMBDA_SHORT
         self.lambda_long = config.LAMBDA_LONG
         self.lambda_var = config.LAMBDA_VAR
+        self.lambda_trend_outer = float(getattr(config, 'LAMBDA_TREND_OUTER', 0.5))
+        self.lambda_dir_outer = float(getattr(config, 'LAMBDA_DIR_OUTER', 0.5))
+        self.lambda_dir_align_outer = float(getattr(config, 'LAMBDA_DIR_ALIGN_OUTER', 0.5))
+        self.lambda_coherence_outer = float(getattr(config, 'LAMBDA_COHERENCE', 1.0))
+        self.lambda_nll_outer = float(getattr(config, 'LAMBDA_NLL_OUTER', 1.0))
         self.config = config or Config()
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
@@ -2034,14 +2056,14 @@ class CustomTrainModel(models.Model):
 
         total = (
             point_loss_val +
-            0.5 * trend_loss_val +      # Trend baseline consistency (auxiliary)
-            0.5 * total_dir_loss +      # Direction classification (INCREASED from 0.2)
-            0.5 * dir_align_loss +     # Distribution alignment (increased for better calibration)
-            reg_loss +
+            self.lambda_trend_outer * trend_loss_val +
+            self.lambda_dir_outer * total_dir_loss +
+            self.lambda_dir_align_outer * dir_align_loss +
+            #reg_loss +
             0.1 * inter_reg +           # Indicator correlation (weak regularization)
             0.1 * vol_loss +           # Volatility penalty (very weak)
-            1 * coherence_penalty +   # STRENGTHENED: Cross-horizon coherence (0.01 → 0.1)
-            1.0 * total_nll             # Variance NLL (INCREASED from 0.5 for better calibration)
+            self.lambda_coherence_outer * coherence_penalty +
+            self.lambda_nll_outer * total_nll
         )
 
         # Format breakdown (22 components total):
