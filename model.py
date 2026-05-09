@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator, FuncFormatter
 import time
 from tqdm import tqdm
+import plotly.io as pio
+pio.renderers.default = 'colab'
 
 try:
     # Optional local utilities (kept lightweight). If missing, fall back to sklearn MAPE only.
@@ -42,29 +44,34 @@ class Config:
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 1440
-    EPOCHS = 20
-    LR = 1e-2  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    BATCH_SIZE = 1439#0 / 10
+    EPOCHS = 2 * 10
+    LR = 1e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 1440 * 720  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 90# / 10  # Limit most recent sequences to bound training size
+    
 
-
+    
 
     # Use integer periods to avoid float indexing issues
     # Extended trend features are computed as percent-change over these lags (in minutes)
-    EXTENDED_TREND_PERIODS = [1, 5, 15]  # 1m, 5m, 15m
+    EXTENDED_TREND_PERIODS = [1, 15, 30]  # 1m, 5m, 15m
 
     # Supervision horizons (in minutes ahead from last_close). These define the 3 output towers.
     # h0=1m, h1=5m, h2=15m.
-    HORIZON_STEPS = [1, 5, 15]
+    HORIZON_STEPS = [1, 15, 30]
 
+
+#1 - 15
 # Loss Function Weights
     DAMPING = 0.5
     LAMBDA_LOCAL_TREND  = 1.0
     LAMBDA_GLOBAL_TREND =  0.1
     LAMBDA_EXTENDED_TREND = 0.5
     LAMBDA_QUANTILE = 1.0
-    REG_MOMENTUM_L2 = 1e-4
+    REG_MOMENTUM_L2 = 1e-30
+    INDICATOR_L2 = 5e-3     # Dedicated L2 for indicator logit vars (separate from NN Dense weights)
+    INDICATOR_LR_MULT = 10.0  # Indicator optimizer LR = LR * INDICATOR_LR_MULT
     MOMENTUM_CLIP_MIN = 1.0
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True
@@ -77,7 +84,7 @@ class Config:
     # - h2 (15-min): Long-term trend, more stable, higher weight to enforce consistency
     LAMBDA_SHORT = 0.8   # h0 (1-min):  Reduced from 1.0 to avoid noise overfitting
     LAMBDA_POINT = 1.0   # h1 (5-min):  Primary horizon baseline
-    LAMBDA_LONG = 0.8    # h2 (15-min): Increased from 1.0 to enforce long-term consistency
+    LAMBDA_LONG = 0.8   # h2 (15-min): Increased from 1.0 to enforce long-term consistency
     
     # Auxiliary loss weights
     LAMBDA_DIR = 0.3  # Direction classification (focal loss)
@@ -100,15 +107,15 @@ class Config:
     MODEL_PATH = "nn_learnable_indicators_v3.weights.h5"
     SCALER_PATH = "scaler_v3.joblib"
 
-# TA initial params
-    MA_SPANS = [5, 15, 30] 
+    # TA initial params
+    MA_SPANS = [5, 10, 30]
     MACD_SETTINGS = [
-        {'fast': 15, 'slow': 30, 'signal': 5},
-        {'fast': 45, 'slow': 60, 'signal': 30},
-        {'fast': 30, 'slow': 45, 'signal': 15}
+      {'fast': 12, 'slow': 26, 'signal': 9},
+      {'fast': 5, 'slow': 35, 'signal': 5},
+      {'fast': 8, 'slow': 17, 'signal': 9}
     ]
-    RSI_PERIODS = [9, 21, 30]  
-    BB_PERIODS = [10, 20, 50]  
+    RSI_PERIODS = [9, 14, 21]
+    BB_PERIODS = [10, 20, 50]
 
 # Activation function settings
     TANH_SCALE = 1.0
@@ -116,8 +123,8 @@ class Config:
     SIGMOID_SCALE = 1.0
 
 # Training stability controls
-    INDICATOR_GRAD_MULT = 20.0
-    GRAD_CLIP_NORM = 10.0
+    INDICATOR_GRAD_MULT = 5.0    # STE gradient scale in call(); 500 was compensating the broken STE idiom
+    GRAD_CLIP_NORM = 20.0        # Applied to NN weights only; indicator grads use dedicated optimizer
 
 # Focal loss hyperparameters for direction classification
     # NOTE: alpha weights DOWN class (label=0), (1-alpha) weights UP (label=1)
@@ -141,7 +148,8 @@ class Config:
     # Align direction head with distribution-implied P(up) from (mu, var).
     # Setting this > 0 helps avoid degenerate constant direction probabilities.
     LAMBDA_DIR_ALIGN = 0.7
-# -----------------------------
+
+
 class DataProcessor:
     def __init__(self, config):
         self.config = config
@@ -1296,7 +1304,7 @@ class LearnableIndicators(layers.Layer):
                                 initializer=initializers.Constant(init_logit),
                                 trainable=True,
                                 name=f'alpha_ma_{i}',
-                                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
+                                regularizer=regularizers.L2(self.config.INDICATOR_L2))
             self.alpha_vars_ma.append(v)
             self.all_logit_vars.append(v)
 
@@ -1306,19 +1314,19 @@ class LearnableIndicators(layers.Layer):
                 initializer=initializers.Constant(self._logit_from_period(settings['fast'])),
                 trainable=True,
                 name=f'macd_{i}_fast',
-                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
+                regularizer=regularizers.L2(self.config.INDICATOR_L2))
             v_slow = self.add_weight(
                 shape=(),
                 initializer=initializers.Constant(self._logit_from_period(settings['slow'])),
                 trainable=True,
                 name=f'macd_{i}_slow',
-                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
+                regularizer=regularizers.L2(self.config.INDICATOR_L2))
             v_signal = self.add_weight(
                 shape=(),
                 initializer=initializers.Constant(self._logit_from_period(settings['signal'])),
                 trainable=True,
                 name=f'macd_{i}_signal',
-                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
+                regularizer=regularizers.L2(self.config.INDICATOR_L2))
             self.macd_alpha_vars[f'macd_{i}_fast'] = v_fast
             self.macd_alpha_vars[f'macd_{i}_slow'] = v_slow
             self.macd_alpha_vars[f'macd_{i}_signal'] = v_signal
@@ -1329,7 +1337,7 @@ class LearnableIndicators(layers.Layer):
                                 initializer=initializers.Constant(self._logit_from_period(p)),
                                 trainable=True,
                                 name=f'rsi_alpha_{i}',
-                                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
+                                regularizer=regularizers.L2(self.config.INDICATOR_L2))
             self.rsi_alpha_vars.append(v)
             self.all_logit_vars.append(v)
 
@@ -1338,7 +1346,7 @@ class LearnableIndicators(layers.Layer):
                                 initializer=initializers.Constant(self._logit_from_period(p)),
                                 trainable=True,
                                 name=f'bb_alpha_{i}',
-                                regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))
+                                regularizer=regularizers.L2(self.config.INDICATOR_L2))
             self.bb_alpha_vars.append(v)
             self.all_logit_vars.append(v)
 
@@ -1354,7 +1362,7 @@ class LearnableIndicators(layers.Layer):
             fn=lambda prev, cur: step(prev, cur),
             elems=tf.transpose(rest, perm=[1, 0]),
             initializer=first,
-            parallel_iterations=1
+            parallel_iterations=10
         )
         ema_rest = tf.transpose(ema_rest, perm=[1, 0])
         ema_full = tf.concat([tf.expand_dims(first, axis=1), ema_rest], axis=1)
@@ -1367,9 +1375,12 @@ class LearnableIndicators(layers.Layer):
         idx = 0  # Index for slicing meta_adjust
 
         for logit in self.alpha_vars_ma:
-            # Apply gradient multiplier for better learning
-            logit_boosted = logit + tf.stop_gradient(logit) * (self.grad_multiplier - 1.0)
-            adjusted_logit = logit_boosted + meta_adjust[:, idx] * self.meta_scale
+            # Correct STE gradient trick: forward=logit (unchanged), backward=logit * grad_multiplier
+            # Old (broken): logit + stop_grad(logit)*(k-1) => forward=logit*k (saturates sigmoid!)
+            # New (correct): k*logit - stop_grad((k-1)*logit) => forward=logit, backward=k
+            logit_for_alpha = (self.grad_multiplier * logit
+                               - tf.stop_gradient((self.grad_multiplier - 1.0) * logit))
+            adjusted_logit = logit_for_alpha + meta_adjust[:, idx] * self.meta_scale
             alpha = self._alpha_from_logit(adjusted_logit)
             ema_seq = self.ewma_seq(x, alpha)
             features.append(ema_seq)
@@ -1379,13 +1390,16 @@ class LearnableIndicators(layers.Layer):
             fast_var = self.macd_alpha_vars[f'macd_{i}_fast']
             slow_var = self.macd_alpha_vars[f'macd_{i}_slow']
             sig_var = self.macd_alpha_vars[f'macd_{i}_signal']
-            # Boost gradients
-            fast_boosted = fast_var + tf.stop_gradient(fast_var) * (self.grad_multiplier - 1.0)
-            slow_boosted = slow_var + tf.stop_gradient(slow_var) * (self.grad_multiplier - 1.0)
-            sig_boosted = sig_var + tf.stop_gradient(sig_var) * (self.grad_multiplier - 1.0)
-            fast_logit = fast_boosted + meta_adjust[:, idx] * self.meta_scale
-            slow_logit = slow_boosted + meta_adjust[:, idx+1] * self.meta_scale
-            sig_logit = sig_boosted + meta_adjust[:, idx+2] * self.meta_scale
+            # Correct STE gradient trick (see MA block above for explanation)
+            fast_for_alpha = (self.grad_multiplier * fast_var
+                              - tf.stop_gradient((self.grad_multiplier - 1.0) * fast_var))
+            slow_for_alpha = (self.grad_multiplier * slow_var
+                              - tf.stop_gradient((self.grad_multiplier - 1.0) * slow_var))
+            sig_for_alpha  = (self.grad_multiplier * sig_var
+                              - tf.stop_gradient((self.grad_multiplier - 1.0) * sig_var))
+            fast_logit = fast_for_alpha + meta_adjust[:, idx] * self.meta_scale
+            slow_logit = slow_for_alpha + meta_adjust[:, idx+1] * self.meta_scale
+            sig_logit  = sig_for_alpha  + meta_adjust[:, idx+2] * self.meta_scale
             fast = self._alpha_from_logit(fast_logit)
             slow = self._alpha_from_logit(slow_logit)
             sig = self._alpha_from_logit(sig_logit)
@@ -1395,8 +1409,8 @@ class LearnableIndicators(layers.Layer):
             macd_sig = self.ewma_seq(macd_line, sig)
             macd_hist = macd_line - macd_sig
             features.extend([macd_line, macd_sig, macd_hist])
-            # Add binary cross for signals
-            macd_cross = tf.sign(macd_hist)
+            # Soft sign: tf.sign has zero gradient; tanh*10 is a differentiable approximation
+            macd_cross = tf.tanh(macd_hist * 10.0)
             features.append(macd_cross)
             idx += 3
 
@@ -1407,9 +1421,10 @@ class LearnableIndicators(layers.Layer):
         losses_padded = tf.concat([tf.zeros((tf.shape(losses)[0], 1), dtype=losses.dtype), losses], axis=1)
 
         for logit in self.rsi_alpha_vars:
-            # Boost gradients
-            logit_boosted = logit + tf.stop_gradient(logit) * (self.grad_multiplier - 1.0)
-            adjusted_logit = logit_boosted + meta_adjust[:, idx] * self.meta_scale
+            # Correct STE gradient trick (see MA block above for explanation)
+            logit_for_alpha = (self.grad_multiplier * logit
+                               - tf.stop_gradient((self.grad_multiplier - 1.0) * logit))
+            adjusted_logit = logit_for_alpha + meta_adjust[:, idx] * self.meta_scale
             rsi_alpha = self._alpha_from_logit(adjusted_logit)
             gains_ema = self.ewma_seq(gains_padded, rsi_alpha)
             losses_ema = self.ewma_seq(losses_padded, rsi_alpha)
@@ -1419,9 +1434,10 @@ class LearnableIndicators(layers.Layer):
             idx += 1
 
         for logit in self.bb_alpha_vars:
-            # Boost gradients
-            logit_boosted = logit + tf.stop_gradient(logit) * (self.grad_multiplier - 1.0)
-            adjusted_logit = logit_boosted + meta_adjust[:, idx] * self.meta_scale
+            # Correct STE gradient trick (see MA block above for explanation)
+            logit_for_alpha = (self.grad_multiplier * logit
+                               - tf.stop_gradient((self.grad_multiplier - 1.0) * logit))
+            adjusted_logit = logit_for_alpha + meta_adjust[:, idx] * self.meta_scale
             bb_alpha = self._alpha_from_logit(adjusted_logit)
             ema_mean = self.ewma_seq(x, bb_alpha)
             sq_dev = tf.square(x - ema_mean)
@@ -1642,6 +1658,12 @@ class CustomTrainModel(models.Model):
         self.lambda_long = config.LAMBDA_LONG
         self.lambda_var = config.LAMBDA_VAR
         self.config = config or Config()
+
+        # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
+        # Adam normalizes gradient magnitudes, so scaling grads is insufficient — a higher LR
+        # is the only way to give indicator params a genuinely larger step size.
+        ind_lr = float(self.config.LR) * float(getattr(self.config, 'INDICATOR_LR_MULT', 10.0))
+        self.indicator_optimizer = optimizers.Adam(learning_rate=ind_lr)
 
         # Single source-of-truth for Huber delta (in *scaled* units)
         self.huber_delta = float(self.config.HUBER_DELTA)
@@ -2059,26 +2081,28 @@ class CustomTrainModel(models.Model):
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
-        # Build list of (grad, var) excluding None grads
-        grads_and_vars = []
+        # Split gradients into NN weights vs. indicator logit vars.
+        # They use separate Adam optimizers because Adam normalizes gradient magnitude —
+        # scaling grads before apply cancels out. Higher LR on indicator optimizer is the
+        # correct way to give indicator params a larger effective step size.
+        _is_ind = lambda name: any(k in name for k in
+            ('alpha_ma', 'macd_', 'rsi_alpha', 'bb_alpha', 'pair_', 'momentum_raw'))
+
+        nn_gvs, ind_gvs = [], []
         for g, v in zip(grads, self.trainable_variables):
             if g is None:
                 continue
-            name = v.name.lower()
-            # Scale indicator-related variable grads
-            if ('alpha_ma' in name or 'macd_' in name or 'pair_' in name or
-                'rsi_alpha' in name or 'bb_alpha' in name or 'momentum_raw' in name):
-                g = g * self.config.INDICATOR_GRAD_MULT
-            grads_and_vars.append((g, v))
+            (ind_gvs if _is_ind(v.name.lower()) else nn_gvs).append((g, v))
 
-        # Optional global-norm clipping
+        # Clip NN grads by global norm only (indicator grads are small scalars; Adam handles scale)
         if getattr(self.config, 'GRAD_CLIP_NORM', 0.0) and self.config.GRAD_CLIP_NORM > 0.0:
-            grads_only = [gv[0] for gv in grads_and_vars]
-            clipped_grads, _ = tf.clip_by_global_norm(grads_only, self.config.GRAD_CLIP_NORM)
-            grads_and_vars = list(zip(clipped_grads, [gv[1] for gv in grads_and_vars]))
+            nn_gs_clipped, _ = tf.clip_by_global_norm(
+                [g for g, v in nn_gvs], self.config.GRAD_CLIP_NORM)
+            nn_gvs = list(zip(nn_gs_clipped, [v for g, v in nn_gvs]))
 
-        # Apply gradients
-        self.optimizer.apply_gradients(grads_and_vars)
+        # Apply gradients with separate optimizers
+        self.optimizer.apply_gradients(nn_gvs)
+        self.indicator_optimizer.apply_gradients(ind_gvs)
 
         # Keep indicator periods within sensible bounds
         min_p = self.config.MOMENTUM_CLIP_MIN
