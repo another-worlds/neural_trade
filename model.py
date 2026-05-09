@@ -54,30 +54,55 @@ class Config:
     LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
     EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
-    MAX_SEQUENCE_COUNT = 1440 * 150 * 4#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 * 8#31 +6#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
     
 
     
 
     # Use integer periods to avoid float indexing issues
     # Extended trend features are computed as percent-change over these lags (in minutes)
-    EXTENDED_TREND_PERIODS = [5, 15, 30]  # 1m, 5m, 15m
+    EXTENDED_TREND_PERIODS = [5, 10, 15]  # 1m, 5m, 15m
 
     # Supervision horizons (in minutes ahead from last_close). These define the 3 output towers.
     # h0=1m, h1=5m, h2=15m.
-    HORIZON_STEPS = [5, 15, 20]
+    HORIZON_STEPS = [5, 10, 15]
 
 
 #1 - 15
 # Loss Function Weights
-    DAMPING = 0.5
+    DAMPING = 0.5  # Legacy alias — use CALIB_DAMPING for new code
+
+    # === LAMBDA CALIBRATION CONTROLS ===
+    # Pre-training pass that measures natural loss magnitudes and rescales lambdas so all
+    # components start at the same scale, preventing any one term from dominating by virtue
+    # of units alone. Formula: new_λ = clip(orig_λ × (ref/med)^d, λ_min, λ_max)
+    # where ref = mean of non-zero medians, med = per-component median, d = damping.
+    CALIB_WARMUP_FRACTION = 0.05  # BN warmup: fraction of training batches (e.g. 0.15 × 25 ≈ 4 batches)
+    CALIB_SAMPLE_FRACTION = 0.1  # Loss sampling: fraction of training batches (e.g. 0.35 × 25 ≈ 9 batches)
+    CALIB_LAMBDA_MIN = 0.1       # Lower clamp bound on all calibrated lambdas
+    CALIB_LAMBDA_MAX = 20.0      # Upper clamp bound on all calibrated lambdas
+    CALIB_DAMPING = 1          # Global damping d ∈ [0, 1]. 0=no change, 1=full equalization
+    # Per-component damping overrides (None → fall back to CALIB_DAMPING).
+    # Set lower values (e.g. 0.2) for noisy components where you want gentler adjustment.
+    CALIB_DAMPING_POINT = None   # Applies to lambda_short, lambda_point, lambda_long
+    CALIB_DAMPING_TREND = None   # Applies to lambda_extended_trend
+    CALIB_DAMPING_DIR   = None   # Applies to lambda_dir (focal+dice)
+    CALIB_DAMPING_VAR   = None   # Applies to lambda_var (NLL)
+    CALIB_DAMPING_CRPS  = None   # Applies to lambda_crps
+    CALIB_DAMPING_ECE   = None   # Applies to lambda_soft_ece
+    CALIB_DAMPING_VOL   = None   # Applies to lambda_vol
+    # Outer-multiplier calibration (default OFF — preserves existing behavior).
+    # When True, calibrates lambda_trend_outer, lambda_dir_outer, lambda_nll_outer
+    # using the already-calibrated per-component group sums.
+    CALIB_OUTER = False
+
     LAMBDA_LOCAL_TREND  = 1.0
     LAMBDA_GLOBAL_TREND =  1.0
     LAMBDA_EXTENDED_TREND = 1.0
     LAMBDA_QUANTILE = 1.0
     REG_MOMENTUM_L2 = 0
     INDICATOR_L2 = 0     # Dedicated L2 for indicator logit vars (separate from NN Dense weights)
-    INDICATOR_LR_MULT = 10.0  # Indicator optimizer LR = LR * INDICATOR_LR_MULT
+    INDICATOR_LR_MULT = 5.0  # Insdicator optimizer LR = LR * INDICATOR_LR_MULT
     MOMENTUM_CLIP_MIN = 1.0
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True
@@ -106,8 +131,8 @@ class Config:
     LAMBDA_DIR_ALIGN_OUTER = 1.0  # Weight for dir_align_loss in total
     LAMBDA_COHERENCE = 1.0        # Weight for coherence_penalty in total
     LAMBDA_NLL_OUTER = 1.0        # Weight for total_nll in total
-    LAMBDA_CRPS = 0.2             # CRPS calibration loss (0 = off; try 0.1–1.0)
-    LAMBDA_SOFT_ECE = 0.1        # Soft-ECE direction calibration loss (0 = off; try 0.05–0.5)
+    LAMBDA_CRPS = 1.0             # CRPS calibration loss (0 = off; try 0.1–1.0)
+    LAMBDA_SOFT_ECE = 1.0       # Soft-ECE direction calibration loss (0 = off; try 0.05–0.5)
 
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
@@ -423,6 +448,7 @@ class TrainResult:
     predictions: Dict[str, Dict[str, np.ndarray]]
     metrics: Dict[str, Any]
     calibration_pipeline: Optional[Any] = None  # CalibrationPipeline, None if not fitted
+    calibration_lambdas: Optional[Dict[str, float]] = None  # Lambdas after pre-training calibration
 
 
 def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
@@ -1054,32 +1080,78 @@ def train_and_evaluate(
     )
 
     # Optional calibration (kept identical to train_model behavior)
+    _calib_lambdas: Optional[Dict[str, float]] = None  # set below if calibrate=True
     if calibrate is True:
         try:
-            orig_lambda_point = custom_model.lambda_point
-            orig_lambda_short = custom_model.lambda_short
-            orig_lambda_long = custom_model.lambda_long
-            orig_lambda_ext = custom_model.lambda_extended_trend
-            orig_lambda_dir = custom_model.lambda_dir
-            orig_lambda_var = custom_model.lambda_var
-            orig_lambda_vol = custom_model.lambda_vol
+            # ----------------------------------------------------------------
+            # Read calibration knobs from config (with safe fallbacks)
+            # ----------------------------------------------------------------
+            # Derive batch counts from actual training dataset size so the
+            # calibration overhead scales with the training set, not a hardcoded number.
+            train_batches  = math.ceil(X_train_seq.shape[0] / cfg.BATCH_SIZE)
+            warmup_frac    = float(getattr(cfg, 'CALIB_WARMUP_FRACTION', 0.15))
+            sample_frac    = float(getattr(cfg, 'CALIB_SAMPLE_FRACTION', 0.35))
+            n_warmup       = max(1, round(train_batches * warmup_frac))
+            n_sample       = max(1, round(train_batches * sample_frac))
+            lam_min    = float(getattr(cfg, 'CALIB_LAMBDA_MIN', 0.1))
+            lam_max    = float(getattr(cfg, 'CALIB_LAMBDA_MAX', 20.0))
+            d_global   = float(getattr(cfg, 'CALIB_DAMPING', getattr(cfg, 'DAMPING', 0.5)))
+            calib_outer = bool(getattr(cfg, 'CALIB_OUTER', False))
 
-            custom_model.lambda_point = 1.0
-            custom_model.lambda_short = 1.0
-            custom_model.lambda_long = 1.0
-            custom_model.lambda_extended_trend = 1.0
-            custom_model.lambda_dir = 1.0
-            custom_model.lambda_var = 1.0
-            custom_model.lambda_vol = 1.0
+            def _d(attr):
+                """Resolve per-component damping, falling back to global."""
+                v = getattr(cfg, attr, None)
+                return float(v) if v is not None else d_global
 
-            n_calib_batches = 20
-            print("Warming up BatchNorm statistics for accurate calibration...")
-            for batch in train_ds.take(n_calib_batches):
+            d_point = _d('CALIB_DAMPING_POINT')
+            d_trend = _d('CALIB_DAMPING_TREND')
+            d_dir   = _d('CALIB_DAMPING_DIR')
+            d_var   = _d('CALIB_DAMPING_VAR')
+            d_crps  = _d('CALIB_DAMPING_CRPS')
+            d_ece   = _d('CALIB_DAMPING_ECE')
+            d_vol   = _d('CALIB_DAMPING_VOL')
+
+            # ----------------------------------------------------------------
+            # Save originals and reset all per-component lambdas to 1.0
+            # so that natural magnitudes are measured without existing weights.
+            # ----------------------------------------------------------------
+            orig_short = custom_model.lambda_short
+            orig_point = custom_model.lambda_point
+            orig_long  = custom_model.lambda_long
+            orig_ext   = custom_model.lambda_extended_trend
+            orig_dir   = custom_model.lambda_dir
+            orig_var   = custom_model.lambda_var
+            orig_vol   = custom_model.lambda_vol
+            orig_crps  = custom_model.lambda_crps
+            orig_ece   = custom_model.lambda_soft_ece
+
+            custom_model.lambda_short            = 1.0
+            custom_model.lambda_point            = 1.0
+            custom_model.lambda_long             = 1.0
+            custom_model.lambda_extended_trend   = 1.0
+            custom_model.lambda_dir              = 1.0
+            custom_model.lambda_var              = 1.0
+            custom_model.lambda_vol              = 1.0
+            custom_model.lambda_crps             = 1.0
+            custom_model.lambda_soft_ece         = 1.0
+
+            # ----------------------------------------------------------------
+            # Phase 1 — BatchNorm warmup (no sampling, no gradient)
+            # ----------------------------------------------------------------
+            print(f"[calib] Warming up BatchNorm over {n_warmup}/{train_batches} batches ({warmup_frac:.0%} of epoch)...")
+            for batch in train_ds.take(n_warmup):
                 x_batch, _, _, _ = batch
                 _ = custom_model(x_batch, training=True)
 
-            short_losses, point_losses, long_losses, ext_losses, dir_losses, var_losses, vol_losses = [], [], [], [], [], [], []
-            for batch in train_ds.take(n_calib_batches):
+            # ----------------------------------------------------------------
+            # Phase 2 — Sample loss magnitudes
+            # ----------------------------------------------------------------
+            print(f"[calib] Sampling loss magnitudes over {n_sample}/{train_batches} batches ({sample_frac:.0%} of epoch)...")
+            short_buf, point_buf, long_buf = [], [], []
+            ext_buf, dir_buf, var_buf, vol_buf = [], [], [], []
+            crps_buf, ece_buf = [], []
+
+            for batch in train_ds.take(n_sample):
                 x_batch, y_batch, last_batch, ext_batch = batch
                 y_pred_batch = custom_model(x_batch, training=True)
                 (total,
@@ -1095,54 +1167,141 @@ def train_and_evaluate(
                     x_batch, y_batch, y_pred_batch, last_batch, ext_batch
                 )
 
-                short_losses.append(float(point_h0))
-                point_losses.append(float(point_h1))
-                long_losses.append(float(point_h2))
-                ext_losses.append(float((ext_h0 + ext_h1 + ext_h2) / 3.0))
-                dir_losses.append(float((dir_h0 + dir_h1 + dir_h2) / 3.0))
-                var_losses.append(float((nll_h0 + nll_h1 + nll_h2) / 3.0))
-                vol_losses.append(float(vol_loss_val))
+                short_buf.append(float(point_h0))
+                point_buf.append(float(point_h1))
+                long_buf.append(float(point_h2))
+                ext_buf.append(float((ext_h0 + ext_h1 + ext_h2) / 3.0))
+                dir_buf.append(float((dir_h0 + dir_h1 + dir_h2) / 3.0))
+                var_buf.append(float((nll_h0 + nll_h1 + nll_h2) / 3.0))
+                vol_buf.append(float(vol_loss_val))
+                crps_buf.append(float((crps_h0_c + crps_h1_c + crps_h2_c) / 3.0))
+                ece_buf.append(float((soft_ece_h0_c + soft_ece_h1_c + soft_ece_h2_c) / 3.0))
 
-            med_short = float(np.median(np.array(short_losses))) if short_losses else 0.0
-            med_point = float(np.median(np.array(point_losses))) if point_losses else 0.0
-            med_long = float(np.median(np.array(long_losses))) if long_losses else 0.0
-            med_ext = float(np.median(np.array(ext_losses))) if ext_losses else 0.0
-            med_dir = float(np.median(np.array(dir_losses))) if dir_losses else 0.0
-            med_var = float(np.median(np.array(var_losses))) if var_losses else 0.0
-            med_vol = float(np.median(np.array(vol_losses))) if vol_losses else 0.0
+            def _med(buf):
+                return float(np.median(np.array(buf))) if buf else 0.0
 
-            non_zero_medians = [m for m in [med_short, med_point, med_long, med_ext, med_dir, med_var, med_vol] if m > 1e-8]
-            ref_loss = float(np.mean(non_zero_medians)) if non_zero_medians else 1.0
+            med_short = _med(short_buf)
+            med_point = _med(point_buf)
+            med_long  = _med(long_buf)
+            med_ext   = _med(ext_buf)
+            med_dir   = _med(dir_buf)
+            med_var   = _med(var_buf)
+            med_vol   = _med(vol_buf)
+            med_crps  = _med(crps_buf)
+            med_ece   = _med(ece_buf)
 
+            # Reference = mean of all active (non-zero) component medians.
+            # CRPS and ECE are included only when their config lambda is active.
+            crps_active = float(getattr(cfg, 'LAMBDA_CRPS', 0.0)) > 0.0
+            ece_active  = float(getattr(cfg, 'LAMBDA_SOFT_ECE', 0.0)) > 0.0
+            candidate_meds = [med_short, med_point, med_long, med_ext, med_dir, med_var, med_vol]
+            if crps_active:
+                candidate_meds.append(med_crps)
+            if ece_active:
+                candidate_meds.append(med_ece)
+            non_zero = [m for m in candidate_meds if m > 1e-8]
+            ref_loss = float(np.mean(non_zero)) if non_zero else 1.0
+
+            # ----------------------------------------------------------------
+            # Phase 3 — Damped rescaling and clamping
+            # ----------------------------------------------------------------
             eps = 1e-8
-            damping = Config.DAMPING
-            new_short = orig_lambda_short * (ref_loss / (med_short + eps)) ** damping if med_short > eps else orig_lambda_short
-            new_point = orig_lambda_point * (ref_loss / (med_point + eps)) ** damping if med_point > eps else orig_lambda_point
-            new_long = orig_lambda_long * (ref_loss / (med_long + eps)) ** damping if med_long > eps else orig_lambda_long
-            new_ext = orig_lambda_ext * (ref_loss / (med_ext + eps)) ** damping if med_ext > eps else orig_lambda_ext
-            new_dir = orig_lambda_dir * (ref_loss / (med_dir + eps)) ** damping if med_dir > eps else orig_lambda_dir
-            new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
-            new_vol = orig_lambda_vol * (ref_loss / (med_vol + eps)) ** damping if med_vol > eps else orig_lambda_vol
 
-            min_lambda = 0.1
-            max_lambda = 20
-            custom_model.lambda_short = float(np.clip(new_short, min_lambda, max_lambda))
-            custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
-            custom_model.lambda_long = float(np.clip(new_long, min_lambda, max_lambda))
-            custom_model.lambda_extended_trend = float(np.clip(new_ext, min_lambda, max_lambda))
-            custom_model.lambda_dir = float(np.clip(new_dir, min_lambda, max_lambda))
-            custom_model.lambda_var = float(np.clip(new_var, min_lambda, max_lambda))
-            custom_model.lambda_vol = float(np.clip(new_vol, min_lambda, max_lambda))
+            def _rescale(orig, med, damping):
+                if med > eps:
+                    return float(np.clip(orig * (ref_loss / (med + eps)) ** damping, lam_min, lam_max))
+                return orig  # component inactive — keep original
 
-            print(f"Calibration medians: "
-                  f"short={med_short:.6f}, point={med_point:.6f}, long={med_long:.6f}, "
-                  f"ext={med_ext:.6f}, dir={med_dir:.6f}, var={med_var:.6f}, vol={med_vol:.6f}, ref={ref_loss:.6f}")
-            print(f"New lambdas (damped+clamped): "
-                  f"short={custom_model.lambda_short:.6f}, point={custom_model.lambda_point:.6f}, "
-                  f"long={custom_model.lambda_long:.6f}, ext={custom_model.lambda_extended_trend:.6f}, "
-                  f"dir={custom_model.lambda_dir:.6f}, var={custom_model.lambda_var:.6f}, vol={custom_model.lambda_vol:.6f}")
+            new_short = _rescale(orig_short, med_short, d_point)
+            new_point = _rescale(orig_point, med_point, d_point)
+            new_long  = _rescale(orig_long,  med_long,  d_point)
+            new_ext   = _rescale(orig_ext,   med_ext,   d_trend)
+            new_dir   = _rescale(orig_dir,   med_dir,   d_dir)
+            new_var   = _rescale(orig_var,   med_var,   d_var)
+            new_vol   = _rescale(orig_vol,   med_vol,   d_vol)
+            new_crps  = _rescale(orig_crps,  med_crps,  d_crps) if crps_active else orig_crps
+            new_ece   = _rescale(orig_ece,   med_ece,   d_ece)  if ece_active  else orig_ece
+
+            custom_model.lambda_short          = new_short
+            custom_model.lambda_point          = new_point
+            custom_model.lambda_long           = new_long
+            custom_model.lambda_extended_trend = new_ext
+            custom_model.lambda_dir            = new_dir
+            custom_model.lambda_var            = new_var
+            custom_model.lambda_vol            = new_vol
+            custom_model.lambda_crps           = new_crps
+            custom_model.lambda_soft_ece       = new_ece
+
+            # ----------------------------------------------------------------
+            # Phase 4 — Optional outer-multiplier calibration (CALIB_OUTER)
+            # Calibrates lambda_trend_outer, lambda_dir_outer, lambda_nll_outer
+            # so that the already-rescaled per-component group sums are equalized.
+            # Uses same damping logic (d_global) and same clamp bounds.
+            # ----------------------------------------------------------------
+            if calib_outer:
+                med_trend_group = new_ext * med_ext          # post-rescale magnitude proxy
+                med_dir_group   = new_dir * med_dir
+                med_nll_group   = new_var * med_var
+                outer_meds = [m for m in [med_trend_group, med_dir_group, med_nll_group] if m > eps]
+                ref_outer = float(np.mean(outer_meds)) if outer_meds else 1.0
+
+                def _rescale_outer(orig_outer, med_g):
+                    if med_g > eps:
+                        return float(np.clip(orig_outer * (ref_outer / (med_g + eps)) ** d_global, lam_min, lam_max))
+                    return orig_outer
+
+                custom_model.lambda_trend_outer = _rescale_outer(custom_model.lambda_trend_outer, med_trend_group)
+                custom_model.lambda_dir_outer   = _rescale_outer(custom_model.lambda_dir_outer,   med_dir_group)
+                custom_model.lambda_nll_outer   = _rescale_outer(custom_model.lambda_nll_outer,   med_nll_group)
+
+            # ----------------------------------------------------------------
+            # Print report
+            # ----------------------------------------------------------------
+            def _fmt_row(name, orig, med, new, active=True):
+                skip = "" if active else " [skipped — inactive]"
+                arrow = f"{orig:.4f} → {new:.4f}"
+                return f"  {name:<14} med={med:.6f}  {arrow}{skip}"
+
+            print("[calib] Sampled medians and updated lambdas:")
+            print(_fmt_row("λ_short",  orig_short, med_short, new_short))
+            print(_fmt_row("λ_point",  orig_point, med_point, new_point))
+            print(_fmt_row("λ_long",   orig_long,  med_long,  new_long))
+            print(_fmt_row("λ_trend",  orig_ext,   med_ext,   new_ext))
+            print(_fmt_row("λ_dir",    orig_dir,   med_dir,   new_dir))
+            print(_fmt_row("λ_var",    orig_var,   med_var,   new_var))
+            print(_fmt_row("λ_vol",    orig_vol,   med_vol,   new_vol))
+            print(_fmt_row("λ_crps",   orig_crps,  med_crps,  new_crps,  active=crps_active))
+            print(_fmt_row("λ_ece",    orig_ece,   med_ece,   new_ece,   active=ece_active))
+            if calib_outer:
+                print(f"  [outer] λ_trend_outer={custom_model.lambda_trend_outer:.4f}  "
+                      f"λ_dir_outer={custom_model.lambda_dir_outer:.4f}  "
+                      f"λ_nll_outer={custom_model.lambda_nll_outer:.4f}")
+            print(f"[calib] ref_loss={ref_loss:.6f}  d_global={d_global}  "
+                  f"warmup={n_warmup}/{train_batches}  sample={n_sample}/{train_batches}  clamp=[{lam_min}, {lam_max}]")
+
+            _calib_lambdas = {
+                'lambda_short':          new_short,
+                'lambda_point':          new_point,
+                'lambda_long':           new_long,
+                'lambda_extended_trend': new_ext,
+                'lambda_dir':            new_dir,
+                'lambda_var':            new_var,
+                'lambda_vol':            new_vol,
+                'lambda_crps':           new_crps,
+                'lambda_soft_ece':       new_ece,
+                'ref_loss':              ref_loss,
+            }
+            if calib_outer:
+                _calib_lambdas.update({
+                    'lambda_trend_outer': custom_model.lambda_trend_outer,
+                    'lambda_dir_outer':   custom_model.lambda_dir_outer,
+                    'lambda_nll_outer':   custom_model.lambda_nll_outer,
+                })
+
         except Exception as e:
-            print("Calibration pass failed, proceeding with default lambdas:", e)
+            import traceback
+            print(f"[calib] Calibration pass failed — proceeding with default lambdas: {e}")
+            traceback.print_exc()
 
     opt = optimizers.Adam(learning_rate=cfg.LR)
     custom_model.compile(optimizer=opt)
@@ -1318,6 +1477,7 @@ def train_and_evaluate(
         predictions=predictions,
         metrics=metrics,
         calibration_pipeline=cal_pipeline,
+        calibration_lambdas=_calib_lambdas,
     )
 
 # -----------------------------
@@ -1568,7 +1728,7 @@ class PricePredictor:
 
         # Memory-Supplemented Layers: Capture temporal interconnections
         memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
-        memory = layers.Dropout(0.5)(memory)
+        memory = layers.Dropout(0.8)(memory)
 
         # Interconnection Attention: Model relations between indicators
         att_key_dim = 32
@@ -1593,11 +1753,11 @@ class PricePredictor:
 
         # Transformer-style blocks (reduced to 2 for speed)
         for _ in range(2):
-            att = layers.MultiHeadAttention(num_heads=4, key_dim=16, dropout=0.5)(x, x)
+            att = layers.MultiHeadAttention(num_heads=4, key_dim=16, dropout=0.8)(x, x)
             x = layers.Add()([x, att])
             x = layers.LayerNormalization()(x)
             ff = layers.Dense(32, activation='gelu')(x)
-            ff = layers.Dropout(0.5)(ff)
+            ff = layers.Dropout(0.8)(ff)
             ff = layers.Dense(x.shape[-1])(ff)
             x = layers.Add()([x, ff])
             x = layers.LayerNormalization()(x)
