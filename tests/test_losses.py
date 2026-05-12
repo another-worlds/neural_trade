@@ -4,10 +4,13 @@ from losses import Losses
 
 def test_registry_has_registered_losses():
     # Ensure the important losses have been registered
-    keys = set(Losses.list())
+    keys = set(Losses.list_names())
     expected = {
         'focal_loss', 'dice_loss', 'combined_direction_loss', 'point_huber',
-        'local_trend_loss', 'extended_trend_loss', 'custom_loss'
+        'local_trend_loss', 'extended_trend_loss', 'custom_loss',
+        't_perp_calibration_loss', 'casimir_interference_loss',
+        'vacuum_bandwidth_loss', 'hyper_decoherence_coupling_loss',
+        'information_flow_entropy_loss',
     }
     assert expected.issubset(keys), f"Missing expected losses: {expected - keys}"
 

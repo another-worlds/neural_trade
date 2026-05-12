@@ -30,6 +30,12 @@ from registries.losses import (
     crps_gaussian_loss,
     soft_ece_loss,
     custom_loss,
+    # T_⊥ / QBOX loss functions
+    t_perp_calibration_loss,
+    casimir_interference_loss,
+    vacuum_bandwidth_loss,
+    hyper_decoherence_coupling_loss,
+    information_flow_entropy_loss,
 )
 
 # Re-export everything for backward compatibility
@@ -45,4 +51,9 @@ __all__ = [
     'crps_gaussian_loss',
     'soft_ece_loss',
     'custom_loss',
+    't_perp_calibration_loss',
+    'casimir_interference_loss',
+    'vacuum_bandwidth_loss',
+    'hyper_decoherence_coupling_loss',
+    'information_flow_entropy_loss',
 ]

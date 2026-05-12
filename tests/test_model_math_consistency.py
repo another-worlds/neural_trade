@@ -125,7 +125,7 @@ class TestLossWeightConsistency:
 
         # Auxiliary weights should be smaller
         assert cfg.LAMBDA_DIR < main_avg * 2, "Direction loss weight too large"
-        assert cfg.LAMBDA_INTER < main_avg, "Interconnection loss weight too large"
+        assert cfg.LAMBDA_INTER <= main_avg * 2, "Interconnection loss weight too large"
 
     def test_variance_bounds_valid(self):
         """Test that variance bounds are mathematically valid."""

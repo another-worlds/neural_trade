@@ -340,6 +340,169 @@ def soft_ece_loss(model, true_dir, dir_pred, mask, n_bins=10, bandwidth=None):
     return ece
 
 
+@Losses.register(name="t_perp_calibration_loss", tags=["calibration", "t_perp", "perpendicular"])
+def t_perp_calibration_loss(model, y_true_h, price_h, var_h):
+    """T_⊥ Calibration Loss — 'zero does not exist, only T_⊥'.
+
+    In the QBOX ontology, anything that vanishes is not destroyed — it flows into
+    the perpendicular tensor T_⊥ (hidden dimensions).  Semantically transposed
+    to trading: the variance head IS our estimate of T_⊥ magnitude (unexplained
+    residual energy / hidden order-flow).
+
+    Calibration target: predicted σ should track empirical residual std of the batch.
+    Prevents variance from collapsing to a constant by anchoring it to actual errors.
+
+    Loss = (empirical_std(residuals) - mean(predicted_σ))²
+    """
+    eps = tf.constant(1e-8, dtype=tf.float32)
+    y = tf.cast(tf.squeeze(y_true_h, axis=1), tf.float32)      # [B]
+    mu = tf.cast(tf.squeeze(price_h, axis=1), tf.float32)       # [B]
+    var = tf.cast(tf.squeeze(var_h, axis=1), tf.float32)         # [B]
+
+    residuals = y - mu
+    empirical_std = tf.math.reduce_std(residuals) + eps
+    predicted_sigma = tf.reduce_mean(tf.sqrt(var + eps))
+    return tf.square(empirical_std - predicted_sigma)
+
+
+@Losses.register(name="casimir_interference_loss", tags=["calibration", "casimir", "multi_scale", "t_perp"])
+def casimir_interference_loss(model, price_h0, price_h1, price_h2,
+                               var_h0, var_h1, var_h2):
+    """Casimir Inter-Scale Interference Loss.
+
+    Casimir effect in QBOX: at boundaries between layers (scales), destructive
+    interference causes energy to flow into T_⊥.  Transposed to trading:
+    when short-horizon and long-horizon predictions point in OPPOSITE directions
+    (destructive interference), the model is genuinely uncertain — the variance
+    MUST be high at those crossing points.
+
+    Penalises low predicted variance when cross-horizon interference is high.
+
+    Loss = mean(interference_h01 / avg_σ² + interference_h12 / avg_σ²)
+    where interference = relu(-sign(p_a) * sign(p_b))  [high when opposite signs]
+    """
+    eps = tf.constant(1e-8, dtype=tf.float32)
+    p0 = tf.cast(tf.squeeze(price_h0, axis=1), tf.float32)   # [B]
+    p1 = tf.cast(tf.squeeze(price_h1, axis=1), tf.float32)
+    p2 = tf.cast(tf.squeeze(price_h2, axis=1), tf.float32)
+    v0 = tf.cast(tf.squeeze(var_h0, axis=1), tf.float32)
+    v1 = tf.cast(tf.squeeze(var_h1, axis=1), tf.float32)
+    v2 = tf.cast(tf.squeeze(var_h2, axis=1), tf.float32)
+
+    # Destructive interference = positive when predictions disagree in sign
+    interf_h01 = tf.nn.relu(-p0 * p1)                         # [B]
+    interf_h12 = tf.nn.relu(-p1 * p2)
+
+    avg_var_h01 = 0.5 * (v0 + v1) + eps
+    avg_var_h12 = 0.5 * (v1 + v2) + eps
+
+    # High interference with low variance → large penalty (T_⊥ should be high here)
+    casimir = tf.reduce_mean(interf_h01 / avg_var_h01 + interf_h12 / avg_var_h12)
+    return casimir
+
+
+@Losses.register(name="vacuum_bandwidth_loss", tags=["regulation", "vacuum", "t_perp", "self_limiting"])
+def vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac=None):
+    """Vacuum Bandwidth Loss — Λ_vac self-limiting term.
+
+    QBOX vacuum: the vacuum has limited bandwidth Λ_vac; when local energy exceeds it,
+    the excess is automatically shunted to T_⊥ producing supra-stable plateaus.
+    Transposed to trading: the cross-horizon spread of predictions (h0–h2) should not
+    exceed Λ_vac.  When it does, the model is over-extrapolating across timescales
+    (the market's 'vacuum' bandwidth is saturated → uncertainty should rise).
+
+    Only penalises violations ABOVE Λ_vac (relu clamp = supra-stable self-limiting).
+
+    Loss = mean(relu(std(p0, p1, p2) - Λ_vac))
+    """
+    if lambda_vac is None:
+        lambda_vac = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 1.0)),
+                                 dtype=tf.float32)
+    lv = tf.cast(lambda_vac, tf.float32)
+
+    p0 = tf.cast(tf.squeeze(price_h0, axis=1), tf.float32)    # [B]
+    p1 = tf.cast(tf.squeeze(price_h1, axis=1), tf.float32)
+    p2 = tf.cast(tf.squeeze(price_h2, axis=1), tf.float32)
+
+    stacked = tf.stack([p0, p1, p2], axis=1)                   # [B, 3]
+    cross_std = tf.math.reduce_std(stacked, axis=1)             # [B]
+    violation = tf.nn.relu(cross_std - lv)
+    return tf.reduce_mean(violation)
+
+
+@Losses.register(name="hyper_decoherence_coupling_loss",
+                 tags=["calibration", "volatility", "decoherence", "t_perp"])
+def hyper_decoherence_coupling_loss(model, x_window, var_h0, var_h1, var_h2):
+    """Hyper-Decoherence Coupling Loss.
+
+    QBOX High-T T_⊥-Computer: hyper-decoherence is a RESOURCE.  At high temperatures
+    (high volatility), instead of fighting uncertainty we should EMBRACE it — the model
+    must express high σ when local market volatility is high.  Penalises suppressed σ
+    during volatile regimes.
+
+    The 'ΔS = S_real − S_measured = |T_⊥|' framing: when the market is highly disordered
+    (high vol) but the model claims to be certain (low σ), the entropy gap is large.
+    We minimise that gap.
+
+    Loss = −mean(local_vol · avg_σ)   [negative = reward coupling; higher vol → higher σ]
+
+    In practice we negate so that minimising the loss drives positive coupling.
+    """
+    eps = tf.constant(1e-8, dtype=tf.float32)
+    x = tf.cast(x_window, tf.float32)                          # [B, LOOKBACK]
+    # Local volatility: std across time dimension
+    local_vol = tf.math.reduce_std(x, axis=1)                  # [B]
+
+    v0 = tf.cast(tf.squeeze(var_h0, axis=1), tf.float32)       # [B]
+    v1 = tf.cast(tf.squeeze(var_h1, axis=1), tf.float32)
+    v2 = tf.cast(tf.squeeze(var_h2, axis=1), tf.float32)
+    avg_sigma = tf.sqrt((v0 + v1 + v2) / 3.0 + eps)            # [B]
+
+    # Negative coupling: minimising loss → σ grows with local_vol
+    return -tf.reduce_mean(local_vol * avg_sigma)
+
+
+@Losses.register(name="information_flow_entropy_loss",
+                 tags=["regulation", "diversity", "multi_scale", "information"])
+def information_flow_entropy_loss(model, price_h0, price_h1, price_h2, rho_max=None):
+    """Information Flow Entropy Loss.
+
+    QBOX 'movement = unrolling of transcendental number digits': each horizon is
+    meant to reveal ADDITIONAL new information — the next decimal of Ξ.  If
+    h0, h1, h2 are simply scaled copies of each other, the network has learned to
+    copy rather than integrate multi-scale information.
+
+    Penalises cross-horizon Pearson correlation that exceeds ρ_max:
+        Loss = relu(|corr(h0, h1)| − ρ_max)² + relu(|corr(h1, h2)| − ρ_max)²
+
+    This forces horizons to carry non-redundant information (diverse views of the
+    same market state), analogous to ensuring each digit of Ξ is actually new.
+    """
+    if rho_max is None:
+        rho_max = float(getattr(getattr(model, 'config', None), 'RHO_MAX', 0.95))
+    rho_max_c = tf.constant(float(rho_max), dtype=tf.float32)
+    eps = tf.constant(1e-8, dtype=tf.float32)
+
+    p0 = tf.cast(tf.squeeze(price_h0, axis=1), tf.float32)    # [B]
+    p1 = tf.cast(tf.squeeze(price_h1, axis=1), tf.float32)
+    p2 = tf.cast(tf.squeeze(price_h2, axis=1), tf.float32)
+
+    def _pearson(a, b):
+        ma = a - tf.reduce_mean(a)
+        mb = b - tf.reduce_mean(b)
+        cov = tf.reduce_mean(ma * mb)
+        std_a = tf.math.reduce_std(a) + eps
+        std_b = tf.math.reduce_std(b) + eps
+        return cov / (std_a * std_b)
+
+    r01 = _pearson(p0, p1)
+    r12 = _pearson(p1, p2)
+
+    viol = (tf.nn.relu(tf.abs(r01) - rho_max_c) ** 2 +
+            tf.nn.relu(tf.abs(r12) - rho_max_c) ** 2)
+    return viol
+
+
 @Losses.register(name="custom_loss", tags=["composite", "default", "multi_output"])
 def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     # Convert to expected types and shapes exactly as original model implementation
@@ -517,6 +680,33 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     soft_ece_h2_val = soft_ece_loss(model, true_dir_h2, dir_pred_h2, mask_h2)
     total_soft_ece = lambda_soft_ece * (soft_ece_h0_val + soft_ece_h1_val + soft_ece_h2_val)
 
+    # === T_⊥ / QBOX LOSSES ===
+    # T_⊥ calibration: predicted σ tracks empirical residual std (T_⊥ is what we can't explain)
+    lambda_t_perp = tf.constant(float(getattr(model, 'lambda_t_perp', 0.0)), dtype=tf.float32)
+    t_perp_h0_val = t_perp_calibration_loss(model, y_true_h0, price_h0, var_h0_c)
+    t_perp_h1_val = t_perp_calibration_loss(model, y_true_h1, price_h1, var_h1_c)
+    t_perp_h2_val = t_perp_calibration_loss(model, y_true_h2, price_h2, var_h2_c)
+    total_t_perp = lambda_t_perp * (t_perp_h0_val + t_perp_h1_val + t_perp_h2_val)
+
+    # Casimir: destructive cross-horizon interference → T_⊥ (σ) must be high
+    lambda_casimir = tf.constant(float(getattr(model, 'lambda_casimir', 0.0)), dtype=tf.float32)
+    casimir_val = lambda_casimir * casimir_interference_loss(
+        model, price_h0, price_h1, price_h2, var_h0_c, var_h1_c, var_h2_c)
+
+    # Vacuum bandwidth: cross-horizon spread must not exceed Λ_vac (self-limiting)
+    lambda_vac_cfg = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 1.0)),
+                                 dtype=tf.float32)
+    vac_val = vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac_cfg)
+
+    # Hyper-decoherence: high local volatility should couple to high σ
+    lambda_hd = tf.constant(float(getattr(model, 'lambda_hd', 0.0)), dtype=tf.float32)
+    hd_val = lambda_hd * hyper_decoherence_coupling_loss(
+        model, x_window, var_h0_c, var_h1_c, var_h2_c)
+
+    # Information flow entropy: each horizon must carry non-redundant information
+    lambda_ife = tf.constant(float(getattr(model, 'lambda_ife', 0.0)), dtype=tf.float32)
+    ife_val = lambda_ife * information_flow_entropy_loss(model, price_h0, price_h1, price_h2)
+
     total = (
         point_loss_val +
         model.lambda_trend_outer * trend_loss_val +
@@ -528,10 +718,15 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
         model.lambda_coherence_outer * coherence_penalty +
         model.lambda_nll_outer * total_nll +
         total_crps +                # CRPS calibration (active only when lambda_crps > 0)
-        total_soft_ece              # Soft-ECE calibration (active only when lambda_soft_ece > 0)
+        total_soft_ece +            # Soft-ECE calibration (active only when lambda_soft_ece > 0)
+        total_t_perp +              # T_⊥ calibration (active only when lambda_t_perp > 0)
+        casimir_val +               # Casimir interference (active only when lambda_casimir > 0)
+        vac_val +                   # Vacuum bandwidth self-limiting (always active, weight via Λ_vac)
+        hd_val +                    # Hyper-decoherence coupling (active only when lambda_hd > 0)
+        ife_val                     # Information flow entropy (active only when lambda_ife > 0)
     )
 
-    # Return tuple: 28 components total
+    # Return tuple: 33 components total
     # [0]    total_loss
     # [1-3]  point_h0, point_h1, point_h2
     # [4-12] local_h0, global_h0, extended_h0, ..., extended_h2
@@ -540,6 +735,11 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     # [19-21] reg_loss, inter_reg, vol_loss
     # [22-24] crps_h0, crps_h1, crps_h2
     # [25-27] soft_ece_h0, soft_ece_h1, soft_ece_h2
+    # [28]    t_perp_total  (T_⊥ calibration)
+    # [29]    casimir_val   (Casimir interference)
+    # [30]    vac_val       (Vacuum bandwidth)
+    # [31]    hd_val        (Hyper-decoherence coupling)
+    # [32]    ife_val       (Information flow entropy)
     return (
         total,
         point_loss_h0_val, point_loss_h1_val, point_loss_h2_val,
@@ -551,4 +751,5 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
         reg_loss, inter_reg, vol_loss,
         crps_h0_val, crps_h1_val, crps_h2_val,
         soft_ece_h0_val, soft_ece_h1_val, soft_ece_h2_val,
+        total_t_perp, casimir_val, vac_val, hd_val, ife_val,
     )

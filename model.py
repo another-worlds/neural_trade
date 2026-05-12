@@ -21,7 +21,7 @@ from matplotlib.ticker import MaxNLocator, FuncFormatter
 import time
 from tqdm import tqdm
 import plotly.io as pio
-pio.renderers.default = 'colab'
+#pio.renderers.default = 'colab'
 
 try:
     # Optional local utilities (kept lightweight). If missing, fall back to sklearn MAPE only.
@@ -49,23 +49,23 @@ class Config:
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 1440#0 / 10
+    BATCH_SIZE = 1440 #int(2160)#0 / 10
     EPOCHS = 2 * 10
-    LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
-    PATIENCE = EPOCHS //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
+    LR = 3e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    PATIENCE = EPOCHS# //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
     EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
-    MAX_SEQUENCE_COUNT = 1440 * 8#31 +6#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 *  365#(31 +6 ) #int(1440 * 60 + 60 * 0.2)#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
     
 
     
 
     # Use integer periods to avoid float indexing issues
     # Extended trend features are computed as percent-change over these lags (in minutes)
-    EXTENDED_TREND_PERIODS = [5, 10, 15]  # 1m, 5m, 15m
+    EXTENDED_TREND_PERIODS = [10, 15, 20]  # 1m, 5m, 15m
 
     # Supervision horizons (in minutes ahead from last_close). These define the 3 output towers.
     # h0=1m, h1=5m, h2=15m.
-    HORIZON_STEPS = [5, 10, 15]
+    HORIZON_STEPS = [10, 15, 20]
 
 
 #1 - 15
@@ -133,6 +133,23 @@ class Config:
     LAMBDA_NLL_OUTER = 1.0        # Weight for total_nll in total
     LAMBDA_CRPS = 1.0             # CRPS calibration loss (0 = off; try 0.1–1.0)
     LAMBDA_SOFT_ECE = 1.0       # Soft-ECE direction calibration loss (0 = off; try 0.05–0.5)
+
+    # === T_⊥ / QBOX ONTOLOGY CONTROLS ===
+    # These implement the perpendicular-tensor (T_⊥) physical model, semantically
+    # transposed to time-series trading:
+    #   T_⊥  → unexplained variance / hidden order-flow
+    #   k(E) → volatility-adaptive kernel size (high vol = short kernel dominates)
+    #   Λ_vac → max allowed cross-horizon prediction spread
+    #   Casimir → destructive interference between horizons requires high σ
+    #   Hyper-decoherence → volatility is a resource; high vol should → high σ
+    #   Information flow → each horizon must reveal NEW information
+    T_PERP_DIM = 16             # Dimension of perpendicular projection subspace
+    LAMBDA_T_PERP = 0.8      # T_⊥ calibration loss (0=off; try 0.5 when enabling)
+    LAMBDA_CASIMIR =  0.8       # Casimir inter-scale interference loss (0=off; try 0.5)
+    LAMBDA_VAC = 1.0            # Vacuum bandwidth threshold Λ_vac (cross-horizon spread limit)
+    LAMBDA_HD =  0.8             # Hyper-decoherence coupling loss (0=off; try 0.3)
+    LAMBDA_IFE = 0.8         # Information flow entropy loss (0=off; try 0.3)
+    RHO_MAX = 0.95              # Max allowed cross-horizon Pearson correlation
 
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
@@ -1002,6 +1019,8 @@ def make_interactive_plot_callback(
                         </div>
                     </div>
                     
+                    {_qbox_dashboard_html(logs)}
+                    
                     <div style="margin-bottom: 10px;">
                         <div style="color: #CE93D8; font-weight: bold; margin-bottom: 8px;">📈 TRAINING HEALTH</div>
                         <div style="margin-left: 15px;">
@@ -1124,6 +1143,10 @@ def train_and_evaluate(
             orig_vol   = custom_model.lambda_vol
             orig_crps  = custom_model.lambda_crps
             orig_ece   = custom_model.lambda_soft_ece
+            orig_t_perp   = custom_model.lambda_t_perp
+            orig_casimir  = custom_model.lambda_casimir
+            orig_hd       = custom_model.lambda_hd
+            orig_ife      = custom_model.lambda_ife
 
             custom_model.lambda_short            = 1.0
             custom_model.lambda_point            = 1.0
@@ -1134,6 +1157,10 @@ def train_and_evaluate(
             custom_model.lambda_vol              = 1.0
             custom_model.lambda_crps             = 1.0
             custom_model.lambda_soft_ece         = 1.0
+            custom_model.lambda_t_perp           = 1.0
+            custom_model.lambda_casimir          = 1.0
+            custom_model.lambda_hd               = 1.0
+            custom_model.lambda_ife              = 1.0
 
             # ----------------------------------------------------------------
             # Phase 1 — BatchNorm warmup (no sampling, no gradient)
@@ -1150,6 +1177,7 @@ def train_and_evaluate(
             short_buf, point_buf, long_buf = [], [], []
             ext_buf, dir_buf, var_buf, vol_buf = [], [], [], []
             crps_buf, ece_buf = [], []
+            t_perp_buf, casimir_buf, vac_buf, hd_buf, ife_buf = [], [], [], [], []
 
             for batch in train_ds.take(n_sample):
                 x_batch, y_batch, last_batch, ext_batch = batch
@@ -1163,7 +1191,8 @@ def train_and_evaluate(
                  nll_h0, nll_h1, nll_h2,
                  reg_val, inter_reg, vol_loss_val,
                  crps_h0_c, crps_h1_c, crps_h2_c,
-                 soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c) = custom_model.custom_loss(
+                 soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c,
+                 t_perp_c, casimir_c, vac_c, hd_c, ife_c) = custom_model.custom_loss(
                     x_batch, y_batch, y_pred_batch, last_batch, ext_batch
                 )
 
@@ -1176,6 +1205,11 @@ def train_and_evaluate(
                 vol_buf.append(float(vol_loss_val))
                 crps_buf.append(float((crps_h0_c + crps_h1_c + crps_h2_c) / 3.0))
                 ece_buf.append(float((soft_ece_h0_c + soft_ece_h1_c + soft_ece_h2_c) / 3.0))
+                t_perp_buf.append(float(t_perp_c))
+                casimir_buf.append(float(casimir_c))
+                vac_buf.append(float(vac_c))
+                hd_buf.append(float(hd_c))
+                ife_buf.append(float(ife_c))
 
             def _med(buf):
                 return float(np.median(np.array(buf))) if buf else 0.0
@@ -1189,16 +1223,36 @@ def train_and_evaluate(
             med_vol   = _med(vol_buf)
             med_crps  = _med(crps_buf)
             med_ece   = _med(ece_buf)
+            med_t_perp  = _med(t_perp_buf)
+            med_casimir = _med(casimir_buf)
+            med_vac     = _med(vac_buf)
+            med_hd      = _med(hd_buf)
+            med_ife     = _med(ife_buf)
 
             # Reference = mean of all active (non-zero) component medians.
             # CRPS and ECE are included only when their config lambda is active.
             crps_active = float(getattr(cfg, 'LAMBDA_CRPS', 0.0)) > 0.0
             ece_active  = float(getattr(cfg, 'LAMBDA_SOFT_ECE', 0.0)) > 0.0
+            t_perp_active  = float(getattr(cfg, 'LAMBDA_T_PERP',  0.0)) > 0.0
+            casimir_active = float(getattr(cfg, 'LAMBDA_CASIMIR', 0.0)) > 0.0
+            hd_active      = float(getattr(cfg, 'LAMBDA_HD',      0.0)) > 0.0
+            ife_active     = float(getattr(cfg, 'LAMBDA_IFE',     0.0)) > 0.0
             candidate_meds = [med_short, med_point, med_long, med_ext, med_dir, med_var, med_vol]
             if crps_active:
                 candidate_meds.append(med_crps)
             if ece_active:
                 candidate_meds.append(med_ece)
+            if t_perp_active:
+                candidate_meds.append(med_t_perp)
+            if casimir_active:
+                candidate_meds.append(med_casimir)
+            if hd_active:
+                candidate_meds.append(med_hd)
+            if ife_active:
+                candidate_meds.append(med_ife)
+            # vac is always added (vacuum bandwidth self-limiting is always active)
+            if med_vac > 1e-8:
+                candidate_meds.append(med_vac)
             non_zero = [m for m in candidate_meds if m > 1e-8]
             ref_loss = float(np.mean(non_zero)) if non_zero else 1.0
 
@@ -1221,6 +1275,10 @@ def train_and_evaluate(
             new_vol   = _rescale(orig_vol,   med_vol,   d_vol)
             new_crps  = _rescale(orig_crps,  med_crps,  d_crps) if crps_active else orig_crps
             new_ece   = _rescale(orig_ece,   med_ece,   d_ece)  if ece_active  else orig_ece
+            new_t_perp  = _rescale(orig_t_perp,  med_t_perp,  d_global) if t_perp_active  else orig_t_perp
+            new_casimir = _rescale(orig_casimir, med_casimir, d_global) if casimir_active else orig_casimir
+            new_hd      = _rescale(orig_hd,      med_hd,      d_global) if hd_active      else orig_hd
+            new_ife     = _rescale(orig_ife,     med_ife,     d_global) if ife_active     else orig_ife
 
             custom_model.lambda_short          = new_short
             custom_model.lambda_point          = new_point
@@ -1231,6 +1289,10 @@ def train_and_evaluate(
             custom_model.lambda_vol            = new_vol
             custom_model.lambda_crps           = new_crps
             custom_model.lambda_soft_ece       = new_ece
+            custom_model.lambda_t_perp         = new_t_perp
+            custom_model.lambda_casimir        = new_casimir
+            custom_model.lambda_hd             = new_hd
+            custom_model.lambda_ife            = new_ife
 
             # ----------------------------------------------------------------
             # Phase 4 — Optional outer-multiplier calibration (CALIB_OUTER)
@@ -1272,6 +1334,12 @@ def train_and_evaluate(
             print(_fmt_row("λ_vol",    orig_vol,   med_vol,   new_vol))
             print(_fmt_row("λ_crps",   orig_crps,  med_crps,  new_crps,  active=crps_active))
             print(_fmt_row("λ_ece",    orig_ece,   med_ece,   new_ece,   active=ece_active))
+            print(_fmt_row("λ_t_perp", orig_t_perp,  med_t_perp,  new_t_perp,  active=t_perp_active))
+            print(_fmt_row("λ_casimir",orig_casimir, med_casimir, new_casimir, active=casimir_active))
+            print(_fmt_row("λ_hd",     orig_hd,      med_hd,      new_hd,      active=hd_active))
+            print(_fmt_row("λ_ife",    orig_ife,     med_ife,     new_ife,     active=ife_active))
+            lambda_vac_orig = float(getattr(cfg, 'LAMBDA_VAC', 1.0))
+            print(_fmt_row("Λ_vac(thr)", lambda_vac_orig, med_vac, lambda_vac_orig, active=True) + "  (threshold, not rescaled)")
             if calib_outer:
                 print(f"  [outer] λ_trend_outer={custom_model.lambda_trend_outer:.4f}  "
                       f"λ_dir_outer={custom_model.lambda_dir_outer:.4f}  "
@@ -1289,6 +1357,10 @@ def train_and_evaluate(
                 'lambda_vol':            new_vol,
                 'lambda_crps':           new_crps,
                 'lambda_soft_ece':       new_ece,
+                'lambda_t_perp':         new_t_perp,
+                'lambda_casimir':        new_casimir,
+                'lambda_hd':             new_hd,
+                'lambda_ife':            new_ife,
                 'ref_loss':              ref_loss,
             }
             if calib_outer:
@@ -1746,7 +1818,41 @@ class PricePredictor:
         x_short = layers.Conv1D(16, 3, padding='same', activation='gelu')(x)
         x_med = layers.Conv1D(16, 7, padding='same', activation='gelu')(x)
         x_long = layers.Conv1D(16, 15, padding='same', activation='gelu')(x)
-        x = layers.Concatenate()([x_short, x_med, x_long])
+
+        # === ENERGY GATE — k(E) adaptive kernel weighting ===
+        # High local volatility (energy) → short kernel dominates (fine-grained view).
+        # Low volatility → long kernel dominates (coarse trend view).
+        # Implements: x = Σ_k gate_k(E) · x_k   (energy-weighted sum, not concat)
+        # This is the semantic transpose of k(E) from QBOX: the convolution kernel size
+        # adapts to local market energy rather than being fixed.
+        _inp_resh_2d = layers.Reshape((self.config.LOOKBACK, 1))(inp)
+        _local_mean = layers.GlobalAveragePooling1D()(_inp_resh_2d)           # [B, 1]
+        _inp_center = layers.Subtract()([
+            layers.Reshape((self.config.LOOKBACK, 1))(inp),
+            layers.RepeatVector(self.config.LOOKBACK)(
+                layers.Reshape((1,))(_local_mean))
+        ])
+        _local_var = layers.GlobalAveragePooling1D()(
+            layers.Lambda(lambda t: tf.square(t))(_inp_center)
+        )  # [B, 1]
+        _local_max = layers.GlobalMaxPooling1D()(_inp_resh_2d)                # [B, 1]
+        _energy_feats = layers.Concatenate()([_local_var, _local_max])        # [B, 2]
+        _energy_gate = layers.Dense(3, activation='softmax',
+                                    name='energy_gate')(_energy_feats)        # [B, 3]
+
+        # Expand gate to [B, 1, 1] for broadcast multiply with [B, LOOKBACK, 16]
+        _gate_s = layers.Lambda(
+            lambda g: tf.expand_dims(tf.expand_dims(g[:, 0], 1), 2))(_energy_gate)
+        _gate_m = layers.Lambda(
+            lambda g: tf.expand_dims(tf.expand_dims(g[:, 1], 1), 2))(_energy_gate)
+        _gate_l = layers.Lambda(
+            lambda g: tf.expand_dims(tf.expand_dims(g[:, 2], 1), 2))(_energy_gate)
+
+        x_short_g = layers.Multiply()([x_short, _gate_s])
+        x_med_g   = layers.Multiply()([x_med,   _gate_m])
+        x_long_g  = layers.Multiply()([x_long,  _gate_l])
+        x = layers.Add()([x_short_g, x_med_g, x_long_g])        # [B, LOOKBACK, 16]
+        x = layers.LayerNormalization()(x)
 
         # Positional encoding
         x = layers.Add()([x, PositionalEncodingLayer()(x)])
@@ -1764,6 +1870,32 @@ class PricePredictor:
 
         # Global context vector
         context = layers.GlobalAveragePooling1D()(x)
+
+        # === T_⊥ PERPENDICULAR PROJECTION ===
+        # T_⊥ encodes the energy/information that escaped the observable projection.
+        # In trading: unexplained residual variance = hidden order-flow / regime change.
+        # perp_magnitude → conditions ALL variance heads: high T_⊥ → high predicted σ.
+        # This prevents variance heads from driving uncertainty to zero when T_⊥ is large.
+        _t_perp_dim = int(getattr(self.config, 'T_PERP_DIM', 16))
+        h_perp = layers.Dense(_t_perp_dim, activation='tanh',
+                               name='t_perp_proj')(context)               # [B, T_PERP_DIM]
+        perp_magnitude = layers.Dense(1, activation='softplus',
+                                      name='t_perp_magnitude')(h_perp)   # [B, 1]
+
+        # === REGIME GATE (White-hole / T_⊥^up detector) ===
+        # Regime gate ≈ 1.0 when market is in a "white hole" state:
+        #   new information is flowing IN from outside (regime breaks, flash crashes,
+        #   macro news shocks), making the current visible projection insufficient.
+        # Regime gate ≈ 0.0 = "black hole" state: coherent trend, info is observable.
+        # Computed from local price std (volatility level) fused with global context.
+        _inp_for_gate = layers.Reshape((self.config.LOOKBACK, 1))(inp)
+        _gate_vol = layers.GlobalAveragePooling1D()(
+            layers.Lambda(lambda t: tf.abs(t - tf.reduce_mean(t, axis=1, keepdims=True)))(
+                _inp_for_gate)
+        )                                                                    # [B, 1]
+        regime_gate = layers.Dense(1, activation='sigmoid',
+                                   name='regime_gate')(
+            layers.Concatenate()([_gate_vol, context]))                  # [B, 1]
 
         # Sequence summary for regression
         seq_flat = layers.Flatten()(x)
@@ -1791,9 +1923,12 @@ class PricePredictor:
         price_h0 = layers.Dense(1, name='price_h0')(tower_h0)
         direction_h0 = layers.Dense(1, activation='sigmoid', name='direction_h0',
                                    bias_initializer=dir_bias_init)(tower_h0)
+        # Variance head conditioned on T_⊥ and regime gate:
+        #   high perp_magnitude → more energy in hidden dims → higher σ²
+        #   high regime_gate → white-hole / regime-break → higher σ²
+        tower_h0_var_input = layers.Concatenate()([tower_h0, perp_magnitude, regime_gate])
         variance_h0 = layers.Dense(1, activation='softplus', name='variance_h0',
-                                  bias_initializer=var_bias_init)(tower_h0)
-        # Variance initialized to ~1.0 via softplus(0.5) for stable NLL training
+                                  bias_initializer=var_bias_init)(tower_h0_var_input)
 
         # ---- TOWER 1 (5-minute horizon - PRIMARY) ----
         tower_h1 = layers.Dense(16, activation='gelu',
@@ -1801,9 +1936,9 @@ class PricePredictor:
         price_h1 = layers.Dense(1, name='price_h1')(tower_h1)
         direction_h1 = layers.Dense(1, activation='sigmoid', name='direction_h1',
                                    bias_initializer=dir_bias_init)(tower_h1)
+        tower_h1_var_input = layers.Concatenate()([tower_h1, perp_magnitude, regime_gate])
         variance_h1 = layers.Dense(1, activation='softplus', name='variance_h1',
-                                  bias_initializer=var_bias_init)(tower_h1)
-        # Variance initialized to ~1.0 via softplus(0.5) for stable NLL training
+                                  bias_initializer=var_bias_init)(tower_h1_var_input)
 
         # ---- TOWER 2 (15-minute horizon) ----
         tower_h2 = layers.Dense(16, activation='gelu',
@@ -1811,9 +1946,9 @@ class PricePredictor:
         price_h2 = layers.Dense(1, name='price_h2')(tower_h2)
         direction_h2 = layers.Dense(1, activation='sigmoid', name='direction_h2',
                                    bias_initializer=dir_bias_init)(tower_h2)
+        tower_h2_var_input = layers.Concatenate()([tower_h2, perp_magnitude, regime_gate])
         variance_h2 = layers.Dense(1, activation='softplus', name='variance_h2',
-                                  bias_initializer=var_bias_init)(tower_h2)
-        # Variance initialized to ~1.0 via softplus(0.5) for stable NLL training
+                                  bias_initializer=var_bias_init)(tower_h2_var_input)
 
         # === FINAL MODEL: 9 outputs (3 horizons × 3 heads each) ===
         return models.Model(
@@ -1877,6 +2012,11 @@ class CustomTrainModel(models.Model):
         self.lambda_nll_outer = float(getattr(config, 'LAMBDA_NLL_OUTER', 1.0))
         self.lambda_crps = float(getattr(config, 'LAMBDA_CRPS', 0.0))
         self.lambda_soft_ece = float(getattr(config, 'LAMBDA_SOFT_ECE', 0.0))
+        # === T_⊥ / QBOX lambdas (default 0.0 → backward compatible; enable explicitly) ===
+        self.lambda_t_perp  = float(getattr(config, 'LAMBDA_T_PERP',  0.0))
+        self.lambda_casimir = float(getattr(config, 'LAMBDA_CASIMIR', 0.0))
+        self.lambda_hd      = float(getattr(config, 'LAMBDA_HD',      0.0))
+        self.lambda_ife     = float(getattr(config, 'LAMBDA_IFE',     0.0))
         self.config = config or Config()
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
@@ -2037,7 +2177,7 @@ class CustomTrainModel(models.Model):
             y_pred = self(x_window, training=True)
             loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
 
-        # Unpack 28-component tuple from custom_loss
+        # Unpack 33-component tuple from custom_loss
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -2047,7 +2187,8 @@ class CustomTrainModel(models.Model):
          nll_h0, nll_h1, nll_h2,
          reg_val, inter_reg, vol_loss,
          crps_h0, crps_h1, crps_h2,
-         soft_ece_h0, soft_ece_h1, soft_ece_h2) = loss_components
+         soft_ece_h0, soft_ece_h1, soft_ece_h2,
+         t_perp_total, casimir_val, vac_val, hd_val, ife_val) = loss_components
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -2236,6 +2377,12 @@ class CustomTrainModel(models.Model):
             "reg_loss": reg_val,
             "inter_reg": inter_reg,
             "vol_loss": vol_loss,
+            # === T_⊥ / QBOX metrics ===
+            "t_perp_loss": t_perp_total,
+            "casimir_loss": casimir_val,
+            "vac_loss": vac_val,
+            "hd_loss": hd_val,
+            "ife_loss": ife_val,
             **metrics_head,
             **metrics_gauss
         }
@@ -2359,7 +2506,7 @@ class CustomTrainModel(models.Model):
         y_pred = self(x_window, training=False)
         loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
 
-        # Unpack 28-component tuple
+        # Unpack 33-component tuple
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -2369,7 +2516,8 @@ class CustomTrainModel(models.Model):
          nll_h0, nll_h1, nll_h2,
          reg_val, inter_reg, vol_loss,
          crps_h0, crps_h1, crps_h2,
-         soft_ece_h0, soft_ece_h1, soft_ece_h2) = loss_components
+         soft_ece_h0, soft_ece_h1, soft_ece_h2,
+         t_perp_total, casimir_val, vac_val, hd_val, ife_val) = loss_components
 
         # Compute direction labels with the same trade-aware deadband used in training loss.
         y_true = tf.cast(y_true, tf.float32)
@@ -2488,6 +2636,12 @@ class CustomTrainModel(models.Model):
             "reg_loss": reg_val,
             "inter_reg": inter_reg,
             "vol_loss": vol_loss,
+            # === T_⊥ / QBOX metrics ===
+            "t_perp_loss": t_perp_total,
+            "casimir_loss": casimir_val,
+            "vac_loss": vac_val,
+            "hd_loss": hd_val,
+            "ife_loss": ife_val,
             **metrics_head,
             **metrics_gauss
         }
@@ -2554,6 +2708,41 @@ def _mean_present(mapping, keys):
     if total is None or count == 0:
         return None
     return total / float(count)
+
+def _qbox_dashboard_html(logs):
+    """Return an HTML string for the T_⊥ / QBOX section of the epoch dashboard.
+
+    Only renders if at least one QBOX component has a non-trivial value (> 1e-6),
+    so the section stays hidden when all QBOX lambdas are 0.
+    """
+    components = [
+        ('t_perp_loss',  'T⊥ calib',  'val_t_perp_loss'),
+        ('casimir_loss', 'Casimir',    'val_casimir_loss'),
+        ('vac_loss',     'Vac BW',     'val_vac_loss'),
+        ('hd_loss',      'Hyper-Dec',  'val_hd_loss'),
+        ('ife_loss',     'Info-Flow',  'val_ife_loss'),
+    ]
+    rows = []
+    for train_key, label, val_key in components:
+        train_val = float(logs.get(train_key, 0.0))
+        val_val   = float(logs.get(val_key,   0.0))
+        if train_val > 1e-6 or val_val > 1e-6:
+            rows.append(
+                f'<span style="display: inline-block; width: 180px;">{label}:</span>'
+                f' <span style="color: #CE93D8;">{train_val:.6f}</span>'
+                f' <span style="color: #888; font-size: 11px;">val: {val_val:.6f}</span><br>'
+            )
+    if not rows:
+        return ''
+    inner = '\n                            '.join(rows)
+    return f"""
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: #CE93D8; font-weight: bold; margin-bottom: 8px;">⚛ T&#x22A5; / QBOX LOSSES</div>
+                        <div style="margin-left: 15px;">
+                            {inner}
+                        </div>
+                    </div>"""
+
 
 def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     """Add plotting-friendly aliases into a Keras `logs` dict.
@@ -2801,6 +2990,16 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     set_if_missing("val_dir_sensitivity", out.get("val_dir_sensitivity_avg"))
     set_if_missing("val_dir_specificity", out.get("val_dir_specificity_avg"))
 
+    # --- QBOX / T_⊥ aggregate alias ---
+    # Sum all active T_⊥ loss components so the dashboard can plot a single trend line.
+    # Components with lambda=0 contribute 0, so this is safe even when losses are off.
+    _qbox_train_keys = ['t_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss']
+    _qbox_val_keys   = [f'val_{k}' for k in _qbox_train_keys]
+    _qbox_train_sum  = sum(float(out[k]) for k in _qbox_train_keys if k in out)
+    _qbox_val_sum    = sum(float(out[k]) for k in _qbox_val_keys   if k in out)
+    set_if_missing('qbox_loss',     _qbox_train_sum if _qbox_train_sum > 0 else None)
+    set_if_missing('val_qbox_loss', _qbox_val_sum   if _qbox_val_sum   > 0 else None)
+
     return out
 
 
@@ -2871,63 +3070,100 @@ class ParamsLogger(tf.keras.callbacks.Callback):
         self.prev_epoch = -1
         self.convergence_window = 5  # epochs for convergence detection
 
+    # Prefixes that identify actual indicator parameters vs. Keras log scalars
+    _INDICATOR_PREFIXES = ('ma_period_', 'macd_', 'rsi_period_', 'bb_period_')
+
+    def _is_indicator_key(self, key):
+        return any(key.startswith(p) for p in self._INDICATOR_PREFIXES)
+
     def _calculate_param_changes(self, current_params):
-        """Calculate per-parameter change rates for convergence detection."""
+        """Calculate per-parameter change rates for convergence detection.
+
+        Only computes changes for actual learnable indicator parameters
+        (ma_period_*, macd_*, rsi_period_*, bb_period_*).  Keras log scalars
+        like log_loss / log_val_loss are intentionally excluded to avoid them
+        contaminating the convergence signal.
+        """
         if self.prev_params is None:
             return None
 
         changes = {}
         for key in current_params:
+            if not self._is_indicator_key(key):
+                continue  # skip log_*, epoch, timestamp, convergence_*, etc.
             if key in self.prev_params:
                 try:
                     prev_val = float(self.prev_params[key])
                     curr_val = float(current_params[key])
-                    if prev_val is not None and curr_val is not None:
-                        # Calculate relative change (avoid division by zero)
-                        if abs(prev_val) > 1e-6:
-                            change_pct = abs(curr_val - prev_val) / abs(prev_val) * 100.0
-                        else:
-                            change_pct = abs(curr_val - prev_val) * 100.0
-                        changes[f'change_{key}'] = float(change_pct)
+                    if abs(prev_val) > 1e-6:
+                        change_pct = abs(curr_val - prev_val) / abs(prev_val) * 100.0
+                    else:
+                        change_pct = abs(curr_val - prev_val) * 100.0
+                    changes[f'change_{key}'] = float(change_pct)
                 except (ValueError, TypeError):
-                    # Skip non-numeric columns like 'timestamp', 'epoch'
                     pass
         return changes if changes else {}
 
     def _detect_convergence(self, rows_window):
         """
         Detect convergence vs drift patterns over recent epochs.
-        Returns convergence score (0-1, higher = more converged).
+
+        Computes a per-epoch mean-change series across indicator params only,
+        then fits a linear slope.  The slope direction distinguishes true
+        convergence (slope < 0, params decelerating) from a plateau (slope ~0,
+        params already small) and drift (slope > 0, params accelerating).
+
+        Returns dict with:
+          convergence_score     — 0-1, grounded at 3%/epoch = 0 (fully active)
+          mean_param_change_pct — mean indicator-param % change in latest epoch
+          std_param_change_pct  — std of individual param changes in latest epoch
+          slope_pct_per_epoch   — linear trend of mean_change over the window
+                                  (negative = converging, positive = drifting)
         """
         if len(rows_window) < 2:
             return None
 
-        # Extract change rates
-        change_keys = [k for k in rows_window[0].keys() if k.startswith('change_')]
-        if not change_keys:
+        # Only look at indicator-parameter change keys (change_ma_period_*, etc.)
+        indicator_change_keys = [
+            k for k in rows_window[0].keys()
+            if k.startswith('change_') and self._is_indicator_key(k[len('change_'):])
+        ]
+        if not indicator_change_keys:
             return None
 
-        # Calculate mean and std of changes across window
-        changes_over_window = []
+        # Build per-epoch mean-change series  [epoch_i_mean, epoch_i+1_mean, ...]
+        epoch_means = []
         for row in rows_window:
-            for key in change_keys:
-                if key in row:
-                    changes_over_window.append(row[key])
+            vals = [row[k] for k in indicator_change_keys if k in row and row[k] is not None]
+            if vals:
+                epoch_means.append(np.mean(vals))
 
-        if not changes_over_window:
+        if not epoch_means:
             return None
 
-        mean_change = np.mean(changes_over_window)
-        std_change = np.std(changes_over_window)
+        current_mean = float(epoch_means[-1])
+        current_std  = float(np.std(
+            [rows_window[-1].get(k, 0.0) for k in indicator_change_keys
+             if rows_window[-1].get(k) is not None]
+        ))
 
-        # Convergence score: lower mean change = more converged (0-1 scale)
-        # Normalize to [0, 1] where convergence means mean_change < 1%
-        convergence_score = max(0.0, min(1.0, 1.0 - (mean_change / 10.0)))
+        # Linear slope over the window (units: %/epoch)
+        if len(epoch_means) >= 2:
+            n = len(epoch_means)
+            xs = np.arange(n, dtype=float)
+            slope = float(np.polyfit(xs, epoch_means, 1)[0])
+        else:
+            slope = 0.0
+
+        # Score: grounded so that 3% mean change = score 0 (fully active),
+        # < 0.5% = score >= 0.83 (converged territory)
+        convergence_score = max(0.0, min(1.0, 1.0 - (current_mean / 3.0)))
 
         return {
-            'convergence_score': float(convergence_score),
-            'mean_param_change_pct': float(mean_change),
-            'std_param_change_pct': float(std_change)
+            'convergence_score':     float(convergence_score),
+            'mean_param_change_pct': current_mean,
+            'std_param_change_pct':  current_std,
+            'slope_pct_per_epoch':   slope,
         }
 
     def on_epoch_end(self, epoch, logs=None):
@@ -2982,11 +3218,21 @@ class ParamsLogger(tf.keras.callbacks.Callback):
             # Log convergence status periodically (every 5 epochs)
             if epoch % 5 == 0 or epoch < 3:
                 if 'convergence_score' in params:
-                    conv_score = params['convergence_score']
+                    conv_score  = params['convergence_score']
                     mean_change = params['mean_param_change_pct']
-                    status = "converging" if conv_score > 0.7 else "active" if conv_score > 0.3 else "drifting"
-                    print(f"Epoch {epoch}: Params {status} (convergence={conv_score:.3f}, "
-                          f"mean_change={mean_change:.2f}%)")
+                    slope       = params.get('slope_pct_per_epoch', 0.0)
+                    # Status derived from both magnitude AND trend direction
+                    if mean_change < 0.5:
+                        status = "converged"
+                    elif slope < -0.3:
+                        status = "converging"
+                    elif slope > 0.3:
+                        status = "drifting"
+                    else:
+                        status = "plateau"
+                    print(f"Epoch {epoch}: Params {status} "
+                          f"(score={conv_score:.3f}, mean={mean_change:.2f}%, "
+                          f"slope={slope:+.2f}%/ep)")
                 elif epoch < 3:
                     print(f"Epoch {epoch}: Indicator params logged to {self.out_csv}")
 
@@ -3003,9 +3249,12 @@ class ParamsLogger(tf.keras.callbacks.Callback):
                 recent_window = self.rows[-min(10, len(self.rows)):]
                 convergence_info = self._detect_convergence(recent_window)
                 if convergence_info:
+                    slope = convergence_info.get('slope_pct_per_epoch', 0.0)
                     print(f"Final Convergence Score: {convergence_info['convergence_score']:.3f}")
-                    print(f"Final Mean Change: {convergence_info['mean_param_change_pct']:.2f}%")
-                    print(f"Final Std Change: {convergence_info['std_param_change_pct']:.2f}%")
+                    print(f"Final Mean Change:    {convergence_info['mean_param_change_pct']:.2f}%")
+                    print(f"Final Std Change:     {convergence_info['std_param_change_pct']:.2f}%")
+                    print(f"Final Slope:          {slope:+.2f}%/ep  "
+                          f"({'decelerating' if slope < 0 else 'accelerating' if slope > 0 else 'flat'})")
 
 def train_model(extra_callbacks=None, epochs=None, force=False, calibrate=True):
     # Backward-compatible wrapper; prefer `train_and_evaluate()` for new code.
