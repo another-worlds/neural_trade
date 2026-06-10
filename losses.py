@@ -36,6 +36,7 @@ from registries.losses import (
     vacuum_bandwidth_loss,
     hyper_decoherence_coupling_loss,
     information_flow_entropy_loss,
+    vacuum_overflow_t_perp_loss,
 )
 
 # Re-export everything for backward compatibility
@@ -56,4 +57,5 @@ __all__ = [
     'vacuum_bandwidth_loss',
     'hyper_decoherence_coupling_loss',
     'information_flow_entropy_loss',
+    'vacuum_overflow_t_perp_loss',
 ]

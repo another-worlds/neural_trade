@@ -503,8 +503,50 @@ def information_flow_entropy_loss(model, price_h0, price_h1, price_h2, rho_max=N
     return viol
 
 
+@Losses.register(name="vacuum_overflow_t_perp_loss",
+                 tags=["calibration", "t_perp", "vacuum", "overflow", "precision"])
+def vacuum_overflow_t_perp_loss(model, vacuum_overflow,
+                                y_true_h0, price_h0,
+                                y_true_h1, price_h1,
+                                y_true_h2, price_h2):
+    """Vacuum Overflow T_⊥ Precision Loss.
+
+    Anchors the observable vacuum overflow signal to the actual prediction residual
+    magnitude, making the overflow a precise, calibrated measure of T_⊥ intensity.
+
+    Physics framing: the overflow (energy exceeding the vacuum ceiling E_max) is the
+    portion of hidden-dimension energy that the network's visible subspace cannot absorb.
+    This MUST equal the unexplained residual in real-space predictions, otherwise T_⊥ is
+    either under-reported (overflow too small) or a hallucination (overflow too large).
+
+    Loss = (mean_overflow - mean_residual_mag)² / (mean_residual_mag² + ε)
+
+    Normalised by residual² so the loss is scale-invariant across training stages.
+    """
+    eps = tf.constant(1e-8, dtype=tf.float32)
+
+    ov = tf.cast(tf.squeeze(vacuum_overflow, axis=1), tf.float32)   # [B]
+
+    y0 = tf.cast(tf.squeeze(y_true_h0, axis=1), tf.float32)         # [B]
+    p0 = tf.cast(tf.squeeze(price_h0,  axis=1), tf.float32)
+    y1 = tf.cast(tf.squeeze(y_true_h1, axis=1), tf.float32)
+    p1 = tf.cast(tf.squeeze(price_h1,  axis=1), tf.float32)
+    y2 = tf.cast(tf.squeeze(y_true_h2, axis=1), tf.float32)
+    p2 = tf.cast(tf.squeeze(price_h2,  axis=1), tf.float32)
+
+    # Per-sample mean absolute residual across all three horizons
+    residual_mag = (tf.abs(y0 - p0) + tf.abs(y1 - p1) + tf.abs(y2 - p2)) / 3.0  # [B]
+
+    mean_ov  = tf.reduce_mean(ov)           # scalar
+    mean_res = tf.reduce_mean(residual_mag) # scalar
+
+    # Scale-invariant alignment loss
+    return tf.square(mean_ov - mean_res) / (tf.square(mean_res) + eps)
+
+
 @Losses.register(name="custom_loss", tags=["composite", "default", "multi_output"])
-def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
+def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
+               vacuum_overflow=None):
     # Convert to expected types and shapes exactly as original model implementation
     y_true = tf.cast(y_true, tf.float32)
     y_true_raw = y_true * model.pred_scale + model.pred_mean
@@ -707,6 +749,20 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     lambda_ife = tf.constant(float(getattr(model, 'lambda_ife', 0.0)), dtype=tf.float32)
     ife_val = lambda_ife * information_flow_entropy_loss(model, price_h0, price_h1, price_h2)
 
+    # Vacuum overflow T_⊥ precision: overflow tracks prediction residual magnitude
+    # Active only when lambda_vac_overflow > 0 AND vacuum_overflow tensor is provided.
+    lambda_vac_overflow = tf.constant(
+        float(getattr(model, 'lambda_vac_overflow', 0.0)), dtype=tf.float32)
+    if vacuum_overflow is not None:
+        vac_overflow_val = lambda_vac_overflow * vacuum_overflow_t_perp_loss(
+            model, vacuum_overflow,
+            y_true_h0, price_h0,
+            y_true_h1, price_h1,
+            y_true_h2, price_h2,
+        )
+    else:
+        vac_overflow_val = tf.constant(0.0, dtype=tf.float32)
+
     total = (
         point_loss_val +
         model.lambda_trend_outer * trend_loss_val +
@@ -723,10 +779,11 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
         casimir_val +               # Casimir interference (active only when lambda_casimir > 0)
         vac_val +                   # Vacuum bandwidth self-limiting (always active, weight via Λ_vac)
         hd_val +                    # Hyper-decoherence coupling (active only when lambda_hd > 0)
-        ife_val                     # Information flow entropy (active only when lambda_ife > 0)
+        ife_val +                   # Information flow entropy (active only when lambda_ife > 0)
+        vac_overflow_val            # Vacuum overflow T_⊥ precision (active when lambda_vac_overflow > 0)
     )
 
-    # Return tuple: 33 components total
+    # Return tuple: 34 components total
     # [0]    total_loss
     # [1-3]  point_h0, point_h1, point_h2
     # [4-12] local_h0, global_h0, extended_h0, ..., extended_h2
@@ -735,11 +792,12 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
     # [19-21] reg_loss, inter_reg, vol_loss
     # [22-24] crps_h0, crps_h1, crps_h2
     # [25-27] soft_ece_h0, soft_ece_h1, soft_ece_h2
-    # [28]    t_perp_total  (T_⊥ calibration)
-    # [29]    casimir_val   (Casimir interference)
-    # [30]    vac_val       (Vacuum bandwidth)
-    # [31]    hd_val        (Hyper-decoherence coupling)
-    # [32]    ife_val       (Information flow entropy)
+    # [28]    t_perp_total    (T_⊥ calibration)
+    # [29]    casimir_val     (Casimir interference)
+    # [30]    vac_val         (Vacuum bandwidth)
+    # [31]    hd_val          (Hyper-decoherence coupling)
+    # [32]    ife_val         (Information flow entropy)
+    # [33]    vac_overflow_val (Vacuum overflow T_⊥ precision)
     return (
         total,
         point_loss_h0_val, point_loss_h1_val, point_loss_h2_val,
@@ -752,4 +810,5 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends):
         crps_h0_val, crps_h1_val, crps_h2_val,
         soft_ece_h0_val, soft_ece_h1_val, soft_ece_h2_val,
         total_t_perp, casimir_val, vac_val, hd_val, ife_val,
+        vac_overflow_val,
     )

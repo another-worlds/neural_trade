@@ -10,7 +10,7 @@ def test_registry_has_registered_losses():
         'local_trend_loss', 'extended_trend_loss', 'custom_loss',
         't_perp_calibration_loss', 'casimir_interference_loss',
         'vacuum_bandwidth_loss', 'hyper_decoherence_coupling_loss',
-        'information_flow_entropy_loss',
+        'information_flow_entropy_loss', 'vacuum_overflow_t_perp_loss',
     }
     assert expected.issubset(keys), f"Missing expected losses: {expected - keys}"
 

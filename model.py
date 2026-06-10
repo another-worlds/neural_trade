@@ -51,10 +51,10 @@ class Config:
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
     BATCH_SIZE = 1440 #int(2160)#0 / 10
     EPOCHS = 2 * 10
-    LR = 3e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    LR = 2e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
     PATIENCE = EPOCHS# //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
     EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
-    MAX_SEQUENCE_COUNT = 1440 *  365#(31 +6 ) #int(1440 * 60 + 60 * 0.2)#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
+    MAX_SEQUENCE_COUNT = 1440 *  (31 +6 ) #int(1440 * 60 + 60 * 0.2)#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
     
 
     
@@ -150,6 +150,10 @@ class Config:
     LAMBDA_HD =  0.8             # Hyper-decoherence coupling loss (0=off; try 0.3)
     LAMBDA_IFE = 0.8         # Information flow entropy loss (0=off; try 0.3)
     RHO_MAX = 0.95              # Max allowed cross-horizon Pearson correlation
+    #   Vacuum saturation: natural + artificial noise fills each t_perp_proj kernel to
+    #   E_max capacity at all times.  Excess energy above the ceiling = T_⊥ intensity.
+    VACUUM_E_MAX = 1.0          # Per-dim energy ceiling (tanh² max = 1.0; tune 0.5–1.0)
+    LAMBDA_VAC_OVERFLOW = 0.5   # Weight for vacuum overflow T_⊥ precision loss
 
     # Variance calibration bounds (in scaled space)
     VAR_FLOOR = 0.1  # Minimum variance = 0.1 (prevents overconfidence, std ≈ 0.316)
@@ -1177,11 +1181,13 @@ def train_and_evaluate(
             short_buf, point_buf, long_buf = [], [], []
             ext_buf, dir_buf, var_buf, vol_buf = [], [], [], []
             crps_buf, ece_buf = [], []
-            t_perp_buf, casimir_buf, vac_buf, hd_buf, ife_buf = [], [], [], [], []
+            t_perp_buf, casimir_buf, vac_buf, hd_buf, ife_buf, vac_overflow_buf = [], [], [], [], [], []
 
             for batch in train_ds.take(n_sample):
                 x_batch, y_batch, last_batch, ext_batch = batch
-                y_pred_batch = custom_model(x_batch, training=True)
+                _y_pred_raw = custom_model(x_batch, training=True)
+                # Strip 10th output (vacuum_overflow) before passing to custom_loss
+                (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
                 (total,
                  point_h0, point_h1, point_h2,
                  local_h0, global_h0, ext_h0,
@@ -1192,8 +1198,10 @@ def train_and_evaluate(
                  reg_val, inter_reg, vol_loss_val,
                  crps_h0_c, crps_h1_c, crps_h2_c,
                  soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c,
-                 t_perp_c, casimir_c, vac_c, hd_c, ife_c) = custom_model.custom_loss(
-                    x_batch, y_batch, y_pred_batch, last_batch, ext_batch
+                 t_perp_c, casimir_c, vac_c, hd_c, ife_c,
+                 vac_overflow_c) = custom_model.custom_loss(
+                    x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
+                    vacuum_overflow=_vac_overflow_batch
                 )
 
                 short_buf.append(float(point_h0))
@@ -1210,6 +1218,7 @@ def train_and_evaluate(
                 vac_buf.append(float(vac_c))
                 hd_buf.append(float(hd_c))
                 ife_buf.append(float(ife_c))
+                vac_overflow_buf.append(float(vac_overflow_c))
 
             def _med(buf):
                 return float(np.median(np.array(buf))) if buf else 0.0
@@ -1228,6 +1237,7 @@ def train_and_evaluate(
             med_vac     = _med(vac_buf)
             med_hd      = _med(hd_buf)
             med_ife     = _med(ife_buf)
+            med_vac_overflow = _med(vac_overflow_buf)
 
             # Reference = mean of all active (non-zero) component medians.
             # CRPS and ECE are included only when their config lambda is active.
@@ -1250,6 +1260,9 @@ def train_and_evaluate(
                 candidate_meds.append(med_hd)
             if ife_active:
                 candidate_meds.append(med_ife)
+            vac_overflow_active = float(getattr(cfg, 'LAMBDA_VAC_OVERFLOW', 0.0)) > 0.0
+            if vac_overflow_active and med_vac_overflow > 1e-8:
+                candidate_meds.append(med_vac_overflow)
             # vac is always added (vacuum bandwidth self-limiting is always active)
             if med_vac > 1e-8:
                 candidate_meds.append(med_vac)
@@ -1879,8 +1892,28 @@ class PricePredictor:
         _t_perp_dim = int(getattr(self.config, 'T_PERP_DIM', 16))
         h_perp = layers.Dense(_t_perp_dim, activation='tanh',
                                name='t_perp_proj')(context)               # [B, T_PERP_DIM]
+
+        # === VACUUM SATURATION ===
+        # Fill each kernel dimension to VACUUM_E_MAX with calibrated Gaussian noise.
+        # natural_noise + artificial_noise = E_max at all times during training.
+        # training=False: pure pass-through (deterministic inference).
+        _e_max = float(getattr(self.config, 'VACUUM_E_MAX', 1.0))
+        h_perp_sat = VacuumSaturationNoise(
+            e_max=_e_max, name='vacuum_saturation')(h_perp)               # [B, T_PERP_DIM]
+
+        # Overflow = per-sample mean energy above E_max in the saturated subspace.
+        # This is the observable T_⊥ intensity: energy that could not be absorbed by
+        # the vacuum kernels — proportional to unexplained prediction residual.
+        vacuum_overflow = layers.Lambda(
+            lambda h: tf.nn.relu(
+                tf.reduce_mean(tf.square(h), axis=1, keepdims=True)
+                - tf.constant(_e_max, dtype=tf.float32)
+            ),
+            name='vacuum_overflow'
+        )(h_perp_sat)                                                     # [B, 1]
+
         perp_magnitude = layers.Dense(1, activation='softplus',
-                                      name='t_perp_magnitude')(h_perp)   # [B, 1]
+                                      name='t_perp_magnitude')(h_perp_sat)  # [B, 1]
 
         # === REGIME GATE (White-hole / T_⊥^up detector) ===
         # Regime gate ≈ 1.0 when market is in a "white hole" state:
@@ -1950,13 +1983,19 @@ class PricePredictor:
         variance_h2 = layers.Dense(1, activation='softplus', name='variance_h2',
                                   bias_initializer=var_bias_init)(tower_h2_var_input)
 
-        # === FINAL MODEL: 9 outputs (3 horizons × 3 heads each) ===
+        # === FINAL MODEL: 10 outputs (3 horizons × 3 heads + vacuum_overflow) ===
+        # Output index layout:
+        #   0: price_h0    1: direction_h0    2: variance_h0
+        #   3: price_h1    4: direction_h1    5: variance_h1
+        #   6: price_h2    7: direction_h2    8: variance_h2
+        #   9: vacuum_overflow  [B, 1]  (T_⊥ overflow intensity; 0 at inference)
         return models.Model(
             inputs=inp,
             outputs=[
                 price_h0, direction_h0, variance_h0,
                 price_h1, direction_h1, variance_h1,
-                price_h2, direction_h2, variance_h2
+                price_h2, direction_h2, variance_h2,
+                vacuum_overflow,
             ]
         )
 
@@ -1978,6 +2017,63 @@ class PricePredictor:
         return train_ds, val_ds
 
 # -----------------------------
+
+
+class VacuumSaturationNoise(layers.Layer):
+    """Vacuum Saturation Noise layer for the T_⊥ perpendicular subspace.
+
+    Maintains maximum vacuum kernel energy density at all times:
+        natural_noise + artificial_noise = VACUUM_E_MAX (per dimension)
+
+    During training:
+    1. Measure actual per-dimension energy:  energy[d] = mean(h²[:, d])   [T_PERP_DIM]
+    2. Compute deficit:                      deficit[d] = relu(E_max - energy[d])
+    3. Inject calibrated Gaussian noise:     noise ~ N(0, stop_grad(sqrt(deficit + ε)))
+    4. Return h + noise  (saturated subspace)
+
+    The noise is stop-gradient w.r.t. the deficit measurement so the network learns to
+    fill the vacuum with real signal rather than chasing the artificial noise level.
+
+    During inference (training=False): pass-through (deterministic predictions).
+
+    The per-sample mean energy above E_max (computed downstream as a Lambda layer)
+    is the observable T_⊥ overflow intensity — proportional to the fraction of the
+    prediction residual that lives in the hidden perpendicular subspace.
+    """
+
+    def __init__(self, e_max=1.0, eps=1e-8, **kwargs):
+        super().__init__(**kwargs)
+        self.e_max = float(e_max)
+        self.eps   = float(eps)
+
+    def call(self, h_perp, training=None):
+        if not training:
+            return h_perp
+
+        # h_perp: [B, T_PERP_DIM], values in (-1, 1) due to upstream tanh
+        h = tf.cast(h_perp, tf.float32)
+
+        # Batch-level per-dimension energy measurement
+        energy_per_dim = tf.reduce_mean(tf.square(h), axis=0)          # [T_PERP_DIM]
+
+        # Deficit = how much energy is missing to reach E_max per dim
+        deficit = tf.nn.relu(
+            tf.constant(self.e_max, dtype=tf.float32) - energy_per_dim
+        )                                                                # [T_PERP_DIM]
+
+        # Stop-gradient: noise level is treated as a constant forcing signal,
+        # not a target the network learns to game by minimising deficit.
+        noise_std = tf.stop_gradient(
+            tf.sqrt(deficit + tf.constant(self.eps, dtype=tf.float32))
+        )                                                                # [T_PERP_DIM]
+
+        noise = tf.random.normal(shape=tf.shape(h), dtype=tf.float32)  # [B, T_PERP_DIM]
+        return h + noise * noise_std                                    # broadcast over B
+
+    def get_config(self):
+        cfg = super().get_config()
+        cfg.update({'e_max': self.e_max, 'eps': self.eps})
+        return cfg
 
 
 class CustomTrainModel(models.Model):
@@ -2013,10 +2109,11 @@ class CustomTrainModel(models.Model):
         self.lambda_crps = float(getattr(config, 'LAMBDA_CRPS', 0.0))
         self.lambda_soft_ece = float(getattr(config, 'LAMBDA_SOFT_ECE', 0.0))
         # === T_⊥ / QBOX lambdas (default 0.0 → backward compatible; enable explicitly) ===
-        self.lambda_t_perp  = float(getattr(config, 'LAMBDA_T_PERP',  0.0))
-        self.lambda_casimir = float(getattr(config, 'LAMBDA_CASIMIR', 0.0))
-        self.lambda_hd      = float(getattr(config, 'LAMBDA_HD',      0.0))
-        self.lambda_ife     = float(getattr(config, 'LAMBDA_IFE',     0.0))
+        self.lambda_t_perp       = float(getattr(config, 'LAMBDA_T_PERP',       0.0))
+        self.lambda_casimir      = float(getattr(config, 'LAMBDA_CASIMIR',      0.0))
+        self.lambda_hd           = float(getattr(config, 'LAMBDA_HD',           0.0))
+        self.lambda_ife          = float(getattr(config, 'LAMBDA_IFE',          0.0))
+        self.lambda_vac_overflow = float(getattr(config, 'LAMBDA_VAC_OVERFLOW', 0.0))
         self.config = config or Config()
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
@@ -2167,17 +2264,23 @@ class CustomTrainModel(models.Model):
     # -------------------------
     # Combined custom loss (NEW: Per-horizon outputs with focal loss)
     # -------------------------
-    def custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends):
+    def custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends,
+                    vacuum_overflow=None):
         """Delegate to centralized implementation in `losses.py`."""
-        return _losses.custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends)
+        return _losses.custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends,
+                                   vacuum_overflow=vacuum_overflow)
 
     def train_step(self, data):
         x_window, y_true, last_close, extended_trends = data
         with tf.GradientTape() as tape:
             y_pred = self(x_window, training=True)
-            loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
+            # Unpack 10th output (vacuum overflow) before passing to custom_loss
+            (*y_pred_9, vac_overflow_pred) = y_pred
+            loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
+                                               extended_trends,
+                                               vacuum_overflow=vac_overflow_pred)
 
-        # Unpack 33-component tuple from custom_loss
+        # Unpack 34-component tuple from custom_loss
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -2188,7 +2291,8 @@ class CustomTrainModel(models.Model):
          reg_val, inter_reg, vol_loss,
          crps_h0, crps_h1, crps_h2,
          soft_ece_h0, soft_ece_h1, soft_ece_h2,
-         t_perp_total, casimir_val, vac_val, hd_val, ife_val) = loss_components
+         t_perp_total, casimir_val, vac_val, hd_val, ife_val,
+         vac_overflow_val) = loss_components
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -2253,7 +2357,7 @@ class CustomTrainModel(models.Model):
         true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
 
         # Extract direction predictions for all 3 horizons
-        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred
+        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred_9
         dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)
         dir_pred_h1 = tf.squeeze(dir_pred_h1, axis=1)
         dir_pred_h2 = tf.squeeze(dir_pred_h2, axis=1)
@@ -2315,21 +2419,21 @@ class CustomTrainModel(models.Model):
         pit_ks_h2 = tf.constant(float('nan'), dtype=tf.float32)
         if pit_uniformity is not None:
             try:
-                sigma_h0_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred[2], axis=1),
+                sigma_h0_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred_9[2], axis=1),
                                                         float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                                         float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
-                sigma_h1_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred[5], axis=1),
+                sigma_h1_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred_9[5], axis=1),
                                                         float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                                         float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
-                sigma_h2_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred[8], axis=1),
+                sigma_h2_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred_9[8], axis=1),
                                                         float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                                         float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
                 y_true_h0_np = y_true[:, 0].numpy()
                 y_true_h1_np = y_true[:, 1].numpy()
                 y_true_h2_np = y_true[:, 2].numpy()
-                mu_h0_np = tf.squeeze(y_pred[0], axis=1).numpy()
-                mu_h1_np = tf.squeeze(y_pred[3], axis=1).numpy()
-                mu_h2_np = tf.squeeze(y_pred[6], axis=1).numpy()
+                mu_h0_np = tf.squeeze(y_pred_9[0], axis=1).numpy()
+                mu_h1_np = tf.squeeze(y_pred_9[3], axis=1).numpy()
+                mu_h2_np = tf.squeeze(y_pred_9[6], axis=1).numpy()
                 pit_ks_h0 = tf.constant(pit_uniformity(y_true_h0_np, mu_h0_np, sigma_h0_np), dtype=tf.float32)
                 pit_ks_h1 = tf.constant(pit_uniformity(y_true_h1_np, mu_h1_np, sigma_h1_np), dtype=tf.float32)
                 pit_ks_h2 = tf.constant(pit_uniformity(y_true_h2_np, mu_h2_np, sigma_h2_np), dtype=tf.float32)
@@ -2383,6 +2487,7 @@ class CustomTrainModel(models.Model):
             "vac_loss": vac_val,
             "hd_loss": hd_val,
             "ife_loss": ife_val,
+            "vac_overflow_loss": vac_overflow_val,
             **metrics_head,
             **metrics_gauss
         }
@@ -2504,9 +2609,13 @@ class CustomTrainModel(models.Model):
     def test_step(self, data):
         x_window, y_true, last_close, extended_trends = data
         y_pred = self(x_window, training=False)
-        loss_components = self.custom_loss(x_window, y_true, y_pred, last_close, extended_trends)
+        # Unpack 10th output (vacuum overflow; near-zero at inference)
+        (*y_pred_9, vac_overflow_pred) = y_pred
+        loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
+                                           extended_trends,
+                                           vacuum_overflow=vac_overflow_pred)
 
-        # Unpack 33-component tuple
+        # Unpack 34-component tuple
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -2517,7 +2626,8 @@ class CustomTrainModel(models.Model):
          reg_val, inter_reg, vol_loss,
          crps_h0, crps_h1, crps_h2,
          soft_ece_h0, soft_ece_h1, soft_ece_h2,
-         t_perp_total, casimir_val, vac_val, hd_val, ife_val) = loss_components
+         t_perp_total, casimir_val, vac_val, hd_val, ife_val,
+         vac_overflow_val) = loss_components
 
         # Compute direction labels with the same trade-aware deadband used in training loss.
         y_true = tf.cast(y_true, tf.float32)
@@ -2540,7 +2650,7 @@ class CustomTrainModel(models.Model):
         true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
         true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
 
-        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred
+        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred_9
         dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)
         dir_pred_h1 = tf.squeeze(dir_pred_h1, axis=1)
         dir_pred_h2 = tf.squeeze(dir_pred_h2, axis=1)
@@ -2642,6 +2752,7 @@ class CustomTrainModel(models.Model):
             "vac_loss": vac_val,
             "hd_loss": hd_val,
             "ife_loss": ife_val,
+            "vac_overflow_loss": vac_overflow_val,
             **metrics_head,
             **metrics_gauss
         }
@@ -2716,11 +2827,12 @@ def _qbox_dashboard_html(logs):
     so the section stays hidden when all QBOX lambdas are 0.
     """
     components = [
-        ('t_perp_loss',  'T⊥ calib',  'val_t_perp_loss'),
-        ('casimir_loss', 'Casimir',    'val_casimir_loss'),
-        ('vac_loss',     'Vac BW',     'val_vac_loss'),
-        ('hd_loss',      'Hyper-Dec',  'val_hd_loss'),
-        ('ife_loss',     'Info-Flow',  'val_ife_loss'),
+        ('t_perp_loss',       'T⊥ calib',   'val_t_perp_loss'),
+        ('casimir_loss',      'Casimir',     'val_casimir_loss'),
+        ('vac_loss',          'Vac BW',      'val_vac_loss'),
+        ('hd_loss',           'Hyper-Dec',   'val_hd_loss'),
+        ('ife_loss',          'Info-Flow',   'val_ife_loss'),
+        ('vac_overflow_loss', 'T⊥ Overflow', 'val_vac_overflow_loss'),
     ]
     rows = []
     for train_key, label, val_key in components:
@@ -2993,7 +3105,7 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     # --- QBOX / T_⊥ aggregate alias ---
     # Sum all active T_⊥ loss components so the dashboard can plot a single trend line.
     # Components with lambda=0 contribute 0, so this is safe even when losses are off.
-    _qbox_train_keys = ['t_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss']
+    _qbox_train_keys = ['t_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss', 'vac_overflow_loss']
     _qbox_val_keys   = [f'val_{k}' for k in _qbox_train_keys]
     _qbox_train_sum  = sum(float(out[k]) for k in _qbox_train_keys if k in out)
     _qbox_val_sum    = sum(float(out[k]) for k in _qbox_val_keys   if k in out)

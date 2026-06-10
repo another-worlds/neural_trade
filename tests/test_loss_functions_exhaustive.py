@@ -695,6 +695,7 @@ _casimir       = Losses.get('casimir_interference_loss')
 _vac_bw        = Losses.get('vacuum_bandwidth_loss')
 _hd            = Losses.get('hyper_decoherence_coupling_loss')
 _ife           = Losses.get('information_flow_entropy_loss')
+_vac_overflow  = Losses.get('vacuum_overflow_t_perp_loss')
 
 B = 8  # batch size
 
@@ -804,4 +805,63 @@ class TestQBOXLosses:
         assert float(result) >= 0.0, "IFE loss must be non-negative"
         # |corr| = 1.0 with rho_max=0.50 → (1.0 - 0.5)^2 * 2 = 0.5
         assert float(result) > 0.0, "Perfect correlation should yield positive IFE loss"
+
+
+class TestVacuumOverflowLoss:
+    """Tests for vacuum_overflow_t_perp_loss.
+
+    The loss measures alignment between:
+      - mean vacuum overflow signal  (energy above E_max in hidden-perp subspace)
+      - mean absolute prediction residual across three horizons
+    Loss = (mean_overflow - mean_residual)² / (mean_residual² + ε)
+    """
+
+    def test_perfect_alignment_zero_loss(self):
+        """When overflow equals residual magnitude exactly, loss ≈ 0."""
+        tf.random.set_seed(0)
+        residual = tf.constant(0.3, dtype=tf.float32)
+        # y_true and price differ by `residual` per sample (all horizons equal)
+        y_true = tf.zeros([B, 1], dtype=tf.float32)
+        price  = tf.ones([B, 1], dtype=tf.float32) * residual
+        overflow = tf.ones([B, 1], dtype=tf.float32) * residual  # matches mean residual
+        result = _vac_overflow(None, overflow, y_true, price, y_true, price, y_true, price)
+        assert float(result) < 1e-6, f"Perfectly aligned overflow/residual → loss should be ~0, got {float(result)}"
+
+    def test_zero_overflow_zero_residual_near_zero(self):
+        """When both overflow and residuals are zero, loss is numerically safe (not NaN/inf)."""
+        y_true   = tf.zeros([B, 1], dtype=tf.float32)
+        overflow = tf.zeros([B, 1], dtype=tf.float32)
+        result = _vac_overflow(None, overflow, y_true, y_true, y_true, y_true, y_true, y_true)
+        assert tf.math.is_finite(result), f"Zero-overflow/zero-residual should be finite, got {float(result)}"
+        assert float(result) >= 0.0
+
+    def test_large_overflow_small_residual_positive(self):
+        """Large overflow with near-zero residuals → positive, finite loss."""
+        y_true   = tf.zeros([B, 1], dtype=tf.float32)
+        price    = tf.zeros([B, 1], dtype=tf.float32)        # residual ≈ 0
+        overflow = tf.ones([B, 1], dtype=tf.float32) * 5.0  # big overflow signal
+        result = _vac_overflow(None, overflow, y_true, price, y_true, price, y_true, price)
+        assert tf.math.is_finite(result), f"Result must be finite, got {float(result)}"
+        assert float(result) > 0.0, "Large overflow vs tiny residual should yield positive loss"
+
+    def test_non_negative(self):
+        """Loss is always non-negative (it is a squared term)."""
+        tf.random.set_seed(42)
+        y_true   = tf.random.normal([B, 1])
+        price    = tf.random.normal([B, 1])
+        overflow = tf.random.uniform([B, 1], 0.0, 2.0)
+        result = _vac_overflow(None, overflow, y_true, price, y_true, price, y_true, price)
+        assert float(result) >= 0.0, f"Loss must be non-negative, got {float(result)}"
+
+    def test_gradient_flows(self):
+        """Gradients wrt overflow tensor must exist and be finite."""
+        tf.random.set_seed(99)
+        y_true   = tf.random.normal([B, 1])
+        price    = tf.random.normal([B, 1])
+        overflow = tf.Variable(tf.random.uniform([B, 1], 0.1, 1.0))
+        with tf.GradientTape() as tape:
+            loss = _vac_overflow(None, overflow, y_true, price, y_true, price, y_true, price)
+        grad = tape.gradient(loss, overflow)
+        assert grad is not None, "Gradient wrt overflow must exist"
+        assert tf.reduce_all(tf.math.is_finite(grad)), f"Gradient must be finite: {grad}"
 
