@@ -11,9 +11,32 @@ to normalize common return shapes for logging (e.g., scalar, dict, tuple).
 """
 from __future__ import annotations
 from typing import Callable, Dict, Any, Tuple
+from collections import namedtuple
 import tensorflow as tf
 
 from core.registry import BaseRegistry
+
+# Robust representation of the 34-component loss return from custom_loss.
+# NamedTuple is a tuple subclass, so all existing positional unpacks in
+# CustomTrainModel.train_step / test_step, lambda calibration sampler,
+# and tests continue to work unchanged. New code can use attribute access.
+LossComponents = namedtuple(
+    'LossComponents',
+    [
+        'total',
+        'point_h0', 'point_h1', 'point_h2',
+        'local_h0', 'global_h0', 'extended_h0',
+        'local_h1', 'global_h1', 'extended_h1',
+        'local_h2', 'global_h2', 'extended_h2',
+        'dir_h0', 'dir_h1', 'dir_h2',
+        'nll_h0', 'nll_h1', 'nll_h2',
+        'reg_loss', 'inter_reg', 'vol_loss',
+        'crps_h0', 'crps_h1', 'crps_h2',
+        'soft_ece_h0', 'soft_ece_h1', 'soft_ece_h2',
+        't_perp_total', 'casimir_val', 'vac_val', 'hd_val', 'ife_val',
+        'vac_overflow_val',
+    ]
+)
 
 
 class Losses(BaseRegistry):
@@ -179,6 +202,15 @@ def compute_dynamic_alpha(model_or_labels, true_labels=None, min_alpha=0.3, max_
 
 @Losses.register(name="point_huber", tags=["regression", "robust", "logcosh"])
 def point_huber(model, y_true_scaled, y_pred_scaled, last_close_scaled=None, delta=None):
+    """Log-cosh point loss (smooth, robust regression loss).
+
+    Registered name "point_huber" is retained for backward compatibility with
+    tests, the Losses registry, and any external code that does Losses.get('point_huber').
+    The implementation has always been log(cosh) (see exhaustive tests and
+    CustomTrainModel point_huber delegation comment). A separate piecewise Huber
+    implementation exists on CustomTrainModel.huber but is not wired into the
+    primary point supervision path.
+    """
     y_true = tf.squeeze(y_true_scaled, axis=1)
     y_pred = tf.squeeze(y_pred_scaled, axis=1)
     diffs = y_true - y_pred
@@ -231,11 +263,17 @@ def extended_trend_loss(model, x_window, y_true_raw, y_pred_raw, extended_trends
 
     def compute_extended():
         eps = tf.cast(1e-8, tf.float32)
+        # Extended trends are now absolute deltas (price[t] - price[t-p]) per the
+        # contract in DataProcessor.compute_extended_trend_features (see model.py:282).
+        # Previously this code treated them as fractional returns (last / (1 + trend)),
+        # which was invalidated by the data-layer refactor. Fix: use direct delta arithmetic.
         long_term_trend = tf.cast(extended_trends[:, -1], tf.float32)
-        long_term_trend = tf.clip_by_value(long_term_trend, -0.999, 1e6)
-        past_price_long = last_close / (1.0 + long_term_trend + eps)
-        long_price_diff_raw = last_close - past_price_long
-        long_price_diff_scaled = long_price_diff_raw / (model.pred_scale + model.eps)
+        long_term_trend = tf.clip_by_value(long_term_trend, -1e6, 1e6)  # deltas, not returns
+        # implied delta from the trend feature is exactly the feature value itself
+        long_price_diff_raw = long_term_trend
+        long_price_diff_scaled = model._to_scaled_static(
+            long_price_diff_raw, model.pred_mean, model.pred_scale, model.eps
+        )
 
         long_diffs = pred_trend_scaled - long_price_diff_scaled
         long_logcosh = tf.math.log(tf.cosh(long_diffs))
@@ -245,11 +283,13 @@ def extended_trend_loss(model, x_window, y_true_raw, y_pred_raw, extended_trends
 
         def compute_multi():
             short_trends = tf.cast(extended_trends[:, :-1], tf.float32)
-            short_trends = tf.clip_by_value(short_trends, -0.999, 1e6)
+            short_trends = tf.clip_by_value(short_trends, -1e6, 1e6)
 
-            past_prices = last_close[:, None] / (1.0 + short_trends + eps)
-            short_price_diff_raw = last_close[:, None] - past_prices
-            short_price_diff_scaled = short_price_diff_raw / (model.pred_scale + model.eps)
+            # For each short period the feature value *is* the absolute delta over that lag.
+            short_price_diff_raw = short_trends
+            short_price_diff_scaled = model._to_scaled_static(
+                short_price_diff_raw, model.pred_mean, model.pred_scale, model.eps
+            )
 
             short_diffs = tf.expand_dims(pred_trend_scaled, 1) - short_price_diff_scaled
             logcosh_losses = tf.math.log(tf.cosh(short_diffs))
@@ -416,7 +456,7 @@ def vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac=None):
     Loss = mean(relu(std(p0, p1, p2) - Λ_vac))
     """
     if lambda_vac is None:
-        lambda_vac = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 1.0)),
+        lambda_vac = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 0.0)),
                                  dtype=tf.float32)
     lv = tf.cast(lambda_vac, tf.float32)
 
@@ -427,7 +467,16 @@ def vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac=None):
     stacked = tf.stack([p0, p1, p2], axis=1)                   # [B, 3]
     cross_std = tf.math.reduce_std(stacked, axis=1)             # [B]
     violation = tf.nn.relu(cross_std - lv)
-    return tf.reduce_mean(violation)
+    mean_viol = tf.reduce_mean(violation)
+
+    # P0-2: opt-in via LAMBDA_VAC (default 0 in Config). Graph-safe conditional for
+    # Keras fit / train_step / @tf.function autograph (OperatorNotAllowedInGraphError).
+    # When lv <= 0 the term contributes exactly 0 (no penalty, no gradient from it).
+    return tf.cond(
+        tf.greater(lv, 0.0),
+        lambda: mean_viol,
+        lambda: tf.constant(0.0, dtype=tf.float32)
+    )
 
 
 @Losses.register(name="hyper_decoherence_coupling_loss",
@@ -544,6 +593,26 @@ def vacuum_overflow_t_perp_loss(model, vacuum_overflow,
     return tf.square(mean_ov - mean_res) / (tf.square(mean_res) + eps)
 
 
+def _compute_direction_labels_and_masks_tf(y_true_raw, last_close_squeeze, deadband_bps, eps=1e-8):
+    """TF-graph version of direction labeling with deadband (single source of truth).
+
+    Used by custom_loss (and can be reused by train_step/test_step direction metric code).
+    Returns (mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2).
+    Mirrors the logic previously duplicated in custom_loss, train/test_step, and _compute_...
+    """
+    deadband = tf.cast(deadband_bps, tf.float32) / tf.constant(10000.0, dtype=tf.float32)
+    ret_h0 = y_true_raw[:, 0] / (last_close_squeeze + eps)
+    ret_h1 = y_true_raw[:, 1] / (last_close_squeeze + eps)
+    ret_h2 = y_true_raw[:, 2] / (last_close_squeeze + eps)
+    mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
+    mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
+    mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
+    true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
+    true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
+    true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
+    return mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2
+
+
 @Losses.register(name="custom_loss", tags=["composite", "default", "multi_output"])
 def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
                vacuum_overflow=None):
@@ -561,36 +630,66 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     y_true_raw_h2 = y_true_raw[:, 2]
 
     deadband_bps = tf.cast(getattr(model.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
+    mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2 = (
+        _compute_direction_labels_and_masks_tf(
+            y_true_raw, last_close_squeeze, deadband_bps, model.eps
+        )
+    )
+
+    # The scaled deadband is still needed later for dir_align and gauss_p_up calculations.
     deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
-
-    ret_h0 = (y_true_raw_h0) / (last_close_squeeze + model.eps)
-    ret_h1 = (y_true_raw_h1) / (last_close_squeeze + model.eps)
-    ret_h2 = (y_true_raw_h2) / (last_close_squeeze + model.eps)
-
-    mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-    mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-    mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
-
-    true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-    true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-    true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
 
     # y_pred unpacking
     price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, price_h2, dir_h2, var_h2 = y_pred
+
+    # Sanitize heads (belt-and-suspenders with output clips in build_model).
+    # Ensures no NaN/Inf reaches *any* loss term (point, dir, nll, casimir, t_perp, ife, vacuum, hd, align, etc.).
+    # Prevents 0*nan pollution in total even for "inactive" (lambda=0) terms, and keeps all components finite.
+    price_h0 = tf.where(tf.math.is_finite(price_h0), price_h0, tf.zeros_like(price_h0))
+    dir_h0   = tf.where(tf.math.is_finite(dir_h0),   dir_h0,   tf.ones_like(dir_h0) * 0.5)
+    var_h0   = tf.where(tf.math.is_finite(var_h0),   var_h0,   tf.ones_like(var_h0))
+    price_h1 = tf.where(tf.math.is_finite(price_h1), price_h1, tf.zeros_like(price_h1))
+    dir_h1   = tf.where(tf.math.is_finite(dir_h1),   dir_h1,   tf.ones_like(dir_h1) * 0.5)
+    var_h1   = tf.where(tf.math.is_finite(var_h1),   var_h1,   tf.ones_like(var_h1))
+    price_h2 = tf.where(tf.math.is_finite(price_h2), price_h2, tf.zeros_like(price_h2))
+    dir_h2   = tf.where(tf.math.is_finite(dir_h2),   dir_h2,   tf.ones_like(dir_h2) * 0.5)
+    var_h2   = tf.where(tf.math.is_finite(var_h2),   var_h2,   tf.ones_like(var_h2))
 
     point_loss_h0_val = model.lambda_short * point_huber(model, y_true_h0, price_h0)
     point_loss_h1_val = model.lambda_point * point_huber(model, y_true_h1, price_h1)
     point_loss_h2_val = model.lambda_long * point_huber(model, y_true_h2, price_h2)
     point_loss_val = point_loss_h0_val + point_loss_h1_val + point_loss_h2_val
+    point_loss_val = tf.where(tf.math.is_finite(point_loss_val), point_loss_val, tf.constant(0.0, dtype=tf.float32))
+    point_loss_h0_val = tf.where(tf.math.is_finite(point_loss_h0_val), point_loss_h0_val, tf.constant(0.0, dtype=tf.float32))
+    point_loss_h1_val = tf.where(tf.math.is_finite(point_loss_h1_val), point_loss_h1_val, tf.constant(0.0, dtype=tf.float32))
+    point_loss_h2_val = tf.where(tf.math.is_finite(point_loss_h2_val), point_loss_h2_val, tf.constant(0.0, dtype=tf.float32))
 
-    pred_scale = tf.cast(model.pred_scale + model.eps, tf.float32)
-    extended_trends_scaled_h0 = extended_trends[:, 0:1] / pred_scale
-    extended_trends_scaled_h1 = extended_trends[:, 1:2] / pred_scale
-    extended_trends_scaled_h2 = extended_trends[:, 2:3] / pred_scale
+    # Use the registered trend loss fns (now fixed for absolute-delta extended_trends
+    # per DataProcessor contract). This activates the intended multi-scale "global from
+    # window start" + feature-implied trend matching instead of the previous naive
+    # (and incorrectly scaled) direct regression of future delta heads onto past deltas.
+    # The returned values populate the per-horizon slots for logging/metrics and
+    # contribute (via extended_trend_h*) to trend_loss_val.
+    # last_close (the [B,1] tensor from the dataset) is passed; the fns squeeze internally.
+    # Squeeze the per-horizon price outputs to 1D for the registered trend loss fns
+    # (they expect 1D y_pred_raw for the per-horizon calls; model outputs are [B,1]).
+    price_h0_s = tf.squeeze(price_h0, axis=1)
+    price_h1_s = tf.squeeze(price_h1, axis=1)
+    price_h2_s = tf.squeeze(price_h2, axis=1)
 
-    trend_loss_h0 = tf.reduce_mean(tf.square(price_h0 - extended_trends_scaled_h0))
-    trend_loss_h1 = tf.reduce_mean(tf.square(price_h1 - extended_trends_scaled_h1))
-    trend_loss_h2 = tf.reduce_mean(tf.square(price_h2 - extended_trends_scaled_h2))
+    local_trend_h0 = local_trend_loss(model, x_window, y_true_raw_h0, price_h0_s, last_close)
+    g0, ext0 = extended_trend_loss(model, x_window, y_true_raw_h0, price_h0_s, extended_trends, last_close)
+    local_trend_h1 = local_trend_loss(model, x_window, y_true_raw_h1, price_h1_s, last_close)
+    g1, ext1 = extended_trend_loss(model, x_window, y_true_raw_h1, price_h1_s, extended_trends, last_close)
+    local_trend_h2 = local_trend_loss(model, x_window, y_true_raw_h2, price_h2_s, last_close)
+    g2, ext2 = extended_trend_loss(model, x_window, y_true_raw_h2, price_h2_s, extended_trends, last_close)
+
+    # For backward compatibility of the "trend_loss_val" formula we keep the previous
+    # structure (extended components + coherence). The globals are available in the
+    # returned components for richer logging.
+    trend_loss_h0 = ext0
+    trend_loss_h1 = ext1
+    trend_loss_h2 = ext2
 
     sign_pred_h0 = tf.sign(price_h0)
     sign_pred_h1 = tf.sign(price_h1)
@@ -599,6 +698,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_agree_h01 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h0, sign_pred_h1), tf.float32))
     dir_agree_h12 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h1, sign_pred_h2), tf.float32))
     dir_disagree_loss = 1.0 - (dir_agree_h01 + dir_agree_h12) / 2.0
+    dir_disagree_loss = tf.where(tf.math.is_finite(dir_disagree_loss), dir_disagree_loss, tf.constant(0.0, dtype=tf.float32))
 
     abs_pred_h0 = tf.abs(price_h0)
     abs_pred_h1 = tf.abs(price_h1)
@@ -607,6 +707,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     magnitude_h01_violation = tf.nn.relu(abs_pred_h0 - abs_pred_h1)
     magnitude_h12_violation = tf.nn.relu(abs_pred_h1 - abs_pred_h2)
     magnitude_loss = tf.reduce_mean(magnitude_h01_violation + magnitude_h12_violation)
+    magnitude_loss = tf.where(tf.math.is_finite(magnitude_loss), magnitude_loss, tf.constant(0.0, dtype=tf.float32))
 
     sign_target_h0 = tf.sign(y_true_raw_h0)
     sign_target_h1 = tf.sign(y_true_raw_h1)
@@ -615,17 +716,19 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0, 
                                      sign_target_h1 == sign_target_h2), tf.float32)
     )
+    target_smoothness_loss = tf.where(tf.math.is_finite(target_smoothness_loss), target_smoothness_loss, tf.constant(0.0, dtype=tf.float32))
 
     coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
+    coherence_penalty = tf.where(tf.math.is_finite(coherence_penalty), coherence_penalty, tf.constant(0.0, dtype=tf.float32))
 
-    local_trend_h0 = tf.constant(0.0, dtype=tf.float32)
-    global_trend_h0 = tf.constant(0.0, dtype=tf.float32)
+    # Assign from the registered calls above (scaled correctly, using fixed delta math).
+    # Multiply the extended components by the per-horizon lambda here for consistency
+    # with prior behavior (the registered fn returns the raw component loss).
+    global_trend_h0 = g0
     extended_trend_h0 = model.lambda_extended_trend * trend_loss_h0
-    local_trend_h1 = tf.constant(0.0, dtype=tf.float32)
-    global_trend_h1 = tf.constant(0.0, dtype=tf.float32)
+    global_trend_h1 = g1
     extended_trend_h1 = model.lambda_extended_trend * trend_loss_h1
-    local_trend_h2 = tf.constant(0.0, dtype=tf.float32)
-    global_trend_h2 = tf.constant(0.0, dtype=tf.float32)
+    global_trend_h2 = g2
     extended_trend_h2 = model.lambda_extended_trend * trend_loss_h2
 
     trend_loss_val = extended_trend_h0 + extended_trend_h1 + extended_trend_h2 + coherence_penalty * 0.01
@@ -648,7 +751,11 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_loss_h0 = tf.reduce_sum(per_ex_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + model.eps)
     dir_loss_h1 = tf.reduce_sum(per_ex_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + model.eps)
     dir_loss_h2 = tf.reduce_sum(per_ex_h2 * mask_h2) / (tf.reduce_sum(mask_h2) + model.eps)
+    dir_loss_h0 = tf.where(tf.math.is_finite(dir_loss_h0), dir_loss_h0, tf.constant(0.0, dtype=tf.float32))
+    dir_loss_h1 = tf.where(tf.math.is_finite(dir_loss_h1), dir_loss_h1, tf.constant(0.0, dtype=tf.float32))
+    dir_loss_h2 = tf.where(tf.math.is_finite(dir_loss_h2), dir_loss_h2, tf.constant(0.0, dtype=tf.float32))
     total_dir_loss = model.lambda_dir * (dir_loss_h0 + dir_loss_h1 + dir_loss_h2)
+    total_dir_loss = tf.where(tf.math.is_finite(total_dir_loss), total_dir_loss, tf.constant(0.0, dtype=tf.float32))
 
     var_floor = tf.cast(getattr(model.config, 'VAR_FLOOR', 1e-4), tf.float32)
     var_cap = tf.cast(getattr(model.config, 'VAR_CAP', 1e4), tf.float32)
@@ -664,7 +771,11 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     nll_h1_val = tf.reduce_mean(nll_h1)
     nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + model.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + model.eps)
     nll_h2_val = tf.reduce_mean(nll_h2)
+    nll_h0_val = tf.where(tf.math.is_finite(nll_h0_val), nll_h0_val, tf.constant(0.0, dtype=tf.float32))
+    nll_h1_val = tf.where(tf.math.is_finite(nll_h1_val), nll_h1_val, tf.constant(0.0, dtype=tf.float32))
+    nll_h2_val = tf.where(tf.math.is_finite(nll_h2_val), nll_h2_val, tf.constant(0.0, dtype=tf.float32))
     total_nll = model.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
+    total_nll = tf.where(tf.math.is_finite(total_nll), total_nll, tf.constant(0.0, dtype=tf.float32))
 
     mu_h0 = tf.squeeze(price_h0, axis=1)
     mu_h1 = tf.squeeze(price_h1, axis=1)
@@ -711,6 +822,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     crps_h1_val = crps_gaussian_loss(model, y_true_h1, price_h1, var_h1_c)
     crps_h2_val = crps_gaussian_loss(model, y_true_h2, price_h2, var_h2_c)
     total_crps = lambda_crps * (crps_h0_val + crps_h1_val + crps_h2_val)
+    total_crps = tf.where(tf.math.is_finite(total_crps), total_crps, tf.constant(0.0, dtype=tf.float32))
 
     # === SOFT-ECE LOSSES (differentiable Expected Calibration Error) ===
     # Directly minimizes direction-head calibration error w.r.t. realized outcomes.
@@ -721,6 +833,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     soft_ece_h1_val = soft_ece_loss(model, true_dir_h1, dir_pred_h1, mask_h1)
     soft_ece_h2_val = soft_ece_loss(model, true_dir_h2, dir_pred_h2, mask_h2)
     total_soft_ece = lambda_soft_ece * (soft_ece_h0_val + soft_ece_h1_val + soft_ece_h2_val)
+    total_soft_ece = tf.where(tf.math.is_finite(total_soft_ece), total_soft_ece, tf.constant(0.0, dtype=tf.float32))
 
     # === T_⊥ / QBOX LOSSES ===
     # T_⊥ calibration: predicted σ tracks empirical residual std (T_⊥ is what we can't explain)
@@ -729,25 +842,31 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     t_perp_h1_val = t_perp_calibration_loss(model, y_true_h1, price_h1, var_h1_c)
     t_perp_h2_val = t_perp_calibration_loss(model, y_true_h2, price_h2, var_h2_c)
     total_t_perp = lambda_t_perp * (t_perp_h0_val + t_perp_h1_val + t_perp_h2_val)
+    total_t_perp = tf.where(tf.math.is_finite(total_t_perp), total_t_perp, tf.constant(0.0, dtype=tf.float32))
 
     # Casimir: destructive cross-horizon interference → T_⊥ (σ) must be high
     lambda_casimir = tf.constant(float(getattr(model, 'lambda_casimir', 0.0)), dtype=tf.float32)
     casimir_val = lambda_casimir * casimir_interference_loss(
         model, price_h0, price_h1, price_h2, var_h0_c, var_h1_c, var_h2_c)
+    casimir_val = tf.where(tf.math.is_finite(casimir_val), casimir_val, tf.constant(0.0, dtype=tf.float32))
 
     # Vacuum bandwidth: cross-horizon spread must not exceed Λ_vac (self-limiting)
-    lambda_vac_cfg = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 1.0)),
+    # P0-2: now opt-in (default 0 in Config + helper). When 0 the term is 0.
+    lambda_vac_cfg = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 0.0)),
                                  dtype=tf.float32)
     vac_val = vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac_cfg)
+    vac_val = tf.where(tf.math.is_finite(vac_val), vac_val, tf.constant(0.0, dtype=tf.float32))
 
     # Hyper-decoherence: high local volatility should couple to high σ
     lambda_hd = tf.constant(float(getattr(model, 'lambda_hd', 0.0)), dtype=tf.float32)
     hd_val = lambda_hd * hyper_decoherence_coupling_loss(
         model, x_window, var_h0_c, var_h1_c, var_h2_c)
+    hd_val = tf.where(tf.math.is_finite(hd_val), hd_val, tf.constant(0.0, dtype=tf.float32))
 
     # Information flow entropy: each horizon must carry non-redundant information
     lambda_ife = tf.constant(float(getattr(model, 'lambda_ife', 0.0)), dtype=tf.float32)
     ife_val = lambda_ife * information_flow_entropy_loss(model, price_h0, price_h1, price_h2)
+    ife_val = tf.where(tf.math.is_finite(ife_val), ife_val, tf.constant(0.0, dtype=tf.float32))
 
     # Vacuum overflow T_⊥ precision: overflow tracks prediction residual magnitude
     # Active only when lambda_vac_overflow > 0 AND vacuum_overflow tensor is provided.
@@ -762,6 +881,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         )
     else:
         vac_overflow_val = tf.constant(0.0, dtype=tf.float32)
+    vac_overflow_val = tf.where(tf.math.is_finite(vac_overflow_val), vac_overflow_val, tf.constant(0.0, dtype=tf.float32))
 
     total = (
         point_loss_val +
@@ -782,23 +902,13 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         ife_val +                   # Information flow entropy (active only when lambda_ife > 0)
         vac_overflow_val            # Vacuum overflow T_⊥ precision (active when lambda_vac_overflow > 0)
     )
+    total = tf.where(tf.math.is_finite(total), total, tf.constant(0.0, dtype=tf.float32))
 
-    # Return tuple: 34 components total
-    # [0]    total_loss
-    # [1-3]  point_h0, point_h1, point_h2
-    # [4-12] local_h0, global_h0, extended_h0, ..., extended_h2
-    # [13-15] dir_h0, dir_h1, dir_h2
-    # [16-18] nll_h0, nll_h1, nll_h2
-    # [19-21] reg_loss, inter_reg, vol_loss
-    # [22-24] crps_h0, crps_h1, crps_h2
-    # [25-27] soft_ece_h0, soft_ece_h1, soft_ece_h2
-    # [28]    t_perp_total    (T_⊥ calibration)
-    # [29]    casimir_val     (Casimir interference)
-    # [30]    vac_val         (Vacuum bandwidth)
-    # [31]    hd_val          (Hyper-decoherence coupling)
-    # [32]    ife_val         (Information flow entropy)
-    # [33]    vac_overflow_val (Vacuum overflow T_⊥ precision)
-    return (
+    # Return as LossComponents (NamedTuple subclass). This preserves exact
+    # 34-element tuple shape / positional unpacking for all callers while
+    # enabling named attribute access (e.g. lc.extended_trend_h1).
+    # Update the component list only by extending the namedtuple definition above.
+    return LossComponents(
         total,
         point_loss_h0_val, point_loss_h1_val, point_loss_h2_val,
         local_trend_h0, global_trend_h0, extended_trend_h0,

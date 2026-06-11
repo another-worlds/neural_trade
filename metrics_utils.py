@@ -158,3 +158,35 @@ def pit_uniformity(
     # KS statistic: max deviation from uniform diagonal
     ks = float(np.max(np.abs(ecdf - u_sorted)))
     return ks
+
+
+def compute_direction_labels_np(
+    y_true_delta_raw: np.ndarray,
+    last_close: np.ndarray,
+    deadband_bps: float = 0.0,
+) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
+    """NumPy equivalent of the direction labeling logic (with deadband).
+
+    Centralizes the previously duplicated "compute returns, apply deadband mask,
+    produce binary UP labels" code that lived in model.py (_compute_all_horizon_metrics,
+    train/test_step), registries/losses.py:custom_loss, and calibration/pipeline.py.
+
+    Returns a dict mapping 'h0'/'h1'/'h2' to (labels, mask) numpy arrays.
+    Matches the shape/semantics expected by CalibrationPipeline and the py metrics path.
+    """
+    lc = np.asarray(last_close, dtype=float).reshape(-1)
+    y = np.asarray(y_true_delta_raw, dtype=float)
+    if y.ndim == 1:
+        y = y.reshape(-1, 1)
+
+    deadband = deadband_bps / 10_000.0
+    result = {}
+    horizons = ("h0", "h1", "h2")
+    for i, h in enumerate(horizons):
+        if i >= y.shape[1]:
+            break
+        ret = y[:, i] / (lc + 1e-12)
+        mask = (np.abs(ret) > deadband)
+        labels = (ret > deadband).astype(float)
+        result[h] = (labels, mask)
+    return result

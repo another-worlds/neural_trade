@@ -12,6 +12,9 @@ import pytest
 import numpy as np
 import sys
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path to import model
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -432,6 +435,126 @@ class TestConfigurationConsistency:
 
         assert cfg.PATIENCE <= cfg.EPOCHS, \
             "Patience should not exceed total epochs"
+
+
+# =============================================================================
+# NEW / EXPANDED tests for the specific P0-1..P1-5 (Config refactor priority)
+# Math testing is the priority area. Deep "full loss math under Config + actual
+# CustomTrainModel + registered losses" is STUBBED with logging (major work).
+# =============================================================================
+
+@pytest.mark.skipif(not MODEL_AVAILABLE, reason="model.py not available")
+class TestConfigP0P1Issues:
+    """Targeted tests for the 8 labeled Config P0/P1 issues from the plan."""
+
+    def test_p0_1_consolidated_var_floor(self):
+        """P0-1: Single VAR_FLOOR (1e-4 stabilizing) after dupe removal."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        assert cfg.VAR_FLOOR == 1e-4, "P0-1: expected consolidated 1e-4"
+        assert cfg.VAR_CAP > cfg.VAR_FLOOR
+
+    def test_p0_2_lambda_vac_default_zero(self):
+        """P0-2: LAMBDA_VAC now 0 (opt-in); vacuum constraint not unconditional."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        assert cfg.LAMBDA_VAC == 0.0, "P0-2: default must be 0 (was 1.0 always-on)"
+        # When >0 the loss will include the term (tested in losses smoke / verification)
+
+    def test_p0_3_validate_catches_basic_and_coupling(self):
+        """P0-3: validate() enforces positives + P1-4 list coupling."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        cfg.validate()  # defaults must pass
+
+        bad = Config()
+        bad.LOOKBACK = 0
+        with pytest.raises(ValueError):
+            bad.validate()
+
+        bad2 = Config()
+        bad2.HORIZON_STEPS = [10, 20]
+        bad2.EXTENDED_TREND_PERIODS = [5]
+        with pytest.raises(ValueError) as exc:
+            bad2.validate()
+        assert "must match" in str(exc.value) or "coupling" in str(exc.value).lower()
+
+    def test_p1_1_legacy_attrs_present(self):
+        """P1-1: Legacy attrs still exist (DAMPING, USE_HUBER, LAMBDA_QUANTILE)."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        assert hasattr(cfg, 'DAMPING')
+        assert hasattr(cfg, 'USE_HUBER')
+        assert hasattr(cfg, 'LAMBDA_QUANTILE')
+        # (deprecation logging is exercised in calib path and manual access in verification)
+
+    def test_p1_2_getattr_defaults_reasonable(self):
+        """P1-2: Common getattr patterns have sane defaults (no explosion on bare Config)."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        # These are the patterns used in CustomTrainModel / calib / losses
+        assert getattr(cfg, 'LAMBDA_TREND_OUTER', 0.5) >= 0
+        assert getattr(cfg, 'LAMBDA_VAC', 0.0) == 0.0  # after P0-2
+        assert getattr(cfg, 'VAR_FLOOR', 1e-4) == 1e-4
+
+    def test_p1_4_list_coupling_enforced(self):
+        """P1-4: HORIZON_STEPS vs EXTENDED_TREND_PERIODS alignment (via validate)."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        # Already tested in P0-3 coupling case; explicit extra assertion
+        assert len(cfg.HORIZON_STEPS) == len(cfg.EXTENDED_TREND_PERIODS)
+
+    def test_p1_5_math_tests_still_coupled_but_validated(self):
+        """P1-5: bare Config() still works; new validate protects the math invariants."""
+        if not MODEL_AVAILABLE:
+            pytest.skip("model.py not available")
+        cfg = Config()
+        # The old tests relied on these; we keep them working while adding validation.
+        assert cfg.LAMBDA_SHORT > 0
+        cfg.validate()
+
+
+# ------------------------------------------------------------------
+# STUBBED major deep math tests (PRIORITY area but MAJOR WORK)
+# These are the ones the user asked to stub + log right now.
+# They would exercise full Config + CustomTrainModel + registered losses
+# (NLL, vacuum, dir-align, PIT, coherence under varied configs, coupled lists,
+# consolidated VAR_FLOOR, LAMBDA_VAC=0, calib pre-pass, etc.).
+# ------------------------------------------------------------------
+
+@pytest.mark.skipif(not MODEL_AVAILABLE, reason="model.py not available")
+class TestConfigDeepMathStubs:
+    """Stubs for the major math verification work. Logged + skipped per plan."""
+
+    def test_stub_full_config_math_under_loss_computation(self):
+        logger.warning("STUB LOG: TODO major work - full Config math under custom_loss/NLL/vacuum_bandwidth_loss/dir-align/PIT when lists coupled or LAMBDA_VAC=0 or after calib pre-pass. See approved plan. Skeleton only.")
+        cfg = Config()
+        cfg.validate()
+        # TODO skeleton would do:
+        #   predictor = PricePredictor(cfg)
+        #   model = ... build ...
+        #   custom = CustomTrainModel(...)
+        #   loss_tuple = custom.custom_loss(...)
+        #   assert vacuum term == 0 when LAMBDA_VAC==0, etc.
+        pytest.skip("STUB: major math test work (P0-1/2/3 + P1-3/4/5)")
+
+    def test_stub_loss_values_with_consolidated_var_floor(self):
+        logger.warning("STUB LOG: TODO major work - exact NLL / variance clipping values with the consolidated VAR_FLOOR after P0-1.")
+        pytest.skip("STUB: major math test work")
+
+    def test_stub_vacuum_contrib_zero_when_lambda_vac_zero(self):
+        logger.warning("STUB LOG: TODO major work - vacuum contrib == 0 in loss components when LAMBDA_VAC=0 (P0-2).")
+        pytest.skip("STUB: major math test work")
+
+    def test_stub_calib_effect_on_effective_lambdas(self):
+        logger.warning("STUB LOG: TODO major work - P1-3: effective lambdas after calib pre-pass are visible and correct for T_⊥ / VAC group.")
+        pytest.skip("STUB: major math test work")
 
 
 if __name__ == "__main__":

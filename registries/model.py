@@ -144,7 +144,7 @@ class Config:
     # and allow calibration or manual tuning of each grouped term independently.
     LAMBDA_TREND_OUTER = 1.0      # Weight for trend_loss_val in total
     LAMBDA_DIR_OUTER = 1.0        # Weight for total_dir_loss in total
-    LAMBDA_DIR_ALIGN_OUTER = 0.0  # Weight for dir_align_loss in total (0 = dir head learns independently; avoid pulling to ~0.5 from weak price-implied gauss_p_up)
+    LAMBDA_DIR_ALIGN_OUTER = 1.0  # Weight for dir_align_loss in total
     LAMBDA_COHERENCE = 1.0        # Weight for coherence_penalty in total
     LAMBDA_NLL_OUTER = 1.0        # Weight for total_nll in total
     LAMBDA_CRPS = 1.0             # CRPS calibration loss (0 = off; try 0.1–1.0)
@@ -1593,18 +1593,10 @@ def train_and_evaluate(
     dir_pred_h0 = np.asarray(heads.direction_h0).reshape(-1)[:len(y_test)]
     dir_pred_h1 = np.asarray(heads.direction_h1).reshape(-1)[:len(y_test)]
     dir_pred_h2 = np.asarray(heads.direction_h2).reshape(-1)[:len(y_test)]
-    # Post-extraction sanitization for dir probs (neutral 0.5 on any NaN/Inf). This keeps
-    # predictions always valid for users/metrics without hard-coding 0.5 inside the model heads.
-    dir_pred_h0 = np.nan_to_num(dir_pred_h0, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
-    dir_pred_h1 = np.nan_to_num(dir_pred_h1, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
-    dir_pred_h2 = np.nan_to_num(dir_pred_h2, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
 
     var_pred_h0 = np.asarray(heads.variance_h0).reshape(-1)[:len(y_test)]
     var_pred_h1 = np.asarray(heads.variance_h1).reshape(-1)[:len(y_test)]
     var_pred_h2 = np.asarray(heads.variance_h2).reshape(-1)[:len(y_test)]
-    var_pred_h0 = np.nan_to_num(var_pred_h0, nan=1.0, posinf=1.0, neginf=1.0).clip(1e-4, 1e4)
-    var_pred_h1 = np.nan_to_num(var_pred_h1, nan=1.0, posinf=1.0, neginf=1.0).clip(1e-4, 1e4)
-    var_pred_h2 = np.nan_to_num(var_pred_h2, nan=1.0, posinf=1.0, neginf=1.0).clip(1e-4, 1e4)
 
     predictions = {
         "delta": {"h0": y_pred_h0_raw, "h1": y_pred_h1_raw, "h2": y_pred_h2_raw},
@@ -2075,15 +2067,9 @@ class PricePredictor:
         # This is the observable T_⊥ intensity: energy that could not be absorbed by
         # the vacuum kernels — proportional to unexplained prediction residual.
         vacuum_overflow = layers.Lambda(
-            lambda h: tf.where(
-                tf.math.is_finite(
-                    tf.reduce_mean(tf.square(h), axis=1, keepdims=True)
-                ),
-                tf.nn.relu(
-                    tf.reduce_mean(tf.square(h), axis=1, keepdims=True)
-                    - tf.constant(_e_max, dtype=tf.float32)
-                ),
-                tf.zeros( [tf.shape(h)[0], 1], dtype=tf.float32 )
+            lambda h: tf.nn.relu(
+                tf.reduce_mean(tf.square(h), axis=1, keepdims=True)
+                - tf.constant(_e_max, dtype=tf.float32)
             ),
             name='vacuum_overflow'
         )(h_perp_sat)                                                     # [B, 1]
@@ -2130,77 +2116,40 @@ class PricePredictor:
         tower_h0 = layers.Dense(16, activation='gelu',
                                kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(shared_dense)
         price_h0 = layers.Dense(1, name='price_h0')(tower_h0)
-        # Clip + sanitize price outputs (in *scaled* delta units) to prevent extreme values or NaN/Inf
-        # from random init, high dropout (0.8), or early unstable indicator steps from producing inf/nan
-        # that poisons losses (NLL err^2/var, logcosh, coherence signs, etc.) and drives weights to NaN.
-        # NaN/Inf -> 0 (neutral delta); extremes clipped. Wide bound allows exploration.
-        price_h0 = layers.Lambda(
-            lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
-            name='price_h0_clip'
-        )(price_h0)
+        # Clip price outputs (in *scaled* delta units) to prevent extreme values from random init,
+        # high dropout (0.8), or early unstable indicator steps from producing inf/nan that
+        # poisons NLL/trend losses and drives weights to NaN. Wide bound allows exploration.
+        price_h0 = layers.Lambda(lambda t: tf.clip_by_value(t, -100.0, 100.0), name='price_h0_clip')(price_h0)
         direction_h0 = layers.Dense(1, activation='sigmoid', name='direction_h0',
                                    bias_initializer=dir_bias_init)(tower_h0)
-        # Clip dir probs to [0,1]. (NaN/Inf protection is handled by loss guards + post-extraction sanitization
-        # to avoid any appearance of hard-coded 0.5 in the architecture.)
-        direction_h0 = layers.Lambda(
-            lambda t: tf.clip_by_value(t, 0.0, 1.0),
-            name='direction_h0_clip'
-        )(direction_h0)
         # Variance head conditioned on T_⊥ and regime gate:
         #   high perp_magnitude → more energy in hidden dims → higher σ²
         #   high regime_gate → white-hole / regime-break → higher σ²
         tower_h0_var_input = layers.Concatenate()([tower_h0, perp_magnitude, regime_gate])
         variance_h0 = layers.Dense(1, activation='softplus', name='variance_h0',
                                   bias_initializer=var_bias_init)(tower_h0_var_input)
-        # Sanitize var (NaN/Inf -> 1.0); softplus already >=~0 but upstream nan can leak. Loss also clips.
-        variance_h0 = layers.Lambda(
-            lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
-            name='variance_h0_clip'
-        )(variance_h0)
 
         # ---- TOWER 1 (5-minute horizon - PRIMARY) ----
         tower_h1 = layers.Dense(16, activation='gelu',
                                kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(shared_dense)
         price_h1 = layers.Dense(1, name='price_h1')(tower_h1)
-        price_h1 = layers.Lambda(
-            lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
-            name='price_h1_clip'
-        )(price_h1)
+        price_h1 = layers.Lambda(lambda t: tf.clip_by_value(t, -100.0, 100.0), name='price_h1_clip')(price_h1)
         direction_h1 = layers.Dense(1, activation='sigmoid', name='direction_h1',
                                    bias_initializer=dir_bias_init)(tower_h1)
-        direction_h1 = layers.Lambda(
-            lambda t: tf.clip_by_value(t, 0.0, 1.0),
-            name='direction_h1_clip'
-        )(direction_h1)
         tower_h1_var_input = layers.Concatenate()([tower_h1, perp_magnitude, regime_gate])
         variance_h1 = layers.Dense(1, activation='softplus', name='variance_h1',
                                   bias_initializer=var_bias_init)(tower_h1_var_input)
-        variance_h1 = layers.Lambda(
-            lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
-            name='variance_h1_clip'
-        )(variance_h1)
 
         # ---- TOWER 2 (15-minute horizon) ----
         tower_h2 = layers.Dense(16, activation='gelu',
                                kernel_regularizer=regularizers.L2(self.config.REG_MOMENTUM_L2))(shared_dense)
         price_h2 = layers.Dense(1, name='price_h2')(tower_h2)
-        price_h2 = layers.Lambda(
-            lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
-            name='price_h2_clip'
-        )(price_h2)
+        price_h2 = layers.Lambda(lambda t: tf.clip_by_value(t, -100.0, 100.0), name='price_h2_clip')(price_h2)
         direction_h2 = layers.Dense(1, activation='sigmoid', name='direction_h2',
                                    bias_initializer=dir_bias_init)(tower_h2)
-        direction_h2 = layers.Lambda(
-            lambda t: tf.clip_by_value(t, 0.0, 1.0),
-            name='direction_h2_clip'
-        )(direction_h2)
         tower_h2_var_input = layers.Concatenate()([tower_h2, perp_magnitude, regime_gate])
         variance_h2 = layers.Dense(1, activation='softplus', name='variance_h2',
                                   bias_initializer=var_bias_init)(tower_h2_var_input)
-        variance_h2 = layers.Lambda(
-            lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
-            name='variance_h2_clip'
-        )(variance_h2)
 
         # === FINAL MODEL: 10 outputs (3 horizons × 3 heads + vacuum_overflow) ===
         # Output index layout:
@@ -2322,7 +2271,7 @@ class CustomTrainModel(models.Model):
         self.lambda_var = config.LAMBDA_VAR
         self.lambda_trend_outer = float(getattr(config, 'LAMBDA_TREND_OUTER', 0.5))
         self.lambda_dir_outer = float(getattr(config, 'LAMBDA_DIR_OUTER', 0.5))
-        self.lambda_dir_align_outer = float(getattr(config, 'LAMBDA_DIR_ALIGN_OUTER', 0.0))
+        self.lambda_dir_align_outer = float(getattr(config, 'LAMBDA_DIR_ALIGN_OUTER', 0.5))
         self.lambda_coherence_outer = float(getattr(config, 'LAMBDA_COHERENCE', 1.0))
         self.lambda_nll_outer = float(getattr(config, 'LAMBDA_NLL_OUTER', 1.0))
         self.lambda_crps = float(getattr(config, 'LAMBDA_CRPS', 0.0))

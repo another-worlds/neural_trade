@@ -39,6 +39,11 @@ from calibration.temperature_scaling import TemperatureScaler
 from calibration.conformal import ConformalRegressor
 from calibration.online_calibrator import OnlineTemperatureCalibrator
 
+try:
+    from metrics_utils import compute_direction_labels_np as _compute_direction_labels_np
+except Exception:  # fallback if metrics_utils not on path in some test contexts
+    _compute_direction_labels_np = None
+
 HORIZONS = ("h0", "h1", "h2")
 _DEFAULT_DIR = "calibration"
 
@@ -54,17 +59,12 @@ def _direction_labels(
 ) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
     """Convert raw price-delta matrix to per-horizon (labels, mask) pairs.
 
-    Parameters
-    ----------
-    y_true_delta_raw : array [N, 3] of raw (un-scaled) price deltas per horizon
-    last_close       : array [N] of last close prices
-    deadband_bps     : minimum return magnitude to include in direction fitting
-                       (matches Config.DIR_DEADBAND_BPS, default 0 = no filter)
-
-    Returns
-    -------
-    dict mapping 'h0'/'h1'/'h2' to (labels [N], mask [N]) arrays
+    Delegates to the single shared implementation in metrics_utils to avoid
+    duplication with the training loss paths and model.py metrics.
     """
+    if _compute_direction_labels_np is not None:
+        return _compute_direction_labels_np(y_true_delta_raw, last_close, deadband_bps)
+    # Fallback (should rarely be hit): original inline logic
     lc = np.asarray(last_close, dtype=float).reshape(-1)
     y = np.asarray(y_true_delta_raw, dtype=float)
     if y.ndim == 1:
