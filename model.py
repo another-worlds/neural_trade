@@ -65,9 +65,9 @@ class Config:
     LOOKBACK = HOUR   # Reduced to 1 hour of minute data
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = 1  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
-    BATCH_SIZE = 1440 #int(2160)#0 / 10
+    BATCH_SIZE = 64  # Keep the effective learning rate in the validated range.
     EPOCHS = 2 * 10
-    LR = 2e-4  # Fixed from critically low 1e-10; reasonable for Adam optimizer
+    LR = 1e-3  # Adam default-scale learning rate for the validated batch size.
     PATIENCE = EPOCHS# //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
     EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
     MAX_SEQUENCE_COUNT = 1440 *  (31 +6 ) #int(1440 * 60 + 60 * 0.2)#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
