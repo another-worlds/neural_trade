@@ -1,4 +1,4 @@
-csv="Bitcoin_BTCUSDT.csv"
+csv="binance_btcusdt_1min_ccxt.csv"
 
 import os
 import numpy as np
