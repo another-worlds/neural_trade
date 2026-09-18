@@ -315,7 +315,18 @@ class DataProcessor:
         read_csv_kwargs = dict(read_csv_kwargs or {})
         df = pd.read_csv(self.config.CSV_PATH, **read_csv_kwargs)
 
-        # Parse timestamp column (minute-level data format)
+        # Accept the repository dataset's `datetime` name as well as the
+        # legacy `timestamp` name used by older exports.
+        time_column = next(
+            (name for name in ('timestamp', 'datetime') if name in df.columns),
+            None,
+        )
+        if time_column is None:
+            raise ValueError(
+                "Market data must contain a 'timestamp' or 'datetime' column"
+            )
+        if time_column != 'timestamp':
+            df = df.rename(columns={time_column: 'timestamp'})
         df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
         df = df.dropna(subset=['timestamp']).copy()
         df = df.sort_values('timestamp').drop_duplicates(subset=['timestamp'], keep='last')
