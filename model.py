@@ -1752,20 +1752,7 @@ class LearnableIndicators(layers.Layer):
         super().build(input_shape)
 
     def ewma_seq(self, x_seq, alpha_scalar):
-        x_seq = tf.cast(x_seq, tf.float32)
-        def step(prev, cur):
-            return alpha_scalar * cur + (1.0 - alpha_scalar) * prev
-        first = x_seq[:, 0]
-        rest = x_seq[:, 1:]
-        ema_rest = tf.scan(
-            fn=lambda prev, cur: step(prev, cur),
-            elems=tf.transpose(rest, perm=[1, 0]),
-            initializer=first,
-            parallel_iterations=10
-        )
-        ema_rest = tf.transpose(ema_rest, perm=[1, 0])
-        ema_full = tf.concat([tf.expand_dims(first, axis=1), ema_rest], axis=1)
-        return ema_full
+        return mh.ewma_sequence(x_seq, alpha_scalar)
 
     def call(self, inputs, training=None):
         x, meta_adjust = inputs
@@ -1983,7 +1970,7 @@ class PricePredictor:
 
         # Memory-Supplemented Layers: Capture temporal interconnections
         memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
-        memory = layers.Dropout(0.8)(memory)
+        memory = layers.Dropout(0.1)(memory)
 
         # Interconnection Attention: Model relations between indicators
         att_key_dim = 32
@@ -2042,11 +2029,11 @@ class PricePredictor:
 
         # Transformer-style blocks (reduced to 2 for speed)
         for _ in range(2):
-            att = layers.MultiHeadAttention(num_heads=4, key_dim=16, dropout=0.8)(x, x)
+            att = layers.MultiHeadAttention(num_heads=4, key_dim=16, dropout=0.1)(x, x)
             x = layers.Add()([x, att])
             x = layers.LayerNormalization()(x)
             ff = layers.Dense(32, activation='gelu')(x)
-            ff = layers.Dropout(0.8)(ff)
+            ff = layers.Dropout(0.1)(ff)
             ff = layers.Dense(x.shape[-1])(ff)
             x = layers.Add()([x, ff])
             x = layers.LayerNormalization()(x)
