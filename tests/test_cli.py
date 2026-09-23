@@ -64,3 +64,20 @@ def test_train_predict_backtest_round_trip(tmp_path, synthetic_bars, monkeypatch
     summary = json.loads(capsys.readouterr().out)
     assert summary["strategy"] == "liberal" and "buy_and_hold_return" in summary
     assert (out / "backtest.json").exists() and (out / "trades.csv").exists() and (out / "backtest.html").exists()
+
+
+def test_registry_listing_includes_the_repository_plugins(capsys, monkeypatch):
+    """Definition of done: plugins/examples/echo_metric.py appears in `registry list metrics`."""
+    import sys
+
+    from neural_trade.registries.metrics import Metrics
+
+    monkeypatch.chdir(Path(__file__).resolve().parent.parent)
+    try:
+        assert main(["registry", "list", "metrics"]) == 0
+        assert "n_samples" in capsys.readouterr().out
+    finally:
+        if Metrics.has("n_samples"):
+            Metrics.remove("n_samples")
+        for name in [m for m in sys.modules if m.startswith("neural_trade_plugins")]:
+            del sys.modules[name]

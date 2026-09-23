@@ -144,7 +144,8 @@ def cmd_backtest(args) -> int:
 def cmd_registry(args) -> int:
     from neural_trade.registries import all_registries, load_all, registry_summary
 
-    load_all(None, plugins_dir=args.plugins, strict=False)
+    plugins = args.plugins or ("plugins" if Path("plugins").is_dir() else None)  # the repository's plugins/
+    load_all(None, plugins_dir=plugins, strict=False)
     regs = all_registries()
     if args.action == "list":
         if args.registry:
@@ -227,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("action", choices=["list", "info", "search"])
     r.add_argument("registry", nargs="?")
     r.add_argument("name", nargs="?")
-    r.add_argument("--plugins", default=None, help="also load plugins from this directory")
+    r.add_argument("--plugins", default=None, help="plugin directory (default: ./plugins when it exists)")
     r.set_defaults(func=cmd_registry)
 
     e = sub.add_parser("env", help="versions, CUDA build, devices, git state")
