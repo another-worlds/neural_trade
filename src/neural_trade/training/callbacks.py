@@ -261,3 +261,128 @@ class ParamsLogger(tf.keras.callbacks.Callback):
                     print(f"Final Std Change:     {convergence_info['std_param_change_pct']:.2f}%")
                     print(f"Final Slope:          {slope:+.2f}%/ep  "
                           f"({'decelerating' if slope < 0 else 'accelerating' if slope > 0 else 'flat'})")
+
+
+# ============================================================================ B11: registry-built callbacks
+from dataclasses import dataclass, field  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any, Dict, Optional  # noqa: E402
+
+
+@dataclass
+class TrainContext:
+    """What a callback builder may need besides the config."""
+
+    model: Any = None
+    indicator_layer: Any = None
+    run_dir: Optional[Path] = None
+    run_id: Optional[str] = None
+    extra: Dict[str, Any] = field(default_factory=dict)
+
+    def path(self, name: str) -> str:
+        """``name`` inside the run directory, or relative to the working directory (legacy)."""
+        return str(Path(self.run_dir) / name) if self.run_dir else name
+
+
+class LambdaScheduleCallback(callbacks.Callback):
+    """Piecewise-constant loss-weight schedule: ``{"lambda_hd": {0: 0.0, 3: 0.1}, ...}``.
+
+    At the start of each epoch every scheduled weight takes the value of the latest key <= epoch.
+    The weights are tf.Variables, so the change applies without retracing.
+    """
+
+    def __init__(self, schedule: Dict[str, Dict[Any, float]]):
+        super().__init__()
+        self.schedule = {name: {int(k): float(v) for k, v in steps.items()}
+                         for name, steps in (schedule or {}).items()}
+
+    def on_epoch_begin(self, epoch, logs=None):
+        for name, steps in self.schedule.items():
+            due = [e for e in steps if e <= epoch]
+            if due:
+                setattr(self.model, name, steps[max(due)])
+
+
+class MetricThresholdStop(callbacks.Callback):
+    """Stop training when ``monitor`` crosses ``threshold`` (or is not finite) at an epoch end."""
+
+    def __init__(self, monitor="loss", threshold=float("inf"), mode="max"):
+        super().__init__()
+        self.monitor, self.threshold, self.mode = monitor, float(threshold), mode
+        self.stopped_epoch = None
+
+    def on_epoch_end(self, epoch, logs=None):
+        v = (logs or {}).get(self.monitor)
+        if v is None:
+            return
+        crossed = (not np.isfinite(v)) or (v > self.threshold if self.mode == "max" else v < self.threshold)
+        if crossed:
+            self.stopped_epoch = epoch
+            self.model.stop_training = True
+
+
+# ---- builders registered in neural_trade.registries.callbacks: f(config, context) ----------
+def build_csv_logger(config, context):
+    """Keras CSVLogger to training_log.csv."""
+    return callbacks.CSVLogger(context.path("training_log.csv"), append=True)
+
+
+def build_early_stopping(config, context):
+    """EarlyStopping on val_loss, patience EARLY, restoring the best weights."""
+    return callbacks.EarlyStopping(monitor="val_loss", patience=config.EARLY, restore_best_weights=True)
+
+
+def build_model_checkpoint(config, context):
+    """Best-on-validation weights to MODEL_PATH."""
+    return callbacks.ModelCheckpoint(config.MODEL_PATH, save_best_only=True, monitor="val_loss",
+                                     save_weights_only=True)
+
+
+def build_mcc_early_stopping(config, context):
+    """EarlyStopping on val_dir_mcc_h1 (max); opt-in, without weight restore."""
+    return callbacks.EarlyStopping(monitor="val_dir_mcc_h1", mode="max", patience=config.EARLY,
+                                   restore_best_weights=False)
+
+
+def build_reduce_lr_on_plateau(config, context):
+    """Halve the learning rate after PATIENCE epochs without val_loss improvement."""
+    return callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=config.PATIENCE)
+
+
+def build_tqdm_progress(config, context):
+    """Console progress bars."""
+    return TqdmCallback()
+
+
+def build_params_logger(config, context):
+    """Learned indicator periods per epoch to indicator_params_history.csv (legacy CSV)."""
+    return ParamsLogger(layer=context.indicator_layer, out_csv=context.path("indicator_params_history.csv"))
+
+
+def build_jsonl_epoch_logger(config, context):
+    """Append-only metrics.jsonl + status.json (never raises)."""
+    from neural_trade.telemetry.epoch_logger import JsonlEpochLogger
+
+    return JsonlEpochLogger(context.run_dir or ".", context.indicator_layer, context.run_id)
+
+
+def build_lambda_schedule(config, context):
+    """Config.LOSS_WEIGHT_SCHEDULE applied at each epoch start."""
+    return LambdaScheduleCallback(getattr(config, "LOSS_WEIGHT_SCHEDULE", None) or {})
+
+
+def build_metric_threshold(config, context):
+    """Stop on a non-finite or out-of-range metric (settings in context.extra["metric_threshold"])."""
+    return MetricThresholdStop(**dict(context.extra.get("metric_threshold", {})))
+
+
+def build_tensorboard(config, context):
+    """TensorBoard scalars under <run>/tb."""
+    return callbacks.TensorBoard(log_dir=context.path("tb"), write_graph=False, profile_batch=0)
+
+
+def build_interactive_plot(config, context):
+    """The notebook's live Plotly dashboard (widgets passed in context.extra["interactive_plot"])."""
+    from neural_trade.visualization.plotly_training import make_interactive_plot_callback
+
+    return make_interactive_plot_callback(config=config, **dict(context.extra.get("interactive_plot", {})))

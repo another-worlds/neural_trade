@@ -25,7 +25,8 @@ from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
 from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
-from neural_trade.training.callbacks import ParamsLogger, TqdmCallback
+from neural_trade.registries.callbacks import build_callbacks
+from neural_trade.training.callbacks import ParamsLogger, TqdmCallback, TrainContext
 from neural_trade.training.custom_model import CustomTrainModel
 from neural_trade.training.lambda_calibration import calibrate_loss_weights
 from neural_trade.training.lambdas import ablate
@@ -150,6 +151,7 @@ def train_and_evaluate(
     calibrate: bool = True,
     fit_calibration: bool = True,
     extra_callbacks: Optional[List[tf.keras.callbacks.Callback]] = None,
+    run_context=None,
 ) -> TrainResult:
     """Train (optionally) and evaluate, returning a rich result bundle.
 
@@ -211,22 +213,21 @@ def train_and_evaluate(
 
     custom_model.compile(optimizer=optimizer_pair.main)
 
-    csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
-    es = callbacks.EarlyStopping(monitor='val_loss', patience=cfg.EARLY, restore_best_weights=True)
-    ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
-    tqdm_callback = TqdmCallback()
-    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=cfg.PATIENCE)
-
     learnable_layer = None
     for layer in custom_model.layers:
         if getattr(layer, 'name', '').startswith('learnable_indicators'):
             learnable_layer = layer
             break
-    params_logger = ParamsLogger(layer=learnable_layer, out_csv='indicator_params_history.csv')
-
-    # S21: there is exactly one EarlyStopping (on val_loss, restoring best weights). A second
-    # one on val_dir_mcc_h1 without restore used to race it; it has been removed.
-    callbacks_list = [csv_logger, es, ckpt, tqdm_callback, params_logger, lr_scheduler]
+    # Callbacks registry, Config.CALLBACKS in order (the default is the previously hard-coded list).
+    # S21: exactly one EarlyStopping (val_loss, restore best); the MCC stopper is opt-in only.
+    context = TrainContext(model=custom_model, indicator_layer=learnable_layer,
+                           run_dir=getattr(run_context, 'run_dir', None), run_id=getattr(run_context, 'run_id', None))
+    names = list(getattr(cfg, 'CALLBACKS', []) or [])
+    if run_context is not None and 'jsonl_epoch_logger' not in names:
+        names.append('jsonl_epoch_logger')
+    if getattr(cfg, 'LOSS_WEIGHT_SCHEDULE', None) and 'lambda_schedule' not in names:
+        names.append('lambda_schedule')
+    callbacks_list = build_callbacks(cfg, context, names)
     if extra_callbacks:
         callbacks_list += list(extra_callbacks)
 
