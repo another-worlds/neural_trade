@@ -142,6 +142,66 @@ def _logcosh_safe(x):
     return x + tf.math.softplus(-2.0 * x) - tf.constant(0.6931471805599453, dtype=tf.float32)
 
 
+_LOG_NDTR_SPLIT = -8.0
+_HALF_LOG_2PI = 0.9189385332046727
+
+
+def log_ndtr(x):
+    """log(Phi(x)) for float32 that stays finite deep in the lower tail.
+
+    TensorFlow 2.10 has no ``log_ndtr``. ``log(0.5 * erfc(-x / sqrt2))`` is accurate down to
+    about x = -8 and then underflows to log(0) = -inf, which matters here: with the variance
+    head at VAR_FLOOR both tail probabilities of the direction readout are ~1e-98. Below the
+    split the Mills-ratio asymptotic series is used (truncation error < 1e-6 at x = -8).
+    Each branch only ever sees inputs clamped into its own domain, so neither the discarded
+    branch nor its gradient can produce NaN (the usual ``tf.where`` gradient trap).
+    """
+    x = tf.cast(x, tf.float32)
+    split = tf.constant(_LOG_NDTR_SPLIT, dtype=tf.float32)
+    x_hi = tf.maximum(x, split)
+    upper = tf.math.log(0.5 * tf.math.erfc(-x_hi * tf.constant(0.7071067811865476, dtype=tf.float32)))
+    x_lo = tf.minimum(x, split)
+    inv2 = 1.0 / (x_lo * x_lo)
+    series = 1.0 - inv2 + 3.0 * inv2 ** 2 - 15.0 * inv2 ** 3 + 105.0 * inv2 ** 4
+    lower = (-0.5 * x_lo * x_lo - tf.math.log(-x_lo)
+             - tf.constant(_HALF_LOG_2PI, dtype=tf.float32) + tf.math.log(series))
+    return tf.where(x > split, upper, lower)
+
+
+def gaussian_up_prob_given_move(mu_scaled, var_scaled, last_close, deadband_frac,
+                                pred_mean, pred_scale, eps=1e-8):
+    """P(delta > d | |delta| > d) for delta ~ N(mu, sigma^2): the Gaussian direction readout.
+
+    Direction labels mask out moves inside the deadband (|return| <= d) and call the rest
+    "up" when return > d (see ``_compute_direction_labels_and_masks_tf``). The readout
+    that matches those labels is therefore the probability of "up" GIVEN that the move
+    left the deadband:
+
+        p = Phi(a) / (Phi(a) + Phi(b)),  a = (mu - d) / sigma,  b = (-mu - d) / sigma
+
+    evaluated as sigmoid(log Phi(a) - log Phi(b)) so it stays finite when sigma << d.
+
+    The previous readout was Phi((mu - d) / sigma) alone - the UNconditional probability of
+    an up move, which also counts the neutral mass as "not up". With the 5 bps deadband
+    (~0.21 scaled units at BTC 110k) every sample sat at Phi(-0.21) ~ 0.42 < 0.5, nothing
+    was ever predicted up and the Gaussian MCC was identically zero by construction. It also
+    converted the threshold to scaled units without the pred_mean offset. This version works
+    in raw dollars, where the labels are defined, and reduces to Phi(mu / sigma) when d = 0.
+
+    Args:
+        mu_scaled, var_scaled: price head and variance head in scaled-delta units, [B].
+        last_close: raw last close, [B].
+        deadband_frac: DIR_DEADBAND_BPS / 1e4.
+        pred_mean, pred_scale: the target scaler statistics.
+    """
+    mu_raw = tf.cast(mu_scaled, tf.float32) * pred_scale + pred_mean
+    sigma_raw = tf.sqrt(tf.maximum(tf.cast(var_scaled, tf.float32), 0.0)) * pred_scale + eps
+    d_raw = tf.cast(deadband_frac, tf.float32) * tf.cast(last_close, tf.float32)
+    a = (mu_raw - d_raw) / sigma_raw
+    b = (-mu_raw - d_raw) / sigma_raw
+    return tf.sigmoid(log_ndtr(a) - log_ndtr(b))
+
+
 @Losses.register(name="focal_loss", tags=["classification", "imbalanced", "focal"])
 def focal_loss(model, true_labels, logits, alpha=None, gamma=None, reduce=True):
     """Focal loss implementation that accepts a `model` context for hyperparams.
@@ -771,28 +831,27 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     mu_h0 = tf.squeeze(price_h0, axis=1)
     mu_h1 = tf.squeeze(price_h1, axis=1)
     mu_h2 = tf.squeeze(price_h2, axis=1)
-    sigma_h0 = tf.sqrt(tf.squeeze(var_h0_c, axis=1) + model.eps)
-    sigma_h1 = tf.sqrt(tf.squeeze(var_h1_c, axis=1) + model.eps)
-    sigma_h2 = tf.sqrt(tf.squeeze(var_h2_c, axis=1) + model.eps)
-    deadband_delta_scaled = (deadband * last_close_squeeze) / (model.pred_scale + model.eps)
-    z_up_h0 = (mu_h0 - deadband_delta_scaled) / (sigma_h0 + model.eps)
-    z_up_h1 = (mu_h1 - deadband_delta_scaled) / (sigma_h1 + model.eps)
-    z_up_h2 = (mu_h2 - deadband_delta_scaled) / (sigma_h2 + model.eps)
-    gauss_p_up_h0 = 0.5 * (1.0 + tf.math.erf(z_up_h0 / tf.constant(np.sqrt(2.0), dtype=tf.float32)))
-    gauss_p_up_h1 = 0.5 * (1.0 + tf.math.erf(z_up_h1 / tf.constant(np.sqrt(2.0), dtype=tf.float32)))
-    gauss_p_up_h2 = 0.5 * (1.0 + tf.math.erf(z_up_h2 / tf.constant(np.sqrt(2.0), dtype=tf.float32)))
+    # Gaussian-implied P(up | move left the deadband), consistent with the masked labels.
+    def _gauss_up(mu, var_c):
+        return gaussian_up_prob_given_move(mu, tf.squeeze(var_c, axis=1), last_close_squeeze,
+                                           deadband, model.pred_mean, model.pred_scale, model.eps)
+    gauss_p_up_h0 = _gauss_up(mu_h0, var_h0_c)
+    gauss_p_up_h1 = _gauss_up(mu_h1, var_h1_c)
+    gauss_p_up_h2 = _gauss_up(mu_h2, var_h2_c)
 
     # Direction/Gaussian alignment. Skipped entirely unless its outer weight is > 0
     # (LAMBDA_DIR_ALIGN_OUTER defaults to 0): otherwise three BCE evaluations per step
-    # for a term that is multiplied by zero. NOTE when re-enabling:
-    # tf.keras.losses.binary_crossentropy on 1-D arguments reduces over the batch axis
-    # and returns a scalar, so the per-sample masks below are a no-op - compute the
-    # per-example BCE by hand before masking.
+    # for a term that is multiplied by zero. The BCE is computed per example by hand:
+    # tf.keras.losses.binary_crossentropy on 1-D arguments reduces over the batch and
+    # returned a scalar, which made the masks a no-op.
     if float(getattr(model, 'lambda_dir_align_outer', 0.0)) > 0.0:
         lambda_dir_align = tf.constant(float(getattr(model.config, 'LAMBDA_DIR_ALIGN', 0.0)), dtype=tf.float32)
-        align_h0 = tf.keras.losses.binary_crossentropy(gauss_p_up_h0, dir_pred_h0)
-        align_h1 = tf.keras.losses.binary_crossentropy(gauss_p_up_h1, dir_pred_h1)
-        align_h2 = tf.keras.losses.binary_crossentropy(gauss_p_up_h2, dir_pred_h2)
+        def _bce(target, pred):  # per-example, so the masks below weight samples
+            pred = tf.clip_by_value(pred, 1e-7, 1.0 - 1e-7)
+            return -(target * tf.math.log(pred) + (1.0 - target) * tf.math.log(1.0 - pred))
+        align_h0 = _bce(gauss_p_up_h0, dir_pred_h0)
+        align_h1 = _bce(gauss_p_up_h1, dir_pred_h1)
+        align_h2 = _bce(gauss_p_up_h2, dir_pred_h2)
         align_h0 = tf.reduce_sum(align_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + model.eps)
         align_h1 = tf.reduce_sum(align_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + model.eps)
         align_h2 = tf.reduce_sum(align_h2 * mask_h2) / (tf.reduce_sum(mask_h2) + model.eps)

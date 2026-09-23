@@ -40,3 +40,14 @@ indicator_params_history.csv
 .DS_Store
 Thumbs.db
 inference.ipynb.backup
+
+# Run directories (scripts/gate_run.py, experiments): heavy artefacts stay local,
+# small evidence (JSON, per-epoch logs, reports) is committable so every reported
+# number can be traced to a run.
+runs/**/*.npz
+runs/**/*.parquet
+runs/**/tb/
+!runs/**/training_log.csv
+!runs/**/indicator_params_history.csv
+!runs/**/results.csv
+!runs/**/summary.csv

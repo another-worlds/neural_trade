@@ -258,6 +258,49 @@ def ewma_sequence(x_seq, alpha_scalar):
     return ema_full
 
 
+_EWMA_ALPHA_CLAMP = 1e-6
+
+
+def ewma_sequence_matrix(x_seq, alpha):
+    """EWMA as one batched matrix product - the same recurrence as ``ewma_sequence``.
+
+    ``ewma_sequence`` runs ``tf.scan(parallel_iterations=1)``: LOOKBACK-1 strictly sequential
+    steps, and LearnableIndicators calls it 24 times per forward pass (~1,400 sequential GPU
+    steps per batch, forward and backward). Unrolling the recurrence
+    ``ema[t] = a*x[t] + (1-a)*ema[t-1]``, ``ema[0] = x[0]`` gives
+
+        ema[t] = (1-a)^t * x[0] + sum_{k=1..t} a*(1-a)^(t-k) * x[k]
+
+    i.e. ``ema = M @ x`` with ``M[b,t,k] = a_b (1-a_b)^(t-k)`` for 1 <= k <= t,
+    ``M[b,t,0] = (1-a_b)^t`` and 0 above the diagonal. The powers are built as
+    ``exp((t-k) * log1p(-a))``, so a per-sample alpha (shape [B]) or a scalar is supported and
+    the gradient w.r.t. alpha flows exactly as through the scan.
+
+    Alpha is clamped to [1e-6, 1-1e-6] because float32 ``sigmoid`` rounds to exactly 1.0 for
+    logits above ~17 and ``log1p(-1) = -inf`` would give ``0 * inf = NaN`` on the diagonal.
+    At the clamp the result differs from the scan by at most 1e-6 * |x[t] - x[t-1]|.
+
+    Cost is O(B*T^2) memory (64 x 60 x 60 floats per call), trivially parallel.
+    Equivalence with the scan is pinned by tests/test_learnable_indicators.py.
+    """
+    x = tf.cast(x_seq, tf.float32)                                   # [B, T]
+    a = tf.cast(alpha, tf.float32)
+    a = a + tf.zeros_like(x[:, 0])                                   # scalar or [B] -> [B]
+    a = tf.clip_by_value(a, _EWMA_ALPHA_CLAMP, 1.0 - _EWMA_ALPHA_CLAMP)
+
+    t = tf.range(tf.shape(x)[1])
+    lag = t[:, None] - t[None, :]                                    # [T, T], t - k
+    lower = lag >= 0
+    lag_f = tf.cast(tf.maximum(lag, 0), tf.float32)
+
+    decay = tf.exp(lag_f[None, :, :] * tf.math.log1p(-a)[:, None, None])   # (1-a)^(t-k)
+    weights = decay * a[:, None, None]                                      # a (1-a)^(t-k)
+    first_col = tf.equal(t, 0)[None, None, :]                               # k == 0
+    weights = tf.where(first_col, decay, weights)
+    weights = tf.where(lower[None, :, :], weights, tf.zeros_like(weights))
+    return tf.einsum('btk,bk->bt', weights, x)
+
+
 # -------------------------
 # Utility Functions
 # -------------------------

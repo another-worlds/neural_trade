@@ -145,6 +145,11 @@ class Config:
     INDICATOR_L2 = 0     # Dedicated L2 for indicator logit vars (separate from NN Dense weights)
     INDICATOR_LR_MULT = 5.0  # Insdicator optimizer LR = LR * INDICATOR_LR_MULT
     MOMENTUM_CLIP_MIN = 2.0  # period floor. 1.0 gave alpha=1 -> logit +18.4 -> float32 sigmoid derivative exactly 0 (frozen indicator)
+    # EWMA implementation inside LearnableIndicators: "matrix" (one batched einsum, default)
+    # or "scan" (the original tf.scan recurrence, kept as the reference; ~LOOKBACK sequential
+    # steps x 24 calls per forward pass). Both compute the same recurrence; see
+    # math_helpers.ewma_sequence_matrix and tests/test_learnable_indicators.py.
+    EWMA_IMPL = "matrix"
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True  # legacy flag; current point loss uses log(cosh) via the registered helper (see registries/losses.py)
     
@@ -819,9 +824,14 @@ def _compute_all_horizon_metrics(
         # Direction labels with the same NEUTRAL MASK the train/validation metrics use:
         # |return| <= deadband is neither UP nor DOWN and is excluded. The previous
         # delta-space threshold had no mask, so this accuracy never matched val_dir_acc.
-        ret = y_t / (np.asarray(lc, dtype=float).reshape(-1)[:n] + 1e-12)
-        dir_mask = np.abs(ret) > deadband
-        true_dir = (ret > deadband)
+        # S22: one labelling rule for every path (metrics_utils.compute_direction_labels_np).
+        if compute_direction_labels_np is not None:
+            _lab, dir_mask = compute_direction_labels_np(y_t, lc_h, deadband_bps)["h0"]
+            true_dir = _lab.astype(bool)
+        else:  # metrics_utils unavailable: same rule inline
+            ret = y_t / (lc_h + 1e-12)
+            dir_mask = np.abs(ret) > deadband
+            true_dir = (ret > deadband)
         if dir_probs is not None and h_key in dir_probs and dir_probs[h_key] is not None:
             p = np.asarray(dir_probs[h_key], dtype=float).reshape(-1)[:n]
             pred_dir = (p >= 0.5)
@@ -1698,16 +1708,6 @@ def train_and_evaluate(
     csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
     es = callbacks.EarlyStopping(monitor='val_loss', patience=cfg.EARLY, restore_best_weights=True)
     ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
-    # MCC-based early stopping for direction head (class-imbalance robust)
-    # MCC = (TP×TN - FP×FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
-    # Range: [-1, 1], where 1 = perfect, 0 = random, -1 = inverse
-    # Unlike accuracy, MCC is balanced even with severe class imbalance
-    es_dir = callbacks.EarlyStopping(
-        monitor='val_dir_mcc_h1',
-        patience=cfg.PATIENCE,
-        mode='max',
-        restore_best_weights=False
-    )
     tqdm_callback = TqdmCallback()
     lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=cfg.PATIENCE)
 
@@ -1718,8 +1718,8 @@ def train_and_evaluate(
             break
     params_logger = ParamsLogger(layer=learnable_layer, out_csv='indicator_params_history.csv')
 
-    # es_dir (a second EarlyStopping on val_dir_mcc_h1 with restore_best_weights=False) is no
-    # longer attached: two stoppers raced and the one without restore could win.
+    # S21: there is exactly one EarlyStopping (on val_loss, restoring best weights). A second
+    # one on val_dir_mcc_h1 without restore used to race it; it has been removed.
     callbacks_list = [csv_logger, es, ckpt, tqdm_callback, params_logger, lr_scheduler]
     if extra_callbacks:
         callbacks_list += list(extra_callbacks)
@@ -1944,7 +1944,9 @@ class LearnableIndicators(layers.Layer):
         super().build(input_shape)
 
     def ewma_seq(self, x_seq, alpha_scalar):
-        return mh.ewma_sequence(x_seq, alpha_scalar)
+        if str(getattr(self.config, 'EWMA_IMPL', 'matrix')).lower() == 'scan':
+            return mh.ewma_sequence(x_seq, alpha_scalar)
+        return mh.ewma_sequence_matrix(x_seq, alpha_scalar)
 
     def call(self, inputs, training=None):
         x, meta_adjust = inputs
@@ -2826,10 +2828,11 @@ class CustomTrainModel(models.Model):
         mu_h0 = tf.squeeze(price_h0, axis=1)
         mu_h1 = tf.squeeze(price_h1, axis=1)
         mu_h2 = tf.squeeze(price_h2, axis=1)
-        deadband_delta_scaled = (deadband * tf.squeeze(last_close, axis=1)) / (self.pred_scale + self.eps)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+        # P(up | the move left the deadband): matches the masked labels (see losses.gaussian_up_prob_given_move).
+        _lc = tf.squeeze(last_close, axis=1)
+        gauss_p_up_h0 = _losses.gaussian_up_prob_given_move(mu_h0, var_h0_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
+        gauss_p_up_h1 = _losses.gaussian_up_prob_given_move(mu_h1, var_h1_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
+        gauss_p_up_h2 = _losses.gaussian_up_prob_given_move(mu_h2, var_h2_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
 
         # Compute per-horizon metrics (masked if deadband is set)
         metrics_head = self._compute_direction_metrics(
@@ -3093,11 +3096,10 @@ class CustomTrainModel(models.Model):
         mu_h0 = tf.squeeze(price_h0, axis=1)
         mu_h1 = tf.squeeze(price_h1, axis=1)
         mu_h2 = tf.squeeze(price_h2, axis=1)
-        # Threshold for "UP" in scaled-delta space, consistent with direction labeling
-        deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+        # P(up | the move left the deadband): matches the masked labels (see losses.gaussian_up_prob_given_move).
+        gauss_p_up_h0 = _losses.gaussian_up_prob_given_move(mu_h0, var_h0_c, last_close_squeeze, deadband, self.pred_mean, self.pred_scale, self.eps)
+        gauss_p_up_h1 = _losses.gaussian_up_prob_given_move(mu_h1, var_h1_c, last_close_squeeze, deadband, self.pred_mean, self.pred_scale, self.eps)
+        gauss_p_up_h2 = _losses.gaussian_up_prob_given_move(mu_h2, var_h2_c, last_close_squeeze, deadband, self.pred_mean, self.pred_scale, self.eps)
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.

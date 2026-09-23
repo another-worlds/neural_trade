@@ -66,3 +66,36 @@ def test_three_steps_keep_weights_finite_and_val_loss_moves(tf, tiny_config, tmp
     after = model.evaluate(val_ds, verbose=0, return_dict=True)["loss"]
     assert np.isfinite(after)
     assert after != before, "validation loss did not change after an update (frozen evaluation path)"
+
+
+class _FreezeLearning(tf.keras.callbacks.Callback):
+    """Set both optimizers' learning rates to 0 so validation loss is exactly flat."""
+
+    def on_train_begin(self, logs=None):
+        tf.keras.backend.set_value(self.model.optimizer.learning_rate, 0.0)
+        tf.keras.backend.set_value(self.model.indicator_optimizer.learning_rate, 0.0)
+
+
+def test_early_stopping_fires_on_a_plateau(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+    """M4: 'early stopping fires on a plateaued run'.
+
+    Before Phase A, EARLY and PATIENCE both equalled EPOCHS and were read from the class, not
+    the instance, so no stopper could ever fire. With a frozen model val_loss is exactly flat
+    and EarlyStopping(patience=EARLY) must stop after EARLY + 1 epochs, restoring the best.
+    """
+    from model import train_and_evaluate
+
+    monkeypatch.chdir(tmp_path)
+    synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)
+    cfg = tiny_config
+    cfg.CSV_PATH = str(tmp_path / "bars.csv")
+    cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
+    cfg.MODEL_PATH = str(tmp_path / "weights.h5")
+    cfg.EARLY = 2
+    cfg.PATIENCE = 1
+
+    result = train_and_evaluate(config=cfg, epochs=8, force=True, calibrate=False,
+                                fit_calibration=False, extra_callbacks=[_FreezeLearning()])
+    val = result.history.history["val_loss"]
+    assert len(set(np.round(val, 9))) == 1, f"frozen model should have a flat val_loss, got {val}"
+    assert len(val) == cfg.EARLY + 1, f"expected to stop after {cfg.EARLY + 1} epochs, ran {len(val)}"
