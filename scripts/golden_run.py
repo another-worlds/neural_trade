@@ -102,6 +102,11 @@ def main(argv=None) -> int:
     print(f"[golden] compared {len(worst)} arrays; missing={missing} extra={extra}")
     for excess, k, msg in worst[:12]:
         print(f"   {'FAIL' if excess > 0 else 'ok  '} {k:45s} {msg}")
+    by_prefix = {}
+    for excess, k, _ in worst:
+        pre = k.split("/")[0]
+        by_prefix.setdefault(pre, [0, 0])[0 if excess <= 0 else 1] += 1
+    print("   by prefix (ok, fail): " + ", ".join(f"{p}={v[0]}/{v[1]}" for p, v in sorted(by_prefix.items())))
     ok = not bad and not missing
     print(json.dumps({"golden_equal": ok, "n_fail": len(bad), "n_missing": len(missing)}))
     return 0 if ok else 1
