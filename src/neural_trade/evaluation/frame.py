@@ -72,11 +72,16 @@ class PredictionFrame:
         if split == "test":
             preds, y, lc = result.predictions, result.y_test, result.last_close_test
             cal = result.predictions_calibrated or {}
+            if X_raw is None:
+                X_raw = getattr(result, "windows_test", None)
         elif split == "cal":
             if result.predictions_cal is None:
                 raise ValueError("this TrainResult has no calibration-split predictions")
             preds, y, lc = result.predictions_cal, result.y_cal, result.last_close_cal
-            cal = (result.calibration_pipeline.apply(preds) if result.calibration_pipeline is not None else {})
+            cal = (result.calibration_pipeline.apply(preds, windows=getattr(result, "windows_cal", None))
+                   if result.calibration_pipeline is not None else {})
+            if X_raw is None:
+                X_raw = getattr(result, "windows_cal", None)
         else:
             raise ValueError(f"split must be 'test' or 'cal', got {split!r}")
         return cls(y, lc, preds["delta"], preds["direction_prob"], preds["variance"], scale, mean,

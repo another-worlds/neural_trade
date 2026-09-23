@@ -89,7 +89,7 @@ class Predictor:
         calibrated = {h: preds["direction_prob"][h] for h in HORIZONS}
         intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
         if self.bundle.calibration_pipeline is not None:
-            cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha)
+            cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X)
             calibrated, intervals = cal["direction_prob"], cal["intervals"]
         sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in HORIZONS}
         gauss = {h: gaussian_up_prob_given_move_np(preds["delta"][h], preds["variance"][h], lc,

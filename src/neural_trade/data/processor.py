@@ -189,7 +189,9 @@ class DataProcessor:
         self.val_block = dict(X=_normalise(X_val_seq, last_close_val), y_scaled=y_val_scaled, y_raw=y_val,
                               last_close=last_close_val, extended_trends=extended_trends_val)
         self.cal_block = dict(X=_normalise(X_cal_seq, last_close_cal), y_scaled=y_cal_scaled, y_raw=y_cal,
-                              last_close=last_close_cal, extended_trends=extended_trends_cal)
+                              last_close=last_close_cal, extended_trends=extended_trends_cal, X_raw=X_cal_seq)
+        # RAW test windows (conformal realized-vol scales, baselines, backtests).
+        self.test_windows_raw = X_test_seq
 
         return (X_train_seq_scaled, y_train_scaled, last_close_train, extended_trends_train,
                 X_test_seq_scaled, y_test_scaled, last_close_test, extended_trends_test,

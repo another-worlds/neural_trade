@@ -102,6 +102,8 @@ class Config:
     CALIB_DAMPING_PHYSICS: Optional[float] = _f(0.0, "calibration",
                                                 "0: bounded physics regularisers are never rescaled")
     CALIB_OUTER: bool = _f(False, "calibration", "also calibrate the outer group multipliers")
+    CONFORMAL_SCALE: str = _f("realized_vol", "calibration",
+                              "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'")
 
     # ------------------------------------------------------------------ loss weights
     LAMBDA_LOCAL_TREND: float = _f(1.0, "loss_weights", "retired term (always 0 in the objective)")
@@ -264,6 +266,8 @@ class Config:
             bad(f"FOLD_INDEX must be in [-{self.N_FOLDS}, {self.N_FOLDS - 1}]")
         if self.DIR_DEADBAND_BPS < 0:
             bad("DIR_DEADBAND_BPS must be >= 0")
+        if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol"):
+            bad(f"CONFORMAL_SCALE must be 'none', 'sigma' or 'realized_vol', got {self.CONFORMAL_SCALE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):
             bad(f"EWMA_IMPL must be 'matrix' or 'scan', got {self.EWMA_IMPL!r}")
         if not (0 < self.MOMENTUM_CLIP_MIN < (self.MOMENTUM_CLIP_MAX or self.LOOKBACK)):

@@ -79,3 +79,43 @@ def test_fit_apply_coverage_temperature_and_round_trip(tmp_path):
         np.testing.assert_allclose(out2["direction_prob"][h], out["direction_prob"][h], atol=1e-6)
         np.testing.assert_allclose(out2["intervals"][h][0], out["intervals"][h][0], atol=1e-6)
         np.testing.assert_allclose(out2["intervals"][h][1], out["intervals"][h][1], atol=1e-6)
+
+
+def _regime(rng, n, vol, lookback=60, steps=(10, 15, 20)):
+    """Random-walk windows at per-bar volatility ``vol`` and forward deltas at the same volatility;
+    the model predicts zero change."""
+    win = 110_000 + np.cumsum(rng.normal(0, vol, (n, lookback)), axis=1)
+    y = np.stack([rng.normal(0, vol * np.sqrt(k), n) for k in steps], 1)
+    preds = {"delta": {h: np.zeros(n) for h in H}, "direction_prob": {h: np.full(n, 0.5) for h in H},
+             "variance": {h: np.ones(n) for h in H}}
+    return preds, y, win[:, -1], win
+
+
+@pytest.mark.parametrize("mode, lo_cov, hi_cov", [("none", 0.975, 1.0), ("realized_vol", 0.87, 0.93)])
+def test_realized_vol_conformal_survives_a_volatility_regime_shift(mode, lo_cov, hi_cov):
+    rng = np.random.default_rng(7)
+    cal_preds, y_cal, lc_cal, win_cal = _regime(rng, 4_000, vol=30.0)   # calm-to-busy: cal is 1.5x more volatile
+    te_preds, y_te, _, win_te = _regime(rng, 20_000, vol=20.0)
+    pipe = CalibrationPipeline(conformal_scale=mode).fit_from_arrays(
+        cal_preds, y_cal, lc_cal, windows=win_cal, horizon_steps=(10, 15, 20))
+    out = pipe.apply(te_preds, windows=win_te)
+    for i, h in enumerate(H):
+        lo, hi = out["intervals"][h]
+        cov = float(np.mean((y_te[:, i] >= lo) & (y_te[:, i] <= hi)))
+        assert lo_cov <= cov <= hi_cov, (mode, h, cov)
+
+
+def test_normalized_conformal_needs_windows_and_round_trips(tmp_path):
+    rng = np.random.default_rng(8)
+    preds, y, lc, win = _regime(rng, 2_000, vol=25.0)
+    pipe = CalibrationPipeline(conformal_scale="realized_vol").fit_from_arrays(preds, y, lc, windows=win)
+    with pytest.raises(ValueError, match="raw input windows"):
+        pipe.apply(preds)
+    pipe.save(str(tmp_path / "c"))
+    loaded = CalibrationPipeline.load(str(tmp_path / "c"))
+    assert loaded.conformal_scale == "realized_vol"
+    a, b = pipe.apply(preds, windows=win), loaded.apply(preds, windows=win)
+    for h in H:
+        np.testing.assert_allclose(a["intervals"][h][1], b["intervals"][h][1], rtol=1e-12)
+    with pytest.raises(ValueError, match="conformal_scale"):
+        CalibrationPipeline(conformal_scale="bogus")

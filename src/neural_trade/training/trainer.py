@@ -67,6 +67,8 @@ class TrainResult:
     last_close_cal: Optional[np.ndarray] = None
     fold: Optional[Any] = None  # FoldIndices used for the split
     normalizer: Optional[Any] = None  # data.scaling.WindowNormalizer fitted on train
+    windows_test: Optional[np.ndarray] = None  # RAW test windows [N, LOOKBACK]
+    windows_cal: Optional[np.ndarray] = None   # RAW calibration windows
     artifacts_dir: Optional[str] = None  # where the serving bundle was written, if any
 
 
@@ -309,14 +311,18 @@ def train_and_evaluate(
         try:
             print("\nFitting CalibrationPipeline on the calibration split...")
             predictions_cal = _predict_heads(custom_model, _cb['X'], _cb['y_raw'].shape[0], target_scaler, cfg)
-            cal_pipeline = _CalibrationPipeline()
+            cal_pipeline = _CalibrationPipeline(conformal_scale=getattr(cfg, 'CONFORMAL_SCALE', 'none'))
             cal_pipeline.fit_from_arrays(
                 predictions_dict=predictions_cal,
                 y_true_delta_raw=np.asarray(_cb['y_raw'], dtype=float),
                 last_close=np.asarray(_cb['last_close'], dtype=float),
                 deadband_bps=float(getattr(cfg, 'DIR_DEADBAND_BPS', 0.0)),
+                windows=_cb.get('X_raw'),
+                pred_scale=float(target_scaler.scale_[0]),
+                horizon_steps=tuple(cfg.HORIZON_STEPS),
             )
-            predictions_calibrated = cal_pipeline.apply(predictions, alpha=0.1)
+            predictions_calibrated = cal_pipeline.apply(predictions, alpha=0.1,
+                                                        windows=getattr(data_processor, 'test_windows_raw', None))
             calibration_report = _calibration_coverage_report(predictions_calibrated, np.asarray(y_test), cal_pipeline)
             for _h, _row in calibration_report.items():
                 print(f"  [test] {_h}: conformal coverage@90 = {_row['coverage90']:.3f} (target >= 0.90), "
@@ -348,6 +354,8 @@ def train_and_evaluate(
         y_cal=(np.asarray(_cb['y_raw']) if _cb is not None else None),
         last_close_cal=(np.asarray(_cb['last_close']) if _cb is not None else None),
         fold=getattr(data_processor, 'fold', None),
+        windows_test=getattr(data_processor, 'test_windows_raw', None),
+        windows_cal=(_cb.get('X_raw') if _cb is not None else None),
         normalizer=getattr(data_processor, 'normalizer', None),
     )
 

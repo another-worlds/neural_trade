@@ -31,12 +31,12 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
 from neural_trade.calibration.temperature_scaling import TemperatureScaler
-from neural_trade.calibration.conformal import ConformalRegressor
+from neural_trade.calibration.conformal import SCALE_MODES, ConformalRegressor, interval_scale
 from neural_trade.calibration.online_calibrator import OnlineTemperatureCalibrator
 
 try:
@@ -85,7 +85,14 @@ class CalibrationPipeline:
     ``{'delta': {'h0':…,'h1':…,'h2':…}, 'direction_prob': {…}, 'variance': {…}}``
     """
 
-    def __init__(self) -> None:
+    def __init__(self, conformal_scale: str = "none") -> None:
+        if conformal_scale not in SCALE_MODES:
+            raise ValueError(f"conformal_scale must be one of {SCALE_MODES}, got {conformal_scale!r}")
+        # Per-sample interval scale (see calibration.conformal.interval_scale); "realized_vol"
+        # needs the raw input windows at fit and apply time.
+        self.conformal_scale = conformal_scale
+        self.pred_scale: Optional[float] = None
+        self.horizon_steps: Tuple[int, ...] = (10, 15, 20)
         self.temperature_scaler = TemperatureScaler()
         self.conformal: Dict[str, ConformalRegressor] = {
             h: ConformalRegressor() for h in HORIZONS
@@ -137,6 +144,9 @@ class CalibrationPipeline:
             last_close=np.asarray(lc_cal, dtype=float),
             deadband_bps=deadband_bps,
             conformal_alpha=conformal_alpha,
+            windows=getattr(result, "windows_cal", None),
+            pred_scale=float(result.target_scaler.scale_[0]),
+            horizon_steps=tuple(getattr(result.config, "HORIZON_STEPS", self.horizon_steps)),
         )
 
     def fit_from_arrays(
@@ -146,6 +156,9 @@ class CalibrationPipeline:
         last_close: np.ndarray,
         deadband_bps: float = 0.0,
         conformal_alpha: float = 0.1,
+        windows: Optional[np.ndarray] = None,
+        pred_scale: Optional[float] = None,
+        horizon_steps: Optional[Sequence[int]] = None,
     ) -> "CalibrationPipeline":
         """Fit from raw arrays when a TrainResult is not available.
 
@@ -156,7 +169,14 @@ class CalibrationPipeline:
         last_close        : array [N] of last close prices
         deadband_bps      : deadband used during training (match Config.DIR_DEADBAND_BPS)
         conformal_alpha   : miscoverage level for coverage reporting
+        windows           : RAW input windows [N, LOOKBACK] (conformal_scale="realized_vol")
+        pred_scale        : target-scaler scale (conformal_scale="sigma")
+        horizon_steps     : bars per horizon (conformal_scale="realized_vol")
         """
+        if pred_scale is not None:
+            self.pred_scale = float(pred_scale)
+        if horizon_steps is not None:
+            self.horizon_steps = tuple(int(k) for k in horizon_steps)
         y = np.asarray(y_true_delta_raw, dtype=float)
         N = len(y)
         print(f"CalibrationPipeline: fitting on {N} samples")
@@ -185,18 +205,19 @@ class CalibrationPipeline:
         # ------------------------------------------------------------------
         # 2. Conformal regressors — fit on all samples (no deadband filter)
         # ------------------------------------------------------------------
-        print("\n[2/2] Conformal regressors (price delta intervals)...")
+        print(f"\n[2/2] Conformal regressors (price delta intervals, scale={self.conformal_scale})...")
+        scales = self._scales(predictions_dict, windows, N)
         for i, h in enumerate(HORIZONS):
             if i >= y.shape[1]:
                 break
             y_true_h = y[:, i]
             y_pred_h = np.asarray(predictions_dict["delta"][h], dtype=float)
-            self.conformal[h].fit(y_true_h, y_pred_h)
-            lo, hi = self.conformal[h].predict_interval(y_pred_h, alpha=conformal_alpha)
+            u = scales[h] if scales is not None else None
+            self.conformal[h].fit(y_true_h, y_pred_h, scale=u)
+            lo, hi = self.conformal[h].predict_interval(y_pred_h, alpha=conformal_alpha, scale=u)
             cov = float(np.mean((y_true_h >= lo) & (y_true_h <= hi)))
-            q = self.conformal[h].empirical_quantile(conformal_alpha)
             print(f"  [{h}] coverage @ alpha={conformal_alpha:.2f}: {cov:.3f} "
-                  f"(target ≥ {1 - conformal_alpha:.2f}),  +/-{q:.4f} raw units")
+                  f"(target >= {1 - conformal_alpha:.2f}),  mean half-width {np.mean(hi - lo) / 2:.2f} raw units")
 
         # ------------------------------------------------------------------
         # 3. Online calibrator — warm-start from offline temperatures
@@ -213,10 +234,19 @@ class CalibrationPipeline:
     # Applying
     # ------------------------------------------------------------------
 
+    def _scales(self, predictions_dict, windows, n):
+        """Per-horizon conformal scales, or None for plain (unnormalised) conformal."""
+        if self.conformal_scale == "none":
+            return None
+        return interval_scale(self.conformal_scale, windows=windows,
+                              variance_scaled=predictions_dict.get("variance"), pred_scale=self.pred_scale,
+                              horizon_steps=self.horizon_steps, n=n)
+
     def apply(
         self,
         predictions_dict: Dict,
         alpha: float = 0.1,
+        windows: Optional[np.ndarray] = None,
     ) -> Dict:
         """Apply all calibrators and return a drop-in replacement predictions dict.
 
@@ -232,8 +262,11 @@ class CalibrationPipeline:
         ----------
         predictions_dict : raw ``result.predictions``-format dict
         alpha            : conformal miscoverage level (default 0.1 → 90% coverage)
+        windows          : RAW input windows, required when conformal_scale="realized_vol"
         """
         self._require_fitted()
+        n = len(np.asarray(predictions_dict["delta"][HORIZONS[0]]).reshape(-1))
+        scales = self._scales(predictions_dict, windows, n)
 
         cal: Dict = {
             "delta": {h: np.asarray(predictions_dict["delta"][h]) for h in HORIZONS},
@@ -247,7 +280,8 @@ class CalibrationPipeline:
             cal["direction_prob"][h] = self.temperature_scaler.calibrate(raw_probs, horizon=h)
 
             y_pred = np.asarray(predictions_dict["delta"][h], dtype=float)
-            cal["intervals"][h] = self.conformal[h].predict_interval(y_pred, alpha=alpha)
+            cal["intervals"][h] = self.conformal[h].predict_interval(
+                y_pred, alpha=alpha, scale=scales[h] if scales is not None else None)
 
         return cal
 
@@ -255,6 +289,7 @@ class CalibrationPipeline:
         self,
         predictions_dict: Dict,
         alpha: float = 0.1,
+        windows: Optional[np.ndarray] = None,
     ) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
         """Return only conformal intervals without scaling direction probs.
 
@@ -263,10 +298,12 @@ class CalibrationPipeline:
         dict mapping 'h0'/'h1'/'h2' to ``(lo, hi)`` arrays in raw price-delta units
         """
         self._require_fitted()
+        n = len(np.asarray(predictions_dict["delta"][HORIZONS[0]]).reshape(-1))
+        scales = self._scales(predictions_dict, windows, n)
         return {
             h: self.conformal[h].predict_interval(
                 np.asarray(predictions_dict["delta"][h], dtype=float),
-                alpha=alpha,
+                alpha=alpha, scale=scales[h] if scales is not None else None,
             )
             for h in HORIZONS
         }
@@ -334,7 +371,8 @@ class CalibrationPipeline:
         if self.online is not None:
             self.online.save(os.path.join(directory, "online_calibrator.json"))
         with open(os.path.join(directory, "pipeline_meta.json"), "w") as fh:
-            json.dump({"fitted": self._fitted}, fh, indent=2)
+            json.dump({"fitted": self._fitted, "conformal_scale": self.conformal_scale,
+                       "pred_scale": self.pred_scale, "horizon_steps": list(self.horizon_steps)}, fh, indent=2)
         print(f"CalibrationPipeline saved to '{directory}/'")
 
     @classmethod
@@ -367,7 +405,11 @@ class CalibrationPipeline:
         meta_path = os.path.join(directory, "pipeline_meta.json")
         if os.path.exists(meta_path):
             with open(meta_path) as fh:
-                obj._fitted = bool(json.load(fh).get("fitted", True))
+                meta = json.load(fh)
+            obj._fitted = bool(meta.get("fitted", True))
+            obj.conformal_scale = meta.get("conformal_scale", "none")
+            obj.pred_scale = meta.get("pred_scale")
+            obj.horizon_steps = tuple(meta.get("horizon_steps", obj.horizon_steps))
         else:
             obj._fitted = True
         print(f"CalibrationPipeline loaded from '{directory}/'")
@@ -403,7 +445,8 @@ class CalibrationPipeline:
             n = self.conformal[h].n_calibration
             if n > 0:
                 q90 = self.conformal[h].empirical_quantile(0.1)
-                print(f"  {h}: N = {n},  90%-quantile = +/-{q90:.4f} raw price units")
+                unit = "raw price units" if self.conformal_scale == "none" else f"x {self.conformal_scale} scale"
+                print(f"  {h}: N = {n},  90%-quantile = +/-{q90:.4f} {unit}")
             else:
                 print(f"  {h}: not fitted")
 
