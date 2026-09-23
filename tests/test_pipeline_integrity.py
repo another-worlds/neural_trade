@@ -91,10 +91,13 @@ class TestDataPipeline:
             # Read back
             loaded_df = pd.read_csv(csv_path, parse_dates=['timestamp'])
 
-            # Check equality
+            # Check equality. check_dtype=False because a CSV stores no dtype: on Windows
+            # np.random.randint produces int32 volumes and read_csv infers int64, so an
+            # exact-dtype comparison fails on the platform rather than on the data.
             pd.testing.assert_frame_equal(
                 original_df.reset_index(drop=True),
-                loaded_df.reset_index(drop=True)
+                loaded_df.reset_index(drop=True),
+                check_dtype=False,
             )
         finally:
             os.unlink(csv_path)

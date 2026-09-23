@@ -1,0 +1,18 @@
+# Line endings: normalise text to LF in the repository (working tree was CRLF throughout).
+# After adding this file run once:  git add --renormalize . && git commit -m "Normalise line endings"
+* text=auto
+*.py     text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.toml   text eol=lf
+*.cfg    text eol=lf
+*.txt    text eol=lf
+*.ipynb  text eol=lf filter=nbstripout diff=ipynb
+
+# Data and model artefacts: never diff, never rewrite.
+*.csv    -text -diff
+*.h5     binary
+*.joblib binary
+*.pkl    binary
+*.parquet binary

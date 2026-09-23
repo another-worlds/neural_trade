@@ -1,0 +1,26 @@
+# Portable recreation of the `nt` training environment (Windows + NVIDIA GPU).
+#
+#   conda env create -f environment.yml      # or: mamba env create -f environment.yml
+#   conda activate nt
+#
+# Why these three pins:
+#   python 3.10        TensorFlow 2.10 ships cp37-cp310 wheels only.
+#   cudatoolkit 11.2.2 } the exact pair the official TF 2.10 Windows build links against.
+#   cudnn 8.1.0.77     } TF 2.10 is the last release with native Windows GPU support.
+# Everything else is pip, pinned in requirements.txt (a freeze of the working environment).
+#
+# An exact, build-string-level export of one known-good machine is kept in
+# environment.lock.yml; it is NOT portable (build strings come and go from the
+# channels) and exists only as a forensic record. Use this file to rebuild.
+#
+# CPU-only or CI: skip conda entirely and use requirements-ci.txt on python 3.10.
+name: nt
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - cudatoolkit=11.2.2
+  - cudnn=8.1.0.77
+  - pip:
+      - -r requirements.txt

@@ -10,14 +10,10 @@ These tests verify:
 
 import pytest
 import numpy as np
-import sys
-from pathlib import Path
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Add parent directory to path to import model
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 try:
     from model import Config

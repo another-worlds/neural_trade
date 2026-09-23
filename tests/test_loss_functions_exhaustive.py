@@ -674,9 +674,6 @@ if __name__ == "__main__":
 # T_⊥ / QBOX loss function tests
 # ---------------------------------------------------------------------------
 import tensorflow as tf
-import sys
-import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from registries.losses import Losses  # noqa: E402
 
 

@@ -1,0 +1,25 @@
+# Install once per clone:  pip install pre-commit nbstripout && pre-commit install && nbstripout --install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        # ruff-format is deliberately not enabled until the Phase B16 hygiene sweep
+        # reformats the monolith in one commit.
+
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        # Blocks the 290 MB Bitcoin_BTCUSDT.csv; the 3.2 MB bundled CSV stays tracked.
+        args: [--maxkb=5000]

@@ -1,0 +1,39 @@
+# Phase 0 of the remediation plan: test collection, lint and coverage configuration.
+# Packaging metadata ([build-system]/[project]) is added when src/neural_trade/ lands (Phase B1).
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# "." makes `from model import ...` / `from losses import ...` resolve from the repo root
+# under a bare `pytest`; "src" is where the neural_trade package will live.
+pythonpath = ["src", "."]
+addopts = "-ra --strict-markers"
+markers = [
+    "tf: requires TensorFlow (auto-applied to any test module that imports tensorflow)",
+    "slow: trains a model or otherwise takes more than ~30 s",
+    "gpu: requires a GPU; never selected in CI",
+    "data: requires the bundled binance_btcusdt_1min_ccxt.csv",
+    "notebook: requires ipywidgets / IPython",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:tensorflow.*",
+]
+
+[tool.coverage.run]
+source = ["model", "losses", "core", "calibration", "metrics_utils", "math_helpers", "neural_trade"]
+omit = ["*/notebooks/*", "tests/*"]
+
+[tool.coverage.report]
+skip_covered = true
+show_missing = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests"]
+# The monolith and its stale copies are excluded until the Phase B16 hygiene sweep;
+# lifting this exclusion is part of that step.
+extend-exclude = ["model.py", "losses.py", "registries/", "*.ipynb"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "I"]
+ignore = ["E501"]
