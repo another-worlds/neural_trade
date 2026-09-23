@@ -8,7 +8,8 @@ Expects the run directories written by scripts/gate_run.py:
     m2   5 epochs, defaults                  (M2)
     m3   20 epochs, defaults                 (M3 and M4, first attempt - kept as history)
     m4   20 epochs, defaults, after the normalised-conformal fix (M3 and M4, second attempt)
-    m5   20 epochs, defaults, after the BCE direction loss + direction skip (M3 and M4, current)
+    m5   20 epochs, defaults, after the BCE direction loss + direction skip (M3 and M4, third attempt)
+    m6   20 epochs, defaults, after delta shrinkage (M3 and M4, current)
 The newest finished attempt is judged; earlier ones are printed as history (M3@m3, ...).
 Missing runs are reported as NOT RUN, never as passes. Exit 0 only when every clause of every
 milestone whose run exists passes, and no clause is PENDING.
@@ -174,7 +175,7 @@ def m4(run, ms="M4"):
 
 def main():
     print(f"gate runs under: {ROOT.resolve()}")
-    attempts = ("m3", "m4", "m5")          # successive M3/M4 attempts; the newest finished one is judged
+    attempts = ("m3", "m4", "m5", "m6")    # successive M3/M4 attempts; the newest finished one is judged
     runs = {n: load(n) for n in ("m1a", "m1b", "m2", *attempts)}
     finished = [a for a in attempts if runs[a] is not None and not runs[a].get("in_progress")]
     current = finished[-1] if finished else "m3"
