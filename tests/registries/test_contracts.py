@@ -44,7 +44,20 @@ def test_load_all_resolves_the_default_config_and_rejects_unknown_components():
         load_all(Config(MODEL_NAME="nope"))
 
 
-def test_plugins_register_components_and_templates_are_skipped():
+@pytest.fixture
+def clean_plugins():
+    """Plugins register into the process-wide registries; undo that after the test."""
+    import sys
+
+    from neural_trade.registries.metrics import Metrics
+
+    yield
+    Metrics.remove("n_samples")
+    for name in [m for m in sys.modules if m.startswith("neural_trade_plugins")]:
+        del sys.modules[name]
+
+
+def test_plugins_register_components_and_templates_are_skipped(clean_plugins):
     from neural_trade.core.plugin_loader import load_plugins
     from neural_trade.registries.metrics import Metrics
 

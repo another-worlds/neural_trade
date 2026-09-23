@@ -16,8 +16,9 @@ from neural_trade.registries.metrics import STEP_METRICS, Metrics
 
 
 def test_both_tiers_are_registered_and_separate():
-    assert len(Metrics.numpy_names()) == 16 and len(Metrics.tf_names()) == 11
-    assert set(Config().METRICS) == set(Metrics.numpy_names())
+    assert len(Metrics.tf_names()) == 11
+    assert set(Config().METRICS) <= set(Metrics.numpy_names())  # plugins may add more
+    assert len(Config().METRICS) == 16
     assert set(Config().STEP_METRICS) == set(Metrics.tf_names()) == set(STEP_METRICS)
     with pytest.raises(ComponentNotFoundError):
         Metrics.tf_functions(["rmse"])

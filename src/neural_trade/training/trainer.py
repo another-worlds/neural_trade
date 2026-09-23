@@ -25,6 +25,7 @@ from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
 from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
+from neural_trade.serving.postprocess import heads_to_predictions
 from neural_trade.registries.callbacks import build_callbacks
 from neural_trade.training.callbacks import ParamsLogger, TqdmCallback, TrainContext
 from neural_trade.training.custom_model import CustomTrainModel
@@ -65,6 +66,8 @@ class TrainResult:
     y_cal: Optional[np.ndarray] = None
     last_close_cal: Optional[np.ndarray] = None
     fold: Optional[Any] = None  # FoldIndices used for the split
+    normalizer: Optional[Any] = None  # data.scaling.WindowNormalizer fitted on train
+    artifacts_dir: Optional[str] = None  # where the serving bundle was written, if any
 
 
 def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
@@ -113,32 +116,13 @@ def _predict_heads(model, X, n, target_scaler, cfg, batch_size=None):
     """Run the model on scaled windows and return the raw-unit predictions dict.
 
     {"delta": {h: raw $ deltas}, "direction_prob": {h: P(up) in [0, 1]}, "variance": {h: scaled var}}
-    Price heads are inverse-transformed with the target scaler; direction and variance heads are
-    sanitised (NaN/Inf -> neutral) and clipped. Shared by the test and calibration paths.
+    Shared with serving (neural_trade.serving.postprocess), so served and reported predictions match.
     """
     bs = int(batch_size or getattr(cfg, 'BATCH_SIZE', 64))
     ds = tf.data.Dataset.from_tensor_slices(np.asarray(X, dtype='float32')).batch(bs)
-    heads = PredictiveOutputs(*model.predict(ds, verbose=0))
-    n = int(n)
+    heads = model.predict(ds, verbose=0)
+    return heads_to_predictions(heads, n, float(target_scaler.scale_[0]), float(target_scaler.mean_[0]), cfg)
 
-    def _delta(head):
-        scaled = np.asarray(head).reshape(-1)[:n]
-        return target_scaler.inverse_transform(scaled.reshape(-1, 1)).ravel()
-
-    def _prob(head):
-        p = np.asarray(head, dtype=float).reshape(-1)[:n]
-        return np.nan_to_num(p, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
-
-    def _var(head):
-        v = np.asarray(head, dtype=float).reshape(-1)[:n]
-        return np.nan_to_num(v, nan=1.0, posinf=1.0, neginf=1.0).clip(float(cfg.VAR_FLOOR), float(cfg.VAR_CAP))
-
-    return {
-        "delta": {"h0": _delta(heads.price_h0), "h1": _delta(heads.price_h1), "h2": _delta(heads.price_h2)},
-        "direction_prob": {"h0": _prob(heads.direction_h0), "h1": _prob(heads.direction_h1),
-                           "h2": _prob(heads.direction_h2)},
-        "variance": {"h0": _var(heads.variance_h0), "h1": _var(heads.variance_h1), "h2": _var(heads.variance_h2)},
-    }
 
 def train_and_evaluate(
     *,
@@ -152,6 +136,7 @@ def train_and_evaluate(
     fit_calibration: bool = True,
     extra_callbacks: Optional[List[tf.keras.callbacks.Callback]] = None,
     run_context=None,
+    save_artifacts: Optional[bool] = None,
 ) -> TrainResult:
     """Train (optionally) and evaluate, returning a rich result bundle.
 
@@ -343,7 +328,7 @@ def train_and_evaluate(
             cal_pipeline = None
             predictions_calibrated = None
 
-    return TrainResult(
+    result = TrainResult(
         config=cfg,
         model=custom_model,
         target_scaler=target_scaler,
@@ -363,7 +348,19 @@ def train_and_evaluate(
         y_cal=(np.asarray(_cb['y_raw']) if _cb is not None else None),
         last_close_cal=(np.asarray(_cb['last_close']) if _cb is not None else None),
         fold=getattr(data_processor, 'fold', None),
+        normalizer=getattr(data_processor, 'normalizer', None),
     )
+
+    # Serving bundle (training.artifacts): weights, config, target scale, normaliser, calibration.
+    # Written for run-context runs by default, or whenever save_artifacts=True.
+    if save_artifacts or (save_artifacts is None and run_context is not None):
+        from neural_trade.training.artifacts import ArtifactBundle
+
+        out_dir = cfg.ARTIFACTS_DIR
+        ArtifactBundle.from_result(result).save(out_dir)
+        result.artifacts_dir = str(out_dir)
+        print(f"Artifact bundle written to {out_dir}")
+    return result
 
 
 def train_model(extra_callbacks=None, epochs=None, force=False, calibrate=True):
