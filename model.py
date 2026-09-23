@@ -1,6 +1,22 @@
 csv="binance_btcusdt_1min_ccxt.csv"
 
 import os
+import sys
+os.environ.setdefault("TF_DETERMINISTIC_OPS", "1")  # must be set before TensorFlow is imported
+
+# Console encoding guard. This module's progress output contains non-ASCII glyphs
+# (lambda, T-perp, arrows, ~ - 137 characters over 25 distinct code points). On a Windows
+# console whose code page is not UTF-8 (cp1251 on the development box) `print` raises
+# UnicodeEncodeError, and because one such print sits inside the pre-training lambda
+# calibration pass the whole pass aborted and fell back to the configured lambdas - a
+# numerical feature silently disabled by a log line. Replacing unencodable characters
+# costs a "?" in the log instead of an aborted training stage.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except (AttributeError, ValueError, OSError):  # not a TextIOWrapper, or already detached
+        pass
+
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -69,9 +85,14 @@ class Config:
     BATCH_SIZE = 64  # Keep the effective learning rate in the validated range.
     EPOCHS = 2 * 10
     LR = 1e-3  # Adam default-scale learning rate for the validated batch size.
-    PATIENCE = EPOCHS# //2  # lr scheduler patience (set to half of total epochs for gradual decay, or equal to epochs for no decay)
-    EARLY=EPOCHS # Early stopping patience (set to total epochs for no early stopping, or a smaller value for actual early stopping)
+    PATIENCE = 3  # ReduceLROnPlateau patience. Was EPOCHS, which disabled it by construction.
+    EARLY = 6  # EarlyStopping patience on val_loss. Was EPOCHS, which disabled it by construction.
     MAX_SEQUENCE_COUNT = 1440 *  (31 +6 ) #int(1440 * 60 + 60 * 0.2)#(31 +6 ) #1440 * 364## / 10  # Limit most recent sequences to bound training size
+    # Purged four-way split (see make_purged_splits): sizes of the validation and calibration
+    # blocks as fractions of the sequence count, and the number of TimeSeriesSplit folds.
+    VAL_FRACTION = 0.066
+    CAL_FRACTION = 0.066
+    N_FOLDS = 5
     
 
     
@@ -102,12 +123,15 @@ class Config:
     # Per-component damping overrides (None → fall back to CALIB_DAMPING).
     # Set lower values (e.g. 0.2) for noisy components where you want gentler adjustment.
     CALIB_DAMPING_POINT = None   # Applies to lambda_short, lambda_point, lambda_long
-    CALIB_DAMPING_TREND = None   # Applies to lambda_extended_trend
+    CALIB_DAMPING_TREND = 0.0    # 0 = excluded from equalisation: the trend prior is a regulariser, not an objective   # Applies to lambda_extended_trend
     CALIB_DAMPING_DIR   = None   # Applies to lambda_dir (focal+dice)
     CALIB_DAMPING_VAR   = None   # Applies to lambda_var (NLL)
     CALIB_DAMPING_CRPS  = None   # Applies to lambda_crps
     CALIB_DAMPING_ECE   = None   # Applies to lambda_soft_ece
     CALIB_DAMPING_VOL   = None   # Applies to lambda_vol
+    CALIB_DAMPING_PHYSICS = 0.0  # Applies to lambda_t_perp, lambda_casimir, lambda_hd, lambda_ife. 0 = excluded from
+                                 # equalisation: bounded hinge/constraint terms are legitimately ~0 and must never be
+                                 # rescaled against the primary objectives (IFE was pinned at CALIB_LAMBDA_MAX every run).
     # Outer-multiplier calibration (default OFF — preserves existing behavior).
     # When True, calibrates lambda_trend_outer, lambda_dir_outer, lambda_nll_outer
     # using the already-calibrated per-component group sums.
@@ -115,12 +139,12 @@ class Config:
 
     LAMBDA_LOCAL_TREND  = 1.0
     LAMBDA_GLOBAL_TREND =  1.0
-    LAMBDA_EXTENDED_TREND = 1.0
+    LAMBDA_EXTENDED_TREND = 0.1  # momentum prior (past delta over EXTENDED_TREND_PERIODS[k]); a regulariser, kept small
     LAMBDA_QUANTILE = 1.0
     REG_MOMENTUM_L2 = 0
     INDICATOR_L2 = 0     # Dedicated L2 for indicator logit vars (separate from NN Dense weights)
     INDICATOR_LR_MULT = 5.0  # Insdicator optimizer LR = LR * INDICATOR_LR_MULT
-    MOMENTUM_CLIP_MIN = 1.0
+    MOMENTUM_CLIP_MIN = 2.0  # period floor. 1.0 gave alpha=1 -> logit +18.4 -> float32 sigmoid derivative exactly 0 (frozen indicator)
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True  # legacy flag; current point loss uses log(cosh) via the registered helper (see registries/losses.py)
     
@@ -161,16 +185,16 @@ class Config:
     #   Hyper-decoherence → volatility is a resource; high vol should → high σ
     #   Information flow → each horizon must reveal NEW information
     T_PERP_DIM = 16             # Dimension of perpendicular projection subspace
-    LAMBDA_T_PERP = 0.8      # T_⊥ calibration loss (0=off; try 0.5 when enabling)
-    LAMBDA_CASIMIR =  0.8       # Casimir inter-scale interference loss (0=off; try 0.5)
+    LAMBDA_T_PERP = 0.1      # T_⊥ calibration loss (0=off; try 0.5 when enabling)
+    LAMBDA_CASIMIR = 0.1       # Casimir inter-scale interference loss (0=off; try 0.5)
     LAMBDA_VAC = 0.0            # Vacuum bandwidth threshold Λ_vac (cross-horizon spread limit)  # P0-2: now opt-in (was 1.0 always-on)
-    LAMBDA_HD =  0.8             # Hyper-decoherence coupling loss (0=off; try 0.3)
-    LAMBDA_IFE = 0.8         # Information flow entropy loss (0=off; try 0.3)
+    LAMBDA_HD = 0.1             # Hyper-decoherence coupling loss (0=off; try 0.3)
+    LAMBDA_IFE = 0.1         # Information flow entropy loss (0=off; try 0.3)
     RHO_MAX = 0.95              # Max allowed cross-horizon Pearson correlation
     #   Vacuum saturation: natural + artificial noise fills each t_perp_proj kernel to
     #   E_max capacity at all times.  Excess energy above the ceiling = T_⊥ intensity.
     VACUUM_E_MAX = 1.0          # Per-dim energy ceiling (tanh² max = 1.0; tune 0.5–1.0)
-    LAMBDA_VAC_OVERFLOW = 0.5   # Weight for vacuum overflow T_⊥ precision loss
+    LAMBDA_VAC_OVERFLOW = 0.1   # Weight for vacuum overflow T_⊥ precision loss
 
 # paths
     # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
@@ -214,12 +238,15 @@ class Config:
     # If > 0, direction loss/metrics treat returns within +/- deadband as neutral.
     # Units: basis points (bps). Example: 10 bps = 0.10%.
     # CRITICAL FIX: Non-zero deadband filters label noise from tiny price moves
-    DIR_DEADBAND_BPS = 0.0  # 5 bps = 0.05% minimum move for UP classification
+    DIR_DEADBAND_BPS = 5.0  # 5 bps = 0.05% minimum move to count as UP/DOWN; 0 made every +-$1 tick a hard label
 
     # Stabilize NLL and prevent variance head from dominating early (P0-1 consolidated).
     # Single definition (1e-4 stabilizing value). Variance is in SCALED units^2.
     VAR_FLOOR = 1e-4
     VAR_CAP = 1e3
+    # Minimum |y| (raw dollars) for the delta-space safe-MAPE in _compute_all_horizon_metrics;
+    # read via getattr there but never declared before (always fell back to 1.0).
+    DELTA_MAPE_MIN_ABS = 1.0
 
     # Align direction head with distribution-implied P(up) from (mu, var).
     # Setting this > 0 helps avoid degenerate constant direction probabilities.
@@ -295,6 +322,61 @@ class Config:
     def effective_var_floor(self) -> float:
         """Consolidated stabilizing value (P0-1)."""
         return self.VAR_FLOOR
+
+
+@dataclass(frozen=True)
+class FoldIndices:
+    """Index blocks of one purged chronological fold (sequence indices, not bar indices)."""
+    fold: int
+    gap: int
+    train: np.ndarray
+    val: np.ndarray
+    cal: np.ndarray
+    test: np.ndarray
+
+
+def make_purged_splits(n_seq, *, lookback, horizon_steps, window_step=1, n_folds=5,
+                       val_fraction=0.066, cal_fraction=0.066, gap=None):
+    """Chronological train | gap | val | gap | cal | gap | test blocks per TimeSeriesSplit fold.
+
+    A training sequence anchored at bar i carries labels up to bar i + max(H) - 1; a later
+    sequence anchored at bar j reads inputs from bar j - LOOKBACK. They share a bar iff
+    j - i <= LOOKBACK + max(H) - 1, so a gap of LOOKBACK + max(H) sequences (79 + 1 for the
+    default config) guarantees no bar is both a training label and an evaluation input.
+    The gap is applied between every adjacent pair of blocks. With WINDOW_STEP > 1 the gap
+    is expressed in sequences (ceil of the bar gap / step).
+
+    Returns folds in chronological order; folds whose train block would be empty are omitted.
+    """
+    horizon_steps = [int(h) for h in horizon_steps]
+    bar_gap = int(gap) if gap is not None else int(lookback) + int(max(horizon_steps))
+    seq_gap = int(math.ceil(bar_gap / max(1, int(window_step))))
+    val_len = max(1, int(round(val_fraction * n_seq)))
+    cal_len = max(1, int(round(cal_fraction * n_seq)))
+
+    folds = []
+    tscv = TimeSeriesSplit(n_splits=int(n_folds))
+    for k, (_, test_idx) in enumerate(tscv.split(np.arange(n_seq)), start=1):
+        t0, t1 = int(test_idx[0]), int(test_idx[-1]) + 1
+        cal1 = t0 - seq_gap
+        cal0 = cal1 - cal_len
+        val1 = cal0 - seq_gap
+        val0 = val1 - val_len
+        train1 = val0 - seq_gap
+        if train1 <= 0:
+            continue
+        folds.append(FoldIndices(
+            fold=k, gap=seq_gap,
+            train=np.arange(0, train1), val=np.arange(val0, val1),
+            cal=np.arange(cal0, cal1), test=np.arange(t0, t1),
+        ))
+    if not folds:
+        raise ValueError(
+            f"Not enough sequences ({n_seq}) for a purged split with gap={seq_gap}, "
+            f"val_len={val_len}, cal_len={cal_len}, n_folds={n_folds}: add data, raise "
+            f"MAX_SEQUENCE_COUNT, or lower VAL_FRACTION / CAL_FRACTION."
+        )
+    return folds
 
 
 class DataProcessor:
@@ -502,43 +584,72 @@ class DataProcessor:
         print("[INFO] Dataset Statistics:")
         print(f"   Total sequences: {X_seq.shape[0]}")
 
-        tscv = TimeSeriesSplit(n_splits=5)
-        # self.plot_splits(df, start_idx=max(self.config.LOOKBACK, max(self.config.EXTENDED_TREND_PERIODS)),
-        #                 tscv=tscv, X_seq_len=len(X_seq))
+        # Four-way PURGED chronological split: train | gap | val | gap | cal | gap | test.
+        #   train -> gradients and the target scaler;  val -> early stopping / checkpoint / LR;
+        #   cal   -> post-hoc calibration (temperature, conformal);  test -> reported once.
+        # Previously the last TimeSeriesSplit fold was BOTH validation and test with no gap:
+        # 79 "validation" windows contained bars that were training labels, model selection
+        # happened on the test set, and calibration was fit on the test set too.
+        fold = make_purged_splits(
+            X_seq.shape[0],
+            lookback=self.config.LOOKBACK,
+            horizon_steps=self.config.HORIZON_STEPS,
+            window_step=int(max(1, getattr(self.config, 'WINDOW_STEP', 1))),
+            n_folds=int(getattr(self.config, 'N_FOLDS', 5)),
+            val_fraction=float(getattr(self.config, 'VAL_FRACTION', 0.066)),
+            cal_fraction=float(getattr(self.config, 'CAL_FRACTION', 0.066)),
+        )[-1]
+        self.fold = fold
 
-        train_indices, test_indices = list(tscv.split(X_seq))[-1]
+        def _take(idx):
+            return X_seq[idx], y_seq[idx], last_close_seq[idx], extended_trends[idx]
 
-        X_train_seq, X_test_seq = X_seq[train_indices], X_seq[test_indices]
-        y_train, y_test = y_seq[train_indices], y_seq[test_indices]
-        last_close_train, last_close_test = last_close_seq[train_indices], last_close_seq[test_indices]
-        extended_trends_train, extended_trends_test = extended_trends[train_indices], extended_trends[test_indices]
+        X_train_seq, y_train, last_close_train, extended_trends_train = _take(fold.train)
+        X_val_seq, y_val, last_close_val, extended_trends_val = _take(fold.val)
+        X_cal_seq, y_cal, last_close_cal, extended_trends_cal = _take(fold.cal)
+        X_test_seq, y_test, last_close_test, extended_trends_test = _take(fold.test)
 
         train_batches = math.ceil(X_train_seq.shape[0] / self.config.BATCH_SIZE)
         test_batches = math.ceil(X_test_seq.shape[0] / self.config.BATCH_SIZE)
         print(f"   Train sequences: {X_train_seq.shape[0]} (batches/epoch: {train_batches})")
-        print(f"   Test sequences: {X_test_seq.shape[0]} (batches: {test_batches})")
+        print(f"   Val sequences:   {X_val_seq.shape[0]}   Cal sequences: {X_cal_seq.shape[0]}   "
+              f"(purge gap: {fold.gap} sequences, fold {fold.fold})")
+        print(f"   Test sequences:  {X_test_seq.shape[0]} (batches: {test_batches})")
 
-        # Targets are multi-horizon: shape [N, 3].
-        # Use a single scaler fit on ALL horizons (flattened) to keep consistent scaling.
+        # Targets are multi-horizon [N, 3]: one scaler, fit on TRAIN only, shared across horizons.
         target_scaler = StandardScaler()
-        y_train_flat = y_train.reshape(-1, 1)
-        y_test_flat = y_test.reshape(-1, 1)
-        y_train_scaled = target_scaler.fit_transform(y_train_flat).reshape(y_train.shape)
-        y_test_scaled = target_scaler.transform(y_test_flat).reshape(y_test.shape)
+        y_train_scaled = target_scaler.fit_transform(y_train.reshape(-1, 1)).reshape(y_train.shape)
+        y_val_scaled = target_scaler.transform(y_val.reshape(-1, 1)).reshape(y_val.shape)
+        y_cal_scaled = target_scaler.transform(y_cal.reshape(-1, 1)).reshape(y_cal.shape)
+        y_test_scaled = target_scaler.transform(y_test.reshape(-1, 1)).reshape(y_test.shape)
 
-        # Scale input sequences for better normalization
-        input_scaler = StandardScaler()
-        X_train_seq_reshaped = X_train_seq.reshape(-1, X_train_seq.shape[-1])
-        X_train_seq_scaled = input_scaler.fit_transform(X_train_seq_reshaped).reshape(X_train_seq.shape)
-        X_test_seq_reshaped = X_test_seq.reshape(-1, X_test_seq.shape[-1])
-        X_test_seq_scaled = input_scaler.transform(X_test_seq_reshaped).reshape(X_test_seq.shape)
+        # Window-relative input in TARGET-scaler units: (x - last_close) / target_scale.
+        # The previous per-lag-position StandardScaler z-scored the absolute price LEVEL over
+        # the whole training span, so within one hour the 60 inputs barely differed and the
+        # model's dominant signal was "where is BTC vs. its multi-week mean" - noise w.r.t. a
+        # delta target, and a second reason it learned to repeat the last close. This puts the
+        # window, last_close, the extended-trend features, the price heads and sigma in one
+        # unit system. Parameter-free: there is no input scaler to persist.
+        input_scale = float(target_scaler.scale_[0]) if float(target_scaler.scale_[0]) > 0 else 1.0
+
+        def _normalise(X, lc):
+            return ((X - lc[:, None]) / input_scale).astype('float32')
+
+        X_train_seq_scaled = _normalise(X_train_seq, last_close_train)
+        X_test_seq_scaled = _normalise(X_test_seq, last_close_test)
+        input_scaler = None
 
         joblib.dump(target_scaler, self.config.SCALER_PATH)
-        joblib.dump(input_scaler, self.config.SCALER_PATH.replace('.joblib', '_input.joblib'))
 
         # Keep references for programmatic use without changing the return signature.
         self.target_scaler = target_scaler
         self.input_scaler = input_scaler
+        self.input_scale = input_scale
+        # Validation and calibration blocks, consumed by train_and_evaluate.
+        self.val_block = dict(X=_normalise(X_val_seq, last_close_val), y_scaled=y_val_scaled, y_raw=y_val,
+                              last_close=last_close_val, extended_trends=extended_trends_val)
+        self.cal_block = dict(X=_normalise(X_cal_seq, last_close_cal), y_scaled=y_cal_scaled, y_raw=y_cal,
+                              last_close=last_close_cal, extended_trends=extended_trends_cal)
 
         return (X_train_seq_scaled, y_train_scaled, last_close_train, extended_trends_train,
                 X_test_seq_scaled, y_test_scaled, last_close_test, extended_trends_test,
@@ -565,6 +676,13 @@ class TrainResult:
     metrics: Dict[str, Any]
     calibration_pipeline: Optional[Any] = None  # CalibrationPipeline, None if not fitted
     calibration_lambdas: Optional[Dict[str, float]] = None  # Lambdas after pre-training calibration
+    # Calibration-split artefacts (None when fit_calibration=False or the pipeline failed).
+    predictions_cal: Optional[Dict[str, Dict[str, np.ndarray]]] = None
+    predictions_calibrated: Optional[Dict[str, Any]] = None  # CalibrationPipeline.apply(predictions) on TEST
+    calibration_report: Optional[Dict[str, Dict[str, float]]] = None  # conformal coverage on TEST, per horizon
+    y_cal: Optional[np.ndarray] = None
+    last_close_cal: Optional[np.ndarray] = None
+    fold: Optional[Any] = None  # FoldIndices used for the split
 
 
 def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
@@ -698,17 +816,23 @@ def _compute_all_horizon_metrics(
 
         out["price"][h_key] = price_metrics
 
-        true_dir = (y_t > thr)
+        # Direction labels with the same NEUTRAL MASK the train/validation metrics use:
+        # |return| <= deadband is neither UP nor DOWN and is excluded. The previous
+        # delta-space threshold had no mask, so this accuracy never matched val_dir_acc.
+        ret = y_t / (np.asarray(lc, dtype=float).reshape(-1)[:n] + 1e-12)
+        dir_mask = np.abs(ret) > deadband
+        true_dir = (ret > deadband)
         if dir_probs is not None and h_key in dir_probs and dir_probs[h_key] is not None:
             p = np.asarray(dir_probs[h_key], dtype=float).reshape(-1)[:n]
             pred_dir = (p >= 0.5)
         else:
             pred_dir = (y_p > thr)
-
-        out["direction"][h_key] = {
-            "acc": float(accuracy_score(true_dir.astype(int), pred_dir.astype(int))),
-            "f1": float(f1_score(true_dir.astype(int), pred_dir.astype(int), zero_division=0)),
-        }
+        if int(dir_mask.sum()) > 0:
+            _td, _pd = true_dir[dir_mask].astype(int), pred_dir[dir_mask].astype(int)
+            _acc, _f1 = float(accuracy_score(_td, _pd)), float(f1_score(_td, _pd, zero_division=0))
+        else:
+            _acc, _f1 = float('nan'), float('nan')
+        out["direction"][h_key] = {"acc": _acc, "f1": _f1, "n_masked": int(dir_mask.sum())}
 
     out["meta"] = {
         "horizon_keys": list(horizons),
@@ -1140,6 +1264,72 @@ def make_interactive_plot_callback(
     return _InteractivePlotCallback()
 
 
+def _temperature_of(pipeline, h):
+    """Fitted temperature for horizon *h* from a CalibrationPipeline, NaN if unavailable."""
+    ts = getattr(pipeline, 'temperature_scaler', None)
+    for attr in ('temperatures', 'temperature', 'T', 'temps', '_temperatures'):
+        v = getattr(ts, attr, None)
+        if isinstance(v, dict) and h in v:
+            try:
+                return float(v[h])
+            except (TypeError, ValueError):
+                return float('nan')
+    return float('nan')
+
+
+def _calibration_coverage_report(calibrated, y_true_raw, pipeline, alpha=0.1):
+    """Empirical coverage / mean width of the conformal intervals on a held-out split, per horizon."""
+    report = {}
+    y = np.asarray(y_true_raw, dtype=float)
+    for i, h in enumerate(("h0", "h1", "h2")):
+        if y.ndim < 2 or i >= y.shape[1] or h not in calibrated.get("intervals", {}):
+            continue
+        lo, hi = calibrated["intervals"][h]
+        lo, hi = np.asarray(lo, dtype=float), np.asarray(hi, dtype=float)
+        m = min(len(lo), y.shape[0])
+        inside = (y[:m, i] >= lo[:m]) & (y[:m, i] <= hi[:m])
+        report[h] = {
+            "coverage90": float(np.mean(inside)) if m else float('nan'),
+            "width90": float(np.mean(hi[:m] - lo[:m])) if m else float('nan'),
+            "temperature": _temperature_of(pipeline, h),
+            "target": 1.0 - alpha,
+            "n": int(m),
+        }
+    return report
+
+
+def _predict_heads(model, X, n, target_scaler, cfg, batch_size=None):
+    """Run the model on scaled windows and return the raw-unit predictions dict.
+
+    {"delta": {h: raw $ deltas}, "direction_prob": {h: P(up) in [0, 1]}, "variance": {h: scaled var}}
+    Price heads are inverse-transformed with the target scaler; direction and variance heads are
+    sanitised (NaN/Inf -> neutral) and clipped. Shared by the test and calibration paths.
+    """
+    bs = int(batch_size or getattr(cfg, 'BATCH_SIZE', 64))
+    ds = tf.data.Dataset.from_tensor_slices(np.asarray(X, dtype='float32')).batch(bs)
+    heads = PredictiveOutputs(*model.predict(ds, verbose=0))
+    n = int(n)
+
+    def _delta(head):
+        scaled = np.asarray(head).reshape(-1)[:n]
+        return target_scaler.inverse_transform(scaled.reshape(-1, 1)).ravel()
+
+    def _prob(head):
+        p = np.asarray(head, dtype=float).reshape(-1)[:n]
+        return np.nan_to_num(p, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
+
+    def _var(head):
+        v = np.asarray(head, dtype=float).reshape(-1)[:n]
+        return np.nan_to_num(v, nan=1.0, posinf=1.0, neginf=1.0).clip(float(cfg.VAR_FLOOR), float(cfg.VAR_CAP))
+
+    return {
+        "delta": {"h0": _delta(heads.price_h0), "h1": _delta(heads.price_h1), "h2": _delta(heads.price_h2)},
+        "direction_prob": {"h0": _prob(heads.direction_h0), "h1": _prob(heads.direction_h1),
+                           "h2": _prob(heads.direction_h2)},
+        "variance": {"h0": _var(heads.variance_h0), "h1": _var(heads.variance_h1), "h2": _var(heads.variance_h2)},
+    }
+
+
 def train_and_evaluate(
     *,
     config: Optional['Config'] = None,
@@ -1161,7 +1351,6 @@ def train_and_evaluate(
     """
 
     tf.keras.utils.set_random_seed(42)
-    os.environ["TF_DETERMINISTIC_OPS"] = "1"
 
     cfg = config or Config()
     if csv_path is not None:
@@ -1196,13 +1385,20 @@ def train_and_evaluate(
         outputs=base_model.outputs,
     )
 
+    _vb = data_processor.val_block  # early stopping / checkpoint / LR select on the VALIDATION block, never on test
     train_ds, val_ds = predictor.create_datasets(
         X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
-        X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
+        _vb["X"], _vb["y_scaled"], _vb["last_close"], _vb["extended_trends"],
     )
 
     # Optional calibration (kept identical to train_model behavior)
     _calib_lambdas: Optional[Dict[str, float]] = None  # set below if calibrate=True
+    _CALIB_LAMBDA_NAMES = (
+        'lambda_short', 'lambda_point', 'lambda_long', 'lambda_extended_trend', 'lambda_dir',
+        'lambda_var', 'lambda_vol', 'lambda_crps', 'lambda_soft_ece',
+        'lambda_t_perp', 'lambda_casimir', 'lambda_hd', 'lambda_ife',
+    )
+    _calib_saved: Dict[str, float] = {}  # populated after the originals are read; restored on failure
     if calibrate is True:
         try:
             # ----------------------------------------------------------------
@@ -1234,24 +1430,26 @@ def train_and_evaluate(
             d_crps  = _d('CALIB_DAMPING_CRPS')
             d_ece   = _d('CALIB_DAMPING_ECE')
             d_vol   = _d('CALIB_DAMPING_VOL')
+            d_physics = _d('CALIB_DAMPING_PHYSICS')  # 0.0 by default: bounded regularisers are excluded from equalisation
 
             # ----------------------------------------------------------------
             # Save originals and reset all per-component lambdas to 1.0
             # so that natural magnitudes are measured without existing weights.
             # ----------------------------------------------------------------
-            orig_short = custom_model.lambda_short
-            orig_point = custom_model.lambda_point
-            orig_long  = custom_model.lambda_long
-            orig_ext   = custom_model.lambda_extended_trend
-            orig_dir   = custom_model.lambda_dir
-            orig_var   = custom_model.lambda_var
-            orig_vol   = custom_model.lambda_vol
-            orig_crps  = custom_model.lambda_crps
-            orig_ece   = custom_model.lambda_soft_ece
-            orig_t_perp   = custom_model.lambda_t_perp
-            orig_casimir  = custom_model.lambda_casimir
-            orig_hd       = custom_model.lambda_hd
-            orig_ife      = custom_model.lambda_ife
+            orig_short = float(custom_model.lambda_short)
+            orig_point = float(custom_model.lambda_point)
+            orig_long  = float(custom_model.lambda_long)
+            orig_ext   = float(custom_model.lambda_extended_trend)
+            orig_dir   = float(custom_model.lambda_dir)
+            orig_var   = float(custom_model.lambda_var)
+            orig_vol   = float(custom_model.lambda_vol)
+            orig_crps  = float(custom_model.lambda_crps)
+            orig_ece   = float(custom_model.lambda_soft_ece)
+            orig_t_perp   = float(custom_model.lambda_t_perp)
+            orig_casimir  = float(custom_model.lambda_casimir)
+            orig_hd       = float(custom_model.lambda_hd)
+            orig_ife      = float(custom_model.lambda_ife)
+            _calib_saved.update({_n: float(getattr(custom_model, _n)) for _n in _CALIB_LAMBDA_NAMES})
 
             custom_model.lambda_short            = 1.0
             custom_model.lambda_point            = 1.0
@@ -1268,9 +1466,9 @@ def train_and_evaluate(
             custom_model.lambda_ife              = 1.0
 
             # ----------------------------------------------------------------
-            # Phase 1 — BatchNorm warmup (no sampling, no gradient)
+            # Phase 1 — warm-up forward passes (no sampling, no gradient). There is no BatchNorm in the graph; this builds the graph and model.losses before sampling.
             # ----------------------------------------------------------------
-            print(f"[calib] Warming up BatchNorm over {n_warmup}/{train_batches} batches ({warmup_frac:.0%} of epoch)...")
+            print(f"[calib] Warm-up forward passes over {n_warmup}/{train_batches} batches ({warmup_frac:.0%} of epoch) to build the graph and layer losses before sampling...")
             for batch in train_ds.take(n_warmup):
                 x_batch, _, _, _ = batch
                 _ = custom_model(x_batch, training=True)
@@ -1389,10 +1587,10 @@ def train_and_evaluate(
             new_vol   = _rescale(orig_vol,   med_vol,   d_vol)
             new_crps  = _rescale(orig_crps,  med_crps,  d_crps) if crps_active else orig_crps
             new_ece   = _rescale(orig_ece,   med_ece,   d_ece)  if ece_active  else orig_ece
-            new_t_perp  = _rescale(orig_t_perp,  med_t_perp,  d_global) if t_perp_active  else orig_t_perp
-            new_casimir = _rescale(orig_casimir, med_casimir, d_global) if casimir_active else orig_casimir
-            new_hd      = _rescale(orig_hd,      med_hd,      d_global) if hd_active      else orig_hd
-            new_ife     = _rescale(orig_ife,     med_ife,     d_global) if ife_active     else orig_ife
+            new_t_perp  = _rescale(orig_t_perp,  med_t_perp,  d_physics) if t_perp_active  else orig_t_perp
+            new_casimir = _rescale(orig_casimir, med_casimir, d_physics) if casimir_active else orig_casimir
+            new_hd      = _rescale(orig_hd,      med_hd,      d_physics) if hd_active      else orig_hd
+            new_ife     = _rescale(orig_ife,     med_ife,     d_physics) if ife_active     else orig_ife
 
             custom_model.lambda_short          = new_short
             custom_model.lambda_point          = new_point
@@ -1486,14 +1684,19 @@ def train_and_evaluate(
 
         except Exception as e:
             import traceback
-            print(f"[calib] Calibration pass failed — proceeding with default lambdas: {e}")
+            # Restore the lambdas that were reset to 1.0 for sampling. Without this, a
+            # failure after the reset silently trained with every lambda at 1.0 while
+            # the message claimed "default lambdas".
+            for _name, _value in _calib_saved.items():
+                setattr(custom_model, _name, _value)
+            print(f"[calib] Calibration pass failed — restored configured lambdas and continuing: {e}")
             traceback.print_exc()
 
     opt = optimizers.Adam(learning_rate=cfg.LR)
     custom_model.compile(optimizer=opt)
 
     csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
-    es = callbacks.EarlyStopping(monitor='val_loss', patience=Config.EARLY, restore_best_weights=True)
+    es = callbacks.EarlyStopping(monitor='val_loss', patience=cfg.EARLY, restore_best_weights=True)
     ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
     # MCC-based early stopping for direction head (class-imbalance robust)
     # MCC = (TP×TN - FP×FN) / sqrt((TP+FP)(TP+FN)(TN+FP)(TN+FN))
@@ -1501,12 +1704,12 @@ def train_and_evaluate(
     # Unlike accuracy, MCC is balanced even with severe class imbalance
     es_dir = callbacks.EarlyStopping(
         monitor='val_dir_mcc_h1',
-        patience=Config.PATIENCE,
+        patience=cfg.PATIENCE,
         mode='max',
         restore_best_weights=False
     )
     tqdm_callback = TqdmCallback()
-    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=Config.PATIENCE)
+    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=cfg.PATIENCE)
 
     learnable_layer = None
     for layer in custom_model.layers:
@@ -1515,7 +1718,9 @@ def train_and_evaluate(
             break
     params_logger = ParamsLogger(layer=learnable_layer, out_csv='indicator_params_history.csv')
 
-    callbacks_list = [csv_logger, es, ckpt, es_dir, tqdm_callback, params_logger, lr_scheduler]
+    # es_dir (a second EarlyStopping on val_dir_mcc_h1 with restore_best_weights=False) is no
+    # longer attached: two stoppers raced and the one without restore could win.
+    callbacks_list = [csv_logger, es, ckpt, tqdm_callback, params_logger, lr_scheduler]
     if extra_callbacks:
         callbacks_list += list(extra_callbacks)
 
@@ -1550,27 +1755,10 @@ def train_and_evaluate(
             pass
 
     print("Evaluating enhanced model...")
-    X_test_simple = tf.data.Dataset.from_tensor_slices(X_test_seq).batch(cfg.BATCH_SIZE)
-    y_pred_all = custom_model.predict(X_test_simple)
-
-    # Use named view over the (up to) 10 outputs. This replaces the previous
-    # fragile y_pred_all[0],[3],[6] and [1,4,7],[2,5,8] indexing.
-    heads = PredictiveOutputs(*y_pred_all)
-
-    # Extract 3 price heads (scaled deltas from model outputs)
-    # CRITICAL: These are SCALED predictions (trained in scaled delta space)
-    y_pred_price_scaled = np.column_stack([
-        heads.price_h0[:, 0],
-        heads.price_h1[:, 0],
-        heads.price_h2[:, 0],
-    ])
-    y_pred_price_scaled = y_pred_price_scaled[:len(y_test)]
-
-    # Inverse-transform from scaled space back to raw delta space
-    # This ensures predictions have the same statistical properties as the original deltas
-    y_pred_h0_raw = target_scaler.inverse_transform(y_pred_price_scaled[:, 0].reshape(-1, 1)).ravel()
-    y_pred_h1_raw = target_scaler.inverse_transform(y_pred_price_scaled[:, 1].reshape(-1, 1)).ravel()
-    y_pred_h2_raw = target_scaler.inverse_transform(y_pred_price_scaled[:, 2].reshape(-1, 1)).ravel()
+    predictions = _predict_heads(custom_model, X_test_seq, y_test.shape[0], target_scaler, cfg)
+    y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw = (predictions["delta"][h] for h in ("h0", "h1", "h2"))
+    dir_pred_h0, dir_pred_h1, dir_pred_h2 = (predictions["direction_prob"][h] for h in ("h0", "h1", "h2"))
+    var_pred_h0, var_pred_h1, var_pred_h2 = (predictions["variance"][h] for h in ("h0", "h1", "h2"))
 
     # === DIAGNOSTIC: Check prediction quality ===
     # Print statistics to help diagnose issues
@@ -1602,27 +1790,6 @@ def train_and_evaluate(
         print(f"  {h_name}: pred_mean={pred_mean:.6f}, true_mean={true_mean:.6f} | pred_std={pred_std:.6f}, true_std={true_std:.6f}")
         print(f"         pred_range=[{pred_min:.6f}, {pred_max:.6f}], true_range=[{true_min:.6f}, {true_max:.6f}]")
 
-    dir_pred_h0 = np.asarray(heads.direction_h0).reshape(-1)[:len(y_test)]
-    dir_pred_h1 = np.asarray(heads.direction_h1).reshape(-1)[:len(y_test)]
-    dir_pred_h2 = np.asarray(heads.direction_h2).reshape(-1)[:len(y_test)]
-    # Post-extraction sanitization for dir probs (neutral 0.5 on any NaN/Inf). This keeps
-    # predictions always valid for users/metrics without hard-coding 0.5 inside the model heads.
-    dir_pred_h0 = np.nan_to_num(dir_pred_h0, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
-    dir_pred_h1 = np.nan_to_num(dir_pred_h1, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
-    dir_pred_h2 = np.nan_to_num(dir_pred_h2, nan=0.5, posinf=0.5, neginf=0.5).clip(0.0, 1.0)
-
-    var_pred_h0 = np.asarray(heads.variance_h0).reshape(-1)[:len(y_test)]
-    var_pred_h1 = np.asarray(heads.variance_h1).reshape(-1)[:len(y_test)]
-    var_pred_h2 = np.asarray(heads.variance_h2).reshape(-1)[:len(y_test)]
-    var_pred_h0 = np.nan_to_num(var_pred_h0, nan=1.0, posinf=1.0, neginf=1.0).clip(1e-4, 1e4)
-    var_pred_h1 = np.nan_to_num(var_pred_h1, nan=1.0, posinf=1.0, neginf=1.0).clip(1e-4, 1e4)
-    var_pred_h2 = np.nan_to_num(var_pred_h2, nan=1.0, posinf=1.0, neginf=1.0).clip(1e-4, 1e4)
-
-    predictions = {
-        "delta": {"h0": y_pred_h0_raw, "h1": y_pred_h1_raw, "h2": y_pred_h2_raw},
-        "direction_prob": {"h0": dir_pred_h0, "h1": dir_pred_h1, "h2": dir_pred_h2},
-        "variance": {"h0": var_pred_h0, "h1": var_pred_h1, "h2": var_pred_h2},
-    }
 
     metrics = _compute_all_horizon_metrics(
         config=cfg,
@@ -1638,29 +1805,36 @@ def train_and_evaluate(
     except Exception:
         pass
 
-    # Post-hoc calibration pipeline (temperature scaling + conformal intervals)
+    # Post-hoc calibration: fit on the CAL block, apply to the TEST predictions.
+    # Previously it was fit on the test split itself (voiding the conformal guarantee and
+    # contaminating every reported test metric) and nothing ever consumed the fit.
     cal_pipeline = None
-    if fit_calibration and _CalibrationPipeline is not None:
+    predictions_cal = None
+    predictions_calibrated = None
+    calibration_report: Optional[Dict[str, Any]] = None
+    _cb = getattr(data_processor, 'cal_block', None)
+    if fit_calibration and _CalibrationPipeline is not None and _cb is not None:
         try:
-            print("\nFitting CalibrationPipeline on test split...")
-            _draft = TrainResult(
-                config=cfg,
-                model=custom_model,
-                target_scaler=target_scaler,
-                input_scaler=input_scaler,
-                X_test_seq=X_test_seq,
-                y_test=np.asarray(y_test),
-                last_close_test=np.asarray(last_close_test),
-                extended_trends_test=np.asarray(extended_trends_test),
-                history=history,
-                predictions=predictions,
-                metrics=metrics,
-            )
+            print("\nFitting CalibrationPipeline on the calibration split...")
+            predictions_cal = _predict_heads(custom_model, _cb['X'], _cb['y_raw'].shape[0], target_scaler, cfg)
             cal_pipeline = _CalibrationPipeline()
-            cal_pipeline.fit(_draft)
+            cal_pipeline.fit_from_arrays(
+                predictions_dict=predictions_cal,
+                y_true_delta_raw=np.asarray(_cb['y_raw'], dtype=float),
+                last_close=np.asarray(_cb['last_close'], dtype=float),
+                deadband_bps=float(getattr(cfg, 'DIR_DEADBAND_BPS', 0.0)),
+            )
+            predictions_calibrated = cal_pipeline.apply(predictions, alpha=0.1)
+            calibration_report = _calibration_coverage_report(predictions_calibrated, np.asarray(y_test), cal_pipeline)
+            for _h, _row in calibration_report.items():
+                print(f"  [test] {_h}: conformal coverage@90 = {_row['coverage90']:.3f} (target >= 0.90), "
+                      f"mean width = {_row['width90']:.2f} raw units, T = {_row['temperature']:.3f}")
         except Exception as _cal_err:
-            print(f"CalibrationPipeline fit skipped: {_cal_err}")
+            import traceback
+            print(f"CalibrationPipeline fit FAILED (continuing without calibration): {_cal_err}")
+            traceback.print_exc()
             cal_pipeline = None
+            predictions_calibrated = None
 
     return TrainResult(
         config=cfg,
@@ -1676,6 +1850,12 @@ def train_and_evaluate(
         metrics=metrics,
         calibration_pipeline=cal_pipeline,
         calibration_lambdas=_calib_lambdas,
+        predictions_cal=predictions_cal,
+        predictions_calibrated=predictions_calibrated,
+        calibration_report=calibration_report,
+        y_cal=(np.asarray(_cb['y_raw']) if _cb is not None else None),
+        last_close_cal=(np.asarray(_cb['last_close']) if _cb is not None else None),
+        fold=getattr(data_processor, 'fold', None),
     )
 
 # -----------------------------
@@ -1884,33 +2064,20 @@ class LearnableIndicators(layers.Layer):
         return vs
 
     def clip_learned_periods(self, min_p, max_p):
-        """Clip all learned periods (MA, MACD, RSI, BB, and any legacy momentum_raw)
-        into [min_p, max_p] and write the corresponding logit/raw values back.
+        """Clip every learned period into [min_p, max_p] by clipping its LOGIT.
+
+        Clipping happens in logit space (no period -> logit -> period round trip), so a
+        clip can never write a saturated logit. The old round trip with
+        MOMENTUM_CLIP_MIN = 1.0 mapped period 1 to alpha = 1 and logit ~ +18.4, where the
+        float32 sigmoid is exactly 1.0 and its derivative exactly 0: any indicator that
+        touched the bound was frozen for the rest of training. Logit is decreasing in
+        period, so the period floor is the logit ceiling.
         Called from CustomTrainModel.train_step after the optimizer step.
         """
-        for var in self.alpha_vars_ma:
-            period = self._period_from_logit(var)
-            clipped = tf.clip_by_value(period, min_p, max_p)
-            logit = self._logit_from_period(clipped)
-            var.assign(logit)
-
-        for v in self.macd_alpha_vars.values():
-            period = self._period_from_logit(v)
-            clipped = tf.clip_by_value(period, min_p, max_p)
-            logit = self._logit_from_period(clipped)
-            v.assign(logit)
-
-        for var in self.rsi_alpha_vars:
-            period = self._period_from_logit(var)
-            clipped = tf.clip_by_value(period, min_p, max_p)
-            logit = self._logit_from_period(clipped)
-            var.assign(logit)
-
-        for var in self.bb_alpha_vars:
-            period = self._period_from_logit(var)
-            clipped = tf.clip_by_value(period, min_p, max_p)
-            logit = self._logit_from_period(clipped)
-            var.assign(logit)
+        logit_hi = self._logit_from_period(tf.cast(min_p, tf.float32))
+        logit_lo = self._logit_from_period(tf.cast(max_p, tf.float32))
+        for var in self.get_indicator_trainable_variables():
+            var.assign(tf.clip_by_value(var, logit_lo, logit_hi))
 
         # Legacy momentum_raw support (if any such vars exist on the layer)
         # The original clipping lived in train_step string checks; we keep the
@@ -2301,6 +2468,14 @@ class CustomTrainModel(models.Model):
         super().__init__(**kwargs)
         self.base_model = base_model
         self.epsilon = 1e-8
+        # Per-term loss weights live in non-trainable tf.Variables behind properties (see
+        # _make_lambda_property after this class). Reads in losses.py (`model.lambda_x`) and
+        # writes in the calibration pass (`model.lambda_x = v`) are unchanged, but a write is
+        # now an in-place .assign() that takes effect on the next step without retracing.
+        # Created with attribute tracking off so Keras does not add them to the weights file.
+        self._setattr_tracking = False
+        self._lambda_vars = {}
+        self._setattr_tracking = True
 
         # Cast important scalars to float32 early
         self.pred_scale = tf.cast(pred_scale, tf.float32)
@@ -2345,6 +2520,8 @@ class CustomTrainModel(models.Model):
 
         # Numerical epsilon used in denominators
         self.eps = tf.constant(1e-8, dtype=tf.float32)
+        # Counts training steps whose update was zeroed by the finite-gradient guard (reset each epoch by Keras).
+        self.nonfinite_grad_steps = tf.keras.metrics.Sum(name='nonfinite_grad_steps')
 
         # Robust (non-string) collection of indicator vars for gradient routing
         # (to indicator_optimizer) and post-step period clipping.
@@ -2404,6 +2581,25 @@ class CustomTrainModel(models.Model):
     # -------------------------
     # Utility / transforms (moved outside class to avoid tracing issues)
     # -------------------------
+    def _pit_ks(self, y, mu, var):
+        """Kolmogorov-Smirnov distance between the PIT values Phi((y - mu) / sigma) and U[0, 1].
+
+        Computed in-graph. The previous implementation called .numpy() on symbolic tensors
+        inside the traced train step, was swallowed by a bare except, and logged NaN in
+        every epoch; test_step did not compute it at all.
+        """
+        y = tf.cast(tf.reshape(y, [-1]), tf.float32)
+        mu = tf.cast(tf.reshape(mu, [-1]), tf.float32)
+        var = tf.cast(tf.reshape(var, [-1]), tf.float32)
+        var = tf.clip_by_value(var, float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
+                               float(getattr(self.config, 'VAR_CAP', 1e3)))
+        u = tf.sort(self._normal_cdf((y - mu) / (tf.sqrt(var) + self.eps)))
+        n = tf.cast(tf.shape(u)[0], tf.float32)
+        i = tf.range(1.0, n + 1.0, dtype=tf.float32)
+        d_plus = tf.reduce_max(i / n - u)
+        d_minus = tf.reduce_max(u - (i - 1.0) / n)
+        return tf.maximum(d_plus, d_minus)
+
     @staticmethod
     def _to_scaled_static(raw, pred_mean, pred_scale, eps=1e-8):
         """Convert raw prices to scaled units (same domain as dataset scaling)."""
@@ -2536,6 +2732,22 @@ class CustomTrainModel(models.Model):
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
+        # ---- Finite-gradient guard --------------------------------------------
+        # One non-finite gradient anywhere used to poison EVERY weight in a single
+        # step: tf.clip_by_global_norm computed a NaN global norm and rescaled every
+        # gradient in the group by it. Zero the whole update instead, and count it.
+        _present = [g for g in grads if g is not None]
+        grad_global_norm = tf.linalg.global_norm(_present) if _present else tf.constant(0.0, dtype=tf.float32)
+        step_finite = tf.math.is_finite(total_loss_val)
+        if _present:
+            step_finite = tf.logical_and(
+                step_finite,
+                tf.reduce_all(tf.stack([tf.reduce_all(tf.math.is_finite(g)) for g in _present])),
+            )
+        self.nonfinite_grad_steps.update_state(tf.cast(tf.logical_not(step_finite), tf.float32))
+        # tf.where, not `g * mask`: NaN * 0 is still NaN.
+        grads = [None if g is None else tf.where(step_finite, g, tf.zeros_like(g)) for g in grads]
+
         # Split gradients into NN weights vs. indicator logit vars using id() set
         # (populated in __init__ from the layer's get_indicator_trainable_variables).
         # This replaces fragile substring matching on variable names.
@@ -2569,10 +2781,7 @@ class CustomTrainModel(models.Model):
         min_p = self.config.MOMENTUM_CLIP_MIN
         max_p = self.config.MOMENTUM_CLIP_MAX
         if self._indicator_layer is not None:
-            try:
-                self._indicator_layer.clip_learned_periods(min_p, max_p)
-            except Exception:
-                pass
+            self._indicator_layer.clip_learned_periods(min_p, max_p)
         # Fallback for any legacy 'momentum_raw' style vars that might still be
         # attached directly to the base model (rare).
         for var in self.base_model.trainable_variables:
@@ -2610,7 +2819,7 @@ class CustomTrainModel(models.Model):
 
         # Gaussian-implied P(up) from (mu, var): interpretable and consistent with regression.
         var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
+        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e3), tf.float32)
         var_h0_c = tf.clip_by_value(tf.squeeze(var_h0, axis=1), var_floor, var_cap)
         var_h1_c = tf.clip_by_value(tf.squeeze(var_h1, axis=1), var_floor, var_cap)
         var_h2_c = tf.clip_by_value(tf.squeeze(var_h2, axis=1), var_floor, var_cap)
@@ -2637,15 +2846,6 @@ class CustomTrainModel(models.Model):
         )
 
         # Trend metrics: margins (bps), agreement rates, magnitudes (bps)
-        trend_margin_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0] - extended_trends[:, 0] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1] - extended_trends[:, 1] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2] - extended_trends[:, 2] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        agreement_rate_h0 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 0]), tf.sign(extended_trends[:, 0])), tf.float32))
-        agreement_rate_h1 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 1]), tf.sign(extended_trends[:, 1])), tf.float32))
-        agreement_rate_h2 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 2]), tf.sign(extended_trends[:, 2])), tf.float32))
-        magnitude_bps_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
 
         # Add all loss components to metrics
         point_loss_total = point_h0 + point_h1 + point_h2
@@ -2658,36 +2858,15 @@ class CustomTrainModel(models.Model):
         crps_total = crps_h0 + crps_h1 + crps_h2
         soft_ece_total = soft_ece_h0 + soft_ece_h1 + soft_ece_h2
 
-        # PIT uniformity (KS statistic) — computed in numpy from the batch tensors.
-        # Smaller KS → more uniform PIT → better calibrated variance head.
-        pit_ks_h0 = tf.constant(float('nan'), dtype=tf.float32)
-        pit_ks_h1 = tf.constant(float('nan'), dtype=tf.float32)
-        pit_ks_h2 = tf.constant(float('nan'), dtype=tf.float32)
-        if pit_uniformity is not None:
-            try:
-                sigma_h0_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred_9[2], axis=1),
-                                                        float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
-                                                        float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
-                sigma_h1_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred_9[5], axis=1),
-                                                        float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
-                                                        float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
-                sigma_h2_np = tf.sqrt(tf.clip_by_value(tf.squeeze(y_pred_9[8], axis=1),
-                                                        float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
-                                                        float(getattr(self.config, 'VAR_CAP', 1e3)))).numpy()
-                y_true_h0_np = y_true[:, 0].numpy()
-                y_true_h1_np = y_true[:, 1].numpy()
-                y_true_h2_np = y_true[:, 2].numpy()
-                mu_h0_np = tf.squeeze(y_pred_9[0], axis=1).numpy()
-                mu_h1_np = tf.squeeze(y_pred_9[3], axis=1).numpy()
-                mu_h2_np = tf.squeeze(y_pred_9[6], axis=1).numpy()
-                pit_ks_h0 = tf.constant(pit_uniformity(y_true_h0_np, mu_h0_np, sigma_h0_np), dtype=tf.float32)
-                pit_ks_h1 = tf.constant(pit_uniformity(y_true_h1_np, mu_h1_np, sigma_h1_np), dtype=tf.float32)
-                pit_ks_h2 = tf.constant(pit_uniformity(y_true_h2_np, mu_h2_np, sigma_h2_np), dtype=tf.float32)
-            except Exception:
-                pass
+        # PIT uniformity per horizon, in-graph (see _pit_ks).
+        pit_ks_h0 = self._pit_ks(y_true[:, 0], y_pred_9[0], y_pred_9[2])
+        pit_ks_h1 = self._pit_ks(y_true[:, 1], y_pred_9[3], y_pred_9[5])
+        pit_ks_h2 = self._pit_ks(y_true[:, 2], y_pred_9[6], y_pred_9[8])
 
         return {
             "loss": total_loss_val,
+            "nonfinite_grad_steps": self.nonfinite_grad_steps.result(),
+            "grad_global_norm": grad_global_norm,
             "point_loss": point_loss_total,
             "point_h0": point_h0,
             "point_h1": point_h1,
@@ -2829,7 +3008,10 @@ class CustomTrainModel(models.Model):
                 else:
                     in_bin = tf.cast((dir_pred_clipped >= bin_lower) & (dir_pred_clipped < bin_upper), tf.float32) * m
                 bin_count = tf.reduce_sum(in_bin)
-                bin_correct = tf.reduce_sum(tf.cast(pred_dir_binary == true_dir, tf.float32) * in_bin)
+                # Positive-class convention (matches soft_ece_loss): observed UP rate in the bin vs mean p(up).
+                # The old top-label form paired argmax-correctness with p(up) and reported ~0.9 ECE for a
+                # perfectly calibrated bin at p = 0.05.
+                bin_correct = tf.reduce_sum(true_dir * in_bin)
                 bin_acc = bin_correct / (bin_count + 1e-8)
                 bin_conf = tf.reduce_sum(dir_pred_clipped * in_bin) / (bin_count + 1e-8)
                 ece_sum = ece_sum + (bin_count / total_masked) * tf.abs(bin_acc - bin_conf)
@@ -2860,7 +3042,7 @@ class CustomTrainModel(models.Model):
         vac_overflow_pred = heads.vacuum_overflow
         loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                            extended_trends,
-                                           vacuum_overflow=vac_overflow_pred)
+                                           vacuum_overflow=None)  # identically 0 at eval (tanh^2 < E_max): the term would be a constant lambda in every val_loss
 
         # Unpack 34-component tuple (LossComponents NamedTuple; positional ok)
         (total_loss_val,
@@ -2904,7 +3086,7 @@ class CustomTrainModel(models.Model):
 
         # Gaussian-implied P(up) from (mu, var)
         var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e4), tf.float32)
+        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e3), tf.float32)
         var_h0_c = tf.clip_by_value(tf.squeeze(var_h0, axis=1), var_floor, var_cap)
         var_h1_c = tf.clip_by_value(tf.squeeze(var_h1, axis=1), var_floor, var_cap)
         var_h2_c = tf.clip_by_value(tf.squeeze(var_h2, axis=1), var_floor, var_cap)
@@ -2933,15 +3115,6 @@ class CustomTrainModel(models.Model):
         )
 
         # Trend metrics: margins (bps), agreement rates, magnitudes (bps)
-        trend_margin_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0] - extended_trends[:, 0] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1] - extended_trends[:, 1] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        trend_margin_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2] - extended_trends[:, 2] * last_close_squeeze)) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        agreement_rate_h0 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 0]), tf.sign(extended_trends[:, 0])), tf.float32))
-        agreement_rate_h1 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 1]), tf.sign(extended_trends[:, 1])), tf.float32))
-        agreement_rate_h2 = tf.reduce_mean(tf.cast(tf.equal(tf.sign(y_true_raw[:, 2]), tf.sign(extended_trends[:, 2])), tf.float32))
-        magnitude_bps_h0 = tf.reduce_mean(tf.abs(y_true_raw[:, 0])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h1 = tf.reduce_mean(tf.abs(y_true_raw[:, 1])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
-        magnitude_bps_h2 = tf.reduce_mean(tf.abs(y_true_raw[:, 2])) * 10000 / (tf.reduce_mean(last_close_squeeze) + self.eps)
 
         # Test step
         # Loss components
@@ -2955,8 +3128,15 @@ class CustomTrainModel(models.Model):
         crps_total = crps_h0 + crps_h1 + crps_h2
         soft_ece_total = soft_ece_h0 + soft_ece_h1 + soft_ece_h2
 
+        # PIT uniformity per horizon, in-graph (see _pit_ks).
+        pit_ks_h0 = self._pit_ks(y_true[:, 0], y_pred_9[0], y_pred_9[2])
+        pit_ks_h1 = self._pit_ks(y_true[:, 1], y_pred_9[3], y_pred_9[5])
+        pit_ks_h2 = self._pit_ks(y_true[:, 2], y_pred_9[6], y_pred_9[8])
         return {
             "loss": total_loss_val,
+            "pit_ks_h0": pit_ks_h0,
+            "pit_ks_h1": pit_ks_h1,
+            "pit_ks_h2": pit_ks_h2,
             "point_loss": point_loss_total,
             "point_h0": point_h0,
             "point_h1": point_h1,
@@ -3040,6 +3220,51 @@ class CustomTrainModel(models.Model):
                        config=config_instance,
                        **config)
         return instance
+
+# ---- Loss-weight properties for CustomTrainModel ---------------------------------------
+# Each `lambda_<key>` is a non-trainable tf.Variable kept in model._lambda_vars.
+# `model.lambda_x` returns the Variable (usable directly inside the traced train step);
+# `model.lambda_x = v` assigns in place, so schedules and ablations work after compile().
+_LAMBDA_VARIABLE_KEYS = ('short', 'point', 'long', 'extended_trend', 'dir', 'var', 'vol',
+                         'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow')
+
+
+def _make_lambda_property(key):
+    name = f'lambda_{key}'
+
+    def _get(self):
+        return self._lambda_vars[key]
+
+    def _set(self, value):
+        var = self._lambda_vars.get(key)
+        if var is None:
+            self._lambda_vars[key] = tf.Variable(float(value), trainable=False, dtype=tf.float32, name=name)
+        else:
+            var.assign(float(value))
+
+    return property(_get, _set, doc=f"Non-trainable tf.Variable weight for the '{key}' loss term.")
+
+
+for _key in _LAMBDA_VARIABLE_KEYS:
+    setattr(CustomTrainModel, f'lambda_{_key}', _make_lambda_property(_key))
+
+
+def _get_lambda_values(self):
+    """Current per-term loss weights as plain floats (for logging, ablation and export)."""
+    return {f'lambda_{k}': float(v.numpy()) for k, v in self._lambda_vars.items()}
+
+
+def _set_lambda_values(self, **weights):
+    """Assign per-term loss weights in place, e.g. model.set_lambda_values(lambda_hd=0.0)."""
+    for name, value in weights.items():
+        if not name.startswith('lambda_') or name[len('lambda_'):] not in _LAMBDA_VARIABLE_KEYS:
+            raise KeyError(f"unknown loss weight {name!r}; known: {[f'lambda_{k}' for k in _LAMBDA_VARIABLE_KEYS]}")
+        setattr(self, name, value)
+
+
+CustomTrainModel.get_lambda_values = _get_lambda_values
+CustomTrainModel.set_lambda_values = _set_lambda_values
+
 
 def _first_present(mapping, keys):
     for k in keys:
@@ -3516,7 +3741,9 @@ class ParamsLogger(tf.keras.callbacks.Callback):
 
         # Score: grounded so that 3% mean change = score 0 (fully active),
         # < 0.5% = score >= 0.83 (converged territory)
-        convergence_score = max(0.0, min(1.0, 1.0 - (current_mean / 3.0)))
+        # NaN must not read as "converged": Python's min(1.0, nan) returns 1.0.
+        convergence_score = (float('nan') if not np.isfinite(current_mean)
+                             else max(0.0, min(1.0, 1.0 - (current_mean / 3.0))))
 
         return {
             'convergence_score':     float(convergence_score),
@@ -3571,8 +3798,10 @@ class ParamsLogger(tf.keras.callbacks.Callback):
 
         # Write CSV immediately after each epoch (per-epoch tracking)
         if self.rows:
-            df = pd.DataFrame(self.rows)
-            df.to_csv(self.out_csv, index=False)
+            try:
+                pd.DataFrame(self.rows).to_csv(self.out_csv, index=False)
+            except OSError as exc:  # e.g. the CSV is open in Excel: never abort training over telemetry
+                warnings.warn(f"ParamsLogger: could not write {self.out_csv}: {exc}")
 
             # Log convergence status periodically (every 5 epochs)
             if epoch % 5 == 0 or epoch < 3:

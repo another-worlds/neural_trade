@@ -53,12 +53,12 @@ def test_registry_functions_from_module():
     assert f.__module__ == 'losses'
 
 
-def test_custom_loss_smoke_runs():
-    from model import CustomTrainModel, Config
-    # Instantiate a model with minimal settings
-    m = CustomTrainModel(base_model=None, pred_scale=1.0, pred_mean=0.0,
-                         lambda_point=1.0, lambda_local_trend=1.0, lambda_global_trend=0.2,
-                         lambda_extended_trend=0.16, lambda_dir=1.0, config=Config())
+def test_custom_loss_smoke_runs(make_loss_model):
+    # Built through the shared factory: CustomTrainModel is functional in production and
+    # Keras permanently injects Functional into the class, so the bare
+    # CustomTrainModel(base_model=None, ...) form fails once anything else has trained.
+    m = make_loss_model(1.0, 0.0, lambda_point=1.0, lambda_local_trend=1.0,
+                        lambda_global_trend=0.2, lambda_extended_trend=0.16, lambda_dir=1.0)
 
     B = 2
     x_window = tf.zeros([B, 1, 1], dtype=tf.float32)

@@ -7,7 +7,7 @@ finite-sample, model-agnostic guarantee:
 
 for any calibration set of size N, regardless of model quality or distributional
 assumptions.  This is strictly stronger than the Gaussian interval
-[mu ± z*sigma], which relies on a correctly specified variance head.
+[mu +/- z*sigma], which relies on a correctly specified variance head.
 
 The nonconformity score used here is the absolute residual in raw (unscaled)
 price-delta space:

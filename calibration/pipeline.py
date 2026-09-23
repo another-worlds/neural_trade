@@ -116,27 +116,40 @@ class CalibrationPipeline:
         self,
         result,
         *,
+        split: str = "cal",
         deadband_bps: Optional[float] = None,
         conformal_alpha: float = 0.1,
     ) -> "CalibrationPipeline":
         """Fit all calibrators from a ``TrainResult`` object.
 
-        Uses the held-out test split stored in *result* as the calibration set.
-        Call this once, immediately after ``train_and_evaluate``.
-
-        Parameters
-        ----------
-        result          : TrainResult returned by ``train_and_evaluate``
-        deadband_bps    : override config deadband (default: read from result.config)
-        conformal_alpha : miscoverage target for coverage reporting (default 0.1 → 90%)
+        ``split`` must be ``"cal"``: the dedicated calibration block that ``train_and_evaluate``
+        carves out between train and test (``result.predictions_cal`` / ``y_cal`` /
+        ``last_close_cal``). Fitting on ``"test"`` is refused - split conformal's finite-sample
+        guarantee needs calibration and evaluation samples to be disjoint, and the temperatures
+        would otherwise be tuned on the very data used to report performance.
         """
+        if split == "test":
+            raise ValueError(
+                "CalibrationPipeline.fit(split='test') is refused: calibration must be fit on the "
+                "calibration block (split='cal'), never on the data used to report metrics."
+            )
+        if split != "cal":
+            raise ValueError(f"unknown split {split!r}; expected 'cal'")
+        preds = getattr(result, "predictions_cal", None)
+        y_cal = getattr(result, "y_cal", None)
+        lc_cal = getattr(result, "last_close_cal", None)
+        if preds is None or y_cal is None or lc_cal is None:
+            raise ValueError(
+                "TrainResult carries no calibration split (predictions_cal / y_cal / last_close_cal). "
+                "Re-run train_and_evaluate(fit_calibration=True)."
+            )
         if deadband_bps is None:
             deadband_bps = float(getattr(result.config, "DIR_DEADBAND_BPS", 0.0))
 
         return self.fit_from_arrays(
-            predictions_dict=result.predictions,
-            y_true_delta_raw=np.asarray(result.y_test, dtype=float),
-            last_close=np.asarray(result.last_close_test, dtype=float),
+            predictions_dict=preds,
+            y_true_delta_raw=np.asarray(y_cal, dtype=float),
+            last_close=np.asarray(lc_cal, dtype=float),
             deadband_bps=deadband_bps,
             conformal_alpha=conformal_alpha,
         )
@@ -197,8 +210,8 @@ class CalibrationPipeline:
             lo, hi = self.conformal[h].predict_interval(y_pred_h, alpha=conformal_alpha)
             cov = float(np.mean((y_true_h >= lo) & (y_true_h <= hi)))
             q = self.conformal[h].empirical_quantile(conformal_alpha)
-            print(f"  [{h}] coverage @ α={conformal_alpha:.2f}: {cov:.3f} "
-                  f"(target ≥ {1 - conformal_alpha:.2f}),  ±{q:.4f} raw units")
+            print(f"  [{h}] coverage @ alpha={conformal_alpha:.2f}: {cov:.3f} "
+                  f"(target ≥ {1 - conformal_alpha:.2f}),  +/-{q:.4f} raw units")
 
         # ------------------------------------------------------------------
         # 3. Online calibrator — warm-start from offline temperatures
@@ -405,7 +418,7 @@ class CalibrationPipeline:
             n = self.conformal[h].n_calibration
             if n > 0:
                 q90 = self.conformal[h].empirical_quantile(0.1)
-                print(f"  {h}: N = {n},  90%-quantile = ±{q90:.4f} raw price units")
+                print(f"  {h}: N = {n},  90%-quantile = +/-{q90:.4f} raw price units")
             else:
                 print(f"  {h}: not fitted")
 
