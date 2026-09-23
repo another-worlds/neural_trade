@@ -15,12 +15,19 @@ The package lives in `src/neural_trade/`. Around the model it provides a typed c
 component registries, a purged evaluation protocol with baselines, post-hoc calibration, a
 serving API, an honest backtest engine, run tracking and a CLI.
 
-> **Status.** The model trains: finite gradients, calibrated variance heads and conformal
-> intervals with the target coverage (milestones M1, M2 and M4 in
-> [`runs/gates/REPORT.md`](runs/gates/REPORT.md)). It does **not yet have directional skill**
-> (milestone M3). Its direction heads stay near 0.5, while a logistic regression on trailing
-> returns from the same window reaches out-of-sample AUC ≈ 0.52–0.53. Read every backtest in
-> that light.
+> **Status.** The model trains and its uncertainty is trustworthy. Gradients are finite, the
+> variance heads are calibrated (variance / squared-error correlation ≈ 0.4), and the conformal
+> intervals cover 90% of the held-out test block at a 90% target (milestones M1, M2 and M4 in
+> [`runs/gates/REPORT.md`](runs/gates/REPORT.md)).
+>
+> **Direction skill is weak.** At best it is level with a logistic regression on trailing
+> returns: test AUC about 0.50-0.55 depending on run and horizon (M3 not met;
+> [`runs/experiments/direction_v1/REPORT.md`](runs/experiments/direction_v1/REPORT.md)).
+>
+> **The price heads have no skill.** On the calibration block they are shrunk to about zero.
+>
+> **No backtest has made money after costs:** a gross edge of about buy-and-hold, against
+> 26 bps per round trip.
 
 ## Install
 
