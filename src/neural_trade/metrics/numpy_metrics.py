@@ -163,3 +163,147 @@ def pit_uniformity(
     return ks
 
 
+# =============================================================================== numpy metric tier
+# Signature contract (Metrics registry): f(y_true, y_pred, *, mask=None, ...) -> float.
+# Regression metrics take raw deltas; direction metrics take 0/1 labels and P(up); interval
+# metrics take y_pred as an (n, 2) array of [lower, upper].
+
+
+def _masked(y_true, y_pred, mask):
+    yt = _to_1d(y_true)
+    yp = np.asarray(y_pred, dtype=float)
+    if yp.ndim == 1 or yp.shape[-1] != 2:
+        yp = yp.reshape(-1)
+    n = min(len(yt), len(yp))
+    yt, yp = yt[:n], yp[:n]
+    if mask is not None:
+        mk = np.asarray(mask).reshape(-1).astype(bool)[:n]
+        yt, yp = yt[mk], yp[mk]
+    return yt, yp
+
+
+def mse(y_true, y_pred, *, mask=None) -> float:
+    """Mean squared error."""
+    yt, yp = _masked(y_true, y_pred, mask)
+    return float(np.mean((yt - yp) ** 2)) if len(yt) else float("nan")
+
+
+def rmse(y_true, y_pred, *, mask=None) -> float:
+    """Root mean squared error."""
+    return float(np.sqrt(mse(y_true, y_pred, mask=mask)))
+
+
+def mae(y_true, y_pred, *, mask=None) -> float:
+    """Mean absolute error."""
+    yt, yp = _masked(y_true, y_pred, mask)
+    return float(np.mean(np.abs(yt - yp))) if len(yt) else float("nan")
+
+
+def explained_variance(y_true, y_pred, *, mask=None) -> float:
+    """1 - Var(y - yhat) / Var(y) (sklearn semantics; negative when worse than the mean)."""
+    from sklearn.metrics import explained_variance_score
+
+    yt, yp = _masked(y_true, y_pred, mask)
+    return float(explained_variance_score(yt, yp)) if len(yt) > 1 else float("nan")
+
+
+def corr(y_true, y_pred, *, mask=None) -> float:
+    """Pearson correlation; 0.0 when either side is constant."""
+    yt, yp = _masked(y_true, y_pred, mask)
+    if len(yt) < 2 or yt.std() == 0 or yp.std() == 0:
+        return 0.0
+    return float(np.corrcoef(yt, yp)[0, 1])
+
+
+def r2(y_true, y_pred, *, mask=None) -> float:
+    """Coefficient of determination."""
+    from sklearn.metrics import r2_score
+
+    yt, yp = _masked(y_true, y_pred, mask)
+    return float(r2_score(yt, yp)) if len(yt) > 1 else float("nan")
+
+
+def _confusion(y_true, y_pred, mask, threshold):
+    t, p = _masked(y_true, y_pred, mask)
+    t = t > 0.5
+    b = p > threshold
+    tp, tn = float(np.sum(b & t)), float(np.sum(~b & ~t))
+    fp, fn = float(np.sum(b & ~t)), float(np.sum(~b & t))
+    return tp, tn, fp, fn
+
+
+def direction_accuracy(y_true, y_pred, *, mask=None, threshold=0.5) -> float:
+    """Accuracy of P(up) > threshold against 0/1 labels."""
+    tp, tn, fp, fn = _confusion(y_true, y_pred, mask, threshold)
+    n = tp + tn + fp + fn
+    return (tp + tn) / n if n else float("nan")
+
+
+def direction_f1(y_true, y_pred, *, mask=None, threshold=0.5) -> float:
+    """F1 of the UP class."""
+    tp, tn, fp, fn = _confusion(y_true, y_pred, mask, threshold)
+    denom = 2 * tp + fp + fn
+    return 2 * tp / denom if denom else 0.0
+
+
+def mcc(y_true, y_pred, *, mask=None, threshold=0.5) -> float:
+    """Matthews correlation coefficient (0.0 when a margin is empty)."""
+    tp, tn, fp, fn = _confusion(y_true, y_pred, mask, threshold)
+    denom = (tp + fp) * (tp + fn) * (tn + fp) * (tn + fn)
+    return float((tp * tn - fp * fn) / np.sqrt(denom)) if denom > 0 else 0.0
+
+
+def brier(y_true, y_pred, *, mask=None) -> float:
+    """Brier score of P(up) against 0/1 labels."""
+    t, p = _masked(y_true, y_pred, mask)
+    return float(np.mean((p - t) ** 2)) if len(t) else float("nan")
+
+
+def ece_pos(y_true, y_pred, *, mask=None, n_bins=10) -> float:
+    """Positive-class expected calibration error: |observed up-rate - mean P(up)| per bin."""
+    t, p = _masked(y_true, y_pred, mask)
+    if not len(t):
+        return float("nan")
+    p = np.clip(p, 0.0, 1.0)
+    idx = np.clip(np.floor(p * n_bins).astype(int), 0, n_bins - 1)
+    ece = 0.0
+    for b in range(n_bins):
+        sel = idx == b
+        if sel.any():
+            ece += sel.mean() * abs(t[sel].mean() - p[sel].mean())
+    return float(ece)
+
+
+def pit_ks(y_true, y_pred, *, variance, mask=None) -> float:
+    """KS distance between the PIT values Phi((y - mu) / sigma) and U[0, 1] (exact)."""
+    from scipy.special import ndtr
+
+    y, mu = _masked(y_true, y_pred, mask)
+    var = _to_1d(variance)[: len(_to_1d(y_true))]
+    if mask is not None:
+        var = var[np.asarray(mask).reshape(-1).astype(bool)[: len(var)]]
+    if not len(y):
+        return float("nan")
+    u = np.sort(ndtr((y - mu) / np.sqrt(np.maximum(var, 1e-12))))
+    n = len(u)
+    i = np.arange(1, n + 1)
+    return float(max(np.max(i / n - u), np.max(u - (i - 1) / n)))
+
+
+def coverage(y_true, y_pred, *, mask=None) -> float:
+    """Share of y_true inside [lower, upper]; y_pred is an (n, 2) array or a (lower, upper) pair."""
+    yp = np.asarray(y_pred, dtype=float)
+    if yp.ndim == 2 and yp.shape[0] == 2 and yp.shape[1] != 2:
+        yp = yp.T
+    yt = _to_1d(y_true)
+    n = min(len(yt), len(yp))
+    inside = (yt[:n] >= yp[:n, 0]) & (yt[:n] <= yp[:n, 1])
+    if mask is not None:
+        inside = inside[np.asarray(mask).reshape(-1).astype(bool)[:n]]
+    return float(np.mean(inside)) if len(inside) else float("nan")
+
+
+REGRESSION_METRICS = ("mse", "rmse", "mae", "explained_variance", "corr", "r2", "safe_mape", "smape", "wape")
+DIRECTION_METRICS = ("direction_accuracy", "direction_f1", "mcc", "brier", "ece_pos")
+DISTRIBUTION_METRICS = ("pit_ks", "coverage")
+

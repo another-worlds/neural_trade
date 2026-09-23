@@ -37,6 +37,11 @@ import neural_trade.utils.math as mh
 from neural_trade.metrics.tf_direction import direction_labels_tf
 from neural_trade.core.outputs import PredictiveOutputs
 from neural_trade.registries.models import Models
+from neural_trade.registries.metrics import Metrics
+from neural_trade.metrics.evaluate import _compute_all_horizon_metrics  # noqa: F401  (moved in B8)
+from neural_trade.metrics.tf_direction import (DirectionAccumulator, PITAccumulator, STEP_MEAN_KEYS,
+                                               TRAIN_ONLY_MEAN_KEYS, direction_counts, direction_stats,
+                                               direction_metrics_from_stats)
 from neural_trade.models.layers import (EnergyGate, LearnableIndicators,  # noqa: F401  (moved in B6)
                                         PositionalEncodingLayer, VacuumSaturationNoise)
 # Loss functions (custom) are implemented centrally in `losses.py` to
@@ -440,159 +445,7 @@ def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Con
     return config.override(**dict(overrides))
 
 
-def _compute_all_horizon_metrics(
-    *,
-    config: 'Config',
-    y_true_deltas: np.ndarray,
-    y_pred_deltas: Dict[str, np.ndarray],
-    last_close: np.ndarray,
-    dir_probs: Optional[Dict[str, np.ndarray]] = None,
-) -> Dict[str, Any]:
-    """Compute consistent metrics for all horizons.
-
-    Returns a dict with per-horizon delta-space metrics, price-space metrics, and direction metrics.
-    """
-
-    horizons = ("h0", "h1", "h2")
-    # Compute human-readable horizon labels based on HORIZON_STEPS and RESAMPLE_MINUTES.
-    def _format_tf(minutes: int) -> str:
-        # Prefer days/hours when evenly divisible, otherwise show minutes
-        if minutes % 1440 == 0:
-            days = minutes // 1440
-            return f"{days}d" if days > 1 else "1d"
-        if minutes % 60 == 0:
-            hours = minutes // 60
-            return f"{hours}h"
-        return f"{minutes}min"
-
-    try:
-        horizon_steps = list(getattr(config, 'HORIZON_STEPS', [1, 5, 15]))
-    except Exception:
-        horizon_steps = [1, 5, 15]
-
-    horizon_names = tuple(_format_tf(int(step * getattr(config, 'RESAMPLE_MINUTES', 1))) for step in horizon_steps)
-    y_true_deltas = np.asarray(y_true_deltas)
-    if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != 3:
-        raise ValueError(f"Expected y_true_deltas shape (N,3), got {y_true_deltas.shape}")
-    lc = np.asarray(last_close, dtype=float).reshape(-1)
-
-    out: Dict[str, Any] = {
-        "delta": {},
-        "price": {},
-        "direction": {},
-    }
-
-    deadband_bps = float(getattr(config, 'DIR_DEADBAND_BPS', 0.0))
-    deadband = deadband_bps / 10000.0
-    threshold_delta = deadband * (lc + 1e-12)
-    min_abs_delta_for_mape = float(getattr(config, 'DELTA_MAPE_MIN_ABS', 1.0))
-
-    for idx, (h_key, h_label) in enumerate(zip(horizons, horizon_names)):
-        y_t = np.asarray(y_true_deltas[:, idx], dtype=float).reshape(-1)
-        y_p = np.asarray(y_pred_deltas[h_key], dtype=float).reshape(-1)
-        # Sanitize predictions: if NaN/Inf slipped through (e.g. before full stability fixes),
-        # replace so sklearn metrics don't raise ValueError. Diagnostics will still surface the nans.
-        y_p = np.nan_to_num(y_p, nan=0.0, posinf=0.0, neginf=0.0)
-        thr = np.asarray(threshold_delta, dtype=float).reshape(-1)
-        n = min(len(y_t), len(y_p), len(lc), len(thr))
-        y_t = y_t[:n]
-        y_p = y_p[:n]
-        lc_h = lc[:n]
-        thr = thr[:n]
-
-        # Delta-space metrics (raw price differences)
-        mse_delta = mean_squared_error(y_t, y_p)
-        rmse_delta = float(np.sqrt(mse_delta))
-        mae_delta = float(np.mean(np.abs(y_t - y_p)))
-        # Note: Explained Variance CAN be negative when predictions are poor (like R²)
-        # EV < 0 means predictions are worse than predicting the mean
-        ev_delta = explained_variance_score(y_t, y_p)
-        # Correlation coefficient is bounded [-1, 1] and measures linear relationship
-        # More robust than EV for evaluating prediction quality
-        corr_delta = float(np.corrcoef(y_t, y_p)[0, 1]) if len(y_t) > 1 else 0.0
-        corr_delta = 0.0 if np.isnan(corr_delta) else corr_delta
-
-        delta_metrics = {
-            "mse": float(mse_delta),
-            "rmse": float(rmse_delta),
-            "mae": float(mae_delta),
-            "ev": float(ev_delta),  # Can be negative if predictions are poor
-            "corr": corr_delta,  # Pearson correlation [-1, 1]
-        }
-        if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
-            delta_metrics.update({
-                "mape_delta": float(mean_absolute_percentage_error(y_t, y_p)),
-                "safe_mape_delta": float(safe_mape(y_t, y_p, min_abs_y=min_abs_delta_for_mape)),
-                "smape_delta": float(smape(y_t, y_p)),
-                "wape_delta": float(wape(y_t, y_p)),
-            })
-
-        out["delta"][h_key] = delta_metrics
-
-        # CRITICAL: Price-space EV is the most interpretable metric for price prediction.
-        # Reconstruct prices: price[t+h] = last_close[t] + delta[t, t+h]
-        # EV in price space measures how well cumulative predictions track actual future prices.
-        y_true_price = lc_h + y_t  # Simple reconstruction: last_close + delta
-        y_pred_price = lc_h + y_p
-
-        # In price space, EV is more stable because:
-        # 1. Price levels have larger variance than deltas
-        # 2. EV measures the fraction of price-level variance explained
-        # 3. This aligns with trading objectives (predicting future prices, not just changes)
-        ev_price_simple = explained_variance_score(y_true_price, y_pred_price)
-        corr_price = float(np.corrcoef(y_true_price, y_pred_price)[0, 1]) if len(y_true_price) > 1 else 0.0
-        corr_price = 0.0 if np.isnan(corr_price) else corr_price
-        
-        price_metrics = {
-            "ev": float(ev_price_simple),  # Explained variance in price space
-            "mse": float(mean_squared_error(y_true_price, y_pred_price)),
-            "rmse": float(np.sqrt(mean_squared_error(y_true_price, y_pred_price))),
-            "corr": corr_price,  # Pearson correlation in price space
-        }
-        
-        if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
-            # Use the more sophisticated reconstruction if available for additional metrics
-            y_true_price_soph = reconstruct_prices(lc_h, y_t)
-            y_pred_price_soph = reconstruct_prices(lc_h, y_p)
-            price_metrics.update({
-                "ev_soph": float(explained_variance_score(y_true_price_soph, y_pred_price_soph)),
-                "mape": float(safe_mape(y_true_price_soph, y_pred_price_soph)),
-                "smape": float(smape(y_true_price_soph, y_pred_price_soph)),
-                "wape": float(wape(y_true_price_soph, y_pred_price_soph)),
-            })
-
-        out["price"][h_key] = price_metrics
-
-        # Direction labels with the same NEUTRAL MASK the train/validation metrics use:
-        # |return| <= deadband is neither UP nor DOWN and is excluded. The previous
-        # delta-space threshold had no mask, so this accuracy never matched val_dir_acc.
-        # S22: one labelling rule for every path (metrics_utils.compute_direction_labels_np).
-        if compute_direction_labels_np is not None:
-            _lab, dir_mask = compute_direction_labels_np(y_t, lc_h, deadband_bps)["h0"]
-            true_dir = _lab.astype(bool)
-        else:  # metrics_utils unavailable: same rule inline
-            ret = y_t / (lc_h + 1e-12)
-            dir_mask = np.abs(ret) > deadband
-            true_dir = (ret > deadband)
-        if dir_probs is not None and h_key in dir_probs and dir_probs[h_key] is not None:
-            p = np.asarray(dir_probs[h_key], dtype=float).reshape(-1)[:n]
-            pred_dir = (p >= 0.5)
-        else:
-            pred_dir = (y_p > thr)
-        if int(dir_mask.sum()) > 0:
-            _td, _pd = true_dir[dir_mask].astype(int), pred_dir[dir_mask].astype(int)
-            _acc, _f1 = float(accuracy_score(_td, _pd)), float(f1_score(_td, _pd, zero_division=0))
-        else:
-            _acc, _f1 = float('nan'), float('nan')
-        out["direction"][h_key] = {"acc": _acc, "f1": _f1, "n_masked": int(dir_mask.sum())}
-
-    out["meta"] = {
-        "horizon_keys": list(horizons),
-        "horizon_labels": list(horizon_names),
-        "deadband_bps": float(deadband_bps),
-        "delta_safe_mape_min_abs": float(min_abs_delta_for_mape),
-    }
-    return out
+# _compute_all_horizon_metrics moved to neural_trade.metrics.evaluate (B8); re-imported above.
 
 
 def make_interactive_plot_callback(
@@ -1637,166 +1490,8 @@ class PricePredictor:
 
 
 
-# ---- Epoch-level aggregation of the step metrics ---------------------------------------
-# Keras keeps only the dict returned by the LAST train/test step of an epoch
-# (`logs = tmp_logs` in Model.fit/evaluate). The steps used to return per-batch tensors, so
-# every logged train_*/val_* number - including the val_loss that drives EarlyStopping,
-# ModelCheckpoint and ReduceLROnPlateau - described one batch (~50 of 2,866 validation
-# samples). The steps now update epoch accumulators and return their running totals, so the
-# last dict IS the epoch aggregate. Keras resets them via CustomTrainModel.metrics.
-_DIR_N_BINS = 10
-_PIT_N_BINS = 200
-_STEP_MEAN_KEYS = (
-    'loss', 'point_loss', 'point_h0', 'point_h1', 'point_h2',
-    'trend_loss', 'trend_h0', 'trend_h1', 'trend_h2',
-    'local_h0', 'global_h0', 'extended_h0', 'local_h1', 'global_h1', 'extended_h1',
-    'local_h2', 'global_h2', 'extended_h2',
-    'dir_loss', 'dir_loss_h0', 'dir_loss_h1', 'dir_loss_h2',
-    'nll_loss', 'nll_h0', 'nll_h1', 'nll_h2',
-    'crps_loss', 'crps_h0', 'crps_h1', 'crps_h2',
-    'soft_ece_loss', 'soft_ece_h0', 'soft_ece_h1', 'soft_ece_h2',
-    'reg_loss', 'inter_reg', 'vol_loss',
-    't_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss', 'vac_overflow_loss',
-    'grad_global_norm',
-)
-_TRAIN_ONLY_MEAN_KEYS = ('grad_global_norm',)
-
-
-def _direction_counts(true_dir, dir_pred, mask):
-    """Sufficient statistics of one horizon's direction predictions.
-
-    Returns ([TP, TN, FP, FN, brier_sum, prob_sum, mask_sum], bin_n, bin_true, bin_prob) where
-    the bins partition [0, 1] into _DIR_N_BINS (last bin inclusive) for the ECE.
-    """
-    t = tf.cast(tf.reshape(true_dir, [-1]), tf.float32)
-    p = tf.cast(tf.reshape(dir_pred, [-1]), tf.float32)
-    m = tf.cast(tf.reshape(mask, [-1]), tf.float32)
-    pb = tf.cast(p > 0.5, tf.float32)
-    pc = tf.clip_by_value(p, 0.0, 1.0)
-    counts = tf.stack([
-        tf.reduce_sum(pb * t * m),
-        tf.reduce_sum((1.0 - pb) * (1.0 - t) * m),
-        tf.reduce_sum(pb * (1.0 - t) * m),
-        tf.reduce_sum((1.0 - pb) * t * m),
-        tf.reduce_sum(tf.square(p - t) * m),
-        tf.reduce_sum(pc * m),
-        tf.reduce_sum(m),
-    ])
-    idx = tf.clip_by_value(tf.cast(tf.floor(pc * _DIR_N_BINS), tf.int32), 0, _DIR_N_BINS - 1)
-    onehot = tf.one_hot(idx, _DIR_N_BINS, dtype=tf.float32) * m[:, None]
-    return (counts, tf.reduce_sum(onehot, axis=0), tf.reduce_sum(onehot * t[:, None], axis=0),
-            tf.reduce_sum(onehot * pc[:, None], axis=0))
-
-
-def _direction_metrics_from_counts(counts, bin_n, bin_true, bin_prob, prefix, h_name):
-    """Direction metrics of one horizon from _direction_counts statistics (single formula
-    shared by the per-array function and the epoch accumulators)."""
-    TP, TN, FP, FN = counts[0], counts[1], counts[2], counts[3]
-    brier_sum, prob_sum, mask_sum = counts[4], counts[5], counts[6]
-    no_samples = mask_sum < 1e-8
-    nan = tf.constant(np.nan, dtype=tf.float32)
-
-    def _g(v):
-        return tf.where(no_samples, nan, v)
-
-    out = {}
-    out[f"{prefix}dir_acc_{h_name}"] = _g((TP + TN) / (TP + TN + FP + FN + 1e-8))
-    sensitivity = TP / (TP + FN + 1e-8)
-    specificity = TN / (TN + FP + 1e-8)
-    out[f"{prefix}dir_sensitivity_{h_name}"] = _g(sensitivity)
-    out[f"{prefix}dir_specificity_{h_name}"] = _g(specificity)
-    out[f"{prefix}dir_bal_acc_{h_name}"] = _g((sensitivity + specificity) / 2.0)
-    precision = TP / (TP + FP + 1e-8)
-    recall = TP / (TP + FN + 1e-8)
-    out[f"{prefix}dir_f1_{h_name}"] = _g(2.0 * (precision * recall) / (precision + recall + 1e-8))
-    mcc_num = (TP * TN) - (FP * FN)
-    marginal = (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)
-    mcc = tf.where(marginal > 1e-8, mcc_num / tf.sqrt(marginal + 1e-8), tf.constant(0.0, tf.float32))
-    out[f"{prefix}dir_mcc_{h_name}"] = _g(mcc)
-    out[f"{prefix}dir_brier_{h_name}"] = _g(brier_sum / (mask_sum + 1e-8))
-    # Positive-class ECE (matches soft_ece_loss): observed UP rate per bin vs mean p(up).
-    bin_acc = bin_true / (bin_n + 1e-8)
-    bin_conf = bin_prob / (bin_n + 1e-8)
-    ece = tf.reduce_sum((bin_n / (mask_sum + 1e-8)) * tf.abs(bin_acc - bin_conf))
-    out[f"{prefix}dir_ece_{h_name}"] = _g(ece)
-    total = TP + TN + FP + FN + 1e-8
-    out[f"{prefix}pred_up_rate_{h_name}"] = _g((TP + FP) / total)
-    out[f"{prefix}true_up_rate_{h_name}"] = _g((TP + FN) / total)
-    out[f"{prefix}mean_dir_prob_{h_name}"] = _g(prob_sum / (mask_sum + 1e-8))
-    return out
-
-
-class _DirectionAccumulator(tf.keras.metrics.Metric):
-    """Epoch accumulator of direction statistics for the three horizons."""
-
-    def __init__(self, name='direction_accumulator', **kwargs):
-        super().__init__(name=name, **kwargs)
-        self.counts = self.add_weight(name='counts', shape=(3, 7), initializer='zeros')
-        self.bin_n = self.add_weight(name='bin_n', shape=(3, _DIR_N_BINS), initializer='zeros')
-        self.bin_true = self.add_weight(name='bin_true', shape=(3, _DIR_N_BINS), initializer='zeros')
-        self.bin_prob = self.add_weight(name='bin_prob', shape=(3, _DIR_N_BINS), initializer='zeros')
-
-    def update_state(self, true_dirs, dir_preds, masks, sample_weight=None):
-        stats = [_direction_counts(t, p, m) for t, p, m in zip(true_dirs, dir_preds, masks)]
-        self.counts.assign_add(tf.stack([s[0] for s in stats]))
-        self.bin_n.assign_add(tf.stack([s[1] for s in stats]))
-        self.bin_true.assign_add(tf.stack([s[2] for s in stats]))
-        self.bin_prob.assign_add(tf.stack([s[3] for s in stats]))
-
-    def result(self):
-        return self.counts
-
-    def reset_state(self):
-        for v in (self.counts, self.bin_n, self.bin_true, self.bin_prob):
-            v.assign(tf.zeros_like(v))
-
-    def logs(self, prefix):
-        out = {}
-        for i, h in enumerate(("h0", "h1", "h2")):
-            out.update(_direction_metrics_from_counts(
-                self.counts[i], self.bin_n[i], self.bin_true[i], self.bin_prob[i], prefix, h))
-        return out
-
-
-class _PITAccumulator(tf.keras.metrics.Metric):
-    """Epoch histogram of PIT values Phi((y - mu) / sigma) per horizon; KS from the binned ECDF.
-
-    KS is not decomposable over batches (the mean of per-batch KS on ~64 samples is dominated
-    by sampling noise, ~0.1 even for a perfectly calibrated model), so the PIT values are
-    binned into _PIT_N_BINS and the KS distance is taken at the bin edges of the pooled
-    epoch ECDF (resolution 1 / _PIT_N_BINS).
-    """
-
-    def __init__(self, var_floor=1e-4, var_cap=1e3, name='pit_accumulator', **kwargs):
-        super().__init__(name=name, **kwargs)
-        self.var_floor, self.var_cap = float(var_floor), float(var_cap)
-        self.hist = self.add_weight(name='hist', shape=(3, _PIT_N_BINS), initializer='zeros')
-
-    def update_state(self, ys, mus, variances, sample_weight=None):
-        rows = []
-        for y, mu, var in zip(ys, mus, variances):
-            y = tf.cast(tf.reshape(y, [-1]), tf.float32)
-            mu = tf.cast(tf.reshape(mu, [-1]), tf.float32)
-            var = tf.clip_by_value(tf.cast(tf.reshape(var, [-1]), tf.float32), self.var_floor, self.var_cap)
-            u = 0.5 * (1.0 + tf.math.erf(((y - mu) / (tf.sqrt(var) + 1e-8)) / np.sqrt(2.0).astype(np.float32)))
-            idx = tf.clip_by_value(tf.cast(tf.floor(u * _PIT_N_BINS), tf.int32), 0, _PIT_N_BINS - 1)
-            rows.append(tf.reduce_sum(tf.one_hot(idx, _PIT_N_BINS, dtype=tf.float32), axis=0))
-        self.hist.assign_add(tf.stack(rows))
-
-    def result(self):
-        return self.hist
-
-    def reset_state(self):
-        self.hist.assign(tf.zeros_like(self.hist))
-
-    def logs(self):
-        n = tf.reduce_sum(self.hist, axis=1, keepdims=True)                       # [3, 1]
-        ecdf = tf.cumsum(self.hist, axis=1) / (n + 1e-8)                          # at right edges
-        edges = tf.range(1, _PIT_N_BINS + 1, dtype=tf.float32) / _PIT_N_BINS
-        ks = tf.reduce_max(tf.abs(ecdf - edges[None, :]), axis=1)
-        ks = tf.where(tf.squeeze(n, 1) > 0, ks, tf.constant(np.nan, tf.float32))
-        return {"pit_ks_h0": ks[0], "pit_ks_h1": ks[1], "pit_ks_h2": ks[2]}
-
+# Step-metric machinery (epoch accumulators, direction statistics) lives in
+# neural_trade.metrics.tf_direction; the metric functions are the Metrics registry's TF tier.
 
 class CustomTrainModel(models.Model):
     def __init__(self, base_model, pred_scale, pred_mean,
@@ -1859,14 +1554,16 @@ class CustomTrainModel(models.Model):
         self.eps = tf.constant(1e-8, dtype=tf.float32)
         # Counts training steps whose update was zeroed by the finite-gradient guard (reset each epoch by Keras).
         self.nonfinite_grad_steps = tf.keras.metrics.Sum(name='nonfinite_grad_steps')
-        # Epoch accumulators behind every logged step metric (see _STEP_MEAN_KEYS above).
+        # Epoch accumulators behind every logged step metric (see neural_trade.metrics.tf_direction.STEP_MEAN_KEYS).
         # Created with attribute tracking off; the `metrics` property below hands them to
         # Keras so they are reset at every epoch and before every evaluation.
         self._setattr_tracking = False
-        self._step_means = {k: tf.keras.metrics.Mean(name=k) for k in _STEP_MEAN_KEYS}
-        self._dir_head_acc = _DirectionAccumulator(name='dir_head_accumulator')
-        self._dir_gauss_acc = _DirectionAccumulator(name='dir_gauss_accumulator')
-        self._pit_acc = _PITAccumulator(var_floor=float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
+        self._step_means = {k: tf.keras.metrics.Mean(name=k) for k in STEP_MEAN_KEYS}
+        # Step metrics resolved ONCE from the Metrics registry (TF tier), never inside tf.function.
+        self._step_metric_fns = Metrics.tf_functions(getattr(self.config, 'STEP_METRICS', None))
+        self._dir_head_acc = DirectionAccumulator(name='dir_head_accumulator')
+        self._dir_gauss_acc = DirectionAccumulator(name='dir_gauss_accumulator')
+        self._pit_acc = PITAccumulator(var_floor=float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                         var_cap=float(getattr(self.config, 'VAR_CAP', 1e3)),
                                         name='pit_accumulator')
         self._setattr_tracking = True
@@ -1960,10 +1657,10 @@ class CustomTrainModel(models.Model):
                                    [y_pred_9[0], y_pred_9[3], y_pred_9[6]],
                                    [y_pred_9[2], y_pred_9[5], y_pred_9[8]])
         logs = {k: m.result() for k, m in self._step_means.items()
-                if training or k not in _TRAIN_ONLY_MEAN_KEYS}
+                if training or k not in TRAIN_ONLY_MEAN_KEYS}
         logs.update(self._pit_acc.logs())
-        logs.update(self._dir_head_acc.logs(head_prefix))
-        logs.update(self._dir_gauss_acc.logs(gauss_prefix))
+        logs.update(self._dir_head_acc.logs(head_prefix, self._step_metric_fns))
+        logs.update(self._dir_gauss_acc.logs(gauss_prefix, self._step_metric_fns))
         return logs
 
 
@@ -2239,7 +1936,7 @@ class CustomTrainModel(models.Model):
         """Direction metrics (acc, sensitivity, specificity, balanced acc, F1, MCC, Brier,
         positive-class ECE, predicted/true up rates, mean prob) over the given arrays, per horizon.
 
-        Same formulas as the epoch accumulators (_direction_metrics_from_counts); this form
+        Same formulas as the epoch accumulators (tf_direction.direction_metrics_from_stats); this form
         evaluates one set of arrays in full.
         """
         metrics = {}
@@ -2247,8 +1944,9 @@ class CustomTrainModel(models.Model):
                                                  ("h1", true_dir_h1, dir_pred_h1, mask_h1),
                                                  ("h2", true_dir_h2, dir_pred_h2, mask_h2)):
             m = tf.ones_like(tf.cast(true_dir, tf.float32)) if mask is None else mask
-            metrics.update(_direction_metrics_from_counts(*_direction_counts(true_dir, dir_pred, m),
-                                                          prefix, h_name))
+            stats = direction_stats(*direction_counts(true_dir, dir_pred, m))
+            metrics.update(direction_metrics_from_stats(stats, prefix, h_name,
+                                                        getattr(self, '_step_metric_fns', None)))
         return metrics
 
     def test_step(self, data):
