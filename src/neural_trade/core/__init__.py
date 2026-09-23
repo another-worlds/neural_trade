@@ -8,8 +8,8 @@ This module provides the base infrastructure for the registry system:
 - Custom exceptions for registry errors
 
 Example:
-    from core import BaseRegistry, RegistryEntry
-    from core.exceptions import ComponentNotFoundError
+    from neural_trade.core import BaseRegistry, RegistryEntry
+    from neural_trade.core.exceptions import ComponentNotFoundError
 
     class MyRegistry(BaseRegistry):
         registry = {}

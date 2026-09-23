@@ -1,7 +1,7 @@
-"""The pre-package ``model.py`` API in one import (Phase B12).
+"""The pre-package ``model.py`` API in one import, for old scripts: ``from neural_trade.compat import *``.
 
-``import model`` / ``from model import *`` keep working through the root ``model.py`` shim,
-which aliases this module. New code should import from the owning modules instead:
+The root ``model.py`` shim that aliased this module was removed in B18. New code should import
+from the owning modules instead:
 
     neural_trade.core.config.Config                    neural_trade.training.trainer.train_and_evaluate
     neural_trade.data.processor.DataProcessor          neural_trade.training.custom_model.CustomTrainModel

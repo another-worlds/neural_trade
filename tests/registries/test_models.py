@@ -31,7 +31,7 @@ def test_builder_signature_and_output_contract_are_enforced():
 
 
 def test_price_predictor_facade_uses_the_registry():
-    from model import PricePredictor
+    from neural_trade.models.facade import PricePredictor
 
     tf.keras.utils.set_random_seed(0)
     m = PricePredictor(Config(LOOKBACK=32)).build_model()

@@ -5,8 +5,9 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
-import math_helpers as mh
-from model import Config, LearnableIndicators
+import neural_trade.utils.math as mh
+from neural_trade.core.config import Config
+from neural_trade.models.layers import LearnableIndicators
 
 B, T = 16, 60
 

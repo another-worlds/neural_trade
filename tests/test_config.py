@@ -104,8 +104,7 @@ def test_lambda_weights_and_ablation_names():
         Config(ABLATE_LAMBDAS=["LAMBDA_NOPE"])
 
 
-def test_legacy_import_path_is_the_same_class():
-    import model
-    from core.config import Config as ViaShim
+def test_legacy_import_surface_is_the_same_class():
+    import neural_trade.compat as compat
 
-    assert model.Config is Config is ViaShim
+    assert compat.Config is Config

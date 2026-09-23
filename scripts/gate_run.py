@@ -161,7 +161,7 @@ def main(argv=None) -> int:
     os.chdir(run_dir)  # CSVLogger / ParamsLogger write relative paths
     sys.path.insert(0, str(REPO))
     t0 = time.time()
-    from model import train_and_evaluate  # noqa: E402  (after chdir so relative outputs land here)
+    from neural_trade.training.trainer import train_and_evaluate  # noqa: E402  (after chdir so relative outputs land here)
 
     result = train_and_evaluate(
         csv_path=str(REPO / "binance_btcusdt_1min_ccxt.csv"),

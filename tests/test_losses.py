@@ -1,5 +1,5 @@
 import tensorflow as tf
-from losses import Losses
+from neural_trade.registries.losses import Losses
 
 
 def test_registry_has_registered_losses():

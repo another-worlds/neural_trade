@@ -8,14 +8,15 @@ import numpy as np
 import pytest
 import tensorflow as tf
 
-from losses import (
+from neural_trade.losses import (
     casimir_interference_loss,
     hyper_decoherence_coupling_loss,
     information_flow_entropy_loss,
     t_perp_calibration_loss,
     vacuum_overflow_t_perp_loss,
 )
-from model import Config, LearnableIndicators
+from neural_trade.core.config import Config
+from neural_trade.models.layers import LearnableIndicators
 
 B = 128
 

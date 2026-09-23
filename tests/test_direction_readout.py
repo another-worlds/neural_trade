@@ -13,7 +13,7 @@ import tensorflow as tf
 from scipy.special import log_ndtr as sp_log_ndtr
 from scipy.stats import norm
 
-from losses import gaussian_up_prob_given_move, log_ndtr
+from neural_trade.losses import gaussian_up_prob_given_move, log_ndtr
 
 PRED_SCALE, PRED_MEAN, LC = 261.0, 3.2, 110_000.0
 D = 5e-4  # 5 bps

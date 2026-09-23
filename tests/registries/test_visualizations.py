@@ -37,10 +37,9 @@ def test_indicator_evolution_and_qbox_html():
     assert Visualizations.build("qbox_dashboard_html", {"hd_loss": 0.0}, Config()) == ""
 
 
-def test_model_shim_is_the_compat_module():
-    import model
+def test_compat_module_re_exports_the_legacy_api():
     import neural_trade.compat as compat
     from neural_trade.training.trainer import train_and_evaluate
 
-    assert model is compat and model.train_and_evaluate is train_and_evaluate
+    assert compat.train_and_evaluate is train_and_evaluate
     assert {"Config", "CustomTrainModel", "DataProcessor", "train_and_evaluate"} <= set(compat.__all__)

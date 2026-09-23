@@ -7,8 +7,8 @@ all functionality works correctly before implementing specific registries.
 
 import pytest
 import warnings
-from core.registry import BaseRegistry, RegistryEntry, RegistryMixin
-from core.exceptions import RegistryError
+from neural_trade.core.registry import BaseRegistry, RegistryEntry, RegistryMixin
+from neural_trade.core.exceptions import RegistryError
 
 
 class TestRegistry(BaseRegistry):

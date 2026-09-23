@@ -7,7 +7,7 @@ LOOKBACK, HORIZONS = 60, [10, 15, 20]
 
 
 def test_purged_splits_leave_a_gap_between_every_pair_of_blocks(tf):
-    from model import make_purged_splits
+    from neural_trade.data.splits import make_purged_splits
 
     folds = make_purged_splits(6_000, lookback=LOOKBACK, horizon_steps=HORIZONS, n_folds=5)
     assert folds, "no fold had a non-empty training block"
@@ -24,7 +24,7 @@ def test_purged_splits_leave_a_gap_between_every_pair_of_blocks(tf):
 
 def test_leak_count_without_gap_is_exactly_79(tf):
     """Regression pin for the leak the gap removes: LOOKBACK + max(H) - 1 = 79 sequences."""
-    from model import make_purged_splits
+    from neural_trade.data.splits import make_purged_splits
 
     f = make_purged_splits(6_000, lookback=LOOKBACK, horizon_steps=HORIZONS, n_folds=5, gap=0)[-1]
     label_bars = {i + h - 1 for i in f.train for h in HORIZONS}
@@ -33,7 +33,7 @@ def test_leak_count_without_gap_is_exactly_79(tf):
 
 
 def test_targets_are_strictly_forward_and_windows_end_at_last_close(tf, tiny_config, synthetic_close):
-    from model import DataProcessor
+    from neural_trade.data.processor import DataProcessor
 
     dp = DataProcessor(tiny_config)
     X, y, lc, _ext = dp.make_sequences_with_extended_trends(synthetic_close, LOOKBACK)
@@ -49,7 +49,7 @@ def test_targets_are_strictly_forward_and_windows_end_at_last_close(tf, tiny_con
 
 
 def test_prepare_datasets_scaler_on_train_only_and_window_relative_input(tf, tiny_config, tmp_path, synthetic_bars):
-    from model import DataProcessor
+    from neural_trade.data.processor import DataProcessor
 
     cfg = tiny_config
     csv = tmp_path / "bars.csv"

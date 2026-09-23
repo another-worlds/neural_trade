@@ -103,9 +103,3 @@ def test_auto_discover_imports_declared_modules_and_fails_loudly_when_strict():
     with pytest.raises(RegistryNotInitializedError):
         r.auto_discover()
     del sys.modules["_nt_fake_discovery"]
-
-
-def test_legacy_import_path_is_the_same_object():
-    import core.registry as legacy
-    import neural_trade.core.registry as new
-    assert legacy is new and legacy.BaseRegistry is BaseRegistry

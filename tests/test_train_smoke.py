@@ -11,7 +11,9 @@ import tensorflow as tf
 
 
 def _build(cfg, tmp_path, synthetic_bars):
-    from model import CustomTrainModel, DataProcessor, PricePredictor
+    from neural_trade.training.custom_model import CustomTrainModel
+    from neural_trade.data.processor import DataProcessor
+    from neural_trade.models.facade import PricePredictor
 
     csv_path = tmp_path / "bars.csv"
     synthetic_bars.to_csv(csv_path, index=False)
@@ -83,7 +85,7 @@ def test_early_stopping_fires_on_a_plateau(tf, tiny_config, tmp_path, synthetic_
     the instance, so no stopper could ever fire. With a frozen model val_loss is exactly flat
     and EarlyStopping(patience=EARLY) must stop after EARLY + 1 epochs, restoring the best.
     """
-    from model import train_and_evaluate
+    from neural_trade.training.trainer import train_and_evaluate
 
     monkeypatch.chdir(tmp_path)
     synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)

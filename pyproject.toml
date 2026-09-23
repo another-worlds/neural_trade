@@ -46,7 +46,7 @@ neural_trade = ["py.typed", "configs/*.yaml"]
 testpaths = ["tests"]
 # "." makes `from model import ...` / `from losses import ...` resolve from the repo root
 # under a bare `pytest`; "src" is where the neural_trade package will live.
-pythonpath = ["src", "."]
+pythonpath = ["src"]
 addopts = "-ra --strict-markers"
 markers = [
     "tf: requires TensorFlow (auto-applied to any test module that imports tensorflow)",
@@ -71,9 +71,7 @@ show_missing = true
 line-length = 120
 target-version = "py310"
 src = ["src", "tests"]
-# The monolith and its stale copies are excluded until the Phase B16 hygiene sweep;
-# lifting this exclusion is part of that step.
-extend-exclude = ["model.py", "losses.py", "registries/", "*.ipynb"]
+extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "B", "I"]

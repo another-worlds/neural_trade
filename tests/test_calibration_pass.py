@@ -9,7 +9,8 @@ import numpy as np
 
 
 def test_calibration_pass_restores_lambdas_on_failure(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
-    from model import CustomTrainModel, train_and_evaluate
+    from neural_trade.training.custom_model import CustomTrainModel
+    from neural_trade.training.trainer import train_and_evaluate
 
     monkeypatch.chdir(tmp_path)
     synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)

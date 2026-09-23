@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from calibration import CalibrationPipeline
+from neural_trade.calibration import CalibrationPipeline
 
 H = ("h0", "h1", "h2")
 

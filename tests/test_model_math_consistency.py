@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 try:
-    from model import Config
+    from neural_trade.core.config import Config
     MODEL_AVAILABLE = True
 except ImportError:
     MODEL_AVAILABLE = False

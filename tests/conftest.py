@@ -97,7 +97,8 @@ def make_loss_model(tf):
     graph below keeps these tests order-independent and matches production construction.
     The graph is never called; the loss tests pass the nine heads in explicitly.
     """
-    from model import Config, CustomTrainModel
+    from neural_trade.core.config import Config
+    from neural_trade.training.custom_model import CustomTrainModel
 
     def _factory(pred_scale=261.0, pred_mean=3.2, *, config=None, lookback=60, **kwargs):
         inp = tf.keras.Input(shape=(lookback,), name="close_window")
@@ -158,8 +159,8 @@ def real_slice() -> pd.DataFrame:
 
 @pytest.fixture
 def tiny_config(tf):
-    """A ``Config`` sized for smoke tests. Requires TensorFlow because ``model`` imports it."""
-    from model import Config
+    """A ``Config`` sized for smoke tests. Requires TensorFlow (the smoke tests build models)."""
+    from neural_trade.core.config import Config
 
     cfg = Config()
     cfg.EPOCHS = 1
