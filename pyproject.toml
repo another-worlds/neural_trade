@@ -60,7 +60,7 @@ filterwarnings = [
 ]
 
 [tool.coverage.run]
-source = ["model", "losses", "core", "calibration", "metrics_utils", "math_helpers", "neural_trade"]
+source = ["neural_trade"]
 omit = ["*/notebooks/*", "tests/*"]
 
 [tool.coverage.report]

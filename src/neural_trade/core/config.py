@@ -161,6 +161,8 @@ class Config:
     # ------------------------------------------------------------------ direction
     FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class")
     FOCAL_GAMMA: float = _f(2.0, "direction")
+    DIRECTION_LOSS: str = _f("bce", "direction",
+                             "'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)")
     DIR_DEADBAND_BPS: float = _f(5.0, "direction", "|return| below this is neutral and masked")
 
     # ------------------------------------------------------------------ variance
@@ -265,6 +267,8 @@ class Config:
             bad(f"FOLD_INDEX must be in [-{self.N_FOLDS}, {self.N_FOLDS - 1}]")
         if self.DIR_DEADBAND_BPS < 0:
             bad("DIR_DEADBAND_BPS must be >= 0")
+        if self.DIRECTION_LOSS not in ("bce", "focal_dice"):
+            bad(f"DIRECTION_LOSS must be 'bce' or 'focal_dice', got {self.DIRECTION_LOSS!r}")
         if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol"):
             bad(f"CONFORMAL_SCALE must be 'none', 'sigma' or 'realized_vol', got {self.CONFORMAL_SCALE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):

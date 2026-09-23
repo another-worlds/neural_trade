@@ -121,3 +121,64 @@ def test_extended_trend_matches_numpy_reference_and_responds_to_the_head(make_lo
     out2 = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
     assert abs(float(out2.extended_h0) - float(out.extended_h0)) > 1e-4
     assert abs(float(out2.extended_h1) - float(out.extended_h1)) < 1e-6
+
+
+# ---------------------------------------------------------------------------- the former stubs
+# (tests/test_model_math_consistency.py::TestConfigDeepMathStubs, now real)
+
+def _components(m, rng_seed=1, var_value=None):
+    rng = np.random.default_rng(rng_seed)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price, dirs, var = _heads(rng)
+    if var_value is not None:
+        var = [tf.Variable(np.full((B, 1), var_value, np.float32)) for _ in range(3)]
+    return m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext), (x, y, price, var)
+
+
+@pytest.mark.parametrize("weight, fields, outer", [
+    ("lambda_crps", ("crps_h0", "crps_h1", "crps_h2"), None),
+    ("lambda_soft_ece", ("soft_ece_h0", "soft_ece_h1", "soft_ece_h2"), None),
+    ("lambda_var", ("nll_h0", "nll_h1", "nll_h2"), "lambda_nll_outer"),
+    ("lambda_dir", ("dir_h0", "dir_h1", "dir_h2"), "lambda_dir_outer"),
+])
+def test_total_is_the_weighted_sum_of_its_components(make_loss_model, weight, fields, outer):
+    """Changing one loss weight changes the total by exactly weight x (its returned components)."""
+    m = make_loss_model()
+    m.set_lambda_values(**{weight: 0.0})
+    base, _ = _components(m)
+    m.set_lambda_values(**{weight: 2.5})
+    out, _ = _components(m)
+    comp = sum(float(getattr(out, f)) for f in fields)
+    scale = float(getattr(m, outer)) if outer else 1.0
+    assert float(out.total) - float(base.total) == pytest.approx(2.5 * scale * comp, rel=1e-4, abs=1e-5)
+
+
+def test_already_weighted_physics_fields_scale_with_their_weight(make_loss_model):
+    m = make_loss_model()
+    m.set_lambda_values(lambda_t_perp=0.1, lambda_hd=0.1)
+    a, _ = _components(m)
+    m.set_lambda_values(lambda_t_perp=0.3, lambda_hd=0.3)
+    b, _ = _components(m)
+    assert float(b.t_perp_total) == pytest.approx(3 * float(a.t_perp_total), rel=1e-5)
+    assert float(b.hd_val) == pytest.approx(3 * float(a.hd_val), rel=1e-5)
+
+
+def test_nll_is_exact_at_the_variance_floor(make_loss_model):
+    """Variance below VAR_FLOOR is floored (not capped above) before the Gaussian NLL."""
+    m = make_loss_model()
+    out, (_, y, price, _) = _components(m, var_value=1e-6)
+    floor = m.config.VAR_FLOOR + 1e-8
+    for h in range(3):
+        err = y.numpy()[:, h] - price[h].numpy()[:, 0]
+        ref = np.mean(0.5 * (np.log(2 * np.pi) + np.log(floor)) + 0.5 * err ** 2 / floor)
+        assert float(getattr(out, f"nll_h{h}")) == pytest.approx(ref, rel=1e-4)
+
+
+def test_vacuum_bandwidth_term_is_zero_unless_lambda_vac_is_set(make_loss_model):
+    from neural_trade.core.config import Config
+
+    off, _ = _components(make_loss_model(config=Config(LAMBDA_VAC=0.0)))
+    assert float(off.vac_val) == 0.0
+    on, (_, _, price, _) = _components(make_loss_model(config=Config(LAMBDA_VAC=0.1)))
+    spread = np.std(np.stack([p.numpy()[:, 0] for p in price], 1), axis=1)
+    assert float(on.vac_val) == pytest.approx(np.mean(np.maximum(spread - 0.1, 0.0)), rel=1e-4)

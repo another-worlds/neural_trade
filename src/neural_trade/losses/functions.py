@@ -80,6 +80,23 @@ def dice_loss(model, true_labels, logits, smooth=1.0, reduce=True):
     return dice_loss_per_sample
 
 
+@Losses.register(name="binary_cross_entropy_loss", tags=["classification", "direction", "proper"])
+def binary_cross_entropy_loss(model, true_labels, probs, reduce=True):
+    """Binary cross-entropy on probabilities: the direction heads' default objective.
+
+    A strictly proper scoring rule - its expected value over y ~ Bernoulli(q) is minimised
+    exactly at p = q - so a head that finds a weak signal is rewarded for reporting it.
+    The previous default, 0.5 focal + 0.5 dice, is not: dice's expected loss has an interior
+    MAXIMUM, so its optimum is always p = 0 or p = 1 (a constant extreme when samples look
+    alike), and focal (BCE minus an entropy bonus) rewards staying near 0.5. Together they
+    held the direction heads near a constant. Kept as Config.DIRECTION_LOSS = "focal_dice".
+    """
+    y = tf.cast(true_labels, tf.float32)
+    p = tf.clip_by_value(tf.cast(probs, tf.float32), 1e-7, 1.0 - 1e-7)
+    per_example = -(y * tf.math.log(p) + (1.0 - y) * tf.math.log(1.0 - p))
+    return tf.reduce_mean(per_example) if reduce else per_example
+
+
 @Losses.register(name="combined_direction_loss", tags=["classification", "composite", "direction"])
 def combined_direction_loss(model, true_labels, logits, alpha=None, gamma=None,
                              focal_weight=0.5, dice_weight=0.5, reduce=True):
@@ -594,16 +611,20 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_pred_h1 = tf.squeeze(dir_h1, axis=1)
     dir_pred_h2 = tf.squeeze(dir_h2, axis=1)
 
-    alpha_h0 = compute_dynamic_alpha(true_dir_h0)
-    alpha_h1 = compute_dynamic_alpha(true_dir_h1)
-    alpha_h2 = compute_dynamic_alpha(true_dir_h2)
-
-    per_ex_h0 = combined_direction_loss(model, true_dir_h0, dir_pred_h0, alpha=alpha_h0, 
-                                        focal_weight=0.5, dice_weight=0.5, reduce=False)
-    per_ex_h1 = combined_direction_loss(model, true_dir_h1, dir_pred_h1, alpha=alpha_h1,
-                                        focal_weight=0.5, dice_weight=0.5, reduce=False)
-    per_ex_h2 = combined_direction_loss(model, true_dir_h2, dir_pred_h2, alpha=alpha_h2,
-                                        focal_weight=0.5, dice_weight=0.5, reduce=False)
+    if str(getattr(model.config, 'DIRECTION_LOSS', 'bce')) == 'focal_dice':  # legacy, improper
+        alpha_h0 = compute_dynamic_alpha(true_dir_h0)
+        alpha_h1 = compute_dynamic_alpha(true_dir_h1)
+        alpha_h2 = compute_dynamic_alpha(true_dir_h2)
+        per_ex_h0 = combined_direction_loss(model, true_dir_h0, dir_pred_h0, alpha=alpha_h0,
+                                            focal_weight=0.5, dice_weight=0.5, reduce=False)
+        per_ex_h1 = combined_direction_loss(model, true_dir_h1, dir_pred_h1, alpha=alpha_h1,
+                                            focal_weight=0.5, dice_weight=0.5, reduce=False)
+        per_ex_h2 = combined_direction_loss(model, true_dir_h2, dir_pred_h2, alpha=alpha_h2,
+                                            focal_weight=0.5, dice_weight=0.5, reduce=False)
+    else:
+        per_ex_h0 = binary_cross_entropy_loss(model, true_dir_h0, dir_pred_h0, reduce=False)
+        per_ex_h1 = binary_cross_entropy_loss(model, true_dir_h1, dir_pred_h1, reduce=False)
+        per_ex_h2 = binary_cross_entropy_loss(model, true_dir_h2, dir_pred_h2, reduce=False)
 
     dir_loss_h0 = tf.reduce_sum(per_ex_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + model.eps)
     dir_loss_h1 = tf.reduce_sum(per_ex_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + model.eps)

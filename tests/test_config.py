@@ -108,3 +108,46 @@ def test_legacy_import_surface_is_the_same_class():
     import neural_trade.compat as compat
 
     assert compat.Config is Config
+
+
+@pytest.mark.parametrize("overrides, match", [
+    ({"LOOKBACK": 0}, "LOOKBACK must be positive"),
+    ({"LOOKBACK": 2000}, "exceed 1 day"),
+    ({"BATCH_SIZE": 8}, "BATCH_SIZE"),
+    ({"LR": 2.0}, "LR"),
+    ({"EPOCHS": 0}, "EPOCHS"),
+    ({"HORIZON_STEPS": [10, 0, 20]}, "positive"),
+    ({"HORIZON_STEPS": [20, 15, 10], "EXTENDED_TREND_PERIODS": [10, 15, 20]}, "ascending"),
+    ({"EXTENDED_TREND_PERIODS": [20, 15, 10]}, "ascending"),
+    ({"HORIZON_STEPS": [10, 20], "EXTENDED_TREND_PERIODS": [10, 20]}, "three horizon towers"),
+    ({"VAR_CAP": 1e-5}, "VAR_CAP"),
+    ({"VAL_FRACTION": 0.6}, "VAL_FRACTION"),
+    ({"FOLD_INDEX": 7}, "FOLD_INDEX"),
+    ({"DIR_DEADBAND_BPS": -1.0}, "DIR_DEADBAND_BPS"),
+    ({"MOMENTUM_CLIP_MIN": 80}, "MOMENTUM_CLIP_MIN"),
+    ({"CONFORMAL_SCALE": "iqr"}, "CONFORMAL_SCALE"),
+])
+def test_validate_rejects_structurally_invalid_settings(overrides, match):
+    """(Ported from the old test_model_math_consistency.py, which asserted the DEFAULTS were
+    'reasonable' instead of checking that validate() rejects bad values.)"""
+    with pytest.raises(InvalidConfigurationError, match=match):
+        Config(**overrides)
+
+
+def test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type():
+    cfg = Config().override(USE_HUBER="off", EPOCHS="12", LR="5e-4", HORIZON_STEPS="[5, 10, 20]",
+                            EXTENDED_TREND_PERIODS=(5, 10, 20), CALIB_DAMPING_DIR="null",
+                            LOSS_WEIGHT_SCHEDULE="{lambda_hd: {0: 0.0}}")
+    assert cfg.USE_HUBER is False and cfg.EPOCHS == 12 and cfg.LR == 5e-4
+    assert cfg.HORIZON_STEPS == [5, 10, 20] and cfg.EXTENDED_TREND_PERIODS == [5, 10, 20]
+    assert cfg.CALIB_DAMPING_DIR is None and cfg.LOSS_WEIGHT_SCHEDULE == {"lambda_hd": {0: 0.0}}
+    for bad in ({"USE_HUBER": "maybe"}, {"EPOCHS": 2.5}, {"HORIZON_STEPS": "7"}, {"LOSS_WEIGHT_SCHEDULE": "[1, 2]"}):
+        with pytest.raises(InvalidConfigurationError, match="cannot interpret"):
+            Config().override(**bad)
+
+
+def test_copy_is_independent():
+    a = Config()
+    b = a.copy().override(EPOCHS=3)
+    b.MA_SPANS.append(1)
+    assert a.EPOCHS == 20 and a.MA_SPANS == [5, 10, 30]

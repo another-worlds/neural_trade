@@ -119,3 +119,84 @@ def test_normalized_conformal_needs_windows_and_round_trips(tmp_path):
         np.testing.assert_allclose(a["intervals"][h][1], b["intervals"][h][1], rtol=1e-12)
     with pytest.raises(ValueError, match="conformal_scale"):
         CalibrationPipeline(conformal_scale="bogus")
+
+
+# ---------------------------------------------------------------------------- scales, online, diagnostics
+def test_interval_scale_modes_and_errors():
+    from neural_trade.calibration.conformal import interval_scale
+
+    rng = np.random.default_rng(0)
+    win = 100 + np.cumsum(rng.normal(0, 2.0, (50, 60)), axis=1)
+    var = {h: np.full(50, 0.25) for h in H}
+    assert all((v == 1).all() and len(v) == 50 for v in interval_scale("none", windows=win).values())
+    assert len(interval_scale("none", variance_scaled=var)["h1"]) == 50
+    np.testing.assert_allclose(interval_scale("sigma", variance_scaled=var, pred_scale=200.0)["h2"], 100.0)
+    rv = interval_scale("realized_vol", windows=win, horizon_steps=(4, 9, 16))
+    np.testing.assert_allclose(rv["h1"] / rv["h0"], 1.5) and np.testing.assert_allclose(rv["h2"] / rv["h0"], 2.0)
+    for mode, kw, match in (("bogus", {}, "one of"), ("none", {}, "needs n"), ("sigma", {"variance_scaled": var}, "pred_scale"),
+                            ("realized_vol", {}, "raw input windows")):
+        with pytest.raises(ValueError, match=match):
+            interval_scale(mode, **kw)
+
+
+def test_conformal_regressor_scale_contract():
+    from neural_trade.calibration.conformal import ConformalRegressor
+
+    plain = ConformalRegressor().fit(np.arange(10.0), np.zeros(10))
+    with pytest.raises(ValueError, match="without a scale"):
+        plain.predict_interval(np.zeros(3), scale=np.ones(3))
+    scaled = ConformalRegressor().fit(np.arange(10.0), np.zeros(10), scale=np.ones(10))
+    with pytest.raises(ValueError, match="pass scale"):
+        scaled.predict_interval(np.zeros(3))
+    with pytest.raises(ValueError, match="entries"):
+        scaled.predict_interval(np.zeros(3), scale=np.ones(4))
+    with pytest.raises(RuntimeError):
+        ConformalRegressor().predict_interval(np.zeros(3))
+    lo, hi = scaled.predict_interval(np.zeros(2), scale=np.array([1.0, 1e-9]))
+    assert hi[1] - lo[1] > 0  # the floor keeps a near-zero scale from collapsing the interval
+
+
+def test_online_calibrator_learns_to_soften_an_overconfident_head(tmp_path):
+    from neural_trade.calibration.online_calibrator import OnlineTemperatureCalibrator
+
+    rng = np.random.default_rng(1)
+    oc = OnlineTemperatureCalibrator(lr=0.05, ema_decay=0.9)
+    assert oc.calibrate(0.8) == 0.8 and np.allclose(oc.calibrate_array(np.array([0.2, 0.8])), [0.2, 0.8])
+    for _ in range(3000):
+        z = rng.normal(0, 1)
+        y = float(rng.uniform() < 1 / (1 + np.exp(-z)))
+        oc.update(1 / (1 + np.exp(-3 * z)), y, "h1")   # reports sigmoid(3z): over-confident
+    assert oc.state["h1"]["T_ema"] > 1.5 and oc.state["h1"]["n_updates"] == 3000
+    assert abs(oc.calibrate(0.9, "h1") - 0.5) < 0.4
+    np.testing.assert_allclose(oc.calibrate_array(np.array([0.9]), "h1")[0], oc.calibrate(0.9, "h1"), rtol=1e-9)
+    oc.save(str(tmp_path / "online.json"))
+    again = OnlineTemperatureCalibrator.from_file(str(tmp_path / "online.json"))
+    assert again.state["h1"]["T_ema"] == pytest.approx(oc.state["h1"]["T_ema"])
+
+
+def test_pipeline_online_intervals_summary_and_legacy_load(tmp_path, capsys):
+    import os
+
+    rng = np.random.default_rng(2)
+    preds, y, lc, _ = _synthetic(rng, 2_000)
+    with pytest.raises(RuntimeError):
+        CalibrationPipeline().apply(preds)
+    pipe = CalibrationPipeline().fit_from_arrays(preds, y, lc)
+    iv = pipe.predict_intervals(preds)
+    np.testing.assert_allclose(iv["h1"][1], pipe.apply(preds)["intervals"]["h1"][1])
+    before = pipe.calibrate_online(0.9)
+    for _ in range(200):
+        pipe.update_online(0.95, 0.0)
+    assert pipe.calibrate_online(0.9) < before
+    assert pipe.calibrate_online_array(np.array([0.9]))[0] == pytest.approx(pipe.calibrate_online(0.9))
+    capsys.readouterr()
+    pipe.summary()
+    out = capsys.readouterr().out
+    assert "Temperature scaling" in out and "Conformal regressors" in out
+    d = tmp_path / "old"
+    pipe.save(str(d))
+    os.remove(d / "pipeline_meta.json")        # bundles written before the meta file existed
+    os.remove(d / "online_calibrator.json")
+    old = CalibrationPipeline.load(str(d))
+    assert old.conformal_scale == "none" and old.online is not None
+    np.testing.assert_allclose(old.apply(preds)["intervals"]["h0"][0], pipe.apply(preds)["intervals"]["h0"][0])

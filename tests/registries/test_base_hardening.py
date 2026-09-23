@@ -103,3 +103,20 @@ def test_auto_discover_imports_declared_modules_and_fails_loudly_when_strict():
     with pytest.raises(RegistryNotInitializedError):
         r.auto_discover()
     del sys.modules["_nt_fake_discovery"]
+
+
+def test_plugin_loader_reports_missing_dirs_and_broken_plugins(tmp_path):
+    import pytest
+
+    from neural_trade.core.exceptions import RegistryError
+    from neural_trade.core.plugin_loader import load_plugins
+
+    with pytest.warns(UserWarning, match="does not exist"):
+        assert load_plugins(tmp_path / "nope") == []
+    with pytest.raises(RegistryError, match="does not exist"):
+        load_plugins(tmp_path / "nope", strict=True)
+    (tmp_path / "broken_plugin_xyz.py").write_text("raise ImportError('missing dependency')\n", encoding="utf-8")
+    with pytest.warns(UserWarning, match="failed to load"):
+        assert load_plugins(tmp_path) == []
+    with pytest.raises(RegistryError, match="failed to load"):
+        load_plugins(tmp_path, strict=True)

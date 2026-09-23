@@ -48,3 +48,23 @@ def test_calibration_pass_restores_lambdas_on_failure(tf, tiny_config, tmp_path,
         got = float(getattr(result.model, name))
         assert np.isclose(got, value), f"{name}: expected restored {value}, got {got}"
     assert result.calibration_lambdas is None
+
+
+def test_calibration_pass_records_the_lambdas_it_leaves_in_effect(tf, tiny_config, tmp_path, synthetic_bars,
+                                                                  monkeypatch):
+    from neural_trade.training.trainer import train_and_evaluate
+
+    monkeypatch.chdir(tmp_path)
+    synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)
+    cfg = tiny_config
+    cfg.CSV_PATH = str(tmp_path / "bars.csv")
+    cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
+    cfg.MODEL_PATH = str(tmp_path / "weights.h5")
+    result = train_and_evaluate(config=cfg, epochs=0, force=True, calibrate=True, fit_calibration=False)
+    recorded = {k: v for k, v in (result.calibration_lambdas or {}).items() if k.startswith("lambda_")}
+    assert recorded, "the pass recorded no lambdas"
+    live = result.model.get_lambda_values()
+    for name, value in recorded.items():
+        assert np.isclose(live[name], value, rtol=1e-6), (name, live[name], value)
+    assert any(not np.isclose(v, getattr(cfg, "LAMBDA_" + k[len("lambda_"):].upper(), v)) for k, v in recorded.items()
+               if hasattr(cfg, "LAMBDA_" + k[len("lambda_"):].upper())), "calibration changed nothing"
