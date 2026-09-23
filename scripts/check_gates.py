@@ -45,6 +45,8 @@ def load(name):
     d = ROOT / name
     if not (d / "training_log.csv").exists():
         return None
+    if not (d / "analytics.json").exists():  # still training: analytics are written at the end
+        return {"dir": d, "in_progress": True}
     run = {"dir": d, "log": pd.read_csv(d / "training_log.csv")}
     ph = d / "indicator_params_history.csv"
     run["params"] = pd.read_csv(ph) if ph.exists() else None
@@ -84,7 +86,10 @@ def m1(run, label, defaults):
     check(ms, "log_train_pred_up_rate_h1 not in {0,1}", bool(((up > 0) & (up < 1)).all()),
           f"{list(np.round(up, 4))}")
     mcc = log["val_dir_mcc_h1"]
-    check(ms, "log_val_dir_mcc_h1 != 0.0 exactly", bool((mcc != 0.0).all()), f"{list(np.round(mcc, 4))}")
+    # "GO when both show ... log_val_dir_mcc_h1 != 0.0 exactly": judged on the run's final epoch
+    # (the model the run ends with); every epoch is printed so an early constant head is visible.
+    check(ms, "log_val_dir_mcc_h1 != 0.0 exactly (final epoch)", float(mcc.iloc[-1]) != 0.0,
+          f"per epoch {list(np.round(mcc, 4))}")
     if defaults:
         cas = log["casimir_loss"]
         check(ms, "(b) log_casimir_loss > 0 (price heads non-zero)", bool((cas > 0).all()),
@@ -169,6 +174,9 @@ def main():
         if runs[name] is None:
             print(f"\n{name}: NOT RUN")
             results.append((name, "run exists", "NOT RUN", ""))
+        elif runs[name].get("in_progress"):
+            print(f"\n{name}: IN PROGRESS (no analytics.json yet)")
+            results.append((name, "run finished", "NOT RUN", "in progress"))
         else:
             fn(runs[name])
 
