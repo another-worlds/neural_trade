@@ -69,7 +69,12 @@
   "calibration_lambdas_completed": true,
   "pred_scale": 257.51813253642973,
   "pred_mean": -1.0095569718884807,
-  "total_trades": null,
-  "total_trades_note": "computed by the backtest engine from predictions_test.npz (Phase C5)",
-  "wall_clock_s": 1564.3667783737183
+  "total_trades": 0,
+  "total_trades_note": "enhanced_multi_horizon strategy, default costs, scripts/backtest_gate.py; all strategies in backtest.json",
+  "wall_clock_s": 1564.3667783737183,
+  "total_trades_by_strategy": {
+    "enhanced_multi_horizon": 0,
+    "liberal": 0,
+    "threshold_spike": 0
+  }
 }

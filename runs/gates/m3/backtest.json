@@ -1,0 +1,233 @@
+{
+  "run": "m3",
+  "var_scale": 1.1843791604042053,
+  "calibrated": true,
+  "n_bars": 7236,
+  "strategies": {
+    "enhanced_multi_horizon": {
+      "strategy": "enhanced_multi_horizon",
+      "summary": {
+        "n_trades": 0,
+        "total_return": 0.0,
+        "sharpe_net": 0.0,
+        "sharpe_gross": 0.0,
+        "sortino": 0.0,
+        "max_drawdown": 0.0,
+        "hit_rate": NaN,
+        "profit_factor": NaN,
+        "avg_hold_bars": 0.0,
+        "exposure": 0.0,
+        "turnover": 0.0,
+        "fees_paid": 0.0,
+        "costs_paid": 0.0,
+        "gross_pnl": 0.0,
+        "net_pnl": 0.0
+      },
+      "baselines": {
+        "buy_and_hold": {
+          "n_trades": 1,
+          "total_return": 0.040966802984327755,
+          "sharpe_net": 6.646960011707853,
+          "sharpe_gross": 7.06523916676405,
+          "sortino": 9.553915859315063,
+          "max_drawdown": 0.04949785743049548,
+          "hit_rate": 1.0,
+          "profit_factor": Infinity,
+          "avg_hold_bars": 7234.0,
+          "exposure": 0.999861802100608,
+          "turnover": 2.0,
+          "fees_paid": 20.436235135519453,
+          "costs_paid": 26.567105676175288,
+          "gross_pnl": 436.235135519453,
+          "net_pnl": 409.66802984327774
+        },
+        "always_flat": {
+          "n_trades": 0,
+          "total_return": 0.0,
+          "sharpe_net": 0.0,
+          "sharpe_gross": 0.0,
+          "sortino": 0.0,
+          "max_drawdown": 0.0,
+          "hit_rate": NaN,
+          "profit_factor": NaN,
+          "avg_hold_bars": 0.0,
+          "exposure": 0.0,
+          "turnover": 0.0,
+          "fees_paid": 0.0,
+          "costs_paid": 0.0,
+          "gross_pnl": 0.0,
+          "net_pnl": 0.0
+        },
+        "random_same_freq": {
+          "n_seeds": 0,
+          "percentile_total_return": NaN,
+          "percentile_sharpe_net": NaN
+        }
+      },
+      "config": {
+        "fill": "next_open",
+        "fee_bps": 10.0,
+        "half_spread_bps": 1.0,
+        "slippage_bps": 2.0,
+        "tp_sl_on": "high_low",
+        "same_bar_tiebreak": "sl_first",
+        "max_hold": 30,
+        "mark_to_market_at_end": true,
+        "initial_equity": 10000.0,
+        "bar_minutes": 1.0,
+        "minutes_per_year": 525600,
+        "random_seeds": 100
+      }
+    },
+    "liberal": {
+      "strategy": "liberal",
+      "summary": {
+        "n_trades": 0,
+        "total_return": 0.0,
+        "sharpe_net": 0.0,
+        "sharpe_gross": 0.0,
+        "sortino": 0.0,
+        "max_drawdown": 0.0,
+        "hit_rate": NaN,
+        "profit_factor": NaN,
+        "avg_hold_bars": 0.0,
+        "exposure": 0.0,
+        "turnover": 0.0,
+        "fees_paid": 0.0,
+        "costs_paid": 0.0,
+        "gross_pnl": 0.0,
+        "net_pnl": 0.0
+      },
+      "baselines": {
+        "buy_and_hold": {
+          "n_trades": 1,
+          "total_return": 0.040966802984327755,
+          "sharpe_net": 6.646960011707853,
+          "sharpe_gross": 7.06523916676405,
+          "sortino": 9.553915859315063,
+          "max_drawdown": 0.04949785743049548,
+          "hit_rate": 1.0,
+          "profit_factor": Infinity,
+          "avg_hold_bars": 7234.0,
+          "exposure": 0.999861802100608,
+          "turnover": 2.0,
+          "fees_paid": 20.436235135519453,
+          "costs_paid": 26.567105676175288,
+          "gross_pnl": 436.235135519453,
+          "net_pnl": 409.66802984327774
+        },
+        "always_flat": {
+          "n_trades": 0,
+          "total_return": 0.0,
+          "sharpe_net": 0.0,
+          "sharpe_gross": 0.0,
+          "sortino": 0.0,
+          "max_drawdown": 0.0,
+          "hit_rate": NaN,
+          "profit_factor": NaN,
+          "avg_hold_bars": 0.0,
+          "exposure": 0.0,
+          "turnover": 0.0,
+          "fees_paid": 0.0,
+          "costs_paid": 0.0,
+          "gross_pnl": 0.0,
+          "net_pnl": 0.0
+        },
+        "random_same_freq": {
+          "n_seeds": 0,
+          "percentile_total_return": NaN,
+          "percentile_sharpe_net": NaN
+        }
+      },
+      "config": {
+        "fill": "next_open",
+        "fee_bps": 10.0,
+        "half_spread_bps": 1.0,
+        "slippage_bps": 2.0,
+        "tp_sl_on": "high_low",
+        "same_bar_tiebreak": "sl_first",
+        "max_hold": 30,
+        "mark_to_market_at_end": true,
+        "initial_equity": 10000.0,
+        "bar_minutes": 1.0,
+        "minutes_per_year": 525600,
+        "random_seeds": 100
+      }
+    },
+    "threshold_spike": {
+      "strategy": "threshold_spike",
+      "summary": {
+        "n_trades": 0,
+        "total_return": 0.0,
+        "sharpe_net": 0.0,
+        "sharpe_gross": 0.0,
+        "sortino": 0.0,
+        "max_drawdown": 0.0,
+        "hit_rate": NaN,
+        "profit_factor": NaN,
+        "avg_hold_bars": 0.0,
+        "exposure": 0.0,
+        "turnover": 0.0,
+        "fees_paid": 0.0,
+        "costs_paid": 0.0,
+        "gross_pnl": 0.0,
+        "net_pnl": 0.0
+      },
+      "baselines": {
+        "buy_and_hold": {
+          "n_trades": 1,
+          "total_return": 0.040966802984327755,
+          "sharpe_net": 6.646960011707853,
+          "sharpe_gross": 7.06523916676405,
+          "sortino": 9.553915859315063,
+          "max_drawdown": 0.04949785743049548,
+          "hit_rate": 1.0,
+          "profit_factor": Infinity,
+          "avg_hold_bars": 7234.0,
+          "exposure": 0.999861802100608,
+          "turnover": 2.0,
+          "fees_paid": 20.436235135519453,
+          "costs_paid": 26.567105676175288,
+          "gross_pnl": 436.235135519453,
+          "net_pnl": 409.66802984327774
+        },
+        "always_flat": {
+          "n_trades": 0,
+          "total_return": 0.0,
+          "sharpe_net": 0.0,
+          "sharpe_gross": 0.0,
+          "sortino": 0.0,
+          "max_drawdown": 0.0,
+          "hit_rate": NaN,
+          "profit_factor": NaN,
+          "avg_hold_bars": 0.0,
+          "exposure": 0.0,
+          "turnover": 0.0,
+          "fees_paid": 0.0,
+          "costs_paid": 0.0,
+          "gross_pnl": 0.0,
+          "net_pnl": 0.0
+        },
+        "random_same_freq": {
+          "n_seeds": 0,
+          "percentile_total_return": NaN,
+          "percentile_sharpe_net": NaN
+        }
+      },
+      "config": {
+        "fill": "next_open",
+        "fee_bps": 10.0,
+        "half_spread_bps": 1.0,
+        "slippage_bps": 2.0,
+        "tp_sl_on": "high_low",
+        "same_bar_tiebreak": "sl_first",
+        "max_hold": 30,
+        "mark_to_market_at_end": true,
+        "initial_equity": 10000.0,
+        "bar_minutes": 1.0,
+        "minutes_per_year": 525600,
+        "random_seeds": 100
+      }
+    }
+  }
+}

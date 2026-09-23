@@ -6,7 +6,8 @@ Expects the run directories written by scripts/gate_run.py:
     m1a  2 epochs, physics lambdas at 0      (M1 run (a))
     m1b  2 epochs, defaults                  (M1 run (b))
     m2   5 epochs, defaults                  (M2)
-    m3   20 epochs, defaults                 (M3 and M4)
+    m3   20 epochs, defaults                 (M3 and M4, first attempt - kept as history)
+    m4   20 epochs, defaults, after the normalised-conformal fix (M3 and M4, current)
 Missing runs are reported as NOT RUN, never as passes. Exit 0 only when every clause of every
 milestone whose run exists passes, and no clause is PENDING.
 
@@ -125,10 +126,9 @@ def m2(run):
     check(ms, "std(var_h1)/mean(var_h1) > 0.05", h1["var_dispersion"] > 0.05, fmt(h1["var_dispersion"]))
 
 
-def m3(run):
-    ms = "M3"
+def m3(run, ms="M3"):
     log, an = run["log"], run["an"]
-    print(f"\nM3  ({run['dir'].name}, {len(log)} epochs run)  plan A3: 'M3 stop/go (20 epochs)'")
+    print(f"\n{ms}  ({run['dir'].name}, {len(log)} epochs run)  plan A3: 'M3 stop/go (20 epochs)'")
     if an is None:
         record(ms, "analytics", "FAIL", "analytics.json missing")
         return
@@ -149,10 +149,9 @@ def m3(run):
     check(ms, "best-epoch log_val_gauss_dir_mcc_h1 > 0", gmcc > 0, f"{gmcc:.4f} at epoch {best}")
 
 
-def m4(run):
-    ms = "M4"
+def m4(run, ms="M4"):
     an = run["an"]
-    print(f"\nM4  ({run['dir'].name})  plan A4: 'test coverage at alpha=0.1 in [0.87, 0.93] all horizons; "
+    print(f"\n{ms}  ({run['dir'].name})  plan A4: 'test coverage at alpha=0.1 in [0.87, 0.93] all horizons; "
           "early stopping fires on a plateaued run; bare pytest green'")
     if an is None or not an.get("calibration_fitted"):
         record(ms, "conformal coverage on test", "FAIL", "calibration pipeline not fitted")
@@ -168,9 +167,14 @@ def m4(run):
 
 def main():
     print(f"gate runs under: {ROOT.resolve()}")
-    runs = {n: load(n) for n in ("m1a", "m1b", "m2", "m3")}
-    for name, fn in (("m1a", lambda r: m1(r, "a", False)), ("m1b", lambda r: m1(r, "b", True)),
-                     ("m2", m2), ("m3", lambda r: (m3(r), m4(r)))):
+    runs = {n: load(n) for n in ("m1a", "m1b", "m2", "m3", "m4")}
+    rerun = runs["m4"] is not None and not runs["m4"].get("in_progress")
+    # With the m4 re-run present, M3/M4 are judged on it and the first attempt is shown as history.
+    first = (lambda r: (m3(r, "M3@m3"), m4(r, "M4@m3"))) if rerun else (lambda r: (m3(r), m4(r)))
+    plan = [("m1a", lambda r: m1(r, "a", False)), ("m1b", lambda r: m1(r, "b", True)), ("m2", m2), ("m3", first)]
+    if runs["m4"] is not None:
+        plan.append(("m4", lambda r: (m3(r), m4(r))))
+    for name, fn in plan:
         if runs[name] is None:
             print(f"\n{name}: NOT RUN")
             results.append((name, "run exists", "NOT RUN", ""))
@@ -189,7 +193,7 @@ def main():
         n_pend = st.count("PENDING") + st.count("NOT RUN")
         verdict = "PASS" if n_fail == 0 and n_pend == 0 else ("FAIL" if n_fail else "INCOMPLETE")
         print(f"  {ms:5s} {verdict:10s} {st.count('PASS')} pass, {n_fail} fail, {n_pend} pending/not run")
-    bad = [r for r in results if r[2] in ("FAIL", "PENDING", "NOT RUN")]
+    bad = [r for r in results if r[2] in ("FAIL", "PENDING", "NOT RUN") and "@" not in r[0]]
     return 0 if not bad else 1
 
 
