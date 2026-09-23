@@ -1,10 +1,10 @@
 {
-  "name": "m2",
-  "epochs": 5,
+  "name": "m5",
+  "epochs": 20,
   "physics_off": false,
   "overrides": {},
-  "git": "6dec27a",
-  "wall_clock_s": 506.65598154067993,
+  "git": "d750892",
+  "wall_clock_s": 1903.9983110427856,
   "ewma_impl": "matrix",
   "lambda_values_final": {
     "lambda_point": 0.7232704758644104,
