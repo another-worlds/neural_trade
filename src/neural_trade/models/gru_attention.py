@@ -16,6 +16,29 @@ from tensorflow.keras import layers, models, regularizers
 from neural_trade.registries.layers import Layers
 
 
+SKIP_LAGS = (1, 5, 10, 15, 20, 30)
+
+
+def _trailing_return_features(x, lags=SKIP_LAGS):
+    """[B, LOOKBACK] window-relative input -> [B, len(lags) + 2]: the (scaled) close change over each
+    trailing lag, over the whole window, and the log of the 1-bar change volatility. The same
+    information a logistic regression on trailing returns uses; all causal (inside the window)."""
+    last = x[:, -1:]
+    cols = [last - x[:, -1 - k:-k] for k in lags] + [last - x[:, :1]]
+    vol = tf.math.reduce_std(x[:, 1:] - x[:, :-1], axis=1, keepdims=True)
+    return tf.concat(cols + [tf.math.log(vol + 1e-6)], axis=1)
+
+
+def _direction_head(config, tower, skip_features, name, bias_init):
+    """P(up) head. Without the skip this is exactly the original Dense(1, sigmoid) layer."""
+    if skip_features is None:
+        return layers.Dense(1, activation='sigmoid', name=name, bias_initializer=bias_init)(tower)
+    tower_logit = layers.Dense(1, name=f'{name}_logit', bias_initializer=bias_init)(tower)
+    skip_logit = layers.Dense(1, name=f'{name}_skip', use_bias=False,
+                              kernel_regularizer=regularizers.L2(float(config.DIRECTION_SKIP_L2)))(skip_features)
+    return layers.Activation('sigmoid', name=name)(layers.Add()([tower_logit, skip_logit]))
+
+
 def build_gru_attention(config) -> tf.keras.Model:
     """Build the gru_attention architecture for ``config`` (LOOKBACK, indicators, T_PERP_DIM...)."""
     inp = layers.Input(shape=(config.LOOKBACK,), name='close_sequence')
@@ -150,6 +173,13 @@ def build_gru_attention(config) -> tf.keras.Model:
     # Keep at 0 for balanced initial predictions
     dir_bias_init = tf.keras.initializers.Zeros()
 
+    # Optional linear path from trailing-return features straight to the direction logits
+    # (Config.DIRECTION_SKIP): the heads can then represent at least the linear baseline, which
+    # the deep path alone did not recover.
+    skip_features = None
+    if bool(getattr(config, 'DIRECTION_SKIP', False)):
+        skip_features = layers.Lambda(_trailing_return_features, name='direction_skip_features')(inp)
+
     # ---- TOWER 0 (1-minute horizon) ----
     tower_h0 = layers.Dense(16, activation='gelu',
                            kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
@@ -162,8 +192,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
         name='price_h0_clip'
     )(price_h0)
-    direction_h0 = layers.Dense(1, activation='sigmoid', name='direction_h0',
-                               bias_initializer=dir_bias_init)(tower_h0)
+    direction_h0 = _direction_head(config, tower_h0, skip_features, 'direction_h0', dir_bias_init)
     # Clip dir probs to [0,1]. (NaN/Inf protection is handled by loss guards + post-extraction sanitization
     # to avoid any appearance of hard-coded 0.5 in the architecture.)
     direction_h0 = layers.Lambda(
@@ -190,8 +219,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
         name='price_h1_clip'
     )(price_h1)
-    direction_h1 = layers.Dense(1, activation='sigmoid', name='direction_h1',
-                               bias_initializer=dir_bias_init)(tower_h1)
+    direction_h1 = _direction_head(config, tower_h1, skip_features, 'direction_h1', dir_bias_init)
     direction_h1 = layers.Lambda(
         lambda t: tf.clip_by_value(t, 0.0, 1.0),
         name='direction_h1_clip'
@@ -212,8 +240,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
         name='price_h2_clip'
     )(price_h2)
-    direction_h2 = layers.Dense(1, activation='sigmoid', name='direction_h2',
-                               bias_initializer=dir_bias_init)(tower_h2)
+    direction_h2 = _direction_head(config, tower_h2, skip_features, 'direction_h2', dir_bias_init)
     direction_h2 = layers.Lambda(
         lambda t: tf.clip_by_value(t, 0.0, 1.0),
         name='direction_h2_clip'

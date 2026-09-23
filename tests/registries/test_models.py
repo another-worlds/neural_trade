@@ -36,3 +36,30 @@ def test_price_predictor_facade_uses_the_registry():
     tf.keras.utils.set_random_seed(0)
     m = PricePredictor(Config(LOOKBACK=32)).build_model()
     assert len(m.outputs) == 10
+
+
+def test_direction_skip_adds_a_linear_logit_and_is_absent_by_default():
+    import numpy as np
+
+    from neural_trade.models.gru_attention import SKIP_LAGS, _trailing_return_features
+
+    tf.keras.utils.set_random_seed(0)
+    plain = Models.build(None, Config(LOOKBACK=32))
+    names = {layer.name for layer in plain.layers}
+    assert "direction_skip_features" not in names and "direction_h1_skip" not in names
+
+    tf.keras.utils.set_random_seed(0)
+    skip = Models.build(None, Config(LOOKBACK=32, DIRECTION_SKIP=True))
+    names = {layer.name for layer in skip.layers}
+    assert {"direction_skip_features", "direction_h0_skip", "direction_h1_logit", "direction_h2_skip"} <= names
+    outs = PredictiveOutputs(*skip(tf.random.normal([4, 32]), training=False))
+    assert 0.0 <= float(tf.reduce_min(outs.direction_h1)) <= float(tf.reduce_max(outs.direction_h1)) <= 1.0
+
+    x = np.random.default_rng(0).normal(size=(5, 32)).astype(np.float32)
+    feats = _trailing_return_features(tf.constant(x)).numpy()
+    expect = [x[:, -1] - x[:, -1 - k] for k in SKIP_LAGS] + [x[:, -1] - x[:, 0],
+                                                            np.log(np.std(np.diff(x, axis=1), axis=1) + 1e-6)]
+    np.testing.assert_allclose(feats, np.stack(expect, 1), rtol=1e-5, atol=1e-5)
+
+    # the skip is the only path it adds: the tower's direction weights exist in both builds
+    assert skip.get_layer("direction_h1_skip").kernel.shape == (len(SKIP_LAGS) + 2, 1)

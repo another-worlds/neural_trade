@@ -96,6 +96,8 @@ GRAD_CLIP_NORM: 20.0  # global-norm clip, per optimizer group
 # ---- direction
 FOCAL_ALPHA: 0.5  # weight of the DOWN class
 FOCAL_GAMMA: 2.0
+DIRECTION_SKIP: false  # add a linear logit from trailing-return features of the window to each direction head
+DIRECTION_SKIP_L2: 0.0001  # L2 on the direction skip weights
 DIRECTION_LOSS: bce  # 'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)
 DIR_DEADBAND_BPS: 5.0  # |return| below this is neutral and masked
 
