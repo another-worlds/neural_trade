@@ -55,3 +55,33 @@ def test_run_context_layout(tmp_path):
     assert ctx.config.MODEL_PATH == str(ctx.run_dir / "weights.h5")
     back = RunContext.load(ctx.run_dir)
     assert back.config.EPOCHS == 3 and back.tags == ["t"]
+
+
+def test_compare_runs_tabulates_scored_runs_and_refuses_unscored(tmp_path):
+    import json
+
+    import pytest
+
+    from neural_trade.experiments.compare import compare_runs
+
+    def run(name, auc, scored=True, seed=0):
+        d = tmp_path / name
+        d.mkdir()
+        (d / "meta.json").write_text(json.dumps({"seed": seed, "tags": ["t"]}), encoding="utf-8")
+        if scored:
+            rep = {"run_id": name, "model": {"horizons": {"h1": {"direction": {"auc": auc}, "delta": {},
+                                                                  "variance": {"crpss": 0.01},
+                                                                  "gauss_direction": {}}},
+                                             "coherence": {"coherence_primary": 0.6}},
+                   "backtest": {"summary": {"sharpe_net": -1.0}}}
+            (d / "eval_report_test.json").write_text(json.dumps(rep), encoding="utf-8")
+
+    run("a", 0.51)
+    run("b", 0.53, seed=1)
+    df = compare_runs(tmp_path / "*", metrics=["h1/direction/auc", "backtest/sharpe_net"])
+    assert list(df.index) == ["a", "b"] and df.loc["b", "h1/direction/auc"] == 0.53 and df.loc["a", "seed"] == 0
+    assert "coherence/coherence_primary" in compare_runs(tmp_path / "a").columns
+    run("c", 0.0, scored=False)
+    with pytest.raises(FileNotFoundError, match="no eval_report_test.json"):
+        compare_runs(tmp_path / "*")
+    assert compare_runs(tmp_path / "*", skip_unscored=True).attrs["unscored"] == ["c"]
