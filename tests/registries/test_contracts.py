@@ -11,10 +11,11 @@ from neural_trade.core.registry import BaseRegistry
 
 TRAINING_REGISTRIES = {"Models", "Optimizers", "Metrics", "Callbacks", "DataLoaders", "Layers",
                        "Preprocessors", "Losses"}
+ALL_NINE = TRAINING_REGISTRIES | {"Visualizations"}
 REPO = Path(__file__).resolve().parents[2]
 
 
-def test_training_queries_every_training_registry(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+def test_training_and_reporting_query_all_nine_registries(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
     from neural_trade.training.trainer import train_and_evaluate
 
     hits = set()
@@ -30,8 +31,15 @@ def test_training_queries_every_training_registry(tf, tiny_config, tmp_path, syn
     cfg = tiny_config
     cfg.CSV_PATH, cfg.MODEL_PATH, cfg.SCALER_PATH = (str(tmp_path / "bars.csv"), str(tmp_path / "w.h5"),
                                                      str(tmp_path / "s.joblib"))
-    train_and_evaluate(config=cfg, epochs=1, force=True, calibrate=False, fit_calibration=False)
+    result = train_and_evaluate(config=cfg, epochs=1, force=True, calibrate=False, fit_calibration=False)
     assert TRAINING_REGISTRIES <= hits, f"registries never queried: {TRAINING_REGISTRIES - hits}"
+
+    # the reporting path reaches the ninth registry (Visualizations renders the evaluation figure)
+    from neural_trade.evaluation.walk_forward import evaluate_result
+
+    report = evaluate_result(result, out_dir=tmp_path / "report", figure=True)
+    assert ALL_NINE <= hits, f"registries never queried: {ALL_NINE - hits}"
+    assert (tmp_path / "report" / "eval_report_test.md").exists() and report.n == len(result.y_test)
 
 
 def test_load_all_resolves_the_default_config_and_rejects_unknown_components():

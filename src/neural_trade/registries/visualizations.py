@@ -39,4 +39,8 @@ Visualizations.register(name="matplotlib_splits", tags=["matplotlib", "data"],
                         dependencies=["matplotlib"])(_ms.matplotlib_splits)
 Visualizations.register(name="indicator_evolution", tags=["plotly", "indicators"],
                         dependencies=["plotly"])(_ie.indicator_evolution)
+from neural_trade.evaluation import plots as _ev  # noqa: E402
+
+Visualizations.register(name="eval_report", tags=["plotly", "evaluation", "calibration"],
+                        dependencies=["plotly"])(_ev.eval_report_figure)
 Visualizations._initialized = True

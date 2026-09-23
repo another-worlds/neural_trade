@@ -19,6 +19,41 @@ from neural_trade.data.splits import make_purged_splits
 from neural_trade.data.windowing import compute_extended_trend_features, make_sequences_with_extended_trends
 
 
+def _select_fold(folds, index):
+    """The fold at ``index`` of make_purged_splits' list (folds with an empty train block are omitted,
+    so index -1 is always the latest; an out-of-range positive index is an error)."""
+    try:
+        return folds[index]
+    except IndexError:
+        raise ValueError(f"FOLD_INDEX={index} but only {len(folds)} usable folds exist") from None
+
+
+def split_arrays(config, read_csv_kwargs=None):
+    """RAW (unscaled) windows, targets, last closes and trend features of every block of the
+    configured fold: ``{"train": {...}, "val": {...}, "cal": {...}, "test": {...}, "fold": FoldIndices}``.
+
+    Deterministic given the config, so any saved run can rebuild its splits (baselines,
+    backtests, re-evaluation) without having stored them.
+    """
+    dp = DataProcessor(config)
+    _, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
+    X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK)
+    cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
+    if cap and X.shape[0] > cap:
+        X, y, lc, ext = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:]
+    folds = make_purged_splits(X.shape[0], lookback=config.LOOKBACK, horizon_steps=config.HORIZON_STEPS,
+                               window_step=int(max(1, getattr(config, "WINDOW_STEP", 1))),
+                               n_folds=int(getattr(config, "N_FOLDS", 5)),
+                               val_fraction=float(getattr(config, "VAL_FRACTION", 0.066)),
+                               cal_fraction=float(getattr(config, "CAL_FRACTION", 0.066)))
+    fold = _select_fold(folds, int(getattr(config, "FOLD_INDEX", -1)))
+    out = {"fold": fold, "close": close}
+    for name in ("train", "val", "cal", "test"):
+        idx = getattr(fold, name)
+        out[name] = {"X": X[idx], "y": y[idx], "last_close": lc[idx], "extended_trends": ext[idx], "index": idx}
+    return out
+
+
 class DataProcessor:
     def __init__(self, config):
         self.config = config
@@ -101,7 +136,8 @@ class DataProcessor:
             n_folds=int(getattr(self.config, 'N_FOLDS', 5)),
             val_fraction=float(getattr(self.config, 'VAL_FRACTION', 0.066)),
             cal_fraction=float(getattr(self.config, 'CAL_FRACTION', 0.066)),
-        )[-1]
+        )
+        fold = _select_fold(fold, int(getattr(self.config, 'FOLD_INDEX', -1)))
         self.fold = fold
 
         def _take(idx):

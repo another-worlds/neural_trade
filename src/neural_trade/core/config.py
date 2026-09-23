@@ -71,6 +71,7 @@ class Config:
     VAL_FRACTION: float = _f(0.066, "data", "validation block size (fraction of sequences)")
     CAL_FRACTION: float = _f(0.066, "data", "calibration block size (fraction of sequences)")
     N_FOLDS: int = _f(5, "data", "TimeSeriesSplit folds; the last fold's test block is reported")
+    FOLD_INDEX: int = _f(-1, "data", "which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)")
 
     # ------------------------------------------------------------------ horizons
     EXTENDED_TREND_PERIODS: List[int] = _f([10, 15, 20], "horizons",
@@ -259,6 +260,8 @@ class Config:
             bad("VAL_FRACTION and CAL_FRACTION must be in (0, 0.5)")
         if self.N_FOLDS < 2:
             bad("N_FOLDS must be >= 2")
+        if not -self.N_FOLDS <= self.FOLD_INDEX < self.N_FOLDS:
+            bad(f"FOLD_INDEX must be in [-{self.N_FOLDS}, {self.N_FOLDS - 1}]")
         if self.DIR_DEADBAND_BPS < 0:
             bad("DIR_DEADBAND_BPS must be >= 0")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):
