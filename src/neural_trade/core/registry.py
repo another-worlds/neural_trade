@@ -225,7 +225,7 @@ class BaseRegistry:
         return cls.get(cls.resolve(None))
 
     @classmethod
-    def build(cls, name: Optional[str], *args, **kwargs) -> Any:
+    def build(cls, name: Optional[str], /, *args, **kwargs) -> Any:
         """Resolve ``name`` (None -> default) and call the component with the arguments."""
         component = cls._checked_component(cls.resolve(name))
         if not callable(component):

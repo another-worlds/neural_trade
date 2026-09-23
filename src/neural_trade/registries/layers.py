@@ -30,14 +30,14 @@ class Layers(BaseRegistry):
         return inspect.isclass(component) and issubclass(component, tf.keras.layers.Layer)
 
     @classmethod
-    def build(cls, name, *args, **kwargs) -> tf.keras.layers.Layer:
+    def build(cls, name, /, *args, **kwargs) -> tf.keras.layers.Layer:
         layer = super().build(name, *args, **kwargs)
         if not isinstance(layer, tf.keras.layers.Layer):
             raise ComponentValidationError(f"Layers: '{name}' did not produce a Keras Layer")
         return layer
 
     @classmethod
-    def for_role(cls, config, role: str, *args, **kwargs) -> tf.keras.layers.Layer:
+    def for_role(cls, config, role: str, /, *args, **kwargs) -> tf.keras.layers.Layer:
         """Instantiate the layer ``config.LAYERS[role]`` names."""
         return cls.build(dict(getattr(config, "LAYERS", {}) or {}).get(role, role), *args, **kwargs)
 
