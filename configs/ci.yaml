@@ -1,0 +1,9 @@
+# Small, fast configuration for CI smoke runs (CPU): one epoch on the most recent
+# 3,000 sequences of the bundled CSV. Keys not listed keep their defaults
+# (see configs/default.yaml).
+MAX_SEQUENCE_COUNT: 3000
+EPOCHS: 1
+BATCH_SIZE: 64
+MODEL_PATH: runs/ci/weights.h5
+SCALER_PATH: runs/ci/scaler.joblib
+ARTIFACTS_DIR: runs/ci/artifacts

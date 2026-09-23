@@ -1,0 +1,136 @@
+# neural_trade Config - flat keys; see neural_trade/core/config.py for every field
+
+# ---- data
+CSV_PATH: binance_btcusdt_1min_ccxt.csv  # OHLCV CSV (timestamp/datetime, open..volume)
+LOOKBACK: 60  # input window length in bars
+WINDOW_STEP: 1  # stride between consecutive training windows
+RESAMPLE_MINUTES: 1  # aggregate to coarser bars (1 = native minute bars)
+MAX_SEQUENCE_COUNT: 53280  # keep only the most recent N sequences
+VAL_FRACTION: 0.066  # validation block size (fraction of sequences)
+CAL_FRACTION: 0.066  # calibration block size (fraction of sequences)
+N_FOLDS: 5  # TimeSeriesSplit folds; the last fold's test block is reported
+
+# ---- horizons
+EXTENDED_TREND_PERIODS: [10, 15, 20]  # lags (bars) of the past-delta momentum features, one per horizon
+HORIZON_STEPS: [10, 15, 20]  # forecast horizons in bars (h0, h1, h2)
+
+# ---- training
+BATCH_SIZE: 64
+EPOCHS: 20
+LR: 0.001  # main optimizer learning rate
+PATIENCE: 3  # ReduceLROnPlateau patience (was EPOCHS: disabled)
+EARLY: 6  # EarlyStopping patience on val_loss (was EPOCHS: disabled)
+
+# ---- calibration
+DAMPING: 0.5  # legacy alias; use CALIB_DAMPING
+CALIB_WARMUP_FRACTION: 0.05  # warm-up forward passes (fraction of an epoch)
+CALIB_SAMPLE_FRACTION: 0.1  # loss-magnitude sampling (fraction of an epoch)
+CALIB_LAMBDA_MIN: 0.1
+CALIB_LAMBDA_MAX: 20.0
+CALIB_DAMPING: 1.0  # 0 = no change, 1 = full magnitude equalisation
+CALIB_DAMPING_POINT: null
+CALIB_DAMPING_TREND: 0.0  # 0: the trend prior is a regulariser, not rescaled
+CALIB_DAMPING_DIR: null
+CALIB_DAMPING_VAR: null
+CALIB_DAMPING_CRPS: null
+CALIB_DAMPING_ECE: null
+CALIB_DAMPING_VOL: null
+CALIB_DAMPING_PHYSICS: 0.0  # 0: bounded physics regularisers are never rescaled
+CALIB_OUTER: false  # also calibrate the outer group multipliers
+
+# ---- loss_weights
+LAMBDA_LOCAL_TREND: 1.0  # retired term (always 0 in the objective)
+LAMBDA_GLOBAL_TREND: 1.0  # retired term (always 0 in the objective)
+LAMBDA_EXTENDED_TREND: 0.1  # momentum prior; a regulariser, kept small
+LAMBDA_QUANTILE: 1.0  # unused (no quantile term in the objective)
+LAMBDA_SHORT: 1.0  # point loss weight, h0
+LAMBDA_POINT: 1.0  # point loss weight, h1
+LAMBDA_LONG: 1.0  # point loss weight, h2
+LAMBDA_DIR: 1.0  # direction loss (focal + dice)
+LAMBDA_INTER: 1.0  # weight of model.losses (layer regularisers)
+LAMBDA_VOL: 1.0  # prediction-spread vs target-spread penalty
+LAMBDA_VAR: 1.0  # Gaussian NLL of the variance heads
+LAMBDA_TREND_OUTER: 1.0
+LAMBDA_DIR_OUTER: 1.0
+LAMBDA_DIR_ALIGN_OUTER: 0.0  # direction head vs Gaussian readout alignment
+LAMBDA_COHERENCE: 1.0
+LAMBDA_NLL_OUTER: 1.0
+LAMBDA_CRPS: 1.0
+LAMBDA_SOFT_ECE: 1.0
+LAMBDA_DIR_ALIGN: 0.7  # inner weight of the alignment term
+
+# ---- physics
+T_PERP_DIM: 16  # width of the perpendicular projection
+LAMBDA_T_PERP: 0.1  # batch variance tracks batch residual energy
+LAMBDA_CASIMIR: 0.1  # disagreeing horizons need variance
+LAMBDA_VAC: 0.0  # vacuum bandwidth threshold (0 = off)
+LAMBDA_HD: 0.1  # variance ordered like realised volatility
+LAMBDA_IFE: 0.1  # cross-horizon correlation hinge
+RHO_MAX: 0.95  # max allowed cross-horizon correlation
+VACUUM_E_MAX: 1.0  # per-dimension energy ceiling of the vacuum layer
+LAMBDA_VAC_OVERFLOW: 0.1  # overflow tracks residual magnitude
+
+# ---- indicators
+MA_SPANS: [5, 10, 30]
+MACD_SETTINGS: [{fast: 12, slow: 26, signal: 9}, {fast: 5, slow: 35, signal: 5}, {fast: 8, slow: 17, signal: 9}]
+RSI_PERIODS: [9, 14, 21]
+BB_PERIODS: [10, 20, 25]
+INDICATOR_L2: 0.0  # L2 on the indicator logits
+INDICATOR_LR_MULT: 5.0  # indicator optimizer LR = LR * this
+INDICATOR_GRAD_MULT: 5.0  # straight-through gradient scale
+MOMENTUM_CLIP_MIN: 2.0  # period floor (1.0 saturated the logit)
+MOMENTUM_CLIP_MAX: 60  # period ceiling; None -> LOOKBACK
+EWMA_IMPL: matrix  # 'matrix' (batched einsum) or 'scan' (reference)
+
+# ---- architecture
+REG_MOMENTUM_L2: 0.0  # L2 on the dense towers
+TANH_SCALE: 1.0  # unused
+SIGMOID_SCALE: 1.0  # unused
+HUBER_DELTA: 1.0  # delta of CustomTrainModel.huber (not the point loss)
+USE_HUBER: true  # legacy flag; the point loss is log(cosh)
+
+# ---- stability
+GRAD_CLIP_NORM: 20.0  # global-norm clip, per optimizer group
+
+# ---- direction
+FOCAL_ALPHA: 0.5  # weight of the DOWN class
+FOCAL_GAMMA: 2.0
+DIR_DEADBAND_BPS: 5.0  # |return| below this is neutral and masked
+
+# ---- variance
+VAR_FLOOR: 0.0001  # variance floor (scaled units^2)
+VAR_CAP: 1000.0  # variance cap for metrics (not applied in the loss)
+DELTA_MAPE_MIN_ABS: 1.0  # min |y| ($) for the delta safe-MAPE
+
+# ---- paths
+MODEL_PATH: nn_learnable_indicators_v3.weights.h5
+SCALER_PATH: scaler_v3.joblib
+ARTIFACTS_DIR: artifacts  # where Trainer writes the serving bundle
+PLUGINS_DIR: null  # directory of plugin modules to load at startup
+
+# ---- registries
+MODEL_NAME: gru_attention  # Models registry key
+LOSS_NAME: custom_loss  # Losses objective key
+OPTIMIZER_NAME: adam  # Optimizers key, main network
+INDICATOR_OPTIMIZER_NAME: adam  # Optimizers key, indicator logits
+DATA_LOADER: csv  # DataLoaders key
+PREPROCESSORS: [standardize_ohlcv, sort_dedupe, resample_bars, drop_missing_close]  # Preprocessors keys, applied in order
+WINDOW_NORMALIZER: window_relative  # input normalisation of the windows
+LAYERS: {indicators: learnable_indicators, positional_encoding: positional_encoding, vacuum_noise: vacuum_saturation_noise, energy_gate: energy_gate}  # Layers keys by role in the architecture
+METRICS: [mse, rmse, mae, explained_variance, corr, r2, safe_mape, smape, wape, direction_accuracy, direction_f1, mcc, brier, ece_pos, pit_ks, coverage]  # Metrics keys, numpy tier (evaluation)
+STEP_METRICS: [dir_acc, dir_sensitivity, dir_specificity, dir_bal_acc, dir_f1, dir_mcc, dir_brier, dir_ece, pred_up_rate, true_up_rate, mean_dir_prob]  # Metrics keys, TF tier (train/test step)
+CALLBACKS: [csv_logger, early_stopping, model_checkpoint, tqdm_progress, params_logger, reduce_lr_on_plateau]  # Callbacks keys, in order
+VISUALIZATION: plotly_interactive  # Visualizations key
+
+# ---- optimizers
+ADAM_BETA1: 0.9
+ADAM_BETA2: 0.999
+ADAM_EPSILON: 1.0e-07  # Keras default
+WEIGHT_DECAY: 0.004  # adamw only
+SGD_MOMENTUM: 0.9
+SGD_NESTEROV: true
+
+# ---- ops
+LOSS_WEIGHT_SCHEDULE: null  # {'lambda_hd': {epoch: value, ...}, ...} for the lambda_schedule callback
+ABLATE_LAMBDAS: []  # LAMBDA_* names forced to 0 after calibration (ablation)
+SEED: 42  # global seed set by train_and_evaluate
