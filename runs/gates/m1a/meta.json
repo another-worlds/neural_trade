@@ -1,0 +1,55 @@
+{
+  "name": "m1a",
+  "epochs": 2,
+  "physics_off": true,
+  "overrides": {
+    "LAMBDA_T_PERP": 0.0,
+    "LAMBDA_CASIMIR": 0.0,
+    "LAMBDA_HD": 0.0,
+    "LAMBDA_IFE": 0.0,
+    "LAMBDA_VAC_OVERFLOW": 0.0,
+    "LAMBDA_VAC": 0.0
+  },
+  "git": "89593e0",
+  "wall_clock_s": 312.83128333091736,
+  "ewma_impl": "matrix",
+  "lambda_values_final": {
+    "lambda_point": 1.1450906991958618,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 2.9644291400909424,
+    "lambda_vol": 1.0903635025024414,
+    "lambda_short": 1.5818076133728027,
+    "lambda_long": 0.9982945919036865,
+    "lambda_var": 0.3391556441783905,
+    "lambda_crps": 0.8538081645965576,
+    "lambda_soft_ece": 3.443659543991089,
+    "lambda_t_perp": 0.0,
+    "lambda_casimir": 0.0,
+    "lambda_hd": 0.0,
+    "lambda_ife": 0.0,
+    "lambda_vac_overflow": 0.0
+  },
+  "calibration_lambdas": {
+    "lambda_short": 1.5818076193203077,
+    "lambda_point": 1.145090749315473,
+    "lambda_long": 0.9982946005158777,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 2.964429095411561,
+    "lambda_var": 0.33915564858134495,
+    "lambda_vol": 1.0903635100363869,
+    "lambda_crps": 0.8538081514819141,
+    "lambda_soft_ece": 3.443659461267972,
+    "lambda_t_perp": 0.0,
+    "lambda_casimir": 0.0,
+    "lambda_hd": 0.0,
+    "lambda_ife": 0.0,
+    "ref_loss": 0.5756705419884788
+  },
+  "fold": {
+    "train": 30213,
+    "val": 2866,
+    "cal": 2866,
+    "test": 7236,
+    "gap": 80
+  }
+}
