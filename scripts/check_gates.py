@@ -7,7 +7,9 @@ Expects the run directories written by scripts/gate_run.py:
     m1b  2 epochs, defaults                  (M1 run (b))
     m2   5 epochs, defaults                  (M2)
     m3   20 epochs, defaults                 (M3 and M4, first attempt - kept as history)
-    m4   20 epochs, defaults, after the normalised-conformal fix (M3 and M4, current)
+    m4   20 epochs, defaults, after the normalised-conformal fix (M3 and M4, second attempt)
+    m5   20 epochs, defaults, after the BCE direction loss + direction skip (M3 and M4, current)
+The newest finished attempt is judged; earlier ones are printed as history (M3@m3, ...).
 Missing runs are reported as NOT RUN, never as passes. Exit 0 only when every clause of every
 milestone whose run exists passes, and no clause is PENDING.
 
@@ -167,13 +169,16 @@ def m4(run, ms="M4"):
 
 def main():
     print(f"gate runs under: {ROOT.resolve()}")
-    runs = {n: load(n) for n in ("m1a", "m1b", "m2", "m3", "m4")}
-    rerun = runs["m4"] is not None and not runs["m4"].get("in_progress")
-    # With the m4 re-run present, M3/M4 are judged on it and the first attempt is shown as history.
-    first = (lambda r: (m3(r, "M3@m3"), m4(r, "M4@m3"))) if rerun else (lambda r: (m3(r), m4(r)))
-    plan = [("m1a", lambda r: m1(r, "a", False)), ("m1b", lambda r: m1(r, "b", True)), ("m2", m2), ("m3", first)]
-    if runs["m4"] is not None:
-        plan.append(("m4", lambda r: (m3(r), m4(r))))
+    attempts = ("m3", "m4", "m5")          # successive M3/M4 attempts; the newest finished one is judged
+    runs = {n: load(n) for n in ("m1a", "m1b", "m2", *attempts)}
+    finished = [a for a in attempts if runs[a] is not None and not runs[a].get("in_progress")]
+    current = finished[-1] if finished else "m3"
+    plan = [("m1a", lambda r: m1(r, "a", False)), ("m1b", lambda r: m1(r, "b", True)), ("m2", m2)]
+    for a in attempts:
+        if a == current:
+            plan.append((a, lambda r: (m3(r), m4(r))))
+        elif runs[a] is not None:
+            plan.append((a, lambda r, a=a: (m3(r, f"M3@{a}"), m4(r, f"M4@{a}"))))
     for name, fn in plan:
         if runs[name] is None:
             print(f"\n{name}: NOT RUN")
