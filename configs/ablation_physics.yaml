@@ -22,3 +22,7 @@ scales:
     EPOCHS: 3
   full:
     EPOCHS: 20
+    # A training step costs ~0.17-0.20 s on the RTX 4070 Ti whether the batch is 64 or 256 (it is
+    # kernel-launch bound), so batch 256 makes the 84-run grid ~10 GPU-h instead of ~35. Every
+    # condition uses the same recipe; verdicts are paired deltas within it.
+    BATCH_SIZE: 256

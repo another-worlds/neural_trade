@@ -161,7 +161,7 @@ class Config:
     # ------------------------------------------------------------------ direction
     FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class")
     FOCAL_GAMMA: float = _f(2.0, "direction")
-    DIRECTION_SKIP: bool = _f(False, "direction",
+    DIRECTION_SKIP: bool = _f(True, "direction",
                               "add a linear logit from trailing-return features of the window to each direction head")
     DIRECTION_SKIP_L2: float = _f(1e-4, "direction", "L2 on the direction skip weights")
     DIRECTION_LOSS: str = _f("bce", "direction",

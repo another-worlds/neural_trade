@@ -35,6 +35,7 @@ for _fold in (-3, -2):
         f"bce_f{_fold}": ({**_f}, 20),
         f"bce_no_soft_ece_f{_fold}": ({**_f, "LAMBDA_SOFT_ECE": 0.0}, 20),
         f"bce_skip_f{_fold}": ({**_f, "DIRECTION_SKIP": True}, 20),
+        f"bce_skip_l2_1e-2_f{_fold}": ({**_f, "DIRECTION_SKIP": True, "DIRECTION_SKIP_L2": 1e-2}, 20),
     })
 
 
