@@ -71,7 +71,7 @@ def _compute_all_horizon_metrics(
     threshold_delta = deadband * (lc + 1e-12)
     min_abs_delta_for_mape = float(getattr(config, 'DELTA_MAPE_MIN_ABS', 1.0))
 
-    for idx, (h_key, h_label) in enumerate(zip(horizons, horizon_names)):
+    for idx, (h_key, _h_label) in enumerate(zip(horizons, horizon_names)):
         y_t = np.asarray(y_true_deltas[:, idx], dtype=float).reshape(-1)
         y_p = np.asarray(y_pred_deltas[h_key], dtype=float).reshape(-1)
         # Sanitize predictions: if NaN/Inf slipped through (e.g. before full stability fixes),
@@ -126,14 +126,14 @@ def _compute_all_horizon_metrics(
         ev_price_simple = explained_variance_score(y_true_price, y_pred_price)
         corr_price = float(np.corrcoef(y_true_price, y_pred_price)[0, 1]) if len(y_true_price) > 1 else 0.0
         corr_price = 0.0 if np.isnan(corr_price) else corr_price
-        
+
         price_metrics = {
             "ev": float(ev_price_simple),  # Explained variance in price space
             "mse": float(mean_squared_error(y_true_price, y_pred_price)),
             "rmse": float(np.sqrt(mean_squared_error(y_true_price, y_pred_price))),
             "corr": corr_price,  # Pearson correlation in price space
         }
-        
+
         if safe_mape is not None and smape is not None and wape is not None and reconstruct_prices is not None:
             # Use the more sophisticated reconstruction if available for additional metrics
             y_true_price_soph = reconstruct_prices(lc_h, y_t)

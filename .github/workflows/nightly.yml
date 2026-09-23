@@ -8,11 +8,11 @@ on:
 jobs:
   slow-and-data:
     runs-on: ubuntu-22.04
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
-      NEURAL_TRADE_FORCE_CPU: "1"
       TF_CPP_MIN_LOG_LEVEL: "2"
       PYTHONHASHSEED: "0"
+      CUDA_VISIBLE_DEVICES: "-1"
     steps:
       - uses: actions/checkout@v4
 
@@ -26,10 +26,29 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-ci.txt
+          pip install --no-deps -e .
+          python -m ipykernel install --user --name python3
 
-      - name: Slow and data-backed tests
-        run: pytest -m "slow or data" --timeout=3600
+      - name: Slow, data-backed and notebook tests
+        run: pytest -m "slow or data or notebook" --timeout=3600
 
-      # Phase C4 adds here:
-      #   python scripts/ablate.py configs/ablation_physics.yaml --scale smoke --only all_on,all_off
-      # and uploads runs/**/eval_report.json + report.md as artifacts.
+      - name: Smoke ablation (all_on vs all_off, one seed, one fold)
+        run: |
+          python - <<'PY'
+          from neural_trade.experiments.ablation import AblationSpec, Criteria, run_grid, summarize_dir
+          spec = AblationSpec.from_yaml("configs/ablation_physics.yaml")
+          spec.modes, spec.seeds, spec.periods = ["all_on", "all_off"], [0], {"P2": -1}
+          run_grid(spec, "smoke", "ablation_smoke", csv_path="binance_btcusdt_1min_ccxt.csv")
+          summarize_dir(spec, Criteria.from_yaml("configs/ablation_criteria.yaml"), "ablation_smoke", "smoke")
+          PY
+
+      - name: Upload ablation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ablation-smoke
+          path: |
+            ablation_smoke/report.md
+            ablation_smoke/results.csv
+            ablation_smoke/runs/*/eval_report_test.json
+          if-no-files-found: ignore

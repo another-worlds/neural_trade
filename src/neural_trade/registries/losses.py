@@ -108,7 +108,7 @@ class Losses(BaseRegistry):
                         total = v_mean if total is None else total + v_mean
                     comps["loss"] = total
                 else:
-                    for k, v in comps.items():
+                    for _k, v in comps.items():
                         if isinstance(v, (float, int, tf.Tensor)):
                             comps["loss"] = tf.reduce_mean(v) if isinstance(v, tf.Tensor) else v
                             break

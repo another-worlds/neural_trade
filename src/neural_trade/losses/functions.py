@@ -587,7 +587,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     sign_target_h1 = tf.sign(y_true_raw_h1)
     sign_target_h2 = tf.sign(y_true_raw_h2)
     target_smoothness_loss = tf.reduce_mean(
-        tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0, 
+        tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0,
                                      sign_target_h1 == sign_target_h2), tf.float32)
     )
     target_smoothness_loss = tf.where(tf.math.is_finite(target_smoothness_loss), target_smoothness_loss, tf.constant(0.0, dtype=tf.float32))

@@ -54,7 +54,7 @@ class PredictionBatch:
 
     def to_frame(self, index=None) -> pd.DataFrame:
         cols = {"last_close": self.last_close}
-        for h, steps in zip(HORIZONS, self.horizon_steps):
+        for h, _steps in zip(HORIZONS, self.horizon_steps):
             cols[f"{h}_delta"] = self.delta[h]
             cols[f"{h}_price"] = self.last_close + self.delta[h]
             cols[f"{h}_p_up"] = self.direction_prob[h]

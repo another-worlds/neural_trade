@@ -10,7 +10,7 @@ def plot_splits(df, start_idx, tscv, X_seq_len):
     fig, ax = plt.subplots(figsize=(14, 7))
     ax.plot(df['Date'], df['Close'], label='BTC Close Price', alpha=0.8)
     split_boundaries = [0]
-    for train_idx, test_idx in tscv.split(np.arange(X_seq_len)):
+    for _train_idx, test_idx in tscv.split(np.arange(X_seq_len)):
         split_boundaries.append(test_idx[0])
     split_boundaries.append(X_seq_len)
     colors = ['#fff8b0', '#d2f8d2']

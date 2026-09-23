@@ -74,8 +74,8 @@ src = ["src", "tests"]
 extend-exclude = ["*.ipynb"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "B", "I"]
-ignore = ["E501"]
+select = ["E", "F", "W", "B"]
+ignore = ["E501", "B905"]   # B905: zip(strict=) would change behaviour where lengths already match by construction
 
 [tool.ruff.lint.per-file-ignores]
 "src/neural_trade/compat.py" = ["F401"]   # the legacy re-export surface

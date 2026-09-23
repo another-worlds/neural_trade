@@ -198,18 +198,18 @@ def make_interactive_plot_callback(
                         fig.add_trace(go.Scatter(x=batches, y=self.batch_history['dir_acc'], mode='lines', name='dir_acc', line=dict(color='#81C784')), row=2, col=1)
                     if 'f1' in self.batch_history:
                         fig.add_trace(go.Scatter(x=batches, y=self.batch_history['f1'], mode='lines', name='f1', line=dict(color='#FFB74D')), row=2, col=1)
-                    
+
                     # Add 50% dotted lines to metrics subplot (row 2)
                     if batches:
                         fig.add_hline(y=0.5, line_dash="dot", line_color="#888888", row=2, col=1, annotation_text="50%", annotation_position="right")
-                    
+
                     # Calculate axis range with padding to prevent data touching borders
                     if batches:
                         x_min, x_max = min(batches), max(batches)
                         x_padding = max(1, (x_max - x_min) * 0.03)  # 3% padding
                     else:
                         x_min, x_max, x_padding = 0, 1, 0.1
-                    
+
                     # Dark theme styling with proper margins
                     fig.update_layout(
                         height=450,
@@ -231,21 +231,21 @@ def make_interactive_plot_callback(
                         yaxis2_gridwidth=1,
                         yaxis2_gridcolor='#333333',
                     )
-                    
+
                     # Set x-axis range with padding (shared x-axis, only xaxis2 controls both)
                     fig.update_xaxes(range=[x_min - x_padding, x_max + x_padding])
-                    
+
                     # Set y-axis range for metrics subplot with padding
                     fig.update_yaxes(range=[-0.05, 1.05], row=2, col=1)
-                    
+
                     # Update axes styling
                     fig.update_xaxes(showline=True, linewidth=1, linecolor='#444444', mirror=False, zeroline=False)
                     fig.update_yaxes(showline=True, linewidth=1, linecolor='#444444', mirror=False, zeroline=False)
-                    
+
                     # Update subplot titles color
                     for annotation in fig['layout']['annotations']:
                         annotation['font'] = dict(color='#e0e0e0', size=12)
-                    
+
                     display(fig)
 
             self.batch_count += 1
@@ -289,13 +289,13 @@ def make_interactive_plot_callback(
                         best_idx = np.argmin(self.history['val_loss'])
                         patience_used_info = len(self.history['val_loss']) - 1 - best_idx
                     patience_max_info = getattr(config, 'PATIENCE', total_epochs)
-                    
+
                     # Get current metrics
                     curr_loss = logs.get('loss', 0)
                     curr_val_loss = logs.get('val_loss', 0)
                     curr_dir_acc = logs.get('val_dir_acc_avg', 0)
                     curr_f1 = logs.get('val_f1_avg', 0)
-                    
+
                     # Determine status color
                     if patience_used_info > patience_max_info * 0.8:
                         patience_color = "#EF5350"  # Red - close to stopping
@@ -303,10 +303,10 @@ def make_interactive_plot_callback(
                         patience_color = "#FFB74D"  # Orange - warning
                     else:
                         patience_color = "#81C784"  # Green - good
-                    
+
                     epoch_info_widget.value = f"""
-                    <div style="font-family: monospace; color: #e0e0e0; background-color: #1a1a1a; 
-                                padding: 12px 20px; border-radius: 5px; text-align: center; 
+                    <div style="font-family: monospace; color: #e0e0e0; background-color: #1a1a1a;
+                                padding: 12px 20px; border-radius: 5px; text-align: center;
                                 border: 1px solid #333; margin-bottom: 10px;">
                         <span style="font-size: 18px; font-weight: bold; color: #64B5F6;">
                             🔄 Epoch {self.epoch_count}/{total_epochs}
@@ -334,52 +334,52 @@ def make_interactive_plot_callback(
             # Epoch plots
             with loss_output:
                 clear_output(wait=True)
-                
+
                 # Compute patience estimation (epochs since best val_loss)
                 patience_used = 0
                 if 'val_loss' in self.history and len(self.history['val_loss']) > 1:
                     best_val_loss_idx = np.argmin(self.history['val_loss'])
                     patience_used = len(self.history['val_loss']) - 1 - best_val_loss_idx
                 patience_max = getattr(config, 'PATIENCE', total_epochs)
-                
+
                 # Compute key metrics for header
                 current_loss = self.history.get('loss', [0])[-1] if 'loss' in self.history else 0
                 current_val_loss = self.history.get('val_loss', [0])[-1] if 'val_loss' in self.history else 0
                 current_dir_acc = self.history.get('val_dir_acc_avg', [0])[-1] if 'val_dir_acc_avg' in self.history else 0
-                
+
                 # Build title with epoch progress and metrics
                 title_text = (f"<b>Epoch {self.epoch_count}/{total_epochs}</b> │ "
                              f"Patience: {patience_used}/{patience_max} │ "
                              f"Loss: {current_loss:.4f} │ Val Loss: {current_val_loss:.4f} │ "
                              f"Val Dir Acc: {current_dir_acc:.1%}")
-                
+
                 fig = training_curves_figure(self.history, title=title_text,
                                              n_epochs=self.epoch_count)
                 display(fig)
 
             with metrics_output:
                 clear_output(wait=True)
-                
+
                 # Compute convergence metrics
                 loss_hist = self.history.get('loss', [])
                 val_loss_hist = self.history.get('val_loss', [])
-                
+
                 # Convergence: rate of loss decrease (last 3 epochs)
                 convergence_rate = 0.0
                 if len(loss_hist) >= 3:
                     recent_losses = loss_hist[-3:]
                     convergence_rate = (recent_losses[0] - recent_losses[-1]) / (len(recent_losses) - 1) if len(recent_losses) > 1 else 0
-                
+
                 # Stability: std of recent validation losses
                 stability = 0.0
                 if len(val_loss_hist) >= 3:
                     stability = 1.0 - min(1.0, np.std(val_loss_hist[-5:]) * 10)  # Higher = more stable
-                
+
                 # Generalization gap: difference between train and val loss
                 gen_gap = 0.0
                 if loss_hist and val_loss_hist:
                     gen_gap = val_loss_hist[-1] - loss_hist[-1]
-                
+
                 # Coherence: How well train/val losses track each other (moving in same direction)
                 # High coherence (>0.8) = model generalizes well, losses move together
                 # Low/negative coherence = overfitting (train improves, val doesn't) or noise
@@ -401,33 +401,33 @@ def make_interactive_plot_callback(
                             coherence = 0.5  # Neutral if not enough data
                     except Exception:
                         coherence = 0.0
-                
+
                 # Learning progress: improvement from initial
                 progress = 0.0
                 if len(val_loss_hist) >= 2:
                     progress = (val_loss_hist[0] - val_loss_hist[-1]) / val_loss_hist[0] if val_loss_hist[0] > 0 else 0
-                
+
                 # Build HTML output for dark theme visibility
                 from IPython.display import HTML
-                
+
                 conv_status = "↓ converging" if convergence_rate > 0.001 else ("→ plateau" if abs(convergence_rate) < 0.001 else "↑ diverging")
                 conv_color = "#81C784" if convergence_rate > 0.001 else ("#FFB74D" if abs(convergence_rate) < 0.001 else "#EF5350")
-                
+
                 stab_status = "stable" if stability > 0.8 else ("moderate" if stability > 0.5 else "unstable")
                 stab_color = "#81C784" if stability > 0.8 else ("#FFB74D" if stability > 0.5 else "#EF5350")
-                
+
                 gap_status = "good" if gen_gap < 0.1 else ("warning" if gen_gap < 0.3 else "overfitting")
                 gap_color = "#81C784" if gen_gap < 0.1 else ("#FFB74D" if gen_gap < 0.3 else "#EF5350")
-                
+
                 coh_status = "aligned" if coherence > 0.8 else ("moderate" if coherence > 0.5 else "misaligned")
                 coh_color = "#81C784" if coherence > 0.8 else ("#FFB74D" if coherence > 0.5 else "#EF5350")
-                
+
                 html_content = f"""
                 <div style="font-family: monospace; color: #e0e0e0; background-color: #0d0d0d; padding: 15px; border-radius: 5px;">
                     <div style="text-align: center; font-size: 16px; font-weight: bold; border-bottom: 2px solid #444; padding-bottom: 10px; margin-bottom: 15px;">
                         📊 EPOCH METRICS DASHBOARD
                     </div>
-                    
+
                     <div style="margin-bottom: 15px;">
                         <div style="color: #64B5F6; font-weight: bold; margin-bottom: 8px;">📉 LOSSES</div>
                         <div style="margin-left: 15px;">
@@ -438,7 +438,7 @@ def make_interactive_plot_callback(
                             {'<span style="display: inline-block; width: 180px;">nll_loss:</span> <span style="color: #90CAF9;">' + f"{logs.get('nll_loss', 0):.6f}" + '</span><br>' if 'nll_loss' in logs else ''}
                         </div>
                     </div>
-                    
+
                     <div style="margin-bottom: 15px;">
                         <div style="color: #81C784; font-weight: bold; margin-bottom: 8px;">🎯 DIRECTION METRICS</div>
                         <div style="margin-left: 15px;">
@@ -450,9 +450,9 @@ def make_interactive_plot_callback(
                             <span style="display: inline-block; width: 180px;">ece_avg:</span> <span style="color: #BA68C8;">{logs.get('ece_avg', 0):.4f}</span><br>
                         </div>
                     </div>
-                    
+
                     {_qbox_dashboard_html(logs)}
-                    
+
                     <div style="margin-bottom: 10px;">
                         <div style="color: #CE93D8; font-weight: bold; margin-bottom: 8px;">📈 TRAINING HEALTH</div>
                         <div style="margin-left: 15px;">

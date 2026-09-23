@@ -223,7 +223,7 @@ class ParamsLogger(tf.keras.callbacks.Callback):
             try:
                 pd.DataFrame(self.rows).to_csv(self.out_csv, index=False)
             except OSError as exc:  # e.g. the CSV is open in Excel: never abort training over telemetry
-                warnings.warn(f"ParamsLogger: could not write {self.out_csv}: {exc}")
+                warnings.warn(f"ParamsLogger: could not write {self.out_csv}: {exc}", stacklevel=2)
 
             # Log convergence status periodically (every 5 epochs)
             if epoch % 5 == 0 or epoch < 3:

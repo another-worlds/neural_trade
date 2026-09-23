@@ -186,7 +186,7 @@ def main():
 
     print("\n" + "=" * 78)
     by_ms = {}
-    for ms, clause, status, _ in results:
+    for ms, _clause, status, _ in results:
         by_ms.setdefault(ms, []).append(status)
     for ms, st in by_ms.items():
         n_fail = st.count("FAIL")

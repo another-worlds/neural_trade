@@ -272,7 +272,7 @@ class CustomTrainModel(models.Model):
     # -------------------------
     # Combined Focal + Dice Loss for balanced optimization
     # -------------------------
-    def combined_direction_loss(self, true_labels, logits, alpha=None, gamma=None, 
+    def combined_direction_loss(self, true_labels, logits, alpha=None, gamma=None,
                                  focal_weight=0.5, dice_weight=0.5, reduce=True):
         """Delegate to centralized implementation in `losses.py`."""
         return _losses.combined_direction_loss(self, true_labels, logits, alpha=alpha, gamma=gamma,
@@ -284,32 +284,32 @@ class CustomTrainModel(models.Model):
     def compute_dynamic_alpha(self, true_labels, min_alpha=0.3, max_alpha=0.7):
         """
         Compute dynamic focal alpha based on actual class distribution in batch.
-        
+
         Alpha weights the DOWN class (label=0), so:
         - If batch has more UP (label=1), alpha should be higher (weight DOWN more)
         - If batch has more DOWN (label=0), alpha should be lower (weight UP more)
-        
+
         Args:
             true_labels: Binary labels [B]
             min_alpha: Minimum alpha (clips to prevent instability)
             max_alpha: Maximum alpha (clips to prevent instability)
-        
+
         Returns:
             Dynamic alpha value clipped to [min_alpha, max_alpha]
         """
         true_labels = tf.cast(true_labels, tf.float32)
-        
+
         # Compute proportion of UP class (label=1)
         up_ratio = tf.reduce_mean(true_labels)
-        
+
         # Alpha = up_ratio means: weight DOWN inversely to its frequency
         # If up_ratio=0.6 (60% UP), alpha=0.6 → DOWN gets 0.6 weight, UP gets 0.4
         # This balances the classes
         alpha = up_ratio
-        
+
         # Clip for stability
         alpha = tf.clip_by_value(alpha, min_alpha, max_alpha)
-        
+
         return alpha
 
     # -------------------------
