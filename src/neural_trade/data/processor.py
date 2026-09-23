@@ -7,6 +7,8 @@ The public methods and return values are those of the original class.
 """
 from __future__ import annotations
 
+import logging
+
 import math
 from typing import Optional
 
@@ -18,6 +20,8 @@ from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, trans
 from neural_trade.data.splits import make_purged_splits
 from neural_trade.data.windowing import (compute_extended_trend_features, make_sequences_with_extended_trends,
                                          sequence_anchor_bars)
+
+logger = logging.getLogger(__name__)
 
 
 def _select_fold(folds, index):
@@ -87,8 +91,8 @@ class DataProcessor:
         ``read_csv_kwargs`` is passed through to ``pd.read_csv`` for the csv loader.
         """
         df = self.preprocess(self.load_raw(read_csv_kwargs, **loader_kwargs))
-        print(f"Dataset length after cleaning: {len(df)}")
-        print("Date range after cleaning:", df['Date'].min(), "to", df['Date'].max())
+        logger.info(f"Dataset length after cleaning: {len(df)}")
+        logger.info('%s %s %s %s', "Date range after cleaning:", df['Date'].min(), "to", df['Date'].max())
 
         if len(df) < self.config.LOOKBACK + 2:
             raise ValueError(f"Not enough rows ({len(df)}) for lookback={self.config.LOOKBACK}")
@@ -110,7 +114,7 @@ class DataProcessor:
         X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
             self.config, close_values, self.config.LOOKBACK
         )
-        print(f"Sequences with extended trends: {X_seq.shape}, {y_seq.shape}, Extended: {extended_trends.shape}")
+        logger.info(f"Sequences with extended trends: {X_seq.shape}, {y_seq.shape}, Extended: {extended_trends.shape}")
 
         max_sequences = getattr(self.config, 'MAX_SEQUENCE_COUNT', None)
         if max_sequences and X_seq.shape[0] > max_sequences:
@@ -120,10 +124,10 @@ class DataProcessor:
             y_seq = y_seq[take_from:]
             last_close_seq = last_close_seq[take_from:]
             extended_trends = extended_trends[take_from:]
-            print(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
+            logger.info(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
 
-        print("[INFO] Dataset Statistics:")
-        print(f"   Total sequences: {X_seq.shape[0]}")
+        logger.info("[INFO] Dataset Statistics:")
+        logger.info(f"   Total sequences: {X_seq.shape[0]}")
 
         # Four-way PURGED chronological split: train | gap | val | gap | cal | gap | test.
         #   train -> gradients and the target scaler;  val -> early stopping / checkpoint / LR;
@@ -153,10 +157,10 @@ class DataProcessor:
 
         train_batches = math.ceil(X_train_seq.shape[0] / self.config.BATCH_SIZE)
         test_batches = math.ceil(X_test_seq.shape[0] / self.config.BATCH_SIZE)
-        print(f"   Train sequences: {X_train_seq.shape[0]} (batches/epoch: {train_batches})")
-        print(f"   Val sequences:   {X_val_seq.shape[0]}   Cal sequences: {X_cal_seq.shape[0]}   "
+        logger.info(f"   Train sequences: {X_train_seq.shape[0]} (batches/epoch: {train_batches})")
+        logger.info(f"   Val sequences:   {X_val_seq.shape[0]}   Cal sequences: {X_cal_seq.shape[0]}   "
               f"(purge gap: {fold.gap} sequences, fold {fold.fold})")
-        print(f"   Test sequences:  {X_test_seq.shape[0]} (batches: {test_batches})")
+        logger.info(f"   Test sequences:  {X_test_seq.shape[0]} (batches: {test_batches})")
 
         # Targets are multi-horizon [N, 3]: one scaler, fit on TRAIN only, shared across horizons.
         target_scaler = fit_target_scaler(y_train)

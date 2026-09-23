@@ -6,6 +6,11 @@ from tensorflow.keras import initializers, layers, regularizers
 
 import neural_trade.utils.math as mh
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only
+    from neural_trade.core.config import Config
+
 
 class LearnableIndicators(layers.Layer):
     """18 learnable EWMA periods -> 31 indicator channels (MA, MACD, RSI, Bollinger, raw).

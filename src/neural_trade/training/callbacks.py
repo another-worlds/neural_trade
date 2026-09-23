@@ -1,6 +1,8 @@
 """Training callbacks (moved from model.py in B10; the Callbacks registry arrives in B11)."""
 from __future__ import annotations
 
+import logging
+
 import time
 import warnings
 
@@ -9,6 +11,8 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import callbacks
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 class TqdmCallback(callbacks.Callback):
@@ -236,19 +240,19 @@ class ParamsLogger(tf.keras.callbacks.Callback):
                         status = "drifting"
                     else:
                         status = "plateau"
-                    print(f"Epoch {epoch}: Params {status} "
+                    logger.info(f"Epoch {epoch}: Params {status} "
                           f"(score={conv_score:.3f}, mean={mean_change:.2f}%, "
                           f"slope={slope:+.2f}%/ep)")
                 elif epoch < 3:
-                    print(f"Epoch {epoch}: Indicator params logged to {self.out_csv}")
+                    logger.info(f"Epoch {epoch}: Indicator params logged to {self.out_csv}")
 
     def on_train_end(self, logs=None):
         """Final summary and stats."""
         if self.rows:
-            print("\n=== Indicator Learning Summary ===")
-            print(f"Total epochs tracked: {len(self.rows)}")
-            print(f"Parameters logged per epoch: ~{len(self.rows[0])}")
-            print(f"CSV saved to: {self.out_csv}")
+            logger.info("\n=== Indicator Learning Summary ===")
+            logger.info(f"Total epochs tracked: {len(self.rows)}")
+            logger.info(f"Parameters logged per epoch: ~{len(self.rows[0])}")
+            logger.info(f"CSV saved to: {self.out_csv}")
 
             # Calculate final convergence metrics
             if len(self.rows) > 1:
@@ -256,10 +260,10 @@ class ParamsLogger(tf.keras.callbacks.Callback):
                 convergence_info = self._detect_convergence(recent_window)
                 if convergence_info:
                     slope = convergence_info.get('slope_pct_per_epoch', 0.0)
-                    print(f"Final Convergence Score: {convergence_info['convergence_score']:.3f}")
-                    print(f"Final Mean Change:    {convergence_info['mean_param_change_pct']:.2f}%")
-                    print(f"Final Std Change:     {convergence_info['std_param_change_pct']:.2f}%")
-                    print(f"Final Slope:          {slope:+.2f}%/ep  "
+                    logger.info(f"Final Convergence Score: {convergence_info['convergence_score']:.3f}")
+                    logger.info(f"Final Mean Change:    {convergence_info['mean_param_change_pct']:.2f}%")
+                    logger.info(f"Final Std Change:     {convergence_info['std_param_change_pct']:.2f}%")
+                    logger.info(f"Final Slope:          {slope:+.2f}%/ep  "
                           f"({'decelerating' if slope < 0 else 'accelerating' if slope > 0 else 'flat'})")
 
 

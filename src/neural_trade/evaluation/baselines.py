@@ -15,7 +15,7 @@ EV is never reported - only EV on the deltas the model actually predicts.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Tuple
+from typing import Dict
 
 import numpy as np
 

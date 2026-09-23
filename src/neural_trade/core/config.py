@@ -14,7 +14,6 @@ Every setting of the pre-package ``model.Config`` keeps its name and default val
 """
 from __future__ import annotations
 
-import dataclasses
 import difflib
 import logging
 import typing

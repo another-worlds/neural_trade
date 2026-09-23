@@ -78,3 +78,6 @@ extend-exclude = ["model.py", "losses.py", "registries/", "*.ipynb"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "B", "I"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/neural_trade/compat.py" = ["F401"]   # the legacy re-export surface

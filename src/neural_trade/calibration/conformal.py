@@ -43,10 +43,14 @@ Usage
 
 from __future__ import annotations
 
+import logging
+
 import os
 from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 HORIZONS = ("h0", "h1", "h2")
 SCALE_MODES = ("none", "sigma", "realized_vol")
@@ -138,7 +142,7 @@ class ConformalRegressor:
         else:
             u = np.ones(n)
         self._scores = np.sort(np.abs(y_true[:n] - y_pred[:n]) / u)
-        print(f"ConformalRegressor: fitted on {n} samples, "
+        logger.info(f"ConformalRegressor: fitted on {n} samples, "
               f"median score = {np.median(self._scores):.4f}")
         return self
 
@@ -191,7 +195,7 @@ class ConformalRegressor:
         import joblib
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         joblib.dump({"scores": self._scores, "normalized": self.normalized, "scale_floor": self.scale_floor}, path)
-        print(f"ConformalRegressor saved to {path}")
+        logger.info(f"ConformalRegressor saved to {path}")
 
     @classmethod
     def load(cls, path: str) -> "ConformalRegressor":

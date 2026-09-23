@@ -8,7 +8,6 @@ CALIBRATION block and applied to test -> TrainResult.
 from __future__ import annotations
 
 import logging
-import math
 import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
@@ -17,10 +16,8 @@ import joblib
 import numpy as np
 import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
-from tensorflow.keras import callbacks
 
 from neural_trade.core.config import Config
-from neural_trade.core.outputs import PredictiveOutputs
 from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
 from neural_trade.utils.seeding import seed_everything
@@ -28,7 +25,7 @@ from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
 from neural_trade.serving.postprocess import heads_to_predictions
 from neural_trade.registries.callbacks import build_callbacks
-from neural_trade.training.callbacks import ParamsLogger, TqdmCallback, TrainContext
+from neural_trade.training.callbacks import TrainContext
 from neural_trade.training.custom_model import CustomTrainModel
 from neural_trade.training.lambda_calibration import calibrate_loss_weights
 from neural_trade.training.lambdas import ablate
@@ -38,6 +35,8 @@ try:
     from neural_trade.calibration import CalibrationPipeline as _CalibrationPipeline
 except Exception:  # pragma: no cover
     _CalibrationPipeline = None
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -157,7 +156,7 @@ def train_and_evaluate(
     # Seed AFTER the overrides: seeding first ignored a SEED given in config_overrides.
     seed_everything(int(getattr(cfg, 'SEED', 42)))
 
-    print("Starting enhanced model training with extended trend features...")
+    logger.info("Starting enhanced model training with extended trend features...")
     data_processor = DataProcessor(cfg)
     df, close_values = data_processor.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
 
@@ -223,18 +222,20 @@ def train_and_evaluate(
     actual_epochs = int(epochs) if epochs is not None else int(cfg.EPOCHS)
     history = None
     if os.path.exists(cfg.MODEL_PATH) and not force:
-        print(f"Loading existing model weights from {cfg.MODEL_PATH}...")
+        logger.info(f"Loading existing model weights from {cfg.MODEL_PATH}...")
         try:
             custom_model.load_weights(cfg.MODEL_PATH)
         except Exception as e:
-            print(f"Warning: failed to load existing weights but continuing: {e}")
+            logger.warning(f"Warning: failed to load existing weights but continuing: {e}")
     else:
         if os.path.exists(cfg.MODEL_PATH) and force:
             try:
-                custom_model.load_weights(cfg.MODEL_PATH)
+                custom_model.load_weights(cfg.MODEL_PATH)  # force=True retrains, warm-started from these
+                logger.info("Warm start from existing weights %s", cfg.MODEL_PATH)
             except Exception:
-                pass
-        print(f"Training for {actual_epochs} epochs...")
+                logger.warning("existing weights %s not loaded; training from scratch", cfg.MODEL_PATH,
+                               exc_info=True)
+        logger.info(f"Training for {actual_epochs} epochs...")
         history = custom_model.fit(
             train_ds,
             validation_data=val_ds,
@@ -242,15 +243,15 @@ def train_and_evaluate(
             callbacks=callbacks_list,
             verbose=0,
         )
-        print(f"Enhanced model weights saved to {cfg.MODEL_PATH}")
+        logger.info(f"Enhanced model weights saved to {cfg.MODEL_PATH}")
         try:
             joblib.dump(target_scaler, cfg.SCALER_PATH)
             if input_scaler is not None:
                 joblib.dump(input_scaler, cfg.SCALER_PATH.replace('.joblib', '_input.joblib'))
         except Exception:
-            pass
+            logger.exception("could not save the scalers to %s", cfg.SCALER_PATH)
 
-    print("Evaluating enhanced model...")
+    logger.info("Evaluating enhanced model...")
     predictions = _predict_heads(custom_model, X_test_seq, y_test.shape[0], target_scaler, cfg)
     y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw = (predictions["delta"][h] for h in ("h0", "h1", "h2"))
     dir_pred_h0, dir_pred_h1, dir_pred_h2 = (predictions["direction_prob"][h] for h in ("h0", "h1", "h2"))
@@ -272,7 +273,7 @@ def train_and_evaluate(
     horizon_steps = list(getattr(cfg, 'HORIZON_STEPS', [1, 5, 15]))
     horizon_labels = [f"{k}(" + _format_tf_local(int(k_step * resample)) + ")" for k, k_step in zip(['h0','h1','h2'], horizon_steps)]
 
-    print("\n[Diagnostic: Prediction Statistics]")
+    logger.info("\n[Diagnostic: Prediction Statistics]")
     for h_idx, (h_name, y_pred_raw) in enumerate(zip(horizon_labels, [y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw])):
         y_true_raw = y_test[:, h_idx]
         pred_mean = np.mean(y_pred_raw)
@@ -283,8 +284,8 @@ def train_and_evaluate(
         pred_max = np.max(y_pred_raw)
         true_min = np.min(y_true_raw)
         true_max = np.max(y_true_raw)
-        print(f"  {h_name}: pred_mean={pred_mean:.6f}, true_mean={true_mean:.6f} | pred_std={pred_std:.6f}, true_std={true_std:.6f}")
-        print(f"         pred_range=[{pred_min:.6f}, {pred_max:.6f}], true_range=[{true_min:.6f}, {true_max:.6f}]")
+        logger.info(f"  {h_name}: pred_mean={pred_mean:.6f}, true_mean={true_mean:.6f} | pred_std={pred_std:.6f}, true_std={true_std:.6f}")
+        logger.info(f"         pred_range=[{pred_min:.6f}, {pred_max:.6f}], true_range=[{true_min:.6f}, {true_max:.6f}]")
 
 
     metrics = _compute_all_horizon_metrics(
@@ -299,7 +300,7 @@ def train_and_evaluate(
     try:
         custom_model.predictions_dict = predictions
     except Exception:
-        pass
+        logger.debug("could not attach predictions_dict to the model", exc_info=True)
 
     # Post-hoc calibration: fit on the CAL block, apply to the TEST predictions.
     # Previously it was fit on the test split itself (voiding the conformal guarantee and
@@ -311,7 +312,7 @@ def train_and_evaluate(
     _cb = getattr(data_processor, 'cal_block', None)
     if fit_calibration and _CalibrationPipeline is not None and _cb is not None:
         try:
-            print("\nFitting CalibrationPipeline on the calibration split...")
+            logger.info("\nFitting CalibrationPipeline on the calibration split...")
             predictions_cal = _predict_heads(custom_model, _cb['X'], _cb['y_raw'].shape[0], target_scaler, cfg)
             cal_pipeline = _CalibrationPipeline(conformal_scale=getattr(cfg, 'CONFORMAL_SCALE', 'none'))
             cal_pipeline.fit_from_arrays(
@@ -327,11 +328,11 @@ def train_and_evaluate(
                                                         windows=getattr(data_processor, 'test_windows_raw', None))
             calibration_report = _calibration_coverage_report(predictions_calibrated, np.asarray(y_test), cal_pipeline)
             for _h, _row in calibration_report.items():
-                print(f"  [test] {_h}: conformal coverage@90 = {_row['coverage90']:.3f} (target >= 0.90), "
+                logger.info(f"  [test] {_h}: conformal coverage@90 = {_row['coverage90']:.3f} (target >= 0.90), "
                       f"mean width = {_row['width90']:.2f} raw units, T = {_row['temperature']:.3f}")
         except Exception as _cal_err:
             import traceback
-            print(f"CalibrationPipeline fit FAILED (continuing without calibration): {_cal_err}")
+            logger.warning(f"CalibrationPipeline fit FAILED (continuing without calibration): {_cal_err}")
             traceback.print_exc()
             cal_pipeline = None
             predictions_calibrated = None
@@ -369,7 +370,7 @@ def train_and_evaluate(
         out_dir = cfg.ARTIFACTS_DIR
         ArtifactBundle.from_result(result).save(out_dir)
         result.artifacts_dir = str(out_dir)
-        print(f"Artifact bundle written to {out_dir}")
+        logger.info(f"Artifact bundle written to {out_dir}")
     return result
 
 
@@ -403,13 +404,13 @@ def train_model(extra_callbacks=None, epochs=None, force=False, calibrate=True):
     try:
         m = result.metrics
         if isinstance(m, dict) and 'delta' in m:
-            print("\n[Summary: Per-Horizon Delta Metrics]")
+            logger.info("\n[Summary: Per-Horizon Delta Metrics]")
             for h_key, label in zip(m.get('meta', {}).get('horizon_keys', ['h0','h1','h2']), m.get('meta', {}).get('horizon_labels', ['1min','5min','15min'])):
                 hm = m['delta'].get(h_key, {})
                 pm = m['price'].get(h_key, {})
-                print(f"  {label}: MSE={hm.get('mse'):.6f}, RMSE={hm.get('rmse'):.6f}, R2={pm.get('r2', hm.get('r2')):.6f}")
+                logger.info(f"  {label}: MSE={hm.get('mse'):.6f}, RMSE={hm.get('rmse'):.6f}, R2={pm.get('r2', hm.get('r2')):.6f}")
     except Exception:
-        pass
+        logger.debug("metric summary not printable", exc_info=True)
 
     return (
         custom_model,

@@ -4,6 +4,11 @@ from __future__ import annotations
 from neural_trade.data.datasets import create_datasets
 from neural_trade.registries.models import Models
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only
+    from neural_trade.core.config import Config
+
 
 class PricePredictor:
     def __init__(self, config: Config):

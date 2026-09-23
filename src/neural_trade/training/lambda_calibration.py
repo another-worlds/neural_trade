@@ -17,6 +17,8 @@ from typing import Dict, Optional
 
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optional[Dict[str, float]]:
     """Run the calibration pass on ``custom_model``; return the calibrated weights (or None)."""
@@ -96,7 +98,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # ----------------------------------------------------------------
             # Phase 1 — warm-up forward passes (no sampling, no gradient). There is no BatchNorm in the graph; this builds the graph and model.losses before sampling.
             # ----------------------------------------------------------------
-            print(f"[calib] Warm-up forward passes over {n_warmup}/{train_batches} batches ({warmup_frac:.0%} of epoch) to build the graph and layer losses before sampling...")
+            logger.info(f"[calib] Warm-up forward passes over {n_warmup}/{train_batches} batches ({warmup_frac:.0%} of epoch) to build the graph and layer losses before sampling...")
             for batch in train_ds.take(n_warmup):
                 x_batch, _, _, _ = batch
                 _ = custom_model(x_batch, training=True)
@@ -104,7 +106,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # ----------------------------------------------------------------
             # Phase 2 — Sample loss magnitudes
             # ----------------------------------------------------------------
-            print(f"[calib] Sampling loss magnitudes over {n_sample}/{train_batches} batches ({sample_frac:.0%} of epoch)...")
+            logger.info(f"[calib] Sampling loss magnitudes over {n_sample}/{train_batches} batches ({sample_frac:.0%} of epoch)...")
             short_buf, point_buf, long_buf = [], [], []
             ext_buf, dir_buf, var_buf, vol_buf = [], [], [], []
             crps_buf, ece_buf = [], []
@@ -264,27 +266,27 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 arrow = f"{orig:.4f} → {new:.4f}"
                 return f"  {name:<14} med={med:.6f}  {arrow}{skip}"
 
-            print("[calib] Sampled medians and updated lambdas:")
-            print(_fmt_row("λ_short",  orig_short, med_short, new_short))
-            print(_fmt_row("λ_point",  orig_point, med_point, new_point))
-            print(_fmt_row("λ_long",   orig_long,  med_long,  new_long))
-            print(_fmt_row("λ_trend",  orig_ext,   med_ext,   new_ext))
-            print(_fmt_row("λ_dir",    orig_dir,   med_dir,   new_dir))
-            print(_fmt_row("λ_var",    orig_var,   med_var,   new_var))
-            print(_fmt_row("λ_vol",    orig_vol,   med_vol,   new_vol))
-            print(_fmt_row("λ_crps",   orig_crps,  med_crps,  new_crps,  active=crps_active))
-            print(_fmt_row("λ_ece",    orig_ece,   med_ece,   new_ece,   active=ece_active))
-            print(_fmt_row("λ_t_perp", orig_t_perp,  med_t_perp,  new_t_perp,  active=t_perp_active))
-            print(_fmt_row("λ_casimir",orig_casimir, med_casimir, new_casimir, active=casimir_active))
-            print(_fmt_row("λ_hd",     orig_hd,      med_hd,      new_hd,      active=hd_active))
-            print(_fmt_row("λ_ife",    orig_ife,     med_ife,     new_ife,     active=ife_active))
+            logger.info("[calib] Sampled medians and updated lambdas:")
+            logger.info('%s', _fmt_row("λ_short",  orig_short, med_short, new_short))
+            logger.info('%s', _fmt_row("λ_point",  orig_point, med_point, new_point))
+            logger.info('%s', _fmt_row("λ_long",   orig_long,  med_long,  new_long))
+            logger.info('%s', _fmt_row("λ_trend",  orig_ext,   med_ext,   new_ext))
+            logger.info('%s', _fmt_row("λ_dir",    orig_dir,   med_dir,   new_dir))
+            logger.info('%s', _fmt_row("λ_var",    orig_var,   med_var,   new_var))
+            logger.info('%s', _fmt_row("λ_vol",    orig_vol,   med_vol,   new_vol))
+            logger.info('%s', _fmt_row("λ_crps",   orig_crps,  med_crps,  new_crps,  active=crps_active))
+            logger.info('%s', _fmt_row("λ_ece",    orig_ece,   med_ece,   new_ece,   active=ece_active))
+            logger.info('%s', _fmt_row("λ_t_perp", orig_t_perp,  med_t_perp,  new_t_perp,  active=t_perp_active))
+            logger.info('%s', _fmt_row("λ_casimir",orig_casimir, med_casimir, new_casimir, active=casimir_active))
+            logger.info('%s', _fmt_row("λ_hd",     orig_hd,      med_hd,      new_hd,      active=hd_active))
+            logger.info('%s', _fmt_row("λ_ife",    orig_ife,     med_ife,     new_ife,     active=ife_active))
             lambda_vac_orig = float(getattr(cfg, 'LAMBDA_VAC', 0.0))
-            print(_fmt_row("Λ_vac(thr)", lambda_vac_orig, med_vac, lambda_vac_orig, active=True) + "  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)")
+            logger.info('%s', _fmt_row("Λ_vac(thr)", lambda_vac_orig, med_vac, lambda_vac_orig, active=True) + "  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)")
             if calib_outer:
-                print(f"  [outer] λ_trend_outer={custom_model.lambda_trend_outer:.4f}  "
+                logger.info(f"  [outer] λ_trend_outer={custom_model.lambda_trend_outer:.4f}  "
                       f"λ_dir_outer={custom_model.lambda_dir_outer:.4f}  "
                       f"λ_nll_outer={custom_model.lambda_nll_outer:.4f}")
-            print(f"[calib] ref_loss={ref_loss:.6f}  d_global={d_global}  "
+            logger.info(f"[calib] ref_loss={ref_loss:.6f}  d_global={d_global}  "
                   f"warmup={n_warmup}/{train_batches}  sample={n_sample}/{train_batches}  clamp=[{lam_min}, {lam_max}]")
 
             _calib_lambdas = {
@@ -317,7 +319,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # the message claimed "default lambdas".
             for _name, _value in _calib_saved.items():
                 setattr(custom_model, _name, _value)
-            print(f"[calib] Calibration pass failed — restored configured lambdas and continuing: {e}")
+            logger.warning(f"[calib] Calibration pass failed — restored configured lambdas and continuing: {e}")
             traceback.print_exc()
 
     return _calib_lambdas

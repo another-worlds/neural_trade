@@ -8,9 +8,11 @@
 """
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras import models, optimizers
+from tensorflow.keras import models
 
 import neural_trade.losses.functions as _losses
 import neural_trade.utils.math as mh
@@ -25,6 +27,8 @@ from neural_trade.registries.metrics import Metrics
 from neural_trade.registries.models import Models
 from neural_trade.training.lambdas import install_lambda_properties
 from neural_trade.training.optim import build_indicator_optimizer
+
+logger = logging.getLogger(__name__)
 
 
 class CustomTrainModel(models.Model):
@@ -123,7 +127,8 @@ class CustomTrainModel(models.Model):
                         self._indicator_layer = layer
                         break
         except Exception:
-            pass
+            # Without the indicator variables the second optimizer silently gets nothing.
+            logger.exception("could not locate the learnable-indicator layer's variables")
 
         # NOTE: We no longer use tf.keras.losses.Huber in the primary point supervision path;
         # point loss delegates to the registered "point_huber" which implements log(cosh).
@@ -493,9 +498,7 @@ class CustomTrainModel(models.Model):
     def test_step(self, data):
         x_window, y_true, last_close, extended_trends = data
         y_pred_list = self(x_window, training=False)
-        heads = PredictiveOutputs(*y_pred_list)
         y_pred_9 = y_pred_list[:9]
-        vac_overflow_pred = heads.vacuum_overflow
         loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                            extended_trends,
                                            vacuum_overflow=None)  # identically 0 at eval (tanh^2 < E_max): the term would be a constant lambda in every val_loss

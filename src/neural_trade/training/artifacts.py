@@ -49,6 +49,8 @@ class ArtifactBundle:
             "fold": ({"train": len(result.fold.train), "val": len(result.fold.val), "cal": len(result.fold.cal),
                       "test": len(result.fold.test), "gap": result.fold.gap} if result.fold is not None else None),
             "epochs_run": len(getattr(result.history, "history", {}).get("loss", [])) if result.history else 0,
+            # Strategy confidence scale from the CALIBRATION block (never the data being traded).
+            "var_scale": _var_scale(result.predictions_cal),
         }
         bundle = cls(result.config, scale, mean, normalizer, calibration_pipeline=result.calibration_pipeline,
                      meta=meta)
@@ -109,14 +111,21 @@ class ArtifactBundle:
         return model
 
 
-def _json_default(o):
-    try:
-        import numpy as np
+def _var_scale(predictions) -> Optional[float]:
+    if not predictions:
+        return None
+    import numpy as np
 
-        if isinstance(o, np.generic):
-            return o.item()
-        if isinstance(o, np.ndarray):
-            return o.tolist()
-    except Exception:
-        pass
+    v = np.concatenate([np.asarray(predictions["variance"][h], float).reshape(-1) for h in ("h0", "h1", "h2")])
+    v = v[v > 1e-8]
+    return float(np.median(v)) if len(v) else None
+
+
+def _json_default(o):
+    import numpy as np
+
+    if isinstance(o, np.generic):
+        return o.item()
+    if isinstance(o, np.ndarray):
+        return o.tolist()
     return str(o)

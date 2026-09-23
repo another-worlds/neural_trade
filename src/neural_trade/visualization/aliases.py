@@ -1,6 +1,8 @@
 """Plot-friendly aliases for Keras epoch logs (moved from model.py in B12)."""
 from __future__ import annotations
 
+import numpy as np
+
 
 def _first_present(mapping, keys):
     for k in keys:

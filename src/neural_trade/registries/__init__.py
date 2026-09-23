@@ -10,8 +10,12 @@ time. Importing this package itself does NOT import TensorFlow.
 """
 from __future__ import annotations
 
+import logging
+
 import importlib
 from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 REGISTRY_MODULES = {
     "Models": "neural_trade.registries.models",
@@ -87,7 +91,7 @@ def registry_summary() -> str:
 
 
 def print_registry_summary() -> None:
-    print(registry_summary())
+    logger.info('%s', registry_summary())
 
 
 __all__ = ["REGISTRY_MODULES", "all_registries", "validate_config_components", "load_all",

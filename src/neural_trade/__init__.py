@@ -24,6 +24,10 @@ for _stream in (_sys.stdout, _sys.stderr):
     except (AttributeError, ValueError, OSError):  # not a TextIOWrapper (e.g. captured by a test runner)
         pass
 
+from neural_trade.core.logging import configure_logging as _configure_logging  # noqa: E402
+
+_configure_logging()
+
 __version__ = "0.3.0"
 
 __all__ = ["__version__"]

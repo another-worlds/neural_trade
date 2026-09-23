@@ -29,6 +29,8 @@ Quick start (notebook)
 
 from __future__ import annotations
 
+import logging
+
 import json
 import os
 from typing import Dict, Optional, Sequence, Tuple
@@ -43,6 +45,8 @@ try:
     from neural_trade.metrics.direction_labels import direction_labels_np as _compute_direction_labels_np
 except Exception:  # fallback if metrics_utils not on path in some test contexts
     _compute_direction_labels_np = None
+
+logger = logging.getLogger(__name__)
 
 HORIZONS = ("h0", "h1", "h2")
 _DEFAULT_DIR = "calibration"
@@ -179,14 +183,14 @@ class CalibrationPipeline:
             self.horizon_steps = tuple(int(k) for k in horizon_steps)
         y = np.asarray(y_true_delta_raw, dtype=float)
         N = len(y)
-        print(f"CalibrationPipeline: fitting on {N} samples")
+        logger.info(f"CalibrationPipeline: fitting on {N} samples")
 
         labels_map = _direction_labels(y, last_close, deadband_bps)
 
         # ------------------------------------------------------------------
         # 1. Temperature scaling — fit on deadband-filtered samples
         # ------------------------------------------------------------------
-        print("\n[1/2] Temperature scaling (direction heads)...")
+        logger.info("\n[1/2] Temperature scaling (direction heads)...")
         h0_lab, h0_mask = labels_map["h0"]
         h1_lab, h1_mask = labels_map["h1"]
         h2_lab, h2_mask = labels_map["h2"]
@@ -205,7 +209,7 @@ class CalibrationPipeline:
         # ------------------------------------------------------------------
         # 2. Conformal regressors — fit on all samples (no deadband filter)
         # ------------------------------------------------------------------
-        print(f"\n[2/2] Conformal regressors (price delta intervals, scale={self.conformal_scale})...")
+        logger.info(f"\n[2/2] Conformal regressors (price delta intervals, scale={self.conformal_scale})...")
         scales = self._scales(predictions_dict, windows, N)
         for i, h in enumerate(HORIZONS):
             if i >= y.shape[1]:
@@ -216,7 +220,7 @@ class CalibrationPipeline:
             self.conformal[h].fit(y_true_h, y_pred_h, scale=u)
             lo, hi = self.conformal[h].predict_interval(y_pred_h, alpha=conformal_alpha, scale=u)
             cov = float(np.mean((y_true_h >= lo) & (y_true_h <= hi)))
-            print(f"  [{h}] coverage @ alpha={conformal_alpha:.2f}: {cov:.3f} "
+            logger.info(f"  [{h}] coverage @ alpha={conformal_alpha:.2f}: {cov:.3f} "
                   f"(target >= {1 - conformal_alpha:.2f}),  mean half-width {np.mean(hi - lo) / 2:.2f} raw units")
 
         # ------------------------------------------------------------------
@@ -227,7 +231,7 @@ class CalibrationPipeline:
         )
 
         self._fitted = True
-        print("\nCalibrationPipeline: fitting complete.")
+        logger.info("\nCalibrationPipeline: fitting complete.")
         return self
 
     # ------------------------------------------------------------------
@@ -373,7 +377,7 @@ class CalibrationPipeline:
         with open(os.path.join(directory, "pipeline_meta.json"), "w") as fh:
             json.dump({"fitted": self._fitted, "conformal_scale": self.conformal_scale,
                        "pred_scale": self.pred_scale, "horizon_steps": list(self.horizon_steps)}, fh, indent=2)
-        print(f"CalibrationPipeline saved to '{directory}/'")
+        logger.info(f"CalibrationPipeline saved to '{directory}/'")
 
     @classmethod
     def load(cls, directory: str = _DEFAULT_DIR) -> "CalibrationPipeline":
@@ -412,7 +416,7 @@ class CalibrationPipeline:
             obj.horizon_steps = tuple(meta.get("horizon_steps", obj.horizon_steps))
         else:
             obj._fitted = True
-        print(f"CalibrationPipeline loaded from '{directory}/'")
+        logger.info(f"CalibrationPipeline loaded from '{directory}/'")
         return obj
 
     # ------------------------------------------------------------------
@@ -422,14 +426,14 @@ class CalibrationPipeline:
     def summary(self) -> None:
         """Print a concise summary of all fitted calibration parameters."""
         if not self._fitted:
-            print("Pipeline is not fitted. Call fit(result) first.")
+            logger.info("Pipeline is not fitted. Call fit(result) first.")
             return
 
-        print("=" * 55)
-        print("CalibrationPipeline Summary")
-        print("=" * 55)
+        logger.info('%s', "=" * 55)
+        logger.info("CalibrationPipeline Summary")
+        logger.info('%s', "=" * 55)
 
-        print("\nTemperature scaling (direction heads):")
+        logger.info("\nTemperature scaling (direction heads):")
         for h in HORIZONS:
             T = self.temperature_scaler.temperatures.get(h, 1.0)
             if T > 1.05:
@@ -438,24 +442,24 @@ class CalibrationPipeline:
                 note = "underconfident — sharpened"
             else:
                 note = "well-calibrated (T ≈ 1)"
-            print(f"  {h}: T = {T:.4f}  ({note})")
+            logger.info(f"  {h}: T = {T:.4f}  ({note})")
 
-        print("\nConformal regressors (price delta intervals):")
+        logger.info("\nConformal regressors (price delta intervals):")
         for h in HORIZONS:
             n = self.conformal[h].n_calibration
             if n > 0:
                 q90 = self.conformal[h].empirical_quantile(0.1)
                 unit = "raw price units" if self.conformal_scale == "none" else f"x {self.conformal_scale} scale"
-                print(f"  {h}: N = {n},  90%-quantile = +/-{q90:.4f} {unit}")
+                logger.info(f"  {h}: N = {n},  90%-quantile = +/-{q90:.4f} {unit}")
             else:
-                print(f"  {h}: not fitted")
+                logger.info(f"  {h}: not fitted")
 
         if self.online is not None:
-            print("\nOnline calibrator (adaptive temperatures):")
+            logger.info("\nOnline calibrator (adaptive temperatures):")
             for h, st in self.online.state.items():
-                print(f"  {h}: T_ema = {st['T_ema']:.4f},  updates = {st['n_updates']}")
+                logger.info(f"  {h}: T_ema = {st['T_ema']:.4f},  updates = {st['n_updates']}")
 
-        print("=" * 55)
+        logger.info('%s', "=" * 55)
 
     # ------------------------------------------------------------------
     # Internal

@@ -8,7 +8,7 @@ It provides stable alternatives to vanilla MAPE when targets can be near zero
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 

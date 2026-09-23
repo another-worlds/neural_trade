@@ -16,6 +16,11 @@ from sklearn.metrics import (accuracy_score, explained_variance_score, f1_score,
 from neural_trade.metrics.direction_labels import compute_direction_labels_np
 from neural_trade.metrics.numpy_metrics import reconstruct_prices, safe_mape, smape, wape
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only
+    from neural_trade.core.config import Config
+
 HORIZONS = ("h0", "h1", "h2")
 
 

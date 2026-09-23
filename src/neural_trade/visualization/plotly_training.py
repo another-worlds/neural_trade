@@ -9,12 +9,21 @@
 """
 from __future__ import annotations
 
+import logging
+
 import time
 
 import numpy as np
 
-from neural_trade.visualization.aliases import _first_present, _mean_present, _sum_present, add_plot_aliases
+from neural_trade.visualization.aliases import add_plot_aliases
 from neural_trade.visualization.qbox_dashboard import _qbox_dashboard_html
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only
+    from neural_trade.core.config import Config
+
+_log = logging.getLogger(__name__)
 
 
 def training_curves_figure(history, *, title=None, n_epochs=None):
@@ -132,12 +141,11 @@ def make_interactive_plot_callback(
     This is a rewrite/encapsulation of the notebook's Cell 3 callback so notebooks can
     depend on `model.py` as the single source of truth.
     """
+    import tensorflow as tf
     from IPython.display import clear_output, display
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
-    import ipywidgets as widgets
 
-    import time
 
     def _bool_call(maybe_callable) -> bool:
         try:
@@ -173,8 +181,8 @@ def make_interactive_plot_callback(
                     continue
                 try:
                     self.batch_history.setdefault(key, []).append(float(value))
-                except Exception:
-                    pass
+                except (TypeError, ValueError):
+                    continue
 
             # Batch plot (loss + a couple key metrics)
             if batch_metrics_output is not None and self.batch_count % self.batch_update_interval == 0:
@@ -246,20 +254,14 @@ def make_interactive_plot_callback(
             # Optional notebook controls.
             # Keep this inside the callback so the notebook can remain a thin UI wrapper.
             if _bool_call(should_stop):
-                try:
-                    self.model.stop_training = True
-                except Exception:
-                    pass
+                self.model.stop_training = True
                 return
 
             # Cooperative pause loop (safe no-op if not provided)
             while _bool_call(should_pause) and not _bool_call(should_stop):
                 time.sleep(0.1)
             if _bool_call(should_stop):
-                try:
-                    self.model.stop_training = True
-                except Exception:
-                    pass
+                self.model.stop_training = True
                 return
 
             logs = add_plot_aliases(logs or {}, primary_horizon=primary_horizon, prefer_gauss=prefer_gauss)
@@ -269,14 +271,14 @@ def make_interactive_plot_callback(
                     continue
                 try:
                     self.history.setdefault(k, []).append(float(v))
-                except Exception:
-                    pass
+                except (TypeError, ValueError):
+                    continue
 
             try:
                 progress_widget.value = min(total_epochs, epoch + 1)
                 progress_widget.description = f'Epoch ({epoch + 1}/{total_epochs}):'
             except Exception:
-                pass
+                _log.debug("dashboard widget update failed", exc_info=True)
 
             # Update epoch info widget if provided
             try:
@@ -327,7 +329,7 @@ def make_interactive_plot_callback(
                     </div>
                     """
             except Exception:
-                pass
+                _log.debug("dashboard widget update failed", exc_info=True)
 
             # Epoch plots
             with loss_output:

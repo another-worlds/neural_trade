@@ -42,6 +42,16 @@ class PredictionBatch:
         """The TrainResult.predictions layout (raw heads), for evaluation and calibration code."""
         return {"delta": self.delta, "direction_prob": self.direction_prob, "variance": self.variance_scaled}
 
+    def to_prediction_frame(self, pred_scale: float, pred_mean: float = 0.0, y=None, split: str = "live"):
+        """An evaluation.PredictionFrame (``y`` = realised deltas, NaN when unknown) for strategies."""
+        from neural_trade.evaluation.frame import PredictionFrame
+
+        n = len(self.last_close)
+        y = np.full((n, 3), np.nan) if y is None else np.asarray(y, float)
+        return PredictionFrame(y, self.last_close, self.delta, self.direction_prob, self.variance_scaled,
+                               pred_scale, pred_mean, tuple(self.horizon_steps), split,
+                               self.direction_prob_calibrated, self.interval)
+
     def to_frame(self, index=None) -> pd.DataFrame:
         cols = {"last_close": self.last_close}
         for h, steps in zip(HORIZONS, self.horizon_steps):
@@ -106,6 +116,20 @@ class Predictor:
         return {h: {k.split("_", 1)[1]: float(v) for k, v in row.items() if k.startswith(h)} | {
             "horizon_bars": int(steps), "last_close": float(batch.last_close[0])}
             for h, steps in zip(HORIZONS, batch.horizon_steps)}
+
+    def predict_windows_frame(self, frame: pd.DataFrame, alpha: float = 0.1):
+        """``(PredictionBatch, preprocessed df, anchor rows)`` for every complete window of a raw frame;
+        anchor row i of the df is the last bar of window i (for Bars.from_frame)."""
+        from neural_trade.data.loaders import validate_ohlcv_frame
+        from neural_trade.data.windowing import make_inference_windows
+        from neural_trade.registries.preprocessors import run_preprocessors
+
+        df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config))
+        close = df["Close"].to_numpy(dtype="float32")
+        X, lc, _ = make_inference_windows(close, self.config.LOOKBACK,
+                                          extended_trend_periods=self.config.EXTENDED_TREND_PERIODS)
+        start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
+        return self.predict(X, lc, alpha=alpha), df, np.arange(start - 1, len(close))
 
     def predict_frame(self, frame: pd.DataFrame, alpha: float = 0.1) -> pd.DataFrame:
         """Preprocess a raw OHLCV frame (Config.PREPROCESSORS) and forecast every complete window."""

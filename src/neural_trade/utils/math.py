@@ -10,7 +10,6 @@ This module contains pure mathematical functions extracted from model.py
 for better modularity and testability. All functions work with TensorFlow tensors.
 """
 
-import math
 import numpy as np
 import tensorflow as tf
 

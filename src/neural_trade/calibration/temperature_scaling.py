@@ -30,11 +30,15 @@ Usage
 
 from __future__ import annotations
 
+import logging
+
 import json
 import os
 from typing import Dict, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def _logit(p: np.ndarray, eps: float = 1e-7) -> np.ndarray:
@@ -146,7 +150,7 @@ class TemperatureScaler:
         for h, probs, labels in data:
             T = _fit_temperature(probs, labels, n_steps=n_steps, lr=lr)
             self.temperatures[h] = T
-            print(f"  TemperatureScaler [{h}]: T = {T:.4f}")
+            logger.info(f"  TemperatureScaler [{h}]: T = {T:.4f}")
         return self
 
     def calibrate(self, probs: np.ndarray, horizon: str = "h1") -> np.ndarray:
@@ -172,7 +176,7 @@ class TemperatureScaler:
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w") as f:
             json.dump({"temperatures": self.temperatures}, f, indent=2)
-        print(f"TemperatureScaler saved to {path}")
+        logger.info(f"TemperatureScaler saved to {path}")
 
     @classmethod
     def load(cls, path: str) -> "TemperatureScaler":

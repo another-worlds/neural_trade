@@ -8,7 +8,6 @@ lives in ``neural_trade/registries/losses.py``; ``LossComponents`` in
 """
 from __future__ import annotations
 
-import numpy as np
 import tensorflow as tf
 
 from neural_trade.core.outputs import LossComponents
@@ -616,7 +615,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     total_dir_loss = tf.where(tf.math.is_finite(total_dir_loss), total_dir_loss, tf.constant(0.0, dtype=tf.float32))
 
     var_floor = tf.cast(getattr(model.config, 'VAR_FLOOR', 1e-4), tf.float32)
-    var_cap = tf.cast(getattr(model.config, 'VAR_CAP', 1e4), tf.float32)
+    var_cap = tf.cast(getattr(model.config, 'VAR_CAP', 1e4), tf.float32)  # noqa: F841 - unused, but removing the op shifts graph op seeds
     # Floor only: clip_by_value has zero gradient outside its range, so the old upper cap (1e3)
     # permanently detached any variance head that drifted to it. With the physics terms now
     # bounded nothing pushes sigma to +inf; the metric paths keep the cap for gauss_p_up.
