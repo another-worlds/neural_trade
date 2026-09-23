@@ -29,3 +29,9 @@ def plot_splits(df, start_idx, tscv, X_seq_len):
     ax.legend()
     plt.tight_layout()
     plt.show()
+
+
+def matplotlib_splits(data, config=None, **_):
+    """Registry entry: ``data`` = {"df", "start_idx", "tscv", "X_seq_len"}."""
+    return plot_splits(data["df"], data["start_idx"], data["tscv"], data["X_seq_len"])
+
