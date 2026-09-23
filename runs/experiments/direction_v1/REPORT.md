@@ -70,6 +70,13 @@ Chosen defaults: `DIRECTION_LOSS = "bce"`, `DIRECTION_SKIP = true`, `DIRECTION_S
 The network now matches the linear baseline on average. It beats the baseline on fold −2 h1/h2
 and on fold −3 h0, and falls short on fold −3 h1. It does not go beyond it.
 
+**Caveat on noise.** These are single runs. A same-config re-run on fold −2 moved per-horizon AUC
+by 0.01-0.06, because GPU training here is not bit-reproducible even with
+`TF_DETERMINISTIC_OPS=1`. Four further seeded runs of the chosen setting (seeds 0 and 1 × folds −3
+and −2, the `reg0_*` rows) average **0.504**. The skip's gain over plain BCE is therefore real but
+smaller than the first estimate. Folds differ more than settings do: fold −1 carries the strongest
+linear signal (logistic regression 0.56).
+
 ## 5. What this does and does not establish
 
 * The heads now carry real direction information at about the level of the best simple
@@ -79,3 +86,27 @@ and on fold −3 h0, and falls short on fold −3 h1. It does not go beyond it.
   net-of-cost backtest should not be expected from these heads alone.
 * Batch 256 was used for speed (the step is kernel-launch bound). The gate re-run uses the
   default batch of 64.
+
+## 6. The price heads, once the trunk carries information
+
+With the direction path working, the price (delta) heads can overfit. In the m5 gate run (fold
+−1, batch 64) training point loss (h1) fell from 0.249 to 0.182 while validation point loss rose
+from 0.110 to 0.156, and test EV(delta) h1 was −0.85: large predicted moves, uncorrelated with
+outcomes. One dev re-run did the same (EV −0.34). Four seeded dev runs stayed near zero (mean EV
++0.005). Early stopping watches the total validation loss, which keeps improving through the
+direction and variance terms, so it cannot catch this.
+
+Tower L2 (`REG_MOMENTUM_L2`), 2 seeds × 2 dev folds each:
+
+| L2 | mean EV (3 horizons) | worst EV | mean AUC | AUC > 0.5 |
+|---|---|---|---|---|
+| **0 (kept)** | **+0.005** | -0.008 | **0.504** | 7/12 |
+| 1e-3 | -0.017 | -0.066 | 0.502 | 5/12 |
+| 1e-2 | -0.014 | -0.090 | 0.501 | 6/12 |
+
+Instead, the calibration pipeline now shrinks each price head to its least-squares scale on the
+calibration block (`Config.DELTA_SHRINKAGE`): β = clip(E[y·d] / E[d²], 0, 1), and the served delta is
+β·d. It is the regression counterpart of temperature scaling: a head that is noise gets β ≈ 0, so
+the served delta is about 0 rather than an overfit extrapolation. A head with signal keeps it.
+Conformal intervals are fitted around the served delta. The raw and served EV are both recorded in
+the gate analytics.
