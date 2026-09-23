@@ -60,8 +60,7 @@ neural-trade predict  --artifacts runs/<run id>/artifacts --csv bars.csv --last
 neural-trade predict  --artifacts runs/<run id>/artifacts --csv bars.csv --out forecasts.csv
 
 # backtest a strategy (fees, spread, slippage, next-open fills, stops on high/low)
-neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv \
-                      --strategy enhanced_multi_horizon --out bt/ --plot
+neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv --out bt/ --plot   # calibrated_quantile
 
 neural-trade registry list            # every registered component
 neural-trade registry info Optimizers adamw
@@ -131,7 +130,11 @@ changes. The tests run it on every registered strategy.
 
 The three notebook strategies are ported as `threshold_spike`, `enhanced_multi_horizon` and
 `liberal`, with their knobs as dataclass fields (see `configs/strategies/`). The port fixed
-their look-ahead and sizing bugs; the module docstrings list each fix.
+their look-ahead and sizing bugs; the module docstrings list each fix. They use fixed
+probability lines (a horizon "votes" beyond 0.55 / 0.45), which a calibrated weak-edge model
+almost never crosses. The default, `calibrated_quantile`, therefore sets its entry lines on the
+calibration block instead: long above the 90th percentile of its confidence-weighted P(up),
+short below the 10th. The serving bundle stores those quantiles.
 
 ## Physics-term ablation
 
