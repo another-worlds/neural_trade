@@ -101,6 +101,8 @@ class Config:
     CALIB_DAMPING_PHYSICS: Optional[float] = _f(0.0, "calibration",
                                                 "0: bounded physics regularisers are never rescaled")
     CALIB_OUTER: bool = _f(False, "calibration", "also calibrate the outer group multipliers")
+    DELTA_SHRINKAGE: bool = _f(True, "calibration",
+                               "serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block")
     CONFORMAL_SCALE: str = _f("realized_vol", "calibration",
                               "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'")
 

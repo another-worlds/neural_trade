@@ -314,7 +314,8 @@ def train_and_evaluate(
         try:
             logger.info("\nFitting CalibrationPipeline on the calibration split...")
             predictions_cal = _predict_heads(custom_model, _cb['X'], _cb['y_raw'].shape[0], target_scaler, cfg)
-            cal_pipeline = _CalibrationPipeline(conformal_scale=getattr(cfg, 'CONFORMAL_SCALE', 'none'))
+            cal_pipeline = _CalibrationPipeline(conformal_scale=getattr(cfg, 'CONFORMAL_SCALE', 'none'),
+                                                shrink_delta=bool(getattr(cfg, 'DELTA_SHRINKAGE', False)))
             cal_pipeline.fit_from_arrays(
                 predictions_dict=predictions_cal,
                 y_true_delta_raw=np.asarray(_cb['y_raw'], dtype=float),

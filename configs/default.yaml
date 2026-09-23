@@ -37,6 +37,7 @@ CALIB_DAMPING_ECE: null
 CALIB_DAMPING_VOL: null
 CALIB_DAMPING_PHYSICS: 0.0  # 0: bounded physics regularisers are never rescaled
 CALIB_OUTER: false  # also calibrate the outer group multipliers
+DELTA_SHRINKAGE: true  # serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block
 CONFORMAL_SCALE: realized_vol  # conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'
 
 # ---- loss_weights

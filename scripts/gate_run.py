@@ -105,6 +105,11 @@ def _analytics(result, epochs_requested):
             "n_test": int(len(yt)),
             "n_masked": int(mask.sum()),
         }
+        served = ((result.predictions_calibrated or {}).get("delta") or {}).get(h)
+        if served is not None:  # what the Predictor serves (delta shrinkage fit on the calibration block)
+            served = np.asarray(served, float)
+            per_h[h]["ev_delta_served"] = float(explained_variance_score(yt, served))
+            per_h[h]["delta_scale"] = float(getattr(result.calibration_pipeline, "delta_scale", {}).get(h, 1.0))
         rep = (result.calibration_report or {}).get(h) or {}
         per_h[h]["coverage90"] = rep.get("coverage90")
         per_h[h]["width90"] = rep.get("width90")
@@ -178,6 +183,8 @@ def main(argv=None) -> int:
     cal = result.predictions_calibrated or {}
     for h, v in (cal.get("direction_prob") or {}).items():
         extra[f"calibrated_direction_prob_{h}"] = v
+    for h, v in (cal.get("delta") or {}).items():
+        extra[f"served_delta_{h}"] = v
     for h, (lo, hi) in (cal.get("intervals") or {}).items():
         extra[f"interval90_lo_{h}"], extra[f"interval90_hi_{h}"] = lo, hi
     _save_predictions(run_dir / "predictions_test.npz", result.predictions, result.y_test,

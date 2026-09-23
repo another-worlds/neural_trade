@@ -101,6 +101,7 @@ class Predictor:
         if self.bundle.calibration_pipeline is not None:
             cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X)
             calibrated, intervals = cal["direction_prob"], cal["intervals"]
+            preds = dict(preds, delta=cal["delta"])  # delta shrinkage (identity when not fitted)
         sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in HORIZONS}
         gauss = {h: gaussian_up_prob_given_move_np(preds["delta"][h], preds["variance"][h], lc,
                                                    self.config.DIR_DEADBAND_BPS, self.bundle.pred_scale)

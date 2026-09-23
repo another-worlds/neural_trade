@@ -200,3 +200,28 @@ def test_pipeline_online_intervals_summary_and_legacy_load(tmp_path, capsys):
     old = CalibrationPipeline.load(str(d))
     assert old.conformal_scale == "none" and old.online is not None
     np.testing.assert_allclose(old.apply(preds)["intervals"]["h0"][0], pipe.apply(preds)["intervals"]["h0"][0])
+
+
+def test_delta_shrinkage_scales_the_price_head_to_its_calibration_value(tmp_path):
+    rng = np.random.default_rng(9)
+    n = 5_000
+    y = rng.normal(0, 200, (n, 3))
+    signal = y + rng.normal(0, 400, (n, 3))          # informative but too loud: LS scale ~0.2
+    noise = rng.normal(0, 300, (n, 3))               # pure noise: LS scale ~0
+    for d, lo_beta, hi_beta in ((signal, 0.15, 0.25), (noise, 0.0, 0.03)):
+        preds = {"delta": {h: d[:, i] for i, h in enumerate(H)}, "direction_prob": {h: np.full(n, 0.5) for h in H},
+                 "variance": {h: np.ones(n) for h in H}}
+        pipe = CalibrationPipeline(shrink_delta=True).fit_from_arrays(preds, y, np.full(n, 110_000.0))
+        for h in H:
+            assert lo_beta <= pipe.delta_scale[h] <= hi_beta, (h, pipe.delta_scale[h])
+        out = pipe.apply(preds)
+        np.testing.assert_allclose(out["delta"]["h1"], pipe.delta_scale["h1"] * d[:, 1])
+        lo, hi = out["intervals"]["h1"]
+        np.testing.assert_allclose((lo + hi) / 2, out["delta"]["h1"], atol=1e-6)   # centred on the served delta
+        ev_raw = 1 - np.var(y[:, 1] - d[:, 1]) / np.var(y[:, 1])
+        ev_served = 1 - np.var(y[:, 1] - out["delta"]["h1"]) / np.var(y[:, 1])
+        assert ev_served >= ev_raw and ev_served > -0.01
+    pipe.save(str(tmp_path / "s"))
+    assert CalibrationPipeline.load(str(tmp_path / "s")).delta_scale == pytest.approx(pipe.delta_scale)
+    off = CalibrationPipeline().fit_from_arrays(preds, y, np.full(n, 110_000.0))
+    assert off.delta_scale == {h: 1.0 for h in H}

@@ -136,7 +136,12 @@ def m3(run, ms="M3"):
         return
     check(ms, "run requested 20 epochs", an["epochs_requested"] >= 20, f"{an['epochs_requested']} requested")
     h1 = an["horizons"]["h1"]
-    check(ms, "EV(delta) h1 > 0", h1["ev_delta"] > 0, fmt(h1["ev_delta"]) + "  (HEAD 0.0000)")
+    if "ev_delta_served" in h1:   # judged on what the Predictor serves; the raw head is shown too
+        check(ms, "EV(delta) h1 > 0 (served delta)", h1["ev_delta_served"] > 0,
+              f"{fmt(h1['ev_delta_served'])} (beta {fmt(h1.get('delta_scale'))}); raw head {fmt(h1['ev_delta'])}  "
+              "(HEAD 0.0000)")
+    else:
+        check(ms, "EV(delta) h1 > 0", h1["ev_delta"] > 0, fmt(h1["ev_delta"]) + "  (HEAD 0.0000)")
     check(ms, "ROC-AUC h1 > 0.52 (all test rows)", h1["roc_auc"] > 0.52,
           f"{fmt(h1['roc_auc'])} on {h1['n_test']} rows; masked {fmt(h1['roc_auc_masked'])}")
     trades = an.get("total_trades")

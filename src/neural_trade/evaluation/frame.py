@@ -84,7 +84,9 @@ class PredictionFrame:
                 X_raw = getattr(result, "windows_cal", None)
         else:
             raise ValueError(f"split must be 'test' or 'cal', got {split!r}")
-        return cls(y, lc, preds["delta"], preds["direction_prob"], preds["variance"], scale, mean,
+        # The served delta: shrunk by the calibration pipeline when it fitted a delta scale.
+        delta = cal.get("delta") or preds["delta"]
+        return cls(y, lc, delta, preds["direction_prob"], preds["variance"], scale, mean,
                    tuple(result.config.HORIZON_STEPS), split, cal.get("direction_prob"), cal.get("intervals"),
                    X_raw)
 

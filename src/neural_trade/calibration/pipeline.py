@@ -89,12 +89,18 @@ class CalibrationPipeline:
     ``{'delta': {'h0':…,'h1':…,'h2':…}, 'direction_prob': {…}, 'variance': {…}}``
     """
 
-    def __init__(self, conformal_scale: str = "none") -> None:
+    def __init__(self, conformal_scale: str = "none", shrink_delta: bool = False) -> None:
         if conformal_scale not in SCALE_MODES:
             raise ValueError(f"conformal_scale must be one of {SCALE_MODES}, got {conformal_scale!r}")
         # Per-sample interval scale (see calibration.conformal.interval_scale); "realized_vol"
         # needs the raw input windows at fit and apply time.
         self.conformal_scale = conformal_scale
+        # Delta shrinkage (Config.DELTA_SHRINKAGE): served delta = beta_h * raw delta with
+        # beta_h = clip(E[y d] / E[d^2], 0, 1) fit on the calibration block - the least-squares
+        # scale of the price head. A head that is noise gets beta ~ 0 (served delta ~ 0) instead
+        # of extrapolating an overfit function; a head with signal keeps it.
+        self.shrink_delta = bool(shrink_delta)
+        self.delta_scale: Dict[str, float] = {h: 1.0 for h in HORIZONS}
         self.pred_scale: Optional[float] = None
         self.horizon_steps: Tuple[int, ...] = (10, 15, 20)
         self.temperature_scaler = TemperatureScaler()
@@ -209,13 +215,21 @@ class CalibrationPipeline:
         # ------------------------------------------------------------------
         # 2. Conformal regressors — fit on all samples (no deadband filter)
         # ------------------------------------------------------------------
+        if self.shrink_delta:
+            for i, h in enumerate(HORIZONS[:y.shape[1]]):
+                d = np.asarray(predictions_dict["delta"][h], dtype=float)
+                dd = float(np.dot(d, d))
+                self.delta_scale[h] = float(np.clip(np.dot(y[:, i], d) / dd, 0.0, 1.0)) if dd > 0 else 0.0
+            logger.info("Delta shrinkage (least-squares scale of the price heads on this block): "
+                        + ", ".join(f"{h} {b:.3f}" for h, b in self.delta_scale.items()))
+
         logger.info(f"\n[2/2] Conformal regressors (price delta intervals, scale={self.conformal_scale})...")
         scales = self._scales(predictions_dict, windows, N)
         for i, h in enumerate(HORIZONS):
             if i >= y.shape[1]:
                 break
             y_true_h = y[:, i]
-            y_pred_h = np.asarray(predictions_dict["delta"][h], dtype=float)
+            y_pred_h = self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float)
             u = scales[h] if scales is not None else None
             self.conformal[h].fit(y_true_h, y_pred_h, scale=u)
             lo, hi = self.conformal[h].predict_interval(y_pred_h, alpha=conformal_alpha, scale=u)
@@ -273,7 +287,8 @@ class CalibrationPipeline:
         scales = self._scales(predictions_dict, windows, n)
 
         cal: Dict = {
-            "delta": {h: np.asarray(predictions_dict["delta"][h]) for h in HORIZONS},
+            "delta": {h: self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float)
+                      for h in HORIZONS},
             "variance": {h: np.asarray(predictions_dict["variance"][h]) for h in HORIZONS},
             "direction_prob": {},
             "intervals": {},
@@ -283,7 +298,7 @@ class CalibrationPipeline:
             raw_probs = np.asarray(predictions_dict["direction_prob"][h], dtype=float)
             cal["direction_prob"][h] = self.temperature_scaler.calibrate(raw_probs, horizon=h)
 
-            y_pred = np.asarray(predictions_dict["delta"][h], dtype=float)
+            y_pred = cal["delta"][h]
             cal["intervals"][h] = self.conformal[h].predict_interval(
                 y_pred, alpha=alpha, scale=scales[h] if scales is not None else None)
 
@@ -306,7 +321,7 @@ class CalibrationPipeline:
         scales = self._scales(predictions_dict, windows, n)
         return {
             h: self.conformal[h].predict_interval(
-                np.asarray(predictions_dict["delta"][h], dtype=float),
+                self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float),
                 alpha=alpha, scale=scales[h] if scales is not None else None,
             )
             for h in HORIZONS
@@ -376,7 +391,8 @@ class CalibrationPipeline:
             self.online.save(os.path.join(directory, "online_calibrator.json"))
         with open(os.path.join(directory, "pipeline_meta.json"), "w") as fh:
             json.dump({"fitted": self._fitted, "conformal_scale": self.conformal_scale,
-                       "pred_scale": self.pred_scale, "horizon_steps": list(self.horizon_steps)}, fh, indent=2)
+                       "pred_scale": self.pred_scale, "horizon_steps": list(self.horizon_steps),
+                       "shrink_delta": self.shrink_delta, "delta_scale": self.delta_scale}, fh, indent=2)
         logger.info(f"CalibrationPipeline saved to '{directory}/'")
 
     @classmethod
@@ -414,6 +430,8 @@ class CalibrationPipeline:
             obj.conformal_scale = meta.get("conformal_scale", "none")
             obj.pred_scale = meta.get("pred_scale")
             obj.horizon_steps = tuple(meta.get("horizon_steps", obj.horizon_steps))
+            obj.shrink_delta = bool(meta.get("shrink_delta", False))
+            obj.delta_scale = {h: float(v) for h, v in meta.get("delta_scale", obj.delta_scale).items()}
         else:
             obj._fitted = True
         logger.info(f"CalibrationPipeline loaded from '{directory}/'")
