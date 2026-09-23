@@ -100,6 +100,24 @@ def make_sequences_with_extended_trends(config, close_array, lookback):
     )
 
 
+def sequence_anchor_bars(config, n_bars, n_total_seq=None, seq_index=None):
+    """Bar index of each sequence's LAST input bar (its decision bar), for ``make_sequences_with_extended_trends``.
+
+    Sequence k (after the MAX_SEQUENCE_COUNT cap kept the newest ones) ends at bar
+    ``start + (k + dropped) * step - 1``. ``n_total_seq`` is the uncapped sequence count
+    (derived from ``n_bars`` when omitted); ``seq_index`` selects sequences (default all kept).
+    """
+    start = int(max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS))))
+    step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
+    end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
+    total = len(range(start, end, step)) if n_total_seq is None else int(n_total_seq)
+    cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
+    dropped = max(0, total - int(cap)) if cap else 0
+    kept = total - dropped
+    k = np.arange(kept) if seq_index is None else np.asarray(seq_index, dtype=int)
+    return start + (k + dropped) * step - 1
+
+
 def make_inference_windows(close_array, lookback, *, extended_trend_periods=None):
     """Windows for PREDICTION: every complete window, including the latest, with no targets.
 

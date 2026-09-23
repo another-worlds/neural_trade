@@ -16,7 +16,8 @@ import numpy as np
 from neural_trade.data.loaders import validate_ohlcv_frame
 from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, transform_targets
 from neural_trade.data.splits import make_purged_splits
-from neural_trade.data.windowing import compute_extended_trend_features, make_sequences_with_extended_trends
+from neural_trade.data.windowing import (compute_extended_trend_features, make_sequences_with_extended_trends,
+                                         sequence_anchor_bars)
 
 
 def _select_fold(folds, index):
@@ -36,8 +37,9 @@ def split_arrays(config, read_csv_kwargs=None):
     backtests, re-evaluation) without having stored them.
     """
     dp = DataProcessor(config)
-    _, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
+    df, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
     X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK)
+    n_total = X.shape[0]
     cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
     if cap and X.shape[0] > cap:
         X, y, lc, ext = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:]
@@ -47,10 +49,11 @@ def split_arrays(config, read_csv_kwargs=None):
                                val_fraction=float(getattr(config, "VAL_FRACTION", 0.066)),
                                cal_fraction=float(getattr(config, "CAL_FRACTION", 0.066)))
     fold = _select_fold(folds, int(getattr(config, "FOLD_INDEX", -1)))
-    out = {"fold": fold, "close": close}
+    out = {"fold": fold, "close": close, "df": df}
     for name in ("train", "val", "cal", "test"):
         idx = getattr(fold, name)
-        out[name] = {"X": X[idx], "y": y[idx], "last_close": lc[idx], "extended_trends": ext[idx], "index": idx}
+        out[name] = {"X": X[idx], "y": y[idx], "last_close": lc[idx], "extended_trends": ext[idx], "index": idx,
+                     "anchor_bar": sequence_anchor_bars(config, len(close), n_total, idx)}
     return out
 
 

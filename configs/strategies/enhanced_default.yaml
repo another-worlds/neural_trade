@@ -1,0 +1,12 @@
+# neural_trade.strategy.params.from_file: a strategy, its knobs, and the backtest costs.
+strategy: enhanced_multi_horizon
+params:
+  min_agreement: 0.5
+  min_signal_strength: 0.15
+  base_entry_threshold: 0.45
+  require_consensus_side: true
+backtest:
+  fee_bps: 10.0
+  half_spread_bps: 1.0
+  slippage_bps: 2.0
+  max_hold: 30

@@ -43,4 +43,8 @@ from neural_trade.evaluation import plots as _ev  # noqa: E402
 
 Visualizations.register(name="eval_report", tags=["plotly", "evaluation", "calibration"],
                         dependencies=["plotly"])(_ev.eval_report_figure)
+from neural_trade.visualization import plotly_trading as _tr  # noqa: E402
+
+Visualizations.register(name="plotly_trading", tags=["plotly", "backtest", "trading"],
+                        dependencies=["plotly"])(_tr.plotly_trading)
 Visualizations._initialized = True
