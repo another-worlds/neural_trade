@@ -2463,6 +2463,168 @@ class VacuumSaturationNoise(layers.Layer):
         return cfg
 
 
+
+# ---- Epoch-level aggregation of the step metrics ---------------------------------------
+# Keras keeps only the dict returned by the LAST train/test step of an epoch
+# (`logs = tmp_logs` in Model.fit/evaluate). The steps used to return per-batch tensors, so
+# every logged train_*/val_* number - including the val_loss that drives EarlyStopping,
+# ModelCheckpoint and ReduceLROnPlateau - described one batch (~50 of 2,866 validation
+# samples). The steps now update epoch accumulators and return their running totals, so the
+# last dict IS the epoch aggregate. Keras resets them via CustomTrainModel.metrics.
+_DIR_N_BINS = 10
+_PIT_N_BINS = 200
+_STEP_MEAN_KEYS = (
+    'loss', 'point_loss', 'point_h0', 'point_h1', 'point_h2',
+    'trend_loss', 'trend_h0', 'trend_h1', 'trend_h2',
+    'local_h0', 'global_h0', 'extended_h0', 'local_h1', 'global_h1', 'extended_h1',
+    'local_h2', 'global_h2', 'extended_h2',
+    'dir_loss', 'dir_loss_h0', 'dir_loss_h1', 'dir_loss_h2',
+    'nll_loss', 'nll_h0', 'nll_h1', 'nll_h2',
+    'crps_loss', 'crps_h0', 'crps_h1', 'crps_h2',
+    'soft_ece_loss', 'soft_ece_h0', 'soft_ece_h1', 'soft_ece_h2',
+    'reg_loss', 'inter_reg', 'vol_loss',
+    't_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss', 'vac_overflow_loss',
+    'grad_global_norm',
+)
+_TRAIN_ONLY_MEAN_KEYS = ('grad_global_norm',)
+
+
+def _direction_counts(true_dir, dir_pred, mask):
+    """Sufficient statistics of one horizon's direction predictions.
+
+    Returns ([TP, TN, FP, FN, brier_sum, prob_sum, mask_sum], bin_n, bin_true, bin_prob) where
+    the bins partition [0, 1] into _DIR_N_BINS (last bin inclusive) for the ECE.
+    """
+    t = tf.cast(tf.reshape(true_dir, [-1]), tf.float32)
+    p = tf.cast(tf.reshape(dir_pred, [-1]), tf.float32)
+    m = tf.cast(tf.reshape(mask, [-1]), tf.float32)
+    pb = tf.cast(p > 0.5, tf.float32)
+    pc = tf.clip_by_value(p, 0.0, 1.0)
+    counts = tf.stack([
+        tf.reduce_sum(pb * t * m),
+        tf.reduce_sum((1.0 - pb) * (1.0 - t) * m),
+        tf.reduce_sum(pb * (1.0 - t) * m),
+        tf.reduce_sum((1.0 - pb) * t * m),
+        tf.reduce_sum(tf.square(p - t) * m),
+        tf.reduce_sum(pc * m),
+        tf.reduce_sum(m),
+    ])
+    idx = tf.clip_by_value(tf.cast(tf.floor(pc * _DIR_N_BINS), tf.int32), 0, _DIR_N_BINS - 1)
+    onehot = tf.one_hot(idx, _DIR_N_BINS, dtype=tf.float32) * m[:, None]
+    return (counts, tf.reduce_sum(onehot, axis=0), tf.reduce_sum(onehot * t[:, None], axis=0),
+            tf.reduce_sum(onehot * pc[:, None], axis=0))
+
+
+def _direction_metrics_from_counts(counts, bin_n, bin_true, bin_prob, prefix, h_name):
+    """Direction metrics of one horizon from _direction_counts statistics (single formula
+    shared by the per-array function and the epoch accumulators)."""
+    TP, TN, FP, FN = counts[0], counts[1], counts[2], counts[3]
+    brier_sum, prob_sum, mask_sum = counts[4], counts[5], counts[6]
+    no_samples = mask_sum < 1e-8
+    nan = tf.constant(np.nan, dtype=tf.float32)
+
+    def _g(v):
+        return tf.where(no_samples, nan, v)
+
+    out = {}
+    out[f"{prefix}dir_acc_{h_name}"] = _g((TP + TN) / (TP + TN + FP + FN + 1e-8))
+    sensitivity = TP / (TP + FN + 1e-8)
+    specificity = TN / (TN + FP + 1e-8)
+    out[f"{prefix}dir_sensitivity_{h_name}"] = _g(sensitivity)
+    out[f"{prefix}dir_specificity_{h_name}"] = _g(specificity)
+    out[f"{prefix}dir_bal_acc_{h_name}"] = _g((sensitivity + specificity) / 2.0)
+    precision = TP / (TP + FP + 1e-8)
+    recall = TP / (TP + FN + 1e-8)
+    out[f"{prefix}dir_f1_{h_name}"] = _g(2.0 * (precision * recall) / (precision + recall + 1e-8))
+    mcc_num = (TP * TN) - (FP * FN)
+    marginal = (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)
+    mcc = tf.where(marginal > 1e-8, mcc_num / tf.sqrt(marginal + 1e-8), tf.constant(0.0, tf.float32))
+    out[f"{prefix}dir_mcc_{h_name}"] = _g(mcc)
+    out[f"{prefix}dir_brier_{h_name}"] = _g(brier_sum / (mask_sum + 1e-8))
+    # Positive-class ECE (matches soft_ece_loss): observed UP rate per bin vs mean p(up).
+    bin_acc = bin_true / (bin_n + 1e-8)
+    bin_conf = bin_prob / (bin_n + 1e-8)
+    ece = tf.reduce_sum((bin_n / (mask_sum + 1e-8)) * tf.abs(bin_acc - bin_conf))
+    out[f"{prefix}dir_ece_{h_name}"] = _g(ece)
+    total = TP + TN + FP + FN + 1e-8
+    out[f"{prefix}pred_up_rate_{h_name}"] = _g((TP + FP) / total)
+    out[f"{prefix}true_up_rate_{h_name}"] = _g((TP + FN) / total)
+    out[f"{prefix}mean_dir_prob_{h_name}"] = _g(prob_sum / (mask_sum + 1e-8))
+    return out
+
+
+class _DirectionAccumulator(tf.keras.metrics.Metric):
+    """Epoch accumulator of direction statistics for the three horizons."""
+
+    def __init__(self, name='direction_accumulator', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.counts = self.add_weight(name='counts', shape=(3, 7), initializer='zeros')
+        self.bin_n = self.add_weight(name='bin_n', shape=(3, _DIR_N_BINS), initializer='zeros')
+        self.bin_true = self.add_weight(name='bin_true', shape=(3, _DIR_N_BINS), initializer='zeros')
+        self.bin_prob = self.add_weight(name='bin_prob', shape=(3, _DIR_N_BINS), initializer='zeros')
+
+    def update_state(self, true_dirs, dir_preds, masks, sample_weight=None):
+        stats = [_direction_counts(t, p, m) for t, p, m in zip(true_dirs, dir_preds, masks)]
+        self.counts.assign_add(tf.stack([s[0] for s in stats]))
+        self.bin_n.assign_add(tf.stack([s[1] for s in stats]))
+        self.bin_true.assign_add(tf.stack([s[2] for s in stats]))
+        self.bin_prob.assign_add(tf.stack([s[3] for s in stats]))
+
+    def result(self):
+        return self.counts
+
+    def reset_state(self):
+        for v in (self.counts, self.bin_n, self.bin_true, self.bin_prob):
+            v.assign(tf.zeros_like(v))
+
+    def logs(self, prefix):
+        out = {}
+        for i, h in enumerate(("h0", "h1", "h2")):
+            out.update(_direction_metrics_from_counts(
+                self.counts[i], self.bin_n[i], self.bin_true[i], self.bin_prob[i], prefix, h))
+        return out
+
+
+class _PITAccumulator(tf.keras.metrics.Metric):
+    """Epoch histogram of PIT values Phi((y - mu) / sigma) per horizon; KS from the binned ECDF.
+
+    KS is not decomposable over batches (the mean of per-batch KS on ~64 samples is dominated
+    by sampling noise, ~0.1 even for a perfectly calibrated model), so the PIT values are
+    binned into _PIT_N_BINS and the KS distance is taken at the bin edges of the pooled
+    epoch ECDF (resolution 1 / _PIT_N_BINS).
+    """
+
+    def __init__(self, var_floor=1e-4, var_cap=1e3, name='pit_accumulator', **kwargs):
+        super().__init__(name=name, **kwargs)
+        self.var_floor, self.var_cap = float(var_floor), float(var_cap)
+        self.hist = self.add_weight(name='hist', shape=(3, _PIT_N_BINS), initializer='zeros')
+
+    def update_state(self, ys, mus, variances, sample_weight=None):
+        rows = []
+        for y, mu, var in zip(ys, mus, variances):
+            y = tf.cast(tf.reshape(y, [-1]), tf.float32)
+            mu = tf.cast(tf.reshape(mu, [-1]), tf.float32)
+            var = tf.clip_by_value(tf.cast(tf.reshape(var, [-1]), tf.float32), self.var_floor, self.var_cap)
+            u = 0.5 * (1.0 + tf.math.erf(((y - mu) / (tf.sqrt(var) + 1e-8)) / np.sqrt(2.0).astype(np.float32)))
+            idx = tf.clip_by_value(tf.cast(tf.floor(u * _PIT_N_BINS), tf.int32), 0, _PIT_N_BINS - 1)
+            rows.append(tf.reduce_sum(tf.one_hot(idx, _PIT_N_BINS, dtype=tf.float32), axis=0))
+        self.hist.assign_add(tf.stack(rows))
+
+    def result(self):
+        return self.hist
+
+    def reset_state(self):
+        self.hist.assign(tf.zeros_like(self.hist))
+
+    def logs(self):
+        n = tf.reduce_sum(self.hist, axis=1, keepdims=True)                       # [3, 1]
+        ecdf = tf.cumsum(self.hist, axis=1) / (n + 1e-8)                          # at right edges
+        edges = tf.range(1, _PIT_N_BINS + 1, dtype=tf.float32) / _PIT_N_BINS
+        ks = tf.reduce_max(tf.abs(ecdf - edges[None, :]), axis=1)
+        ks = tf.where(tf.squeeze(n, 1) > 0, ks, tf.constant(np.nan, tf.float32))
+        return {"pit_ks_h0": ks[0], "pit_ks_h1": ks[1], "pit_ks_h2": ks[2]}
+
+
 class CustomTrainModel(models.Model):
     def __init__(self, base_model, pred_scale, pred_mean,
                  lambda_point=1.0, lambda_local_trend=1.0, lambda_global_trend=0.2,
@@ -2524,6 +2686,17 @@ class CustomTrainModel(models.Model):
         self.eps = tf.constant(1e-8, dtype=tf.float32)
         # Counts training steps whose update was zeroed by the finite-gradient guard (reset each epoch by Keras).
         self.nonfinite_grad_steps = tf.keras.metrics.Sum(name='nonfinite_grad_steps')
+        # Epoch accumulators behind every logged step metric (see _STEP_MEAN_KEYS above).
+        # Created with attribute tracking off; the `metrics` property below hands them to
+        # Keras so they are reset at every epoch and before every evaluation.
+        self._setattr_tracking = False
+        self._step_means = {k: tf.keras.metrics.Mean(name=k) for k in _STEP_MEAN_KEYS}
+        self._dir_head_acc = _DirectionAccumulator(name='dir_head_accumulator')
+        self._dir_gauss_acc = _DirectionAccumulator(name='dir_gauss_accumulator')
+        self._pit_acc = _PITAccumulator(var_floor=float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
+                                        var_cap=float(getattr(self.config, 'VAR_CAP', 1e3)),
+                                        name='pit_accumulator')
+        self._setattr_tracking = True
 
         # Robust (non-string) collection of indicator vars for gradient routing
         # (to indicator_optimizer) and post-step period clipping.
@@ -2569,6 +2742,62 @@ class CustomTrainModel(models.Model):
         quadratic = 0.5 * tf.square(x)
         linear = delta * (abs_x - 0.5 * delta)
         return tf.where(abs_x <= delta, quadratic, linear)
+
+    @property
+    def metrics(self):
+        """Metrics Keras resets at each epoch / evaluation: the built-in ones plus the epoch
+        accumulators behind the step logs."""
+        base = list(super().metrics)
+        extra = list(getattr(self, '_step_means', {}).values())
+        extra += [m for m in (getattr(self, '_dir_head_acc', None), getattr(self, '_dir_gauss_acc', None),
+                              getattr(self, '_pit_acc', None)) if m is not None]
+        seen = {id(m) for m in base}
+        return base + [m for m in extra if id(m) not in seen]
+
+    def _epoch_logs(self, loss_components, y_true, y_pred_9, true_dirs, head_probs, gauss_probs, masks,
+                    head_prefix, gauss_prefix, training, grad_global_norm=None):
+        """Update the epoch accumulators with this batch and return their running aggregates."""
+        c = loss_components
+        batch = tf.cast(tf.shape(y_true)[0], tf.float32)
+        scalars = {
+            'loss': c.total,
+            'point_loss': c.point_h0 + c.point_h1 + c.point_h2,
+            'point_h0': c.point_h0, 'point_h1': c.point_h1, 'point_h2': c.point_h2,
+            'trend_h0': c.local_h0 + c.global_h0 + c.extended_h0,
+            'trend_h1': c.local_h1 + c.global_h1 + c.extended_h1,
+            'trend_h2': c.local_h2 + c.global_h2 + c.extended_h2,
+            'local_h0': c.local_h0, 'global_h0': c.global_h0, 'extended_h0': c.extended_h0,
+            'local_h1': c.local_h1, 'global_h1': c.global_h1, 'extended_h1': c.extended_h1,
+            'local_h2': c.local_h2, 'global_h2': c.global_h2, 'extended_h2': c.extended_h2,
+            'dir_loss': c.dir_h0 + c.dir_h1 + c.dir_h2,
+            'dir_loss_h0': c.dir_h0, 'dir_loss_h1': c.dir_h1, 'dir_loss_h2': c.dir_h2,
+            'nll_loss': c.nll_h0 + c.nll_h1 + c.nll_h2,
+            'nll_h0': c.nll_h0, 'nll_h1': c.nll_h1, 'nll_h2': c.nll_h2,
+            'crps_loss': c.crps_h0 + c.crps_h1 + c.crps_h2,
+            'crps_h0': c.crps_h0, 'crps_h1': c.crps_h1, 'crps_h2': c.crps_h2,
+            'soft_ece_loss': c.soft_ece_h0 + c.soft_ece_h1 + c.soft_ece_h2,
+            'soft_ece_h0': c.soft_ece_h0, 'soft_ece_h1': c.soft_ece_h1, 'soft_ece_h2': c.soft_ece_h2,
+            'reg_loss': c.reg_loss, 'inter_reg': c.inter_reg, 'vol_loss': c.vol_loss,
+            't_perp_loss': c.t_perp_total, 'casimir_loss': c.casimir_val, 'vac_loss': c.vac_val,
+            'hd_loss': c.hd_val, 'ife_loss': c.ife_val, 'vac_overflow_loss': c.vac_overflow_val,
+        }
+        scalars['trend_loss'] = scalars['trend_h0'] + scalars['trend_h1'] + scalars['trend_h2']
+        if training and grad_global_norm is not None:
+            scalars['grad_global_norm'] = grad_global_norm
+        for k, v in scalars.items():
+            self._step_means[k].update_state(tf.cast(v, tf.float32), sample_weight=batch)
+        self._dir_head_acc.update_state(true_dirs, head_probs, masks)
+        self._dir_gauss_acc.update_state(true_dirs, gauss_probs, masks)
+        self._pit_acc.update_state([y_true[:, 0], y_true[:, 1], y_true[:, 2]],
+                                   [y_pred_9[0], y_pred_9[3], y_pred_9[6]],
+                                   [y_pred_9[2], y_pred_9[5], y_pred_9[8]])
+        logs = {k: m.result() for k, m in self._step_means.items()
+                if training or k not in _TRAIN_ONLY_MEAN_KEYS}
+        logs.update(self._pit_acc.logs())
+        logs.update(self._dir_head_acc.logs(head_prefix))
+        logs.update(self._dir_gauss_acc.logs(gauss_prefix))
+        return logs
+
 
     # Small utility: reduce-mean with safe casting
     def _reduce_mean(self, x):
@@ -2834,207 +3063,32 @@ class CustomTrainModel(models.Model):
         gauss_p_up_h1 = _losses.gaussian_up_prob_given_move(mu_h1, var_h1_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
         gauss_p_up_h2 = _losses.gaussian_up_prob_given_move(mu_h2, var_h2_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
 
-        # Compute per-horizon metrics (masked if deadband is set)
-        metrics_head = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            dir_pred_h0, dir_pred_h1, dir_pred_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
-            prefix="train_"
+        logs = self._epoch_logs(
+            loss_components, y_true, y_pred_9,
+            (true_dir_h0, true_dir_h1, true_dir_h2),
+            (dir_pred_h0, dir_pred_h1, dir_pred_h2),
+            (gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2),
+            (mask_h0, mask_h1, mask_h2),
+            head_prefix="train_", gauss_prefix="train_gauss_", training=True,
+            grad_global_norm=grad_global_norm,
         )
-        metrics_gauss = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
-            prefix="train_gauss_"
-        )
-
-        # Trend metrics: margins (bps), agreement rates, magnitudes (bps)
-
-        # Add all loss components to metrics
-        point_loss_total = point_h0 + point_h1 + point_h2
-        trend_loss_h0 = local_h0 + global_h0 + extended_h0
-        trend_loss_h1 = local_h1 + global_h1 + extended_h1
-        trend_loss_h2 = local_h2 + global_h2 + extended_h2
-        trend_loss_total = trend_loss_h0 + trend_loss_h1 + trend_loss_h2
-        dir_loss_total = dir_h0 + dir_h1 + dir_h2
-        nll_total = nll_h0 + nll_h1 + nll_h2
-        crps_total = crps_h0 + crps_h1 + crps_h2
-        soft_ece_total = soft_ece_h0 + soft_ece_h1 + soft_ece_h2
-
-        # PIT uniformity per horizon, in-graph (see _pit_ks).
-        pit_ks_h0 = self._pit_ks(y_true[:, 0], y_pred_9[0], y_pred_9[2])
-        pit_ks_h1 = self._pit_ks(y_true[:, 1], y_pred_9[3], y_pred_9[5])
-        pit_ks_h2 = self._pit_ks(y_true[:, 2], y_pred_9[6], y_pred_9[8])
-
-        return {
-            "loss": total_loss_val,
-            "nonfinite_grad_steps": self.nonfinite_grad_steps.result(),
-            "grad_global_norm": grad_global_norm,
-            "point_loss": point_loss_total,
-            "point_h0": point_h0,
-            "point_h1": point_h1,
-            "point_h2": point_h2,
-            "trend_loss": trend_loss_total,
-            "trend_h0": trend_loss_h0,
-            "trend_h1": trend_loss_h1,
-            "trend_h2": trend_loss_h2,
-            "local_h0": local_h0,
-            "global_h0": global_h0,
-            "extended_h0": extended_h0,
-            "local_h1": local_h1,
-            "global_h1": global_h1,
-            "extended_h1": extended_h1,
-            "local_h2": local_h2,
-            "global_h2": global_h2,
-            "extended_h2": extended_h2,
-            "dir_loss": dir_loss_total,
-            "dir_loss_h0": dir_h0,
-            "dir_loss_h1": dir_h1,
-            "dir_loss_h2": dir_h2,
-            "nll_loss": nll_total,
-            "nll_h0": nll_h0,
-            "nll_h1": nll_h1,
-            "nll_h2": nll_h2,
-            "crps_loss": crps_total,
-            "crps_h0": crps_h0,
-            "crps_h1": crps_h1,
-            "crps_h2": crps_h2,
-            "soft_ece_loss": soft_ece_total,
-            "soft_ece_h0": soft_ece_h0,
-            "soft_ece_h1": soft_ece_h1,
-            "soft_ece_h2": soft_ece_h2,
-            "pit_ks_h0": pit_ks_h0,
-            "pit_ks_h1": pit_ks_h1,
-            "pit_ks_h2": pit_ks_h2,
-            "reg_loss": reg_val,
-            "inter_reg": inter_reg,
-            "vol_loss": vol_loss,
-            # === T_⊥ / QBOX metrics ===
-            "t_perp_loss": t_perp_total,
-            "casimir_loss": casimir_val,
-            "vac_loss": vac_val,
-            "hd_loss": hd_val,
-            "ife_loss": ife_val,
-            "vac_overflow_loss": vac_overflow_val,
-            **metrics_head,
-            **metrics_gauss
-        }
+        logs["nonfinite_grad_steps"] = self.nonfinite_grad_steps.result()
+        return logs
 
     def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):
-        """
-        Compute per-horizon direction classification metrics.
-        Returns dict with accuracy, F1, sensitivity, specificity, MCC for each horizon.
+        """Direction metrics (acc, sensitivity, specificity, balanced acc, F1, MCC, Brier,
+        positive-class ECE, predicted/true up rates, mean prob) over the given arrays, per horizon.
+
+        Same formulas as the epoch accumulators (_direction_metrics_from_counts); this form
+        evaluates one set of arrays in full.
         """
         metrics = {}
-
-        masks = {
-            "h0": tf.ones_like(true_dir_h0) if mask_h0 is None else tf.cast(mask_h0, tf.float32),
-            "h1": tf.ones_like(true_dir_h1) if mask_h1 is None else tf.cast(mask_h1, tf.float32),
-            "h2": tf.ones_like(true_dir_h2) if mask_h2 is None else tf.cast(mask_h2, tf.float32),
-        }
-
-        for horizon_idx, (h_name, true_dir, dir_pred) in enumerate([
-            ("h0", true_dir_h0, dir_pred_h0),
-            ("h1", true_dir_h1, dir_pred_h1),
-            ("h2", true_dir_h2, dir_pred_h2)
-        ]):
-            # Binary predictions
-            pred_dir_binary = tf.cast(dir_pred > 0.5, tf.float32)
-
-            m = masks[h_name]
-            mask_sum = tf.reduce_sum(m)
-            no_samples = mask_sum < 1e-8
-            nan = tf.constant(np.nan, dtype=tf.float32)
-
-            # Confusion matrix elements
-            TP = tf.reduce_sum(pred_dir_binary * true_dir * m)
-            TN = tf.reduce_sum((1.0 - pred_dir_binary) * (1.0 - true_dir) * m)
-            FP = tf.reduce_sum(pred_dir_binary * (1.0 - true_dir) * m)
-            FN = tf.reduce_sum((1.0 - pred_dir_binary) * true_dir * m)
-
-            # Accuracy
-            accuracy = (TP + TN) / (TP + TN + FP + FN + 1e-8)
-            accuracy = tf.where(no_samples, nan, accuracy)
-            metrics[f"{prefix}dir_acc_{h_name}"] = accuracy
-
-            # Sensitivity (True Positive Rate / Recall for UP class)
-            sensitivity = TP / (TP + FN + 1e-8)
-            sensitivity = tf.where(no_samples, nan, sensitivity)
-            metrics[f"{prefix}dir_sensitivity_{h_name}"] = sensitivity
-
-            # Specificity (True Negative Rate)
-            specificity = TN / (TN + FP + 1e-8)
-            specificity = tf.where(no_samples, nan, specificity)
-            metrics[f"{prefix}dir_specificity_{h_name}"] = specificity
-
-            # Balanced Accuracy: (Sensitivity + Specificity) / 2
-            balanced_acc = (sensitivity + specificity) / 2.0
-            balanced_acc = tf.where(no_samples, nan, balanced_acc)
-            metrics[f"{prefix}dir_bal_acc_{h_name}"] = balanced_acc
-
-            # F1 Score (harmonic mean of precision and recall)
-            precision = TP / (TP + FP + 1e-8)
-            recall = TP / (TP + FN + 1e-8)
-            f1 = 2.0 * (precision * recall) / (precision + recall + 1e-8)
-            f1 = tf.where(no_samples, nan, f1)
-            metrics[f"{prefix}dir_f1_{h_name}"] = f1
-
-            # Matthews Correlation Coefficient (balanced metric for binary classification)
-            mcc_numerator = (TP * TN) - (FP * FN)
-            marginal_product = (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN)
-            mcc_denominator = tf.sqrt(marginal_product + 1e-8)
-            mcc_raw = tf.where(
-                marginal_product > 1e-8,
-                mcc_numerator / mcc_denominator,
-                tf.constant(0.0, dtype=tf.float32)
-            )
-            mcc = tf.where(no_samples, nan, mcc_raw)
-            metrics[f"{prefix}dir_mcc_{h_name}"] = mcc
-
-            # ========== CALIBRATION METRICS ==========
-            # Brier Score: Mean squared error between predicted probability and actual outcome
-            brier_per_sample = tf.square(dir_pred - true_dir)
-            brier_score = tf.reduce_sum(brier_per_sample * m) / (mask_sum + 1e-8)
-            brier_score = tf.where(no_samples, nan, brier_score)
-            metrics[f"{prefix}dir_brier_{h_name}"] = brier_score
-
-            # Expected Calibration Error (ECE): partition [0,1] into inclusive bins
-            n_bins = 10
-            ece_sum = tf.constant(0.0, dtype=tf.float32)
-            total_masked = mask_sum + 1e-8
-            dir_pred_clipped = tf.clip_by_value(dir_pred, 0.0, 1.0)
-            for bin_idx in range(n_bins):
-                bin_lower = tf.cast(bin_idx, tf.float32) / n_bins
-                bin_upper = tf.cast(bin_idx + 1, tf.float32) / n_bins
-                if bin_idx == n_bins - 1:
-                    in_bin = tf.cast((dir_pred_clipped >= bin_lower) & (dir_pred_clipped <= bin_upper), tf.float32) * m
-                else:
-                    in_bin = tf.cast((dir_pred_clipped >= bin_lower) & (dir_pred_clipped < bin_upper), tf.float32) * m
-                bin_count = tf.reduce_sum(in_bin)
-                # Positive-class convention (matches soft_ece_loss): observed UP rate in the bin vs mean p(up).
-                # The old top-label form paired argmax-correctness with p(up) and reported ~0.9 ECE for a
-                # perfectly calibrated bin at p = 0.05.
-                bin_correct = tf.reduce_sum(true_dir * in_bin)
-                bin_acc = bin_correct / (bin_count + 1e-8)
-                bin_conf = tf.reduce_sum(dir_pred_clipped * in_bin) / (bin_count + 1e-8)
-                ece_sum = ece_sum + (bin_count / total_masked) * tf.abs(bin_acc - bin_conf)
-            ece_sum = tf.where(no_samples, nan, ece_sum)
-            metrics[f"{prefix}dir_ece_{h_name}"] = ece_sum
-
-            # CALIBRATION METRICS: Per-class prediction rates to detect bias
-            total_samples = TP + TN + FP + FN + 1e-8
-            pred_up_rate = (TP + FP) / total_samples
-            true_up_rate = (TP + FN) / total_samples
-            pred_up_rate = tf.where(no_samples, nan, pred_up_rate)
-            true_up_rate = tf.where(no_samples, nan, true_up_rate)
-            metrics[f"{prefix}pred_up_rate_{h_name}"] = pred_up_rate
-            metrics[f"{prefix}true_up_rate_{h_name}"] = true_up_rate
-
-            # Mean predicted probability (should be ~0.5 for calibrated model)
-            mean_prob = tf.reduce_sum(dir_pred_clipped * m) / (mask_sum + 1e-8)
-            mean_prob = tf.where(no_samples, nan, mean_prob)
-            metrics[f"{prefix}mean_dir_prob_{h_name}"] = mean_prob
-
+        for h_name, true_dir, dir_pred, mask in (("h0", true_dir_h0, dir_pred_h0, mask_h0),
+                                                 ("h1", true_dir_h1, dir_pred_h1, mask_h1),
+                                                 ("h2", true_dir_h2, dir_pred_h2, mask_h2)):
+            m = tf.ones_like(tf.cast(true_dir, tf.float32)) if mask is None else mask
+            metrics.update(_direction_metrics_from_counts(*_direction_counts(true_dir, dir_pred, m),
+                                                          prefix, h_name))
         return metrics
 
     def test_step(self, data):
@@ -3103,88 +3157,15 @@ class CustomTrainModel(models.Model):
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.
-        metrics_head = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            dir_pred_h0, dir_pred_h1, dir_pred_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
-            prefix=""
-        )
-        metrics_gauss = self._compute_direction_metrics(
-            true_dir_h0, true_dir_h1, true_dir_h2,
-            gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2,
-            mask_h0=mask_h0, mask_h1=mask_h1, mask_h2=mask_h2,
-            prefix="gauss_"
+        return self._epoch_logs(
+            loss_components, y_true, y_pred_9,
+            (true_dir_h0, true_dir_h1, true_dir_h2),
+            (dir_pred_h0, dir_pred_h1, dir_pred_h2),
+            (gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2),
+            (mask_h0, mask_h1, mask_h2),
+            head_prefix="", gauss_prefix="gauss_", training=False,
         )
 
-        # Trend metrics: margins (bps), agreement rates, magnitudes (bps)
-
-        # Test step
-        # Loss components
-        point_loss_total = point_h0 + point_h1 + point_h2
-        trend_loss_h0 = local_h0 + global_h0 + extended_h0
-        trend_loss_h1 = local_h1 + global_h1 + extended_h1
-        trend_loss_h2 = local_h2 + global_h2 + extended_h2
-        trend_loss_total = trend_loss_h0 + trend_loss_h1 + trend_loss_h2
-        dir_loss_total = dir_h0 + dir_h1 + dir_h2
-        nll_total = nll_h0 + nll_h1 + nll_h2
-        crps_total = crps_h0 + crps_h1 + crps_h2
-        soft_ece_total = soft_ece_h0 + soft_ece_h1 + soft_ece_h2
-
-        # PIT uniformity per horizon, in-graph (see _pit_ks).
-        pit_ks_h0 = self._pit_ks(y_true[:, 0], y_pred_9[0], y_pred_9[2])
-        pit_ks_h1 = self._pit_ks(y_true[:, 1], y_pred_9[3], y_pred_9[5])
-        pit_ks_h2 = self._pit_ks(y_true[:, 2], y_pred_9[6], y_pred_9[8])
-        return {
-            "loss": total_loss_val,
-            "pit_ks_h0": pit_ks_h0,
-            "pit_ks_h1": pit_ks_h1,
-            "pit_ks_h2": pit_ks_h2,
-            "point_loss": point_loss_total,
-            "point_h0": point_h0,
-            "point_h1": point_h1,
-            "point_h2": point_h2,
-            "trend_loss": trend_loss_total,
-            "trend_h0": trend_loss_h0,
-            "trend_h1": trend_loss_h1,
-            "trend_h2": trend_loss_h2,
-            "local_h0": local_h0,
-            "global_h0": global_h0,
-            "extended_h0": extended_h0,
-            "local_h1": local_h1,
-            "global_h1": global_h1,
-            "extended_h1": extended_h1,
-            "local_h2": local_h2,
-            "global_h2": global_h2,
-            "extended_h2": extended_h2,
-            "dir_loss": dir_loss_total,
-            "dir_loss_h0": dir_h0,
-            "dir_loss_h1": dir_h1,
-            "dir_loss_h2": dir_h2,
-            "nll_loss": nll_total,
-            "nll_h0": nll_h0,
-            "nll_h1": nll_h1,
-            "nll_h2": nll_h2,
-            "crps_loss": crps_total,
-            "crps_h0": crps_h0,
-            "crps_h1": crps_h1,
-            "crps_h2": crps_h2,
-            "soft_ece_loss": soft_ece_total,
-            "soft_ece_h0": soft_ece_h0,
-            "soft_ece_h1": soft_ece_h1,
-            "soft_ece_h2": soft_ece_h2,
-            "reg_loss": reg_val,
-            "inter_reg": inter_reg,
-            "vol_loss": vol_loss,
-            # === T_⊥ / QBOX metrics ===
-            "t_perp_loss": t_perp_total,
-            "casimir_loss": casimir_val,
-            "vac_loss": vac_val,
-            "hd_loss": hd_val,
-            "ife_loss": ife_val,
-            "vac_overflow_loss": vac_overflow_val,
-            **metrics_head,
-            **metrics_gauss
-        }
 
     def get_config(self):
         cfg = super().get_config()
