@@ -1,0 +1,24 @@
+# Physics-term ablation (plan C4). Run with:  python scripts/ablate.py --scale smoke|full
+# 14 conditions (all_on, all_off, only:<term> x6, without:<term> x6) x seeds x periods.
+name: ablate_physics_v1
+terms:                       # LAMBDA_* -> value when the term is ON
+  LAMBDA_T_PERP: 0.1
+  LAMBDA_CASIMIR: 0.1
+  LAMBDA_HD: 0.1
+  LAMBDA_IFE: 0.1
+  LAMBDA_VAC_OVERFLOW: 0.1
+  LAMBDA_VAC: 0.5            # a threshold (cross-horizon spread, scaled units), 0 = off
+modes: [all_on, all_off, leave_one_in, leave_one_out]
+seeds: [0, 1, 2]
+periods:                     # walk-forward folds (FOLD_INDEX: -1 = latest)
+  P1: -2
+  P2: -1
+calibrate: once              # lambda calibration once on all_on, then frozen for every cell
+strategy: enhanced_multi_horizon
+base_overrides: {}
+scales:
+  smoke:                     # minutes on CPU; nightly CI
+    MAX_SEQUENCE_COUNT: 5000
+    EPOCHS: 3
+  full:
+    EPOCHS: 20

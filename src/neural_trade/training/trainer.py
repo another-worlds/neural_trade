@@ -23,6 +23,7 @@ from neural_trade.core.config import Config
 from neural_trade.core.outputs import PredictiveOutputs
 from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
+from neural_trade.utils.seeding import seed_everything
 from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
 from neural_trade.serving.postprocess import heads_to_predictions
@@ -149,11 +150,12 @@ def train_and_evaluate(
     """
 
     cfg = config or Config()
-    tf.keras.utils.set_random_seed(int(getattr(cfg, 'SEED', 42)))
     if csv_path is not None:
         cfg.CSV_PATH = csv_path
     cfg = _apply_config_overrides(cfg, config_overrides)
     cfg.validate()  # P0-3 / P1-4: early enforcement (added in Config refactor)
+    # Seed AFTER the overrides: seeding first ignored a SEED given in config_overrides.
+    seed_everything(int(getattr(cfg, 'SEED', 42)))
 
     print("Starting enhanced model training with extended trend features...")
     data_processor = DataProcessor(cfg)

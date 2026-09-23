@@ -1,0 +1,24 @@
+# Pre-registered decision rules for configs/ablation_physics.yaml (written BEFORE the grid ran).
+# Metric names are keys of EvalReport.flat(). Deltas are paired over (seed, period) and oriented
+# so positive = the term helps. VALUE: mean delta > max(seed sigma, mde) with >= min_agree_frac of
+# pairs agreeing and no guard-rail breach; HARMFUL: the mirror image; NEUTRAL: |mean| <= mde;
+# otherwise INCONCLUSIVE (add seeds). A term's verdict needs both modes to agree (or one + NEUTRAL).
+min_agree_frac: 0.8333       # 5 of 6 pairs
+primary:
+  default:                   # t_perp, casimir, hd, vac_overflow: they act on the variance heads
+    - {metric: h1/variance/crpss, higher_is_better: true, mde: 0.005}
+    - {metric: h1/variance/corr_var_err2_spearman, higher_is_better: true, mde: 0.01}
+  LAMBDA_VAC:                # the cross-horizon bandwidth acts on the price heads' coherence
+    - {metric: coherence/coherence_primary, higher_is_better: true, mde: 0.01}
+  LAMBDA_IFE:                # information flow between horizons: direction skill
+    - {metric: h1/direction/mcc, higher_is_better: true, mde: 0.005}
+    - {metric: h1/direction/auc, higher_is_better: true, mde: 0.005}
+  family:
+    - {metric: h1/variance/crpss, higher_is_better: true, mde: 0.005}
+    - {metric: h1/variance/corr_var_err2_spearman, higher_is_better: true, mde: 0.01}
+    - {metric: h1/direction/mcc, higher_is_better: true, mde: 0.005}
+    - {metric: backtest/sharpe_net, higher_is_better: true, mde: 0.5}
+guardrails:                  # a VALUE verdict is withdrawn if any of these gets worse beyond tolerance
+  - {metric: h1/delta/rmse, higher_is_better: false, tolerance: 2.0}
+  - {metric: h1/direction/auc, higher_is_better: true, tolerance: 0.01}
+  - {metric: h1/variance/pit_ks, higher_is_better: false, tolerance: 0.02}
