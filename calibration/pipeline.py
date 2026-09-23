@@ -40,7 +40,7 @@ from calibration.conformal import ConformalRegressor
 from calibration.online_calibrator import OnlineTemperatureCalibrator
 
 try:
-    from metrics_utils import compute_direction_labels_np as _compute_direction_labels_np
+    from neural_trade.metrics.direction_labels import direction_labels_np as _compute_direction_labels_np
 except Exception:  # fallback if metrics_utils not on path in some test contexts
     _compute_direction_labels_np = None
 
@@ -59,27 +59,12 @@ def _direction_labels(
 ) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
     """Convert raw price-delta matrix to per-horizon (labels, mask) pairs.
 
-    Delegates to the single shared implementation in metrics_utils to avoid
-    duplication with the training loss paths and model.py metrics.
+    Delegates to the single shared rule (neural_trade.metrics.direction_labels); the
+    inline fallback copy was removed.
     """
-    if _compute_direction_labels_np is not None:
-        return _compute_direction_labels_np(y_true_delta_raw, last_close, deadband_bps)
-    # Fallback (should rarely be hit): original inline logic
-    lc = np.asarray(last_close, dtype=float).reshape(-1)
-    y = np.asarray(y_true_delta_raw, dtype=float)
-    if y.ndim == 1:
-        y = y.reshape(-1, 1)
-
-    deadband = deadband_bps / 10_000.0
-    result = {}
-    for i, h in enumerate(HORIZONS):
-        if i >= y.shape[1]:
-            break
-        ret = y[:, i] / (lc + 1e-12)
-        mask = (np.abs(ret) > deadband)
-        labels = (ret > deadband).astype(float)
-        result[h] = (labels, mask)
-    return result
+    if _compute_direction_labels_np is None:  # pragma: no cover - package always importable
+        raise ImportError("neural_trade.metrics.direction_labels is required")
+    return _compute_direction_labels_np(y_true_delta_raw, last_close, deadband_bps)
 
 
 # ---------------------------------------------------------------------------

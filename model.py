@@ -33,7 +33,8 @@ from sklearn.model_selection import TimeSeriesSplit
 import joblib
 from losses import Losses
 import losses as _losses
-import math_helpers as mh
+import neural_trade.utils.math as mh
+from neural_trade.metrics.tf_direction import direction_labels_tf
 # Loss functions (custom) are implemented centrally in `losses.py` to
 # maintain a single authoritative source and avoid duplication.
 import matplotlib.pyplot as plt
@@ -45,9 +46,9 @@ import plotly.io as pio
 
 try:
     # Optional local utilities (kept lightweight). If missing, fall back to sklearn MAPE only.
-    from metrics_utils import (safe_mape, smape, wape, reconstruct_prices,
-                               mask_by_min_abs_y, pit_uniformity,
-                               compute_direction_labels_np)
+    from neural_trade.metrics.numpy_metrics import (safe_mape, smape, wape, reconstruct_prices,
+                                                    mask_by_min_abs_y, pit_uniformity,
+                                                    compute_direction_labels_np)
 except Exception:
     safe_mape = None
     smape = None
@@ -1608,20 +1609,18 @@ class LearnableIndicators(layers.Layer):
         self.meta_scale = 0.5  # Increased from 0.1 for stronger adjustments
         self.grad_multiplier = config.INDICATOR_GRAD_MULT  # Apply gradient boost
 
+    # Period <-> alpha <-> logit transforms: one definition, in neural_trade.utils.math.
     def _logit_from_alpha(self, alpha):
-        return tf.math.log(alpha + self.epsilon) - tf.math.log(1.0 - alpha + self.epsilon)
+        return mh.logit_from_alpha(alpha, self.epsilon)
 
     def _alpha_from_logit(self, logit):
-        return tf.sigmoid(logit)
+        return mh.alpha_from_logit(logit)
 
     def _logit_from_period(self, period):
-        alpha = 2.0 / (period + 1.0)
-        return self._logit_from_alpha(alpha)
+        return mh.logit_from_period(period, self.epsilon)
 
     def _period_from_logit(self, logit):
-        alpha = self._alpha_from_logit(logit)
-        period = (2.0 / (alpha + self.epsilon)) - 1.0
-        return tf.maximum(period, 0.0)
+        return mh.period_from_logit(logit, self.epsilon)
 
     def build(self, input_shape):
         # input_shape[0] is close_seq, [1] is meta_adjust [B, num_logits]
@@ -2454,15 +2453,10 @@ class CustomTrainModel(models.Model):
         # point loss delegates to the registered "point_huber" which implements log(cosh).
         # A separate piecewise Huber lives in CustomTrainModel.huber (unused for the main loss).
         # Config.USE_HUBER is legacy and not consulted by the active custom_loss.
-    def _logit_from_alpha(self, alpha): return tf.math.log(alpha + self.epsilon) - tf.math.log(1.0 - alpha + self.epsilon)
-    def _alpha_from_logit(self, logit): return tf.sigmoid(logit)
-    def _logit_from_period(self, period):
-        alpha = 2.0 / (period + 1.0)
-        return self._logit_from_alpha(alpha)
-    def _period_from_logit(self, logit):
-        alpha = self._alpha_from_logit(logit)
-        period = (2.0 / (alpha + self.epsilon)) - 1.0
-        return tf.maximum(period, 0.0)
+    def _logit_from_alpha(self, alpha): return mh.logit_from_alpha(alpha, self.epsilon)
+    def _alpha_from_logit(self, logit): return mh.alpha_from_logit(logit)
+    def _logit_from_period(self, period): return mh.logit_from_period(period, self.epsilon)
+    def _period_from_logit(self, logit): return mh.period_from_logit(logit, self.epsilon)
     # -------------------------
     # Unified element-wise Huber
     # -------------------------
@@ -2766,17 +2760,9 @@ class CustomTrainModel(models.Model):
         deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
         deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
 
-        ret_h0 = (y_true_raw[:, 0]) / (last_close_squeeze + self.eps)
-        ret_h1 = (y_true_raw[:, 1]) / (last_close_squeeze + self.eps)
-        ret_h2 = (y_true_raw[:, 2]) / (last_close_squeeze + self.eps)
-
-        mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-        mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-        mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
-
-        true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-        true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-        true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
+        # One labelling rule for every path (neural_trade.metrics.tf_direction).
+        mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2 = direction_labels_tf(
+            y_true_raw, last_close_squeeze, deadband_bps, self.eps)
 
         # Extract direction predictions for all 3 horizons
         price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred_9
@@ -2859,18 +2845,9 @@ class CustomTrainModel(models.Model):
         deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
         deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
 
-        # Targets are deltas; compute returns as delta / last_close (matches train_step)
-        ret_h0 = (y_true_raw[:, 0]) / (last_close_squeeze + self.eps)
-        ret_h1 = (y_true_raw[:, 1]) / (last_close_squeeze + self.eps)
-        ret_h2 = (y_true_raw[:, 2]) / (last_close_squeeze + self.eps)
-
-        mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-        mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-        mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
-
-        true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-        true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-        true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
+        # One labelling rule for every path (neural_trade.metrics.tf_direction).
+        mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2 = direction_labels_tf(
+            y_true_raw, last_close_squeeze, deadband_bps, self.eps)
 
         price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred_9
         dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)

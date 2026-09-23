@@ -12,8 +12,12 @@ import numpy as np
 import tensorflow as tf
 
 from neural_trade.core.outputs import LossComponents
+from neural_trade.metrics.tf_direction import direction_labels_tf, gaussian_up_prob_given_move  # noqa: F401
 from neural_trade.registries.losses import Losses
+from neural_trade.utils.math import log_ndtr  # noqa: F401  (re-exported for callers of this module)
 
+# Old private name of the TF labelling rule, kept for callers of this module.
+_compute_direction_labels_and_masks_tf = direction_labels_tf
 
 
 def _logcosh_safe(x):
@@ -26,66 +30,6 @@ def _logcosh_safe(x):
     """
     x = tf.cast(x, tf.float32)
     return x + tf.math.softplus(-2.0 * x) - tf.constant(0.6931471805599453, dtype=tf.float32)
-
-
-_LOG_NDTR_SPLIT = -8.0
-_HALF_LOG_2PI = 0.9189385332046727
-
-
-def log_ndtr(x):
-    """log(Phi(x)) for float32 that stays finite deep in the lower tail.
-
-    TensorFlow 2.10 has no ``log_ndtr``. ``log(0.5 * erfc(-x / sqrt2))`` is accurate down to
-    about x = -8 and then underflows to log(0) = -inf, which matters here: with the variance
-    head at VAR_FLOOR both tail probabilities of the direction readout are ~1e-98. Below the
-    split the Mills-ratio asymptotic series is used (truncation error < 1e-6 at x = -8).
-    Each branch only ever sees inputs clamped into its own domain, so neither the discarded
-    branch nor its gradient can produce NaN (the usual ``tf.where`` gradient trap).
-    """
-    x = tf.cast(x, tf.float32)
-    split = tf.constant(_LOG_NDTR_SPLIT, dtype=tf.float32)
-    x_hi = tf.maximum(x, split)
-    upper = tf.math.log(0.5 * tf.math.erfc(-x_hi * tf.constant(0.7071067811865476, dtype=tf.float32)))
-    x_lo = tf.minimum(x, split)
-    inv2 = 1.0 / (x_lo * x_lo)
-    series = 1.0 - inv2 + 3.0 * inv2 ** 2 - 15.0 * inv2 ** 3 + 105.0 * inv2 ** 4
-    lower = (-0.5 * x_lo * x_lo - tf.math.log(-x_lo)
-             - tf.constant(_HALF_LOG_2PI, dtype=tf.float32) + tf.math.log(series))
-    return tf.where(x > split, upper, lower)
-
-
-def gaussian_up_prob_given_move(mu_scaled, var_scaled, last_close, deadband_frac,
-                                pred_mean, pred_scale, eps=1e-8):
-    """P(delta > d | |delta| > d) for delta ~ N(mu, sigma^2): the Gaussian direction readout.
-
-    Direction labels mask out moves inside the deadband (|return| <= d) and call the rest
-    "up" when return > d (see ``_compute_direction_labels_and_masks_tf``). The readout
-    that matches those labels is therefore the probability of "up" GIVEN that the move
-    left the deadband:
-
-        p = Phi(a) / (Phi(a) + Phi(b)),  a = (mu - d) / sigma,  b = (-mu - d) / sigma
-
-    evaluated as sigmoid(log Phi(a) - log Phi(b)) so it stays finite when sigma << d.
-
-    The previous readout was Phi((mu - d) / sigma) alone - the UNconditional probability of
-    an up move, which also counts the neutral mass as "not up". With the 5 bps deadband
-    (~0.21 scaled units at BTC 110k) every sample sat at Phi(-0.21) ~ 0.42 < 0.5, nothing
-    was ever predicted up and the Gaussian MCC was identically zero by construction. It also
-    converted the threshold to scaled units without the pred_mean offset. This version works
-    in raw dollars, where the labels are defined, and reduces to Phi(mu / sigma) when d = 0.
-
-    Args:
-        mu_scaled, var_scaled: price head and variance head in scaled-delta units, [B].
-        last_close: raw last close, [B].
-        deadband_frac: DIR_DEADBAND_BPS / 1e4.
-        pred_mean, pred_scale: the target scaler statistics.
-    """
-    mu_raw = tf.cast(mu_scaled, tf.float32) * pred_scale + pred_mean
-    sigma_raw = tf.sqrt(tf.maximum(tf.cast(var_scaled, tf.float32), 0.0)) * pred_scale + eps
-    d_raw = tf.cast(deadband_frac, tf.float32) * tf.cast(last_close, tf.float32)
-    a = (mu_raw - d_raw) / sigma_raw
-    b = (-mu_raw - d_raw) / sigma_raw
-    return tf.sigmoid(log_ndtr(a) - log_ndtr(b))
 
 
 @Losses.register(name="focal_loss", tags=["classification", "imbalanced", "focal"])
@@ -527,26 +471,6 @@ def vacuum_overflow_t_perp_loss(model, vacuum_overflow,
 
     # Scale-invariant alignment loss
     return tf.square(mean_ov - mean_res) / (tf.square(mean_res) + eps)
-
-
-def _compute_direction_labels_and_masks_tf(y_true_raw, last_close_squeeze, deadband_bps, eps=1e-8):
-    """TF-graph version of direction labeling with deadband (single source of truth).
-
-    Used by custom_loss (and can be reused by train_step/test_step direction metric code).
-    Returns (mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2).
-    Mirrors the logic previously duplicated in custom_loss, train/test_step, and _compute_...
-    """
-    deadband = tf.cast(deadband_bps, tf.float32) / tf.constant(10000.0, dtype=tf.float32)
-    ret_h0 = y_true_raw[:, 0] / (last_close_squeeze + eps)
-    ret_h1 = y_true_raw[:, 1] / (last_close_squeeze + eps)
-    ret_h2 = y_true_raw[:, 2] / (last_close_squeeze + eps)
-    mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-    mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-    mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
-    true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-    true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-    true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
-    return mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2
 
 
 @Losses.register_objective(name="custom_loss", tags=["composite", "default", "multi_output"])
