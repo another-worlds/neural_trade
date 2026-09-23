@@ -51,6 +51,7 @@ class ArtifactBundle:
             "epochs_run": len(getattr(result.history, "history", {}).get("loss", [])) if result.history else 0,
             # Strategy confidence scale from the CALIBRATION block (never the data being traded).
             "var_scale": _var_scale(result.predictions_cal),
+            "weighted_direction_quantiles": _direction_quantiles(result),
         }
         bundle = cls(result.config, scale, mean, normalizer, calibration_pipeline=result.calibration_pipeline,
                      meta=meta)
@@ -119,6 +120,20 @@ def _var_scale(predictions) -> Optional[float]:
     v = np.concatenate([np.asarray(predictions["variance"][h], float).reshape(-1) for h in ("h0", "h1", "h2")])
     v = v[v > 1e-8]
     return float(np.median(v)) if len(v) else None
+
+
+def _direction_quantiles(result) -> Optional[Dict[str, float]]:
+    """Quantiles of the calibration block's confidence-weighted P(up) (strategy thresholds)."""
+    if not getattr(result, "predictions_cal", None) or getattr(result, "y_cal", None) is None:
+        return None
+    import numpy as np
+
+    from neural_trade.evaluation.frame import PredictionFrame
+    from neural_trade.strategy.signals import SignalFrame, var_scale_from
+
+    cal = PredictionFrame.from_result(result, "cal")
+    w = SignalFrame.build(cal, var_scale_from(cal)).weighted_direction
+    return {str(q): float(np.quantile(w, q)) for q in (0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95)}
 
 
 def _json_default(o):

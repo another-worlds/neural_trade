@@ -107,14 +107,15 @@ def cmd_backtest(args) -> int:
     import pandas as pd
 
     from neural_trade.serving.predictor import Predictor
-    from neural_trade.strategy import (Bars, SignalFrame, backtest, build_backtest_config, build_strategy, load_params,
-                                       var_scale_from)
+    from neural_trade.strategy import (Bars, SignalFrame, Strategies, backtest, build_backtest_config, build_strategy,
+                                       load_params, var_scale_from)
 
     predictor = Predictor.from_artifacts(args.artifacts)
     batch, df, anchors = predictor.predict_windows_frame(pd.read_csv(args.csv))
     frame = batch.to_prediction_frame(predictor.bundle.pred_scale, predictor.bundle.pred_mean)
     params = load_params(args.params) if args.params else {}
-    strategy = build_strategy(args.strategy or params.get("strategy", "enhanced_multi_horizon"), params.get("params"))
+    strategy = build_strategy(args.strategy or params.get("strategy", Strategies.default), params.get("params"),
+                              calibration=predictor.bundle.meta.get("weighted_direction_quantiles"))
     bcfg = build_backtest_config({**(params.get("backtest") or {}), "random_seeds": args.random_seeds})
     var_scale = predictor.bundle.meta.get("var_scale")
     if var_scale is None:

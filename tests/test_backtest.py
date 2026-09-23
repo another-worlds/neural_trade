@@ -133,7 +133,8 @@ def test_no_order_on_the_last_bar():
 def test_no_lookahead_all_strategies(name):
     f, bars = _frame(500, seed=3)
     vs = var_scale_from(f)
-    assert_no_lookahead(f, bars, lambda: build_strategy(name), var_scale=vs, probes=(120, 250, 380))
+    cal = SignalFrame.build(_frame(500, seed=11)[0], vs)   # calibration-block signals (another sample)
+    assert_no_lookahead(f, bars, lambda: build_strategy(name, calibration=cal), var_scale=vs, probes=(120, 250, 380))
 
 
 def test_lookahead_probe_catches_a_peeking_strategy():
@@ -247,3 +248,29 @@ def test_anchor_bars_match_windowing_and_bars_from_frame():
     assert np.allclose(bars.close, lc[-50:]) and np.allclose(bars.high - bars.close, 1.0, atol=1e-4)
     with pytest.raises(ValueError, match="consecutive"):
         Bars.from_frame(df, anchors[::2])
+
+
+def test_calibrated_quantile_thresholds_come_from_the_calibration_block():
+    from neural_trade.strategy import QuantileSignalStrategy
+
+    f, bars = _frame(800, seed=12)
+    vs = var_scale_from(f)
+    cal = SignalFrame.build(_frame(800, seed=13)[0], vs)
+    with pytest.raises(InvalidConfigurationError, match="calibration"):
+        build_strategy("calibrated_quantile")
+    strat = build_strategy("calibrated_quantile", {"entry_quantile": 0.8}, calibration=cal)
+    assert strat.long_above == pytest.approx(np.quantile(cal.weighted_direction, 0.8))
+    assert strat.short_below == pytest.approx(np.quantile(cal.weighted_direction, 0.2))
+    table = {str(q): float(np.quantile(cal.weighted_direction, q)) for q in (0.05, 0.1, 0.2, 0.5, 0.8, 0.9, 0.95)}
+    same = QuantileSignalStrategy.from_calibration(table, 0.8)
+    assert (same.long_above, same.short_below, same.median) == pytest.approx(
+        (strat.long_above, strat.short_below, strat.median))
+    with pytest.raises(ValueError, match="lacks"):
+        QuantileSignalStrategy.from_calibration(table, 0.75)
+    s = SignalFrame.build(f, vs)
+    res = run_backtest(s, bars, strat)
+    assert res.summary["n_trades"] > 0
+    for d in res.decisions:
+        w = s.weighted_direction[d["bar"]]
+        assert (w > strat.long_above) if d["side"] == "LONG" else (w < strat.short_below)
+    assert Strategies.default == "calibrated_quantile"

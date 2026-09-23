@@ -38,18 +38,18 @@ def test_price_predictor_facade_uses_the_registry():
     assert len(m.outputs) == 10
 
 
-def test_direction_skip_adds_a_linear_logit_and_is_absent_by_default():
+def test_direction_skip_adds_a_linear_logit_and_can_be_turned_off():
     import numpy as np
 
     from neural_trade.models.gru_attention import SKIP_LAGS, _trailing_return_features
 
     tf.keras.utils.set_random_seed(0)
-    plain = Models.build(None, Config(LOOKBACK=32))
+    plain = Models.build(None, Config(LOOKBACK=32, DIRECTION_SKIP=False))
     names = {layer.name for layer in plain.layers}
     assert "direction_skip_features" not in names and "direction_h1_skip" not in names
 
     tf.keras.utils.set_random_seed(0)
-    skip = Models.build(None, Config(LOOKBACK=32, DIRECTION_SKIP=True))
+    skip = Models.build(None, Config(LOOKBACK=32))   # on by default
     names = {layer.name for layer in skip.layers}
     assert {"direction_skip_features", "direction_h0_skip", "direction_h1_logit", "direction_h2_skip"} <= names
     outs = PredictiveOutputs(*skip(tf.random.normal([4, 32]), training=False))

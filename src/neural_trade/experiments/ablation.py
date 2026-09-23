@@ -70,7 +70,7 @@ class AblationSpec:
     base_overrides: Dict[str, Any] = field(default_factory=dict)
     scales: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     calibrate: str = "once"                       # "once" (all_on, then frozen) or "none"
-    strategy: str = "enhanced_multi_horizon"
+    strategy: str = "calibrated_quantile"
 
     def __post_init__(self):
         bad = [m for m in self.modes if m not in MODES]
@@ -158,7 +158,8 @@ def execute_cell(spec: AblationSpec, cell: Cell, scale: str, out_dir, frozen: Op
                            float(ctx.config.DIR_DEADBAND_BPS))
     bars = Bars.from_frame(blocks["df"], blocks["test"]["anchor_bar"])
     var_scale = var_scale_from(cal) if cal is not None else var_scale_from(test)
-    bt = run_backtest(SignalFrame.build(test, var_scale), bars, build_strategy(spec.strategy))
+    cal_signals = SignalFrame.build(cal, var_scale) if cal is not None else None
+    bt = run_backtest(SignalFrame.build(test, var_scale), bars, build_strategy(spec.strategy, calibration=cal_signals))
     report = evaluate(test, ctx.config, baselines=base, cal_frame=cal, run_id=ctx.run_id,
                       backtest={"strategy": spec.strategy, "summary": bt.summary})
     report.to_json(ctx.path("eval_report_test.json"))

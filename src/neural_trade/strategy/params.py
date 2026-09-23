@@ -21,10 +21,19 @@ def _check_keys(cls, params: Mapping[str, Any], what: str) -> None:
                 f"unknown {what} parameter {key!r}" + (f" (did you mean {hint[0]!r}?)" if hint else ""))
 
 
-def build_strategy(name: str, params: Optional[Mapping[str, Any]] = None) -> Strategy:
+def build_strategy(name: str, params: Optional[Mapping[str, Any]] = None, *, calibration=None) -> Strategy:
+    """Build a registered strategy. ``calibration`` (the calibration block's SignalFrame or a stored
+    quantile table) is required by strategies whose thresholds come from it (``from_calibration``)."""
     cls = Strategies.get(name)
     params = dict(params or {})
     _check_keys(cls, params, f"strategy {name!r}")
+    if hasattr(cls, "from_calibration"):
+        if calibration is None:
+            raise InvalidConfigurationError(f"strategy {name!r} sets its thresholds on the calibration block: "
+                                            "pass calibration= (its SignalFrame or a stored quantile table)")
+        for fixed in ("long_above", "short_below", "median"):
+            params.pop(fixed, None)
+        return cls.from_calibration(calibration, **params)
     return cls(**params)
 
 

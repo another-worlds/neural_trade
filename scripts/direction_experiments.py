@@ -36,7 +36,20 @@ for _fold in (-3, -2):
         f"bce_no_soft_ece_f{_fold}": ({**_f, "LAMBDA_SOFT_ECE": 0.0}, 20),
         f"bce_skip_f{_fold}": ({**_f, "DIRECTION_SKIP": True}, 20),
         f"bce_skip_l2_1e-2_f{_fold}": ({**_f, "DIRECTION_SKIP": True, "DIRECTION_SKIP_L2": 1e-2}, 20),
+        # batch-size check: m-gate runs use the default 64 (4x the updates per epoch)
+        f"skip_b64_f{_fold}": ({"FOLD_INDEX": _fold, "DIRECTION_SKIP": True, "BATCH_SIZE": 64}, 20),
+        f"skip_b256_rerun_f{_fold}": ({**_f, "DIRECTION_SKIP": True}, 20),
     })
+
+
+# Price-head regularisation (the heads overfit once the trunk carries information): tower L2,
+# 2 seeds x 2 development folds per setting, because identical GPU runs differ by 0.01-0.05 AUC.
+REG_GRID = [f"reg{r:g}_s{seed}_f{fold}" for r in (0.0, 1e-3, 1e-2) for fold in (-3, -2) for seed in (0, 1)]
+for _r in (0.0, 1e-3, 1e-2):
+    for _fold in (-3, -2):
+        for _seed in (0, 1):
+            EXPERIMENTS[f"reg{_r:g}_s{_seed}_f{_fold}"] = (
+                {**B, "FOLD_INDEX": _fold, "SEED": _seed, "REG_MOMENTUM_L2": _r}, 20)
 
 
 def _auc(y, s):
@@ -66,7 +79,9 @@ def score(frame, deadband_bps, baseline_frame=None):
         y = lab[mask].astype(int)
         row = {"auc": _auc(y, p), "mcc": _mcc(y, p), "gauss_auc": _auc(y, g), "p_std": float(np.std(p)),
                "pred_up_rate": float(np.mean(p > 0.5)), "delta_corr": float(np.corrcoef(frame.delta[h],
-                                                                                        frame.y[:, i])[0, 1])}
+                                                                                        frame.y[:, i])[0, 1]),
+               "delta_ev": float(1 - np.var(frame.y[:, i] - frame.delta[h]) / np.var(frame.y[:, i])),
+               "delta_pred_std": float(np.std(frame.delta[h]))}
         if baseline_frame is not None:
             row["logreg_auc"] = _auc(y, baseline_frame.direction_prob[h][mask])
         out[h] = row

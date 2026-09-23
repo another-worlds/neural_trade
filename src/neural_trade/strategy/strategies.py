@@ -50,7 +50,7 @@ class Strategies(BaseRegistry):
 
     registry = {}
     strict = True
-    default = "enhanced_multi_horizon"
+    default = "calibrated_quantile"
 
     @classmethod
     def validate_component(cls, component: Any) -> bool:
@@ -216,6 +216,61 @@ class LiberalStrategy(Strategy):
         tp1 = order.info.get("tp1_offset")
         if tp1 is not None and bars_held >= self.tp1_min_bars and sign * (s.close[t] - entry_price) >= tp1:
             return "TP1"
+        return None
+
+
+@Strategies.register(name="calibrated_quantile", tags=["calibrated", "default-for-weak-edges"])
+@dataclass
+class QuantileSignalStrategy(Strategy):
+    """Trade only the model's most convinced bars, with thresholds set on the CALIBRATION block.
+
+    The notebook strategies use fixed probability lines (a horizon "votes" beyond 0.55 / 0.45).
+    A calibrated head with a weak edge almost never crosses them, so they never trade. Here the
+    entry lines are quantiles of the confidence-weighted P(up) on the calibration block
+    (``from_calibration``): long above its ``entry_quantile``, short below ``1 - entry_quantile``,
+    optionally only when the h1 price head points the same way. Exit after ``max_hold`` bars (the
+    h1 horizon by default), on the stop (``sl_sigma`` x predicted sigma), or when the signal crosses
+    back through the calibration median.
+    """
+
+    name: ClassVar[str] = "calibrated_quantile"
+    long_above: float = 0.55
+    short_below: float = 0.45
+    median: float = 0.5
+    entry_quantile: float = 0.9
+    require_delta_agreement: bool = False
+    sl_sigma: float = 2.0
+    size: float = 1.0
+    max_hold: int = 15
+
+    @classmethod
+    def from_calibration(cls, calibration, entry_quantile: float = 0.9, **kwargs) -> "QuantileSignalStrategy":
+        """``calibration``: the calibration block's SignalFrame, or a stored quantile table
+        ``{quantile: weighted-direction value}`` (ArtifactBundle meta "weighted_direction_quantiles")."""
+        if isinstance(calibration, SignalFrame):
+            w = np.asarray(calibration.weighted_direction, dtype=float)
+            q = lambda x: float(np.quantile(w, x))  # noqa: E731
+        else:
+            table = {round(float(k), 6): float(v) for k, v in dict(calibration).items()}
+            missing = [x for x in (entry_quantile, 1.0 - entry_quantile, 0.5) if round(x, 6) not in table]
+            if missing:
+                raise ValueError(f"quantile table lacks {missing}; it has {sorted(table)}")
+            q = lambda x: table[round(x, 6)]  # noqa: E731
+        return cls(long_above=q(entry_quantile), short_below=q(1.0 - entry_quantile), median=q(0.5),
+                   entry_quantile=entry_quantile, **kwargs)
+
+    def decide(self, s, t):
+        w = s.weighted_direction[t]
+        for sign, ok in ((1, w > self.long_above), (-1, w < self.short_below)):
+            if ok and (not self.require_delta_agreement or np.sign(s.delta[t, 1]) == sign):
+                return Order(_side(sign), self.size, sl=-sign * self.sl_sigma * s.sigma[t, 1], tp_is_offset=True,
+                             reason="quantile", max_hold=self.max_hold)
+        return None
+
+    def exit_signal(self, s, t, side, bars_held, entry_price, order):
+        w = s.weighted_direction[t]
+        if (side == "LONG" and w < self.median) or (side == "SHORT" and w > self.median):
+            return "REV"
         return None
 
 

@@ -49,13 +49,14 @@ def main(argv=None) -> int:
 
     var_scale = var_scale_from(cal)
     signals = SignalFrame.build(test, var_scale, calibrated=not args.uncalibrated)
+    cal_signals = SignalFrame.build(cal, var_scale, calibrated=not args.uncalibrated)
     cfg = BacktestConfig(random_seeds=args.random_seeds)
     out = {"run": run.name, "var_scale": var_scale, "calibrated": not args.uncalibrated, "n_bars": len(bars),
            "strategies": {}}
     for name in Strategies.list_names():
         if "baseline" in Strategies.get_metadata(name).get("tags", []):
             continue
-        res = backtest(signals, bars, build_strategy(name), cfg)
+        res = backtest(signals, bars, build_strategy(name, calibration=cal_signals), cfg)
         out["strategies"][name] = res.to_dict()
         s = res.summary
         rnd = res.baselines["random_same_freq"]
