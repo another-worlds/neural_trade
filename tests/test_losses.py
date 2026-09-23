@@ -48,9 +48,12 @@ def test_point_huber_executes_with_dummy_self():
 
 
 def test_registry_functions_from_module():
-    # Ensure the registered functions come from the centralized module
-    f = Losses.get('point_huber')
-    assert f.__module__ == 'losses'
+    # The registry must hand out the production function itself - not a copy from a stale
+    # module (registries/losses.py used to be one, and its tests checked dead code).
+    import neural_trade.losses.functions as functions
+
+    assert Losses.get('point_huber') is functions.point_huber
+    assert Losses.get_objective() is functions.custom_loss
 
 
 def test_custom_loss_smoke_runs(make_loss_model):

@@ -674,7 +674,7 @@ if __name__ == "__main__":
 # T_⊥ / QBOX loss function tests
 # ---------------------------------------------------------------------------
 import tensorflow as tf
-from registries.losses import Losses  # noqa: E402
+from neural_trade.registries.losses import Losses  # noqa: E402  (production functions, not a copy)
 
 
 def _mock_model(**kwargs):
@@ -767,18 +767,23 @@ class TestQBOXLosses:
     # ------------------------------------------------------------------
 
     def test_hd_coupling_scalar_finite(self):
-        """Loss is a finite scalar (typically negative — reward term)."""
+        """Loss is a finite scalar in [0, 2] (1 - Pearson correlation)."""
         x_window = tf.random.normal([B, 32])
         v = tf.random.uniform([B, 1], 0.01, 1.0)
         result = _hd(None, x_window, v, v, v)
         assert np.isfinite(float(result)), "hd_loss must be finite"
+        assert 0.0 <= float(result) <= 2.0 + 1e-6
 
     def test_hd_coupling_zero_volatility(self):
-        """Zero local volatility → reward = 0 → loss = 0."""
+        """No volatility variation → no ordering information → correlation 0 → loss = 1.
+
+        The pre-Phase-A form (-mean(vol * sigma)) returned 0 here; the corrected term is
+        1 - Pearson(z(log vol), z(log var)), the neutral midpoint of [0, 2].
+        """
         x_flat   = tf.zeros([B, 32])   # constant series → std = 0
         v = tf.ones([B, 1]) * 0.5
         result = _hd(None, x_flat, v, v, v)
-        assert float(result) == 0.0, f"Zero-vol hd_loss should be 0, got {float(result)}"
+        assert abs(float(result) - 1.0) < 1e-6, f"Zero-vol hd_loss should be 1, got {float(result)}"
 
     # ------------------------------------------------------------------
     # Information flow entropy loss
@@ -800,7 +805,7 @@ class TestQBOXLosses:
         base = tf.random.normal([B, 1])
         result = _ife(None, base, base, base, rho_max=0.50)
         assert float(result) >= 0.0, "IFE loss must be non-negative"
-        # |corr| = 1.0 with rho_max=0.50 → (1.0 - 0.5)^2 * 2 = 0.5
+        # |corr| = 1.0 with rho_max=0.50 → linear hinge: 2 * (1.0 - 0.5) = 1.0
         assert float(result) > 0.0, "Perfect correlation should yield positive IFE loss"
 
 
@@ -810,7 +815,8 @@ class TestVacuumOverflowLoss:
     The loss measures alignment between:
       - mean vacuum overflow signal  (energy above E_max in hidden-perp subspace)
       - mean absolute prediction residual across three horizons
-    Loss = (mean_overflow - mean_residual)² / (mean_residual² + ε)
+    Loss = (mean_overflow - mean_residual)² / (mean_residual² + ε), with the residual
+    statistic stop-gradient-ed (it is a target, not something to game).
     """
 
     def test_perfect_alignment_zero_loss(self):
