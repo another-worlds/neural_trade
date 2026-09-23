@@ -15,7 +15,7 @@ does not interfere with cross-horizon coherence.
 
 Usage
 -----
-    from calibration.temperature_scaling import TemperatureScaler
+    from neural_trade.calibration.temperature_scaling import TemperatureScaler
 
     scaler = TemperatureScaler()
     # probs_h* : np.ndarray of shape [N] with values in (0, 1)

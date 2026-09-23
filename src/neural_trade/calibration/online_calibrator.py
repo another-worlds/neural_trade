@@ -19,7 +19,7 @@ The calibrated probability used for trading is always sigmoid(logit(p) / T_ema).
 
 Usage
 -----
-    from calibration.online_calibrator import OnlineTemperatureCalibrator
+    from neural_trade.calibration.online_calibrator import OnlineTemperatureCalibrator
 
     # Initialise from saved offline temperatures (or with defaults):
     calib = OnlineTemperatureCalibrator.from_file("calibration/temperature_params.json")

@@ -22,7 +22,7 @@ Fit one `ConformalRegressor` per output horizon; save/load with joblib.
 
 Usage
 -----
-    from calibration.conformal import ConformalRegressor
+    from neural_trade.calibration.conformal import ConformalRegressor
 
     # On the calibration split (raw price delta, NOT scaled):
     cr_h1 = ConformalRegressor()

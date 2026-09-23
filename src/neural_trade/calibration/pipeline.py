@@ -4,7 +4,7 @@ Quick start (notebook)
 -----------------------
 ::
 
-    from calibration import CalibrationPipeline
+    from neural_trade.calibration import CalibrationPipeline
 
     # After training:
     pipeline = CalibrationPipeline()
@@ -35,9 +35,9 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from calibration.temperature_scaling import TemperatureScaler
-from calibration.conformal import ConformalRegressor
-from calibration.online_calibrator import OnlineTemperatureCalibrator
+from neural_trade.calibration.temperature_scaling import TemperatureScaler
+from neural_trade.calibration.conformal import ConformalRegressor
+from neural_trade.calibration.online_calibrator import OnlineTemperatureCalibrator
 
 try:
     from neural_trade.metrics.direction_labels import direction_labels_np as _compute_direction_labels_np

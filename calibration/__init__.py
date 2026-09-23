@@ -1,28 +1,5 @@
-"""Post-hoc calibration utilities for the neural_trade model.
+"""Compatibility shim: ``calibration`` moved to ``neural_trade.calibration`` (B10/B13; removed in B18)."""
+from neural_trade._shim import alias_package
 
-Modules
--------
-temperature_scaling
-    Per-horizon temperature scaling for direction heads.  Fit a scalar T_h
-    on a held-out calibration set; apply before signal fusion at inference time.
-
-conformal
-    Distribution-free conformal prediction intervals for price heads.  Guarantees
-    empirical coverage >= 1-alpha regardless of model quality.
-
-online_calibrator
-    Online adaptive temperature scaling for live inference.  Updates T_h after
-    each realized trade outcome to track non-stationary market regimes.
-"""
-
-from calibration.temperature_scaling import TemperatureScaler
-from calibration.conformal import ConformalRegressor
-from calibration.online_calibrator import OnlineTemperatureCalibrator
-from calibration.pipeline import CalibrationPipeline
-
-__all__ = [
-    "TemperatureScaler",
-    "ConformalRegressor",
-    "OnlineTemperatureCalibrator",
-    "CalibrationPipeline",
-]
+alias_package(__name__, "neural_trade.calibration",
+              ("conformal", "online_calibrator", "pipeline", "temperature_scaling"))
