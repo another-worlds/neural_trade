@@ -97,8 +97,8 @@ def design_effect(a, b, steps: int) -> float:
 
 
 def corr_band(n: int, deff: float) -> float:
-    """95% half-width of a correlation of ``n`` samples with no relationship (n / deff effective)."""
-    return S.corr_null(n / max(deff, 1.0))
+    """95% half-width of a correlation of ``n`` samples with no relationship (n / deff effective), in r units."""
+    return S.corr_null_r(n / max(deff, 1.0))
 
 
 def newey_west_var_of_mean(z, lag: int) -> float:

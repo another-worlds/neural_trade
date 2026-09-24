@@ -175,7 +175,7 @@ def test_direction_tiles_are_graded_against_the_chance_band(viz_config):
     from neural_trade.visualization.training_dashboard import training_dashboard_figure, training_health
 
     rows = _served_rows(6, best=5)
-    band = S.corr_null(2866 // 10)
+    band = S.corr_null_r(2866 // 10)
     for m, status in ((0.05, "info"), (band + 0.01, "good"), (-band - 0.01, "critical")):
         rows[-1]["val_dir_mcc_h0"] = m
         tile = training_health(rows, viz_config, n_val=2866)["direction h0"]
@@ -186,7 +186,7 @@ def test_direction_tiles_are_graded_against_the_chance_band(viz_config):
     xa, ya = _panel_axes(fig, 2, 1)
     rects = [s for s in fig.layout.shapes if s.type == "rect" and s.yref == ya]
     # n_eff = N // steps, as the evaluation report counts it
-    assert sorted(round(s.y1, 4) for s in rects) == sorted(round(S.corr_null(2866 // k), 4) for k in (10, 15, 20))
+    assert sorted(round(s.y1, 4) for s in rects) == sorted(round(S.corr_null_r(2866 // k), 4) for k in (10, 15, 20))
     xa, ya = _panel_axes(fig, 3, 1)
     rects = [s for s in fig.layout.shapes if s.type == "rect" and s.yref == ya]
     assert min(round(s.y1 - 0.5, 4) for s in rects) == round(band / 2, 4)   # balanced accuracy: half the MCC band
@@ -213,7 +213,7 @@ def test_two_sided_chance_bands_mark_each_horizons_own_edges(viz_config):
     rows = _served_rows(6, best=5)
     rows[-1]["val_gauss_dir_mcc_h0"] = -0.148
     fig = training_dashboard_figure(rows, viz_config, n_val=2866)
-    band = {h: S.corr_null(2866 // k) for h, k in zip(H, (10, 15, 20))}
+    band = {h: S.corr_null_r(2866 // k) for h, k in zip(H, (10, 15, 20))}
     for (r, c), center, scale in (((2, 1), 0.0, 1.0), ((2, 2), 0.0, 1.0), ((3, 1), 0.5, 0.5)):
         edges = _horizon_edges(fig, r, c)
         assert sum(len(v) for v in edges.values()) == 6, ((r, c), edges)

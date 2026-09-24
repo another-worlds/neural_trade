@@ -722,7 +722,8 @@ def _corr_panel(fig, go, summary, order, labels):
     labs = np.asarray(labels, dtype=object)
     if not np.isfinite(rc).any() and not np.isfinite(lev).any():
         return None, m
-    band = S.corr_null(m)
+    # r units, not Fisher z (19 changes: 0.45, not 0.49; 7 changes: 0.75, not 0.98): bars, shading and title
+    band = S.corr_null_r(m)
     inside = np.isfinite(rc) & (np.abs(rc) <= band)
     outside = np.isfinite(rc) & ~inside
     for sel, name, color in ((inside, "Δ in noise", WITHIN_NOISE_COLOR),

@@ -615,7 +615,7 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     steps = max(S.horizon_steps(frame, h) for h in H)
     # 1. correlation
     corr = np.corrcoef(P.T) if np.all(P.std(0) > 0) else np.eye(3)
-    band = S.corr_null(N, steps=steps)
+    band = S.corr_null_r(N, steps=steps)                     # r units, not Fisher z
     # 2. vote patterns
     code = (~U[:, 0]) * 4 + (~U[:, 1]) * 2 + (~U[:, 2]) * 1        # UUU = 0 ... DDD = 7, the PATTERNS order
     share = np.bincount(code, minlength=8) / max(N, 1)

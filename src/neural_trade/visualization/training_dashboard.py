@@ -300,11 +300,12 @@ def _too_few(ctx: _Ctx) -> bool:
 
 def _chance(ctx: _Ctx, h: str) -> Optional[float]:
     """Half-width of the 95% band an MCC stays inside by chance on the validation block (n_eff = n / h bars),
-    capped at 1; None when the validation size is unknown or n_eff < _MIN_N_EFF."""
+    in MCC (r) units, so below 1 (not the Fisher-z half-width: n_eff 10 gives 0.63, not 0.74); None when
+    the validation size is unknown or n_eff < _MIN_N_EFF."""
     n = _enough(ctx, h)
     if n is None:
         return None
-    return min(1.0, S.corr_null(n))
+    return min(1.0, S.corr_null_r(n))
 
 
 def _ks_crit(ctx: _Ctx, h: str) -> Optional[float]:

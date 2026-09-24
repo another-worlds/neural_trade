@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 
 import numpy as np
 import pandas as pd
@@ -154,7 +155,7 @@ def test_correlation_panel_uses_epoch_to_epoch_changes_against_a_noise_band():
     s = indicator_summary(rows, Config())
     r = s.loc["rsi_period_0"]
     assert r["corr with val loss"] > 0.9 and r["r with epoch"] < -0.9      # the shared training trend
-    band = S.corr_null(n - 1)
+    band = S.corr_null_r(n - 1)                                             # r units, not Fisher z
     assert abs(r["r of changes"]) < band                                     # nothing beyond it
     fig = indicator_evolution(rows, Config())
     bars = [t for t in _panel_traces(fig, 3, 2) if t.type == "bar"]
@@ -165,6 +166,44 @@ def test_correlation_panel_uses_epoch_to_epoch_changes_against_a_noise_band():
     rect = next(sh for sh in fig.layout.shapes if sh.type == "rect")
     assert rect.x0 == pytest.approx(-band) and rect.x1 == pytest.approx(band)
     assert not any(c in (T.SERIES[0], T.SERIES[1]) for t in bars for c in [t.marker.color])
+
+
+def _rows_with_r_of_changes(n, r, seed=5):
+    """``n`` epochs whose epoch-to-epoch changes of RSI #0 and of val loss correlate at exactly ``r``."""
+    rng = np.random.default_rng(seed)
+    a = rng.normal(size=n - 1)
+    a -= a.mean()
+    a /= np.linalg.norm(a)
+    b = rng.normal(size=n - 1)
+    b -= b.mean() + (b @ a) * a
+    b /= np.linalg.norm(b)
+    y = r * a + math.sqrt(1 - r * r) * b
+    vl = 5 - 0.05 * np.arange(n) + 0.05 * np.concatenate([[0.0], np.cumsum(a)])
+    per = 14 - 0.1 * np.arange(n) + 0.5 * np.concatenate([[0.0], np.cumsum(y)])
+    return [{"epoch": e, "val_loss": float(vl[e]), "period/rsi_period_0": float(per[e])} for e in range(n)]
+
+
+@pytest.mark.parametrize("n, r, band, printed, cls", [
+    (20, 0.47, 0.4542, "±0.45", "Δ beyond noise"),   # Fisher-z half-width 0.49: 0.47 was greyed out
+    (20, 0.40, 0.4542, "±0.45", "Δ in noise"),
+    (8, 0.85, 0.7531, "±0.75", "Δ beyond noise"),    # 7 changes: the z-scale band was ±0.98
+])
+def test_noise_band_is_on_the_r_scale_it_is_drawn_on(n, r, band, printed, cls):
+    """Final check, finding 9: the band is the 95% no-relation half-width of r (tanh of the Fisher-z
+    half-width, 0.45 for 19 changes), not the Fisher-z half-width itself (0.49), which greyed out
+    bars between the two as 'in noise' and printed the wrong threshold."""
+    rows = _rows_with_r_of_changes(n, r)
+    s = indicator_summary(rows, Config())
+    assert s.loc["rsi_period_0", "r of changes"] == pytest.approx(r, abs=1e-9)
+    assert s.attrs["n_changes"] == n - 1
+    fig = indicator_evolution(rows, Config())
+    rect = next(sh for sh in fig.layout.shapes if sh.type == "rect")
+    assert rect.x1 == pytest.approx(band, abs=1e-4) and rect.x0 == pytest.approx(-band, abs=1e-4)
+    assert rect.x1 == pytest.approx(S.corr_null_r(n - 1)) == pytest.approx(math.tanh(S.corr_null(n - 1)))
+    title = fig.get_subplot(3, 2).xaxis.title.text
+    assert f"shaded {printed} = no relation at 95% ({n - 1} epoch-to-epoch changes)" in title
+    bars = [t for t in _panel_traces(fig, 3, 2) if t.type == "bar"]
+    assert [t.name for t in bars] == [cls]
 
 
 def test_correlations_are_nan_below_eight_epochs():

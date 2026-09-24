@@ -398,7 +398,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
                       3, 1)
         _hline(fig, 3, 1, labels[0], labels[-1], be, name=f"break-even {be:.2f}%", legend=lg[7])
         fig.add_hline(y=0, line=dict(color=T.NEUTRAL, width=1), row=3, col=1)
-        rho, band = _spearman(conv, gross_pct), S.corr_null(n)
+        rho, band = _spearman(conv, gross_pct), S.corr_null_r(n)        # r units, not Fisher z
         fig.layout.annotations[6].text = _title(_PANELS[6][0], f"Spearman ρ {rho:+.2f} (chance ±{band:.2f}), "
                                                                 f"{k} bins")
         # (3,3): the h1 forecast at the decision bar, in the trade's direction, against what followed
@@ -438,7 +438,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
         # no zero line here: the realised = predicted line IS almost flat when the predicted moves are small
         fig.add_trace(go.Scatter(x=span, y=span, mode="lines", name="y = x (perfect)", legend=lg[9],
                                  line=dict(color=T.NEUTRAL, width=1.5, dash=_REF_DASH), hoverinfo="skip"), 3, 3)
-        rho2, band2 = _spearman(pred[ok], real[ok]), S.corr_null(max(n_eff, 1))
+        rho2, band2 = _spearman(pred[ok], real[ok]), S.corr_null_r(max(n_eff, 1))
         right = 100 * np.mean(np.sign(pred[ok]) * np.sign(real[ok]) > 0) if ok.any() else float("nan")
         late = int((~ok).sum())
         head = _PANELS[8][0] if steps else "Predicted h1 vs move over the hold ($)"

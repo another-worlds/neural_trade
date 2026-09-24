@@ -8,7 +8,8 @@ report (``n_eff = N // h_steps``), the helpers here count ``N / steps`` effectiv
 * :func:`n_eff` - effective sample size.
 * :func:`wilson` - binomial proportion interval on the effective count.
 * :func:`mean_ci` - normal interval of a mean on the effective count.
-* :func:`corr_null` - the +/- band a correlation stays inside by chance (no relationship).
+* :func:`corr_null_r` - the +/- band a correlation r stays inside by chance (no relationship), in r units.
+* :func:`corr_null` - the same band on the Fisher-z scale (atanh r), for intervals built on that scale.
 * :func:`auc_ci` - Hanley-McNeil interval for a ROC AUC on effective class counts.
 * :func:`thin` - indices that keep at most ``max_points`` of a long, ordered series (for plotting).
 """
@@ -51,8 +52,22 @@ def mean_ci(y, *, steps: int = 1, z: float = Z95) -> Tuple[float, float, float]:
 
 
 def corr_null(n, *, steps: int = 1, z: float = Z95) -> float:
-    """Half-width of the band a sample correlation stays inside by chance when there is no relationship."""
+    """Half-width, on the Fisher-z scale (atanh r), of the band a sample correlation stays inside by chance
+    when there is no relationship: z / sqrt(n_eff - 3).
+
+    This is NOT a threshold for r itself: for 19 samples it is 0.49 where the r-scale value is 0.45, and
+    for 7 samples 0.98 where it is 0.75. Compare an r, a Spearman rho or an MCC with :func:`corr_null_r`.
+    Use this value only on the z scale, e.g. times (1 - r^2) for the delta-method interval of an r."""
     return float(z / np.sqrt(max(n_eff(n, steps) - 3.0, 1.0)))
+
+
+def corr_null_r(n, *, steps: int = 1, z: float = Z95) -> float:
+    """95% no-relation half-width on the r scale: the band a sample correlation r (Pearson, Spearman rho,
+    or an MCC) stays inside by chance, on n / steps effective samples.
+
+    The Fisher-z half-width :func:`corr_null` back-transformed with tanh, so it is always below 1: 0.45
+    for 19 samples (exact t test 0.456), 0.63 for 10 (0.632), 0.75 for 7 (0.754)."""
+    return float(np.tanh(corr_null(n, steps=steps, z=z)))
 
 
 def auc_ci(auc: float, n_pos: int, n_neg: int, *, steps: int = 1, z: float = Z95) -> Tuple[float, float]:
