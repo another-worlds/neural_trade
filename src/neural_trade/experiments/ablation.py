@@ -415,14 +415,20 @@ def _guardrail_breaches(rows, treat, control, guardrails):
     return breaches
 
 
+def _mode_arms(term: str):
+    """(mode, treatment, control) of a term's two comparisons."""
+    return (("leave_one_in", f"only:{term}", "all_off"), ("leave_one_out", "all_on", f"without:{term}"))
+
+
 def analyze(rows: List[Dict[str, Any]], spec: AblationSpec, criteria: Criteria) -> Dict[str, Any]:
-    """Per-term verdicts from the completed rows (see the module docstring)."""
+    """Per-term verdicts from the completed rows (see the module docstring). The result also records
+    the pre-registered ``min_agree_frac`` the verdicts used, so a reader of analysis.json (the
+    ablation figure's subtitle) can say how many pairs had to agree without the criteria file."""
     conds = {c.name for c in spec.conditions()}
     out: Dict[str, Any] = {"terms": {}, "family": None}
     for term in spec.terms:
         modes = {}
-        for mode, treat, control in (("leave_one_in", f"only:{term}", "all_off"),
-                                     ("leave_one_out", "all_on", f"without:{term}")):
+        for mode, treat, control in _mode_arms(term):
             if treat not in conds or control not in conds:
                 continue
             comps = [compare(rows, treat, control, c, criteria.min_agree_frac) for c in criteria.for_term(term)]
@@ -439,6 +445,7 @@ def analyze(rows: List[Dict[str, Any]], spec: AblationSpec, criteria: Criteria) 
         if verdict == "VALUE" and breaches:
             verdict = "INCONCLUSIVE"
         out["family"] = {"verdict": verdict, "metrics": comps, "guardrail_breaches": breaches}
+    out["min_agree_frac"] = float(criteria.min_agree_frac)
     return out
 
 
@@ -452,30 +459,44 @@ def write_results(rows: List[Dict[str, Any]], out_dir) -> Path:
     for r in rows:
         keys += [k for k in r if k not in keys]
     with open(path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=keys)
+        w = csv.DictWriter(fh, fieldnames=keys, lineterminator="\n")      # LF on Windows too (tracked file)
         w.writeheader()
         for r in rows:
             w.writerow(r)
     return path
 
 
+SUMMARY_FIELDS = ["term", "mode", "metric", "treatment", "control", "n_pairs", "mean_delta", "sd_delta", "sigma_seed",
+                  "mde", "n_positive", "n_negative", "verdict", "mode_verdict", "term_verdict", "tolerance"]
+
+
 def write_summary(analysis: Dict[str, Any], out_dir) -> Path:
+    """summary.csv: one row per term (or family), mode and primary metric, then one ``BREACH`` row per
+    guard-rail breach of that mode, as report.md lists them. A breach row has the guard-rail metric,
+    its mean delta (oriented, positive = the term helps) and its ``tolerance`` (the last column, empty
+    on a primary row); the pair statistics it does not have are left empty."""
     path = Path(out_dir) / "summary.csv"
-    fields = ["term", "mode", "metric", "treatment", "control", "n_pairs", "mean_delta", "sd_delta", "sigma_seed",
-              "mde", "n_positive", "n_negative", "verdict", "mode_verdict", "term_verdict"]
+    fields = SUMMARY_FIELDS
+
+    def block(w, term, mode, m, term_verdict, arms):
+        for c in m["metrics"]:
+            w.writerow({"term": term, "mode": mode, **{k: c[k] for k in fields if k in c},
+                        "mode_verdict": m["verdict"], "term_verdict": term_verdict})
+        for b in m.get("guardrail_breaches") or []:
+            w.writerow({"term": term, "mode": mode, "metric": b["metric"], "treatment": arms.get(mode, ("", ""))[0],
+                        "control": arms.get(mode, ("", ""))[1], "mean_delta": b["mean_delta"], "verdict": "BREACH",
+                        "mode_verdict": m["verdict"], "term_verdict": term_verdict, "tolerance": b["tolerance"]})
+
     with open(path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=fields)
+        w = csv.DictWriter(fh, fieldnames=fields, lineterminator="\n")      # LF on Windows too (tracked file)
         w.writeheader()
         for term, t in analysis["terms"].items():
+            arms = {mode: (treat, control) for mode, treat, control in _mode_arms(term)}
             for mode, m in t["modes"].items():
-                for c in m["metrics"]:
-                    w.writerow({"term": term, "mode": mode, **{k: c[k] for k in fields if k in c},
-                                "mode_verdict": m["verdict"], "term_verdict": t["verdict"]})
+                block(w, term, mode, m, t["verdict"], arms)
         fam = analysis.get("family")
         if fam:
-            for c in fam["metrics"]:
-                w.writerow({"term": "family", "mode": "all_on_vs_all_off", **{k: c[k] for k in fields if k in c},
-                            "mode_verdict": fam["verdict"], "term_verdict": fam["verdict"]})
+            block(w, "family", "all_on_vs_all_off", fam, fam["verdict"], {"all_on_vs_all_off": ("all_on", "all_off")})
     return path
 
 
@@ -483,22 +504,53 @@ def _fmt(x, nd=4):
     return "nan" if x is None or (isinstance(x, float) and not math.isfinite(x)) else f"{x:+.{nd}f}"
 
 
+def value_withdrawn(block: Dict[str, Any]) -> bool:
+    """True when a mode's (or the family's) primary metrics combine to VALUE but a guard-rail breach
+    made its verdict INCONCLUSIVE (``analyze``): the breach is then the only reason it is not VALUE."""
+    return (bool(block.get("guardrail_breaches")) and block.get("verdict") == "INCONCLUSIVE"
+            and _combine_primaries(c.get("verdict") for c in block.get("metrics") or []) == "VALUE")
+
+
+def _breach_note(block: Dict[str, Any]) -> str:
+    """' (VALUE withdrawn: guard-rail `m` breached)', ' (guard-rail `m` breached)' or ''."""
+    breaches = block.get("guardrail_breaches") or []
+    if not breaches:
+        return ""
+    names = ", ".join(f"`{b['metric']}`" for b in breaches)
+    return f" (VALUE withdrawn: guard-rail {names} breached)" if value_withdrawn(block) else \
+        f" (guard-rail {names} breached)"
+
+
+def _breach_rows(label: str, mode: str, block: Dict[str, Any]) -> List[str]:
+    return [f"| {label} | {mode} | guard-rail `{b['metric']}` | | {_fmt(b['mean_delta'])} | | | "
+            f"tol {b['tolerance']:g} | | BREACH |" for b in block.get("guardrail_breaches") or []]
+
+
 def write_report(analysis: Dict[str, Any], rows: List[Dict[str, Any]], spec: AblationSpec, criteria: Criteria,
                  out_dir, scale: str) -> Path:
+    n_pairs = len(spec.seeds) * len(spec.periods)
+    need = math.ceil(criteria.min_agree_frac * n_pairs - 1e-9)
     L = [f"# Ablation `{spec.name}` - scale `{scale}`", "",
          f"{len(rows)} completed runs; terms {', '.join(spec.terms)}; seeds {spec.seeds}; periods "
          f"{', '.join(f'{k} (fold {v})' for k, v in spec.periods.items())}; lambda calibration: {spec.calibrate}.",
          "", "Deltas are paired over (seed, period) and oriented so that **positive = the term helps**. "
-         f"A verdict of VALUE needs mean delta > max(seed sigma, MDE) with at least "
-         f"{criteria.min_agree_frac:.0%} of pairs agreeing and no guard-rail breach (criteria pre-registered in "
-         "`configs/ablation_criteria.yaml`).", "", "## Verdicts", "",
+         f"A metric is VALUE when its mean delta > max(seed sigma, MDE) with at least "
+         f"{criteria.min_agree_frac:.0%} of pairs agreeing ({need} of {n_pairs}), HARMFUL in the mirror case, "
+         "NEUTRAL when |mean delta| <= MDE, else INCONCLUSIVE. A mode combines its metrics (any HARMFUL, else any "
+         "VALUE, else all NEUTRAL, else INCONCLUSIVE), and a guard-rail breach (a guard-rail metric worse than its "
+         "tolerance: a BREACH row below) withdraws a VALUE, which then reads INCONCLUSIVE. A term needs both modes "
+         "to agree (or one of them and NEUTRAL). Criteria pre-registered in `configs/ablation_criteria.yaml`.",
+         "", "## Verdicts", "",
          "| term | leave-one-in | leave-one-out | verdict |", "|---|---|---|---|"]
     for term, t in analysis["terms"].items():
-        li = t["modes"].get("leave_one_in", {}).get("verdict", "-")
-        lo = t["modes"].get("leave_one_out", {}).get("verdict", "-")
-        L.append(f"| `{term}` | {li} | {lo} | **{t['verdict']}** |")
+        cells = []
+        for mode in ("leave_one_in", "leave_one_out"):
+            m = t["modes"].get(mode)
+            cells.append(f"{m['verdict']}{_breach_note(m)}" if m else "-")
+        L.append(f"| `{term}` | {cells[0]} | {cells[1]} | **{t['verdict']}** |")
     if analysis.get("family"):
-        L.append(f"| family (all_on vs all_off) | | | **{analysis['family']['verdict']}** |")
+        fam = analysis["family"]
+        L.append(f"| family (all_on vs all_off) | | | **{fam['verdict']}**{_breach_note(fam)} |")
     L += ["", "## Per-metric deltas", "",
           "| term | mode | metric | pairs | mean delta | sd | seed sigma | MDE | +/- | verdict |",
           "|---|---|---|---|---|---|---|---|---|---|"]
@@ -508,15 +560,14 @@ def write_report(analysis: Dict[str, Any], rows: List[Dict[str, Any]], spec: Abl
                 L.append(f"| `{term}` | {mode} | `{c['metric']}` | {c['n_pairs']} | {_fmt(c['mean_delta'])} | "
                          f"{_fmt(c['sd_delta'])} | {_fmt(c['sigma_seed'])} | {c['mde']:g} | "
                          f"{c['n_positive']}/{c['n_negative']} | {c['verdict']} |")
-            for b in m["guardrail_breaches"]:
-                L.append(f"| `{term}` | {mode} | guard-rail `{b['metric']}` | | {_fmt(b['mean_delta'])} | | | "
-                         f"tol {b['tolerance']:g} | | BREACH |")
+            L += _breach_rows(f"`{term}`", mode, m)
     fam = analysis.get("family")
     if fam:
         for c in fam["metrics"]:
             L.append(f"| family | all_on vs all_off | `{c['metric']}` | {c['n_pairs']} | {_fmt(c['mean_delta'])} | "
                      f"{_fmt(c['sd_delta'])} | {_fmt(c['sigma_seed'])} | {c['mde']:g} | "
                      f"{c['n_positive']}/{c['n_negative']} | {c['verdict']} |")
+        L += _breach_rows("family", "all_on vs all_off", fam)
     L += ["", "## Condition means", ""]
     metrics = sorted({c.metric for cs in criteria.primary.values() for c in cs})
     L.append("| condition | n | " + " | ".join(f"`{m}`" for m in metrics) + " |")
@@ -535,7 +586,7 @@ def write_report(analysis: Dict[str, Any], rows: List[Dict[str, Any]], spec: Abl
         L.append(f"| {r['key']} | `{r.get('run_id', '')}` | {r.get('epochs_run', '')} | "
                  f"{r.get('wall_s', 0) / 60:.1f} |")
     path = Path(out_dir) / "report.md"
-    path.write_text("\n".join(L) + "\n", encoding="utf-8")
+    path.write_text("\n".join(L) + "\n", encoding="utf-8", newline="\n")     # LF on Windows too (tracked file)
     return path
 
 

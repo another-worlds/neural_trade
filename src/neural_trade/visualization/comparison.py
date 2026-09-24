@@ -20,6 +20,10 @@ merged into one bar), and one dot per run and horizon in the horizon's colour, w
 * whether the runs were scored on one block: runs whose reports agree on the sample counts, the
   realised up-rates and the zero-delta baseline's RMSE share it (their intervals overlap by
   construction); otherwise each block gets a letter, shown after the run label.
+
+``ablation_deltas_figure`` draws the ablation's paired deltas (experiments.ablation.analyze) on each
+comparison's decision scale, delta / max(seed sigma, MDE), so a Sharpe row and a CRPSS row share one
+axis, with the NEUTRAL zone, the +/-1 thresholds, the pairs' sign counts and the guard-rail breaches.
 """
 from __future__ import annotations
 
@@ -612,30 +616,258 @@ def _identical_runs(df, metrics, labels) -> List[List[str]]:
     return [g for g in groups.values() if len(g) > 1]
 
 
-def ablation_deltas_figure(analysis, *, title: Optional[str] = None):
-    """Mean paired delta (+/- sd over seeds and periods) per term, mode and primary metric, coloured
-    by that comparison's verdict. Positive = the term helps."""
+# ------------------------------------------------------------------ ablation verdicts
+_MODE_LABEL = {"leave_one_in": "one in", "leave_one_out": "one out"}
+_REF_DASH = "6px,3px"                      # reference lines (dotted is kept for training curves)
+_ZONE_FILL, _ZONE_LINE = T.rgba(T.NEUTRAL, 0.08), T.rgba(T.NEUTRAL, 0.55)   # a row's NEUTRAL zone: a faint box
+
+
+def _num(v) -> Optional[float]:
+    """``v`` as a finite float, else None (NaN, None, text)."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if np.isfinite(v) else None
+
+
+def _decision_threshold(c: dict) -> Optional[float]:
+    """What a comparison's mean delta must pass for VALUE / HARMFUL: max(seed sigma, MDE), as
+    ``experiments.ablation.compare`` computes it (a missing sigma counts as 0). None when the
+    comparison carries neither or both are 0: there is then no scale to put the delta on."""
+    if "sigma_seed" not in c and "mde" not in c:
+        return None
+    thr = max(_num(c.get("sigma_seed")) or 0.0, _num(c.get("mde")) or 0.0)
+    return thr if thr > 0 else None
+
+
+def _verdict_mark(v: Optional[str]) -> str:
+    """A verdict word in ink after a square in the verdict's colour (colour never carries it alone)."""
+    color = VERDICT_COLORS.get(v or "", T.MUTED)
+    return f"<span style='color:{color}'>■</span> <b>{v or '?'}</b>"
+
+
+def _ablation_rows(analysis) -> List[dict]:
+    """The figure's rows, top to bottom: per term a heading, then per mode its primary metrics and
+    its guard-rail breaches; then the family (all_on vs all_off) the same way."""
+    from neural_trade.experiments.ablation import value_withdrawn
+
+    def block(label, heading, modes, verdict, family):
+        rows.append({"kind": "head", "label": label, "note": heading})
+        for mode, m in modes:
+            ml = "on vs off" if family else _MODE_LABEL.get(mode, mode)
+            for c in m.get("metrics") or []:
+                rows.append({"kind": "metric", "label": f"{ml} · {c['metric']}", "c": c, "mode": ml,
+                             "mode_verdict": m.get("verdict"), "verdict": verdict, "family": family})
+            for b in m.get("guardrail_breaches") or []:
+                rows.append({"kind": "breach", "label": f"{ml} · guard-rail {b['metric']}", "b": b, "mode": ml,
+                             "withdrawn": value_withdrawn(m)})
+
+    rows: List[dict] = []
+    for term, t in (analysis.get("terms") or {}).items():
+        modes = list((t.get("modes") or {}).items())
+        parts = []
+        for mode, m in modes:
+            why = " (VALUE withdrawn: guard-rail breach)" if value_withdrawn(m) else ""
+            parts.append(f"{_MODE_LABEL.get(mode, mode)} {m.get('verdict')}{why}")
+        note = f"term {_verdict_mark(t.get('verdict'))}" + (f"   {' · '.join(parts)}" if parts else "")
+        block(term, note, modes, t.get("verdict"), False)
+    fam = analysis.get("family")
+    if fam:
+        note = f"family {_verdict_mark(fam.get('verdict'))}"
+        if value_withdrawn(fam):
+            names = ", ".join(b["metric"] for b in fam["guardrail_breaches"])
+            note += f"   VALUE withdrawn by the guard-rail breach: {names}"
+        block("family (all_on vs all_off)", note, [("all_on_vs_all_off", fam)], fam.get("verdict"), True)
+    return rows
+
+
+def _agree_text(rows: List[dict], min_agree_frac: Optional[float]) -> str:
+    """How many pairs must agree in sign for VALUE / HARMFUL, as the subtitle says it."""
+    ns = {int(r["c"]["n_pairs"]) for r in rows if r["kind"] == "metric" and _num(r["c"].get("n_pairs"))}
+    if min_agree_frac is None:
+        return "the pre-registered share of the pairs (min_agree_frac) agreeing in sign"
+    if len(ns) == 1:
+        n = ns.pop()
+        return f"{int(np.ceil(min_agree_frac * n - 1e-9))} of the {n} pairs agreeing in sign"
+    return f"{min_agree_frac:.0%} of the pairs agreeing in sign"
+
+
+def ablation_deltas_figure(analysis, *, title: Optional[str] = None, min_agree_frac: Optional[float] = None):
+    """Per term, mode and primary metric, the mean paired delta (positive = the term helps) divided
+    by that comparison's decision threshold max(seed sigma, MDE), so metrics of different units
+    (backtest Sharpe, CRPSS, AUC ...) share one axis and a bar past the dashed +/-1 line passed its
+    threshold. Each row shows its NEUTRAL zone (|delta| <= MDE, grey), +/-1 sd whiskers on the same
+    scale, the raw mean +/- sd and the sign counts of its pairs; bar colour = that metric's verdict.
+    Guard-rail breaches are drawn as crosses at delta / tolerance (a breach lies past -1), and a
+    heading per term (and for the family) gives its verdict and says when a breach withdrew a VALUE.
+
+    ``min_agree_frac``: the pre-registered share of pairs that must agree in sign (the criteria
+    file's ``min_agree_frac``); only used in the subtitle. When not given, the analysis's own
+    ``min_agree_frac`` (written by ``experiments.ablation.analyze``) is used. An analysis without seed
+    sigma / MDE (not from ``experiments.ablation.analyze``) is drawn on the raw delta scale, and the
+    subtitle says so; one without any comparison says that instead, on a blank axis.
+    """
     import plotly.graph_objects as go
 
-    rows = []
-    for term, t in analysis.get("terms", {}).items():
-        for mode, m in t["modes"].items():
-            for c in m["metrics"]:
-                rows.append((f"{term.replace('LAMBDA_', '')} · {mode.replace('leave_one_', 'one ')} · "
-                             f"{c['metric'].split('/')[-1]}", c["mean_delta"], c.get("sd_delta"), c["verdict"]))
-    for c in (analysis.get("family") or {}).get("metrics", []):
-        rows.append((f"family · {c['metric'].split('/')[-1]}", c["mean_delta"], c.get("sd_delta"), c["verdict"]))
+    rows = _ablation_rows(analysis)
+    metric_rows = [r for r in rows if r["kind"] == "metric"]
+    for r in metric_rows:
+        r["thr"] = _decision_threshold(r["c"])
+    scaled = any(r["thr"] is not None for r in metric_rows)
+    empty = not any(r["kind"] != "head" for r in rows)      # no metric and no breach: nothing to draw
+    if min_agree_frac is None:
+        min_agree_frac = _num(analysis.get("min_agree_frac"))
+    n = len(rows)
     fig = go.Figure()
-    for verdict, color in VERDICT_COLORS.items():
-        sel = [r for r in rows if r[3] == verdict]
-        if sel:
-            fig.add_trace(go.Bar(y=[r[0] for r in sel], x=[r[1] for r in sel], orientation="h", name=verdict,
-                                 marker_color=color,
-                                 error_x=dict(type="data", array=[r[2] if r[2] == r[2] else 0 for r in sel])))
-    fig.add_vline(x=0, line_color="#9a9890")
-    fig.update_layout(title=title or "Ablation: paired deltas (positive = the term helps)", barmode="overlay",
-                      height=max(360, 22 * len(rows)), xaxis_title="mean delta over (seed, period) pairs")
-    return apply(fig)
+    shapes, notes = [], []
+    col_raw, col_pm = [], []                  # right-hand columns: raw mean +/- sd, pair sign counts
+    bars: Dict[str, dict] = {}
+    breach = {"x": [], "y": [], "hover": []}
+    no_scale = []
+    for i, r in enumerate(rows):
+        if r["kind"] == "head":
+            if i:
+                shapes.append(dict(type="line", xref="paper", x0=0, x1=1, y0=i - 0.5, y1=i - 0.5,
+                                   line=dict(color=T.AXIS, width=1)))
+            notes.append(dict(x=0, xref="paper", xshift=6, y=i, text=r["note"], xanchor="left", bgcolor=T.SURFACE,
+                              font=dict(size=11, color=T.INK_2)))
+            continue
+        if r["kind"] == "breach":
+            b = r["b"]
+            mean, tol = _num(b.get("mean_delta")), _num(b.get("tolerance")) or 0.0
+            if mean is None:
+                continue
+            x = mean / tol if scaled and tol > 0 else (-1.0 if scaled else mean)
+            breach["x"].append(x)
+            breach["y"].append(i)
+            breach["hover"].append(
+                f"{r['label']}<br>mean Δ {mean:+.4f}, tolerance {tol:g}: worse than the tolerance (a breach)"
+                + ("<br>this breach alone turned a VALUE into INCONCLUSIVE" if r["withdrawn"] else
+                   "<br>the verdict was not VALUE, so the breach changed nothing"))
+            col_raw.append((i, f"{mean:+.4f}"))
+            col_pm.append((i, f"tol {tol:g}"))
+            continue
+        c = r["c"]
+        mean, sd, thr = _num(c.get("mean_delta")), _num(c.get("sd_delta")), r["thr"]
+        npos, nneg = c.get("n_positive"), c.get("n_negative")
+        if npos is not None and nneg is not None:
+            col_pm.append((i, f"{npos}/{nneg}"))
+        if mean is None:
+            notes.append(dict(x=0, y=i, text="  no pairs", xanchor="left", font=dict(size=10, color=T.MUTED)))
+            continue
+        col_raw.append((i, f"{mean:+.4f}" + (f" ± {sd:.4f}" if sd is not None else "")))
+        if scaled and thr is None:
+            no_scale.append(r["label"])
+            notes.append(dict(x=0, y=i, text="  no threshold (seed σ n/a, MDE 0)", xanchor="left",
+                              font=dict(size=10, color=T.MUTED)))
+            continue
+        k = thr if scaled else 1.0
+        sigma, mde = _num(c.get("sigma_seed")), _num(c.get("mde"))
+        if scaled and mde:
+            shapes.append(dict(type="rect", x0=-mde / k, x1=mde / k, y0=i - 0.4, y1=i + 0.4, layer="below",
+                               fillcolor=_ZONE_FILL, line=dict(color=_ZONE_LINE, width=1)))
+        v = c.get("verdict") if c.get("verdict") in VERDICT_COLORS else "INCONCLUSIVE"
+        hover = (f"{r['label']}<br>mean Δ {mean:+.4f}" + (f" ± sd {sd:.4f}" if sd is not None else "")
+                 + (f" over {c['n_pairs']} pairs" if c.get("n_pairs") is not None else "")
+                 + (f" ({npos} positive, {nneg} negative)" if npos is not None and nneg is not None else ""))
+        if scaled:
+            hover += (f"<br>threshold max(seed σ {'n/a' if sigma is None else f'{sigma:.4f}'}, MDE {mde or 0:g})"
+                      f" = {thr:.4g}; Δ ÷ threshold = {mean / thr:+.2f}")
+        hover += f"<br>metric {v}; mode ({r['mode']}) {r['mode_verdict']}; " \
+                 f"{'family' if r['family'] else 'term'} {r['verdict']}"
+        t = bars.setdefault(v, {"x": [], "y": [], "e": [], "hover": []})
+        t["x"].append(mean / k)
+        t["y"].append(i)
+        t["e"].append(sd / k if sd is not None else 0.0)
+        t["hover"].append(hover)
+
+    for rank, (v, color) in enumerate(VERDICT_COLORS.items()):
+        t = bars.get(v)
+        if t:
+            fig.add_trace(go.Bar(
+                x=t["x"], y=t["y"], orientation="h", width=0.56, name=v, legendrank=1 + rank,
+                marker=dict(color=color, line=dict(width=0)), hovertext=t["hover"], hoverinfo="text",
+                error_x=dict(type="data", array=t["e"], color=T.INK_2, thickness=1.2, width=3)))
+    if scaled:                                # legend key for the grey NEUTRAL zone drawn as shapes
+        fig.add_trace(go.Scatter(x=[None], y=[None], mode="markers", name="NEUTRAL zone: |Δ| ≤ MDE",
+                                 legendrank=6, marker=dict(symbol="square", size=11, color=_ZONE_FILL,
+                                                           line=dict(color=_ZONE_LINE, width=1)),
+                                 hoverinfo="skip"))
+    if breach["x"]:
+        fig.add_trace(go.Scatter(
+            x=breach["x"], y=breach["y"], mode="markers", name="guard-rail breach", legendrank=7,
+            marker=dict(symbol="x", size=11, color=T.CRITICAL, line=dict(color=T.PAPER, width=1)),
+            hovertext=breach["hover"], hoverinfo="text"))
+
+    # the axis: symmetric, holding every bar end, whisker, breach and the +/-1 lines
+    ends = [abs(x) + e for t in bars.values() for x, e in zip(t["x"], t["e"])] + [abs(x) for x in breach["x"]]
+    if scaled:
+        half = max([1.5] + ends) * 1.08
+        shapes += [dict(type="line", yref="paper", x0=x, x1=x, y0=0, y1=1, layer="below",
+                        line=dict(color=T.INK_2, dash=_REF_DASH, width=1.2)) for x in (-1, 1)]
+        step = 1 if half <= 4 else int(np.ceil(half / 4))
+        ticks = sorted({float(x) for x in np.arange(-np.floor(half / step) * step, half + 1e-9, step)} | {-1.0, 1.0})
+        names = {-1: "−1<br>HARMFUL / breach", 1: "+1<br>VALUE"}
+        xaxis = dict(range=[-half, half], tickvals=list(ticks),
+                     ticktext=[names.get(int(x), f"{x:+g}".replace("-", "−") if x else "0") for x in ticks],
+                     title="mean paired Δ ÷ its threshold: max(seed σ, MDE) for a metric, the tolerance "
+                           "for a guard-rail")
+    elif empty:                               # no comparison: a blank axis, no scale to name
+        xaxis = dict(range=[-1, 1], showticklabels=False, showgrid=False, title="")
+    else:                                     # raw deltas; all of them 0 (or none drawn): a unit axis, not +/-1e-9
+        half = max(ends) * 1.1 if ends and max(ends) > 0 else 1.0
+        xaxis = dict(range=[-half, half], title="mean paired Δ, raw units of each metric")
+    if not empty:
+        shapes.append(dict(type="line", yref="paper", x0=0, x1=0, y0=0, y1=1, line=dict(color=T.NEUTRAL, width=1)))
+
+    anns = [dict(yref="y", showarrow=False, yanchor="middle", **a) for a in notes]
+    for col, shift, head in ((col_raw, 10, "mean Δ ± sd"), (col_pm, 124, "+/− pairs")):
+        anns += [dict(x=1, xref="paper", xshift=shift, y=i, yref="y", text=s, xanchor="left", yanchor="middle",
+                      showarrow=False, font=dict(size=11, color=T.INK_2)) for i, s in col]
+        if col:                           # headed above the plot, right of the legend (which wraps inside it)
+            anns.append(dict(x=1, xref="paper", xshift=shift, y=1, yref="paper", text=head, xanchor="left",
+                             yanchor="bottom", showarrow=False, font=dict(size=11, color=T.MUTED)))
+    if empty:
+        anns.append(dict(x=0.5, y=0.5, xref="paper", yref="paper", text="no comparisons in this analysis",
+                         showarrow=False, font=dict(size=12, color=T.MUTED)))
+
+    lines = []
+    if empty:
+        lines.append("no comparisons in this analysis: no term or family has a primary metric or a guard-rail "
+                     "breach, so there is nothing to draw")
+    elif scaled:
+        lines.append("x: mean paired Δ over the (seed, period) pairs ÷ that row's threshold max(seed σ, MDE), so "
+                     "metrics of different units share one axis; VALUE / HARMFUL: past the dashed ±1 line with "
+                     + _agree_text(rows, min_agree_frac) + " (+/− column); grey box: NEUTRAL zone |Δ| ≤ MDE; "
+                     "whiskers: ±1 sd of the paired deltas, same scale")
+    else:
+        why = ("no row has a threshold to scale by (seed σ n/a and MDE 0)"
+               if any("sigma_seed" in r["c"] or "mde" in r["c"] for r in metric_rows)
+               else "the analysis has no seed σ / MDE (not from experiments.ablation.analyze)")
+        lines.append(f"{why}: raw deltas, so rows of different metrics do not share a scale; whiskers: ±1 sd of the "
+                     "paired deltas")
+    if not empty:
+        lines.append("bar colour = that metric's verdict; a mode combines its metrics (any HARMFUL, else any VALUE, "
+                     "else all NEUTRAL, else INCONCLUSIVE)"
+                     + (f"; ✕ guard-rail breach ({'Δ ÷ tolerance past −1' if scaled else 'Δ worse than its tolerance'})"
+                        ": it withdraws a VALUE, the headings say where" if breach["x"] else ""))
+    if no_scale:
+        lines.append(f"no threshold (seed σ n/a and MDE 0), so no bar: {', '.join(no_scale)}")
+    wrapped = [w for line in lines for w in _wrap(line)]
+    top = 110 + 17 * len(wrapped)             # title, subtitle and the legend (it wraps in a narrow cell)
+    height = int(24 * max(n, 4) + top + 96)
+    labels = [f"<span style='color:{T.INK}'><b>{r['label']}</b></span>" if r["kind"] == "head" else r["label"]
+              for r in rows]
+    fig.update_layout(barmode="overlay", shapes=shapes, annotations=anns, xaxis=xaxis,
+                      yaxis=dict(tickmode="array", tickvals=list(range(n)), ticktext=labels,
+                                 range=[max(n, 1) - 0.5, -0.5],   # one blank row when there is none
+                                 showgrid=False, zeroline=False, tickfont=dict(size=11, color=T.INK_2)))
+    apply(fig, title=title or "Ablation: paired deltas against each metric's decision threshold "
+                              "(positive = the term helps)", subtitle="<br>".join(wrapped), height=height)
+    fig.update_layout(margin=dict(t=top, r=190, b=80), xaxis=dict(zeroline=False, showspikes=False),
+                      yaxis=dict(showspikes=False))
+    return fig
 
 
 # ------------------------------------------------------------------ registry entries (data, config)

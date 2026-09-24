@@ -1,14 +1,18 @@
 """Ablation harness (plan C4): grid construction, resume, verdict rules, and one real cell."""
 from __future__ import annotations
 
+import csv
+import io
+import json
+import re
 import zlib
 from pathlib import Path
 
 import numpy as np
 import pytest
 
-from neural_trade.experiments.ablation import (AblationSpec, Criteria, analyze, dry_run, load_rows, run_grid,
-                                               summarize_dir)
+from neural_trade.experiments.ablation import (SUMMARY_FIELDS, AblationSpec, Criteria, analyze, dry_run, load_rows,
+                                               run_grid, summarize_dir, value_withdrawn)
 
 REPO = Path(__file__).resolve().parent.parent
 TERMS = {"LAMBDA_T_PERP": 0.1, "LAMBDA_CASIMIR": 0.1, "LAMBDA_HD": 0.1, "LAMBDA_IFE": 0.1,
@@ -102,6 +106,107 @@ def test_guardrail_breach_withdraws_value(tmp_path):
     hd = a["terms"]["LAMBDA_HD"]
     assert hd["verdict"] == "INCONCLUSIVE"
     assert hd["modes"]["leave_one_in"]["guardrail_breaches"][0]["metric"] == "h1/delta/rmse"
+
+
+def test_report_lists_the_family_breach_and_says_why_value_was_withdrawn(tmp_path):
+    # T_PERP lifts crpss (so the family's crpss is VALUE); HD worsens the rmse guard-rail by 5 > 2 in
+    # every condition that has it on, all_on included: the family's VALUE is withdrawn by that breach
+    spec = _spec()
+    run_grid(spec, "smoke", tmp_path, runner=_fake_runner({"LAMBDA_T_PERP": 0.02}, rmse_effects={"LAMBDA_HD": 5.0}),
+             log=lambda *_: None)
+    a = summarize_dir(spec, CRIT, tmp_path, "smoke")
+    fam = a["family"]
+    assert fam["verdict"] == "INCONCLUSIVE" and [c["verdict"] for c in fam["metrics"]] == ["VALUE"]
+    assert value_withdrawn(fam) and fam["guardrail_breaches"][0]["metric"] == "h1/delta/rmse"
+    raw = (tmp_path / "report.md").read_bytes()
+    assert b"\r\n" not in raw                                          # LF, also when written on Windows
+    report = raw.decode("utf-8")
+    # the family's breach gets its own BREACH row, as the terms' breaches do
+    assert re.search(r"^\| family \| all_on vs all_off \| guard-rail `h1/delta/rmse` \| \| -[45]\.\d{4} \| \| \| "
+                     r"tol 2 \| \| BREACH \|$", report, re.M)
+    assert re.search(r"^\| `LAMBDA_HD` \| leave_one_in \| guard-rail `h1/delta/rmse` \|.*\| BREACH \|$", report, re.M)
+    # the verdict table says why: VALUE withdrawn (family), a breach that changed nothing (HD)
+    assert "| family (all_on vs all_off) | | | **INCONCLUSIVE** (VALUE withdrawn: guard-rail `h1/delta/rmse` " \
+           "breached) |" in report
+    assert "| `LAMBDA_HD` | NEUTRAL (guard-rail `h1/delta/rmse` breached) | " \
+           "NEUTRAL (guard-rail `h1/delta/rmse` breached) | **NEUTRAL** |" in report
+    assert "`LAMBDA_T_PERP` | VALUE | VALUE | **VALUE**" in report
+    assert "(5 of 6)" in report and "withdraws a VALUE" in report
+
+
+def test_summary_csv_lists_every_guardrail_breach_as_the_report_does(tmp_path):
+    # same grid as above: HD breaches the rmse guard-rail in both of its modes and in the family
+    spec = _spec()
+    run_grid(spec, "smoke", tmp_path, runner=_fake_runner({"LAMBDA_T_PERP": 0.02}, rmse_effects={"LAMBDA_HD": 5.0}),
+             log=lambda *_: None)
+    a = summarize_dir(spec, CRIT, tmp_path, "smoke")
+    raw = (tmp_path / "summary.csv").read_bytes()
+    assert b"\r\n" not in raw and b"\r\n" not in (tmp_path / "results.csv").read_bytes()   # LF (tracked files)
+    rows = list(csv.DictReader(io.StringIO(raw.decode("utf-8"))))
+    assert list(rows[0]) == SUMMARY_FIELDS and SUMMARY_FIELDS[-1] == "tolerance"   # the old columns keep their order
+    breaches = [r for r in rows if r["verdict"] == "BREACH"]
+    got = {(r["term"], r["mode"], r["metric"], r["treatment"], r["control"]) for r in breaches}
+    assert got == {("LAMBDA_HD", "leave_one_in", "h1/delta/rmse", "only:LAMBDA_HD", "all_off"),
+                   ("LAMBDA_HD", "leave_one_out", "h1/delta/rmse", "all_on", "without:LAMBDA_HD"),
+                   ("family", "all_on_vs_all_off", "h1/delta/rmse", "all_on", "all_off")}
+    fam = next(r for r in breaches if r["term"] == "family")
+    assert float(fam["tolerance"]) == 2.0 and np.isclose(float(fam["mean_delta"]),
+                                                         a["family"]["guardrail_breaches"][0]["mean_delta"])
+    assert fam["mode_verdict"] == fam["term_verdict"] == "INCONCLUSIVE" and fam["n_pairs"] == fam["mde"] == ""
+    assert all(r["tolerance"] == "" for r in rows if r["verdict"] != "BREACH")
+    n_metrics = sum(len(m["metrics"]) for t in a["terms"].values() for m in t["modes"].values()) \
+        + len(a["family"]["metrics"])
+    assert len(rows) - len(breaches) == n_metrics
+    # analysis.json records the pre-registered share the verdicts used (the figure's subtitle reads it)
+    saved = json.loads((tmp_path / "analysis.json").read_text(encoding="utf-8"))
+    assert saved["min_agree_frac"] == a["min_agree_frac"] == CRIT.min_agree_frac
+
+
+def test_tracked_ablation_summary_and_analysis_carry_breaches_and_the_agree_share():
+    d = REPO / "runs" / "ablations" / "ablate_physics_v1-full"
+    if not (d / "analysis.json").exists() or not (d / "summary.csv").exists():
+        pytest.skip("no tracked ablation outputs")
+    a = json.loads((d / "analysis.json").read_text(encoding="utf-8"))
+    assert a["min_agree_frac"] == Criteria.from_yaml(REPO / "configs" / "ablation_criteria.yaml").min_agree_frac
+    rows = list(csv.DictReader(io.StringIO((d / "summary.csv").read_text(encoding="utf-8"))))
+    want = {(term, mode, b["metric"]) for term, t in a["terms"].items() for mode, m in t["modes"].items()
+            for b in m["guardrail_breaches"]}
+    want |= {("family", "all_on_vs_all_off", b["metric"]) for b in (a.get("family") or {}).get("guardrail_breaches", [])}
+    assert want and {(r["term"], r["mode"], r["metric"]) for r in rows if r["verdict"] == "BREACH"} == want
+    assert sum(r["verdict"] == "BREACH" for r in rows) == len(want)
+
+
+def test_value_withdrawn_only_when_the_breach_changed_the_verdict():
+    breach = [{"metric": "h1/direction/auc", "mean_delta": -0.0119, "tolerance": 0.01}]
+    vs = lambda *v: [{"verdict": x} for x in v]                        # noqa: E731
+    assert value_withdrawn({"verdict": "INCONCLUSIVE", "metrics": vs("VALUE", "INCONCLUSIVE"),
+                            "guardrail_breaches": breach})
+    assert not value_withdrawn({"verdict": "INCONCLUSIVE", "metrics": vs("NEUTRAL", "INCONCLUSIVE"),
+                                "guardrail_breaches": breach})           # not VALUE before the breach
+    assert not value_withdrawn({"verdict": "NEUTRAL", "metrics": vs("NEUTRAL"), "guardrail_breaches": breach})
+    assert not value_withdrawn({"verdict": "INCONCLUSIVE", "metrics": vs("VALUE", "INCONCLUSIVE"),
+                                "guardrail_breaches": []})
+    assert not value_withdrawn({"verdict": "HARMFUL", "metrics": vs("VALUE", "HARMFUL"), "guardrail_breaches": breach})
+
+
+def test_tracked_ablation_report_lists_every_breach_of_its_analysis():
+    d = REPO / "runs" / "ablations" / "ablate_physics_v1-full"
+    if not (d / "analysis.json").exists() or not (d / "report.md").exists():
+        pytest.skip("no tracked ablation report")
+    a = json.loads((d / "analysis.json").read_text(encoding="utf-8"))
+    report = (d / "report.md").read_text(encoding="utf-8")
+    blocks = [(f"`{term}`", mode, m) for term, t in a["terms"].items() for mode, m in t["modes"].items()]
+    if a.get("family"):
+        blocks.append(("family", "all_on vs all_off", a["family"]))
+    n = 0
+    for label, mode, m in blocks:
+        for b in m["guardrail_breaches"]:
+            n += 1
+            assert (f"| {label} | {mode} | guard-rail `{b['metric']}` | | {b['mean_delta']:+.4f} | | | "
+                    f"tol {b['tolerance']:g} | | BREACH |") in report, (label, mode, b["metric"])
+    assert n == report.count("| BREACH |")
+    if a.get("family") and value_withdrawn(a["family"]):
+        assert "| family (all_on vs all_off) | | | **INCONCLUSIVE** (VALUE withdrawn: guard-rail" in report
 
 
 def test_too_few_pairs_is_inconclusive(tmp_path):

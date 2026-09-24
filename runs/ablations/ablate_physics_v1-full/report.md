@@ -2,19 +2,19 @@
 
 84 completed runs; terms LAMBDA_T_PERP, LAMBDA_CASIMIR, LAMBDA_HD, LAMBDA_IFE, LAMBDA_VAC_OVERFLOW, LAMBDA_VAC; seeds [0, 1, 2]; periods P1 (fold -2), P2 (fold -1); lambda calibration: once.
 
-Deltas are paired over (seed, period) and oriented so that **positive = the term helps**. A verdict of VALUE needs mean delta > max(seed sigma, MDE) with at least 83% of pairs agreeing and no guard-rail breach (criteria pre-registered in `configs/ablation_criteria.yaml`).
+Deltas are paired over (seed, period) and oriented so that **positive = the term helps**. A metric is VALUE when its mean delta > max(seed sigma, MDE) with at least 83% of pairs agreeing (5 of 6), HARMFUL in the mirror case, NEUTRAL when |mean delta| <= MDE, else INCONCLUSIVE. A mode combines its metrics (any HARMFUL, else any VALUE, else all NEUTRAL, else INCONCLUSIVE), and a guard-rail breach (a guard-rail metric worse than its tolerance: a BREACH row below) withdraws a VALUE, which then reads INCONCLUSIVE. A term needs both modes to agree (or one of them and NEUTRAL). Criteria pre-registered in `configs/ablation_criteria.yaml`.
 
 ## Verdicts
 
 | term | leave-one-in | leave-one-out | verdict |
 |---|---|---|---|
 | `LAMBDA_T_PERP` | INCONCLUSIVE | NEUTRAL | **INCONCLUSIVE** |
-| `LAMBDA_CASIMIR` | NEUTRAL | NEUTRAL | **NEUTRAL** |
-| `LAMBDA_HD` | INCONCLUSIVE | VALUE | **INCONCLUSIVE** |
+| `LAMBDA_CASIMIR` | NEUTRAL (guard-rail `h1/direction/auc` breached) | NEUTRAL | **NEUTRAL** |
+| `LAMBDA_HD` | INCONCLUSIVE (guard-rail `h1/direction/auc` breached) | VALUE | **INCONCLUSIVE** |
 | `LAMBDA_IFE` | INCONCLUSIVE | INCONCLUSIVE | **INCONCLUSIVE** |
-| `LAMBDA_VAC_OVERFLOW` | INCONCLUSIVE | NEUTRAL | **INCONCLUSIVE** |
+| `LAMBDA_VAC_OVERFLOW` | INCONCLUSIVE | NEUTRAL (guard-rail `h1/direction/auc` breached) | **INCONCLUSIVE** |
 | `LAMBDA_VAC` | INCONCLUSIVE | INCONCLUSIVE | **INCONCLUSIVE** |
-| family (all_on vs all_off) | | | **INCONCLUSIVE** |
+| family (all_on vs all_off) | | | **INCONCLUSIVE** (VALUE withdrawn: guard-rail `h1/direction/auc` breached) |
 
 ## Per-metric deltas
 
@@ -49,6 +49,7 @@ Deltas are paired over (seed, period) and oriented so that **positive = the term
 | family | all_on vs all_off | `h1/variance/corr_var_err2_spearman` | 6 | +0.0364 | +0.0329 | +0.0274 | 0.01 | 6/0 | VALUE |
 | family | all_on vs all_off | `h1/direction/mcc` | 6 | -0.0168 | +0.0152 | +0.0228 | 0.005 | 1/5 | INCONCLUSIVE |
 | family | all_on vs all_off | `backtest/sharpe_net` | 6 | -1.4660 | +18.7155 | +15.0856 | 0.5 | 3/3 | INCONCLUSIVE |
+| family | all_on vs all_off | guard-rail `h1/direction/auc` | | -0.0119 | | | tol 0.01 | | BREACH |
 
 ## Condition means
 

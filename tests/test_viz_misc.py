@@ -451,3 +451,209 @@ def test_runs_comparison_grouped_zero_tags_sit_beside_their_own_dot(tmp_path, mo
                 assert x == 0.0 and p == "middle right" and s.startswith(" ")
     lo, hi = fig.layout.xaxis.range
     assert hi > 0.004 + 0.08 * 0.012                                   # room for the text right of the dots
+
+
+# ------------------------------------------------------------------ ablation deltas (final check: ablation)
+def _cmp(metric, mean, sd, sigma, mde, npos, nneg, verdict, n=6):
+    return {"metric": metric, "treatment": "t", "control": "c", "n_pairs": n, "mean_delta": mean, "sd_delta": sd,
+            "sigma_seed": sigma, "mde": mde, "n_positive": npos, "n_negative": nneg, "verdict": verdict}
+
+
+AUC_BREACH = {"metric": "h1/direction/auc", "mean_delta": -0.011864, "tolerance": 0.01}
+
+
+def _analysis():
+    """The shape of experiments.ablation.analyze, with numbers of the physics ablation: a term whose
+    rows are in CRPSS / Spearman units and a family whose Sharpe row is 500 times larger."""
+    hd_in = [_cmp("h1/variance/crpss", 0.0019, 0.0035, 0.0055, 0.005, 4, 2, "NEUTRAL"),
+             _cmp("h1/variance/corr_var_err2_spearman", 0.0264, 0.0123, 0.0274, 0.01, 6, 0, "INCONCLUSIVE")]
+    hd_out = [_cmp("h1/variance/crpss", 0.0033, 0.0053, 0.0024, 0.005, 5, 1, "NEUTRAL"),
+              _cmp("h1/variance/corr_var_err2_spearman", 0.0207, 0.0135, 0.0182, 0.01, 6, 0, "VALUE")]
+    fam = [_cmp("h1/variance/crpss", 0.0056, 0.0114, 0.0055, 0.005, 5, 1, "VALUE"),
+           _cmp("backtest/sharpe_net", -1.466, 18.7155, 15.0856, 0.5, 3, 3, "INCONCLUSIVE")]
+    return {"terms": {"LAMBDA_HD": {"verdict": "INCONCLUSIVE", "modes": {
+        "leave_one_in": {"verdict": "INCONCLUSIVE", "metrics": hd_in, "guardrail_breaches": [
+            {"metric": "h1/direction/auc", "mean_delta": -0.0126, "tolerance": 0.01}]},
+        "leave_one_out": {"verdict": "VALUE", "metrics": hd_out, "guardrail_breaches": []}}}},
+        "family": {"verdict": "INCONCLUSIVE", "metrics": fam, "guardrail_breaches": [AUC_BREACH]}}
+
+
+def _bars(fig):
+    """(y, x, whisker, hover) of every bar, by verdict trace."""
+    return {t.name: list(zip(t.y, t.x, t.error_x.array, t.hovertext)) for t in fig.data if t.type == "bar"}
+
+
+def test_ablation_deltas_put_every_metric_on_its_decision_scale():
+    from neural_trade.visualization.comparison import VERDICT_COLORS, ablation_deltas_figure
+
+    a = _analysis()
+    fig = ablation_deltas_figure(a, min_agree_frac=0.8333)
+    labels = list(fig.layout.yaxis.ticktext)
+    pos = {re.sub(r"<[^>]+>", "", s): i for i, s in enumerate(labels)}
+    bars = {y: (x, e, h, v) for v, rows in _bars(fig).items() for y, x, e, h in rows}
+    # every row: x = mean / max(seed sigma, MDE), whisker = sd / the same threshold
+    for mode, ml in (("leave_one_in", "one in"), ("leave_one_out", "one out")):
+        for c in a["terms"]["LAMBDA_HD"]["modes"][mode]["metrics"]:
+            x, e, h, v = bars[pos[f"{ml} · {c['metric']}"]]
+            thr = max(c["sigma_seed"], c["mde"])
+            assert np.isclose(x, c["mean_delta"] / thr) and np.isclose(e, c["sd_delta"] / thr)
+            assert v == c["verdict"] and f"{c['mean_delta']:+.4f}" in h            # raw value on hover
+    x, e, _, v = bars[pos["on vs off · backtest/sharpe_net"]]
+    assert np.isclose(x, -1.466 / 15.0856) and np.isclose(e, 18.7155 / 15.0856) and v == "INCONCLUSIVE"
+    x, _, _, v = bars[pos["one out · h1/variance/corr_var_err2_spearman"]]
+    assert x > 1 and v == "VALUE"                                     # a VALUE bar passes its threshold
+    lo, hi = fig.layout.xaxis.range
+    assert -4 < lo < -1 and 1 < hi < 4                                 # not stretched by the Sharpe row's units
+    # dashed threshold lines at -1 and +1, the zero line, a NEUTRAL box of +/- MDE / threshold per row
+    vlines = [s for s in fig.layout.shapes if s.type == "line" and s.x0 == s.x1]
+    assert {(s.x0, s.line.dash) for s in vlines if s.x0 in (-1, 1)} == {(-1, "6px,3px"), (1, "6px,3px")}
+    assert any(s.x0 == 0 for s in vlines)
+    ticks = dict(zip(fig.layout.xaxis.tickvals, fig.layout.xaxis.ticktext))
+    assert ticks[-1] == "−1<br>HARMFUL / breach" and ticks[1] == "+1<br>VALUE" and ticks[0] == "0"
+    boxes ={round(s.y0 + 0.4): (s.x0, s.x1) for s in fig.layout.shapes if s.type == "rect"}
+    y = pos["one in · h1/variance/corr_var_err2_spearman"]
+    assert np.allclose(boxes[y], (-0.01 / 0.0274, 0.01 / 0.0274))
+    assert np.allclose(boxes[pos["one out · h1/variance/crpss"]], (-1, 1))   # MDE > sigma: the box is +/-1
+    # rows in term / mode / metric order under a heading per term, never regrouped by verdict
+    heads = [i for i, s in enumerate(labels) if s.startswith("<span")]
+    assert [re.sub(r"<[^>]+>", "", labels[i]) for i in heads] == ["LAMBDA_HD", "family (all_on vs all_off)"]
+    order = ["one in · h1/variance/crpss", "one in · h1/variance/corr_var_err2_spearman",
+             "one in · guard-rail h1/direction/auc", "one out · h1/variance/crpss",
+             "one out · h1/variance/corr_var_err2_spearman"]
+    assert [pos[k] for k in order] == list(range(1, 6))
+    assert list(fig.layout.yaxis.range) == [len(labels) - 0.5, -0.5]
+    for t in fig.data:
+        if t.type == "bar":
+            assert t.marker.color == VERDICT_COLORS[t.name]
+            assert t.marker.color not in T.HORIZON_COLORS.values()
+    # the raw mean +/- sd and the pairs' sign counts in columns right of the plot
+    right = {(a_.y, a_.text) for a_ in fig.layout.annotations if a_.xref == "paper" and a_.x == 1}
+    assert (pos["on vs off · backtest/sharpe_net"], "-1.4660 ± 18.7155") in right
+    assert (pos["one out · h1/variance/corr_var_err2_spearman"], "6/0") in right
+    text = fig.layout.title.text
+    assert "max(seed σ, MDE)" in text and "5 of the 6 pairs" in text and "±1 sd" in text
+    assert "max(seed σ, MDE)" in fig.layout.xaxis.title.text
+    lines = re.sub(r"</?span[^>]*>", "", text).split("<br>")[1:]
+    assert all(len(s) <= 140 for s in lines)
+
+
+def test_ablation_deltas_mark_guardrail_breaches_and_a_withdrawn_value():
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    fig = ablation_deltas_figure(_analysis())
+    labels = [re.sub(r"<[^>]+>", "", s) for s in fig.layout.yaxis.ticktext]
+    br = _trace(fig, "guard-rail breach")
+    got = {labels[int(y)]: x for y, x in zip(br.y, br.x)}
+    assert got.keys() == {"one in · guard-rail h1/direction/auc", "on vs off · guard-rail h1/direction/auc"}
+    assert np.isclose(got["on vs off · guard-rail h1/direction/auc"], -1.1864)   # delta / tolerance: past -1
+    assert br.marker.color == T.CRITICAL and br.marker.symbol == "x"
+    notes = {int(a_.y): a_.text for a_ in fig.layout.annotations if a_.xref == "paper" and a_.x == 0}
+    fam = notes[labels.index("family (all_on vs all_off)")]
+    assert "INCONCLUSIVE" in fam and "VALUE withdrawn by the guard-rail breach: h1/direction/auc" in fam
+    hd = notes[labels.index("LAMBDA_HD")]
+    assert "one in INCONCLUSIVE" in hd and "one out VALUE" in hd and "withdrawn" not in hd
+    right = {(int(a_.y), a_.text) for a_ in fig.layout.annotations if a_.xref == "paper" and a_.x == 1}
+    assert (labels.index("on vs off · guard-rail h1/direction/auc"), "tol 0.01") in right
+    assert "guard-rail breach" in fig.layout.title.text and "withdraws a VALUE" in fig.layout.title.text
+    assert "pre-registered share" in fig.layout.title.text               # min_agree_frac not given
+    assert len(fig.to_json()) < SIZE_BUDGET
+
+
+def test_ablation_deltas_rows_without_a_threshold_or_pairs_are_written_not_drawn():
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    a = {"terms": {"LAMBDA_X": {"verdict": "INCONCLUSIVE", "modes": {"leave_one_in": {
+        "verdict": "INCONCLUSIVE", "guardrail_breaches": [], "metrics": [
+            _cmp("h1/variance/crpss", 0.004, 0.002, 0.002, 0.005, 5, 1, "NEUTRAL"),
+            _cmp("h1/direction/auc", 0.003, float("nan"), float("nan"), 0.0, 1, 0, "INCONCLUSIVE", n=1),
+            _cmp("h1/direction/mcc", float("nan"), float("nan"), float("nan"), 0.005, 0, 0, "INCONCLUSIVE", n=0)]}}}},
+        "family": None}
+    fig = ablation_deltas_figure(a)
+    labels = [re.sub(r"<[^>]+>", "", s) for s in fig.layout.yaxis.ticktext]
+    drawn = {labels[int(y)] for rows in _bars(fig).values() for y, *_ in rows}
+    assert drawn == {"one in · h1/variance/crpss"}
+    notes = {labels[int(a_.y)]: a_.text.strip() for a_ in fig.layout.annotations if a_.xref in (None, "x")}
+    assert notes == {"one in · h1/direction/auc": "no threshold (seed σ n/a, MDE 0)",
+                     "one in · h1/direction/mcc": "no pairs"}
+    assert "no threshold (seed σ n/a and MDE 0), so no bar: one in · h1/direction/auc" in fig.layout.title.text
+
+
+def test_ablation_deltas_without_thresholds_draw_raw_deltas_and_say_so():
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    # an analysis written by hand (no seed sigma, no MDE): nothing to scale by
+    a = {"terms": {"LAMBDA_HD": {"verdict": "NEUTRAL", "modes": {"leave_one_in": {"verdict": "NEUTRAL", "metrics": [
+        {"metric": "h1/variance/crpss", "mean_delta": 0.001, "sd_delta": 0.002, "verdict": "NEUTRAL"}]}}}},
+         "family": {"verdict": "VALUE", "metrics": [{"metric": "h1/direction/mcc", "mean_delta": 0.02,
+                                                     "sd_delta": 0.01, "verdict": "VALUE"}]}}
+    fig = ablation_deltas_figure(a)
+    assert {t.name for t in fig.data} == {"NEUTRAL", "VALUE"}
+    assert np.allclose(sorted(x for rows in _bars(fig).values() for _, x, _, _ in rows), [0.001, 0.02])
+    assert not [s for s in fig.layout.shapes if s.type == "line" and s.x0 in (-1, 1)]
+    assert "raw deltas" in fig.layout.title.text and "raw units" in fig.layout.xaxis.title.text
+
+
+def test_ablation_deltas_of_an_empty_analysis_say_so_on_a_blank_axis():
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    for a in ({"terms": {}, "family": None},                                       # nothing at all
+              {"terms": {"LAMBDA_HD": {"verdict": "INCONCLUSIVE", "modes": {}}}, "family": None}):   # headings only
+        fig = ablation_deltas_figure(a)
+        sub = fig.layout.title.text.split("<br>", 1)[1]
+        assert "no comparisons in this analysis" in sub
+        assert "seed σ" not in sub and "raw deltas" not in sub and "bar colour" not in sub   # nothing is drawn
+        assert fig.layout.xaxis.range == (-1, 1) and fig.layout.xaxis.showticklabels is False  # not +/-1.1e-9, '1n'
+        assert not fig.layout.xaxis.title.text
+        assert not [t for t in fig.data if t.type == "bar"]
+        assert not [s for s in fig.layout.shapes if s.type == "line" and s.x0 == s.x1]        # no zero / +/-1 lines
+        assert any(an.text == "no comparisons in this analysis" for an in fig.layout.annotations)
+        lo, hi = fig.layout.yaxis.range
+        assert lo - hi >= 1                                                  # a real row band, not [-0.5, -0.5]
+
+
+def test_ablation_deltas_of_all_zero_raw_deltas_keep_a_unit_axis():
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    a = {"terms": {"LAMBDA_HD": {"verdict": "NEUTRAL", "modes": {"leave_one_in": {"verdict": "NEUTRAL", "metrics": [
+        {"metric": "h1/variance/crpss", "mean_delta": 0.0, "sd_delta": 0.0, "verdict": "NEUTRAL"}]}}}}, "family": None}
+    fig = ablation_deltas_figure(a)
+    assert tuple(fig.layout.xaxis.range) == (-1.0, 1.0)                  # was +/-1.1e-9, ticks '-1n ... 1n'
+    assert "raw deltas" in fig.layout.title.text
+    # an analysis from analyze() whose rows have no usable threshold is not called "not from analyze"
+    a["terms"]["LAMBDA_HD"]["modes"]["leave_one_in"]["metrics"][0].update(sigma_seed=float("nan"), mde=0.0)
+    fig = ablation_deltas_figure(a)
+    assert "no row has a threshold to scale by" in fig.layout.title.text
+    assert "not from experiments.ablation.analyze" not in fig.layout.title.text
+
+
+def test_ablation_deltas_read_min_agree_frac_from_the_analysis():
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    a = dict(_analysis(), min_agree_frac=0.8333)                        # as analyze() writes analysis.json
+    assert "5 of the 6 pairs" in ablation_deltas_figure(a).layout.title.text
+    assert "4 of the 6 pairs" in ablation_deltas_figure(a, min_agree_frac=0.6).layout.title.text   # keyword wins
+
+
+def test_ablation_deltas_of_the_tracked_physics_ablation():
+    from pathlib import Path
+
+    from neural_trade.visualization.comparison import ablation_deltas_figure
+
+    p = Path(__file__).resolve().parent.parent / "runs" / "ablations" / "ablate_physics_v1-full" / "analysis.json"
+    if not p.exists():
+        pytest.skip("no tracked ablation analysis")
+    a = json.loads(p.read_text(encoding="utf-8"))
+    fig = ablation_deltas_figure(a, min_agree_frac=0.8333)
+    bars = _bars(fig)
+    n_metrics = sum(len(m["metrics"]) for t in a["terms"].values() for m in t["modes"].values()) \
+        + len(a["family"]["metrics"])
+    assert sum(len(v) for v in bars.values()) == n_metrics
+    assert all(x > 1 for _, x, _, _ in bars.get("VALUE", []))         # every VALUE bar is past its threshold
+    assert len(bars["VALUE"]) == 3
+    assert all(abs(x) < 3 for rows in bars.values() for _, x, _, _ in rows)
+    n_breach = sum(len(m["guardrail_breaches"]) for t in a["terms"].values() for m in t["modes"].values()) \
+        + len(a["family"]["guardrail_breaches"])
+    assert len(_trace(fig, "guard-rail breach").x) == n_breach
+    assert all(x < -1 for x in _trace(fig, "guard-rail breach").x)
+    # notebook 05 calls it without min_agree_frac: analysis.json carries the pre-registered share
+    assert "5 of the 6 pairs agreeing in sign" in ablation_deltas_figure(a).layout.title.text
