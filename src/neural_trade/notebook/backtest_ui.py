@@ -7,6 +7,7 @@ the strategies' confidence scale (var_scale) and the calibrated_quantile thresho
     ex = BacktestExplorer.from_run("runs/<id>", csv_path="binance_btcusdt_1min_ccxt.csv")
     display(ex.widget())
     res = ex.run("liberal", {"min_agreement": 0.4}, {"fee_bps": 5})   # programmatic use
+    runs, fig = ex.compare_strategies()     # every model strategy next to its matched random null
 """
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import typing
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+import numpy as np
 import pandas as pd
 
 from neural_trade.notebook._display import show
@@ -22,6 +24,102 @@ from neural_trade.notebook._display import show
 COST_FIELDS = ("fee_bps", "half_spread_bps", "slippage_bps", "max_hold", "tp_sl_on", "same_bar_tiebreak",
                "random_seeds")
 _DERIVED = {"long_above", "short_below", "median"}   # set from the calibration block, not by hand
+_BENCHMARKS = ("buy_and_hold", "always_flat")          # the baselines compare_strategies keeps by default
+SUMMARY_COLS = ["n_trades", "total_return", "sharpe_net", "max_drawdown", "hit_rate", "hit_rate_gross", "profit_factor",
+                "avg_win", "avg_loss", "expectancy", "n_long", "n_short", "gross_long", "gross_short", "net_long",
+                "net_short", "exposure", "fees_paid", "costs_paid"]
+
+
+def trade_stats(result) -> Dict[str, float]:
+    """Per-trade figures the summary lacks: average win / loss and expectancy (net $ per trade), and
+    the long / short split (count, gross $, net $). NaN where there is nothing to average."""
+    net = np.array([t.net_pnl for t in result.trades], dtype=float)
+    gross = np.array([t.gross_pnl for t in result.trades], dtype=float)
+    side = np.array([t.side for t in result.trades], dtype=object)
+    nan = float("nan")
+    out = {"avg_win": float(net[net > 0].mean()) if (net > 0).any() else nan,
+           "avg_loss": float(net[net <= 0].mean()) if (net <= 0).any() else nan,
+           "expectancy": float(net.mean()) if len(net) else nan}
+    for s in ("long", "short"):
+        m = side == s.upper()
+        out.update({f"n_{s}": int(m.sum()), f"gross_{s}": float(gross[m].sum()), f"net_{s}": float(net[m].sum())})
+    return out
+
+
+def _null_columns(null) -> Dict[str, float]:
+    """The matched random null as table columns (empty when it was not run)."""
+    if not null or not null.get("n_seeds"):
+        return {}
+    return {"random mean return": null.get("random_mean_total_return"),
+            "random p05 (return)": null.get("random_p05_total_return"),
+            "random p95 (return)": null.get("random_p95_total_return"),
+            "random percentile (return)": null.get("percentile_total_return"),
+            "random percentile (gross)": null.get("percentile_gross_return")}
+
+
+class _Sized:
+    """A strategy whose every order is resized to ``size`` (a random null that matches a strategy's
+    position size: a null trading at full size pays more costs than a strategy that sizes down)."""
+
+    def __init__(self, base, size: float):
+        self.base, self.size = base, float(size)
+        self.name = getattr(base, "name", type(base).__name__)
+        self.max_hold = getattr(base, "max_hold", 30)
+
+    def warmup(self) -> int:
+        return self.base.warmup()
+
+    def decide(self, s, t):
+        order = self.base.decide(s, t)
+        if order is not None:
+            order.size_frac = self.size
+        return order
+
+    def exit_signal(self, *args):
+        return self.base.exit_signal(*args)
+
+
+def matched_random_null(signals, bars, result, *, seeds: Optional[int] = None, config=None) -> Dict[str, float]:
+    """Random entries with ``result``'s trade rate, holding time AND mean position size, over
+    ``seeds`` seeds (default: the config's ``random_seeds``, as the engine's own null): where the
+    strategy ranks among them (after and before costs). Seeds 0..seeds-1, so the same call gives
+    the same numbers.
+
+    Same keys as ``strategy.random_same_frequency`` plus ``size_frac``, the 5th / 95th percentiles of
+    the random total return, and the gross (before-cost) mean and percentile. After costs the
+    return is mostly cost x trade count, so a null that trades at full size while the strategy
+    sizes down would make the strategy look skilled when it is not.
+    """
+    from neural_trade.strategy import RandomSignal, run_backtest
+
+    cfg = config or result.config
+    k = int(cfg.random_seeds if seeds is None else seeds)
+    n_tr = result.summary["n_trades"]
+    if n_tr == 0 or k <= 0:
+        return {"n_seeds": 0, "percentile_total_return": float("nan"), "percentile_sharpe_net": float("nan")}
+    hold = max(1, int(round(result.summary["avg_hold_bars"])) or 1)
+    flat_bars = max(1, len(bars) - int(result.summary["exposure"] * len(bars)))
+    rate = min(1.0, n_tr / flat_bars)
+    sizes = [float(d.get("size", 1.0)) for d in result.decisions]
+    size = float(np.clip(np.mean(sizes), 0.0, 1.0)) if sizes else 1.0
+    init = float(cfg.initial_equity)
+    rets, sharpes, grosses = [], [], []
+    for seed in range(k):
+        r = run_backtest(signals, bars, _Sized(RandomSignal(trade_rate=rate, hold_bars=hold, seed=seed), size), cfg)
+        rets.append(r.summary["total_return"])
+        sharpes.append(r.summary["sharpe_net"])
+        grosses.append(r.summary["gross_pnl"] / init)
+    rets, sharpes, grosses = np.array(rets), np.array(sharpes), np.array(grosses)
+    g0 = result.summary.get("gross_pnl", 0.0) / init
+    return {
+        "n_seeds": k, "trade_rate": rate, "hold_bars": hold, "size_frac": size,
+        "random_mean_total_return": float(rets.mean()), "random_mean_sharpe_net": float(sharpes.mean()),
+        "random_p05_total_return": float(np.percentile(rets, 5)), "random_p95_total_return": float(np.percentile(rets, 95)),
+        "random_mean_gross_return": float(grosses.mean()),
+        "percentile_total_return": float(100.0 * np.mean(rets < result.summary["total_return"])),
+        "percentile_sharpe_net": float(100.0 * np.mean(sharpes < result.summary["sharpe_net"])),
+        "percentile_gross_return": float(100.0 * np.mean(grosses < g0)),
+    }
 
 
 def load_run_blocks(run_dir, csv_path: Optional[str] = None) -> Dict[str, Any]:
@@ -84,13 +182,30 @@ class BacktestExplorer:
         return cls(load_run_blocks(run_dir, csv_path))
 
     # ------------------------------------------------------------------ programmatic
-    def run(self, strategy: str, params: Optional[Dict[str, Any]] = None, costs: Optional[Dict[str, Any]] = None,
-            baselines: bool = True):
+    def _backtest(self, strategy: str, params: Optional[Dict[str, Any]] = None,
+                  costs: Optional[Dict[str, Any]] = None, baselines: bool = True):
+        """(BacktestResult, Strategy) without touching ``last`` / ``last_strategy``.
+
+        With ``baselines``: buy-and-hold and always-flat from the engine, and as the random null
+        ``matched_random_null`` over ``random_seeds`` seeds (trade rate, hold AND size matched) - the
+        same null, with the same seeds, that ``compare_strategies`` draws, so both report one rank.
+        """
         from neural_trade.strategy import backtest, build_backtest_config, build_strategy
 
         strat = build_strategy(strategy, params, calibration=self.cal_signals)
-        self.last = backtest(self.signals, self.bars, strat, build_backtest_config(costs or {}), baselines=baselines)
-        self.last_strategy = strat
+        cfg = build_backtest_config(costs or {})
+        # the engine's baselines without its own (full-size) random null; the matched one replaces it
+        res = backtest(self.signals, self.bars, strat, dataclasses.replace(cfg, random_seeds=0), baselines=baselines)
+        res.config = cfg
+        if baselines:
+            res.baselines["random_same_freq"] = matched_random_null(self.signals, self.bars, res,
+                                                                    seeds=cfg.random_seeds, config=cfg)
+        return res, strat
+
+    def run(self, strategy: str, params: Optional[Dict[str, Any]] = None, costs: Optional[Dict[str, Any]] = None,
+            baselines: bool = True):
+        """Backtest ``strategy`` and make it the explorer's current result (``last``)."""
+        self.last, self.last_strategy = self._backtest(strategy, params, costs, baselines)
         return self.last
 
     def dashboard(self, res=None, *, start=None, end=None):
@@ -102,33 +217,107 @@ class BacktestExplorer:
         return trading_dashboard_figure(res, self.bars, self.signals, strat, start=start, end=end)
 
     def trade_analytics(self, res=None):
-        """Per-trade view of the last run (or ``res``): P&L, cost drag, exit reasons, excursions."""
-        from neural_trade.visualization.trading_dashboard import trade_analytics_figure
+        """Per-trade view of the last run (or ``res``): P&L before / after costs, exit reasons,
+        holding time, excursions, the entry signal vs the outcome (the predicted h1 move against
+        the realised move over the same h1 bars), long vs short."""
+        from neural_trade.visualization.trade_analytics import trade_analytics_figure
 
-        return trade_analytics_figure(res or self.last, self.bars)
+        steps = getattr(self.blocks.get("test"), "horizon_steps", None) or getattr(self.config, "HORIZON_STEPS", None)
+        return trade_analytics_figure(res or self.last, self.bars, signals=self.signals, horizon_steps=steps)
 
-    def compare_strategies(self, names=None, costs=None):
-        """Every registered strategy (or ``names``) with default knobs: {name: BacktestResult} and a figure."""
-        from neural_trade.strategy import Strategies
-        from neural_trade.visualization.trading_dashboard import strategy_comparison_figure
+    def compare_strategies(self, names=None, costs=None, *, null_seeds: Optional[int] = None):
+        """Model strategies (or ``names``) with default knobs, plus buy-and-hold and always-flat:
+        ({name: BacktestResult}, figure). Leaves ``last`` / ``last_strategy`` alone.
 
-        runs = {n: self.run(n, costs=dict(costs or {}, random_seeds=0), baselines=False)
-                for n in (names or Strategies.list_names())}
-        return runs, strategy_comparison_figure(runs, self.bars)
+        Each model strategy that trades gets a matched random null (``null_seeds`` seeds, default the
+        costs' ``random_seeds`` as in ``run``, with its trade rate, holding time and size) in
+        ``result.baselines['random_same_freq']``, drawn on its bar: ``run(name)`` and this report
+        the same rank. The standalone ``random_signal`` (5% entries, 10-bar hold, one seed) is not a
+        matched null, so it is only run when named, and then labelled with its knobs.
+        """
+        from neural_trade.strategy import Strategies, build_backtest_config
+        from neural_trade.visualization.trade_analytics import strategy_comparison_figure
+
+        baseline = set(Strategies.filter_by_tag("baseline"))
+        if names is None:
+            names = [n for n in Strategies.list_names() if n not in baseline] + \
+                    [n for n in _BENCHMARKS if Strategies.has(n)]
+        k = build_backtest_config(dict(costs or {})).random_seeds if null_seeds is None else int(null_seeds)
+        runs, labels = {}, {}
+        for n in names:
+            res, strat = self._backtest(n, costs=costs, baselines=False)
+            if n not in baseline and res.summary["n_trades"] > 0 and k > 0:
+                res.baselines["random_same_freq"] = matched_random_null(self.signals, self.bars, res, seeds=k,
+                                                                        config=res.config)
+            if n == "random_signal":
+                labels[n] = (f"random_signal ({100 * strat.trade_rate:.0f}%/bar, {strat.hold_bars}-bar hold, "
+                             f"seed {strat.seed})")
+            runs[n] = res
+        return runs, strategy_comparison_figure(runs, self.bars, labels=labels)
+
+    def comparison_table(self, runs) -> pd.DataFrame:
+        """One row per strategy of ``compare_strategies``: summary, win / loss and long / short
+        figures, exit reasons, and the rank among its matched random null."""
+        rows = {}
+        for name, r in runs.items():
+            row = {k: r.summary.get(k) for k in ("n_trades", "total_return", "sharpe_net", "max_drawdown", "hit_rate",
+                                                  "hit_rate_gross", "profit_factor", "exposure", "gross_pnl", "costs_paid")}
+            row.update(trade_stats(r))
+            row.update(_null_columns(r.baselines.get("random_same_freq")))
+            reasons = pd.Series([t.exit_reason for t in r.trades], dtype=object).value_counts()
+            row["exits"] = ", ".join(f"{k} {v}" for k, v in reasons.items()) if len(reasons) else ""
+            rows[name] = row
+        return pd.DataFrame(rows).T
+
+    def signal_summary(self) -> Dict[str, pd.DataFrame]:
+        """What the strategies see on the test block: numeric features (count / mean / quantiles),
+        the share of bars where each boolean flag is true, consensus and horizon-vote shares, and
+        the confidence scale. (``DataFrame.describe`` silently drops boolean columns.)"""
+        s = self.signals
+        feats = pd.DataFrame({"weighted_direction": s.weighted_direction, "weighted_move_$": s.weighted_move,
+                              "strength": s.strength, "avg_confidence": s.avg_confidence, "agreement": s.agreement,
+                              "volatility_$": s.volatility})
+        flags = pd.DataFrame({"magnitude_coherent": s.magnitude_coherent, "direction_aligned": s.direction_aligned,
+                              "var_spike": s.var_spike}).astype(float)
+        p = np.asarray(s.p, float)
+        votes = (p > 0.55).sum(1) + (p < 0.45).sum(1)
+        return {
+            "features": feats.describe().T,
+            "flags (share of bars true)": flags.mean().to_frame("share true").assign(bars=len(flags)),
+            "consensus": pd.Series(s.consensus).map({1: "up", -1: "down", 0: "neutral"}).value_counts(normalize=True)
+                           .reindex(["up", "down", "neutral"]).fillna(0.0).to_frame("share of bars"),
+            "horizon votes (P > 0.55 or < 0.45)": pd.Series(np.minimum(votes, 2)).map({0: "0 votes", 1: "1 vote",
+                                                                                      2: "2+ votes"})
+                                                     .value_counts(normalize=True).to_frame("share of bars"),
+            "confidence scale": pd.DataFrame({"var_scale": [s.var_scale]},
+                                             index=["confidence = exp(-var / var_scale); var_scale = median "
+                                                    "predicted variance on the CAL block"]),
+        }
 
     def summary_frame(self, res=None) -> pd.DataFrame:
+        """The run (default: ``last``) next to its baselines. The random null is a distribution over
+        seeds, not one run: its row holds the random mean (return, Sharpe, gross return) and the
+        5th / 95th percentiles of the random return; the strategy's row holds its rank among the
+        seeds after and before costs (the same numbers ``compare_strategies`` shows)."""
         res = res or self.last
-        cols = ["n_trades", "total_return", "sharpe_net", "max_drawdown", "hit_rate", "hit_rate_gross", "profit_factor", "exposure",
-                "fees_paid", "costs_paid"]
-        rows = {res.strategy: {k: res.summary.get(k) for k in cols}}
+        init = float(res.config.initial_equity)
+        rows = {res.strategy: {**{k: res.summary.get(k) for k in SUMMARY_COLS}, **trade_stats(res),
+                               "gross_return": res.summary.get("gross_pnl", 0.0) / init}}
         for name, s in res.baselines.items():
-            if name == "random_same_freq":   # a distribution over seeds, not one run: show its mean and our rank
-                rows[f"random same freq (mean of {s.get('n_seeds', 0)})"] = {
-                    "total_return": s.get("random_mean_total_return"), "sharpe_net": s.get("random_mean_sharpe_net"),
-                    "random percentile (return)": s.get("percentile_total_return")}
-                rows[res.strategy]["random percentile (return)"] = s.get("percentile_total_return")
+            if name == "random_same_freq":
+                if not s.get("n_seeds"):
+                    rows["random same freq (not run: no trades or 0 seeds)"] = {}
+                    continue
+                label = f"random same freq (mean of {s['n_seeds']} seeds" + \
+                        (f", size {s['size_frac']:.2f})" if "size_frac" in s else ")")
+                rows[label] = {"total_return": s.get("random_mean_total_return"),
+                               "sharpe_net": s.get("random_mean_sharpe_net"),
+                               "gross_return": s.get("random_mean_gross_return"),
+                               "random p05 (return)": s.get("random_p05_total_return"),
+                               "random p95 (return)": s.get("random_p95_total_return")}
+                rows[res.strategy].update({k: v for k, v in _null_columns(s).items() if "percentile" in k})
                 continue
-            rows[name] = {k: s.get(k) for k in cols if k in s}
+            rows[name] = {k: s.get(k) for k in SUMMARY_COLS if k in s}
         return pd.DataFrame(rows).T
 
     # ------------------------------------------------------------------ widgets
@@ -150,7 +339,8 @@ class BacktestExplorer:
             "tp_sl_on": w.Dropdown(options=["high_low", "close"], value=defaults.tp_sl_on, description="TP/SL on"),
             "same_bar_tiebreak": w.Dropdown(options=["sl_first", "tp_first"], value=defaults.same_bar_tiebreak,
                                             description="same-bar"),
-            "random_seeds": w.IntText(value=20, description="random seeds"),
+            # the same seed count compare_strategies uses by default, so both report one random rank
+            "random_seeds": w.IntText(value=defaults.random_seeds, description="random seeds"),
         }
         for c in cost_w.values():
             c.style = {"description_width": "120px"}
@@ -186,9 +376,12 @@ class BacktestExplorer:
             tf_ = res.trades_frame()
             show(trades, tf_.tail(30) if len(tf_) else pd.DataFrame({"trades": []}))
             s = res.summary
+            null = res.baselines.get("random_same_freq") or {}
+            rank = (f", beats {null['percentile_total_return']:.0f}% of {null['n_seeds']} matched random runs"
+                    if null.get("n_seeds") else "")
             status.value = (f"<b>{s['n_trades']}</b> trades, net <b>{100 * s['total_return']:+.2f}%</b>, "
                             f"gross {100 * s['gross_pnl'] / res.config.initial_equity:+.2f}%, "
-                            f"costs {s['costs_paid']:.0f} on {res.config.initial_equity:,.0f} equity")
+                            f"costs {s['costs_paid']:.0f} on {res.config.initial_equity:,.0f} equity{rank}")
 
         strategy.observe(rebuild, names="value")
         run.on_click(do_run)
