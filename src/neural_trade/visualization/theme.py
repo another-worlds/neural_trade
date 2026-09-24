@@ -41,7 +41,9 @@ LONG_COLOR = UP_COLOR = SERIES[6]
 SHORT_COLOR = DOWN_COLOR = SERIES[3]
 # Categorical series that are not horizons (strategies, loss components, runs): the slots after
 # the three horizon colours, then neutral inks. Assign in this order, never cycle into h0-h2.
-OTHER_SERIES = (SERIES[3], SERIES[4], SERIES[5], SERIES[6], SERIES[7], "#c3c2b7", "#8a8984")
+# SERIES[:3] are reserved for the horizons. Figures index these slots by position, so keep the order.
+# Slot 2 was the palette green (#008300), which reads as the status colour GOOD; it is a tan now.
+OTHER_SERIES = (SERIES[3], SERIES[4], "#a58d6a", SERIES[6], SERIES[7], "#c3c2b7", "#8a8984")
 
 VAL_DASH = "solid"
 TRAIN_DASH = "dot"
@@ -105,7 +107,7 @@ def apply(fig, *, title: Optional[str] = None, height: Optional[int] = None, sub
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="left", x=0.0))
     # subplot titles are annotations: give them the secondary ink, a size below the figure title
     for a in fig.layout.annotations or ():
-        if a.font is None or a.font.size is None:
+        if a.font is None or a.font.size in (None, 16):          # make_subplots sets 16
             a.update(font=dict(color=INK_2, size=12))
     return fig
 
@@ -129,7 +131,9 @@ def rgba(hex_color: str, alpha: float) -> str:
 def empty_panels(fig) -> list:
     """Subplot axes that hold no trace (a panel drawn with nothing in it). Used by the tests and by
     the dashboards to put a 'not logged' note instead of a blank frame."""
-    used = {(getattr(t, "xaxis", None) or "x", getattr(t, "yaxis", None) or "y") for t in fig.data}
+    domain = {"table", "pie", "indicator", "sunburst", "treemap", "sankey", "parcoords"}
+    used = {(getattr(t, "xaxis", None) or "x", getattr(t, "yaxis", None) or "y") for t in fig.data
+            if t.type not in domain}
     used_y = {y for _, y in used}
     out = []
     for name in fig.layout:
@@ -148,7 +152,7 @@ def note_on_empty(fig, text: str = "not logged in this run"):
         xd = fig.layout["xaxis" + xref[1:]].domain or (0, 1)
         yd = ax.domain or (0, 1)
         fig.add_annotation(x=(xd[0] + xd[1]) / 2, y=(yd[0] + yd[1]) / 2, xref="paper", yref="paper",
-                           text=text, showarrow=False, font=dict(color=MUTED, size=12))
+                           text=text, showarrow=False, xanchor="center", yanchor="middle", font=dict(color=MUTED, size=12))
     return fig
 
 

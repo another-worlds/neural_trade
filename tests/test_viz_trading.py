@@ -53,7 +53,7 @@ def _viz_modules():
 
 # '+'-leading d3 formats still written in modules other groups own (finding #116); drop an entry once
 # its module is fixed (the xfail is not strict, so a fixed module shows as XPASS until then)
-_PENDING_D3 = {"trade_analytics.py", "indicator_evolution.py", "analytics_delta.py"}
+_PENDING_D3: set = set()
 _FIELD = re.compile(r"%\{+[^{}:|]*:([^{}]*)\}+")      # %{var:fmt} in a plain string or %{{var:fmt}} in an f-string
 _FORMAT_KW = re.compile(r"(?:tick|hover|value|xhover|yhover)format\s*[=:]\s*[\"']([^\"']*)[\"']")
 

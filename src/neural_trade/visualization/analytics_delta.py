@@ -518,7 +518,7 @@ def _rolling_panels(fig, j, h, q, ctx, first):
                    line=dict(color=T.INK_2, width=1.2, dash=T.ALT_DASH))
         fig.add_trace(go.Scatter(x=xx, y=_f32(rc[idx]), mode="lines", name=f"{ctx['head']}, trailing window",
                                  legend="legend4", legendgroup="rc", showlegend=False, line=dict(color=c, width=1.5),
-                                 hovertemplate=hx + "<br>corr %{y:+.3f}<extra>" + h + "</extra>"), 4, j)
+                                 hovertemplate=hx + "<br>corr %{y:>+.3f}<extra>" + h + "</extra>"), 4, j)
         _block_line(fig, 4, j, ends, q["corr"], c, False, "legend4", "blk4", "whole block")
         with np.errstate(invalid="ignore", divide="ignore"):
             rs = np.where(my2 > 0, 1.0 - mse / my2, np.nan)
@@ -528,7 +528,7 @@ def _rolling_panels(fig, j, h, q, ctx, first):
         fig.add_trace(go.Scatter(x=xx, y=_f32(rs[idx]), mode="lines", name="served delta, trailing window",
                                  legend="legend5", legendgroup="rs", showlegend=first("rs"),
                                  line=dict(color=SERVED_COLOR, width=1.5),
-                                 hovertemplate=hx + "<br>skill %{y:+.4f}<extra>" + h + "</extra>"), 5, j)
+                                 hovertemplate=hx + "<br>skill %{y:>+.4f}<extra>" + h + "</extra>"), 5, j)
         _block_line(fig, 5, j, ends, q["skill_srv"], SERVED_COLOR, first("blk5"), "legend5", "blk5", "whole block")
     for r in (4, 5):
         fig.add_hline(y=0, line=dict(color=T.NEUTRAL, width=1), row=r, col=j, exclude_empty_subplots=False)

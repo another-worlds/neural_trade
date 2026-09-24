@@ -143,8 +143,28 @@ def load_run_blocks(run_dir, csv_path: Optional[str] = None) -> Dict[str, Any]:
             out[key] = batch.to_prediction_frame(predictor.bundle.pred_scale, predictor.bundle.pred_mean,
                                                  y=b["y"], split=name)
             out[key].X_raw = b["X"]
+        # the served frame carries its raw heads and betas, so evaluate() scores both without extra arguments
+        out[name].meta["delta_raw"] = out[f"{name}_raw"].delta
+        pipe = predictor.bundle.calibration_pipeline
+        if pipe is not None:                     # served delta = beta x raw (beta = 1 without DELTA_SHRINKAGE)
+            out[name].meta["delta_scale"] = dict(pipe.delta_scale)
     out["bars"] = Bars.from_frame(blocks["df"], blocks["test"]["anchor_bar"])
+    out["times"] = _bar_times(blocks["df"], blocks["test"]["anchor_bar"])
     return out
+
+
+def _bar_times(df, anchor_bars):
+    """One timestamp per test bar (the decision bar), or None when the frame has no time column."""
+    import numpy as np
+
+    cols = [c for c in df.columns if str(c).lower() in ("datetime", "timestamp", "time", "date", "open_time")]
+    if cols:
+        values = df[cols[0]]
+    elif isinstance(df.index, pd.DatetimeIndex):
+        values = df.index.to_series()
+    else:
+        return None
+    return pd.to_datetime(values).to_numpy()[np.asarray(anchor_bars, dtype=int)]
 
 
 def _field_widget(field, value):
@@ -214,7 +234,8 @@ class BacktestExplorer:
 
         res = res or self.last
         strat = self.last_strategy if res is self.last else None
-        return trading_dashboard_figure(res, self.bars, self.signals, strat, start=start, end=end)
+        return trading_dashboard_figure(res, self.bars, self.signals, strat, start=start, end=end,
+                                        config=self.config, times=self.blocks.get("times"))
 
     def trade_analytics(self, res=None):
         """Per-trade view of the last run (or ``res``): P&L before / after costs, exit reasons,

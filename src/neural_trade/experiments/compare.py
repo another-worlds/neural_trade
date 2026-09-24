@@ -20,7 +20,7 @@ import pandas as pd
 def _flat(report: dict) -> dict:
     out = {}
     for h, row in report.get("model", {}).get("horizons", {}).items():
-        for group in ("direction", "gauss_direction", "delta", "variance"):
+        for group in ("direction", "gauss_direction", "delta", "delta_raw", "variance"):
             for k, v in (row.get(group) or {}).items():
                 out[f"{h}/{group}/{k}"] = v
     for k, v in report.get("model", {}).get("coherence", {}).items():

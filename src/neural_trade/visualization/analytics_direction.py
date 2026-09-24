@@ -395,7 +395,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
                 customdata=np.c_[f32(np.where(np.isfinite(thr), thr, np.nan)), f32(tpr)],
                 hovertemplate=(f"{h} {name}, AUC {auc:.3f} (95% CI {lo:.2f}-{hi:.2f})"
                                "<br>up when the score ≥ %{customdata[0]:.3f}"
-                               "<br>FPR %{x:.3f} · TPR %{customdata[1]:.3f}<br>TPR − FPR %{y:+.3f}<extra></extra>")),
+                               "<br>FPR %{x:.3f} · TPR %{customdata[1]:.3f}<br>TPR − FPR %{y:>+.3f}<extra></extra>")),
                 2, j)
         fig.update_xaxes(title_text="false positive rate (down moves called up)", range=[0, 1], row=2, col=j)
         fig.update_yaxes(title_text="TPR − FPR (lift over chance)" if first else None,

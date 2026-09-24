@@ -66,6 +66,12 @@ from neural_trade.visualization import training_dashboard as _trd  # noqa: E402
 
 Visualizations.register(name="training_dashboard", tags=["plotly", "training"],
                         dependencies=["plotly"])(_trd.training_dashboard)
+Visualizations.register(name="training_direction_detail", tags=["plotly", "training", "direction"],
+                        dependencies=["plotly"])(_trd.training_direction_detail)
+Visualizations.register(name="training_loss_terms", tags=["plotly", "training", "losses"],
+                        dependencies=["plotly"])(_trd.training_loss_terms)
+Visualizations.register(name="indicator_applied_periods", tags=["plotly", "indicators"],
+                        dependencies=["plotly"])(_ie.indicator_applied_periods)
 for _name, _fn, _tags in (("direction_analytics", _ma.direction_analytics, ["direction"]),
                           ("delta_analytics", _ma.delta_analytics, ["delta"]),
                           ("variance_analytics", _ma.variance_analytics, ["variance", "calibration"]),

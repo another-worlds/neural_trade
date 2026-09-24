@@ -82,13 +82,17 @@ def _rolling_corr(a, b, window):
 def _grid(rows, titles, *, row_heights=None, vspace=0.09, specs=None):
     from plotly.subplots import make_subplots
 
-    return make_subplots(rows=rows, cols=3, subplot_titles=titles, vertical_spacing=vspace,
-                         horizontal_spacing=0.06, row_heights=row_heights, specs=specs)
+    fig = make_subplots(rows=rows, cols=3, subplot_titles=titles, vertical_spacing=vspace,
+                        horizontal_spacing=0.06, row_heights=row_heights, specs=specs)
+    fig.update_xaxes(title_standoff=6)      # keep x titles off the next row's subplot titles
+    return fig
 
 
 def _diag(fig, row, col, lo, hi, name="perfect"):
     import plotly.graph_objects as go
 
-    fig.add_trace(go.Scatter(x=[lo, hi], y=[lo, hi], mode="lines", name=name, showlegend=(row, col) == (1, 1),
-                             legendgroup="ref", line=dict(color=T.NEUTRAL, dash="dot", width=1), hoverinfo="skip"),
+    # dashed, not dotted (dotted means training); one legend entry per reference name
+    fig.add_trace(go.Scatter(x=[lo, hi], y=[lo, hi], mode="lines", name=name, showlegend=col == 1,
+                             legendgroup=f"ref-{name}", line=dict(color=T.NEUTRAL, dash="6px,3px", width=1.5),
+                             hoverinfo="skip"),
                   row, col)

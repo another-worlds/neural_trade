@@ -86,9 +86,15 @@ class PredictionFrame:
             raise ValueError(f"split must be 'test' or 'cal', got {split!r}")
         # The served delta: shrunk by the calibration pipeline when it fitted a delta scale.
         delta = cal.get("delta") or preds["delta"]
-        return cls(y, lc, delta, preds["direction_prob"], preds["variance"], scale, mean,
-                   tuple(result.config.HORIZON_STEPS), split, cal.get("direction_prob"), cal.get("intervals"),
-                   X_raw)
+        frame = cls(y, lc, delta, preds["direction_prob"], preds["variance"], scale, mean,
+                    tuple(result.config.HORIZON_STEPS), split, cal.get("direction_prob"), cal.get("intervals"),
+                    X_raw)
+        # evaluate() scores the raw price heads and records the betas from these (report.delta_raw group)
+        frame.meta["delta_raw"] = {h: np.asarray(preds["delta"][h], float).reshape(-1)[:len(frame)] for h in HORIZONS}
+        betas = getattr(result.calibration_pipeline, "delta_scale", None)
+        if cal.get("delta") is not None and betas:
+            frame.meta["delta_scale"] = {h: float(betas[h]) for h in HORIZONS if h in betas}
+        return frame
 
     @classmethod
     def from_npz(cls, path, pred_scale: float, pred_mean: float = 0.0, horizon_steps=(10, 15, 20),

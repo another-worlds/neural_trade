@@ -39,6 +39,11 @@ def _trailing_mean(x: np.ndarray, window: int) -> np.ndarray:
     return (c[idx] - c[lo]) / (idx - lo)
 
 
+# A horizon votes up / down when its P(up) is beyond these lines (SignalFrame.agreement and
+# consensus; the coherence figure reads them from here).
+VOTE_UP = 0.55
+VOTE_DOWN = 0.45
+
 @dataclass
 class SignalFrame:
     close: np.ndarray            # decision price (the last close) per bar
@@ -78,8 +83,8 @@ class SignalFrame:
         wmove = np.where(wsum < 1e-8, 0.0, (w * d).sum(1) / safe)
         vol = (sig * conf).sum(1) / (conf.sum(1) + 1e-8)
         strength = np.clip((w * np.abs(p - 0.5) * 2).sum(1) / (wsum + 1e-8), 0, 1)
-        up = (p > 0.55).sum(1)
-        down = (p < 0.45).sum(1)
+        up = (p > VOTE_UP).sum(1)
+        down = (p < VOTE_DOWN).sum(1)
         agreement = np.where(up + down == 0, 1 / 3, np.maximum(up, down) / 3.0)
         consensus = np.sign(up - down).astype(int)
         mag = (np.abs(d[:, 0]) <= np.abs(d[:, 1]) + 1e-6) & (np.abs(d[:, 1]) <= np.abs(d[:, 2]) + 1e-6)

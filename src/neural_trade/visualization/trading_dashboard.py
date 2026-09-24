@@ -612,6 +612,7 @@ def trading_dashboard(data, config=None, *, bars=None, signals=None, strategy=No
 
 
 def trade_analytics(data, config=None, *, bars=None, **kw):
+    kw.setdefault("horizon_steps", getattr(config, "HORIZON_STEPS", None))   # like-for-like h1 panel
     return trade_analytics_figure(data, bars, **kw)
 
 

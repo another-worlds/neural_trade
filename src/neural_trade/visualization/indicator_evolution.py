@@ -702,7 +702,7 @@ def _change_panel(fig, go, order, labels, init):
             textfont=dict(size=10, color=T.INK_2),
             hovertemplate=f"{row['indicator']} ({c})<br>{frm:.2f} → {row['last']:.2f} bars"
                           + (f" (within 5% of the clip {where})" if where else "")
-                          + "<br>change %{x:+.1f}%<extra></extra>"), 3, 1)
+                          + "<br>change %{x:>+.1f}%<extra></extra>"), 3, 1)
     lo0, hi0 = min(0.0, float(np.nanmin(ch))), max(0.0, float(np.nanmax(ch)))
     pad_lo, pad_hi = _outside_text_room(texts, lo0, hi0)
     fig.add_vline(x=0, line=dict(color=T.NEUTRAL, width=1), row=3, col=1)
@@ -730,14 +730,14 @@ def _corr_panel(fig, go, summary, order, labels):
         if sel.any():
             fig.add_trace(go.Bar(x=rc[sel].astype("float32"), y=labs[sel].tolist(), orientation="h", name=name,
                                  legend="legend6", legendgroup=name, marker=dict(color=color),
-                                 hovertemplate="%{y}: r of epoch-to-epoch changes = %{x:+.2f}<extra></extra>"),
+                                 hovertemplate="%{y}: r of epoch-to-epoch changes = %{x:>+.2f}<extra></extra>"),
                           3, 2)
     if np.isfinite(lev).any():
         ok = np.isfinite(lev)
         fig.add_trace(go.Scatter(x=lev[ok].astype("float32"), y=labs[ok].tolist(), mode="markers",
                                  name="levels (shared trend)", legend="legend6",
                                  marker=dict(symbol="circle-open", size=9, color=T.INK, line=dict(width=1.5)),
-                                 hovertemplate="%{y}: r of levels = %{x:+.2f} (mostly the trend both share with "
+                                 hovertemplate="%{y}: r of levels = %{x:>+.2f} (mostly the trend both share with "
                                                "training time)<extra></extra>"), 3, 2)
     fig.add_vrect(x0=-band, x1=band, fillcolor=T.rgba(T.NEUTRAL, 0.16), line_width=0, layer="below", row=3, col=2)
     fig.add_vline(x=0, line=dict(color=T.NEUTRAL, width=1), row=3, col=2)
