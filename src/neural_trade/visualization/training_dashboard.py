@@ -1262,14 +1262,27 @@ def _shade(fig, spans, row: int, col: int) -> int:
     return k
 
 
+def _horizon_limits(fig, edges, row: int, col: int) -> None:
+    """Each horizon's own limit(s) as a dashed line in its colour (``edges``: (horizon, y) pairs), so a
+    horizon's line is read against its own band rather than against whichever shaded tier it falls in."""
+    for h, y in edges:
+        fig.add_hline(y=y, line=dict(color=T.HORIZON_COLORS[h], dash="dash", width=1), opacity=0.7, row=row, col=col)
+
+
 def _chance_bands(fig, ctx: _Ctx, row: int, col: int, *, center=0.0, scale=1.0):
     """Nested 95% chance bands of an MCC (scale 1, capped at ±1) or a balanced accuracy (centre 0.5,
-    scale 0.5, so within [0, 1]), one per horizon (n_eff = n / h bars); the widest is h2's."""
-    spans = []
+    scale 0.5, so within [0, 1]), one per horizon (n_eff = n / h bars); the widest is h2's. Both edges
+    of each horizon's band are also drawn dashed in that horizon's colour, as on the one-sided panels:
+    the neutral tiers alone do not say which band is whose."""
+    spans, edges = [], []
     for h in T.HORIZONS:
         band = _chance(ctx, h)
         spans.append(None if band is None else (center - scale * band, center + scale * band))
-    return _shade(fig, spans, row, col)
+        if band is not None:
+            edges += [(h, center - scale * band), (h, center + scale * band)]
+    k = _shade(fig, spans, row, col)
+    _horizon_limits(fig, edges, row, col)
+    return k
 
 
 def _style_key(fig, entries, row=1, col=1):
@@ -1399,10 +1412,8 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
                           ((4, 2), lambda h: _ks_crit(ctx, h))):
         lims = {h: limit(h) for h in T.HORIZONS}
         _shade(fig, [(0.0, v) if v else None for v in lims.values()], r, c)
-        for h, v in lims.items():    # one-sided: each horizon's limit, so its own line can be read against it
-            if v:
-                fig.add_hline(y=v, line=dict(color=T.HORIZON_COLORS[h], dash="dash", width=1), opacity=0.7,
-                              row=r, col=c)
+        # one-sided: each horizon's limit, so its own line can be read against it
+        _horizon_limits(fig, [(h, v) for h, v in lims.items() if v], r, c)
     for r, c in ((4, 1), (4, 2)):
         fig.update_yaxes(rangemode="tozero", row=r, col=c)
     for r, c, y0 in ((2, 1, 0.0), (2, 2, 0.0), (3, 1, 0.5), (3, 2, 0.0), (5, 1, 0.0)):
@@ -1565,8 +1576,9 @@ def _title_lines(ctx: _Ctx) -> List[str]:
     how = ["solid = validation, dotted = training", "train metrics sampled every TRAIN_METRICS_EVERY steps",
            "ECE, PIT-KS: raw heads (before temperature scaling / β shrink)"]
     if any(_chance(ctx, h) for h in T.HORIZONS):
-        how.append("shaded = 95% of what chance gives on the validation block with no skill (ECE, PIT-KS: "
-                   "a calibrated head); dashed = each horizon's limit")
+        # two parts, so _wrap breaks between the phrases rather than inside 'dashed = each horizon's limit'
+        how += ["shaded = 95% of what chance gives on the validation block with no skill (ECE, PIT-KS: "
+                "a calibrated head)", "dashed = each horizon's limit, in its colour"]
     return _wrap(parts) + _wrap(_context_parts(ctx, served=False) + how)
 
 

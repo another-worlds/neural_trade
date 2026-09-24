@@ -9,9 +9,19 @@ Rows:
 3. reliability of the raw and the calibrated P(up) on 10 equal-count bins, with the realised up-rate;
 4. a scorecard: labelled and effective n, up-rates, accuracy, precision / recall, MCC, the head-vs-Gaussian
    AUC difference, Brier and ECE against a constant 0.5 (the ECE with the evaluation report's bins, so the
-   numbers match eval_report_*.md), and how often the delta head agrees with the direction head on the sign.
+   numbers match eval_report_*.md), and how often the raw price head agrees with the direction head on the
+   sign (the report's sign agreement, on the raw heads as ``report.coherence_block`` scores it).
 
 Every direction number uses only the moves outside the deadband (``DIR_DEADBAND_BPS``), as the report does.
+
+Delta shrinkage with beta = 0 serves a delta of exactly 0, so the served Gaussian readout is the constant 0.5
+and the served delta has no sign: nothing about them is measured. Such a horizon says so instead of printing
+intervals and verdicts for a constant. With the raw price heads (``raw_delta=``, or ``frame.meta["delta_raw"]``
+as ``PredictionFrame.from_result`` sets it) the ROC row and the AUC difference read the Gaussian readout of the
+raw head (labelled raw: column title, hover, AUC-difference cell, and the legend key, which names the horizons
+that draw it when beta = 0 on some horizons only) and the sign row uses the raw head; without them the Gaussian
+curve is not drawn and those cells read n/a. Brier and ECE of the served readout read n/a (a constant 0.5 is the
+'const 0.5' column).
 
 A frame without a fitted calibration (``direction_prob_calibrated`` is None, or equal to the raw head, as the
 Predictor serves it with ``calibrated=False``) is labelled as such: P(up) is the raw head, the reliability row
@@ -45,6 +55,10 @@ _SCORECARD_TITLE = "<b>Scorecard</b> · labelled samples · definitions as in th
 _REF_DASH = "5px,4px"    # the realised up-rate line (dotted is reserved for training curves)
 _SHIFT_WIDTH, _SHIFT_ALPHA = 3.5, 0.4   # raw -> calibrated connector: a thick translucent bar (dumbbell)
 _NO_CAL = "no calibration applied"
+_NOTE_PX = 18            # a fourth subtitle line: the beta = 0 note
+_CONST_TOL = 1e-12       # a readout whose range is below this is a constant (beta = 0 serves exactly 0.5)
+_GAUSS = "Gaussian readout (price head)"
+_GAUSS_RAW = "Gaussian readout (raw price head)"
 _trapz = getattr(np, "trapezoid", None) or np.trapz
 
 
@@ -182,8 +196,21 @@ def _hist_range(samples, *, fence: float = 3.0):
     return float(min(lows)), float(max(highs))
 
 
-def _horizon_stats(frame, h, lab_mask, deadband, *, block, max_points):
+def _resolve_heads(frame, raw_delta):
+    """(raw price heads {h: [N]} or None, the frame's betas {h: beta} or None).
+
+    The raw heads as the evaluation report resolves them: ``raw_delta`` ({h: array} or a raw PredictionFrame),
+    else ``frame.delta_raw`` / ``frame.meta["delta_raw"]``, else served / beta when every beta > 0."""
+    from neural_trade.evaluation.report import _frame_extra, _resolve_raw
+
+    betas = _frame_extra(frame, "delta_scale")
+    raw = _resolve_raw(frame, getattr(raw_delta, "delta", raw_delta), betas)
+    return raw, betas
+
+
+def _horizon_stats(frame, h, lab_mask, deadband, *, block, max_points, raw=None, betas=None):
     from neural_trade.metrics import numpy_metrics as npm
+    from neural_trade.metrics.direction_labels import gaussian_up_prob_given_move_np
 
     lab_all, mask = lab_mask
     steps = S.horizon_steps(frame, h)
@@ -191,12 +218,27 @@ def _horizon_stats(frame, h, lab_mask, deadband, *, block, max_points):
     lab = lab_all[mask]
     p_cal = np.asarray(frame.prob(h, True), float)[mask]
     p_raw = np.asarray(frame.direction_prob[h], float)[mask]
-    g = np.asarray(frame.gauss_prob(h, deadband), float)[mask]
+    g_served = np.asarray(frame.gauss_prob(h, deadband), float)[mask]
     n = int(len(lab))
     n_pos = int(lab.sum())
     n_neg = n - n_pos
+    nan = float("nan")
+    served_zero = not np.any(np.asarray(frame.delta[h], float))
+    # beta = 0 serves a delta of 0, so the served Gaussian readout is the constant 0.5: nothing to measure.
+    # The ROC row then reads the raw price head's readout (when the frame has the raw heads), else draws none.
+    const = bool(n > 0 and np.ptp(g_served) <= _CONST_TOL)
+    g, src = g_served, "served"
+    if const:
+        src = "const"
+        if raw is not None:
+            g_raw = np.asarray(gaussian_up_prob_given_move_np(raw[h], frame.variance_scaled[h], frame.last_close,
+                                                              deadband, frame.pred_scale), float)[mask]
+            if np.ptp(g_raw) > _CONST_TOL:
+                g, src = g_raw, "raw"
     s = dict(lab=lab, t=t, p_cal=p_cal, p_raw=p_raw, g=g, n=n, n_pos=n_pos, n_neg=n_neg, steps=steps,
              n_eff=int(n // max(1, steps)), both=n_pos > 0 and n_neg > 0,
+             gauss_const=const, gauss_src=src, served_zero=served_zero,
+             beta_zero=bool(betas and h in betas and float(betas[h]) <= 0),
              # the calibration keeps the order of the raw head: its bins hold the same samples
              monotone=bool(n < 2 or np.all(np.diff(p_cal[np.argsort(p_raw, kind="mergesort")]) >= -1e-12)))
     # discrimination: ROC of the served P(up) (the report's AUC) and of the Gaussian readout
@@ -205,7 +247,10 @@ def _horizon_stats(frame, h, lab_mask, deadband, *, block, max_points):
         auc = s[f"roc_{key}"][3]
         s[f"auc_{key}"] = auc
         s[f"ci_{key}"] = S.auc_ci(auc, n_pos, n_neg, steps=steps) if s["both"] else (np.nan, np.nan)
-    s["auc_diff"] = auc_difference(lab, p_cal, g, steps=steps)
+    if src == "const":                  # a constant has AUC 0.5 in every sample: no interval, no difference
+        s["ci_gauss"], s["auc_diff"] = (nan, nan), (nan, nan, nan)
+    else:
+        s["auc_diff"] = auc_difference(lab, p_cal, g, steps=steps)
     # calibration: the drawn equal-count tables, their ECE and its noise level
     s["block"] = max(int(block), 2 * steps)
     s["rel_raw"] = reliability_rows(lab, p_raw, t, block=s["block"], steps=steps)
@@ -218,7 +263,10 @@ def _horizon_stats(frame, h, lab_mask, deadband, *, block, max_points):
                       int(np.sum(~called & ~up)))
     sens, spec = _rate(tp, tp + fn), _rate(tn, tn + fp)
     finite = [v for v in (sens, spec) if np.isfinite(v)]
-    nan = float("nan")
+    # sign agreement over all samples, as report.coherence_block: the raw heads when known (a positive beta
+    # keeps the sign, beta = 0 does not); the served delta otherwise, which has no sign when it is all 0
+    d = np.asarray(raw[h] if raw is not None else frame.delta[h], float)
+    sign_na = raw is None and served_zero
     s.update(
         base=_rate(n_pos, n), called_up=_rate(tp + fp, n),
         acc=S.wilson(tp + tn, max(n, 1), steps=steps), bal_acc=float(np.mean(finite)) if finite else nan,
@@ -226,10 +274,13 @@ def _horizon_stats(frame, h, lab_mask, deadband, *, block, max_points):
         mcc=npm.mcc(lab, p_cal) if n else nan,
         brier_cal=float(np.mean((p_cal - lab) ** 2)) if n else nan,
         brier_const=float(np.mean((0.5 - lab) ** 2)) if n else nan,
-        brier_gauss=float(np.mean((g - lab) ** 2)) if n else nan,
+        # the served readout's calibration (the report's gauss_direction); a constant 0.5 is the const column
+        brier_gauss=float(np.mean((g_served - lab) ** 2)) if n and not const else nan,
         ece_rep_raw=npm.ece_pos(lab, p_raw), ece_rep_cal=npm.ece_pos(lab, p_cal),
-        ece_rep_const=npm.ece_pos(lab, np.full(n, 0.5)), ece_rep_gauss=npm.ece_pos(lab, g),
-        sign_agree=float(np.mean((np.asarray(frame.delta[h]) > 0) == (np.asarray(frame.prob(h, True)) > 0.5))),
+        ece_rep_const=npm.ece_pos(lab, np.full(n, 0.5)), ece_rep_gauss=nan if const else npm.ece_pos(lab, g_served),
+        sign_na=sign_na,
+        sign_agree=(nan if sign_na or not len(d) else
+                    float(np.mean((d > 0) == (np.asarray(frame.prob(h, True), float) > 0.5)))),
     )
     return s
 
@@ -239,14 +290,30 @@ def _f(v, fmt):
     return "n/a" if v is None or not np.isfinite(v) else format(v, fmt)
 
 
-def _verdict(lo, hi, what):
+def _side(lo, hi):
     if not (np.isfinite(lo) and np.isfinite(hi)):
-        return f"{what}: n/a"
-    if lo > 0.5:
-        return f"{what} above chance"
-    if hi < 0.5:
-        return f"{what} below chance"
-    return f"{what} at chance"
+        return None
+    return "above" if lo > 0.5 else "below" if hi < 0.5 else "at"
+
+
+def _verdict(lo, hi, what):
+    side = _side(lo, hi)
+    return f"{what}: n/a" if side is None else f"{what} {side} chance"
+
+
+def _pair_verdict(ci_head, ci_gauss):
+    """Both verdicts in one short phrase (the raw-readout title has room for little else)."""
+    a, b = _side(*ci_head), _side(*ci_gauss)
+    if a is None or b is None:
+        return "95% CI n/a"
+    return f"both {a} chance (95% CI)" if a == b else f"head {a}, Gaussian {b} chance"
+
+
+def _const_reason(s):
+    """Why a horizon's served Gaussian readout is constant."""
+    if s["beta_zero"]:
+        return "β = 0: served delta ≡ 0"
+    return "served delta ≡ 0" if s["served_zero"] else "served readout constant"
 
 
 def _small(text):
@@ -255,12 +322,16 @@ def _small(text):
 
 # ------------------------------------------------------------------ figure
 def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: int = 1650,
-                               ci_block: int = CI_BLOCK, max_points: int = 400):
+                               ci_block: int = CI_BLOCK, max_points: int = 400, raw_delta=None):
     """Direction heads: P(up) by realised move, ROC lift over chance, reliability, scorecard.
 
     ``frame``: a PredictionFrame (served P(up) = ``frame.prob(h)``; raw head = ``frame.direction_prob``);
     ``config``: supplies ``DIR_DEADBAND_BPS`` and the horizon labels. ``bins``: histogram bins of row 1;
     ``ci_block``: contiguous bars per cluster for the reliability bars; ``max_points``: ROC points drawn.
+    ``raw_delta``: the price heads before the delta shrinkage ({h: array} in dollars, or a raw
+    PredictionFrame); defaults to ``frame.meta["delta_raw"]``. The sign-agreement row uses them, and a
+    horizon whose beta is 0 (served delta 0, Gaussian readout the constant 0.5) reads its Gaussian readout
+    from them; without them such a horizon prints n/a instead of numbers for a constant.
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -269,8 +340,11 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     labels = _labels(frame, config)
     fitted = calibration_applied(frame)
     served = "calibrated P(up)" if fitted else "raw P(up)"          # what frame.prob(h) returns
-    st = {h: _horizon_stats(frame, h, labels[h], deadband, block=ci_block, max_points=max_points)
+    raw, betas = _resolve_heads(frame, raw_delta)
+    st = {h: _horizon_stats(frame, h, labels[h], deadband, block=ci_block, max_points=max_points,
+                            raw=raw, betas=betas)
           for h in T.HORIZONS}
+    const_h = [h for h in T.HORIZONS if st[h]["gauss_const"]]
 
     # row 1: one P(up) axis for all three columns; the tails beyond it are folded into the end bins
     p_lo, p_hi = _hist_range([st[h]["p_cal"] for h in T.HORIZONS if st[h]["n"]])
@@ -288,8 +362,9 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
         if s["both"]:
             s["band"] = S.Z95 * np.sqrt(f_grid * (1 - f_grid) * (1 / S.n_eff(s["n_pos"], s["steps"])
                                                                 + 1 / S.n_eff(s["n_neg"], s["steps"])))
+            drawn = ("roc_head",) if s["gauss_src"] == "const" else ("roc_head", "roc_gauss")
             lift_max = max(lift_max, float(s["band"].max()),
-                           *(float(np.max(np.abs(s[k][1] - s[k][0]))) for k in ("roc_head", "roc_gauss")))
+                           *(float(np.max(np.abs(s[k][1] - s[k][0]))) for k in drawn))
     lift_lim = 1.15 * lift_max
 
     # row 3: one reliability range for all three columns, symmetric around 0.5, from what is drawn
@@ -317,12 +392,19 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     for h in T.HORIZONS:
         s = st[h]
         (lo_h, hi_h), (lo_g, hi_g) = s["ci_head"], s["ci_gauss"]
-        both_chance = (np.isfinite(lo_h) and lo_h <= 0.5 <= hi_h and np.isfinite(lo_g) and lo_g <= 0.5 <= hi_g)
-        verdict = ("head and Gaussian at chance: both 95% CIs include 0.5" if both_chance else
-                   f"{_verdict(lo_h, hi_h, 'head')} · {_verdict(lo_g, hi_g, 'Gaussian')} (95% CI vs 0.5)")
-        titles.append(f"AUC head {_f(s['auc_head'], '.3f')} [{_f(lo_h, '.2f')}, {_f(hi_h, '.2f')}]"
-                      f" · Gaussian {_f(s['auc_gauss'], '.3f')} [{_f(lo_g, '.2f')}, {_f(hi_g, '.2f')}]<br>"
-                      + _small(verdict))
+        head = f"AUC head {_f(s['auc_head'], '.3f')} [{_f(lo_h, '.2f')}, {_f(hi_h, '.2f')}]"
+        if s["gauss_src"] == "const":       # no interval or verdict for a constant: say why it is not drawn
+            titles.append(f"{head} · Gaussian ≡ 0.5, not drawn<br>"
+                          + _small(f"{_verdict(lo_h, hi_h, 'head')} (95% CI vs 0.5) · {_const_reason(s)}"))
+            continue
+        gauss = f"Gaussian {_f(s['auc_gauss'], '.3f')} [{_f(lo_g, '.2f')}, {_f(hi_g, '.2f')}]"
+        if s["gauss_src"] == "raw":
+            verdict = f"Gaussian of the raw price head · {_pair_verdict(s['ci_head'], s['ci_gauss'])}"
+        elif _side(lo_h, hi_h) == _side(lo_g, hi_g) == "at":
+            verdict = "head and Gaussian at chance: both 95% CIs include 0.5"
+        else:
+            verdict = f"{_verdict(lo_h, hi_h, 'head')} · {_verdict(lo_g, hi_g, 'Gaussian')} (95% CI vs 0.5)"
+        titles.append(f"{head} · {gauss}<br>" + _small(verdict))
     for h in T.HORIZONS:
         s = st[h]
         ece = (f"raw {_f(s['ece_eq_raw'], '.2f')} → calibrated {_f(s['ece_eq_cal'], '.2f')}" if fitted
@@ -334,7 +416,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     # vertical layout in pixels: under each panel its tick labels and x title, then the next row's heading
     # (a legend) and its two-line column titles; the scorecard table (one line per row) at the bottom
     score_rows = _scorecard_rows(deadband, fitted)
-    top, bottom, gap_px = _TOP_PX, _BOTTOM_PX, _GAP_PX
+    top, bottom, gap_px = _TOP_PX + (_NOTE_PX if const_h else 0), _BOTTOM_PX, _GAP_PX
     table_px = _HEADER_PX + len(score_rows) * _ROW_PX + _WRAP_PX
     plot_px = float(max(height - top - bottom, 3 * gap_px + table_px + 300))
     panel_px = (plot_px - 3 * gap_px - table_px) / 3
@@ -384,8 +466,9 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
         fig.add_trace(go.Scatter(x=[0, 1], y=[0, 0], mode="lines", line=dict(color=T.NEUTRAL, width=1),
                                  hoverinfo="skip", showlegend=False, legend="legend2", legendgroup="chance"), 2, j)
         for key, name, dash, width in (("roc_head", "direction head", T.VAL_DASH, 2.2),
-                                       ("roc_gauss", "Gaussian readout (price head)", T.ALT_DASH, 1.6)):
-            if not s["both"]:
+                                       ("roc_gauss", _GAUSS_RAW if s["gauss_src"] == "raw" else _GAUSS,
+                                        T.ALT_DASH, 1.6)):
+            if not s["both"] or (key == "roc_gauss" and s["gauss_src"] == "const"):
                 continue
             fpr, tpr, thr, auc = s[key]
             lo, hi = s["ci_" + key[4:]]
@@ -445,11 +528,13 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
         fig.update_yaxes(title_text="observed up-rate" if first else None, range=[rel_lo, rel_hi], row=3, col=j)
 
     # legend-only keys for the horizon-coloured series, in neutral ink (the colour is the column's horizon)
-    keys = [("direction head", "roc_head", 2, dict(mode="lines", line=dict(color=T.INK_2, width=2.2))),
-            ("Gaussian readout (price head)", "roc_gauss", 2,
-             dict(mode="lines", line=dict(color=T.INK_2, width=1.6, dash=T.ALT_DASH))),
-            ("calibrated (served), 95% CI" if fitted else "raw P(up) (served), 95% CI", "cal", 3,
-             dict(mode="markers", marker=dict(symbol="circle", size=8, color=T.INK_2)))]
+    keys = [("direction head", "roc_head", 2, dict(mode="lines", line=dict(color=T.INK_2, width=2.2)))]
+    gauss_key = _gauss_key(st)
+    if gauss_key:
+        keys.append((gauss_key, "roc_gauss", 2,
+                     dict(mode="lines", line=dict(color=T.INK_2, width=1.6, dash=T.ALT_DASH))))
+    keys.append(("calibrated (served), 95% CI" if fitted else "raw P(up) (served), 95% CI", "cal", 3,
+                 dict(mode="markers", marker=dict(symbol="circle", size=8, color=T.INK_2))))
     if fitted:
         keys.append(("raw", "raw", 3,
                      dict(mode="markers", marker=dict(symbol="circle-open", size=9, color=T.INK_2, line=dict(width=1.6)))))
@@ -475,7 +560,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
         f"{frame.split} block, {len(frame):,} samples · direction numbers use only moves beyond ±{deadband:g} bps"
         " (labelled n per column) · line colour = horizon<br>"
         "95% intervals: AUC, accuracy and the chance band on effective samples (n / horizon bars; outcomes overlap)"
-        f"<br>reliability bars clustered in {blk}-bar blocks · {uses}"))
+        f"<br>reliability bars clustered in {blk}-bar blocks · {uses}" + _constant_note(st, const_h)))
     fig.update_layout(height=top + bottom + plot_px, margin=dict(t=top, b=bottom, l=70, r=24))
     for a in fig.layout.annotations or ():
         if a.text and a.text.startswith(("<span", "AUC", "ECE")):
@@ -496,6 +581,44 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     return fig
 
 
+def _gauss_key(st):
+    """The legend key of the drawn Gaussian curves ('' when none is drawn): it names the readout each one is.
+
+    One key serves all three columns, so with mixed sources (beta = 0 on some horizons only, raw heads known)
+    it names the columns that draw the raw price head's readout, e.g. 'Gaussian readout (price head; raw on h1)'.
+    """
+    drawn = [h for h in T.HORIZONS if st[h]["both"] and st[h]["gauss_src"] != "const"]
+    raw_h = [h for h in drawn if st[h]["gauss_src"] == "raw"]
+    if not drawn:
+        return ""
+    if not raw_h:
+        return _GAUSS
+    if len(raw_h) == len(drawn):
+        return _GAUSS_RAW
+    return f"Gaussian readout (price head; raw on {'/'.join(raw_h)})"      # short: legend row 2 is nearly full
+
+
+def _constant_note(st, const_h):
+    """The subtitle line for horizons whose served Gaussian readout is constant ('' when there are none)."""
+    if not const_h:
+        return ""
+    hs = ", ".join(const_h)
+    if all(st[h]["beta_zero"] for h in const_h):
+        lead = f"β = 0 on {hs}: the served delta is 0, so its Gaussian readout ≡ 0.5"
+    elif all(st[h]["served_zero"] for h in const_h):
+        lead = f"served delta ≡ 0 on {hs}: its Gaussian readout ≡ 0.5"
+    else:
+        lead = f"the served Gaussian readout is constant on {hs}"
+    if all(st[h]["gauss_src"] == "raw" for h in const_h):
+        tail = "; ROC and AUC difference use the raw price head, Brier / ECE n/a"
+    elif any(st[h]["gauss_src"] == "raw" for h in const_h):
+        tail = "; ROC uses the raw price head where known, else n/a; Brier / ECE n/a"
+    else:
+        sign = " and the sign row" if any(st[h]["sign_na"] for h in const_h) else ""
+        tail = f" (not drawn; AUC difference, Brier / ECE{sign} n/a)"
+    return "<br>" + lead + tail
+
+
 def _scorecard_rows(deadband, fitted):
     """(label, formatter) per scorecard row; labels short enough to stay on one line in a ~1000 px notebook.
 
@@ -514,6 +637,17 @@ def _scorecard_rows(deadband, fitted):
         ece = ("ECE, report bins (0.1 wide): head · const 0.5 · Gaussian",
                lambda s: (f"{_f(s['ece_rep_cal'], '.3f')} · {_f(s['ece_rep_const'], '.3f')} · "
                           f"{_f(s['ece_rep_gauss'], '.3f')}"))
+
+    def auc_diff(s):
+        if s["gauss_src"] == "const":
+            return "n/a (Gaussian ≡ 0.5)"
+        d, lo, hi = s["auc_diff"]
+        text = f"{_f(d, '+.3f')} [{_f(lo, '+.2f')}, {_f(hi, '+.2f')}]"
+        return text + " (raw)" if s["gauss_src"] == "raw" else text
+
+    def sign(s):
+        return f"n/a ({_const_reason(s)})" if s["sign_na"] else _f(s["sign_agree"], ".1%")
+
     return [
         (f"labelled n (moves beyond ±{deadband:g} bps) · effective n", lambda s: f"{s['n']:,} · {s['n_eff']:,}"),
         ("realised up-rate · called up (P(up) above 0.5)",
@@ -523,13 +657,12 @@ def _scorecard_rows(deadband, fitted):
         ("precision of up calls · recall of up moves",
          lambda s: f"{_f(s['precision'], '.1%')} · {_f(s['recall'], '.1%')}"),
         ("MCC", lambda s: _f(s["mcc"], "+.3f")),
-        ("AUC head − Gaussian (paired DeLong) [95% CI, effective n]",
-         lambda s: (f"{_f(s['auc_diff'][0], '+.3f')} [{_f(s['auc_diff'][1], '+.2f')}, "
-                    f"{_f(s['auc_diff'][2], '+.2f')}]")),
+        ("AUC head − Gaussian (paired DeLong) [95% CI, effective n]", auc_diff),
         (f"Brier: {'calibrated head' if fitted else 'head (uncalibrated)'} · const 0.5 · Gaussian",
          lambda s: f"{_f(s['brier_cal'], '.4f')} · {_f(s['brier_const'], '.4f')} · {_f(s['brier_gauss'], '.4f')}"),
         ece,
-        ("delta head's sign agrees with P(up) above 0.5 (all samples)", lambda s: _f(s["sign_agree"], ".1%")),
+        # the raw price head's sign (a positive beta keeps it, so the served sign is the same while beta > 0)
+        ("raw delta sign agrees with P(up) above 0.5 (all samples)", sign),
     ]
 
 

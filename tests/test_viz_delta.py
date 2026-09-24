@@ -485,6 +485,208 @@ def test_without_raw_heads_the_figure_says_it_shows_the_served_delta(block, viz_
     assert np.allclose(np.sort(xs), np.sort(frame.delta["h0"]), rtol=1e-5, atol=1e-3)
 
 
+# ------------------------------------------------------------------ beta = 0: the served delta is 0
+def _drawn(fig, row, col):
+    """Traces of a panel that carry data (not the invisible placeholders or legend proxies)."""
+    return [t for t in _traces(fig, row, col) if t.y is not None and any(v is not None for v in t.y)]
+
+
+def _texts(fig):
+    return [a.text or "" for a in fig.layout.annotations]
+
+
+@pytest.fixture(scope="module")
+def fig_beta0(viz_config):
+    """beta = 0 on every horizon (the real run of 2026-09-24): the served delta is 0 on every sample,
+    while the raw heads are not."""
+    from neural_trade.visualization.model_analytics import delta_analytics_figure
+
+    frame, raw = _overlap_frame(beta=(0.0, 0.0, 0.0))
+    assert all(not np.any(frame.delta[h]) for h in H) and all(np.std(raw[h]) > 0 for h in H)
+    return delta_analytics_figure(frame, viz_config, raw_delta=raw)
+
+
+def test_beta_zero_row5_draws_nothing_and_says_why(fig_beta0):
+    """A served delta of 0 has skill 0 vs predicting 0 by construction: no flat line on a +/-1 axis,
+    no zero-width band in the legend, but a note, and no generic 'nothing to draw' either."""
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.analytics_delta import EMPTY_NOTE
+
+    assert T.empty_panels(fig_beta0) == []
+    assert not any(EMPTY_NOTE in t for t in _texts(fig_beta0))
+    assert not any(t.legend == "legend5" and t.y is not None and any(v is not None for v in t.y)
+                   for t in fig_beta0.data if t.type != "table")
+    for j in (1, 2, 3):
+        assert _drawn(fig_beta0, 5, j) == []
+        assert _drawn(fig_beta0, 4, j)                          # the raw head's correlation is still drawn
+        xa, ya = _axes(fig_beta0, 5, j)
+        assert fig_beta0.layout["yaxis" + ya[1:]].visible is False
+        assert fig_beta0.layout["xaxis" + xa[1:]].visible is False
+    assert not any(t.startswith("block skill") for t in _texts(fig_beta0))
+    assert sum(t == "served delta is 0 (β = 0)" for t in _texts(fig_beta0)) == 3
+    (head,) = [t for t in _texts(fig_beta0) if "rolling skill vs predicting 0" in t]
+    assert "not drawn" in head and "β = 0 on every horizon" in head and "by construction" in head
+
+
+def test_beta_zero_on_every_horizon_shrinks_row5_to_a_strip(fig_beta0, fig_block):
+    for j in (1, 2, 3):
+        _, y0 = _axes(fig_beta0, 5, j)
+        _, y4 = _axes(fig_beta0, 4, j)
+        _, b4 = _axes(fig_block, 4, j)
+        d5, d4, e4 = (fig["yaxis" + a[1:]].domain for fig, a in
+                      ((fig_beta0.layout, y0), (fig_beta0.layout, y4), (fig_block.layout, b4)))
+        assert (d5[1] - d5[0]) * (fig_beta0.layout.height - 176) == pytest.approx(40, abs=1)
+        # rows 2-4 keep their pixel height
+        assert (d4[1] - d4[0]) * (fig_beta0.layout.height - 176) == pytest.approx(
+            (e4[1] - e4[0]) * (fig_block.layout.height - 176), abs=0.5)
+    assert fig_block.layout.height == 1820 and fig_beta0.layout.height < 1650
+
+
+def test_beta_zero_row4_heading_is_the_raw_heads_not_same_for_served(fig_beta0, fig_block):
+    """corr(beta x raw, y) = corr(raw, y) only while beta > 0; a served delta of 0 has no correlation."""
+    assert "same for raw and served" in fig_block.layout.legend4.title.text
+    text = fig_beta0.layout.legend4.title.text
+    assert "same for raw and served" not in text and "raw head" in text
+
+
+def test_beta_zero_table_and_footer_say_n_a_not_a_measured_zero(fig_beta0):
+    cells, colours = _row(fig_beta0, "skill vs predicting 0: served")
+    assert cells == ["n/a (β = 0: served delta is 0)"] * 3
+    assert all(c not in ("#0ca30c", "#d03b3b") for c in colours)
+    raw_cells = _row(fig_beta0, "skill vs predicting 0: raw")[0]
+    assert all(c.startswith(("+", "-")) for c in raw_cells)      # the raw heads are still measured
+    assert _row(fig_beta0, "served β")[0] == ["0.000 (clipped: served = 0)"] * 3
+    (footer,) = [t for t in _texts(fig_beta0) if "Magnitude ordering" in t]
+    ordering = footer.split("sign(Δ)")[0]                          # the sign check uses the raw heads
+    assert ordering.count("→ served n/a") == 3 and "100.0%" not in ordering
+    assert "reflects the per-horizon β" not in ordering
+
+
+def test_beta_zero_on_one_horizon_only_marks_that_horizon(viz_config):
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.model_analytics import delta_analytics_figure
+
+    frame, raw = _overlap_frame(beta=(0.2, 0.05, 0.0))
+    fig = delta_analytics_figure(frame, viz_config, raw_delta=raw)
+    assert T.empty_panels(fig) == [] and fig.layout.height == 1820
+    assert _drawn(fig, 5, 1) and _drawn(fig, 5, 2) and _drawn(fig, 5, 3) == []
+    texts = _texts(fig)
+    assert sum(t.startswith("block skill") for t in texts) == 2 and "served delta is 0 (β = 0)" in texts
+    assert any("β = 0: the served delta is 0" in t and "by construction" in t for t in texts)
+    assert fig.layout.legend5.title.text                           # h0, h1 still have keys
+    assert "same for served except h2" in fig.layout.legend4.title.text
+    cells = _row(fig, "skill vs predicting 0: served")[0]
+    assert cells[2] == "n/a (β = 0: served delta is 0)" and cells[0].startswith(("+", "-"))
+    (footer,) = [t for t in texts if "Magnitude ordering" in t]
+    a = np.abs(np.stack([frame.delta[h] for h in H], 1))
+    assert f"|Δh0| ≤ |Δh1|: raw {100 * np.mean(np.abs(raw['h0']) <= np.abs(raw['h1'])):.1f}% → served " \
+           f"{100 * np.mean(a[:, 0] <= a[:, 1]):.1f}%" in footer
+    assert "|Δh1| ≤ |Δh2|: raw" in footer and footer.count("→ served n/a") == 2
+    xa, ya = _axes(fig, 5, 1)
+    assert fig.layout["yaxis" + ya[1:]].title.text == "skill vs 0"
+
+
+def test_is_flat_ignores_missing_values():
+    from neural_trade.visualization.analytics_delta import is_flat
+
+    assert is_flat(np.zeros(5)) and is_flat(-0.0 * np.arange(5.0)) and is_flat([]) and is_flat([np.nan, np.nan])
+    assert not is_flat([1.0, np.nan, 2.0]) and not is_flat(0.21 * np.arange(5.0))
+
+
+@pytest.fixture(scope="module")
+def fig_noraw0(viz_config):
+    """No raw heads and beta = 0 on every horizon: the plotted head (the served delta) is 0 everywhere."""
+    from neural_trade.visualization.model_analytics import delta_analytics_figure
+
+    frame, _ = _overlap_frame(beta=(0.0, 0.0, 0.0))
+    return delta_analytics_figure(frame, viz_config)
+
+
+def test_without_raw_heads_a_zero_served_delta_is_not_measured(fig_noraw0):
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.analytics_delta import EMPTY_NOTE
+
+    fig = fig_noraw0
+    # nothing is drawn and nothing is left as an unexplained empty panel: every row says why
+    assert T.empty_panels(fig) == [] and not any(EMPTY_NOTE in t for t in _texts(fig))
+    for row in (2, 3, 4, 5):
+        for j in (1, 2, 3):
+            assert _drawn(fig, row, j) == [], (row, j)
+    assert _row(fig, "skill vs predicting 0: served")[0] == ["n/a (served delta is 0)"] * 3
+    assert all(c.startswith("n/a") for c in _row(fig, "sign(Δ)")[0])
+    assert all(c.startswith("n/a /") for c in _row(fig, "share above 0")[0])
+    (footer,) = [t for t in _texts(fig) if "Magnitude ordering" in t]
+    assert "100.0%" not in footer and footer.count("n/a") >= 4
+    heads = " ".join(t for t in _texts(fig) if t.startswith("<b>"))
+    assert "Rolling correlation</b>" in heads and "rolling skill vs predicting 0</b>" in heads
+
+
+def test_without_raw_heads_a_zero_served_delta_has_no_scatter_statistics(fig_noraw0):
+    """The old row 2 drew a vertical line of points on a +/-1 axis with 'top 0.5% |pred| (> $0): 0 in
+    0 episodes' and a '(noise ±0.073)' band for a correlation that does not exist."""
+    text = " | ".join(_texts(fig_noraw0))
+    assert "top 0.5% |pred|" not in text and "points beyond the plotted range" not in text
+    assert "(noise ±" not in text and "corr n/a" not in text and "fit n/a" not in text
+    assert not any(t.legend == "legend2" for t in fig_noraw0.data if t.type != "table")   # no sample keys
+    for j, h in enumerate(H, start=1):
+        xa, ya = _axes(fig_noraw0, 2, j)
+        assert fig_noraw0.layout["xaxis" + xa[1:]].visible is False
+        assert fig_noraw0.layout["yaxis" + ya[1:]].visible is False
+        assert any(t.startswith(f"{h} (") and t.endswith("served delta is 0") for t in _texts(fig_noraw0))
+
+
+def test_without_raw_heads_every_row_with_nothing_to_draw_is_a_strip(fig_noraw0, fig_block):
+    """Row 5 already shrank to a strip while rows 2-4 kept their full height with boxed notes: every
+    row with nothing to draw on any horizon is now the same text strip under its heading."""
+    from neural_trade.visualization.analytics_delta import STRIP_PX
+
+    plot = fig_noraw0.layout.height - 176
+    for row in (2, 3, 4, 5):
+        for j in (1, 2, 3):
+            _, ya = _axes(fig_noraw0, row, j)
+            dom = fig_noraw0.layout["yaxis" + ya[1:]].domain
+            assert (dom[1] - dom[0]) * plot == pytest.approx(STRIP_PX, abs=1), (row, j)
+    assert fig_noraw0.layout.height < 1000 < fig_block.layout.height
+    heads = [t for t in _texts(fig_noraw0) if t.startswith("<b>")]
+    assert len(heads) == 4 and all("not drawn." in t for t in heads)
+    assert sum("The served delta is 0 on every horizon" in t for t in heads) == 4
+    # a strip has no subplot titles: the heading sits right above it, not lifted over a title
+    for row in (2, 3, 4, 5):
+        _, ya = _axes(fig_noraw0, row, 1)
+        top = fig_noraw0.layout["yaxis" + ya[1:]].domain[1]
+        (head,) = [a for a in fig_noraw0.layout.annotations if (a.text or "").startswith("<b>")
+                   and a.y == pytest.approx(top + 0.002)]
+        assert "not drawn." in head.text
+
+
+def test_without_raw_heads_a_zero_served_delta_on_one_horizon_marks_that_column(viz_config):
+    """beta = 0 on h1 only and no raw heads: the h1 column says so in every row, the other columns
+    are drawn as usual and the rows keep their height."""
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.analytics_delta import EMPTY_NOTE
+    from neural_trade.visualization.model_analytics import delta_analytics_figure
+
+    frame, _ = _overlap_frame(beta=(0.2, 0.0, 0.3))
+    fig = delta_analytics_figure(frame, viz_config)
+    assert fig.layout.height == 1820 and T.empty_panels(fig) == []
+    assert not any(EMPTY_NOTE in t for t in _texts(fig))
+    for row in (2, 3, 4, 5):
+        assert _drawn(fig, row, 1) and _drawn(fig, row, 3) and _drawn(fig, row, 2) == [], row
+        xa, ya = _axes(fig, row, 2)
+        assert fig.layout["xaxis" + xa[1:]].visible is False and fig.layout["yaxis" + ya[1:]].visible is False
+    texts = _texts(fig)
+    assert any(t.startswith("h1 (") and t.endswith(": served delta is 0") for t in texts)
+    assert sum(t.startswith("h1 (") for t in texts) == 1 and sum(t.startswith(("h0 (", "h2 (")) for t in texts) == 2
+    assert sum("(noise ±" in t for t in texts) == 2 and sum(t.startswith("fit ") for t in texts) == 2
+    assert sum("top 0.5% |pred|" in t for t in texts) == 2
+    assert any("nothing to plot against the outcome" in t for t in texts)
+    assert any("has no deciles" in t for t in texts) and any("has no correlation" in t for t in texts)
+    assert any("is 0 by construction" in t for t in texts)
+    for row, title in ((2, "realised move ($)"), (3, "mean realised ($)")):
+        _, ya = _axes(fig, row, 1)
+        assert fig.layout["yaxis" + ya[1:]].title.text == title
+
+
 def test_short_block_and_constant_prediction_still_draw(viz_config):
     from neural_trade.visualization import theme as T
     from neural_trade.visualization.model_analytics import delta_analytics_figure
@@ -495,4 +697,7 @@ def test_short_block_and_constant_prediction_still_draw(viz_config):
     raw["h1"] = np.zeros(len(frame))
     frame.delta["h1"] = np.zeros(len(frame))
     fig = delta_analytics_figure(frame, viz_config, raw_delta=raw)
-    assert "constant prediction or too few samples" in " ".join(_titles(fig))
+    # a head that does not vary: every panel of its column says why (no generic empty-panel note)
+    assert T.empty_panels(fig) == []
+    text = " ".join(_titles(fig))
+    assert "has no deciles" in text and "has no correlation" in text and "raw price head is 0" in text

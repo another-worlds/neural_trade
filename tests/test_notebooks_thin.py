@@ -78,3 +78,38 @@ def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     _run(NB_DIR / "04_diagnostics.ipynb", common, tmp_path)
     _run(NB_DIR / "05_compare_runs.ipynb", {"RUNS_GLOB": str(runs / "*"), "ABLATION_DIR": str(tmp_path / "none")},
          tmp_path)
+
+
+def _saved_training_dashboards():
+    """(notebook, cell index, figure JSON) of every saved 'Training dashboard' output."""
+    for path in (NB_DIR / "01_train_and_monitor.ipynb", NB_DIR / "04_diagnostics.ipynb"):
+        nb = json.loads(path.read_text(encoding="utf-8"))
+        for i, cell in enumerate(nb["cells"]):
+            for out in cell.get("outputs", []):
+                fig = out.get("data", {}).get("application/vnd.plotly.v1+json")
+                if fig and fig["layout"].get("title", {}).get("text", "").startswith("<b>Training dashboard</b>"):
+                    yield path.name, i, fig
+
+
+def test_saved_training_dashboards_mark_each_chance_band_edge_in_its_horizon_colour():
+    """Final check, round 2: the saved outputs of 01 cell 7 and 04 cell 4 still showed the old dashboard.
+    Its MCC and balanced-accuracy panels shaded three neutral tiers with no horizon edges, and its subtitle
+    broke 'dashed = each / horizon's limit' across two lines. In every saved dashboard, each edge of a
+    shaded chance range must now be a dashed line in a horizon colour (a one-sided range's 0 excepted)."""
+    from neural_trade.visualization import theme as T
+
+    horizon_hex = set(T.HORIZON_COLORS.values())
+    found = {}
+    for name, cell, fig in _saved_training_dashboards():
+        found.setdefault(name, []).append(cell)
+        shapes = fig["layout"].get("shapes", [])
+        rects = [s for s in shapes if s.get("type") == "rect"]
+        dashed = {(s["yref"], round(s["y0"], 6)) for s in shapes
+                  if s.get("type") == "line" and s.get("line", {}).get("color") in horizon_hex
+                  and s.get("line", {}).get("dash") == "dash" and s["y0"] == s["y1"]}
+        edges = {(s["yref"], round(y, 6)) for s in rects for y in (s["y0"], s["y1"]) if y != 0}
+        assert edges <= dashed, (name, cell, sorted(edges - dashed))
+        lines = fig["layout"]["title"]["text"].replace("</span>", "").split("<br>")
+        if rects:   # a run with too small a validation block has no chance range and no such phrase
+            assert any("dashed = each horizon's limit, in its colour" in ln for ln in lines), (name, cell, lines[-2:])
+    assert set(found) == {"01_train_and_monitor.ipynb", "04_diagnostics.ipynb"}, found

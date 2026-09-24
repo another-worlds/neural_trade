@@ -192,6 +192,63 @@ def test_direction_tiles_are_graded_against_the_chance_band(viz_config):
     assert min(round(s.y1 - 0.5, 4) for s in rects) == round(band / 2, 4)   # balanced accuracy: half the MCC band
 
 
+def _horizon_edges(fig, row, col):
+    """{horizon: sorted y} of the dashed horizon-coloured lines in a panel."""
+    _, ya = _panel_axes(fig, row, col)
+    by_hex = {c: h for h, c in T.HORIZON_COLORS.items()}
+    out = {}
+    for s in fig.layout.shapes:
+        if s.type == "line" and s.yref == ya and s.line.color in HORIZON_HEX:
+            assert s.line.dash == "dash" and s.y0 == s.y1, s
+            out.setdefault(by_hex[s.line.color], []).append(round(s.y0, 4))
+    return {h: sorted(v) for h, v in out.items()}
+
+
+def test_two_sided_chance_bands_mark_each_horizons_own_edges(viz_config):
+    """Final check: the MCC and balanced-accuracy panels shaded three neutral tiers with no horizon marking,
+    so a price-head h0 MCC of -0.148 (critical: below h0's ±0.12) sat inside h2's ±0.17 tier and read as
+    chance, while the subtitle promised 'dashed = each horizon's limit'."""
+    from neural_trade.visualization.training_dashboard import training_dashboard_figure, training_health
+
+    rows = _served_rows(6, best=5)
+    rows[-1]["val_gauss_dir_mcc_h0"] = -0.148
+    fig = training_dashboard_figure(rows, viz_config, n_val=2866)
+    band = {h: S.corr_null(2866 // k) for h, k in zip(H, (10, 15, 20))}
+    for (r, c), center, scale in (((2, 1), 0.0, 1.0), ((2, 2), 0.0, 1.0), ((3, 1), 0.5, 0.5)):
+        edges = _horizon_edges(fig, r, c)
+        assert sum(len(v) for v in edges.values()) == 6, ((r, c), edges)
+        for h in H:   # both edges of each horizon's own band, in that horizon's colour
+            assert edges[h] == [round(center - scale * band[h], 4), round(center + scale * band[h], 4)], (r, c, h)
+    # the price-head h0 point is outside its own band, as its tile says, though inside h2's shaded tier
+    lo_h0 = _horizon_edges(fig, 2, 2)["h0"][0]
+    assert -0.148 < lo_h0 and -0.148 > -band["h2"]
+    assert training_health(rows, viz_config, n_val=2866)["price head h0"]["status"] == "critical"
+    assert "dashed = each horizon's limit, in its colour" in fig.layout.title.text.replace("<br>", " ")
+
+
+def test_the_dashed_limit_phrase_is_never_broken_across_subtitle_lines(viz_config):
+    """Round 2 of the final check: the subtitle wrapped inside the phrase ('... dashed = each' / 'horizon's
+    limit, in its colour') because it was one long part with the shading note; it is now its own part, so
+    _wrap breaks between the two phrases, with and without a figure-wide title and in a long run."""
+    import re
+
+    from neural_trade.visualization.training_dashboard import _SUB_CHARS, training_dashboard_figure
+
+    phrase = "dashed = each horizon's limit, in its colour"
+    for n, best, served in ((6, 5, None), (20, 17, 18)):
+        fig = training_dashboard_figure(_served_rows(n, best=best), viz_config, n_val=2866, weights_epoch=served)
+        head, sub = fig.layout.title.text.split("<br>", 1)
+        lines = [re.sub("<[^>]+>", "", ln) for ln in sub.split("<br>")]
+        assert any(phrase in ln for ln in lines), lines
+        assert not any(ln.rstrip().endswith("dashed = each") for ln in lines), lines
+        shading = "shaded = 95% of what chance gives on the validation block with no skill (ECE, PIT-KS: a calibrated head)"
+        assert sum(shading in ln for ln in lines) == 1, lines
+        assert all(len(ln) <= _SUB_CHARS for ln in lines), lines
+    # no chance band (tiny validation block): neither phrase is printed
+    fig = training_dashboard_figure(_served_rows(6, best=5), viz_config, n_val=90)
+    assert "dashed = each horizon" not in fig.layout.title.text and "shaded = 95%" not in fig.layout.title.text
+
+
 def test_convergence_and_stability_do_not_flip_on_epoch_noise(viz_config):
     """Finding 37: a 3-point slope turned a steadily improving run 'worsening' (critical) on noise."""
     from neural_trade.visualization.training_dashboard import training_health
@@ -374,12 +431,16 @@ def test_chance_ranges_are_capped_or_withheld_on_a_tiny_validation_block(viz_con
         assert checks[f"direction {h}"]["status"] == "info"
     fig = training_dashboard_figure(rows, viz_config, n_val=90)
     assert not [s for s in fig.layout.shapes if s.type == "rect"]
+    for r, c in ((2, 1), (2, 2), (3, 1), (3, 2), (4, 1), (4, 2)):    # no band, so no horizon edges either
+        assert not _horizon_edges(fig, r, c), (r, c)
     assert "fewer than 10 effective samples" in fig.layout.title.text
     fig = training_dashboard_figure(rows, viz_config, n_val=200)      # n_eff 20 / 13 / 10: all drawn, all inside
     for (r, c), (lo, hi) in (((2, 1), (-1, 1)), ((2, 2), (-1, 1)), ((3, 1), (0, 1))):
         _, ya = _panel_axes(fig, r, c)
         rects = [s for s in fig.layout.shapes if s.type == "rect" and s.yref == ya]
         assert len(rects) == 3 and all(lo <= s.y0 < s.y1 <= hi for s in rects)
+        edges = _horizon_edges(fig, r, c)
+        assert sorted(edges) == list(H) and all(lo <= y <= hi for v in edges.values() for y in v)
 
 
 def test_calibration_panels_show_what_a_calibrated_head_reaches_by_chance(viz_config):

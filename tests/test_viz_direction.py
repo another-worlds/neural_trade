@@ -31,6 +31,48 @@ def _frame(p_cal, up, *, p_raw=None, n=None, steps=(10, 15, 20), delta=None):
         horizon_steps=tuple(steps), direction_prob_calibrated=p_cal)
 
 
+def _beta_frame(betas, *, with_raw=True, record_betas=True, n=4000, seed=11):
+    """(served frame, raw heads): served delta = beta x raw head per horizon, as the delta shrinkage serves it.
+
+    The raw heads carry a real, biased sign signal (so their sign agreement with P(up) differs from
+    1 - share(P(up) above 0.5)) and the variance varies per sample (so their Gaussian readout ranks).
+    ``with_raw`` / ``record_betas``: put ``delta_raw`` / ``delta_scale`` in ``frame.meta``."""
+    from neural_trade.evaluation.frame import PredictionFrame
+
+    rng = np.random.default_rng(seed)
+    sig = rng.normal(size=(n, 3))
+    sigma = rng.uniform(60, 240, (n, 3))
+    y = 0.15 * sig * sigma + rng.normal(size=(n, 3)) * sigma
+    raw = {h: 0.3 * sig[:, i] * sigma[:, i] + 25 * rng.normal(size=n) - 20 for i, h in enumerate(H)}
+    p = {h: 1 / (1 + np.exp(-0.35 * sig[:, i] - 0.3 * rng.normal(size=n) - 0.2 * (i - 1))) for i, h in enumerate(H)}
+    meta = {}
+    if with_raw:
+        meta["delta_raw"] = {h: v.copy() for h, v in raw.items()}
+    if record_betas:
+        meta["delta_scale"] = dict(betas)
+    fr = PredictionFrame(
+        y=y, last_close=np.full(n, 100_000.0), delta={h: float(betas[h]) * raw[h] for h in H},
+        direction_prob=p, variance_scaled={h: (sigma[:, i] / 100.0) ** 2 for i, h in enumerate(H)},
+        pred_scale=100.0, direction_prob_calibrated={h: 0.5 + 0.8 * (p[h] - 0.5) for h in H}, meta=meta)
+    return fr, raw
+
+
+BETA0 = {"h0": 0.0, "h1": 0.0, "h2": 0.0}
+
+
+def _table(fig):
+    """{row label: [h0, h1, h2 cells]} of the scorecard."""
+    (table,) = [t for t in fig.data if t.type == "table"]
+    labels, *cols = [list(c) for c in table.cells.values]
+    return {label: [c[i] for c in cols] for i, label in enumerate(labels)}
+
+
+def _row(fig, prefix):
+    table = _table(fig)
+    (key,) = [k for k in table if k.startswith(prefix)]
+    return table[key]
+
+
 def _stretch(p, k=1.3):
     """A raw head whose monotone calibration is ``p`` (so the frame counts as calibrated)."""
     if isinstance(p, dict):
@@ -193,6 +235,8 @@ def test_scorecard_matches_the_evaluation_report(viz_frame, viz_config):
         assert f"→ {d['ece_pos']:.3f}" in cell(j, "ECE, report bins")
         assert cell(j, "ECE, report bins").endswith(f"{g['ece_pos']:.3f}")
         assert "calibrated head" in next(k for k in rows if k.startswith("Brier"))
+        # beta > 0 and no raw heads: the served sign is the raw sign, the report's sign agreement
+        assert cell(j, "raw delta sign") == f"{sc['coherence'][f'delta_dir_align_{h}']:.1%}"
 
 
 def test_titles_state_labelled_and_effective_n(viz_frame, viz_config):
@@ -373,18 +417,39 @@ def test_layout_fits_a_1000px_notebook(viz_frame, viz_config):
     """Text budgets that keep every line inside a ~1000 px container (the renders at 1000 / 1150 / 1500 px
     were checked by eye): short column titles, legend rows and subtitle lines, one-line table cells, and a
     table height that grows with its rows and leaves room for a wrapped line."""
-    from neural_trade.visualization.analytics_direction import _HEADER_PX, _ROW_PX
     from neural_trade.visualization.model_analytics import direction_analytics_figure
 
-    fig = direction_analytics_figure(viz_frame, viz_config)
+    _assert_fits_1000px(direction_analytics_figure(viz_frame, viz_config))
+
+
+@pytest.mark.parametrize("with_raw", [True, False])
+@pytest.mark.parametrize("betas", [BETA0, {"h0": 0.2, "h1": 0.0, "h2": 0.25}, {"h0": 0.0, "h1": 0.02, "h2": 0.0}])
+def test_beta_zero_layout_fits_a_1000px_notebook(viz_config, with_raw, betas):
+    """The beta = 0 texts (column titles, the fourth subtitle line, n/a cells) keep the same budgets, and the
+    top margin grows by the extra subtitle line."""
+    from neural_trade.visualization.analytics_direction import _NOTE_PX, _TOP_PX
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    fr, _ = _beta_frame(betas, with_raw=with_raw)
+    fig = direction_analytics_figure(fr, viz_config)
+    _assert_fits_1000px(fig)
+    assert fig.layout.margin.t == _TOP_PX + _NOTE_PX
+    assert len(fig.layout.title.text.split("<br>")) == 5                           # title + four subtitle lines
+
+
+def _assert_fits_1000px(fig):
+    from neural_trade.visualization.analytics_direction import _HEADER_PX, _ROW_PX
+
     for a in fig.layout.annotations:
         if a.text and a.text.startswith(("<span", "AUC", "ECE")):                   # the per-column titles
             first, *rest = a.text.split("<br>")
             assert len(_plain(first)) <= 60, first
             assert all(len(_plain(r)) <= 66 for r in rest), rest
-    for legend_id in ("legend", "legend2", "legend3"):                              # heading + keys on one row
+    # heading + keys on one row. The widest row, legend 2 with mixed betas ('Gaussian readout (price head; raw on
+    # h0/h2)', 162), was rendered at 1000 px: it ends ~50 px inside the right panel's edge (about 5.4 px a unit)
+    for legend_id in ("legend", "legend2", "legend3"):
         width = len(_plain(fig.layout[legend_id].title.text)) + sum(len(k) + 8 for k in _keys(fig, legend_id))
-        assert width <= 155, (legend_id, width)
+        assert width <= 162, (legend_id, width)
     for line in fig.layout.title.text.split("<br>"):
         assert len(_plain(line)) <= 140, line
     (table,) = [t for t in fig.data if t.type == "table"]
@@ -421,3 +486,205 @@ def test_degenerate_horizon_still_draws_every_panel():
     fig = direction_analytics_figure(_frame(p, up), None)
     assert T.empty_panels(fig) == []
     assert "n/a" in _row_titles(fig, "AUC head")[2]
+
+
+# ------------------------------------------------------------------ beta = 0: the served delta is 0
+def test_sign_row_uses_the_raw_heads_when_beta_is_zero(viz_config):
+    """beta = 0 serves a delta of 0: the served sign is never 'up', so the old row measured only
+    1 - share(P(up) above 0.5). The row must be the report's sign agreement on the raw heads, whether the
+    frame carries them (meta['delta_raw']) or they are passed (a dict or a raw PredictionFrame)."""
+    import copy
+
+    from neural_trade.evaluation.frame import PredictionFrame
+    from neural_trade.evaluation.report import coherence_block
+    from neural_trade.visualization.model_analytics import direction_analytics, direction_analytics_figure
+
+    fr, raw = _beta_frame(BETA0)
+    coh = coherence_block(fr, raw)
+    want = [f"{coh[f'delta_dir_align_{h}']:.1%}" for h in H]
+    for h in H:                                                           # what the served delta gave
+        served_only = 1 - np.mean(fr.prob(h) > 0.5)
+        assert abs(coh[f"delta_dir_align_{h}"] - served_only) > 0.02
+    bare = copy.copy(fr)
+    bare.meta = {"delta_scale": dict(BETA0)}
+    raw_frame = PredictionFrame(y=fr.y, last_close=fr.last_close, delta=raw, direction_prob=fr.direction_prob,
+                                variance_scaled=fr.variance_scaled, pred_scale=fr.pred_scale)
+    for fig in (direction_analytics_figure(fr, viz_config),                  # from meta['delta_raw']
+                direction_analytics_figure(bare, viz_config, raw_delta=raw),    # a dict
+                direction_analytics(bare, viz_config, raw_delta=raw_frame)):    # a raw frame, via the registry
+        assert _row(fig, "raw delta sign agrees with P(up) above 0.5") == want
+
+
+def test_sign_row_is_na_when_the_served_delta_is_zero_and_no_raw_heads_are_known(viz_config):
+    import copy
+
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    fr, _ = _beta_frame(BETA0, with_raw=False)
+    cells = _row(direction_analytics_figure(fr, viz_config), "raw delta sign")
+    assert cells == ["n/a (β = 0: served delta ≡ 0)"] * 3                      # never a measured share
+    unknown = copy.copy(fr)
+    unknown.meta = {}                                                           # no betas recorded
+    assert _row(direction_analytics_figure(unknown, viz_config), "raw delta sign") == ["n/a (served delta ≡ 0)"] * 3
+
+
+def test_constant_gaussian_readout_is_not_given_intervals_or_verdicts(viz_config):
+    """No raw heads and beta = 0: the served Gaussian readout is the constant 0.5, which has AUC 0.5 in every
+    sample. No interval, no 'at chance' verdict, no curve on the zero line, and n/a in the Gaussian cells."""
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    fr, _ = _beta_frame(BETA0, with_raw=False)
+    assert all(np.ptp(fr.gauss_prob(h, 5.0)) == 0 for h in H)
+    fig = direction_analytics_figure(fr, viz_config)
+    for j, text in enumerate(_row_titles(fig, "AUC head"), start=1):
+        first, second = text.split("<br>")
+        assert re.match(r"AUC head \d\.\d{3} \[\d\.\d\d, \d\.\d\d\] · Gaussian ≡ 0\.5, not drawn$", first), first
+        assert "Gaussian at chance" not in second and "both" not in second
+        assert "β = 0: served delta ≡ 0" in second and "(95% CI vs 0.5)" in second
+        assert not [t for t in fig.select_traces(row=2, col=j) if t.legendgroup == "roc_gauss"]
+        assert _named(fig, 2, j, "direction head")                              # the head is still drawn
+    assert not [k for k in _keys(fig, "legend2") if k.startswith("Gaussian")]
+    assert _row(fig, "AUC head − Gaussian") == ["n/a (Gaussian ≡ 0.5)"] * 3
+    for prefix in ("Brier", "ECE, report bins"):
+        assert all(c.endswith(" · n/a") for c in _row(fig, prefix)), _row(fig, prefix)
+    note = fig.layout.title.text.split("<br>")[-1]
+    assert "β = 0 on h0, h1, h2" in note and "not drawn" in note and "sign row n/a" in note
+
+
+def test_constant_gaussian_readout_is_replaced_by_the_raw_price_head(viz_config):
+    """With the raw heads, a beta = 0 horizon's ROC and AUC difference read the raw price head's Gaussian
+    readout, labelled raw; the served readout's Brier / ECE read n/a."""
+    from sklearn.metrics import roc_auc_score
+
+    from neural_trade.metrics.direction_labels import gaussian_up_prob_given_move_np
+    from neural_trade.visualization.analytics_common import _labels
+    from neural_trade.visualization.analytics_direction import auc_difference
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    fr, raw = _beta_frame(BETA0)
+    fig = direction_analytics_figure(fr, viz_config)
+    labels = _labels(fr, viz_config)
+    diffs = _row(fig, "AUC head − Gaussian")
+    for j, (h, text) in enumerate(zip(H, _row_titles(fig, "AUC head")), start=1):
+        lab, mask = labels[h]
+        g = gaussian_up_prob_given_move_np(raw[h], fr.variance_scaled[h], fr.last_close,
+                                           viz_config.DIR_DEADBAND_BPS, fr.pred_scale)[mask]
+        auc = roc_auc_score(lab[mask], g)
+        assert abs(auc - 0.5) > 0.01                                           # the raw readout ranks
+        first, second = text.split("<br>")
+        m = re.search(r"· Gaussian (\d\.\d{3}) \[(\d\.\d\d), (\d\.\d\d)\]$", first)
+        assert m and float(m.group(1)) == pytest.approx(auc, abs=5e-4), first
+        lo, hi = S.auc_ci(auc, int(lab[mask].sum()), int((1 - lab[mask]).sum()), steps=fr.horizon_steps[j - 1])
+        assert (float(m.group(2)), float(m.group(3))) == pytest.approx((lo, hi), abs=5e-3)
+        assert _plain(second).startswith("Gaussian of the raw price head · ")
+        (curve,) = _named(fig, 2, j, "Gaussian readout (raw price head)")
+        assert curve.line.dash == T.ALT_DASH and np.ptp(np.asarray(curve.y, float)) > 0
+        d, dlo, dhi = auc_difference(lab[mask], fr.prob(h)[mask], g, steps=fr.horizon_steps[j - 1])
+        assert diffs[j - 1] == f"{d:+.3f} [{dlo:+.2f}, {dhi:+.2f}] (raw)"
+    assert "Gaussian readout (raw price head)" in _keys(fig, "legend2")
+    for prefix in ("Brier", "ECE, report bins"):
+        assert all(c.endswith(" · n/a") for c in _row(fig, prefix)), _row(fig, prefix)
+    note = fig.layout.title.text.split("<br>")[-1]
+    assert note.startswith("β = 0 on h0, h1, h2") and "raw price head" in note
+
+
+def test_mixed_betas_mark_only_the_zero_horizon(viz_config):
+    """beta = 0 on h1 only: h0 / h2 keep the served readout and the report's numbers; h1 reads the raw head."""
+    from neural_trade.evaluation.report import score_frame
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    betas = {"h0": 0.2, "h1": 0.0, "h2": 0.25}
+    fr, raw = _beta_frame(betas)
+    fig = direction_analytics_figure(fr, viz_config)
+    sc = score_frame(fr, float(viz_config.DIR_DEADBAND_BPS), raw_delta=raw)
+    titles = _row_titles(fig, "AUC head")
+    brier = _row(fig, "Brier")
+    for j, h in ((1, "h0"), (3, "h2")):
+        g = sc["horizons"][h]["gauss_direction"]
+        assert _named(fig, 2, j, "Gaussian readout (price head)")
+        assert f"Gaussian {g['auc']:.3f} [" in titles[j - 1] and "raw" not in titles[j - 1]
+        assert brier[j - 1].endswith(f"{g['brier']:.4f}")
+    assert _named(fig, 2, 2, "Gaussian readout (raw price head)")
+    assert "Gaussian of the raw price head" in titles[1] and brier[1].endswith("n/a")
+    assert _row(fig, "AUC head − Gaussian")[1].endswith("(raw)")
+    # the one legend key serves all three columns: it names the column that draws the raw head's readout
+    assert [k for k in _keys(fig, "legend2") if k.startswith("Gaussian")] == ["Gaussian readout (price head; raw on h1)"]
+    assert fig.layout.title.text.split("<br>")[-1].startswith("β = 0 on h1:")
+    assert _row(fig, "raw delta sign") == [f"{sc['coherence'][f'delta_dir_align_{h}']:.1%}" for h in H]
+
+
+def test_positive_betas_are_unchanged_by_the_raw_heads(viz_config):
+    """beta > 0: the served readout is scored (the report's gauss_direction), with or without the raw heads,
+    and nothing mentions beta = 0."""
+    import copy
+
+    from neural_trade.evaluation.report import score_frame
+    from neural_trade.visualization.analytics_direction import _TOP_PX
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    betas = {"h0": 0.21, "h1": 0.023, "h2": 0.25}
+    fr, raw = _beta_frame(betas)
+    bare = copy.copy(fr)
+    bare.meta = {}
+    figs = [direction_analytics_figure(fr, viz_config), direction_analytics_figure(bare, viz_config)]
+    sc = score_frame(fr, float(viz_config.DIR_DEADBAND_BPS), raw_delta=raw)
+    for fig in figs:
+        assert fig.layout.margin.t == _TOP_PX and "β = 0" not in fig.layout.title.text
+        for j, h in enumerate(H, start=1):
+            g = sc["horizons"][h]["gauss_direction"]
+            assert _row(fig, "Brier")[j - 1].endswith(f"{g['brier']:.4f}")
+            assert _row(fig, "raw delta sign")[j - 1] == f"{sc['coherence'][f'delta_dir_align_{h}']:.1%}"
+            assert _named(fig, 2, j, "Gaussian readout (price head)")
+            assert not _row(fig, "AUC head − Gaussian")[j - 1].endswith("(raw)")
+    assert _table(figs[0]) == _table(figs[1])
+
+
+@pytest.mark.parametrize("betas, with_raw, key, raw_cols", [
+    ({"h0": 0.2, "h1": 0.0, "h2": 0.25}, True, "Gaussian readout (price head; raw on h1)", (2,)),
+    ({"h0": 0.0, "h1": 0.02, "h2": 0.0}, True, "Gaussian readout (price head; raw on h0/h2)", (1, 3)),
+    ({"h0": 0.2, "h1": 0.0, "h2": 0.25}, False, "Gaussian readout (price head)", ()),     # h1 draws none
+    (BETA0, True, "Gaussian readout (raw price head)", (1, 2, 3)),
+    (BETA0, False, None, ()),                                                           # nothing drawn
+    ({"h0": 0.21, "h1": 0.023, "h2": 0.25}, True, "Gaussian readout (price head)", ()),
+])
+def test_gaussian_legend_key_names_the_readout_of_every_drawn_curve(viz_config, betas, with_raw, key, raw_cols):
+    """One legend key serves the three columns' Gaussian curves: with beta = 0 on some horizons only (raw heads
+    known) it must not read 'price head' for a column that draws the raw price head's readout."""
+    from neural_trade.visualization.model_analytics import direction_analytics_figure
+
+    fr, _ = _beta_frame(betas, with_raw=with_raw)
+    fig = direction_analytics_figure(fr, viz_config)
+    assert [k for k in _keys(fig, "legend2") if k.startswith("Gaussian")] == ([key] if key else [])
+    for j in (1, 2, 3):
+        drawn = [t.name for t in fig.select_traces(row=2, col=j)
+                 if t.legendgroup == "roc_gauss" and not (len(t.x) == 1 and t.x[0] is None)]
+        const = betas[H[j - 1]] == 0 and not with_raw
+        want = [] if const else ["Gaussian readout (raw price head)" if j in raw_cols
+                                 else "Gaussian readout (price head)"]
+        assert drawn == want, (j, drawn)
+
+
+def test_notebook_call_without_raw_delta_reads_the_raw_heads_of_a_from_result_frame(viz_config):
+    """Notebook 01 builds its frame with PredictionFrame.from_result and calls
+    Visualizations.build('direction_analytics', test, config) without raw_delta: at beta = 0 the frame's
+    meta['delta_raw'] must give the report's sign agreement and the raw price head's Gaussian readout."""
+    from types import SimpleNamespace
+
+    from neural_trade.evaluation.frame import PredictionFrame
+    from neural_trade.evaluation.report import evaluate
+    from neural_trade.registries.visualizations import Visualizations
+
+    fr, raw = _beta_frame(BETA0)
+    served = {"delta": {h: 0.0 * raw[h] for h in H}, "direction_prob": fr.direction_prob_calibrated, "intervals": {}}
+    result = SimpleNamespace(
+        target_scaler=SimpleNamespace(scale_=[fr.pred_scale], mean_=[0.0]), y_test=fr.y,
+        last_close_test=fr.last_close, config=viz_config, predictions_calibrated=served,
+        predictions={"delta": raw, "direction_prob": fr.direction_prob, "variance": fr.variance_scaled},
+        calibration_pipeline=SimpleNamespace(delta_scale=dict(BETA0)))
+    test = PredictionFrame.from_result(result, "test")
+    assert not any(np.any(test.delta[h]) for h in H) and test.meta["delta_scale"] == BETA0
+    coh = evaluate(test, viz_config).model["coherence"]
+    fig = Visualizations.build("direction_analytics", test, viz_config)          # the notebook's call
+    assert _row(fig, "raw delta sign") == [f"{coh[f'delta_dir_align_{h}']:.1%}" for h in H]
+    assert all("Gaussian of the raw price head" in t for t in _row_titles(fig, "AUC head"))
+    assert all(c.endswith("(raw)") for c in _row(fig, "AUC head − Gaussian"))

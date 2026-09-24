@@ -88,6 +88,8 @@ RESTATED_BASELINE_ROWS = {("zero_delta", "delta/ev"), ("zero_delta", "delta/corr
                           ("mean_delta", "delta/ev"), ("mean_delta", "delta/corr"),
                           ("mean_delta", "delta/skill_vs_zero")}
 BASELINE_ORDER = ("logreg_lags", "class_prior", "zero_delta", "mean_delta", "const_var")
+# a served-delta statistic where the calibration's shrink beta is 0 (the served delta is 0 on every sample)
+SERVED_ZERO_NA = "n/a (beta = 0: served delta is 0)"
 
 
 def _auc(labels, scores):
@@ -604,19 +606,29 @@ class EvalReport:
         betas = self.meta.get("delta_scale") or {}
         s, r = "delta", "delta_raw"
         sv = "served"  # the frame's deltas: PredictionFrame.from_result holds what the predictor serves
+        zero_beta = {h for h in HORIZONS if betas.get(h) is not None and float(betas[h]) <= 0}
+
+        def served(key):
+            """A served-delta statistic that is fixed by construction where beta = 0 (the served delta is
+            0 there: skill and EV 0, no correlation): n/a, not a measured 0.0000."""
+            cell = self._cell(s, key)
+            return lambda h: SERVED_ZERO_NA if h in zero_beta else cell(h)
+
         rows = [(f"RMSE ($), {sv}", self._cell(s, "rmse", _usd))]
         rows += [("RMSE ($), raw heads", self._cell(r, "rmse", _usd))] if has_raw else []
         rows += [("RMSE ($), zero prediction", self._cell(s, "rmse_zero", _usd)),
                  (f"MAE ($), {sv}", self._cell(s, "mae", _usd))]
         rows += [("MAE ($), raw heads", self._cell(r, "mae", _usd))] if has_raw else []
         rows += [("MAE ($), zero prediction", self._cell(s, "mae_zero", _usd)),
-                 (f"skill vs zero (1 - MSE / MSE of 0), {sv}", self._cell(s, "skill_vs_zero"))]
+                 (f"skill vs zero (1 - MSE / MSE of 0), {sv}", served("skill_vs_zero"))]
         rows += [("skill vs zero, raw heads", self._cell(r, "skill_vs_zero"))] if has_raw else []
-        rows += [(f"EV, {sv}", self._cell(s, "ev"))]
+        rows += [(f"EV, {sv}", served("ev"))]
         rows += [("EV, raw heads", self._cell(r, "ev"))] if has_raw else []
-        rows += [("corr, Pearson" + (" (the same raw and served)" if has_raw else ""), self._cell(s, "corr")),
-                 ("corr, Spearman", self._cell(s, "corr_spearman")),
-                 (f"mean predicted ($), {sv}", self._cell(s, "mean_pred", _usd))]
+        # corr(beta x raw, y) = corr(raw, y) only while beta > 0: with the raw heads, print theirs
+        rows += ([("corr, Pearson, raw heads (the same for served while beta > 0)", self._cell(r, "corr")),
+                  ("corr, Spearman, raw heads", self._cell(r, "corr_spearman"))] if has_raw else
+                 [("corr, Pearson", served("corr")), ("corr, Spearman", served("corr_spearman"))])
+        rows += [(f"mean predicted ($), {sv}", self._cell(s, "mean_pred", _usd))]
         rows += [("mean predicted ($), raw heads", self._cell(r, "mean_pred", _usd))] if has_raw else []
         rows += [("mean realised ($)", self._cell(s, "mean_true", _usd)),
                  ("share predicted up" + (", raw heads" if has_raw else ""),
