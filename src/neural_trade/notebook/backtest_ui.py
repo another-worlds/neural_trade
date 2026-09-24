@@ -97,8 +97,13 @@ class BacktestExplorer:
                 "fees_paid", "costs_paid"]
         rows = {res.strategy: {k: res.summary.get(k) for k in cols}}
         for name, s in res.baselines.items():
-            rows[name] = {k: s.get(k) for k in cols if k in s} | (
-                {"random percentile (return)": s.get("percentile_total_return")} if name == "random_same_freq" else {})
+            if name == "random_same_freq":   # a distribution over seeds, not one run: show its mean and our rank
+                rows[f"random same freq (mean of {s.get('n_seeds', 0)})"] = {
+                    "total_return": s.get("random_mean_total_return"), "sharpe_net": s.get("random_mean_sharpe_net"),
+                    "random percentile (return)": s.get("percentile_total_return")}
+                rows[res.strategy]["random percentile (return)"] = s.get("percentile_total_return")
+                continue
+            rows[name] = {k: s.get(k) for k in cols if k in s}
         return pd.DataFrame(rows).T
 
     # ------------------------------------------------------------------ widgets

@@ -36,10 +36,13 @@ def test_no_function_or_class_definitions(path):
 
 
 @pytest.mark.parametrize("path", NOTEBOOKS, ids=lambda p: p.name)
-def test_outputs_are_stripped_and_parameters_come_first(path):
+def test_parameters_come_first_and_no_saved_output_is_an_error(path):
+    """Notebooks are committed with the outputs of their last real run (so they can be read without
+    running them); none of those outputs may be an error."""
     nb, cells = _code_cells(path)
-    assert all(not c.get("outputs") and c.get("execution_count") is None for _, c in cells)
     assert "parameters" in cells[0][1].get("metadata", {}).get("tags", [])
+    errors = [o for _, c in cells for o in c.get("outputs", []) if o.get("output_type") == "error"]
+    assert not errors, f"{path.name} was saved with an error output: {errors[0].get('ename')}"
 
 
 def _run(path, params, tmp_path):

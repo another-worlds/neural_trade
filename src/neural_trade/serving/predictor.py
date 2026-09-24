@@ -99,17 +99,17 @@ class Predictor:
         heads = self.model.predict(tf.data.Dataset.from_tensor_slices(Xn).batch(bs), verbose=0)
         preds = heads_to_predictions(heads, len(Xn), self.bundle.pred_scale, self.bundle.pred_mean, self.config)
 
-        calibrated = {h: preds["direction_prob"][h] for h in HORIZONS}
+        prob_cal = {h: preds["direction_prob"][h] for h in HORIZONS}
         intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
         if calibrated and self.bundle.calibration_pipeline is not None:
             cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X)
-            calibrated, intervals = cal["direction_prob"], cal["intervals"]
+            prob_cal, intervals = cal["direction_prob"], cal["intervals"]
             preds = dict(preds, delta=cal["delta"])  # delta shrinkage (identity when not fitted)
         sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in HORIZONS}
         gauss = {h: gaussian_up_prob_given_move_np(preds["delta"][h], preds["variance"][h], lc,
                                                    self.config.DIR_DEADBAND_BPS, self.bundle.pred_scale)
                  for h in HORIZONS}
-        return PredictionBatch(preds["delta"], preds["direction_prob"], calibrated, sigma, preds["variance"],
+        return PredictionBatch(preds["delta"], preds["direction_prob"], prob_cal, sigma, preds["variance"],
                                gauss, intervals, lc, tuple(self.config.HORIZON_STEPS))
 
     def predict_last(self, close, alpha: float = 0.1) -> Dict[str, dict]:

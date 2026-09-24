@@ -69,6 +69,19 @@ def test_served_predictions_equal_the_reported_ones(trained):
         assert np.all(lo < hi)
 
 
+def test_uncalibrated_predict_returns_the_raw_heads(trained):
+    """calibrated=False must skip the pipeline: raw delta, raw probabilities, no intervals."""
+    from neural_trade.serving.predictor import Predictor
+
+    cfg, result = trained
+    p = Predictor.from_artifacts(result.artifacts_dir)
+    batch = p.predict(_raw_test_windows(cfg, result), result.last_close_test, calibrated=False)
+    for h in ("h0", "h1", "h2"):
+        np.testing.assert_array_equal(batch.delta[h], result.predictions["delta"][h], err_msg=f"delta/{h}")
+        np.testing.assert_array_equal(batch.direction_prob_calibrated[h], result.predictions["direction_prob"][h])
+        assert np.all(np.isnan(batch.interval[h][0]))
+
+
 def test_predict_frame_and_predict_last(trained, synthetic_bars):
     from neural_trade.serving.predictor import Predictor
 

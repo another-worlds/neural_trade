@@ -4,7 +4,6 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from neural_trade.core.config import Config
 from neural_trade.evaluation.baselines import BaselineSet, lag_features

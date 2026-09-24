@@ -20,7 +20,8 @@ def test_objective_comes_from_the_losses_registry(make_loss_model):
 
     m2 = make_loss_model(261.0, 3.2, objective=spy)
     import tensorflow as tf
-    x = tf.zeros([2, 60]); y = tf.zeros([2, 3]); lc = tf.ones([2, 1]) * 1e5; ext = tf.zeros([2, 3])
+    x, y, ext = tf.zeros([2, 60]), tf.zeros([2, 3]), tf.zeros([2, 3])
+    lc = tf.ones([2, 1]) * 1e5
     heads = tuple(tf.fill([2, 1], 0.5) for _ in range(9))
     m2.custom_loss(x, y, heads, lc, ext)
     assert calls == [1]

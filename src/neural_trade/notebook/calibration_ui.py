@@ -34,6 +34,7 @@ class CalibrationExplorer:
         self.pred_scale = float(blocks["predictor"].bundle.pred_scale)
         self.saved = blocks["predictor"].bundle.calibration_pipeline
         self.pipeline = None
+        self.last_table = None
         self._w = None
 
     @classmethod
@@ -82,7 +83,8 @@ class CalibrationExplorer:
                 "ECE calibrated": ece_pos(lab[mask], out["direction_prob"][h][mask]),
             }
         self.pipeline, self._out = pipe, out
-        return pd.DataFrame(rows).T
+        self.last_table = pd.DataFrame(rows).T
+        return self.last_table
 
     def figures(self, horizon: str = "h1", window: int = 500):
         """(reliability, coverage-over-time) figures for ``horizon`` from the last refit."""

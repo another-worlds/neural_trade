@@ -1,7 +1,6 @@
 """Callbacks registry: default order reproduces the old hard-coded list; schedule and threshold."""
 from __future__ import annotations
 
-import numpy as np
 import tensorflow as tf
 
 from neural_trade.core.config import Config

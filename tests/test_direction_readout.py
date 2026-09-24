@@ -8,7 +8,6 @@ Phi(-0.21) ~ 0.42, nothing was ever predicted "up" and val_gauss_dir_mcc was exa
 from __future__ import annotations
 
 import numpy as np
-import pytest
 import tensorflow as tf
 from scipy.special import log_ndtr as sp_log_ndtr
 from scipy.stats import norm

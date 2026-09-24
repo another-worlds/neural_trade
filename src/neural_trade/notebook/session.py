@@ -176,6 +176,21 @@ class TrainingSession:
 
         return _SessionCallback()
 
+    def curves_figure(self):
+        """The epoch curves as a plain figure (for a static cell output after training)."""
+        from neural_trade.visualization.plotly_training import plotly_interactive
+
+        return plotly_interactive(self.history, self.config)
+
+    def history_frame(self):
+        """One row per epoch with the headline train/val metrics."""
+        import pandas as pd
+
+        cols = ["epoch", "seconds", "loss", "val_loss", "val_dir_mcc_h1", "val_gauss_dir_mcc_h1", "val_pit_ks_h1",
+                "val_crps_loss", "val_nll_loss", "nonfinite_grad_steps"]
+        df = pd.DataFrame(self.history)
+        return df[[c for c in cols if c in df.columns]]
+
     # ------------------------------------------------------------------ widgets
     def widget(self):
         """Buttons, status, progress, live curves and the log (build once, display anywhere)."""
