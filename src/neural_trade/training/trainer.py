@@ -2,15 +2,24 @@
 
 data (DataProcessor) -> model (Models registry) -> objective (Losses registry) -> optimizers
 (Optimizers registry) -> optional loss-weight calibration -> ablations -> fit with early
-stopping on the VALIDATION block -> predictions on test -> CalibrationPipeline fit on the
+stopping on the VALIDATION block -> the best-validation weights put back (see
+:func:`_serve_best_weights`) -> predictions on test -> CalibrationPipeline fit on the
 CALIBRATION block and applied to test -> TrainResult.
+
+The served epoch (1-based, the weights that are evaluated, calibrated and bundled) is recorded on
+the TrainResult (``weights_epoch``, ``weights_val_loss``), in ``artifacts/meta.json`` and in the
+run's ``status.json``. Every epoch's logs carry the learning rates it trained with (``lr_used``,
+``lr_indicator_used``; :class:`LearningRateInEffect`), whatever the callback order.
 """
 from __future__ import annotations
 
+import json
 import logging
+import math
 import os
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -70,6 +79,11 @@ class TrainResult:
     windows_test: Optional[np.ndarray] = None  # RAW test windows [N, LOOKBACK]
     windows_cal: Optional[np.ndarray] = None   # RAW calibration windows
     artifacts_dir: Optional[str] = None  # where the serving bundle was written, if any
+    # The epoch (1-based) whose weights the model holds after training: the weights that are
+    # evaluated on TEST, calibrated and bundled. None when no training ran (weights loaded).
+    weights_epoch: Optional[int] = None
+    weights_val_loss: Optional[float] = None   # validation loss of that epoch
+    weights_source: Optional[str] = None       # how that epoch was chosen (for the logs and the dashboard)
 
 
 def _report_device() -> None:
@@ -135,6 +149,111 @@ def _predict_heads(model, X, n, target_scaler, cfg, batch_size=None):
     ds = tf.data.Dataset.from_tensor_slices(np.asarray(X, dtype='float32')).batch(bs)
     heads = model.predict(ds, verbose=0)
     return heads_to_predictions(heads, n, float(target_scaler.scale_[0]), float(target_scaler.mean_[0]), cfg)
+
+
+def _finite_or_none(v) -> Optional[float]:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _serve_best_weights(model, callbacks_list, history) -> Tuple[Optional[int], Optional[float], str]:
+    """Put the best-validation weights back into ``model`` and say which epoch is served.
+
+    Keras 2.10 ``EarlyStopping(restore_best_weights=True)`` restores the best weights only when it
+    stops training itself (``set_weights`` sits inside its ``wait >= patience`` branch; its
+    ``on_train_end`` only prints). A run that reaches the epoch cap, or that the notebook's Stop
+    button ends, kept the LAST epoch's weights, so TEST, calibration and the bundle silently used a
+    model other than the best-validation one. This restores the stopper's ``best_weights`` whenever
+    it did not stop the run (``stopped_epoch == 0``), which is the Keras 3 behaviour.
+
+    Returns ``(epoch, val_loss, source)``: the 1-based epoch whose weights ``model`` now holds, its
+    validation loss, and a short description of how it was chosen. Without a restoring stopper on
+    val_loss the last epoch is served.
+    """
+    val = list((getattr(history, "history", None) or {}).get("val_loss", []) or [])
+    es = next((c for c in callbacks_list or []
+               if isinstance(c, tf.keras.callbacks.EarlyStopping) and getattr(c, "restore_best_weights", False)
+               and getattr(c, "monitor", None) == "val_loss"), None)
+    if es is not None and getattr(es, "best_weights", None) is not None:
+        best_epoch = getattr(es, "best_epoch", None)
+        if best_epoch is None:  # older Keras: the stopper does not record it
+            finite = [(v, i) for i, v in enumerate(val) if _finite_or_none(v) is not None]
+            best_epoch = min(finite)[1] if finite else 0
+        epoch = int(best_epoch) + 1
+        if not getattr(es, "stopped_epoch", 0):
+            model.set_weights(es.best_weights)
+            source = (f"best validation epoch, restored after training "
+                      f"(EarlyStopping did not stop the run: {len(val)} epochs ran)")
+        else:
+            source = f"best validation epoch, restored by EarlyStopping (stopped at epoch {int(es.stopped_epoch) + 1})"
+        vl = _finite_or_none(getattr(es, "best", None))
+        if vl is None and 0 < epoch <= len(val):
+            vl = _finite_or_none(val[epoch - 1])
+        return epoch, vl, source
+    if val:
+        return len(val), _finite_or_none(val[-1]), "last epoch (no EarlyStopping restoring the best val_loss)"
+    return None, None, "unknown (no validation history)"
+
+
+def _record_served_epoch_in_status(run_context, epoch, val_loss, source) -> None:
+    """Add the served epoch to the run's status.json (telemetry: never raises)."""
+    run_dir = getattr(run_context, "run_dir", None)
+    if run_dir is None:
+        return
+    path = Path(run_dir) / "status.json"
+    try:
+        status = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        status.update(weights_epoch=epoch, weights_val_loss=val_loss, weights_source=source)
+        path.write_text(json.dumps(status, indent=2), encoding="utf-8")
+    except Exception:
+        logger.warning("could not record the served epoch in %s", path, exc_info=True)
+
+
+def _with_epoch_logger(names: List[str]) -> List[str]:
+    """``names`` plus 'jsonl_epoch_logger', placed before 'reduce_lr_on_plateau'.
+
+    Callbacks run in list order at each epoch end. Appended last, the logger read the optimizer's
+    learning rate AFTER ReduceLROnPlateau had cut it, so the 'lr' it recorded for epoch e was the
+    rate of epoch e + 1. Before the scheduler it records the rate the epoch was trained with.
+    """
+    out = list(names)
+    if "jsonl_epoch_logger" not in out:
+        at = out.index("reduce_lr_on_plateau") if "reduce_lr_on_plateau" in out else len(out)
+        out.insert(at, "jsonl_epoch_logger")
+    return out
+
+
+class LearningRateInEffect(tf.keras.callbacks.Callback):
+    """Adds the learning rates each epoch trained with to that epoch's logs: ``lr_used`` (network
+    optimizer) and ``lr_indicator_used`` (indicator-period optimizer).
+
+    They are read when the epoch STARTS, so they do not depend on where a logger sits relative to
+    ReduceLROnPlateau, which cuts the rate at the epoch's end (a logger after it records the next
+    epoch's rate as 'lr'). ``train_and_evaluate`` puts this callback first; Keras passes one logs dict
+    to every callback in turn, so the jsonl logger, the CSV logger, History and the notebook all get
+    the keys. Never raises.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._rates: Dict[str, float] = {}
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self._rates = {}
+        for key, attr in (("lr_used", "optimizer"), ("lr_indicator_used", "indicator_optimizer")):
+            opt = getattr(self.model, attr, None)
+            try:
+                if opt is not None:
+                    self._rates[key] = float(tf.keras.backend.get_value(opt.learning_rate))
+            except Exception:  # a schedule object, or no optimizer yet: telemetry only
+                logger.debug("learning rate of %s not readable", attr, exc_info=True)
+
+    def on_epoch_end(self, epoch, logs=None):
+        if logs is not None:
+            logs.update(self._rates)
 
 
 def train_and_evaluate(
@@ -223,16 +342,26 @@ def train_and_evaluate(
     context = TrainContext(model=custom_model, indicator_layer=learnable_layer,
                            run_dir=getattr(run_context, 'run_dir', None), run_id=getattr(run_context, 'run_id', None))
     names = list(getattr(cfg, 'CALLBACKS', []) or [])
-    if run_context is not None and 'jsonl_epoch_logger' not in names:
-        names.append('jsonl_epoch_logger')
+    if run_context is not None:
+        names = _with_epoch_logger(names)
     if getattr(cfg, 'LOSS_WEIGHT_SCHEDULE', None) and 'lambda_schedule' not in names:
         names.append('lambda_schedule')
-    callbacks_list = build_callbacks(cfg, context, names)
+    # First: the learning rates of each epoch, read before any callback can change them (LearningRateInEffect).
+    callbacks_list = [LearningRateInEffect()] + build_callbacks(cfg, context, names)
     if extra_callbacks:
         callbacks_list += list(extra_callbacks)
 
     actual_epochs = int(epochs) if epochs is not None else int(cfg.EPOCHS)
+    # The validation size, for live dashboards (a callback sees only the model): the chance band
+    # of a validation metric depends on it.
+    try:
+        custom_model.n_val_samples = int(np.asarray(_vb["y_scaled"]).shape[0])
+    except Exception:
+        logger.debug("validation size not attached to the model", exc_info=True)
     history = None
+    weights_epoch: Optional[int] = None
+    weights_val_loss: Optional[float] = None
+    weights_source: Optional[str] = None
     if os.path.exists(cfg.MODEL_PATH) and not force:
         logger.info(f"Loading existing model weights from {cfg.MODEL_PATH}...")
         try:
@@ -255,7 +384,15 @@ def train_and_evaluate(
             callbacks=callbacks_list,
             verbose=0,
         )
-        logger.info(f"Enhanced model weights saved to {cfg.MODEL_PATH}")
+        # Before anything is predicted, calibrated or saved: serve the best-validation weights.
+        weights_epoch, weights_val_loss, weights_source = _serve_best_weights(custom_model, callbacks_list, history)
+        n_run = len((getattr(history, "history", None) or {}).get("val_loss", []) or [])
+        logger.info("Serving the weights of epoch %s of %d (val_loss %s): %s", weights_epoch, n_run,
+                    f"{weights_val_loss:.4f}" if weights_val_loss is not None else "n/a", weights_source)
+        if any(isinstance(c, tf.keras.callbacks.ModelCheckpoint) for c in callbacks_list):
+            logger.info("model_checkpoint wrote the best-on-validation weights to %s", cfg.MODEL_PATH)
+        if run_context is not None:
+            _record_served_epoch_in_status(run_context, weights_epoch, weights_val_loss, weights_source)
         try:
             joblib.dump(target_scaler, cfg.SCALER_PATH)
             if input_scaler is not None:
@@ -373,6 +510,9 @@ def train_and_evaluate(
         windows_test=getattr(data_processor, 'test_windows_raw', None),
         windows_cal=(_cb.get('X_raw') if _cb is not None else None),
         normalizer=getattr(data_processor, 'normalizer', None),
+        weights_epoch=weights_epoch,
+        weights_val_loss=weights_val_loss,
+        weights_source=weights_source,
     )
 
     # Serving bundle (training.artifacts): weights, config, target scale, normaliser, calibration.

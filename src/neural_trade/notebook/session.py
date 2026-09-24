@@ -66,6 +66,9 @@ class TrainingSession:
         self.history: List[Dict[str, float]] = []
         self.batch_points: List[tuple] = []      # (fractional epoch, running-mean train loss)
         self.val_points: List[tuple] = []        # (epoch end, val loss)
+        # (fractional epoch, {h: (share of up calls, true up-rate, balanced accuracy)}), running over the epoch
+        self.batch_dir_points: List[tuple] = []
+        self.n_val: Optional[int] = None         # validation samples (set by the trainer on the model)
         self.status = "ready"
         self.result = None
         self.error: Optional[BaseException] = None
@@ -172,10 +175,30 @@ class TrainingSession:
                     loss = (logs or {}).get("loss")
                     if loss is not None and steps:
                         session.batch_points.append((len(session.history) + (batch + 1) / steps, float(loss)))
+                    if batch > 0 and steps:   # batch 0 holds one sampled step: too few for a rate
+                        self._direction_point(len(session.history) + (batch + 1) / steps)
                     session._progress(len(session.history), batch + 1, steps)
                     session._redraw_batches()
 
+            def _direction_point(self, x):
+                """The running share of up calls per horizon over this epoch (the class-collapse signal), from
+                the model's training accumulators (sampled every TRAIN_METRICS_EVERY steps). Never raises."""
+                fn = getattr(self.model, "train_epoch_logs", None)
+                if not callable(fn):
+                    return
+                try:
+                    d = fn()
+                    session.batch_dir_points.append((x, {h: (d.get(f"train_pred_up_rate_{h}"),
+                                                             d.get(f"train_true_up_rate_{h}"),
+                                                             d.get(f"train_dir_bal_acc_{h}"))
+                                                         for h in ("h0", "h1", "h2")}))
+                except Exception:  # the live strip must never break training
+                    logger.debug("running direction metrics unavailable", exc_info=True)
+
             def on_epoch_end(self, epoch, logs=None):
+                if session.n_val is None:
+                    n_val = getattr(self.model, "n_val_samples", None)
+                    session.n_val = int(n_val) if isinstance(n_val, (int, float)) and n_val > 0 else None
                 row = {"epoch": epoch, "seconds": time.time() - self._t0}
                 row.update({k: float(v) for k, v in (logs or {}).items()})
                 session.history.append(row)
@@ -200,17 +223,66 @@ class TrainingSession:
             rows = [{**r, **logged.get(int(r["epoch"]), {})} for r in rows]
         return rows
 
+    # ------------------------------------------------------------------ the training record
+    @property
+    def served_epoch(self) -> Optional[int]:
+        """The 1-based epoch whose weights were evaluated and bundled (None until training finished)."""
+        return getattr(self.result, "weights_epoch", None) if self.result is not None else None
+
+    def _display_kw(self) -> dict:
+        """What the dashboard needs beyond the rows: the served epoch (after training; before, the
+        dashboard shows the epoch that will be restored), the validation size (chance bands) and the
+        bundle metadata (loss weights calibrated at the outer level)."""
+        from neural_trade.visualization.training_dashboard import run_meta
+
+        meta = None
+        if self.result is not None:
+            src = getattr(self.run_context, "run_dir", None) or getattr(self.result, "artifacts_dir", None)
+            meta = run_meta(src)
+        n_val = self.n_val
+        fold = getattr(self.result, "fold", None) if self.result is not None else None
+        if fold is not None and getattr(fold, "val", None) is not None:
+            n_val = len(fold.val)
+        return dict(weights_epoch=self.served_epoch, n_val=n_val, meta=meta)
+
     def curves_figure(self):
         """The training dashboard as a plain figure (for a static cell output after training)."""
         from neural_trade.visualization.training_dashboard import training_dashboard_figure
 
-        return training_dashboard_figure(self.epoch_rows(), self._config_for_display())
+        return training_dashboard_figure(self.epoch_rows(), self._config_for_display(), **self._display_kw())
 
-    def health_html(self) -> str:
-        """The training-health tiles (convergence, patience, collapse, gradients ...) as HTML."""
+    def health_html(self, *, table: bool = True) -> str:
+        """The training-health tiles (served epoch, convergence, per-horizon verdicts against their chance
+        bands, collapse, gradients ...) and, with ``table``, the exact numbers at the served epoch."""
         from neural_trade.visualization.training_dashboard import training_health_html
 
-        return training_health_html(self.epoch_rows(), self._config_for_display())
+        return training_health_html(self.epoch_rows(), self._config_for_display(), table=table, **self._display_kw())
+
+    def epoch_table_html(self) -> str:
+        """Every loss term (with its weight and share) and every direction metric at the served epoch."""
+        from neural_trade.visualization.training_dashboard import epoch_table_html
+
+        return epoch_table_html(self.epoch_rows(), self._config_for_display(), **self._display_kw())
+
+    def direction_figure(self):
+        """Accuracy, sensitivity / specificity, F1, Brier and mean P(up) per horizon, against no-skill references."""
+        from neural_trade.visualization.training_dashboard import direction_detail_figure
+
+        return direction_detail_figure(self.epoch_rows(), self._config_for_display(), **self._display_kw())
+
+    def loss_terms_figure(self):
+        """Each loss term per horizon on its own axis."""
+        from neural_trade.visualization.training_dashboard import loss_terms_figure
+
+        kw = self._display_kw()
+        kw.pop("n_val")
+        return loss_terms_figure(self.epoch_rows(), self._config_for_display(), **kw)
+
+    def batch_figure(self):
+        """The batch-by-batch strip (loss and the running share of up calls), for the static record."""
+        from neural_trade.visualization.training_dashboard import batch_loss_figure
+
+        return batch_loss_figure(self.batch_points, self.val_points, dir_points=self.batch_dir_points or None)
 
     def _config_for_display(self):
         cfg = self.config.copy() if hasattr(self.config, "copy") else self.config
@@ -219,13 +291,20 @@ class TrainingSession:
         return cfg
 
     def history_frame(self):
-        """One row per epoch with the headline train/val metrics."""
+        """One row per epoch (1-based) with the headline train/val metrics for every horizon."""
         import pandas as pd
 
-        cols = ["epoch", "seconds", "loss", "val_loss", "val_dir_mcc_h1", "val_gauss_dir_mcc_h1", "val_pit_ks_h1",
-                "val_crps_loss", "val_nll_loss", "nonfinite_grad_steps"]
-        df = pd.DataFrame(self.history)
-        return df[[c for c in cols if c in df.columns]]
+        cols = ["epoch", "seconds", "loss", "val_loss", "lr_used", "lr"]
+        for h in ("h0", "h1", "h2"):
+            cols += [f"val_dir_mcc_{h}", f"train_dir_mcc_{h}", f"val_gauss_dir_mcc_{h}", f"val_dir_bal_acc_{h}",
+                     f"val_dir_brier_{h}", f"val_dir_ece_{h}", f"val_pit_ks_{h}", f"val_pred_up_rate_{h}"]
+        cols += ["val_point_loss", "val_dir_loss", "val_nll_loss", "val_crps_loss", "grad_global_norm",
+                 "nonfinite_grad_steps"]
+        df = pd.DataFrame(self.epoch_rows())
+        df = df[[c for c in cols if c in df.columns]]
+        if "epoch" in df.columns:
+            df = df.assign(epoch=df["epoch"].astype(int) + 1)
+        return df
 
     # ------------------------------------------------------------------ widgets
     def widget(self):
@@ -291,4 +370,5 @@ class TrainingSession:
         from neural_trade.visualization.training_dashboard import batch_loss_figure
 
         self._w["last_batch_draw"] = now
-        show(self._w["batch_curve"], batch_loss_figure(self.batch_points, self.val_points))
+        show(self._w["batch_curve"], batch_loss_figure(self.batch_points, self.val_points,
+                                                       dir_points=self.batch_dir_points or None))

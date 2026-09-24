@@ -332,7 +332,13 @@ def build_csv_logger(config, context):
 
 
 def build_early_stopping(config, context):
-    """EarlyStopping on val_loss, patience EARLY, restoring the best weights."""
+    """EarlyStopping on val_loss, patience EARLY, keeping the best weights in memory.
+
+    Keras 2.10 puts those weights back only when this callback stops training itself. When the run
+    reaches EPOCHS (or is stopped from the notebook) ``train_and_evaluate`` restores them after
+    ``fit`` (trainer._serve_best_weights), so the evaluated and bundled model is always the
+    best-validation epoch.
+    """
     return callbacks.EarlyStopping(monitor="val_loss", patience=config.EARLY, restore_best_weights=True)
 
 

@@ -4,7 +4,8 @@
       weights.h5          base-model weights (the 10-head functional model)
       config.yaml         the exact training configuration
       meta.json           target scale/mean, window normaliser, loss weights (configured,
-                          calibrated, final), fold sizes, versions, git sha
+                          calibrated, final), fold sizes, the served epoch (weights_epoch,
+                          weights_val_loss), versions, git sha
       calibration/        the fitted CalibrationPipeline (temperature + conformal), if any
 
 Before this, training persisted only the weights and the target scaler: pred_scale and
@@ -49,6 +50,12 @@ class ArtifactBundle:
             "fold": ({"train": len(result.fold.train), "val": len(result.fold.val), "cal": len(result.fold.cal),
                       "test": len(result.fold.test), "gap": result.fold.gap} if result.fold is not None else None),
             "epochs_run": len(getattr(result.history, "history", {}).get("loss", [])) if result.history else 0,
+            # The epoch (1-based) whose weights are in weights.h5 and were evaluated / calibrated, and its
+            # validation loss. Absent in bundles written before it was recorded (see
+            # visualization.training_dashboard.served_epoch for how those are read).
+            "weights_epoch": getattr(result, "weights_epoch", None),
+            "weights_val_loss": getattr(result, "weights_val_loss", None),
+            "weights_source": getattr(result, "weights_source", None),
             # Strategy confidence scale from the CALIBRATION block (never the data being traded).
             "var_scale": _var_scale(result.predictions_cal),
             "weighted_direction_quantiles": _direction_quantiles(result),
