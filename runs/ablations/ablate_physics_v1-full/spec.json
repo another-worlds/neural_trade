@@ -1,0 +1,39 @@
+{
+  "name": "ablate_physics_v1",
+  "terms": {
+    "LAMBDA_T_PERP": 0.1,
+    "LAMBDA_CASIMIR": 0.1,
+    "LAMBDA_HD": 0.1,
+    "LAMBDA_IFE": 0.1,
+    "LAMBDA_VAC_OVERFLOW": 0.1,
+    "LAMBDA_VAC": 0.5
+  },
+  "modes": [
+    "all_on",
+    "all_off",
+    "leave_one_in",
+    "leave_one_out"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "periods": {
+    "P1": -2,
+    "P2": -1
+  },
+  "base_overrides": {},
+  "scales": {
+    "smoke": {
+      "MAX_SEQUENCE_COUNT": 5000,
+      "EPOCHS": 3
+    },
+    "full": {
+      "EPOCHS": 20,
+      "BATCH_SIZE": 256
+    }
+  },
+  "calibrate": "once",
+  "strategy": "calibrated_quantile"
+}
