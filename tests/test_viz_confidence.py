@@ -379,9 +379,11 @@ def test_head_alignment_and_raw_magnitude_ordering(viz_frame, viz_config):
     raw = {h: rng.normal(0, 10 * (i + 1), len(viz_frame)) for i, h in enumerate(H)}
     fig = _coh(viz_frame, viz_config, raw_delta=raw)
     cb = coherence_block(viz_frame)
+    cb_raw = coherence_block(viz_frame, raw)                  # the sign check reads the raw heads, as the report
     al = _one(fig, 2, 1, "share of bars")
     assert list(al.x) == ["h0", "h1", "h2", "all 3"]
-    assert al.y[1] == pytest.approx(cb["coherence_primary"]) and al.y[3] == pytest.approx(cb["delta_dir_align_all"])
+    assert al.y[1] == pytest.approx(cb_raw["coherence_primary"])
+    assert al.y[3] == pytest.approx(cb_raw["delta_dir_align_all"])
     a = np.abs(np.column_stack([raw[h] for h in H]))
     r = _one(fig, 2, 2, "raw price heads")
     assert r.y[2] == pytest.approx(np.mean((a[:, 0] <= a[:, 1]) & (a[:, 1] <= a[:, 2])))
@@ -396,6 +398,301 @@ def test_head_alignment_and_raw_magnitude_ordering(viz_frame, viz_config):
     fig3 = _coh(viz_frame, viz_config)
     assert _one(fig3, 2, 2, "deltas as given").y[2] == pytest.approx(cb["mag_order_full"])
     assert "raw_delta" in fig3.layout.legend4.title.text
+
+
+def _shrunk(betas, *, n=2000, seed=6, meta=False):
+    """A frame whose served delta is beta x raw per horizon (beta = 0: identically 0), and its raw heads.
+
+    The raw signs mostly follow P(up), so the sign agreement is well above the P(up) <= 0.5 share."""
+    rng = np.random.default_rng(seed)
+    p = rng.uniform(0.3, 0.7, (n, 3))
+    raw = (p - 0.5) * 200 + rng.normal(0, 30, (n, 3))
+    fr = _frame(p, rng.normal(0, 150, (n, 3)), delta=raw * np.asarray(betas, float)[None, :])
+    raw_d = {h: raw[:, i] for i, h in enumerate(H)}
+    if meta:                                              # what PredictionFrame.from_result carries
+        fr.meta["delta_raw"] = raw_d
+        fr.meta["delta_scale"] = {h: float(b) for h, b in zip(H, betas)}
+    return fr, raw_d
+
+
+def _na_marks(fig, row, col):
+    """The 'n/a' labels drawn in panel (row, col)."""
+    sp = fig.get_subplot(row, col)
+    xr, yr = sp.xaxis.plotly_name.replace("axis", ""), sp.yaxis.plotly_name.replace("axis", "")
+    return [a for a in fig.layout.annotations if a.text == "n/a" and a.xref == xr and a.yref == yr]
+
+
+def _probs(fr):
+    return np.column_stack([fr.prob(h, True) for h in H])
+
+
+def _panel_heading(fig, title):
+    """A panel's heading text: its legend's title, or the annotation that stands in for it."""
+    lay = fig.layout.to_plotly_json()
+    texts = [lay[k]["title"]["text"] for k in lay if k.startswith("legend") and "title" in lay[k]]
+    texts += [a.text for a in fig.layout.annotations]
+    got = [t for t in texts if t and t.startswith(f"<b>{title}</b>")]
+    assert len(got) == 1, (title, got)
+    return got[0]
+
+
+def test_sign_agreement_reads_the_raw_heads_when_beta_is_0():
+    """beta = 0: the served delta is 0, so 'delta > 0' is never true and the old panel showed the P(up) <= 0.5
+    share with its independence tick on top of it. The bars must be the eval report's delta_dir_align (and
+    the alignment table printed next to the figure)."""
+    from neural_trade.evaluation.report import coherence_block
+    from neural_trade.visualization.analytics_tables import alignment_table
+
+    fr, raw = _shrunk((0.0, 0.0, 0.0))
+    fig = _coh(fr, raw_delta=raw)
+    cb = coherence_block(fr, raw)
+    al, ind = _one(fig, 2, 1, "share of bars"), _one(fig, 2, 1, "if independent")
+    np.testing.assert_allclose(al.y, [cb[f"delta_dir_align_{h}"] for h in H] + [cb["delta_dir_align_all"]])
+    np.testing.assert_allclose(ind.y, [cb[f"delta_dir_align_indep_{h}"] for h in H] + [cb["delta_dir_align_indep_all"]])
+    tab = alignment_table(fr, raw_delta=raw, digits=None)
+    np.testing.assert_allclose(al.y, tab["agree"].to_numpy())
+    np.testing.assert_allclose(ind.y, tab["expected if independent"].to_numpy())
+    P = _probs(fr)
+    assert np.all(np.abs(np.asarray(al.y[:3]) - (P <= 0.5).mean(0)) > 0.05)       # not the vote share
+    assert "raw price head" in fig.layout.legend3.title.text and "raw price head > 0" in al.hovertemplate
+    sub = fig.layout.title.text
+    assert (f"same sign on all 3 horizons: {cb['delta_dir_align_all']:.1%} "
+            f"({cb['delta_dir_align_indep_all']:.1%} if independent)") in sub
+    # the strategies' gate on the served deltas is n/a as an alignment; its pass rate is named for what it is
+    assert "(SignalFrame.direction_aligned)" not in sub
+    assert "n/a (beta = 0 on h0, h1, h2: served delta is 0)" in sub
+    from neural_trade.visualization.analytics_confidence import PATTERNS
+
+    ddd = _one(fig, 1, 2, "share of bars").y[PATTERNS.index("DDD")]     # beta = 0 everywhere: the gate is DDD
+    assert ddd == pytest.approx((P <= 0.5).all(1).mean())
+    assert (f"direction_aligned then passes {ddd:.1%} of bars (P(up) &#8804; 0.5 on all 3: the DDD share)"
+            in sub)
+
+
+def test_served_delta_ordering_is_na_not_100_percent_when_beta_is_0():
+    """beta = 0 on every horizon: 0 <= 0 holds on every bar, so the served ordering is n/a, not 100%."""
+    from neural_trade.evaluation.report import magnitude_ordering
+
+    fr, raw = _shrunk((0.0, 0.0, 0.0))
+    fig = _coh(fr, raw_delta=raw)
+    served = _one(fig, 2, 2, "served deltas (shrunk)")
+    assert not np.isfinite(np.asarray(served.y, float)).any()
+    assert list(served.text) == ["", "", ""]
+    marks = _na_marks(fig, 2, 2)
+    assert len(marks) == 3 and all(a.hovertext == "n/a (beta = 0: served delta is 0)" for a in marks)
+    # each label sits on the served bar's slot, beside the measured raw bar
+    np.testing.assert_allclose(sorted(float(a.x) for a in marks),
+                               [k + served.offset + served.width / 2 for k in range(3)])
+    rawbar = _one(fig, 2, 2, "raw price heads")
+    A = np.column_stack([raw[h] for h in H])
+    np.testing.assert_allclose(rawbar.y, magnitude_ordering(A))
+    assert rawbar.offset + rawbar.width <= served.offset + 1e-9
+    note = fig.layout.legend4.title.text
+    assert "beta = 0 on h0, h1, h2" in note and "different factor" not in note
+    sub = fig.layout.title.text
+    assert "100.0%" not in sub and "(SignalFrame.magnitude_coherent)" not in sub
+    assert "magnitude_coherent: n/a" in sub
+    assert f"on the raw price heads: {magnitude_ordering(A)[2]:.1%}" in sub
+    js = fig.to_json()
+    assert "nan%" not in js and "+nan" not in js
+
+
+def test_without_raw_heads_every_served_statistic_is_na_at_beta_0():
+    fr, _ = _shrunk((0.0, 0.0, 0.0))
+    fig = _coh(fr)
+    al, ind = _one(fig, 2, 1, "share of bars"), _one(fig, 2, 1, "if independent")
+    assert not np.isfinite(np.asarray(al.y, float)).any() and not np.isfinite(np.asarray(ind.y, float)).any()
+    assert all(t == "" for t in al.text)
+    assert len(_na_marks(fig, 2, 1)) == 4 and len(_na_marks(fig, 2, 2)) == 3
+    assert not np.isfinite(np.asarray(_one(fig, 2, 2, "deltas as given").y, float)).any()
+    sub = fig.layout.title.text
+    assert "same sign on all 3 horizons: n/a (beta = 0: served delta is 0)" in sub
+    assert "pass raw_delta" in fig.layout.legend4.title.text
+    sign_head = _panel_heading(fig, "Direction head and price head give the same sign")
+    assert "beta = 0 on h0, h1, h2" in sign_head and "pass raw_delta" in sign_head
+    assert "nan%" not in fig.to_json()
+
+
+@pytest.mark.parametrize("betas", [(0.3, 0.0, 0.2), (0.3, 0.3, 0.0)])
+def test_one_horizon_at_beta_0_only_blanks_what_it_touches(betas):
+    from neural_trade.evaluation.report import coherence_block, magnitude_ordering
+    from neural_trade.strategy import SignalFrame
+
+    fr, raw = _shrunk(betas)
+    k0 = betas.index(0.0)
+    zh = H[k0]
+    P, D = _probs(fr), np.column_stack([fr.delta[h] for h in H])
+    fig = _coh(fr)                                                # served deltas only
+    y = np.asarray(_one(fig, 2, 1, "share of bars").y, float)
+    for i in range(3):
+        if i == k0:
+            assert np.isnan(y[i])
+        else:
+            assert y[i] == pytest.approx(np.mean((P[:, i] > 0.5) == (D[:, i] > 0)))
+    assert np.isnan(y[3]) and len(_na_marks(fig, 2, 1)) == 2
+    served = np.asarray(_one(fig, 2, 2, "deltas as given").y, float)
+    want = np.array(magnitude_ordering(D))
+    touched = np.array([k0 in (0, 1), k0 in (1, 2), True])
+    assert np.isnan(served[touched]).all()
+    np.testing.assert_allclose(served[~touched], want[~touched])
+    sub = fig.layout.title.text
+    gate = SignalFrame.build(fr, 1.0).direction_aligned.mean()
+    live = ", ".join(h for h in H if h != zh)
+    assert f"beta = 0 on {zh}: served delta is 0" in sub
+    assert f"passes {gate:.1%} of bars (P(up) &#8804; 0.5 on {zh} and sign match on {live})" in sub
+    # with the raw heads every sign check is measured again
+    fig2 = _coh(fr, raw_delta=raw)
+    cb = coherence_block(fr, raw)
+    np.testing.assert_allclose(_one(fig2, 2, 1, "share of bars").y,
+                               [cb[f"delta_dir_align_{h}"] for h in H] + [cb["delta_dir_align_all"]])
+    assert not _na_marks(fig2, 2, 1) and len(_na_marks(fig2, 2, 2)) == touched.sum()
+
+
+def test_raw_heads_and_betas_default_to_what_the_frame_carries():
+    """PredictionFrame.from_result stores meta['delta_raw'] / meta['delta_scale']; evaluate() reads them, so
+    the figure does too."""
+    fr, raw = _shrunk((0.0, 0.0, 0.0), meta=True)
+    fig, given = _coh(fr), _coh(fr, raw_delta=raw)
+    np.testing.assert_allclose(_one(fig, 2, 1, "share of bars").y, _one(given, 2, 1, "share of bars").y)
+    np.testing.assert_allclose(_one(fig, 2, 2, "raw price heads").y, _one(given, 2, 2, "raw price heads").y)
+    assert fig.layout.title.text == given.layout.title.text
+
+
+def test_positive_betas_keep_measured_served_statistics_and_name_the_betas():
+    """beta > 0 (the previous run: h0 0.21, h1 0.023, h2 0.25): nothing is n/a, the served ordering is measured
+    and the note gives the betas instead of an unchecked claim about them."""
+    from neural_trade.evaluation.report import coherence_block, magnitude_ordering
+    from neural_trade.strategy import SignalFrame
+
+    betas = (0.21, 0.023, 0.25)
+    fr, raw = _shrunk(betas)
+    fig = _coh(fr, raw_delta=raw)
+    assert not _na_marks(fig, 2, 1) and not _na_marks(fig, 2, 2)
+    D = np.column_stack([fr.delta[h] for h in H])
+    np.testing.assert_allclose(_one(fig, 2, 2, "served deltas (shrunk)").y, magnitude_ordering(D))
+    assert "beta h0 0.21 / h1 0.023 / h2 0.25" in fig.layout.legend4.title.text     # read off served / raw
+    # a positive beta keeps the sign: raw and served sign checks agree, and equal the report's
+    cb = coherence_block(fr, raw)
+    np.testing.assert_allclose(_one(fig, 2, 1, "share of bars").y, _one(_coh(fr), 2, 1, "share of bars").y)
+    assert _one(fig, 2, 1, "share of bars").y[3] == pytest.approx(cb["delta_dir_align_all"])
+    sf = SignalFrame.build(fr, 1.0)
+    sub = fig.layout.title.text
+    assert f"SignalFrame.direction_aligned {sf.direction_aligned.mean():.1%}" in sub
+    assert f"SignalFrame.magnitude_coherent (|h0| &#8804; |h1| &#8804; |h2|) {sf.magnitude_coherent.mean():.1%}" in sub
+    assert "n/a" not in sub
+    # the betas given (or carried by the frame) win over the ones read off the frame
+    fig2 = _coh(fr, raw_delta=raw, delta_scale={"h0": 0.2, "h1": 0.02, "h2": 0.3})
+    assert "beta h0 0.2 / h1 0.02 / h2 0.3" in fig2.layout.legend4.title.text
+
+
+def _note(fig, legend):
+    """The grey note under a panel's legend-title heading."""
+    return fig.layout[legend].title.text.split("<br>", 1)[1]
+
+
+@pytest.mark.parametrize("betas, want", [
+    ((0.3, 0.2, 0.0), "beta h0 0.3 / h1 0.2 / h2 0: served ordering n/a where it involves h2"),
+    ((0.0, 0.3, 0.2), "beta h0 0 / h1 0.3 / h2 0.2: served ordering n/a where it involves h0"),
+    ((0.3, 0.0, 0.2), "beta h0 0.3 / h1 0 / h2 0.2: served ordering n/a"),          # h1 is in every comparison
+])
+def test_partial_beta_0_ordering_note_names_what_is_na_and_keeps_the_other_betas(betas, want):
+    """beta = 0 on one horizon: the note says which served comparisons are n/a (not all of them when one is
+    still measured) and keeps the betas of the other horizons."""
+    fr, raw = _shrunk(betas)
+    fig = _coh(fr, raw_delta=raw)
+    note = _note(fig, "legend4")
+    assert want in note and "raw_delta" not in note
+    served = np.asarray(_one(fig, 2, 2, "served deltas (shrunk)").y, float)
+    assert np.isfinite(served).sum() == (1 if "where it involves" in want else 0)
+    # the betas come from the frame's meta too, and without raw heads the note adds the way to get them
+    fr_m, _ = _shrunk(betas, meta=True)
+    fr_m.meta.pop("delta_raw")
+    assert _note(_coh(fr_m), "legend4") == f"<span style='font-size:11px;color:{T.MUTED}'>{want} · pass raw_delta</span>"
+
+
+def test_gate_line_gives_the_whole_gate_pass_rate_and_its_condition():
+    """One horizon at beta = 0: direction_aligned then passes P(up) <= 0.5 there AND the sign match on the
+    other two. The line gives the gate's pass rate as such, not as the P(up) <= 0.5 share of that horizon."""
+    from neural_trade.strategy import SignalFrame
+
+    fr, raw = _shrunk((0.3, 0.2, 0.0))
+    P, D = _probs(fr), np.column_stack([fr.delta[h] for h in H])
+    gate = SignalFrame.build(fr, 1.0).direction_aligned.mean()
+    want = ((P[:, 2] <= 0.5) & ((P[:, :2] > 0.5) == (D[:, :2] > 0)).all(1)).mean()
+    assert gate == pytest.approx(want) and abs(gate - (P[:, 2] <= 0.5).mean()) > 0.05
+    sub = _coh(fr, raw_delta=raw).layout.title.text
+    assert f"direction_aligned then passes {gate:.1%} of bars (P(up) &#8804; 0.5 on h2 and sign match on h0, h1)" in sub
+    assert "there" not in sub and f"{(P[:, 2] <= 0.5).mean():.1%}" not in sub
+
+
+def test_legend_shows_no_key_for_a_series_with_nothing_drawn():
+    """beta = 0 everywhere: the served bars are all n/a, so their swatch leaves the |delta| legend (the n/a
+    labels stay); without raw heads the sign panel draws nothing, so its keys go too and its heading, still
+    level with the row's other headings, says to pass raw_delta. beta > 0 keeps every key."""
+    from neural_trade.visualization.analytics_confidence import KEY_ROW_PX
+
+    fr, raw = _shrunk((0.0, 0.0, 0.0))
+    fig = _coh(fr, raw_delta=raw)
+    keys = {(lg, name) for lg, name, _, _ in _shown_keys(fig)}
+    assert ("legend4", "raw price heads") in keys and ("legend4", "realised |y|") in keys
+    assert ("legend4", "served deltas (shrunk)") not in keys and len(_na_marks(fig, 2, 2)) == 3
+    assert {("legend3", "same sign"), ("legend3", "if independent")} <= keys
+
+    bare = _coh(fr)
+    keys = {(lg, name) for lg, name, _, _ in _shown_keys(bare)}
+    assert not [k for k in keys if k[0] == "legend3"]
+    assert ("legend4", "deltas as given") not in keys and ("legend4", "realised |y|") in keys
+    assert "legend3" not in bare.layout.to_plotly_json()          # no key: plotly would drop the legend's title
+    head = _panel_heading(bare, "Direction head and price head give the same sign")
+    assert "sign n/a" in head and "pass raw_delta" in head
+    ann = next(a for a in bare.layout.annotations if a.text == head)
+    sp = bare.get_subplot(2, 1)
+    plot_h = bare.layout.height - bare.layout.margin.t - bare.layout.margin.b
+    assert ann.y == pytest.approx(sp.yaxis.domain[1] + (4 + KEY_ROW_PX) / plot_h)
+    assert len(_na_marks(bare, 2, 1)) == 4
+
+    pos, raw_p = _shrunk((0.21, 0.023, 0.25))
+    keys = {(lg, name) for lg, name, _, _ in _shown_keys(_coh(pos, raw_delta=raw_p))}
+    assert {("legend3", "same sign"), ("legend3", "if independent"), ("legend4", "raw price heads"),
+            ("legend4", "served deltas (shrunk)"), ("legend4", "realised |y|")} <= keys
+
+
+def test_partial_beta_0_without_raw_heads_sign_note_says_pass_raw_delta():
+    fr, _ = _shrunk((0.3, 0.2, 0.0))
+    fig = _coh(fr)
+    note = _note(fig, "legend3")
+    assert "n/a on h2 (beta = 0)" in note and "pass raw_delta" in note
+    assert {("legend3", "same sign"), ("legend3", "if independent")} <= {(lg, n) for lg, n, _, _ in _shown_keys(fig)}
+
+
+def test_the_frame_extras_are_read_by_the_reports_own_helpers():
+    """No private copy of evaluation.report's frame helpers: the figure resolves the raw heads as evaluate()."""
+    from neural_trade.evaluation import report
+    from neural_trade.visualization import analytics_confidence as AC
+
+    assert AC._frame_extra is report._frame_extra and AC._resolve_raw is report._resolve_raw
+
+
+def test_positive_betas_alone_recover_the_raw_heads_as_evaluate_does(viz_config):
+    """No raw heads but every beta > 0 (given or in the frame's meta): raw = served / beta, as evaluate()
+    recovers them for the report's mag_order_full_raw. A beta = 0 recovers nothing."""
+    from neural_trade.evaluation.report import evaluate, magnitude_ordering
+
+    betas = (0.21, 0.023, 0.25)
+    fr, raw = _shrunk(betas)
+    scale = dict(zip(H, betas))
+    fig = _coh(fr, delta_scale=scale)
+    A = np.column_stack([raw[h] for h in H])
+    np.testing.assert_allclose(_one(fig, 2, 2, "raw price heads").y, magnitude_ordering(A))
+    rep = evaluate(fr, viz_config, delta_scale=scale)
+    assert _one(fig, 2, 2, "raw price heads").y[2] == pytest.approx(rep.model["coherence"]["mag_order_full_raw"])
+    assert "beta h0 0.21 / h1 0.023 / h2 0.25" in _note(fig, "legend4")
+    fr.meta["delta_scale"] = scale
+    np.testing.assert_allclose(_one(_coh(fr), 2, 2, "raw price heads").y, magnitude_ordering(A))
+    fr0, _ = _shrunk((0.21, 0.0, 0.25))
+    fig0 = _coh(fr0, delta_scale={"h0": 0.21, "h1": 0.0, "h2": 0.25})
+    assert [t for t in fig0.select_traces(row=2, col=2) if t.name == "deltas as given"]
+    assert not [t for t in fig0.select_traces(row=2, col=2) if t.name == "raw price heads"]
 
 
 def test_strategy_vote_agreement_comes_from_signalframe(viz_frame, viz_config):
