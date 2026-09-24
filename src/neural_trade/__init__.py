@@ -10,6 +10,8 @@ Process-level defaults are set here because they must precede any TensorFlow imp
 that a submodule triggers:
 
 * ``TF_DETERMINISTIC_OPS=1`` (unless already set): deterministic kernels (plan S24).
+* ``TF_FORCE_GPU_ALLOW_GROWTH=true`` (unless already set): GPU memory on demand, so several GPU
+  users can share the card without Windows paging it into system RAM.
 * stdout/stderr replace unencodable characters instead of raising: on a Windows console
   with a non-UTF-8 code page a single non-ASCII glyph in a progress line used to raise
   UnicodeEncodeError and silently abort the lambda-calibration pass.
@@ -22,6 +24,10 @@ import os as _os
 import sys as _sys
 
 _os.environ.setdefault("TF_DETERMINISTIC_OPS", "1")
+# Allocate GPU memory as needed instead of reserving ~all of it per process: with the default, a
+# second GPU user (another run, a notebook, a container) over-commits the card and Windows pages
+# the overflow into system RAM, slowing every process on it by an order of magnitude.
+_os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
 for _stream in (_sys.stdout, _sys.stderr):
     try:
         _stream.reconfigure(errors="replace")

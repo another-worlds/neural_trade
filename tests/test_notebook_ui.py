@@ -156,3 +156,22 @@ def test_calibration_explorer_refits_and_scores_on_test(session_run):
     rel, cov = ex.figures("h2")
     assert len(rel.data) == 3 and len(cov.data) == 2
     ex.click_refit()
+
+
+def test_pick_run_finds_the_newest_servable_run_or_explains(tmp_path):
+    import os
+
+    from neural_trade.notebook import pick_run, servable_runs
+
+    with pytest.raises(FileNotFoundError, match="notebook 01_train_and_monitor"):
+        pick_run(None, tmp_path)
+    for i, name in enumerate(("gates/m6", "20260101-a", "20260102-b")):
+        (tmp_path / name / "artifacts").mkdir(parents=True)
+        (tmp_path / name / "artifacts" / "weights.h5").write_bytes(b"")
+        os.utime(tmp_path / name, (1_000 + i, 1_000 + i))
+    (tmp_path / "no_bundle").mkdir()
+    assert [p.name for p in servable_runs(tmp_path)] == ["20260102-b", "20260101-a", "m6"]
+    assert pick_run(None, tmp_path).name == "20260102-b"
+    assert pick_run(tmp_path / "gates" / "m6", tmp_path).name == "m6"
+    with pytest.raises(FileNotFoundError, match="no serving bundle"):
+        pick_run(tmp_path / "no_bundle", tmp_path)

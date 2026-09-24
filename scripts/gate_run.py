@@ -158,7 +158,8 @@ def main(argv=None) -> int:
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True)
 
-    overrides = {"MODEL_PATH": str(run_dir / "weights.h5"), "SCALER_PATH": str(run_dir / "scaler.joblib")}
+    overrides = {"MODEL_PATH": str(run_dir / "weights.h5"), "SCALER_PATH": str(run_dir / "scaler.joblib"),
+                 "ARTIFACTS_DIR": str(run_dir / "artifacts")}
     if args.physics_off:
         overrides.update({k: 0.0 for k in PHYSICS_LAMBDAS})
     overrides.update(_parse_set(args.set))
@@ -171,7 +172,7 @@ def main(argv=None) -> int:
     result = train_and_evaluate(
         csv_path=str(REPO / "binance_btcusdt_1min_ccxt.csv"),
         config_overrides=overrides, epochs=args.epochs, force=True,
-        calibrate=not args.no_calibrate, fit_calibration=True,
+        calibrate=not args.no_calibrate, fit_calibration=True, save_artifacts=True,  # loadable by the notebooks
     )
     wall = time.time() - t0
 

@@ -13,6 +13,8 @@ Requires ipywidgets (the ``notebooks`` extra). Nothing here imports TensorFlow a
 """
 from neural_trade.notebook.backtest_ui import BacktestExplorer, load_run_blocks
 from neural_trade.notebook.calibration_ui import CalibrationExplorer
+from neural_trade.notebook.runs import pick_run, servable_runs
 from neural_trade.notebook.session import TrainingSession
 
-__all__ = ["BacktestExplorer", "CalibrationExplorer", "TrainingSession", "load_run_blocks"]
+__all__ = ["BacktestExplorer", "CalibrationExplorer", "TrainingSession", "load_run_blocks", "pick_run",
+           "servable_runs"]
