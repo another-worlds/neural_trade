@@ -286,6 +286,137 @@ def test_trade_analytics_predicted_vs_realised_is_like_for_like(viz_backtest):
     assert f"median {np.median(held):.0f} bars" in fig2.layout.yaxis9.title.text
 
 
+def _served_zero(sig):
+    """The signals with every served delta shrunk to 0 (delta shrink beta = 0 on every horizon)."""
+    import dataclasses
+
+    return dataclasses.replace(sig, delta=np.zeros_like(sig.delta))
+
+
+_BETA0 = {"h0": 0.0, "h1": 0.0, "h2": 0.0}
+
+
+def _x9(fig):
+    return np.concatenate([np.asarray(t.x, float) for t in _traces(fig, "x9") if t.mode == "markers"])
+
+
+def _want_x9(res, delta, steps=15):
+    """sign x the h1 delta at each trade's decision bar, longs then shorts (the trace order), for the
+    trades whose h1 window ends inside the block (the others are 'too late to score')."""
+    n = len(delta)
+    tr = [t for t in res.trades if t.entry_bar - 1 + steps < n]
+    return np.concatenate([(1 if s == "LONG" else -1) * np.asarray(delta, float)[[t.entry_bar - 1 for t in tr
+                                                                                  if t.side == s], 1]
+                           for s in ("LONG", "SHORT")])
+
+
+def test_predicted_vs_realised_scores_the_raw_head_when_the_served_delta_is_zero(viz_backtest):
+    """beta = 0: the served h1 delta is a constant 0, not a forecast. The panel scores the raw h1 head
+    (as the evaluation report does) and says why; a constant 0 would give 'ρ +nan' and a false
+    'sign right 0%' (sign(0) is never right)."""
+    from neural_trade.visualization.trade_analytics import trade_analytics_figure
+
+    res, bars, sig, _ = viz_backtest
+    raw = {h: sig.delta[:, i].copy() for i, h in enumerate(("h0", "h1", "h2"))}
+    fig = trade_analytics_figure(res, bars, signals=_served_zero(sig), horizon_steps=(10, 15, 20), raw_delta=raw,
+                                 delta_scale=_BETA0)
+    np.testing.assert_allclose(_x9(fig), _want_x9(res, sig.delta), rtol=1e-5, atol=1e-4)
+    title = fig.layout.annotations[8].text
+    assert title.startswith("Raw h1 head vs realised move") and "served delta = 0 (β = 0)" in title
+    assert "nan" not in title and "n/a" not in title
+    assert fig.layout.xaxis9.title.text.startswith("raw h1 head")
+    assert all("raw h1 head" in t.hovertemplate for t in _traces(fig, "x9") if t.mode == "markers")
+    # the sign check is the raw head's: the same share as scoring the raw deltas as served ones
+    ref = trade_analytics_figure(res, bars, signals=sig, horizon_steps=(10, 15, 20))
+    ref_readout = ref.layout.annotations[8].text.split("<br>", 1)[1]
+    right = ref_readout.split("sign right ")[1].split("%")[0]
+    assert f"sign right {right}%" in title
+    # an [N, 3] array works too, and the served delta wins while it is not 0 (beta > 0)
+    fig2 = trade_analytics_figure(res, bars, signals=_served_zero(sig), horizon_steps=(10, 15, 20),
+                                  raw_delta=np.asarray(sig.delta), delta_scale=_BETA0)
+    np.testing.assert_allclose(_x9(fig2), _x9(fig), rtol=1e-6)
+    fig3 = trade_analytics_figure(res, bars, signals=sig, horizon_steps=(10, 15, 20), raw_delta=10 * np.asarray(sig.delta),
+                                  delta_scale={"h0": 0.1, "h1": 0.1, "h2": 0.1})
+    np.testing.assert_allclose(_x9(fig3), _want_x9(res, sig.delta), rtol=1e-5, atol=1e-4)
+    assert fig3.layout.annotations[8].text.startswith("Predicted vs realised h1 move")
+    # the data decide, not the betas: signals that are not 0 are scored as they are
+    fig4 = trade_analytics_figure(res, bars, signals=sig, horizon_steps=(10, 15, 20), delta_scale=_BETA0)
+    np.testing.assert_allclose(_x9(fig4), _want_x9(res, sig.delta), rtol=1e-5, atol=1e-4)
+    with pytest.raises(ValueError, match="bars"):
+        trade_analytics_figure(res, bars, signals=_served_zero(sig), raw_delta={"h1": np.ones(5)}, delta_scale=_BETA0)
+
+
+def test_predicted_vs_realised_without_raw_heads_has_nothing_to_score(viz_backtest):
+    """A served delta of 0 everywhere and no raw heads: no points on one vertical line, no 'ρ +nan',
+    no 'sign right 0%' - a note in the middle of the panel says why."""
+    from neural_trade.visualization.trade_analytics import trade_analytics_figure
+
+    res, bars, sig, _ = viz_backtest
+    for kw, beta_txt in (({"delta_scale": _BETA0}, "(shrink β = 0)"), ({}, "")):     # the old call as well
+        fig = trade_analytics_figure(res, bars, signals=_served_zero(sig), horizon_steps=(10, 15, 20), **kw)
+        assert T.empty_panels(fig) == ["y9"] and not _traces(fig, "x9")
+        (note,) = [a for a in fig.layout.annotations if "nothing to score" in a.text]
+        assert note.text.startswith("served h1 delta is 0 on every bar") and beta_txt in note.text
+        sp = fig.get_subplot(3, 3)
+        assert note.x == pytest.approx(sum(sp.xaxis.domain) / 2) and note.xanchor == "center"   # centred on it
+        title = fig.layout.annotations[8].text
+        assert "nan" not in title and "sign right" not in title and "constant 0" in title
+
+
+def test_the_sign_check_counts_only_non_zero_predictions(viz_backtest):
+    """A zero prediction calls no side: it is left out of 'sign right', not counted as wrong."""
+    import dataclasses
+
+    from neural_trade.visualization.trade_analytics import trade_analytics_figure
+
+    res, bars, sig, _ = viz_backtest
+    d = np.array([t.entry_bar - 1 for t in res.trades])
+    delta = np.asarray(sig.delta, float).copy()
+    delta[d[::2], 1] = 0.0                                       # every other trade's forecast is exactly 0
+    fig = trade_analytics_figure(res, bars, signals=dataclasses.replace(sig, delta=delta), horizon_steps=(10, 15, 20))
+    close = np.asarray(sig.close, float)
+    sign = np.array([1 if t.side == "LONG" else -1 for t in res.trades])
+    ok = d + 15 < len(close)
+    pred = sign * delta[d, 1]
+    real = np.where(ok, sign * (close[np.minimum(d + 15, len(close) - 1)] - close[d]), np.nan)
+    nz = ok & (pred != 0)
+    want = 100 * np.mean(np.sign(pred[nz]) * np.sign(real[nz]) > 0)
+    assert f"sign right {want:.0f}% of {int(nz.sum())}" in fig.layout.annotations[8].text
+
+
+def test_trade_analytics_profit_factor_with_no_losing_trade_reads_infinity(viz_backtest):
+    """Gains over no losses: '∞ (no losing trade)' in the subtitle, not 'inf'; nothing to divide: 'n/a'."""
+    import dataclasses
+
+    from neural_trade.visualization.trade_analytics import trade_analytics_figure
+
+    res, bars, sig, _ = viz_backtest
+    wins = [t for t in res.trades if t.net_pnl > 0]
+    only_wins = dataclasses.replace(res, trades=wins, summary=dict(res.summary, n_trades=len(wins),
+                                                                   profit_factor=float("inf")))
+    sub = trade_analytics_figure(only_wins, bars, signals=sig).layout.title.text      # the subtitle is in the title
+    assert "profit factor ∞ (no losing trade)" in sub and "profit factor inf" not in sub
+    no_pf = dataclasses.replace(res, summary=dict(res.summary, profit_factor=None))
+    assert "profit factor n/a" in trade_analytics_figure(no_pf, bars).layout.title.text
+    assert f"profit factor {res.summary['profit_factor']:.2f} ·" in trade_analytics_figure(res, bars).layout.title.text
+
+
+def test_trade_analytics_of_one_trade_prints_no_nan(viz_backtest):
+    """One trade (buy-and-hold): no CI and no rank correlation exist; the readouts say so, not '+nan'."""
+    import dataclasses
+
+    from neural_trade.visualization.trade_analytics import trade_analytics_figure
+
+    res, bars, sig, _ = viz_backtest
+    one = dataclasses.replace(res, strategy="buy_and_hold", trades=res.trades[:1],
+                              summary=dict(res.summary, n_trades=1, profit_factor=float("inf")))
+    fig = trade_analytics_figure(one, bars, signals=sig, horizon_steps=(10, 15, 20))
+    texts = [fig.layout.title.text] + [a.text for a in fig.layout.annotations]
+    assert not [t for t in texts if "nan" in t.lower()], texts
+    assert "(1 trade: no CI)" in fig.layout.annotations[0].text
+    assert "Spearman ρ n/a" in fig.layout.annotations[6].text
+
+
 def _templates(fig):
     for t in fig.data:
         for key in ("hovertemplate", "texttemplate"):
@@ -308,6 +439,8 @@ def test_no_hover_spec_starts_with_a_plus_sign(viz_backtest):
             "percentile_gross_return": 70.0}
     figs = [trade_analytics_figure(res, bars, signals=sig, horizon_steps=(10, 15, 20)),
             trade_analytics_figure(res, bars, signals=sig),
+            trade_analytics_figure(res, bars, signals=_served_zero(sig), raw_delta=np.asarray(sig.delta),
+                                   delta_scale=_BETA0),
             strategy_comparison_figure({"a": dataclasses.replace(res, baselines={"random_same_freq": null}),
                                         "buy_and_hold": res}, bars)]
     specs = [s for f in figs for s in _templates(f)]

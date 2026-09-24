@@ -78,6 +78,99 @@ def _null_columns(null) -> Dict[str, float]:
             "random percentile (gross)": null.get("percentile_gross_return")}
 
 
+def _table(rows: Dict[str, Dict[str, Any]]) -> pd.DataFrame:
+    """One row per key of ``rows`` (an empty dict stays, as an all-NaN row), columns in first-seen
+    order, each with its own dtype: numbers stay numeric, so ``round`` applies. (``DataFrame(rows).T``
+    makes EVERY column object as soon as one row holds text, and ``round`` then skips them all.)"""
+    cols = list(dict.fromkeys(k for r in rows.values() for k in r))
+    recs = [{c: (np.nan if r.get(c) is None else r.get(c)) for c in cols} for r in rows.values()]
+    return pd.DataFrame(recs, index=list(rows), columns=cols).infer_objects()
+
+
+# How metrics_view shows each column of summary_frame / comparison_table: (column, row label,
+# format). Returns and rates are fractions and print as %, dollars with separators, counts as integers.
+_METRIC_ROWS = (
+    ("n_trades", "trades", "{:,.0f}"),
+    ("total_return", "net return (after costs)", "{:+.2%}"),
+    ("gross_return", "gross return (before costs)", "{:+.2%}"),
+    ("gross_pnl", "gross P&L before costs ($)", "{:+,.0f}"),
+    ("costs_paid", "costs paid ($)", "{:,.0f}"),
+    ("fees_paid", "of which fees ($)", "{:,.0f}"),
+    ("sharpe_net", "Sharpe after costs (annualised)", "{:+.2f}"),
+    ("max_drawdown", "max drawdown", "{:.2%}"),
+    ("hit_rate", "hit rate after costs", "{:.1%}"),
+    ("hit_rate_gross", "hit rate before costs", "{:.1%}"),
+    ("profit_factor", "profit factor", "{:.2f}"),
+    ("avg_win", "avg win ($)", "{:+,.2f}"),
+    ("avg_loss", "avg loss ($)", "{:+,.2f}"),
+    ("expectancy", "expectancy ($ per trade)", "{:+,.2f}"),
+    ("n_long", "long trades", "{:,.0f}"),
+    ("gross_long", "long P&L before costs ($)", "{:+,.0f}"),
+    ("net_long", "long P&L after costs ($)", "{:+,.0f}"),
+    ("n_short", "short trades", "{:,.0f}"),
+    ("gross_short", "short P&L before costs ($)", "{:+,.0f}"),
+    ("net_short", "short P&L after costs ($)", "{:+,.0f}"),
+    ("exposure", "exposure (share of bars in a position)", "{:.1%}"),
+    ("random mean return", "random null: mean net return", "{:+.2%}"),
+    ("random p05 (return)", "random null: 5th percentile net return", "{:+.2%}"),
+    ("random p95 (return)", "random null: 95th percentile net return", "{:+.2%}"),
+    ("random percentile (return)", "beats this % of random runs (after costs)", "{:.0f}%"),
+    ("random percentile (gross)", "beats this % of random runs (before costs)", "{:.0f}%"),
+    ("exits", "exits by reason", "{}"),
+)
+_NA = "–"          # not applicable (no trades, nothing to average) or not measured (a baseline, the random null)
+_INF = "∞"         # a ratio over nothing: profit factor with no losing trade
+
+
+def _cell_format(fmt: str):
+    """``fmt`` as a cell formatter: text as it is ('' -> '–'), an infinite value as '∞' / '-∞' (not
+    'inf'), and no sign on an exact 0, a negative zero included ('0', not '+0' or '-0')."""
+    def f(v):
+        if isinstance(v, str):
+            return v or _NA
+        try:
+            if np.isinf(v):
+                return _INF if v > 0 else f"-{_INF}"
+            if v == 0:
+                return fmt.replace("+", "").format(abs(v))       # abs: -0.0 prints as 0
+            return fmt.format(v)
+        except (TypeError, ValueError):
+            return str(v)
+    return f
+
+
+def _caption(table: pd.DataFrame, not_measured: str) -> str:
+    """What '–' (and '∞', when the table has one) stands for in ``metrics_view(table)``: no trades,
+    no winning / losing trade to average (avg win / avg loss), or ``not_measured``."""
+    text = f"{_NA}: no trades, no winning / losing trade (avg win / avg loss), or {not_measured}"
+    pf = pd.to_numeric(table["profit_factor"], errors="coerce") if "profit_factor" in table else pd.Series(dtype=float)
+    return text + (f" · {_INF}: no losing trade (profit factor)" if np.isinf(pf.to_numpy(float)).any() else "")
+
+
+def metrics_view(frame: pd.DataFrame, *, caption: Optional[str] = None):
+    """``frame`` (one row per strategy, as ``summary_frame`` / ``comparison_table`` return it) as a
+    pandas Styler with ONE ROW PER METRIC and one column per strategy, so a notebook shows every
+    metric (pandas cuts a frame wider than ``display.max_columns`` = 20 with '...'). Each metric
+    row has its own label and format: returns and rates in %, dollars with separators, counts as
+    integers; '–' where a value does not apply (no trades) or was not measured, '∞' for a ratio over
+    nothing (profit factor with no losing trade). The numbers stay in ``.data`` (unrounded)."""
+    known = {k: (label, fmt) for k, label, fmt in _METRIC_ROWS}
+    cols = [k for k, _, _ in _METRIC_ROWS if k in frame.columns] + [c for c in frame.columns if c not in known]
+    labels = [known[c][0] if c in known else str(c) for c in cols]
+    t = frame[cols].T
+    t.index = pd.Index(labels)
+    t.columns = [str(c) for c in frame.index]
+    sty = t.style
+    for c, label in zip(cols, labels):
+        sty = sty.format(_cell_format(known[c][1] if c in known else "{:,.4g}"), subset=pd.IndexSlice[[label], :],
+                         na_rep=_NA)
+    sty = sty.set_table_styles([{"selector": "th.row_heading", "props": [("text-align", "left")]},
+                                {"selector": "td", "props": [("text-align", "right"), ("white-space", "nowrap")]},
+                                {"selector": "caption", "props": [("caption-side", "bottom"), ("text-align", "left"),
+                                                                  ("font-size", "0.85em")]}])
+    return sty.set_caption(caption) if caption else sty
+
+
 class _Sized:
     """A strategy whose every order is resized to ``size`` (a random null that matches a strategy's
     position size: a null trading at full size pays more costs than a strategy that sizes down)."""
@@ -261,11 +354,16 @@ class BacktestExplorer:
     def trade_analytics(self, res=None):
         """Per-trade view of the last run (or ``res``): P&L before / after costs, exit reasons,
         holding time, excursions, the entry signal vs the outcome (the predicted h1 move against
-        the realised move over the same h1 bars), long vs short."""
+        the realised move over the same h1 bars), long vs short. The test frame's raw heads and
+        shrink betas go along, so a served delta shrunk to 0 (beta = 0) is replaced by the raw h1
+        head in the predicted-vs-realised panel instead of being scored as a forecast."""
         from neural_trade.visualization.trade_analytics import trade_analytics_figure
 
-        steps = getattr(self.blocks.get("test"), "horizon_steps", None) or getattr(self.config, "HORIZON_STEPS", None)
-        return trade_analytics_figure(res or self.last, self.bars, signals=self.signals, horizon_steps=steps)
+        test = self.blocks.get("test")
+        meta = getattr(test, "meta", None) or {}
+        steps = getattr(test, "horizon_steps", None) or getattr(self.config, "HORIZON_STEPS", None)
+        return trade_analytics_figure(res or self.last, self.bars, signals=self.signals, horizon_steps=steps,
+                                      raw_delta=meta.get("delta_raw"), delta_scale=meta.get("delta_scale"))
 
     def compare_strategies(self, names=None, costs=None, *, null_seeds: Optional[int] = None):
         """Model strategies (or ``names``) with default knobs, plus buy-and-hold and always-flat:
@@ -297,9 +395,14 @@ class BacktestExplorer:
             runs[n] = res
         return runs, strategy_comparison_figure(runs, self.bars, labels=labels)
 
-    def comparison_table(self, runs) -> pd.DataFrame:
+    def comparison_table(self, runs, *, styled: bool = False):
         """One row per strategy of ``compare_strategies``: summary, win / loss and long / short
-        figures, exit reasons, and the rank among its matched random null."""
+        figures, exit reasons, and the rank among its matched random null. Numeric columns stay
+        numeric (``round`` applies to them; ``exits`` is text).
+
+        ``styled=True``: the same numbers as a Styler with one row per metric and one column per
+        strategy, each metric formatted for its unit (see ``metrics_view``): the whole table shows in
+        a notebook, where the one-row-per-strategy frame (25 columns) is cut with '...'."""
         rows = {}
         for name, r in runs.items():
             row = {k: r.summary.get(k) for k in ("n_trades", "total_return", "sharpe_net", "max_drawdown", "hit_rate",
@@ -309,7 +412,10 @@ class BacktestExplorer:
             reasons = pd.Series([t.exit_reason for t in r.trades], dtype=object).value_counts()
             row["exits"] = ", ".join(f"{k} {v}" for k, v in reasons.items()) if len(reasons) else ""
             rows[name] = row
-        return pd.DataFrame(rows).T
+        table = _table(rows)
+        if not styled:
+            return table
+        return metrics_view(table, caption=_caption(table, "no matched random null (not run)"))
 
     def signal_summary(self) -> Dict[str, pd.DataFrame]:
         """What the strategies see on the test block: numeric features (count / mean / quantiles),
@@ -342,11 +448,15 @@ class BacktestExplorer:
                                                     "predicted variance on the CAL block"]),
         }
 
-    def summary_frame(self, res=None) -> pd.DataFrame:
+    def summary_frame(self, res=None, *, styled: bool = False):
         """The run (default: ``last``) next to its baselines. The random null is a distribution over
         seeds, not one run: its row holds the random mean (return, Sharpe, gross return) and the
         5th / 95th percentiles of the random return; the strategy's row holds its rank among the
-        seeds after and before costs (the same numbers ``compare_strategies`` shows)."""
+        seeds after and before costs (the same numbers ``compare_strategies`` shows).
+
+        ``styled=True``: a Styler with one row per metric and one column per row of this frame, each
+        metric formatted for its unit (see ``metrics_view``), so a notebook shows all of it (the
+        one-row-per-strategy frame has 24 columns, and pandas cuts it with '...')."""
         res = res or self.last
         init = float(res.config.initial_equity)
         rows = {res.strategy: {**{k: res.summary.get(k) for k in SUMMARY_COLS}, **trade_stats(res),
@@ -366,7 +476,16 @@ class BacktestExplorer:
                 rows[res.strategy].update({k: v for k, v in _null_columns(s).items() if "percentile" in k})
                 continue
             rows[name] = {k: s.get(k) for k in SUMMARY_COLS if k in s}
-        return pd.DataFrame(rows).T
+            if s.get("gross_pnl") is not None:                   # a baseline's run summary has its gross P&L
+                rows[name]["gross_return"] = s["gross_pnl"] / init
+        table = _table(rows)
+        if not styled:
+            return table
+        return metrics_view(table, caption=_caption(table, "not measured (buy-and-hold and always-flat keep their "
+                                                           "run summary only, not the per-trade figures; the random "
+                                                           "null is a distribution over seeds: its mean return, "
+                                                           "Sharpe and gross return and its 5th / 95th percentiles "
+                                                           "only)"))
 
     # ------------------------------------------------------------------ widgets
     def widget(self):
@@ -418,7 +537,7 @@ class BacktestExplorer:
             except Exception as exc:
                 status.value = f"<b style='color:#b91c1c'>{exc}</b>"
                 return
-            show(table, self.summary_frame(res).round(4))
+            show(table, self.summary_frame(res, styled=True))     # every metric, one row each (no '...')
             show(fig, self.dashboard(res))
             show(per_trade, self.trade_analytics(res))
             tf_ = res.trades_frame()

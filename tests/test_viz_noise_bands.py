@@ -118,7 +118,12 @@ def test_table_noise_bands_are_in_r_units(viz_config):
     col = "corr noise band +/- (95%, n_eff)"
     dq = AT.delta_quality_table(frame, viz_config, digits=None, usd_digits=None)
     tm = AT.trailing_move_table({"test": frame}, viz_config, digits=None)
-    for h, steps in zip(HORIZONS, (10, 15, 20)):
-        assert dq.loc[col, h] == pytest.approx(S.corr_null_r(200, steps=steps))
+    from neural_trade.visualization.analytics_delta import corr_band, design_effect
+
+    dcol = "corr noise band +/- (95%, N / deff, Bartlett)"      # the delta table uses the Bartlett design effect
+    for i, (h, steps) in enumerate(zip(HORIZONS, (10, 15, 20))):
+        d, y = frame.delta[h], frame.y[:, i]
+        expect = corr_band(len(y), design_effect(d, y, steps))     # = corr_null_r(N / deff): r units
+        assert dq.loc[dcol, h] == pytest.approx(expect) and 0 < expect < 1
         assert tm.loc[("test", h), col] == pytest.approx(S.corr_null_r(200, steps=steps))
-    assert f"{dq.loc[col, 'h2']:.2f}" == "0.63" and f"{tm.loc[('test', 'h2'), col]:.2f}" == "0.63"   # z: 0.74
+    assert f"{tm.loc[('test', 'h2'), col]:.2f}" == "0.63"                                     # z scale: 0.74

@@ -129,6 +129,19 @@ def _pct(v: float, decimals: int = 2) -> str:
     return f"{v:+.{decimals}f}%"
 
 
+def _signed(v: float, decimals: int = 2) -> str:
+    """'+0.12', or 'n/a' when there is no value (a correlation of a constant, too few points)."""
+    return f"{v:+.{decimals}f}" if np.isfinite(v) else "n/a"
+
+
+def _profit_factor(v) -> str:
+    """'1.23'; '∞ (no losing trade)' for gains over no losses (not 'inf'); 'n/a' with nothing to divide."""
+    v = float("nan") if v is None else float(v)
+    if np.isinf(v):
+        return "∞ (no losing trade)" if v > 0 else "n/a"
+    return f"{v:.2f}" if np.isfinite(v) else "n/a"
+
+
 # ------------------------------------------------------------------ layout helpers
 def _panel_key(fig, legend_id: str, row: int, col: int):
     """A panel's key: one row of legend entries directly above the panel, under its title."""
@@ -143,8 +156,9 @@ def _panel_key(fig, legend_id: str, row: int, col: int):
 def _note(fig, row: int, col: int, text: str):
     sp = fig.get_subplot(row, col)
     xd, yd = sp.xaxis.domain, sp.yaxis.domain
+    # centred on the panel (plotly's 'auto' anchor would right-align a note in the right-hand column)
     fig.add_annotation(x=(xd[0] + xd[1]) / 2, y=(yd[0] + yd[1]) / 2, xref="paper", yref="paper", text=text,
-                       showarrow=False, font=dict(color=T.MUTED, size=12))
+                       xanchor="center", yanchor="middle", showarrow=False, font=dict(color=T.MUTED, size=12))
 
 
 def _title(text: str, readout: str) -> str:
@@ -179,6 +193,21 @@ def _h1_steps(horizon_steps, signals) -> Optional[int]:
     return int(steps[1]) if len(steps) > 1 else None
 
 
+def _raw_h1(raw_delta) -> np.ndarray:
+    """The raw (pre-shrink) h1 price head, per bar: from a {h: array} dict (``PredictionFrame.meta
+    ['delta_raw']``, a PredictionFrame's ``delta``) or an [N, 3] array; a 1-D array is taken as h1."""
+    if isinstance(raw_delta, dict):
+        return np.asarray(raw_delta["h1"], float).reshape(-1)
+    a = np.asarray(raw_delta, float)
+    return a[:, 1] if a.ndim == 2 else a.reshape(-1)
+
+
+def _beta(delta_scale, h: str = "h1") -> Optional[float]:
+    """The calibration's delta shrink for ``h`` (served delta = beta x raw head), None when unknown."""
+    v = (delta_scale or {}).get(h)
+    return None if v is None else float(v)
+
+
 def _disjoint_windows(starts, span: int) -> int:
     """How many of the windows [start, start + span) can be picked without overlap (greedy, in time
     order): the effective sample count of outcomes that share bars."""
@@ -210,7 +239,8 @@ def _no_trades_figure(result):
 
 
 def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Optional[Sequence[int]] = None,
-                           height: int = 1380, seed: int = 0):
+                           height: int = 1380, seed: int = 0, raw_delta=None,
+                           delta_scale: Optional[Dict[str, float]] = None):
     """Per-trade analytics of one BacktestResult.
 
     ``bars``: its Bars (for the MFE / MAE panel); ``signals``: the SignalFrame it traded on (for the
@@ -219,6 +249,15 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
     bars ahead of (h0, h1, h2), e.g. ``PredictionFrame.horizon_steps``. With it, the predicted h1
     move is compared with the realised move over the SAME h1 bars from the decision close; without
     it, with the trade's own move from entry to exit (a different span, said so on the panel).
+
+    ``raw_delta`` (the price heads before the calibration's delta shrink: ``{h: array}`` as in a
+    served frame's ``meta['delta_raw']``, or [N, 3]) and ``delta_scale`` (the per-horizon shrink
+    beta, served = beta x raw): when the served h1 delta is 0 (beta = 0, or 0 at every decision
+    bar), the predicted-vs-realised panel scores the raw h1 head instead and says so; without raw
+    heads it says there is nothing to score (a constant 0 has no rank correlation and no sign).
+    While the served delta is not 0 the panel scores it (what the strategy traded on). The sign
+    check counts only non-zero predictions.
+
     Panels without their input say so instead of drawing nothing. A result with no trades gives
     one short figure with one message.
     """
@@ -243,7 +282,8 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
     reason = np.array([t.exit_reason for t in trades])
     win = net > 0
     g_mean, g_lo, g_hi = S.mean_ci(gross_pct)          # consecutive trades never overlap: one sample each
-    readouts[0] = f"mean gross {_pct(g_mean)} [{g_lo:+.2f}, {g_hi:+.2f}], net {_pct(net_pct.mean())}"
+    g_ci = f" [{g_lo:+.2f}, {g_hi:+.2f}]" if np.isfinite(g_lo) and np.isfinite(g_hi) else " (1 trade: no CI)"
+    readouts[0] = f"mean gross {_pct(g_mean)}{g_ci}, net {_pct(net_pct.mean())}"
     readouts[1] = f"gross beat the {rt:.2f}% costs on {int((gross_pct > rt).sum())} of {n} trades"
     readouts[2] = "box: median, quartiles, 1.5 IQR whiskers"
     readouts[3] = (f"gross {_money(gross.sum())} - costs ${(gross - net).sum():,.0f} = net {_money(net.sum())}")
@@ -398,11 +438,27 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
                       3, 1)
         _hline(fig, 3, 1, labels[0], labels[-1], be, name=f"break-even {be:.2f}%", legend=lg[7])
         fig.add_hline(y=0, line=dict(color=T.NEUTRAL, width=1), row=3, col=1)
-        rho, band = _spearman(conv, gross_pct), S.corr_null_r(n)        # r units, not Fisher z
-        fig.layout.annotations[6].text = _title(_PANELS[6][0], f"Spearman ρ {rho:+.2f} (chance ±{band:.2f}), "
+        rho, band = _spearman(conv, gross_pct), S.corr_null_r(n)
+        fig.layout.annotations[6].text = _title(_PANELS[6][0], f"Spearman ρ {_signed(rho)} (chance ±{band:.2f}), "
                                                                 f"{k} bins")
-        # (3,3): the h1 forecast at the decision bar, in the trade's direction, against what followed
-        pred = sign * np.asarray(signals.delta, float)[d, 1]
+        # (3,3): the h1 forecast at the decision bar, in the trade's direction, against what followed.
+        # A served delta shrunk to 0 (beta = 0) is a constant, not a forecast: score the raw head then.
+        served_h1 = np.asarray(signals.delta, float)[:, 1]
+        pred = sign * served_h1[d]
+        beta1 = _beta(delta_scale)
+        served_zero = not np.any(pred)
+        if beta1 == 0.0:
+            why_zero = "served h1 delta is 0 on every bar (shrink β = 0)"
+        else:
+            why_zero = f"served h1 delta is 0 {'on every bar' if not np.any(served_h1) else 'at every decision bar'}"
+        use_raw = served_zero and raw_delta is not None
+        if use_raw:
+            raw_h1 = _raw_h1(raw_delta)
+            if len(raw_h1) != len(served_h1):
+                raise ValueError(f"raw_delta has {len(raw_h1)} bars, the signals {len(served_h1)}")
+            pred = sign * raw_h1[d]
+        pred_name = "raw h1 head" if use_raw else "predicted h1"
+        x9_title = ("raw h1 head" if use_raw else "predicted h1 move") + ", in the trade's direction ($)"
         sig_h1 = np.asarray(signals.sigma, float)[d, 1]
         entry_mid = np.array([_entry_mid(t, bars, cfg.slip_rate) for t in trades])
         exit_mid = np.array([_exit_mid(t, bars, cfg.slip_rate) for t in trades])
@@ -424,30 +480,51 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
             n_eff = n                                      # positions never overlap
             y9_title = f"realised over the hold ($; median {np.median(held):.0f} bars)"
             real_hover = "realised over the hold (%{customdata[2]:.0f} bars, entry to exit) %{y:>+$,.2f}"
-        cd9 = np.stack([sig_h1, hold_move, held], 1).astype(np.float32)
-        for s_name, color, symbol in (("LONG", T.LONG_COLOR, "triangle-up"), ("SHORT", T.SHORT_COLOR, "triangle-down")):
-            m = (side == s_name) & ok
-            if not m.any():
-                continue
-            fig.add_trace(go.Scatter(x=f32(pred[m]), y=f32(real[m]), mode="markers", name=s_name.lower(), legend=lg[9],
-                                     customdata=cd9[m], opacity=0.8,
-                                     marker=dict(symbol=symbol, size=7, color=color, line=dict(color=T.PAPER, width=0.5)),
-                                     hovertemplate="predicted h1 %{x:>+$,.2f} (sigma %{customdata[0]:$,.0f})<br>"
-                                                   + real_hover + "<extra>" + s_name.lower() + "</extra>"), 3, 3)
-        span = np.array([min(pred.min(), 0.0), max(pred.max(), 0.0)])
-        # no zero line here: the realised = predicted line IS almost flat when the predicted moves are small
-        fig.add_trace(go.Scatter(x=span, y=span, mode="lines", name="y = x (perfect)", legend=lg[9],
-                                 line=dict(color=T.NEUTRAL, width=1.5, dash=_REF_DASH), hoverinfo="skip"), 3, 3)
-        rho2, band2 = _spearman(pred[ok], real[ok]), S.corr_null_r(max(n_eff, 1))
-        right = 100 * np.mean(np.sign(pred[ok]) * np.sign(real[ok]) > 0) if ok.any() else float("nan")
-        late = int((~ok).sum())
-        head = _PANELS[8][0] if steps else "Predicted h1 vs move over the hold ($)"
-        fig.layout.annotations[8].text = _title(
-            head, f"ρ {rho2:+.2f} (chance ±{band2:.2f}) · sign right {right:.0f}% · median "
-                  f"${np.median(np.abs(pred[ok])):,.1f} vs ${np.median(np.abs(real[ok])):,.0f}"
-                  + (f" · {late} too late to score" if late else ""))
+        if served_zero and not use_raw:
+            # nothing to score: a constant 0 has no rank correlation, and sign(0) is never "right"
+            _note(fig, 3, 3, f"{why_zero}:<br>nothing to score (raw_delta= scores the raw h1 head)")
+            fig.layout.annotations[8].text = _title(_PANELS[8][0] if steps else "Predicted h1 vs move over the hold ($)",
+                                                    "no prediction: the served delta is a constant 0")
+        else:
+            cd9 = np.stack([sig_h1, hold_move, held], 1).astype(np.float32)
+            for s_name, color, symbol in (("LONG", T.LONG_COLOR, "triangle-up"),
+                                          ("SHORT", T.SHORT_COLOR, "triangle-down")):
+                m = (side == s_name) & ok
+                if not m.any():
+                    continue
+                fig.add_trace(go.Scatter(x=f32(pred[m]), y=f32(real[m]), mode="markers", name=s_name.lower(),
+                                         legend=lg[9], customdata=cd9[m], opacity=0.8,
+                                         marker=dict(symbol=symbol, size=7, color=color,
+                                                     line=dict(color=T.PAPER, width=0.5)),
+                                         hovertemplate=pred_name + " %{x:>+$,.2f} (sigma %{customdata[0]:$,.0f})<br>"
+                                                       + real_hover + "<extra>" + s_name.lower() + "</extra>"), 3, 3)
+            fin = pred[np.isfinite(pred)]
+            span = np.array([min(fin.min(initial=0.0), 0.0), max(fin.max(initial=0.0), 0.0)])
+            # no zero line here: the realised = predicted line IS almost flat when the predicted moves are small
+            fig.add_trace(go.Scatter(x=span, y=span, mode="lines", name="y = x (perfect)", legend=lg[9],
+                                     line=dict(color=T.NEUTRAL, width=1.5, dash=_REF_DASH), hoverinfo="skip"), 3, 3)
+            rho2, band2 = _spearman(pred[ok], real[ok]), S.corr_null_r(max(n_eff, 1))
+            # a zero prediction calls no side: the sign check counts only the non-zero ones
+            nz = ok & np.isfinite(pred) & (pred != 0) & np.isfinite(real)
+            right = 100 * np.mean(np.sign(pred[nz]) * np.sign(real[nz]) > 0) if nz.any() else float("nan")
+            right_txt = "n/a" if not np.isfinite(right) else f"{right:.0f}%" + (
+                f" of {int(nz.sum())}" if nz.sum() < ok.sum() else "")
+            late = int((~ok).sum())
+            if use_raw:
+                head = "Raw h1 head vs realised move ($)" if steps else "Raw h1 head vs move over the hold ($)"
+            else:
+                head = _PANELS[8][0] if steps else "Predicted h1 vs move over the hold ($)"
+            med = ""
+            if ok.any():
+                mp = float(np.nanmedian(np.abs(pred[ok])))
+                med = f" · median ${mp:,.{1 if mp < 10 else 0}f} vs ${np.nanmedian(np.abs(real[ok])):,.0f}"
+            # with the raw head, say first why it is not the served prediction (as the evaluation report does)
+            why = f"served delta = 0{' (β = 0)' if beta1 == 0.0 else ''} · " if use_raw else ""
+            fig.layout.annotations[8].text = _title(
+                head, f"{why}ρ {_signed(rho2)} (chance ±{band2:.2f}) · sign right {right_txt}{med}"
+                      + (f" · {late} too late to score" if late else ""))
     else:
-        y9_title = "realised move ($)"
+        x9_title, y9_title = "predicted h1 move, in the trade's direction ($)", "realised move ($)"
         for c in (1, 3):
             _note(fig, 3, c, "needs the signals (signals=)")
 
@@ -494,7 +571,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
                              (2, 3): ("worst move against (% of entry mid)", "best move in favour (%)"),
                              (3, 1): ("conviction quintile at the decision bar (weak to strong)", "mean gross return (%)"),
                              (3, 2): (None, "total P&L ($)"),
-                             (3, 3): ("predicted h1 move, in the trade's direction ($)", y9_title)}.items():
+                             (3, 3): (x9_title, y9_title)}.items():
         fig.update_xaxes(title_text=xt, row=r, col=c)
         fig.update_yaxes(title_text=yt, row=r, col=c)
     fig.update_layout(barmode="overlay", boxmode="overlay")
@@ -503,7 +580,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
     avg_win = _money(wins.mean(), 2) if len(wins) else "n/a"
     avg_loss = _money(losses.mean(), 2) if len(losses) else "n/a"
     line1 = (f"hit rate {100 * (s.get('hit_rate') or 0):.1f}% after costs, {100 * (s.get('hit_rate_gross') or 0):.1f}% "
-             f"before · profit factor {s.get('profit_factor', float('nan')):.2f} · avg win {avg_win}, avg loss "
+             f"before · profit factor {_profit_factor(s.get('profit_factor'))} · avg win {avg_win}, avg loss "
              f"{avg_loss}, expectancy {_money(net.mean(), 2)} per trade")
     line2 = (f"costs {cost_per_side(cfg) * 1e4:.0f} bps per side ({rt:.2f}% round trip) · per-trade panels in % of "
              f"notional (size x equity at entry: ${notional[0]:,.0f} first trade, ${notional[-1]:,.0f} last)")

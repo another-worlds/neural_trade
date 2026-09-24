@@ -288,6 +288,152 @@ def test_backtest_explorer_tables_and_trade_analytics(viz_frame, viz_backtest):
     assert summ["confidence scale"]["var_scale"].iloc[0] == 1.0
 
 
+def _explorer(viz_frame, bars, test=None):
+    import copy
+    from types import SimpleNamespace
+
+    from neural_trade.core.config import Config
+    from neural_trade.notebook import BacktestExplorer
+
+    fr = copy.deepcopy(viz_frame)
+    fr.last_close = bars.close
+    return BacktestExplorer({"config": Config(), "test": fr if test is None else test, "cal": fr, "bars": bars,
+                             "predictor": SimpleNamespace(bundle=SimpleNamespace(meta={"var_scale": 1.0}))}), fr
+
+
+def test_backtest_explorer_trade_analytics_scores_the_raw_head_when_beta_is_zero(viz_frame, viz_backtest):
+    """load_run_blocks puts the raw heads and the shrink betas on the served test frame; with beta = 0
+    the served delta is 0 on every bar, so trade_analytics must hand the raw heads to the figure
+    (else its predicted-vs-realised panel is one vertical line at $0 with 'ρ +nan, sign right 0%')."""
+    import copy
+
+    _, bars, _, _ = viz_backtest
+    _, fr = _explorer(viz_frame, bars)
+    served = copy.deepcopy(fr)
+    served.delta = {h: np.zeros_like(v) for h, v in fr.delta.items()}
+    served.meta = {"delta_raw": {h: v.copy() for h, v in fr.delta.items()},
+                   "delta_scale": {"h0": 0.0, "h1": 0.0, "h2": 0.0}}
+    ex, _ = _explorer(viz_frame, bars, test=served)
+    res = ex.run("calibrated_quantile", costs={"random_seeds": 0}, baselines=False)
+    assert res.summary["n_trades"] > 5
+    fig = ex.trade_analytics()
+    title = fig.layout.annotations[8].text
+    assert title.startswith("Raw h1 head vs realised move") and "β = 0" in title and "nan" not in title
+    x = np.concatenate([np.asarray(t.x, float) for t in fig.data if t.xaxis == "x9" and t.mode == "markers"])
+    sign = {"LONG": 1, "SHORT": -1}
+    steps = int(ex.config.HORIZON_STEPS[1])                  # trades whose h1 window runs past the block are not scored
+    want = [sign[s] * fr.delta["h1"][t.entry_bar - 1] for s in ("LONG", "SHORT") for t in res.trades
+            if t.side == s and t.entry_bar - 1 + steps < len(fr)]
+    np.testing.assert_allclose(x, want, rtol=1e-5, atol=1e-4)
+    # a frame without raw heads or betas (an older run) still draws the served delta
+    ex2, _ = _explorer(viz_frame, bars)
+    ex2.run("calibrated_quantile", costs={"random_seeds": 0}, baselines=False)
+    assert ex2.trade_analytics().layout.annotations[8].text.startswith("Predicted vs realised h1 move")
+
+
+def test_backtest_explorer_tables_keep_numbers_numeric_and_show_every_metric(viz_frame, viz_backtest):
+    """The comparison table's text 'exits' column must not turn every column into object dtype (round(4)
+    then does nothing), the summary keeps its 'not run' null row, and styled=True shows every metric:
+    one row per metric (the one-row-per-strategy frames have 24-25 columns, which pandas cuts with '...')."""
+    from pandas.api.types import is_numeric_dtype
+    from pandas.io.formats.style import Styler
+
+    from neural_trade.notebook.backtest_ui import _METRIC_ROWS
+
+    _, bars, _, _ = viz_backtest
+    ex, _ = _explorer(viz_frame, bars)
+    runs, _ = ex.compare_strategies(null_seeds=2)
+    ct = ex.comparison_table(runs)
+    assert [c for c in ct.columns if not is_numeric_dtype(ct[c])] == ["exits"]
+    assert ct["n_trades"].dtype.kind == "i"
+    r4 = ct.round(4)
+    num = [c for c in ct.columns if c != "exits"]
+    np.testing.assert_allclose(r4[num].to_numpy(float), np.round(ct[num].to_numpy(float), 4), equal_nan=True)
+    sty = ex.comparison_table(runs, styled=True)
+    assert isinstance(sty, Styler) and sty.data.shape == (ct.shape[1], ct.shape[0])
+    assert list(sty.data.columns) == list(ct.index)
+    labels = {k: label for k, label, _ in _METRIC_ROWS}
+    html = sty.to_html()
+    for c in ct.columns:                                  # every metric has its own, labelled row
+        assert f">{labels[c]}<" in html.replace("&amp;", "&"), c
+    name = next(n for n, r in runs.items() if r.summary["n_trades"])
+    assert f"{runs[name].summary['total_return']:+.2%}" in html          # returns in %, 2 decimals
+    assert f">{runs[name].summary['n_trades']:,}<" in html                  # counts as integers
+    with pd.option_context("display.max_columns", 20, "display.max_rows", 60):
+        assert "..." not in sty._repr_html_() and "…" not in sty._repr_html_()
+
+    res = ex.run("calibrated_quantile", costs={"random_seeds": 0})
+    plain = ex.summary_frame()
+    assert all(is_numeric_dtype(plain[c]) for c in plain.columns)
+    assert "random same freq (not run: no trades or 0 seeds)" in plain.index         # the empty row stays
+    sty = ex.summary_frame(styled=True)
+    html = sty.to_html().replace("&amp;", "&")
+    for label in ("avg win ($)", "long trades", "short trades", "long P&L before costs ($)",
+                  "short P&L after costs ($)", "exposure (share of bars in a position)"):
+        assert f">{label}<" in html, label
+    assert ">–<" in html and ">nan<" not in html.lower()                  # no trades / not measured: '–'
+    net = np.array([t.net_pnl for t in res.trades])
+    assert f"{net.mean():+,.2f}" in html                                           # expectancy, $ with 2 decimals
+    # the widget's summary table is the styled one: every metric is in it (no '...' column)
+    ex.widget()
+    ex._w["costs"]["random_seeds"].value = 0
+    ex.click_run()
+    shown = ex._w["box"].children[2].outputs[0]["data"]["text/html"].replace("&amp;", "&")
+    assert all(f">{label}<" in shown for label in ("long trades", "short trades", "costs paid ($)"))
+    assert "..." not in shown
+
+
+def test_metrics_view_prints_a_negative_zero_unsigned_and_an_infinite_profit_factor_as_infinity():
+    """No sign on an exact 0, a negative zero included ('-0.00%' read as a loss), and a profit factor
+    with no losing trade (gains / 0: buy-and-hold with one winning trade) prints as '∞', not 'inf'."""
+    from neural_trade.notebook.backtest_ui import _cell_format, metrics_view
+
+    assert _cell_format("{:+.2%}")(-0.0) == "0.00%"
+    assert _cell_format("{:+,.0f}")(np.float64(-0.0)) == "0"
+    assert _cell_format("{:.1%}")(-0.0) == "0.0%"
+    assert _cell_format("{:+.2%}")(-0.0123) == "-1.23%" and _cell_format("{:+.2%}")(0.0123) == "+1.23%"
+    assert _cell_format("{:.2f}")(float("inf")) == "∞" and _cell_format("{:+,.2f}")(-np.inf) == "-∞"
+    frame = pd.DataFrame({"n_trades": [1, 0], "total_return": [-0.0, 0.0], "gross_pnl": [-0.0, 0.0],
+                          "profit_factor": [np.inf, np.nan]}, index=["buy_and_hold", "always_flat"])
+    html = metrics_view(frame).to_html()
+    assert ">-0" not in html and ">+0" not in html
+    assert html.count(">0.00%<") == 2 and html.count(">0<") == 3                   # 2 returns; 2 P&L + 1 count
+    assert ">∞<" in html and ">inf<" not in html and ">–<" in html                  # always_flat: no trades
+
+
+def test_backtest_tables_say_what_a_dash_and_an_infinity_stand_for(viz_frame, viz_backtest):
+    """'–' also marks a strategy that traded with no winning (or no losing) trade: avg win / avg loss
+    have nothing to average. '∞' is explained when a profit factor is infinite (no losing trade)."""
+    import dataclasses
+
+    from neural_trade.notebook.backtest_ui import _caption
+
+    _, bars, _, _ = viz_backtest
+    ex, _ = _explorer(viz_frame, bars)
+    runs, _ = ex.compare_strategies(null_seeds=2)
+    cap = ex.comparison_table(runs, styled=True).caption
+    assert "no winning / losing trade (avg win / avg loss)" in cap and "no matched random null (not run)" in cap
+    assert ("∞" in cap) == bool(np.isinf(ex.comparison_table(runs)["profit_factor"].to_numpy(float)).any())
+    name = next(n for n, r in runs.items() if r.summary["n_trades"] > 1)
+    wins = [t for t in runs[name].trades if t.net_pnl > 0]
+    runs[name] = dataclasses.replace(runs[name], trades=wins, summary=dict(runs[name].summary, n_trades=len(wins),
+                                                                           profit_factor=float("inf")))
+    sty = ex.comparison_table(runs, styled=True)
+    assert "∞: no losing trade (profit factor)" in sty.caption
+    html = sty.to_html()
+    assert ">∞<" in html and ">inf<" not in html
+    assert _caption(pd.DataFrame({"n_trades": [3]}), "x").endswith(", or x")         # no profit factor column
+    res = ex.run("calibrated_quantile", costs={"random_seeds": 0})
+    cap = ex.summary_frame(styled=True).caption
+    assert "no winning / losing trade (avg win / avg loss)" in cap and "the random null is a distribution" in cap
+    assert "buy-and-hold and always-flat keep their run summary only" in cap        # their per-trade rows are '–'
+    # a baseline's gross return is in its run summary: shown, not '–'
+    plain = ex.summary_frame()
+    for name in ("buy_and_hold", "always_flat"):
+        want = res.baselines[name]["gross_pnl"] / res.config.initial_equity
+        assert plain.loc[name, "gross_return"] == pytest.approx(want), name
+
+
 @pytest.mark.slow
 def test_calibration_explorer_refits_and_scores_on_test(session_run):
     from neural_trade.notebook import CalibrationExplorer
