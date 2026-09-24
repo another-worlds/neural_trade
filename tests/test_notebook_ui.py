@@ -17,15 +17,22 @@ def test_reliability_table_is_flat_for_calibrated_probabilities():
     y = (rng.uniform(size=p.size) < p).astype(float)
     t = reliability_table(y, p, 10)
     assert t.shape == (10, 5) and np.all(np.abs(t[:, 0] - t[:, 1]) < 0.03) and t[:, 2].sum() == p.size
-    assert len(reliability_figure(y, p, np.clip(p * 1.1, 0, 1)).data) == 3
+    fig = reliability_figure(y, p, np.clip(p * 1.1, 0, 1))
+    assert {"perfect", "raw P(up)", "calibrated P(up)"} <= {tr.name for tr in fig.data}
+    assert all(0 <= v <= 1 for v in fig.layout.xaxis.range)          # zoomed to the bins, inside [0, 1]
 
 
-def test_comparison_and_ablation_figures():
+def test_comparison_and_ablation_figures(tmp_path, monkeypatch):
     from neural_trade.visualization.comparison import ablation_deltas_figure, runs_comparison_figure
+
+    monkeypatch.chdir(tmp_path)                                  # no runs/ folder to look the ids up in
 
     df = pd.DataFrame({"h1/direction/auc": [0.51, 0.53], "backtest/sharpe_net": [-3.0, -1.0], "seed": [0, 1]},
                       index=["run-a", "run-b"])
-    assert len(runs_comparison_figure(df).data) == 2
+    fig = runs_comparison_figure(df)
+    dots = [t for t in fig.data if t.mode == "markers"]
+    assert len(dots) == 2 and [len(t.x) for t in dots] == [2, 2]              # one dot per run and panel
+    assert list(fig.layout.yaxis.ticktext) == ["run-a", "run-b"]
     analysis = {"terms": {"LAMBDA_HD": {"verdict": "NEUTRAL", "modes": {"leave_one_in": {"verdict": "NEUTRAL", "metrics": [
         {"metric": "h1/variance/crpss", "mean_delta": 0.001, "sd_delta": 0.002, "verdict": "NEUTRAL"}]}}}},
                 "family": {"verdict": "VALUE", "metrics": [{"metric": "h1/direction/mcc", "mean_delta": 0.02,
@@ -293,8 +300,10 @@ def test_calibration_explorer_refits_and_scores_on_test(session_run):
         if not shrink:
             assert (t["delta beta"] == 1.0).all() and np.allclose(t["EV raw delta"], t["EV served delta"])
     rel, cov = ex.figures("h2")
-    assert len(rel.data) == 3 and len(cov.data) == 2
+    assert {"raw P(up)", "calibrated P(up)"} <= {t.name for t in rel.data}
+    assert {"coverage", "target 0.80"} <= {t.name for t in cov.data}     # the target follows alpha=0.2
     ex.click_refit()
+    assert list(ex.comparison_table().index.get_level_values(0).unique()) == ["h0", "h1", "h2"]
 
 
 def test_pick_run_finds_the_newest_servable_run_or_explains(tmp_path):
