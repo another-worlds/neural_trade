@@ -76,6 +76,7 @@ class BacktestExplorer:
         self.cal_signals = SignalFrame.build(blocks["cal"], var_scale)
         self.bars = blocks["bars"]
         self.last = None
+        self.last_strategy = None
         self._w = None
 
     @classmethod
@@ -89,7 +90,31 @@ class BacktestExplorer:
 
         strat = build_strategy(strategy, params, calibration=self.cal_signals)
         self.last = backtest(self.signals, self.bars, strat, build_backtest_config(costs or {}), baselines=baselines)
+        self.last_strategy = strat
         return self.last
+
+    def dashboard(self, res=None, *, start=None, end=None):
+        """Price / signals / confidence / sigma / equity / drawdown for the last run (or ``res``)."""
+        from neural_trade.visualization.trading_dashboard import trading_dashboard_figure
+
+        res = res or self.last
+        strat = self.last_strategy if res is self.last else None
+        return trading_dashboard_figure(res, self.bars, self.signals, strat, start=start, end=end)
+
+    def trade_analytics(self, res=None):
+        """Per-trade view of the last run (or ``res``): P&L, cost drag, exit reasons, excursions."""
+        from neural_trade.visualization.trading_dashboard import trade_analytics_figure
+
+        return trade_analytics_figure(res or self.last, self.bars)
+
+    def compare_strategies(self, names=None, costs=None):
+        """Every registered strategy (or ``names``) with default knobs: {name: BacktestResult} and a figure."""
+        from neural_trade.strategy import Strategies
+        from neural_trade.visualization.trading_dashboard import strategy_comparison_figure
+
+        runs = {n: self.run(n, costs=dict(costs or {}, random_seeds=0), baselines=False)
+                for n in (names or Strategies.list_names())}
+        return runs, strategy_comparison_figure(runs, self.bars)
 
     def summary_frame(self, res=None) -> pd.DataFrame:
         res = res or self.last
@@ -131,7 +156,7 @@ class BacktestExplorer:
             c.style = {"description_width": "120px"}
         run = w.Button(description="Run backtest", icon="play", button_style="primary")
         status = w.HTML()
-        table, trades, fig = w.Output(), w.Output(), w.Output()
+        table, trades, fig, per_trade = w.Output(), w.Output(), w.Output(), w.Output()
 
         def rebuild(_=None):
             cls = Strategies.get(strategy.value)
@@ -155,10 +180,9 @@ class BacktestExplorer:
             except Exception as exc:
                 status.value = f"<b style='color:#b91c1c'>{exc}</b>"
                 return
-            from neural_trade.registries.visualizations import Visualizations
-
             show(table, self.summary_frame(res).round(4))
-            show(fig, Visualizations.build("plotly_trading", res, self.config, bars=self.bars))
+            show(fig, self.dashboard(res))
+            show(per_trade, self.trade_analytics(res))
             tf_ = res.trades_frame()
             show(trades, tf_.tail(30) if len(tf_) else pd.DataFrame({"trades": []}))
             s = res.summary
@@ -173,7 +197,7 @@ class BacktestExplorer:
             w.HBox([strategy, run, status]),
             w.HBox([w.VBox([w.HTML("<b>Strategy knobs</b>"), knobs]),
                     w.VBox([w.HTML("<b>Costs and execution</b>"), *cost_w.values()])]),
-            table, fig, w.Accordion(children=[trades], titles=("Last 30 trades",)),
+            table, fig, per_trade, w.Accordion(children=[trades], titles=("Last 30 trades",)),
         ])
         self._w = {"box": box, "strategy": strategy, "knobs": knobs, "costs": cost_w, "run": run, "status": status,
                    "do_run": do_run}

@@ -71,7 +71,7 @@ def main() -> int:
         "## Files", "",
         "| file | tests | markers | purpose |", "|---|---|---|---|", *rows, "",
     ]
-    (REPO / "TESTING_DOCUMENTATION.md").write_text("\n".join(L), encoding="utf-8")
+    (REPO / "TESTING_DOCUMENTATION.md").write_text("\n".join(L), encoding="utf-8", newline="\n")
     print(f"TESTING_DOCUMENTATION.md: {len(col.items)} tests, {len(by_file)} files")
     return 0
 

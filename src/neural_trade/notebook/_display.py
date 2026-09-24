@@ -15,9 +15,10 @@ def mime_bundle(obj) -> dict:
     if hasattr(obj, "to_plotly_json"):  # plotly figure
         import plotly.io as pio
 
+        # The plotly mime type only (what fig.show() publishes in Jupyter / VS Code): a text/html
+        # fallback would embed the whole figure a second time and double the saved notebook.
         return {"application/vnd.plotly.v1+json": {**json.loads(pio.to_json(obj, validate=False)),
                                                    "config": {"responsive": True}},
-                "text/html": pio.to_html(obj, include_plotlyjs="cdn", full_html=False),
                 "text/plain": f"<Figure: {obj.layout.title.text or ''}>"}
     if hasattr(obj, "_repr_html_"):  # DataFrame / Styler
         return {"text/html": obj._repr_html_(), "text/plain": repr(obj)}

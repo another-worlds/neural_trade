@@ -5,6 +5,8 @@ from typing import Optional
 
 import numpy as np
 
+from neural_trade.visualization.theme import apply
+
 
 def reliability_table(labels, probs, n_bins: int = 10):
     """Equal-count bins of predicted P(up): mean prediction, observed up-rate, count, 95% band."""
@@ -29,8 +31,8 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
     hi = max(np.max(p_raw), np.max(p_cal) if p_cal is not None else 0.0)
     pad = max(0.01, (hi - lo) * 0.1)
     fig.add_trace(go.Scatter(x=[lo - pad, hi + pad], y=[lo - pad, hi + pad], mode="lines", name="perfect",
-                             line=dict(dash="dot", color="#9ca3af")))
-    for name, p, color in (("raw", p_raw, "#b45309"), ("calibrated", p_cal, "#1d4ed8")):
+                             line=dict(dash="dot", color="#9a9890")))
+    for name, p, color in (("raw", p_raw, "#c98500"), ("calibrated", p_cal, "#3987e5")):
         if p is None:
             continue
         t = reliability_table(labels, p, n_bins)
@@ -41,7 +43,7 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
     fig.update_layout(title=title or "Direction reliability (equal-count bins, 95% bands)",
                       xaxis_title="predicted P(up)", yaxis_title="observed up-rate (outside the deadband)",
                       height=420)
-    return fig
+    return apply(fig)
 
 
 def coverage_over_time_figure(y, lo, hi, *, window: int = 500, target: float = 0.9, title: Optional[str] = None):
@@ -56,13 +58,13 @@ def coverage_over_time_figure(y, lo, hi, *, window: int = 500, target: float = 0
     x = np.arange(window - 1, len(y))
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.6, 0.4],
                         subplot_titles=(f"Coverage, trailing {window} samples", "Interval width ($)"))
-    fig.add_trace(go.Scatter(x=x, y=roll, name="coverage", line=dict(color="#1d4ed8")), 1, 1)
+    fig.add_trace(go.Scatter(x=x, y=roll, name="coverage", line=dict(color="#3987e5")), 1, 1)
     fig.add_hline(y=target, line_dash="dot", row=1, col=1)
-    fig.add_trace(go.Scatter(x=np.arange(len(y)), y=hi - lo, name="width", line=dict(width=1, color="#6b7280")),
+    fig.add_trace(go.Scatter(x=np.arange(len(y)), y=hi - lo, name="width", line=dict(width=1, color="#898781")),
                   2, 1)
     fig.update_layout(title=title or f"Interval coverage: {inside.mean():.3f} overall (target {target:.2f})",
                       height=460, showlegend=False)
-    return fig
+    return apply(fig)
 
 
 # ------------------------------------------------------------------ registry entries (data, config)

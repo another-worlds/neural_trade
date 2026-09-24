@@ -170,3 +170,79 @@ def tiny_config(tf):
     cfg.EARLY = 1
     cfg.validate()
     return cfg
+
+# ---------------------------------------------------------------------------- dashboards (no TensorFlow)
+VIZ_HORIZONS = ("h0", "h1", "h2")
+
+
+@pytest.fixture(scope="session")
+def viz_frame():
+    from neural_trade.evaluation.frame import PredictionFrame
+
+    rng = np.random.default_rng(0)
+    n = 3000
+    sigma = rng.uniform(60, 240, (n, 3))
+    signal = rng.normal(0, 1, (n, 3))
+    y = 0.2 * signal * sigma + rng.normal(0, 1, (n, 3)) * sigma       # a weak, real edge
+    p = 1 / (1 + np.exp(-0.4 * signal))
+    pred_scale = 100.0
+    lo_hi = {h: (0.3 * signal[:, i] * sigma[:, i] - 1.645 * sigma[:, i],
+                 0.3 * signal[:, i] * sigma[:, i] + 1.645 * sigma[:, i]) for i, h in enumerate(VIZ_HORIZONS)}
+    return PredictionFrame(
+        y=y, last_close=np.full(n, 100_000.0),
+        delta={h: 0.3 * signal[:, i] * sigma[:, i] for i, h in enumerate(VIZ_HORIZONS)},
+        direction_prob={h: p[:, i] for i, h in enumerate(VIZ_HORIZONS)},
+        variance_scaled={h: (sigma[:, i] / pred_scale) ** 2 for i, h in enumerate(VIZ_HORIZONS)},
+        pred_scale=pred_scale, direction_prob_calibrated={h: 0.5 + 0.8 * (p[:, i] - 0.5) for i, h in enumerate(VIZ_HORIZONS)},
+        intervals=lo_hi)
+
+
+@pytest.fixture(scope="session")
+def viz_config():
+    from neural_trade.core.config import Config
+
+    return Config(EPOCHS=6, EARLY=3)
+
+
+@pytest.fixture(scope="session")
+def viz_history():
+    """A factory: viz_history(n=6, full=True) -> epoch rows with the keys the trainer logs."""
+    return _viz_history
+
+
+def _viz_history(n=6, *, full=True):
+    rng = np.random.default_rng(1)
+    rows = []
+    for e in range(n):
+        r = {"epoch": e, "loss": 7 - 0.2 * e, "val_loss": 6 - 0.1 * e + 0.05 * rng.normal(), "seconds": 20.0}
+        if full:
+            for pre in ("", "val_"):
+                for k in ("point_loss", "trend_loss", "dir_loss", "nll_loss", "crps_loss", "soft_ece_loss",
+                          "t_perp_loss", "casimir_loss", "hd_loss"):
+                    r[pre + k] = float(rng.uniform(0.01, 1))
+            for h in VIZ_HORIZONS:
+                for pre in ("train_", "val_"):
+                    for k in ("dir_mcc", "gauss_dir_mcc", "dir_bal_acc", "dir_ece"):
+                        r[f"{pre}{k}_{h}"] = float(rng.uniform(0, 0.6))
+                r[f"val_pred_up_rate_{h}"], r[f"val_true_up_rate_{h}"] = 0.48, 0.5
+                r[f"val_pit_ks_{h}"], r[f"pit_ks_{h}"] = 0.1, 0.05
+            r.update(lr=1e-3 if e < 4 else 5e-4, lr_indicator=5e-3, grad_global_norm=8.0, nonfinite_grad_steps=0.0)
+        rows.append(r)
+    return rows
+
+
+@pytest.fixture(scope="session")
+def viz_backtest(viz_frame):
+    from neural_trade.strategy import Bars, SignalFrame, backtest, build_backtest_config, build_strategy
+
+    rng = np.random.default_rng(2)
+    close = 100_000 * np.exp(np.cumsum(rng.normal(0, 8e-4, len(viz_frame))))
+    bars = Bars.from_close(close)
+    import copy
+    fr = copy.deepcopy(viz_frame)
+    fr.last_close = close
+    sig = SignalFrame.build(fr, 1.0)
+    strat = build_strategy("calibrated_quantile", None, calibration=sig)
+    res = backtest(sig, bars, strat, build_backtest_config({"random_seeds": 0}))
+    assert res.summary["n_trades"] > 5
+    return res, bars, sig, strat

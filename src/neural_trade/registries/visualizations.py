@@ -60,4 +60,19 @@ Visualizations.register(name="runs_comparison", tags=["plotly", "experiments"], 
 Visualizations.register(name="ablation_deltas", tags=["plotly", "experiments", "ablation"],
                         dependencies=["plotly"])(_cmp.ablation_deltas)
 Visualizations.register(name="split_overview", tags=["plotly", "data"], dependencies=["plotly"])(_do.split_overview)
+from neural_trade.visualization import model_analytics as _ma  # noqa: E402
+from neural_trade.visualization import trading_dashboard as _td  # noqa: E402
+from neural_trade.visualization import training_dashboard as _trd  # noqa: E402
+
+Visualizations.register(name="training_dashboard", tags=["plotly", "training"],
+                        dependencies=["plotly"])(_trd.training_dashboard)
+for _name, _fn, _tags in (("direction_analytics", _ma.direction_analytics, ["direction"]),
+                          ("delta_analytics", _ma.delta_analytics, ["delta"]),
+                          ("variance_analytics", _ma.variance_analytics, ["variance", "calibration"]),
+                          ("confidence_analytics", _ma.confidence_analytics, ["direction", "confidence"]),
+                          ("coherence_analytics", _ma.coherence_analytics, ["horizons"])):
+    Visualizations.register(name=_name, tags=["plotly", "evaluation", *_tags], dependencies=["plotly"])(_fn)
+for _name, _fn in (("trading_dashboard", _td.trading_dashboard), ("trade_analytics", _td.trade_analytics),
+                   ("strategy_comparison", _td.strategy_comparison)):
+    Visualizations.register(name=_name, tags=["plotly", "backtest", "trading"], dependencies=["plotly"])(_fn)
 Visualizations._initialized = True

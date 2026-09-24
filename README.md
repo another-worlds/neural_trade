@@ -133,14 +133,20 @@ The notebooks in `notebooks/` contain no functions. The logic and widgets live i
 | Notebook | What you can do |
 |---|---|
 | `00_data_and_splits` | See the bars, the purged train / val / cal / test blocks of any walk-forward fold, and the label balance per block |
-| `01_train_and_monitor` | Train in the background with **Pause / Resume / Stop**, live curves and a log panel; then get the test report with baselines, evaluation figures and learned indicator periods |
-| `02_backtest` | Strategy dropdown, per-strategy settings and cost controls with a **Run** button; see equity and trades, the three baselines, and every strategy compared |
-| `03_signals_and_trades` | See the signal features the strategies use next to price and trades |
-| `04_diagnostics` | See learning dynamics and the direction heads' bias. The **calibration explorer** refits on the calibration block (interval scale, delta shrinkage, miscoverage) and shows test coverage, width, temperature, reliability diagram and coverage over time |
+| `01_train_and_monitor` | Train in the background with **Pause / Resume / Stop**. The live dashboard shows training-health tiles (convergence, patience, class collapse per horizon, non-finite gradients), the loss batch by batch, and 12 per-epoch panels: losses and components, direction MCC / balanced accuracy / ECE per horizon for train and validation, the price head's Gaussian readout, PIT-KS, predicted vs true up-rate, physics terms, learning rates, gradient norm. Then the test report with baselines, analytics for every head per horizon, and the learned indicator periods |
+| `02_backtest` | Strategy dropdown, per-strategy settings and cost controls with a **Run** button. The trading dashboard stacks price and trades (entries, exits, take-profit / stop levels), P(up) per horizon against the entry lines, confidence, predicted sigma, equity and drawdown on one time axis with shared hover and zoom. Per-trade analytics cover P&L, cost drag, exit reasons and favourable / adverse excursion. Every strategy is compared on the same block |
+| `03_signals_and_trades` | The trading dashboard for a window of bars (`START`, `BARS`), the signal features, and the trades |
+| `04_diagnostics` | Everything about a saved run: its training dashboard, the head analytics, the learned periods, and the **calibration explorer**, which refits on the calibration block (interval scale, delta shrinkage, miscoverage) and shows test coverage, width, temperature, reliability diagram and coverage over time |
 | `05_compare_runs` | Compare scored runs side by side, and read the ablation verdicts with their paired deltas |
 
 The buttons work because training runs in a background thread: Jupyter processes widget
 clicks only while no cell is running.
+
+The figures live in `neural_trade.visualization` and are registered in `Visualizations`
+(`training_dashboard`, `direction_analytics`, `delta_analytics`, `variance_analytics`,
+`confidence_analytics`, `coherence_analytics`, `trading_dashboard`, `trade_analytics`,
+`strategy_comparison`, `indicator_evolution` ...). They share one dark theme in which each
+horizon keeps its colour in every figure (`visualization/theme.py`).
 
 ## How it is evaluated
 

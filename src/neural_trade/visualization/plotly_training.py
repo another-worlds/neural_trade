@@ -111,14 +111,17 @@ def _as_history(data):
     return dict(data or {})
 
 
-def plotly_interactive(data, config=None, *, primary_horizon="h1", prefer_gauss=True, **_):
-    """Registry entry: training curves figure from any history-like ``data``."""
-    hist = _as_history(data)
-    n = len(hist.get("loss", []))
-    rows = [{k: v[i] for k, v in hist.items() if i < len(v)} for i in range(n)]
-    for row in rows:
-        add_plot_aliases(row, primary_horizon=primary_horizon, prefer_gauss=prefer_gauss)
-    return training_curves_figure(_as_history(rows), n_epochs=n)
+def plotly_interactive(data, config=None, **kw):
+    """Registry entry (the default training figure): the full training dashboard for any
+    history-like ``data`` (see :func:`neural_trade.visualization.training_dashboard.training_dashboard_figure`).
+
+    It used to draw :func:`training_curves_figure`, whose direction panel reads legacy
+    aggregate keys (``dir_acc_avg`` ...) the trainer no longer logs, so that panel came out empty.
+    """
+    from neural_trade.visualization.training_dashboard import training_dashboard_figure
+
+    kw.pop("primary_horizon", None), kw.pop("prefer_gauss", None)
+    return training_dashboard_figure(_as_history(data) if hasattr(data, "history") else data, config, **kw)
 
 
 def make_interactive_plot_callback(

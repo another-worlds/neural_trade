@@ -64,6 +64,8 @@ class TrainingSession:
         self.extra_callbacks = list(extra_callbacks or [])
         self.redraw_every = max(1, int(redraw_every_batches))
         self.history: List[Dict[str, float]] = []
+        self.batch_points: List[tuple] = []      # (fractional epoch, running-mean train loss)
+        self.val_points: List[tuple] = []        # (epoch end, val loss)
         self.status = "ready"
         self.result = None
         self.error: Optional[BaseException] = None
@@ -166,21 +168,55 @@ class TrainingSession:
                 if session._stop.is_set():
                     self.model.stop_training = True
                 if batch % session.redraw_every == 0:
-                    session._progress(len(session.history), batch + 1, (self.params or {}).get("steps"))
+                    steps = (self.params or {}).get("steps")
+                    loss = (logs or {}).get("loss")
+                    if loss is not None and steps:
+                        session.batch_points.append((len(session.history) + (batch + 1) / steps, float(loss)))
+                    session._progress(len(session.history), batch + 1, steps)
+                    session._redraw_batches()
 
             def on_epoch_end(self, epoch, logs=None):
                 row = {"epoch": epoch, "seconds": time.time() - self._t0}
                 row.update({k: float(v) for k, v in (logs or {}).items()})
                 session.history.append(row)
+                if "val_loss" in row:
+                    session.val_points.append((epoch + 1, row["val_loss"]))
                 session._redraw()
 
         return _SessionCallback()
 
-    def curves_figure(self):
-        """The epoch curves as a plain figure (for a static cell output after training)."""
-        from neural_trade.visualization.plotly_training import plotly_interactive
+    def epoch_rows(self) -> List[Dict[str, float]]:
+        """Per-epoch rows: the session's Keras logs merged with the run's metrics.jsonl (which adds
+        the learning rates, the learned periods and the epoch timing) when the run logs one."""
+        rows = [dict(r) for r in self.history]
+        path = self.run_context.path("metrics.jsonl") if self.run_context is not None else None
+        if path is not None and path.exists():
+            from neural_trade.telemetry.epoch_logger import read_metrics
 
-        return plotly_interactive(self.history, self.config)
+            try:
+                logged = {int(r["epoch"]): r for r in read_metrics(path) if "epoch" in r}
+            except (OSError, ValueError):
+                logged = {}
+            rows = [{**r, **logged.get(int(r["epoch"]), {})} for r in rows]
+        return rows
+
+    def curves_figure(self):
+        """The training dashboard as a plain figure (for a static cell output after training)."""
+        from neural_trade.visualization.training_dashboard import training_dashboard_figure
+
+        return training_dashboard_figure(self.epoch_rows(), self._config_for_display())
+
+    def health_html(self) -> str:
+        """The training-health tiles (convergence, patience, collapse, gradients ...) as HTML."""
+        from neural_trade.visualization.training_dashboard import training_health_html
+
+        return training_health_html(self.epoch_rows(), self._config_for_display())
+
+    def _config_for_display(self):
+        cfg = self.config.copy() if hasattr(self.config, "copy") else self.config
+        if hasattr(cfg, "override"):
+            cfg.override(EPOCHS=self.epochs)
+        return cfg
 
     def history_frame(self):
         """One row per epoch with the headline train/val metrics."""
@@ -207,12 +243,14 @@ class TrainingSession:
         status = w.HTML()
         epochs = w.IntProgress(min=0, max=self.epochs, description="Epochs", layout=w.Layout(width="45%"))
         batches = w.IntProgress(min=0, max=1, description="Batch", layout=w.Layout(width="45%"))
+        batch_curve = w.Output(layout=w.Layout(min_height="240px"))
         curves = w.Output(layout=w.Layout(min_height="420px"))
         table = w.HTML()
         log = w.Output(layout=w.Layout(max_height="220px", overflow="auto", border="1px solid #8884"))
-        box = w.VBox([w.HBox([pause, resume, stop, status]), w.HBox([epochs, batches]), curves, table,
+        box = w.VBox([w.HBox([pause, resume, stop, status]), w.HBox([epochs, batches]), table, batch_curve, curves,
                       w.Accordion(children=[log], titles=("Log",))])
-        self._w = dict(box=box, status=status, epochs=epochs, batches=batches, curves=curves, table=table, log=log)
+        self._w = dict(box=box, status=status, epochs=epochs, batches=batches, curves=curves, table=table, log=log,
+                       batch_curve=batch_curve, last_batch_draw=0.0)
         self._set_status(self.status)
         return box
 
@@ -237,16 +275,20 @@ class TrainingSession:
     def _redraw(self):
         if self._w is None or not self.history:
             return
-        from neural_trade.visualization.plotly_training import plotly_interactive
-
         self._w["epochs"].value = min(len(self.history), self.epochs)
-        fig = plotly_interactive(self.history, self.config)
-        out = self._w["curves"]
-        show(out, fig)   # state update: never published to the executing cell (see notebook._display)
-        last = self.history[-1]
-        keys = [("loss", "train loss"), ("val_loss", "val loss"), ("val_dir_mcc_h1", "val MCC h1"),
-                ("val_gauss_dir_mcc_h1", "val Gauss MCC h1"), ("val_pit_ks_h1", "val PIT-KS h1"),
-                ("val_crps_loss", "val CRPS"), ("seconds", "epoch s")]
-        cells = "".join(f"<td style='padding:2px 10px'>{label}<br><b>{last[k]:.4f}</b></td>"
-                        for k, label in keys if k in last)
-        self._w["table"].value = f"<table><tr><td>epoch {int(last['epoch']) + 1}</td>{cells}</tr></table>"
+        # state updates: never published to the executing cell (see notebook._display)
+        show(self._w["curves"], self.curves_figure())
+        self._w["table"].value = self.health_html()
+        self._redraw_batches(force=True)
+
+    def _redraw_batches(self, force: bool = False):
+        """The batch-by-batch loss strip; at most every 2 s so drawing never slows training."""
+        if self._w is None or not self.batch_points:
+            return
+        now = time.time()
+        if not force and now - self._w["last_batch_draw"] < 2.0:
+            return
+        from neural_trade.visualization.training_dashboard import batch_loss_figure
+
+        self._w["last_batch_draw"] = now
+        show(self._w["batch_curve"], batch_loss_figure(self.batch_points, self.val_points))

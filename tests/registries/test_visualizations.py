@@ -22,7 +22,7 @@ def test_training_curves_from_a_history_dict_and_from_jsonl_rows():
     pytest.importorskip("plotly")
     fig = Visualizations.build("plotly_interactive", _history(), Config())
     names = {t.name for t in fig.data}
-    assert {"loss", "val_loss"} <= names
+    assert {"train", "validation"} <= names          # the total-loss panel of the training dashboard
     rows = [{k: v[i] for k, v in _history().items()} for i in range(4)]
     assert len(Visualizations.build(None, rows, Config()).data) >= 2
 
@@ -31,7 +31,7 @@ def test_indicator_evolution_and_qbox_html():
     pytest.importorskip("plotly")
     df = pd.DataFrame({"epoch": [0, 1], "ma_period_0": [5.0, 5.2], "change_ma_period_0": [None, 4.0]})
     fig = Visualizations.build("indicator_evolution", df, Config())
-    assert [t.name for t in fig.data] == ["ma_period_0"]
+    assert "ma_period_0" in {t.name for t in fig.data}
     html = Visualizations.build("qbox_dashboard_html", {"hd_loss": 0.5, "val_hd_loss": 0.4}, Config())
     assert "Hyper-Dec" in html
     assert Visualizations.build("qbox_dashboard_html", {"hd_loss": 0.0}, Config()) == ""

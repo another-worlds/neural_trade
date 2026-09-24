@@ -6,7 +6,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-BLOCK_COLORS = {"train": "#1d4ed8", "val": "#b45309", "cal": "#7c3aed", "test": "#15803d"}
+from neural_trade.visualization.theme import apply
+
+BLOCK_COLORS = {"train": "#3987e5", "val": "#c98500", "cal": "#7c3aed", "test": "#0ca30c"}
 
 
 def split_table(blocks, config) -> pd.DataFrame:
@@ -47,7 +49,7 @@ def split_overview_figure(blocks, config, *, title: Optional[str] = None, max_po
     fig.update_layout(title=title or f"Purged split, fold {getattr(fold, 'fold', '?')} "
                                      f"(gap {getattr(fold, 'gap', '?')} sequences between blocks)",
                       height=380, yaxis_title="close", showlegend=False)
-    return fig
+    return apply(fig)
 
 
 # ------------------------------------------------------------------ registry entry (data, config)

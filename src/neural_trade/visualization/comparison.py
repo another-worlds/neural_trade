@@ -5,7 +5,9 @@ from typing import Optional, Sequence
 
 import numpy as np
 
-VERDICT_COLORS = {"VALUE": "#15803d", "HARMFUL": "#b91c1c", "NEUTRAL": "#6b7280", "INCONCLUSIVE": "#b45309"}
+from neural_trade.visualization.theme import apply
+
+VERDICT_COLORS = {"VALUE": "#0ca30c", "HARMFUL": "#d03b3b", "NEUTRAL": "#898781", "INCONCLUSIVE": "#c98500"}
 
 
 def runs_comparison_figure(df, metrics: Optional[Sequence[str]] = None, *, title: Optional[str] = None):
@@ -23,7 +25,7 @@ def runs_comparison_figure(df, metrics: Optional[Sequence[str]] = None, *, title
                              hovertext=list(df.index)), row=k // cols + 1, col=k % cols + 1)
     fig.update_layout(title=title or f"{len(df)} runs", height=300 * rows)
     fig.update_xaxes(tickangle=-40, tickfont=dict(size=9))
-    return fig
+    return apply(fig)
 
 
 def ablation_deltas_figure(analysis, *, title: Optional[str] = None):
@@ -46,10 +48,10 @@ def ablation_deltas_figure(analysis, *, title: Optional[str] = None):
             fig.add_trace(go.Bar(y=[r[0] for r in sel], x=[r[1] for r in sel], orientation="h", name=verdict,
                                  marker_color=color,
                                  error_x=dict(type="data", array=[r[2] if r[2] == r[2] else 0 for r in sel])))
-    fig.add_vline(x=0, line_color="#9ca3af")
+    fig.add_vline(x=0, line_color="#9a9890")
     fig.update_layout(title=title or "Ablation: paired deltas (positive = the term helps)", barmode="overlay",
                       height=max(360, 22 * len(rows)), xaxis_title="mean delta over (seed, period) pairs")
-    return fig
+    return apply(fig)
 
 
 # ------------------------------------------------------------------ registry entries (data, config)

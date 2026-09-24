@@ -137,7 +137,8 @@ def test_backtest_explorer_runs_every_strategy_from_the_widget(session_run):
         ex.click_run()
         assert ex.last is not None and ex.last.strategy == name, ex._w["status"].value
     table = ex.summary_frame()
-    assert {"buy_and_hold", "always_flat", "random_same_freq"} <= set(table.index)
+    assert {"buy_and_hold", "always_flat"} <= set(table.index)
+    assert any(i.startswith("random same freq") for i in table.index)
     res = ex.run("calibrated_quantile", {"entry_quantile": 0.8}, {"fee_bps": 0.0, "random_seeds": 0})
     assert res.config.fee_bps == 0.0 and box is ex.widget()
 
@@ -186,7 +187,8 @@ def test_show_puts_figures_and_tables_into_the_widget_itself():
     out = w.Output()
     show(out, go.Figure(go.Scatter(y=[1, 2, 3]), layout_title_text="curves"))
     (o,) = out.outputs
-    assert "application/vnd.plotly.v1+json" in o["data"] and "text/html" in o["data"]
+    assert "application/vnd.plotly.v1+json" in o["data"]
+    assert "text/html" not in o["data"]                      # the figure is stored once, not twice
     show(out, pd.DataFrame({"a": [1]}))                      # replaces, never appends
     (o,) = out.outputs
     assert "<table" in o["data"]["text/html"]
