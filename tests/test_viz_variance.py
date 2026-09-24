@@ -1,7 +1,9 @@
 """Variance-head analytics: the numbers, the noise bands, the baseline and the encoding."""
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -272,17 +274,163 @@ def test_overall_coverage_and_width_are_stated_and_width_is_drawn(market, plain_
 
 
 # ------------------------------------------------------------------ findings 109 / 110: encoding
-def test_no_misleading_mean_abs_error_line_and_dotted_only_for_references(raw_fig):
-    fig = raw_fig
-    assert not any((t.name or "").startswith("mean |error|") for t in fig.data)
+def test_no_misleading_mean_abs_error_line_and_no_dotted_lines(raw_fig, plain_fig):
+    """This figure has no training series, so no trace or key may be dotted (dotted means training
+    in this package, final review finding 6)."""
     horizon_colors = set(T.HORIZON_COLORS.values())
-    for t in fig.data:
-        if getattr(getattr(t, "line", None), "dash", None) == "dot":
-            assert t.line.color == T.NEUTRAL, t.name          # dotted = a grey reference, never a series
-        if not _has_data(t):                                  # legend keys show the style in neutral ink
-            assert not _colors(t) & horizon_colors, t.name
-        else:                                                 # a horizon colour only in its own column
-            assert _colors(t) & horizon_colors <= {T.HORIZON_COLORS[H[_row_col(t)[1] - 1]]}, t.name
+    for fig in (raw_fig, plain_fig):
+        assert not any((t.name or "").startswith("mean |error|") for t in fig.data)
+        for t in fig.data:
+            assert getattr(getattr(t, "line", None), "dash", None) != T.TRAIN_DASH, t.name
+            if not _has_data(t):                              # legend keys show the style in neutral ink
+                assert not _colors(t) & horizon_colors, t.name
+            else:                                             # a horizon colour only in its own column
+                assert _colors(t) & horizon_colors <= {T.HORIZON_COLORS[H[_row_col(t)[1] - 1]]}, t.name
+        assert not [s for s in fig.layout.shapes if s.line is not None and s.line.dash == T.TRAIN_DASH]
+
+
+def test_reference_lines_use_the_package_patterns_and_their_keys_match(raw_fig):
+    """Final review finding 6: the diagonal uses analytics_delta's y = x pattern, ratio 1 and the 90%
+    target use calibration_plots' reference pattern (the calibration explorer draws the same 90%
+    target), and the uniform PIT density is a solid grey line apart from the dashed noise-range edges.
+    Each key shows the drawn style."""
+    from neural_trade.visualization import analytics_delta as AD
+    from neural_trade.visualization import analytics_variance as AV
+    from neural_trade.visualization import calibration_plots as CP
+
+    assert AV.DIAG_DASH == AD.DIAG_DASH and AV.REF_DASH == CP.REF_DASH
+    fig = raw_fig
+    expected = {"diag": (1, AV.DIAG_DASH), "uniform": (2, None), "gauss1": (3, AV.REF_DASH),
+                "target": (4, AV.REF_DASH)}
+    for group, (row, dash) in expected.items():
+        drawn = [t for t in fig.data if t.legendgroup == group and _has_data(t)]
+        keys = [t for t in fig.data if t.legendgroup == group and not _has_data(t)]
+        assert sorted(_row_col(t) for t in drawn) == [(row, c) for c in (1, 2, 3)], group
+        assert len(keys) == 1, group
+        for t in drawn + keys:
+            assert t.line.color == T.NEUTRAL and t.line.width == 1, (group, t.name)
+            assert (t.line.dash or "solid") == (dash or "solid"), (group, t.name, t.line.dash)
+    band = next(t for t in fig.data if t.legendgroup == "pit-band" and _has_data(t))
+    uniform = next(t for t in fig.data if t.legendgroup == "uniform" and _has_data(t))
+    assert (uniform.line.dash or "solid") != band.line.dash          # the uniform line reads apart from the edges
+
+
+# ------------------------------------------------------------------ beta = 0: the served delta is 0
+def _beta_frame(market, betas, *, split="test"):
+    """The market block served with delta shrinkage ``betas`` (a horizon at 0 serves a delta of 0)."""
+    b = np.array([betas[h] for h in H], float)
+    fr = _frame(market["y"], market["delta"] * b, market["sigma"], intervals=market["intervals"],
+                X_raw=market["windows"], split=split)
+    fr.meta["delta_scale"] = dict(betas)
+    return fr
+
+
+def _sub_lines(fig):
+    return _plain(fig.layout.title.text.replace("<br>", "\n")).split("\n")[1:]
+
+
+def test_beta_zero_is_stated_in_the_subtitle_and_errors_are_y(market, raw_heads, plain_fig):
+    """The real run of the final review: shrinkage set beta = 0 on every horizon, so the served delta
+    is 0 and the error around it is y itself. The subtitle says so (the numbers are still measured:
+    std z = std(y / sigma)); the layout keeps its fixed row gaps with the extra line."""
+    from neural_trade.visualization import analytics_variance as AV
+
+    fig = _fig(_beta_frame(market, {h: 0.0 for h in H}), raw_delta=raw_heads)
+    note = [s for s in _sub_lines(fig) if s.startswith("β = 0")]
+    assert note == ["β = 0 on every horizon (delta shrinkage): the served delta is 0, so error = y · "
+                    "row 1 adds the raw heads"]
+    assert all(len(s) <= 110 for s in _sub_lines(fig))
+    for j in (1, 2, 3):
+        z = market["y"][:, j - 1] / market["sigma"][:, j - 1]
+        assert f"std z {z.std():.2f}" in _title(fig, 2, j)
+    assert fig.layout.margin.t == plain_fig.layout.margin.t + AV._SUB_LINE_PX
+    assert fig.layout.height == plain_fig.layout.height + AV._SUB_LINE_PX
+    plot_h = fig.layout.height - fig.layout.margin.t - fig.layout.margin.b
+    for r, lid in enumerate(("legend", "legend2", "legend3", "legend4"), start=1):
+        top = fig.layout[f"yaxis{'' if r == 1 else (r - 1) * 3 + 1}"].domain[1]
+        assert (fig.layout[lid].y - top) * plot_h == pytest.approx(AV._TITLES_PX + 2, abs=0.01)
+    # without raw heads the note stays, without the row-1 pointer; on the cal block it joins that line
+    bare = _fig(_beta_frame(market, {h: 0.0 for h in H}, split="cal"))
+    lines = _sub_lines(bare)
+    assert "β = 0 on every horizon (delta shrinkage): the served delta is 0, so error = y" in lines
+    assert any("by construction" in s for s in lines) and len(lines) == 6
+
+
+def test_beta_zero_note_names_only_the_zero_horizons_and_needs_evidence(market, raw_heads, plain_fig):
+    """Beta > 0 (the previous run: h0 0.21, h1 0.023, h2 0.25) gives no note; a zero on one horizon
+    names it; a frame without shrinkage metadata gets the note only when its served delta is 0 while
+    the raw heads given are not (a delta that is 0 for another reason is not called beta = 0)."""
+    pos = _fig(_beta_frame(market, {"h0": 0.21, "h1": 0.023, "h2": 0.25}), raw_delta=raw_heads)
+    assert not [s for s in _sub_lines(pos) if "β = 0" in s]
+    assert not [s for s in _sub_lines(plain_fig) if "β = 0" in s]
+    one = _fig(_beta_frame(market, {"h0": 0.21, "h1": 0.0, "h2": 0.25}), raw_delta=raw_heads)
+    assert [s for s in _sub_lines(one) if s.startswith("β = 0")] == [
+        "β = 0 on h1 (delta shrinkage): the served delta is 0 there, so error = y · row 1 adds the raw heads"]
+    zero = _frame(market["y"], np.zeros_like(market["y"]), market["sigma"], X_raw=market["windows"])
+    assert not zero.meta                                            # no shrinkage metadata
+    assert [s for s in _sub_lines(_fig(zero, raw_delta=raw_heads)) if s.startswith("β = 0 on every horizon")]
+    assert not [s for s in _sub_lines(_fig(zero)) if "β = 0" in s]  # no raw heads: no evidence of shrinkage
+
+
+# ------------------------------------------------------------------ the committed notebook outputs
+NB_DIR = Path(__file__).resolve().parent.parent / "notebooks"
+_PLOTLY = "application/vnd.plotly.v1+json"
+
+
+def _output_text(o):
+    """Every text an output shows (stream text, Markdown, plain text, HTML), as one string."""
+    parts = [o.get("text", "")] + [v for k, v in o.get("data", {}).items() if k.startswith("text/")]
+    return "".join("".join(p) if isinstance(p, list) else str(p) for p in parts)
+
+
+def _saved_variance_cells():
+    """(notebook, cell index, saved variance figures, the notebook's saved output text) for every code
+    cell that builds the variance figure and was saved with outputs."""
+    out = []
+    for path in sorted(NB_DIR.glob("*.ipynb")):
+        cells = json.loads(path.read_text(encoding="utf-8"))["cells"]
+        text = "\n".join(_output_text(o) for c in cells for o in c.get("outputs", []))
+        for i, c in enumerate(cells):
+            if c["cell_type"] == "code" and '"variance_analytics"' in "".join(c["source"]) and c.get("outputs"):
+                figs = [o["data"][_PLOTLY] for o in c["outputs"] if _PLOTLY in o.get("data", {})
+                        and o["data"][_PLOTLY]["layout"]["title"]["text"].startswith("<b>Variance heads</b>")]
+                out.append((path.name, i, figs, text))
+    return out
+
+
+def test_saved_notebook_outputs_carry_the_current_encoding():
+    """The notebooks are committed with the outputs of their last real run and are read without a
+    kernel, so a saved variance figure must look like one the module draws now: no dotted line, the
+    reference patterns of finding 6, and, when the notebook's own saved evaluation report says beta = 0,
+    the subtitle's beta = 0 line naming the same horizons. Notebooks 01 (cell 17) and 04 (cell 8) were
+    saved with dotted references and without that line before the fix."""
+    from neural_trade.visualization import analytics_variance as AV
+
+    cells = _saved_variance_cells()
+    if not cells:
+        pytest.skip("no notebook was saved with a variance figure")
+    expected = {"diag": AV.DIAG_DASH, "uniform": None, "gauss1": AV.REF_DASH, "target": AV.REF_DASH}
+    for nb, i, figs, text in cells:
+        where = f"{nb} cell {i}"
+        assert len(figs) == 1, where
+        fig = figs[0]
+        groups = set()
+        for t in fig["data"]:
+            dash = (t.get("line") or {}).get("dash")
+            assert dash != T.TRAIN_DASH, (where, t.get("name"))
+            if t.get("legendgroup") in expected:
+                groups.add(t["legendgroup"])
+                assert (dash or "solid") == (expected[t["legendgroup"]] or "solid"), (where, t.get("name"), dash)
+        assert groups == set(expected), where
+        assert not [s for s in fig["layout"].get("shapes", []) if (s.get("line") or {}).get("dash") == T.TRAIN_DASH]
+        m = re.search(r"beta = 0 for ((?:h\d, )*h\d): the served delta is 0 there", text)
+        subtitle = fig["layout"]["title"]["text"]
+        if m is None:
+            assert "β = 0" not in subtitle, where
+        else:
+            zero = m.group(1).split(", ")
+            named = "every horizon" if len(zero) == len(H) else ", ".join(zero)
+            assert f"β = 0 on {named} (delta shrinkage): the served delta is 0" in subtitle, where
 
 
 # ------------------------------------------------------------------ finding 111: axes

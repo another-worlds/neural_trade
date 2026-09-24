@@ -20,7 +20,11 @@ One column per horizon, five rows:
 
 Errors are measured around the SERVED delta (``frame.delta``: beta x raw head), as ``eval_report``
 does, so the numbers match the report. The variance head was trained on the raw head's errors; pass
-``raw_delta`` to add that view to row 1.
+``raw_delta`` to add that view to row 1. When delta shrinkage set beta = 0 (``frame.meta['delta_scale']``)
+the served delta is 0, so the error is y itself; the subtitle says so for those horizons.
+
+Encoding: grey reference lines use explicit dash patterns (:data:`DIAG_DASH`, :data:`REF_DASH`) or are
+solid (the uniform PIT density); none is dotted, because dotted means training in this package.
 
 Uncertainty: consecutive 1-minute samples have overlapping targets (a horizon of h bars shares h - 1
 bars with its neighbour), so nothing here treats the N samples as independent.
@@ -60,6 +64,10 @@ MAX_LINE_POINTS = 1500               # rolling lines are thinned to at most this
 
 _BAND = T.rgba(T.NEUTRAL, 0.28)      # "range expected from noise" fill (row 4, drawn below the lines)
 _BAND_EDGE_DASH = "dash"             # row 2: the noise range as two thin grey edges over the bars
+# Grey reference lines use explicit dash patterns, never dotted: dotted (T.TRAIN_DASH) means training
+# in this package. Row 2's uniform density is a solid 1-px grey line, apart from the dashed band edges.
+REF_DASH = "5px,4px"                 # rows 3-4: ratio 1 and the 90% target (= calibration_plots.REF_DASH)
+DIAG_DASH = "6px,3px"                # row 1: the diagonal RMS = sigma (= analytics_delta.DIAG_DASH, y = x)
 _LOG_TICKS = (0.1, 0.25, 0.5, 0.75, 1, 2, 5, 10, 20, 50, 100)
 _ROWS = 5
 
@@ -240,6 +248,24 @@ def variance_summary(frame, *, raw_delta: Optional[Dict[str, np.ndarray]] = None
     return out
 
 
+def _zero_beta_horizons(frame, raw_delta=None) -> list:
+    """Horizons whose served delta is 0 because delta shrinkage set beta = 0.
+
+    From ``frame.meta['delta_scale']`` when the frame carries it; otherwise a horizon counts only when
+    its served delta is 0 on every sample while the raw head given in ``raw_delta`` is not."""
+    betas = (getattr(frame, "meta", None) or {}).get("delta_scale") or {}
+    out = []
+    for h in T.HORIZONS:
+        if h in betas:
+            if betas[h] is not None and float(betas[h]) == 0.0:
+                out.append(h)
+        elif raw_delta is not None and h in raw_delta and h in frame.delta:
+            served, raw = np.asarray(frame.delta[h], float), np.asarray(raw_delta[h], float)
+            if len(served) and not np.any(served) and np.any(raw[np.isfinite(raw)]):
+                out.append(h)
+    return out
+
+
 # ------------------------------------------------------------------ drawing helpers
 def _thin_line(x, y):
     """x0 / dx / float32 y of an evenly spaced series, keeping at most MAX_LINE_POINTS points."""
@@ -372,6 +398,12 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
     if frame.split == "cal":
         sub_lines.insert(1, "conformal coverage is 90% by construction on this block (the conformal scale "
                             "was fitted on it)")
+    zero = _zero_beta_horizons(frame, raw_delta)
+    if zero:
+        where = "every horizon" if len(zero) == len(T.HORIZONS) else ", ".join(zero)
+        sub_lines.insert(1, f"β = 0 on {where} (delta shrinkage): the served delta is 0"
+                            f"{'' if len(zero) == len(T.HORIZONS) else ' there'}, so error = y"
+                            + (" · row 1 adds the raw heads" if raw_delta is not None else ""))
 
     # ---- vertical layout in pixels: the gap between rows is fixed, whatever the height
     margin_t = _TITLE_PX + _SUB_LINE_PX * len(sub_lines) + _HEAD_PX + _TITLES_PX + 8
@@ -430,7 +462,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
         hi_x = float(max(a.max() for a in xs))
         fig.add_trace(go.Scatter(x=[lo_x, hi_x], y=[lo_x, hi_x], mode="lines", name="calibrated: RMS error = σ",
                                  legendgroup="diag", showlegend=False,
-                                 line=dict(color=T.NEUTRAL, dash="dot", width=1), hoverinfo="skip"), 1, j)
+                                 line=dict(color=T.NEUTRAL, dash=DIAG_DASH, width=1), hoverinfo="skip"), 1, j)
 
         # 2: PIT, pre-binned, with the range a calibrated sigma shows from noise as two thin grey edges
         # over the bars (a filled band over opaque bars would tint them two-tone)
@@ -447,7 +479,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
                              hovertemplate="PIT %{customdata[0]:.2f} to %{customdata[1]:.2f}<br>density %{y:.2f}"
                                            "<br>n %{customdata[2]:,.0f}<extra></extra>"), 2, j)
         fig.add_trace(go.Scatter(x=[0, 1], y=[1, 1], mode="lines", name="uniform", legendgroup="uniform",
-                                 showlegend=False, line=dict(color=T.NEUTRAL, dash="dot", width=1),
+                                 showlegend=False, line=dict(color=T.NEUTRAL, width=1),
                                  hovertemplate="uniform density 1<extra></extra>"), 2, j)
         fig.add_trace(go.Scatter(
             x=[0, 1, None, 0, 1], y=[max(0.0, 1 - hw), max(0.0, 1 - hw), None, 1 + hw, 1 + hw], mode="lines",
@@ -476,7 +508,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
         tail_hi += [float(v) for v in (whi / p0) if v > 0]
         fig.add_trace(go.Scatter(x=[float(K_GRID[0]), float(K_GRID[-1])], y=[1, 1], mode="lines",
                                  name="Gaussian rate (ratio 1)", legendgroup="gauss1", showlegend=False,
-                                 line=dict(color=T.NEUTRAL, dash="dot", width=1), hoverinfo="skip"), 3, j)
+                                 line=dict(color=T.NEUTRAL, dash=REF_DASH, width=1), hoverinfo="skip"), 3, j)
         if "cov_conf" in r:
             miss = 1 - r["cov_conf"]
             tail_lo.append(miss / 0.10)
@@ -499,7 +531,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
         fig.add_hrect(y0=0.9 - hw_c, y1=min(1.0, 0.9 + hw_c), fillcolor=_BAND, line_width=0, layer="below",
                       exclude_empty_subplots=False, row=4, col=j)
         fig.add_trace(go.Scatter(x=[w - 1, n - 1], y=[0.9, 0.9], mode="lines", name="90% target", legendgroup="target",
-                                 showlegend=False, line=dict(color=T.NEUTRAL, dash="dot", width=1),
+                                 showlegend=False, line=dict(color=T.NEUTRAL, dash=REF_DASH, width=1),
                                  hovertemplate=f"90% target; noise range ±{hw_c:.3f} (overlap factor {vif_c:.1f}). "
                                                "Pointwise 95%: over a long block the<br>trailing line leaves "
                                                "it now and then by chance alone<extra></extra>"), 4, j)
@@ -567,25 +599,25 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
     if raw_delta is not None:
         _key(fig, 1, "legend", "RMS around raw head (training target)", "raw", mode="lines+markers",
              line=dict(color=ink, width=1.5, dash=T.ALT_DASH), marker=dict(size=7, symbol="diamond-open", color=ink))
-    _key(fig, 1, "legend", "calibrated: RMS = σ", "diag", line=dict(color=T.NEUTRAL, dash="dot", width=1))
+    _key(fig, 1, "legend", "calibrated: RMS = σ", "diag", line=dict(color=T.NEUTRAL, dash=DIAG_DASH, width=1))
     _key(fig, 2, "legend2", "PIT density (20 bins)", "pit", mode="markers",
          marker=dict(symbol="square", size=11, color=ink))
     _key(fig, 2, "legend2", "noise range if calibrated (95% per bin)", "pit-band",
          line=dict(color=T.NEUTRAL, dash=_BAND_EDGE_DASH, width=1))
-    _key(fig, 2, "legend2", "uniform", "uniform", line=dict(color=T.NEUTRAL, dash="dot", width=1))
+    _key(fig, 2, "legend2", "uniform", "uniform", line=dict(color=T.NEUTRAL, width=1))
     _key(fig, 3, "legend3", "observed ÷ Gaussian, 95% CI", "tail", mode="lines+markers",
          line=dict(color=ink, width=2), marker=dict(size=6, color=ink))
     if has_iv:
         _key(fig, 3, "legend3", "conformal 90% interval: miss rate ÷ 10%", "conf", mode="markers",
              marker=dict(size=10, symbol="diamond", color=ink))
-    _key(fig, 3, "legend3", "Gaussian rate (ratio 1)", "gauss1", line=dict(color=T.NEUTRAL, dash="dot", width=1))
+    _key(fig, 3, "legend3", "Gaussian rate (ratio 1)", "gauss1", line=dict(color=T.NEUTRAL, dash=REF_DASH, width=1))
     if has_iv:
         _key(fig, 4, "legend4", "conformal interval", "conf-cov", line=dict(color=ink, width=1.5))
     _key(fig, 4, "legend4", "Gaussian ±1.645σ around served delta", "gauss-cov",
          line=dict(color=ink, width=1.5, dash=T.ALT_DASH))
     _key(fig, 4, "legend4", "noise range (pointwise 95%)", "cov-band", mode="markers",
          marker=dict(symbol="square", size=11, color=_BAND))
-    _key(fig, 4, "legend4", "90% target", "target", line=dict(color=T.NEUTRAL, dash="dot", width=1))
+    _key(fig, 4, "legend4", "90% target", "target", line=dict(color=T.NEUTRAL, dash=REF_DASH, width=1))
     # every trace joins its row's legend, so a key toggles that series in all three columns (row 5
     # shares row 4's keys)
     for tr in fig.data:
