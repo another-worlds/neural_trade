@@ -79,8 +79,11 @@ class Predictor:
 
     # ------------------------------------------------------------------ core
     def predict(self, windows, last_close: Optional[np.ndarray] = None, alpha: float = 0.1,
-                batch_size: Optional[int] = None) -> PredictionBatch:
-        """Forecast from raw close windows ``[N, LOOKBACK]`` (the last column is the last close)."""
+                batch_size: Optional[int] = None, calibrated: bool = True) -> PredictionBatch:
+        """Forecast from raw close windows ``[N, LOOKBACK]`` (the last column is the last close).
+
+        ``calibrated=False`` returns the raw heads (no temperature, delta shrinkage or intervals),
+        e.g. to refit the calibration pipeline."""
         import tensorflow as tf
 
         X = np.asarray(windows, dtype="float32")
@@ -98,7 +101,7 @@ class Predictor:
 
         calibrated = {h: preds["direction_prob"][h] for h in HORIZONS}
         intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
-        if self.bundle.calibration_pipeline is not None:
+        if calibrated and self.bundle.calibration_pipeline is not None:
             cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X)
             calibrated, intervals = cal["direction_prob"], cal["intervals"]
             preds = dict(preds, delta=cal["delta"])  # delta shrinkage (identity when not fitted)

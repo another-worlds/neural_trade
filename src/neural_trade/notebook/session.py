@@ -1,0 +1,236 @@
+"""TrainingSession: train in a background thread with Pause / Resume / Stop and live curves.
+
+Jupyter processes widget events (button clicks) only while no cell is executing, so a training
+loop that blocks its cell can never be paused or stopped from a button. The session runs
+``train_and_evaluate`` in a thread and returns control to the notebook at once; a Keras callback
+checks the pause/stop events after every batch and redraws the curves after every epoch.
+
+    session = TrainingSession(cfg, run_context=ctx, epochs=20)
+    display(session.widget())
+    session.start()
+    ...
+    result = session.wait()          # blocks until training (and evaluation) finished
+
+Stop ends training after the current batch; evaluation, calibration and the artifact bundle
+still run, so a stopped run is a complete, usable run.
+"""
+from __future__ import annotations
+
+import logging
+import threading
+import time
+from typing import Dict, List, Optional
+
+logger = logging.getLogger(__name__)
+
+_QUIET_CALLBACKS = ("tqdm_progress",)   # console progress bars would print into whichever cell is active
+
+
+class _ThreadLogHandler(logging.Handler):
+    """Routes one thread's log records to a widget; other threads are unaffected."""
+
+    def __init__(self, sink, thread_ident_getter):
+        super().__init__()
+        self._sink, self._ident = sink, thread_ident_getter
+        self.setFormatter(logging.Formatter("%(message)s"))
+
+    def emit(self, record):
+        if record.thread == self._ident():
+            try:
+                self._sink(self.format(record) + "\n")
+            except Exception:  # never let the UI break training
+                self.handleError(record)
+
+
+class _NotThreadFilter(logging.Filter):
+    def __init__(self, thread_ident_getter):
+        super().__init__()
+        self._ident = thread_ident_getter
+
+    def filter(self, record):
+        return record.thread != self._ident()
+
+
+class TrainingSession:
+    def __init__(self, config, *, run_context=None, epochs: Optional[int] = None, calibrate: bool = True,
+                 fit_calibration: bool = True, save_artifacts: bool = True, extra_callbacks=None,
+                 redraw_every_batches: int = 25):
+        self.config = config
+        self.run_context = run_context
+        self.epochs = int(epochs if epochs is not None else config.EPOCHS)
+        self.calibrate, self.fit_calibration, self.save_artifacts = calibrate, fit_calibration, save_artifacts
+        self.extra_callbacks = list(extra_callbacks or [])
+        self.redraw_every = max(1, int(redraw_every_batches))
+        self.history: List[Dict[str, float]] = []
+        self.status = "ready"
+        self.result = None
+        self.error: Optional[BaseException] = None
+        self._pause = threading.Event()
+        self._stop = threading.Event()
+        self._done = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._w = None
+
+    # ------------------------------------------------------------------ controls (safe to call from anywhere)
+    def pause(self):
+        if self.status == "training":
+            self._pause.set()
+            self._set_status("paused")
+
+    def resume(self):
+        if self._pause.is_set():
+            self._pause.clear()
+            self._set_status("training")
+
+    def stop(self):
+        self._stop.set()
+        self._pause.clear()
+        if self.status in ("training", "paused", "ready"):
+            self._set_status("stopping")
+
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    # ------------------------------------------------------------------ lifecycle
+    def start(self) -> "TrainingSession":
+        if self.running:
+            raise RuntimeError("this session is already training")
+        self._thread = threading.Thread(target=self._run, name="neural_trade-training", daemon=True)
+        self._thread.start()
+        return self
+
+    def wait(self, timeout: Optional[float] = None):
+        """Block until the run finished; returns the TrainResult (re-raises a training error)."""
+        self._done.wait(timeout)
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+    def _run(self):
+        from neural_trade.training.trainer import train_and_evaluate
+
+        pkg_logger = logging.getLogger("neural_trade")
+        ident = lambda: self._thread.ident if self._thread else None  # noqa: E731
+        handler = _ThreadLogHandler(self._log, ident)
+        quiet = _NotThreadFilter(ident)
+        pkg_logger.addHandler(handler)
+        for h in pkg_logger.handlers:
+            if h is not handler:
+                h.addFilter(quiet)
+        cfg = self.config
+        names = [c for c in (getattr(cfg, "CALLBACKS", None) or []) if c not in _QUIET_CALLBACKS]
+        try:
+            cfg = cfg.copy().override(CALLBACKS=names) if names != list(cfg.CALLBACKS) else cfg
+            if self.run_context is not None:
+                self.run_context.config.override(CALLBACKS=names)
+                cfg = self.run_context.config
+            self._set_status("training")
+            self.result = train_and_evaluate(
+                config=cfg, run_context=self.run_context, epochs=self.epochs, force=True,
+                calibrate=self.calibrate, fit_calibration=self.fit_calibration,
+                save_artifacts=self.save_artifacts, extra_callbacks=[self._callback()] + self.extra_callbacks)
+            self._set_status("stopped early - evaluated" if self._stop.is_set() else "finished")
+        except BaseException as exc:  # surfaced by wait()
+            self.error = exc
+            self._set_status(f"failed: {exc!r}"[:200])
+            logger.exception("training failed")
+        finally:
+            pkg_logger.removeHandler(handler)
+            for h in pkg_logger.handlers:
+                h.removeFilter(quiet)
+            self._done.set()
+            self._redraw()
+
+    # ------------------------------------------------------------------ the Keras hook
+    def _callback(self):
+        import tensorflow as tf
+
+        session = self
+
+        class _SessionCallback(tf.keras.callbacks.Callback):
+            def __init__(self):
+                super().__init__()
+                self._supports_tf_logs = True
+                self._t0 = time.time()
+
+            def on_epoch_begin(self, epoch, logs=None):
+                self._t0 = time.time()
+                session._progress(epoch, 0, (self.params or {}).get("steps"))
+
+            def on_train_batch_end(self, batch, logs=None):
+                while session._pause.is_set() and not session._stop.is_set():
+                    time.sleep(0.2)
+                if session._stop.is_set():
+                    self.model.stop_training = True
+                if batch % session.redraw_every == 0:
+                    session._progress(len(session.history), batch + 1, (self.params or {}).get("steps"))
+
+            def on_epoch_end(self, epoch, logs=None):
+                row = {"epoch": epoch, "seconds": time.time() - self._t0}
+                row.update({k: float(v) for k, v in (logs or {}).items()})
+                session.history.append(row)
+                session._redraw()
+
+        return _SessionCallback()
+
+    # ------------------------------------------------------------------ widgets
+    def widget(self):
+        """Buttons, status, progress, live curves and the log (build once, display anywhere)."""
+        import ipywidgets as w
+
+        if self._w is not None:
+            return self._w["box"]
+        pause = w.Button(description="Pause", icon="pause", layout=w.Layout(width="110px"))
+        resume = w.Button(description="Resume", icon="play", layout=w.Layout(width="110px"))
+        stop = w.Button(description="Stop", icon="stop", button_style="danger", layout=w.Layout(width="110px"))
+        pause.on_click(lambda _: self.pause())
+        resume.on_click(lambda _: self.resume())
+        stop.on_click(lambda _: self.stop())
+        status = w.HTML()
+        epochs = w.IntProgress(min=0, max=self.epochs, description="Epochs", layout=w.Layout(width="45%"))
+        batches = w.IntProgress(min=0, max=1, description="Batch", layout=w.Layout(width="45%"))
+        curves = w.Output(layout=w.Layout(min_height="420px"))
+        table = w.HTML()
+        log = w.Output(layout=w.Layout(max_height="220px", overflow="auto", border="1px solid #8884"))
+        box = w.VBox([w.HBox([pause, resume, stop, status]), w.HBox([epochs, batches]), curves, table,
+                      w.Accordion(children=[log], titles=("Log",))])
+        self._w = dict(box=box, status=status, epochs=epochs, batches=batches, curves=curves, table=table, log=log)
+        self._set_status(self.status)
+        return box
+
+    def _set_status(self, text):
+        self.status = text
+        if self._w is not None:
+            color = {"training": "#15803d", "paused": "#b45309", "stopping": "#b91c1c"}.get(text, "#6b7280")
+            self._w["status"].value = f"<b style='color:{color};margin-left:12px'>{text}</b>"
+
+    def _log(self, text):
+        if self._w is not None:
+            self._w["log"].append_stdout(text)
+
+    def _progress(self, epoch, batch, steps):
+        if self._w is None:
+            return
+        self._w["epochs"].value = min(epoch, self.epochs)
+        if steps:
+            self._w["batches"].max = int(steps)
+        self._w["batches"].value = int(batch)
+
+    def _redraw(self):
+        if self._w is None or not self.history:
+            return
+        from neural_trade.visualization.plotly_training import plotly_interactive
+
+        self._w["epochs"].value = min(len(self.history), self.epochs)
+        fig = plotly_interactive(self.history, self.config)
+        out = self._w["curves"]
+        out.clear_output(wait=True)
+        out.append_display_data(fig)   # thread-safe; `with out:` does not capture from a thread
+        last = self.history[-1]
+        keys = [("loss", "train loss"), ("val_loss", "val loss"), ("val_dir_mcc_h1", "val MCC h1"),
+                ("val_gauss_dir_mcc_h1", "val Gauss MCC h1"), ("val_pit_ks_h1", "val PIT-KS h1"),
+                ("val_crps_loss", "val CRPS"), ("seconds", "epoch s")]
+        cells = "".join(f"<td style='padding:2px 10px'>{label}<br><b>{last[k]:.4f}</b></td>"
+                        for k, label in keys if k in last)
+        self._w["table"].value = f"<table><tr><td>epoch {int(last['epoch']) + 1}</td>{cells}</tr></table>"

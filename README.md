@@ -125,6 +125,23 @@ signals = SignalFrame.build(test, var_scale_from(cal))     # confidence scale fr
 bt = backtest(signals, bars, build_strategy("liberal"))    # bars: Bars.from_frame(df, anchor rows)
 ```
 
+## Notebooks
+
+The notebooks in `notebooks/` contain no functions. The logic and widgets live in
+`neural_trade.notebook` and are tested headlessly.
+
+| Notebook | What you can do |
+|---|---|
+| `00_data_and_splits` | See the bars, the purged train / val / cal / test blocks of any walk-forward fold, and the label balance per block |
+| `01_train_and_monitor` | Train in the background with **Pause / Resume / Stop**, live curves and a log panel; then get the test report with baselines, evaluation figures and learned indicator periods |
+| `02_backtest` | Strategy dropdown, per-strategy settings and cost controls with a **Run** button; see equity and trades, the three baselines, and every strategy compared |
+| `03_signals_and_trades` | See the signal features the strategies use next to price and trades |
+| `04_diagnostics` | See learning dynamics and the direction heads' bias. The **calibration explorer** refits on the calibration block (interval scale, delta shrinkage, miscoverage) and shows test coverage, width, temperature, reliability diagram and coverage over time |
+| `05_compare_runs` | Compare scored runs side by side, and read the ablation verdicts with their paired deltas |
+
+The buttons work because training runs in a background thread: Jupyter processes widget
+clicks only while no cell is running.
+
 ## How it is evaluated
 
 - **Purged four-way split.** Train | val | cal | test in time order, with an 80-sequence gap

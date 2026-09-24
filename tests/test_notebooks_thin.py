@@ -17,9 +17,10 @@ def _code_cells(path):
     return nb, [("".join(c["source"]), c) for c in nb["cells"] if c["cell_type"] == "code"]
 
 
-def test_the_four_notebooks_exist_and_the_old_ones_are_gone():
-    assert [p.name for p in NOTEBOOKS] == ["01_train_and_monitor.ipynb", "02_backtest.ipynb",
-                                           "03_signals_and_trades.ipynb", "04_diagnostics.ipynb"]
+def test_the_six_notebooks_exist_and_the_old_ones_are_gone():
+    assert [p.name for p in NOTEBOOKS] == ["00_data_and_splits.ipynb", "01_train_and_monitor.ipynb",
+                                           "02_backtest.ipynb", "03_signals_and_trades.ipynb",
+                                           "04_diagnostics.ipynb", "05_compare_runs.ipynb"]
     for old in ("inference.ipynb", "trade.ipynb", "diagnostics.ipynb", "cfg.ipynb"):
         assert not (REPO / old).exists(), old
 
@@ -60,13 +61,17 @@ def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     synthetic_bars.to_csv(csv, index=False)
     runs = tmp_path / "runs"
     common = {"CSV_PATH": str(csv), "RUNS_DIR": str(runs)}
+    small = {"MAX_SEQUENCE_COUNT": 1500, "BATCH_SIZE": 32}
+    _run(NB_DIR / "00_data_and_splits.ipynb",
+         {"CSV_PATH": str(csv), "CONFIG_PATH": str(REPO / "configs" / "default.yaml"), "OVERRIDES": small}, tmp_path)
     _run(NB_DIR / "01_train_and_monitor.ipynb",
          {**common, "CONFIG_PATH": str(REPO / "configs" / "default.yaml"), "EPOCHS": 1,
           "CALIBRATE_LOSS_WEIGHTS": False,
-          "OVERRIDES": {"MAX_SEQUENCE_COUNT": 1500, "BATCH_SIZE": 32,
-                        "CALLBACKS": ["early_stopping", "model_checkpoint"]}}, tmp_path)
+          "OVERRIDES": {**small, "CALLBACKS": ["early_stopping", "model_checkpoint"]}}, tmp_path)
     (run_dir,) = [p for p in runs.iterdir() if (p / "artifacts").is_dir()]
     assert (run_dir / "eval_report_test.json").exists()
     _run(NB_DIR / "02_backtest.ipynb", {**common, "RANDOM_SEEDS": 3}, tmp_path)
     _run(NB_DIR / "03_signals_and_trades.ipynb", {**common, "WINDOW": 300}, tmp_path)
     _run(NB_DIR / "04_diagnostics.ipynb", common, tmp_path)
+    _run(NB_DIR / "05_compare_runs.ipynb", {"RUNS_GLOB": str(runs / "*"), "ABLATION_DIR": str(tmp_path / "none")},
+         tmp_path)

@@ -47,4 +47,17 @@ from neural_trade.visualization import plotly_trading as _tr  # noqa: E402
 
 Visualizations.register(name="plotly_trading", tags=["plotly", "backtest", "trading"],
                         dependencies=["plotly"])(_tr.plotly_trading)
+from neural_trade.visualization import calibration_plots as _cp  # noqa: E402
+from neural_trade.visualization import comparison as _cmp  # noqa: E402
+from neural_trade.visualization import data_overview as _do  # noqa: E402
+
+Visualizations.register(name="reliability", tags=["plotly", "calibration", "direction"],
+                        dependencies=["plotly"])(_cp.reliability)
+Visualizations.register(name="interval_coverage", tags=["plotly", "calibration", "intervals"],
+                        dependencies=["plotly"])(_cp.interval_coverage)
+Visualizations.register(name="runs_comparison", tags=["plotly", "experiments"], dependencies=["plotly"])(
+    _cmp.runs_comparison)
+Visualizations.register(name="ablation_deltas", tags=["plotly", "experiments", "ablation"],
+                        dependencies=["plotly"])(_cmp.ablation_deltas)
+Visualizations.register(name="split_overview", tags=["plotly", "data"], dependencies=["plotly"])(_do.split_overview)
 Visualizations._initialized = True
