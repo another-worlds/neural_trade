@@ -14,6 +14,8 @@ horizon:
                      mean_pred mean_true (dollars), share_pred_up share_true_up (share of deltas > 0)
     delta_raw        the same for the raw price heads, before the calibration's delta shrink (only
                      when evaluate() is given them: ``raw_delta=``, or ``frame.meta["delta_raw"]``)
+    gauss_direction_raw  the Gaussian readout of the raw price heads (with the served variance), when
+                     they are known: at beta = 0 the served readout is the constant 0.5
     variance         crps nll (dollars) pit_ks corr_var_err2_spearman coverage90 width90 crpss
     confidence_gap   accuracy(high confidence) - accuracy(low confidence) with a moving-block
                      bootstrap CI (block = 80 bars); WORKS only when the CI excludes 0 and
@@ -32,6 +34,14 @@ Across horizons (``coherence``):
     delta_dir_align_indep_h0/h1/h2, _all       the agreement two independent signs would show
     coherence_primary                          = delta_dir_align_h1 (kept for older readers)
     unanimity                                  all three P(up) on the same side of 0.5
+
+A shrink beta = 0 serves the constant 0: its correlation, sign share, magnitude ordering (1.0 by ties), sign
+agreement and Gaussian readout (the constant 0.5: AUC 0.5, Brier 0.25 by construction) are not statistics of a
+prediction. The JSON keeps the computed fallback values; the markdown prints ZERO_BETA_NA (GAUSS_CONST_NA) for
+them. A horizon counts as such when its recorded beta is 0, or when its served delta was 0 on every sample
+(``meta["served_delta_zero"]``, recorded by evaluate() also when no beta is known). Its price-head table shows
+the raw heads' correlations and signs whenever the raw heads are known (served = beta x raw has the same while
+beta > 0), and the direction table the raw heads' Gaussian readout where the served one is constant.
 
 Baselines (fit on train, see evaluation.baselines) are scored with the same code.
 ``beats_baseline`` records, per baseline and relevant metric, whether the model is better;
@@ -56,7 +66,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -66,7 +76,7 @@ from scipy.stats import spearmanr
 
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
 from neural_trade.metrics import numpy_metrics as npm
-from neural_trade.metrics.direction_labels import direction_labels_np
+from neural_trade.metrics.direction_labels import direction_labels_np, gaussian_up_prob_given_move_np
 
 # precision / recall / specificity / f1 are deliberately NOT here: a constant baseline (class_prior
 # calls one side only) has recall 0 or 1 and an undefined precision, so a "beats" on them is empty.
@@ -88,8 +98,19 @@ RESTATED_BASELINE_ROWS = {("zero_delta", "delta/ev"), ("zero_delta", "delta/corr
                           ("mean_delta", "delta/ev"), ("mean_delta", "delta/corr"),
                           ("mean_delta", "delta/skill_vs_zero")}
 BASELINE_ORDER = ("logreg_lags", "class_prior", "zero_delta", "mean_delta", "const_var")
-# a served-delta statistic where the calibration's shrink beta is 0 (the served delta is 0 on every sample)
-SERVED_ZERO_NA = "n/a (beta = 0: served delta is 0)"
+# A served delta of beta x raw with beta = 0 is the constant 0: it has no correlation, no sign and no magnitude
+# ordering (|0| <= |0| holds on every bar by ties). Statistics of it print this instead of the 0.0 / 1.0 fallback.
+ZERO_BETA_NA = "n/a (beta = 0: served delta is 0)"
+# The Gaussian readout P(up | the move leaves the deadband) of a delta of 0 is 0.5 on every bar: it calls up on no
+# bar and has AUC 0.5, Brier 0.25 and the constant-0.5 ECE by construction.
+GAUSS_CONST_NA = "n/a (beta = 0: readout is the constant 0.5)"
+SERVED_ZERO_NA = ZERO_BETA_NA          # alias: both names are imported
+# the same, for a served delta found 0 on every sample with no beta = 0 recorded
+ZERO_DELTA_NA = "n/a (served delta is 0)"
+GAUSS_ZERO_NA = "n/a (served delta is 0: readout is the constant 0.5)"
+MAG_CHECKS = (("abs(d h0) <= abs(d h1)", "mag_h0_le_h1", ("h0", "h1")),
+              ("abs(d h1) <= abs(d h2)", "mag_h1_le_h2", ("h1", "h2")),
+              ("full chain h0 <= h1 <= h2", "mag_order_full", HORIZONS))
 
 
 def _auc(labels, scores):
@@ -274,6 +295,8 @@ def score_frame(frame: PredictionFrame, deadband_bps: float, conf_threshold=None
         }
         if raw is not None:
             row["delta_raw"] = delta_block(yt, raw[h])
+            row["gauss_direction_raw"] = direction_block(lab, mask, gaussian_up_prob_given_move_np(
+                raw[h], frame.variance_scaled[h], frame.last_close, deadband_bps, frame.pred_scale))
         conf = np.abs(prob - 0.5)
         thr = (conf_threshold or {}).get(h, float(np.median(conf[mask]))) if mask.any() else 0.0
         correct = ((prob > 0.5) == (lab > 0.5)).astype(float)
@@ -513,6 +536,18 @@ class EvalReport:
             Path(path).write_text(text, encoding="utf-8")
         return text
 
+    @classmethod
+    def from_json(cls, source) -> "EvalReport":
+        """The report ``to_json`` wrote (a path to it, or its text), e.g. to re-render a saved run's markdown
+        with the current code: ``EvalReport.from_json(p).to_markdown(p.with_suffix(".md"))``. Keys this
+        version does not know are ignored."""
+        text = str(source)
+        if not text.lstrip().startswith("{"):
+            text = Path(source).read_text(encoding="utf-8")
+        data = json.loads(text)
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
     def margin(self, name: str, key: str, h: str) -> Dict[str, Any]:
         """Model value, baseline value, margin (> 0: the model is better) and noise test (dm_z or boot_z) for one cell."""
         got = ((self.baseline_margins.get(name) or {}).get(key) or {}).get(h)
@@ -562,6 +597,43 @@ class EvalReport:
         fmt = fmt or _fmt
         return lambda h: fmt(self._get(h, group, key))
 
+    def _beta_zero(self) -> list:
+        """Horizons whose recorded shrink beta is 0 (or below)."""
+        betas = self.meta.get("delta_scale") or {}
+        out = []
+        for h in HORIZONS:
+            try:
+                if betas.get(h) is not None and float(betas[h]) <= 0:
+                    out.append(h)
+            except (TypeError, ValueError):
+                continue
+        return out
+
+    def _zero_beta(self) -> list:
+        """Horizons whose served delta is the constant 0: a recorded shrink beta of 0 (or below), or a served
+        delta that evaluate() found 0 on every sample (``meta["served_delta_zero"]``: no beta recorded, e.g.
+        a frame without ``delta_scale`` and without the raw heads)."""
+        zero = set(self._beta_zero()) | set(self.meta.get("served_delta_zero") or ())
+        return [h for h in HORIZONS if h in zero]
+
+    def _zero_lead(self, zero) -> str:
+        """The opening of a note on the horizons ``zero`` whose served delta is 0."""
+        hs = ", ".join(zero)
+        if set(zero) <= set(self._beta_zero()):
+            return f"beta = 0 for {hs}: the served delta is 0 there"
+        return f"The served delta is 0 on every sample for {hs} (no beta = 0 recorded)"
+
+    def _na(self, zero, gauss: bool = False) -> str:
+        """The cell text for a served-delta statistic that the horizons ``zero`` (served delta 0) leave undefined:
+        ZERO_BETA_NA / GAUSS_CONST_NA when their beta = 0 is recorded, else ZERO_DELTA_NA / GAUSS_ZERO_NA."""
+        if set(zero) <= set(self._beta_zero()):
+            return GAUSS_CONST_NA if gauss else ZERO_BETA_NA
+        return GAUSS_ZERO_NA if gauss else ZERO_DELTA_NA
+
+    def _served_cell(self, key, zero_beta):
+        """A statistic of the served delta that a constant 0 does not have (a correlation, a sign share)."""
+        return lambda h: self._na([h]) if h in zero_beta else _fmt(self._get(h, "delta", key))
+
     def _md_direction(self, head):
         d, g = "direction", "gauss_direction"
 
@@ -591,48 +663,64 @@ class EvalReport:
                 ("MCC", self._cell(d, "mcc")), ("AUC", self._cell(d, "auc")), ("Brier", self._cell(d, "brier")),
                 ("ECE (positive class)", self._cell(d, "ece_pos")),
                 ("ECE of a constant 0.5 (= distance of the up-rate from 0.5)", const_ece),
-                ("TP / FP / TN / FN", counts),
-                ("Gaussian readout: calls up", self._cell(g, "pred_up_rate")),
-                ("Gaussian readout: MCC", self._cell(g, "mcc")), ("Gaussian readout: AUC", self._cell(g, "auc")),
-                ("Gaussian readout: Brier", self._cell(g, "brier")),
-                ("Gaussian readout: ECE", self._cell(g, "ece_pos"))]
-        return [f"## Direction heads: P(up) > 0.5 on moves beyond {self.deadband_bps:g} bps", "",
-                "Up is the positive class. Temperature scaling does not move P(up) across 0.5, so the "
-                "counts and rates are the same before and after calibration; Brier and ECE are not.", ""] \
+                ("TP / FP / TN / FN", counts)]
+        # a served delta of 0 has the constant readout 0.5: its rates are fixed by construction, not measured
+        zero = self._zero_beta()
+        gauss = [("calls up", "pred_up_rate"), ("MCC", "mcc"), ("AUC", "auc"), ("Brier", "brier"), ("ECE", "ece_pos")]
+        rows += [(f"Gaussian readout: {name}",
+                  lambda h, key=key: self._na([h], gauss=True) if h in zero else _fmt(self._get(h, g, key)))
+                 for name, key in gauss]
+        raw_gauss = bool(zero) and any(self._get(h, "gauss_direction_raw", "auc") is not None for h in HORIZONS)
+        rows += [(f"Gaussian readout of the raw heads: {name}", self._cell("gauss_direction_raw", key))
+                 for name, key in gauss] if raw_gauss else []
+        L = [f"## Direction heads: P(up) > 0.5 on moves beyond {self.deadband_bps:g} bps", "",
+             "Up is the positive class. Temperature scaling does not move P(up) across 0.5, so the "
+             "counts and rates are the same before and after calibration; Brier and ECE are not.", ""] \
             + self._table(head, rows)
+        if zero:
+            if raw_gauss:
+                how = ("The rows \"Gaussian readout of the raw heads\" score the raw price heads' readout (with the "
+                       "served variance).")
+            elif any(self._get(h, "delta_raw", "rmse") is not None for h in HORIZONS):
+                how = "This report predates the raw heads' readout: re-score it with evaluate() to show it."
+            else:
+                how = "Pass raw_delta to evaluate() to score the raw heads' readout."
+            L += [self._zero_lead(zero) + ", so its Gaussian readout P(up | the move leaves the deadband) is the "
+                  "constant 0.5: it calls up on no bar and has AUC 0.5 and Brier 0.25 by construction, so those "
+                  "cells are n/a. " + how, ""]
+        return L
 
     def _md_delta(self, head):
         has_raw = any(self.model["horizons"][h].get("delta_raw") for h in HORIZONS)
         betas = self.meta.get("delta_scale") or {}
         s, r = "delta", "delta_raw"
         sv = "served"  # the frame's deltas: PredictionFrame.from_result holds what the predictor serves
-        zero_beta = {h for h in HORIZONS if betas.get(h) is not None and float(betas[h]) <= 0}
-
-        def served(key):
-            """A served-delta statistic that is fixed by construction where beta = 0 (the served delta is
-            0 there: skill and EV 0, no correlation): n/a, not a measured 0.0000."""
-            cell = self._cell(s, key)
-            return lambda h: SERVED_ZERO_NA if h in zero_beta else cell(h)
-
         rows = [(f"RMSE ($), {sv}", self._cell(s, "rmse", _usd))]
         rows += [("RMSE ($), raw heads", self._cell(r, "rmse", _usd))] if has_raw else []
         rows += [("RMSE ($), zero prediction", self._cell(s, "rmse_zero", _usd)),
                  (f"MAE ($), {sv}", self._cell(s, "mae", _usd))]
         rows += [("MAE ($), raw heads", self._cell(r, "mae", _usd))] if has_raw else []
+        zero_beta = self._zero_beta()
+        # the served delta of a zero-beta horizon is the zero prediction: its skill vs zero and EV are 0 by
+        # construction (its RMSE / MAE are real: the zero prediction's)
         rows += [("MAE ($), zero prediction", self._cell(s, "mae_zero", _usd)),
-                 (f"skill vs zero (1 - MSE / MSE of 0), {sv}", served("skill_vs_zero"))]
+                 (f"skill vs zero (1 - MSE / MSE of 0), {sv}", self._served_cell("skill_vs_zero", zero_beta))]
         rows += [("skill vs zero, raw heads", self._cell(r, "skill_vs_zero"))] if has_raw else []
-        rows += [(f"EV, {sv}", served("ev"))]
+        rows += [(f"EV, {sv}", self._served_cell("ev", zero_beta))]
         rows += [("EV, raw heads", self._cell(r, "ev"))] if has_raw else []
-        # corr(beta x raw, y) = corr(raw, y) only while beta > 0: with the raw heads, print theirs
-        rows += ([("corr, Pearson, raw heads (the same for served while beta > 0)", self._cell(r, "corr")),
-                  ("corr, Spearman, raw heads", self._cell(r, "corr_spearman"))] if has_raw else
-                 [("corr, Pearson", served("corr")), ("corr, Spearman", served("corr_spearman"))])
+        # served = beta x raw: the same correlations and signs as the raw heads while beta > 0, none at beta = 0
+        # (a constant). So with the raw heads known, these rows are the raw heads'.
+        if has_raw:
+            rows += [("corr, Pearson, raw heads (the same for served while beta > 0)", self._cell(r, "corr")),
+                     ("corr, Spearman, raw heads", self._cell(r, "corr_spearman"))]
+        else:
+            rows += [("corr, Pearson", self._served_cell("corr", zero_beta)),
+                     ("corr, Spearman", self._served_cell("corr_spearman", zero_beta))]
         rows += [(f"mean predicted ($), {sv}", self._cell(s, "mean_pred", _usd))]
         rows += [("mean predicted ($), raw heads", self._cell(r, "mean_pred", _usd))] if has_raw else []
         rows += [("mean realised ($)", self._cell(s, "mean_true", _usd)),
-                 ("share predicted up" + (", raw heads" if has_raw else ""),
-                  self._cell(r if has_raw else s, "share_pred_up")),
+                 ("share predicted up, raw heads", self._cell(r, "share_pred_up")) if has_raw
+                 else (f"share predicted up, {sv}", self._served_cell("share_pred_up", zero_beta)),
                  ("share realised up", self._cell(s, "share_true_up"))]
         if betas:
             rows.append(("shrink beta (served = beta x raw, fit on cal)",
@@ -641,7 +729,16 @@ class EvalReport:
             "Scored on the deltas in the frame, as served: beta x the raw price head when the calibration fits a "
             "delta shrink, the raw head otherwise. The raw heads were not passed to evaluate() (raw_delta=), so "
             "their errors are not shown.", ""]
-        return ["## Price heads (dollars)", ""] + note + self._table(head, rows)
+        after = []
+        if has_raw:
+            after.append("Correlations and the share predicted up are the raw heads': the served delta, beta x raw, "
+                         "has the same while beta > 0.")
+        if zero_beta:
+            after.append(self._zero_lead(zero_beta) + ", the zero prediction (its errors are the zero "
+                         "prediction's, its skill vs zero and EV 0 by construction: n/a), so it has no correlation "
+                         "and no sign" + (" of its own." if has_raw else "; those cells are n/a. Pass raw_delta to "
+                                                                          "evaluate() for the raw heads."))
+        return ["## Price heads (dollars)", ""] + note + self._table(head, rows) + ([" ".join(after), ""] if after else [])
 
     def _md_variance(self, head):
         v = "variance"
@@ -664,30 +761,44 @@ class EvalReport:
              "asks. Magnitudes in random order would give 0.5, 0.5 and 0.1667.", "",
              "| check | " + " | ".join(cols) + " |", "|---|" + "---|" * len(cols)]
         realised = self.meta.get("realised_ordering") or [None, None, None]
-        for j, (label, key) in enumerate((("abs(d h0) <= abs(d h1)", "mag_h0_le_h1"),
-                                          ("abs(d h1) <= abs(d h2)", "mag_h1_le_h2"),
-                                          ("full chain h0 <= h1 <= h2", "mag_order_full"))):
-            vals = ([_fmt(c.get(f"{key}_raw"))] if has_raw else []) + [_fmt(c.get(key)), _fmt(realised[j])]
+        zero_beta = self._zero_beta()
+        for j, (label, key, involved) in enumerate(MAG_CHECKS):
+            # a zero-beta horizon's served delta is 0 on every bar: |0| <= |x| holds by ties, |x| <= |0| almost never
+            hit = [h for h in involved if h in zero_beta]
+            served = self._na(hit) if hit else _fmt(c.get(key))
+            vals = ([_fmt(c.get(f"{key}_raw"))] if has_raw else []) + [served, _fmt(realised[j])]
             L.append(f"| {label} | " + " | ".join(vals) + " |")
-        zero_beta = [h for h in HORIZONS if betas.get(h) is not None and float(betas[h]) <= 0]
         if zero_beta:
-            L += ["", f"beta = 0 for {', '.join(zero_beta)}: the served delta is 0 there, so every sign and "
-                  "magnitude check on the served deltas is empty" + ("; the sign checks below use the raw heads."
-                                                                    if has_raw else ".")]
-        if has_raw:
+            L += ["", self._zero_lead(zero_beta) + ", so it has no magnitude ordering (|0| <= |0| holds on every bar "
+                  "by ties) and no sign; the served checks that involve "
+                  + ("it are n/a" if len(zero_beta) == 1 else "them are n/a")
+                  + ("; the sign checks below use the raw heads." if has_raw else ", the sign checks below too.")]
+        if has_raw and len(zero_beta) == len(HORIZONS):
+            L += ["", "No served delta varies, so there is no served ordering: judge the trained constraint on the "
+                  "raw heads."]
+        elif has_raw:
             L += ["", "The served ordering mostly reflects the per-horizon shrink beta, not the model: judge the "
                   "trained constraint on the raw heads."]
         else:
             L += ["", "Scored on the deltas in the frame (the served deltas when the calibration shrinks them); "
                   "pass raw_delta to evaluate() to score the raw heads."]
-        L += ["", "Sign agreement: sign(delta) against calibrated P(up) > 0.5 (the same for raw and served deltas "
-              "while beta > 0).", "", "| | " + " | ".join(HORIZONS) + " | all 3 |", "|---|---|---|---|---|",
-              "| agree | " + " | ".join(_fmt(c.get(f"delta_dir_align_{h}", c.get("coherence_primary") if h == "h1"
-                                                   else None)) for h in HORIZONS)
-              + f" | {_fmt(c.get('delta_dir_align_all'))} |",
+        # without the raw heads the signs are the served deltas': none where beta = 0
+        na = set() if has_raw else set(zero_beta)
+
+        def sign_cell(key, h=None):
+            if h in na or (h is None and na):
+                return self._na([h] if h is not None else na)
+            return _fmt(c.get(key, c.get("coherence_primary") if key == "delta_dir_align_h1" else None))
+
+        L += ["", "Sign agreement: " + ("sign(raw price head) against calibrated P(up) > 0.5 (the served delta, "
+                                        "beta x raw, has the same sign while beta > 0)." if has_raw else
+                                        "sign(delta in the frame) against calibrated P(up) > 0.5."), "",
+              "| | " + " | ".join(HORIZONS) + " | all 3 |", "|---|---|---|---|---|",
+              "| agree | " + " | ".join(sign_cell(f"delta_dir_align_{h}", h) for h in HORIZONS)
+              + f" | {sign_cell('delta_dir_align_all')} |",
               "| expected if the two signs were independent | "
-              + " | ".join(_fmt(c.get(f"delta_dir_align_indep_{h}")) for h in HORIZONS)
-              + f" | {_fmt(c.get('delta_dir_align_indep_all'))} |", "",
+              + " | ".join(sign_cell(f"delta_dir_align_indep_{h}", h) for h in HORIZONS)
+              + f" | {sign_cell('delta_dir_align_indep_all')} |", "",
               f"- P(up) unanimity (all three horizons call the same side): {_fmt(c.get('unanimity'))}"]
         return L
 
@@ -847,6 +958,10 @@ def evaluate(frame: PredictionFrame, config, *, baselines=None, cal_frame: Optio
     betas = _betas(frame, raw, delta_scale)
     if betas:
         meta["delta_scale"] = betas
+    # a served delta of 0 on every sample (beta = 0, recorded or not): its statistics are fixed by construction
+    zero = [h for h in HORIZONS if len(frame) and not np.any(np.asarray(frame.delta[h], float))]
+    if zero:
+        meta["served_delta_zero"] = zero
     report = EvalReport(run_id, frame.split, deadband, len(frame), model, backtest=backtest, meta=meta)
     if baselines is not None:
         labels = direction_labels_np(frame.y, frame.last_close, deadband)

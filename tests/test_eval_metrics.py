@@ -189,6 +189,196 @@ def test_a_zero_beta_is_flagged_and_the_sign_checks_use_the_raw_heads():
     assert "beta = 0 for h1" in rep.to_markdown()
 
 
+def _md_row(md: str, label: str) -> list:
+    line = next(s for s in md.splitlines() if s.startswith(f"| {label} |"))
+    return [c.strip() for c in line.strip("|").split("|")[1:]]
+
+
+PEARSON_RAW = "corr, Pearson, raw heads (the same for served while beta > 0)"
+
+
+def test_markdown_at_beta_zero_prints_the_raw_heads_correlations_not_the_constant():
+    """beta = 0 serves the constant 0: its correlation is undefined, and the raw heads' is not 0 (final review,
+    findings 3 and 13)."""
+    import copy
+
+    from scipy.stats import spearmanr
+
+    from neural_trade.evaluation.report import ZERO_BETA_NA
+
+    frame = _frame(n=3000, seed=30)
+    betas = {h: 0.0 for h in HORIZONS}
+    served, raw = _shrunk(frame, betas)
+    served.meta["delta_raw"], served.meta["delta_scale"] = raw, betas          # as PredictionFrame.from_result does
+    rep = evaluate(served, Config())
+    md = rep.to_markdown()
+    assert "the same raw and served" not in md and "| corr, Pearson |" not in md and "| corr, Spearman |" not in md
+    pearson, spear = _md_row(md, PEARSON_RAW), _md_row(md, "corr, Spearman, raw heads")
+    for i, h in enumerate(HORIZONS):
+        y = frame.y[:, i]
+        assert pearson[i] == f"{np.corrcoef(y, raw[h])[0, 1]:.4f}" != "0.0000"
+        assert spear[i] == f"{spearmanr(y, raw[h]).correlation:.4f}"
+    assert _md_row(md, "share predicted up, raw heads") == [f"{np.mean(raw[h] > 0):.4f}" for h in HORIZONS]
+    assert "beta = 0 for h0, h1, h2: the served delta is 0 there" in md
+    assert rep.model["horizons"]["h1"]["delta"]["corr"] == 0.0                  # the JSON keeps its fallback
+    # the frame's deltas alone (no raw heads): the served rows say why they are empty
+    bare = copy.deepcopy(served)
+    bare.meta.pop("delta_raw")
+    md2 = evaluate(bare, Config()).to_markdown()
+    for label in ("corr, Pearson", "corr, Spearman", "share predicted up, served", "EV, served",
+                  "skill vs zero (1 - MSE / MSE of 0), served"):
+        assert _md_row(md2, label) == [ZERO_BETA_NA] * 3, label
+    # beta > 0: one correlation row, the raw heads' (served = beta x raw has the same)
+    pos, raw_pos = _shrunk(frame, {"h0": 0.3, "h1": 0.05, "h2": 0.4})
+    rep_pos = evaluate(pos, Config(), raw_delta=raw_pos)
+    row = _md_row(rep_pos.to_markdown(), PEARSON_RAW)
+    assert row == [f"{rep_pos.model['horizons'][h]['delta']['corr']:.4f}" for h in HORIZONS]
+    assert ZERO_BETA_NA not in rep_pos.to_markdown()
+
+
+def test_markdown_coherence_does_not_score_the_ties_of_a_served_delta_of_zero():
+    """|0| <= |0| holds on every bar: 1.0000 there is not coherence (final review, finding 14)."""
+    from neural_trade.evaluation.report import ZERO_BETA_NA
+
+    frame = _frame(n=3000, seed=31)
+    served, raw = _shrunk(frame, {h: 0.0 for h in HORIZONS})
+    rep = evaluate(served, Config(), raw_delta=raw, delta_scale={h: 0.0 for h in HORIZONS})
+    c = rep.model["coherence"]
+    assert c["mag_order_full"] == 1.0                                          # ties: the JSON keeps the computed value
+    md = rep.to_markdown()
+    for label, key in (("abs(d h0) <= abs(d h1)", "mag_h0_le_h1"), ("full chain h0 <= h1 <= h2", "mag_order_full")):
+        raw_col, served_col, _ = _md_row(md, label)
+        assert raw_col == f"{c[key + '_raw']:.4f}" and served_col == ZERO_BETA_NA
+    assert "1.0000" not in "".join(s for s in md.splitlines() if s.startswith("| abs(d") or s.startswith("| full"))
+    assert _md_row(md, "agree")[0] == f"{c['delta_dir_align_h0']:.4f}"          # the raw heads' signs
+    # only h2 served nothing: the h0 / h1 check is still measured; without raw heads its sign checks are n/a
+    part = {"h0": 0.3, "h1": 0.05, "h2": 0.0}
+    served2, _ = _shrunk(frame, part)
+    md2 = evaluate(served2, Config(), delta_scale=part).to_markdown()
+    assert _md_row(md2, "abs(d h0) <= abs(d h1)")[0].startswith("0.")
+    assert _md_row(md2, "abs(d h1) <= abs(d h2)")[0] == ZERO_BETA_NA
+    agree = _md_row(md2, "agree")
+    assert agree[2] == agree[3] == ZERO_BETA_NA and agree[0] != ZERO_BETA_NA
+    assert "beta = 0 for h2:" in md2
+
+
+def _coherence_lines(md: str) -> str:
+    return "".join(s for s in md.splitlines() if s.startswith("| abs(d") or s.startswith("| full")
+                   or s.startswith("| agree") or s.startswith("| expected if"))
+
+
+def test_a_served_delta_of_zero_is_found_in_the_data_when_no_beta_is_recorded():
+    """No delta_scale and no raw heads, so no beta to read: the served delta is still 0 on every sample. Its
+    correlation, sign share, ordering (1.0 by ties), sign agreement (equal to its own independence value) and
+    Gaussian readout were printed as measured (final review, round 2)."""
+    from neural_trade.evaluation.report import GAUSS_ZERO_NA, ZERO_BETA_NA, ZERO_DELTA_NA
+
+    frame = _frame(n=3000, seed=40)
+    served, _ = _shrunk(frame, {h: 0.0 for h in HORIZONS})
+    rep = evaluate(served, Config())
+    assert "delta_scale" not in rep.meta and rep.meta["served_delta_zero"] == list(HORIZONS)
+    md = rep.to_markdown()
+    for label in ("corr, Pearson", "corr, Spearman", "share predicted up, served", "EV, served",
+                  "skill vs zero (1 - MSE / MSE of 0), served", "agree", "expected if the two signs were independent"):
+        cells = _md_row(md, label)
+        assert set(cells) == {ZERO_DELTA_NA}, label
+    for label in ("abs(d h0) <= abs(d h1)", "abs(d h1) <= abs(d h2)", "full chain h0 <= h1 <= h2"):
+        served_col, realised = _md_row(md, label)
+        assert served_col == ZERO_DELTA_NA and realised.startswith("0.")
+    for name in ("calls up", "MCC", "AUC", "Brier", "ECE"):
+        assert _md_row(md, f"Gaussian readout: {name}") == [GAUSS_ZERO_NA] * 3
+    assert "1.0000" not in _coherence_lines(md) and ZERO_BETA_NA not in md     # no beta = 0 claimed: none recorded
+    assert "The served delta is 0 on every sample for h0, h1, h2 (no beta = 0 recorded)" in md
+    assert _md_row(md, "RMSE ($), served") == _md_row(md, "RMSE ($), zero prediction")   # real errors: kept
+    # only h2 is 0: the h0 / h1 statistics are measured
+    part, _ = _shrunk(frame, {"h0": 0.3, "h1": 0.05, "h2": 0.0})
+    rep2 = evaluate(part, Config())
+    assert rep2.meta["served_delta_zero"] == ["h2"]
+    md2 = rep2.to_markdown()
+    corr = _md_row(md2, "corr, Pearson")
+    assert corr[2] == ZERO_DELTA_NA and corr[:2] == [f"{rep2.model['horizons'][h]['delta']['corr']:.4f}"
+                                                      for h in ("h0", "h1")]
+    assert _md_row(md2, "abs(d h0) <= abs(d h1)")[0].startswith("0.")
+    assert _md_row(md2, "full chain h0 <= h1 <= h2")[0] == ZERO_DELTA_NA
+    # every served delta varies: nothing recorded, nothing n/a
+    rep3 = evaluate(_frame(n=3000, seed=41), Config())
+    assert "served_delta_zero" not in rep3.meta
+    assert ZERO_DELTA_NA not in rep3.to_markdown() and GAUSS_ZERO_NA not in rep3.to_markdown()
+
+
+def test_the_gaussian_readout_of_a_served_delta_of_zero_is_na_and_the_raw_heads_readout_is_scored():
+    """beta = 0: the served delta is 0, so its Gaussian readout is the constant 0.5 (calls up 0, MCC 0, AUC
+    0.5, Brier 0.25 by construction), which the report printed as measured (final review, round 2)."""
+    import copy
+
+    from sklearn.metrics import roc_auc_score
+
+    from neural_trade.evaluation.report import GAUSS_CONST_NA
+    from neural_trade.metrics.direction_labels import direction_labels_np, gaussian_up_prob_given_move_np
+
+    frame = _frame(n=3000, seed=42)
+    betas = {h: 0.0 for h in HORIZONS}
+    served, raw = _shrunk(frame, betas)
+    rep = evaluate(served, Config(), raw_delta=raw, delta_scale=betas)
+    md = rep.to_markdown()
+    for name in ("calls up", "MCC", "AUC", "Brier", "ECE"):
+        assert _md_row(md, f"Gaussian readout: {name}") == [GAUSS_CONST_NA] * 3
+    g_json = rep.model["horizons"]["h1"]["gauss_direction"]
+    assert g_json["auc"] == 0.5 and g_json["pred_up_rate"] == 0.0              # the JSON keeps the constant's values
+    labels = direction_labels_np(frame.y, frame.last_close, rep.deadband_bps)
+    auc = _md_row(md, "Gaussian readout of the raw heads: AUC")
+    for i, h in enumerate(HORIZONS):
+        lab, mask = labels[h]
+        g = gaussian_up_prob_given_move_np(raw[h], served.variance_scaled[h], served.last_close, rep.deadband_bps,
+                                           served.pred_scale)
+        assert auc[i] == f"{roc_auc_score(lab[mask], g[mask]):.4f}" != "0.5000"
+        assert rep.model["horizons"][h]["gauss_direction_raw"]["n_masked"] == int(mask.sum())
+    assert "beta = 0 for h0, h1, h2: the served delta is 0 there, so its Gaussian readout" in md
+    # the same report re-rendered from an older JSON without the raw readout: n/a, and says how to get it
+    old = copy.deepcopy(rep)
+    for h in HORIZONS:
+        old.model["horizons"][h].pop("gauss_direction_raw")
+    md_old = old.to_markdown()
+    assert "Gaussian readout of the raw heads" not in md_old and "re-score it with evaluate()" in md_old
+    # beta > 0: the served readout is measured and the raw readout rows are not repeated
+    pos, raw_pos = _shrunk(frame, {"h0": 0.3, "h1": 0.05, "h2": 0.4})
+    md_pos = evaluate(pos, Config(), raw_delta=raw_pos).to_markdown()
+    assert GAUSS_CONST_NA not in md_pos and "Gaussian readout of the raw heads" not in md_pos
+    assert _md_row(md_pos, "Gaussian readout: AUC")[1].startswith("0.")
+
+
+def test_the_coherence_note_claims_no_served_ordering_when_no_served_delta_varies():
+    frame = _frame(n=2000, seed=43)
+    zero = {h: 0.0 for h in HORIZONS}
+    served, raw = _shrunk(frame, zero)
+    md = evaluate(served, Config(), raw_delta=raw, delta_scale=zero).to_markdown()
+    assert "The served ordering mostly reflects" not in md and "there is no served ordering" in md
+    pos, raw_pos = _shrunk(frame, {"h0": 0.3, "h1": 0.05, "h2": 0.4})
+    md_pos = evaluate(pos, Config(), raw_delta=raw_pos).to_markdown()
+    assert "The served ordering mostly reflects" in md_pos and "there is no served ordering" not in md_pos
+
+
+def test_a_saved_report_re_renders_from_its_json(tmp_path):
+    """EvalReport.from_json: a run's markdown can be rewritten with the current code, without evaluate()."""
+    import json
+
+    from neural_trade.evaluation.report import EvalReport
+
+    train, test = _frame(n=2000, seed=44), _frame(n=2000, seed=45)
+    betas = {"h0": 0.2, "h1": 0.0, "h2": 0.3}
+    served, raw = _shrunk(test, betas)
+    base = BaselineSet.fit(train.X_raw, train.y, train.last_close, 5.0)
+    rep = evaluate(served, Config(), baselines=base, raw_delta=raw, delta_scale=betas)
+    path = tmp_path / "eval_report_test.json"
+    rep.to_json(path)
+    assert EvalReport.from_json(path).to_markdown() == rep.to_markdown()
+    assert EvalReport.from_json(str(path)).to_markdown() == rep.to_markdown()
+    data = json.loads(rep.to_json())
+    data["written_by_a_later_version"] = 1                                     # unknown keys are ignored
+    again = EvalReport.from_json(json.dumps(data))
+    assert again.to_markdown() == rep.to_markdown() and again.meta["delta_scale"] == betas
+
+
 def test_legacy_report_keys_keep_their_meaning():
     frame = _frame(n=2000, seed=9)
     served, raw = _shrunk(frame, {"h0": 0.2, "h1": 0.02, "h2": 0.25})

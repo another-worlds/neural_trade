@@ -46,6 +46,27 @@ def trade_stats(result) -> Dict[str, float]:
     return out
 
 
+def _zero_delta_flag_notes(delta) -> Dict[str, str]:
+    """Notes for the flags table when a served delta is 0 on every bar (the calibration's beta = 0): the
+    strategies still see ``magnitude_coherent`` and ``direction_aligned``, but they are then decided by the 0
+    (ties, P(up) alone), not measured on a prediction. {} when every served delta varies."""
+    from neural_trade.evaluation.frame import HORIZONS
+
+    d = np.asarray(delta, float)
+    if d.ndim != 2 or not len(d):
+        return {}
+    zero = [h for h, z in zip(HORIZONS, ~np.any(d, axis=0)) if z]
+    if not zero:
+        return {}
+    lead = f"served delta is 0 on {', '.join(zero)} (beta = 0)"
+    if len(zero) == len(HORIZONS):
+        return {"magnitude_coherent": f"{lead}: true on every bar by ties (|0| <= |0|), not a measured ordering",
+                "direction_aligned": f"{lead}: the share of bars where all three P(up) <= 0.5, not a sign "
+                                     "agreement"}
+    return {"magnitude_coherent": f"{lead}: every comparison with it is fixed by the 0, not measured",
+            "direction_aligned": f"{lead}: there it only asks P(up) <= 0.5"}
+
+
 def _null_columns(null) -> Dict[str, float]:
     """The matched random null as table columns (empty when it was not run)."""
     if not null or not null.get("n_seeds"):
@@ -293,18 +314,24 @@ class BacktestExplorer:
     def signal_summary(self) -> Dict[str, pd.DataFrame]:
         """What the strategies see on the test block: numeric features (count / mean / quantiles),
         the share of bars where each boolean flag is true, consensus and horizon-vote shares, and
-        the confidence scale. (``DataFrame.describe`` silently drops boolean columns.)"""
+        the confidence scale. (``DataFrame.describe`` silently drops boolean columns.) Where a served
+        delta is 0 on every bar (beta = 0), the flags table gets a ``note`` column: magnitude_coherent
+        and direction_aligned are then fixed by the 0, not measured."""
         s = self.signals
         feats = pd.DataFrame({"weighted_direction": s.weighted_direction, "weighted_move_$": s.weighted_move,
                               "strength": s.strength, "avg_confidence": s.avg_confidence, "agreement": s.agreement,
                               "volatility_$": s.volatility})
         flags = pd.DataFrame({"magnitude_coherent": s.magnitude_coherent, "direction_aligned": s.direction_aligned,
                               "var_spike": s.var_spike}).astype(float)
+        shares = flags.mean().to_frame("share true").assign(bars=len(flags))
+        notes = _zero_delta_flag_notes(s.delta)
+        if notes:
+            shares["note"] = [notes.get(k, "") for k in shares.index]
         p = np.asarray(s.p, float)
         votes = (p > 0.55).sum(1) + (p < 0.45).sum(1)
         return {
             "features": feats.describe().T,
-            "flags (share of bars true)": flags.mean().to_frame("share true").assign(bars=len(flags)),
+            "flags (share of bars true)": shares,
             "consensus": pd.Series(s.consensus).map({1: "up", -1: "down", 0: "neutral"}).value_counts(normalize=True)
                            .reindex(["up", "down", "neutral"]).fillna(0.0).to_frame("share of bars"),
             "horizon votes (P > 0.55 or < 0.45)": pd.Series(np.minimum(votes, 2)).map({0: "0 votes", 1: "1 vote",

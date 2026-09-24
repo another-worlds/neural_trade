@@ -21,7 +21,11 @@ Pure functions returning pandas DataFrames (``run_settings_table`` also reads th
   :func:`delta_summary_text` - the same numbers as one-line captions for figure titles.
 
 Consecutive 1-minute samples have overlapping targets, so every interval uses n_eff = N / bars ahead
-(:mod:`neural_trade.visualization.stats`), like the evaluation report. Tables with metrics as rows and
+(:mod:`neural_trade.visualization.stats`), like the evaluation report; the price-head correlation band
+uses the delta figure's N / deff (Bartlett design effect), so both print the same +/-. A served delta
+with beta = 0 is the constant 0: its correlation, sign and magnitude ordering print ``ZERO_BETA_NA``
+(or the raw heads' values, labelled so), never the 0.0 / 1.0 fallback, and its Gaussian readout (the
+constant 0.5) ``GAUSS_CONST_NA``. Tables with metrics as rows and
 horizons as columns mix counts and rates: their cells are rounded to ``digits`` (dollars to
 ``usd_digits``) and kept as numbers; intervals are "[lo, hi]" strings. What a table cannot say in its
 labels is in ``df.attrs["caption"]``, which :func:`styled` shows under it.
@@ -37,12 +41,13 @@ import numpy as np
 import pandas as pd
 
 from neural_trade.evaluation.report import (
-    BASELINE_ORDER, BLOCK, BOOT_N, DM_LAG_PER_STEP, DOLLAR_METRICS, HORIZONS, RESTATED_BASELINE_ROWS, Z95,
-    baseline_margin, coherence_block, delta_block, direction_block, independent_agreement, magnitude_ordering,
-    margin_z,
+    BASELINE_ORDER, BLOCK, BOOT_N, DM_LAG_PER_STEP, DOLLAR_METRICS, GAUSS_CONST_NA, HORIZONS, RESTATED_BASELINE_ROWS,
+    Z95, ZERO_BETA_NA, baseline_margin, coherence_block, delta_block, direction_block, independent_agreement,
+    magnitude_ordering, margin_z,
 )
 from neural_trade.metrics.direction_labels import direction_labels_np
 from neural_trade.visualization import stats as S
+from neural_trade.visualization.analytics_delta import corr_band, design_effect
 
 __all__ = ["classification_table", "delta_quality_table", "magnitude_ordering_table", "alignment_table",
            "baseline_table", "trailing_move_table", "run_settings_table", "styled", "scored_counts_text",
@@ -73,8 +78,8 @@ def _num(v, digits: Optional[int]):
     if isinstance(v, (int, np.integer)):
         return int(v)
     if isinstance(v, (float, np.floating)):
-        v = float(v)
-        return round(v, digits) if digits is not None and math.isfinite(v) else v
+        v = float(v) + 0.0                      # + 0.0: -0.0 (0 x a negative raw head) prints as 0.00
+        return round(v, digits) + 0.0 if digits is not None and math.isfinite(v) else v
     return v
 
 
@@ -103,6 +108,20 @@ def _raw_or(frame, raw_delta):
     return {h: np.asarray(raw_delta[h], float).reshape(-1)[:len(frame)] for h in HORIZONS} if raw_delta else None
 
 
+def _zero_columns(arr) -> list:
+    """Indices of the columns of an [N, 3] array that are 0 on every row (a served delta with beta = 0)."""
+    arr = np.asarray(arr, float)
+    return [i for i in range(arr.shape[1]) if len(arr) and not np.any(arr[:, i])]
+
+
+def _constant_na(pred, served: bool) -> Optional[str]:
+    """None for a prediction that varies; else why its correlation and sign share are not shown."""
+    pred = np.asarray(pred, float)
+    if len(pred) and np.ptp(pred) > 0:
+        return None
+    return ZERO_BETA_NA if served and not np.any(pred) else "n/a (constant prediction)"
+
+
 # ------------------------------------------------------------------ direction
 def classification_table(frame, config=None, *, calibrated: bool = True, readout: str = "head",
                          deadband_bps: Optional[float] = None, digits: Optional[int] = 4) -> pd.DataFrame:
@@ -112,12 +131,16 @@ def classification_table(frame, config=None, *, calibrated: bool = True, readout
     "gaussian" (the price head's Gaussian readout). Rows are metrics, columns h0 / h1 / h2. The
     references: "majority-class accuracy" (always calling the block's more common side, known only in
     hindsight), the Brier of a constant equal to the block's up-rate, and the ECE of a constant 0.5.
+    Where the served delta is 0 on every bar (beta = 0) the Gaussian readout is the constant 0.5: its
+    calls, rates, AUC, Brier and ECE are fixed by construction, so they read GAUSS_CONST_NA (the
+    block's own numbers and the references stay) and ``df.attrs["caption"]`` names the horizons.
     """
     if readout not in ("head", "gaussian"):
         raise ValueError(f"readout must be 'head' or 'gaussian', got {readout!r}")
     deadband = _deadband(config, deadband_bps)
     labels = direction_labels_np(frame.y, frame.last_close, deadband)
     cols: Dict[str, Dict[str, Any]] = {}
+    const_h = []                    # horizons whose Gaussian readout is the constant 0.5 (served delta 0)
     for h in HORIZONS:
         lab, mask = labels[h]
         p = np.asarray(frame.prob(h, calibrated) if readout == "head" else frame.gauss_prob(h, deadband), float)
@@ -157,8 +180,20 @@ def classification_table(frame, config=None, *, calibrated: bool = True, readout
             "mean P(up), all samples": float(p.mean()) if len(p) else float("nan"),
             "std P(up), all samples": float(p.std()) if len(p) else float("nan"),
         }
+        if readout == "gaussian" and len(p) and not np.any(np.asarray(frame.delta[h], float)):
+            const_h.append(h)       # never calls up, AUC 0.5, Brier 0.25 by construction: not measured
+            keep = {"bars ahead", "n samples", f"n scored (moves beyond {deadband:g} bps)",
+                    "n_eff of the scored moves (n scored // bars ahead)", "true up-rate",
+                    "majority-class accuracy (hindsight)", "Brier of a constant = the up-rate (hindsight)",
+                    "ECE of a constant 0.5", "mean P(up), all samples", "std P(up), all samples"}
+            c = {k: (v if k in keep else GAUSS_CONST_NA) for k, v in c.items()}
         cols[h] = {k: _num(v, digits) for k, v in c.items()}
-    return _object_frame(cols)
+    df = _object_frame(cols)
+    if const_h:
+        df.attrs["caption"] = (f"beta = 0 for {', '.join(const_h)}: the served delta is 0 on every bar there, so the "
+                               "Gaussian readout is the constant 0.5 (it never calls up; AUC 0.5 and Brier 0.25 by "
+                               "construction): its calls and rates are n/a.")
+    return df
 
 
 # ------------------------------------------------------------------ price heads
@@ -167,12 +202,18 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
                         usd_digits: Optional[int] = 2, tail: float = 0.995) -> pd.DataFrame:
     """The price heads in dollars, per horizon: raw heads vs served (shrunk) deltas vs a zero prediction.
 
-    ``raw_delta``: the heads before the calibration's delta shrink (served = beta x raw, so every
-    correlation and sign is the same for both; errors, skill and magnitudes are not). ``delta_scale``:
-    the calibration's beta per horizon (default: the least-squares ratio served / raw). Without either,
-    the frame's deltas are labelled "model" (a served frame holds beta x raw, a raw frame the heads;
-    ``df.attrs["caption"]`` says so). ``tail``: the correlation "without the largest predictions" drops
-    |prediction| above this quantile, to show how much a few outliers carry. "LS slope" is the
+    ``raw_delta``: the heads before the calibration's delta shrink. served = beta x raw has the same
+    correlations and signs as the raw heads while beta > 0 (errors, skill and magnitudes differ); at
+    beta = 0 the served delta is the constant 0, which has no correlation and no sign. So with
+    ``raw_delta`` every correlation, sign and min / max row is the raw heads' (labelled ", raw heads"),
+    and the caption names the horizons whose served delta is 0. Without it those rows are the frame's
+    deltas', and a delta that is 0 on every bar shows ``ZERO_BETA_NA`` instead of the 0.0 fallback.
+    ``delta_scale``: the calibration's beta per horizon (default: the least-squares ratio served / raw).
+    Without either, the frame's deltas are labelled "model" (a served frame holds beta x raw, a raw
+    frame the heads; ``df.attrs["caption"]`` says so). ``tail``: the correlation "without the largest
+    predictions" drops |prediction| above this quantile, to show how much a few outliers carry. The
+    correlation noise band is the delta figure's: 95% on N / deff effective samples, deff the Bartlett
+    design effect of the head and the outcome (analytics_delta.design_effect). "LS slope" is the
     unconstrained least-squares slope of the realised move on the head; the calibration fits
     clip(slope, 0, 1) on the calibration block, shown next to it.
     """
@@ -180,6 +221,7 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
     sv = "served" if raw is not None or delta_scale else "model"
     rw = ", raw heads" if raw is not None else f", {sv}"
     cols: Dict[str, Dict[str, Any]] = {}
+    zero = []                       # horizons whose served delta is 0 on every bar (beta = 0)
     for i, h in enumerate(HORIZONS):
         y = frame.y[:, i]
         s = np.asarray(frame.delta[h], float)
@@ -205,10 +247,17 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
             c += [(f"{name}, {sv}", bs[metric])]
         slope = float(np.dot(y, d)) / dd if dd > 0 else None
         on = "raw head" if br is not None else ("served delta" if sv == "served" else "model delta")
-        c += [("corr, Pearson", bs["corr"]),
-              ("corr noise band +/- (95%, n_eff)", S.corr_null(len(y), steps=steps)),
-              ("corr, Spearman", bs["corr_spearman"]),
-              (f"corr without the {100 * (1 - tail):g}% largest |prediction|", _corr(d[keep], y[keep])),
+        if len(s) and not np.any(s):
+            zero.append(h)
+        # correlations and signs of d: the raw heads when known, else the frame's deltas (none if constant)
+        na = _constant_na(d, sv == "served") if br is None else None
+        cs = {k: na for k in ("corr", "corr_spearman", "share_pred_up")} if na is not None else (br or bs)
+        c += [(f"corr, Pearson{rw}", cs["corr"]),
+              ("corr noise band +/- (95%, N / deff, Bartlett)",
+               na if na is not None else corr_band(len(y), design_effect(d, y, steps))),
+              (f"corr, Spearman{rw}", cs["corr_spearman"]),
+              (f"corr without the {100 * (1 - tail):g}% largest |prediction|{rw}",
+               na if na is not None else _corr(d[keep], y[keep])),
               (f"LS slope of realised on the {on} (unclipped)", slope)]
         if br is not None:
             c.append(("beta this block would fit: clip(LS slope, 0, 1)",
@@ -216,7 +265,7 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
         c += [("mean predicted ($), raw heads", br["mean_pred"])] if br is not None else []
         c += [(f"mean predicted ($), {sv}", bs["mean_pred"]), ("mean realised ($)", m),
               ("mean realised 95% CI ($, n_eff)", _interval(mlo, mhi, usd_digits)),
-              ("share predicted up (delta > 0)", (br or bs)["share_pred_up"]),
+              (f"share predicted up (delta > 0){rw}", cs["share_pred_up"]),
               ("share realised up (move > 0)", bs["share_true_up"])]
         c += [("std predicted ($), raw heads", float(np.std(d)))] if br is not None else []
         c += [(f"std predicted ($), {sv}", float(np.std(s))), ("std realised ($)", float(np.std(y)))]
@@ -228,6 +277,17 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
     if raw is None and not delta_scale:
         df.attrs["caption"] = ("\"model\" = the deltas in the frame: beta x the raw price head in a served frame, the "
                                "raw head in a raw one. Pass raw_delta= to compare raw heads, served deltas and zero.")
+    notes = []
+    if raw is not None:
+        notes.append("Correlations, signs and min / max are the raw heads': the served delta, beta x raw, has the same "
+                     "correlations and signs while beta > 0.")
+    if zero and sv == "served":
+        notes.append(f"beta = 0 for {', '.join(zero)}: the served delta is 0 there, the zero prediction (its errors "
+                     "are the zero prediction's), so it has no correlation and no sign"
+                     + (" of its own." if raw is not None else "; those rows are n/a. Pass raw_delta= for the raw "
+                                                               "heads."))
+    if notes:
+        df.attrs["caption"] = " ".join(notes)
     return df
 
 
@@ -240,27 +300,45 @@ def magnitude_ordering_table(frame, *, raw_delta: Optional[Dict[str, np.ndarray]
     (after a per-horizon shrink beta this mostly reflects the betas), the realised moves, each with its
     95% Wilson interval on n / bars-ahead effective samples (the longer horizon of the check), and the
     value for magnitudes in random order (1/2, 1/2, 1/6).
+
+    A served delta with beta = 0 is 0 on every bar: |0| <= |0| holds by ties, so a check that involves
+    such a horizon measures nothing. Its share is NaN, its interval cell says ``ZERO_BETA_NA`` and
+    ``df.attrs["caption"]`` names the horizons (the same for any series with a column of zeros).
     """
     raw = _raw_or(frame, raw_delta)
     served = np.stack([frame.delta[h] for h in HORIZONS], 1)
     n = len(frame)
     steps = [max(S.horizon_steps(frame, a), S.horizon_steps(frame, b)) for a, b in (("h0", "h1"), ("h1", "h2"))]
     steps.append(max(S.horizon_steps(frame, h) for h in HORIZONS))
+    involved = ((0, 1), (1, 2), (0, 1, 2))
     series = {}
     if raw is not None:
         series["raw heads (trained ordering)"] = np.stack([raw[h] for h in HORIZONS], 1)
     series["served deltas"] = served
     series["realised moves"] = frame.y[:, :3]
     cols: Dict[str, list] = {}
+    zero_served = []
     for name, arr in series.items():
+        zero = set(_zero_columns(arr))
+        if name == "served deltas":
+            zero_served = [HORIZONS[i] for i in sorted(zero)]
+        void = [bool(zero & set(ix)) for ix in involved]
         shares = magnitude_ordering(arr)
-        cols[name] = [round(s, digits) if digits is not None else s for s in shares]
+        cols[name] = [float("nan") if v else (round(s, digits) if digits is not None else s)
+                      for s, v in zip(shares, void)]
         cis = [S.wilson(round(s * n), n, steps=st)[1:] for s, st in zip(shares, steps)]
-        cols[f"{name.split(' (')[0]} 95% CI (n_eff)"] = [_interval(float(lo), float(hi), digits) for lo, hi in cis]
+        why = ZERO_BETA_NA if name == "served deltas" else "n/a (0 on every bar)"
+        cols[f"{name.split(' (')[0]} 95% CI (n_eff)"] = [why if v else _interval(float(lo), float(hi), digits)
+                                                         for (lo, hi), v in zip(cis, void)]
     cols["magnitudes in random order"] = [round(v, digits) if digits is not None else v for v in (0.5, 0.5, 1 / 6)]
     cols["n_eff"] = [n // max(1, st) for st in steps]
     df = pd.DataFrame(cols, index=["|d h0| <= |d h1|", "|d h1| <= |d h2|", "full chain |d h0| <= |d h1| <= |d h2|"])
     df.index.name = "check"
+    if zero_served:
+        df.attrs["caption"] = (f"beta = 0 for {', '.join(zero_served)}: the served delta is 0 on every bar there, so "
+                               "|0| <= |0| holds by ties and the served checks that involve it are n/a"
+                               + ("; the raw heads carry the ordering the loss trains." if raw is not None
+                                  else "; pass raw_delta= for the raw heads."))
     return df
 
 
@@ -269,14 +347,19 @@ def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndar
     """Does sign(delta) agree with P(up) > 0.5? Per horizon and on all three at once, on every sample.
 
     The sign of delta is the same raw or served while beta > 0 (``raw_delta`` protects against beta = 0).
+    Without ``raw_delta``, a horizon whose delta is 0 on every bar (beta = 0) has no sign: its row, and
+    "all 3", are NaN, and ``df.attrs["caption"]`` says so.
     "expected if independent": the agreement two unrelated signs with these up-shares would show
     (for "all 3", summed over the eight up/down patterns of the three horizons). The 95% interval is a
     Wilson interval on n / bars-ahead effective samples (the longest horizon for "all 3").
     """
     raw = _raw_or(frame, raw_delta)
-    d = np.stack([(raw if raw is not None else frame.delta)[h] for h in HORIZONS], 1) > 0
+    D = np.stack([np.asarray((raw if raw is not None else frame.delta)[h], float) for h in HORIZONS], 1)
+    zero = set() if raw is not None else set(_zero_columns(D))
+    d = D > 0
     p = np.stack([np.asarray(frame.prob(h, calibrated), float) for h in HORIZONS], 1) > 0.5
     n = len(frame)
+    nan = float("nan")
     rows = {}
     for i, h in enumerate(HORIZONS):
         steps = S.horizon_steps(frame, h)
@@ -287,19 +370,26 @@ def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndar
         rows[h] = {"agree": k / n, "95% CI low": float(lo), "95% CI high": float(hi),
                    "expected if independent": sd * sp + (1 - sd) * (1 - sp),
                    "share delta > 0": sd, "share P(up) > 0.5": sp, "n": n, "n_eff": n // max(1, steps)}
+        if i in zero:
+            rows[h].update({k_: nan for k_ in ("agree", "95% CI low", "95% CI high", "expected if independent",
+                                               "share delta > 0")})
     steps = max(S.horizon_steps(frame, h) for h in HORIZONS)
     k = int((d == p).all(1).sum())
     _, lo, hi = S.wilson(k, n, steps=steps)
     indep = independent_agreement(d, p)
-    rows["all 3"] = {"agree": k / n, "95% CI low": float(lo), "95% CI high": float(hi),
-                     "expected if independent": indep, "share delta > 0": float("nan"),
-                     "share P(up) > 0.5": float("nan"), "n": n, "n_eff": n // max(1, steps)}
+    rows["all 3"] = {"agree": nan if zero else k / n, "95% CI low": nan if zero else float(lo),
+                     "95% CI high": nan if zero else float(hi), "expected if independent": nan if zero else indep,
+                     "share delta > 0": nan, "share P(up) > 0.5": nan, "n": n, "n_eff": n // max(1, steps)}
     df = pd.DataFrame.from_dict(rows, orient="index")
     df.index.name = "horizon"
     df[["n", "n_eff"]] = df[["n", "n_eff"]].astype(int)
     if digits is not None:
         num = [c for c in df.columns if c not in ("n", "n_eff")]
         df[num] = df[num].round(digits)
+    if zero:
+        df.attrs["caption"] = (f"The delta is 0 on every bar for {', '.join(HORIZONS[i] for i in sorted(zero))} "
+                               "(a served delta with beta = 0): it has no sign, so those rows and \"all 3\" are n/a. "
+                               "Pass raw_delta= to score the raw heads.")
     return df
 
 
@@ -660,13 +750,17 @@ def direction_stats_line(frame, config=None, h: str = "h1", *, raw_delta: Option
     same as the served deltas while beta > 0) and the calibrated P(up), like the report's coherence block."""
     d, _ = _direction(frame, config, h, calibrated, deadband_bps)
     u = d["true_up_rate"]
-    coh = coherence_block(frame, _raw_or(frame, raw_delta))
+    raw = _raw_or(frame, raw_delta)
+    coh = coherence_block(frame, raw)
     f = lambda v, k=3: f"{v:.{k}f}" if v is not None and math.isfinite(v) else "n/a"  # noqa: E731
+    if raw is None and not np.any(np.asarray(frame.delta[h], float)):
+        sign = f"sign(delta) = call {ZERO_BETA_NA}"          # a served delta of 0 (beta = 0) has no sign
+    else:
+        sign = (f"sign(delta) = call {f(coh[f'delta_dir_align_{h}'])} "
+                f"({f(coh[f'delta_dir_align_indep_{h}'])} if independent)")
     return SEP.join([f"up-rate {f(u)}", f"calls up {f(d['pred_up_rate'])}", f"acc {f(d['acc'])}",
                      f"bal acc {f(d['bal_acc'])}",
-                     f"Brier {f(d['brier'], 4)} (constant up-rate {f(u * (1 - u), 4)})",
-                     f"sign(delta) = call {f(coh[f'delta_dir_align_{h}'])} "
-                     f"({f(coh[f'delta_dir_align_indep_{h}'])} if independent)"])
+                     f"Brier {f(d['brier'], 4)} (constant up-rate {f(u * (1 - u), 4)})", sign])
 
 
 def delta_summary_text(frame, h: str = "h1", *, raw_delta: Optional[Dict[str, np.ndarray]] = None,

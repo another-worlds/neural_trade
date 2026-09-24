@@ -10,10 +10,13 @@ import pandas as pd
 import pytest
 
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+from neural_trade.evaluation.report import ZERO_BETA_NA
 from neural_trade.visualization import analytics_tables as AT
 from neural_trade.visualization import stats as S
+from neural_trade.visualization.analytics_delta import corr_band, design_effect
 
 BETAS = {"h0": 0.2, "h1": 0.02, "h2": 0.25}
+ZERO = {"h0": 0.0, "h1": 0.0, "h2": 0.0}       # the calibration's delta shrink served nothing (beta = 0)
 
 
 def _served(frame, betas=BETAS):
@@ -106,12 +109,14 @@ def test_delta_quality_table_raw_served_and_zero(viz_frame, viz_config):
         assert math.isclose(col["RMSE ($), zero prediction"], math.sqrt(np.mean(y ** 2)))
         assert math.isclose(col["MAE ($), zero prediction"], np.mean(np.abs(y)))
         assert math.isclose(col["shrink beta (served = beta x raw)"], BETAS[h])   # least squares served / raw
-        assert math.isclose(col["corr, Pearson"], np.corrcoef(y, raw[h])[0, 1])
-        assert math.isclose(col["corr noise band +/- (95%, n_eff)"],
-                            S.corr_null(len(y), steps=S.horizon_steps(viz_frame, h)))
+        assert math.isclose(col["corr, Pearson, raw heads"], np.corrcoef(y, raw[h])[0, 1])
+        # the delta figure's band: N / deff effective samples, deff the Bartlett design effect
+        steps = S.horizon_steps(viz_frame, h)
+        assert math.isclose(col["corr noise band +/- (95%, N / deff, Bartlett)"],
+                            corr_band(len(y), design_effect(raw[h], y, steps)))
         assert math.isclose(col["mean predicted ($), raw heads"], raw[h].mean())
         assert math.isclose(col["mean predicted ($), served"], BETAS[h] * raw[h].mean())
-        assert math.isclose(col["share predicted up (delta > 0)"], np.mean(raw[h] > 0))
+        assert math.isclose(col["share predicted up (delta > 0), raw heads"], np.mean(raw[h] > 0))
         assert math.isclose(col["max predicted ($), raw heads"], raw[h].max())
         slope = float(np.dot(y, raw[h]) / np.dot(raw[h], raw[h]))
         assert math.isclose(col["LS slope of realised on the raw head (unclipped)"], slope)
@@ -123,7 +128,9 @@ def test_delta_quality_table_raw_served_and_zero(viz_frame, viz_config):
     assert not any("raw heads" in str(i) or str(i).endswith(", predicted") for i in plain.index)
     assert {"RMSE ($), model", "mean predicted ($), model"} <= set(plain.index)
     assert "raw_delta" in plain.attrs["caption"] and "caption" in AT.styled(plain).to_html()
-    assert "caption" not in AT.delta_quality_table(served, viz_config, raw_delta=raw).attrs
+    assert {"corr, Pearson, model", "share predicted up (delta > 0), model"} <= set(plain.index)
+    with_raw = AT.delta_quality_table(served, viz_config, raw_delta=raw).attrs["caption"]
+    assert "raw heads'" in with_raw and "beta = 0" not in with_raw          # every beta > 0 here
 
 
 def test_the_clipped_beta_row_shows_what_the_calibration_would_fit(viz_frame, viz_config):
@@ -138,8 +145,39 @@ def test_delta_quality_table_rounds_dollars_to_cents_and_ratios_to_four_places(v
     served, raw = _served(viz_frame)
     df = AT.delta_quality_table(served, viz_config, raw_delta=raw)
     assert df.loc["RMSE ($), served", "h0"] == round(df.loc["RMSE ($), served", "h0"], 2)
-    assert df.loc["corr, Pearson", "h0"] == round(df.loc["corr, Pearson", "h0"], 4)
+    assert df.loc["corr, Pearson, raw heads", "h0"] == round(df.loc["corr, Pearson, raw heads", "h0"], 4)
     assert isinstance(df.loc["n samples", "h0"], int)
+
+
+def test_delta_quality_table_at_beta_zero_shows_the_raw_heads_correlations_not_the_constant(viz_frame, viz_config):
+    """beta = 0 serves the constant 0: its correlation is undefined, not 0.0 (final review, findings 3, 4 and 13)."""
+    from scipy.stats import spearmanr
+
+    served, raw = _served(viz_frame, ZERO)
+    df = AT.delta_quality_table(served, viz_config, raw_delta=raw, delta_scale=ZERO, digits=None, usd_digits=None)
+    assert "corr, Pearson" not in df.index and "corr, Spearman" not in df.index     # no unlabelled served rows
+    for i, h in enumerate(HORIZONS):
+        y, col = viz_frame.y[:, i], df[h]
+        assert col["corr, Pearson, raw heads"] == pytest.approx(np.corrcoef(y, raw[h])[0, 1])
+        assert abs(col["corr, Pearson, raw heads"]) > 0.05                         # the fixture's edge, not the 0.0
+        assert col["corr, Spearman, raw heads"] == pytest.approx(spearmanr(y, raw[h]).correlation)
+        assert col["share predicted up (delta > 0), raw heads"] == pytest.approx(np.mean(raw[h] > 0))
+        assert col["RMSE ($), served"] == pytest.approx(col["RMSE ($), zero prediction"])
+        for key in ("min predicted ($), raw heads", "max predicted ($), raw heads"):
+            assert key in df.index
+    assert "beta = 0 for h0, h1, h2" in df.attrs["caption"] and "no correlation" in df.attrs["caption"]
+    # without the raw heads the served rows say why they are empty, and 0 x a negative head prints as 0.00
+    bare = AT.delta_quality_table(served, viz_config, delta_scale=ZERO, digits=None, usd_digits=None)
+    for label in ("corr, Pearson, served", "corr, Spearman, served", "corr noise band +/- (95%, N / deff, Bartlett)",
+                  "corr without the 0.5% largest |prediction|, served", "share predicted up (delta > 0), served"):
+        assert bare.loc[label].tolist() == [ZERO_BETA_NA] * 3, label
+    assert all(math.copysign(1.0, v) == 1.0 for v in bare.loc["min predicted ($), served"])
+    assert ">-0.00<" not in AT.styled(bare).to_html() and "those rows are n/a" in bare.attrs["caption"]
+    # a beta > 0 frame without raw heads keeps its numbers
+    kept = AT.delta_quality_table(_served(viz_frame)[0], viz_config, delta_scale=BETAS, digits=None)
+    assert kept.loc["corr, Pearson, served", "h1"] == pytest.approx(np.corrcoef(viz_frame.y[:, 1],
+                                                                                viz_frame.delta["h1"])[0, 1])
+    assert "beta = 0" not in kept.attrs.get("caption", "")
 
 
 # ------------------------------------------------------------------ across horizons
@@ -164,6 +202,45 @@ def test_magnitude_ordering_separates_the_trained_heads_from_the_shrink():
     _, wlo, whi = S.wilson(round(share * n), n, steps=20)
     assert lo == pytest.approx(wlo, abs=1e-4) and hi == pytest.approx(whi, abs=1e-4) and lo < share < hi
     assert list(df.columns[:2]) == ["raw heads (trained ordering)", "raw heads 95% CI (n_eff)"]
+    assert "caption" not in df.attrs
+
+
+def test_magnitude_ordering_is_not_measured_on_a_served_delta_of_zero():
+    """beta = 0: |0| <= |0| holds on every bar by ties, which is not 100% coherence (final review, finding 14)."""
+    rng = np.random.default_rng(2)
+    n = 2000
+    mags = np.sort(np.abs(rng.normal(0, 40, (n, 3))), axis=1) * np.sign(rng.normal(size=(n, 1)))
+    frame = PredictionFrame(rng.normal(0, 100, (n, 3)), np.full(n, 1e5), {h: mags[:, i] for i, h in enumerate(HORIZONS)},
+                            {h: np.full(n, 0.5) for h in HORIZONS}, {h: np.ones(n) for h in HORIZONS}, 100.0)
+    served, raw = _served(frame, ZERO)
+    df = AT.magnitude_ordering_table(served, raw_delta=raw, digits=None)
+    assert df["raw heads (trained ordering)"].tolist() == [1.0, 1.0, 1.0]
+    assert df["served deltas"].isna().all()                                    # not 1.0 by ties
+    assert df["served deltas 95% CI (n_eff)"].tolist() == [ZERO_BETA_NA] * 3
+    assert "beta = 0 for h0, h1, h2" in df.attrs["caption"] and "ties" in df.attrs["caption"]
+    assert not df["realised moves"].isna().any()
+    # only h2 served nothing: the h0 / h1 check still measures the served deltas
+    part, _ = _served(frame, {"h0": 0.2, "h1": 0.3, "h2": 0.0})
+    dp = AT.magnitude_ordering_table(part, raw_delta=raw, digits=None)
+    a = np.abs(mags)
+    assert dp["served deltas"].iloc[0] == pytest.approx(np.mean(0.2 * a[:, 0] <= 0.3 * a[:, 1]))
+    assert dp["served deltas"].iloc[1:].isna().all() and dp["served deltas 95% CI (n_eff)"].iloc[0].startswith("[")
+    assert "beta = 0 for h2:" in dp.attrs["caption"]
+    html = AT.styled(df).to_html()
+    assert ZERO_BETA_NA in html and ">1.0000<" in html
+
+
+def test_alignment_without_raw_heads_has_no_sign_for_a_served_delta_of_zero(viz_frame, viz_config):
+    served, raw = _served(viz_frame, {"h0": 0.2, "h1": 0.0, "h2": 0.25})
+    bare = AT.alignment_table(served, viz_config, digits=None)
+    assert bare.loc[["h1", "all 3"], ["agree", "95% CI low", "expected if independent"]].isna().all().all()
+    assert bare.loc["h1", "share P(up) > 0.5"] == pytest.approx(np.mean(viz_frame.prob("h1") > 0.5))
+    assert bare.loc["h0", "agree"] == pytest.approx(np.mean((raw["h0"] > 0) == (viz_frame.prob("h0") > 0.5)))
+    assert "h1" in bare.attrs["caption"] and "raw_delta=" in bare.attrs["caption"]
+    with_raw = AT.alignment_table(served, viz_config, raw_delta=raw, digits=None)
+    assert not with_raw["agree"].isna().any() and "caption" not in with_raw.attrs
+    assert ZERO_BETA_NA in AT.direction_stats_line(served, viz_config, "h1")
+    assert ZERO_BETA_NA not in AT.direction_stats_line(served, viz_config, "h1", raw_delta=raw)
 
 
 def test_alignment_table_per_horizon_all_three_and_the_independence_reference(viz_frame, viz_config):
