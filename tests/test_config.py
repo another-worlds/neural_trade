@@ -11,7 +11,8 @@ from neural_trade.core.exceptions import InvalidConfigurationError
 # class before the move). The typed Config must keep all of them, unchanged.
 LEGACY_DEFAULTS = {
     "CSV_PATH": "binance_btcusdt_1min_ccxt.csv", "LOOKBACK": 60, "WINDOW_STEP": 1, "RESAMPLE_MINUTES": 1,
-    "BATCH_SIZE": 64, "EPOCHS": 20, "LR": 0.001, "PATIENCE": 3, "EARLY": 6, "MAX_SEQUENCE_COUNT": 53280,
+    "BATCH_SIZE": 256, "EPOCHS": 20,  # BATCH_SIZE: 64 before the GPU-speed work
+    "LR": 0.001, "PATIENCE": 3, "EARLY": 6, "MAX_SEQUENCE_COUNT": 53280,
     "VAL_FRACTION": 0.066, "CAL_FRACTION": 0.066, "N_FOLDS": 5, "EXTENDED_TREND_PERIODS": [10, 15, 20],
     "HORIZON_STEPS": [10, 15, 20], "DAMPING": 0.5, "CALIB_WARMUP_FRACTION": 0.05,
     "CALIB_SAMPLE_FRACTION": 0.1, "CALIB_LAMBDA_MIN": 0.1, "CALIB_LAMBDA_MAX": 20.0, "CALIB_DAMPING": 1,

@@ -56,10 +56,12 @@ def test_served_predictions_equal_the_reported_ones(trained):
     cfg, result = trained
     p = Predictor.from_artifacts(result.artifacts_dir)
     batch = p.predict(_raw_test_windows(cfg, result), result.last_close_test)
-    for kind, served in (("delta", batch.delta), ("direction_prob", batch.direction_prob),
-                         ("variance", batch.variance_scaled)):
+    for kind, served in (("direction_prob", batch.direction_prob), ("variance", batch.variance_scaled)):
         for h in ("h0", "h1", "h2"):
             np.testing.assert_array_equal(served[h], result.predictions[kind][h], err_msg=f"{kind}/{h}")
+    for h in ("h0", "h1", "h2"):  # the served delta is the calibration pipeline's (delta shrinkage)
+        np.testing.assert_allclose(batch.delta[h], result.predictions_calibrated["delta"][h], rtol=1e-12,
+                                   err_msg=f"delta/{h}")
     for h in ("h0", "h1", "h2"):
         np.testing.assert_allclose(batch.direction_prob_calibrated[h],
                                    result.predictions_calibrated["direction_prob"][h], rtol=1e-12)
@@ -77,4 +79,5 @@ def test_predict_frame_and_predict_last(trained, synthetic_bars):
     assert {"h1_delta", "h1_p_up_calibrated", "h1_lo90", "h1_hi90", "h1_gauss_p_up"} <= set(frame.columns)
     last = p.predict_last(synthetic_bars["close"].to_numpy())
     assert set(last) == {"h0", "h1", "h2"} and last["h1"]["horizon_bars"] == cfg.HORIZON_STEPS[1]
-    np.testing.assert_allclose(last["h2"]["delta"], frame["h2_delta"].iloc[-1], rtol=1e-6)
+    # one window vs a batch: different GEMM tiling, float32 round-off only
+    np.testing.assert_allclose(last["h2"]["delta"], frame["h2_delta"].iloc[-1], rtol=1e-4)

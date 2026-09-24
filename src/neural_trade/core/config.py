@@ -78,7 +78,7 @@ class Config:
     HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2)")
 
     # ------------------------------------------------------------------ training
-    BATCH_SIZE: int = _f(64, "training")
+    BATCH_SIZE: int = _f(256, "training", "256: a step costs about the same at 64 or 256 on the GPU (launch-bound), so ~3.7x faster epochs")
     EPOCHS: int = _f(20, "training")
     LR: float = _f(1e-3, "training", "main optimizer learning rate")
     PATIENCE: int = _f(3, "training", "ReduceLROnPlateau patience (was EPOCHS: disabled)")
@@ -152,6 +152,9 @@ class Config:
 
     # ------------------------------------------------------------------ architecture / activations
     REG_MOMENTUM_L2: float = _f(0.0, "architecture", "L2 on the dense towers")
+    TRAIN_METRICS_EVERY: int = _f(10, "training",
+                                  "update the training-set diagnostics every N steps (1 = every step); the "
+                                  "training loss and all validation metrics are always exact")
     TANH_SCALE: float = _f(1.0, "architecture", "unused")
     SIGMOID_SCALE: float = _f(1.0, "architecture", "unused")
     HUBER_DELTA: float = _f(1.0, "architecture", "delta of CustomTrainModel.huber (not the point loss)")
@@ -274,6 +277,8 @@ class Config:
             bad("DIR_DEADBAND_BPS must be >= 0")
         if self.DIRECTION_LOSS not in ("bce", "focal_dice"):
             bad(f"DIRECTION_LOSS must be 'bce' or 'focal_dice', got {self.DIRECTION_LOSS!r}")
+        if int(self.TRAIN_METRICS_EVERY) < 1:
+            bad("TRAIN_METRICS_EVERY must be >= 1")
         if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol"):
             bad(f"CONFORMAL_SCALE must be 'none', 'sigma' or 'realized_vol', got {self.CONFORMAL_SCALE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):

@@ -72,6 +72,17 @@ class TrainResult:
     artifacts_dir: Optional[str] = None  # where the serving bundle was written, if any
 
 
+def _report_device() -> None:
+    """Say which device trains; warn loudly when a GPU is absent without having been disabled on purpose."""
+    gpus = tf.config.list_physical_devices("GPU")
+    if gpus:
+        logger.info("Training on %s", ", ".join(g.name for g in gpus))
+    elif os.environ.get("CUDA_VISIBLE_DEVICES", "").strip() != "-1":
+        logger.warning("No GPU is visible to TensorFlow: training runs on the CPU, several times slower. "
+                       "On Windows, import neural_trade before tensorflow (it puts the conda env's CUDA DLLs "
+                       "on PATH) or start Python from an activated conda environment.")
+
+
 def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
     """Validated update: unknown names raise InvalidConfigurationError with suggestions
     (the old setattr loop silently created misspelled attributes that nothing read)."""
@@ -155,6 +166,7 @@ def train_and_evaluate(
     cfg.validate()  # P0-3 / P1-4: early enforcement (added in Config refactor)
     # Seed AFTER the overrides: seeding first ignored a SEED given in config_overrides.
     seed_everything(int(getattr(cfg, 'SEED', 42)))
+    _report_device()
 
     logger.info("Starting enhanced model training with extended trend features...")
     data_processor = DataProcessor(cfg)

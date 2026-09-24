@@ -118,7 +118,7 @@ class Predictor:
             "horizon_bars": int(steps), "last_close": float(batch.last_close[0])}
             for h, steps in zip(HORIZONS, batch.horizon_steps)}
 
-    def predict_windows_frame(self, frame: pd.DataFrame, alpha: float = 0.1):
+    def predict_windows_frame(self, frame: pd.DataFrame, alpha: float = 0.1, batch_size: Optional[int] = None):
         """``(PredictionBatch, preprocessed df, anchor rows)`` for every complete window of a raw frame;
         anchor row i of the df is the last bar of window i (for Bars.from_frame)."""
         from neural_trade.data.loaders import validate_ohlcv_frame
@@ -130,9 +130,11 @@ class Predictor:
         X, lc, _ = make_inference_windows(close, self.config.LOOKBACK,
                                           extended_trend_periods=self.config.EXTENDED_TREND_PERIODS)
         start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
-        return self.predict(X, lc, alpha=alpha), df, np.arange(start - 1, len(close))
+        return self.predict(X, lc, alpha=alpha, batch_size=batch_size), df, np.arange(start - 1, len(close))
 
-    def predict_frame(self, frame: pd.DataFrame, alpha: float = 0.1) -> pd.DataFrame:
+    def predict_frame(self, frame: pd.DataFrame, alpha: float = 0.1, batch_size: Optional[int] = None) -> pd.DataFrame:
+        """``batch_size``: None = the training batch (bit-identical to training); larger (e.g. 4096)
+        is much faster on a GPU for bulk scoring and differs only at float32 round-off."""
         """Preprocess a raw OHLCV frame (Config.PREPROCESSORS) and forecast every complete window."""
         from neural_trade.data.loaders import validate_ohlcv_frame
         from neural_trade.data.windowing import make_inference_windows
@@ -144,4 +146,4 @@ class Predictor:
                                           extended_trend_periods=self.config.EXTENDED_TREND_PERIODS)
         start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
         index = pd.DatetimeIndex(df["timestamp"].iloc[start - 1:].to_numpy(), name="timestamp")
-        return self.predict(X, lc, alpha=alpha).to_frame(index=index)
+        return self.predict(X, lc, alpha=alpha, batch_size=batch_size).to_frame(index=index)

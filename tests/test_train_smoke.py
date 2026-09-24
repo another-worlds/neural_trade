@@ -101,3 +101,29 @@ def test_early_stopping_fires_on_a_plateau(tf, tiny_config, tmp_path, synthetic_
     val = result.history.history["val_loss"]
     assert len(set(np.round(val, 9))) == 1, f"frozen model should have a flat val_loss, got {val}"
     assert len(val) == cfg.EARLY + 1, f"expected to stop after {cfg.EARLY + 1} epochs, ran {len(val)}"
+
+
+def test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_complete(
+        tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+    """TRAIN_METRICS_EVERY=4: the loss accumulates every step, the diagnostics every 4th step
+    (steps 1, 5, 9 of 10), and the epoch logs still carry the full train_*/val_* keys (added once per
+    epoch by _EpochTrainLogs, before validation resets the accumulators)."""
+    monkeypatch.chdir(tmp_path)
+    tiny_config.TRAIN_METRICS_EVERY = 4
+    model, train_ds, val_ds = _build(tiny_config, tmp_path, synthetic_bars)
+    seen = {}
+
+    class Probe(tf.keras.callbacks.Callback):
+        def on_train_batch_end(self, batch, logs=None):
+            seen["loss"] = float(model._step_means["loss"].count)
+            seen["diag"] = float(model._step_means["point_h1"].count)
+            seen["logs"] = sorted(logs or {})
+
+    hist = model.fit(train_ds, epochs=1, steps_per_epoch=10, validation_data=val_ds, verbose=0, callbacks=[Probe()])
+    b = tiny_config.BATCH_SIZE
+    assert seen["loss"] == 10 * b and seen["diag"] == 3 * b
+    assert seen["logs"] == ["loss", "nonfinite_grad_steps"]  # lean per-step logs
+    h = hist.history
+    for key in ("loss", "val_loss", "grad_global_norm", "point_h1", "train_dir_mcc_h1", "pit_ks_h1",
+                "val_dir_mcc_h1", "val_pit_ks_h1", "nonfinite_grad_steps"):
+        assert key in h and np.isfinite(h[key][-1]), key

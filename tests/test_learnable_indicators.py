@@ -84,3 +84,33 @@ def test_matrix_and_scan_layers_agree():
     # RSI divides two EWMAs; compare with a tolerance scaled to each feature's magnitude
     scale = np.maximum(np.abs(outs[0]).max(axis=(0, 1), keepdims=True), 1.0)
     np.testing.assert_allclose(outs[1] / scale, outs[0] / scale, atol=2e-4)
+
+
+def test_multi_series_ewma_equals_one_call_per_series():
+    rng = np.random.default_rng(3)
+    K = 5
+    xs = tf.constant(np.cumsum(rng.normal(0, 1, (B, K, T)), axis=2).astype(np.float32))
+    al = tf.constant(rng.uniform(0.02, 0.9, (B, K)).astype(np.float32))
+    multi = mh.ewma_sequence_matrix_multi(xs, al).numpy()
+    for k in range(K):
+        one = mh.ewma_sequence_matrix(xs[:, k], al[:, k]).numpy()
+        np.testing.assert_allclose(multi[:, k], one, rtol=1e-5, atol=1e-5)
+
+
+def test_batched_layer_equals_per_indicator_layer_values_and_gradients():
+    """The two-stage batched call (default) computes exactly the per-indicator features."""
+    tf.keras.utils.set_random_seed(0)
+    layer = LearnableIndicators(Config())
+    x = tf.Variable(_x(4) * 0.3)
+    c = layer.config
+    n_logits = len(c.MA_SPANS) + 3 * len(c.MACD_SETTINGS) + len(c.RSI_PERIODS) + len(c.BB_PERIODS)
+    meta = tf.Variable(np.random.default_rng(5).uniform(-1, 1, (B, n_logits)).astype(np.float32))
+    layer([x, meta])  # build
+    with tf.GradientTape(persistent=True) as tape:
+        batched = layer._call_batched(tf.convert_to_tensor(x), meta)
+        reference = layer._call_per_indicator(tf.convert_to_tensor(x), meta)
+        lb, lr = tf.reduce_sum(tf.sin(batched)), tf.reduce_sum(tf.sin(reference))
+    np.testing.assert_allclose(batched.numpy(), reference.numpy(), rtol=1e-4, atol=1e-4)
+    targets = [x, meta] + layer.get_indicator_trainable_variables()
+    for gb, gr in zip(tape.gradient(lb, targets), tape.gradient(lr, targets)):
+        np.testing.assert_allclose(gb.numpy(), gr.numpy(), rtol=1e-3, atol=1e-3)

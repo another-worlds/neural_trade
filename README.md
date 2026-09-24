@@ -48,6 +48,34 @@ pip install -e ".[viz,dev]"
 
 Importing `neural_trade` does not import TensorFlow. Training modules load it on demand.
 
+## Performance
+
+On Windows, TensorFlow 2.10 finds CUDA/cuDNN only through `PATH`. `import neural_trade` adds the
+conda env's DLL folders when the env has the CUDA runtime, so **import `neural_trade` before
+`tensorflow`** (or start from an activated env). Training logs which device it uses and warns if
+no GPU is visible. Set `NEURAL_TRADE_NO_DLL_PATH=1` to opt out.
+
+Training time, full dataset (~30k training sequences), RTX 4070 Ti:
+
+| | before | now |
+|---|---|---|
+| epoch at batch 64 | ~90 s | 43 s |
+| epoch at batch 256 (the default) | ~20 s | 12 s |
+| 20-epoch run with the default settings | ~32 min | ~4-5 min |
+
+What made the difference:
+
+- **Training metrics.** The step returns only the running loss. The ~150 epoch-level training
+  diagnostics are computed once per epoch and updated every `TRAIN_METRICS_EVERY` steps (10). The
+  training loss and all validation metrics stay exact.
+- **Soft-ECE loss.** It is computed for all bins in one operation.
+- **Learnable indicators.** The 24 moving averages run as 2 batched matrix products.
+- **Batch size.** A step costs about the same at 64 or 256 because it is kernel-launch-bound.
+
+For bulk prediction, pass a larger `batch_size` to `Predictor.predict` / `predict_frame`, or
+`--batch-size` in the CLI: about 16,700 windows/s at 1024 on the GPU. The default, the training
+batch, reproduces training output bit for bit.
+
 ## Quick start (CLI)
 
 ```bash

@@ -31,6 +31,37 @@ from neural_trade.training.optim import build_indicator_optimizer
 logger = logging.getLogger(__name__)
 
 
+class _EpochTrainLogs(tf.keras.callbacks.Callback):
+    """Adds the full training-set metrics to the epoch logs, computed ONCE per epoch.
+
+    ``train_step`` returns only the running loss: recomputing ~150 epoch aggregates (direction
+    statistics per horizon, PIT, the running means) after every batch cost ~45 ms of a ~180 ms
+    step. The aggregates are read right after the last training batch - before Keras's validation
+    pass resets the accumulators - and merged into the epoch logs ahead of every other callback
+    (CustomTrainModel.fit puts this callback first), so loggers and stoppers see the same keys.
+    """
+
+    def __init__(self, model):
+        super().__init__()
+        self._model_ref = model
+        self._stash = None
+        self._supports_tf_logs = True  # never forces a per-batch numpy conversion
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self._stash = None
+
+    def on_train_batch_end(self, batch, logs=None):
+        steps = (self.params or {}).get("steps")
+        if steps is None or batch + 1 >= steps:  # the last batch (every batch if the length is unknown)
+            self._stash = self._model_ref.train_epoch_logs()
+
+    def on_epoch_end(self, epoch, logs=None):
+        if logs is not None and self._stash:
+            for k, v in self._stash.items():
+                if k not in ("loss",):
+                    logs[k] = v
+
+
 class CustomTrainModel(models.Model):
     def __init__(self, base_model, pred_scale, pred_mean,
                  lambda_point=1.0, lambda_local_trend=1.0, lambda_global_trend=0.2,
@@ -165,11 +196,69 @@ class CustomTrainModel(models.Model):
         seen = {id(m) for m in base}
         return base + [m for m in extra if id(m) not in seen]
 
-    def _epoch_logs(self, loss_components, y_true, y_pred_9, true_dirs, head_probs, gauss_probs, masks,
-                    head_prefix, gauss_prefix, training, grad_global_norm=None):
+    def _epoch_logs(self, loss_components, y_true, y_pred_9, last_close, head_prefix, gauss_prefix, training,
+                    grad_global_norm=None):
         """Update the epoch accumulators with this batch and return their running aggregates."""
+        self._update_epoch_metrics(loss_components, y_true, y_pred_9, last_close, training, grad_global_norm)
+        return self._epoch_results(head_prefix, gauss_prefix, training)
+
+    def _direction_inputs(self, y_true, y_pred_9, last_close):
+        """Labels, masks, head P(up) and Gaussian-readout P(up) per horizon, for the direction metrics.
+        One labelling rule for every path (neural_trade.metrics.tf_direction)."""
+        y_true = tf.cast(y_true, tf.float32)
+        y_true_raw = y_true * self.pred_scale + self.pred_mean
+        lc = tf.squeeze(last_close, axis=1)
+        deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
+        deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
+        m0, m1, m2, t0, t1, t2 = direction_labels_tf(y_true_raw, lc, deadband_bps, self.eps)
+        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
+        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e3), tf.float32)
+        heads, gauss = [], []
+        for price, direction, var in (y_pred_9[0:3], y_pred_9[3:6], y_pred_9[6:9]):
+            heads.append(tf.squeeze(direction, axis=1))
+            # P(up | the move left the deadband): matches the masked labels.
+            gauss.append(_losses.gaussian_up_prob_given_move(
+                tf.squeeze(price, axis=1), tf.clip_by_value(tf.squeeze(var, axis=1), var_floor, var_cap), lc,
+                deadband, self.pred_mean, self.pred_scale, self.eps))
+        return y_true, (t0, t1, t2), tuple(heads), tuple(gauss), (m0, m1, m2)
+
+    def train_epoch_logs(self):
+        """The training-set epoch aggregates as floats (called once per epoch by _EpochTrainLogs)."""
+        if getattr(self, "_train_results_fn", None) is None:
+            self._train_results_fn = tf.function(
+                lambda: dict(self._epoch_results("train_", "train_gauss_", True),
+                             nonfinite_grad_steps=self.nonfinite_grad_steps.result()))
+        return {k: float(v) for k, v in self._train_results_fn().items()}
+
+    def fit(self, *args, callbacks=None, **kwargs):
+        cbs = list(callbacks or [])
+        if not any(isinstance(c, _EpochTrainLogs) for c in cbs):
+            cbs.insert(0, _EpochTrainLogs(self))
+        return super().fit(*args, callbacks=cbs, **kwargs)
+
+    def _update_epoch_metrics(self, loss_components, y_true, y_pred_9, last_close, training, grad_global_norm=None):
+        """Accumulate this batch. The loss is always exact; in training the other diagnostics are
+        updated every Config.TRAIN_METRICS_EVERY steps (and on the first step of every epoch)."""
         c = loss_components
         batch = tf.cast(tf.shape(y_true)[0], tf.float32)
+        self._step_means['loss'].update_state(tf.cast(c.total, tf.float32), sample_weight=batch)
+        every = int(getattr(self.config, 'TRAIN_METRICS_EVERY', 1) or 1) if training else 1
+        if every <= 1:
+            self._update_diagnostics(c, batch, y_true, y_pred_9, last_close, training, grad_global_norm)
+            return
+        probe = self._step_means['point_h1']
+        with tf.device("/CPU:0"):  # int64 FloorMod has no GPU kernel here (it would need XLA/ptxas)
+            due = tf.logical_or(tf.equal(tf.math.floormod(self.optimizer.iterations - 1, every), 0),
+                                tf.equal(probe.count, 0.0))  # first step after a reset always counts
+
+        def _update():
+            self._update_diagnostics(c, batch, y_true, y_pred_9, last_close, training, grad_global_norm)
+            return tf.constant(True)
+
+        tf.cond(due, _update, lambda: tf.constant(False))
+
+    def _update_diagnostics(self, c, batch, y_true, y_pred_9, last_close, training, grad_global_norm=None):
+        y_true, true_dirs, head_probs, gauss_probs, masks = self._direction_inputs(y_true, y_pred_9, last_close)
         scalars = {
             'loss': c.total,
             'point_loss': c.point_h0 + c.point_h1 + c.point_h2,
@@ -195,6 +284,7 @@ class CustomTrainModel(models.Model):
         scalars['trend_loss'] = scalars['trend_h0'] + scalars['trend_h1'] + scalars['trend_h2']
         if training and grad_global_norm is not None:
             scalars['grad_global_norm'] = grad_global_norm
+        scalars.pop('loss')  # updated every step by _update_epoch_metrics
         for k, v in scalars.items():
             self._step_means[k].update_state(tf.cast(v, tf.float32), sample_weight=batch)
         self._dir_head_acc.update_state(true_dirs, head_probs, masks)
@@ -202,6 +292,9 @@ class CustomTrainModel(models.Model):
         self._pit_acc.update_state([y_true[:, 0], y_true[:, 1], y_true[:, 2]],
                                    [y_pred_9[0], y_pred_9[3], y_pred_9[6]],
                                    [y_pred_9[2], y_pred_9[5], y_pred_9[8]])
+
+    def _epoch_results(self, head_prefix, gauss_prefix, training):
+        """The running aggregates of every epoch accumulator, as a logs dict."""
         logs = {k: m.result() for k, m in self._step_means.items()
                 if training or k not in TRAIN_ONLY_MEAN_KEYS}
         logs.update(self._pit_acc.logs())
@@ -433,50 +526,14 @@ class CustomTrainModel(models.Model):
                 raw = tf.math.asinh((clipped - 1.0) / 2.0)
                 var.assign(raw)
 
-        # === COMPUTE DIRECTION METRICS FOR ALL 3 HORIZONS ===
-        y_true = tf.cast(y_true, tf.float32)
-        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, 3] (delta_raw)
-        last_close_squeeze = tf.squeeze(last_close, axis=1)
-        # Match training direction labeling (including deadband if enabled)
-        deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
-        deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
-
-        # One labelling rule for every path (neural_trade.metrics.tf_direction).
-        mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2 = direction_labels_tf(
-            y_true_raw, last_close_squeeze, deadband_bps, self.eps)
-
-        # Extract direction predictions for all 3 horizons
-        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred_9
-        dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)
-        dir_pred_h1 = tf.squeeze(dir_pred_h1, axis=1)
-        dir_pred_h2 = tf.squeeze(dir_pred_h2, axis=1)
-
-        # Gaussian-implied P(up) from (mu, var): interpretable and consistent with regression.
-        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e3), tf.float32)
-        var_h0_c = tf.clip_by_value(tf.squeeze(var_h0, axis=1), var_floor, var_cap)
-        var_h1_c = tf.clip_by_value(tf.squeeze(var_h1, axis=1), var_floor, var_cap)
-        var_h2_c = tf.clip_by_value(tf.squeeze(var_h2, axis=1), var_floor, var_cap)
-        mu_h0 = tf.squeeze(price_h0, axis=1)
-        mu_h1 = tf.squeeze(price_h1, axis=1)
-        mu_h2 = tf.squeeze(price_h2, axis=1)
-        # P(up | the move left the deadband): matches the masked labels (see losses.gaussian_up_prob_given_move).
-        _lc = tf.squeeze(last_close, axis=1)
-        gauss_p_up_h0 = _losses.gaussian_up_prob_given_move(mu_h0, var_h0_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
-        gauss_p_up_h1 = _losses.gaussian_up_prob_given_move(mu_h1, var_h1_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
-        gauss_p_up_h2 = _losses.gaussian_up_prob_given_move(mu_h2, var_h2_c, _lc, deadband, self.pred_mean, self.pred_scale, self.eps)
-
-        logs = self._epoch_logs(
-            loss_components, y_true, y_pred_9,
-            (true_dir_h0, true_dir_h1, true_dir_h2),
-            (dir_pred_h0, dir_pred_h1, dir_pred_h2),
-            (gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2),
-            (mask_h0, mask_h1, mask_h2),
-            head_prefix="train_", gauss_prefix="train_gauss_", training=True,
-            grad_global_norm=grad_global_norm,
-        )
-        logs["nonfinite_grad_steps"] = self.nonfinite_grad_steps.result()
-        return logs
+        # Metric inputs (direction labels, Gaussian readout) are computed INSIDE the update, so on
+        # the steps where the training diagnostics are skipped they cost nothing.
+        self._update_epoch_metrics(loss_components, y_true, y_pred_9, last_close,
+                                   training=True, grad_global_norm=grad_global_norm)
+        # Lean per-step logs: the full training aggregates are added once per epoch by
+        # _EpochTrainLogs (see CustomTrainModel.fit), not recomputed after every batch.
+        return {"loss": self._step_means['loss'].result(),
+                "nonfinite_grad_steps": self.nonfinite_grad_steps.result()}
 
     def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):
         """Direction metrics (acc, sensitivity, specificity, balanced acc, F1, MCC, Brier,
@@ -517,47 +574,10 @@ class CustomTrainModel(models.Model):
          t_perp_total, casimir_val, vac_val, hd_val, ife_val,
          vac_overflow_val) = loss_components
 
-        # Compute direction labels with the same trade-aware deadband used in training loss.
-        y_true = tf.cast(y_true, tf.float32)
-        y_true_raw = y_true * self.pred_scale + self.pred_mean  # [B, 3]
-        last_close_squeeze = tf.squeeze(last_close, axis=1)
-
-        deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
-        deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
-
-        # One labelling rule for every path (neural_trade.metrics.tf_direction).
-        mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2 = direction_labels_tf(
-            y_true_raw, last_close_squeeze, deadband_bps, self.eps)
-
-        price_h0, dir_pred_h0, var_h0, price_h1, dir_pred_h1, var_h1, price_h2, dir_pred_h2, var_h2 = y_pred_9
-        dir_pred_h0 = tf.squeeze(dir_pred_h0, axis=1)
-        dir_pred_h1 = tf.squeeze(dir_pred_h1, axis=1)
-        dir_pred_h2 = tf.squeeze(dir_pred_h2, axis=1)
-
-        # Gaussian-implied P(up) from (mu, var)
-        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
-        var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e3), tf.float32)
-        var_h0_c = tf.clip_by_value(tf.squeeze(var_h0, axis=1), var_floor, var_cap)
-        var_h1_c = tf.clip_by_value(tf.squeeze(var_h1, axis=1), var_floor, var_cap)
-        var_h2_c = tf.clip_by_value(tf.squeeze(var_h2, axis=1), var_floor, var_cap)
-        mu_h0 = tf.squeeze(price_h0, axis=1)
-        mu_h1 = tf.squeeze(price_h1, axis=1)
-        mu_h2 = tf.squeeze(price_h2, axis=1)
-        # P(up | the move left the deadband): matches the masked labels (see losses.gaussian_up_prob_given_move).
-        gauss_p_up_h0 = _losses.gaussian_up_prob_given_move(mu_h0, var_h0_c, last_close_squeeze, deadband, self.pred_mean, self.pred_scale, self.eps)
-        gauss_p_up_h1 = _losses.gaussian_up_prob_given_move(mu_h1, var_h1_c, last_close_squeeze, deadband, self.pred_mean, self.pred_scale, self.eps)
-        gauss_p_up_h2 = _losses.gaussian_up_prob_given_move(mu_h2, var_h2_c, last_close_squeeze, deadband, self.pred_mean, self.pred_scale, self.eps)
-
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.
-        return self._epoch_logs(
-            loss_components, y_true, y_pred_9,
-            (true_dir_h0, true_dir_h1, true_dir_h2),
-            (dir_pred_h0, dir_pred_h1, dir_pred_h2),
-            (gauss_p_up_h0, gauss_p_up_h1, gauss_p_up_h2),
-            (mask_h0, mask_h1, mask_h2),
-            head_prefix="", gauss_prefix="gauss_", training=False,
-        )
+        return self._epoch_logs(loss_components, y_true, y_pred_9, last_close,
+                                head_prefix="", gauss_prefix="gauss_", training=False)
 
 
     def get_config(self):

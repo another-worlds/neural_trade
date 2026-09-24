@@ -218,6 +218,29 @@ def ewma_sequence_matrix(x_seq, alpha):
     return tf.einsum('btk,bk->bt', weights, x)
 
 
+def ewma_sequence_matrix_multi(x_seq, alpha):
+    """``ewma_sequence_matrix`` for K series at once: ``x_seq`` [B, K, T], ``alpha`` [B, K] -> [B, K, T].
+
+    One batched weight tensor [B, K, T, T] and one einsum instead of K separate calls: the same
+    formula per element (the results agree to float32 round-off). LearnableIndicators computes its
+    18 first-stage and 6 second-stage averages this way - 2 kernel groups instead of 24.
+    """
+    x = tf.cast(x_seq, tf.float32)                                           # [B, K, T]
+    a = tf.clip_by_value(tf.cast(alpha, tf.float32), _EWMA_ALPHA_CLAMP, 1.0 - _EWMA_ALPHA_CLAMP)  # [B, K]
+
+    t = tf.range(tf.shape(x)[2])
+    lag = t[:, None] - t[None, :]
+    lower = lag >= 0
+    lag_f = tf.cast(tf.maximum(lag, 0), tf.float32)
+
+    decay = tf.exp(lag_f[None, None, :, :] * tf.math.log1p(-a)[:, :, None, None])   # [B, K, T, T]
+    weights = decay * a[:, :, None, None]
+    first_col = tf.equal(t, 0)[None, None, None, :]
+    weights = tf.where(first_col, decay, weights)
+    weights = tf.where(lower[None, None, :, :], weights, tf.zeros_like(weights))
+    return tf.einsum('bjtk,bjk->bjt', weights, x)
+
+
 # -------------------------
 # Utility Functions
 # -------------------------

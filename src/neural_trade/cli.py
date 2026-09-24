@@ -94,7 +94,7 @@ def cmd_predict(args) -> int:
         close = df[[c for c in df.columns if c.lower() == "close"][0]].to_numpy()
         print(json.dumps(predictor.predict_last(close, alpha=args.alpha), indent=2))  # noqa: T201
         return 0
-    frame = predictor.predict_frame(df, alpha=args.alpha)
+    frame = predictor.predict_frame(df, alpha=args.alpha, batch_size=args.batch_size)
     if args.out:
         frame.to_csv(args.out)
         logger.info("%d rows -> %s", len(frame), args.out)
@@ -111,7 +111,7 @@ def cmd_backtest(args) -> int:
                                        load_params, var_scale_from)
 
     predictor = Predictor.from_artifacts(args.artifacts)
-    batch, df, anchors = predictor.predict_windows_frame(pd.read_csv(args.csv))
+    batch, df, anchors = predictor.predict_windows_frame(pd.read_csv(args.csv), batch_size=args.batch_size)
     frame = batch.to_prediction_frame(predictor.bundle.pred_scale, predictor.bundle.pred_mean)
     params = load_params(args.params) if args.params else {}
     strategy = build_strategy(args.strategy or params.get("strategy", Strategies.default), params.get("params"),
@@ -213,6 +213,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last", action="store_true", help="only the newest window, as JSON")
     p.add_argument("--alpha", type=float, default=0.1)
     p.add_argument("--tail", type=int, default=10)
+    p.add_argument("--batch-size", type=int, default=None,
+                   help="bulk scoring batch (default: the training batch, bit-identical to training)")
     p.set_defaults(func=cmd_predict)
 
     b = sub.add_parser("backtest", help="backtest a strategy on a CSV with a saved bundle")
@@ -223,6 +225,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--out", default=None)
     b.add_argument("--plot", action="store_true", help="write backtest.html into --out")
     b.add_argument("--random-seeds", type=int, default=100)
+    b.add_argument("--batch-size", type=int, default=None, help="prediction batch (default: the training batch)")
     b.set_defaults(func=cmd_backtest)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")

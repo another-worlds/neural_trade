@@ -107,9 +107,82 @@ class LearnableIndicators(layers.Layer):
             return mh.ewma_sequence(x_seq, alpha_scalar)
         return mh.ewma_sequence_matrix(x_seq, alpha_scalar)
 
+    def _alpha(self, logit, meta_adjust, col):
+        """Per-sample alpha for one learned period: STE-scaled logit + the meta adjustment."""
+        # Correct STE gradient trick: forward=logit (unchanged), backward=logit * grad_multiplier
+        logit_for_alpha = (self.grad_multiplier * logit
+                           - tf.stop_gradient((self.grad_multiplier - 1.0) * logit))
+        return self._alpha_from_logit(logit_for_alpha + meta_adjust[:, col] * self.meta_scale)
+
     def call(self, inputs, training=None):
         x, meta_adjust = inputs
         x = tf.cast(x, tf.float32)
+        if str(getattr(self.config, 'EWMA_IMPL', 'matrix')).lower() == 'scan':
+            return self._call_per_indicator(x, meta_adjust)
+        return self._call_batched(x, meta_adjust)
+
+    def _call_batched(self, x, meta_adjust):
+        """All 24 moving averages as two batched matrix products (Config.EWMA_IMPL = "matrix").
+
+        Stage 1: the 18 averages of the input or its gains/losses (MA, MACD fast/slow, Bollinger
+        mean, RSI gains/losses). Stage 2: the 6 that depend on stage 1 (MACD signal, Bollinger
+        variance). Same features, order and meta-adjust columns as ``_call_per_indicator``; the two
+        agree to float32 round-off (tests/test_learnable_indicators.py).
+        """
+        n_ma, n_macd = len(self.alpha_vars_ma), len(self.config.MACD_SETTINGS)
+        n_rsi, n_bb = len(self.rsi_alpha_vars), len(self.bb_alpha_vars)
+        col = 0
+        ma = [self._alpha(v, meta_adjust, col + i) for i, v in enumerate(self.alpha_vars_ma)]
+        col += n_ma
+        macd = []
+        for i in range(n_macd):
+            macd.append(tuple(self._alpha(self.macd_alpha_vars[f'macd_{i}_{part}'], meta_adjust, col + j)
+                              for j, part in enumerate(('fast', 'slow', 'signal'))))
+            col += 3
+        rsi = [self._alpha(v, meta_adjust, col + i) for i, v in enumerate(self.rsi_alpha_vars)]
+        col += n_rsi
+        bb = [self._alpha(v, meta_adjust, col + i) for i, v in enumerate(self.bb_alpha_vars)]
+
+        diffs = x[:, 1:] - x[:, :-1]
+        zero = tf.zeros((tf.shape(x)[0], 1), dtype=x.dtype)
+        gains = tf.concat([zero, tf.where(diffs > 0, diffs, tf.zeros_like(diffs))], axis=1)
+        losses = tf.concat([zero, tf.where(diffs < 0, -diffs, tf.zeros_like(diffs))], axis=1)
+
+        seqs = [x] * (n_ma + 2 * n_macd + n_bb) + [gains] * n_rsi + [losses] * n_rsi
+        alphas = ma + [f for f, _, _ in macd] + [s_ for _, s_, _ in macd] + bb + rsi + rsi
+        e1 = mh.ewma_sequence_matrix_multi(tf.stack(seqs, axis=1), tf.stack(alphas, axis=1))
+        e1 = tf.unstack(e1, axis=1)
+        o = 0
+        ema_ma, o = e1[o:o + n_ma], o + n_ma
+        ema_fast, o = e1[o:o + n_macd], o + n_macd
+        ema_slow, o = e1[o:o + n_macd], o + n_macd
+        bb_mean, o = e1[o:o + n_bb], o + n_bb
+        gains_ema, o = e1[o:o + n_rsi], o + n_rsi
+        losses_ema = e1[o:o + n_rsi]
+
+        macd_lines = [f - s_ for f, s_ in zip(ema_fast, ema_slow)]
+        sq_devs = [tf.square(x - m) for m in bb_mean]
+        e2 = mh.ewma_sequence_matrix_multi(tf.stack(macd_lines + sq_devs, axis=1),
+                                           tf.stack([g for _, _, g in macd] + bb, axis=1))
+        e2 = tf.unstack(e2, axis=1)
+        macd_sig, bb_var = e2[:n_macd], e2[n_macd:]
+
+        features = list(ema_ma)
+        for line, sig in zip(macd_lines, macd_sig):
+            hist = line - sig
+            features.extend([line, sig, hist, tf.tanh(hist * 10.0)])
+        for g, l_ in zip(gains_ema, losses_ema):
+            features.append(100.0 - (100.0 / (1.0 + g / (l_ + 1e-8))))
+        for mean, var in zip(bb_mean, bb_var):
+            std = tf.sqrt(var + 1e-8)
+            features.extend([mean, mean + 2.0 * std, mean - 2.0 * std, (x - (mean - 2.0 * std)) / (4.0 * std + 1e-8)])
+        features.append(x)
+        output = tf.stack(features, axis=-1)
+        output.set_shape([None, self.config.LOOKBACK, len(features)])
+        return output
+
+    def _call_per_indicator(self, x, meta_adjust):
+        """The reference form: one EWMA call per indicator (used with EWMA_IMPL = "scan")."""
         features = []
         idx = 0  # Index for slicing meta_adjust
 

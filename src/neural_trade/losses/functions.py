@@ -249,16 +249,14 @@ def soft_ece_loss(model, true_dir, dir_pred, mask, n_bins=10, bandwidth=None):
     h2 = tf.constant(2.0 * bandwidth ** 2, dtype=tf.float32)
 
     total_eff = tf.reduce_sum(m) + 1e-8
-    ece = tf.constant(0.0, dtype=tf.float32)
-    for i in range(n_bins):
-        c = tf.constant((float(i) + 0.5) / float(n_bins), dtype=tf.float32)
-        w = tf.exp(-tf.square(p - c) / h2) * m
-        sum_w = tf.reduce_sum(w) + 1e-8
-        soft_acc = tf.reduce_sum(w * y) / sum_w
-        soft_conf = tf.reduce_sum(w * p) / sum_w
-        bin_weight = tf.reduce_sum(w) / total_eff
-        ece = ece + bin_weight * tf.abs(soft_acc - soft_conf)
-    return ece
+    # All bins at once ([B, n_bins]): the per-bin Python loop issued ~30 small kernels per bin and
+    # was ~3/4 of the whole loss's forward+backward time.
+    centers = (tf.range(n_bins, dtype=tf.float32) + 0.5) / float(n_bins)
+    w = tf.exp(-tf.square(p[:, None] - centers[None, :]) / h2) * m[:, None]      # [B, n_bins]
+    w_sum = tf.reduce_sum(w, axis=0)                                              # [n_bins]
+    soft_acc = tf.reduce_sum(w * y[:, None], axis=0) / (w_sum + 1e-8)
+    soft_conf = tf.reduce_sum(w * p[:, None], axis=0) / (w_sum + 1e-8)
+    return tf.reduce_sum(w_sum / total_eff * tf.abs(soft_acc - soft_conf))
 
 
 @Losses.register(name="t_perp_calibration_loss", tags=["calibration", "t_perp", "perpendicular"])
