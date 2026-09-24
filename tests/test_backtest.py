@@ -274,3 +274,21 @@ def test_calibrated_quantile_thresholds_come_from_the_calibration_block():
         w = s.weighted_direction[d["bar"]]
         assert (w > strat.long_above) if d["side"] == "LONG" else (w < strat.short_below)
     assert Strategies.default == "calibrated_quantile"
+
+
+@pytest.mark.parametrize("name", ["liberal", "enhanced_multi_horizon"])
+def test_zero_predicted_move_does_not_put_the_stop_at_the_entry(name):
+    """With served deltas shrunk to ~0, the stop / take-profit distances fall back to a floor in
+    predicted sigmas instead of sitting at the entry price (which stopped every trade out at once)."""
+    f, bars = _frame(600, seed=21)
+    for h in HORIZONS:
+        f.delta[h] = np.where(np.arange(len(f)) % 2 == 0, 1e-9, -1e-9)   # tiny, sign alternating
+    s = SignalFrame.build(f, var_scale_from(f))
+    strat = build_strategy(name, {"min_agreement": 0.0, "min_signal_strength": 0.0, "min_confidence": 0.0,
+                                  "require_direction_alignment": False})
+    orders = [(t, o) for t in range(len(s)) if (o := strat.decide(s, t)) is not None]
+    assert orders
+    for t, o in orders:
+        assert abs(o.tp) >= 0.5 * s.sigma[t, 1] * 0.99
+        if name == "liberal":
+            assert abs(o.sl) >= 0.25 * s.sigma[t, 1] * 0.99

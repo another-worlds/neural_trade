@@ -37,7 +37,8 @@ def _dirs(runs: Union[str, Path, Iterable[Union[str, Path]]]) -> List[Path]:
     for r in runs:
         matches = glob.glob(str(r))
         out += [Path(m) for m in sorted(matches)] if matches else [Path(r)]
-    return [d for d in out if d.is_dir()]
+    # A run directory has meta.json or config.yaml; container folders (ablations/, gates/ ...) are not runs.
+    return [d for d in out if d.is_dir() and ((d / "meta.json").exists() or (d / "config.yaml").exists())]
 
 
 def compare_runs(runs, split: str = "test", metrics: Optional[Sequence[str]] = None,

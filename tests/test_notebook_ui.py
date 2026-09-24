@@ -175,3 +175,18 @@ def test_pick_run_finds_the_newest_servable_run_or_explains(tmp_path):
     assert pick_run(tmp_path / "gates" / "m6", tmp_path).name == "m6"
     with pytest.raises(FileNotFoundError, match="no serving bundle"):
         pick_run(tmp_path / "no_bundle", tmp_path)
+
+
+def test_show_puts_figures_and_tables_into_the_widget_itself():
+    import ipywidgets as w
+    import plotly.graph_objects as go
+
+    from neural_trade.notebook._display import show
+
+    out = w.Output()
+    show(out, go.Figure(go.Scatter(y=[1, 2, 3]), layout_title_text="curves"))
+    (o,) = out.outputs
+    assert "application/vnd.plotly.v1+json" in o["data"] and "text/html" in o["data"]
+    show(out, pd.DataFrame({"a": [1]}))                      # replaces, never appends
+    (o,) = out.outputs
+    assert "<table" in o["data"]["text/html"]

@@ -85,7 +85,9 @@ def variance_block(y, mu, sigma, interval=None) -> Dict[str, float]:
         "crps": float(np.mean(gaussian_crps(y, mu, s))),
         "nll": float(np.mean(0.5 * np.log(2 * math.pi * s ** 2) + err2 / (2 * s ** 2))),
         "pit_ks": npm.pit_ks(y, mu, variance=s ** 2),
-        "corr_var_err2_spearman": (float(spearmanr(s ** 2, err2).correlation) if np.std(s) > 0 else 0.0),
+        # (0.0 when either side is constant: e.g. a constant-variance baseline, or zero served deltas)
+        "corr_var_err2_spearman": (float(spearmanr(s ** 2, err2).correlation)
+                                   if np.ptp(s ** 2) > 0 and np.ptp(err2) > 0 else 0.0),
         "sigma_dispersion": float(np.std(s) / np.mean(s)) if np.mean(s) > 0 else 0.0,
     }
     if interval is not None:

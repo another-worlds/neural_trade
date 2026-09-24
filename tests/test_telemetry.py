@@ -85,3 +85,15 @@ def test_compare_runs_tabulates_scored_runs_and_refuses_unscored(tmp_path):
     with pytest.raises(FileNotFoundError, match="no eval_report_test.json"):
         compare_runs(tmp_path / "*")
     assert compare_runs(tmp_path / "*", skip_unscored=True).attrs["unscored"] == ["c"]
+
+
+def test_compare_runs_ignores_container_folders(tmp_path):
+    from neural_trade.experiments.compare import compare_runs
+
+    (tmp_path / "gates" / "m6").mkdir(parents=True)
+    (tmp_path / "ablations").mkdir()
+    run = tmp_path / "run-a"
+    run.mkdir()
+    (run / "meta.json").write_text('{"seed": 1, "tags": []}', encoding="utf-8")
+    df = compare_runs(tmp_path / "*", skip_unscored=True)
+    assert df.attrs["unscored"] == ["run-a"]

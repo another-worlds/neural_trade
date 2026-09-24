@@ -125,6 +125,7 @@ class EnhancedMultiHorizonStrategy(Strategy):
     reversal_short: float = 0.60
     incoherence_min_bars: int = 3
     max_hold: int = 30
+    min_move_sigma: float = 0.5   # floor on the move that sizes the take-profits, in predicted h1 sigmas
 
     def _threshold(self, s, t):
         conf, strength = s.avg_confidence[t], s.strength[t]
@@ -146,10 +147,11 @@ class EnhancedMultiHorizonStrategy(Strategy):
                              + s.strength[t] * self.size_strength_mult, 0.1, 1.0))
         for sign, ok in ((1, wdir > thr and d1 > 0), (-1, wdir < 1.0 - thr and d1 < 0)):
             if ok and (not self.require_consensus_side or s.consensus[t] == sign):
-                return Order(_side(sign), size, tp=sign * abs(d1) * self.tp2_delta_mult,
+                move = max(abs(d1), self.min_move_sigma * s.sigma[t, 1])
+                return Order(_side(sign), size, tp=sign * move * self.tp2_delta_mult,
                              sl=-sign * s.volatility[t] * self.sl_vol_mult, tp_is_offset=True, reason="consensus",
                              max_hold=self.max_hold,
-                             info={"tp1_offset": abs(d1) * self.tp1_delta_mult, "confidence": s.avg_confidence[t]})
+                             info={"tp1_offset": move * self.tp1_delta_mult, "confidence": s.avg_confidence[t]})
         return None
 
     def exit_signal(self, s, t, side, bars_held, entry_price, order):
@@ -188,6 +190,9 @@ class LiberalStrategy(Strategy):
     sl_delta_mult: float = 0.5
     tp1_min_bars: int = 3
     max_hold: int = 30
+    # Floor on the move that sizes TP/SL, in predicted h1 sigmas: with a zero (shrunk or flat) delta
+    # the stop sat at the entry price and every trade stopped out in its entry bar.
+    min_move_sigma: float = 0.5
 
     def decide(self, s, t):
         if (self.require_magnitude_coherence and not s.magnitude_coherent[t]) or \
@@ -203,7 +208,8 @@ class LiberalStrategy(Strategy):
             thr = self.base_entry_threshold + self.low_quality_threshold_increase
         if strength < self.min_signal_strength or conf < self.min_confidence or agree < self.min_agreement:
             return None
-        d1, wdir = abs(s.delta[t, 1]), s.weighted_direction[t]
+        d1 = max(abs(s.delta[t, 1]), self.min_move_sigma * s.sigma[t, 1])
+        wdir = s.weighted_direction[t]
         for sign, ok in ((1, wdir > thr), (-1, wdir < 1.0 - thr)):
             if ok and (not self.require_consensus_side or s.consensus[t] == sign):
                 return Order(_side(sign), 1.0, tp=sign * d1 * self.tp2_delta_mult, sl=-sign * d1 * self.sl_delta_mult,

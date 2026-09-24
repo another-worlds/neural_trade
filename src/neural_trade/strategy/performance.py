@@ -50,6 +50,7 @@ def summarize(equity, bar_returns_net, bar_returns_gross, trades, fees_paid: flo
         "sortino": sortino(bar_returns_net, periods_per_year),
         "max_drawdown": max_drawdown(equity),
         "hit_rate": float(np.mean([p > 0 for p in net])) if net else float("nan"),
+        "hit_rate_gross": float(np.mean([t.gross_pnl > 0 for t in trades])) if trades else float("nan"),  # before costs
         "profit_factor": profit_factor(net),
         "avg_hold_bars": float(np.mean([t.bars_held for t in trades])) if trades else 0.0,
         "exposure": float(exposure),

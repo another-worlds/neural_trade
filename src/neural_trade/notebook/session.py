@@ -21,6 +21,8 @@ import threading
 import time
 from typing import Dict, List, Optional
 
+from neural_trade.notebook._display import show
+
 logger = logging.getLogger(__name__)
 
 _QUIET_CALLBACKS = ("tqdm_progress",)   # console progress bars would print into whichever cell is active
@@ -225,8 +227,7 @@ class TrainingSession:
         self._w["epochs"].value = min(len(self.history), self.epochs)
         fig = plotly_interactive(self.history, self.config)
         out = self._w["curves"]
-        out.clear_output(wait=True)
-        out.append_display_data(fig)   # thread-safe; `with out:` does not capture from a thread
+        show(out, fig)   # state update: never published to the executing cell (see notebook._display)
         last = self.history[-1]
         keys = [("loss", "train loss"), ("val_loss", "val loss"), ("val_dir_mcc_h1", "val MCC h1"),
                 ("val_gauss_dir_mcc_h1", "val Gauss MCC h1"), ("val_pit_ks_h1", "val PIT-KS h1"),

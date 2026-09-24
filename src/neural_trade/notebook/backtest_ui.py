@@ -17,6 +17,8 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
+from neural_trade.notebook._display import show
+
 COST_FIELDS = ("fee_bps", "half_spread_bps", "slippage_bps", "max_hold", "tp_sl_on", "same_bar_tiebreak",
                "random_seeds")
 _DERIVED = {"long_above", "short_below", "median"}   # set from the calibration block, not by hand
@@ -91,7 +93,7 @@ class BacktestExplorer:
 
     def summary_frame(self, res=None) -> pd.DataFrame:
         res = res or self.last
-        cols = ["n_trades", "total_return", "sharpe_net", "max_drawdown", "hit_rate", "profit_factor", "exposure",
+        cols = ["n_trades", "total_return", "sharpe_net", "max_drawdown", "hit_rate", "hit_rate_gross", "profit_factor", "exposure",
                 "fees_paid", "costs_paid"]
         rows = {res.strategy: {k: res.summary.get(k) for k in cols}}
         for name, s in res.baselines.items():
@@ -150,13 +152,10 @@ class BacktestExplorer:
                 return
             from neural_trade.registries.visualizations import Visualizations
 
-            table.clear_output(wait=True)
-            table.append_display_data(self.summary_frame(res).round(4))
-            fig.clear_output(wait=True)
-            fig.append_display_data(Visualizations.build("plotly_trading", res, self.config, bars=self.bars))
-            trades.clear_output(wait=True)
+            show(table, self.summary_frame(res).round(4))
+            show(fig, Visualizations.build("plotly_trading", res, self.config, bars=self.bars))
             tf_ = res.trades_frame()
-            trades.append_display_data(tf_.tail(30) if len(tf_) else pd.DataFrame({"trades": []}))
+            show(trades, tf_.tail(30) if len(tf_) else pd.DataFrame({"trades": []}))
             s = res.summary
             status.value = (f"<b>{s['n_trades']}</b> trades, net <b>{100 * s['total_return']:+.2f}%</b>, "
                             f"gross {100 * s['gross_pnl'] / res.config.initial_equity:+.2f}%, "

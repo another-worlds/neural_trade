@@ -12,12 +12,14 @@ coverage. Nothing is written back to the run.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Optional
 
 import numpy as np
 import pandas as pd
 
 from neural_trade.evaluation.frame import HORIZONS
+from neural_trade.notebook._display import show
 
 
 def _ev(y, d) -> float:
@@ -51,10 +53,16 @@ class CalibrationExplorer:
         from neural_trade.metrics.numpy_metrics import ece_pos
 
         cal, test = self.blocks["cal_raw"], self.blocks["test_raw"]
-        pipe = CalibrationPipeline(conformal_scale=conformal_scale, shrink_delta=shrink_delta).fit_from_arrays(
-            self._preds(cal), cal.y, cal.last_close, deadband_bps=float(self.config.DIR_DEADBAND_BPS),
-            conformal_alpha=alpha, windows=cal.X_raw, pred_scale=self.pred_scale,
-            horizon_steps=tuple(self.config.HORIZON_STEPS))
+        cal_log = logging.getLogger("neural_trade.calibration")   # the fit narrates every step at INFO
+        level = cal_log.level
+        cal_log.setLevel(logging.WARNING)
+        try:
+            pipe = CalibrationPipeline(conformal_scale=conformal_scale, shrink_delta=shrink_delta).fit_from_arrays(
+                self._preds(cal), cal.y, cal.last_close, deadband_bps=float(self.config.DIR_DEADBAND_BPS),
+                conformal_alpha=alpha, windows=cal.X_raw, pred_scale=self.pred_scale,
+                horizon_steps=tuple(self.config.HORIZON_STEPS))
+        finally:
+            cal_log.setLevel(level)
         out = pipe.apply(self._preds(test), alpha=alpha, windows=test.X_raw)
         labels = direction_labels_np(test.y, test.last_close, float(self.config.DIR_DEADBAND_BPS))
         rows = {}
@@ -111,8 +119,7 @@ class CalibrationExplorer:
         def do_refit(_=None):
             status.value = "<i>fitting...</i>"
             frame = self.refit(scale.value, shrink.value, alpha.value)
-            table.clear_output(wait=True)
-            table.append_display_data(frame.round(4))
+            show(table, frame.round(4))
             draw()
             status.value = f"refit: scale={scale.value}, shrinkage={shrink.value}, alpha={alpha.value:.2f}"
 
@@ -120,10 +127,8 @@ class CalibrationExplorer:
             if self.pipeline is None:
                 return
             r, c = self.figures(horizon.value)
-            rel.clear_output(wait=True)
-            rel.append_display_data(r)
-            cov.clear_output(wait=True)
-            cov.append_display_data(c)
+            show(rel, r)
+            show(cov, c)
 
         refit.on_click(do_refit)
         horizon.observe(draw, names="value")
