@@ -3,7 +3,8 @@
 One JSON object per epoch in ``metrics.jsonl``: the Keras epoch logs (epoch aggregates, see
 CustomTrainModel), the current learning rates, every loss weight and every learned indicator
 period, plus wall-clock timing. ``status.json`` is rewritten each epoch with progress,
-seconds per step and the number of telemetry errors.
+seconds per step and the number of telemetry errors. ``period_init.json`` holds the learned
+periods when training began (the baseline the indicator figure measures change from).
 
 Telemetry must never stop training: every write is wrapped, failures are counted and logged.
 The old ParamsLogger rewrote a growing CSV every epoch (O(n^2)) and a CSV held open in Excel
@@ -20,6 +21,8 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 import tensorflow as tf
+
+from neural_trade.core.indicator_periods import PERIOD_INIT_FILE, configured_periods
 
 _log = logging.getLogger(__name__)
 
@@ -41,6 +44,10 @@ def _plain(v: Any):
 
 
 class JsonlEpochLogger(tf.keras.callbacks.Callback):
+    """Also writes ``period_init.json`` when training begins: the learned indicator periods before the
+    first step (metrics.jsonl rows are logged at epoch ends, so its first row is already one epoch
+    in), and ``matches_config`` - false after a warm start from earlier weights."""
+
     def __init__(self, out_dir, indicator_layer=None, run_id: Optional[str] = None):
         super().__init__()
         self.out_dir = Path(out_dir)
@@ -49,6 +56,7 @@ class JsonlEpochLogger(tf.keras.callbacks.Callback):
         self.n_errors = 0
         self._t_train = self._t_epoch = None
         self._steps = 0
+        self._init_written = False
 
     @property
     def metrics_path(self) -> Path:
@@ -58,6 +66,10 @@ class JsonlEpochLogger(tf.keras.callbacks.Callback):
     def status_path(self) -> Path:
         return self.out_dir / "status.json"
 
+    @property
+    def period_init_path(self) -> Path:
+        return self.out_dir / PERIOD_INIT_FILE
+
     def _safe(self, fn, *args):
         try:
             return fn(*args)
@@ -66,9 +78,29 @@ class JsonlEpochLogger(tf.keras.callbacks.Callback):
             _log.warning("JsonlEpochLogger: telemetry write failed", exc_info=True)
             return None
 
+    def _layer(self):
+        return self.indicator_layer or getattr(self.model, "_indicator_layer", None)
+
     def on_train_begin(self, logs=None):
         self._t_train = time.time()
         self._safe(self.out_dir.mkdir, 0o777, True, True)
+        if not self._init_written:          # once per logger: the start of this training
+            self._init_written = True
+            self._safe(self._write_period_init)
+
+    def _write_period_init(self):
+        layer = self._layer()
+        if layer is None or not hasattr(layer, "get_learned_parameters"):
+            return
+        periods = {k: _plain(v) for k, v in layer.get_learned_parameters().items()}
+        configured = configured_periods(getattr(layer, "config", None))
+        matches = None
+        if configured:   # float32 round trip of the initial logit: equal to ~1e-6
+            matches = all(k in configured and v is not None and abs(v - configured[k]) <= 1e-3 * configured[k]
+                          for k, v in periods.items())
+        rec = {"run_id": self.run_id, "time": time.time(), "periods": periods, "configured": configured or None,
+               "matches_config": matches}
+        self.period_init_path.write_text(json.dumps(rec, indent=2, allow_nan=False), encoding="utf-8")
 
     def on_epoch_begin(self, epoch, logs=None):
         self._t_epoch = time.time()
@@ -87,7 +119,7 @@ class JsonlEpochLogger(tf.keras.callbacks.Callback):
                 rec[name] = _plain(tf.keras.backend.get_value(opt.learning_rate))
         if hasattr(model, "get_lambda_values"):
             rec.update({k: _plain(v) for k, v in model.get_lambda_values().items()})
-        layer = self.indicator_layer or getattr(model, "_indicator_layer", None)
+        layer = self._layer()
         if layer is not None and hasattr(layer, "get_learned_parameters"):
             rec.update({f"period/{k}": _plain(v) for k, v in layer.get_learned_parameters().items()})
         dt = time.time() - (self._t_epoch or time.time())
