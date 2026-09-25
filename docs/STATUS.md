@@ -7,7 +7,8 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
 - **Branch** `remediation/plan` (about 107 commits ahead of `master`, which is untouched at
   7002a71). Worktrees `../neural_trade_gates` and `../neural_trade_ablation` (detached at 6dec27a)
   hold the gate and ablation runs; leave them.
-- **CI is red** since fe4ba85 (the `unit` job; lint passes; last green 609d19e). Cause, reproduced
+- **CI is red** since fe4ba85 (the `unit` job; lint passes; last green 609d19e); latest check:
+  ed0ed9b, run 36124565636, lint success, unit failure (same step). Cause, reproduced
   locally: CI pins plotly 5.24.1, which writes figure arrays as JSON lists, so two figure
   size-budget tests fail there (`test_viz_delta.py::test_no_empty_panel_and_size_budget_on_a_full_size_block`,
   `test_viz_trading.py::test_size_budget_x0_dx_and_float32`); the local env has plotly 6.7.0.
