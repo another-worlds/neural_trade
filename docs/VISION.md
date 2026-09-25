@@ -48,6 +48,8 @@ section if it is not what you want. Every later plan derives from it.*
   verdict, never for choices.
 - **Honest trading numbers.** Next-open fills, fees, spread and slippage, stops on high/low,
   baselines in every report, and a random null at the same trade frequency.
+- **Fast training.** Fast GPU training and solid optimisation are first-class requirements;
+  inference speed is negligible (owner, D-018).
 - **One visual system.** Every figure uses `visualization/theme.py`. Horizons keep their
   colours (h0 blue, h1 orange, h2 green); dotted lines mean training.
 

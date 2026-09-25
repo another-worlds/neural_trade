@@ -13,16 +13,17 @@ export PYTHONIOENCODING=utf-8                   # the console code page is cp125
 | Task | Command |
 |---|---|
 | Rebuild the env from nothing (Windows, GPU; not re-verified) | `powershell -ExecutionPolicy Bypass -File scripts\setup_env.ps1`, then `conda activate nt`, `pip install -e ".[viz,dev]"` |
-| Linux / CPU only (what CI does) | `pip install -r requirements-ci.txt && pip install -e ".[viz,dev]"` |
+| Linux / CPU only (exactly what CI's `unit` job does) | `python -m pip install --upgrade pip && pip install -r requirements-ci.txt && pip install --no-deps -e .`, then `pytest -m "not gpu and not slow" --timeout=600 --cov=neural_trade ...` (see `.github/workflows/ci.yml`) |
 | Environment fingerprint | `CUDA_VISIBLE_DEVICES=-1 $PY -m neural_trade.cli env --no-devices` |
 
-Changing the env (install / upgrade packages) needs the owner.
+Changing the local env (install / upgrade / remove packages) needs the owner. `requirements-ci.txt`
+and the CI workflow pins are test infrastructure: a backlog item may change them (TF stays 2.10.x).
 
 ## Tests, lint, coverage, docs
 
 | Task | Command | Time |
 |---|---|---|
-| Fast suite | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"` | 5-6 min |
+| Fast suite | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"` | 5-6 min idle; 14 min seen while the machine was busy (2026-09-25): run it in the background |
 | Slow suite (training, CLI and predictor round trips, reproducibility, notebook execution on synthetic bars) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow` | ~4 min |
 | Lint | `$PY -m ruff check src tests scripts` (CI lints `src scripts` with ruff 0.6.9; locally 0.16.8) | seconds |
 | Coverage and per-package gates | `COVERAGE_FILE=<scratch>/.coverage CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" --cov=neural_trade --cov-report=json:<scratch>/coverage.json` then `$PY scripts/check_coverage.py <scratch>/coverage.json` | ~6 min |
@@ -36,6 +37,13 @@ branch head (the GitHub CLI is not installed; job logs need auth, the run list d
 curl -s "https://api.github.com/repos/another-worlds/neural_trade/actions/runs?branch=remediation/plan&per_page=5" \
   | $PY -c "import json,sys; [print(r['head_sha'][:7], r['name'], r['status'], r['conclusion']) for r in json.load(sys.stdin)['workflow_runs']]"
 ```
+
+For one run's jobs (public, no auth): `curl -s https://api.github.com/repos/another-worlds/neural_trade/actions/runs/<run id>/jobs`.
+Job logs need auth; failing test names become readable once CI writes failure annotations (NT-001).
+Until then, reproduce CI's plotly 5 behaviour locally without installing it: a pytest plugin module
+`plotly5_lists.py` containing `import plotly.basedatatypes as b; b.convert_to_base64 = lambda o: None`,
+on `PYTHONPATH`, run with `pytest -p plotly5_lists ...` (plotly 5 writes figure arrays as JSON lists).
+Wait at most 30 minutes for a run (OPERATING_MODEL, definition of done).
 
 The nightly workflow (`.github/workflows/nightly.yml`) never runs: GitHub registers scheduled
 workflows only from the default branch, and `master` has no `.github/` yet (NT-008).
@@ -66,10 +74,29 @@ numbers are in-sample.** Out-of-sample backtests: notebook `02_backtest` (the te
 | Refactor guard (small deterministic run) | `$PY scripts/golden_run.py record OUT.npz`, later `$PY scripts/golden_run.py verify OUT.npz` |
 | Compare scored runs | `$PY -c "from neural_trade.experiments.compare import compare_runs; print(compare_runs('runs/*', metrics=['h1/direction/auc'], skip_unscored=True))"` |
 
-Before any GPU job: `nvidia-smi` must show the GPU idle (the owner's other project runs in
-Docker/WSL and shows as pid 0 or unexplained memory use: then wait), and `df -h /c /d` must show
-room. Experiments follow `.claude/agents/experimenter.md`: pre-registered SPEC.md, verdict on the
-test block once, report with run ids.
+**Before any GPU job, check that the GPU is free:** `nvidia-smi dmon -s um -c 10` (10 one-second
+samples; `sm` = utilisation %, `fb` = memory used MB). Idle on this machine (measured 2026-09-25):
+fb about 700 MB (the Windows desktop), sm mostly under 30%. The GPU is **busy** if fb is above
+2000 MB or the median sm is above 30% (the owner's Docker/WSL project shows up this way, often as
+pid 0). Per-process memory `N/A` is normal under WDDM. If busy: do not start; do CPU work and check
+again later; after about 2 hours of waiting, record it in STATUS. Disk: `df -h /c /d`; at least 5 GB
+free on the target drive, else write to D:.
+
+Experiments follow `.claude/agents/experimenter.md`: a pre-registered SPEC.md (QA-checked before GPU
+time), a pinned worktree (`git worktree add --detach D:/nt_exp_<name> <sha>`, `PYTHONPATH` set to its
+`src`), the verdict on the test block once, a REPORT with run ids. Never reuse a `scripts/gate_run.py`
+`--name`: it deletes an existing run directory (NT-024 makes it refuse).
+
+### Long jobs (longer than the 10-minute tool timeout)
+
+- Use only resumable harnesses: `scripts/ablate.py` (resumes per cell) and
+  `scripts/direction_experiments.py` (skips experiments that have a `result.json`).
+- Launch detached so the job survives the session, with its log next to its outputs, e.g. from the
+  pinned worktree: `nohup env PYTHONPATH=D:/nt_exp_<name>/src $PY scripts/ablate.py ... > <out>/logs/run.log 2>&1 &`
+  (Git Bash), and record in STATUS: what runs, where its log is, how to check it (`ablate.py --dry-run`
+  lists pending cells), and how to resume.
+- The next session checks the job first (STATUS), resumes it if it died, and never starts a second
+  GPU job next to it.
 
 ## Notebooks
 
@@ -97,8 +124,9 @@ fresh clone 02-04 fail with a clear message until 01 has trained.
   (e.g. int64 FloorMod) fail: pin them to `/CPU:0`.
 - **One GPU job at a time.** Training is kernel-launch bound (~0.1 s/step); two TF processes give
   no extra throughput and can page to system RAM. Never touch the owner's Docker/WSL GPU work.
-- **GPU runs are not bit-reproducible** (`TF_DETERMINISTIC_OPS=1` is set, still): same seed and
-  config, h1 AUC 0.478-0.500 over four runs. Compare over seeds.
+- **GPU runs are not bit-reproducible** (`TF_DETERMINISTIC_OPS=1` is set, still): a same-config
+  re-run moved per-horizon AUC by 0.01-0.06 (`runs/experiments/direction_v1/REPORT.md`). Compare
+  settings over several seeds, never on one run.
 - **Disk.** C: is nearly full (the owner's Docker WSL image, ~116 GB; never touch it). Large
   scratch and renders go to D:. Delete your own scratch when done.
 - **Editable install.** `neural_trade` imports from the main checkout's `src/`. In a worktree

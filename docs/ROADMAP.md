@@ -26,7 +26,7 @@ The model trains, the package is installable, and the measurement stack can be t
 Nothing downstream means anything if CI is red or a baseline is wrong.
 
 - Items: NT-001 (CI green), NT-002 (random null ignores position size), NT-010 (every cited number
-  links to a tracked run), NT-011 (done).
+  links to a tracked run), NT-011 (done), NT-025 (notebook size limit enforced).
 - **Exit:** the `ci` workflow is green on the branch head; no open P0; the numbers in STATUS and
   README each link to a committed report or run summary.
 
@@ -35,10 +35,11 @@ Nothing downstream means anything if CI is red or a baseline is wrong.
 The central research question. Can the network beat the trailing-returns logistic regression
 (AUC about 0.52-0.56 on fold -1)?
 
-- Items: NT-003 (direction: M3 direction clauses), NT-004 (price heads: served EV > 0).
-- **Exit (pass):** on fold -1, averaged over at least 3 seeds with the current trainer, test AUC
-  h1 > 0.52 on all rows and at least the `logreg_lags` baseline, best-epoch val MCC h1 > 0.02,
-  Gaussian-readout MCC > 0, and served EV(delta) h1 > 0 with beta_h1 > 0.
+- Items: NT-024 (multi-seed gate runs and judge: the tooling both need), NT-003 (direction: M3
+  direction clauses), NT-004 (price heads: served EV > 0).
+- **Exit (pass):** NT-003's and NT-004's acceptance criteria (fold -1, at least 3 seeds, the
+  current trainer: AUC h1 > 0.52 and at least `logreg_lags`, val MCC h1 > 0.02, Gaussian-readout
+  MCC > 0, served EV(delta) h1 > 0 with beta_h1 > 0).
 - **Exit (negative):** each item's pre-registered variants are exhausted without passing. The
   report says so, and the owner decides the next direction (see VISION: a negative answer is
   valid).
@@ -46,10 +47,11 @@ The central research question. Can the network beat the trailing-returns logisti
 ## R3: an edge that survives costs
 
 - Items: NT-005 (cost-aware trading). Depends on NT-002 and the owner's answer on NT-007.
-- **Exit (pass):** a strategy whose net return on fold -1's test block, over at least 3 seeds,
-  beats buy-and-hold and ranks above the 95th percentile of the size-matched random null after
-  26 bps round-trip costs; checked for look-ahead.
-- **Exit (negative):** the edge per trade stays below the cost for every pre-registered variant.
+- **Exit (pass):** NT-005's acceptance (a): a strategy with knobs fixed on cal / dev folds, net
+  return > 0 after costs on fold -1, size-matched random-null percentile >= 95, net > 0 on at least
+  2 of 3 folds, look-ahead checked.
+- **Exit (negative):** NT-005's acceptance (b): the negative-result report with the gross edge per
+  trade and its CI against the cost, for every pre-registered variant.
 
 ## R4: the physics terms, judged on the current trainer
 

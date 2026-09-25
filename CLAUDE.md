@@ -1,112 +1,113 @@
 # neural_trade: instructions for every Claude session
 
-This file is loaded at the start of every session in this folder. With the files it imports, it
-is everything a new session needs. The owner should never have to repeat an instruction; if they
-state a new rule, record it (see "Keep these instructions current").
+This file is loaded at the start of every session in this folder, with the files it imports at the
+bottom (STATUS, VISION, OPERATING_MODEL, DECISIONS). Together they are everything a new session
+needs. **OPERATING_MODEL is authoritative for roles, the work loop, limits, escalation and the
+definition of done**; this file adds the project facts and does not repeat it.
 
 ## The project in brief
 
 A neural network reads the last 60 one-minute BTC/USDT closes and predicts the next 10, 15 and 20
 minutes: price change, P(up) and variance per horizon, with learnable technical indicators and six
-physics-inspired loss terms. The question is whether a strategy built on it beats realistic
-baselines **after trading costs**, out of sample, with evidence. Package: `src/neural_trade/`.
-Full vision: [docs/VISION.md](docs/VISION.md).
+physics-inspired loss terms. The question: does a strategy built on it beat realistic baselines
+**after trading costs**, out of sample, with evidence? Package: `src/neural_trade/`.
 
 ## Start of every session
 
-1. The current state and the next item are in `docs/STATUS.md` (imported below).
-2. `git status -sb` and `git log --oneline -5`: you must be on the working branch
-   `remediation/plan`, clean, in sync with `origin`.
-3. Answer the owner's questions first. Otherwise run the work loop: the `/next` skill
-   (`.claude/skills/next/SKILL.md`) takes the next backlog item end to end.
-4. End every session with the `/handoff` skill: STATUS rewritten, backlog and decisions
-   updated, committed and pushed.
+1. The state and the next item are in `docs/STATUS.md` (imported below).
+2. `git fetch origin`, `git status -sb`, `git log --oneline -5`. Expected: branch
+   `remediation/plan`, no modified or staged tracked files, not behind `origin`.
+   **Untracked run directories under `runs/` are expected** (until NT-010 they are the only copies of
+   cited evidence): never delete, move, stash or stage them wholesale. Never use `git clean`,
+   `git stash -u`, `git add -A`, `git add .` or `git add runs`; stage files by explicit path. Any
+   other untracked or modified file may belong to another session: do not discard or commit it;
+   record it in STATUS and ask the owner.
+3. Check CI on the pushed head (docs/RUNBOOK.md "CI").
+4. Then work: the item the owner names, otherwise the `/next` skill. **Keep going** through the
+   backlog without asking to continue (D-017); stop only under OPERATING_MODEL "Stop instead of
+   guessing". End with the `/handoff` skill.
 
 ## Where things live
 
 | What | Where |
 |---|---|
-| Why and the end goal (stable, owner-owned) | [docs/VISION.md](docs/VISION.md) |
-| How work is done: roles, loop, limits, escalation, definition of done | [docs/OPERATING_MODEL.md](docs/OPERATING_MODEL.md) |
-| Milestones and their exit criteria | [docs/ROADMAP.md](docs/ROADMAP.md) |
-| All open work, prioritised, with acceptance criteria | [docs/BACKLOG.md](docs/BACKLOG.md) |
-| Current state, handoff, questions for the owner | [docs/STATUS.md](docs/STATUS.md) |
-| Settled decisions with reasons (do not re-litigate) | [docs/DECISIONS.md](docs/DECISIONS.md) |
-| How to run everything (env, tests, notebooks, training, experiments) | [docs/RUNBOOK.md](docs/RUNBOOK.md) |
+| Why and the end goal (owner-owned) | [docs/VISION.md](docs/VISION.md) (imported) |
+| Roles, loop, limits, escalation, definition of done | [docs/OPERATING_MODEL.md](docs/OPERATING_MODEL.md) (imported) |
+| Settled decisions (do not re-litigate) | [docs/DECISIONS.md](docs/DECISIONS.md) (imported) |
+| Current state, handoff, questions for the owner | [docs/STATUS.md](docs/STATUS.md) (imported) |
+| Milestones and exit criteria | [docs/ROADMAP.md](docs/ROADMAP.md) |
+| All open work with acceptance criteria (NT-xxx) | [docs/BACKLOG.md](docs/BACKLOG.md) |
+| How to run everything; machine traps | [docs/RUNBOOK.md](docs/RUNBOOK.md) |
 | Subagent roles | `.claude/agents/implementer.md`, `qa.md`, `experimenter.md` |
-| Evidence: gate runs, experiments, ablation | `runs/gates/REPORT.md`, `runs/experiments/*/REPORT.md`, `runs/ablations/*/report.md` |
-| User-facing docs | `README.md`, `TESTING_DOCUMENTATION.md` (generated), `REGISTRY_*.md` (reference) |
+| Skills | `/next` (one backlog item end to end), `/handoff` (end of session) |
+| Notebook workflow | [scripts/notebooks/README.md](scripts/notebooks/README.md) |
+| Evidence | `runs/gates/REPORT.md`, `runs/experiments/*/REPORT.md`, `runs/ablations/*/report.md` |
 
-## Rules
+## Project rules (beyond OPERATING_MODEL)
 
-- **Roles.** The main session is the lead: it picks work, delegates, integrates and records. Code
-  goes to the `implementer` agent, verification to the `qa` agent, GPU runs to the
-  `experimenter` agent. Nothing is done without a QA pass. See OPERATING_MODEL.
-- **Limits.** At most two repair rounds per item per session, then `blocked` and move on.
-  Findings outside the item go to the backlog. Recorded decisions are not reopened without new
-  evidence.
-- **Ask the owner, do not act,** for: `owner-decision` backlog items; changing default trading
-  behaviour; anything touching `master`, history or force-push; deleting runs, data or files you
-  did not create; freeing disk outside our own files (never the Docker WSL image on C:);
-  installing or upgrading packages; GPU jobs over about 3 hours or while the GPU is busy.
-- **Git.** Work on `remediation/plan`. Commit in logical steps; push the working branch at the
-  end of a session, then check that CI is green on the pushed head (RUNBOOK "CI"): CI pins other
-  package versions than the local env, so green locally is not enough. Never touch `master`; never rewrite history (D-004). Commit messages end with
-  the co-author trailer the session's system prompt gives.
-- **Evidence.** A claim needs a run directory, a test or an executed notebook behind it.
-  Numbers carry their noise (effective samples `N // horizon bars`; see D-012). Test data is used
-  once, for the verdict.
-- **Notebooks** are generated by `scripts/notebooks/build.py` (never hand-edited), executed in
-  place on the real defaults, checked, their figures rendered and looked at, and committed with
-  outputs (D-013). The owner opens them to see real results. Never install `nbstripout` or run
-  `pre-commit install` in this clone: `.gitattributes` names an nbstripout filter that would strip
-  the outputs at `git add` (workflow and rules: `scripts/notebooks/README.md`).
+- **Owner decisions** D-001 to D-004: TF 2.10 / Keras 2; all nine registries; keep the physics terms
+  and fix them until the ablation says they help or cannot; never rewrite git history.
+- **Autonomy and pushing** (D-017): work through the backlog without waiting for "continue". Push
+  `remediation/plan` (and implementers' `nt-*` branches, to run CI) without asking; never `master`,
+  never `--force`. This project rule takes precedence over the global "ask before pushing".
+- **Speed** (owner, D-018): fast GPU training and solid optimisation are first-class; inference
+  speed is negligible. A change to the per-step training path must not slow training.
+- **Evidence.** A claim needs a run directory, a test or an executed notebook behind it; numbers
+  carry their noise (D-012). Choices (a knob, a threshold, a variant, a default) never use
+  test-block numbers, including the ones the notebooks show: use val, cal or the dev folds.
+- **Notebooks** are generated by `scripts/notebooks/build.py`, executed in place on the real
+  defaults, checked, rendered and looked at, and committed with outputs (D-013). There is no
+  nbstripout filter or hook (NT-011); never add one or run `nbstripout --install`.
 - **Figures** follow `src/neural_trade/visualization/theme.py`: horizons h0 blue, h1 orange,
-  h2 green (only for horizons); dotted = training; noise bands everywhere; rich, not minimal
-  (D-014).
-- **Owner decisions** (D-001 to D-004): TF 2.10 / Keras 2; all nine registries; keep the physics
-  terms and fix them until the ablation says they help or cannot; never rewrite git history.
+  h2 green (only for horizons); dotted = training; noise bands everywhere; rich, not minimal: a
+  change that drops a metric, horizon, band or table from a figure is a regression (D-014).
+- **Packages.** The local `nt` env (and anything else on the owner's machine) changes only with the
+  owner. `requirements-ci.txt` and CI workflow pins are test infrastructure: an item may change them
+  (TF stays 2.10.x).
 
 ## Environment essentials (Windows 10, RTX 4070 Ti)
 
-- Python: `C:/Users/Step/miniforge3/envs/nt/python` (conda env `nt`, Python 3.10, TF 2.10 GPU).
-  `import neural_trade` before `tensorflow` (it puts the CUDA DLLs on PATH).
-- Tests and scripts that do not need the GPU: set `CUDA_VISIBLE_DEVICES=-1`. The console is
-  cp1251: set `PYTHONIOENCODING=utf-8`.
-- `ptxas.exe ... CreateProcess failed` log lines are harmless. Ops needing XLA JIT must be pinned
-  to `/CPU:0`.
-- One GPU job at a time. The owner also runs another project on this GPU (Docker/WSL; shows as
-  pid 0 in GPU counters). Never touch it. If the GPU is busy, wait or work on CPU tasks.
-- GPU runs are not bit-reproducible (AUC moves 0.01-0.05 run to run): compare over seeds.
-- Disk C: is nearly full (the other project's Docker image). Keep scratch output small or on D:.
-- Bash heredocs with nested quotes break easily here. Write scripts with the Write tool, then run them.
+- Python: `C:/Users/Step/miniforge3/envs/nt/python` (conda env `nt`, Python 3.10, TF 2.10 GPU). Do
+  not use `conda run`. `import neural_trade` before `tensorflow` (it puts the CUDA DLLs on PATH).
+- Tests and CPU scripts: `CUDA_VISIBLE_DEVICES=-1`; never for real training or notebook 01. The
+  console is cp1251: `PYTHONIOENCODING=utf-8`.
+- `ptxas.exe ... CreateProcess failed` log lines are harmless.
+- One GPU job at a time; the owner's other project also uses this GPU (Docker/WSL). Never touch it.
+  How to tell the GPU is free: RUNBOOK "Experiments and gates".
+- Disk C: is nearly full (the other project's Docker image): scratch, renders and worktrees go to D:.
+- Bash heredocs with nested quotes break easily here: write scripts with the Write tool.
+- The editable install imports the main checkout's `src/`: in a worktree set `PYTHONPATH=<worktree>/src`
+  for ad-hoc scripts (pytest and `scripts/notebooks/*` do it themselves).
 
-## Commands (details in docs/RUNBOOK.md)
+## Commands (details and more in docs/RUNBOOK.md)
 
 ```bash
 PY=C:/Users/Step/miniforge3/envs/nt/python
-CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"   # fast suite, 5-6 min
+CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"   # fast suite, 5-6 min (up to 14 min on a busy machine)
 CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow        # slow suite, ~4 min
 $PY -m ruff check src tests scripts
 $PY scripts/notebooks/build.py            # regenerate notebooks/ from the generator
 $PY scripts/notebooks/execute.py          # execute in place (01 trains ~5 min on the GPU)
-$PY scripts/notebooks/check.py            # errors / stderr / empty panels
-$PY scripts/notebooks/render.py --out D:/nt_render   # PNGs of every saved figure, then LOOK at them
-$PY scripts/test_inventory.py             # regenerate TESTING_DOCUMENTATION.md
+$PY scripts/notebooks/check.py            # errors / stderr / empty panels / unexecuted cells
+$PY scripts/notebooks/render.py           # PNGs of every saved figure, then LOOK at them
+CUDA_VISIBLE_DEVICES=-1 $PY scripts/test_inventory.py   # regenerate TESTING_DOCUMENTATION.md
 ```
 
 ## Talking to the owner
 
-Short and factual. Lead with what changed and what they can open to see it. Every claim with its
-evidence. Separate what needs their decision, with options and a recommendation. Say plainly
-when something failed or was not checked.
+Short and factual; the owner writes English and Russian. Lead with what changed and what they can
+open to see it. Every claim with its evidence. Say plainly when something failed or was not
+checked. Ask a question once, with options and a recommendation, record it in STATUS with the date,
+and afterwards only say how many questions are still open.
 
 ## Keep these instructions current
 
 When the owner states a rule, preference or correction, record it in the same session: a project
 rule → this file (and the agent file it concerns); a decision → `docs/DECISIONS.md`; a change of
-direction → `docs/VISION.md` / `docs/ROADMAP.md`; a fact about this machine only → the local
-memory and `docs/RUNBOOK.md`.
+direction → `docs/VISION.md` / `docs/ROADMAP.md`; a change to the loop → `docs/OPERATING_MODEL.md`
+and the `/next` and `/handoff` skills together; a fact about this machine only → the local memory
+and `docs/RUNBOOK.md`. neural_trade rules live only in this repo (`~/.claude/CLAUDE.md` is for
+cross-project preferences).
 
 ---
 
@@ -115,3 +116,5 @@ memory and `docs/RUNBOOK.md`.
 @docs/VISION.md
 
 @docs/OPERATING_MODEL.md
+
+@docs/DECISIONS.md

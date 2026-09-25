@@ -1,14 +1,21 @@
 # Backlog
 
-All open work, prioritised. The lead picks the highest-priority `todo` item whose dependencies are
-done and whose role is not `owner` (see [OPERATING_MODEL.md](OPERATING_MODEL.md)). IDs are stable:
+All open work, prioritised. The lead picks by OPERATING_MODEL "Picking the next item". IDs are stable:
 never renumber; new items take the next free number. Done items stay (status `done`, with the
 evidence) until the next milestone review, then move to the log at the bottom.
 
 Priorities: **P0** wrong numbers or broken behaviour; **P1** the milestone path and owner decisions
 that block it; **P2** useful features, logging, infra; **P3** polish (batched per module).
 
-Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with the evidence).
+Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with the evidence),
+`dropped` (with the reason and date; lead only, never P0 or owner-decision items).
+
+The pick order is in [OPERATING_MODEL.md](OPERATING_MODEL.md) "Picking the next item". Acceptance
+criteria are checkable at QA time; the lead's STATUS / DECISIONS / ROADMAP updates are not criteria.
+
+Provenance: `source:` lines that name `integration_todo.md`, `fix_results.json`, `final_findings.json`,
+'finding N' or 'verifier' refer to the review rounds of 2026-09-24 (artefacts not kept). Every item
+is self-contained; code references (file:line) were verified on 2026-09-25.
 
 | ID | P | type | role | status | title |
 |---|---|---|---|---|---|
@@ -21,7 +28,7 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 | [NT-007](#nt-007) | P1 | owner-decision | owner | todo | Owner decision: which delta the strategies read (served beta-shrunk vs raw heads) |
 | [NT-008](#nt-008) | P1 | owner-decision | owner | todo | Owner decision: merge remediation/plan into master |
 | [NT-009](#nt-009) | P1 | owner-decision | owner | todo | Owner: free space on C: (Docker WSL disk image) |
-| [NT-010](#nt-010) | P2 | infra | implementer | todo | Every cited number links to a tracked run (run-tracking policy, clean git status) |
+| [NT-010](#nt-010) | P1 | infra | implementer | todo | Every cited number links to a tracked run (run-tracking policy, clean git status) |
 | [NT-011](#nt-011) | P2 | infra | implementer | done | Notebook output policy: remove nbstripout (it contradicts D-013) |
 | [NT-012](#nt-012) | P2 | feature | implementer | todo | Training logging: per-term loss contributions, gradient max and clip counts, deadband sample counts |
 | [NT-013](#nt-013) | P2 | feature | implementer | todo | Evaluation report: realised-vol variance baseline and honest baseline verdicts |
@@ -35,6 +42,8 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 | [NT-021](#nt-021) | P3 | polish | implementer | todo | Trading figures polish (trading_dashboard.py, trade_analytics.py) |
 | [NT-022](#nt-022) | P3 | polish | implementer | todo | Run-comparison and calibration-explorer figures polish (comparison.py, calibration_plots.py) |
 | [NT-023](#nt-023) | P3 | polish | implementer | todo | Theme: one reference dash, a strategy palette, legend fixes (theme.py) |
+| [NT-024](#nt-024) | P1 | infra | implementer | todo | Multi-seed gate runs and judge: gate_run.py --seed and no silent overwrite; check_gates.py judges named runs averaged over seeds |
+| [NT-025](#nt-025) | P2 | infra | implementer | todo | check.py enforces the 5 MB per-notebook limit of D-013 |
 
 ## Items
 
@@ -45,8 +54,8 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 - **status:** todo
 - **priority / type / role:** P0 / bug / implementer
 - **area:** .github/workflows/ci.yml, requirements-ci.txt, tests/, plotly/pandas-version-sensitive code in src/neural_trade/visualization and src/neural_trade/notebook
-- **why:** The GitHub Actions 'ci' workflow fails on the last two pushes of remediation/plan: be93193 (run 36043324055, job 107780609497) and fe4ba85 (run 36032011043, job 107742810495). Both fail in the step 'Unit tests (CPU, no slow/gpu)'. The last green run was 609d19e. Lint passes. Locally, the fast non-TF suite passes (2026-09-25, pytest -m 'not tf and not slow and not gpu': 557 passed, 142 deselected). The main suspect is version drift: the review rounds were written and checked against plotly 6.7.0 / pandas 2.3.3 in the nt env, while requirements-ci.txt pins plotly==5.24.1 and pandas==2.0.3. The TF-marked tests are the other candidate. CI logs need an authenticated API or the gh CLI (not installed here); failure annotations are readable without auth. This breaks the plan's Definition of Done ('CI + nightly green') and every future QA gate.
-- **acceptance:** (1) Root cause recorded in the item: the failing test names, taken from the CI log. Without auth, add a CI step that turns junit failures into '::error' annotations, then read them via the public check-runs annotations API. (2) The 'ci' workflow ends with conclusion=success (lint + unit, including 'Coverage gates' and 'CLI smoke') on the pushed branch head. (3) requirements-ci.txt and the local env agree on the plotly and pandas major versions, or the suite passes under both (documented in docs/RUNBOOK.md). (4) The local 'pytest -m "not slow"' still passes.
+- **why:** The GitHub Actions 'ci' workflow fails on be93193 (run 36043324055) and fe4ba85 (run 36032011043), in the step 'Unit tests (CPU, no slow/gpu)'; lint passes; the last green run was 609d19e. Reproduced locally (2026-09-25) by emulating CI's plotly 5.24.1, which writes figure arrays as JSON lists (RUNBOOK 'CI': the `plotly5_lists` pytest plugin): `tests/test_viz_delta.py::test_no_empty_panel_and_size_budget_on_a_full_size_block` (1,295,932 > 600,000 chars) and `tests/test_viz_trading.py::test_size_budget_x0_dx_and_float32` (760,043 over its budget) fail; both pass under the local plotly 6.7.0. Other pins drift too (pandas 2.0.3 vs 2.3.3, scikit-learn 1.3.2 vs 1.7.2) and may hide further failures. Every item's definition of done needs CI green.
+- **acceptance:** (1) The unit step writes junit XML and a failure step turns failed tests into `::error` annotations, so failing test names are readable without auth (checks API). (2) `requirements-ci.txt` matches the tested local env for plotly, pandas, scikit-learn and scipy (preferred: CI tests what the owner runs; TF stays 2.10.x), or the size budgets are measured version-independently; RUNBOOK 'CI' says which. (3) The `ci` workflow is green (lint, unit incl. coverage gates and CLI smoke) on the pushed head of `nt-001` and, after the merge, of `remediation/plan`. (4) Local fast suite and ruff still pass.
 - **source:** GitHub Actions API (runs 36043324055, 36032011043); plan 'Definition of done' (CI + nightly green); requirements-ci.txt vs local plotly 6.7.0 / pandas 2.3.3
 
 ### NT-002
@@ -67,8 +76,9 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 - **status:** todo
 - **priority / type / role:** P1 / research / experimenter
 - **area:** configs/default.yaml, src/neural_trade/models/gru_attention.py (direction heads and skip), src/neural_trade/losses/functions.py, scripts/direction_experiments.py, scripts/gate_run.py, scripts/check_gates.py, runs/experiments/direction_v2/, runs/gates/
+- **depends on:** NT-024 (multi-seed gate runs and judge)
 - **why:** M3 fails on the final code (runs/gates/REPORT.md, m6): test AUC h1 0.5015 (0.5239 with the deadband mask), best-epoch val_dir_mcc_h1 0.0175 against the 0.02 threshold, and val_gauss_dir_mcc_h1 -0.0219. The latest default run (runs/20260924T182915Z-1aeff1c-dirty-af67ee43, batch 256, served epoch 19) scores test AUC h1 0.478 and MCC -0.034. The logreg_lags baseline scores 0.523 on the same block, and a logistic regression on trailing returns reaches about 0.56 on fold -1 (direction_v1 REPORT section 1). Identical GPU runs differ by 0.01-0.05 AUC, so no single run can decide. D-010's claim that batch 256 matches the batch-64 run m6 rests on one run.
-- **acceptance:** (1) A pre-registered spec in runs/experiments/direction_v2/: one hypothesis and at most 3 variants, all within gru_attention (new architectures are out of scope). Batch 64 vs 256 is a candidate variant. (2) Variants are chosen on dev folds -3/-2 only, with at least 3 seeds each. (3) One judgement on fold -1: scripts/check_gates.py on the new gate runs under runs/gates/ shows, averaged over at least 3 seeds, test AUC h1 > 0.52 on all 7,236 test rows, best-epoch log_val_dir_mcc_h1 > 0.02 and best-epoch log_val_gauss_dir_mcc_h1 > 0. The mean AUC h1 is also >= the logreg_lags baseline on the same block. (4) REPORT.md lists per-seed, per-fold AUC with 80-bar block-bootstrap CIs. A negative verdict meets the criteria when the report holds all of this. (5) STATUS.md and README status are updated.
+- **acceptance:** (1) A pre-registered spec in runs/experiments/direction_v2/: one hypothesis and at most 3 variants, all within gru_attention (new architectures are out of scope). Batch 64 vs 256 is a candidate variant. (2) Variants are chosen on dev folds -3/-2 only, with at least 3 seeds each. (3) One judgement on fold -1: scripts/check_gates.py on the new gate runs under runs/gates/ shows, averaged over at least 3 seeds, test AUC h1 > 0.52 on all 7,236 test rows, best-epoch log_val_dir_mcc_h1 > 0.02 and best-epoch log_val_gauss_dir_mcc_h1 > 0. The mean AUC h1 is also >= the logreg_lags baseline on the same block. (4) REPORT.md lists per-seed, per-fold AUC with 80-bar block-bootstrap CIs. A negative verdict meets the criteria when the report holds all of this. (5) STATUS.md and README status are updated. Note: 'mean AUC h1 >= logreg_lags' is the M3 point-estimate clause; the VISION end goal needs it beyond the noise (paired block-bootstrap CI above 0), so the REPORT gives that CI too. The Gaussian-readout clause depends on the price heads (NT-004): the SPEC may spend one variant on it, or state that the clause is judged with NT-004.
 - **source:** runs/gates/REPORT.md (M3 FAIL); runs/experiments/direction_v1/REPORT.md sections 1, 4, 5; eval_report_test.json of 20260924T182915Z-1aeff1c-dirty-af67ee43; docs/DECISIONS.md D-010
 
 ### NT-004
@@ -78,6 +88,7 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 - **status:** todo
 - **priority / type / role:** P1 / research / experimenter
 - **area:** src/neural_trade/calibration/pipeline.py (delta shrinkage fit), src/neural_trade/training/trainer.py / callbacks (checkpoint criterion), src/neural_trade/models/gru_attention.py (price towers), runs/experiments/price_heads_v1/
+- **depends on:** NT-024
 - **why:** The M3 clause EV(delta) h1 > 0 (served) cannot pass while delta shrinkage sets beta_h1 = 0: the served delta is then exactly 0. In m6, served EV was 0.0000 (beta 0) and raw EV -0.6555. The latest run has betas h0 0.123 / h1 0.000 / h2 0.069, with raw EV h1 -0.061. The raw heads overfit. Early stopping watches the total val loss, which keeps improving through the direction and variance terms, so it cannot catch this (direction_v1 section 6). The beta fit is plain OLS clipped to [0, 1] (pipeline.py:222), and a few high-leverage points drive it: on cal, h0 beta goes from 0.212 to 0.155 without the top 0.5% |pred|, and h1 from 0.023 to negative.
 - **acceptance:** (1) A pre-registered spec with at most 3 variants, for example early stopping / checkpoint on per-head val point loss, stronger tower regularisation, or a robust (trimmed or Huber) beta fit. Variants are chosen on folds -3/-2 x at least 3 seeds. (2) Judged once on fold -1: served EV(delta) h1 > 0 with beta_h1 > 0, on the mean over at least 3 seeds and on every one of them, with the raw EV reported alongside. (3) CalibrationPipeline records both the OLS beta and any robust beta in pipeline_meta.json (unit test). (4) Report at runs/experiments/price_heads_v1/REPORT.md. A negative result meets the criteria when the report is complete.
 - **source:** runs/gates/REPORT.md (M3, m6: EV served 0.0000, raw -0.6555); runs/experiments/direction_v1/REPORT.md section 6; integration_todo.md delta 'calibration/pipeline.py (finding 4)'
@@ -145,7 +156,7 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 **Every cited number links to a tracked run (run-tracking policy, clean git status)**
 
 - **status:** todo
-- **priority / type / role:** P2 / infra / implementer
+- **priority / type / role:** P1 / infra / implementer
 - **area:** .gitignore, runs/, README.md (status section), docs/RUNBOOK.md
 - **why:** git status is never clean after a session. 7 notebook run dirs, the ablation's cells/, logs/ and runs/, and direction_v1's logs/ and runs/ are untracked, while the session protocol requires a clean tree. The saved notebook outputs and README cite runs, for example 20260924T182915Z-1aeff1c-dirty-af67ee43 (4.5 MB), whose directories exist only on this machine. The README status numbers carry no run ids, and its AUC range (0.50-0.55) does not cover the latest default run (h1 0.478). This is a Definition of Done gap: 'every reported number links to a run'.
 - **acceptance:** (1) docs/RUNBOOK.md states which run files are tracked (config.yaml, meta.json, status.json, metrics.jsonl, eval_report_*.json/md, artifacts/meta.json and pipeline_meta.json) and which are ignored (weights, joblib, prediction npz, ablation cells/logs). (2) .gitignore implements it, so 'git status --porcelain' is empty after a notebook execution. (3) A script or test finds every run id cited in README.md, runs/**/REPORT.md, runs/**/report.md and the saved notebook outputs, and passes only when each has its light files tracked. (4) Each README status number cites a run id.
@@ -155,7 +166,7 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 
 **Notebook output policy: remove nbstripout (it contradicts D-013)**
 
-- **status:** done (2026-09-25, lead): the nbstripout filter is gone from `.gitattributes` and the hook from `.pre-commit-config.yaml` (with a comment why); `tests/test_notebooks_thin.py` docstring updated. Evidence: `git grep nbstripout` only finds the explanatory comments.
+- **status:** done (2026-09-25, lead edit in a0edba7; checked by the setup QA pass): `git check-attr filter notebooks/01_train_and_monitor.ipynb` reports unspecified; no nbstripout hook; the pre-commit header no longer mentions it; D-013 cites NT-011.
 - **priority / type / role:** P2 / infra / implementer
 - **area:** .gitattributes, .pre-commit-config.yaml, docs/DECISIONS.md D-013
 - **why:** .gitattributes marks *.ipynb with filter=nbstripout, and .pre-commit-config.yaml runs the nbstripout hook. Its header tells every clone to run 'nbstripout --install'. D-013 (owner) requires notebooks to be committed with real outputs, and tests check the saved outputs (tests/test_notebooks_thin.py::test_saved_training_dashboards_mark_each_chance_band_edge_in_its_horizon_colour, tests/test_viz_variance.py::test_saved_notebook_outputs_carry_the_current_encoding). A future session that follows the pre-commit instructions would strip every output on its next commit.
@@ -293,6 +304,28 @@ Status values: `todo`, `in-progress`, `blocked` (with the reason), `done` (with 
 - **why:** (1) The reference-line dash has drifted: '6px,4px' in analytics_confidence.py:42 and trade_analytics.py:44, '5px,4px' in analytics_direction.py:55, analytics_variance.py:69 and calibration_plots.py:30, '6px,3px' in comparison.py:621. (2) trade_analytics._STRATEGY_COLORS = OTHER_SERIES[1, 3, 0] (line 38): pink (the same as the 'costs' line), violet (= LONG_COLOR) and amber (= SHORT_COLOR). OTHER_SERIES[0] == DOWN_COLOR and OTHER_SERIES[3] == UP_COLOR (theme.py:40-46). (3) panel_legend uses title side='left', whose width plotly.js ignores when it wraps keys, so the last keys are cut at 1000-1100 px (theme.py:169). (4) empty_panels does not treat a panel whose traces hold only non-finite y as empty.
 - **acceptance:** (1) theme.T.REF_DASH is defined once, and a test scans visualization/ for any other dash literal used for reference lines. (2) T.STRATEGY_COLORS has at least 4 colours distinct from the horizon, status, LONG/SHORT and costs colours, and trade_analytics uses it (test). (3) No OTHER_SERIES slot equals UP_COLOR or DOWN_COLOR, or figures that show both are tested to avoid the overlap. (4) panel_legend puts its title on top (side='top'). (5) empty_panels treats an all-non-finite panel as empty (test).
 - **source:** integration_todo.md trade_analytics requests (theme owner: strategy palette, legend bottom, REF_DASH), variance requests (panel_legend side-left), misc (empty_panels non-finite), confidence (OTHER_SERIES collisions); fix2_results.json variance requests (shared REF_DASH)
+
+### NT-024
+
+**Multi-seed gate runs and judge: gate_run.py --seed and no silent overwrite; check_gates.py judges named runs averaged over seeds**
+
+- **status:** todo
+- **priority / type / role:** P1 / infra / implementer
+- **area:** scripts/gate_run.py, scripts/check_gates.py, scripts/backtest_gate.py, tests/test_gate_scripts.py (new)
+- **why:** NT-003 and NT-004 must be judged on fold -1 averaged over at least 3 seeds, but `check_gates.py` only knows the fixed runs m1a..m6 and judges single runs, and `gate_run.py` deletes an existing run directory without asking (gate_run.py:157-158), which can destroy evidence. The experimenter may not write this code (it never edits src/ or tests/; scripts it may extend only via an implementer item).
+- **acceptance:** (1) `gate_run.py` refuses an existing non-empty run directory unless `--overwrite` is given (test). (2) `gate_run.py --seed N` sets SEED and records it in meta.json (test). (3) `check_gates.py --runs NAME ...` (or `--glob`) judges the M3/M4 clauses per named run and prints the per-run values and their mean and sd; the mean decides the exit code; with no arguments its output is unchanged (test on small fixture run directories). (4) The logreg_lags baseline AUC h1 on the same test block is written to each run's analytics and shown next to the model's. (5) Fast suite and ruff pass.
+- **source:** setup QA 2026-09-25 (cold-start research probe): NT-003's criteria could not be met with the existing scripts.
+
+### NT-025
+
+**check.py enforces the 5 MB per-notebook limit of D-013**
+
+- **status:** todo
+- **priority / type / role:** P2 / infra / implementer
+- **area:** scripts/notebooks/check.py, tests/test_notebook_tooling.py
+- **why:** D-013 says each notebook stays under 5 MB (the repo's large-file limit), but nothing enforces it; a figure change could silently push a notebook over it (02 was 6.6 MB once).
+- **acceptance:** (1) `check.py` exits 1 and names the notebook when a saved notebook exceeds 5 MB (test with a synthetic notebook in tmp_path). (2) The committed notebooks pass. (3) scripts/notebooks/README.md mentions the limit.
+- **source:** setup QA 2026-09-25 (fact check of D-013).
 
 ## Done log
 
