@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git show *)",
+      "Bash(git branch *)",
+      "Bash(git worktree list *)",
+      "Bash(git rev-parse *)",
+      "Bash(git ls-files *)",
+      "Bash(C:/Users/Step/miniforge3/envs/nt/python -m pytest *)",
+      "Bash(CUDA_VISIBLE_DEVICES=-1 C:/Users/Step/miniforge3/envs/nt/python -m pytest *)",
+      "Bash(C:/Users/Step/miniforge3/envs/nt/python -m ruff check *)",
+      "Bash(C:/Users/Step/miniforge3/envs/nt/python scripts/notebooks/check.py *)",
+      "Bash(C:/Users/Step/miniforge3/envs/nt/python scripts/notebooks/build.py *)",
+      "Bash(C:/Users/Step/miniforge3/envs/nt/python scripts/notebooks/render.py *)",
+      "Bash(CUDA_VISIBLE_DEVICES=-1 C:/Users/Step/miniforge3/envs/nt/python scripts/test_inventory.py *)",
+      "Bash(nvidia-smi *)",
+      "Bash(df *)"
+    ]
+  }
+}

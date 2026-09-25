@@ -1,4 +1,5 @@
-"""Notebooks are thin (plan B17): no def/class, outputs stripped, and all four execute end to end."""
+"""Notebooks are thin (plan B17): no def/class/lambda in cells; saved with the outputs of a real run
+(D-013); all six execute end to end (the slow test runs them on synthetic bars in a temp folder)."""
 from __future__ import annotations
 
 import ast

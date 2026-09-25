@@ -1,3 +1,5 @@
+> **Archived (superseded).** The January 2026 plan for the registry architecture. Replaced by the remediation plan ([REMEDIATION_PLAN_2026-09.md](REMEDIATION_PLAN_2026-09.md)); current plans are in [docs/ROADMAP.md](../ROADMAP.md) and [docs/BACKLOG.md](../BACKLOG.md).
+
 # Registry-Based Architecture - Implementation Plan
 ## Neural Trade Project
 

@@ -1,3 +1,5 @@
+> **Archived (superseded).** January 2026 planning document for the registry architecture, written before it was built. The registries now exist (`src/neural_trade/registries/`, README); how work is planned and done is in [CLAUDE.md](../../CLAUDE.md) and [docs/](../).
+
 # Registry-Based Architecture Documentation Index
 
 **Branch:** `claude/registry-modular-structure-1hpZb`

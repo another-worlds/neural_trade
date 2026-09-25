@@ -233,10 +233,21 @@ loads the plugins, and the config then selects the component by name. See `plugi
 ## Tests
 
 ```bash
-pytest -m "not slow"          # ~2 min on CPU
+pytest -m "not slow"          # 5-6 min on CPU
 pytest -m slow                # end-to-end training, CLI round trip, reproducibility
 python scripts/golden_run.py verify <oracle.npz>   # a refactor changed no numbers
 ```
+
+## Working on this project
+
+Development runs as a multi-session loop with Claude Code agents. Start with
+[CLAUDE.md](CLAUDE.md) (loaded by every session). It points to the vision
+([docs/VISION.md](docs/VISION.md)), the roadmap and backlog ([docs/ROADMAP.md](docs/ROADMAP.md),
+[docs/BACKLOG.md](docs/BACKLOG.md)), the current state ([docs/STATUS.md](docs/STATUS.md)), settled
+decisions ([docs/DECISIONS.md](docs/DECISIONS.md)), how work is done
+([docs/OPERATING_MODEL.md](docs/OPERATING_MODEL.md)) and how to run everything
+([docs/RUNBOOK.md](docs/RUNBOOK.md)). The notebooks are generated and executed by
+`scripts/notebooks/` ([README](scripts/notebooks/README.md)).
 
 ## Licence
 

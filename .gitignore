@@ -51,3 +51,7 @@ runs/**/tb/
 !runs/**/indicator_params_history.csv
 !runs/**/results.csv
 !runs/**/summary.csv
+
+# Claude Code: agent worktrees and machine-local settings (agents/, skills/ and settings.json are tracked)
+.claude/worktrees/
+.claude/settings.local.json

@@ -75,10 +75,9 @@ works on all six.
   notebook's cells (type, source, tags) with what `build.py` generates. Outputs are not compared. A
   change made in Jupyter fails that test and is lost at the next build. Move the change into `build.py`.
   To check for drift without the tests, run `build.py --check`.
-- **Keep the outputs.** `.gitattributes` names an `nbstripout` filter and `.pre-commit-config.yaml` has
-  an `nbstripout` hook. Neither is installed in this clone, and neither may be:
-  `nbstripout --install` or `pre-commit install` strips the outputs at `git add`. To confirm,
-  `git config --get filter.nbstripout.clean` must print nothing.
+- **Keep the outputs.** Notebooks are committed with their outputs (D-013). There is no nbstripout filter
+  or hook in this repo, and none may be added: `nbstripout --install` would strip the outputs at `git add`.
+  To confirm, `git config --get filter.nbstripout.clean` must print nothing.
 - **Interactive controls work only with a running kernel.** In the saved file, each widget cell is
   followed by a static copy of its first result, and a reader without a kernel sees that copy.
 - **Disk.** C: is nearly full. When C: has less than 5 GB free, `render.py` writes to

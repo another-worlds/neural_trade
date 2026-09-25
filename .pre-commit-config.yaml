@@ -1,4 +1,6 @@
-# Install once per clone:  pip install pre-commit nbstripout && pre-commit install && nbstripout --install
+# Optional:  pip install pre-commit && pre-commit install
+# Notebooks are committed WITH their outputs (docs/DECISIONS.md D-013): there is deliberately no
+# nbstripout hook, and nbstripout must never be installed in this repo.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.6.9
@@ -6,11 +8,6 @@ repos:
       - id: ruff
         # ruff-format is deliberately not enabled until the Phase B16 hygiene sweep
         # reformats the monolith in one commit.
-
-  - repo: https://github.com/kynan/nbstripout
-    rev: 0.7.1
-    hooks:
-      - id: nbstripout
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0

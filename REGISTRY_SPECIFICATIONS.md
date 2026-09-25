@@ -1,3 +1,5 @@
+> **Reference specification (January 2026).** The nine registries were implemented from it with deliberate deviations (see [docs/archive/REMEDIATION_PLAN_2026-09.md](docs/archive/REMEDIATION_PLAN_2026-09.md) sections B2-B4, and README). Its "Planning Phase" status and timeline are historical; current plans are in [docs/ROADMAP.md](docs/ROADMAP.md).
+
 # Registry-Based Modular Architecture Specifications
 ## Neural Trade Project
 
