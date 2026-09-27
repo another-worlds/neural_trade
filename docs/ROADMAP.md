@@ -124,6 +124,6 @@ the structure, and the indicator Q&A did not place it. NT-043 (MVP-5) may run in
 start (a second implementer, disjoint files). Implementer and experimenter slots are picked separately
 by the same order (OPERATING_MODEL); never two GPU jobs at once.
 
-A milestone closes only when all its items are done. The move to D: (D-030) ends the 2026-09-28
-session; NT-009 closes when the move is verified. The MVP is done when VISION "The MVP" holds on the
+A milestone closes only when all its items are done. The move to D: (D-030) is done (2026-09-28);
+NT-009 closes when the owner confirms the D: copy. The MVP is done when VISION "The MVP" holds on the
 reference setup; MVP-1 to MVP-6 map to its points.

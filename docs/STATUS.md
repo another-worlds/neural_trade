@@ -1,6 +1,6 @@
 # Status
 
-_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-09-28 (mid-session)._
+_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-09-28 (end of session)._
 
 ## Where things stand
 
@@ -9,18 +9,21 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
   not the purpose. [VISION.md](VISION.md) (2c58370), [qa/](qa/), D-019 to D-031,
   [ROADMAP.md](ROADMAP.md).
 - **Indicator Q&A done** (2026-09-28): [qa/2026-09-28-indicators.md](qa/2026-09-28-indicators.md),
-  D-031, items NT-046 to NT-048 (MVP-6). **Window research running** (2026-09-28): removing the fixed
-  input window, as the owner asked; the result and the owner's decision are pending (NT-047 waits).
+  D-031, items NT-046 to NT-048 (MVP-6). **Window research done** (`docs/research/2026-09-28-window-free/`):
+  the owner committed to removing the fixed input window; NT-053 writes the plan (D-032); NT-047 waits.
 - **Branch** `remediation/plan` (about 110 commits ahead of `master`, untouched at 7002a71).
   Worktrees `../neural_trade_gates` and `../neural_trade_ablation` (detached at 6dec27a) hold the
-  gate and ablation runs; leave them. All still under `C:/Users/Step/Documents/`; the project moves
-  to `D:/neural_trade` at the end of the 2026-09-28 session (D-030). After the owner confirms the D:
-  copy works, the lead deletes the C: copy (repo and both worktrees) only on the owner's explicit
-  go-ahead.
+  gate and ablation runs; leave them. **The working copy is `D:/neural_trade`** (moved and verified
+  2026-09-28, D-030: 697 fast tests pass in 3:28 on D:, notebook checks clean, worktrees repaired,
+  editable install re-pointed). The C: copy (`C:/Users/Step/Documents/neural_trade` and its two
+  worktrees) is untouched: after the owner confirms the D: copy works, the lead deletes it only on
+  the owner's explicit go-ahead.
 - **CI is red** since fe4ba85 (the `unit` job; lint passes; last green 609d19e); latest check:
-  ed0ed9b, run 36124565636, unit failure. Cause, reproduced locally: CI pins plotly 5.24.1 (local
-  6.7.0), so two figure size-budget tests fail there (names in NT-001); other pins drift too.
-- **Tests locally:** 697 fast pass (5-6 min), 13 slow pass; ruff clean; coverage gates pass.
+  71a0fd2, run 36349235067, lint success, unit failure (the same step); 97ad06b, run 36359654472,
+  lint success, unit still running at handoff (the next session checks it first). Cause, reproduced
+  locally: CI pins plotly 5.24.1 (local 6.7.0), so two figure size-budget tests fail there (names in
+  NT-001); other pins drift too.
+- **Tests locally:** 697 fast pass (3:28 on D:, 2026-09-28), 13 slow pass; ruff clean; coverage gates pass.
 - **Disk (2026-09-28):** C: 9.1 GB free (Docker WSL image), D: 103 GB free.
 - **Works (reference setup):** the model trains (remediation gates M1, M2); the variance heads beat
   constant variance (CRPS DM z 6.2 / 4.0 / 4.0) and the conformal 90% intervals cover 0.90-0.91
@@ -56,7 +59,8 @@ Nothing below blocks the first items of "Next"; item 1 gates NT-047. Details in 
 
 1. **Window-free plan** (D-032): NT-053 writes it; you approve it before its first implementation
    item is picked. Research record: `docs/research/2026-09-28-window-free/`.
-2. **After the move:** confirm the D: copy works, then say whether the lead may delete the C: copy.
+2. **The move is done:** reopen VS Code at `D:/neural_trade`, confirm it works, then say whether the
+   lead may delete the C: copy (repo and both worktrees).
 3. **Pushing (D-017, 2026-09-25):** keep or revoke the rule that sessions push without asking.
 4. **NT-007** which delta the strategies read (asked 2026-09-25; recommendation: raw heads for the
    coherence check, served delta for sizing).
@@ -70,9 +74,8 @@ the move to D:, D-030; `Bitcoin_BTCUSDT.csv` stays as the 2017-2025 walk-forward
 
 ## Next
 
-The 2026-09-28 session ends with the move to `D:/neural_trade`
-(D-030), verified by the tests and `check.py` on D:; NT-009 is done when the move is verified. If the
-move is not done when a later session starts, ask the owner before starting NT-001.
+Work from `D:/neural_trade` only (CLAUDE.md start step 2). NT-009 closes when the owner confirms the
+D: copy; the C: copy is deleted only on the owner's go-ahead.
 
 Then by ROADMAP "Order":
 

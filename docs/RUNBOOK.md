@@ -1,9 +1,8 @@
 # Runbook
 
 How to run everything, and the traps of this machine. Commands were verified on 2026-09-25 unless
-marked otherwise. Run them from the repository root. The repository is at
-`C:/Users/Step/Documents/neural_trade` until the planned move to `D:/neural_trade` (D-030, see the
-last section); commands here use relative paths and work in either place.
+marked otherwise. Run them from the repository root. The repository is at `D:/neural_trade` since
+2026-09-28 (D-030, see the last section); commands here use relative paths.
 
 ```bash
 PY=C:/Users/Step/miniforge3/envs/nt/python     # conda env nt: Python 3.10, TF 2.10 GPU. Do not use `conda run` (plugin crash).
@@ -245,12 +244,13 @@ included.
 - **Deleting anything** follows D-029: only what is both stale and without any effect, with the
   evidence. Runs, data and remote branches need the owner.
 
-## Planned move to D: (D-030; not yet done, commands not yet run)
+## Move to D: (D-030; done 2026-09-28, steps 1-6; step 7 waits for the owner)
 
-The project moves from `C:/Users/Step/Documents/neural_trade` to `D:/neural_trade` at the end of the
-session of 2026-09-28, after the doc overhaul is committed and pushed. D: had 103 GB free on
-2026-09-28; the repo with its runs is about 0.8 GB, each worktree about 6 MB. The conda env stays
-where it is (`$PY` does not change). Steps:
+The project moved from `C:/Users/Step/Documents/neural_trade` to `D:/neural_trade` on 2026-09-28
+(robocopy: 2,161 files, 754 MB, 0 failed; the two worktrees 277 and 276 files; `git worktree repair`
+done; editable install re-pointed; 697 fast tests passed in 3:28 on D:; `build.py --check` and
+`check.py` clean; the Claude memory copied to `~/.claude/projects/d--neural-trade/memory/`). The conda
+env stays where it is (`$PY` does not change). The steps, for the record and for a future move:
 
 1. **Quiet.** No job writes into `runs/` (STATUS, GPU check above); `git status -sb` shows only the
    expected untracked run directories; the branch is pushed.
@@ -275,9 +275,10 @@ where it is (`$PY` does not change). Steps:
 6. **Verify on D:.** `git status -sb` and `git log --oneline -3` match the C: copy; the fast suite
    passes; `$PY -m ruff check src tests scripts` is clean; `$PY scripts/notebooks/build.py --check`
    and `$PY scripts/notebooks/check.py` pass. Record the result lines in STATUS.
-7. **Owner confirms.** The owner reopens VS Code at `D:/neural_trade`. After the owner confirms the
-   D: copy works, the lead deletes the C: copy (repo and both worktrees) only on the owner's explicit
-   go-ahead. NT-009 is done when the move is verified.
+7. **Owner confirms** (open as of 2026-09-28). The owner reopens VS Code at `D:/neural_trade`. After
+   the owner confirms the D: copy works, the lead deletes the C: copy (repo and both worktrees) only
+   on the owner's explicit go-ahead. NT-009 closes then. Until then, never work in the C: copy
+   (CLAUDE.md start step 2).
 
 After the move, the header of this file and the machine-local memory name `D:/neural_trade`; the
 relative worktree paths (`../neural_trade_gates`) and `$PY` keep working unchanged. Scratch, QA and
