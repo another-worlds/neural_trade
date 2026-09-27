@@ -1,11 +1,11 @@
 # neural-trade
 
 A neural network that predicts financial time series from technical indicators whose parameters
-are learned by gradient descent. It is meant as a substitute for manual indicator search: instead
-of a person trying RSI 14 against RSI 21, the network learns the indicator periods that predict
-best, shows what it learned, and is judged by net financial metrics after trading costs. The
-design goal is that the instrument, bar size, window and horizons are configuration; today the code
-is built and tested on one reference setup.
+and combinations are learned by gradient descent. It is meant as a substitute for manual indicator
+search: instead of a person trying RSI 14 against RSI 21, the network learns the indicator periods
+that predict best, shows what it learned, and is judged by net financial metrics after trading
+costs. The design goal is that the instrument, bar size, window and horizons are configuration;
+today the code is built and tested on one reference setup.
 
 **Reference setup: BTC/USDT one-minute bars.** From the last 60 closes, one network predicts, for
 10, 15 and 20 minutes ahead:

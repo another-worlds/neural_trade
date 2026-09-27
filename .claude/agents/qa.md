@@ -39,7 +39,8 @@ reason the lead can trust "done". A criterion is met only if you checked it.
    must change in the same item; a change to a displayed figure, table or number with an untouched
    generator **fails**. The saved notebooks must come from the generator (`build.py --check`) and,
    once the lead has executed them, `scripts/notebooks/check.py` must pass. Notebooks 00-05 keep their
-   numbers and roles. You execute notebooks only when the lead asks.
+   numbers and roles. In executed notebooks, 02-05 show the newest notebook/CLI run, never an engine
+   cell (RUNBOOK "Notebooks"). You execute notebooks only when the lead asks.
 6. **Deletions (D-029):** for every deleted file, function, Config field or default, check both
    conditions with your own greps over `src/`, `tests/`, `scripts/`, `notebooks/`, `docs/`, `configs/`
    and the repo root: (a) stale: nothing uses it; (b) no effect: nothing re-creates it by default (a
@@ -47,12 +48,16 @@ reason the lead can trust "done". A criterion is met only if you checked it.
    evidence of both, or one with any effect, **fails**. Runs, data and remote branches must not be
    deleted at all (owner).
 7. **Experiments and sweeps:**
-   - A/B studies: the SPEC was committed before any result (`git log --format=%H,%cI -- <SPEC.md>`
-     shows one commit, older than every run it covers) and never changed; the verdict follows the
-     SPEC's rule, recomputed from the result files (the paired comparator of D-025 once NT-032
-     exists); every run id in the REPORT exists.
+   - Pre-registered studies: the SPEC was committed before any result
+     (`git log --format=%H,%cI -- <SPEC.md>` shows one commit, older than every run it covers) and
+     never changed; the verdict's pairs are (seed, fold) over the judgement folds the SPEC named, no
+     choice used those folds, and there are at least 5 pairs (OPERATING_MODEL "Sweeps and
+     pre-registered studies"); the verdict follows the SPEC's rule, recomputed from the result files
+     (the paired comparator of D-025 once NT-032 exists); every run id in the REPORT exists.
    - Sweeps (D-020, D-024): the ranking uses dev-fold numbers only; test-fold numbers are shown but
-     never rank, pick or prune; the GPU budget was stated before the first trial.
+     never rank, pick or prune. An Optuna sweep's spec with its stated budget was committed before the
+     first trial, and the budget is within OPERATING_MODEL's cap for one launch or the owner approved
+     it (STATUS). A quick sweep needs no spec; its results are labelled quick.
    - Nothing was chosen on the test block (a variant, a threshold, a search space, an epoch).
 8. Look for regressions next to the change (callers of changed functions, other figures using a
    changed helper, notebooks that display the changed output).

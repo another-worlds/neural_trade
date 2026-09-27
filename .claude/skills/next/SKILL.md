@@ -8,14 +8,15 @@ Run the work loop of `docs/OPERATING_MODEL.md` (authoritative; this is the check
 1. **Session start**, if not done in this session: CLAUDE.md "Start of every session" (fetch,
    status as defined there, CI on the pushed head). Act on owner answers recorded since last time
    (STATUS, `docs/qa/`).
-2. **Pick** by OPERATING_MODEL "Picking the next item". Set it to `in-progress` in `docs/BACKLOG.md`.
+2. **Pick** by OPERATING_MODEL "Picking the next item" (the implementer and experimenter slots are
+   picked separately, by the same order). Set it to `in-progress` in `docs/BACKLOG.md`.
 3. **Specify:** objective criteria checkable at QA time, the files that may change, the relevant
    DECISIONS entries. If the item changes what a notebook shows, the `build.py` update is part of
    it (D-028); a deletion carries the D-029 evidence. Tighten the item in the backlog if needed.
 4. **Delegate:** code → the `implementer` agent (branch `nt-<id>`, its own worktree; parallel
    implementers need disjoint files). GPU experiments → the `experimenter` agent, as a sweep (D-024)
    or a pre-registered study (D-025), per OPERATING_MODEL "Sweeps and pre-registered studies"; once
-   NT-026 exists, both run through the experiment engine, not the frozen scripts (D-023). Code the
+   NT-026 exists, both run through the experiment engine, not the frozen set (D-023). Code the
    experiment needs is an implementer item first. Give each agent the item ID, the criteria, the
    files, the branch.
 5. **Verify:** the `qa` agent with the same criteria and the commit sha (it makes its own worktree).

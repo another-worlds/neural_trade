@@ -14,7 +14,7 @@ Each role owns different things. A role does not do another role's job.
 | **Lead** | the main Claude session | choosing the next item, its acceptance criteria, delegating, integrating, **executing the notebooks** (the routine in `scripts/notebooks/README.md`; notebook 01's ~5-minute training is the one GPU job the lead runs itself), the verdict "done", and the planning docs (STATUS, ROADMAP, BACKLOG, DECISIONS) | implement changes that need tests or touch more than one module; set an item `done` without a QA PASS; reopen a recorded decision |
 | **Implementer** | subagent `.claude/agents/implementer.md` | code, tests and code docs for ONE item, in the files the lead assigned, on its own branch `nt-<id>` | edit planning docs; widen scope; run GPU jobs |
 | **QA** | subagent `.claude/agents/qa.md` | an independent PASS / FAIL per acceptance criterion, with evidence it produced itself, in its own worktree | edit the repo; touch another checkout's HEAD; pass anything it did not check |
-| **Experimenter** | subagent `.claude/agents/experimenter.md` | GPU work: sweeps (their stated budget, the run, the leaderboard) and pre-registered studies (the SPEC, running it in a pinned worktree, the REPORT against the SPEC); see "Sweeps and pre-registered studies" | edit `src/` or `tests/` (code an experiment needs is an implementer item first); choose anything on test data; change criteria after results; run two GPU jobs at once (a sweep's parallel trials only under D-024) |
+| **Experimenter** | subagent `.claude/agents/experimenter.md` | GPU work: sweeps (their stated budget, the run, the leaderboard) and pre-registered studies (the SPEC, running it in a pinned worktree, the REPORT against the SPEC); see "Sweeps and pre-registered studies" | edit `src/` or `tests/` (code an experiment needs is an implementer item first); choose anything on test data; change criteria after results; run two GPU jobs at once (a sweep's parallel trials only as "Sweeps and pre-registered studies" allows) |
 
 The lead may make small edits itself (a one-line fix, a doc update, a merge conflict).
 
@@ -28,11 +28,14 @@ In this order:
    (a) priority (P0 first), then (b) the earliest open milestone in ROADMAP "Order", then (c) table
    order in BACKLOG.
 
-An item whose scope waits on an owner Q&A (NT-046, D-027) is not picked until the record is in
-`docs/qa/` and the item's criteria are written from it.
+An item that waits on an owner answer (today NT-047, on the window research of
+`docs/qa/2026-09-28-indicators.md` Round B) is not picked until the answer is recorded in `docs/qa/`
+and DECISIONS and the item's criteria are written from it.
 
+Implementer and experimenter slots are picked separately, by the same order: while implementers work
+on CPU items, the experimenter takes the first actionable experimenter item (GPU rules permitting).
 While a GPU job runs (a sweep included), the lead may take a CPU item in parallel; never two GPU
-items. Two implementers may work at once only on disjoint files (for example NT-043 next to MVP-1).
+items. Two implementers may work at once only on disjoint files (for example NT-043 next to NT-026 or NT-029, not next to NT-027 or NT-028).
 
 ## The work loop (one backlog item)
 
@@ -45,8 +48,8 @@ items. Two implementers may work at once only on disjoint files (for example NT-
 3. **Implement.** Code → the implementer, on branch `nt-<id>` in its own worktree. Experiments → the
    experimenter, as a sweep or a pre-registered study ("Sweeps and pre-registered studies"); if the
    experiment needs code, open (or take) an implementer item for it first. Once NT-026 exists, every
-   sweep and scenario runs through the experiment engine; `scripts/gate_run.py`, `check_gates.py`,
-   `direction_experiments.py` and `ablate.py` are frozen as history (D-023).
+   sweep and scenario runs through the experiment engine; the frozen set (D-023) stays runnable as
+   history, and nothing new builds on it.
 4. **Verify.** QA with the acceptance criteria and the commit sha. QA works in its own worktree.
 5. **Repair.** If QA fails the item, send the implementer QA's evidence. **At most two repair rounds
    per item per session**, then the item goes to `blocked` with the evidence.
@@ -89,25 +92,39 @@ Then take the next item in the same turn (D-017).
 
 ## Sweeps and pre-registered studies
 
-GPU work is one of two kinds, with different limits. An item says which kind it is.
+GPU work is one of two kinds, with different limits. An item says which kind it is. The sweep rules
+live here only; RUNBOOK, the agent files and the backlog point here.
 
-- **Sweeps are exploratory** (owner, D-020, D-023, D-024). A quick sweep takes about 5 minutes
-  wall-clock in total and its results are labelled quick. An Optuna sweep's GPU budget is estimated
-  from a measured `sec_per_step` and stated before it starts (the lead records it in STATUS); it
-  needs no approval and may run overnight while the owner's other project leaves the GPU idle. The
-  GPU-free check (RUNBOOK) runs before every trial. Several training processes at once only while
-  the GPU is otherwise idle, with N from the measured throughput test (NT-035); otherwise one. One
-  seed per trial per dev fold; the top 5 are re-run with 3 seeds and ranked by the seed mean.
-  Sweeps rank on the dev folds only; the test-fold columns are shown and never rank (D-020). A
-  sweep picks a winner; it is not a verdict that A beats B.
-- **Pre-registered studies** (A/B comparisons, ablations, research items). The SPEC states the
-  hypothesis, at most three variants, the metrics, the minimum effect and the guard-rails before
-  any GPU time, and the GPU limit below applies. "A beats B" is judged only by the paired
-  comparator (D-025, NT-032): a paired test over (seed, fold) pairs on the same blocks plus the
-  pre-registered minimum effect, guard-rails by the same test. The v1 physics ablation stays the
-  record under its own criteria (D-003, D-025). A negative or inconclusive result closes the item
-  with a record; further ideas become new items. An inconclusive ablation is re-run at most once
-  before the owner decides.
+- **Sweeps are exploratory** (owner, D-020, D-023, D-024).
+  - A **quick sweep** takes about 5 minutes wall-clock in total and needs no spec. Its results are
+    labelled quick.
+  - An **Optuna sweep** commits its scenario / sweep spec with the stated GPU budget before the
+    first trial: measured `sec_per_step` x steps x trials x folds, plus the top-5 x 3-seed re-runs
+    (NT-030's formula). The lead records the budget in STATUS. No QA.
+  - **Cap** (lead's reading of D-024; the owner: "optuna is measured, but can allow for
+    overnight"): one launch runs at most one night, about 12 GPU-hours (NT-030's `--max-hours`
+    defaults to 12). A larger budget goes to the owner (STATUS "Waiting for the owner") before it
+    starts.
+  - A sweep runs only while the owner's other project leaves the GPU idle. Parallel trials only as
+    RUNBOOK "GPU rules" and NT-030 (4) define them (batches of N, N from NT-035's recorded
+    throughput result; until then N = 1).
+  - One seed per trial per dev fold; the top 5 are re-run with 3 seeds and ranked by the seed mean.
+  - Sweeps rank on the dev folds only; the test-fold columns are shown and never rank (D-020).
+    `RESAMPLE_MINUTES` is not tunable until NT-040 is done (NT-029, NT-030).
+  - A sweep picks a winner; it is not a verdict that A beats B.
+- **Pre-registered studies** (A/B comparisons, ablations, stability-harness runs, research items).
+  The SPEC states the hypothesis, at most three variants, the metrics, the minimum effect and the
+  guard-rails before any GPU time, and the GPU limit below applies. "A beats B" is judged only by
+  the paired comparator (D-025, NT-032): a paired test over (seed, fold) pairs on the same blocks
+  plus the pre-registered minimum effect, guard-rails by the same test.
+  - **Verdict folds** (lead's reading of D-025): a verdict's pairs are (seed, fold) over judgement
+    folds that no choice used; the SPEC names them before any GPU time (fold -1 x at least 5 seeds
+    today; more held-out folds from the long history once NT-041 exists); at least 5 pairs.
+  - **Exception:** a physics-term ablation (NT-006) may carry one condition per term plus the
+    family (D-003) instead of at most three variants; its GPU time still needs the owner.
+  - The v1 physics ablation stays the record under its own criteria (D-003, D-025). A negative or
+    inconclusive result closes the item with a record; further ideas become new items. An
+    inconclusive ablation is re-run at most once before the owner decides.
 
 ## Escalate to the owner (ask; do not act)
 
@@ -115,15 +132,19 @@ GPU work is one of two kinds, with different limits. An item says which kind it 
 - Changing default trading behaviour (strategy defaults, what a signal means).
 - Anything that touches `master`, rewrites history or force-pushes.
 - Deleting runs, data, remote branches, or untracked files the session did not create; freeing disk
-  outside our own files (the Docker WSL image on C: belongs to another project); deleting the C:
-  copy of the project after the move (D-030). Repo code and docs follow the deletion rule above.
+  outside our own files (the Docker WSL image on C: belongs to another project). The C: copy after
+  the move (D-030): after the owner confirms the D: copy works, the lead deletes the C: copy (repo
+  and both worktrees) only on the owner's explicit go-ahead. Repo code and docs follow the deletion
+  rule above.
 - Installing, upgrading or removing packages in the local `nt` env, or anything else on the owner's
-  machine. Already approved: adding optuna (D-023); re-pointing the editable install to D: (D-030).
-  (`requirements-ci.txt` and CI pins are test infrastructure, not this.)
+  machine. Already approved: adding optuna (D-023; the lead installs it pinned, after a dry run, as
+  RUNBOOK says); re-pointing the editable install to D: (D-030). (`requirements-ci.txt` and CI pins
+  are test infrastructure, not this.)
 - GPU time over about **3 hours for one pre-registered study or other backlog item** (the sum over
   all runs in its SPEC: every variant, fold and seed, plus the judgement; splitting launches does not
-  reset it), or any GPU job while the GPU is busy (RUNBOOK). Sweeps follow D-024 instead (above).
-  The notebook routine's ~5-minute training does not count.
+  reset it), or any GPU job while the GPU is busy (RUNBOOK). A sweep has its own cap instead: a
+  budget over one night (about 12 GPU-hours) goes to the owner (above). The notebook routine's
+  ~5-minute training does not count.
 
 Before asking, read the owner Q&A records in `docs/qa/` and DECISIONS: a question answered there is
 never asked again. Ask each new question once (options, recommendation, date in STATUS); afterwards

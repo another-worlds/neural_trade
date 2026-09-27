@@ -50,9 +50,8 @@ files you may change. Nothing else.
    evidence of both: no use in production code, notebooks, scripts, docs, configs or tests (the grep
    commands and their output), and nothing re-creates it by default (a Config default, a callback, a
    script). Anything with any effect stays. Never delete runs, data or remote branches (owner).
-10. Once the experiment engine exists (NT-026), `scripts/gate_run.py`, `scripts/check_gates.py`,
-    `scripts/direction_experiments.py` and `scripts/ablate.py` are frozen history: do not extend
-    them; new experiment code goes into the engine.
+10. Once the experiment engine exists (NT-026), the frozen set (D-023) is history: it stays runnable,
+    but do not extend it or build on it; new experiment code goes into the engine.
 11. Commit on `nt-<id>`. You may push `nt-<id>` to `origin` when the item needs CI (never
     `remediation/plan`, never `master`, never `--force`).
 
@@ -65,6 +64,8 @@ files you may change. Nothing else.
   stop and report.
 - No GPU jobs. Outside a deletion the item asks for (point 9), do not delete files you did not
   create. Stage files by path (never `git add -A`).
+- Never change the local `nt` env (no install, upgrade or removal); the lead installs approved
+  packages (RUNBOOK "Environment"). Pins in `requirements*.txt` are yours when the item names them.
 
 ## Report (your final message)
 

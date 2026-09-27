@@ -2,7 +2,10 @@
 
 Append-only log. An entry changes only through a new entry that cites new evidence ("Supersedes
 D-0xx"). Owner decisions change only with the owner. Format: context, decision, consequence,
-evidence. When you append an entry, add its row to the index.
+evidence. From D-019 on, an owner entry quotes the owner, points to the VISION section or the
+`docs/qa/` round instead of restating it, adds only what VISION does not say, and gives the
+consequence as backlog item IDs; the lead's readings are labelled. When you append an entry, add its
+row to the index.
 
 ## Index
 
@@ -29,18 +32,19 @@ that extend or partly replace an entry.
 | D-016 | How the project is run: roles, loop limits, escalation | owner | D-024, D-029 |
 | D-017 | Autonomous work through the backlog; push policy | owner (autonomy); lead (push rule, revocable) | |
 | D-018 | Training speed is first-class; inference speed is not | owner | D-026 |
-| D-019 | The vision: an indicator-learning predictor; BTC/USDT 1-minute is the reference setup | owner | |
+| D-019 | The vision: an indicator-learning predictor; BTC/USDT 1-minute is the reference setup | owner (NT-017 at P3: lead's) | |
 | D-020 | Deliverable and yardstick: indicators plus predictions, a leaderboard on dev-fold net Sharpe | owner | |
-| D-021 | MVP order: foundations first; the old roadmap folds in | owner | |
-| D-022 | Generality designed in; only the reference setup tested in the MVP | owner (24/7 market: lead's reading) | |
+| D-021 | MVP order: foundations first; the old roadmap folds in | owner (generality's and MVP-6's places, milestone names: lead's) | |
+| D-022 | Generality designed in; only the reference setup tested in the MVP | owner (24/7 market, N = 3 scaling: lead's reading) | |
 | D-023 | Experiment engine first; a control-panel notebook; quick and Optuna sweeps | owner | D-024 |
-| D-024 | GPU use for sweeps | owner (A/B studies keep the old limit: lead's reading) | |
-| D-025 | Verdict rule: paired test plus a pre-registered minimum effect | owner | |
+| D-024 | GPU use for sweeps | owner (A/B studies keep the old limit, one-night cap: lead's reading) | |
+| D-025 | Verdict rule: paired test plus a pre-registered minimum effect | owner (verdict folds: lead's reading) | |
 | D-026 | Gradient stability: invariants, per-run health, stress harness, config guard | owner | |
-| D-027 | Indicators extend through a registry; learned indicators on price first; D-014 on every figure | owner | |
+| D-027 | Indicators extend through a registry; learned indicators on price first; D-014 on every figure | owner | D-031 |
 | D-028 | Notebooks persist and evolve | owner | |
 | D-029 | Delete only what is stale and has no effect | owner | |
-| D-030 | The project moves to D:/neural_trade | owner | |
+| D-030 | The project moves to D:/neural_trade | owner (NT-009 closed by the move: lead's reading) | |
+| D-031 | The indicator catalogue | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -52,7 +56,6 @@ that extend or partly replace an entry.
 ## D-002 All nine component registries, wired into the training path (owner, 2026-09-22)
 - **Decision:** Models, Losses, Metrics, Optimizers, Callbacks, DataLoaders, Preprocessors,
   Layers, Visualizations - each strict, each queried by the trainer / predictor.
-  Further registries extend the nine and do not replace them (Strategies exists; Indicators per D-027).
 - **Evidence:** `tests/registries/test_contracts.py`.
 
 ## D-003 Keep the six physics terms; fix the maths; judge them by pre-registered ablation (owner, 2026-09-22)
@@ -124,7 +127,7 @@ that extend or partly replace an entry.
 - **Decision:** notebooks are built by `scripts/notebooks/build.py` (never edited by hand),
   executed in place on the shipped defaults (01 trains the full `EPOCHS` on the GPU), checked
   (`scripts/notebooks/check.py`), every changed figure rendered and looked at, then committed
-  with outputs. Each notebook stays under 5 MB. See D-028.
+  with outputs. Each notebook stays under 5 MB.
 - **Evidence:** `tests/test_notebook_tooling.py`, `tests/test_notebooks_thin.py`. The nbstripout
   filter and hook, which would strip the outputs, were removed (NT-011, a0edba7).
 
@@ -134,7 +137,7 @@ that extend or partly replace an entry.
 - **Decision:** figures show every logged metric per horizon with noise references, plus the
   tables the old notebook printed. All use `visualization/theme.py`: horizons h0 #3987e5,
   h1 #d95926, h2 #199e70 (only for horizons); dotted = training; status colours only for
-  good / bad outcomes, always with a shape. See D-027.
+  good / bad outcomes, always with a shape.
 
 ## D-015 Plotly hover formats never start with '+' (2026-09-24)
 - **Context:** plotly.js prefixes such a format with '~', d3 rejects it and prints the raw number.
@@ -167,231 +170,191 @@ that extend or partly replace an entry.
 - **Evidence:** commit 6a72613 (about 7.7x faster epochs; D-010).
 
 ## D-019 The vision: an indicator-learning predictor; BTC/USDT 1-minute is the reference setup (owner, 2026-09-25 / 2026-09-28)
-- **Context:** the VISION of 2026-09-25 was inferred by the lead and framed the project as BTC/USDT
-  1-minute trading (STATUS question 1). The owner (2026-09-25): "the project IS NOT about just 60
-  minute BTCUSD, it shouldn't be constrained to a timeframe or a ticker" and "It is a substitute for
-  manual technical indicator search and analysis."
-- **Decision:** `neural_trade` is a neural network that predicts complex financial time series from
-  technical indicators whose parameters and combinations are learned by gradient descent, a
-  substitute for manual indicator search. It is not tied to a ticker or a timeframe. BTC/USDT
-  1-minute bars with a 60-minute window and 10 / 15 / 20-minute horizons is the reference setup,
-  chosen for its effectiveness, noise level and complexity. Audience: the owner and a few reviewers
-  (2026-09-28). The docs are in English.
-- **Consequence:** replaces the inferred vision; STATUS question 1 is answered. Every result names
-  the setup it was measured on. Backlog text that framed BTC 1-minute as the purpose now calls it
-  the reference setup. A licence is not needed for this audience: NT-017 stays open at P3. The
-  growth points toward the MVP are D-020 to D-030.
-- **Evidence:** [VISION.md](VISION.md) "Purpose", "The reference setup", "Audience" (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) owner statement of 2026-09-25, Round 9.
+- **Owner (2026-09-25):** "the project IS NOT about just 60 minute BTCUSD, it shouldn't be constrained
+  to a timeframe or a ticker" and "It is a substitute for manual technical indicator search and
+  analysis."
+- **Decision:** as VISION "Purpose", "The reference setup" and "Audience" (approved as written,
+  2c58370). It replaces the vision the lead inferred on 2026-09-25 (STATUS question 1, answered).
+- **Not in VISION:** the licence. The owner left the licence open (Round 9); the lead lowers NT-017
+  to P3 because the MVP audience does not need one.
+- **Consequence:** backlog text that framed BTC 1-minute as the purpose calls it the reference setup.
+  NT-017 stays open at P3. The growth points toward the MVP: D-020 to D-031.
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) owner statement of
+  2026-09-25, Round 9, "Approval".
 
 ## D-020 Deliverable and yardstick: indicators plus predictions, a leaderboard on dev-fold net Sharpe (owner, 2026-09-28)
-- **Context:** the owner's yardstick: "Searched the grid of configs for the best financial metrics".
-  On selection: "FOR MVP let's keep it as simple winner, but we want to counter it by leaderboarding
-  only on validation dataset valid".
-- **Decision:**
-  - Each run delivers both, judged together: the discovered indicators (the product) and the
-    predictions and strategy built on them (the evidence that the indicators are good).
-  - A searched leaderboard ranks configurations by net Sharpe after costs on the development folds
-    (the out-of-sample blocks of the earlier walk-forward folds; the last fold never ranks).
-    Guard-rail columns can disqualify a row: maximum drawdown, the number of trades, beating
-    buy-and-hold, beating random entries at the same frequency.
-  - Every row also shows its test-fold numbers; they never rank. The owner accepted the risk of
-    picking by eye; the UI makes the ranking column explicit.
-  - MVP winner: the top row after the top 5 are re-run with 3 seeds and ranked by the seed mean. No
-    multiple-testing correction in the MVP.
-  - Manual-search baselines, under the same search budget and the same dev-fold net Sharpe: the
-    frozen twin (the same network with the periods frozen at the textbook values) and classic TA
-    rules (moving-average cross, RSI threshold, Bollinger breakout) whose parameters the same search
-    tunes.
-- **Consequence:** test numbers are displayed on every row, but D-005's rule stands: choices and
-  ranking never use the test block. Built by NT-030 (seed re-runs), NT-031 (leaderboard) and NT-033
-  (baselines).
-- **Evidence:** [VISION.md](VISION.md) "What every run delivers", "The yardstick" (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds 1-4.
+- **Owner:** "Searched the grid of configs for the best financial metrics" and "FOR MVP let's keep it
+  as simple winner, but we want to counter it by leaderboarding only on validation dataset valid".
+- **Decision:** as VISION "What every run delivers" and "The yardstick" (2c58370).
+- **Not in VISION:** no multiple-testing correction in the MVP (Round 2). The owner accepted the risk
+  of picking by eye from the test columns; the UI labels the ranking column (Round 3). D-005 stands:
+  no choice and no ranking uses the test block.
+- **Consequence:** NT-030 (seed re-runs), NT-031 (leaderboard), NT-033 (frozen twin, TA rules),
+  NT-050 (the first real sweep and the learned-against-baseline verdicts under D-025).
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds 1-4.
 
 ## D-021 MVP order: foundations first; the old roadmap folds in (owner, 2026-09-28)
-- **Context:** the owner named five growth points toward the MVP (D-019 statement) and chose
-  "foundations first" for their order.
-- **Decision:**
-  - Order: structure and the experiment engine, then the control panel and model comparison (one
-    framework for growth points 4 and 5), then gradient stability, then generality, then visual
-    comprehension. Visual work may run in parallel where its files are disjoint (the first view,
-    NT-043).
-  - The old roadmap R1-R5 folds in: R1 (trustworthy pipeline) first; R2-R4 become scenarios run
-    through the engine; R5 (merge and publish) is unchanged.
-  - "Unified testing framework" means model comparison (configurations across folds and seeds,
-    statistical verdicts, the leaderboard). The pytest suite stays for code correctness.
-- **Consequence:** ROADMAP runs R1, then MVP-1 to MVP-6, the research tracks R2-R4 after MVP-2, and
-  R5 last (the milestone names and the indicator catalogue's place after MVP-1 are the lead's). The
-  MVP exit is VISION "The MVP". The research items NT-003 to NT-006 wait for the engine (NT-026) and
-  the comparator (NT-032).
-- **Evidence:** [VISION.md](VISION.md) "The MVP" (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 1 (order), Round 2 (roadmap,
-  testing framework).
+- **Owner:** chose "foundations first" (Round 1) and folding the old roadmap into the MVP (Round 2).
+- **Decision:** structure and the experiment engine; then the control panel and model comparison as
+  one framework (growth points 4 and 5); then gradient stability, inside the same framework; then
+  visual comprehension on top, in parallel where its files are disjoint (NT-043). R1 first; R2-R4
+  become scenarios run through the engine; R5 unchanged. "Unified testing framework" means model
+  comparison; the pytest suite stays for code correctness. VISION "The MVP" lists the points.
+- **Consequence:** ROADMAP "Order". R5 whenever the owner is ready, after R1 (unchanged). NT-003 to
+  NT-006 wait for the engine (NT-026) and the comparator (NT-032). Generality's place (after
+  stability, before visuals) is the lead's, approved with VISION's MVP list (2c58370). The milestone
+  names and MVP-6 right after MVP-1 are the lead's reading.
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 1 (order), Round 2
+  (roadmap, testing framework).
 
 ## D-022 Generality designed in; only the reference setup tested in the MVP (owner, 2026-09-28)
-- **Context:** the owner's choice "design now, add later". On the target: "I'd advise for deltas,
-  because this logic is already entrenched in the repo for math reasons". On the data span: "that
-  would be configurable, but let's keep 7 days even, not 30".
-- **Decision:**
-  - Instrument, bar size, window and horizons are configuration. Only BTC/USDT 1-minute is tested in
-    the MVP; a second instrument or timeframe comes after it.
-  - The window and horizons are configured in wall-clock time and converted to bars from the bar
-    size.
-  - A variable number of horizons now (towers, loss components, calibration, serving, figures,
-    tests). The pairwise physics terms run over every neighbouring pair (h_i, h_i+1) and are
-    averaged, so N = 3 reproduces today. Colours: h0 blue, h1 orange, h2 green, then the validated
-    categorical palette of `visualization/theme.py` in a fixed order.
-  - The target stays the price change in quote currency; no returns A/B in the MVP.
-  - The training block is 7 days; the validation, calibration and out-of-sample blocks follow with
-    their own configured lengths. The data file is configurable; the local 2017-2025 BTC/USDT file
-    stays, for walk-forward folds over different months.
-  - The MVP assumes a 24/7 market (the lead's reading, approved with VISION); trading sessions and
-    calendars are outside the MVP.
-- **Consequence:** D-014's horizon colours extend beyond h2 in a fixed order. Every run records the
-  dataset it used. Built by NT-040 (bar size in annualisation), NT-041 (dataset spec and wall-clock
-  configuration) and NT-042 (N horizons).
-- **Evidence:** [VISION.md](VISION.md) "The reference setup", "The MVP" point 4, "Not in the MVP"
-  (2c58370); [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds 1, 5 and 5b.
+- **Owner:** chose "design now, add later" (Round 1). On the target: "I'd advise for deltas, because
+  this logic is already entrenched in the repo for math reasons". On the data span: "that would be
+  configurable, but let's keep 7 days even, not 30".
+- **Decision:** as VISION "The reference setup", "The MVP" point 4 and "Not in the MVP" (2c58370).
+- **Not in VISION:** the pairwise physics terms run over every neighbouring pair (h_i, h_i+1) and are
+  averaged, so N = 3 reproduces today; horizon colours beyond h2 follow the validated categorical
+  palette of `visualization/theme.py` in a fixed order (Round 5b).
+- **Consequence:** NT-040 (bar size in annualisation), NT-041 (dataset spec, wall-clock
+  configuration), NT-042 (N horizons), NT-052 (harness runs for N = 2 and N = 4). The MVP assumes a
+  24/7 market (lead's reading, approved with VISION). Casimir (`losses/functions.py:328`) and IFE
+  (`:442-443`) sum their (h0,h1) and (h1,h2) terms today; to keep "N = 3 reproduces today", the
+  per-pair mean is scaled so that N = 3 gives today's value (lead's reading; NT-042).
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds 1, 5 and 5b.
 
 ## D-023 Experiment engine first; a control-panel notebook; quick and Optuna sweeps (owner, 2026-09-28)
-- **Context:** experiments run through four separate paths today: `scripts/gate_run.py`,
-  `scripts/check_gates.py`, `scripts/direction_experiments.py` and the physics ablation
-  (`scripts/ablate.py`, `experiments/ablation.py`). The owner on sweeps: "The system should have
-  option to do quick sweeps or optuna sweeps. In quick we try to do everything as fast as by 5
-  minutes, but optuna is measured, but can allow for overnight".
-- **Decision:**
-  - Restructure incrementally, engine first: one scenario and sweep specification, a resumable
-    runner, one run store with an index, one scorer. The four old paths are frozen as history.
-  - Every module move is checked by `scripts/golden_run.py verify`; the notebooks work at every step.
-  - The control panel is a Jupyter notebook (ipywidgets and plotly). The same engine runs behind a
-    CLI for long unattended sweeps, into the same run store. No web framework.
-  - Two sweep modes: quick (the whole sweep in about 5 minutes) and Optuna (Bayesian search; GPU use
-    in D-024).
-  - Adding `optuna` to the local `nt` env and to the requirements is approved by the owner, who
-    chose that option knowing it needs an install. The version must suit Python 3.10 and numpy
-    1.23.5.
-- **Consequence:** built by NT-026 (engine; supersedes NT-024), NT-027 (layering), NT-029 (config
-  metadata), NT-030 (sweeps) and NT-034 (control-panel notebook 06). Any other change to the `nt`
-  env still needs the owner.
-- **Evidence:** [VISION.md](VISION.md) "The MVP" points 1 and 2 (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 3 (panel, Optuna), Round 5b
-  (restructure), Round 6 (sweep modes).
+- **Owner:** "The system should have option to do quick sweeps or optuna sweeps. In quick we try to do
+  everything as fast as by 5 minutes, but optuna is measured, but can allow for overnight".
+- **Decision:** as VISION "The MVP" points 1 and 2 (2c58370).
+- **Not in VISION:** the restructure is incremental, engine first; every module move is checked by
+  `scripts/golden_run.py verify` (Round 5b). Adding `optuna` (a version that suits Python 3.10 and
+  numpy 1.23.x: 1.23.0 in the nt env, 1.23.5 in CI) to the local `nt` env and the requirements is owner-approved (Round 3); how: RUNBOOK
+  "Installing optuna". Any other change to the `nt` env still needs the owner.
+- **Consequence:** the frozen set is `scripts/gate_run.py`, `scripts/check_gates.py`,
+  `scripts/backtest_gate.py`, `scripts/direction_experiments.py`, `scripts/ablate.py` and
+  `src/neural_trade/experiments/ablation.py` (kept importable until NT-026 subsumes it); they stay
+  runnable as history, and nothing new builds on them. NT-026 (engine; supersedes NT-024), NT-027
+  (layering), NT-029 (config metadata), NT-030 (sweeps, the optuna pin), NT-034 (notebook 06).
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 3 (panel, Optuna),
+  Round 5b (restructure), Round 6 (sweep modes).
 
 ## D-024 GPU use for sweeps (owner, 2026-09-28)
-- **Context:** an Optuna sweep over dev folds can exceed the limit of about 3 GPU hours per backlog
-  item (OPERATING_MODEL "Escalate to the owner"), and the owner's other project shares the GPU. The
-  owner's words on the Optuna budget are quoted in D-023.
-- **Decision:**
-  - An Optuna sweep's GPU budget is measured and stated before it starts. It may run overnight while
-    the owner's other project leaves the GPU idle.
-  - Several training processes run at once only while the GPU is otherwise idle, with N set by one
-    measured throughput test; otherwise one at a time.
-  - One seed per trial per dev fold; the top 5 are re-run with 3 seeds; the final order and the
-    winner use the seed mean (D-020).
-- **Consequence:** for sweeps, this replaces the 3-GPU-hour limit. Pre-registered A/B studies keep
-  that limit and the research budget (the lead's reading: the owner's answer was about sweeps). The
-  GPU-free check (RUNBOOK) runs before each trial. NT-035 runs the throughput test. The GPU time for
-  NT-006 is still a separate owner question.
-- **Evidence:** [VISION.md](VISION.md) "The MVP" point 2 (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 6 (GPU budget), Round 7 (seeds,
-  parallel GPU).
+- **Owner:** "optuna is measured, but can allow for overnight" (D-023); Round 7's recommended options.
+- **Decision:** as VISION "The MVP" point 2 (2c58370): budget measured and stated first; overnight
+  while the GPU is idle.
+- **Not in VISION (Round 7):** one seed per trial per dev fold; the top 5 re-run with 3 seeds; order
+  and winner by the seed mean. Several training processes at once only while the owner's other
+  project leaves the GPU idle, N from one measured throughput test; otherwise one at a time.
+- **Consequence:** NT-030 (`--max-hours` defaults to 12; `--parallel` above 1 needs NT-035's result),
+  NT-035, NT-050; the rules: OPERATING_MODEL "Sweeps and pre-registered studies". Lead's reading: this
+  replaces the 3-GPU-hour limit for sweeps only (A/B studies keep it and the research budget); one
+  launch runs at most one night, about 12 GPU-hours, and a larger budget goes to the owner (STATUS
+  "Waiting for the owner"). NT-006's GPU time stays a separate owner question (asked 2026-09-25).
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 6 (GPU budget),
+  Round 7 (seeds, parallel GPU).
 
 ## D-025 Verdict rule: paired test plus a pre-registered minimum effect (owner, 2026-09-28)
-- **Context:** the v1 physics ablation (D-003) judged its guard-rails by a point tolerance (h1
-  direction AUC -0.0119 against 0.01).
-- **Decision:** "A beats B" (learned against frozen indicators, a loss term on against off, any two
-  scenarios) rests on a paired test over (seed, fold) pairs on the same blocks plus a minimum
-  practical effect fixed before the run. Guard-rails are judged by the same test, not by a point
-  tolerance. A deterministic TF mode is opt-in for comparison studies, after a measured speed test;
-  sweeps stay fast.
-- **Consequence:** supersedes the ablation verdict rule (`configs/ablation_criteria.yaml`) for new
-  studies; the v1 ablation `runs/ablations/ablate_physics_v1-full` stays the record under its own
-  criteria. NT-032 builds the comparator, with its error rates checked by simulation including block
-  noise (D-012). NT-035 measures the deterministic mode's speed. NT-006 is pre-registered again
-  under this rule; its GPU time still needs the owner (asked 2026-09-25).
-- **Evidence:** [VISION.md](VISION.md) "The yardstick" (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 7.
+- **Owner:** Round 7's recommended options. Context: the v1 physics ablation (D-003) judged its
+  guard-rails by a point tolerance (h1 direction AUC -0.0119 against 0.01).
+- **Decision:** as VISION "The yardstick", "A beats B" (2c58370).
+- **Not in VISION:** guard-rails are judged by the same paired test. A deterministic TF mode is opt-in
+  for comparison studies, after a measured speed test; sweeps stay fast. The mode is
+  `seed_everything(seed, deterministic=True)` (`utils/seeding.py:32`), not the
+  `TF_DETERMINISTIC_OPS=1` that every run already sets (`__init__.py:26`).
+- **Consequence:** supersedes `configs/ablation_criteria.yaml` for new studies; the v1 grid
+  `runs/ablations/ablate_physics_v1-full` stays the record under its own criteria. NT-032
+  (comparator; error rates simulated with block noise, D-012), NT-035 (deterministic-mode speed),
+  NT-006 (pre-registered again; GPU time asked 2026-09-25), NT-039, NT-050. Lead's reading: a
+  verdict's pairs are (seed, fold) over judgement folds that no choice used; the SPEC names them
+  before any GPU time (fold -1 x at least 5 seeds today; more held-out folds from the long history
+  once NT-041 exists); at least 5 pairs.
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 7.
 
 ## D-026 Gradient stability: invariants, per-run health, stress harness, config guard (owner, 2026-09-28)
-- **Context:** the owner on unstable runs: "attribute and fail loudly, but this should be configured
-  to not allow a configuration of hyperparameters that would fail the system".
-- **Decision:**
-  - Hard invariants run in CI in strict mode (the loss masks off).
-  - Every run records gradient health at no more than 2% of `sec_per_step`; a per-loss-term probe
-    (about 10%) is behind a flag.
-  - An on-demand stress harness (scale and volatility sweep x0.1 to x10, extreme-input fuzzing,
-    fault injection, 3 seeds; thresholds pre-registered) must be passed by every new setup (ticker,
-    timeframe or horizons).
-  - An unstable run is attributed to its loss term and fails loudly: Optuna prunes it and the
-    leaderboard shows it as failed.
-  - Config validation and sweep search spaces refuse hyperparameter regions the harness shows to
-    fail, before a run starts.
-  - Measure first, then one pre-registered A/B of gradient-based loss weighting against today's
-    value-based calibration.
-- **Consequence:** built by NT-036 (CI invariants, a "stability" pytest marker), NT-037 (per-run
-  health; absorbs NT-012), NT-038 (harness and config guard) and NT-039 (the A/B, judged under
-  D-025). The 2% cost is held to D-018. Once NT-036 exists, the definition of done runs the
-  stability marker when loss, model, indicator or train-step code changes (OPERATING_MODEL).
-- **Evidence:** [VISION.md](VISION.md) "The MVP" point 3 (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 8.
+- **Owner:** "Mathematical gradient stability. unified gradient stability testing framework"
+  (2026-09-25); on unstable runs: "attribute and fail loudly, but this should be configured to not
+  allow a configuration of hyperparameters that would fail the system".
+- **Decision:** as VISION "The MVP" point 3 (2c58370).
+- **Not in VISION:** the harness runs inside the experiment engine (Round 1). Strict mode (the loss
+  masks off) in CI and in the harness (Round 8). The harness sweeps scale and volatility x0.1 to x10,
+  with pre-registered thresholds. Optuna prunes an unstable run; the leaderboard shows it as failed.
+  The per-term probe costs about 10%.
+- **Consequence:** NT-036 (CI invariants, `stability` marker), NT-037 (per-run health; absorbs
+  NT-012), NT-038 (harness cases as engine scenarios, config guard), NT-039 (the A/B, under D-025),
+  NT-051 (first harness run), NT-052. The 2% cost is held to D-018. Once NT-036 exists, the
+  definition of done runs the stability marker (OPERATING_MODEL).
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds 1 and 8.
 
 ## D-027 Indicators extend through a registry; learned indicators on price first; D-014 on every figure (owner, 2026-09-28)
-- **Context:** the owner on the indicators package: "Lets elaborate on that in a separate Q&A
-  session. In general I want the list of indicators to be extendable and easily integrated via
-  registry". On combinations: "Lets elaborate on that in a separate Q&A".
-- **Decision:**
-  - The indicator list is extendable and integrated through a registry. Its design, and where
-    indicator combinations come from, are settled in a separate owner Q&A held right after this
-    overhaul (2026-09-28, before the move to D:, D-030).
-  - The first comprehension view: the learned indicators drawn on price (moving averages and
-    Bollinger lines on price, RSI and MACD panels) against the textbook defaults, with how the
-    periods moved over training and per window.
-  - D-014 applies to every figure, including the comprehension views: there is no simplified tier.
+- **Owner:** "Lets elaborate on that in a separate Q&A session. In general I want the list of
+  indicators to be extendable and easily integrated via registry". On combinations: "Lets elaborate
+  on that in a separate Q&A".
+- **Decision:** as VISION "The MVP" point 5 and its "Also in the MVP" paragraph (2c58370). The
+  registry's design, and where indicator combinations come from, are settled in a separate owner Q&A
+  held right after this overhaul (2026-09-28, before the move to D:, D-030).
+- **Not in VISION:** the first view draws moving averages and Bollinger lines on price and RSI and
+  MACD in panels, against the textbook defaults, with how the periods moved over training and per
+  window (Round 4). D-014 applies to every figure, the comprehension views included: there is no
+  simplified tier (Round 9).
 - **Consequence:** an Indicators registry extends the nine of D-002. NT-046 stays a placeholder
   until the indicator Q&A; NT-043 builds the first view and notebook 07 (D-028).
-- **Evidence:** [VISION.md](VISION.md) "What every run delivers", "The MVP" point 5 and the
-  indicator catalogue (2c58370); [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds
-  4 and 9.
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Rounds 4 and 9.
 
 ## D-028 Notebooks persist and evolve (owner, 2026-09-25 / 2026-09-28)
-- **Context:** the owner: "I want the notebook structure to persist and even be updated during the
+- **Owner (2026-09-25):** "I want the notebook structure to persist and even be updated during the
   development towards MVP".
-- **Decision:** notebooks 00-05 keep their numbers and roles and are updated as the code changes;
-  they stay the primary interface through the MVP (generated and executed per D-013). New views get
-  new notebooks (06 control panel, 07 discovered indicators). Each figure has one home (the 01 / 04
-  overlap is trimmed).
-- **Consequence:** an item that changes what a notebook shows updates it through
-  `scripts/notebooks/build.py` in the same item (OPERATING_MODEL definition of done). NT-034 builds
-  06, NT-043 builds 07, NT-045 trims the overlap.
-- **Evidence:** [VISION.md](VISION.md) "The MVP" point 5, "Principles" (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) owner statement after Round 3 (dated
-  2026-09-25 there), Round 6.
+- **Decision:** as VISION "The MVP" point 5 and "Principles" (2c58370): 00-05 keep their numbers and
+  roles; new views get new notebooks (06 control panel, 07 discovered indicators); all generated and
+  executed per D-013.
+- **Not in VISION:** each figure has one home, so overlaps (01 / 04) are trimmed (Round 6). An item
+  that changes what a notebook shows updates it through `scripts/notebooks/build.py` in the same item
+  (OPERATING_MODEL definition of done).
+- **Consequence:** NT-034 (06), NT-043 (07), NT-045 (the overlap).
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) owner statement after
+  Round 3 (dated 2026-09-25 there), Round 6.
 
 ## D-029 Delete only what is stale and has no effect (owner, 2026-09-28)
-- **Context:** the restructure (D-023) removes old code. The owner: "only delete something which is
-  both stale and doesnt affect current system in any sense".
-- **Decision:** every deletion shows evidence of both: it is stale, and it has no effect (no
-  production, notebook, script, doc or test use, and no default re-creates it). Anything with any
-  effect stays. Deleting runs, data or remote branches still needs the owner (OPERATING_MODEL
-  "Escalate to the owner").
-- **Consequence:** NT-028 applies the rule to the stale candidates found by the 2026-09-28 survey.
-- **Evidence:** [VISION.md](VISION.md) "The MVP" point 1 (2c58370);
-  [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 6.
+- **Owner:** "only delete something which is both stale and doesnt affect current system in any
+  sense".
+- **Decision:** as VISION "The MVP" point 1 (2c58370). Every deletion shows evidence of both: it is
+  stale, and it has no effect (no production, notebook, script, doc or test use, and no default
+  re-creates it). Anything with any effect stays.
+- **Not in VISION:** deleting runs, data, models or remote branches still needs the owner
+  (OPERATING_MODEL "Escalate to the owner"). Changing a behaviour is not a deletion.
+- **Consequence:** NT-028 (the stale candidates of the 2026-09-28 survey). The silent warm start from
+  weights in the working directory is a behaviour, not a deletion: NT-049.
+- **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 6.
 
 ## D-030 The project moves to D:/neural_trade (owner, 2026-09-28)
-- **Context:** C: is nearly full (the other project's Docker WSL image; NT-009), and runs, Optuna
-  studies and the run index need room. Asked where the run store should live, the owner: "move the
-  project to disk D".
-- **Decision:** in this session, after the doc overhaul is committed and pushed and the indicator
-  Q&A (D-027) is held, the project moves to D:/neural_trade: the repo with its untracked runs, both
-  sibling worktrees (then `git worktree repair`), the editable install re-pointed with
-  `pip install --no-deps -e .` from D: (an owner-approved env change), and the Claude memory folder.
-  Tests and the notebook check are verified on D:, and the owner reopens VS Code there. The C: copy
-  is deleted only after the owner confirms the D: copy works. Runs, the Optuna studies and the run
-  index live in the repo on D:.
-- **Consequence:** until the move, paths stay C:/Users/Step/Documents/neural_trade. NT-009 is
-  resolved by the move and by VISION keeping the 2017-2025 file; it is done when the move is
-  verified.
+- **Owner:** asked where the run store should live: "move the project to disk D" (Round 5b).
+- **Decision (Round 6; VISION does not cover it):** in the 2026-09-28 session, after the doc overhaul
+  is committed and pushed and the indicator Q&A is held, the project moves to D:/neural_trade: the
+  repo with its untracked runs, both sibling worktrees (then `git worktree repair`), the editable
+  install re-pointed with `pip install --no-deps -e .` from D: (an owner-approved env change), and the
+  Claude memory folder. Tests and the notebook check are verified on D:; the owner reopens VS Code
+  there. The C: copy is deleted by the lead only on the owner's explicit go-ahead, after the owner confirms
+  the D: copy works (OPERATING_MODEL "Escalate to the owner"). Runs, the Optuna
+  studies and the run index live in the repo on D:.
+- **Consequence:** the steps: RUNBOOK "Planned move to D:". Until the move, paths stay
+  C:/Users/Step/Documents/neural_trade. Lead's reading: NT-009 is closed by the move, once verified.
 - **Evidence:** [qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md) Round 5b (run store),
   Round 6 (move), Round 9 (indicator Q&A before the move).
+
+## D-031 The indicator catalogue (owner, 2026-09-28)
+- **Owner:** "All should be learnable"; on combinations: "the combination are what the network does
+  automatically, it's the core of it's mechanic. I don't think it needs any extra mechanism"; on
+  delivery: "html report with extensive rich interactive visualizations".
+- **Decision (Rounds A-C; VISION says only "an extendable indicator catalogue"):** all four groups
+  of families: today's MA/EMA, MACD, RSI, Bollinger; ATR, Stochastic, Williams %R, Keltner; OBV,
+  VWAP, MFI; ADX/DMI, CCI, Donchian; so the model input becomes OHLCV. Every indicator learnable
+  (smooth versions where needed); combinations left to the network; adaptive per-window periods
+  kept, reported as a range, with a switch. One registry entry per family (inputs, learnable
+  parameters with textbook defaults and bounds, output channels, drawing); all families on by
+  default, 3 instances each. Grouped permutation importance (read-out only). A self-contained
+  interactive HTML report per run.
+- **Open:** the owner's window question ("I think we can get rid off it completely. Research this.")
+  is under research (2026-09-28); its decision follows as a new entry.
+- **Consequence:** NT-046 (package and registry, today's four families), NT-047 (OHLCV and the new
+  families; waits for the window decision; D-018 applies), NT-048 (the HTML report, notebook 07). Supersedes D-027's "NT-046 stays a placeholder" (the
+  indicator Q&A is held; NT-046 is defined).
+- **Evidence:** [qa/2026-09-28-indicators.md](qa/2026-09-28-indicators.md) Rounds A-C.

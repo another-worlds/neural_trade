@@ -26,14 +26,16 @@ future. Right now the biggest growth points towards MVP are:
 - Order: foundations first: 1) structure; 2) one config+experiment framework (points 4+5); 3) gradient
   stability framework inside it; 4) visuals on top (parallel where independent).
 - Ticker/timeframe: design now, add later (no hard-coding; config keys in bars; BTC 1-min default and only
-  tested dataset in MVP; second ticker/timeframe after MVP).
+  tested dataset in MVP; second ticker/timeframe after MVP). ("config keys in bars": superseded by
+  Round 5: wall-clock time, D-022.)
 
 ## Round 2
 - Leaderboard main column: Net Sharpe after costs (guard-rails: max drawdown, n trades, beats buy-and-hold
   and random null).
 - Selection (owner's words): "FOR MVP let's keep it as simple winner, but we want to counter it by
   leaderboarding only on validation dataset valid" -> simple top-1 winner, no multiple-testing correction
-  in MVP; leaderboard ranks on validation data only (test not used for ranking).
+  in MVP; leaderboard ranks on validation data only (test not used for ranking). ("validation data":
+  made precise in Round 3: dev folds.)
 - Roadmap: fold R1-R5 into the MVP (R1 first; R2-R4 become scenarios in the grid framework; R5 unchanged).
 - "Unified testing framework" = MODEL COMPARISON (configs across folds/seeds, statistical verdicts,
   leaderboard). pytest suite stays as is.

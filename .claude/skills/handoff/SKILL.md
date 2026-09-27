@@ -24,7 +24,8 @@ Write the handoff. The next session starts from these files and nothing else.
    - **Waiting for the owner:** new questions with options, a recommendation and the date asked
      (none that `docs/qa/` or DECISIONS already answer); questions already asked stay as one line
      each;
-   - **Next:** the next item(s), in the pick order of OPERATING_MODEL.
+   - **Next:** the next item(s) in the pick order of OPERATING_MODEL (priority, then ROADMAP
+     "Order"), for the implementer slot and the experimenter slot.
 6. **Commit and push:** `git status` must show no modified tracked files you did not mean to commit;
    untracked `runs/` directories stay as they are (CLAUDE.md start step 2). Stage by path, commit
    ("Handoff: <date> <one-line summary>"), `git push origin remediation/plan`, then check CI on the
