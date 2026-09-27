@@ -16,30 +16,46 @@ reason the lead can trust "done". A criterion is met only if you checked it.
    existing checkout (the lead's main checkout or an implementer's worktree). Create yours:
    `git worktree add --detach D:/nt_qa/<item>-<sha7> <sha>` (on D:, C: is nearly full), `cd` there,
    confirm with `git log -1`. Set `PYTHONPATH=<your worktree>/src` for ad-hoc scripts (pytest and
-   `scripts/notebooks/*` do it themselves). Read run directories (`runs/<id>/`) and gitignored data
-   from the main checkout by absolute path; copy `binance_btcusdt_1min_ccxt.csv` into your worktree
-   if a script needs it there. At the end: `git worktree remove --force <path>` from the main
-   checkout, then `git worktree prune`.
+   `scripts/notebooks/*` do it themselves). The reference dataset (`binance_btcusdt_1min_ccxt.csv`)
+   is tracked, so your worktree has it. Read run directories (`runs/<id>/`) and gitignored data (the
+   long-history file, RUNBOOK "Data") from the main checkout by absolute path. At the end:
+   `git worktree remove --force <path>` from the main checkout, then `git worktree prune`.
 2. Run the checks yourself: `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"`,
    the slow suite if training, serving or notebooks are involved, and `$PY -m ruff check src tests scripts`
-   (`$PY` = `C:/Users/Step/miniforge3/envs/nt/python`). Quote the result lines.
+   (`$PY` = `C:/Users/Step/miniforge3/envs/nt/python`). Once the `stability` marker exists (NT-036),
+   also `-m stability` when loss, model, indicator or train-step code changed. For a refactor that
+   claims no number changed, re-run `scripts/golden_run.py verify` yourself. Quote the result lines.
 3. Recompute every number the item claims, from the data or the run directory. Do not trust the
-   implementer's report.
+   implementer's report. A number must name the setup it was measured on (dataset, bar size, window,
+   horizons).
 4. **Figures:** render them on real data (`scripts/notebooks/render.py`, or a figure function on a
    run's data) and open every PNG. Look for wrong or inconsistent numbers, misleading encodings, empty
    panels, overlapping or cut-off text, colour-role violations (horizon colours for anything but
    horizons, dotted for anything but training). Compare with the previous saved output: a figure or
    table that drops a metric, a horizon, a noise band or a table **fails** (D-014), unless the item
-   asks for it.
-5. **Notebooks:** if the item changes what a notebook shows, the saved notebooks must come from
-   `scripts/notebooks/build.py` (`build.py --check`) and be executed on the real defaults;
-   `scripts/notebooks/check.py` must pass. You execute notebooks only when the lead asks.
-6. **Experiments:** the SPEC was committed before any result (`git log --format=%H,%cI -- <SPEC.md>`
-   shows one commit, older than every run it covers) and never changed; the verdict follows the
-   SPEC's rule, recomputed from the result files; the test block decided nothing but the verdict;
-   every run id in the REPORT exists.
-7. Look for regressions next to the change (callers of changed functions, other figures using a
-   changed helper).
+   asks for it. D-014 applies to new figures too, comprehension views included (learned indicators on
+   price, sweep and leaderboard figures): there is no simplified tier.
+5. **Notebooks (D-013, D-028):** if the item changes what a notebook shows, `scripts/notebooks/build.py`
+   must change in the same item; a change to a displayed figure, table or number with an untouched
+   generator **fails**. The saved notebooks must come from the generator (`build.py --check`) and,
+   once the lead has executed them, `scripts/notebooks/check.py` must pass. Notebooks 00-05 keep their
+   numbers and roles. You execute notebooks only when the lead asks.
+6. **Deletions (D-029):** for every deleted file, function, Config field or default, check both
+   conditions with your own greps over `src/`, `tests/`, `scripts/`, `notebooks/`, `docs/`, `configs/`
+   and the repo root: (a) stale: nothing uses it; (b) no effect: nothing re-creates it by default (a
+   Config default, a callback, a script) and no behaviour changes without it. A deletion without
+   evidence of both, or one with any effect, **fails**. Runs, data and remote branches must not be
+   deleted at all (owner).
+7. **Experiments and sweeps:**
+   - A/B studies: the SPEC was committed before any result (`git log --format=%H,%cI -- <SPEC.md>`
+     shows one commit, older than every run it covers) and never changed; the verdict follows the
+     SPEC's rule, recomputed from the result files (the paired comparator of D-025 once NT-032
+     exists); every run id in the REPORT exists.
+   - Sweeps (D-020, D-024): the ranking uses dev-fold numbers only; test-fold numbers are shown but
+     never rank, pick or prune; the GPU budget was stated before the first trial.
+   - Nothing was chosen on the test block (a variant, a threshold, a search space, an epoch).
+8. Look for regressions next to the change (callers of changed functions, other figures using a
+   changed helper, notebooks that display the changed output).
 
 ## Limits
 
@@ -54,5 +70,6 @@ reason the lead can trust "done". A criterion is met only if you checked it.
 - verdict: **PASS** or **FAIL**;
 - per acceptance criterion: met / not met, the evidence (command and output, recomputed value, PNG
   path and what it shows);
+- deletions and notebooks: the D-029 and D-028 checks above, with their evidence (or "not applicable");
 - regressions found;
 - for the backlog: other issues, one line each, with file:line.

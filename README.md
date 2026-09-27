@@ -1,33 +1,29 @@
 # neural-trade
 
-Multi-horizon forecasting for 1-minute BTC/USDT bars. From the last 60 closes, one network
-predicts, for 10, 15 and 20 minutes ahead:
+A neural network that predicts financial time series from technical indicators whose parameters
+are learned by gradient descent. It is meant as a substitute for manual indicator search: instead
+of a person trying RSI 14 against RSI 21, the network learns the indicator periods that predict
+best, shows what it learned, and is judged by net financial metrics after trading costs. The
+design goal is that the instrument, bar size, window and horizons are configuration; today the code
+is built and tested on one reference setup.
 
-- the price change in dollars (`delta`),
+**Reference setup: BTC/USDT one-minute bars.** From the last 60 closes, one network predicts, for
+10, 15 and 20 minutes ahead:
+
+- the price change in quote currency (`delta`; USDT here),
 - the probability that the price goes up (`direction`),
 - the variance of the price change (`sigma`),
 
-and a set of learnable technical indicators (EMA, MACD, RSI, Bollinger periods trained by
-gradient descent). Six "physics-inspired" regularisers act on these heads. An ablation harness
-tests whether each one earns its place.
+and learns a set of technical indicators (EMA, MACD, RSI, Bollinger periods trained by gradient
+descent). Six "physics-inspired" regularisers act on these heads. An ablation harness tests whether
+each one earns its place.
 
 The package lives in `src/neural_trade/`. Around the model it provides a typed config, nine
 component registries, a purged evaluation protocol with baselines, post-hoc calibration, a
 serving API, an honest backtest engine, run tracking and a CLI.
 
-> **Status.** The model trains and its uncertainty is trustworthy. Gradients are finite, the
-> variance heads are calibrated (variance / squared-error correlation ≈ 0.4), and the conformal
-> intervals cover 90% of the held-out test block at a 90% target (milestones M1, M2 and M4 in
-> [`runs/gates/REPORT.md`](runs/gates/REPORT.md)).
->
-> **Direction skill is weak.** At best it is level with a logistic regression on trailing
-> returns: test AUC about 0.50-0.55 depending on run and horizon (M3 not met;
-> [`runs/experiments/direction_v1/REPORT.md`](runs/experiments/direction_v1/REPORT.md)).
->
-> **The price heads have no skill.** On the calibration block they are shrunk to about zero.
->
-> **No backtest has made money after costs:** a gross edge of about buy-and-hold, against
-> 26 bps per round trip.
+> **Status.** What works, what does not, and the evidence for each: [`docs/STATUS.md`](docs/STATUS.md).
+> The goal and the MVP: [`docs/VISION.md`](docs/VISION.md).
 
 ## Install
 

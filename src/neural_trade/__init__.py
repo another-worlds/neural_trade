@@ -1,4 +1,4 @@
-"""neural_trade: multi-horizon BTC forecasting with learnable indicators.
+"""neural_trade: financial time-series forecasting with learnable technical indicators.
 
 Importing the package is cheap and never imports TensorFlow; heavy modules
 (training, models, serving) are imported on demand by the caller:

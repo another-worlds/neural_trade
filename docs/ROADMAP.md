@@ -1,79 +1,117 @@
 # Roadmap
 
-Milestones toward the end goal in [VISION.md](VISION.md). Each milestone has exit criteria that can
-be checked; its work items are in [BACKLOG.md](BACKLOG.md). The lead updates a milestone's status
-when it moves (see the `/handoff` skill). A milestone that ends in a clear negative result is
-**closed with that result**, recorded, and the owner decides what follows. It is not reopened by
-tuning.
+Milestones toward [VISION.md](VISION.md) "The MVP", foundations first (D-021). Items and their
+acceptance criteria are in [BACKLOG.md](BACKLOG.md); the lead updates a milestone's status when it
+moves (`/handoff`). A milestone that ends in a clear negative result is **closed with that result**,
+recorded, and the owner decides what follows; it is not reopened by tuning. Names: MVP-1 to MVP-6
+here; M1 to M4 are the remediation gates in [runs/gates/REPORT.md](../runs/gates/REPORT.md).
 
 ## Done: the remediation (2026-09-22 to 2026-09-25)
 
-The model trains, the package is installable, and the measurement stack can be trusted. Plan:
-[archive/REMEDIATION_PLAN_2026-09.md](archive/REMEDIATION_PLAN_2026-09.md); evidence:
-[runs/gates/REPORT.md](../runs/gates/REPORT.md).
+The model trains, the package installs, the measurement stack can be trusted
+([plan](archive/REMEDIATION_PLAN_2026-09.md)).
 
-- M1 (a gradient step is possible), M2 (every loss term bounded), M4 (metrics and calibration
-  trusted: conformal coverage 0.90-0.91 at a 0.90 target): **pass**.
-- Phases B (package, typed config, nine strict registries, serving) and C (evaluation protocol
-  with baselines, run tracking, honest backtest engine, ablation harness): **done**.
-- Full physics-term ablation (84 runs): **done**, verdicts inconclusive
-  ([report](../runs/ablations/ablate_physics_v1-full/report.md)).
-- Rich notebooks executed on real runs, the served-epoch fix, noise-aware statistics: **done**.
-- **Not met:** M3 (direction skill, price-head EV), and "CI green".
+- Gates M1 (a gradient step), M2 (every loss term bounded), M4 (conformal coverage 0.90-0.91 at a 0.90
+  target): **pass**. M3 (direction skill, price-head EV): **not met**; it continues in R2.
+- Package, typed config, nine strict registries, serving, evaluation protocol with baselines, honest
+  backtest engine, ablation harness, notebooks executed on real runs, the served-epoch fix (D-011),
+  noise-aware statistics (D-012): **done**. Physics ablation v1 (84 runs): no term reaches VALUE,
+  family inconclusive ([report](../runs/ablations/ablate_physics_v1-full/report.md)).
 
-## R1: a pipeline that stays trustworthy (in progress)
+## R1: a trustworthy pipeline (in progress, first)
 
-Nothing downstream means anything if CI is red or a baseline is wrong.
-
-- Items: NT-001 (CI green), NT-002 (random null ignores position size), NT-010 (every cited number
-  links to a tracked run), NT-011 (done), NT-025 (notebook size limit enforced).
+- Items (nothing downstream counts while CI is red or a baseline is wrong): NT-001 (CI green),
+  NT-002 (random null ignores position size), NT-010 (every cited number links to a tracked run),
+  NT-025 (5 MB notebook limit enforced); NT-011 done.
 - **Exit:** the `ci` workflow is green on the branch head; no open P0; the numbers in STATUS and
   README each link to a committed report or run summary.
 
-## R2: direction skill and price heads (M3)
+## MVP-1: structure and the experiment engine (VISION MVP point 1; D-023, D-029)
 
-The central research question. Can the network beat the trailing-returns logistic regression
-(AUC about 0.52-0.56 on fold -1)?
+- Items: NT-026 (experiment engine: scenario and sweep spec, resumable runner, one run store with an
+  index, one scorer; supersedes NT-024), NT-027 (layering: no circular imports, one metrics and
+  statistics module, figures only draw), NT-028 (stale removal under D-029), NT-029 (config metadata
+  for the panel and search spaces, generated config reference).
+- **Exit:** NT-026 to NT-029 done; VISION point 1 holds on the merged head, with notebooks 00-05
+  executed and checked on it (D-013, D-028).
 
-- Items: NT-024 (multi-seed gate runs and judge: the tooling both need), NT-003 (direction: M3
-  direction clauses), NT-004 (price heads: served EV > 0).
-- **Exit (pass):** NT-003's and NT-004's acceptance criteria (fold -1, at least 3 seeds, the
-  current trainer: AUC h1 > 0.52 and at least `logreg_lags`, val MCC h1 > 0.02, Gaussian-readout
-  MCC > 0, served EV(delta) h1 > 0 with beta_h1 > 0).
-- **Exit (negative):** each item's pre-registered variants are exhausted without passing. The
-  report says so, and the owner decides the next direction (see VISION: a negative answer is
-  valid).
+## MVP-2: control panel and model comparison (point 2, "The yardstick"; D-020, D-023 to D-025)
 
-## R3: an edge that survives costs
+- Items: NT-030 (sweeps: quick and Optuna, `neural-trade sweep`), NT-031 (leaderboard by dev-fold net
+  Sharpe after costs), NT-032 (paired comparator), NT-033 (manual-search baselines: frozen twin and
+  classic TA rules), NT-034 (control-panel notebook 06), NT-035 (GPU measurements: concurrent-runs
+  throughput, deterministic-mode speed; experimenter).
+- **Exit:** NT-030 to NT-035 done; VISION point 2 holds: a real sweep on the reference setup, with both
+  manual-search baselines, appears on the leaderboard in notebook 06 and from the CLI.
 
-- Items: NT-005 (cost-aware trading). Depends on NT-002 and the owner's answer on NT-007.
-- **Exit (pass):** NT-005's acceptance (a): a strategy with knobs fixed on cal / dev folds, net
-  return > 0 after costs on fold -1, size-matched random-null percentile >= 95, net > 0 on at least
-  2 of 3 folds, look-ahead checked.
-- **Exit (negative):** NT-005's acceptance (b): the negative-result report with the gross edge per
-  trade and its CI against the cost, for every pre-registered variant.
+## MVP-3: gradient stability (point 3; D-026)
 
-## R4: the physics terms, judged on the current trainer
+- Items: NT-036 (stability invariants in CI, strict mode), NT-037 (per-run gradient health, at most 2%
+  of `sec_per_step`; absorbs NT-012), NT-038 (stability harness and config guard), NT-039
+  (pre-registered A/B: gradient-based loss weighting against today's value calibration; experimenter).
+- **Exit:** NT-036 to NT-038 done, and the harness passes its pre-registered thresholds on the
+  reference setup; NT-039 closed with the paired comparator's verdict (a negative verdict closes it).
 
-- Items: NT-006 (re-run the ablation grid after the served-epoch fix). Needs the owner's approval
-  for about 7-10 GPU hours (84 runs at 5-7 min each), and disk (NT-009).
-- **Exit:** a regenerated `report.md` with a verdict per term under the unchanged pre-registered
-  criteria. A term that is HARMFUL or NEUTRAL in both modes is proposed to the owner for removal
-  (D-003 says the terms stay until the evidence says they cannot help).
+## MVP-4: generality (point 4; D-022)
+
+- Items: NT-040 (annualisation uses the bar size; P0 before any other bar size runs), NT-041 (dataset
+  spec, wall-clock window and horizons, 7-day training block, walk-forward folds over the long
+  history), NT-042 (variable number of horizons).
+- **Exit:** NT-040 to NT-042 done (N=3 reproduces today's numbers in the golden run; the harness passes
+  for N=2 and N=4); VISION point 4 holds. Only the reference setup is tested (VISION "Not in the MVP").
+
+## MVP-5: visual comprehension (point 5; D-014, D-027, D-028)
+
+- Items: NT-043 (learned indicators on price against the textbook defaults, notebook 07; may start in
+  parallel with MVP-1), NT-044 (guides for the owner and reviewers, README landing page,
+  ARCHITECTURE), NT-045 (notebook overlap: each figure has one home).
+- **Exit:** NT-043 to NT-045 done; VISION point 5 holds: every notebook executed on real runs, checked
+  and rendered, and every changed figure looked at (D-013, D-014).
+
+## MVP-6: indicator catalogue (VISION "Also in the MVP"; D-027)
+
+- Items: NT-046 (indicators package and registry): a placeholder, not picked until the owner's
+  indicator Q&A (held right after the 2026-09-28 overhaul) sets its scope. **Exit:** its acceptance.
+
+## Research tracks R2-R4: scenarios run through the engine
+
+The former research milestones, now engine scenarios (D-021): pre-registered A/B studies within the
+research budget (OPERATING_MODEL), choices on dev folds, one verdict by the paired comparator (D-025).
+R2 and R3 depend on NT-026, NT-031 and NT-032; R4 on NT-026 and NT-032.
+
+- **R2 direction and price heads:** NT-003 (the M3 direction clauses), NT-004 (served price EV > 0).
+  **Exit:** each item's acceptance: a pass, or its complete negative report.
+- **R3 edge after costs:** NT-005 (cost-aware trading; also needs NT-002 and the owner's NT-007).
+  **Exit:** NT-005's acceptance (a), or its negative-result report (b).
+- **R4 physics terms:** NT-006 (ablation re-run on the current trainer, pre-registered again under
+  D-025; needs the owner's GPU approval, asked 2026-09-25). **Exit:** a verdict per term; a term that
+  does not help is proposed to the owner for removal (D-003). The v1 grid stays the record under its
+  own criteria.
 
 ## R5: merge and publish
 
-- Items: NT-008 (merge `remediation/plan` into `master`; after NT-001), NT-017 (licence).
+- Items: NT-008 (owner: merge `remediation/plan` into `master`, after NT-001), NT-017 (licence; P3,
+  not needed for the MVP audience, D-019).
 - **Exit:** the owner has merged, and the nightly workflow runs from `master`.
 
-## Continuous: tooling, evaluation depth, polish
+## Continuous: evaluation depth and polish
 
-Taken between milestone items, highest priority first: NT-012 (training logging), NT-013 and
-NT-014 (evaluation report), NT-015 (interval toolkit), NT-016 (backtest data), NT-018 (notebook
-UX), NT-019 to NT-023 (figure polish, batched per module).
+Outside the milestones, taken when no milestone item of the same priority is actionable: NT-013,
+NT-014 (evaluation report), NT-015 (interval toolkit; after NT-027), NT-016 (backtest data), NT-018
+(notebook UX), NT-019 to NT-023 (figure polish, batched per module).
 
 ## Order
 
-R1 first. Then R2 (GPU, experimenter) with the continuous items in parallel (CPU, implementer).
-R4 when the owner approves the GPU time, never at the same time as another GPU job. R3 after
-R2 has a verdict, unless the owner decides otherwise. R5 whenever the owner is ready, after R1.
+Pick rule: OPERATING_MODEL "Picking the next item" (priority, then the earliest open milestone here).
+
+1. R1; then MVP-1 to MVP-5 in order. NT-043 may run in parallel with MVP-1 (a second implementer,
+   disjoint files).
+2. MVP-6 after MVP-1; the indicator Q&A fixes its exact position.
+3. R2-R4 after MVP-2 (they need the engine, the leaderboard and the comparator): experimenter GPU work
+   beside the implementer's CPU items, never two GPU jobs at once.
+4. R5 whenever the owner is ready, after R1.
+
+Priority comes first, so a milestone's P2 items (NT-025 in R1; NT-027, NT-028 in MVP-1) may be picked
+after later milestones' P1 items; a milestone closes only when all its items are done. The move to D:
+(D-030) ends the 2026-09-28 session; NT-009 closes when the move is verified. The MVP is done when
+VISION "The MVP" holds on the reference setup; MVP-1 to MVP-6 map to its points.
