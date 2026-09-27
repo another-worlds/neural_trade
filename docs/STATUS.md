@@ -19,8 +19,8 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
   worktrees) is untouched: after the owner confirms the D: copy works, the lead deletes it only on
   the owner's explicit go-ahead.
 - **CI is red** since fe4ba85 (the `unit` job; lint passes; last green 609d19e); latest check:
-  71a0fd2, run 36349235067, lint success, unit failure (the same step); 97ad06b, run 36359654472,
-  lint success, unit still running at handoff (the next session checks it first). Cause, reproduced
+  1a2457a, run 36360038423, lint success, unit failure (the same step; 97ad06b's run 36359654472
+  was cancelled by the next push). Cause, reproduced
   locally: CI pins plotly 5.24.1 (local 6.7.0), so two figure size-budget tests fail there (names in
   NT-001); other pins drift too.
 - **Tests locally:** 697 fast pass (3:28 on D:, 2026-09-28), 13 slow pass; ruff clean; coverage gates pass.
