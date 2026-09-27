@@ -46,3 +46,16 @@ a small `meta_adjust` network; combinations are mixed implicitly by the Bi-GRU a
   discovered indicators drawn on price against the textbook defaults, learned parameters in wall-clock
   time with their per-window ranges, the importance read-out with noise bands, how the parameters moved
   during training. Not a YAML or Pine export.
+
+## Round D (the window research's questions, answered 2026-09-28)
+
+The research record: [docs/research/2026-09-28-window-free/](../research/2026-09-28-window-free/README.md).
+
+- Path: owner: "commit to this in another research and write it down in a plan." -> removing the
+  fixed input window is committed to; the concrete path (stages, order, gates) and the corrected A/B
+  specifications come from a second research round that writes a plan (NT-053), which the owner
+  approves before its first implementation item is picked.
+- Longest learnable period: owner: "unlimited" -> no configured period ceiling.
+- Replacement for the per-window adaptive periods: owner: "research" -> part of NT-053.
+- Purge rule for indicators with unbounded memory: owner: "research yourself" -> the lead researches
+  and decides it (part of NT-053), recorded as a new DECISIONS entry with a test.

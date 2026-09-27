@@ -41,9 +41,13 @@ family inconclusive ([report](../runs/ablations/ablate_physics_v1-full/report.md
   and the new families: range / volatility, volume, trend / channels; all learnable, all on by
   default), NT-048 (the discovered-indicators report: a self-contained interactive HTML report per
   run, the same figures in notebook 07).
-- **Window decision pending research:** the owner asked to research removing the fixed input window
-  (2026-09-28). NT-047 waits for the owner's decision on it, because the input path may change.
-- **Exit:** NT-046 to NT-048 done; VISION "Also in the MVP" holds with the design of D-031.
+- **The window (D-032):** the owner committed to removing the fixed input window (research record:
+  [research/2026-09-28-window-free/](research/2026-09-28-window-free/README.md)). NT-053 (the lead's
+  second research round) writes the path, the gates and the A/B specifications; the owner approves
+  the plan before its first implementation item is picked. NT-047 waits for NT-053 (the input path
+  and the indicator forms may change). No period ceiling (owner). NT-054 (fixed costs and launches)
+  is window-independent and sits in Continuous.
+- **Exit:** NT-046 to NT-048 and NT-053 done; VISION "Also in the MVP" holds with the design of D-031.
 
 ## MVP-2: control panel and model comparison (point 2, "The yardstick"; D-020, D-023 to D-025)
 
@@ -108,7 +112,8 @@ the paired comparator (D-021, D-025). R2 and R3 need NT-026, NT-031, NT-032; R4 
 Outside the milestones, taken when no milestone item of the same priority is actionable: NT-013,
 NT-014 (evaluation report), NT-015 (interval toolkit; after NT-027), NT-016 (backtest data), NT-018
 (notebook UX), NT-019 to NT-023 (figure polish, batched per module), NT-049 (training silently
-warm-starts from weights in the working directory).
+warm-starts from weights in the working directory), NT-054 (per-run fixed costs and GPU launches;
+after NT-027 and NT-046).
 
 ## Order
 

@@ -45,15 +45,17 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
 - Owner Q&A on the vision and the MVP ([qa/2026-09-28-vision-mvp.md](qa/2026-09-28-vision-mvp.md),
   b7b8eaf); VISION rewritten and approved as written (2c58370). Indicator Q&A recorded (D-031).
 - Docs rewritten to the new vision (04f4296), reviewed, findings resolved: DECISIONS D-019 to D-031;
-  ROADMAP with one total pick order; BACKLOG NT-026 to NT-052 (milestone-exit items P1); NT-024 and
+  ROADMAP with one total pick order; BACKLOG NT-026 to NT-054 (milestone-exit items P1); NT-024 and
   NT-012 dropped (into NT-026, NT-037); OPERATING_MODEL, CLAUDE.md, RUNBOOK, skills, agents, README.
+- Window research (five investigations, CPU benchmarks, adversarial review) in
+  `docs/research/2026-09-28-window-free/`; the owner's answers recorded (D-032, NT-053, NT-054).
 
 ## Waiting for the owner
 
 Nothing below blocks the first items of "Next"; item 1 gates NT-047. Details in BACKLOG and DECISIONS.
 
-1. **Window research** (2026-09-28, running): the lead brings the result and a recommendation; your
-   decision gates NT-047.
+1. **Window-free plan** (D-032): NT-053 writes it; you approve it before its first implementation
+   item is picked. Research record: `docs/research/2026-09-28-window-free/`.
 2. **After the move:** confirm the D: copy works, then say whether the lead may delete the C: copy.
 3. **Pushing (D-017, 2026-09-25):** keep or revoke the rule that sessions push without asking.
 4. **NT-007** which delta the strategies read (asked 2026-09-25; recommendation: raw heads for the
@@ -62,12 +64,13 @@ Nothing below blocks the first items of "Next"; item 1 gates NT-047. Details in 
 6. **NT-008** merge into `master` when you are ready, after CI is green (asked 2026-09-25).
 7. **NT-017** licence: left open by you (Round 9, 2026-09-28); P3 (asked 2026-09-25).
 
-No longer waiting: the vision (2c58370); the indicator catalogue (D-031); NT-009 disk (resolved by
+No longer waiting: the vision (2c58370); the indicator catalogue (D-031); the window research's
+four questions (Round D, D-032); NT-009 disk (resolved by
 the move to D:, D-030; `Bitcoin_BTCUSDT.csv` stays as the 2017-2025 walk-forward file).
 
 ## Next
 
-The 2026-09-28 session ends with the window research's result, then the move to `D:/neural_trade`
+The 2026-09-28 session ends with the move to `D:/neural_trade`
 (D-030), verified by the tests and `check.py` on D:; NT-009 is done when the move is verified. If the
 move is not done when a later session starts, ask the owner before starting NT-001.
 
@@ -79,4 +82,5 @@ Then by ROADMAP "Order":
    metadata (all P1, implementer; table order).
 3. **NT-043** learned indicators on price (MVP-5) may run in parallel (a second implementer) next to
    NT-026 or NT-029, not next to NT-027 or NT-028 (shared visualization/ and build.py). The experimenter slot's first item is NT-035, once NT-026 is done.
-4. Then MVP-6 (NT-046 to NT-048), MVP-2 to MVP-5, R2-R4.
+4. Then MVP-6 (NT-046; NT-053, the window-free plan, is the lead's and runs beside it; then NT-047,
+   NT-048), MVP-2 to MVP-5, R2-R4.

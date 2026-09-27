@@ -44,7 +44,8 @@ that extend or partly replace an entry.
 | D-028 | Notebooks persist and evolve | owner | |
 | D-029 | Delete only what is stale and has no effect | owner | |
 | D-030 | The project moves to D:/neural_trade | owner (NT-009 closed by the move: lead's reading) | |
-| D-031 | The indicator catalogue | owner | |
+| D-031 | The indicator catalogue | owner | D-032 |
+| D-032 | The fixed input window goes; the path comes from a written plan | owner (purge rule: lead) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -358,3 +359,21 @@ that extend or partly replace an entry.
   families; waits for the window decision; D-018 applies), NT-048 (the HTML report, notebook 07). Supersedes D-027's "NT-046 stays a placeholder" (the
   indicator Q&A is held; NT-046 is defined).
 - **Evidence:** [qa/2026-09-28-indicators.md](qa/2026-09-28-indicators.md) Rounds A-C.
+
+## D-032 The fixed input window goes; the path comes from a written plan (owner, 2026-09-28)
+- **Owner:** on the research's staged-path question: "commit to this in another research and write
+  it down in a plan."; the period ceiling: "unlimited"; the replacement for the per-window adaptive
+  periods: "research"; the purge rule: "research yourself".
+- **Decision:** removing the fixed input window is committed to. The concrete path (stages, order,
+  gates), the replacement for the per-window adaptive periods and the corrections the adversarial
+  review demanded are settled by a second research round that writes a plan (NT-053), approved by
+  the owner before its first implementation item is picked. No configured period ceiling: a learned
+  period may grow without limit (the warm-up it needs is the plan's problem, not a config cap). The
+  purge rule for indicators with unbounded memory is the lead's to research and decide, recorded as
+  a new entry with a test.
+- **Not in VISION:** all of it. VISION's "60-minute input window" wording stays until the plan is
+  approved: the window model is the default until an A/B adopts a replacement (D-025).
+- **Consequence:** NT-053 (the plan); NT-047 waits for NT-053 (the input path and the indicator
+  forms may change); NT-054 (per-run fixed costs and GPU launches; window-independent).
+- **Evidence:** [qa/2026-09-28-indicators.md](qa/2026-09-28-indicators.md) Round D;
+  [research/2026-09-28-window-free/README.md](research/2026-09-28-window-free/README.md).

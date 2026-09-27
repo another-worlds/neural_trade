@@ -1,0 +1,70 @@
+{
+  "scaling": {
+    "windowed K=24 T=60 B=256": {
+      "ms": 150.2,
+      "us_per_pred": 586.9,
+      "epoch_30213_est_s": 17.7,
+      "weights_tensor_MB_per_256": 88.5
+    },
+    "windowed K=87 T=60 B=256": {
+      "ms": 560.0,
+      "us_per_pred": 2187.3,
+      "epoch_30213_est_s": 66.1,
+      "weights_tensor_MB_per_256": 320.7
+    },
+    "windowed K=24 T=240 B=64": {
+      "ms": 582.4,
+      "us_per_pred": 9099.5,
+      "epoch_30213_est_s": 274.9,
+      "weights_tensor_MB_per_256": 1415.6
+    },
+    "windowed K=87 T=240 B=64": {
+      "ms": 2306.2,
+      "us_per_pred": 36034.5,
+      "epoch_30213_est_s": 1088.7,
+      "weights_tensor_MB_per_256": 5131.5
+    },
+    "causal chunked K=24 n=30213+720": {
+      "ms": 21.1,
+      "us_per_pred": 0.697
+    },
+    "causal chunked K=87 n=30213+720": {
+      "ms": 90.1,
+      "us_per_pred": 2.982
+    }
+  },
+  "window_start_weight": {
+    "p5": {
+      "at_last_bar": 0.0,
+      "mean_over_60_positions": 0.05
+    },
+    "p9": {
+      "at_last_bar": 0.0,
+      "mean_over_60_positions": 0.083
+    },
+    "p14": {
+      "at_last_bar": 0.0002,
+      "mean_over_60_positions": 0.125
+    },
+    "p20": {
+      "at_last_bar": 0.0027,
+      "mean_over_60_positions": 0.175
+    },
+    "p26": {
+      "at_last_bar": 0.0107,
+      "mean_over_60_positions": 0.223
+    },
+    "p30": {
+      "at_last_bar": 0.0195,
+      "mean_over_60_positions": 0.254
+    },
+    "p35": {
+      "at_last_bar": 0.0343,
+      "mean_over_60_positions": 0.29
+    },
+    "p60": {
+      "at_last_bar": 0.1399,
+      "mean_over_60_positions": 0.44
+    }
+  }
+}

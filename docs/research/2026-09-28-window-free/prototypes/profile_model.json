@@ -1,0 +1,182 @@
+{
+  "cpu_threads_intra": 0,
+  "sizes": {
+    "train": 30213,
+    "val": 2866,
+    "cal": 2866,
+    "test": 7236,
+    "gap": 80,
+    "n_bars": 43500,
+    "steps_per_epoch_train": 119,
+    "val_batches": 12
+  },
+  "params_total": 296591,
+  "cpu_train_step_ms": {
+    "64": [
+      210.4,
+      199.6,
+      239.7
+    ],
+    "256": [
+      851.4,
+      790.0,
+      903.1
+    ]
+  },
+  "train_step_graph_ops": {
+    "top_level_total": 8795,
+    "top_level_compute_like": 4167,
+    "library_functions": 30,
+    "library_total": 2686,
+    "library_compute_like": 1143,
+    "top_level_most_common": [
+      [
+        "Const",
+        2537
+      ],
+      [
+        "Mul",
+        1001
+      ],
+      [
+        "Placeholder",
+        493
+      ],
+      [
+        "Reshape",
+        416
+      ],
+      [
+        "SelectV2",
+        312
+      ],
+      [
+        "L2Loss",
+        296
+      ],
+      [
+        "Sum",
+        295
+      ],
+      [
+        "RealDiv",
+        273
+      ],
+      [
+        "Identity",
+        266
+      ],
+      [
+        "ReadVariableOp",
+        238
+      ],
+      [
+        "AddV2",
+        228
+      ],
+      [
+        "Sub",
+        183
+      ],
+      [
+        "IsFinite",
+        172
+      ],
+      [
+        "BroadcastGradientArgs",
+        165
+      ],
+      [
+        "Neg",
+        154
+      ]
+    ],
+    "library_fn_names": [
+      "__inference_gpu_gru_with_fallback_31700",
+      "cond_1_false_41110",
+      "__inference_standard_gru_31622",
+      "cond_true_34273",
+      "__forward_gpu_gru_with_fallback_31460",
+      "while_cond_31158",
+      "__inference___backward_gpu_gru_with_fallback_31701_31839",
+      "while_body_31533",
+      "while_body_31159_grad_37567",
+      "while_body_31533_rewritten",
+      "__inference___backward_standard_gru_37879_38192",
+      "__inference___backward_standard_gru_37535_37846",
+      "cond_false_34274_grad_34628",
+      "while_cond_31158_rewritten",
+      "__inference___backward_gpu_gru_with_fallback_31325_31461",
+      "while_body_31159_rewritten",
+      "__forward_gpu_gru_with_fallback_31838",
+      "__forward_standard_gru_38191",
+      "while_cond_31532_rewritten_grad_38093",
+      "cond_1_true_41109",
+      "__inference_gpu_gru_with_fallback_31324",
+      "while_body_31533_grad_37911",
+      "while_cond_31532_rewritten",
+      "while_body_31159",
+      "cond_true_34273_grad_34623",
+      "while_cond_31158_rewritten_grad_37749",
+      "__forward_standard_gru_37845",
+      "cond_false_34274",
+      "while_cond_31532",
+      "__inference_standard_gru_31248"
+    ]
+  },
+  "cpu_block_fwd_bwd_B256": {
+    "indicators(LearnableIndicators+meta)": {
+      "cpu_fwd_bwd_ms_median": 164.49,
+      "min": 144.26,
+      "max": 176.54,
+      "graph_ops_incl_library": 1328
+    },
+    "BiGRU(64)": {
+      "cpu_fwd_bwd_ms_median": 49.3,
+      "min": 46.88,
+      "max": 49.84,
+      "graph_ops_incl_library": 1200
+    },
+    "temporal MHA(8x32)+LN": {
+      "cpu_fwd_bwd_ms_median": 160.04,
+      "min": 150.31,
+      "max": 180.71,
+      "graph_ops_incl_library": 168
+    },
+    "cross-indicator MHA(4x32)+LN": {
+      "cpu_fwd_bwd_ms_median": 226.67,
+      "min": 223.28,
+      "max": 235.31,
+      "graph_ops_incl_library": 177
+    },
+    "3xConv1D+EnergyGate+LN": {
+      "cpu_fwd_bwd_ms_median": 35.78,
+      "min": 34.58,
+      "max": 36.5,
+      "graph_ops_incl_library": 409
+    },
+    "PE+2 transformer blocks": {
+      "cpu_fwd_bwd_ms_median": 118.57,
+      "min": 116.11,
+      "max": 122.12,
+      "graph_ops_incl_library": 697
+    },
+    "FULL base model (sum-of-outputs loss)": {
+      "cpu_fwd_bwd_ms_median": 1050.68,
+      "min": 811.55,
+      "max": 1189.17,
+      "graph_ops_incl_library": 4852
+    }
+  },
+  "analytic_fwd_flops_per_sample": {
+    "indicators (24 EWMA 60x60 matmuls)": 172800,
+    "indicators weight build (~6 elementwise ops on [24,60,60])": 518400,
+    "BiGRU(64)": 4469760,
+    "temporal MHA 8x32 on [60,128]": 19415040,
+    "cross MHA 4x32 on [128,60]": 16252928,
+    "3xConv1D(16; k=3,7,15) on 128ch": 6144000,
+    "2 transformer blocks d=16": 3072000,
+    "flatten->Dense(32) + towers": 66372
+  },
+  "analytic_fwd_flops_total_per_sample": 50111300
+}

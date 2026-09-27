@@ -1,0 +1,16 @@
+{
+ "today_batches": 119,
+ "span_median": 11130.0,
+ "span_p10_p90": [
+  4941.2,
+  14759.000000000002
+ ],
+ "distinct_20bar_blocks_median": 159.0,
+ "distinct_p10_p90": [
+  148.8,
+  168.0
+ ],
+ "seq2seq Bc16 L256 distinct_20bar_blocks_median": 206.0,
+ "seq2seq Bc8 L512 distinct_20bar_blocks_median": 203.0,
+ "seq2seq Bc4 L1024 distinct_20bar_blocks_median": 208.0
+}

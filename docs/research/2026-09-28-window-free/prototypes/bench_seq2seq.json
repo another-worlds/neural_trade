@@ -1,0 +1,69 @@
+{
+  "today_B256": {
+    "ms": 759.1,
+    "min": 738.6,
+    "max": 831.6,
+    "preds_per_step": 256,
+    "preds_per_s": 337,
+    "ops_top_lib": [
+      2167,
+      596
+    ],
+    "params": 296591
+  },
+  "seq2seq": {
+    "Bc16_L256": {
+      "ms": 734.2,
+      "min": 729.8,
+      "max": 775.0,
+      "preds_per_step": 4096,
+      "bars_processed": 6976,
+      "preds_per_s": 5579,
+      "ops_top_lib": [
+        1743,
+        295
+      ],
+      "params": 275293
+    },
+    "Bc8_L512": {
+      "ms": 898.0,
+      "min": 875.4,
+      "max": 911.9,
+      "preds_per_step": 4096,
+      "bars_processed": 5536,
+      "preds_per_s": 4561,
+      "ops_top_lib": [
+        1743,
+        295
+      ],
+      "params": 275293
+    },
+    "Bc4_L1024": {
+      "ms": 1035.2,
+      "min": 1028.6,
+      "max": 1092.5,
+      "preds_per_step": 4096,
+      "bars_processed": 4816,
+      "preds_per_s": 3957,
+      "ops_top_lib": [
+        1741,
+        294
+      ],
+      "params": 275293
+    },
+    "Bc16_L512": {
+      "ms": 1713.0,
+      "min": 1675.0,
+      "max": 1734.6,
+      "preds_per_step": 8192,
+      "bars_processed": 11072,
+      "preds_per_s": 4782,
+      "ops_top_lib": [
+        1743,
+        295
+      ],
+      "params": 275293
+    }
+  },
+  "warmup": 180
+}

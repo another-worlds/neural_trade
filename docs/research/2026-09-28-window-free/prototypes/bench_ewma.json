@@ -1,0 +1,263 @@
+{
+  "periods": [
+    5.0,
+    10.0,
+    30.0,
+    12.0,
+    5.0,
+    8.0,
+    26.0,
+    35.0,
+    17.0,
+    10.0,
+    20.0,
+    25.0,
+    9.0,
+    14.0,
+    21.0,
+    9.0,
+    14.0,
+    21.0,
+    9.0,
+    5.0,
+    9.0,
+    10.0,
+    20.0,
+    25.0
+  ],
+  "scale": 295.7571061233676,
+  "cpu_threads": 32,
+  "a_today_ms": {
+    "256": 155.54,
+    "1024": 651.02
+  },
+  "a_today_ops": [
+    84,
+    0
+  ],
+  "a_real_layer_B256_ms": 178.92,
+  "a_real_layer_ops": [
+    669,
+    0
+  ],
+  "a_today_epoch_est_ms_from_B256": 18509.7,
+  "a_real_layer_epoch_est_ms": 21291.7,
+  "warmup_bars": 180,
+  "trunc_taps_b5": 282,
+  "b_long_pass": {
+    "b1 tf.scan": {
+      "256": {
+        "ms": 11.68,
+        "min": 11.49,
+        "max": 12.87,
+        "us_per_pred": 45.625,
+        "ops_top": 30,
+        "ops_lib": 44
+      },
+      "4096": {
+        "ms": 193.36,
+        "min": 190.02,
+        "max": 251.42,
+        "us_per_pred": 47.206,
+        "ops_top": 30,
+        "ops_lib": 44
+      },
+      "30213": {
+        "ms": 2172.61,
+        "min": 2076.79,
+        "max": 2203.22,
+        "us_per_pred": 71.91,
+        "ops_top": 30,
+        "ops_lib": 44
+      }
+    },
+    "b2 assoc scan": {
+      "256": {
+        "ms": 0.88,
+        "min": 0.79,
+        "max": 1.1,
+        "us_per_pred": 3.433,
+        "ops_top": 268,
+        "ops_lib": 0
+      },
+      "4096": {
+        "ms": 7.38,
+        "min": 6.85,
+        "max": 9.2,
+        "us_per_pred": 1.801,
+        "ops_top": 376,
+        "ops_lib": 0
+      },
+      "30213": {
+        "ms": 96.28,
+        "min": 93.12,
+        "max": 100.93,
+        "us_per_pred": 3.187,
+        "ops_top": 430,
+        "ops_lib": 0
+      }
+    },
+    "b3 chunked matrix C=64": {
+      "256": {
+        "ms": 0.73,
+        "min": 0.65,
+        "max": 0.95,
+        "us_per_pred": 2.859,
+        "ops_top": 145,
+        "ops_lib": 0
+      },
+      "4096": {
+        "ms": 1.17,
+        "min": 1.01,
+        "max": 1.29,
+        "us_per_pred": 0.286,
+        "ops_top": 145,
+        "ops_lib": 0
+      },
+      "30213": {
+        "ms": 17.93,
+        "min": 17.36,
+        "max": 18.54,
+        "us_per_pred": 0.593,
+        "ops_top": 145,
+        "ops_lib": 0
+      }
+    },
+    "b4 FFT conv": {
+      "256": {
+        "ms": 1.16,
+        "min": 1.09,
+        "max": 1.41,
+        "us_per_pred": 4.544,
+        "ops_top": 111,
+        "ops_lib": 0
+      },
+      "4096": {
+        "ms": 18.74,
+        "min": 18.63,
+        "max": 19.28,
+        "us_per_pred": 4.575,
+        "ops_top": 111,
+        "ops_lib": 0
+      },
+      "30213": {
+        "ms": 87.21,
+        "min": 82.29,
+        "max": 92.36,
+        "us_per_pred": 2.887,
+        "ops_top": 111,
+        "ops_lib": 0
+      }
+    },
+    "b5 depthwise conv trunc": {
+      "256": {
+        "ms": 0.92,
+        "min": 0.86,
+        "max": 1.23,
+        "us_per_pred": 3.609,
+        "ops_top": 70,
+        "ops_lib": 0
+      },
+      "4096": {
+        "ms": 6.31,
+        "min": 6.13,
+        "max": 6.67,
+        "us_per_pred": 1.541,
+        "ops_top": 70,
+        "ops_lib": 0
+      },
+      "30213": {
+        "ms": 42.73,
+        "min": 41.96,
+        "max": 55.09,
+        "us_per_pred": 1.414,
+        "ops_top": 70,
+        "ops_lib": 0
+      }
+    }
+  },
+  "b2v_perbar_alpha_ms": {
+    "4096": 8.58,
+    "30213": 115.18
+  },
+  "checks": {
+    "b1 tf.scan": {
+      "max_abs_err_vs_float64": 1.1292355157621614e-05,
+      "max_abs_value": 15.419672782818905
+    },
+    "b2 assoc scan": {
+      "max_abs_err_vs_float64": 5.884106467846095e-06,
+      "max_abs_value": 15.419672782818905
+    },
+    "b3 chunked matrix C=64": {
+      "max_abs_err_vs_float64": 5.2738516700401306e-06,
+      "max_abs_value": 15.419672782818905
+    },
+    "b4 FFT conv": {
+      "max_abs_err_vs_float64": 0.0012504502133214856,
+      "max_abs_value": 15.419672782818905
+    },
+    "b5 depthwise conv trunc": {
+      "max_abs_err_vs_float64": 5.146130996891429e-06,
+      "max_abs_value": 15.419672782818905
+    },
+    "b2v per-bar alpha": {
+      "max_abs_err_vs_float64": 3.6673053127600497e-06
+    },
+    "b1 tf.scan on one 60-bar window vs ewma_sequence_matrix_multi": 3.2782554626464844e-07,
+    "b2 assoc scan on one 60-bar window vs ewma_sequence_matrix_multi": 1.7881393432617188e-07,
+    "b3 chunked matrix C=64 on one 60-bar window vs ewma_sequence_matrix_multi": 1.1920928955078125e-07,
+    "b4 FFT conv on one 60-bar window vs ewma_sequence_matrix_multi": 6.556510925292969e-07,
+    "window_vs_long_analytic_max_err": 1.6137373555491497e-14,
+    "window_vs_long_last_bar_absdiff_by_period": {
+      "p5": 0.0,
+      "p10": 0.0,
+      "p30": 0.0002,
+      "p12": 0.0,
+      "p8": 0.0,
+      "p26": 0.0002,
+      "p35": 0.0,
+      "p17": 0.0,
+      "p20": 0.0001,
+      "p25": 0.0002,
+      "p9": 0.0,
+      "p14": 0.0,
+      "p21": 0.0001
+    },
+    "init_weight_at_last_bar_by_period": {
+      "p5": 0.0,
+      "p10": 0.0,
+      "p30": 0.0195,
+      "p12": 0.0001,
+      "p8": 0.0,
+      "p26": 0.0107,
+      "p35": 0.0343,
+      "p17": 0.001,
+      "p20": 0.0027,
+      "p25": 0.0089,
+      "p9": 0.0,
+      "p14": 0.0002,
+      "p21": 0.0036
+    },
+    "last_bar_rel_discrepancy_median_by_period": {
+      "p5": 0.0,
+      "p10": 0.0,
+      "p30": 0.0198,
+      "p12": 0.0001,
+      "p8": 0.0,
+      "p26": 0.0113,
+      "p35": 0.0358,
+      "p17": 0.0011,
+      "p20": 0.0031,
+      "p25": 0.0095,
+      "p9": 0.0,
+      "p14": 0.0002,
+      "p21": 0.0042
+    },
+    "grad_rel_err b1 tf.scan": 0.0003270609359539857,
+    "grad_rel_err b2 assoc scan": 0.0002659785757228263,
+    "grad_rel_err b3 chunked matrix C=64": 0.00043937657650704263,
+    "grad_rel_err b4 FFT conv": 0.008383798732532786,
+    "grad_rel_err b5 depthwise conv trunc": 0.00015478366728342402
+  }
+}
