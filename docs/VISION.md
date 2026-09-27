@@ -1,71 +1,134 @@
 # Vision
 
-Stable document. It changes only when the owner changes direction. Plans live in
+Stable document, owned by the owner. It changes only when the owner changes direction. Plans live in
 [ROADMAP.md](ROADMAP.md) and [BACKLOG.md](BACKLOG.md); the current state lives in [STATUS.md](STATUS.md).
+Set by the owner on 2026-09-25 / 28 (D-019 to D-030); it replaces the BTC-trading framing of 2026-09-25.
 
 ## Purpose
 
-`neural_trade` asks one question and must answer it with evidence:
+`neural_trade` is a neural network that predicts complex financial time series from **technical
+indicators whose parameters and combinations are learned by gradient descent**. It is a substitute for
+manual technical-indicator search and analysis: instead of a person trying RSI 14 against RSI 21, or
+one moving-average cross against another, the network learns the indicator set that predicts best,
+shows what it discovered, and is judged by the same financial metrics a manual search would use.
 
-> Can one neural network that reads the last 60 one-minute BTC/USDT closes predict the next 10,
-> 15 and 20 minutes (price change, direction, uncertainty) well enough that a strategy built on it
-> beats realistic baselines **after trading costs**, on data it never saw?
+It is not tied to a ticker or a timeframe. The instrument, the bar size, the input window and the
+forecast horizons are configuration.
 
-The architecture under test: a GRU + attention network with learnable technical indicators (EMA,
-MACD, RSI, Bollinger periods trained by gradient descent), nine output heads (delta, P(up) and
-variance for each horizon), and six physics-inspired loss terms.
+## The reference setup
 
-## End goal
+BTC/USDT one-minute bars, a 60-minute input window, horizons of 10, 15 and 20 minutes. It was chosen
+for its effectiveness, noise level and complexity, not because the project is about it. Every result
+names the setup it was measured on. Data: `binance_btcusdt_1min_ccxt.csv` (30 days, in the repo; tests
+and CI) and the local 2017-2025 BTC/USDT file (fingerprinted, not in git) for walk-forward folds spread
+over different months. The training block is 7 days; the validation, calibration and out-of-sample
+blocks follow it with their own configured lengths.
 
-A model and a strategy that, on out-of-sample walk-forward folds with next-open fills and
-26 bps round-trip costs:
+## What every run delivers
 
-1. beat the pre-registered baselines (zero / mean delta, class prior, logistic regression on
-   trailing returns, constant variance, buy-and-hold, random entries at the same frequency) by
-   more than the noise, with intervals that account for overlapping targets;
-2. are served through the `Predictor` API with calibrated probabilities and intervals;
-3. come with the evidence to trust them: reports, notebooks executed on real runs, and every
-   number linked to a run directory.
+Both, judged together:
 
-A clear, evidenced **negative** answer (the edge does not survive costs, or a term adds nothing)
-is also a valid outcome. It is recorded, and the project moves on. It is not tuned away.
+1. **The discovered indicators:** the indicator families, periods and combinations the network learned,
+   readable, and drawn on the price chart next to the textbook defaults.
+2. **The predictions built on them:** for each horizon, the price change in quote currency, P(up) and
+   the variance, with calibrated probabilities and intervals, and a trading strategy on top.
 
-*Owner: this end goal is inferred from the remediation work and your decisions. Edit this
-section if it is not what you want. Every later plan derives from it.*
+The indicators are the product. The prediction and trading quality are the evidence that they are good.
+
+## The yardstick
+
+A search over configurations finds the one with the best financial metrics.
+
+- **Leaderboard:** ranked by the net Sharpe ratio after trading costs (next-open fills, fees, spread,
+  slippage). Guard-rails shown beside it and able to disqualify a row: maximum drawdown, the number of
+  trades, beating buy-and-hold and random entries at the same frequency.
+- **Honest ranking:** rows are ranked on the development folds only (the out-of-sample blocks of the
+  earlier walk-forward folds). Every row also shows its numbers on the held-out test fold, but those
+  never rank.
+- **Winner (MVP):** the top row, after the top five are re-run with three seeds and ranked by their mean.
+- **The manual-search baseline:** the learned indicators must beat, under the same search budget and
+  the same dev-fold net Sharpe, (a) the same network with the periods frozen at the textbook values and
+  (b) classic technical-analysis rules (moving-average cross, RSI threshold, Bollinger breakout) whose
+  parameters the same search tunes.
+- **"A beats B" verdicts** (learned against frozen, a loss term on against off, any two scenarios): a
+  paired test over (seed, fold) pairs on the same blocks, plus a minimum practical effect fixed before
+  the run.
+- A clear, evidenced negative answer is a valid outcome. It is recorded, not tuned away.
+
+## The MVP
+
+The owner's five growth points, taken foundations first (D-021). The MVP is done when all of these hold,
+on the reference setup, with the evidence (runs, tests, executed notebooks) in the repo.
+
+1. **Structure.** One experiment engine: a scenario and sweep specification, a resumable runner, one
+   run store with an index, and one scorer, replacing today's four experiment paths. Packages layered
+   without circular imports. Code is removed only when it is stale and has no effect on the current
+   system. The notebooks work at every step.
+2. **Configuration control panel and model comparison** (one framework). A control-panel notebook
+   (ipywidgets and plotly), with the same engine behind a CLI for long unattended runs. Two sweep modes:
+   **quick** (the whole sweep in about 5 minutes) and **Optuna** (Bayesian search, GPU budget measured
+   and stated before it starts, may run overnight while the GPU is idle). The leaderboard and the
+   verdict rules of the yardstick above.
+3. **Gradient stability.** Hard invariants in CI; health numbers in every run (no more than 2% of the
+   training step's time; a detailed per-loss-term probe behind a flag); an on-demand stress harness
+   (scale and volatility sweeps, extreme inputs, fault injection, three seeds) that every new setup must
+   pass. An unstable run is attributed to its loss term and fails loudly, and configuration validation
+   and search spaces refuse hyperparameter regions known to fail. One pre-registered comparison of
+   gradient-based loss weighting against today's calibration.
+4. **Generality designed in.** Instrument, bar size, window and horizons are configured, the window and
+   horizons in wall-clock time. Any number of horizons (the pairwise physics terms apply to each
+   neighbouring pair). Every run records the dataset it used. The target stays the price change in quote
+   currency. BTC/USDT one-minute stays the reference and the only setup tested in the MVP.
+5. **Visual comprehension of learning, inference and the backtest.** First view: the learned indicators
+   drawn on price against the textbook defaults, and how their periods moved. Every figure stays rich
+   (D-014). Notebooks 00-05 keep their numbers and roles and are updated as the code evolves; new
+   notebooks are added for new views (for example a control panel and the discovered indicators).
+
+Also in the MVP: an **extendable indicator catalogue**: new indicators are added and integrated through a
+registry (the design comes from the owner's indicator Q&A).
 
 ## Principles
 
-- **Evidence, not claims.** A result counts only if it links to a run directory, a test or an
-  executed notebook. "It works" means a real run was executed and its outputs were inspected.
-- **Real runs over toy runs.** Tests on synthetic data are necessary but not sufficient.
-  Figures and notebooks are verified on the shipped defaults (notebook 01 trains the full
-  `EPOCHS` on the GPU).
-- **Noise-aware statistics.** Consecutive 1-minute samples share most of their target bars.
-  Every interval and chance band uses effective samples (about `N // horizon bars`) or a block
-  bootstrap. A number without its noise level is not reported as a finding.
-- **Pre-registered criteria.** An experiment states its hypothesis, metrics and thresholds
-  before it runs (as `configs/ablation_criteria.yaml` did). Test data is touched once, for the
-  verdict, never for choices.
-- **Honest trading numbers.** Next-open fills, fees, spread and slippage, stops on high/low,
-  baselines in every report, and a random null at the same trade frequency.
-- **Fast training.** Fast GPU training and solid optimisation are first-class requirements;
-  inference speed is negligible (owner, D-018).
-- **One visual system.** Every figure uses `visualization/theme.py`. Horizons keep their
-  colours (h0 blue, h1 orange, h2 green); dotted lines mean training.
+- **Evidence, not claims.** A result counts only if it links to a run directory, a test or an executed
+  notebook. "It works" means a real run was executed and its outputs were inspected.
+- **Real runs over toy runs.** Tests on synthetic data are necessary but not sufficient. Figures and
+  notebooks are verified on the shipped defaults.
+- **Noise-aware statistics.** Consecutive bars share most of their target bars. Every interval and
+  chance band uses effective samples (about `N // horizon bars`) or a block bootstrap. A number
+  without its noise level is not reported as a finding.
+- **Choices never use test data.** Sweeps rank on the development folds; A/B verdicts are pre-registered
+  and judged once.
+- **Honest trading numbers.** Next-open fills, fees, spread and slippage, stops on high/low, baselines
+  in every report, and a random null at the same trade frequency.
+- **Fast training.** Fast GPU training and solid optimisation are first-class requirements; inference
+  speed is negligible (D-018).
+- **Extendable by registries.** Components (models, losses, metrics, indicators, strategies, ...) are
+  added through registries, not by editing the pipeline.
+- **One visual system, rich figures.** Every figure uses `visualization/theme.py` and keeps every
+  metric, band and table (D-014). Horizons keep their colours (h0 blue, h1 orange, h2 green; more
+  horizons extend the palette in a fixed order); dotted lines mean training.
+- **Notebooks are the living interface.** They are generated, executed on real runs and committed with
+  their outputs (D-013), and they grow with the project.
 
 ## Fixed decisions (owner)
 
-These are settled. Do not reopen them without new evidence and the owner's agreement; see
-[DECISIONS.md](DECISIONS.md).
+Settled; see [DECISIONS.md](DECISIONS.md). They change only with the owner.
 
 - TensorFlow 2.10 / Keras 2 (the last release with native Windows GPU support). No Keras 3 migration.
-- All nine component registries stay, and stay wired into the training path.
-- The six physics terms stay. Fix their mathematics and iterate until they demonstrably provide
-  value under the pre-registered ablation criteria, or until the evidence says they cannot.
+- The component registries stay and stay wired into the training path.
+- The physics-inspired loss terms stay. Fix their mathematics and iterate until they demonstrably provide
+  value under pre-registered criteria, or until the evidence says they cannot.
 - Git history is never rewritten. `master` changes only when the owner merges.
 
-## Out of scope (until the owner says otherwise)
+## Audience
 
-Keras 3 / newer TensorFlow; new data sources (exchange APIs, order book); multi-asset
-evaluation; MLflow; architectures other than `gru_attention` (the Models registry is ready
-for them, but none is planned).
+The owner and a few reviewers. The docs are in English.
+
+## Not in the MVP (designed for, not built)
+
+- A second instrument or timeframe actually tested (the configuration supports it; the MVP tests only
+  the reference setup).
+- Markets with trading sessions (calendars, overnight gaps); the MVP assumes a 24/7 market.
+- Return-based targets; one model trained on several instruments at once.
+- New data sources (exchange APIs, order book); Keras 3 / newer TensorFlow; a web application or
+  MLflow (the control panel is a notebook).
