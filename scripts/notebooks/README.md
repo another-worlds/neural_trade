@@ -69,7 +69,9 @@ works on all six.
    ```bash
    $PY -m pytest tests/test_notebook_tooling.py tests/test_notebooks_thin.py -q
    ```
-7. **Commit `build.py` together with the executed notebooks (with outputs).** In the message, say which
+7. **Commit `build.py` together with the executed notebooks (with outputs) and the light files of the
+   run they show** (NT-010: `$PY scripts/check_run_evidence.py --list-untracked | git add
+   --pathspec-from-file=-`; otherwise `tests/test_run_evidence.py` fails). In the message, say which
    run the outputs come from (run id, served epoch) and what the check found (figures, errors, stderr,
    empty panels).
 
@@ -88,8 +90,9 @@ works on all six.
   `D:/neural_trade_renders`; otherwise it writes to `<system temp>/neural_trade_renders`. Delete that
   folder when you are done. Each new render replaces the PNGs of the previous one.
 - **Worktrees.** `execute.py` and `check.py` use the checkout's own `src/`, not the editable install's.
-  The kernel starts in the checkout's `notebooks/`, so `../runs` is that checkout's runs folder, and it
-  is empty in a fresh worktree until 01 trains.
+  The kernel starts in the checkout's `notebooks/`, so `../runs` is that checkout's runs folder. In a
+  fresh worktree it holds the tracked light files of past runs but no weights, so no run is servable
+  there until 01 trains.
 - **Never execute in tests.** The fast tests only read files. `test_all_notebooks_execute` in
   `tests/test_notebooks_thin.py` executes the notebooks on synthetic bars into a temp folder (marked
   `slow`). It never writes to `notebooks/`.

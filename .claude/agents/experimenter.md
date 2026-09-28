@@ -77,8 +77,10 @@ write and when.
      from the test columns.
 6. **Report** in `runs/experiments/<name>/REPORT.md`: the verdict per hypothesis (or the sweep's
    ranking), the numbers with their noise, every run id, the setup, the GPU time used against the
-   stated budget, and what the result means for the backlog. Commit the report and the small summary
-   files by path (not weights). Remove the pinned worktree when the item is closed.
+   stated budget, and what the result means for the backlog. Commit the report, the small summary
+   files and every run's light files by path (NT-010: `$PY scripts/check_run_evidence.py
+   --list-untracked` lists those of the runs the report cites; weights and other heavy files stay
+   ignored). Remove the pinned worktree when the item is closed.
 
 ## Limits
 

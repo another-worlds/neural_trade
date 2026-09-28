@@ -59,7 +59,8 @@ items. Two implementers may work at once only on disjoint files (for example NT-
    notebook routine **once** on the merged head (several figure items integrated together share one
    execution): GPU free (RUNBOOK), `execute.py` for the affected notebooks, new ones included (01
    only when the model, training, evaluation or 01's own figures changed), `check.py`, `render.py`,
-   look at every changed figure, commit the notebooks with outputs. If this changed anything QA did
+   look at every changed figure, commit the notebooks with outputs and the new run's light files
+   (NT-010). If this changed anything QA did
    not see, QA checks the executed notebooks (one call). Push, then check CI.
 7. **Record.** Set the item to `done` with its evidence (commit, run id, tests, QA verdict). Update
    STATUS; write any decision into DECISIONS; put new findings into the backlog, not into this item.

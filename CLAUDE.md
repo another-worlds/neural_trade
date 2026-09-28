@@ -18,12 +18,14 @@ horizons) is the reference setup, the only one tested in the MVP (D-022). Packag
 
 1. The state and the next item are in `docs/STATUS.md` (imported below).
 2. `git fetch origin`, `git status -sb`, `git log --oneline -5`. Expected: branch
-   `remediation/plan`, no modified or staged tracked files, not behind `origin`.
-   **Untracked run directories under `runs/` are expected** (until NT-010 they are the only copies of
-   cited evidence): never delete, move, stash or stage them wholesale. Never use `git clean`,
-   `git stash -u`, `git add -A`, `git add .` or `git add runs`; stage files by explicit path. Any
-   other untracked or modified file may belong to another session: do not discard or commit it;
-   record it in STATUS and ask the owner. If behind origin: fast-forward only when the tree is clean
+   `remediation/plan`, a clean tree, not behind `origin`. **Run directories** (NT-010, RUNBOOK "Run
+   directories in git"): their light files are tracked; weights and other heavy files are ignored and
+   exist only on this machine: never delete, move or stash them. Untracked light files under `runs/`
+   are a run whose evidence is not committed yet: commit them by path if this session made the run
+   (`$PY scripts/check_run_evidence.py --list-untracked`), otherwise treat them as below. Never use
+   `git clean`, `git stash -u`, `git add -A`, `git add .` or `git add runs`; stage files by explicit
+   path. Any other untracked or modified file may belong to another session: do not discard or
+   commit it; record it in STATUS and ask the owner. If behind origin: fast-forward only when the tree is clean
    (no modified or staged tracked files); otherwise ask. If this checkout is
    C:/Users/Step/Documents/neural_trade and D:/neural_trade exists, do not work here: the working
    copy is D: (D-030); tell the owner.

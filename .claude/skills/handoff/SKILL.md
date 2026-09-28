@@ -28,7 +28,9 @@ Write the handoff. The next session starts from these files and nothing else.
    - **Next:** the next item(s) in the pick order of OPERATING_MODEL (priority, then ROADMAP
      "Order"), for the implementer slot and the experimenter slot.
 6. **Commit and push:** `git status` must show no modified tracked files you did not mean to commit;
-   untracked `runs/` directories stay as they are (CLAUDE.md start step 2). Stage by path, commit
+   the light files of this session's new runs are committed by path
+   (`scripts/check_run_evidence.py --list-untracked` for cited runs; CLAUDE.md start step 2), and
+   heavy run files stay ignored. Stage by path, commit
    ("Handoff: <date> <one-line summary>"), `git push origin remediation/plan`, then check CI on the
    pushed head (RUNBOOK "CI") and put the result in STATUS if it changed.
 7. Tell the owner in a few lines: what was done, how many questions wait for them (with any new one

@@ -34,7 +34,7 @@ changes).
 | ID | P | type | role | status | title |
 |---|---|---|---|---|---|
 | [NT-001](#nt-001) | P0 | bug | implementer | done | CI unit job green again (red since fe4ba85) |
-| [NT-002](#nt-002) | P0 | bug | implementer | in-progress | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
+| [NT-002](#nt-002) | P0 | bug | implementer | done | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
 | [NT-003](#nt-003) | P1 | research | experimenter | todo | Direction skill: pass the M3 direction clauses (AUC h1 > 0.52, val MCC h1 > 0.02, Gaussian readout MCC > 0) |
 | [NT-004](#nt-004) | P1 | research | experimenter | todo | Price heads: a served delta with positive EV (M3 EV clause) |
 | [NT-005](#nt-005) | P1 | research | experimenter | todo | Cost-aware trading: an edge per trade above the 26 bps round trip |
@@ -109,12 +109,13 @@ changes).
 
 **Engine random null ignores position size (sized strategies are ranked against a costlier null)**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P0 / bug / implementer
 - **area:** src/neural_trade/strategy/strategies.py (RandomSignal), src/neural_trade/strategy/backtest.py (random_same_frequency, backtest), src/neural_trade/notebook/backtest_ui.py (matched_random_null), src/neural_trade/cli.py cmd_backtest, scripts/backtest_gate.py
 - **why:** random_same_frequency (backtest.py:271-293) runs RandomSignal, which hard-codes Order size 1.0 (strategies.py:326). enhanced_multi_horizon sizes each position between 0.1 and 1.0 (strategies.py:147-148). After costs, return is mostly cost x size x trade count. So the 'random percentile' printed by 'neural-trade backtest' (cli.py:125-141) and by scripts/backtest_gate.py puts a sized strategy against a null that pays more costs. That number is wrong. The notebooks use the size-matched matched_random_null (backtest_ui.py:196-236), so the CLI and notebook paths give different ranks for the same run.
 - **acceptance:** (1) RandomSignal has a field size_frac: float = 1.0 and uses it in its Order. (2) random_same_frequency passes size_frac = the mean decision size. It returns size_frac, random_p05_total_return, random_p95_total_return, random_mean_gross_return and percentile_gross_return. (3) matched_random_null is a thin wrapper over it. (4) New test: for a strategy with sizes < 1, every null trade's size equals the mean size, and the engine and notebook paths give an identical percentile_total_return on the same seeds. (5) The existing backtest and strategy tests pass, including assert_no_lookahead for all strategies.
 - **source:** integration_todo.md trade_analytics requests (RandomSignal size_frac, random_same_frequency size_frac: carried over); verified in code 2026-09-25
+- **evidence (done 2026-09-28):** branch nt-002, b0fd0cf, merged as a0fcc8e. `RandomSignal.size_frac`; `random_same_frequency` sizes the null by `_mean_fill_size` (mean of the clipped sizes of the opened positions) and returns size_frac, random_p05/p95_total_return, random_mean_gross_return, percentile_gross_return; `matched_random_null` is a one-call wrapper (`_Sized` removed: stale after the change, no effect: notebook outputs bit-identical on 147 probes and on notebook 02's run; D-029 evidence in QA's report); cli.py and scripts/backtest_gate.py unchanged (they call `backtest()`). tests/test_random_null.py (5 tests; 4 fail on ffb1b67). Synthetic no-edge fixture (800 bars, enhanced_multi_horizon, 207 trades, mean size 0.724): engine-path percentile 100 -> 23.3, equal to the notebook path. Full-size strategies' numbers unchanged (gate m6 test block: calibrated_quantile 120 trades, 95th percentile = runs/gates/m6/backtest.json). QA PASS (fast 702 passed, slow 13 passed, ruff clean). CI green on a0fcc8e (run 36377389290). Follow-ups: NT-057.
 
 ### NT-003
 
