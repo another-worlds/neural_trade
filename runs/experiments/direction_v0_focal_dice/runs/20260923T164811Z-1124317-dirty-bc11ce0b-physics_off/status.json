@@ -1,0 +1,9 @@
+{
+  "run_id": "20260923T164811Z-1124317-dirty-bc11ce0b-physics_off",
+  "epochs_completed": 6,
+  "done": false,
+  "sec_per_step": 0.3085843414819541,
+  "n_errors": 0,
+  "elapsed_seconds": 237.66638708114624,
+  "val_loss": 5.501456260681152
+}

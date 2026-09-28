@@ -1,0 +1,11 @@
+{
+  "run_id": "20260924T013047Z-6dec27a-0379d736-only-LAMBDA_VAC__s1__P1",
+  "seed": 1,
+  "tags": [
+    "ablate_physics_v1",
+    "only:LAMBDA_VAC",
+    "P1",
+    "full"
+  ],
+  "created_utc": "20260924T013047Z"
+}

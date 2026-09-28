@@ -1,0 +1,9 @@
+{
+  "run_id": "20260924T023227Z-6dec27a-e9b47e07-without-LAMBDA_T_PERP__s2__P2",
+  "epochs_completed": 20,
+  "done": true,
+  "sec_per_step": 0.15897813364237295,
+  "n_errors": 0,
+  "elapsed_seconds": 400.04770827293396,
+  "val_loss": 5.299774646759033
+}

@@ -1,0 +1,9 @@
+{
+  "run_id": "20260923T165752Z-6f02b1a-dirty-1e411657-bce_no_soft_ece_f-3",
+  "epochs_completed": 12,
+  "done": true,
+  "sec_per_step": 0.16932579778855847,
+  "n_errors": 0,
+  "elapsed_seconds": 214.53120923042297,
+  "val_loss": 5.523356914520264
+}

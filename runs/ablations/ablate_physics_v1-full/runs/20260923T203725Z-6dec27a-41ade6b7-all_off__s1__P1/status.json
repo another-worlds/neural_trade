@@ -1,0 +1,9 @@
+{
+  "run_id": "20260923T203725Z-6dec27a-41ade6b7-all_off__s1__P1",
+  "epochs_completed": 20,
+  "done": true,
+  "sec_per_step": 0.1640296565161811,
+  "n_errors": 0,
+  "elapsed_seconds": 317.292142868042,
+  "val_loss": 6.405773639678955
+}
