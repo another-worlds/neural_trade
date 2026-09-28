@@ -20,13 +20,13 @@ the first green head since 609d19e. NT-055 and NT-056 are the lead's follow-ups 
 
 **Is it possible?** Yes, for most kinds of issue. Measured on this 4-core cloud CPU, without a GPU:
 
-- The whole CI unit job (697 fast tests, the coverage gates, the CLI smoke) runs in about 10 minutes
-  serially and in 3 minutes 12 seconds with pytest-xdist on 4 cores (697 passed, 192 s).
-- The sweep produced 155 findings. An independent verifier confirmed 122 of them
-  (21 P1, 51 P2, 50 P3; no P0). 4 were already in the backlog, 1 was
-  refuted, and 28 have no confirmed verdict (listed below).
+- The 697 fast tests of the CI unit job take about 10 minutes serially and 3 minutes 12 seconds
+  with pytest-xdist on 4 cores (697 passed, 192 s); its coverage gates and CLI smoke pass as well.
+- The sweep produced 155 findings. An independent verifier checked every one: 148
+  confirmed (27 P1, 66 P2, 55 P3; no P0), 5 already in the backlog, 2
+  refuted.
 - After merging duplicates, they give **33 proposed new items** (CPU-01 to CPU-33,
-  in [NEW_ITEMS.md](NEW_ITEMS.md)) and **evidence or corrections for 31
+  in [NEW_ITEMS.md](NEW_ITEMS.md)) and **evidence or corrections for 30
   existing items**.
 - A CPU can check and fix: code bugs, statistics and formulas, look-ahead and leakage, test gaps,
   CI and packaging, config validation, import structure, stale code with D-029 evidence, loss terms
@@ -83,8 +83,9 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
      signals, strategies, backtest) are unguarded. A training-free scoring golden takes about 10 s.
    - CPU-12, CPU-13, CPU-14 (P2): the health tier, a coverage gate that fails when a gated package
      disappears, and Predictor tests that run in the fast tier.
-   - CPU-31 (P2) and CPU-09 (P2): tests that pin the served and the leaderboard numbers (5 of 6
-     performance-metric mutants pass every test today).
+   - CPU-09 (P1; during NT-026's scorer at the latest) and CPU-31 (P2): tests that pin the
+     scorer's and the served numbers. Today 5 of 6 performance-metric mutants and 13 of 15
+     backtest-engine and strategy mutants pass every test.
    - CPU-22 (P2): a deny list in `.claude/settings.json` for the git commands CLAUDE.md forbids.
    - Write the corrections for NT-027 into the item before it starts: its layering test misses a
      real 3-cycle (experiments, training, visualization), and any import-line change rebuilds the
@@ -141,12 +142,12 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
 | | Count |
 |---|---|
 | Findings | 155 |
-| Confirmed by an independent verifier | 122 (P1 21, P2 51, P3 50) |
-| Already in the backlog | 4 |
-| Refuted | 1 |
-| No confirmed verdict | 28 |
+| Confirmed by an independent verifier | 148 (P1 27, P2 66, P3 55) |
+| Already in the backlog | 5 |
+| Refuted | 2 |
+| No confirmed verdict | 0 |
 | Proposed new items after merging duplicates | 33 |
-| Existing items with evidence or corrections | 31 (from 91 findings) |
+| Existing items with evidence or corrections | 30 (from 90 findings) |
 
 ## New items (proposed)
 
@@ -160,7 +161,7 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
 | [CPU-06](NEW_ITEMS.md#cpu-06) | P1 | 4 | The learned-period ceiling follows LOOKBACK on every override path (interim fix for the window model) | before NT-041 converts the window, before any NT-030 axis over LOOKBACK, and before NT-053's A/B arms | [CORE-1](findings/core-config-cli.md#core-1), [FUZZ-2](findings/property-fuzz-sweep.md#fuzz-2), [TOOL-3](findings/static-tools-sweep.md#tool-3) |
 | [CPU-07](NEW_ITEMS.md#cpu-07) | P1 | 3 | vac_overflow: the term is unsatisfiable and its gradient has the wrong sign (fix the maths under D-003) | before NT-006 (R4) and before NT-051 fixes its harness thresholds | [LOSS-4](findings/losses-training.md#loss-4) |
 | [CPU-08](NEW_ITEMS.md#cpu-08) | P1 | 2 | Diebold-Mariano cells of the report: HAC long-run variance that survives persistent volatility regimes | before NT-032's comparator reuses the report's tests and before NT-013 reads the verdicts | [EVAL-1](findings/evaluation-metrics.md#eval-1) |
-| [CPU-09](NEW_ITEMS.md#cpu-09) | P2 | 2 | Pin the leaderboard's numbers: hand-computed tests for the performance metrics and the backtest engine rules | before NT-031 ranks on net Sharpe; coordinate the Sharpe helper with NT-040 | [STRAT-9](findings/strategy-backtest.md#strat-9), [TEST-1](findings/tests-quality.md#test-1), [TEST-2](findings/tests-quality.md#test-2) |
+| [CPU-09](NEW_ITEMS.md#cpu-09) | P1 | 2 | Pin the scorer's numbers: the performance metrics, the backtest engine rules and the report's variance block | during NT-026 (4)'s scorer, before NT-031 ranks on net Sharpe and before NT-040; coordinate the Sharpe helper with NT-040 | [STRAT-9](findings/strategy-backtest.md#strat-9), [TEST-1](findings/tests-quality.md#test-1), [TEST-2](findings/tests-quality.md#test-2), [TEST-7](findings/tests-quality.md#test-7) |
 | [CPU-10](NEW_ITEMS.md#cpu-10) | P2 | 2 | The gross book of the backtest does not depend on the cost setting | before NT-031 shows any gross column; NT-057 reads the result | [STRAT-2](findings/strategy-backtest.md#strat-2) |
 | [CPU-11](NEW_ITEMS.md#cpu-11) | P2 | 2 | BacktestConfig.max_hold: a real override or no control (today the widget knob and the YAML key do nothing) | before NT-029 declares the backtest knobs' metadata and search spaces | [STRAT-3](findings/strategy-backtest.md#strat-3), [NB-7](findings/notebooks-tooling.md#nb-7) |
 | [CPU-12](NEW_ITEMS.md#cpu-12) | P2 | 1 | A fast CPU health tier: a fixture-aware tf marker, a TF-free metrics.jsonl reader, one CI job and one local command | before the first module move of NT-027 or NT-026 | [INFRA-2](findings/infra-health-tier.md#infra-2), [INFRA-1](findings/infra-health-tier.md#infra-1), [TEST-5](findings/tests-quality.md#test-5), [INFRA-3](findings/infra-health-tier.md#infra-3) |
@@ -182,7 +183,7 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
 | [CPU-28](NEW_ITEMS.md#cpu-28) | P3 | 5 | The per-epoch indicator periods are logged before EarlyStopping restores the best weights | before NT-048 reads the per-epoch periods | [LOSS-7](findings/losses-training.md#loss-7) |
 | [CPU-29](NEW_ITEMS.md#cpu-29) | P3 | 1 | CLI and logging polish: an invalid log level, user errors as tracebacks, the implicit plugins load that the READMEs deny | after the MVP-1 items | [CORE-11](findings/core-config-cli.md#core-11), [CORE-8](findings/core-config-cli.md#core-8) |
 | [CPU-30](NEW_ITEMS.md#cpu-30) | P3 | 1 | Owner decision: local env security updates (tensorflow 2.10.1 locally fixes 50 of 94 TF advisories; 12 non-TF packages have fixes) | whenever the owner chooses; after the D: move (D-030) | [TOOL-9](findings/static-tools-sweep.md#tool-9) |
-| [CPU-31](NEW_ITEMS.md#cpu-31) | P2 | 1 and 2 | Pin the served numbers: the report's variance block, the calibration pipeline, the extended-trend features and the purge gap | before NT-027 moves evaluation/ and calibration/ | [TEST-7](findings/tests-quality.md#test-7), [TEST-8](findings/tests-quality.md#test-8), [TEST-9](findings/tests-quality.md#test-9), [TEST-10](findings/tests-quality.md#test-10) |
+| [CPU-31](NEW_ITEMS.md#cpu-31) | P2 | 1 and 2 | Pin the served numbers: the calibration pipeline and the extended-trend features; repair a test that skips its own assertion | before NT-027 moves calibration/ and data/ | [TEST-8](findings/tests-quality.md#test-8), [TEST-9](findings/tests-quality.md#test-9), [TEST-10](findings/tests-quality.md#test-10) |
 | [CPU-32](NEW_ITEMS.md#cpu-32) | P2 | 5 | Notebook tooling: check.py misses a vanished figure or an empty panel; TrainingSession can train twice into one run | before NT-034 and NT-045 rely on check.py | [NB-3](findings/notebooks-tooling.md#nb-3), [NB-8](findings/notebooks-tooling.md#nb-8), [NB-9](findings/notebooks-tooling.md#nb-9) |
 | [CPU-33](NEW_ITEMS.md#cpu-33) | P2 | 5 | The variance figure crashes when a conformal interval covers every sample | any time; before NT-045 moves the figure | [VIZ-1](findings/visualization-correctness.md#viz-1) |
 
@@ -201,7 +202,7 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
 | [NT-026](ITEM_ADDITIONS.md#nt-026) Experiment engine: one scenario and sweep spec, a resumable runner, ... | 14 | P1 | correction, evidence |
 | [NT-027](ITEM_ADDITIONS.md#nt-027) Layering: no circular subpackage imports, one metrics and statistics ... | 4 | P1 | correction, evidence |
 | [NT-028](ITEM_ADDITIONS.md#nt-028) Stale removal under D-029: every deletion shows evidence of stale and ... | 13 | P1 | correction, evidence |
-| [NT-029](ITEM_ADDITIONS.md#nt-029) Config metadata for the control panel and search spaces, and a ... | 12 | P1 | correction, evidence |
+| [NT-029](ITEM_ADDITIONS.md#nt-029) Config metadata for the control panel and search spaces, and a ... | 13 | P1 | correction, evidence |
 | [NT-030](ITEM_ADDITIONS.md#nt-030) Sweeps: quick mode (about 5 minutes) and Optuna mode (measured ... | 1 | P2 | evidence |
 | [NT-031](ITEM_ADDITIONS.md#nt-031) Leaderboard ranked by dev-fold net Sharpe after costs, with ... | 5 | P1 | correction, evidence |
 | [NT-033](ITEM_ADDITIONS.md#nt-033) Manual-search baselines: frozen-period twin and classic TA rules ... | 1 | P2 | evidence |
@@ -220,42 +221,14 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
 | [NT-053](ITEM_ADDITIONS.md#nt-053) Window-free plan: a second research round that writes the path, gates ... | 3 | P3 | evidence |
 | [NT-054](ITEM_ADDITIONS.md#nt-054) Per-run fixed costs and GPU launches (independent of the window) | 5 | P2 | correction, evidence |
 | [NT-056](ITEM_ADDITIONS.md#nt-056) CI and packaging hygiene: CI lints tests, actions off Node 20, the ... | 2 | P3 | evidence |
-| [NT-057](ITEM_ADDITIONS.md#nt-057) Random-null follow-ups: one mean-size definition, labels with the ... | 1 | P2 | evidence |
 
 ## Findings that are not confirmed
 
-| Finding | severity | status | placement |
-|---|---|---|---|
-| [TEST-1](findings/tests-quality.md#test-1) Leaderboard metric formulas have no unit test: a sign-flipped Sharpe, and a sharpe_net computed from gross ... | P1 | not verified | new item CPU-09 |
-| [TEST-2](findings/tests-quality.md#test-2) Backtest engine and default-strategy rules are unpinned: short-side stops, gap fills, mark-to-market, sizing, ... | P1 | not verified | new item CPU-09 |
-| [TEST-3](findings/tests-quality.md#test-3) Correction to NT-027 (also NT-026 (8), NT-040 (4), NT-041 (2), NT-042 (3), NT-046 (5)): golden_run.py verify ... | P1 | not verified | new item CPU-02 |
-| [TEST-4](findings/tests-quality.md#test-4) A failed CalibrationPipeline fit is swallowed on the CLI and CI path: the run reports no error, predict ... | P1 | not verified | addition to NT-026, NT-049 |
-| [TEST-5](findings/tests-quality.md#test-5) Correction to the lead's fast-CPU tier: -m 'not gpu and not slow and not tf' (568 tests) imports TensorFlow ... | P2 | not verified | new item CPU-12 |
-| [TEST-6](findings/tests-quality.md#test-6) Evidence for NT-037 and NT-042: 17 of 24 loss mutants survive, including per-horizon wiring swaps (h0 point ... | P2 | not verified | addition to NT-037, NT-042 |
-| [TEST-7](findings/tests-quality.md#test-7) Evaluation report variance block unpinned: a wrong Gaussian NLL, coverage90, width90 or sigma_dispersion ... | P2 | not verified | new item CPU-31 |
-| [TEST-8](findings/tests-quality.md#test-8) Calibration pipeline unpinned where it feeds served numbers: temperature fit on deadband-masked samples, the ... | P2 | not verified | new item CPU-31 |
-| [TEST-9](findings/tests-quality.md#test-9) Extended-trend features and the purge gap for WINDOW_STEP > 1 are unpinned: a sign flip turns the momentum ... | P2 | not verified | new item CPU-31 |
-| [TEST-10](findings/tests-quality.md#test-10) tests/test_calibration.py:135 short-circuits its own assertion: the h2 half after `and` never runs | P3 | not verified | new item CPU-31 |
-| [TEST-11](findings/tests-quality.md#test-11) Evidence for NT-046 (5), NT-042 (5) and NT-040 (2): the fast tier has no serving-bundle or run-directory ... | P2 | not verified | new item CPU-14 |
-| [NB-1](findings/notebooks-tooling.md#nb-1) Correction to NT-041 (and NT-026 (5)): notebooks 02-04 rebuild 'the run's TEST block' from the bundled CSV, ... | P1 | not verified | addition to NT-041 |
-| [NB-2](findings/notebooks-tooling.md#nb-2) Correction to NT-034 (5): check.py and the notebook tests see neither the package's warnings nor anything ... | P1 | not verified | addition to NT-034 |
-| [NB-3](findings/notebooks-tooling.md#nb-3) check.py passes a notebook whose figure vanished or whose panel holds no data: notebook 05 with no scored ... | P2 | not verified | new item CPU-32 |
-| [NB-4](findings/notebooks-tooling.md#nb-4) A run trained with an epochs argument records Config.EPOCHS as its planned epoch count: notebook 04 says ... | P2 | not verified | addition to NT-026 |
-| [NB-5](findings/notebooks-tooling.md#nb-5) The backtest and calibration explorers offer knob and calibration choices only on the TEST block, with no dev ... | P2 | not verified | addition to NT-034, NT-018 |
-| [NB-6](findings/notebooks-tooling.md#nb-6) Correction to NT-054: its reference run is a notebook run, whose gaps between timed epochs include ... | P2 | not verified | addition to NT-054 |
-| [NB-7](findings/notebooks-tooling.md#nb-7) The explorer's 'max hold (bars)' cost control, BacktestConfig.max_hold, has no effect on any registered ... | P2 | not verified | new item CPU-11 |
-| [NB-8](findings/notebooks-tooling.md#nb-8) TrainingSession can train twice into one run: a second start() makes wait() return the previous result at ... | P2 | not verified | new item CPU-32 |
-| [NB-9](findings/notebooks-tooling.md#nb-9) The slow notebook execution test passes parameters the notebooks do not have (RANDOM_SEEDS to 02, WINDOW to ... | P3 | not verified | new item CPU-32 |
-| [NB-10](findings/notebooks-tooling.md#nb-10) Evidence for NT-026 (9): pick_run orders runs by directory mtime, so writing any file into an old run makes ... | P3 | not verified | addition to NT-026 |
-| [VIZ-1](findings/visualization-correctness.md#viz-1) Variance figure crashes (ZeroDivisionError) when a conformal interval covers every sample of the block | P2 | not verified | new item CPU-33 |
-| [VIZ-2](findings/visualization-correctness.md#viz-2) Evidence for NT-002: strategy_comparison draws a zero-width '5-95%' random-null whisker from the engine's null | P2 | not verified | addition to NT-057 |
-| [VIZ-3](findings/visualization-correctness.md#viz-3) Evidence for NT-041: every overlap-adjusted interval and several time labels assume one sample per bar ... | P2 | not verified | addition to NT-041 |
-| [VIZ-4](findings/visualization-correctness.md#viz-4) Evidence for NT-028: reachability map of the legacy figure modules (four stale, two live) | P2 | not verified | addition to NT-028 |
-| [VIZ-5](findings/visualization-correctness.md#viz-5) Confidence and coherence figures label an uncalibrated P(up) 'calibrated' | P3 | not verified | addition to NT-020 |
-| [VIZ-6](findings/visualization-correctness.md#viz-6) Correction to NT-020: the frame.meta['delta_raw'] fallback is missing in the delta and variance figures, not ... | P3 | not verified | addition to NT-020 |
-| [VIZ-7](findings/visualization-correctness.md#viz-7) Evidence for NT-042: file:line inventory of the three-horizon assumptions in visualization/, and the hidden ... | P2 | not verified | addition to NT-042 |
+None: every finding has a verdict.
 
-## Dropped findings
+## Refuted findings and findings already planned
+
+The refuted ones are dropped. The ones already planned stay in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md) as evidence for the item that plans them.
 
 | Finding | status | why |
 |---|---|---|
@@ -264,6 +237,8 @@ are in [ITEM_ADDITIONS.md](ITEM_ADDITIONS.md). Each item gives its own timing.
 | [MODEL-7](findings/model-layers.md#model-7) Config accepts invalid indicator periods: 0 gives all-NaN features, -1 crashes the build, and ... | already in the backlog | Covered by NT-029 (ranges enforced by Config.validate) and NT-046 (per-family parameter bounds). Keep it only as 'Evidence for NT-029: the indicator list/dict fields need element-wise and cross-field checks'. NT-029's test ('one out-of-range value per numeric type') would not exercise list ... |
 | [STAB-8](findings/stability-invariants.md#stab-8) Evidence for NT-038/NT-051: EnergyGate feeds the raw window variance and max into a softmax Dense, ... | refuted | What remains is a regime-relative risk inside one block. The 1-day rolling std of 1-minute changes varies 4.6x (max/min) over the bundled 30 days, and the reporter measured 1.6% saturated gates at x1: small. NT-053's research already lists energy_gate.py:24-36 as window-dependent code to redesign ... |
 | [STAB-12](findings/stability-invariants.md#stab-12) Evidence for NT-037: the per-step gradient diagnostics today cost as much as the clip itself and ... | already in the backlog | NT-054 was added at 97ad06b, after the 71a0fd2 cut-off. Its acceptance (2) is 'One global-norm computation per optimizer group and fused finite guards; the graph op count before and after is reported'. Its area and 'coordinate with NT-037 (health diagnostics in the same train step)' cover the ... |
+| [VIZ-2](findings/visualization-correctness.md#viz-2) Evidence for NT-002: strategy_comparison draws a zero-width '5-95%' random-null whisker from the ... | refuted | The core claim (the engine null has no percentiles, so the registry path always draws a zero-width band) held at ffb1b67. NT-002 fixed it at 330ba2f, as the finding's own fix sketch expected. Residual (P3, latent): trade_analytics.py:709-710 still falls back to the mean when a percentile is ... |
+| [VIZ-4](findings/visualization-correctness.md#viz-4) Evidence for NT-028: reachability map of the legacy figure modules (four stale, two live) | already in the backlog | NT-028 (P1, MVP-1) already lists 'figure modules without a production caller', the interactive_plot callback and compat.py. This finding is that item's inventory: paste it into NT-028's why/acceptance rather than filing a new item. Every line number holds at 330ba2f (none of these files changed). ... |
 
 ## Suspected issues that need a GPU or long runs
 
@@ -364,8 +339,8 @@ The finders listed these; none of them was checked.
 
 - **One verifier per finding.** The planned second round (agents that try to disprove every P0 and
   P1 finding from scratch) and the completeness critic with its gap round did not run: the owner's
-  spend limit stopped them twice. The verifiers were strict (they refuted 1, marked 4 as
-  already planned, changed 16 severities (3 raised, 13 lowered) and corrected many details), but a P1 here has had one independent check, not two.
+  spend limit stopped them twice. The verifiers were strict (they refuted 2, marked 5 as
+  already planned, changed 17 severities (3 raised, 14 lowered) and corrected many details), but a P1 here has had one independent check, not two.
 - **Line numbers.** They refer to ffb1b67 unless a verifier's correction gives 330ba2f. Between the two
   heads only the NT-001, NT-002 and NT-025 files changed; lines of `strategy/backtest.py` below line
   270 moved down by up to 35 lines.
