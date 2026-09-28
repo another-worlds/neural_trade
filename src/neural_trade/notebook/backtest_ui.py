@@ -171,69 +171,16 @@ def metrics_view(frame: pd.DataFrame, *, caption: Optional[str] = None):
     return sty.set_caption(caption) if caption else sty
 
 
-class _Sized:
-    """A strategy whose every order is resized to ``size`` (a random null that matches a strategy's
-    position size: a null trading at full size pays more costs than a strategy that sizes down)."""
-
-    def __init__(self, base, size: float):
-        self.base, self.size = base, float(size)
-        self.name = getattr(base, "name", type(base).__name__)
-        self.max_hold = getattr(base, "max_hold", 30)
-
-    def warmup(self) -> int:
-        return self.base.warmup()
-
-    def decide(self, s, t):
-        order = self.base.decide(s, t)
-        if order is not None:
-            order.size_frac = self.size
-        return order
-
-    def exit_signal(self, *args):
-        return self.base.exit_signal(*args)
-
-
 def matched_random_null(signals, bars, result, *, seeds: Optional[int] = None, config=None) -> Dict[str, float]:
     """Random entries with ``result``'s trade rate, holding time AND mean position size, over
-    ``seeds`` seeds (default: the config's ``random_seeds``, as the engine's own null): where the
-    strategy ranks among them (after and before costs). Seeds 0..seeds-1, so the same call gives
-    the same numbers.
-
-    Same keys as ``strategy.random_same_frequency`` plus ``size_frac``, the 5th / 95th percentiles of
-    the random total return, and the gross (before-cost) mean and percentile. After costs the
-    return is mostly cost x trade count, so a null that trades at full size while the strategy
-    sizes down would make the strategy look skilled when it is not.
+    ``seeds`` seeds (default: the config's ``random_seeds``): where the strategy ranks among them
+    (after and before costs). A thin wrapper over the engine's null, ``strategy.random_same_frequency``
+    (its docstring defines the matched size and the keys), so ``backtest(...).baselines
+    ['random_same_freq']`` (what ``neural-trade backtest`` prints) is the same dict for the same seeds.
     """
-    from neural_trade.strategy import RandomSignal, run_backtest
+    from neural_trade.strategy import random_same_frequency
 
-    cfg = config or result.config
-    k = int(cfg.random_seeds if seeds is None else seeds)
-    n_tr = result.summary["n_trades"]
-    if n_tr == 0 or k <= 0:
-        return {"n_seeds": 0, "percentile_total_return": float("nan"), "percentile_sharpe_net": float("nan")}
-    hold = max(1, int(round(result.summary["avg_hold_bars"])) or 1)
-    flat_bars = max(1, len(bars) - int(result.summary["exposure"] * len(bars)))
-    rate = min(1.0, n_tr / flat_bars)
-    sizes = [float(d.get("size", 1.0)) for d in result.decisions]
-    size = float(np.clip(np.mean(sizes), 0.0, 1.0)) if sizes else 1.0
-    init = float(cfg.initial_equity)
-    rets, sharpes, grosses = [], [], []
-    for seed in range(k):
-        r = run_backtest(signals, bars, _Sized(RandomSignal(trade_rate=rate, hold_bars=hold, seed=seed), size), cfg)
-        rets.append(r.summary["total_return"])
-        sharpes.append(r.summary["sharpe_net"])
-        grosses.append(r.summary["gross_pnl"] / init)
-    rets, sharpes, grosses = np.array(rets), np.array(sharpes), np.array(grosses)
-    g0 = result.summary.get("gross_pnl", 0.0) / init
-    return {
-        "n_seeds": k, "trade_rate": rate, "hold_bars": hold, "size_frac": size,
-        "random_mean_total_return": float(rets.mean()), "random_mean_sharpe_net": float(sharpes.mean()),
-        "random_p05_total_return": float(np.percentile(rets, 5)), "random_p95_total_return": float(np.percentile(rets, 95)),
-        "random_mean_gross_return": float(grosses.mean()),
-        "percentile_total_return": float(100.0 * np.mean(rets < result.summary["total_return"])),
-        "percentile_sharpe_net": float(100.0 * np.mean(sharpes < result.summary["sharpe_net"])),
-        "percentile_gross_return": float(100.0 * np.mean(grosses < g0)),
-    }
+    return random_same_frequency(signals, bars, result, config=config, seeds=seeds)
 
 
 def load_run_blocks(run_dir, csv_path: Optional[str] = None) -> Dict[str, Any]:
@@ -320,20 +267,14 @@ class BacktestExplorer:
                   costs: Optional[Dict[str, Any]] = None, baselines: bool = True):
         """(BacktestResult, Strategy) without touching ``last`` / ``last_strategy``.
 
-        With ``baselines``: buy-and-hold and always-flat from the engine, and as the random null
-        ``matched_random_null`` over ``random_seeds`` seeds (trade rate, hold AND size matched) - the
-        same null, with the same seeds, that ``compare_strategies`` draws, so both report one rank.
+        With ``baselines``: the engine's buy-and-hold, always-flat and random null (``matched_random_null``
+        over ``random_seeds`` seeds: trade rate, hold AND size matched) - the same null, with the same
+        seeds, that ``compare_strategies`` draws, so both report one rank.
         """
         from neural_trade.strategy import backtest, build_backtest_config, build_strategy
 
         strat = build_strategy(strategy, params, calibration=self.cal_signals)
-        cfg = build_backtest_config(costs or {})
-        # the engine's baselines without its own (full-size) random null; the matched one replaces it
-        res = backtest(self.signals, self.bars, strat, dataclasses.replace(cfg, random_seeds=0), baselines=baselines)
-        res.config = cfg
-        if baselines:
-            res.baselines["random_same_freq"] = matched_random_null(self.signals, self.bars, res,
-                                                                    seeds=cfg.random_seeds, config=cfg)
+        res = backtest(self.signals, self.bars, strat, build_backtest_config(costs or {}), baselines=baselines)
         return res, strat
 
     def run(self, strategy: str, params: Optional[Dict[str, Any]] = None, costs: Optional[Dict[str, Any]] = None,

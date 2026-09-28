@@ -268,9 +268,35 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
 
 
 # ------------------------------------------------------------------ baselines
+def _mean_fill_size(result: BacktestResult) -> float:
+    """The mean size of the positions ``result`` opened (defined in ``random_same_frequency``);
+    1.0 when no order opened one."""
+    sizes = np.clip([float(d.get("size", 1.0)) for d in result.decisions], 0.0, 1.0)
+    sizes = sizes[sizes > 0]
+    return float(sizes.mean()) if len(sizes) else 1.0
+
+
 def random_same_frequency(signals: SignalFrame, bars: Bars, result: BacktestResult,
                           config: Optional[BacktestConfig] = None, seeds: Optional[int] = None) -> Dict[str, float]:
-    """Where the strategy ranks among random strategies with its trade rate and holding time."""
+    """Where the strategy ranks among random entries with its trade rate, holding time AND mean
+    position size: ``RandomSignal`` with seeds 0..seeds-1 (default: the config's ``random_seeds``),
+    so the same call gives the same numbers.
+
+    Matched to ``result``: the entry rate is its trade count over its flat bars, the holding time its
+    mean holding time (rounded, at least 1 bar), and ``size_frac`` its mean position size: the
+    arithmetic mean, over the orders the strategy placed (``result.decisions``, one per entry; bars
+    where ``decide`` returned None do not count), of each order's ``size_frac`` clipped to [0, 1] as
+    the engine clips it at the fill, leaving out orders whose clipped size is 0 (they open no
+    position). Every order counts once, whatever its holding time. After costs a return is mostly
+    cost x size x trade count, so a null trading at full size while the strategy sizes down pays more
+    costs and would make the strategy look skilled when it is not.
+
+    Returns ``n_seeds``, ``trade_rate``, ``hold_bars``, ``size_frac``; over the seeds the mean, 5th and
+    95th percentile of the net total return, the mean net Sharpe and the mean gross return (gross P&L
+    before costs over the initial equity); and the strategy's percentile among the seeds (the share of
+    seeds strictly below it, in %) by net return, net Sharpe and gross return. Without trades or
+    seeds only ``n_seeds`` = 0 and NaN percentiles of net return and net Sharpe.
+    """
     cfg = config or result.config
     k = int(seeds if seeds is not None else cfg.random_seeds)
     n_tr = result.summary["n_trades"]
@@ -279,23 +305,32 @@ def random_same_frequency(signals: SignalFrame, bars: Bars, result: BacktestResu
     hold = max(1, int(round(result.summary["avg_hold_bars"])) or 1)
     flat_bars = max(1, len(bars) - int(result.summary["exposure"] * len(bars)))
     rate = min(1.0, n_tr / flat_bars)
-    rets, sharpes = [], []
+    size = _mean_fill_size(result)
+    init = float(cfg.initial_equity)
+    rets, sharpes, grosses = [], [], []
     for seed in range(k):
-        r = run_backtest(signals, bars, RandomSignal(trade_rate=rate, hold_bars=hold, seed=seed), cfg)
+        r = run_backtest(signals, bars, RandomSignal(trade_rate=rate, hold_bars=hold, seed=seed, size_frac=size), cfg)
         rets.append(r.summary["total_return"])
         sharpes.append(r.summary["sharpe_net"])
-    rets, sharpes = np.array(rets), np.array(sharpes)
+        grosses.append(r.summary["gross_pnl"] / init)
+    rets, sharpes, grosses = np.array(rets), np.array(sharpes), np.array(grosses)
+    gross = result.summary.get("gross_pnl", 0.0) / init
     return {
-        "n_seeds": k, "trade_rate": rate, "hold_bars": hold,
+        "n_seeds": k, "trade_rate": rate, "hold_bars": hold, "size_frac": size,
         "random_mean_total_return": float(rets.mean()), "random_mean_sharpe_net": float(sharpes.mean()),
+        "random_p05_total_return": float(np.percentile(rets, 5)), "random_p95_total_return": float(np.percentile(rets, 95)),
+        "random_mean_gross_return": float(grosses.mean()),
         "percentile_total_return": float(100.0 * np.mean(rets < result.summary["total_return"])),
         "percentile_sharpe_net": float(100.0 * np.mean(sharpes < result.summary["sharpe_net"])),
+        "percentile_gross_return": float(100.0 * np.mean(grosses < gross)),
     }
 
 
 def backtest(signals: SignalFrame, bars: Bars, strategy: Strategy, config: Optional[BacktestConfig] = None,
              baselines: bool = True) -> BacktestResult:
-    """``run_backtest`` plus the baselines every report carries: buy-and-hold, always-flat, random."""
+    """``run_backtest`` plus the baselines every report carries: buy-and-hold, always-flat, and
+    random entries with the strategy's trade rate, holding time and mean size
+    (``random_same_frequency``, ``config.random_seeds`` seeds)."""
     cfg = config or BacktestConfig()
     res = run_backtest(signals, bars, strategy, cfg)
     if baselines:
