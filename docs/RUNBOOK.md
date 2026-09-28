@@ -119,6 +119,32 @@ held-out folds from the long history once NT-041 exists); at least 5 pairs. Neve
 NT-024, which would have made it refuse, was dropped for NT-026; the script is in the frozen set
 (D-023), so this rule stays.
 
+### Run directories in git
+
+Every number a doc, report or notebook cites links to a tracked run (NT-010). A run directory is a
+directory under `runs/`, at any depth, whose name starts with a run id
+`YYYYMMDDTHHMMSSZ-<sha7>[-dirty]-<hash8>` (`runs/<id>/`, `runs/ablations/<name>/runs/<id>-<cell>/`,
+`runs/experiments/<name>/runs/<id>-<name>/`). Every file in it is tracked except the heavy artefacts,
+which `.gitignore` ignores: weights `*.h5`, `*.joblib`, `*.pkl`, `*.npz`, `*.parquet` and `tb/`. The
+experiment log folders `runs/ablations/*/cells/`, `runs/ablations/*/logs/` and
+`runs/experiments/*/logs/` are ignored too. Tracked: `config.yaml`, `meta.json`, `status.json`,
+`env.json`, `metrics.jsonl`, `eval_report_*.json` and `.md`, `training_log.csv`,
+`indicator_params_history.csv`, `period_init.json`, `artifacts/meta.json`, `artifacts/config.yaml`,
+`artifacts/calibration/*.json` and an experiment's `result.json`.
+
+`scripts/check_run_evidence.py` finds the run ids cited in `docs/**/*.md`, `README.md`,
+`runs/**/REPORT.md`, `report.md`, `summary.md` and the saved notebooks, and exits 1 when a cited run
+has no directory, git does not track its `config.yaml` or its `meta.json`, or a light file in it is
+untracked. A fast-suite test runs it, so CI enforces it. Stage a new run's light files by explicit
+path, in the commit that first cites the run (for notebook 01, with the executed notebooks):
+
+```bash
+$PY scripts/check_run_evidence.py --list-untracked | git add --pathspec-from-file=-
+```
+
+For a run nothing cites yet, `git ls-files --others --exclude-standard -- runs/<run dir>` lists the
+same files. Never `git add runs` (CLAUDE.md start step 2).
+
 ### GPU rules
 
 **Before any GPU job, check that the GPU is free:** `nvidia-smi dmon -s um -c 10` (10 one-second
@@ -194,8 +220,10 @@ $PY scripts/notebooks/render.py [NN]       # PNGs (Windows + Edge); then open an
 
 Notebooks 02-05 read the newest notebook/CLI run, never an engine cell. Today `pick_run`
 (`src/neural_trade/notebook/runs.py:19`) takes the newest directory anywhere under `runs/` that has
-`artifacts/weights.h5`; NT-026 keeps engine runs out of that default. Run directories are not
-committed, so in a fresh clone 02-04 fail with a clear message until 01 has trained. Notebook 06
+`artifacts/weights.h5`; NT-026 keeps engine runs out of that default. Weights are not committed (a
+run's light files are: "Run directories in git" above), so in a fresh clone 02-04 fail with a clear
+message until 01 has trained. The run a new execution of 01 creates is committed with the executed
+notebooks (`check_run_evidence.py --list-untracked`). Notebook 06
 (NT-034) launches nothing when executed: it reads the run store.
 
 The notebooks persist and evolve (D-028): 00-05 keep their numbers and roles and are updated through
@@ -254,10 +282,10 @@ done; editable install re-pointed; 697 fast tests passed in 3:28 on D:; `build.p
 `check.py` clean; the Claude memory copied to `~/.claude/projects/d--neural-trade/memory/`). The conda
 env stays where it is (`$PY` does not change). The steps, for the record and for a future move:
 
-1. **Quiet.** No job writes into `runs/` (STATUS, GPU check above); `git status -sb` shows only the
-   expected untracked run directories; the branch is pushed.
-2. **Copy, do not clone.** The untracked `runs/` directories and the gitignored data
-   (`Bitcoin_BTCUSDT.csv`) must come along. In PowerShell:
+1. **Quiet.** No job writes into `runs/` (STATUS, GPU check above); `git status -sb` shows a clean
+   tree (a run's light files are tracked, "Run directories in git"); the branch is pushed.
+2. **Copy, do not clone.** The gitignored run files (weights, scalers, experiment logs) and the
+   gitignored data (`Bitcoin_BTCUSDT.csv`) must come along. In PowerShell:
    `robocopy C:\Users\Step\Documents\neural_trade D:\neural_trade /E /COPY:DAT /R:1 /W:1`, and the
    same for `neural_trade_gates` and `neural_trade_ablation` to `D:\neural_trade_gates` and
    `D:\neural_trade_ablation` (robocopy exit codes below 8 mean success). Compare file counts and

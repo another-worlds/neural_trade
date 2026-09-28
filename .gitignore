@@ -41,16 +41,17 @@ indicator_params_history.csv
 Thumbs.db
 inference.ipynb.backup
 
-# Run directories (scripts/gate_run.py, experiments): heavy artefacts stay local,
-# small evidence (JSON, per-epoch logs, reports) is committable so every reported
-# number can be traced to a run.
+# Run directories (docs/RUNBOOK.md "Run directories in git"; scripts/check_run_evidence.py):
+# every file under runs/ is tracked except the heavy artefacts (*.h5, *.joblib, *.pkl above,
+# *.npz, *.parquet, tb/ below) and the experiment log folders, so every cited number links to
+# a tracked run and git status stays clean.
 runs/**/*.npz
 runs/**/*.parquet
 runs/**/tb/
-!runs/**/training_log.csv
-!runs/**/indicator_params_history.csv
-!runs/**/results.csv
-!runs/**/summary.csv
+runs/ablations/*/cells/
+runs/ablations/*/logs/
+runs/experiments/*/logs/
+!runs/**/*.csv
 
 # Claude Code: agent worktrees and machine-local settings (agents/, skills/ and settings.json are tracked)
 .claude/worktrees/
