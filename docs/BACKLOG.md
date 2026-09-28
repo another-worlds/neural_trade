@@ -57,11 +57,11 @@ changes).
 | [NT-022](#nt-022) | P3 | polish | implementer | todo | Run-comparison and calibration-explorer figures polish (comparison.py, calibration_plots.py) |
 | [NT-023](#nt-023) | P3 | polish | implementer | todo | Theme: one reference dash, a strategy palette, legend fixes (theme.py) |
 | [NT-024](#nt-024) | P1 | infra | implementer | dropped | Multi-seed gate runs and judge: gate_run.py --seed and no silent overwrite; check_gates.py judges named runs averaged over seeds |
-| [NT-025](#nt-025) | P1 | infra | implementer | in-progress | check.py enforces the 5 MB per-notebook limit of D-013 |
+| [NT-025](#nt-025) | P1 | infra | implementer | done | check.py enforces the 5 MB per-notebook limit of D-013 |
 | [NT-026](#nt-026) | P1 | infra | implementer | in-progress | Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer |
 | [NT-027](#nt-027) | P1 | refactor | implementer | todo | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | todo | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
-| [NT-029](#nt-029) | P1 | infra | implementer | todo | Config metadata for the control panel and search spaces, and a generated config reference |
+| [NT-029](#nt-029) | P1 | infra | implementer | in-progress | Config metadata for the control panel and search spaces, and a generated config reference |
 | [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | todo | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | todo | Paired comparator for "A beats B" verdicts (D-025) |
@@ -85,7 +85,7 @@ changes).
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
 | [NT-051](#nt-051) | P1 | research | experimenter | todo | First stability-harness run on the reference setup against its pre-registered thresholds |
 | [NT-052](#nt-052) | P1 | research | experimenter | todo | Stability-harness runs for N = 2 and N = 4 horizons on the reference data |
-| [NT-053](#nt-053) | P1 | research | lead | todo | Window-free plan: a second research round that writes the path, gates and A/B specifications |
+| [NT-053](#nt-053) | P1 | research | lead | in-progress | Window-free plan: a second research round that writes the path, gates and A/B specifications |
 | [NT-054](#nt-054) | P2 | performance | implementer | todo | Per-run fixed costs and GPU launches (independent of the window) |
 | [NT-055](#nt-055) | P2 | infra | implementer | todo | CI failure annotations: every failed test name readable, right paths for class tests and collection errors |
 | [NT-056](#nt-056) | P3 | infra | implementer | todo | CI and packaging hygiene: CI lints tests, actions off Node 20, the viz extra and jinja2 |
@@ -369,12 +369,13 @@ changes).
 
 **check.py enforces the 5 MB per-notebook limit of D-013**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P1 / infra / implementer
 - **area:** scripts/notebooks/check.py, tests/test_notebook_tooling.py
 - **why:** D-013 says each notebook stays under 5 MB (the repo's large-file limit), but nothing enforces it; a figure change could silently push a notebook over it (02 was 6.6 MB once).
 - **acceptance:** (1) `check.py` exits 1 and names the notebook when a saved notebook exceeds 5 MB (test with a synthetic notebook in tmp_path). (2) The committed notebooks pass. (3) scripts/notebooks/README.md mentions the limit.
 - **source:** setup QA 2026-09-25 (fact check of D-013).
+- **evidence (done 2026-09-28):** branch nt-025, 66c57c8, merged as 7579e0b. `scripts/notebooks/check.py`: `MAX_BYTES = 5_000_000` (decimal, as check.py prints sizes); a notebook over it fails with `TOO LARGE` and its name, at or under passes; other problems are still reported. Three tests in tests/test_notebook_tooling.py (each shown necessary by a mutation check); the committed notebooks (0.14-1.9 MB) pass; scripts/notebooks/README.md and CLAUDE.md name the limit. Sizes are bytes on disk, equal to the blob size (`*.ipynb eol=lf`). QA PASS (fast 700 passed on the branch; 705 on the merged head 7579e0b, ruff clean). CI green on 330ba2f (run 36378359175).
 
 ### NT-026
 
@@ -414,7 +415,7 @@ changes).
 
 **Config metadata for the control panel and search spaces, and a generated config reference**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / infra / implementer
 - **area:** src/neural_trade/core/config.py, a generator script (for example under scripts/), docs/guide/config-reference.md (new, generated), tests/test_config.py
 - **why:** The control panel (NT-034) and the search spaces (NT-030, NT-038) need to know, for every Config field, its valid range or choices, its unit, whether a sweep may tune it and whether it is deprecated. Today a field carries only a group and a one-line doc (`_f`, core/config.py:36-41), the valid ranges live in code inside Config.validate (core/config.py:234 onward), and 26 of the 112 fields have no doc at all (2026-09-28): EPOCHS, CALIB_LAMBDA_MIN/MAX, the six CALIB_DAMPING_* fields, LAMBDA_TREND_OUTER, LAMBDA_DIR_OUTER, LAMBDA_COHERENCE, LAMBDA_NLL_OUTER, LAMBDA_CRPS, LAMBDA_SOFT_ECE, MA_SPANS, MACD_SETTINGS, RSI_PERIODS, BB_PERIODS, FOCAL_GAMMA, MODEL_PATH, SCALER_PATH, ADAM_BETA1, ADAM_BETA2, SGD_MOMENTUM, SGD_NESTEROV. D-022 moves the window and horizons to wall-clock time, so units must be explicit.
@@ -698,7 +699,7 @@ changes).
 
 **Window-free plan: a second research round that writes the path, gates and A/B specifications**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / research / lead
 - **area:** docs/research/2026-09-28-window-free/ (input); a new docs/research/<date>-window-free-plan/ (output; CPU prototypes only); docs/DECISIONS.md (the purge rule); docs/BACKLOG.md and docs/ROADMAP.md (the items the plan creates)
 - **depends on:** none (no GPU; the lead writes it, with subagents for the prototypes and an adversarial review)
