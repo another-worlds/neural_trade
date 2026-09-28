@@ -307,12 +307,14 @@ class AlwaysFlat(Strategy):
 @Strategies.register(name="random_signal", tags=["baseline"])
 @dataclass
 class RandomSignal(Strategy):
-    """Random side at a fixed entry rate and holding time (the 'same frequency' null model)."""
+    """Random side at a fixed entry rate, holding time and position size (the 'same frequency' null
+    model; ``backtest.random_same_frequency`` sets all three from the strategy it is compared with)."""
 
     name: ClassVar[str] = "random_signal"
     trade_rate: float = 0.05
     hold_bars: int = 10
     seed: int = 0
+    size_frac: float = 1.0        # fraction of equity per entry, as Order.size_frac
 
     def __post_init__(self):
         self._rng = np.random.default_rng(self.seed)
@@ -323,5 +325,6 @@ class RandomSignal(Strategy):
         if len(self._draws[0]) != len(s):
             self._draws = (self._rng.uniform(size=len(s)), self._rng.integers(0, 2, size=len(s)))
         if self._draws[0][t] < self.trade_rate:
-            return Order("LONG" if self._draws[1][t] else "SHORT", 1.0, reason="random", max_hold=self.hold_bars)
+            return Order("LONG" if self._draws[1][t] else "SHORT", self.size_frac, reason="random",
+                         max_hold=self.hold_bars)
         return None

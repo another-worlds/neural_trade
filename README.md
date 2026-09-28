@@ -171,7 +171,9 @@ stop-loss are checked against each bar's high and low; if both are hit in the sa
 stop is assumed to fill first, and a gap through the stop fills at the open. Trades are
 capped at 30 bars, and any open position is marked to market at the end. Every result
 carries three baselines: buy-and-hold, always-flat, and random entries at the same trade
-frequency (the strategy's percentile among 100 random seeds).
+frequency, holding time and mean position size (the strategy's percentile among 100 random
+seeds, after and before costs). A null at full size would pay more costs than a strategy that
+sizes down; the CLI, `scripts/backtest_gate.py` and the notebooks use this one null.
 `assert_no_lookahead` perturbs all data after bar *t* and checks that nothing up to *t*
 changes. The tests run it on every registered strategy.
 
