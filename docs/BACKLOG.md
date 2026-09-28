@@ -33,7 +33,7 @@ changes).
 
 | ID | P | type | role | status | title |
 |---|---|---|---|---|---|
-| [NT-001](#nt-001) | P0 | bug | implementer | in-progress | CI unit job green again (red since fe4ba85) |
+| [NT-001](#nt-001) | P0 | bug | implementer | done | CI unit job green again (red since fe4ba85) |
 | [NT-002](#nt-002) | P0 | bug | implementer | in-progress | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
 | [NT-003](#nt-003) | P1 | research | experimenter | todo | Direction skill: pass the M3 direction clauses (AUC h1 > 0.52, val MCC h1 > 0.02, Gaussian readout MCC > 0) |
 | [NT-004](#nt-004) | P1 | research | experimenter | todo | Price heads: a served delta with positive EV (M3 EV clause) |
@@ -96,12 +96,13 @@ changes).
 
 **CI unit job green again (red since fe4ba85)**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P0 / bug / implementer
 - **area:** .github/workflows/ci.yml, requirements-ci.txt, tests/, plotly/pandas-version-sensitive code in src/neural_trade/visualization and src/neural_trade/notebook
 - **why:** The GitHub Actions 'ci' workflow fails on be93193 (run 36043324055) and fe4ba85 (run 36032011043), in the step 'Unit tests (CPU, no slow/gpu)'; lint passes; the last green run was 609d19e. Reproduced locally (2026-09-25) by emulating CI's plotly 5.24.1, which writes figure arrays as JSON lists (RUNBOOK 'CI': the `plotly5_lists` pytest plugin): `tests/test_viz_delta.py::test_no_empty_panel_and_size_budget_on_a_full_size_block` (1,295,932 > 600,000 chars) and `tests/test_viz_trading.py::test_size_budget_x0_dx_and_float32` (760,043 over its budget) fail; both pass under the local plotly 6.7.0. Other pins drift too (pandas 2.0.3 vs 2.3.3, scikit-learn 1.3.2 vs 1.7.2) and may hide further failures. Every item's definition of done needs CI green.
 - **acceptance:** (1) The unit step writes junit XML and a failure step turns failed tests into `::error` annotations, so failing test names are readable without auth (checks API). (2) `requirements-ci.txt` matches the tested local env for plotly, pandas, scikit-learn and scipy (preferred: CI tests what the owner runs; TF stays 2.10.x), or the size budgets are measured version-independently; RUNBOOK 'CI' says which. (3) The `ci` workflow is green (lint, unit incl. coverage gates and CLI smoke) on the pushed head of `nt-001` and, after the merge, of `remediation/plan`. (4) Local fast suite and ruff still pass.
 - **source:** GitHub Actions API (runs 36043324055, 36032011043); plan 'Definition of done' (CI + nightly green); requirements-ci.txt vs local plotly 6.7.0 / pandas 2.3.3
+- **evidence (done 2026-09-28):** implemented by a remote session (PR #14, e3fd63e; D-033), merged as 6d01d11. The cause was wider than the 'why' says: 11 failures at 7785ec9 (8 jinja2 missing for `DataFrame.style`, 1 plotly 5 unable to load the plotly-6 notebooks, 2 size budgets). requirements-ci.txt now pins plotly 6.7.0, narwhals 2.20.0, pandas 2.3.3, scikit-learn 1.7.2, scipy 1.9.3 and jinja2 3.1.6 as the nt env (TF 2.10.1, numpy 1.23.5); the unit step writes junit.xml and failed tests become `::error` annotations; RUNBOOK 'CI' updated. QA PASS (all 4 criteria; annotation step simulated on a real junit file; local fast suite 697 passed, ruff clean). CI green: branch push run 36360621477, pull_request run 36362670048, and remediation/plan 6d01d11 run 36375717146 (lint, unit incl. coverage gates and CLI smoke). Follow-ups: NT-055, NT-056.
 
 ### NT-002
 
