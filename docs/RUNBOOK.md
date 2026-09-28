@@ -84,6 +84,14 @@ Wait at most 30 minutes for a run (OPERATING_MODEL, definition of done).
 Open pull requests (remote sessions open them into `remediation/plan`; D-033):
 `curl -s "https://api.github.com/repos/another-worlds/neural_trade/pulls?state=open&per_page=20" | $PY -c "import json,sys; [print(p['number'], p['head']['ref'], p['head']['sha'][:7], '->', p['base']['ref'], p['title'][:80]) for p in json.load(sys.stdin)]"`.
 
+**Rate limit (trap, 2026-09-28).** The unauthenticated API allows 60 requests per hour per IP, and every
+session and agent on this machine shares them: a 30-second poll loop plus a few agents' checks used them
+all within the hour, and every call then returns `403 rate limit exceeded` until the `X-RateLimit-Reset`
+time (`curl -s -i ... | grep -i x-ratelimit`). Poll a run at most every 3 minutes, and prefer one check
+after the run's usual duration (about 10 minutes for `ci`). The web page
+`https://github.com/another-worlds/neural_trade/actions/runs/<run id>` is not under that limit and says
+"In progress" while a run is going, but its job results are not reliably readable without a browser.
+
 The nightly workflow (`.github/workflows/nightly.yml`) never runs: GitHub registers scheduled
 workflows only from the default branch, and `master` has no `.github/` yet (NT-008).
 

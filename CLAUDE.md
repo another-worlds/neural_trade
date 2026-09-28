@@ -97,7 +97,7 @@ CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow        # sl
 $PY -m ruff check src tests scripts
 $PY scripts/notebooks/build.py            # regenerate notebooks/ from the generator
 $PY scripts/notebooks/execute.py          # execute in place (01 trains ~5 min on the GPU)
-$PY scripts/notebooks/check.py            # errors / stderr / empty panels / unexecuted cells
+$PY scripts/notebooks/check.py            # errors / stderr / empty panels / unexecuted cells / over 5 MB
 $PY scripts/notebooks/render.py           # PNGs of every saved figure, then LOOK at them
 CUDA_VISIBLE_DEVICES=-1 $PY scripts/test_inventory.py   # regenerate TESTING_DOCUMENTATION.md
 ```

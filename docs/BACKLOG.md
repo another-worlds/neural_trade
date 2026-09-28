@@ -58,7 +58,7 @@ changes).
 | [NT-023](#nt-023) | P3 | polish | implementer | todo | Theme: one reference dash, a strategy palette, legend fixes (theme.py) |
 | [NT-024](#nt-024) | P1 | infra | implementer | dropped | Multi-seed gate runs and judge: gate_run.py --seed and no silent overwrite; check_gates.py judges named runs averaged over seeds |
 | [NT-025](#nt-025) | P1 | infra | implementer | in-progress | check.py enforces the 5 MB per-notebook limit of D-013 |
-| [NT-026](#nt-026) | P1 | infra | implementer | todo | Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer |
+| [NT-026](#nt-026) | P1 | infra | implementer | in-progress | Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer |
 | [NT-027](#nt-027) | P1 | refactor | implementer | todo | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | todo | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
 | [NT-029](#nt-029) | P1 | infra | implementer | todo | Config metadata for the control panel and search spaces, and a generated config reference |
@@ -89,6 +89,7 @@ changes).
 | [NT-054](#nt-054) | P2 | performance | implementer | todo | Per-run fixed costs and GPU launches (independent of the window) |
 | [NT-055](#nt-055) | P2 | infra | implementer | todo | CI failure annotations: every failed test name readable, right paths for class tests and collection errors |
 | [NT-056](#nt-056) | P3 | infra | implementer | todo | CI and packaging hygiene: CI lints tests, actions off Node 20, the viz extra and jinja2 |
+| [NT-057](#nt-057) | P3 | polish | implementer | todo | Random-null follow-ups: one mean-size definition, labels with the size, the CLI prints the matched null |
 
 ## Items
 
@@ -378,7 +379,7 @@ changes).
 
 **Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / infra / implementer
 - **area:** src/neural_trade/experiments/ (new engine modules next to run_context.py and compare.py), src/neural_trade/cli.py, src/neural_trade/notebook/runs.py (pick_run), a folder of scenario specs (for example configs/scenarios/), the frozen set (D-023; a header note only), docs/RUNBOOK.md and scripts/notebooks/README.md (which run notebooks 02-05 read), tests/
 - **depends on:** soft: NT-010 (which run files are tracked)
@@ -737,6 +738,17 @@ changes).
 - **why:** QA of NT-001 (2026-09-28): CI lints `ruff check src scripts` (ruff 0.6.9) while the local rule lints `src tests scripts`, so CI never lints tests; the actions target Node 20 and are forced onto Node 24 (a deprecation warning on every job); pyproject.toml's `viz` extra allows `plotly>=5.24`, but plotly 5 cannot load the committed notebooks, and `DataFrame.style` (visualization/analytics_tables.py:815, notebook/backtest_ui.py:163) needs jinja2, which no extra declares.
 - **acceptance:** (1) CI lints `src tests scripts` and passes. (2) No Node 20 deprecation annotation on the `ci` jobs (action versions bumped). (3) The `viz` extra requires a plotly the committed notebooks load (>= 6.7) and declares jinja2. (4) CI is green on the pushed head; nightly.yml installs the same pins (it runs only after NT-008).
 - **source:** QA report for NT-001 (2026-09-28)
+
+### NT-057
+
+**Random-null follow-ups: one mean-size definition, labels with the size, the CLI prints the matched null**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/visualization/trade_analytics.py (`_mean_size`, `_usable_null`, `_default_label`), src/neural_trade/cli.py (cmd_backtest output), src/neural_trade/strategy/backtest.py (the baselines' own null), tests/
+- **why:** Found by NT-002's implementer and QA (2026-09-28, b0fd0cf): trade_analytics.py:595-598 `_mean_size` (an unclipped mean over all decisions) is a second definition of the null's size next to `backtest._mean_fill_size` (clipped, size-0 orders left out); `_default_label` describes a `random_signal` run by rate and hold but not by its new `size_frac` knob; `neural-trade backtest` prints only `random_percentile_return` (the matched size, the 5-95% band and the gross percentile are only in `--out backtest.json`); `backtest()` also computes a null for the baselines themselves (backtest.py:339), so on engine results `buy_and_hold` shows "beats 100% of random" (trade rate 1.0), visible in the trade-analytics comparison figure (not in the notebooks).
+- **acceptance:** (1) trade_analytics uses `backtest._mean_fill_size` (or the null's own `size_frac`), with no second definition (test). (2) A `random_signal` run's default label names its size (test). (3) `neural-trade backtest` prints the matched size, the 5-95% band and the gross percentile next to the net percentile (test through cli.main). (4) The baselines' own null is dropped from the comparison figure or labelled as not meaningful for buy-and-hold; the figure is rendered on a real run and looked at (D-014). (5) Fast suite and ruff pass.
+- **source:** NT-002 implementer and QA reports (2026-09-28)
 
 ## Done log
 
