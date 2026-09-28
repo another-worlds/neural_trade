@@ -6,8 +6,8 @@ description: Take the next neural_trade backlog item and run it through the work
 Run the work loop of `docs/OPERATING_MODEL.md` (authoritative; this is the checklist).
 
 1. **Session start**, if not done in this session: CLAUDE.md "Start of every session" (fetch,
-   status as defined there, CI on the pushed head). Act on owner answers recorded since last time
-   (STATUS, `docs/qa/`).
+   status as defined there, CI on the pushed head, open PRs). Act on owner answers recorded since
+   last time (STATUS, `docs/qa/`) and on open PRs from remote sessions (D-033: QA, then step 7).
 2. **Pick** by OPERATING_MODEL "Picking the next item" (the implementer and experimenter slots are
    picked separately, by the same order). Set it to `in-progress` in `docs/BACKLOG.md`.
 3. **Specify:** objective criteria checkable at QA time, the files that may change, the relevant

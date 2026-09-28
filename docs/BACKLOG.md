@@ -33,8 +33,8 @@ changes).
 
 | ID | P | type | role | status | title |
 |---|---|---|---|---|---|
-| [NT-001](#nt-001) | P0 | bug | implementer | todo | CI unit job green again (red since fe4ba85) |
-| [NT-002](#nt-002) | P0 | bug | implementer | todo | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
+| [NT-001](#nt-001) | P0 | bug | implementer | in-progress | CI unit job green again (red since fe4ba85) |
+| [NT-002](#nt-002) | P0 | bug | implementer | in-progress | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
 | [NT-003](#nt-003) | P1 | research | experimenter | todo | Direction skill: pass the M3 direction clauses (AUC h1 > 0.52, val MCC h1 > 0.02, Gaussian readout MCC > 0) |
 | [NT-004](#nt-004) | P1 | research | experimenter | todo | Price heads: a served delta with positive EV (M3 EV clause) |
 | [NT-005](#nt-005) | P1 | research | experimenter | todo | Cost-aware trading: an edge per trade above the 26 bps round trip |
@@ -42,7 +42,7 @@ changes).
 | [NT-007](#nt-007) | P1 | owner-decision | owner | todo | Owner decision: which delta the strategies read (served beta-shrunk vs raw heads) |
 | [NT-008](#nt-008) | P1 | owner-decision | owner | todo | Owner decision: merge remediation/plan into master |
 | [NT-009](#nt-009) | P1 | owner-decision | owner | in-progress | Disk: C: nearly full; resolved by moving the project to D: (D-030) |
-| [NT-010](#nt-010) | P1 | infra | implementer | todo | Every cited number links to a tracked run (run-tracking policy, clean git status) |
+| [NT-010](#nt-010) | P1 | infra | implementer | in-progress | Every cited number links to a tracked run (run-tracking policy, clean git status) |
 | [NT-011](#nt-011) | P2 | infra | implementer | done | Notebook output policy: remove nbstripout (it contradicts D-013) |
 | [NT-012](#nt-012) | P2 | feature | implementer | dropped | Training logging: per-term loss contributions, gradient max and clip counts, deadband sample counts |
 | [NT-013](#nt-013) | P2 | feature | implementer | todo | Evaluation report: realised-vol variance baseline and honest baseline verdicts |
@@ -57,7 +57,7 @@ changes).
 | [NT-022](#nt-022) | P3 | polish | implementer | todo | Run-comparison and calibration-explorer figures polish (comparison.py, calibration_plots.py) |
 | [NT-023](#nt-023) | P3 | polish | implementer | todo | Theme: one reference dash, a strategy palette, legend fixes (theme.py) |
 | [NT-024](#nt-024) | P1 | infra | implementer | dropped | Multi-seed gate runs and judge: gate_run.py --seed and no silent overwrite; check_gates.py judges named runs averaged over seeds |
-| [NT-025](#nt-025) | P1 | infra | implementer | todo | check.py enforces the 5 MB per-notebook limit of D-013 |
+| [NT-025](#nt-025) | P1 | infra | implementer | in-progress | check.py enforces the 5 MB per-notebook limit of D-013 |
 | [NT-026](#nt-026) | P1 | infra | implementer | todo | Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer |
 | [NT-027](#nt-027) | P1 | refactor | implementer | todo | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | todo | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
@@ -75,7 +75,7 @@ changes).
 | [NT-040](#nt-040) | P1 | bug | implementer | todo | Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars) |
 | [NT-041](#nt-041) | P1 | feature | implementer | todo | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
 | [NT-042](#nt-042) | P1 | feature | implementer | todo | Variable number of horizons |
-| [NT-043](#nt-043) | P1 | feature | implementer | todo | Learned indicators on price against the textbook defaults (notebook 07) |
+| [NT-043](#nt-043) | P1 | feature | implementer | in-progress | Learned indicators on price against the textbook defaults (notebook 07) |
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | todo | Indicators package and registry with today's four families |
@@ -87,6 +87,8 @@ changes).
 | [NT-052](#nt-052) | P1 | research | experimenter | todo | Stability-harness runs for N = 2 and N = 4 horizons on the reference data |
 | [NT-053](#nt-053) | P1 | research | lead | todo | Window-free plan: a second research round that writes the path, gates and A/B specifications |
 | [NT-054](#nt-054) | P2 | performance | implementer | todo | Per-run fixed costs and GPU launches (independent of the window) |
+| [NT-055](#nt-055) | P2 | infra | implementer | todo | CI failure annotations: every failed test name readable, right paths for class tests and collection errors |
+| [NT-056](#nt-056) | P3 | infra | implementer | todo | CI and packaging hygiene: CI lints tests, actions off Node 20, the viz extra and jinja2 |
 
 ## Items
 
@@ -94,7 +96,7 @@ changes).
 
 **CI unit job green again (red since fe4ba85)**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P0 / bug / implementer
 - **area:** .github/workflows/ci.yml, requirements-ci.txt, tests/, plotly/pandas-version-sensitive code in src/neural_trade/visualization and src/neural_trade/notebook
 - **why:** The GitHub Actions 'ci' workflow fails on be93193 (run 36043324055) and fe4ba85 (run 36032011043), in the step 'Unit tests (CPU, no slow/gpu)'; lint passes; the last green run was 609d19e. Reproduced locally (2026-09-25) by emulating CI's plotly 5.24.1, which writes figure arrays as JSON lists (RUNBOOK 'CI': the `plotly5_lists` pytest plugin): `tests/test_viz_delta.py::test_no_empty_panel_and_size_budget_on_a_full_size_block` (1,295,932 > 600,000 chars) and `tests/test_viz_trading.py::test_size_budget_x0_dx_and_float32` (760,043 over its budget) fail; both pass under the local plotly 6.7.0. Other pins drift too (pandas 2.0.3 vs 2.3.3, scikit-learn 1.3.2 vs 1.7.2) and may hide further failures. Every item's definition of done needs CI green.
@@ -105,7 +107,7 @@ changes).
 
 **Engine random null ignores position size (sized strategies are ranked against a costlier null)**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P0 / bug / implementer
 - **area:** src/neural_trade/strategy/strategies.py (RandomSignal), src/neural_trade/strategy/backtest.py (random_same_frequency, backtest), src/neural_trade/notebook/backtest_ui.py (matched_random_null), src/neural_trade/cli.py cmd_backtest, scripts/backtest_gate.py
 - **why:** random_same_frequency (backtest.py:271-293) runs RandomSignal, which hard-codes Order size 1.0 (strategies.py:326). enhanced_multi_horizon sizes each position between 0.1 and 1.0 (strategies.py:147-148). After costs, return is mostly cost x size x trade count. So the 'random percentile' printed by 'neural-trade backtest' (cli.py:125-141) and by scripts/backtest_gate.py puts a sized strategy against a null that pays more costs. That number is wrong. The notebooks use the size-matched matched_random_null (backtest_ui.py:196-236), so the CLI and notebook paths give different ranks for the same run.
@@ -198,11 +200,11 @@ changes).
 
 **Every cited number links to a tracked run (run-tracking policy, clean git status)**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / infra / implementer
 - **area:** .gitignore, runs/, a checker script or test, docs/RUNBOOK.md
 - **why:** git status is never clean after a session. 7 notebook run dirs, the ablation's cells/, logs/ and runs/, and direction_v1's logs/ and runs/ are untracked, while the session protocol requires a clean tree. The saved notebook outputs and docs/STATUS.md cite runs, for example 20260924T182915Z-1aeff1c-dirty-af67ee43 (4.5 MB), whose directories exist only on this machine. The status numbers now live in docs/STATUS.md (the README links to it, README.md:25), and nothing checks that each of them cites a run id. This is a Definition of Done gap: 'every reported number links to a run'.
-- **acceptance:** (1) docs/RUNBOOK.md states which run files are tracked (config.yaml, meta.json, status.json, metrics.jsonl, eval_report_*.json/md, artifacts/meta.json and pipeline_meta.json) and which are ignored (weights, joblib, prediction npz, ablation cells/logs). (2) .gitignore implements it, so 'git status --porcelain' is empty after a notebook execution. (3) A script or test finds every run id cited in docs/STATUS.md, README.md, runs/**/REPORT.md, runs/**/report.md and the saved notebook outputs, and passes only when each has its light files tracked. (4) The checker's scan includes docs/STATUS.md: a test with a fixture STATUS that cites a run whose light files are untracked fails, and one that cites a tracked run passes. (That every STATUS number cites a run id is ROADMAP R1's exit, which the lead ensures in step 7.)
+- **acceptance** (tightened 2026-09-28 by the lead: every non-heavy run file is tracked, so one rule keeps git status clean; measured on the 2026-09-28 tree: 1,060 light files, 48 MB raw, about 15 MB compressed, one-off; all 91 cited run ids resolve to a directory): (1) docs/RUNBOOK.md states the run-tracking policy: in a run directory (a directory under runs/, at any depth, whose name starts with a run id `YYYYMMDDTHHMMSSZ-<sha7>[-dirty]-<hash8>`), every file is tracked except the ignored heavy artefacts (weights `*.h5`, `*.joblib`, `*.pkl`, `*.npz`, `*.parquet`, `tb/`) and the experiment log folders (`runs/ablations/*/cells/`, `runs/ablations/*/logs/`, `runs/experiments/*/logs/`); it names the tracked files (config.yaml, meta.json, status.json, env.json, metrics.jsonl, eval_report_*.json/md, training_log.csv, indicator_params_history.csv, period_init.json, artifacts/meta.json, artifacts/config.yaml, artifacts/calibration/*.json, result.json) and says how a new run's light files are staged (the checker's list mode, explicit paths; never `git add runs`). (2) .gitignore implements it: a test copies the repo's .gitignore into a tmp git repo with a fake run directory holding each heavy kind and each light kind, and `git status --porcelain --untracked-files=all` there lists exactly the light files. (3) `scripts/check_run_evidence.py` finds every run id cited in docs/**/*.md, README.md, runs/**/REPORT.md, runs/**/report.md, runs/**/summary.md and the saved notebook outputs (notebooks/*.ipynb), resolves each to its run directory, and exits 0 only when, for each: git tracks at least config.yaml and meta.json in that directory, and, if the directory exists on disk, no light file in it is untracked. Otherwise it exits 1 and names each failing run id, a file that cites it and the missing paths; a cited id with no directory in git or on disk fails. `--list-untracked` prints the untracked light files of the cited runs, one repo-relative path per line. (4) Tests with fixture git repos in tmp_path: a fixture docs/STATUS.md citing a run whose light files are untracked fails, one citing a tracked run passes; citations in a notebook output and in a runs/**/report.md are found; a cited id without a directory fails; heavy files never count as missing. (5) A fast-suite test runs the checker on the real repo, so CI enforces it; it fails on `nt-010` until the lead stages the light files after the merge (git refuses a merge that would overwrite the main checkout's untracked run files), and passes locally and in CI after that commit. (6) The fast suite (apart from (5) on the branch) and ruff pass. (That every STATUS number cites a run id is ROADMAP R1's exit, which the lead ensures in step 7.)
 - **source:** plan 'Definition of done' (every reported number links to a run); git status at session start; docs/OPERATING_MODEL.md session protocol (clean tree)
 
 ### NT-011
@@ -364,7 +366,7 @@ changes).
 
 **check.py enforces the 5 MB per-notebook limit of D-013**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / infra / implementer
 - **area:** scripts/notebooks/check.py, tests/test_notebook_tooling.py
 - **why:** D-013 says each notebook stays under 5 MB (the repo's large-file limit), but nothing enforces it; a figure change could silently push a notebook over it (02 was 6.6 MB once).
@@ -574,7 +576,7 @@ changes).
 
 **Learned indicators on price against the textbook defaults (notebook 07)**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/visualization/ (a new figure module; indicator_evolution.py read, not rewritten), src/neural_trade/registries/visualizations.py, scripts/notebooks/build.py, scripts/notebooks/README.md, notebooks/07_discovered_indicators.ipynb (new), tests/test_viz_indicators.py
 - **depends on:** none; may run in parallel with MVP-1 (files disjoint from NT-026 and NT-029; coordinate with NT-027 and NT-028 on visualization/)
@@ -712,6 +714,28 @@ changes).
 - **why:** Measured on the newest run (runs/20260924T182915Z-1aeff1c-dirty-af67ee43, local only): about 59 of about 296 s per run are fixed or outside the timed epochs (about 13 s of tracing and warm-up in epoch 0, about 30 s between the timed epochs, about 17 s before and after training), and the step is launch-bound: the graph op census has 296 L2Loss (per-variable norms), 312 SelectV2 and 172 IsFinite nodes (docs/research/2026-09-28-window-free/README.md, compute investigation). Quick sweeps of about 5 minutes (D-023) and 7-day training blocks (about 4 s per epoch, an estimate) need both reduced, whatever happens to the window.
 - **acceptance:** (1) A per-run timeline from a real run in the implementer's report: setup, tracing, each epoch, the time between epochs, evaluation. (2) One global-norm computation per optimizer group and fused finite guards; the graph op count before and after is reported. (3) `scripts/golden_run.py verify` passes; any change that cannot pass it is left out and listed. (4) At least 3 interleaved real GPU runs per side (before / after, same data, RUNBOOK GPU-free check): the median epoch time of epochs 1 and later and the total run wall-clock are both lower, reported with their spread (D-012, D-018). (5) Fast and slow suites and ruff pass.
 - **source:** docs/research/2026-09-28-window-free/README.md (synthesis item P; the Challenge's correction on noise-aware timing)
+
+### NT-055
+
+**CI failure annotations: every failed test name readable, right paths for class tests and collection errors**
+
+- **status:** todo
+- **priority / type / role:** P2 / infra / implementer
+- **area:** .github/workflows/ci.yml (the "Annotate failed tests" step)
+- **why:** QA of NT-001 (2026-09-28, e3fd63e): GitHub documents a cap of about 10 error annotations per step (not verified here), and the red run at 7785ec9 had 11 failures, so some names would stay hidden. The `file=` path taken from the junit classname is wrong for class-based tests (`tests/<module>/<Class>.py`; 3 classes in tests/test_qbox_losses.py and tests/test_registry_base.py) and for collection errors (`file=.py`), whose cause is lost ("collection failure"). The step has never run end to end in CI (both runs since NT-001 were green).
+- **acceptance:** (1) Besides the per-test annotations, the step writes every failed test id to the job summary (`$GITHUB_STEP_SUMMARY`), so all names are readable however many fail. (2) For class-based tests `file=` is the module path (tests/<module>.py); a collection error names its module path and the first line of its cause (a local simulation on a real pytest junit file with a class test, a parametrised test and a collection error shows it). (3) Proven in CI: on `nt-055`, a temporary commit adds at least 11 failing tests (including a class test and a collection error), its CI run's annotations API and job summary list them, and the next commit reverts it (history keeps both; nothing is deleted). (4) With no failures the step is skipped and the job is green.
+- **source:** QA report for NT-001 (2026-09-28)
+
+### NT-056
+
+**CI and packaging hygiene: CI lints tests, actions off Node 20, the viz extra and jinja2**
+
+- **status:** todo
+- **priority / type / role:** P3 / infra / implementer
+- **area:** .github/workflows/ci.yml, .github/workflows/nightly.yml, pyproject.toml, requirements-ci.txt
+- **why:** QA of NT-001 (2026-09-28): CI lints `ruff check src scripts` (ruff 0.6.9) while the local rule lints `src tests scripts`, so CI never lints tests; the actions target Node 20 and are forced onto Node 24 (a deprecation warning on every job); pyproject.toml's `viz` extra allows `plotly>=5.24`, but plotly 5 cannot load the committed notebooks, and `DataFrame.style` (visualization/analytics_tables.py:815, notebook/backtest_ui.py:163) needs jinja2, which no extra declares.
+- **acceptance:** (1) CI lints `src tests scripts` and passes. (2) No Node 20 deprecation annotation on the `ci` jobs (action versions bumped). (3) The `viz` extra requires a plotly the committed notebooks load (>= 6.7) and declares jinja2. (4) CI is green on the pushed head; nightly.yml installs the same pins (it runs only after NT-008).
+- **source:** QA report for NT-001 (2026-09-28)
 
 ## Done log
 

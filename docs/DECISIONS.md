@@ -46,6 +46,7 @@ that extend or partly replace an entry.
 | D-030 | The project moves to D:/neural_trade | owner (NT-009 closed by the move: lead's reading) | |
 | D-031 | The indicator catalogue | owner | D-032 |
 | D-032 | The fixed input window goes; the path comes from a written plan | owner (purge rule: lead) | |
+| D-033 | Remote sessions run review sweeps; the lead QA's and merges their pull requests | owner (fetch between items: lead's reading) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -377,3 +378,23 @@ that extend or partly replace an entry.
   forms may change); NT-054 (per-run fixed costs and GPU launches; window-independent).
 - **Evidence:** [qa/2026-09-28-indicators.md](qa/2026-09-28-indicators.md) Round D;
   [research/2026-09-28-window-free/README.md](research/2026-09-28-window-free/README.md).
+
+## D-033 Remote sessions run review sweeps; the lead QA's and merges their pull requests (owner, 2026-09-28)
+- **Owner:** "i opened PR on a remote session, which runs a parallel code sweep"; then Round 1 of
+  [qa/2026-09-28-remote-sessions.md](qa/2026-09-28-remote-sessions.md): the sweep is a review sweep
+  that takes no backlog items, and the lead QA's and merges its pull requests; then "continue
+  autonomously until the plan completion. check for updates to repo".
+- **Decision:** a remote (cloud) session the owner runs reviews and fixes code outside the backlog
+  items. Its pull requests into `remediation/plan` are treated like an implementer branch: QA
+  verifies them (against the item's criteria, or the PR's own claims plus the definition of done's
+  general clauses when the PR is not a backlog item), the lead merges them, checks CI and records
+  the result. A PR that would change a recorded decision, default trading behaviour or `master` goes
+  to the owner instead (OPERATING_MODEL "Escalate to the owner"). Local sessions keep the backlog
+  order; they do not wait for the remote session.
+- **Lead's reading:** "check for updates to repo" means `git fetch origin` and the open-PR list at
+  session start and between items (RUNBOOK "CI" has the API call), so remote work is integrated as
+  it arrives. The rule is written into CLAUDE.md, OPERATING_MODEL and the `/next` and `/handoff`
+  skills.
+- **Consequence:** PR #14 (NT-001) was QA'd and merged this way (6d01d11). Findings of a remote
+  review that are not fixed in its PR become backlog items, triaged as usual.
+- **Evidence:** [qa/2026-09-28-remote-sessions.md](qa/2026-09-28-remote-sessions.md).

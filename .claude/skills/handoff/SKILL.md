@@ -10,7 +10,8 @@ Write the handoff. The next session starts from these files and nothing else.
    owner answer questions (a Q&A)? Write or extend the record `docs/qa/<date>-<topic>.md` (the
    owner's words verbatim where they go beyond the offered options), and put each decision it
    settles into DECISIONS, citing the record.
-2. **Backlog** (`docs/BACKLOG.md`): every item touched gets its status (`done` with evidence: commit,
+2. **Open PRs** from remote sessions (D-033): each is integrated, or STATUS says where it stands.
+   **Backlog** (`docs/BACKLOG.md`): every item touched gets its status (`done` with evidence: commit,
    run id, tests, QA verdict; `blocked` with the reason and evidence; `in-progress` with where it
    stands; `dropped` with the reason). New findings become items with priority, role and criteria.
 3. **Decisions** (`docs/DECISIONS.md`): append any decision made, with context and evidence.

@@ -81,6 +81,9 @@ annotation (NT-001), readable at `curl -s https://api.github.com/repos/another-w
 (the job id from the jobs call above).
 Wait at most 30 minutes for a run (OPERATING_MODEL, definition of done).
 
+Open pull requests (remote sessions open them into `remediation/plan`; D-033):
+`curl -s "https://api.github.com/repos/another-worlds/neural_trade/pulls?state=open&per_page=20" | $PY -c "import json,sys; [print(p['number'], p['head']['ref'], p['head']['sha'][:7], '->', p['base']['ref'], p['title'][:80]) for p in json.load(sys.stdin)]"`.
+
 The nightly workflow (`.github/workflows/nightly.yml`) never runs: GitHub registers scheduled
 workflows only from the default branch, and `master` has no `.github/` yet (NT-008).
 

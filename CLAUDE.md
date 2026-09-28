@@ -27,10 +27,12 @@ horizons) is the reference setup, the only one tested in the MVP (D-022). Packag
    (no modified or staged tracked files); otherwise ask. If this checkout is
    C:/Users/Step/Documents/neural_trade and D:/neural_trade exists, do not work here: the working
    copy is D: (D-030); tell the owner.
-3. Check CI on the pushed head (docs/RUNBOOK.md "CI").
+3. Check CI on the pushed head and list the open pull requests (docs/RUNBOOK.md "CI"). A PR from
+   a remote session into `remediation/plan` is QA'd and merged like an implementer branch (D-033).
 4. Then work: the item the owner names, otherwise the `/next` skill. **Keep going** through the
-   backlog without asking to continue (D-017); stop only under OPERATING_MODEL "Stop instead of
-   guessing". End with the `/handoff` skill.
+   backlog without asking to continue (D-017); between items, fetch `origin` and check the open PRs
+   again (D-033); stop only under OPERATING_MODEL "Stop instead of guessing". End with the
+   `/handoff` skill.
 
 ## Where things live
 
@@ -57,6 +59,8 @@ Pointers only; the rule lives where the pointer says.
   history rewrite) and D-019 onward (the vision, the yardstick, the MVP plan).
 - **Autonomy and pushing** (D-017): push `remediation/plan` and `nt-*` without asking; never
   `master`, never `--force`. This overrides the global "ask before pushing".
+- **Remote sessions** (owner, D-033): a remote (cloud) session runs review sweeps and takes no
+  backlog items; its PRs into `remediation/plan` are QA'd and merged by the lead.
 - **Speed** (owner, D-018): the per-step training path must not get slower (definition of done).
 - **Evidence** (D-012, D-020, VISION "Principles"): no choice uses test-block numbers, the notebooks'
   and the leaderboard's test columns included.

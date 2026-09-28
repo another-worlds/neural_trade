@@ -113,7 +113,7 @@ Outside the milestones, taken when no milestone item of the same priority is act
 NT-014 (evaluation report), NT-015 (interval toolkit; after NT-027), NT-016 (backtest data), NT-018
 (notebook UX), NT-019 to NT-023 (figure polish, batched per module), NT-049 (training silently
 warm-starts from weights in the working directory), NT-054 (per-run fixed costs and GPU launches;
-after NT-027 and NT-046).
+after NT-027 and NT-046), NT-055 and NT-056 (CI annotations and hygiene, from NT-001's QA).
 
 ## Order
 

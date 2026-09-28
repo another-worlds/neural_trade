@@ -14,6 +14,7 @@ Each role owns different things. A role does not do another role's job.
 | **Lead** | the main Claude session | choosing the next item, its acceptance criteria, delegating, integrating, **executing the notebooks** (the routine in `scripts/notebooks/README.md`; notebook 01's ~5-minute training is the one GPU job the lead runs itself), the verdict "done", and the planning docs (STATUS, ROADMAP, BACKLOG, DECISIONS) | implement changes that need tests or touch more than one module; set an item `done` without a QA PASS; reopen a recorded decision |
 | **Implementer** | subagent `.claude/agents/implementer.md` | code, tests and code docs for ONE item, in the files the lead assigned, on its own branch `nt-<id>` | edit planning docs; widen scope; run GPU jobs |
 | **QA** | subagent `.claude/agents/qa.md` | an independent PASS / FAIL per acceptance criterion, with evidence it produced itself, in its own worktree | edit the repo; touch another checkout's HEAD; pass anything it did not check |
+| **Remote session** | a cloud Claude session the owner starts (D-033) | review sweeps: fixes and findings outside the backlog items, as PRs into `remediation/plan` | take backlog items; merge its own PRs; touch `master` |
 | **Experimenter** | subagent `.claude/agents/experimenter.md` | GPU work: sweeps (their stated budget, the run, the leaderboard) and pre-registered studies (the SPEC, running it in a pinned worktree, the REPORT against the SPEC); see "Sweeps and pre-registered studies" | edit `src/` or `tests/` (code an experiment needs is an implementer item first); choose anything on test data; change criteria after results; run two GPU jobs at once (a sweep's parallel trials only as "Sweeps and pre-registered studies" allows) |
 
 The lead may make small edits itself (a one-line fix, a doc update, a merge conflict).
@@ -63,7 +64,11 @@ items. Two implementers may work at once only on disjoint files (for example NT-
 7. **Record.** Set the item to `done` with its evidence (commit, run id, tests, QA verdict). Update
    STATUS; write any decision into DECISIONS; put new findings into the backlog, not into this item.
 
-Then take the next item in the same turn (D-017).
+Then take the next item in the same turn (D-017). Before each pick, fetch `origin` and check the
+open pull requests: a PR from a remote session is verified by QA (against the item's criteria, or
+the PR's own claims plus the definition of done's general clauses when it is not a backlog item) and
+integrated as in step 6 (D-033). A PR that would change a recorded decision, default trading
+behaviour or `master` goes to the owner.
 
 ## Limits that stop loops and over-management
 
