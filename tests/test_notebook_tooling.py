@@ -1,5 +1,6 @@
 """Notebook tooling (scripts/notebooks): the committed notebooks are exactly what build.py generates, and
-check.py flags each problem it exists for. These tests only read and write small files, and execute nothing."""
+check.py flags each problem it exists for. These tests only read files and write files in tmp_path (the
+largest just over check.py's 5 MB limit), and execute nothing."""
 from __future__ import annotations
 
 import importlib.util
@@ -128,6 +129,48 @@ def test_check_fails_on_each_problem_alone(check, tmp_path, problem):
     assert check.main([str(_synthetic(tmp_path, **{problem: True}))]) == 1
 
 
+def _sized(tmp_path, name: str, size: int) -> Path:
+    """The clean synthetic notebook plus one markdown cell of padding, exactly `size` bytes on disk."""
+    book = nbformat.read(str(_synthetic(tmp_path)), as_version=4)
+    book.cells.append(nbformat.v4.new_markdown_cell("x"))
+    path = tmp_path / f"{name}.ipynb"
+    nbformat.write(book, str(path))
+    book.cells[-1].source = "x" * (1 + size - path.stat().st_size)   # one ASCII character = one byte
+    nbformat.write(book, str(path))
+    assert path.stat().st_size == size
+    return path
+
+
+def test_check_size_limit_is_5_decimal_mb(check):
+    """D-013's per-notebook limit, in the decimal MB that check.py prints (size / 1e6)."""
+    assert check.MAX_BYTES == 5_000_000
+
+
+def test_check_passes_a_notebook_under_or_at_the_size_limit(check, tmp_path, capsys):
+    for name, size in (("under_limit", check.MAX_BYTES - 1), ("at_limit", check.MAX_BYTES)):
+        path = _sized(tmp_path, name, size)
+        report = check.check_notebook(path)
+        assert report.ok and not report.too_large, name
+        assert check.main([str(path)]) == 0
+        out = capsys.readouterr().out
+        assert "TOO LARGE" not in out and "all clean" in out and "too_large=0  OK" in out
+
+
+def test_check_fails_a_notebook_over_the_size_limit_and_names_it(check, tmp_path, capsys):
+    under = _sized(tmp_path, "under_limit", check.MAX_BYTES - 1)
+    over = _sized(tmp_path, "over_limit", check.MAX_BYTES + 1)
+    report = check.check_notebook(over)
+    assert report.too_large and not report.ok
+    assert not (report.errors or report.stderr or report.empty or report.unexecuted)   # the size alone fails it
+
+    assert check.main([str(under), str(over)]) == 1
+    out = capsys.readouterr().out
+    assert "==== over_limit.ipynb  5.0 MB  <-- TOO LARGE: 5,000,001 bytes, limit 5,000,000 (D-013)" in out
+    assert "too_large=1  FAIL" in out
+    assert out.splitlines()[-1] == "2 notebook(s), 2 figures: FAIL in over_limit.ipynb"   # only the big one
+
+
 def test_committed_notebooks_pass_check(check, capsys):
-    """The committed notebooks were saved clean: no error, no stderr, no empty panel, no unexecuted cell."""
+    """The committed notebooks were saved clean: no error, no stderr, no empty panel, no unexecuted cell,
+    none over the 5 MB limit."""
     assert check.main([]) == 0, capsys.readouterr().out

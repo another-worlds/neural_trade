@@ -6,8 +6,9 @@
 Per notebook it prints the file size, then every saved plotly figure (cell, title, trace count, empty
 panels, and any 'not logged' / 'no trades' notes the figure writes on itself), every error output,
 every stderr stream, and every code cell without an execution count (built but never executed).
-Exit 1 if any notebook has an error, a stderr stream, an empty panel or an unexecuted code cell;
-exit 0 when all are clean. It only reads the files: nothing is executed.
+Exit 1 if any notebook has an error, a stderr stream, an empty panel or an unexecuted code cell, or
+is larger than MAX_BYTES (5 MB, the per-notebook limit of D-013); exit 0 when all are clean. It only
+reads the files: nothing is executed.
 
 A clean check does not replace looking at the figures (render.py): it cannot see a panel that is
 drawn but wrong.
@@ -28,6 +29,7 @@ if str(REPO / "src") not in sys.path:   # this checkout's neural_trade (a worktr
 
 PLOTLY = "application/vnd.plotly.v1+json"
 NOTE_MARKERS = ("not logged", "nothing to", "needs the")
+MAX_BYTES = 5_000_000   # per-notebook size limit (D-013), decimal MB like the printed sizes; at the limit is fine
 
 
 def resolve(names, nb_dir: Path = NB_DIR) -> list[Path]:
@@ -75,11 +77,16 @@ class Report:
         return [f for f in self.figures if f.empty]
 
     @property
+    def too_large(self) -> bool:
+        return self.size > MAX_BYTES
+
+    @property
     def ok(self) -> bool:
-        return not (self.errors or self.stderr or self.empty or self.unexecuted)
+        return not (self.errors or self.stderr or self.empty or self.unexecuted or self.too_large)
 
     def lines(self) -> list[str]:
-        out = [f"==== {self.path.name}  {self.size / 1e6:.1f} MB"]
+        size_flag = f"  <-- TOO LARGE: {self.size:,} bytes, limit {MAX_BYTES:,} (D-013)" if self.too_large else ""
+        out = [f"==== {self.path.name}  {self.size / 1e6:.1f} MB{size_flag}"]
         for f in self.figures:
             flag = "  <-- EMPTY PANEL" if f.empty else ""
             notes = f" notes={f.notes}" if f.notes else ""
@@ -88,7 +95,8 @@ class Report:
         out += [f"  [{c}] STDERR {text[:300]!r}" for c, text in self.stderr]
         out += [f"  [{c}] NOT EXECUTED (no execution count)" for c in self.unexecuted]
         out.append(f"  figures={len(self.figures)} errors={len(self.errors)} stderr={len(self.stderr)} "
-                   f"empty_panels={len(self.empty)} unexecuted={len(self.unexecuted)}  {'OK' if self.ok else 'FAIL'}")
+                   f"empty_panels={len(self.empty)} unexecuted={len(self.unexecuted)} too_large={int(self.too_large)}  "
+                   f"{'OK' if self.ok else 'FAIL'}")
         return out
 
 

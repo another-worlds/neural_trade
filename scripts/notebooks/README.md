@@ -8,7 +8,7 @@ without a kernel. The scripts here are the only way to change them.
 | --- | --- |
 | `build.py` | Generates the notebooks from the cell lists in it. **Edit notebooks here, never by hand.** `--out DIR` writes elsewhere; `--check` exits 1 when `notebooks/` differs from it. |
 | `execute.py` | Executes notebooks in place: kernel `python3`, cwd `notebooks/`, this checkout's `src/` first on `PYTHONPATH`, 7200 s per cell. Prints `[nb] name: OK/ERROR (secs)` and exits 1 on an error. `--no-store-widget-state` leaves the widget state out (the default stores it). |
-| `check.py` | Reads the saved notebooks and lists, per notebook: size, figures, errors, stderr, empty panels and unexecuted cells. It exits 1 if any of these is found. |
+| `check.py` | Reads the saved notebooks and lists, per notebook: size, figures, errors, stderr, empty panels and unexecuted cells. It exits 1 if any of these is found, or if a notebook is larger than 5 MB (`MAX_BYTES` = 5,000,000 bytes, the per-notebook limit of D-013). |
 | `render.py` | Renders every saved figure, plus the training-health HTML, to PNG with headless Edge, and prints a manifest. **Windows + Microsoft Edge only.** |
 
 Run everything from the repository root with the `nt` environment's Python:
@@ -50,6 +50,8 @@ works on all six.
    ```bash
    $PY scripts/notebooks/check.py
    ```
+   A notebook over 5 MB fails with `TOO LARGE` next to its name: make its outputs smaller (in `build.py`
+   or the plotting code its cells call), then rebuild and execute it again.
 5. **Render, then LOOK at every figure**:
    ```bash
    $PY scripts/notebooks/render.py            # or: render.py 04 --out D:/nb_png
