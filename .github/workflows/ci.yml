@@ -44,7 +44,27 @@ jobs:
           pip install --no-deps -e .
 
       - name: Unit tests (CPU, no slow/gpu)
-        run: pytest -m "not gpu and not slow" --timeout=600 --cov=neural_trade --cov-report=xml --cov-report=json:coverage.json --cov-report=term
+        run: pytest -m "not gpu and not slow" --timeout=600 --junitxml=junit.xml --cov=neural_trade --cov-report=xml --cov-report=json:coverage.json --cov-report=term
+
+      # Failed test names as annotations: readable in the checks API without auth (NT-001).
+      - name: Annotate failed tests
+        if: failure()
+        run: |
+          python - <<'PY'
+          import os
+          import xml.etree.ElementTree as ET
+          def esc(s, prop=False):
+              s = s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+              return s.replace(":", "%3A").replace(",", "%2C") if prop else s
+          if not os.path.exists("junit.xml"):
+              raise SystemExit(0)
+          for case in ET.parse("junit.xml").getroot().iter("testcase"):
+              for bad in list(case.findall("failure")) + list(case.findall("error")):
+                  name = f"{case.get('classname')}::{case.get('name')}"
+                  msg = " ".join((bad.get("message") or bad.tag).split())[:300]
+                  path = case.get("file") or case.get("classname", "").replace(".", "/") + ".py"
+                  print(f"::error file={esc(path, True)},title={esc(name, True)}::{esc(name + ' - ' + msg)}")
+          PY
 
       - name: Coverage gates
         run: python scripts/check_coverage.py coverage.json
