@@ -63,9 +63,12 @@ so `RESAMPLE_MINUTES` is not tunable and a sweep refuses any other bar size (NT-
 | Refactor guard: a small deterministic CPU run (D-023: every module move) | `$PY scripts/golden_run.py record OUT.npz` before, `$PY scripts/golden_run.py verify OUT.npz` after | not measured |
 | Regenerate TESTING_DOCUMENTATION.md | `CUDA_VISIBLE_DEVICES=-1 $PY scripts/test_inventory.py` | seconds |
 
-**CI.** GitHub Actions `ci` (lint + unit on Linux CPU, `requirements-ci.txt`). Green locally does
-not mean green on CI: its pins differ from the local env (see NT-001). After every push, check the
-branch head (the GitHub CLI is not installed; job logs need auth, the run list does not):
+**CI.** GitHub Actions `ci` (lint + unit on Linux CPU, `requirements-ci.txt`). CI pins the local
+env's versions of plotly, narwhals, pandas, scikit-learn, scipy and jinja2 (NT-001: CI tests what
+the owner runs; the size budgets stay version-specific). The other pins still differ from the local
+env (for example numpy 1.23.5, matplotlib 3.7.5, ruff 0.6.9), so green locally does not guarantee
+green on CI. After every push, check the branch head (the GitHub CLI is not installed; job logs
+need auth, the run list does not):
 
 ```bash
 curl -s "https://api.github.com/repos/another-worlds/neural_trade/actions/runs?branch=remediation/plan&per_page=5" \
@@ -73,10 +76,9 @@ curl -s "https://api.github.com/repos/another-worlds/neural_trade/actions/runs?b
 ```
 
 For one run's jobs (public, no auth): `curl -s https://api.github.com/repos/another-worlds/neural_trade/actions/runs/<run id>/jobs`.
-Job logs need auth; failing test names become readable once CI writes failure annotations (NT-001).
-Until then, reproduce CI's plotly 5 behaviour locally without installing it: a pytest plugin module
-`plotly5_lists.py` containing `import plotly.basedatatypes as b; b.convert_to_base64 = lambda o: None`,
-on `PYTHONPATH`, run with `pytest -p plotly5_lists ...` (plotly 5 writes figure arrays as JSON lists).
+Job logs need auth. Failing test names do not: the `unit` job writes each failed test as an
+annotation (NT-001), readable at `curl -s https://api.github.com/repos/another-worlds/neural_trade/check-runs/<job id>/annotations`
+(the job id from the jobs call above).
 Wait at most 30 minutes for a run (OPERATING_MODEL, definition of done).
 
 The nightly workflow (`.github/workflows/nightly.yml`) never runs: GitHub registers scheduled
