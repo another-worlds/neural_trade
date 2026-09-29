@@ -42,6 +42,26 @@ New engine pieces: stored predictions and `scenario rescore` (NT-076), an exposu
 variance-driven strategies (NT-077). Follow-ups: NT-078 (EWMA/HAR variance baselines: the EWMA twin beat the
 model's sigma), NT-079, NT-080, NT-081.
 
+## Session 2026-09-29 (afternoon/evening): long history, micro loop, new inputs
+
+- **NT-005 done** (strategy study: clear negative; recorded winner always_flat). **NT-076, NT-077, NT-082,
+  NT-046 done** (stored predictions + rescore; exposure mode + 5 strategies; SHUFFLE_BUFFER + notebook 08;
+  Indicators registry, golden bit-for-bit).
+- **360-day run** (D-040; runs/scenarios/long_360d/RESULT.md): 19 min on the GPU; direction at a logistic
+  baseline's level; zero-cost re-score shows a real but tiny timing signal (+17% gross in 32 days, ~0.9 bps per
+  trade vs 26 bps cost).
+- **Micro loop** (D-041, NT-085; runs/experiments/micro_loop_v1/LOG.md): 10 hypotheses (selectivity, holds,
+  confidence buckets, horizons 10 min-5 h, windows 60/240, 10 vs 360 days, OHLCV + 14 families): no variant beats
+  logreg_lags (AUC 0.51-0.53). Owner's /goal (stable >60% hit, drawdown <5%) not reached.
+- **In progress:** NT-047 repair round 1 (QA FAIL: legacy bundles, notebooks 01/04/07, Grappler leak, soft-extremum
+  scale); then QA (Opus) and a re-run of the 3 ohlcv14 duel cells. P&L-target research (owner's point 3) running
+  (docs/research/2026-09-29-pnl-target/). NT-035 REPORT QA running.
+- **Rules added:** D-042 (no pinging; Haiku tracker polls), D-043 (model split).
+- **Owner question 7 (asked 2026-09-29):** NT-047's default input. D-031 wants all families on by default; the new
+  default is 1.64x slower per CPU step (D-018 needs the owner) and showed no directional gain in the duel.
+  Recommendation: keep the close-only input and the four families as the default; the new families stay available
+  by config until an A/B shows value.
+
 ## In progress
 
 - **NT-035** (experimenter): results and REPORT committed (426de4f, 7ee2916; 0.47 GPU-hours of a 3-hour
