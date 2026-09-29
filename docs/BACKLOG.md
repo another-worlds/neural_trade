@@ -114,8 +114,9 @@ changes).
 | [NT-079](#nt-079) | P3 | bug | implementer | todo | Strategy study spec: values of cal-fitted strategies are not checked at load |
 | [NT-080](#nt-080) | P2 | feature | implementer | todo | Exposure-aware backtest views; explorer hides fitted knobs; YAML loading of cal-fitted strategies |
 | [NT-081](#nt-081) | P2 | bug | implementer | todo | Timing null replay micro-rebalances after a capped fill; a full target leaves cash negative by the costs |
-| [NT-082](#nt-082) | P1 | feature | implementer | in-progress | Long-history run: SHUFFLE_BUFFER setting and notebook 08 (launch and live progress of an engine run) |
+| [NT-082](#nt-082) | P1 | feature | implementer | done | Long-history run: SHUFFLE_BUFFER setting and notebook 08 (launch and live progress of an engine run) |
 | [NT-083](#nt-083) | P1 | bug | implementer | todo | Adding a Config field changes every engine cell's config_hash: finished cells re-run and rescore skips them |
+| [NT-084](#nt-084) | P3 | polish | implementer | todo | Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees |
 
 ## Items
 
@@ -1089,7 +1090,7 @@ changes).
 
 **Long-history run: SHUFFLE_BUFFER setting and notebook 08 (launch and live progress of an engine run)**
 
-- **status:** in-progress (implementer, branch nt-082)
+- **status:** done (2026-09-29): f029e39, merged into remediation/plan; QA PASS on every criterion (default shuffle order identical to 99891f8; SHUFFLE_BUFFER 0 permutes the whole block each epoch; fold -2 train 518,432 windows = 360.02 days, 2024-06-01 to 2025-05-28, dev OOS 2025-07-27 to 2025-08-28, fold -1 untouched; a detached dummy process outlived its parent; figures rendered and inspected); fast suite 928 passed; ruff clean. Findings: NT-083, NT-084.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/core/config.py, src/neural_trade/data/datasets.py, a new src/neural_trade/notebook/longrun.py, scripts/notebooks/build.py (notebook 08), configs/scenarios/long_360d.yaml, tests/, docs (config reference, RUNBOOK)
 - **why:** D-040: one 360-day training run on Bitcoin_BTCUSDT.csv, launched and tracked through a notebook. The training shuffle buffer is fixed at 2,048 windows (datasets.py:21), about 1.4 days of consecutive windows: on a 360-day block every batch would come from one narrow time slice.
@@ -1106,6 +1107,17 @@ changes).
 - **why:** NT-082's implementer found that the new SHUFFLE_BUFFER field changes config_hash for every existing cell: `scenario plan configs/scenarios/reference.yaml` shows the 9 reference_default cells as pending again (a re-run would retrain them, about 0.6 GPU-hours), and `scenario rescore` skips them as an older spec, so the NT-005 study (runs/experiments/strategy_study_v1) can no longer be re-scored at the merged head. Every future Config field repeats this.
 - **acceptance:** (1) A cell's resume/rescore identity ignores Config fields that did not exist when the cell ran and are at their default (for example: hash only the fields recorded in the cell's config.yaml, or hash the non-default values); a field added later with a non-default value still changes the identity (tests). (2) At the merged head, `scenario plan configs/scenarios/reference.yaml` lists the 9 reference_default cells as done and the NT-005 rescore reproduces its cells.csv (CPU). (3) Fast suite, ruff.
 - **source:** NT-082 implementer report, 2026-09-29
+
+### NT-084
+
+**Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/notebook/longrun.py, tests/test_notebooks_thin.py, tests/test_longrun.py
+- **why:** QA of NT-082 (2026-09-29): (1) tests/test_notebooks_thin.py:57 `_run`: the notebook kernel does not get <repo>/src on PYTHONPATH, so from a worktree it imports the main checkout and fails on new modules. (2) longrun.py:531: progress shows the newest cell directory whatever its config hash, while launch uses the runner's hash rule (DONE shown while launch would start a new run). (3) longrun.py:520-567: while a fresh launch is still loading data, progress shows an older incomplete cell as running. (4) longrun.py:232: psutil AccessDenied makes pid_alive False; a reused pid can block launch. (5) longrun.py:736: the subtitle's elapsed is wall clock while panel 5's is the sum of epoch times, unlabelled. (6) longrun.py:399: two launches in the same UTC second share log and pid names.
+- **acceptance:** each of (1)-(6) fixed or documented as accepted, with a test where behaviour changes.
+- **source:** QA of NT-082, 2026-09-29
 
 ## Done log
 
