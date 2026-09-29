@@ -79,7 +79,7 @@ changes).
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
-| [NT-047](#nt-047) | P1 | feature | implementer | todo | OHLCV input and the new indicator families, all learnable and on by default |
+| [NT-047](#nt-047) | P1 | feature | implementer | in-progress | OHLCV input and the new indicator families, all learnable and on by default |
 | [NT-048](#nt-048) | P1 | feature | implementer | todo | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
@@ -674,7 +674,7 @@ changes).
 
 **OHLCV input and the new indicator families, all learnable and on by default**
 
-- **status:** todo
+- **status:** in-progress (implementer, branch nt-047, 2026-09-29; D-041: the input lever after NT-046)
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/data/ (sequence building: OHLCV windows), the indicators package and registry (NT-046), src/neural_trade/models/gru_attention.py, src/neural_trade/core/config.py, src/neural_trade/serving/ (input shape), tests/
 - **depends on:** NT-046 (indicators registry); NT-053 (the window-free plan: the input path and the indicator forms may change; D-032)
