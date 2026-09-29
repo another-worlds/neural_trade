@@ -9,7 +9,8 @@ goes through D-025. Reference block for CPU work: the 360-day run's dev block (2
 | H2 | Fewer, more selective trades of the existing cq signal survive the 26 bps cost | CPU rescore, entry_quantile 0.9-0.995 x max_hold 15/60/240 on the 360d cell (rescore/cq_selectivity_v1-20260929T123716Z) | 1 CPU-min | **Negative.** Gross edge stays ~1 bps per trade at every threshold (at 0.995 it is negative); tightening the quantile only cuts the trade count. max_hold is inert: the median-cross exit ends trades at ~8-10 bars whatever the cap. |
 | H2b | The cq signal persists beyond the exit's ~10 bars, so longer holds could pay | Signal-decay curve on stored predictions: IC of sign(weighted_direction - cal median) vs k-bar forward returns, k = 5..480 | seconds | **Negative.** IC peaks at 15-20 bars (0.026-0.027, z ~1.3-1.5 on n_eff) and dies by 120; gross edge <=0.8 bps per trade at any k. The signal lives only at the trained horizons and is ~30x below cost. |
 | H3 | The owner's target (>60% stable hit rate, drawdown <5%) is reachable by trading only the current model's most confident bars | Conditional hit rate by calibrated-P(up) confidence bucket on the 360d cell's dev block | seconds | **Negative for the current model.** Top-10% bars: 51.0-52.9% hit (+-4.5-6.4 pp); the top-0.5% buckets are too small to score (n_eff 12-23, +-20-29 pp). Calibrated p stays inside [0.43, 0.58] on 98% of bars: the model is honest about knowing little. A stable >60% needs a stronger signal, not a threshold. |
-| H1 | Horizons of 1-4 h (move sd 2-4x the 26 bps cost) carry a tradable edge | Quick sweep configs/scenarios/micro_horizons.yaml: h_15m / h_1h / h_4h, micro layout (~10-day train, ~4 min per cell), one seed | ~15 GPU-min | running |
+| H1 | Horizons of 1-4 h (move sd 2-4x the 26 bps cost) carry a tradable edge | Quick sweep configs/scenarios/micro_horizons.yaml: h_15m / h_1h / h_4h, micro layout (~10-day train), one seed, 13.1 GPU-min; cells under runs/scenarios/micro_horizons/ | 13 GPU-min | **Direction: negative.** No horizon beats logreg_lags (h_1h h1 and h_4h h2 significantly worse); gross edge per trade negative in all three cells. **Variance: the edge grows with horizon** (CRPSS 0.010-0.017 at 15m, 0.015-0.024 at 1h, 0.040-0.067 at 4h), but coverage at 4h falls to 0.85-0.87 (the 10-day cal block has n_eff ~40 at 320 bars) and var/err^2 Spearman shrinks. Quick-sweep label: 1 seed, fold -2. |
+| H1b | Confident tails at 1-4 h reach 60% hit | hitrate_buckets.py on the h_1h and h_4h cells | seconds | **Not measurable, and not promising.** Top-0.5% buckets show 36-69% hit at n_eff 1-5 (+-42-98 pp): noise. Top-10% buckets: 44-55%. The useful fact: at 4 h the median \|move\| is 26-39 bps (>= the 26 bps cost), and 35-51 bps on the top-10% bars, so a stable 55%+ direction call at 4 h would be tradable; direction, not the cost, is the bottleneck at every scale. |
 
 H2b table (360d cell, dev block, n = 46,544 bars):
 
@@ -26,3 +27,11 @@ H2b table (360d cell, dev block, n = 46,544 bars):
 
 Reading: to reach PnL, the model must be trained (and calibrated) on horizons where a move is several times
 the cost, or on a P&L-aware target: reshaping the trading of the 10-20-bar signal cannot get there.
+
+## Iteration 2 (started 2026-09-29): richer inputs
+
+H2, H2b, H3, H1 and H1b all point the same way: the close-only input carries no directional signal at any
+horizon, and no strategy or threshold on top of it changes that. The next lever is the model's inputs:
+OHLCV and the indicator catalogue (D-031, NT-046/NT-047), evaluated on the micro layout (~4 minutes per
+cell) against the same dev block, with the owner's target (stable >60% hit, drawdown < 5%) as the yardstick
+and logreg_lags as the bar to clear first.
