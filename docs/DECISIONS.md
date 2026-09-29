@@ -50,6 +50,7 @@ that extend or partly replace an entry.
 | D-034 | The purge rule for indicators with unbounded memory: label overlap, gap kept at 80 | lead (delegated by D-032) | |
 | D-035 | Models and effort: Sonnet for implementer, QA and experimenter; the lead escalates | owner | D-036 |
 | D-036 | A cheap tracker agent for task tracking; the other roles keep the strong model | owner | |
+| D-037 | The window-free plan is approved; NT-047 in window mode first; periods held at the data bound; study budgets | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -443,3 +444,21 @@ that extend or partly replace an entry.
   duplicate integration suite runs, batching). OPERATING_MODEL "Models and task tracking".
 - **Lead's reading:** "specifically for task tracking" means the weaker model is not used for
   implementation or QA; the owner may correct this.
+
+## D-037 The window-free plan is approved; NT-047 in window mode first; periods held at the data bound; study budgets (owner, 2026-09-29)
+- **Owner:** chose every recommended option of [qa/2026-09-29-window-free-plan.md](qa/2026-09-29-window-free-plan.md).
+- **Decision:** the plan [research/2026-09-29-window-free-plan/](research/2026-09-29-window-free-plan/README.md)
+  is the path of D-032: stages 1 (benchmark kit) to 7 with their gates; A/B-1 (series engine against
+  window engine), A/B-1b (removing the 60-bar clip) and, if the probe finds the model epoch-bound,
+  A/B-2 (per-bar model), all judged on per-fold retention of the CRPS edge and paired coverage under
+  D-025 with Pocock two looks; net Sharpe reported, not judged. NT-047 is built now in window mode
+  against the Indicators registry; its series forms (exponential and leaky) come after A/B-1. A learned
+  period that needs more history or pass length than available is projected at the data-derived bound
+  (a 2,048-bar burn-in on the bundled file, a pass budget of 4 training blocks), counted and reported.
+  GPU ceilings: A/B-1 about 6, A/B-1b about 6, A/B-2 about 5.6, the probe about 1.5 GPU-hours, each
+  re-checked from its dev runs.
+- **Not in VISION:** VISION's "60-minute input window" wording stays until A/B-1 adopts the series
+  engine (D-032).
+- **Consequence:** NT-053 done; NT-059 to NT-073; amendments to NT-032, NT-038, NT-041, NT-046, NT-047;
+  ROADMAP research track R6.
+- **Evidence:** the plan, its REVIEW.md and the Q&A record.

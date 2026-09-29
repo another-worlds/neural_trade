@@ -15,7 +15,7 @@ the earliest open milestone in the one total order of [ROADMAP.md](ROADMAP.md) "
 order; implementer and experimenter slots are picked separately by that order. ROADMAP says which
 milestone each item belongs to (R1, MVP-1 to MVP-6, the research tracks R2-R4, R5). Every milestone
 exit criterion is P1. NT-043 may be taken by a second implementer in parallel, next to NT-026 or NT-029
-(not next to NT-027 or NT-028: shared visualization/ and build.py). NT-047 is not picked until the owner decides on the window research (2026-09-28).
+(not next to NT-027 or NT-028: shared visualization/ and build.py). NT-047 is built in window mode (D-037, 2026-09-29).
 Acceptance criteria are checkable at QA time; the lead's STATUS / DECISIONS / ROADMAP updates are not
 criteria.
 
@@ -85,12 +85,27 @@ changes).
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
 | [NT-051](#nt-051) | P1 | research | experimenter | todo | First stability-harness run on the reference setup against its pre-registered thresholds |
 | [NT-052](#nt-052) | P1 | research | experimenter | todo | Stability-harness runs for N = 2 and N = 4 horizons on the reference data |
-| [NT-053](#nt-053) | P1 | research | lead | in-progress | Window-free plan: a second research round that writes the path, gates and A/B specifications |
+| [NT-053](#nt-053) | P1 | research | lead | done | Window-free plan: a second research round that writes the path, gates and A/B specifications |
 | [NT-054](#nt-054) | P2 | performance | implementer | todo | Per-run fixed costs and GPU launches (independent of the window) |
 | [NT-055](#nt-055) | P2 | infra | implementer | todo | CI failure annotations: every failed test name readable, right paths for class tests and collection errors |
 | [NT-056](#nt-056) | P3 | infra | implementer | todo | CI and packaging hygiene: CI lints tests, actions off Node 20, the viz extra and jinja2 |
 | [NT-057](#nt-057) | P3 | polish | implementer | todo | Random-null follow-ups: one mean-size definition, labels with the size, the CLI prints the matched null |
 | [NT-058](#nt-058) | P2 | polish | implementer | todo | Indicator views: which period is 'learned', RSI smoothing named, no private cross-module helpers |
+| [NT-059](#nt-059) | P1 | infra | implementer | todo | Window-free benchmark kit in scripts/bench/ (kernel V1, assembly D6b, the A2 and today's layers, op census, TF32 check) |
+| [NT-060](#nt-060) | P1 | infra | experimenter | todo | GPU run of the window-free benchmark kit (G-A2) |
+| [NT-061](#nt-061) | P1 | decision | lead | todo | TF32 decision for the indicator layer (plan stage 1b) |
+| [NT-062](#nt-062) | P2 | feature | implementer | todo | VAL_BATCH_SIZE key (validation grouping independent of the training batch) |
+| [NT-063](#nt-063) | P1 | feature | implementer | todo | Engine options for pre-registered studies: lambdas once per study, per-arm EPOCHS, cap-extension re-runs, contention records |
+| [NT-064](#nt-064) | P1 | feature | implementer | todo | Series kernel V1 and assembly D6b in the indicators package (plan stage 3) |
+| [NT-065](#nt-065) | P1 | feature | implementer | todo | INDICATOR_MEMORY switch: the series engine with per-bar adaptation, M_run, burn-in, history bound and pass budget (plan stage 4a) |
+| [NT-066](#nt-066) | P1 | feature | implementer | todo | Purge-rule test and config guard (D-034) |
+| [NT-067](#nt-067) | P1 | feature | implementer | todo | Predictor series mode and bundle metadata |
+| [NT-068](#nt-068) | P1 | feature | implementer | todo | Reporting of per-bar periods and bound counts |
+| [NT-069](#nt-069) | P1 | research | experimenter | todo | A/B-1: the series engine against the window engine (pre-registered) |
+| [NT-070](#nt-070) | P1 | research | experimenter | todo | A/B-1b: removing the 60-bar clip in series mode (pre-registered) |
+| [NT-071](#nt-071) | P2 | research | experimenter | todo | GPU probe: epoch- or update-bound on 7-day blocks with the adopted engine |
+| [NT-072](#nt-072) | P2 | feature | implementer | todo | Per-bar causal model as a Models registry entry (option B) |
+| [NT-073](#nt-073) | P2 | research | experimenter | todo | A/B-2: the per-bar model against the default (pre-registered) |
 
 ## Items
 
@@ -463,6 +478,7 @@ changes).
 - **why:** D-025: "A beats B" (learned against frozen, a loss term on against off, any two scenarios) rests on a paired test over (seed, fold) pairs on the same blocks plus a minimum effect fixed before the runs, and guard-rails are judged by the same test, not by a point tolerance. The v1 ablation withdrew a family VALUE on a point tolerance (h1 AUC -0.0119 against 0.01, D-003), and identical GPU runs differ by 0.01-0.05 AUC (NT-003), so single-run comparisons cannot decide.
 - **acceptance:** (1) A compare function pairs the runs of A and B by (seed, fold), refuses pairs whose blocks or dataset fingerprints differ (test), and returns the mean paired difference, its 95% interval, the test statistic, the number of pairs and the verdict (A beats B, B beats A, or inconclusive) against the minimum effect. A verdict's pairs are (seed, fold) over judgement folds that no choice used; the SPEC names them before any GPU time (fold -1 x at least 5 seeds today; more held-out folds from the long history once NT-041 exists); at least 5 pairs (lead's reading of D-025). The comparator refuses fewer than 5 pairs and pairs on a fold the spec does not name as a judgement fold (test). (2) The minimum effect and the guard-rails come from a pre-registered spec; the output records the spec's hash, and the comparator refuses a spec that changed after the first compared run started (test). (3) Guard-rails are judged by the same paired test: a breach is a paired interval beyond the allowed degradation (test). (4) Error rates are checked by simulation, including 80-bar block noise within runs and seed noise between them: with a fixed seed and at least 1,000 simulated null comparisons, the false 'beats' rate is at most 5% plus its Monte Carlo error; the power at twice the minimum effect is reported (test). (5) The output is JSON plus a markdown paragraph that names the pairs, the metric, the minimum effect and the verdict.
 - **source:** owner Q&A 2026-09-28 (round 7); docs/DECISIONS.md D-025, D-003
+- **amendment (2026-09-29, D-037):** the comparator must support the plan's designs: per-fold retention r_f = d_f - E_A,f / 3 with one-sided bounds; non-inferiority with pass, breach or undecided per criterion; log-ratio metrics; paired coverage; Hodges-Lehmann with Wilcoxon bounds, infinite and inconclusive pairs, contention and re-time metadata; intersection-union verdicts with the owner route for D-018; Pocock two looks; anchor hashes per block; fold-placement refusal; a pre-registered pair count (no peeking); a simulation calibrated to the measured variance components that reports size and power (the gaps listed in C/ Q4 of the plan's evidence).
 
 ### NT-033
 
@@ -534,6 +550,7 @@ changes).
 - **why:** D-026: an on-demand stress harness (scale and volatility sweeps, extreme inputs, fault injection, three seeds) that every new setup must pass, with thresholds pre-registered, inside the experiment engine (owner Q&A 2026-09-28, round 1) and in strict mode in CI and in the harness (round 8). The owner added: "this should be configured to not allow a configuration of hyperparameters that would fail the system", so Config.validate and the sweep search spaces refuse regions the harness shows to fail, before a run starts. An unstable run is attributed to its loss term and fails loudly; Optuna prunes it and the leaderboard shows it as failed. The first real run on the reference setup is NT-051; the runs for N = 2 and N = 4 horizons are NT-052.
 - **acceptance:** (1) The thresholds file is committed before the harness's first real run and not changed afterwards; its hash appears in every harness report. (2) The harness runs on demand: input scale and volatility x0.1 to x10, extreme-input fuzzing (constant windows, jumps, very large and very small prices), fault injection (a NaN in the input, in one loss term and in one gradient), 3 seeds each. The harness runs in strict mode (NT-036). Its cases run as engine scenarios, and their runs and verdicts are recorded in the run store and its index (test on a tiny CPU case). It writes a REPORT.md (for example runs/stability/<id>/REPORT.md) with pass or fail per case against the thresholds and, for a failure, the loss term the per-term probe blames. (3) A tiny CPU version runs under the `stability` marker. (4) An unstable run stops with an error that names the loss term (test by fault injection), and the sweep records it as failed (NT-030). (5) The harness writes the failing regions in a machine-readable file; Config.validate refuses a config inside one, naming the region and the report (test with a synthetic failing region), and the sweep search spaces exclude those regions (test). The first real run on the reference setup is NT-051 (experimenter).
 - **source:** owner Q&A 2026-09-28 (rounds 1, 8); docs/DECISIONS.md D-021, D-026
+- **amendment (2026-09-29, D-037):** a named long-memory case: slow periods starting at 1,440 and 10,080 bars with INDICATOR_LR_MULT 5 and 1, plus the per-channel scale normalisation variant (B/ item 5 of the plan's evidence).
 
 ### NT-039
 
@@ -571,6 +588,7 @@ changes).
 - **why:** D-022: generality designed in now, only the reference setup tested in the MVP. Today the window and horizons are in bars (LOOKBACK, core/config.py:66; HORIZON_STEPS, :78), the val and cal blocks are fractions of the sequences (VAL_FRACTION and CAL_FRACTION, :70-71) inside N_FOLDS TimeSeriesSplit folds (:72), the data file is one CSV_PATH (:65), and costs are BacktestConfig defaults (fee 10, half-spread 1, slippage 2 bps per side; strategy/backtest.py:37-39). Figure labels are hard-coded: 'BTC' in visualization/matplotlib_splits.py:11, 26, 28, and '$' currency labels (in text and in d3 formats) in nine figure modules. Nothing checks for missing bars (the purge gap in data/splits.py is a gap between blocks, not a time gap in the data), and the local 2017-2025 file spans years of exchange history. The owner set the training block to 7 days, with the other blocks at their own configured lengths, and kept the long file for walk-forward folds over months (owner Q&A 2026-09-28, rounds 5, 5b).
 - **acceptance:** (1) A dataset spec: symbol, quote currency, bar size and data file; the window and horizons in wall-clock minutes, converted to bars from the bar size; a length that does not divide exactly is refused (test). (2) The reference defaults give today's bars (a 60-minute window is 60 bars, horizons 10/15/20 minutes are 10/15/20 bars) and `scripts/golden_run.py verify` passes. (3) Every run's meta.json and every leaderboard row carry the dataset fingerprint (file sha256, first and last timestamp, bar count) and the setup (test). (4) Costs are a per-instrument profile (fee, half-spread, slippage per side) whose default equals today's 13 bps per side, and backtests read it from the spec (test). (5) Labels come from the spec: figure titles and axes name the symbol, the bar size and the quote currency, and a test finds no hard-coded 'BTC' label and no hard-coded '$' currency label (text or d3 format) left in src/neural_trade/visualization. (6) The training block is 7 days by default, and the val, cal and out-of-sample blocks have their own configured lengths in time; the purge gap stays (D-005) (test on the block lengths in bars). (7) Walk-forward folds over the long history: the data file is configurable, folds are placed at configured dates or spacing, and each fold records its dates in meta.json (test on a synthetic multi-month file: the folds fall in different months and their blocks never overlap). The bundled 30-day file stays the default for tests and CI. (8) Gap policy: missing bars are detected, no input window or target spans a gap, and the number of windows dropped is recorded in meta.json (test on a synthetic file with holes).
 - **source:** owner Q&A 2026-09-28 (rounds 1, 5, 5b); VISION "The reference setup"; docs/DECISIONS.md D-022; survey 2026-09-28
+- **amendment (2026-09-29, D-037):** from the window-free plan: detect forward-filled flat zero-volume runs; gaps and flat runs of 60 minutes or less are elapsed time, longer ones reset (series mode) and are counted in meta.json; do not drop anchors for short filled runs; fold roles (dev or judgement), a judgement fold's read range disjoint from every choice run's blocks (refused otherwise, test); a configurable out-of-sample length (5 days for the A/Bs); meta.json records each run's read range (A/ item 4 and C/ item 3 of the plan's evidence).
 
 ### NT-042
 
@@ -632,6 +650,7 @@ changes).
 - **why:** D-027, owner: "I want the list of indicators to be extendable and easily integrated via registry". D-031 (indicator Q&A 2026-09-28): one registry entry per family, declaring its inputs, its learnable parameters with textbook defaults and bounds, its output channels and how it is drawn (round B); the config lists the instances, 3 per family (round C); the adaptive per-window periods stay, with a switch that turns them off (round A). Today the families are fixed: LearnableIndicators builds MA, MACD, RSI and Bollinger logits (learnable_indicators.py:49-101) from four Config lists (core/config.py:142-145), the meta_adjust width is computed from the same lists (gru_attention.py:52-56), and the Layers registry selects the whole layer by role (gru_attention.py:59; registered in registries/layers.py:58 as '18 learnable EWMA periods -> 31 MA/MACD/RSI/Bollinger channels'). This item moves today's four families into the registry with no number changed; NT-047 adds the OHLCV input and the new families.
 - **acceptance:** (1) An Indicators registry, strict like the nine of D-002 and covered by the registry contract tests (tests/registries/test_contracts.py), holds one entry per family for today's four (MA/EMA, MACD, RSI, Bollinger). Each entry declares its inputs (the close today), its learnable parameters with textbook defaults and bounds, its output channels and its drawing spec (on price or in its own panel) (test). (2) The config lists each family's instances. The default is 3 per family with today's starting periods (MA 5/10/30; MACD 12/26/9, 5/35/5, 8/17/9; RSI 9/14/21; Bollinger 10/20/25), in bars today and in wall-clock time once NT-041 exists. Config files that set MA_SPANS, MACD_SETTINGS, RSI_PERIODS or BB_PERIODS still load and give the same instances (test). (3) The model builds its indicator channels from the registry entries the config lists (18 learnable periods -> 31 channels by default, as today). A family is added by one registry entry and a config line, without editing the model or the training pipeline (test with a toy family registered in the test). (4) The adaptive per-window shift (meta_adjust) is kept, with one switch that turns it off: with it off, every applied period in every window equals the family's learned global value (test). NT-033's frozen twin uses the same switch (whichever item lands first creates it; the other reuses it). (5) No number changed: `scripts/golden_run.py verify` passes against a recording made on the base commit, saved serving bundles still load and predict identically (test on a fixture), and the notebooks build with no drift other than import lines.
 - **source:** owner Q&A 2026-09-28 (round 4); indicator Q&A 2026-09-28 (rounds A-C); VISION "Also in the MVP"; docs/DECISIONS.md D-002, D-027, D-031
+- **amendment (2026-09-29, D-037):** each family's registry entry also declares M(eps), the bars after which its state's dependence on the start is below eps (for a single EWMA ceil(ln eps / ln(1 - alpha_min)) after the maximal shift), with a per-family test that it is at least the empirical offset-invariance value (the plan's 'Warm-up' section).
 
 ### NT-047
 
@@ -644,6 +663,7 @@ changes).
 - **why:** D-031 (indicator Q&A 2026-09-28): the MVP catalogue has all four groups of families: today's four; range / volatility (ATR, Stochastic, Williams %R, Keltner); volume (OBV, VWAP, MFI); trend strength / channels (ADX/DMI, CCI, Donchian). The model input therefore becomes OHLCV. Owner: "All should be learnable", with smooth (differentiable) versions where needed. All families are on by default, 3 instances each. Combinations are left to the network, owner: "the combination are what the network does automatically, it's the core of it's mechanic. I don't think it needs any extra mechanism", so this item adds no gate or selection layer. Today the sequences are built from the close only (data/processor.py:44-45), although both data files carry open, high, low, close and volume, and the preprocessors keep all five (data/preprocessors.py:16-17). The owner also asked to research removing the fixed input window (round B: "I think we can get rid off it completely. Research this."); the input path may change with that decision, so this item waits for it.
 - **acceptance:** (1) The model input carries open, high, low, close and volume; sequence building and serving read OHLCV (test on the bundled data: shapes, and the window ends at the decision bar). (2) The ten new families (ATR, Stochastic, Williams %R, Keltner, OBV, VWAP, MFI, ADX/DMI, CCI, Donchian) are registered in the Indicators registry (NT-046), each with learnable parameters that have textbook defaults and bounds. Where the textbook form is not differentiable (rolling max or min, for example), a smooth version is used, and at the textbook parameters it stays within a tolerance stated in the test of the textbook indicator on a hand-made series (test per family). Every channel at bar t depends only on bars up to t (test: changing later bars leaves it unchanged). (3) Gradients are finite with respect to every learnable parameter of every family, on the bundled data and on extreme inputs (constant windows, zero volume, jumps) (test). (4) All families are on by default with 3 instances each; more or fewer is a config change (test). (5) Speed: a CPU micro-benchmark of the train step before and after (same seed, at least 5 repeats) is in the implementer's report; the GPU check is the definition of done's sec_per_step comparison on a real run (D-018: a slower step needs the owner's acceptance, recorded in STATUS). (6) The `stability` tests (NT-036, once present), the fast and slow suites and ruff pass.
 - **source:** indicator Q&A 2026-09-28 (rounds A-C); docs/DECISIONS.md D-018, D-027, D-031; survey 2026-09-28 (input path checked in code on 2026-09-28)
+- **amendment (2026-09-29, D-037):** no longer waits for the window decision: built now in window mode against the Indicators registry interface (NT-046); each family declares its M(eps) in its registry entry (the plan's 'Warm-up' section); the series forms (exponential and leaky: decayed soft max/min, leaky OBV, VWAP as a ratio of EWMAs) come after A/B-1 (NT-069), drawn next to the textbook values. NT-065 runs after this item (shared files).
 
 ### NT-048
 
@@ -708,13 +728,14 @@ changes).
 
 **Window-free plan: a second research round that writes the path, gates and A/B specifications**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P1 / research / lead
 - **area:** docs/research/2026-09-28-window-free/ (input); a new docs/research/<date>-window-free-plan/ (output; CPU prototypes only); docs/DECISIONS.md (the purge rule); docs/BACKLOG.md and docs/ROADMAP.md (the items the plan creates)
 - **depends on:** none (no GPU; the lead writes it, with subagents for the prototypes and an adversarial review)
 - **why:** D-032, owner: "commit to this in another research and write it down in a plan." The first round (docs/research/2026-09-28-window-free/README.md) measured on CPU that the 60-bar window caps the learned periods (the slow MACD period reaches the ceiling in 3 of 7 local runs), cold-starts every indicator at the window's first bar, and grows quadratically in memory with the window; that the GPU step is launch-bound (about 4,200 ops per step, an estimate), so the window's speed cost is uncertain; and that a per-bar model could train much faster only if the model learns per epoch rather than per update. Its adversarial review found must-fix problems in the proposed specifications: A/B margins that would let an arm lose most of the model's edge (h1 CRPSS vs constant variance is 0.0167), a batch-size probe judged on losses recalibrated per arm, a window gather whose backward is a segment sum with no deterministic GPU kernel (op determinism is already on in every run), precision tolerances the prototype does not meet in the specified increment form, a speed primary that epoch caps could produce, and a coverage band that a block can fail whatever the arms do. The owner left the period ceiling unlimited, and the adaptive-period replacement and the purge rule to research.
 - **acceptance:** (1) A plan document that fixes the stages and their order with an objective gate each (candidates: fixed-cost and launch cuts (NT-054); a GPU probe of epoch- vs update-boundness with a lambda-free, batch-size-free judging metric; indicators computed over the series feeding today's network; the per-bar model), the design of each stage in TF 2.10 (no window gather whose backward is a segment sum; a causal indicator recurrence with tolerances stated relative to the state's magnitude and met by a CPU prototype at 43k bars; state handling at data gaps and at the data start, identical in training and serving), and the corrected A/B specifications (margins as a stated fraction of arm A's measured edge with pair counts that power them; a speed primary that caps cannot produce; coverage judged paired; one change per arm). (2) The replacement for the per-window adaptive periods (D-031: reported as a range), with a CPU prototype, its cost measured, and how the discovered set reports it. (3) The purge rule for indicators with unbounded memory: the leakage argument, the cost of each candidate rule on a 7-day training block, the lead's decision, and the test that will pin it (the DECISIONS entry is the lead's step 7, not a criterion). (4) With no period ceiling (D-032): how the warm-up is derived from the learned periods at run time, what refuses a run whose warm-up exceeds the block, and what the Predictor needs. (5) Every claim labelled measurement (CPU, command given) or estimate; every GPU number an estimate until measured. (6) Proposed backlog items for each stage with acceptance criteria checkable at QA time and the owning role, and a ROADMAP placement that respects the pick order and the disjoint-files rule. (7) The plan is presented to the owner for approval (D-032); implementation items are picked only after it.
 - **source:** owner Q&A 2026-09-28 (indicator Q&A Round D); docs/research/2026-09-28-window-free/README.md (synthesis and Challenge)
+- **evidence (done 2026-09-29):** the plan docs/research/2026-09-29-window-free-plan/README.md (three CPU investigations A, B and C; an adversarial review, REVIEW.md, with 7 must-fix and 15 should-fix findings, all answered in the revision with the numbers of rev/); the lead's purge-rule decision D-034; approved by the owner as written (docs/qa/2026-09-29-window-free-plan.md, D-037). Items NT-059 to NT-073; amendments to NT-032, NT-038, NT-041, NT-046, NT-047.
 
 ### NT-054
 
@@ -771,6 +792,186 @@ changes).
 - **why:** Found by NT-043's implementer and QA (2026-09-29). (1) Some base periods are never applied: MACD #0 slow has base 32.3 but applied 22.2-29.8 (5-95%), and MACD #1 slow has base 58.9 (at the 60 ceiling) but applied median 73.0, with 81% of test windows applied above the 60-bar lookback (not warmed up); the "base period" framing of notebooks 01 and 04 can mislead, and NT-048's "global value" needs a choice. (2) The model's RSI smooths with an EWMA (alpha 2/(p+1)), not Wilder's 1/p, so "textbook RSI 14" is the model's definition at period 14; figures and NT-033's classic RSI rule must say which. (3) discovered_indicators.py imports 8+ underscore-private helpers of indicator_evolution.py.
 - **acceptance:** (1) The period panels and tables of 01, 04 and 07 show the median applied period next to the base, labelled, and flag instances whose applied periods exceed the window. (2) The RSI smoothing is named in the figures' notes. (3) The shared helpers become public (no leading underscore) or move to a shared module; no module imports another's private names (test). (4) Notebooks rebuilt through build.py and executed; the changed figures looked at (D-014); fast suite and ruff pass.
 - **source:** NT-043 implementer and QA reports (2026-09-29)
+
+### NT-059
+
+**Window-free benchmark kit in scripts/bench/ (kernel V1, assembly D6b, the A2 and today's layers, op census, TF32 check)**
+
+- **status:** todo
+- **priority / type / role:** P1 / infra / implementer
+- **area:** scripts/bench/ (new), tests/ (a CPU smoke test)
+- **depends on:** none (plan stage 1)
+- **why:** Every GPU number of the window-free plan is an estimate; the kit measures them (plan stages 1 and 1g).
+- **acceptance:** (1) The kit measures forward and backward time (median of at least 5 interleaved repeats) and op counts for kernel V1, assembly D6b, the whole A2 indicator layer (meta-shift included, written elementwise) and today's LearnableIndicators, at the plan's sizes, and writes JSON with the device and TF version. (2) G-A1 (docs/research/2026-09-29-window-free-plan/README.md, stages table): the census of the whole A2 layer, forward and backward, contains no MatMul, BatchMatMul or Einsum and nothing from the determinism RAISE or host-round-trip lists; CPU precision within 1e-5 x max|state| and 3e-5 x RMS per channel at 43,008 bars. (3) A CPU smoke test in the fast suite; the kit runs on the CPU in 2 minutes or less. (4) No change under src/. (5) Fast suite and ruff pass.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-060
+
+**GPU run of the window-free benchmark kit (G-A2)**
+
+- **status:** todo
+- **priority / type / role:** P1 / infra / experimenter
+- **area:** runs/experiments/window_free_kit_v1/
+- **depends on:** NT-059
+- **why:** Plan stage 1g: measure TF32's effect, launch cost and determinism on the RTX 4070 Ti.
+- **acceptance:** (1) The kit on the GPU after the RUNBOOK GPU-free check, TF32 at its default and op determinism on. (2) G-A2: no error; precision within 1e-5 x max|state| and 3e-5 x RMS; two runs bitwise identical; the A2 layer's forward+backward time at most 1.10x today's layer's (median of at least 5 interleaved repeats), else reported as a failed gate. (3) REPORT.md with the JSON; GPU time under 0.5 hour.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-061
+
+**TF32 decision for the indicator layer (plan stage 1b)**
+
+- **status:** todo
+- **priority / type / role:** P1 / decision / lead
+- **area:** docs/DECISIONS.md, tests/ (the census rule if kept)
+- **depends on:** NT-060
+- **why:** TF32 is enabled for matmul in this env; the plan's layer avoids matmul, but the rest of the model uses it.
+- **acceptance:** (1) A DECISIONS entry citing NT-060's numbers: keep TF32 with the indicator layer's no-matmul rule enforced by the census test, or turn it off. (2) If turning it off slows training (D-018), the owner decides first.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-062
+
+**VAL_BATCH_SIZE key (validation grouping independent of the training batch)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/core/config.py, src/neural_trade/data/datasets.py, tests/
+- **depends on:** none
+- **why:** val_loss moves 8-11% with the validation grouping (C/ Q3 of the plan's evidence), so arms with different BATCH_SIZE compare different functions.
+- **acceptance:** (1) VAL_BATCH_SIZE, default = BATCH_SIZE, with Config metadata (NT-029). (2) At BATCH_SIZE 1024 with VAL_BATCH_SIZE 256, val_loss equals the batch-256 value within 1e-6 relative for the same weights (test). (3) golden_run verify passes; fast suite and ruff pass.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-063
+
+**Engine options for pre-registered studies: lambdas once per study, per-arm EPOCHS, cap-extension re-runs, contention records**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/experiments/, tests/
+- **depends on:** NT-026 (done)
+- **why:** The plan's designs (docs/research/2026-09-29-window-free-plan/README.md, 'Pre-registered designs') need them.
+- **acceptance:** (1) A spec option `lambda_calibration: once` calibrates on a named dev fold and passes the same frozen LAMBDA_* with calibrate=False to every cell (test: identical lambdas in both arms). (2) Per-arm EPOCHS and early stopping on or off. (3) A cell capped at EPOCHS is re-run with the same seed at 2 x EPOCHS when the spec asks, both recorded (test). (4) Each run records its GPU-free check, its epoch times and whether it was re-timed. (5) Fast suite and ruff pass.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-064
+
+**Series kernel V1 and assembly D6b in the indicators package (plan stage 3)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** the indicators package (NT-046), tests/
+- **depends on:** NT-046, NT-061
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Kernel V1' and 'Window assembly D6b'.
+- **acceptance:** Items 1-2 of A/ in the plan's evidence, with the plan's tolerances (1e-5 x max|state| and 3e-5 x RMS per channel, at 30,720 and 43,008 bars, periods 2 to 1e6, constant and per-bar alpha, C = 16 and 64): split invariance; causality bitwise with a zero future Jacobian; gradients within 1e-3 of float64 finite differences and finite at logits +-13.8, +-30 and -40; outputs after a reset independent of earlier inputs; non-finite input refused at data load; a clean op census; utils/math.py unchanged; fast suite and ruff pass.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-065
+
+**INDICATOR_MEMORY switch: the series engine with per-bar adaptation, M_run, burn-in, history bound and pass budget (plan stage 4a)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** the indicators package, src/neural_trade/models/, src/neural_trade/core/config.py, src/neural_trade/data/, tests/
+- **depends on:** NT-064; NT-047 (runs after it: shared files)
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Per-bar adaptive periods' and 'Warm-up, history bound and pass budget'; D-037.
+- **acceptance:** (1) Window mode is the default and `golden_run.py verify` passes. (2) Series mode: G-B1 of B/ in the plan's evidence, including the context mirror at the anchors (<= 1e-6) and the off switch = V1 with a zero shift; M(eps) per family from the registry; M_run with a 3 x lr per-step margin, geometric growth and per-step projection; a burn-in of M_run + L - 1 fixed at run start; the history bound and the pass budget (default 4 training blocks) project logits and are counted per epoch (tests with a forced drift). (3) An end-to-end causality test from the raw frame through every normaliser. (4) The plan's D-018 check (3 interleaved GPU runs per mode, by the experimenter) within 5%, else the owner decides. (5) Fast and slow suites and ruff pass.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-066
+
+**Purge-rule test and config guard (D-034)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/data/splits.py, src/neural_trade/core/config.py, tests/test_purge_rule.py
+- **depends on:** none
+- **why:** D-034 records the rule; this item pins it.
+- **acceptance:** Item 1 of C/ in the plan's evidence: tests/test_purge_rule.py for W in (60, 30, 0) and two horizon sets; the reference gap stays 80 (golden run passes); Config.validate refuses a gap below max(2 max(H), W + max(H)), naming the field; the formula documented in splits.py; fast suite and ruff pass.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-067
+
+**Predictor series mode and bundle metadata**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/serving/, tests/
+- **depends on:** NT-065
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Data gaps and the data start'.
+- **acceptance:** G-B3 of B/ in the plan's evidence: the Predictor refuses a history since the last reset shorter than M_run + L - 1; its predictions equal the trainer's on the same block (bitwise, same pass-start rule); it takes timestamps; the bundle stores the kernel spec, eps, the M rule, M_run, the reset threshold, the bar size and the normalisation constants, with a format version bump (round-trip test); window-mode bundles still load and predict identically.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-068
+
+**Reporting of per-bar periods and bound counts**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/visualization/indicator_evolution.py, discovered_indicators.py, scripts/notebooks/build.py, tests/
+- **depends on:** NT-065
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Reporting'.
+- **acceptance:** G-B4: base, instantaneous and effective p5/p50/p95 per instance; the effective period equals p for a fixed alpha (test); in series mode no 'lookback' line but a history-bound line and the bound counts; the D-014 figure tests pass; notebooks rebuilt through build.py and executed, every changed figure looked at.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-069
+
+**A/B-1: the series engine against the window engine (pre-registered)**
+
+- **status:** todo
+- **priority / type / role:** P1 / research / experimenter
+- **area:** runs/experiments/series_engine_v1/
+- **depends on:** NT-065, NT-066, NT-067, NT-041 (with its amendment), NT-032 (with its amendment), NT-063
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, spec (1); D-025, D-037.
+- **acceptance:** (1) A SPEC equal to spec (1) or stricter, committed before any GPU time, with F and EPOCHS fixed from the dev runs before any judged run. (2) The comparator's verdict with every bound, the joint power, the contention log and every run id. (3) The recomputed worst-case budget within D-037's ceiling (about 6 GPU-hours), else the owner. (4) No choice uses a judgement or test fold.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-070
+
+**A/B-1b: removing the 60-bar clip in series mode (pre-registered)**
+
+- **status:** todo
+- **priority / type / role:** P1 / research / experimenter
+- **area:** the clip switch (an implementer part), runs/experiments/series_no_clip_v1/
+- **depends on:** NT-069 ADOPT
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, spec (1b): the only study that delivers D-032's unlimited periods.
+- **acceptance:** (1) An implementer part adds the switch that removes the clip in series mode (tests; golden run unchanged in window mode). (2) A SPEC as spec (1b); the verdict, the secondaries (drift of the slow periods, bound counts) and a budget within D-037's ceiling.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-071
+
+**GPU probe: epoch- or update-bound on 7-day blocks with the adopted engine**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **area:** runs/experiments/window_free_probe_v0/
+- **depends on:** NT-069 ADOPT, NT-041, NT-062, NT-063
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, spec (0).
+- **acceptance:** A SPEC as spec (0) (reach at 50% of each run's own span, geometric mean, the quality guard, B1024 capped at 4x A's epochs, 4 seeds per arm); the classification; a budget within about 1.5 GPU-hours.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-072
+
+**Per-bar causal model as a Models registry entry (option B)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/models/, a chunk sampler, tests/
+- **depends on:** NT-071 epoch-bound (or the owner overrides), NT-042
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, stage 7; the first round's item.
+- **acceptance:** The first round's item criteria (gates T1-T6 on CPU; per-position towers for N horizons; strided physics terms; val_loss with A's function at identical anchors; status.json records fit_seconds and optimizer steps); one GPU sanity run at least 4x faster per epoch, else the item stops with a record.
+- **source:** the window-free plan and D-037 (2026-09-29)
+
+### NT-073
+
+**A/B-2: the per-bar model against the default (pre-registered)**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **area:** runs/experiments/per_bar_model_v1/
+- **depends on:** NT-072, NT-032
+- **why:** docs/research/2026-09-29-window-free-plan/README.md, spec (2).
+- **acceptance:** A SPEC as spec (2) (time to the served epoch, lower bound at ln 2, guard-rails as A/B-1, two looks of 12); the verdict; a budget within about 5.6 GPU-hours.
+- **source:** the window-free plan and D-037 (2026-09-29)
 
 ## Done log
 

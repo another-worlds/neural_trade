@@ -41,13 +41,13 @@ family inconclusive ([report](../runs/ablations/ablate_physics_v1-full/report.md
   and the new families: range / volatility, volume, trend / channels; all learnable, all on by
   default), NT-048 (the discovered-indicators report: a self-contained interactive HTML report per
   run, the same figures in notebook 07).
-- **The window (D-032):** the owner committed to removing the fixed input window (research record:
-  [research/2026-09-28-window-free/](research/2026-09-28-window-free/README.md)). NT-053 (the lead's
-  second research round) writes the path, the gates and the A/B specifications; the owner approves
-  the plan before its first implementation item is picked. NT-047 waits for NT-053 (the input path
-  and the indicator forms may change). No period ceiling (owner). NT-054 (fixed costs and launches)
-  is window-independent and sits in Continuous.
-- **Exit:** NT-046 to NT-048 and NT-053 done; VISION "Also in the MVP" holds with the design of D-031.
+- **The window (D-032, D-037):** the plan is approved ([research/2026-09-29-window-free-plan/](research/2026-09-29-window-free-plan/README.md)).
+  NT-047 is built now in window mode. In this milestone: NT-059 and NT-060 (the benchmark kit, CPU then GPU; they may run
+  now, beside MVP-1, since their files are only scripts/bench/), NT-061 (TF32 decision), NT-064 (kernel and assembly,
+  after NT-046), NT-065 (the series switch, after NT-047: shared files), NT-066 (purge-rule test; any time), NT-067 and
+  NT-068. NT-048 does not wait for them. The A/Bs form research track R6. No configured period ceiling; periods are held
+  at the data-derived bound (D-037). NT-054 (fixed costs and launches) sits in Continuous.
+- **Exit:** NT-046 to NT-048, NT-053 (done) and NT-059 to NT-068 done; VISION "Also in the MVP" holds with the design of D-031.
 
 ## MVP-2: control panel and model comparison (point 2, "The yardstick"; D-020, D-023 to D-025)
 
@@ -101,6 +101,14 @@ the paired comparator (D-021, D-025). R2 and R3 need NT-026, NT-031, NT-032; R4 
   D-025; needs the owner's GPU approval, asked 2026-09-25). **Exit:** a verdict per term; a term that
   does not help is proposed to the owner for removal (D-003); the v1 grid stays the record.
 
+## Research track R6: window-free (D-032, D-037)
+
+Pre-registered studies of the approved plan, after MVP-4 (they need NT-041's folds and NT-032's amendment):
+NT-063 (engine options) and NT-062 (VAL_BATCH_SIZE) first; NT-069 (A/B-1, series engine against window
+engine); NT-070 (A/B-1b, removing the clip; after an ADOPT); NT-071 (probe), NT-072 (per-bar model) and NT-073
+(A/B-2) only if the probe says epoch-bound. GPU ceilings of D-037. **Exit:** each study's verdict recorded; an
+ADOPT changes the default and the owner edits VISION's window wording.
+
 ## R5: merge and publish
 
 - Items: NT-008 (owner: merge `remediation/plan` into `master`, after NT-001), NT-017 (licence: left
@@ -119,7 +127,7 @@ from NT-002).
 ## Order
 
 Pick rule 3(b) of OPERATING_MODEL "Picking the next item" uses this one total order:
-**R1, MVP-1, MVP-6, MVP-2, MVP-3, MVP-4, MVP-5, then R2-R4 (research tracks); R5 whenever the owner
+**R1, MVP-1, MVP-6, MVP-2, MVP-3, MVP-4, MVP-5, then R2-R4 and R6 (research tracks); R5 whenever the owner
 is ready, after R1.** MVP-6 right after MVP-1 is the lead's reading: the indicator catalogue is part of
 the structure, and the indicator Q&A did not place it. NT-043 (MVP-5) may run in parallel from the
 start (a second implementer, disjoint files). Implementer and experimenter slots are picked separately
