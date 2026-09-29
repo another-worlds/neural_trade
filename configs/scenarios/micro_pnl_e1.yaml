@@ -1,0 +1,28 @@
+# E1 of the P&L-target plan (docs/research/2026-09-29-pnl-target/README.md section 3, pass lines fixed there
+# before this run, committed a9f296f): cost-sensitive direction labels. Moves smaller than the 26 bps round
+# trip are masked out of the direction loss AND out of logreg_lags' labels (DIR_DEADBAND_BPS feeds both), at
+# horizons 60/120/240 bars. db5 = control (today's 5 bps deadband), db26 = the round trip. Micro layout,
+# 3 seeds, quick sweep (D-041); fold -1 never scored.
+schema_version: 1
+name: micro_pnl_e1
+description: "E1 (P&L plan): DIR_DEADBAND_BPS 5 vs 26 at horizons 60/120/240, micro layout, 3 seeds."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  MAX_SEQUENCE_COUNT: 129600
+  VAL_FRACTION: 0.1102
+  CAL_FRACTION: 0.1102
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 2048
+  EPOCHS: 30
+  HORIZON_STEPS: [60, 120, 240]
+  EXTENDED_TREND_PERIODS: [60, 120, 240]
+variants:
+  db5:  {DIR_DEADBAND_BPS: 5}
+  db26: {DIR_DEADBAND_BPS: 26}
+folds: [-2]
+seeds: [0, 1, 2]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}
+run: {calibrate: true, save_artifacts: false}
