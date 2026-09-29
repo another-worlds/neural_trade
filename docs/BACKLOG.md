@@ -37,7 +37,7 @@ changes).
 | [NT-002](#nt-002) | P0 | bug | implementer | done | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
 | [NT-003](#nt-003) | P1 | research | experimenter | todo | Direction skill: pass the M3 direction clauses (AUC h1 > 0.52, val MCC h1 > 0.02, Gaussian readout MCC > 0) |
 | [NT-004](#nt-004) | P1 | research | experimenter | todo | Price heads: a served delta with positive EV (M3 EV clause) |
-| [NT-005](#nt-005) | P1 | research | experimenter | todo | Cost-aware trading: an edge per trade above the 26 bps round trip |
+| [NT-005](#nt-005) | P1 | research | experimenter | in-progress | Cost-aware trading: an edge per trade above the 26 bps round trip |
 | [NT-006](#nt-006) | P1 | research | experimenter | todo | Physics-term ablation re-run on the current trainer, pre-registered under D-025 |
 | [NT-007](#nt-007) | P1 | owner-decision | owner | todo | Owner decision: which delta the strategies read (served beta-shrunk vs raw heads) |
 | [NT-008](#nt-008) | P1 | owner-decision | owner | todo | Owner decision: merge remediation/plan into master |
@@ -108,6 +108,7 @@ changes).
 | [NT-073](#nt-073) | P2 | research | experimenter | todo | A/B-2: the per-bar model against the default (pre-registered) |
 | [NT-074](#nt-074) | P1 | bug | implementer | todo | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
 | [NT-075](#nt-075) | P1 | performance | experimenter | todo | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
+| [NT-076](#nt-076) | P1 | feature | implementer | in-progress | Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU) |
 
 ## Items
 
@@ -163,7 +164,7 @@ changes).
 
 **Cost-aware trading: an edge per trade above the 26 bps round trip**
 
-- **status:** todo
+- **status:** in-progress (owner request 2026-09-29: study on branch `nt-005-strategy-study`; research docs/research/2026-09-29-strategy-architectures/; engine support NT-076)
 - **priority / type / role:** P1 / research / experimenter
 - **area:** src/neural_trade/strategy/strategies.py (new or re-knobbed strategy), configs/strategies/, an engine scenario spec (NT-026), runs/experiments/trading_costs_v1/
 - **depends on:** NT-002, NT-007, NT-026 (experiment engine), NT-031 (leaderboard), NT-032 (paired comparator)
@@ -1007,6 +1008,18 @@ changes).
 - **why:** The notebook run on the MVP-1 head (runs/20260929T081632Z-426de4f-dirty-aba344d6) logged sec_per_step 0.1066 against 0.0984 for the previous notebook run (runs/20260924T182915Z-1aeff1c-dirty-af67ee43), +8%. The session touched callbacks (NT-028) and moved modules (NT-027) but not the per-step path; golden runs are equal. One run per side is not noise-aware (D-012), and the desktop alone showed about 40% GPU utilisation at times (NT-035). D-018: the per-step path must not get slower.
 - **acceptance:** (1) At least 3 interleaved real runs per side (the MVP-1 head against 1aeff1c's commit or fd960cd, same data and config), each after the RUNBOOK GPU-free check; the median epoch time of epochs 1 and later and sec_per_step, with their spread. (2) A verdict: no regression within noise, or a regression with its size; in the latter case an implementer item that finds the cause. (3) GPU time under 1 hour.
 - **source:** handoff 2026-09-29
+
+### NT-076
+
+**Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU)**
+
+- **status:** in-progress (implementer, branch nt-076)
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/experiments/ (scorer.py, runner.py, new rescore.py), src/neural_trade/evaluation/frame.py, src/neural_trade/cli.py, configs/strategy_studies/, tests/, docs/RUNBOOK.md
+- **depends on:** NT-026
+- **why:** The strategy study (NT-005, owner request 2026-09-29) compares many strategy configurations on the reference scenario's dev folds. The engine scores each cell with one strategy and keeps no predictions, so every comparison would retrain (about 5 GPU-minutes per cell).
+- **acceptance:** (1) Each scored cell writes predictions_cal.npz and predictions_oos.npz (served and raw deltas, probabilities, variance, intervals, scales, OHLC at the anchor bars); a backtest from the loaded files equals the scorer's in-memory one on every summary key (test). (2) A strategy study spec (entries with optional grids; unknown keys, strategies and params refused). (3) `neural-trade scenario rescore SPEC --study STUDY` fits every configuration on each cell's cal block and backtests its OOS block with the scorer's rules and baselines, writing a new rescore directory with cells.csv, leaderboard.csv/.md ranked by the mean dev-cell net Sharpe (test columns shown, never ranking; test), study.yaml, meta.json. (4) Cells without predictions are skipped and listed; no dev cell with predictions exits non-zero. (5) Rescoring the scenario's own strategy reproduces each cell's result.json backtest scores (test). (6) Fast suite, ruff, TESTING_DOCUMENTATION.md, RUNBOOK.
+- **source:** owner request 2026-09-29
 
 ## Done log
 
