@@ -13,7 +13,7 @@ from __future__ import annotations
 import tensorflow as tf
 from tensorflow.keras import layers, models, regularizers
 
-from neural_trade.registries.layers import Layers
+from neural_trade.models.layers_registry import Layers
 
 
 SKIP_LAGS = (1, 5, 10, 15, 20, 30)

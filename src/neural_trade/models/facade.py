@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from neural_trade.data.datasets import create_datasets
-from neural_trade.registries.models import Models
+from neural_trade.models.registry import Models
 
 from typing import TYPE_CHECKING
 
