@@ -689,10 +689,9 @@ def _term_multiplier(key: str, cfg: Config, model: Any = None) -> float:
 
     When ``model`` (the trained ``CustomTrainModel``) is given, the multiplier for the four raw
     terms and ``trend_loss`` is read from the model's OWN lambda attributes -- ``model.lambda_dir``,
-    ``model.lambda_var``, ``model.lambda_crps``, ``model.lambda_soft_ece`` (live ``tf.Variable``
-    properties, ``training/lambdas.py``) and ``model.lambda_dir_outer``/``lambda_nll_outer``/
-    ``lambda_trend_outer`` (plain floats set in ``CustomTrainModel.__init__``) -- rather than the
-    pre-run ``cfg.LAMBDA_*``. This matters whenever ``run.calibrate`` (default True) rescaled them
+    ``model.lambda_var``, ``model.lambda_crps``, ``model.lambda_soft_ece`` and (since NT-092)
+    ``model.lambda_dir_outer``/``lambda_nll_outer``/``lambda_trend_outer`` -- all live ``tf.Variable``
+    properties (``training/lambdas.py``) -- rather than the pre-run ``cfg.LAMBDA_*``. This matters whenever ``run.calibrate`` (default True) rescaled them
     after training, or ``ABLATE_LAMBDAS`` zeroed one: reading ``cfg`` alone made shares sum to
     1.232 in a calibrated repro instead of ~1 (QA finding 5). ``model=None`` (e.g. a bare
     ``history``/``cfg`` reconstruction in a test) falls back to ``cfg.LAMBDA_*``, unchanged from
