@@ -10,12 +10,12 @@ from neural_trade.core.exceptions import InvalidConfigurationError
 from neural_trade.core.registry import BaseRegistry
 
 TRAINING_REGISTRIES = {"Models", "Optimizers", "Metrics", "Callbacks", "DataLoaders", "Layers",
-                       "Preprocessors", "Losses"}
-ALL_NINE = TRAINING_REGISTRIES | {"Visualizations"}
+                       "Preprocessors", "Losses", "Indicators"}
+ALL_TEN = TRAINING_REGISTRIES | {"Visualizations"}
 REPO = Path(__file__).resolve().parents[2]
 
 
-def test_training_and_reporting_query_all_nine_registries(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+def test_training_and_reporting_query_all_ten_registries(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
     from neural_trade.training.trainer import train_and_evaluate
 
     hits = set()
@@ -38,7 +38,7 @@ def test_training_and_reporting_query_all_nine_registries(tf, tiny_config, tmp_p
     from neural_trade.evaluation.walk_forward import evaluate_result
 
     report = evaluate_result(result, out_dir=tmp_path / "report", figure=True)
-    assert ALL_NINE <= hits, f"registries never queried: {ALL_NINE - hits}"
+    assert ALL_TEN <= hits, f"registries never queried: {ALL_TEN - hits}"
     assert (tmp_path / "report" / "eval_report_test.md").exists() and report.n == len(result.y_test)
 
 
@@ -46,7 +46,7 @@ def test_load_all_resolves_the_default_config_and_rejects_unknown_components():
     from neural_trade.registries import load_all, registry_summary, validate_config_components
 
     regs = load_all(Config())
-    assert len(regs) == 9 and not validate_config_components(Config())
+    assert len(regs) == 10 and not validate_config_components(Config())
     assert "total" in registry_summary()
     with pytest.raises(InvalidConfigurationError, match="Models:nope"):
         load_all(Config(MODEL_NAME="nope"))

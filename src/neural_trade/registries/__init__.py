@@ -1,9 +1,9 @@
-"""The nine component registries.
+"""The component registries: the nine of D-002 plus the Indicators registry of D-027.
 
     Models (1)  Optimizers (2)  Metrics (3)  Callbacks (4)  DataLoaders (5)
-    Visualizations (6)  Layers (7)  Preprocessors (8)  Losses (9)
+    Visualizations (6)  Layers (7)  Preprocessors (8)  Losses (9)  Indicators (10)
 
-Each registry module is populated when imported. ``load_all(config)`` imports all nine,
+Each registry module is populated when imported. ``load_all(config)`` imports all of them,
 loads plugins from ``Config.PLUGINS_DIR`` and checks that every component the config names
 exists - call it once at a program's entry point (Trainer, Predictor, CLI), never at import
 time. Importing this package itself does NOT import TensorFlow.
@@ -27,6 +27,7 @@ REGISTRY_MODULES = {
     "Layers": "neural_trade.registries.layers",
     "Preprocessors": "neural_trade.registries.preprocessors",
     "Losses": "neural_trade.registries.losses",
+    "Indicators": "neural_trade.registries.indicators",
 }
 
 
@@ -57,6 +58,9 @@ def validate_config_components(config) -> List[str]:
         ("Layers", list(dict(config.LAYERS).values())),
         ("Metrics", list(config.METRICS) + list(config.STEP_METRICS)),
     ]
+    from neural_trade.indicators import indicator_instances
+
+    wanted.append(("Indicators", list(indicator_instances(config))))
     return [f"{reg}:{n}" for reg, names in wanted for n in names if not regs[reg].has(n)]
 
 

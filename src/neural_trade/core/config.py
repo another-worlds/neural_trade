@@ -367,6 +367,14 @@ class Config:
                                 unit="bars", ge=1, step=1)
     BB_PERIODS: List[int] = _f([10, 20, 25], "indicators", "initial periods (bars) of the learnable Bollinger bands",
                                unit="bars", ge=1, step=1)
+    INDICATOR_FAMILIES: Dict[str, List] = _f({}, "indicators", "instances of further Indicators-registry families "
+                                             "(family name -> list of instances, each a starting period in bars or a "
+                                             "dict of parameter periods); naming ma / macd / rsi / bb here overrides "
+                                             "the four fields above (neural_trade.indicators.indicator_instances)",
+                                             unit="mapping", ge=1)
+    ADAPTIVE_INDICATORS: bool = _f(True, "indicators", "shift each learned period per window through the meta_adjust "
+                                   "network; off, every applied period in every window equals the family's learned "
+                                   "global value (the frozen-twin switch, NT-033/NT-046)", unit="flag")
     INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits", unit="dimensionless", ge=0.0,
                              tunable=True)
     INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this", unit="dimensionless",

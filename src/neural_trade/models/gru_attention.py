@@ -13,6 +13,7 @@ from __future__ import annotations
 import tensorflow as tf
 from tensorflow.keras import layers, models, regularizers
 
+from neural_trade.indicators import num_learnable_logits
 from neural_trade.models.layers_registry import Layers
 
 
@@ -49,10 +50,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         layers.GlobalAveragePooling1D()(inp_resh),
         layers.GlobalMaxPooling1D()(inp_resh)
     ])
-    num_logits = (len(config.MA_SPANS) +
-                  len(config.MACD_SETTINGS) * 3 +
-                  len(config.RSI_PERIODS) +
-                  len(config.BB_PERIODS))
+    num_logits = num_learnable_logits(config)  # one meta-adjust column per learnable period
     meta_adjust = layers.Dense(num_logits, activation='tanh')(meta_inp)
 
     # Enhanced Learnable Indicators: Now takes [inp, meta_adjust], outputs sequences [B, LOOKBACK, num_ind]
