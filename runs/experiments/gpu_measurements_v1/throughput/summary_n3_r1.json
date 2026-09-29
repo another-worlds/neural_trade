@@ -1,0 +1,50 @@
+{
+  "n": 3,
+  "repeat": 1,
+  "wall_s": 157.5476971999742,
+  "mean_sm_pct": 30.305732484076433,
+  "peak_sm_pct": 58.0,
+  "mean_fb_mb": 4883.165605095542,
+  "peak_fb_mb": 7766.0,
+  "processes": {
+    "n3_r1_p0": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-1d574af8-n3_r1_p0"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-1d574af8-n3_r1_p0\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-1d574af8-n3_r1_p0\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-1d574af8-n3_r1_p0\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-1d574af8-n3_r1_p0\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-1d574af8-n3_r1_p0\\artifacts"
+      ]
+    },
+    "n3_r1_p1": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-03e98fc2-n3_r1_p1"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-03e98fc2-n3_r1_p1\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-03e98fc2-n3_r1_p1\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-03e98fc2-n3_r1_p1\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-03e98fc2-n3_r1_p1\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-03e98fc2-n3_r1_p1\\artifacts"
+      ]
+    },
+    "n3_r1_p2": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-3298cb6a-n3_r1_p2"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-3298cb6a-n3_r1_p2\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-3298cb6a-n3_r1_p2\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-3298cb6a-n3_r1_p2\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-3298cb6a-n3_r1_p2\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041215Z-8f35053-3298cb6a-n3_r1_p2\\artifacts"
+      ]
+    }
+  }
+}

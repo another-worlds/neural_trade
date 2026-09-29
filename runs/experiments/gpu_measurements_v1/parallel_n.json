@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "item": "NT-035",
+  "spec": "runs/experiments/gpu_measurements_v1/SPEC.md",
+  "report": "runs/experiments/gpu_measurements_v1/REPORT.md",
+  "setup": "BTC/USDT 1-minute (binance_btcusdt_1min_ccxt.csv), LOOKBACK 60, HORIZON_STEPS [10,15,20], BATCH_SIZE 256, FOLD_INDEX -3, EPOCHS 3, RTX 4070 Ti, TF 2.10",
+  "measured_utc": "2026-09-29T04:00Z/04:23Z",
+  "allowed_n": 3,
+  "refused_n": {"4": "one of four processes crashed (exit 0xC00000FD, stack overflow) in the only N=4 repeat; total steps/s 0.68x of N=1; per-process sec_per_step 2.09x of N=1"},
+  "utilization": {
+    "1": {"mean_sm_pct": 23.7, "peak_sm_pct": 100.0, "mean_fb_mb": 2575, "peak_fb_mb": 3731},
+    "2": {"mean_sm_pct": 27.3, "peak_sm_pct": 100.0, "mean_fb_mb": 3743, "peak_fb_mb": 5567},
+    "3": {"mean_sm_pct": 32.2, "peak_sm_pct": 99.0, "mean_fb_mb": 4795, "peak_fb_mb": 7821}
+  },
+  "notes": "utilization = nvidia-smi dmon 1-second samples over each whole batch (process start to exit), averaged over the 3 repeats; the desktop alone reads fb ~1000-1100 MB. The watch level of NT-030 (4) for N own processes is utilization[N]; a batch mean above it (or fb above peak_fb_mb) means someone else is on the GPU."
+}

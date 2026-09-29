@@ -1,0 +1,59 @@
+Training on /physical_device:GPU:0
+Starting enhanced model training with extended trend features...
+Dataset length after cleaning: 43500
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-11-10 07:29:00+00:00
+Sequences with extended trends: (43421, 60), (43421, 3), Extended: (43421, 3)
+[INFO] Dataset Statistics:
+   Total sequences: 43421
+   Train sequences: 15741 (batches/epoch: 62)
+   Val sequences:   2866   Cal sequences: 2866   (purge gap: 80 sequences, fold 3)
+   Test sequences:  7236 (batches: 29)
+Training for 3 epochs...
+Epoch 0: Indicator params logged to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\indicator_params_history.csv
+Epoch 1: Indicator params logged to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\indicator_params_history.csv
+Epoch 2: Indicator params logged to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\indicator_params_history.csv
+
+=== Indicator Learning Summary ===
+Total epochs tracked: 3
+Parameters logged per epoch: ~248
+CSV saved to: runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\indicator_params_history.csv
+Serving the weights of epoch 3 of 3 (val_loss 9.1740): best validation epoch, restored after training (EarlyStopping did not stop the run: 3 epochs ran)
+model_checkpoint wrote the best-on-validation weights to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\weights.h5
+Evaluating enhanced model...
+
+[Diagnostic: Prediction Statistics]
+  h0(10min): pred_mean=-4.261236, true_mean=-2.280297 | pred_std=15.191823, true_std=211.386185
+         pred_range=[-147.832428, 53.367172], true_range=[-2006.226562, 1990.078125]
+  h1(15min): pred_mean=-15.357228, true_mean=-3.604799 | pred_std=26.150312, true_std=250.176544
+         pred_range=[-166.017258, 19.569700], true_range=[-1983.726562, 1894.085938]
+  h2(20min): pred_mean=15.327939, true_mean=-4.940985 | pred_std=25.699135, true_std=285.844147
+         pred_range=[-158.533493, 176.875610], true_range=[-2265.968750, 2019.500000]
+
+Fitting CalibrationPipeline on the calibration split...
+CalibrationPipeline: fitting on 2866 samples
+
+[1/2] Temperature scaling (direction heads)...
+  TemperatureScaler [h0]: T = 1.7220
+  TemperatureScaler [h1]: T = 1.4289
+  TemperatureScaler [h2]: T = 1.3697
+Delta shrinkage (least-squares scale of the price heads on this block): h0 0.525, h1 0.564, h2 0.068
+
+[2/2] Conformal regressors (price delta intervals, scale=realized_vol)...
+ConformalRegressor: fitted on 2866 samples, median score = 0.5875
+  [h0] coverage @ alpha=0.10: 0.901 (target >= 0.90),  mean half-width 190.54 raw units
+ConformalRegressor: fitted on 2866 samples, median score = 0.5630
+  [h1] coverage @ alpha=0.10: 0.901 (target >= 0.90),  mean half-width 223.00 raw units
+ConformalRegressor: fitted on 2866 samples, median score = 0.5701
+  [h2] coverage @ alpha=0.10: 0.901 (target >= 0.90),  mean half-width 250.31 raw units
+
+CalibrationPipeline: fitting complete.
+  [test] h0: conformal coverage@90 = 0.880 (target >= 0.90), mean width = 583.72 raw units, T = 1.722
+  [test] h1: conformal coverage@90 = 0.866 (target >= 0.90), mean width = 683.17 raw units, T = 1.429
+  [test] h2: conformal coverage@90 = 0.853 (target >= 0.90), mean width = 766.83 raw units, T = 1.370
+TemperatureScaler saved to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\artifacts\calibration\temperature_params.json
+ConformalRegressor saved to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\artifacts\calibration\conformal_h0.joblib
+ConformalRegressor saved to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\artifacts\calibration\conformal_h1.joblib
+ConformalRegressor saved to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\artifacts\calibration\conformal_h2.joblib
+CalibrationPipeline saved to 'runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\artifacts\calibration/'
+Artifact bundle written to runs\experiments\gpu_measurements_v1\determinism\20260929T080801Z-8f35053-0f147c54-det_off_r1\artifacts
+{"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T080801Z-8f35053-0f147c54-det_off_r1", "wall_s": 51.61926070001209, "deterministic": false}

@@ -1,0 +1,25 @@
+probe arm_env=unset TF_DETERMINISTIC_OPS= 1 is_enabled= True tf32= True
+probe after enable_op_determinism is_enabled= True
+probe arm_env=0 TF_DETERMINISTIC_OPS= 0 is_enabled= False tf32= True
+probe after enable_op_determinism is_enabled= True
+2026-09-29T08:03:27Z check: 42 1028;40 1028;41 1029;40 1029;40 1029;35 1021;40 1021;40 1021;43 1021;43 1021;
+median_sm 40.0 max_fb 1029.0 BUSY
+2026-09-29T08:04:37Z check: 40 990;41 987;43 987;41 990;43 990;43 990;42 990;42 990;43 990;43 990;
+median_sm 42.5 max_fb 990.0 BUSY
+2026-09-29T08:05:46Z check: 5 1001;5 1003;18 1003;36 1005;31 1005;38 1005;38 1001;40 1001;46 1001;43 1001;
+median_sm 37.0 max_fb 1005.0 BUSY
+2026-09-29T08:06:55Z check: 7 1003;8 1006;7 1006;7 1016;7 1017;6 1005;6 1001;6 1001;6 997;7 993;
+median_sm 7.0 max_fb 1017.0 FREE
+=== det_on r1 2026-09-29T08:06:55Z ===
+rc=0 {"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T080659Z-8f35053-0f147c54-det_on_r1", "wall_s": 56.17135630000848, "deterministic": true}
+=== det_off r1 2026-09-29T08:07:59Z ===
+rc=0 {"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T080801Z-8f35053-0f147c54-det_off_r1", "wall_s": 51.61926070001209, "deterministic": false}
+=== det_on r2 2026-09-29T08:08:56Z ===
+rc=0 {"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T080859Z-8f35053-0f147c54-det_on_r2", "wall_s": 51.42099990003044, "deterministic": true}
+=== det_off r2 2026-09-29T08:09:53Z ===
+rc=0 {"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T080956Z-8f35053-0f147c54-det_off_r2", "wall_s": 51.103097399987746, "deterministic": false}
+=== det_on r3 2026-09-29T08:10:50Z ===
+rc=0 {"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T081053Z-8f35053-0f147c54-det_on_r3", "wall_s": 50.652952300035395, "deterministic": true}
+=== det_off r3 2026-09-29T08:11:47Z ===
+rc=0 {"run_dir": "runs\\experiments\\gpu_measurements_v1\\determinism\\20260929T081149Z-8f35053-0f147c54-det_off_r3", "wall_s": 51.00185500003863, "deterministic": false}
+PART_B_DONE 2026-09-29T08:12:44Z

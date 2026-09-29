@@ -1,0 +1,61 @@
+{
+  "n": 4,
+  "repeat": 0,
+  "wall_s": 288.32241480000084,
+  "mean_sm_pct": 37.89824561403509,
+  "peak_sm_pct": 100.0,
+  "mean_fb_mb": 6496.301754385965,
+  "peak_fb_mb": 9995.0,
+  "processes": {
+    "n4_r0_p0": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-ab6ad0fd-n4_r0_p0"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-ab6ad0fd-n4_r0_p0\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-ab6ad0fd-n4_r0_p0\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-ab6ad0fd-n4_r0_p0\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-ab6ad0fd-n4_r0_p0\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-ab6ad0fd-n4_r0_p0\\artifacts"
+      ]
+    },
+    "n4_r0_p1": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-91dc5cfb-n4_r0_p1"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-91dc5cfb-n4_r0_p1\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-91dc5cfb-n4_r0_p1\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-91dc5cfb-n4_r0_p1\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-91dc5cfb-n4_r0_p1\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-91dc5cfb-n4_r0_p1\\artifacts"
+      ]
+    },
+    "n4_r0_p2": {
+      "returncode": 3221225725,
+      "stdout_tail": [],
+      "stderr_tail": [
+        "",
+        "Training Progress:   0%|          | 0/3 [00:00<?, ?epoch/s]",
+        "",
+        "Epoch 1:   0%|          | 0/62 [00:00<?, ?batch/s]\u001b[A2026-09-29 09:18:31.648078: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.",
+        "2026-09-29 09:18:33.112417: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100"
+      ]
+    },
+    "n4_r0_p3": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-8eefad38-n4_r0_p3"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-8eefad38-n4_r0_p3\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-8eefad38-n4_r0_p3\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-8eefad38-n4_r0_p3\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-8eefad38-n4_r0_p3\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T041802Z-8f35053-8eefad38-n4_r0_p3\\artifacts"
+      ]
+    }
+  }
+}

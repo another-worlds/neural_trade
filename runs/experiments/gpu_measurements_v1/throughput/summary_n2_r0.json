@@ -1,0 +1,37 @@
+{
+  "n": 2,
+  "repeat": 0,
+  "wall_s": 100.95543710002676,
+  "mean_sm_pct": 28.11881188118812,
+  "peak_sm_pct": 100.0,
+  "mean_fb_mb": 3694.29702970297,
+  "peak_fb_mb": 5552.0,
+  "processes": {
+    "n2_r0_p0": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-3f0ccc90-n2_r0_p0"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-3f0ccc90-n2_r0_p0\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-3f0ccc90-n2_r0_p0\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-3f0ccc90-n2_r0_p0\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-3f0ccc90-n2_r0_p0\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-3f0ccc90-n2_r0_p0\\artifacts"
+      ]
+    },
+    "n2_r0_p1": {
+      "returncode": 0,
+      "stdout_tail": [
+        "runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-ab3c96e7-n2_r0_p1"
+      ],
+      "stderr_tail": [
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-ab3c96e7-n2_r0_p1\\artifacts\\calibration\\conformal_h0.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-ab3c96e7-n2_r0_p1\\artifacts\\calibration\\conformal_h1.joblib",
+        "ConformalRegressor saved to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-ab3c96e7-n2_r0_p1\\artifacts\\calibration\\conformal_h2.joblib",
+        "CalibrationPipeline saved to 'runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-ab3c96e7-n2_r0_p1\\artifacts\\calibration/'",
+        "Artifact bundle written to runs\\experiments\\gpu_measurements_v1\\throughput\\20260929T040453Z-8f35053-ab3c96e7-n2_r0_p1\\artifacts"
+      ]
+    }
+  }
+}
