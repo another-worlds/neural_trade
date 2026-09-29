@@ -1,0 +1,35 @@
+# E2 of the P&L-target plan (docs/research/2026-09-29-pnl-target/README.md section 3 "E2"; pass lines fixed
+# there before any run, a9f296f): train the direction heads on net P&L after costs (pnl_utility, NT-087).
+# lam0 = control (pnl_utility at LAMBDA_PNL 0 = custom_loss); lam_a / lam_b = LAMBDA_PNL set from the initial
+# loss magnitudes BEFORE training (NT-087 repair report: 0.25 ~ 0.5x and 0.50 ~ 1x the direction loss at
+# initialisation, bundled data, 5 seeds), not tuned on dev. PNL_GAMMA 1, cost 26 bps round trip, sigma from the
+# window's realised volatility; SHUFFLE_BUFFER 0 so per-batch demeaning approximates the block mean (RUNBOOK).
+# Micro layout, horizons 60/120/240, 3 seeds, quick sweep (D-041); fold -1 never scored.
+schema_version: 1
+name: micro_pnl_e2
+description: "E2 (P&L plan): pnl_utility at LAMBDA_PNL 0 / 0.25 / 0.50, horizons 60/120/240, micro layout, 3 seeds."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  MAX_SEQUENCE_COUNT: 129600
+  VAL_FRACTION: 0.1102
+  CAL_FRACTION: 0.1102
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 2048
+  EPOCHS: 30
+  HORIZON_STEPS: [60, 120, 240]
+  EXTENDED_TREND_PERIODS: [60, 120, 240]
+  LOSS_NAME: pnl_utility
+  PNL_GAMMA: 1.0
+  PNL_COST_BPS: 26.0
+  PNL_SIGMA_SOURCE: realized_vol
+variants:
+  lam0:  {LAMBDA_PNL: 0.0}
+  lam_a: {LAMBDA_PNL: 0.25}
+  lam_b: {LAMBDA_PNL: 0.50}
+folds: [-2]
+seeds: [0, 1, 2]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}
+run: {calibrate: true, save_artifacts: false}
