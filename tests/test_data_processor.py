@@ -70,7 +70,8 @@ def test_prepare_datasets_scaler_on_train_only_and_window_relative_input(tf, tin
     assert f.train[-1] < f.val[0] < f.val[-1] < f.cal[0] < f.cal[-1] < f.test[0]
     assert f.val[0] - f.train[-1] >= f.gap + 1 and f.test[0] - f.cal[-1] >= f.gap + 1
     assert dp.val_block["X"].shape[0] == len(f.val) and dp.cal_block["X"].shape[0] == len(f.cal)
-    assert (tmp_path / "scaler.joblib").exists() and not (tmp_path / "scaler_input.joblib").exists()
+    # NT-028: the processor no longer writes the target scaler (nothing loads SCALER_PATH)
+    assert not (tmp_path / "scaler.joblib").exists() and not (tmp_path / "scaler_input.joblib").exists()
 
     # window-relative input: last element is the anchor close (0), and the raw window is recoverable
     np.testing.assert_allclose(X_tr[:, -1], 0.0, atol=1e-6)

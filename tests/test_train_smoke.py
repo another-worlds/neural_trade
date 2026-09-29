@@ -1,8 +1,12 @@
-"""Three real training steps on synthetic bars.
+"""Real training on synthetic bars (and on the bundled CSV for the default-Config run).
 
-Fails on the pre-fix code: the NaN gradient from the trend loss reached
-tf.clip_by_global_norm, every weight became NaN on step 1, the learnable
-indicator periods went NaN and validation loss froze.
+- Three training steps keep weights and indicator periods finite and move validation loss. Fails on
+  the pre-fix code: the NaN gradient from the trend loss reached tf.clip_by_global_norm, every
+  weight became NaN on step 1, the learnable indicator periods went NaN and validation loss froze.
+- EarlyStopping stops a frozen model after EARLY + 1 epochs.
+- TRAIN_METRICS_EVERY subsamples the step diagnostics but keeps the loss and epoch logs complete.
+- A default-Config run without a RunContext leaves only the MODEL_PATH weights in its working
+  directory (NT-028; the warm start reads them, NT-049).
 """
 from __future__ import annotations
 
@@ -131,25 +135,26 @@ def test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_com
         assert key in h and np.isfinite(h[key][-1]), key
 
 
-def test_a_run_without_a_run_context_writes_no_file_nothing_reads(tiny_config, tmp_path, synthetic_bars,
-                                                                   monkeypatch):
-    """NT-028 acceptance (3): a 1-epoch CPU train_and_evaluate() outside any RunContext must not
-    litter files that nothing reads (training_log.csv, indicator_params_history.csv: csv_logger and
-    params_logger now skip when TrainContext.run_dir is None). MODEL_PATH stays: the warm start
-    reads it on a later run in the same directory (NT-049)."""
+def test_a_default_config_run_without_a_run_context_leaves_only_the_weights(tf, tmp_path, monkeypatch):
+    """NT-028 acceptance (3): a 1-epoch CPU train_and_evaluate() with the default Config and no
+    RunContext creates no file in its working directory that nothing reads. training_log.csv and
+    indicator_params_history.csv (csv_logger / params_logger skip without a run directory) and
+    SCALER_PATH (nothing loads it) are gone; the MODEL_PATH weights stay, because the warm start
+    reads them on a later run in the same directory (NT-049). Only the data is shrunk
+    (MAX_SEQUENCE_COUNT) and read from the bundled CSV by absolute path."""
+    from pathlib import Path
+
+    import pytest
+
+    from neural_trade.core.config import Config
     from neural_trade.training.trainer import train_and_evaluate
 
+    csv = Path(__file__).resolve().parent.parent / "binance_btcusdt_1min_ccxt.csv"
+    if not csv.exists():
+        pytest.skip(f"{csv.name} is not present")
     monkeypatch.chdir(tmp_path)
-    csv_path = tmp_path / "bars.csv"
-    synthetic_bars.to_csv(csv_path, index=False)
-    tiny_config.CSV_PATH = str(csv_path)
-    # MODEL_PATH / SCALER_PATH are left at their Config defaults (relative names).
+    cfg = Config()
+    train_and_evaluate(config=cfg, csv_path=str(csv), config_overrides={"MAX_SEQUENCE_COUNT": 3000}, epochs=1)
 
-    before = {p.name for p in tmp_path.iterdir()}
-    train_and_evaluate(config=tiny_config, epochs=1, force=True, calibrate=False, fit_calibration=False,
-                       save_artifacts=False)
-    created = {p.name for p in tmp_path.iterdir()} - before
-
-    assert "training_log.csv" not in created
-    assert "indicator_params_history.csv" not in created
-    assert (tmp_path / tiny_config.MODEL_PATH).exists()
+    created = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*"))
+    assert created == [Config().MODEL_PATH], created

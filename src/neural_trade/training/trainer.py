@@ -393,12 +393,15 @@ def train_and_evaluate(
             logger.info("model_checkpoint wrote the best-on-validation weights to %s", cfg.MODEL_PATH)
         if run_context is not None:
             _record_served_epoch_in_status(run_context, weights_epoch, weights_val_loss, weights_source)
-        try:
-            joblib.dump(target_scaler, cfg.SCALER_PATH)
-            if input_scaler is not None:
-                joblib.dump(input_scaler, cfg.SCALER_PATH.replace('.joblib', '_input.joblib'))
-        except Exception:
-            logger.exception("could not save the scalers to %s", cfg.SCALER_PATH)
+        # NT-028: nothing loads SCALER_PATH; it is written only as part of a run directory's record
+        # (RunContext.create points it there), never into a bare working directory.
+        if getattr(run_context, 'run_dir', None) is not None:
+            try:
+                joblib.dump(target_scaler, cfg.SCALER_PATH)
+                if input_scaler is not None:
+                    joblib.dump(input_scaler, cfg.SCALER_PATH.replace('.joblib', '_input.joblib'))
+            except Exception:
+                logger.exception("could not save the scalers to %s", cfg.SCALER_PATH)
 
     logger.info("Evaluating enhanced model...")
     predictions = _predict_heads(custom_model, X_test_seq, y_test.shape[0], target_scaler, cfg)
