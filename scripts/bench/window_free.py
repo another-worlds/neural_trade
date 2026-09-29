@@ -200,12 +200,77 @@ def check_census(a2_results):
     return {"PASS": not bad, "offending_ops": sorted(bad)}
 
 
-def check_precision(close, scale, T, periods, chunk=16):
+MACD_TRIPLES = [(12, 26, 9), (1440, 10080, 1440)]     # (fast, slow, signal); a short and a long cascade
+
+
+def _rel_errors(h, ref):
+    """Per-row (period or setting) relative error of `h` (TF, [K, T]) against `ref` (float64, [K, T]):
+    max|error| / max|state| and RMS(error) / RMS(state)."""
+    err = np.abs(np.asarray(h, np.float64) - ref)
+    max_state, rms_state = np.abs(ref).max(-1), np.sqrt((ref ** 2).mean(-1))
+    rel_max = err.max(-1) / np.maximum(max_state, 1e-300)
+    rel_rms = np.sqrt((err ** 2).mean(-1)) / np.maximum(rms_state, 1e-300)
+    return rel_max, rel_rms
+
+
+def _verdict(rel_max, rel_rms, names):
+    ok = bool(np.all(rel_max <= 1e-5) and np.all(rel_rms <= 3e-5))
+    return ok, {"max_rel_err_vs_max_state": float(rel_max.max()), "max_rel_err_vs_rms_state": float(rel_rms.max()),
+                "PASS": ok, "per_period_rel_max": dict(zip(names, map(float, rel_max))),
+                "per_period_rel_rms": dict(zip(names, map(float, rel_rms)))}
+
+
+def _macd_precision(dx32, dx64, shift, triples, chunk):
+    """MACD line (d_fast - d_slow) and signal (EWMA(macd, g)): a two-stage cascade the single-stage
+    increment/RSI/Bollinger channels above do not exercise (the lead's review of this item). Same
+    tolerance, checked per (fast, slow, signal) setting."""
+    dxv, dxx = tf.constant(dx32)[None, :], dx64[None, :]
+    macd_h, macd_ref, sig_h, sig_ref, labels = [], [], [], [], []
+    for f, s, g in triples:
+        labels.append(f"{f}-{s}-{g}")
+        lam_f64 = kernel_v1.logit_period(f) + shift
+        lam_s64 = kernel_v1.logit_period(s) + shift
+        lam_g64 = kernel_v1.logit_period(g) + shift
+
+        la_f = -tf.nn.softplus(tf.constant(lam_f64.astype(np.float32))[None, :])
+        la_s = -tf.nn.softplus(tf.constant(lam_s64.astype(np.float32))[None, :])
+        lam_g32 = tf.constant(lam_g64.astype(np.float32))[None, :]
+        la_g, al_g = -tf.nn.softplus(lam_g32), tf.sigmoid(lam_g32)
+        d_f, _ = kernel_v1.linrec(la_f, -tf.exp(la_f) * dxv, C=chunk)
+        d_s, _ = kernel_v1.linrec(la_s, -tf.exp(la_s) * dxv, C=chunk)
+        macd = d_f - d_s
+        sig, _ = kernel_v1.linrec(la_g, al_g * macd, C=chunk)
+
+        la_f64, la_s64 = -kernel_v1.softplus64(lam_f64)[None, :], -kernel_v1.softplus64(lam_s64)[None, :]
+        la_g64r, al_g64 = -kernel_v1.softplus64(lam_g64)[None, :], kernel_v1.sigmoid64(lam_g64)[None, :]
+        d_f64 = kernel_v1.ref_linrec(la_f64, -np.exp(la_f64) * dxx)
+        d_s64 = kernel_v1.ref_linrec(la_s64, -np.exp(la_s64) * dxx)
+        macd64 = d_f64 - d_s64
+        sig64 = kernel_v1.ref_linrec(la_g64r, al_g64 * macd64)
+
+        macd_h.append(macd.numpy()[0])
+        macd_ref.append(macd64[0])
+        sig_h.append(sig.numpy()[0])
+        sig_ref.append(sig64[0])
+    macd_h, macd_ref = np.stack(macd_h), np.stack(macd_ref)
+    sig_h, sig_ref = np.stack(sig_h), np.stack(sig_ref)
+    out, all_pass = {}, True
+    for cname, h, ref in (("macd_line", macd_h, macd_ref), ("macd_signal", sig_h, sig_ref)):
+        rel_max, rel_rms = _rel_errors(h, ref)
+        ok, entry = _verdict(rel_max, rel_rms, labels)
+        entry["per_setting_rel_max"], entry["per_setting_rel_rms"] = entry.pop("per_period_rel_max"), entry.pop("per_period_rel_rms")
+        out[cname] = entry
+        all_pass = all_pass and ok
+    return out, all_pass
+
+
+def check_precision(close, scale, T, periods, chunk=16, macd_triples=MACD_TRIPLES):
     """G-A1's precision half: kernel V1 (production chunk C=16) against the float64 sequential
     recursion, at T bars of the bundled close series, for `periods` (plus the "no ceiling" logit -40),
     constant and per-bar alpha, on the increment / RSI-gain / RSI-loss / Bollinger-variance channels
-    (A/FINDINGS.md Q1). Tolerance: max|error| <= 1e-5 x max|state|, and RMS(error) <= 3e-5 x RMS(state),
-    per channel and per period."""
+    and on MACD line / signal for `macd_triples` (a two-stage cascade; A/FINDINGS.md Q1 checks the same
+    six channels). Tolerance: max|error| <= 1e-5 x max|state|, and RMS(error) <= 3e-5 x RMS(state), per
+    channel and per period / setting."""
     base = np.concatenate([kernel_v1.logit_period(periods), [INF_LOGIT]])
     names = [f"p{int(p)}" for p in periods] + ["p_inf(logit-40)"]
     c = close[-(T + 1):]
@@ -238,18 +303,17 @@ def check_precision(close, scale, T, periods, chunk=16):
                     "rsi_loss_ewma": (ls.numpy(), ls_ref), "bb_var_ewma_d2": (var.numpy(), var_ref)}
         mode_res = {}
         for cname, (h, ref) in channels.items():
-            err = np.abs(h.astype(np.float64) - ref)
-            max_state, rms_state = np.abs(ref).max(-1), np.sqrt((ref ** 2).mean(-1))
-            rel_max = err.max(-1) / np.maximum(max_state, 1e-300)
-            rel_rms = np.sqrt((err ** 2).mean(-1)) / np.maximum(rms_state, 1e-300)
-            ok = bool(np.all(rel_max <= 1e-5) and np.all(rel_rms <= 3e-5))
+            rel_max, rel_rms = _rel_errors(h, ref)
+            ok, entry = _verdict(rel_max, rel_rms, names)
+            mode_res[cname] = entry
             all_pass = all_pass and ok
-            mode_res[cname] = {"max_rel_err_vs_max_state": float(rel_max.max()),
-                                "max_rel_err_vs_rms_state": float(rel_rms.max()), "PASS": ok,
-                                "per_period_rel_max": dict(zip(names, map(float, rel_max))),
-                                "per_period_rel_rms": dict(zip(names, map(float, rel_rms)))}
+
+        macd_res, macd_pass = _macd_precision(dx32, dx64, shift, macd_triples, chunk)
+        mode_res.update(macd_res)
+        all_pass = all_pass and macd_pass
         results[mode] = mode_res
-    return {"PASS": bool(all_pass), "T": T, "periods": names, "channels": results}
+    return {"PASS": bool(all_pass), "T": T, "periods": names,
+            "macd_settings": [f"{f}-{s}-{g}" for f, s, g in macd_triples], "channels": results}
 
 
 # ----------------------------------------------------------------------------------------------- CLI

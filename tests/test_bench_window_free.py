@@ -52,6 +52,13 @@ def test_smoke_kit_runs_and_gates_pass(tmp_path):
     assert out["g_a1"]["precision"]["PASS"] is True
     assert out["g_a1"]["PASS"] is True
 
+    # the two-stage MACD cascade (the lead's review: the single-stage channels above don't exercise it)
+    for mode in ("constant", "per_bar"):
+        channels = out["g_a1"]["precision"]["channels"][mode]
+        for cname in ("macd_line", "macd_signal"):
+            assert channels[cname]["PASS"] is True, (mode, cname, channels[cname])
+            assert set(channels[cname]["per_setting_rel_max"]) == set(out["g_a1"]["precision"]["macd_settings"])
+
 
 def test_check_census_flags_a_banned_op():
     """The census gate must actually fail when a benchmarked variant used a banned op - it is not a
