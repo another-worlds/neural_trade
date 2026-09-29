@@ -1,0 +1,17 @@
+{
+  "pid": 20992,
+  "command": [
+    "C:\\Users\\Step\\miniforge3\\envs\\nt\\python.exe",
+    "-m",
+    "neural_trade.cli",
+    "scenario",
+    "run",
+    "D:\\neural_trade\\configs\\scenarios\\long_360d.yaml",
+    "--store",
+    "D:\\neural_trade\\runs"
+  ],
+  "cwd": "D:\\neural_trade",
+  "log": "D:\\neural_trade\\runs\\scenarios\\long_360d\\launch\\20260929T115233Z.log",
+  "started_utc": "20260929T115233Z",
+  "started": 1790682753.3047519
+}
