@@ -109,6 +109,8 @@ changes).
 | [NT-074](#nt-074) | P1 | bug | implementer | todo | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
 | [NT-075](#nt-075) | P1 | performance | experimenter | todo | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
 | [NT-076](#nt-076) | P1 | feature | implementer | in-progress | Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU) |
+| [NT-077](#nt-077) | P1 | feature | implementer | in-progress | Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins |
+| [NT-078](#nt-078) | P1 | research | implementer | todo | EWMA and HAR-RV variance baselines in the evaluation report, same block, with the DM test |
 
 ## Items
 
@@ -1020,6 +1022,29 @@ changes).
 - **why:** The strategy study (NT-005, owner request 2026-09-29) compares many strategy configurations on the reference scenario's dev folds. The engine scores each cell with one strategy and keeps no predictions, so every comparison would retrain (about 5 GPU-minutes per cell).
 - **acceptance:** (1) Each scored cell writes predictions_cal.npz and predictions_oos.npz (served and raw deltas, probabilities, variance, intervals, scales, OHLC at the anchor bars); a backtest from the loaded files equals the scorer's in-memory one on every summary key (test). (2) A strategy study spec (entries with optional grids; unknown keys, strategies and params refused). (3) `neural-trade scenario rescore SPEC --study STUDY` fits every configuration on each cell's cal block and backtests its OOS block with the scorer's rules and baselines, writing a new rescore directory with cells.csv, leaderboard.csv/.md ranked by the mean dev-cell net Sharpe (test columns shown, never ranking; test), study.yaml, meta.json. (4) Cells without predictions are skipped and listed; no dev cell with predictions exits non-zero. (5) Rescoring the scenario's own strategy reproduces each cell's result.json backtest scores (test). (6) Fast suite, ruff, TESTING_DOCUMENTATION.md, RUNBOOK.
 - **source:** owner request 2026-09-29
+
+### NT-077
+
+**Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins**
+
+- **status:** in-progress (implementer, branch nt-077)
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/strategy/ (signals.py, backtest.py, strategies.py, performance.py), tests/
+- **depends on:** none (runs beside NT-076 on disjoint files)
+- **why:** The strategy research (docs/research/2026-09-29-strategy-architectures/) finds directional trading of this model cannot break even at 26 bps; its shortlist uses the variance forecast, and two architectures need a continuous target exposure with a rebalancing band, which the one-position engine cannot express. Each variance-driven strategy needs a model-free EWMA twin to show whether the model's sigma adds anything.
+- **acceptance:** (1) SignalFrame gains sigma_ret, mu_gauss and a causal sigma_ewma (half-life 60, 240-bar warm-up). (2) ExposureStrategy and run_exposure_backtest (decide at close, band, fill at next open, drift, per-rebalance costs); hand-computed unit tests. (3) Discrete summaries add traded_notional, breakeven_cost_bps, gross_edge_per_trade_bps. (4) A circular-shift timing null for exposure strategies under the random null's keys. (5) Registered vol_target, net_edge_kelly, edge_over_cost, vol_regime_long, gated_ta, fitted on cal only, sigma_source model or ewma. (6) assert_no_lookahead covers every registered strategy, both sigma sources; fit reads cal only (test). (7) Existing numbers unchanged; fast suite, ruff, TESTING_DOCUMENTATION.md.
+- **source:** owner request 2026-09-29; the research note sections 3 and 5
+
+### NT-078
+
+**EWMA and HAR-RV variance baselines in the evaluation report, same block, with the DM test**
+
+- **status:** todo
+- **priority / type / role:** P1 / research / implementer
+- **area:** src/neural_trade/evaluation/ (baselines, report), tests/
+- **why:** The strategy research (docs/research/2026-09-29-strategy-architectures/ section 2.0) measured an EWMA of squared 1-minute returns (half-life 60) at CRPSS +0.06 to +0.07 against a constant variance on the reference file before the test block, against the model's +0.009 to +0.020 on its test block: different blocks, so a warning, not a verdict. If a free volatility forecast beats the model's sigma, the model's only measured edge is not an edge; this bears on the indicator-learning purpose (VISION) too.
+- **acceptance:** (1) The evaluation report's variance section carries EWMA (half-life 60, fitted scale on the train block) and HAR-RV (Corsi 2009, fitted on the train block) baselines on the same block, with CRPSS, the var/err^2 Spearman and the Diebold-Mariano test it already runs against const_var (noise-aware, D-012). (2) Tests on synthetic data with known variance. (3) The notebook that shows the variance baselines is updated through build.py (D-028).
+- **source:** the strategy research note 2026-09-29, section 2.0 and follow-up 1
 
 ## Done log
 
