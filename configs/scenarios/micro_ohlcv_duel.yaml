@@ -20,7 +20,7 @@ overrides:
   EPOCHS: 30
 variants:
   close4:  {INPUT_SERIES: [close], INDICATOR_FAMILIES: {}}
-  ohlcv14: {}
+  ohlcv14: {BATCH_SIZE: 1024}   # deviation 2026-09-29: batch 2048 OOM (attention einsum [2048,4,128,128])
 folds: [-2]
 seeds: [0, 1, 2]
 strategy: {name: calibrated_quantile, params: {}}
