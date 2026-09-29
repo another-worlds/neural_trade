@@ -117,6 +117,7 @@ changes).
 | [NT-082](#nt-082) | P1 | feature | implementer | done | Long-history run: SHUFFLE_BUFFER setting and notebook 08 (launch and live progress of an engine run) |
 | [NT-083](#nt-083) | P1 | bug | implementer | todo | Adding a Config field changes every engine cell's config_hash: finished cells re-run and rescore skips them |
 | [NT-084](#nt-084) | P3 | polish | implementer | todo | Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees |
+| [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
 
 ## Items
 
@@ -1118,6 +1119,17 @@ changes).
 - **why:** QA of NT-082 (2026-09-29): (1) tests/test_notebooks_thin.py:57 `_run`: the notebook kernel does not get <repo>/src on PYTHONPATH, so from a worktree it imports the main checkout and fails on new modules. (2) longrun.py:531: progress shows the newest cell directory whatever its config hash, while launch uses the runner's hash rule (DONE shown while launch would start a new run). (3) longrun.py:520-567: while a fresh launch is still loading data, progress shows an older incomplete cell as running. (4) longrun.py:232: psutil AccessDenied makes pid_alive False; a reused pid can block launch. (5) longrun.py:736: the subtitle's elapsed is wall clock while panel 5's is the sum of epoch times, unlabelled. (6) longrun.py:399: two launches in the same UTC second share log and pid names. (7) The training dashboard reused in notebook 08 says "~38 min left" on a run that early stopping ended (epoch 12 of 40).
 - **acceptance:** each of (1)-(6) fixed or documented as accepted, with a test where behaviour changes.
 - **source:** QA of NT-082, 2026-09-29
+
+### NT-085
+
+**The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL**
+
+- **status:** in-progress (lead, 2026-09-29)
+- **priority / type / role:** P1 / research / lead+experimenter
+- **area:** runs/experiments/micro_loop_v1/LOG.md (the journal), configs/scenarios/micro_*.yaml, configs/strategy_studies/
+- **why:** D-041. The 360-day run showed data volume is not the limit; the zero-cost re-score showed a real but tiny timing signal. The loop tests one hypothesis at a time on micro setups (~10-day train, batch 2048, ~4 min per cell; CPU rescore where no retraining is needed) and records each in the journal.
+- **acceptance:** Each hypothesis gets a journal row with its method, cost and result, and evidence committed (rescore dirs, scenario cells' light files). Quick sweeps stay within OPERATING_MODEL's sweep rules; a claimed improvement to the reference setup goes through D-025 before any default changes.
+- **source:** owner /goal 2026-09-29 (D-041)
 
 ## Done log
 
