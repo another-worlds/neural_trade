@@ -1,0 +1,26 @@
+# H4b of the micro loop (D-041): separate "no signal in the 4 h window" from "undertrained".
+# micro_lookback's h_4h_L240 early-stopped at epoch 7 serving epoch 1 (batch 256 after the OOM at 2048).
+# Same cell, more patience and epochs; one seed; quick sweep.
+schema_version: 1
+name: micro_lookback_h4b
+description: "H4b (D-041): h_4h_L240 re-run with EPOCHS 60, EARLY 12, PATIENCE 6, batch 256; quick sweep."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  MAX_SEQUENCE_COUNT: 129600
+  VAL_FRACTION: 0.1102
+  CAL_FRACTION: 0.1102
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 256
+  EPOCHS: 60
+  EARLY: 12
+  PATIENCE: 6
+  LOOKBACK: 240
+variants:
+  h_4h_L240b: {HORIZON_STEPS: [160, 240, 320], EXTENDED_TREND_PERIODS: [160, 240, 320]}
+folds: [-2]
+seeds: [0]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}
+run: {calibrate: true, save_artifacts: false}

@@ -35,3 +35,10 @@ horizon, and no strategy or threshold on top of it changes that. The next lever 
 OHLCV and the indicator catalogue (D-031, NT-046/NT-047), evaluated on the micro layout (~4 minutes per
 cell) against the same dev block, with the owner's target (stable >60% hit, drawdown < 5%) as the yardstick
 and logreg_lags as the bar to clear first.
+
+| H4 | The 60-bar window was the mismatch: a 240-bar window unlocks the 1-4 h horizons | Quick sweep configs/scenarios/micro_lookback.yaml (LOOKBACK 240 x the three horizon sets), one seed; cells under runs/scenarios/micro_lookback/ | 32 GPU-min | **Direction: no change** (no horizon beats logreg_lags; deltas -0.034..+0.010, all within ~1 SE). Variance edge weaker than at L60 for 1 h and 4 h. **Confounded:** batch 2048 and 512 OOM at LOOKBACK 240 (the attention softmax is quadratic in the window), so these cells ran at batch 256 and early-stopped at epochs 7-14 serving epochs 1-8: the 4 h cell is barely trained. H4b re-runs it with more patience before any reading. |
+
+Operational findings of H4: (1) the attention memory wall (OOM at batch >= 512 for LOOKBACK 240) is a
+config-guard candidate (NT-038) and constrains the window-free plan's sizing; (2) five failed OOM run
+directories sit under runs/scenarios/micro_lookback/ (kept, D-029); (3) the GPU-free check's 30% sm line
+trips on the owner's active desktop with no compute process present - RUNBOOK clarification candidate.

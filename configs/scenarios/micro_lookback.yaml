@@ -13,7 +13,7 @@ overrides:
   VAL_FRACTION: 0.1102
   CAL_FRACTION: 0.1102
   SHUFFLE_BUFFER: 0
-  BATCH_SIZE: 2048
+  BATCH_SIZE: 256   # 2048 and 512 OOM at LOOKBACK 240: the attention softmax [B, 4, L, L] is quadratic in the window (H4 run note)
   EPOCHS: 30
   LOOKBACK: 240
 variants:
