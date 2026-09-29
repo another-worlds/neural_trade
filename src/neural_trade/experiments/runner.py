@@ -12,8 +12,11 @@ written.
 
 **One cell, one run directory.** Each pending (configuration, fold, seed) cell trains into a new
 directory ``<store>/scenarios/<scenario>/<run id>-<cell key>/`` (experiments.run_context), is
-scored by experiments.scorer on its fold's out-of-sample block, and ends with ``result.json``
-(status, error, scores); the index is updated from those files after every cell. The runner never
+scored by experiments.scorer on its fold's out-of-sample block, stores that block's and the
+calibration block's predictions with their bars (``predictions_oos.npz``, ``predictions_cal.npz``:
+heavy, machine-local, git-ignored; ``neural-trade scenario rescore`` backtests other strategies on
+them without retraining, experiments.rescore), and ends with ``result.json`` (status, error,
+scores); the index is updated from those files after every cell. The runner never
 writes into an existing directory, never overwrites a file and deletes nothing: a name that is
 taken gets a ``-2``, ``-3`` ... suffix.
 
@@ -264,7 +267,9 @@ class Runner:
                                   meta={"scenario": sc.name, "cell_key": pc.key, **self._fold_meta(pc),
                                         "blocks": pc.fold["blocks"], "dataset_sha256": pc.dataset["sha256"]})
             doc.update(status="done", report=scored.paths["json"].name, train_s=t_train,
-                       score_s=time.perf_counter() - t0 - t_train, scores=scored.scores)
+                       score_s=time.perf_counter() - t0 - t_train, scores=scored.scores,
+                       predictions={k: scored.paths[f"predictions_{k}"].name for k in ("oos", "cal")
+                                    if f"predictions_{k}" in scored.paths})
             del result, scored
         except (KeyboardInterrupt, SystemExit):
             logger.warning("[scenario %s] %s interrupted: %s stays without %s; the next run trains the cell again",
