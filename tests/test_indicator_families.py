@@ -20,6 +20,9 @@ from neural_trade.indicators import (
 )
 
 DATA = Path(__file__).parent / "data"
+# The pre-NT-047 default: close-only input, the four families alone. The NT-046 fixtures
+# were recorded there; NT-047's OHLCV default is pinned by tests/test_ohlcv_input.py.
+OLD = dict(INPUT_SERIES=["close"], INDICATOR_FAMILIES={})
 DEFAULT_INSTANCES = {
     "ma": [5, 10, 30],
     "macd": [{"fast": 12, "slow": 26, "signal": 9}, {"fast": 5, "slow": 35, "signal": 5},
@@ -38,7 +41,7 @@ def test_layer_reproduces_the_pre_nt046_output_fixture(tf, impl):
     from neural_trade.models.layers import LearnableIndicators
 
     fx = np.load(DATA / "nt046_layer_fixture.npz", allow_pickle=True)
-    cfg = Config()
+    cfg = Config(**OLD)
     cfg.EWMA_IMPL = impl
     tf.keras.utils.set_random_seed(0)
     layer = LearnableIndicators(cfg)
@@ -54,7 +57,7 @@ def test_variable_names_and_learned_keys_are_unchanged(tf):
     from neural_trade.models.layers import LearnableIndicators
 
     fx = np.load(DATA / "nt046_layer_fixture.npz", allow_pickle=True)
-    layer = LearnableIndicators(Config())
+    layer = LearnableIndicators(Config(**OLD))
     layer([tf.constant(fx["x"]), tf.constant(fx["meta"])])
     got = [v.name.split("/", 1)[1] for v in layer.get_indicator_trainable_variables()]
     want = [n.split("/", 1)[1] for n in fx["var_names"]]  # the layer prefix is a session uid
@@ -72,7 +75,7 @@ def test_model_loads_a_pre_nt046_weights_file_and_predicts_identically(tf):
     from neural_trade.registries import load_all
     from neural_trade.registries.models import Models
 
-    cfg = Config()
+    cfg = Config(**OLD)
     load_all(cfg)
     tf.keras.backend.clear_session()
     tf.keras.utils.set_random_seed(7)
@@ -86,19 +89,23 @@ def test_model_loads_a_pre_nt046_weights_file_and_predicts_identically(tf):
 
 # --------------------------------------------------------------------- criterion 2: config
 def test_default_config_lists_three_instances_per_family_with_todays_periods():
-    assert indicator_instances(Config()) == DEFAULT_INSTANCES
+    # the four NT-046 families keep their instances inside the 14-family NT-047 default
+    inst = indicator_instances(Config())
+    assert {k: inst[k] for k in DEFAULT_INSTANCES} == DEFAULT_INSTANCES
+    assert indicator_instances(Config(**OLD)) == DEFAULT_INSTANCES
 
 
 def test_legacy_fields_still_configure_the_instances(tmp_path):
     cfg = Config(MA_SPANS=[3, 7], RSI_PERIODS=[5], BB_PERIODS=[12, 40],
-                 MACD_SETTINGS=[{"fast": 6, "slow": 13, "signal": 4}])
+                 MACD_SETTINGS=[{"fast": 6, "slow": 13, "signal": 4}], INDICATOR_FAMILIES={})
     got = indicator_instances(cfg)
     assert got == {"ma": [3, 7], "macd": [{"fast": 6, "slow": 13, "signal": 4}],
                    "rsi": [5], "bb": [12, 40]}
     # a config FILE that sets the legacy fields loads and gives the same instances
     yml = tmp_path / "legacy.yaml"
     yml.write_text("MA_SPANS: [3, 7]\nRSI_PERIODS: [5]\nBB_PERIODS: [12, 40]\n"
-                   "MACD_SETTINGS:\n  - {fast: 6, slow: 13, signal: 4}\n", encoding="utf-8")
+                   "MACD_SETTINGS:\n  - {fast: 6, slow: 13, signal: 4}\nINDICATOR_FAMILIES: {}\n",
+                   encoding="utf-8")
     assert indicator_instances(Config.from_yaml(yml)) == got
 
 
@@ -170,8 +177,8 @@ def test_adaptive_indicators_off_applies_the_global_period_in_every_window(tf):
     x = tf.constant(np.cumsum(rng.normal(0, 1, (4, 60)), axis=1).astype(np.float32))
     metas = [tf.constant(rng.uniform(-1, 1, (4, 18)).astype(np.float32)) for _ in range(2)]
 
-    frozen = LearnableIndicators(Config(ADAPTIVE_INDICATORS=False))
-    adaptive = LearnableIndicators(Config())
+    frozen = LearnableIndicators(Config(ADAPTIVE_INDICATORS=False, **OLD))
+    adaptive = LearnableIndicators(Config(**OLD))
     out_zero = adaptive([x, tf.zeros([4, 18])]).numpy()  # the global periods, no shift
     outs = []
     for meta in metas:

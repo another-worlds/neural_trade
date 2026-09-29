@@ -49,12 +49,12 @@ DERIVED_SERIES = {
 #: inverse temperature of the Boltzmann weighting inside the rolling window, PER SERIES
 #: UNIT (the model input is in target-scaler units, so this is a fixed sharpness in those
 #: units; larger = closer to the hard rolling max / min)
-SOFT_EXTREMUM_BETA = 6.0
+SOFT_EXTREMUM_BETA = 4.0
 #: exponent clip of the Boltzmann weights ``exp(clip(+-beta*(x - x_first)))``: bounds the
 #: weights' dynamic range to e^(2*CLIP) so the float64 prefix-sum differences stay
 #: well-conditioned for any input (values further than CLIP/BETA units from the window's
 #: first value saturate the weighting toward an average of their region, never overflow)
-SOFT_EXTREMUM_CLIP = 12.0
+SOFT_EXTREMUM_CLIP = 14.0
 #: sharpness of the smooth sign / gate ``tanh(k*dx)`` / ``sigmoid(k*dx)`` used where the
 #: textbook indicator branches on the sign of a one-bar move (OBV, MFI, ADX/DMI); the same
 #: scale as the MACD soft cross of NT-046
