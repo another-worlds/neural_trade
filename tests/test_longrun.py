@@ -212,6 +212,7 @@ def test_readers_skip_a_partial_last_line(tmp_path):
 def test_not_started(tmp_path, spec, alive):
     p = prog(spec, tmp_path)
     assert p["state"] == "not started" and p["run_dir"] is None and p["epochs_done"] == 0
+    assert p["epochs_total"] == 20
     assert L.progress_figure(p) is None and p["gpu"] is None
 
 
@@ -299,11 +300,17 @@ def test_progress_figure_has_no_empty_panel_and_uses_the_theme(tmp_path, spec, a
     assert dash.layout.title.text.startswith("<b>Training dashboard")
 
 
-def test_show_progress_prints_the_state_instead_of_an_empty_figure(tmp_path, spec, alive, capsys):
-    pytest.importorskip("IPython")
+def test_show_progress_shows_the_state_instead_of_an_empty_figure(tmp_path, spec, alive, monkeypatch):
+    display_mod = pytest.importorskip("IPython.display")
+    shown = []
+    monkeypatch.setattr(display_mod, "display", lambda *objs, **kw: shown.extend(objs))
     L.show_progress(prog(spec, tmp_path))
-    out = capsys.readouterr().out
-    assert "NOT STARTED" in out and "No epoch has finished yet" in out
+    texts = [o.data for o in shown if isinstance(o, display_mod.Pretty)]
+    assert len(texts) == len(shown) == 3                                  # text only: no figure, no table
+    assert "NOT STARTED" in texts[0] and "No epoch has finished yet" in texts[1] and "(empty)" in texts[2]
+    shown.clear()
+    L.show_results(L.results(spec, "runs", root=tmp_path))
+    assert [o.data for o in shown] == ["no scored cell yet (no result.json)"]
 
 
 # ------------------------------------------------------------------ GPU snapshot

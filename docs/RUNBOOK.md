@@ -290,6 +290,34 @@ and the run index live in the repo (on D: after the move, D-030).
 - The next session checks the job first (STATUS), resumes it if it died, and never starts another
   GPU job next to it beyond what the GPU rules above allow.
 
+### Long runs (notebook 08, NT-082)
+
+One long engine run launched and tracked from a notebook; today the 360-day run of D-040,
+`configs/scenarios/long_360d.yaml` (fold -2 on `Bitcoin_BTCUSDT.csv`, the machine-local long history;
+`SHUFFLE_BUFFER: 0`, a full reshuffle of the training block every epoch). Code:
+`src/neural_trade/notebook/longrun.py`.
+
+- **Launch** (GPU rules above first): open `notebooks/08_long_run.ipynb`, set `LAUNCH = True`, run the
+  launch cell once. Or from Python: `launch("configs/scenarios/long_360d.yaml", "runs", root=".")`. It
+  starts `python -m neural_trade.cli scenario run <spec> --store runs` detached (Windows:
+  DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP; it survives the kernel and VS Code closing) in the
+  repository root, with this checkout's `src` first on PYTHONPATH and without CUDA_VISIBLE_DEVICES. It
+  refuses while a cell of the scenario is running (no result.json and a progress file changed in the
+  last 15 minutes, or the last launch's process alive) and once the cell is done (failed too, unless
+  `retry_failed=True`). The CLI works as well: `$PY -m neural_trade.cli scenario run
+  configs/scenarios/long_360d.yaml`, launched detached as in "Long jobs".
+- **Where things are:** the log and the pid file of each launch:
+  `runs/scenarios/<name>/launch/<UTC>.log` and `<UTC>.pid.json` (pid, command, log); the cell:
+  `runs/scenarios/<name>/<run id>-<cell>/` (status.json, metrics.jsonl, training_log.csv, then
+  result.json and eval_report_dev.md).
+- **Watch:** re-run notebook 08's monitor cell (`show_progress(progress(SPEC, STORE, root=ROOT))`): state
+  (not started / running / stalled: no update for max(3 x the median epoch, 30 min) / done / failed),
+  epochs, elapsed, an ETA estimate, learning rate, best validation loss, figures, a GPU snapshot and the
+  log's last 20 lines.
+- **Stop:** `taskkill /PID <pid> /T /F` (the pid from the pid file or the monitor cell), or
+  `longrun.stop(pid)`. The cell stays without result.json (`incomplete`); launching again trains it anew
+  into a new directory.
+
 ## Notebooks
 
 Workflow and rules: [scripts/notebooks/README.md](../scripts/notebooks/README.md). In short:

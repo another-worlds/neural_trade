@@ -22,7 +22,7 @@ def test_the_notebooks_exist_and_the_old_ones_are_gone():
     assert [p.name for p in NOTEBOOKS] == ["00_data_and_splits.ipynb", "01_train_and_monitor.ipynb",
                                            "02_backtest.ipynb", "03_signals_and_trades.ipynb",
                                            "04_diagnostics.ipynb", "05_compare_runs.ipynb",
-                                           "07_discovered_indicators.ipynb"]
+                                           "07_discovered_indicators.ipynb", "08_long_run.ipynb"]
     for old in ("inference.ipynb", "trade.ipynb", "diagnostics.ipynb", "cfg.ipynb"):
         assert not (REPO / old).exists(), old
 
@@ -84,6 +84,12 @@ def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     titles = [o["data"]["application/vnd.plotly.v1+json"]["layout"]["title"]["text"] for c in nb.cells
               if c.cell_type == "code" for o in c.get("outputs", []) if "application/vnd.plotly.v1+json" in o.get("data", {})]
     assert len(titles) == 1 and titles[0].startswith("<b>Discovered indicators")
+    # 08 with LAUNCH False starts nothing and shows the state of a scenario that has no run in this store
+    nb = _run(NB_DIR / "08_long_run.ipynb", {"ROOT": str(REPO), "STORE": str(runs), "LAUNCH": False}, tmp_path)
+    text = "".join(o.get("text", "") + o.get("data", {}).get("text/plain", "") for c in nb.cells
+                   if c.cell_type == "code" for o in c.get("outputs", []))
+    assert "nothing started" in text and "NOT STARTED" in text and "no scored cell yet" in text
+    assert not (runs / "scenarios" / "long_360d").exists()
 
 
 def _saved_training_dashboards():

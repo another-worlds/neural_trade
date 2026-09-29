@@ -509,7 +509,7 @@ def progress(spec, store="runs", *, root=".", now: Optional[float] = None, gpu: 
     alive = bool(last) and pid_alive(last.get("pid"))
     out: Dict[str, Any] = {
         "scenario": sc.name, "state": "not started", "reason": "", "run_dir": None, "epochs_done": 0,
-        "epochs_total": None, "elapsed_s": None, "median_epoch_s": None, "sec_per_step": None, "eta_s": None,
+        "epochs_total": _spec_epochs(sc), "elapsed_s": None, "median_epoch_s": None, "sec_per_step": None, "eta_s": None,
         "eta_note": ETA_NOTE, "last_update_s": None, "stall_after_s": None, "lr": None, "lr_indicator": None,
         "best_val_loss": None, "best_epoch": None, "rows": [], "table": epoch_table([]),
         "pid": last.get("pid") if last else None, "pid_alive": alive, "log": last.get("log") if last else None,
@@ -540,7 +540,7 @@ def progress(spec, store="runs", *, root=".", now: Optional[float] = None, gpu: 
     created = _created(run_dir)
     updated = _last_update(run_dir)
     out.update(rows=rows, table=epoch_table(rows), epochs_done=done,
-               epochs_total=int(total) if isinstance(total, (int, float)) else None, median_epoch_s=med,
+               epochs_total=int(total) if isinstance(total, (int, float)) else _spec_epochs(sc), median_epoch_s=med,
                sec_per_step=_num(status.get("sec_per_step")) if status.get("sec_per_step") is not None else
                (_num(rows[-1].get("sec_per_step")) if rows else None),
                last_update_s=(now - updated) if updated is not None else None, stall_after_s=stall_after(med),
@@ -581,6 +581,15 @@ def progress(spec, store="runs", *, root=".", now: Optional[float] = None, gpu: 
                                            f"{out['stall_after_s'] / 60:.0f} min: {STALL_EPOCHS} x the median "
                                            f"epoch or {STALL_MIN_S // 60} min) and no live process recorded")
     return out
+
+
+def _spec_epochs(sc) -> Optional[int]:
+    """EPOCHS of the spec's (last) cell, before its run directory exists."""
+    try:
+        cells = sc.validate()
+    except Exception:
+        return None
+    return int(cells[-1][1].EPOCHS) if cells else None
 
 
 def _hms(s: Optional[float]) -> str:
@@ -676,7 +685,7 @@ def progress_figure(prog: Dict[str, Any], *, height: Optional[int] = None):
         if any(v is not None for v in y):
             fig.add_trace(go.Scatter(x=x, y=T.positive(y), name=name, mode="lines+markers", line=dict(color=color)),
                           row=1, col=2)
-    fig.update_yaxes(type="log", row=1, col=2)
+    fig.update_yaxes(type="log", tickformat=".0e", row=1, col=2)
 
     secs = col("epoch_seconds")
     fig.add_trace(go.Bar(x=x, y=secs, name="epoch seconds", marker=dict(color=T.rgba(c_time, 0.75)),
@@ -758,16 +767,23 @@ def training_figures(prog: Dict[str, Any]) -> list:
             loss_terms_figure(rows, cfg, run_dir=run_dir)]
 
 
+def _text(display, text: str) -> None:
+    """Show plain text as a notebook output (text/plain; the package does not print)."""
+    from IPython.display import Pretty
+
+    display(Pretty(text))
+
+
 def show_progress(prog: Dict[str, Any], *, dashboards: bool = True) -> None:
     """Display the progress in a notebook: summary lines, the progress figure (or the state when no
     epoch has finished), the per-epoch table, the training dashboards and the launch log's tail."""
     from IPython.display import display
 
-    print("\n".join(summary_lines(prog)))
+    _text(display, "\n".join(summary_lines(prog)))
     fig = progress_figure(prog)
     if fig is None:
-        print("\nNo epoch has finished yet: the figures appear after the first epoch "
-              "(the data load and the loss-weight calibration pass come first).")
+        _text(display, "No epoch has finished yet: the figures appear after the first epoch "
+                       "(the data load and the loss-weight calibration pass come first).")
     else:
         fig.show()
         table = prog.get("table")
@@ -776,8 +792,8 @@ def show_progress(prog: Dict[str, Any], *, dashboards: bool = True) -> None:
         if dashboards:
             for f in training_figures(prog):
                 f.show()
-    print(f"\nlaunch log, last {LOG_TAIL_LINES} lines ({prog.get('log') or 'no launch log'}):")
-    print("\n".join(prog.get("log_tail") or ["(empty)"]))
+    _text(display, f"launch log, last {LOG_TAIL_LINES} lines ({prog.get('log') or 'no launch log'}):\n"
+                   + "\n".join(prog.get("log_tail") or ["(empty)"]))
 
 
 # ------------------------------------------------------------------ results
@@ -833,12 +849,12 @@ def show_results(res: Dict[str, Any]) -> None:
     from IPython.display import Markdown, display
 
     if not res.get("available"):
-        print(res.get("reason", "no result"))
+        _text(display, res.get("reason", "no result"))
         return
-    print(f"{res['run_dir']}: {res['status']} ({res['role']} block), wall time {_hms(res.get('wall_s'))}, "
-          f"s/step {_fmt(res.get('sec_per_step'), '.4f')}")
+    _text(display, f"{res['run_dir']}: {res['status']} ({res['role']} block), wall time "
+                   f"{_hms(res.get('wall_s'))}, s/step {_fmt(res.get('sec_per_step'), '.4f')}")
     if res.get("error"):
-        print("error:", res["error"].get("type"), res["error"].get("message"))
+        _text(display, f"error: {res['error'].get('type')} {res['error'].get('message')}")
         return
     from neural_trade.visualization import analytics_tables as AT
 
@@ -847,8 +863,8 @@ def show_results(res: Dict[str, Any]) -> None:
     if res.get("backtest") is not None:
         display(AT.styled(res["backtest"], digits=4))
     if res.get("random_null"):
-        print("random entries at the same frequency:",
-              ", ".join(f"{k} {_fmt(v, '.4g')}" for k, v in res["random_null"].items()))
+        _text(display, "random entries at the same frequency: "
+                       + ", ".join(f"{k} {_fmt(v, '.4g')}" for k, v in res["random_null"].items()))
     if res.get("report_md"):
         display(Markdown(res["report_md"]))
 
