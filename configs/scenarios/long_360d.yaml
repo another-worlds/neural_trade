@@ -1,0 +1,51 @@
+# Experiment-engine scenario (NT-082, D-040): one training run on a 360-day block of the long history.
+#
+# Data: Bitcoin_BTCUSDT.csv, the local 2017-01 .. 2025-09 BTC/USDT 1-minute file (about 4.6M bars;
+# git-ignored, machine-local, fingerprinted in each run's meta.json). The reference setup otherwise:
+# a 60-bar window, horizons of 10, 15 and 20 bars, the default model and loss.
+#
+# Layout: the newest 698,160 sequences in 14 purged walk-forward folds with VAL_FRACTION = CAL_FRACTION
+# = 0.061877 (13 usable folds). Fold -2 trains on 360 days: 518,432 windows (360.02 days of one-minute
+# anchors, 2024-06-01 08:18 .. 2025-05-28 04:09 on the file of 2025-09-29), with 30-day validation and
+# calibration blocks (43,200 windows each) and a 32.3-day out-of-sample block (46,544 windows,
+# 2025-07-27 .. 2025-08-28), which is a dev block: its scores may inform later choices such as the
+# training length. Fold -1's out-of-sample block (the newest ~32 days, 2025-08-28 .. 2025-09-29) stays
+# unused as the test fold (D-020, D-040); do not add fold -1 here.
+# SHUFFLE_BUFFER 0: a full reshuffle of the 518k training windows every epoch (the default 2048 buffer
+# would draw every batch from ~1.4 days of consecutive windows); one pass of the pipeline alone at batch
+# 2048 costs about 1.5 s on the CPU (NT-082), against about 0.8 s with the 2048 buffer.
+# BATCH_SIZE 2048: the Config maximum and the fastest in the lead's GPU benchmark (0.325 s/step, 5.4 GB
+# peak memory, 80% median SM utilisation; runs/experiments/gpu_batch_bench_v1/REPORT.md).
+# EPOCHS 40: at batch 2048 an epoch of 518k windows is 254 steps (about 1.5 min), so 40 epochs is about
+# 1 hour and about 10,000 optimiser updates; EarlyStopping (EARLY 6) still ends the run sooner if the
+# validation loss plateaus. LR stays at the default 1e-3.
+#
+#   neural-trade scenario plan configs/scenarios/long_360d.yaml     # check it, list the cell (no training; loads the 290 MB file)
+#   neural-trade scenario run  configs/scenarios/long_360d.yaml     # GPU: one long cell; notebook 08 launches and tracks it
+#
+# Runs from the repository root (CSV_PATH is relative to the working directory); base_config is
+# relative to this file. Keys: src/neural_trade/experiments/scenario.py.
+schema_version: 1
+name: long_360d
+description: One run of the default model trained on 360 days of the long BTC/USDT history (fold -2, dev), D-040.
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 14
+  MAX_SEQUENCE_COUNT: 698160
+  VAL_FRACTION: 0.061877
+  CAL_FRACTION: 0.061877
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 2048
+  EPOCHS: 40
+variants:
+  default: {}
+folds: [-2]
+seeds: [0]
+strategy:
+  name: calibrated_quantile
+  params: {}
+backtest: {}                  # BacktestConfig fields; empty = the default cost profile, 100 random-null seeds
+run:
+  calibrate: true             # the loss-weight calibration pass, as `neural-trade train` runs it
+  save_artifacts: true        # a serving bundle (artifacts/) for the cell

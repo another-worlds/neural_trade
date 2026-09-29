@@ -255,6 +255,9 @@ class Config:
                        tunable=True)
     EARLY: int = _f(6, "training", "EarlyStopping patience on val_loss (was EPOCHS: disabled)", unit="epochs", ge=0,
                     step=1)
+    SHUFFLE_BUFFER: int = _f(2048, "training", "shuffle buffer of the training dataset, in windows (0 = the whole "
+                             "training block: a full reshuffle every epoch); validation is never shuffled",
+                             unit="sequences", ge=0, step=1)
 
     # ------------------------------------------------------------------ calibration (pre-training lambda pass)
     DAMPING: float = _f(0.5, "calibration", "legacy alias; use CALIB_DAMPING", unit="dimensionless", ge=0.0, le=1.0,

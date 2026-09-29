@@ -567,6 +567,68 @@ AT.styled(discovered_table(applied, cfg, metrics=metrics, window=WINDOW), digits
 """),
 ]
 
+# ---------------------------------------------------------------------------- 08 long run
+long_run = [
+    ("md", """
+# 08 - Long run: 360 days of training
+
+One training run of the default model on a 360-day block of the long BTC/USDT history (`Bitcoin_BTCUSDT.csv`,
+2017-01 to 2025-09, one-minute bars; machine-local), launched and tracked from here (D-040). The scenario
+`configs/scenarios/long_360d.yaml` trains walk-forward fold -2: 518,432 training windows (360 days), 30-day
+validation and calibration blocks, and a ~32-day out-of-sample block that is a **dev** block. Fold -1, the newest
+~32 days, stays untouched as the test fold (D-020). The run goes through the experiment engine
+(`neural-trade scenario run`) into `runs/scenarios/long_360d/`.
+
+**How to use it.** Open this notebook in VS Code and run all cells. With `LAUNCH = False` (the default) nothing
+starts: the monitor cell shows the state. To start the run, set `LAUNCH = True` and run the launch cell once: it
+starts a detached process on the GPU that keeps running when the kernel or VS Code closes, and refuses to start
+a second one while a cell is running or once it is done. Re-run the **monitor cell** whenever you want to see the
+progress: state, epochs, elapsed time, an ETA estimate (early stopping can end the run sooner), the learning rate,
+the best validation loss, the progress figure, notebook 01's training dashboards for the finished epochs, a GPU
+snapshot and the tail of the process log. The **results cell** shows the scored out-of-sample (dev) block once
+the run has written its `result.json`. To stop the run: `taskkill /PID <pid> /T /F` with the pid the monitor cell
+prints (the cell stays without `result.json`; launching again trains it anew). docs/RUNBOOK.md "Long runs".
+"""),
+    ("code", """
+# Parameters
+ROOT = ".."                                   # the repository root (this notebook runs in notebooks/)
+SPEC = "configs/scenarios/long_360d.yaml"     # relative to ROOT
+STORE = "runs"                                # the run store, relative to ROOT
+LAUNCH = False                                # True: start the run (once); False: only show its state
+""", "parameters"),
+    ("code", """
+from neural_trade.notebook.longrun import launch, progress, results, show_progress, show_results
+
+if LAUNCH:
+    print(launch(SPEC, STORE, root=ROOT))
+else:
+    print("LAUNCH is False: nothing started. Set LAUNCH = True and re-run this cell to start the run.")
+"""),
+    ("md", """
+## Progress
+
+Re-run this cell to refresh. Top: the state and the numbers; then six panels (training and validation loss with
+the best epoch, the learning rates, seconds per epoch and per step, elapsed hours with the ETA projection, and the
+validation CRPS per horizon), the per-epoch table, notebook 01's training dashboard (every logged validation
+metric per horizon with its 95% chance range on the 43,200-window validation block) and the loss terms per
+horizon, and the last 20 lines of the process log. Solid = validation, dotted = training.
+"""),
+    ("code", """
+show_progress(progress(SPEC, STORE, root=ROOT))
+"""),
+    ("md", """
+## Results
+
+Once the cell has written `result.json`: the key numbers of the evaluation report per horizon (direction,
+price and variance heads), the backtest of the default strategy (calibrated_quantile, knobs fitted on the
+calibration block, next-open fills, default costs) against buy-and-hold, always-flat and random entries at the
+same frequency, and the full `eval_report_dev.md`. These are dev-block numbers (fold -2's out-of-sample block).
+"""),
+    ("code", """
+show_results(results(SPEC, STORE, root=ROOT))
+"""),
+]
+
 # ---------------------------------------------------------------------------- the notebooks, in run order
 NOTEBOOKS = {
     "00_data_and_splits": data,
@@ -576,6 +638,7 @@ NOTEBOOKS = {
     "04_diagnostics": diag,
     "05_compare_runs": compare,
     "07_discovered_indicators": discovered,
+    "08_long_run": long_run,
 }
 
 
