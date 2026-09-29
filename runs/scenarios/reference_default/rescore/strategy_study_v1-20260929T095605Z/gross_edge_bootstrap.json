@@ -1,0 +1,74 @@
+{
+  "rs[q_out=0.8]": {
+    "strategy": "vol_regime_long",
+    "n_trades": 541,
+    "n_blocks": 290,
+    "mean_gross_bps": -2.4057875412195537,
+    "ci95_lo": -4.718232345999992,
+    "ci95_hi": -0.07671159313329233,
+    "ci_excludes_cost": true
+  },
+  "rs[q_out=0.95]": {
+    "strategy": "vol_regime_long",
+    "n_trades": 202,
+    "n_blocks": 157,
+    "mean_gross_bps": -14.04327229383591,
+    "ci95_lo": -22.077747769174117,
+    "ci95_hi": -5.710369201697743,
+    "ci_excludes_cost": true
+  },
+  "ec": {
+    "strategy": "edge_over_cost",
+    "n_trades": 20,
+    "n_blocks": 17,
+    "mean_gross_bps": -1.5849961249240483,
+    "ci95_lo": -24.49103959307955,
+    "ci95_hi": 25.064108776053637,
+    "ci_excludes_cost": true
+  },
+  "gt[primary=ma_cross,q=0.5]": {
+    "strategy": "gated_ta",
+    "n_trades": 295,
+    "n_blocks": 250,
+    "mean_gross_bps": 1.5552715148718232,
+    "ci95_lo": -2.5584899609744474,
+    "ci95_hi": 6.034704502506716,
+    "ci_excludes_cost": true
+  },
+  "gt[primary=ma_cross,q=0.8]": {
+    "strategy": "gated_ta",
+    "n_trades": 148,
+    "n_blocks": 133,
+    "mean_gross_bps": 4.353030297447342,
+    "ci95_lo": -1.949297586630869,
+    "ci95_hi": 11.173233570897969,
+    "ci_excludes_cost": true
+  },
+  "gt[primary=bollinger,q=0.5]": {
+    "strategy": "gated_ta",
+    "n_trades": 950,
+    "n_blocks": 407,
+    "mean_gross_bps": -0.09143566850372233,
+    "ci95_lo": -1.9995043262124652,
+    "ci95_hi": 1.7825497142489055,
+    "ci_excludes_cost": true
+  },
+  "gt[primary=bollinger,q=0.8]": {
+    "strategy": "gated_ta",
+    "n_trades": 566,
+    "n_blocks": 288,
+    "mean_gross_bps": 0.15604766319230712,
+    "ci95_lo": -2.6615698415302687,
+    "ci95_hi": 3.307757782916344,
+    "ci_excludes_cost": true
+  },
+  "cq": {
+    "strategy": "calibrated_quantile",
+    "n_trades": 2357,
+    "n_blocks": 525,
+    "mean_gross_bps": 0.4681601067692451,
+    "ci95_lo": -0.23815464232877828,
+    "ci95_hi": 1.1684769438416769,
+    "ci_excludes_cost": true
+  }
+}

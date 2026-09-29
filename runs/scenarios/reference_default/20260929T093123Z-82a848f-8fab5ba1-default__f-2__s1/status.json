@@ -1,0 +1,12 @@
+{
+  "run_id": "20260929T093123Z-82a848f-8fab5ba1-default__f-2__s1",
+  "epochs_completed": 20,
+  "done": true,
+  "sec_per_step": 0.1059849394692315,
+  "n_errors": 0,
+  "elapsed_seconds": 205.4823760986328,
+  "val_loss": 5.234432220458984,
+  "weights_epoch": 19,
+  "weights_val_loss": 5.233102321624756,
+  "weights_source": "best validation epoch, restored after training (EarlyStopping did not stop the run: 20 epochs ran)"
+}

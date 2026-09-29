@@ -104,7 +104,9 @@ def main(rescore_dir: str) -> None:
     md = ["# Strategy study v1: guard-rails and winner (SPEC rules)", "",
           f"Dev bars pooled: {t_bars}; K = {k_cand} candidates ({k_all} with twins). Ranked by mean dev net Sharpe; "
           "test columns shown, never used.", "", "```", json.dumps(result["winner"], indent=2), "```", "",
-          tab[cols].to_markdown(index=False, floatfmt=".4g")]
+          "| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
+    fmt = lambda v: f"{v:.4g}" if isinstance(v, float) else str(v)  # noqa: E731
+    md += ["| " + " | ".join(fmt(r[c]) for c in cols) + " |" for r in tab[cols].to_dict("records")]
     (out / "study_analysis.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print(json.dumps({k: result[k] for k in ("winner", "top_candidate_by_dev_sharpe", "dev_bars_pooled")}, indent=2))
 

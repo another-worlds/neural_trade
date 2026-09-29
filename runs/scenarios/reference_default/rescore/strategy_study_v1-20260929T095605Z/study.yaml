@@ -1,0 +1,83 @@
+schema_version: 1
+name: strategy_study_v1
+description: NT-005 strategy study, 12 candidates and 8 EWMA twins, ranked on the
+  reference scenario's dev cells.
+entries:
+- id: vt
+  strategy: vol_target
+  params:
+    sigma_source: model
+  backtest: {}
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: vt_ewma
+  strategy: vol_target
+  params:
+    sigma_source: ewma
+  backtest: {}
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: rs
+  strategy: vol_regime_long
+  params:
+    sigma_source: model
+  backtest: {}
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: rs_ewma
+  strategy: vol_regime_long
+  params:
+    sigma_source: ewma
+  backtest: {}
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: nk
+  strategy: net_edge_kelly
+  params: {}
+  backtest: {}
+  grid:
+    f:
+    - 0.25
+    - 0.5
+- id: ec
+  strategy: edge_over_cost
+  params: {}
+  backtest: {}
+  grid: {}
+- id: gt
+  strategy: gated_ta
+  params:
+    sigma_source: model
+  backtest: {}
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: gt_ewma
+  strategy: gated_ta
+  params:
+    sigma_source: ewma
+  backtest: {}
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: cq
+  strategy: calibrated_quantile
+  params: {}
+  backtest: {}
+  grid: {}

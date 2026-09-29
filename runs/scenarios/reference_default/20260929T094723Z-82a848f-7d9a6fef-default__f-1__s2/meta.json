@@ -1,0 +1,90 @@
+{
+  "run_id": "20260929T094723Z-82a848f-7d9a6fef-default__f-1__s2",
+  "seed": 2,
+  "tags": [
+    "scenario",
+    "reference_default",
+    "test"
+  ],
+  "created_utc": "20260929T094723Z",
+  "engine": {
+    "schema_version": 1,
+    "scenario": "reference_default",
+    "cell_key": "default__f-1__s2",
+    "configuration": "default",
+    "variant": "default",
+    "params": {},
+    "fold": -1,
+    "fold_id": 5,
+    "n_usable_folds": 5,
+    "role": "test",
+    "seed": 2,
+    "config_hash": "63f47a9d812c",
+    "settings_hash": "ff514fca1d28",
+    "spec_hash": "4ea988c880ba",
+    "commit": "82a848f",
+    "strategy": {
+      "name": "calibrated_quantile",
+      "params": {}
+    },
+    "backtest": {},
+    "run": {
+      "calibrate": true,
+      "save_artifacts": false
+    },
+    "spec": "configs\\scenarios\\reference.yaml"
+  },
+  "dataset": {
+    "path": "binance_btcusdt_1min_ccxt.csv",
+    "sha256": "a57ee1e43981934097527c8c92d72a0ea0525a6272696023ee5048d2dc80dc92",
+    "size_bytes": 3205632,
+    "loader": "csv",
+    "n_rows": 43500,
+    "n_bars": 43500,
+    "first_timestamp": "2025-10-11T02:30:00+00:00",
+    "last_timestamp": "2025-11-10T07:29:00+00:00"
+  },
+  "setup": {
+    "bar_minutes": 1,
+    "LOOKBACK": 60,
+    "HORIZON_STEPS": [
+      10,
+      15,
+      20
+    ]
+  },
+  "blocks": {
+    "fold": -1,
+    "fold_id": 5,
+    "n_usable_folds": 5,
+    "gap": 80,
+    "train": {
+      "start": 0,
+      "stop": 30213,
+      "n": 30213,
+      "first_timestamp": "2025-10-11T03:29:00+00:00",
+      "last_timestamp": "2025-11-01T03:01:00+00:00"
+    },
+    "val": {
+      "start": 30293,
+      "stop": 33159,
+      "n": 2866,
+      "first_timestamp": "2025-11-01T04:22:00+00:00",
+      "last_timestamp": "2025-11-03T04:07:00+00:00"
+    },
+    "cal": {
+      "start": 33239,
+      "stop": 36105,
+      "n": 2866,
+      "first_timestamp": "2025-11-03T05:28:00+00:00",
+      "last_timestamp": "2025-11-05T05:13:00+00:00"
+    },
+    "test": {
+      "start": 36185,
+      "stop": 43421,
+      "n": 7236,
+      "first_timestamp": "2025-11-05T06:34:00+00:00",
+      "last_timestamp": "2025-11-10T07:09:00+00:00"
+    }
+  }
+}
