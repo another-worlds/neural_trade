@@ -62,8 +62,8 @@ Pointers only; the rule lives where the pointer says.
   history rewrite) and D-019 onward (the vision, the yardstick, the MVP plan).
 - **Autonomy and pushing** (D-017): push `remediation/plan` and `nt-*` without asking; never
   `master`, never `--force`. This overrides the global "ask before pushing".
-- **Models and effort** (owner, D-035): OPERATING_MODEL "Models and effort" (Sonnet for
-  implementer, QA and experimenter; the lead escalates per call; at most two agents at once).
+- **Models and task tracking** (owner, D-036): OPERATING_MODEL "Models and task tracking" (a Haiku
+  `tracker` agent waits, polls and makes mechanical fixes; the other roles keep the strong model).
 - **Remote sessions** (owner, D-033): a remote (cloud) session runs review sweeps and takes no
   backlog items; its PRs into `remediation/plan` are QA'd and merged by the lead.
 - **Speed** (owner, D-018): the per-step training path must not get slower (definition of done).

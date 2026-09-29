@@ -71,18 +71,19 @@ the PR's own claims plus the definition of done's general clauses when it is not
 integrated as in step 6 (D-033). A PR that would change a recorded decision, default trading
 behaviour or `master` goes to the owner.
 
-## Models and effort (owner, D-035)
+## Models and task tracking (owner, D-036)
 
-- **Models.** Implementer, QA and experimenter run on Sonnet 5 by default (the agent files say
-  `model: sonnet`). The lead overrides per call with the Agent tool's `model`: Opus 5.5 for QA of P0
-  items and of statistics or verdict items (the comparator, A/B studies, sweep verdicts), and for an
-  implementer's second repair round. The lead, research rounds and adversarial reviews run on Fable
-  5.1 or Opus 5.5. The lead chooses per call without asking.
+- **Models.** Implementer, QA and experimenter run on the session's strong model (their agent files
+  set none). The **tracker** (`.claude/agents/tracker.md`, Haiku) does the task tracking: waiting for
+  CI runs, background processes, test suites and agents' worktrees, and minor mechanical fixes the
+  lead names (regenerating TESTING_DOCUMENTATION.md, `ruff --fix`, a dictated line). The lead hands
+  such chores to the tracker instead of polling itself, and keeps every judgement (diagnosis,
+  merges, criteria, verdicts).
 - **Effort.** QA of a P2 or P3 item checks the criteria plus one suite run, with no mutation or
   exploratory checks. The lead skips its own integration suite run when the merged code equals the
   commit QA verified (`git diff --stat <qa sha> HEAD -- src tests scripts` empty); CI covers the
-  merged head. Small related items may be batched into one implementer run. At most two agents run
-  at once. Agent reports stay under about 800 words.
+  merged head. Small related items may be batched into one implementer run. No fixed cap on the
+  number of agents or on report length.
 - **Spend limits.** The lead cannot see the spend or the limits. Agents commit work in progress on
   their branch, and the lead records state after every merge, so a stall resumes without loss.
 

@@ -48,7 +48,8 @@ that extend or partly replace an entry.
 | D-032 | The fixed input window goes; the path comes from a written plan | owner (purge rule: lead) | |
 | D-033 | Remote sessions run review sweeps; the lead QA's and merges their pull requests | owner (fetch between items: lead's reading) | |
 | D-034 | The purge rule for indicators with unbounded memory: label overlap, gap kept at 80 | lead (delegated by D-032) | |
-| D-035 | Models and effort: Sonnet for implementer, QA and experimenter; the lead escalates | owner | |
+| D-035 | Models and effort: Sonnet for implementer, QA and experimenter; the lead escalates | owner | D-036 |
+| D-036 | A cheap tracker agent for task tracking; the other roles keep the strong model | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -430,3 +431,15 @@ that extend or partly replace an entry.
   lead chooses per call without asking.
 - **Context:** the session of 2026-09-28 / 29 ran seven agents at once and hit the monthly spend limit
   and then the weekly limit, stalling all work for about 21 hours.
+
+## D-036 A cheap tracker agent for task tracking; the other roles keep the strong model (owner, 2026-09-29)
+- **Owner (verbatim):** "drop agnt limit requirments and 800-word reports. Let's revisit this. I'd like
+  to use weaker models specifically for TASK TRACKING, so that you don't have to use fable 5, for
+  example, to poke the running agent, a running process or fix minor issues."
+- **Decision:** supersedes D-035's model and limit parts. A `tracker` agent on Haiku
+  (`.claude/agents/tracker.md`) waits for CI, processes, suites and agents and makes mechanical fixes
+  the lead names; implementer, QA and experimenter set no model (the session's strong model); no cap
+  on the number of agents or on report length. D-035's effort rules stay (lighter QA for P2/P3, no
+  duplicate integration suite runs, batching). OPERATING_MODEL "Models and task tracking".
+- **Lead's reading:** "specifically for task tracking" means the weaker model is not used for
+  implementation or QA; the owner may correct this.
