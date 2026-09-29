@@ -58,7 +58,7 @@ model's sigma), NT-079, NT-080, NT-081.
   (docs/research/2026-09-29-pnl-target/). NT-035 done (re-QA PASS).
 - **Rules added:** D-042 (no pinging; Haiku tracker polls), D-043 (model split).
 - **Owner question 7 (asked 2026-09-29):** NT-047's default input. D-031 wants all families on by default; the new
-  default is 1.64x slower per CPU step and 1.63x per GPU step (0.1735 vs 0.1066 s; D-018 needs the owner); NT-047 passed QA on 72d3838 and waits only on this answer and showed no directional gain in the duel.
+  default is 1.64x slower per CPU step and 1.63x per GPU step (0.1735 vs 0.1066 s; D-018 needs the owner); NT-047 passed QA on 72d3838 and waits only on this answer and showed no directional gain in the duel (final re-run on the fixed code 2026-09-30: seed-mean AUC - logreg_lags -0.006 / -0.005 / -0.016, close-only -0.004 / -0.010 / -0.007).
   Recommendation: keep the close-only input and the four families as the default; the new families stay available
   by config until an A/B shows value.
 
