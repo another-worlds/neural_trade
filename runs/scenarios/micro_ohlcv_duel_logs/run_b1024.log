@@ -1,0 +1,1091 @@
+[scenario micro_ohlcv_duel] cell 1/3 ohlcv14__f-2__s0 (dev fold -2, seed 0)
+Training on /physical_device:GPU:0
+Starting enhanced model training with extended trend features...
+Dataset length after cleaning: 4598198
+Date range after cleaning: 2017-01-01 00:00:00 to 2025-09-29 23:57:00
+Sequences with extended trends: (4598119, 60), (4598119, 3), Extended: (4598119, 3)
+[OK] Limited sequence set from 4598119 to 129600 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 129600
+   Train sequences: 14396 (batches/epoch: 15)
+   Val sequences:   14282   Cal sequences: 14282   (purge gap: 80 sequences, fold 1)
+   Test sequences:  43200 (batches: 43)
+2026-09-29 22:17:56.320113: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-09-29 22:17:56.691850: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-09-29 22:17:56.691899: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 9404 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+[calib] Warm-up forward passes over 1/15 batches (5% of epoch) to build the graph and layer losses before sampling...
+2026-09-29 22:18:00.237257: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2026-09-29 22:18:01.010005: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+2026-09-29 22:18:01.750422: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-09-29 22:18:01.750770: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-09-29 22:18:01.750778: W tensorflow/stream_executor/gpu/asm_compiler.cc:80] Couldn't get ptxas version string: INTERNAL: Couldn't invoke ptxas.exe --version
+2026-09-29 22:18:01.752521: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5cb0-35040-65ca25d66f901" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5cb0-35040-65ca25d66fe02" "-arch=sm_89" "--warn-on-spills"'
+2026-09-29 22:18:01.752657: W tensorflow/stream_executor/gpu/redzone_allocator.cc:314] INTERNAL: Failed to launch ptxas
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+[calib] Sampling loss magnitudes over 2/15 batches (10% of epoch)...
+[calib] Sampled medians and updated lambdas:
+  λ_short        med=1.016249  1.0000 → 0.7708
+  λ_point        med=0.449856  1.0000 → 1.7414
+  λ_long         med=0.614696  1.0000 → 1.2744
+  λ_trend        med=0.676206  0.1000 → 0.1000
+  λ_dir          med=1.063318  1.0000 → 0.7367
+  λ_var          med=2.153975  1.0000 → 0.3637
+  λ_vol          med=0.559649  1.0000 → 1.3998
+  λ_crps         med=0.863379  1.0000 → 0.9073
+  λ_ece          med=0.262396  1.0000 → 2.9855
+  λ_t_perp       med=1.438487  0.1000 → 0.1000
+  λ_casimir      med=0.070455  0.1000 → 0.1000
+  λ_hd           med=0.938123  0.1000 → 0.1000
+  λ_ife          med=0.000000  0.1000 → 0.1000
+  Λ_vac(thr)     med=0.000000  0.0000 → 0.0000  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)
+[calib] ref_loss=0.783371  d_global=1.0  warmup=1/15  sample=2/15  clamp=[0.1, 20.0]
+Training for 30 epochs...
+Training Progress:   0%|          | 0/30 [00:00<?, ?epoch/s]
+Epoch 1:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 1:   7%|▋         | 1/15 [00:18<04:14, 18.17s/batch][A
+Epoch 1:  13%|█▎        | 2/15 [00:18<01:39,  7.67s/batch][A
+Epoch 1:  20%|██        | 3/15 [00:18<00:51,  4.31s/batch][A
+Epoch 1:  27%|██▋       | 4/15 [00:19<00:30,  2.73s/batch][A
+Epoch 1:  33%|███▎      | 5/15 [00:19<00:18,  1.86s/batch][A
+Epoch 1:  40%|████      | 6/15 [00:19<00:12,  1.34s/batch][A
+Epoch 1:  47%|████▋     | 7/15 [00:20<00:08,  1.00s/batch][A
+Epoch 1:  53%|█████▎    | 8/15 [00:20<00:05,  1.27batch/s][A
+Epoch 1:  60%|██████    | 9/15 [00:20<00:03,  1.56batch/s][A
+Epoch 1:  67%|██████▋   | 10/15 [00:21<00:02,  1.84batch/s][A
+Epoch 1:  73%|███████▎  | 11/15 [00:21<00:01,  2.09batch/s][A
+Epoch 1:  80%|████████  | 12/15 [00:21<00:01,  2.32batch/s][A
+Epoch 1:  87%|████████▋ | 13/15 [00:22<00:00,  2.51batch/s][A
+Epoch 1:  93%|█████████▎| 14/15 [00:22<00:00,  2.67batch/s][A
+Epoch 1: 100%|██████████| 15/15 [00:23<00:00,  1.67batch/s][A
+                                                           [ATraining Progress:   0%|          | 0/30 [00:30<?, ?epoch/s, Time: 30.6s | loss=9.1871 val_loss=10.7023]Training Progress:   3%|▎         | 1/30 [00:30<14:46, 30.58s/epoch, Time: 30.6s | loss=9.1871 val_loss=10.7023]Epoch 0: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0\indicator_params_history.csv
+
+Epoch 2:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 2:   7%|▋         | 1/15 [00:00<00:04,  2.94batch/s][A
+Epoch 2:  13%|█▎        | 2/15 [00:00<00:04,  3.04batch/s][A
+Epoch 2:  20%|██        | 3/15 [00:00<00:03,  3.09batch/s][A
+Epoch 2:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 2:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 2:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 2:  47%|████▋     | 7/15 [00:02<00:02,  3.13batch/s][A
+Epoch 2:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 2:  60%|██████    | 9/15 [00:02<00:01,  3.16batch/s][A
+Epoch 2:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 2:  73%|███████▎  | 11/15 [00:03<00:01,  3.15batch/s][A
+Epoch 2:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 2:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 2:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 2: 100%|██████████| 15/15 [00:04<00:00,  3.80batch/s][A
+                                                           [ATraining Progress:   3%|▎         | 1/30 [00:37<14:46, 30.58s/epoch, Time: 37.4s | loss=8.1698 val_loss=10.3898]Training Progress:   7%|▋         | 2/30 [00:37<07:44, 16.59s/epoch, Time: 37.4s | loss=8.1698 val_loss=10.3898]Epoch 1: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0\indicator_params_history.csv
+
+Epoch 3:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 3:   7%|▋         | 1/15 [00:00<00:04,  2.99batch/s][A
+Epoch 3:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 3:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 3:  27%|██▋       | 4/15 [00:01<00:03,  3.15batch/s][A
+Epoch 3:  33%|███▎      | 5/15 [00:01<00:03,  3.16batch/s][A
+Epoch 3:  40%|████      | 6/15 [00:01<00:02,  3.17batch/s][A
+Epoch 3:  47%|████▋     | 7/15 [00:02<00:02,  3.16batch/s][A
+Epoch 3:  53%|█████▎    | 8/15 [00:02<00:02,  3.16batch/s][A
+Epoch 3:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 3:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 3:  73%|███████▎  | 11/15 [00:03<00:01,  3.13batch/s][A
+Epoch 3:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 3:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 3:  93%|█████████▎| 14/15 [00:04<00:00,  3.13batch/s][A
+Epoch 3: 100%|██████████| 15/15 [00:04<00:00,  3.75batch/s][A
+                                                           [ATraining Progress:   7%|▋         | 2/30 [00:44<07:44, 16.59s/epoch, Time: 44.3s | loss=7.7860 val_loss=10.2441]Training Progress:  10%|█         | 3/30 [00:44<05:28, 12.15s/epoch, Time: 44.3s | loss=7.7860 val_loss=10.2441]Epoch 2: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0\indicator_params_history.csv
+
+Epoch 4:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 4:   7%|▋         | 1/15 [00:00<00:05,  2.68batch/s][A
+Epoch 4:  13%|█▎        | 2/15 [00:00<00:04,  2.78batch/s][A
+Epoch 4:  20%|██        | 3/15 [00:01<00:04,  2.79batch/s][A
+Epoch 4:  27%|██▋       | 4/15 [00:01<00:03,  2.82batch/s][A
+Epoch 4:  33%|███▎      | 5/15 [00:01<00:03,  2.84batch/s][A
+Epoch 4:  40%|████      | 6/15 [00:02<00:03,  2.82batch/s][A
+Epoch 4:  47%|████▋     | 7/15 [00:02<00:02,  2.91batch/s][A
+Epoch 4:  53%|█████▎    | 8/15 [00:02<00:02,  2.97batch/s][A
+Epoch 4:  60%|██████    | 9/15 [00:03<00:01,  3.03batch/s][A
+Epoch 4:  67%|██████▋   | 10/15 [00:03<00:01,  3.06batch/s][A
+Epoch 4:  73%|███████▎  | 11/15 [00:03<00:01,  3.09batch/s][A
+Epoch 4:  80%|████████  | 12/15 [00:04<00:00,  3.11batch/s][A
+Epoch 4:  87%|████████▋ | 13/15 [00:04<00:00,  3.13batch/s][A
+Epoch 4:  93%|█████████▎| 14/15 [00:04<00:00,  3.14batch/s][A
+Epoch 4: 100%|██████████| 15/15 [00:04<00:00,  3.79batch/s][A
+                                                           [ATraining Progress:  10%|█         | 3/30 [00:51<05:28, 12.15s/epoch, Time: 51.3s | loss=7.4558 val_loss=10.2373]Training Progress:  13%|█▎        | 4/30 [00:51<04:23, 10.14s/epoch, Time: 51.3s | loss=7.4558 val_loss=10.2373]
+Epoch 5:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 5:   7%|▋         | 1/15 [00:00<00:04,  2.90batch/s][A
+Epoch 5:  13%|█▎        | 2/15 [00:00<00:04,  2.91batch/s][A
+Epoch 5:  20%|██        | 3/15 [00:01<00:04,  2.97batch/s][A
+Epoch 5:  27%|██▋       | 4/15 [00:01<00:03,  3.05batch/s][A
+Epoch 5:  33%|███▎      | 5/15 [00:01<00:03,  3.08batch/s][A
+Epoch 5:  40%|████      | 6/15 [00:01<00:02,  3.11batch/s][A
+Epoch 5:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 5:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 5:  60%|██████    | 9/15 [00:02<00:01,  3.16batch/s][A
+Epoch 5:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 5:  73%|███████▎  | 11/15 [00:03<00:01,  3.13batch/s][A
+Epoch 5:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 5:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 5:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 5: 100%|██████████| 15/15 [00:04<00:00,  3.82batch/s][A
+                                                           [ATraining Progress:  13%|█▎        | 4/30 [00:58<04:23, 10.14s/epoch, Time: 58.2s | loss=7.2065 val_loss=9.7243] Training Progress:  17%|█▋        | 5/30 [00:58<03:43,  8.95s/epoch, Time: 58.2s | loss=7.2065 val_loss=9.7243]
+Epoch 6:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 6:   7%|▋         | 1/15 [00:00<00:04,  2.97batch/s][A
+Epoch 6:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 6:  20%|██        | 3/15 [00:00<00:03,  3.12batch/s][A
+Epoch 6:  27%|██▋       | 4/15 [00:01<00:03,  3.14batch/s][A
+Epoch 6:  33%|███▎      | 5/15 [00:01<00:03,  3.16batch/s][A
+Epoch 6:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 6:  47%|████▋     | 7/15 [00:02<00:02,  3.13batch/s][A
+Epoch 6:  53%|█████▎    | 8/15 [00:02<00:02,  3.14batch/s][A
+Epoch 6:  60%|██████    | 9/15 [00:02<00:01,  3.16batch/s][A
+Epoch 6:  67%|██████▋   | 10/15 [00:03<00:01,  3.16batch/s][A
+Epoch 6:  73%|███████▎  | 11/15 [00:03<00:01,  3.17batch/s][A
+Epoch 6:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 6:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 6:  93%|█████████▎| 14/15 [00:04<00:00,  3.15batch/s][A
+Epoch 6: 100%|██████████| 15/15 [00:04<00:00,  3.80batch/s][A
+                                                           [ATraining Progress:  17%|█▋        | 5/30 [01:05<03:43,  8.95s/epoch, Time: 65.0s | loss=6.7735 val_loss=9.5653]Training Progress:  20%|██        | 6/30 [01:05<03:17,  8.25s/epoch, Time: 65.0s | loss=6.7735 val_loss=9.5653]Epoch 5: Params plateau (score=0.629, mean=1.11%, slope=+0.04%/ep)
+
+Epoch 7:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 7:   7%|▋         | 1/15 [00:00<00:04,  3.00batch/s][A
+Epoch 7:  13%|█▎        | 2/15 [00:00<00:04,  3.11batch/s][A
+Epoch 7:  20%|██        | 3/15 [00:00<00:03,  3.15batch/s][A
+Epoch 7:  27%|██▋       | 4/15 [00:01<00:03,  3.18batch/s][A
+Epoch 7:  33%|███▎      | 5/15 [00:01<00:03,  3.18batch/s][A
+Epoch 7:  40%|████      | 6/15 [00:01<00:02,  3.18batch/s][A
+Epoch 7:  47%|████▋     | 7/15 [00:02<00:02,  3.16batch/s][A
+Epoch 7:  53%|█████▎    | 8/15 [00:02<00:02,  3.17batch/s][A
+Epoch 7:  60%|██████    | 9/15 [00:02<00:01,  3.18batch/s][A
+Epoch 7:  67%|██████▋   | 10/15 [00:03<00:01,  3.16batch/s][A
+Epoch 7:  73%|███████▎  | 11/15 [00:03<00:01,  3.12batch/s][A
+Epoch 7:  80%|████████  | 12/15 [00:03<00:00,  3.14batch/s][A
+Epoch 7:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 7:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 7: 100%|██████████| 15/15 [00:04<00:00,  3.80batch/s][A
+                                                           [ATraining Progress:  20%|██        | 6/30 [01:11<03:17,  8.25s/epoch, Time: 71.7s | loss=6.7014 val_loss=9.7278]Training Progress:  23%|██▎       | 7/30 [01:11<02:57,  7.73s/epoch, Time: 71.7s | loss=6.7014 val_loss=9.7278]
+Epoch 8:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 8:   7%|▋         | 1/15 [00:00<00:04,  2.97batch/s][A
+Epoch 8:  13%|█▎        | 2/15 [00:00<00:04,  3.08batch/s][A
+Epoch 8:  20%|██        | 3/15 [00:00<00:03,  3.10batch/s][A
+Epoch 8:  27%|██▋       | 4/15 [00:01<00:03,  3.12batch/s][A
+Epoch 8:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 8:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 8:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 8:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 8:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 8:  67%|██████▋   | 10/15 [00:03<00:01,  3.10batch/s][A
+Epoch 8:  73%|███████▎  | 11/15 [00:03<00:01,  3.08batch/s][A
+Epoch 8:  80%|████████  | 12/15 [00:03<00:00,  3.08batch/s][A
+Epoch 8:  87%|████████▋ | 13/15 [00:04<00:00,  3.11batch/s][A
+Epoch 8:  93%|█████████▎| 14/15 [00:04<00:00,  3.13batch/s][A
+Epoch 8: 100%|██████████| 15/15 [00:04<00:00,  3.76batch/s][A
+                                                           [ATraining Progress:  23%|██▎       | 7/30 [01:18<02:57,  7.73s/epoch, Time: 78.5s | loss=6.7554 val_loss=9.5182]Training Progress:  27%|██▋       | 8/30 [01:18<02:43,  7.45s/epoch, Time: 78.5s | loss=6.7554 val_loss=9.5182]
+Epoch 9:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 9:   7%|▋         | 1/15 [00:00<00:04,  2.96batch/s][A
+Epoch 9:  13%|█▎        | 2/15 [00:00<00:04,  3.08batch/s][A
+Epoch 9:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 9:  27%|██▋       | 4/15 [00:01<00:03,  3.15batch/s][A
+Epoch 9:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 9:  40%|████      | 6/15 [00:01<00:02,  3.18batch/s][A
+Epoch 9:  47%|████▋     | 7/15 [00:02<00:02,  3.18batch/s][A
+Epoch 9:  53%|█████▎    | 8/15 [00:02<00:02,  3.18batch/s][A
+Epoch 9:  60%|██████    | 9/15 [00:02<00:01,  3.18batch/s][A
+Epoch 9:  67%|██████▋   | 10/15 [00:03<00:01,  3.19batch/s][A
+Epoch 9:  73%|███████▎  | 11/15 [00:03<00:01,  3.15batch/s][A
+Epoch 9:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 9:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 9:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 9: 100%|██████████| 15/15 [00:04<00:00,  3.79batch/s][A
+                                                           [ATraining Progress:  27%|██▋       | 8/30 [01:25<02:43,  7.45s/epoch, Time: 85.3s | loss=6.2059 val_loss=9.6334]Training Progress:  30%|███       | 9/30 [01:25<02:31,  7.23s/epoch, Time: 85.3s | loss=6.2059 val_loss=9.6334]
+Epoch 10:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 10:   7%|▋         | 1/15 [00:00<00:04,  2.95batch/s][A
+Epoch 10:  13%|█▎        | 2/15 [00:00<00:04,  3.10batch/s][A
+Epoch 10:  20%|██        | 3/15 [00:00<00:03,  3.14batch/s][A
+Epoch 10:  27%|██▋       | 4/15 [00:01<00:03,  3.16batch/s][A
+Epoch 10:  33%|███▎      | 5/15 [00:01<00:03,  3.17batch/s][A
+Epoch 10:  40%|████      | 6/15 [00:01<00:02,  3.13batch/s][A
+Epoch 10:  47%|████▋     | 7/15 [00:02<00:02,  3.16batch/s][A
+Epoch 10:  53%|█████▎    | 8/15 [00:02<00:02,  3.17batch/s][A
+Epoch 10:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 10:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 10:  73%|███████▎  | 11/15 [00:03<00:01,  3.16batch/s][A
+Epoch 10:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 10:  87%|████████▋ | 13/15 [00:04<00:00,  3.17batch/s][A
+Epoch 10:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 10: 100%|██████████| 15/15 [00:04<00:00,  3.80batch/s][A
+                                                            [ATraining Progress:  30%|███       | 9/30 [01:31<02:31,  7.23s/epoch, Time: 91.9s | loss=6.0663 val_loss=9.5863]Training Progress:  33%|███▎      | 10/30 [01:31<02:21,  7.05s/epoch, Time: 91.9s | loss=6.0663 val_loss=9.5863]
+Epoch 11:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 11:   7%|▋         | 1/15 [00:00<00:04,  2.95batch/s][A
+Epoch 11:  13%|█▎        | 2/15 [00:00<00:04,  3.08batch/s][A
+Epoch 11:  20%|██        | 3/15 [00:00<00:03,  3.10batch/s][A
+Epoch 11:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 11:  33%|███▎      | 5/15 [00:01<00:03,  3.13batch/s][A
+Epoch 11:  40%|████      | 6/15 [00:01<00:02,  3.15batch/s][A
+Epoch 11:  47%|████▋     | 7/15 [00:02<00:02,  3.15batch/s][A
+Epoch 11:  53%|█████▎    | 8/15 [00:02<00:02,  3.16batch/s][A
+Epoch 11:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 11:  67%|██████▋   | 10/15 [00:03<00:01,  3.16batch/s][A
+Epoch 11:  73%|███████▎  | 11/15 [00:03<00:01,  3.14batch/s][A
+Epoch 11:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 11:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 11:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 11: 100%|██████████| 15/15 [00:04<00:00,  3.84batch/s][A
+                                                            [ATraining Progress:  33%|███▎      | 10/30 [01:38<02:21,  7.05s/epoch, Time: 98.7s | loss=6.0437 val_loss=9.4546]Training Progress:  37%|███▋      | 11/30 [01:38<02:12,  6.97s/epoch, Time: 98.7s | loss=6.0437 val_loss=9.4546]Epoch 10: Params plateau (score=0.480, mean=1.56%, slope=+0.08%/ep)
+
+Epoch 12:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 12:   7%|▋         | 1/15 [00:00<00:04,  3.00batch/s][A
+Epoch 12:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 12:  20%|██        | 3/15 [00:00<00:03,  3.14batch/s][A
+Epoch 12:  27%|██▋       | 4/15 [00:01<00:03,  3.16batch/s][A
+Epoch 12:  33%|███▎      | 5/15 [00:01<00:03,  3.16batch/s][A
+Epoch 12:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 12:  47%|████▋     | 7/15 [00:02<00:02,  3.13batch/s][A
+Epoch 12:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 12:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 12:  67%|██████▋   | 10/15 [00:03<00:01,  3.16batch/s][A
+Epoch 12:  73%|███████▎  | 11/15 [00:03<00:01,  3.16batch/s][A
+Epoch 12:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 12:  87%|████████▋ | 13/15 [00:04<00:00,  3.18batch/s][A
+Epoch 12:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 12: 100%|██████████| 15/15 [00:04<00:00,  3.83batch/s][A
+                                                            [ATraining Progress:  37%|███▋      | 11/30 [01:45<02:12,  6.97s/epoch, Time: 105.4s | loss=5.9039 val_loss=9.5542]Training Progress:  40%|████      | 12/30 [01:45<02:03,  6.87s/epoch, Time: 105.4s | loss=5.9039 val_loss=9.5542]
+Epoch 13:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 13:   7%|▋         | 1/15 [00:00<00:04,  2.96batch/s][A
+Epoch 13:  13%|█▎        | 2/15 [00:00<00:04,  3.12batch/s][A
+Epoch 13:  20%|██        | 3/15 [00:00<00:03,  3.14batch/s][A
+Epoch 13:  27%|██▋       | 4/15 [00:01<00:03,  3.16batch/s][A
+Epoch 13:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 13:  40%|████      | 6/15 [00:01<00:02,  3.14batch/s][A
+Epoch 13:  47%|████▋     | 7/15 [00:02<00:02,  3.15batch/s][A
+Epoch 13:  53%|█████▎    | 8/15 [00:02<00:02,  3.16batch/s][A
+Epoch 13:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 13:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 13:  73%|███████▎  | 11/15 [00:03<00:01,  3.14batch/s][A
+Epoch 13:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 13:  87%|████████▋ | 13/15 [00:04<00:00,  3.18batch/s][A
+Epoch 13:  93%|█████████▎| 14/15 [00:04<00:00,  3.19batch/s][A
+Epoch 13: 100%|██████████| 15/15 [00:04<00:00,  3.84batch/s][A
+                                                            [ATraining Progress:  40%|████      | 12/30 [01:52<02:03,  6.87s/epoch, Time: 112.0s | loss=5.8356 val_loss=9.5760]Training Progress:  43%|████▎     | 13/30 [01:52<01:55,  6.80s/epoch, Time: 112.0s | loss=5.8356 val_loss=9.5760]
+Epoch 14:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 14:   7%|▋         | 1/15 [00:00<00:04,  2.96batch/s][A
+Epoch 14:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 14:  20%|██        | 3/15 [00:00<00:03,  3.15batch/s][A
+Epoch 14:  27%|██▋       | 4/15 [00:01<00:03,  3.16batch/s][A
+Epoch 14:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 14:  40%|████      | 6/15 [00:01<00:02,  3.09batch/s][A
+Epoch 14:  47%|████▋     | 7/15 [00:02<00:02,  3.10batch/s][A
+Epoch 14:  53%|█████▎    | 8/15 [00:02<00:02,  3.12batch/s][A
+Epoch 14:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 14:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 14:  73%|███████▎  | 11/15 [00:03<00:01,  3.19batch/s][A
+Epoch 14:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 14:  87%|████████▋ | 13/15 [00:04<00:00,  3.18batch/s][A
+Epoch 14:  93%|█████████▎| 14/15 [00:04<00:00,  3.18batch/s][A
+Epoch 14: 100%|██████████| 15/15 [00:04<00:00,  3.79batch/s][A
+                                                            [ATraining Progress:  43%|████▎     | 13/30 [01:58<01:55,  6.80s/epoch, Time: 118.7s | loss=5.6563 val_loss=9.5869]Training Progress:  47%|████▋     | 14/30 [01:58<01:48,  6.77s/epoch, Time: 118.7s | loss=5.6563 val_loss=9.5869]
+Epoch 15:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 15:   7%|▋         | 1/15 [00:00<00:04,  2.97batch/s][A
+Epoch 15:  13%|█▎        | 2/15 [00:00<00:04,  3.06batch/s][A
+Epoch 15:  20%|██        | 3/15 [00:00<00:03,  3.12batch/s][A
+Epoch 15:  27%|██▋       | 4/15 [00:01<00:03,  3.14batch/s][A
+Epoch 15:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 15:  40%|████      | 6/15 [00:01<00:02,  3.15batch/s][A
+Epoch 15:  47%|████▋     | 7/15 [00:02<00:02,  3.15batch/s][A
+Epoch 15:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 15:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 15:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 15:  73%|███████▎  | 11/15 [00:03<00:01,  3.12batch/s][A
+Epoch 15:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 15:  87%|████████▋ | 13/15 [00:04<00:00,  3.16batch/s][A
+Epoch 15:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 15: 100%|██████████| 15/15 [00:04<00:00,  3.81batch/s][A
+                                                            [ATraining Progress:  47%|████▋     | 14/30 [02:05<01:48,  6.77s/epoch, Time: 125.4s | loss=5.4239 val_loss=9.9485]Training Progress:  50%|█████     | 15/30 [02:05<01:41,  6.74s/epoch, Time: 125.4s | loss=5.4239 val_loss=9.9485]
+Epoch 16:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 16:   7%|▋         | 1/15 [00:00<00:04,  2.92batch/s][A
+Epoch 16:  13%|█▎        | 2/15 [00:00<00:04,  3.06batch/s][A
+Epoch 16:  20%|██        | 3/15 [00:00<00:03,  3.11batch/s][A
+Epoch 16:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 16:  33%|███▎      | 5/15 [00:01<00:03,  3.13batch/s][A
+Epoch 16:  40%|████      | 6/15 [00:01<00:02,  3.09batch/s][A
+Epoch 16:  47%|████▋     | 7/15 [00:02<00:02,  3.12batch/s][A
+Epoch 16:  53%|█████▎    | 8/15 [00:02<00:02,  3.13batch/s][A
+Epoch 16:  60%|██████    | 9/15 [00:02<00:01,  3.14batch/s][A
+Epoch 16:  67%|██████▋   | 10/15 [00:03<00:01,  3.12batch/s][A
+Epoch 16:  73%|███████▎  | 11/15 [00:03<00:01,  3.13batch/s][A
+Epoch 16:  80%|████████  | 12/15 [00:03<00:00,  3.14batch/s][A
+Epoch 16:  87%|████████▋ | 13/15 [00:04<00:00,  3.14batch/s][A
+Epoch 16:  93%|█████████▎| 14/15 [00:04<00:00,  3.14batch/s][A
+Epoch 16: 100%|██████████| 15/15 [00:04<00:00,  3.78batch/s][A
+                                                            [ATraining Progress:  50%|█████     | 15/30 [02:12<01:41,  6.74s/epoch, Time: 132.1s | loss=5.3614 val_loss=9.7468]Training Progress:  53%|█████▎    | 16/30 [02:12<01:34,  6.74s/epoch, Time: 132.1s | loss=5.3614 val_loss=9.7468]Epoch 15: Params plateau (score=0.565, mean=1.31%, slope=-0.01%/ep)
+
+Epoch 17:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 17:   7%|▋         | 1/15 [00:00<00:04,  2.97batch/s][A
+Epoch 17:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 17:  20%|██        | 3/15 [00:00<00:03,  3.12batch/s][A
+Epoch 17:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 17:  33%|███▎      | 5/15 [00:01<00:03,  3.11batch/s][A
+Epoch 17:  40%|████      | 6/15 [00:01<00:02,  3.11batch/s][A
+Epoch 17:  47%|████▋     | 7/15 [00:02<00:02,  3.12batch/s][A
+Epoch 17:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 17:  60%|██████    | 9/15 [00:02<00:01,  3.14batch/s][A
+Epoch 17:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 17:  73%|███████▎  | 11/15 [00:03<00:01,  3.12batch/s][A
+Epoch 17:  80%|████████  | 12/15 [00:03<00:00,  3.13batch/s][A
+Epoch 17:  87%|████████▋ | 13/15 [00:04<00:00,  3.13batch/s][A
+Epoch 17:  93%|█████████▎| 14/15 [00:04<00:00,  3.14batch/s][A
+Epoch 17: 100%|██████████| 15/15 [00:04<00:00,  3.79batch/s][A
+                                                            [ATraining Progress:  53%|█████▎    | 16/30 [02:18<01:34,  6.74s/epoch, Time: 138.9s | loss=5.3245 val_loss=9.9768]Training Progress:  57%|█████▋    | 17/30 [02:18<01:27,  6.75s/epoch, Time: 138.9s | loss=5.3245 val_loss=9.9768]Training Progress:  57%|█████▋    | 17/30 [02:18<01:27,  6.75s/epoch, Completed in 138.9s]                       Training Progress:  57%|█████▋    | 17/30 [02:18<01:46,  8.17s/epoch, Completed in 138.9s]
+
+=== Indicator Learning Summary ===
+Total epochs tracked: 17
+Parameters logged per epoch: ~284
+CSV saved to: D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0\indicator_params_history.csv
+Final Convergence Score: 0.135
+Final Mean Change:    2.59%
+Final Std Change:     1.50%
+Final Slope:          +0.04%/ep  (accelerating)
+Serving the weights of epoch 11 of 17 (val_loss 9.4546): best validation epoch, restored by EarlyStopping (stopped at epoch 17)
+model_checkpoint wrote the best-on-validation weights to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0\weights.h5
+Evaluating enhanced model...
+
+[Diagnostic: Prediction Statistics]
+  h0(10min): pred_mean=16.394768, true_mean=-1.612014 | pred_std=26.385218, true_std=165.084152
+         pred_range=[-81.997169, 153.176331], true_range=[-3364.000000, 2677.000000]
+  h1(15min): pred_mean=-0.101627, true_mean=-2.416296 | pred_std=58.814037, true_std=199.750229
+         pred_range=[-225.430283, 225.267975], true_range=[-3399.000000, 2740.000000]
+  h2(20min): pred_mean=8.288404, true_mean=-3.211157 | pred_std=61.351845, true_std=230.136398
+         pred_range=[-236.318542, 304.992737], true_range=[-3226.000000, 3282.000000]
+
+Fitting CalibrationPipeline on the calibration split...
+CalibrationPipeline: fitting on 14282 samples
+
+[1/2] Temperature scaling (direction heads)...
+  TemperatureScaler [h0]: T = 2.4469
+  TemperatureScaler [h1]: T = 1.5723
+  TemperatureScaler [h2]: T = 1.9371
+Delta shrinkage (least-squares scale of the price heads on this block): h0 0.001, h1 0.020, h2 0.000
+
+[2/2] Conformal regressors (price delta intervals, scale=realized_vol)...
+ConformalRegressor: fitted on 14282 samples, median score = 0.6447
+  [h0] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 248.67 raw units
+ConformalRegressor: fitted on 14282 samples, median score = 0.6602
+  [h1] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 301.30 raw units
+ConformalRegressor: fitted on 14282 samples, median score = 0.6525
+  [h2] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 337.37 raw units
+
+CalibrationPipeline: fitting complete.
+  [test] h0: conformal coverage@90 = 0.906 (target >= 0.90), mean width = 513.51 raw units, T = 2.447
+  [test] h1: conformal coverage@90 = 0.904 (target >= 0.90), mean width = 622.19 raw units, T = 1.572
+  [test] h2: conformal coverage@90 = 0.897 (target >= 0.90), mean width = 696.68 raw units, T = 1.937
+Dataset length after cleaning: 4598198
+Date range after cleaning: 2017-01-01 00:00:00 to 2025-09-29 23:57:00
+[scenario micro_ohlcv_duel] ohlcv14__f-2__s0 done in 290.4 s -> D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0 (net Sharpe -174.91119372650806, trades 2048.0)
+[scenario micro_ohlcv_duel] cell 2/3 ohlcv14__f-2__s1 (dev fold -2, seed 1)
+Training on /physical_device:GPU:0
+Starting enhanced model training with extended trend features...
+Dataset length after cleaning: 4598198
+Date range after cleaning: 2017-01-01 00:00:00 to 2025-09-29 23:57:00
+Sequences with extended trends: (4598119, 60), (4598119, 3), Extended: (4598119, 3)
+[OK] Limited sequence set from 4598119 to 129600 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 129600
+   Train sequences: 14396 (batches/epoch: 15)
+   Val sequences:   14282   Cal sequences: 14282   (purge gap: 80 sequences, fold 1)
+   Test sequences:  43200 (batches: 43)
+[calib] Warm-up forward passes over 1/15 batches (5% of epoch) to build the graph and layer losses before sampling...
+[calib] Sampling loss magnitudes over 2/15 batches (10% of epoch)...
+[calib] Sampled medians and updated lambdas:
+  λ_short        med=0.410565  1.0000 → 1.5677
+  λ_point        med=0.462802  1.0000 → 1.3907
+  λ_long         med=0.875963  1.0000 → 0.7348
+  λ_trend        med=0.561253  0.1000 → 0.1000
+  λ_dir          med=1.238526  1.0000 → 0.5197
+  λ_var          med=1.798723  1.0000 → 0.3578
+  λ_vol          med=0.503620  1.0000 → 1.2780
+  λ_crps         med=0.757379  1.0000 → 0.8498
+  λ_ece          med=0.376285  1.0000 → 1.7105
+  λ_t_perp       med=0.215047  0.1000 → 0.1000
+  λ_casimir      med=0.000318  0.1000 → 0.1000
+  λ_hd           med=1.090562  0.1000 → 0.1000
+  λ_ife          med=0.000000  0.1000 → 0.1000
+  Λ_vac(thr)     med=0.000000  0.0000 → 0.0000  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)
+[calib] ref_loss=0.643640  d_global=1.0  warmup=1/15  sample=2/15  clamp=[0.1, 20.0]
+Training for 30 epochs...
+Training Progress:   0%|          | 0/30 [00:00<?, ?epoch/s]
+Epoch 1:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 1:   7%|▋         | 1/15 [00:18<04:12, 18.02s/batch][A
+Epoch 1:  13%|█▎        | 2/15 [00:18<01:38,  7.60s/batch][A
+Epoch 1:  20%|██        | 3/15 [00:18<00:51,  4.28s/batch][A
+Epoch 1:  27%|██▋       | 4/15 [00:18<00:29,  2.71s/batch][A
+Epoch 1:  33%|███▎      | 5/15 [00:19<00:18,  1.85s/batch][A
+Epoch 1:  40%|████      | 6/15 [00:19<00:11,  1.33s/batch][A
+Epoch 1:  47%|████▋     | 7/15 [00:19<00:07,  1.00batch/s][A
+Epoch 1:  53%|█████▎    | 8/15 [00:20<00:05,  1.28batch/s][A
+Epoch 1:  60%|██████    | 9/15 [00:20<00:03,  1.58batch/s][A
+Epoch 1:  67%|██████▋   | 10/15 [00:20<00:02,  1.87batch/s][A
+Epoch 1:  73%|███████▎  | 11/15 [00:21<00:01,  2.12batch/s][A
+Epoch 1:  80%|████████  | 12/15 [00:21<00:01,  2.35batch/s][A
+Epoch 1:  87%|████████▋ | 13/15 [00:21<00:00,  2.54batch/s][A
+Epoch 1:  93%|█████████▎| 14/15 [00:22<00:00,  2.71batch/s][A
+Epoch 1: 100%|██████████| 15/15 [00:22<00:00,  2.25batch/s][A
+                                                           [ATraining Progress:   0%|          | 0/30 [00:29<?, ?epoch/s, Time: 29.5s | loss=7.9628 val_loss=9.1189]Training Progress:   3%|▎         | 1/30 [00:29<14:16, 29.52s/epoch, Time: 29.5s | loss=7.9628 val_loss=9.1189]Epoch 0: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1\indicator_params_history.csv
+
+Epoch 2:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 2:   7%|▋         | 1/15 [00:00<00:04,  2.98batch/s][A
+Epoch 2:  13%|█▎        | 2/15 [00:00<00:04,  3.10batch/s][A
+Epoch 2:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 2:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 2:  33%|███▎      | 5/15 [00:01<00:03,  3.13batch/s][A
+Epoch 2:  40%|████      | 6/15 [00:01<00:02,  3.11batch/s][A
+Epoch 2:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 2:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 2:  60%|██████    | 9/15 [00:02<00:01,  3.14batch/s][A
+Epoch 2:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 2:  73%|███████▎  | 11/15 [00:03<00:01,  3.18batch/s][A
+Epoch 2:  80%|████████  | 12/15 [00:03<00:00,  3.18batch/s][A
+Epoch 2:  87%|████████▋ | 13/15 [00:04<00:00,  3.17batch/s][A
+Epoch 2:  93%|█████████▎| 14/15 [00:04<00:00,  3.15batch/s][A
+Epoch 2: 100%|██████████| 15/15 [00:04<00:00,  3.81batch/s][A
+                                                           [ATraining Progress:   3%|▎         | 1/30 [00:36<14:16, 29.52s/epoch, Time: 36.3s | loss=6.9216 val_loss=8.7535]Training Progress:   7%|▋         | 2/30 [00:36<07:31, 16.13s/epoch, Time: 36.3s | loss=6.9216 val_loss=8.7535]Epoch 1: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1\indicator_params_history.csv
+
+Epoch 3:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 3:   7%|▋         | 1/15 [00:00<00:04,  2.89batch/s][A
+Epoch 3:  13%|█▎        | 2/15 [00:00<00:04,  3.07batch/s][A
+Epoch 3:  20%|██        | 3/15 [00:00<00:03,  3.12batch/s][A
+Epoch 3:  27%|██▋       | 4/15 [00:01<00:03,  3.15batch/s][A
+Epoch 3:  33%|███▎      | 5/15 [00:01<00:03,  3.17batch/s][A
+Epoch 3:  40%|████      | 6/15 [00:01<00:02,  3.18batch/s][A
+Epoch 3:  47%|████▋     | 7/15 [00:02<00:02,  3.18batch/s][A
+Epoch 3:  53%|█████▎    | 8/15 [00:02<00:02,  3.18batch/s][A
+Epoch 3:  60%|██████    | 9/15 [00:02<00:01,  3.18batch/s][A
+Epoch 3:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 3:  73%|███████▎  | 11/15 [00:03<00:01,  3.14batch/s][A
+Epoch 3:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 3:  87%|████████▋ | 13/15 [00:04<00:00,  3.16batch/s][A
+Epoch 3:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 3: 100%|██████████| 15/15 [00:04<00:00,  3.79batch/s][A
+                                                           [ATraining Progress:   7%|▋         | 2/30 [00:43<07:31, 16.13s/epoch, Time: 43.1s | loss=6.5503 val_loss=8.4597]Training Progress:  10%|█         | 3/30 [00:43<05:20, 11.86s/epoch, Time: 43.1s | loss=6.5503 val_loss=8.4597]Epoch 2: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1\indicator_params_history.csv
+
+Epoch 4:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 4:   7%|▋         | 1/15 [00:00<00:04,  2.95batch/s][A
+Epoch 4:  13%|█▎        | 2/15 [00:00<00:04,  3.07batch/s][A
+Epoch 4:  20%|██        | 3/15 [00:00<00:03,  3.11batch/s][A
+Epoch 4:  27%|██▋       | 4/15 [00:01<00:03,  3.14batch/s][A
+Epoch 4:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 4:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 4:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 4:  53%|█████▎    | 8/15 [00:02<00:02,  3.16batch/s][A
+Epoch 4:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 4:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 4:  73%|███████▎  | 11/15 [00:03<00:01,  3.15batch/s][A
+Epoch 4:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 4:  87%|████████▋ | 13/15 [00:04<00:00,  3.16batch/s][A
+Epoch 4:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 4: 100%|██████████| 15/15 [00:04<00:00,  3.80batch/s][A
+                                                           [ATraining Progress:  10%|█         | 3/30 [00:49<05:20, 11.86s/epoch, Time: 49.8s | loss=6.2826 val_loss=8.4125]Training Progress:  13%|█▎        | 4/30 [00:49<04:15,  9.84s/epoch, Time: 49.8s | loss=6.2826 val_loss=8.4125]
+Epoch 5:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 5:   7%|▋         | 1/15 [00:00<00:04,  3.00batch/s][A
+Epoch 5:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 5:  20%|██        | 3/15 [00:00<00:03,  3.14batch/s][A
+Epoch 5:  27%|██▋       | 4/15 [00:01<00:03,  3.16batch/s][A
+Epoch 5:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 5:  40%|████      | 6/15 [00:01<00:02,  3.16batch/s][A
+Epoch 5:  47%|████▋     | 7/15 [00:02<00:02,  3.16batch/s][A
+Epoch 5:  53%|█████▎    | 8/15 [00:02<00:02,  3.17batch/s][A
+Epoch 5:  60%|██████    | 9/15 [00:02<00:01,  3.18batch/s][A
+Epoch 5:  67%|██████▋   | 10/15 [00:03<00:01,  3.18batch/s][A
+Epoch 5:  73%|███████▎  | 11/15 [00:03<00:01,  3.15batch/s][A
+Epoch 5:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 5:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 5:  93%|█████████▎| 14/15 [00:04<00:00,  3.15batch/s][A
+Epoch 5: 100%|██████████| 15/15 [00:04<00:00,  3.78batch/s][A
+                                                           [ATraining Progress:  13%|█▎        | 4/30 [00:56<04:15,  9.84s/epoch, Time: 56.6s | loss=6.1586 val_loss=8.2881]Training Progress:  17%|█▋        | 5/30 [00:56<03:38,  8.74s/epoch, Time: 56.6s | loss=6.1586 val_loss=8.2881]
+Epoch 6:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 6:   7%|▋         | 1/15 [00:00<00:04,  2.93batch/s][A
+Epoch 6:  13%|█▎        | 2/15 [00:00<00:04,  3.08batch/s][A
+Epoch 6:  20%|██        | 3/15 [00:00<00:03,  3.12batch/s][A
+Epoch 6:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 6:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 6:  40%|████      | 6/15 [00:01<00:02,  3.11batch/s][A
+Epoch 6:  47%|████▋     | 7/15 [00:02<00:02,  3.12batch/s][A
+Epoch 6:  53%|█████▎    | 8/15 [00:02<00:02,  3.14batch/s][A
+Epoch 6:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 6:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 6:  73%|███████▎  | 11/15 [00:03<00:01,  3.16batch/s][A
+Epoch 6:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 6:  87%|████████▋ | 13/15 [00:04<00:00,  3.17batch/s][A
+Epoch 6:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 6: 100%|██████████| 15/15 [00:04<00:00,  3.81batch/s][A
+                                                           [ATraining Progress:  17%|█▋        | 5/30 [01:03<03:38,  8.74s/epoch, Time: 63.9s | loss=5.9540 val_loss=8.1041]Training Progress:  20%|██        | 6/30 [01:03<03:17,  8.24s/epoch, Time: 63.9s | loss=5.9540 val_loss=8.1041]Epoch 5: Params plateau (score=0.693, mean=0.92%, slope=+0.05%/ep)
+
+Epoch 7:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 7:   7%|▋         | 1/15 [00:00<00:05,  2.42batch/s][A
+Epoch 7:  13%|█▎        | 2/15 [00:00<00:05,  2.58batch/s][A
+Epoch 7:  20%|██        | 3/15 [00:01<00:04,  2.66batch/s][A
+Epoch 7:  27%|██▋       | 4/15 [00:01<00:04,  2.72batch/s][A
+Epoch 7:  33%|███▎      | 5/15 [00:01<00:03,  2.87batch/s][A
+Epoch 7:  40%|████      | 6/15 [00:02<00:03,  2.97batch/s][A
+Epoch 7:  47%|████▋     | 7/15 [00:02<00:02,  3.02batch/s][A
+Epoch 7:  53%|█████▎    | 8/15 [00:02<00:02,  3.06batch/s][A
+Epoch 7:  60%|██████    | 9/15 [00:03<00:01,  3.08batch/s][A
+Epoch 7:  67%|██████▋   | 10/15 [00:03<00:01,  3.11batch/s][A
+Epoch 7:  73%|███████▎  | 11/15 [00:03<00:01,  3.09batch/s][A
+Epoch 7:  80%|████████  | 12/15 [00:04<00:00,  3.10batch/s][A
+Epoch 7:  87%|████████▋ | 13/15 [00:04<00:00,  3.13batch/s][A
+Epoch 7:  93%|█████████▎| 14/15 [00:04<00:00,  3.15batch/s][A
+Epoch 7: 100%|██████████| 15/15 [00:04<00:00,  3.83batch/s][A
+                                                           [ATraining Progress:  20%|██        | 6/30 [01:10<03:17,  8.24s/epoch, Time: 70.9s | loss=5.8344 val_loss=8.0782]Training Progress:  23%|██▎       | 7/30 [01:10<03:00,  7.86s/epoch, Time: 70.9s | loss=5.8344 val_loss=8.0782]
+Epoch 8:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 8:   7%|▋         | 1/15 [00:00<00:04,  2.98batch/s][A
+Epoch 8:  13%|█▎        | 2/15 [00:00<00:04,  3.06batch/s][A
+Epoch 8:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 8:  27%|██▋       | 4/15 [00:01<00:03,  3.15batch/s][A
+Epoch 8:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 8:  40%|████      | 6/15 [00:01<00:02,  3.13batch/s][A
+Epoch 8:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 8:  53%|█████▎    | 8/15 [00:02<00:02,  3.07batch/s][A
+Epoch 8:  60%|██████    | 9/15 [00:02<00:01,  3.02batch/s][A
+Epoch 8:  67%|██████▋   | 10/15 [00:03<00:01,  3.05batch/s][A
+Epoch 8:  73%|███████▎  | 11/15 [00:03<00:01,  3.08batch/s][A
+Epoch 8:  80%|████████  | 12/15 [00:03<00:00,  3.10batch/s][A
+Epoch 8:  87%|████████▋ | 13/15 [00:04<00:00,  3.12batch/s][A
+Epoch 8:  93%|█████████▎| 14/15 [00:04<00:00,  3.14batch/s][A
+Epoch 8: 100%|██████████| 15/15 [00:04<00:00,  3.77batch/s][A
+                                                           [ATraining Progress:  23%|██▎       | 7/30 [01:17<03:00,  7.86s/epoch, Time: 77.8s | loss=5.7690 val_loss=7.9991]Training Progress:  27%|██▋       | 8/30 [01:17<02:45,  7.53s/epoch, Time: 77.8s | loss=5.7690 val_loss=7.9991]
+Epoch 9:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 9:   7%|▋         | 1/15 [00:00<00:04,  2.98batch/s][A
+Epoch 9:  13%|█▎        | 2/15 [00:00<00:04,  3.11batch/s][A
+Epoch 9:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 9:  27%|██▋       | 4/15 [00:01<00:03,  3.15batch/s][A
+Epoch 9:  33%|███▎      | 5/15 [00:01<00:03,  3.17batch/s][A
+Epoch 9:  40%|████      | 6/15 [00:01<00:02,  3.18batch/s][A
+Epoch 9:  47%|████▋     | 7/15 [00:02<00:02,  3.19batch/s][A
+Epoch 9:  53%|█████▎    | 8/15 [00:02<00:02,  3.18batch/s][A
+Epoch 9:  60%|██████    | 9/15 [00:02<00:01,  3.18batch/s][A
+Epoch 9:  67%|██████▋   | 10/15 [00:03<00:01,  3.16batch/s][A
+Epoch 9:  73%|███████▎  | 11/15 [00:03<00:01,  3.12batch/s][A
+Epoch 9:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 9:  87%|████████▋ | 13/15 [00:04<00:00,  3.15batch/s][A
+Epoch 9:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 9: 100%|██████████| 15/15 [00:04<00:00,  3.81batch/s][A
+                                                           [ATraining Progress:  27%|██▋       | 8/30 [01:24<02:45,  7.53s/epoch, Time: 84.4s | loss=5.5857 val_loss=8.0802]Training Progress:  30%|███       | 9/30 [01:24<02:32,  7.25s/epoch, Time: 84.4s | loss=5.5857 val_loss=8.0802]
+Epoch 10:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 10:   7%|▋         | 1/15 [00:00<00:04,  2.99batch/s][A
+Epoch 10:  13%|█▎        | 2/15 [00:00<00:04,  3.12batch/s][A
+Epoch 10:  20%|██        | 3/15 [00:00<00:03,  3.17batch/s][A
+Epoch 10:  27%|██▋       | 4/15 [00:01<00:03,  3.18batch/s][A
+Epoch 10:  33%|███▎      | 5/15 [00:01<00:03,  3.18batch/s][A
+Epoch 10:  40%|████      | 6/15 [00:01<00:02,  3.16batch/s][A
+Epoch 10:  47%|████▋     | 7/15 [00:02<00:02,  3.18batch/s][A
+Epoch 10:  53%|█████▎    | 8/15 [00:02<00:02,  3.18batch/s][A
+Epoch 10:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 10:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 10:  73%|███████▎  | 11/15 [00:03<00:01,  3.17batch/s][A
+Epoch 10:  80%|████████  | 12/15 [00:03<00:00,  3.18batch/s][A
+Epoch 10:  87%|████████▋ | 13/15 [00:04<00:00,  3.20batch/s][A
+Epoch 10:  93%|█████████▎| 14/15 [00:04<00:00,  3.19batch/s][A
+Epoch 10: 100%|██████████| 15/15 [00:04<00:00,  3.86batch/s][A
+                                                            [ATraining Progress:  30%|███       | 9/30 [01:30<02:32,  7.25s/epoch, Time: 91.0s | loss=5.3781 val_loss=8.0643]Training Progress:  33%|███▎      | 10/30 [01:30<02:20,  7.05s/epoch, Time: 91.0s | loss=5.3781 val_loss=8.0643]
+Epoch 11:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 11:   7%|▋         | 1/15 [00:00<00:04,  2.97batch/s][A
+Epoch 11:  13%|█▎        | 2/15 [00:00<00:04,  3.09batch/s][A
+Epoch 11:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 11:  27%|██▋       | 4/15 [00:01<00:03,  3.14batch/s][A
+Epoch 11:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 11:  40%|████      | 6/15 [00:01<00:02,  3.15batch/s][A
+Epoch 11:  47%|████▋     | 7/15 [00:02<00:02,  3.16batch/s][A
+Epoch 11:  53%|█████▎    | 8/15 [00:02<00:02,  3.17batch/s][A
+Epoch 11:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 11:  67%|██████▋   | 10/15 [00:03<00:01,  3.18batch/s][A
+Epoch 11:  73%|███████▎  | 11/15 [00:03<00:01,  3.15batch/s][A
+Epoch 11:  80%|████████  | 12/15 [00:03<00:00,  3.17batch/s][A
+Epoch 11:  87%|████████▋ | 13/15 [00:04<00:00,  3.17batch/s][A
+Epoch 11:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 11: 100%|██████████| 15/15 [00:04<00:00,  3.83batch/s][A
+                                                            [ATraining Progress:  33%|███▎      | 10/30 [01:37<02:20,  7.05s/epoch, Time: 97.7s | loss=5.3431 val_loss=8.0206]Training Progress:  37%|███▋      | 11/30 [01:37<02:11,  6.93s/epoch, Time: 97.7s | loss=5.3431 val_loss=8.0206]Epoch 10: Params plateau (score=0.648, mean=1.06%, slope=+0.04%/ep)
+
+Epoch 12:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 12:   7%|▋         | 1/15 [00:00<00:04,  2.94batch/s][A
+Epoch 12:  13%|█▎        | 2/15 [00:00<00:04,  3.07batch/s][A
+Epoch 12:  20%|██        | 3/15 [00:00<00:03,  3.11batch/s][A
+Epoch 12:  27%|██▋       | 4/15 [00:01<00:03,  3.14batch/s][A
+Epoch 12:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 12:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 12:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 12:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 12:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 12:  67%|██████▋   | 10/15 [00:03<00:01,  3.18batch/s][A
+Epoch 12:  73%|███████▎  | 11/15 [00:03<00:01,  3.18batch/s][A
+Epoch 12:  80%|████████  | 12/15 [00:03<00:00,  3.18batch/s][A
+Epoch 12:  87%|████████▋ | 13/15 [00:04<00:00,  3.17batch/s][A
+Epoch 12:  93%|█████████▎| 14/15 [00:04<00:00,  3.18batch/s][A
+Epoch 12: 100%|██████████| 15/15 [00:04<00:00,  3.83batch/s][A
+                                                            [ATraining Progress:  37%|███▋      | 11/30 [01:44<02:11,  6.93s/epoch, Time: 104.4s | loss=5.2395 val_loss=7.9144]Training Progress:  40%|████      | 12/30 [01:44<02:03,  6.87s/epoch, Time: 104.4s | loss=5.2395 val_loss=7.9144]
+Epoch 13:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 13:   7%|▋         | 1/15 [00:00<00:04,  3.02batch/s][A
+Epoch 13:  13%|█▎        | 2/15 [00:00<00:04,  3.11batch/s][A
+Epoch 13:  20%|██        | 3/15 [00:00<00:03,  3.14batch/s][A
+Epoch 13:  27%|██▋       | 4/15 [00:01<00:03,  3.14batch/s][A
+Epoch 13:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 13:  40%|████      | 6/15 [00:01<00:02,  3.16batch/s][A
+Epoch 13:  47%|████▋     | 7/15 [00:02<00:02,  3.16batch/s][A
+Epoch 13:  53%|█████▎    | 8/15 [00:02<00:02,  3.16batch/s][A
+Epoch 13:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 13:  67%|██████▋   | 10/15 [00:03<00:01,  3.18batch/s][A
+Epoch 13:  73%|███████▎  | 11/15 [00:03<00:01,  3.13batch/s][A
+Epoch 13:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 13:  87%|████████▋ | 13/15 [00:04<00:00,  3.16batch/s][A
+Epoch 13:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 13: 100%|██████████| 15/15 [00:04<00:00,  3.83batch/s][A
+                                                            [ATraining Progress:  40%|████      | 12/30 [01:51<02:03,  6.87s/epoch, Time: 111.1s | loss=4.9648 val_loss=7.9700]Training Progress:  43%|████▎     | 13/30 [01:51<01:55,  6.81s/epoch, Time: 111.1s | loss=4.9648 val_loss=7.9700]
+Epoch 14:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 14:   7%|▋         | 1/15 [00:00<00:04,  2.96batch/s][A
+Epoch 14:  13%|█▎        | 2/15 [00:00<00:04,  3.07batch/s][A
+Epoch 14:  20%|██        | 3/15 [00:00<00:03,  3.06batch/s][A
+Epoch 14:  27%|██▋       | 4/15 [00:01<00:03,  3.02batch/s][A
+Epoch 14:  33%|███▎      | 5/15 [00:01<00:03,  2.98batch/s][A
+Epoch 14:  40%|████      | 6/15 [00:02<00:03,  2.92batch/s][A
+Epoch 14:  47%|████▋     | 7/15 [00:02<00:02,  2.90batch/s][A
+Epoch 14:  53%|█████▎    | 8/15 [00:02<00:02,  2.92batch/s][A
+Epoch 14:  60%|██████    | 9/15 [00:03<00:02,  2.91batch/s][A
+Epoch 14:  67%|██████▋   | 10/15 [00:03<00:01,  2.91batch/s][A
+Epoch 14:  73%|███████▎  | 11/15 [00:03<00:01,  2.92batch/s][A
+Epoch 14:  80%|████████  | 12/15 [00:04<00:01,  2.97batch/s][A
+Epoch 14:  87%|████████▋ | 13/15 [00:04<00:00,  3.04batch/s][A
+Epoch 14:  93%|█████████▎| 14/15 [00:04<00:00,  3.08batch/s][A
+Epoch 14: 100%|██████████| 15/15 [00:04<00:00,  3.76batch/s][A
+                                                            [ATraining Progress:  43%|████▎     | 13/30 [01:57<01:55,  6.81s/epoch, Time: 117.9s | loss=4.8713 val_loss=8.1868]Training Progress:  47%|████▋     | 14/30 [01:57<01:49,  6.83s/epoch, Time: 117.9s | loss=4.8713 val_loss=8.1868]
+Epoch 15:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 15:   7%|▋         | 1/15 [00:00<00:04,  2.93batch/s][A
+Epoch 15:  13%|█▎        | 2/15 [00:00<00:04,  3.05batch/s][A
+Epoch 15:  20%|██        | 3/15 [00:00<00:03,  3.13batch/s][A
+Epoch 15:  27%|██▋       | 4/15 [00:01<00:03,  3.15batch/s][A
+Epoch 15:  33%|███▎      | 5/15 [00:01<00:03,  3.17batch/s][A
+Epoch 15:  40%|████      | 6/15 [00:01<00:02,  3.19batch/s][A
+Epoch 15:  47%|████▋     | 7/15 [00:02<00:02,  3.14batch/s][A
+Epoch 15:  53%|█████▎    | 8/15 [00:02<00:02,  3.13batch/s][A
+Epoch 15:  60%|██████    | 9/15 [00:02<00:01,  3.15batch/s][A
+Epoch 15:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 15:  73%|███████▎  | 11/15 [00:03<00:01,  3.12batch/s][A
+Epoch 15:  80%|████████  | 12/15 [00:03<00:00,  3.14batch/s][A
+Epoch 15:  87%|████████▋ | 13/15 [00:04<00:00,  3.13batch/s][A
+Epoch 15:  93%|█████████▎| 14/15 [00:04<00:00,  3.15batch/s][A
+Epoch 15: 100%|██████████| 15/15 [00:04<00:00,  3.82batch/s][A
+                                                            [ATraining Progress:  47%|████▋     | 14/30 [02:04<01:49,  6.83s/epoch, Time: 124.6s | loss=4.6640 val_loss=8.5118]Training Progress:  50%|█████     | 15/30 [02:04<01:41,  6.79s/epoch, Time: 124.6s | loss=4.6640 val_loss=8.5118]
+Epoch 16:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 16:   7%|▋         | 1/15 [00:00<00:04,  2.99batch/s][A
+Epoch 16:  13%|█▎        | 2/15 [00:00<00:04,  3.10batch/s][A
+Epoch 16:  20%|██        | 3/15 [00:00<00:03,  3.11batch/s][A
+Epoch 16:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 16:  33%|███▎      | 5/15 [00:01<00:03,  3.12batch/s][A
+Epoch 16:  40%|████      | 6/15 [00:01<00:02,  3.10batch/s][A
+Epoch 16:  47%|████▋     | 7/15 [00:02<00:02,  3.13batch/s][A
+Epoch 16:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 16:  60%|██████    | 9/15 [00:02<00:01,  3.16batch/s][A
+Epoch 16:  67%|██████▋   | 10/15 [00:03<00:01,  3.16batch/s][A
+Epoch 16:  73%|███████▎  | 11/15 [00:03<00:01,  3.16batch/s][A
+Epoch 16:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 16:  87%|████████▋ | 13/15 [00:04<00:00,  3.16batch/s][A
+Epoch 16:  93%|█████████▎| 14/15 [00:04<00:00,  3.16batch/s][A
+Epoch 16: 100%|██████████| 15/15 [00:04<00:00,  3.82batch/s][A
+                                                            [ATraining Progress:  50%|█████     | 15/30 [02:11<01:41,  6.79s/epoch, Time: 131.3s | loss=4.5512 val_loss=8.5002]Training Progress:  53%|█████▎    | 16/30 [02:11<01:34,  6.76s/epoch, Time: 131.3s | loss=4.5512 val_loss=8.5002]Epoch 15: Params plateau (score=0.456, mean=1.63%, slope=-0.06%/ep)
+
+Epoch 17:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 17:   7%|▋         | 1/15 [00:00<00:04,  2.93batch/s][A
+Epoch 17:  13%|█▎        | 2/15 [00:00<00:04,  3.08batch/s][A
+Epoch 17:  20%|██        | 3/15 [00:00<00:03,  3.09batch/s][A
+Epoch 17:  27%|██▋       | 4/15 [00:01<00:03,  3.03batch/s][A
+Epoch 17:  33%|███▎      | 5/15 [00:01<00:03,  3.01batch/s][A
+Epoch 17:  40%|████      | 6/15 [00:01<00:02,  3.02batch/s][A
+Epoch 17:  47%|████▋     | 7/15 [00:02<00:02,  3.06batch/s][A
+Epoch 17:  53%|█████▎    | 8/15 [00:02<00:02,  3.10batch/s][A
+Epoch 17:  60%|██████    | 9/15 [00:02<00:01,  3.14batch/s][A
+Epoch 17:  67%|██████▋   | 10/15 [00:03<00:01,  3.15batch/s][A
+Epoch 17:  73%|███████▎  | 11/15 [00:03<00:01,  3.13batch/s][A
+Epoch 17:  80%|████████  | 12/15 [00:03<00:00,  3.15batch/s][A
+Epoch 17:  87%|████████▋ | 13/15 [00:04<00:00,  3.16batch/s][A
+Epoch 17:  93%|█████████▎| 14/15 [00:04<00:00,  3.17batch/s][A
+Epoch 17: 100%|██████████| 15/15 [00:04<00:00,  3.83batch/s][A
+                                                            [ATraining Progress:  53%|█████▎    | 16/30 [02:18<01:34,  6.76s/epoch, Time: 138.0s | loss=4.4546 val_loss=8.7608]Training Progress:  57%|█████▋    | 17/30 [02:18<01:27,  6.74s/epoch, Time: 138.0s | loss=4.4546 val_loss=8.7608]
+Epoch 18:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 18:   7%|▋         | 1/15 [00:00<00:04,  2.87batch/s][A
+Epoch 18:  13%|█▎        | 2/15 [00:00<00:04,  3.05batch/s][A
+Epoch 18:  20%|██        | 3/15 [00:00<00:03,  3.09batch/s][A
+Epoch 18:  27%|██▋       | 4/15 [00:01<00:03,  3.13batch/s][A
+Epoch 18:  33%|███▎      | 5/15 [00:01<00:03,  3.15batch/s][A
+Epoch 18:  40%|████      | 6/15 [00:01<00:02,  3.12batch/s][A
+Epoch 18:  47%|████▋     | 7/15 [00:02<00:02,  3.15batch/s][A
+Epoch 18:  53%|█████▎    | 8/15 [00:02<00:02,  3.15batch/s][A
+Epoch 18:  60%|██████    | 9/15 [00:02<00:01,  3.17batch/s][A
+Epoch 18:  67%|██████▋   | 10/15 [00:03<00:01,  3.17batch/s][A
+Epoch 18:  73%|███████▎  | 11/15 [00:03<00:01,  3.17batch/s][A
+Epoch 18:  80%|████████  | 12/15 [00:03<00:00,  3.19batch/s][A
+Epoch 18:  87%|████████▋ | 13/15 [00:04<00:00,  3.18batch/s][A
+Epoch 18:  93%|█████████▎| 14/15 [00:04<00:00,  3.20batch/s][A
+Epoch 18: 100%|██████████| 15/15 [00:04<00:00,  3.84batch/s][A
+                                                            [ATraining Progress:  57%|█████▋    | 17/30 [02:24<01:27,  6.74s/epoch, Time: 144.8s | loss=4.3590 val_loss=8.7701]Training Progress:  60%|██████    | 18/30 [02:24<01:21,  6.76s/epoch, Time: 144.8s | loss=4.3590 val_loss=8.7701]Training Progress:  60%|██████    | 18/30 [02:24<01:21,  6.76s/epoch, Completed in 144.9s]                       Training Progress:  60%|██████    | 18/30 [02:24<01:36,  8.05s/epoch, Completed in 144.9s]
+
+=== Indicator Learning Summary ===
+Total epochs tracked: 18
+Parameters logged per epoch: ~284
+CSV saved to: D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1\indicator_params_history.csv
+Final Convergence Score: 0.000
+Final Mean Change:    5.45%
+Final Std Change:     3.96%
+Final Slope:          +0.21%/ep  (accelerating)
+Serving the weights of epoch 12 of 18 (val_loss 7.9144): best validation epoch, restored by EarlyStopping (stopped at epoch 18)
+model_checkpoint wrote the best-on-validation weights to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1\weights.h5
+Evaluating enhanced model...
+
+[Diagnostic: Prediction Statistics]
+  h0(10min): pred_mean=5.785206, true_mean=-1.612014 | pred_std=22.996496, true_std=165.084152
+         pred_range=[-98.085487, 116.500946], true_range=[-3364.000000, 2677.000000]
+  h1(15min): pred_mean=10.077606, true_mean=-2.416296 | pred_std=35.174175, true_std=199.750229
+         pred_range=[-112.741592, 154.451614], true_range=[-3399.000000, 2740.000000]
+  h2(20min): pred_mean=17.965582, true_mean=-3.211157 | pred_std=53.462624, true_std=230.136398
+         pred_range=[-157.095993, 202.976410], true_range=[-3226.000000, 3282.000000]
+
+Fitting CalibrationPipeline on the calibration split...
+CalibrationPipeline: fitting on 14282 samples
+
+[1/2] Temperature scaling (direction heads)...
+  TemperatureScaler [h0]: T = 2.0380
+  TemperatureScaler [h1]: T = 1.9094
+  TemperatureScaler [h2]: T = 1.7928
+Delta shrinkage (least-squares scale of the price heads on this block): h0 0.024, h1 0.124, h2 0.128
+
+[2/2] Conformal regressors (price delta intervals, scale=realized_vol)...
+ConformalRegressor: fitted on 14282 samples, median score = 0.6447
+  [h0] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 248.82 raw units
+ConformalRegressor: fitted on 14282 samples, median score = 0.6622
+  [h1] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 301.47 raw units
+ConformalRegressor: fitted on 14282 samples, median score = 0.6523
+  [h2] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 338.00 raw units
+
+CalibrationPipeline: fitting complete.
+  [test] h0: conformal coverage@90 = 0.906 (target >= 0.90), mean width = 513.81 raw units, T = 2.038
+  [test] h1: conformal coverage@90 = 0.904 (target >= 0.90), mean width = 622.55 raw units, T = 1.909
+  [test] h2: conformal coverage@90 = 0.898 (target >= 0.90), mean width = 697.97 raw units, T = 1.793
+Dataset length after cleaning: 4598198
+Date range after cleaning: 2017-01-01 00:00:00 to 2025-09-29 23:57:00
+[scenario micro_ohlcv_duel] ohlcv14__f-2__s1 done in 295.7 s -> D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1 (net Sharpe -160.40632607267483, trades 1901.0)
+[scenario micro_ohlcv_duel] cell 3/3 ohlcv14__f-2__s2 (dev fold -2, seed 2)
+Training on /physical_device:GPU:0
+Starting enhanced model training with extended trend features...
+Dataset length after cleaning: 4598198
+Date range after cleaning: 2017-01-01 00:00:00 to 2025-09-29 23:57:00
+Sequences with extended trends: (4598119, 60), (4598119, 3), Extended: (4598119, 3)
+[OK] Limited sequence set from 4598119 to 129600 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 129600
+   Train sequences: 14396 (batches/epoch: 15)
+   Val sequences:   14282   Cal sequences: 14282   (purge gap: 80 sequences, fold 1)
+   Test sequences:  43200 (batches: 43)
+[calib] Warm-up forward passes over 1/15 batches (5% of epoch) to build the graph and layer losses before sampling...
+[calib] Sampling loss magnitudes over 2/15 batches (10% of epoch)...
+[calib] Sampled medians and updated lambdas:
+  λ_short        med=0.765161  1.0000 → 0.9380
+  λ_point        med=0.426671  1.0000 → 1.6821
+  λ_long         med=0.557677  1.0000 → 1.2870
+  λ_trend        med=0.579685  0.1000 → 0.1000
+  λ_dir          med=0.966436  1.0000 → 0.7426
+  λ_var          med=2.069399  1.0000 → 0.3468
+  λ_vol          med=0.488867  1.0000 → 1.4681
+  λ_crps         med=0.775945  1.0000 → 0.9250
+  λ_ece          med=0.287855  1.0000 → 2.4933
+  λ_t_perp       med=1.243788  0.1000 → 0.1000
+  λ_casimir      med=0.106043  0.1000 → 0.1000
+  λ_hd           med=0.987643  0.1000 → 0.1000
+  λ_ife          med=0.000000  0.1000 → 0.1000
+  Λ_vac(thr)     med=0.000000  0.0000 → 0.0000  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)
+[calib] ref_loss=0.717711  d_global=1.0  warmup=1/15  sample=2/15  clamp=[0.1, 20.0]
+Training for 30 epochs...
+Training Progress:   0%|          | 0/30 [00:00<?, ?epoch/s]
+Epoch 1:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 1:   7%|▋         | 1/15 [00:25<06:01, 25.79s/batch][A
+Epoch 1:  13%|█▎        | 2/15 [00:26<02:20, 10.81s/batch][A
+Epoch 1:  20%|██        | 3/15 [00:26<01:12,  6.02s/batch][A
+Epoch 1:  27%|██▋       | 4/15 [00:26<00:41,  3.77s/batch][A
+Epoch 1:  33%|███▎      | 5/15 [00:27<00:25,  2.53s/batch][A
+Epoch 1:  40%|████      | 6/15 [00:27<00:15,  1.78s/batch][A
+Epoch 1:  47%|████▋     | 7/15 [00:27<00:10,  1.30s/batch][A
+Epoch 1:  53%|█████▎    | 8/15 [00:28<00:06,  1.01batch/s][A
+Epoch 1:  60%|██████    | 9/15 [00:28<00:04,  1.28batch/s][A
+Epoch 1:  67%|██████▋   | 10/15 [00:28<00:03,  1.57batch/s][A
+Epoch 1:  73%|███████▎  | 11/15 [00:29<00:02,  1.84batch/s][A
+Epoch 1:  80%|████████  | 12/15 [00:29<00:01,  2.10batch/s][A
+Epoch 1:  87%|████████▋ | 13/15 [00:29<00:00,  2.34batch/s][A
+Epoch 1:  93%|█████████▎| 14/15 [00:29<00:00,  2.54batch/s][A
+Epoch 1: 100%|██████████| 15/15 [00:30<00:00,  1.87batch/s][A
+                                                           [ATraining Progress:   0%|          | 0/30 [00:46<?, ?epoch/s, Time: 46.9s | loss=8.7538 val_loss=9.8286]Training Progress:   3%|▎         | 1/30 [00:46<22:39, 46.89s/epoch, Time: 46.9s | loss=8.7538 val_loss=9.8286]Epoch 0: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2\indicator_params_history.csv
+
+Epoch 2:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 2:   7%|▋         | 1/15 [00:00<00:05,  2.48batch/s][A
+Epoch 2:  13%|█▎        | 2/15 [00:00<00:05,  2.45batch/s][A
+Epoch 2:  20%|██        | 3/15 [00:01<00:04,  2.59batch/s][A
+Epoch 2:  27%|██▋       | 4/15 [00:01<00:04,  2.57batch/s][A
+Epoch 2:  33%|███▎      | 5/15 [00:01<00:03,  2.57batch/s][A
+Epoch 2:  40%|████      | 6/15 [00:02<00:03,  2.58batch/s][A
+Epoch 2:  47%|████▋     | 7/15 [00:02<00:03,  2.57batch/s][A
+Epoch 2:  53%|█████▎    | 8/15 [00:03<00:02,  2.60batch/s][A
+Epoch 2:  60%|██████    | 9/15 [00:03<00:02,  2.59batch/s][A
+Epoch 2:  67%|██████▋   | 10/15 [00:03<00:01,  2.61batch/s][A
+Epoch 2:  73%|███████▎  | 11/15 [00:04<00:01,  2.57batch/s][A
+Epoch 2:  80%|████████  | 12/15 [00:04<00:01,  2.65batch/s][A
+Epoch 2:  87%|████████▋ | 13/15 [00:04<00:00,  2.67batch/s][A
+Epoch 2:  93%|█████████▎| 14/15 [00:05<00:00,  2.59batch/s][A
+Epoch 2: 100%|██████████| 15/15 [00:05<00:00,  3.14batch/s][A
+                                                           [ATraining Progress:   3%|▎         | 1/30 [00:55<22:39, 46.89s/epoch, Time: 55.6s | loss=7.6006 val_loss=9.5113]Training Progress:   7%|▋         | 2/30 [00:55<11:24, 24.46s/epoch, Time: 55.6s | loss=7.6006 val_loss=9.5113]Epoch 1: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2\indicator_params_history.csv
+
+Epoch 3:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 3:   7%|▋         | 1/15 [00:00<00:08,  1.66batch/s][A
+Epoch 3:  13%|█▎        | 2/15 [00:00<00:05,  2.19batch/s][A
+Epoch 3:  20%|██        | 3/15 [00:01<00:04,  2.40batch/s][A
+Epoch 3:  27%|██▋       | 4/15 [00:01<00:05,  2.17batch/s][A
+Epoch 3:  33%|███▎      | 5/15 [00:02<00:04,  2.31batch/s][A
+Epoch 3:  40%|████      | 6/15 [00:02<00:03,  2.42batch/s][A
+Epoch 3:  47%|████▋     | 7/15 [00:03<00:03,  2.17batch/s][A
+Epoch 3:  53%|█████▎    | 8/15 [00:03<00:03,  2.26batch/s][A
+Epoch 3:  60%|██████    | 9/15 [00:03<00:02,  2.38batch/s][A
+Epoch 3:  67%|██████▋   | 10/15 [00:04<00:02,  2.22batch/s][A
+Epoch 3:  73%|███████▎  | 11/15 [00:04<00:01,  2.23batch/s][A
+Epoch 3:  80%|████████  | 12/15 [00:05<00:01,  2.36batch/s][A
+Epoch 3:  87%|████████▋ | 13/15 [00:05<00:00,  2.41batch/s][A
+Epoch 3:  93%|█████████▎| 14/15 [00:06<00:00,  2.31batch/s][A
+Epoch 3: 100%|██████████| 15/15 [00:06<00:00,  2.80batch/s][A
+                                                           [ATraining Progress:   7%|▋         | 2/30 [01:04<11:24, 24.46s/epoch, Time: 64.9s | loss=7.1020 val_loss=9.5167]Training Progress:  10%|█         | 3/30 [01:04<07:52, 17.51s/epoch, Time: 64.9s | loss=7.1020 val_loss=9.5167]Epoch 2: Indicator params logged to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2\indicator_params_history.csv
+
+Epoch 4:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 4:   7%|▋         | 1/15 [00:00<00:06,  2.06batch/s][A
+Epoch 4:  13%|█▎        | 2/15 [00:00<00:06,  2.06batch/s][A
+Epoch 4:  20%|██        | 3/15 [00:01<00:05,  2.36batch/s][A
+Epoch 4:  27%|██▋       | 4/15 [00:01<00:04,  2.47batch/s][A
+Epoch 4:  33%|███▎      | 5/15 [00:02<00:04,  2.20batch/s][A
+Epoch 4:  40%|████      | 6/15 [00:02<00:04,  2.24batch/s][A
+Epoch 4:  47%|████▋     | 7/15 [00:03<00:03,  2.37batch/s][A
+Epoch 4:  53%|█████▎    | 8/15 [00:03<00:03,  2.25batch/s][A
+Epoch 4:  60%|██████    | 9/15 [00:03<00:02,  2.40batch/s][A
+Epoch 4:  67%|██████▋   | 10/15 [00:04<00:02,  2.48batch/s][A
+Epoch 4:  73%|███████▎  | 11/15 [00:04<00:01,  2.47batch/s][A
+Epoch 4:  80%|████████  | 12/15 [00:05<00:01,  2.53batch/s][A
+Epoch 4:  87%|████████▋ | 13/15 [00:05<00:00,  2.59batch/s][A
+Epoch 4:  93%|█████████▎| 14/15 [00:05<00:00,  2.67batch/s][A
+Epoch 4: 100%|██████████| 15/15 [00:05<00:00,  3.15batch/s][A
+                                                           [ATraining Progress:  10%|█         | 3/30 [01:13<07:52, 17.51s/epoch, Time: 73.7s | loss=6.9234 val_loss=9.2582]Training Progress:  13%|█▎        | 4/30 [01:13<06:05, 14.06s/epoch, Time: 73.7s | loss=6.9234 val_loss=9.2582]
+Epoch 5:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 5:   7%|▋         | 1/15 [00:00<00:05,  2.53batch/s][A
+Epoch 5:  13%|█▎        | 2/15 [00:00<00:05,  2.47batch/s][A
+Epoch 5:  20%|██        | 3/15 [00:01<00:05,  2.19batch/s][A
+Epoch 5:  27%|██▋       | 4/15 [00:01<00:04,  2.38batch/s][A
+Epoch 5:  33%|███▎      | 5/15 [00:02<00:04,  2.50batch/s][A
+Epoch 5:  40%|████      | 6/15 [00:02<00:04,  2.25batch/s][A
+Epoch 5:  47%|████▋     | 7/15 [00:02<00:03,  2.32batch/s][A
+Epoch 5:  53%|█████▎    | 8/15 [00:03<00:02,  2.45batch/s][A
+Epoch 5:  60%|██████    | 9/15 [00:03<00:02,  2.24batch/s][A
+Epoch 5:  67%|██████▋   | 10/15 [00:04<00:02,  2.31batch/s][A
+Epoch 5:  73%|███████▎  | 11/15 [00:04<00:01,  2.39batch/s][A
+Epoch 5:  80%|████████  | 12/15 [00:05<00:01,  2.23batch/s][A
+Epoch 5:  87%|████████▋ | 13/15 [00:05<00:00,  2.30batch/s][A
+Epoch 5:  93%|█████████▎| 14/15 [00:05<00:00,  2.42batch/s][A
+Epoch 5: 100%|██████████| 15/15 [00:06<00:00,  2.55batch/s][A
+                                                           [ATraining Progress:  13%|█▎        | 4/30 [01:23<06:05, 14.06s/epoch, Time: 83.1s | loss=6.7234 val_loss=9.4341]Training Progress:  17%|█▋        | 5/30 [01:23<05:10, 12.41s/epoch, Time: 83.1s | loss=6.7234 val_loss=9.4341]
+Epoch 6:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 6:   7%|▋         | 1/15 [00:00<00:05,  2.50batch/s][A
+Epoch 6:  13%|█▎        | 2/15 [00:00<00:05,  2.40batch/s][A
+Epoch 6:  20%|██        | 3/15 [00:01<00:05,  2.28batch/s][A
+Epoch 6:  27%|██▋       | 4/15 [00:01<00:04,  2.41batch/s][A
+Epoch 6:  33%|███▎      | 5/15 [00:02<00:04,  2.40batch/s][A
+Epoch 6:  40%|████      | 6/15 [00:02<00:04,  2.19batch/s][A
+Epoch 6:  47%|████▋     | 7/15 [00:02<00:03,  2.35batch/s][A
+Epoch 6:  53%|█████▎    | 8/15 [00:03<00:02,  2.35batch/s][A
+Epoch 6:  60%|██████    | 9/15 [00:03<00:02,  2.21batch/s][A
+Epoch 6:  67%|██████▋   | 10/15 [00:04<00:02,  2.35batch/s][A
+Epoch 6:  73%|███████▎  | 11/15 [00:04<00:01,  2.46batch/s][A
+Epoch 6:  80%|████████  | 12/15 [00:05<00:01,  2.24batch/s][A
+Epoch 6:  87%|████████▋ | 13/15 [00:05<00:00,  2.31batch/s][A
+Epoch 6:  93%|█████████▎| 14/15 [00:05<00:00,  2.43batch/s][A
+Epoch 6: 100%|██████████| 15/15 [00:06<00:00,  2.54batch/s][A
+                                                           [ATraining Progress:  17%|█▋        | 5/30 [01:32<05:10, 12.41s/epoch, Time: 92.5s | loss=6.5867 val_loss=9.1399]Training Progress:  20%|██        | 6/30 [01:32<04:32, 11.37s/epoch, Time: 92.5s | loss=6.5867 val_loss=9.1399]Epoch 5: Params plateau (score=0.761, mean=0.72%, slope=-0.05%/ep)
+
+Epoch 7:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 7:   7%|▋         | 1/15 [00:00<00:05,  2.41batch/s][A
+Epoch 7:  13%|█▎        | 2/15 [00:00<00:05,  2.49batch/s][A
+Epoch 7:  20%|██        | 3/15 [00:01<00:04,  2.57batch/s][A
+Epoch 7:  27%|██▋       | 4/15 [00:01<00:04,  2.59batch/s][A
+Epoch 7:  33%|███▎      | 5/15 [00:01<00:03,  2.67batch/s][A
+Epoch 7:  40%|████      | 6/15 [00:02<00:03,  2.54batch/s][A
+Epoch 7:  47%|████▋     | 7/15 [00:02<00:03,  2.52batch/s][A
+Epoch 7:  53%|█████▎    | 8/15 [00:03<00:02,  2.58batch/s][A
+Epoch 7:  60%|██████    | 9/15 [00:03<00:02,  2.31batch/s][A
+Epoch 7:  67%|██████▋   | 10/15 [00:04<00:02,  2.28batch/s][A
+Epoch 7:  73%|███████▎  | 11/15 [00:04<00:01,  2.35batch/s][A
+Epoch 7:  80%|████████  | 12/15 [00:05<00:01,  2.18batch/s][A
+Epoch 7:  87%|████████▋ | 13/15 [00:05<00:00,  2.22batch/s][A
+Epoch 7:  93%|█████████▎| 14/15 [00:05<00:00,  2.35batch/s][A
+Epoch 7: 100%|██████████| 15/15 [00:06<00:00,  2.45batch/s][A
+                                                           [ATraining Progress:  20%|██        | 6/30 [01:41<04:32, 11.37s/epoch, Time: 101.7s | loss=6.4013 val_loss=9.2432]Training Progress:  23%|██▎       | 7/30 [01:41<04:05, 10.66s/epoch, Time: 101.7s | loss=6.4013 val_loss=9.2432]
+Epoch 8:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 8:   7%|▋         | 1/15 [00:00<00:05,  2.63batch/s][A
+Epoch 8:  13%|█▎        | 2/15 [00:00<00:05,  2.50batch/s][A
+Epoch 8:  20%|██        | 3/15 [00:01<00:05,  2.36batch/s][A
+Epoch 8:  27%|██▋       | 4/15 [00:01<00:04,  2.37batch/s][A
+Epoch 8:  33%|███▎      | 5/15 [00:02<00:03,  2.51batch/s][A
+Epoch 8:  40%|████      | 6/15 [00:02<00:04,  2.21batch/s][A
+Epoch 8:  47%|████▋     | 7/15 [00:02<00:03,  2.32batch/s][A
+Epoch 8:  53%|█████▎    | 8/15 [00:03<00:02,  2.45batch/s][A
+Epoch 8:  60%|██████    | 9/15 [00:03<00:02,  2.26batch/s][A
+Epoch 8:  67%|██████▋   | 10/15 [00:04<00:02,  2.32batch/s][A
+Epoch 8:  73%|███████▎  | 11/15 [00:04<00:01,  2.41batch/s][A
+Epoch 8:  80%|████████  | 12/15 [00:05<00:01,  2.21batch/s][A
+Epoch 8:  87%|████████▋ | 13/15 [00:05<00:00,  2.22batch/s][A
+Epoch 8:  93%|█████████▎| 14/15 [00:05<00:00,  2.32batch/s][A
+Epoch 8: 100%|██████████| 15/15 [00:06<00:00,  2.58batch/s][A
+                                                           [ATraining Progress:  23%|██▎       | 7/30 [01:50<04:05, 10.66s/epoch, Time: 111.0s | loss=6.2439 val_loss=9.1985]Training Progress:  27%|██▋       | 8/30 [01:50<03:44, 10.22s/epoch, Time: 111.0s | loss=6.2439 val_loss=9.1985]
+Epoch 9:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 9:   7%|▋         | 1/15 [00:00<00:05,  2.56batch/s][A
+Epoch 9:  13%|█▎        | 2/15 [00:00<00:04,  2.64batch/s][A
+Epoch 9:  20%|██        | 3/15 [00:01<00:04,  2.59batch/s][A
+Epoch 9:  27%|██▋       | 4/15 [00:01<00:04,  2.66batch/s][A
+Epoch 9:  33%|███▎      | 5/15 [00:01<00:03,  2.69batch/s][A
+Epoch 9:  40%|████      | 6/15 [00:02<00:03,  2.66batch/s][A
+Epoch 9:  47%|████▋     | 7/15 [00:02<00:02,  2.70batch/s][A
+Epoch 9:  53%|█████▎    | 8/15 [00:02<00:02,  2.71batch/s][A
+Epoch 9:  60%|██████    | 9/15 [00:03<00:02,  2.65batch/s][A
+Epoch 9:  67%|██████▋   | 10/15 [00:03<00:01,  2.70batch/s][A
+Epoch 9:  73%|███████▎  | 11/15 [00:04<00:01,  2.69batch/s][A
+Epoch 9:  80%|████████  | 12/15 [00:04<00:01,  2.63batch/s][A
+Epoch 9:  87%|████████▋ | 13/15 [00:04<00:00,  2.63batch/s][A
+Epoch 9:  93%|█████████▎| 14/15 [00:05<00:00,  2.60batch/s][A
+Epoch 9: 100%|██████████| 15/15 [00:05<00:00,  2.98batch/s][A
+                                                           [ATraining Progress:  27%|██▋       | 8/30 [01:59<03:44, 10.22s/epoch, Time: 119.5s | loss=6.0427 val_loss=9.7197]Training Progress:  30%|███       | 9/30 [01:59<03:23,  9.68s/epoch, Time: 119.5s | loss=6.0427 val_loss=9.7197]
+Epoch 10:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 10:   7%|▋         | 1/15 [00:00<00:05,  2.53batch/s][A
+Epoch 10:  13%|█▎        | 2/15 [00:00<00:06,  2.10batch/s][A
+Epoch 10:  20%|██        | 3/15 [00:01<00:05,  2.27batch/s][A
+Epoch 10:  27%|██▋       | 4/15 [00:01<00:04,  2.44batch/s][A
+Epoch 10:  33%|███▎      | 5/15 [00:02<00:04,  2.22batch/s][A
+Epoch 10:  40%|████      | 6/15 [00:02<00:04,  2.24batch/s][A
+Epoch 10:  47%|████▋     | 7/15 [00:03<00:03,  2.33batch/s][A
+Epoch 10:  53%|█████▎    | 8/15 [00:03<00:03,  2.25batch/s][A
+Epoch 10:  60%|██████    | 9/15 [00:03<00:02,  2.30batch/s][A
+Epoch 10:  67%|██████▋   | 10/15 [00:04<00:02,  2.46batch/s][A
+Epoch 10:  73%|███████▎  | 11/15 [00:04<00:01,  2.46batch/s][A
+Epoch 10:  80%|████████  | 12/15 [00:05<00:01,  2.41batch/s][A
+Epoch 10:  87%|████████▋ | 13/15 [00:05<00:00,  2.44batch/s][A
+Epoch 10:  93%|█████████▎| 14/15 [00:05<00:00,  2.50batch/s][A
+Epoch 10: 100%|██████████| 15/15 [00:06<00:00,  2.79batch/s][A
+                                                            [ATraining Progress:  30%|███       | 9/30 [02:08<03:23,  9.68s/epoch, Time: 128.7s | loss=5.9746 val_loss=9.2717]Training Progress:  33%|███▎      | 10/30 [02:08<03:11,  9.55s/epoch, Time: 128.7s | loss=5.9746 val_loss=9.2717]
+Epoch 11:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 11:   7%|▋         | 1/15 [00:00<00:05,  2.52batch/s][A
+Epoch 11:  13%|█▎        | 2/15 [00:00<00:05,  2.57batch/s][A
+Epoch 11:  20%|██        | 3/15 [00:01<00:05,  2.23batch/s][A
+Epoch 11:  27%|██▋       | 4/15 [00:01<00:04,  2.38batch/s][A
+Epoch 11:  33%|███▎      | 5/15 [00:02<00:03,  2.51batch/s][A
+Epoch 11:  40%|████      | 6/15 [00:02<00:03,  2.27batch/s][A
+Epoch 11:  47%|████▋     | 7/15 [00:02<00:03,  2.33batch/s][A
+Epoch 11:  53%|█████▎    | 8/15 [00:03<00:02,  2.45batch/s][A
+Epoch 11:  60%|██████    | 9/15 [00:03<00:02,  2.26batch/s][A
+Epoch 11:  67%|██████▋   | 10/15 [00:04<00:02,  2.36batch/s][A
+Epoch 11:  73%|███████▎  | 11/15 [00:04<00:01,  2.41batch/s][A
+Epoch 11:  80%|████████  | 12/15 [00:04<00:01,  2.48batch/s][A
+Epoch 11:  87%|████████▋ | 13/15 [00:05<00:00,  2.52batch/s][A
+Epoch 11:  93%|█████████▎| 14/15 [00:05<00:00,  2.52batch/s][A
+Epoch 11: 100%|██████████| 15/15 [00:05<00:00,  2.96batch/s][A
+                                                            [ATraining Progress:  33%|███▎      | 10/30 [02:17<03:11,  9.55s/epoch, Time: 137.4s | loss=5.7375 val_loss=9.5170]Training Progress:  37%|███▋      | 11/30 [02:17<02:56,  9.29s/epoch, Time: 137.4s | loss=5.7375 val_loss=9.5170]Epoch 10: Params plateau (score=0.410, mean=1.77%, slope=+0.23%/ep)
+
+Epoch 12:   0%|          | 0/15 [00:00<?, ?batch/s][A
+Epoch 12:   7%|▋         | 1/15 [00:00<00:06,  2.08batch/s][A
+Epoch 12:  13%|█▎        | 2/15 [00:00<00:05,  2.27batch/s][A
+Epoch 12:  20%|██        | 3/15 [00:01<00:04,  2.46batch/s][A
+Epoch 12:  27%|██▋       | 4/15 [00:01<00:05,  2.19batch/s][A
+Epoch 12:  33%|███▎      | 5/15 [00:02<00:04,  2.28batch/s][A
+Epoch 12:  40%|████      | 6/15 [00:02<00:03,  2.39batch/s][A
+Epoch 12:  47%|████▋     | 7/15 [00:03<00:03,  2.21batch/s][A
+Epoch 12:  53%|█████▎    | 8/15 [00:03<00:03,  2.26batch/s][A
+Epoch 12:  60%|██████    | 9/15 [00:03<00:02,  2.36batch/s][A
+Epoch 12:  67%|██████▋   | 10/15 [00:04<00:02,  2.22batch/s][A
+Epoch 12:  73%|███████▎  | 11/15 [00:04<00:01,  2.28batch/s][A
+Epoch 12:  80%|████████  | 12/15 [00:05<00:01,  2.39batch/s][A
+Epoch 12:  87%|████████▋ | 13/15 [00:05<00:00,  2.38batch/s][A
+Epoch 12:  93%|█████████▎| 14/15 [00:06<00:00,  2.35batch/s][A
+Epoch 12: 100%|██████████| 15/15 [00:06<00:00,  2.85batch/s][A
+                                                            [ATraining Progress:  37%|███▋      | 11/30 [02:26<02:56,  9.29s/epoch, Time: 146.6s | loss=5.6331 val_loss=9.4324]Training Progress:  40%|████      | 12/30 [02:26<02:46,  9.27s/epoch, Time: 146.6s | loss=5.6331 val_loss=9.4324]Training Progress:  40%|████      | 12/30 [02:26<02:46,  9.27s/epoch, Completed in 146.7s]                       Training Progress:  40%|████      | 12/30 [02:26<03:40, 12.23s/epoch, Completed in 146.7s]
+
+=== Indicator Learning Summary ===
+Total epochs tracked: 12
+Parameters logged per epoch: ~284
+CSV saved to: D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2\indicator_params_history.csv
+Final Convergence Score: 0.000
+Final Mean Change:    5.69%
+Final Std Change:     3.98%
+Final Slope:          +0.33%/ep  (accelerating)
+Serving the weights of epoch 6 of 12 (val_loss 9.1399): best validation epoch, restored by EarlyStopping (stopped at epoch 12)
+model_checkpoint wrote the best-on-validation weights to D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2\weights.h5
+Evaluating enhanced model...
+
+[Diagnostic: Prediction Statistics]
+  h0(10min): pred_mean=10.443639, true_mean=-1.612014 | pred_std=18.658964, true_std=165.084152
+         pred_range=[-61.568359, 130.718903], true_range=[-3364.000000, 2677.000000]
+  h1(15min): pred_mean=2.454381, true_mean=-2.416296 | pred_std=26.292631, true_std=199.750229
+         pred_range=[-164.813034, 105.603363], true_range=[-3399.000000, 2740.000000]
+  h2(20min): pred_mean=-5.375119, true_mean=-3.211157 | pred_std=32.424976, true_std=230.136398
+         pred_range=[-119.467667, 128.601440], true_range=[-3226.000000, 3282.000000]
+
+Fitting CalibrationPipeline on the calibration split...
+CalibrationPipeline: fitting on 14282 samples
+
+[1/2] Temperature scaling (direction heads)...
+  TemperatureScaler [h0]: T = 2.0011
+  TemperatureScaler [h1]: T = 2.1096
+  TemperatureScaler [h2]: T = 1.6359
+Delta shrinkage (least-squares scale of the price heads on this block): h0 0.117, h1 0.000, h2 0.038
+
+[2/2] Conformal regressors (price delta intervals, scale=realized_vol)...
+ConformalRegressor: fitted on 14282 samples, median score = 0.6472
+  [h0] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 248.30 raw units
+ConformalRegressor: fitted on 14282 samples, median score = 0.6611
+  [h1] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 300.83 raw units
+ConformalRegressor: fitted on 14282 samples, median score = 0.6507
+  [h2] coverage @ alpha=0.10: 0.900 (target >= 0.90),  mean half-width 337.01 raw units
+
+CalibrationPipeline: fitting complete.
+  [test] h0: conformal coverage@90 = 0.905 (target >= 0.90), mean width = 512.73 raw units, T = 2.001
+  [test] h1: conformal coverage@90 = 0.903 (target >= 0.90), mean width = 621.21 raw units, T = 2.110
+  [test] h2: conformal coverage@90 = 0.897 (target >= 0.90), mean width = 695.92 raw units, T = 1.636
+Dataset length after cleaning: 4598198
+Date range after cleaning: 2017-01-01 00:00:00 to 2025-09-29 23:57:00
+[scenario micro_ohlcv_duel] ohlcv14__f-2__s2 done in 306.7 s -> D:\neural_trade\runs\scenarios\micro_ohlcv_duel\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2 (net Sharpe -137.29322008567723, trades 1522.0)
+{
+  "scenario": "micro_ohlcv_duel",
+  "store": "D:\\neural_trade\\runs",
+  "index": "D:\\neural_trade\\runs\\index.sqlite",
+  "n_cells": 6,
+  "skipped": [
+    "close4__f-2__s0",
+    "close4__f-2__s1",
+    "close4__f-2__s2"
+  ],
+  "ran": [
+    {
+      "cell": "ohlcv14__f-2__s0",
+      "status": "done",
+      "run_dir": "D:\\neural_trade\\runs\\scenarios\\micro_ohlcv_duel\\20260929T171702Z-e1c8b93-dirty-773c434e-ohlcv14__f-2__s0"
+    },
+    {
+      "cell": "ohlcv14__f-2__s1",
+      "status": "done",
+      "run_dir": "D:\\neural_trade\\runs\\scenarios\\micro_ohlcv_duel\\20260929T172153Z-e1c8b93-dirty-23d6bef8-ohlcv14__f-2__s1"
+    },
+    {
+      "cell": "ohlcv14__f-2__s2",
+      "status": "done",
+      "run_dir": "D:\\neural_trade\\runs\\scenarios\\micro_ohlcv_duel\\20260929T172649Z-e1c8b93-dirty-31c032db-ohlcv14__f-2__s2"
+    }
+  ],
+  "failed": [],
+  "pending": []
+}

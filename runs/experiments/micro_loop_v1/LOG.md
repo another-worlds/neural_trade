@@ -55,3 +55,13 @@ Eight hypotheses (H1-H5 with variants) exhaust the close-only input across horiz
 target and the loop's best var/err^2 ranking. The owner's target (stable >60% hit, drawdown < 5%) is not
 reachable from this input. Iteration 2 is running: OHLCV input and the ten new indicator families (NT-047),
 then the same micro evaluation against logreg_lags on the same dev block.
+
+| I2-duel | OHLCV input + 14 indicator families (NT-047) give direction the close-only input lacks | Quick sweep configs/scenarios/micro_ohlcv_duel.yaml on branch nt-047-duel (e1c8b93 + the batch edit): close4 vs ohlcv14, micro layout, 3 seeds each; cells under runs/scenarios/micro_ohlcv_duel/ | 27 GPU-min | **Negative (provisional).** All 18 cell-horizons within noise of logreg_lags (boot z -1.78..+0.37); at the 3-seed mean both variants sit BELOW logreg_lags on every horizon (AUC - logreg: close4 -0.004/-0.010/-0.007, ohlcv14 -0.008/-0.007/-0.004, inside the seed spread); ohlcv14's seed spread is 2-5x close4's; gross edge -0.24..+0.64 bps per trade. Cost: ohlcv14 ~2.2-2.5x GPU time per training sample and OOM at batch 2048 (attention over 128 tokens), so it ran at 1024: a confound. Provisional because 3 of the 14 families (stoch, willr, donchian) carried QA's soft-extremum scale bug; the 3 ohlcv14 cells re-run after NT-047's repair. |
+
+## Reading after iteration 2 (2026-09-29)
+
+Across 10 hypotheses, no model variant beats a logistic regression on 3 lagged returns, and that baseline
+itself reaches AUC 0.51-0.53. On this data, price-and-volume history alone carries a directional signal
+of that size at 10 min - 5 h. The owner's target (stable >60% hit) sits far above anything any variant or
+the baseline shows: it would need a different information source or a different target, not a different
+model. Next lever inside the owner's list: the P&L-aware target (the owner's point 3), research first.
