@@ -154,8 +154,8 @@ live here only; RUNBOOK, the agent files and the backlog point here.
 - Changing default trading behaviour (strategy defaults, what a signal means).
 - Anything that touches `master`, rewrites history or force-pushes.
 - Deleting runs, data, remote branches, or untracked files the session did not create; freeing disk
-  outside our own files (the Docker WSL image on C: belongs to another project). The C: copy after
-  the move (D-030): after the owner confirms the D: copy works, the lead deletes the C: copy (repo
+  outside our own files (the Docker WSL image on C: belongs to another project). The old C: copy is
+  ignored (D-038): it is never deleted and never asked about. (Formerly: after the owner confirmed, the lead deleted the C: copy (repo
   and both worktrees) only on the owner's explicit go-ahead. Repo code and docs follow the deletion
   rule above.
 - Installing, upgrading or removing packages in the local `nt` env, or anything else on the owner's

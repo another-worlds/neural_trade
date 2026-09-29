@@ -87,7 +87,8 @@ Pointers only; the rule lives where the pointer says.
 - One GPU job at a time (sweeps: OPERATING_MODEL); the owner's other project also uses this GPU
   (Docker/WSL): never touch it. Is the GPU free: RUNBOOK "GPU rules".
 - Disk C: is nearly full (the other project's Docker image): scratch, renders and worktrees go to D:.
-- The working copy is `D:/neural_trade` (moved 2026-09-28, D-030). The old C: copy is deleted only on
+- The working copy is `D:/neural_trade` (moved 2026-09-28, D-030). The old C: copy is ignored (D-038):
+  never delete it, never ask about it. (Formerly: deleted only on
   the owner's go-ahead (OPERATING_MODEL "Escalate to the owner"); never work in it.
 - Bash heredocs with nested quotes break easily here: write scripts with the Write tool.
 - The editable install imports the main checkout's `src/`: in a worktree set `PYTHONPATH=<worktree>/src`

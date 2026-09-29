@@ -51,6 +51,7 @@ that extend or partly replace an entry.
 | D-035 | Models and effort: Sonnet for implementer, QA and experimenter; the lead escalates | owner | D-036 |
 | D-036 | A cheap tracker agent for task tracking; the other roles keep the strong model | owner | |
 | D-037 | The window-free plan is approved; NT-047 in window mode first; periods held at the data bound; study budgets | owner | |
+| D-038 | The old C: copy is ignored; pushing stays automatic | owner ("push auto": lead's reading) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -462,3 +463,12 @@ that extend or partly replace an entry.
 - **Consequence:** NT-053 done; NT-059 to NT-073; amendments to NT-032, NT-038, NT-041, NT-046, NT-047;
   ROADMAP research track R6.
 - **Evidence:** the plan, its REVIEW.md and the Q&A record.
+
+## D-038 The old C: copy is ignored; pushing stays automatic (owner, 2026-09-29)
+- **Owner (verbatim):** "1) ignore c copy 2) revoke.push auto" ([qa/2026-09-29-standing-questions.md](qa/2026-09-29-standing-questions.md)).
+- **Decision:** the C: copy (C:/Users/Step/Documents/neural_trade and its two worktrees) is left as it is; no
+  session deletes it or asks about it (this replaces D-030's "deleted on the owner's go-ahead"). NT-009 is done.
+  Pushing `remediation/plan` and `nt-*` without asking stays (D-017's push rule, now owner-confirmed; never
+  `master`, never `--force`).
+- **Lead's reading:** "revoke.push auto" read as withdrawing the question and keeping automatic pushes; if the
+  owner meant the opposite, a new entry records it.

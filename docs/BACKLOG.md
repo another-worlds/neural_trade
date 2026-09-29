@@ -41,7 +41,7 @@ changes).
 | [NT-006](#nt-006) | P1 | research | experimenter | todo | Physics-term ablation re-run on the current trainer, pre-registered under D-025 |
 | [NT-007](#nt-007) | P1 | owner-decision | owner | todo | Owner decision: which delta the strategies read (served beta-shrunk vs raw heads) |
 | [NT-008](#nt-008) | P1 | owner-decision | owner | todo | Owner decision: merge remediation/plan into master |
-| [NT-009](#nt-009) | P1 | owner-decision | owner | in-progress | Disk: C: nearly full; resolved by moving the project to D: (D-030) |
+| [NT-009](#nt-009) | P1 | owner-decision | owner | done | Disk: C: nearly full; resolved by moving the project to D: (D-030) |
 | [NT-010](#nt-010) | P1 | infra | implementer | done | Every cited number links to a tracked run (run-tracking policy, clean git status) |
 | [NT-011](#nt-011) | P2 | infra | implementer | done | Notebook output policy: remove nbstripout (it contradicts D-013) |
 | [NT-012](#nt-012) | P2 | feature | implementer | dropped | Training logging: per-term loss contributions, gradient max and clip counts, deadband sample counts |
@@ -208,7 +208,7 @@ changes).
 
 **Disk: C: nearly full; resolved by moving the project to D: (D-030)**
 
-- **status:** in-progress (2026-09-28): moved to D:/neural_trade and verified (acceptance 1-4: worktrees at D: paths, `neural_trade.__file__` under D:/neural_trade/src, 697 fast tests and check.py pass on D:, RUNBOOK and CLAUDE.md give the D: paths); waiting for the owner to confirm the D: copy and to give the go-ahead for deleting the C: copy (5). The local 2017-2025 data file stays (VISION "The reference setup").
+- **status:** done (2026-09-29): moved to D:/neural_trade and verified (acceptance 1-4, 2026-09-28); the owner closed (5): "ignore c copy" (D-038): the C: copy is left as it is and not deleted. The local 2017-2025 data file stays (VISION "The reference setup").
 - **priority / type / role:** P1 / owner-decision / owner
 - **area:** machine: C: and D: drives; the repo, its untracked runs/, the sibling worktrees neural_trade_gates and neural_trade_ablation, the editable install in the nt env, the Claude memory folder; docs/RUNBOOK.md, CLAUDE.md
 - **why:** C: had 6.0 GB free (98% used) on 2026-09-25. The Docker WSL image (C:\Users\Step\AppData\Local\Docker\wsl\disk\docker_data.vhdx) is about 116-119 GB and belongs to the owner's other project. During the review, C: reached 0 bytes, and pytest, git index writes and figure renders all failed. GPU grids, Optuna studies, notebook executions and renders need headroom. The owner's answer (owner Q&A 2026-09-28, rounds 5b and 6): move the whole project to D: (repo with its untracked runs, both sibling worktrees, the editable install re-pointed with `pip install --no-deps -e .`, the Claude memory carried); runs, the Optuna studies and the run index live in the repo on D:; after the owner confirms the D: copy works, the lead deletes the C: copy (repo and both worktrees) only on the owner's explicit go-ahead. The local 2017-2025 file stays: Bitcoin_BTCUSDT.csv (291 MB, git-ignored, 2017-01-01 to 2025-09-29), used for walk-forward folds over months (NT-041).
