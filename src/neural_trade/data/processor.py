@@ -140,7 +140,15 @@ class DataProcessor:
     def make_sequences_with_extended_trends(self, close_array, lookback):
         return make_sequences_with_extended_trends(self.config, close_array, lookback)
 
-    def prepare_datasets(self, df, close_values):
+    def build_windows(self, close_values):
+        """Sliding windows/targets (:func:`make_sequences_with_extended_trends`) trimmed to
+        ``MAX_SEQUENCE_COUNT`` (most recent kept): the part of :meth:`prepare_datasets` that loops
+        every bar and is therefore worth caching. A pure function of ``self.config`` and
+        ``close_values`` (every field it reads - LOOKBACK, HORIZON_STEPS, EXTENDED_TREND_PERIODS,
+        WINDOW_STEP, MAX_SEQUENCE_COUNT - is part of :func:`neural_trade.experiments.dataset.data_key`),
+        so a caller that trains many configurations sharing a data key (NT-088 screen mode) can build
+        it once and reuse it across all of them, only redoing the split/scale/normalise step below.
+        """
         X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
             self.config, close_values, self.config.LOOKBACK
         )
@@ -155,7 +163,21 @@ class DataProcessor:
             last_close_seq = last_close_seq[take_from:]
             extended_trends = extended_trends[take_from:]
             logger.info(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
+        return X_seq, y_seq, last_close_seq, extended_trends
 
+    def prepare_datasets(self, df, close_values):
+        X_seq, y_seq, last_close_seq, extended_trends = self.build_windows(close_values)
+        return self.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq, extended_trends)
+
+    def prepare_datasets_from_windows(self, X_seq, y_seq, last_close_seq, extended_trends):
+        """The fold split, target scaling and window normalisation of :meth:`prepare_datasets`, given
+        already-built (and, for MAX_SEQUENCE_COUNT, already-trimmed) windows. Splitting an array by
+        index and fitting a scaler on it is cheap next to building the windows themselves (no
+        per-bar Python loop), so a caller that caches :meth:`build_windows` per data key (NT-088)
+        still pays this part once per trial - the fields it reads beyond the window/data_key ones
+        (N_FOLDS, VAL_FRACTION, CAL_FRACTION, WINDOW_STEP, BATCH_SIZE, WINDOW_NORMALIZER, FOLD_INDEX)
+        may differ per trial even when the data key does not.
+        """
         logger.info("[INFO] Dataset Statistics:")
         logger.info(f"   Total sequences: {X_seq.shape[0]}")
 
