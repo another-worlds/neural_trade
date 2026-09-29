@@ -186,6 +186,45 @@ adds:
   4. `--parallel` above 1 is refused unless NT-035's recorded result allows that N (a test with a
      stubbed record). Until NT-035 has run, N = 1.
 
+### Experiment engine
+
+One scenario spec, one resumable runner, one run store with an sqlite index, one scorer (NT-026;
+code in `src/neural_trade/experiments/`: `scenario.py`, `runner.py`, `store.py`, `scorer.py`,
+`dataset.py`). New experiments go here, not into the frozen set.
+
+| Task | Command |
+|---|---|
+| Check a spec and list its cells with their state (no training, writes nothing but the index) | `CUDA_VISIBLE_DEVICES=-1 $PY -m neural_trade.cli scenario plan configs/scenarios/reference.yaml` |
+| Run or resume a scenario (GPU unless `CUDA_VISIBLE_DEVICES=-1`; GPU rules above) | `$PY -m neural_trade.cli scenario run configs/scenarios/reference.yaml [--max-cells N] [--retry-failed]` |
+| Rebuild the index from the run directories | `$PY -m neural_trade.cli scenario reindex [--store runs]` |
+
+- **Spec** (YAML, `schema_version: 1`): `name`, `base_config` (a flat Config YAML, relative to
+  the spec), `overrides`, `variants` (named Config overrides), `sweep: {mode: grid, axes: {FIELD:
+  [values]}}`, `folds` (FOLD_INDEX values), `seeds`, `strategy: {name, params}` (Strategies registry,
+  default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 13 bps per side),
+  `run: {calibrate, save_artifacts}`. Unknown keys, unknown or invalid Config values, unregistered
+  components, folds the data does not have and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH,
+  SCALER_PATH, ARTIFACTS_DIR, bar_minutes) are refused before anything trains. Run from the
+  repository root: a relative `CSV_PATH` resolves against the working directory.
+- **Cells and run store.** Each (variant x grid point, fold, seed) cell trains into its own
+  directory `runs/scenarios/<name>/<run id>-<configuration>__f<fold>__s<seed>/` with the usual run
+  files plus `meta.json` sections `engine`, `dataset` (file sha256, first and last timestamp, bar
+  count), `setup` (bar minutes, LOOKBACK, HORIZON_STEPS) and `blocks`, the scorer's
+  `eval_report_<dev|test>.json/.md` and `result.json` (status, error, scores). The runner never
+  writes into an existing directory and deletes nothing.
+- **Scoring.** The out-of-sample block of each cell's fold is scored with evaluation/report.py and
+  backtested with the scenario's strategy (knobs fitted on the fold's cal block, next-open fills,
+  buy-and-hold, always-flat and the size-matched random null). The latest usable fold is `test`
+  (shown, never ranks, D-020); the earlier folds are `dev`.
+- **Index.** `runs/index.sqlite` (tables `runs` and `scores`; `--index` moves it) is derived from
+  the run directories' light JSON files; delete it freely, `scenario reindex` rebuilds it. Resume:
+  a cell counts as finished when a `done` (or, without `--retry-failed`, `failed`) run with the same
+  config hash and scoring settings exists; an interrupted cell (no `result.json`) stays on disk as
+  `incomplete` and trains again into a new directory.
+- **Long runs:** launch detached like any long job (next section) and resume with the same command.
+- Notebooks 02-05 never pick an engine run by default (`pick_run` skips `runs/scenarios/` and any
+  run whose meta.json has an `engine` section).
+
 ### Sweeps
 
 What exists today (one GPU job at a time; `ablate.py` and `direction_experiments.py` resume,

@@ -3,12 +3,21 @@
     neural-trade train    --config configs/default.yaml [--set KEY=VALUE ...] [--epochs N]
     neural-trade predict  --artifacts runs/<id>/artifacts --csv bars.csv [--out preds.csv] [--last]
     neural-trade backtest --artifacts runs/<id>/artifacts --csv bars.csv [--strategy NAME] [--params YAML]
+    neural-trade scenario run|plan configs/scenarios/<name>.yaml [--store runs] [--max-cells N] [--retry-failed]
+    neural-trade scenario reindex [--store runs] [--index runs/index.sqlite]
     neural-trade registry list | info REGISTRY NAME | search QUERY
     neural-trade env
 
 ``train`` creates a run directory (runs/<UTC time>-<git sha>-<config hash>/) holding the
 config, per-epoch metrics, the serving bundle (artifacts/) and the test evaluation report.
 Values given to ``--set`` are parsed as YAML (``--set EPOCHS=5 --set HORIZON_STEPS=[5,10,20]``).
+
+``scenario run`` is the experiment engine (neural_trade.experiments.runner): every (variant,
+fold, seed) cell of the spec trains into its own directory under runs/scenarios/<name>/ and is
+scored on its fold's out-of-sample block (dev or test fold) with the scenario's strategy after
+costs; the sqlite index (runs/index.sqlite) records every cell. Running it again resumes: finished
+cells are skipped. ``scenario plan`` validates the spec and lists each cell's state without
+training; ``scenario reindex`` rebuilds the index from the run directories.
 """
 from __future__ import annotations
 
@@ -142,6 +151,36 @@ def cmd_backtest(args) -> int:
     return 0
 
 
+def cmd_scenario(args) -> int:
+    from neural_trade.core.exceptions import InvalidConfigurationError
+    from neural_trade.experiments.runner import Runner, plan_table
+    from neural_trade.experiments.store import RunStore
+
+    store = RunStore(args.store, args.index)
+    if args.action == "reindex":
+        index = store.rebuild_index()
+        rows = index.rows()
+        print(json.dumps({"index": str(index.path), "runs": len(rows),  # noqa: T201 - the command's result
+                          "scenarios": sorted({r["scenario"] for r in rows})}, indent=2))
+        return 0
+    if not args.spec:
+        raise SystemExit(f"usage: neural-trade scenario {args.action} SPEC (a scenario YAML, see configs/scenarios/)")
+    try:
+        runner = Runner.from_spec(args.spec, store=store)
+        if args.action == "plan":
+            cells = plan_table(runner.plan())
+            counts = {s: sum(c["state"] == s for c in cells) for s in ("done", "failed", "pending")}
+            print(json.dumps({"scenario": runner.scenario.name, "spec_hash": runner.scenario.spec_hash,  # noqa: T201
+                              "index": str(store.index_path), "counts": counts, "cells": cells}, indent=2))
+            return 0
+        report = runner.run(max_cells=args.max_cells, retry_failed=args.retry_failed)
+    except InvalidConfigurationError as exc:
+        logger.error("scenario refused, nothing was run: %s", exc)
+        return 2
+    print(json.dumps(report.to_dict(), indent=2))  # noqa: T201 - the command's result, for scripting
+    return 1 if report.failed else 0
+
+
 def cmd_registry(args) -> int:
     from neural_trade.registries import all_registries, load_all, registry_summary
 
@@ -227,6 +266,20 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--random-seeds", type=int, default=100)
     b.add_argument("--batch-size", type=int, default=None, help="prediction batch (default: the training batch)")
     b.set_defaults(func=cmd_backtest)
+
+    s = sub.add_parser("scenario", help="run or resume a scenario (the experiment engine), plan it, or rebuild "
+                                        "the run index",
+                       description="run: train and score every pending cell of a scenario spec (resumable: "
+                                   "finished cells are skipped). plan: validate the spec and list each cell's state "
+                                   "without training. reindex: rebuild the sqlite index from the run directories.")
+    s.add_argument("action", choices=["run", "plan", "reindex"])
+    s.add_argument("spec", nargs="?", help="scenario YAML (configs/scenarios/*.yaml); not used by reindex")
+    s.add_argument("--store", default="runs", help="run store root; engine runs go to <store>/scenarios/<name>/")
+    s.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
+    s.add_argument("--max-cells", type=int, default=None,
+                   help="train at most N pending cells, then stop (the same command resumes)")
+    s.add_argument("--retry-failed", action="store_true", help="train failed cells again (into new directories)")
+    s.set_defaults(func=cmd_scenario)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")
     r.add_argument("action", choices=["list", "info", "search"])

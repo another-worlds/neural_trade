@@ -1,5 +1,8 @@
 """Judge the remediation plan's M1-M4 stop/go gates, clause by clause, as the plan words them.
 
+Frozen (D-023): kept runnable as history; nothing new builds on it. Its replacement is the
+experiment engine (neural_trade.experiments: scenario specs, `neural-trade scenario run`, NT-026).
+
     python scripts/check_gates.py [runs/gates]
 
 Expects the run directories written by scripts/gate_run.py:

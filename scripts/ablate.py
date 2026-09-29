@@ -1,5 +1,8 @@
 """Run (or resume, or project) the physics-term ablation grid and write its report.
 
+Frozen (D-023): kept runnable as history; nothing new builds on it. Its replacement is the
+experiment engine (neural_trade.experiments: scenario specs, `neural-trade scenario run`, NT-026).
+
     python scripts/ablate.py --scale smoke                      # 84 short runs
     python scripts/ablate.py --scale full --out runs/ablations/ablate_physics_v1
     python scripts/ablate.py --scale full --dry-run             # pending cells and projected hours

@@ -86,6 +86,10 @@ neural-trade predict  --artifacts runs/<run id>/artifacts --csv bars.csv --out f
 # backtest a strategy (fees, spread, slippage, next-open fills, stops on high/low)
 neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv --out bt/ --plot   # calibrated_quantile
 
+# experiment engine: every (variant, fold, seed) cell of a scenario, scored on dev / test folds (resumable)
+neural-trade scenario plan configs/scenarios/reference.yaml   # validate, list the cells (no training)
+neural-trade scenario run  configs/scenarios/reference.yaml   # runs/scenarios/<name>/, index runs/index.sqlite
+
 neural-trade registry list            # every registered component
 neural-trade registry info Optimizers adamw
 neural-trade env                      # versions, CUDA build, devices, git state

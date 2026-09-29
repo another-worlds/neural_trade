@@ -1,5 +1,8 @@
 """Direction-skill experiments (milestone M3): which change lets the direction heads learn?
 
+Frozen (D-023): kept runnable as history; nothing new builds on it. Its replacement is the
+experiment engine (neural_trade.experiments: scenario specs, `neural-trade scenario run`, NT-026).
+
     python scripts/direction_experiments.py --out runs/experiments/direction_v1 [--only NAME ...] [--jobs 2]
 
 Each experiment is a Config override set trained in its own process on a DEVELOPMENT fold

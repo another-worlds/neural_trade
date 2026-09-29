@@ -1,5 +1,8 @@
 """Ablation harness for the physics loss terms (plan C4).
 
+Frozen (D-023): kept runnable as history; nothing new builds on it. Its replacement is the
+experiment engine (neural_trade.experiments: scenario specs, `neural-trade scenario run`, NT-026).
+
 A spec (``configs/ablation_physics.yaml``) names the terms and their "on" values, the modes,
 seeds and periods (walk-forward folds). The grid is
 

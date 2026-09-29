@@ -7,13 +7,14 @@ creates ``runs/<UTC-timestamp>-<git sha>[-dirty]-<config hash>[-name]/`` holding
 
     config.yaml            the exact configuration (flat keys)
     env.json               versions, CUDA build, devices, git state
-    meta.json              seed, tags, run id
+    meta.json              seed, tags, run id (engine runs add "engine", "dataset", "setup", "blocks")
     metrics.jsonl          one line per epoch (telemetry.JsonlEpochLogger)
     status.json            progress, seconds per step, telemetry errors
     training_log.csv       Keras CSVLogger
     weights.h5 / scaler.joblib
     artifacts/             the serving bundle (training.artifacts.ArtifactBundle)
     eval_report_*.json/md  evaluation reports (evaluation.report)
+    result.json            engine runs only: status, error and scores (experiments.runner)
 """
 from __future__ import annotations
 
@@ -22,7 +23,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from neural_trade.core.config import Config
 from neural_trade.utils.env import fingerprint, git_sha
@@ -42,7 +43,13 @@ class RunContext:
 
     @classmethod
     def create(cls, config: Config, *, root="runs", seed: Optional[int] = None, tags=(), name: Optional[str] = None,
-               write_env: bool = True) -> "RunContext":
+               write_env: bool = True, meta: Optional[Dict[str, Any]] = None) -> "RunContext":
+        """A new run directory (``FileExistsError`` when the name is taken: nothing is written into an
+        existing directory). ``meta``: extra top-level meta.json entries (the experiment engine's
+        "engine", "dataset", "setup" and "blocks"); they may not replace run_id, seed, tags or created_utc."""
+        clash = sorted(set(meta or {}) & {"run_id", "seed", "tags", "created_utc"})
+        if clash:
+            raise ValueError(f"meta may not set {clash}: RunContext writes them")
         cfg = config.copy()
         seed = int(cfg.SEED if seed is None else seed)
         cfg.override(SEED=seed)
@@ -55,7 +62,8 @@ class RunContext:
         ctx = cls(run_id, run_dir, cfg, seed, list(tags))
         cfg.to_yaml(run_dir / "config.yaml")
         (run_dir / "meta.json").write_text(json.dumps(
-            {"run_id": run_id, "seed": seed, "tags": ctx.tags, "created_utc": stamp}, indent=2), encoding="utf-8")
+            {"run_id": run_id, "seed": seed, "tags": ctx.tags, "created_utc": stamp, **dict(meta or {})}, indent=2,
+            default=str), encoding="utf-8")
         if write_env:
             (run_dir / "env.json").write_text(json.dumps(fingerprint(), indent=2, default=str), encoding="utf-8")
         return ctx

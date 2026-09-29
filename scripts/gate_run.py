@@ -1,6 +1,9 @@
 """Run one milestone-gate training run in its own directory and record everything the
 plan's M1-M4 stop/go gates need.
 
+Frozen (D-023): kept runnable as history; nothing new builds on it. Its replacement is the
+experiment engine (neural_trade.experiments: scenario specs, `neural-trade scenario run`, NT-026).
+
     python scripts/gate_run.py --name m1a --epochs 2 --physics-off
     python scripts/gate_run.py --name m1b --epochs 2
     python scripts/gate_run.py --name m2  --epochs 5
