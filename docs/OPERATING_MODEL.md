@@ -79,6 +79,8 @@ behaviour or `master` goes to the owner.
   lead names (regenerating TESTING_DOCUMENTATION.md, `ruff --fix`, a dictated line). The lead hands
   such chores to the tracker instead of polling itself, and keeps every judgement (diagnosis,
   merges, criteria, verdicts).
+- **Model split (owner, D-043).** Lead, QA of P0/P1 items and research: Opus 5.5, medium effort. Implementer,
+  experimenter and QA of P2/P3 items: Sonnet 5, medium effort (passed per call). Tracker: Haiku 4.5.
 - **No pinging (owner, D-042).** The lead does not poll or inspect running agents, runs or suites itself,
   and does not reply to interim "still running" notifications: the harness notifies on completion. When
   something must be actively watched (CI, an external process), the Haiku 4.5 `tracker` watches it.

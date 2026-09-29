@@ -56,6 +56,7 @@ that extend or partly replace an entry.
 | D-040 | One 360-day training run on the long history, set up by the lead, tracked in a notebook | owner (setup choices: lead's) | |
 | D-041 | The micro-scale loop: minutes-long runs drive hypothesis iteration toward predictive power and PnL | owner (protocol: lead's) | |
 | D-042 | No pinging: the lead waits for completion notices; active polling goes to the Haiku tracker | owner | |
+| D-043 | Model split: Opus for the lead, P0/P1 QA and research; Sonnet for implementer, experimenter and P2/P3 QA | owner (the split: lead's proposal) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -521,3 +522,11 @@ that extend or partly replace an entry.
 - **Decision:** the lead never polls or checks running agents, runs or suites itself, and never replies to interim
   notifications; it waits for the completion notice. Active polling (CI, an external process) goes to the
   `tracker` agent on Haiku 4.5 (D-036). CLAUDE.md "Project rules" and OPERATING_MODEL "Models and task tracking".
+
+## D-043 Model split: Opus for the lead, P0/P1 QA and research; Sonnet for implementer, experimenter and P2/P3 QA (owner, 2026-09-29)
+- **Owner (verbatim):** asked "which model would be optimal to complet this task? sonnet 5 medium effort or opus 5.5
+  medium effort", then, after the lead proposed the split below: "Try to optimize the tasks and close them asap".
+- **Decision (lead's reading of the second message as approval of the proposal; the owner may correct it):**
+  lead (the session), QA of P0/P1 items and research run on Opus 5.5 at medium effort; implementer, experimenter and
+  QA of P2/P3 items run on Sonnet 5 at medium effort (the lead passes the model per call); the tracker stays on Haiku
+  4.5 (D-036, D-042). Supersedes D-036's "implementer, QA and experimenter keep the strong model" for those roles.
