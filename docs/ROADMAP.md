@@ -121,7 +121,8 @@ NT-014 (evaluation report), NT-015 (interval toolkit; after NT-027), NT-016 (bac
 (notebook UX), NT-019 to NT-023 (figure polish, batched per module), NT-049 (training silently
 warm-starts from weights in the working directory), NT-054 (per-run fixed costs and GPU launches;
 after NT-027 and NT-046), NT-055 and NT-056 (CI annotations and hygiene, from NT-001's QA), NT-057 (random-null follow-ups,
-from NT-002).
+from NT-002), NT-058 (indicator views), NT-074 (same-seed runs not reproducible; P1, before any study relies on
+determinism).
 
 ## Order
 

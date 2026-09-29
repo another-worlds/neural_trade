@@ -285,6 +285,9 @@ included.
 
 ## Traps on this machine
 
+- **Concurrent training (NT-035, 2026-09-29):** at most 3 training processes at once (runs/experiments/gpu_measurements_v1/parallel_n.json); with 4, one crashed (0xC00000FD) and the rest ran at half speed.
+- **Determinism:** `TF_DETERMINISTIC_OPS=1`, set by `import neural_trade`, already enables op determinism in TF 2.10 (`enable_op_determinism()` adds nothing); same-seed GPU runs still differ (NT-074). A GPU-free check can read a median sm of about 40% from the desktop alone: judge by fb (memory).
+
 - **CUDA on Windows.** TF 2.10 finds CUDA 11.2 / cuDNN 8.1 only through PATH. `import
   neural_trade` before `tensorflow` adds the env's DLL folders; a script that imports TensorFlow
   first trains on the CPU with only a log line. Opt out: `NEURAL_TRADE_NO_DLL_PATH=1`.
