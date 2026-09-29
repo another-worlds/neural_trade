@@ -290,20 +290,32 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   in history, not only at the file's tail. **Protected span (D-020):** a `DATA_END` that falls
   within the last `DATA_END_PROTECTED_DAYS` days of the FULL file (default 64) is refused with a
   clear error — a screen trial must never be able to slice into the long file's held-out dev/test
-  period. On the bundled 30-day CSV (tests, `configs/screens/example_6h.yaml`) the real 64-day
-  default would protect more history than the file has at all; the example spec lowers
-  `DATA_END_PROTECTED_DAYS` for that reason only — a real campaign against the local long
-  2017-2025 file keeps the 64-day default.
+  period. This is checked for EVERY trial before ANY trial trains
+  (`experiments.screen._preflight_data_end`, a preflight over the whole spec: one violating slice
+  refuses the whole run, not only itself), and it covers the implicit `DATA_END: null` ("use the
+  newest data") case too — the newest bar is trivially inside the file's own protected span for any
+  `DATA_END_PROTECTED_DAYS >= 0`, so a screen spec always needs an explicit, sufficiently old
+  `DATA_END`; there is no config that lets a screen trial use "whatever's newest". A screen spec
+  also cannot lower `DATA_END_PROTECTED_DAYS` below the Config default against a file that actually
+  spans at least that default (closing the obvious way to sneak a `DATA_END` past the guard) — but
+  MAY lower it against a file SHORTER than the default to begin with, which is why the bundled
+  30-day CSV (tests, `configs/screens/example_6h.yaml`) needs the exception: the real 64-day default
+  would refuse every `DATA_END` outright on a file that short. A real campaign against the local
+  long 2017-2025 file (which does span more than 64 days) always keeps the 64-day floor.
 - **The light training path.** A trial trains through `experiments.screen._run_trial_light`, not
   `train_and_evaluate`: no baselines, backtest, random null, stored predictions (`*.npz`),
   checkpoints or serving bundle, and — by default — no per-trial run directory at all (only the
   JSONL row below). `run.calibrate` switches the pre-training loss-weight calibration pass on or
   off, same meaning as a scenario's `run.calibrate`. Data (load, preprocess, the `DATA_END` slice)
-  is cached **once per data key per process**
+  AND its sliding windows (`DataProcessor.build_windows`, the part that loops every bar — 10-18s on
+  the long file) are each cached **once per data key per process**
   (`experiments.dataset.data_key`, which already covers every Config field that can change the
-  prepared bars, `DATA_END` included): many trials that only vary a hyperparameter like `LR` share
-  one load. Each trial still builds its own model, optimizer and windows/split/scaling (cheap next
-  to the load) and trains for real (a real `CustomTrainModel`, real gradients).
+  prepared bars or the windows, `DATA_END` included): many trials that only vary a hyperparameter
+  like `LR` share one load AND one windowing pass. Only the fold split, target scaling and window
+  normalisation (`DataProcessor.prepare_datasets_from_windows`, cheap: no per-bar loop) and the
+  model itself are built fresh per trial, since fields outside the data key (`N_FOLDS`,
+  `VAL_FRACTION`, `CAL_FRACTION`, `WINDOW_NORMALIZER`, `FOLD_INDEX`, `BATCH_SIZE`, ...) may still
+  vary trial to trial.
 - **Health numbers and rules.** Every trial's JSONL row (`<store>/screens/<name>/results.jsonl`,
   one line per trial) carries: whether every logged value was finite, `nonfinite_grad_steps`, the
   max and mean of the per-logged-step `grad_global_norm` and the share of logged steps at or above
@@ -311,17 +323,37 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   `CustomTrainModel` already keeps; "logged steps" respects `TRAIN_METRICS_EVERY` — screens usually
   set it to 1 for exact per-step numbers, since the cost is negligible at screen sizes), the
   training loss's first-to-last-epoch drop, the final validation loss, each loss term's share of
-  the final total loss, per-horizon direction AUC on the validation block (labelled with its noise
-  level, D-012: `n` and `n_eff = n // horizon bars`), the trial's config diff, `DATA_END` and seed,
-  and a `load_s` / `build_s` / `train_s` / `score_s` timing breakdown. The spec's `rules:` block
+  the final total loss (WEIGHTED by that term's `LAMBDA_*`, not its raw magnitude — see
+  `experiments.screen._term_multiplier` — so a huge `LAMBDA_*` actually shows up as a large share
+  and `max_term_share` can catch it), per-horizon direction AUC on the validation block (labelled
+  with its noise level, D-012: `n` and `n_eff = n // horizon bars`), the trial's config diff,
+  `DATA_END` and seed, and a timing breakdown (below). The spec's `rules:` block
   (`finite`, `max_nonfinite_grad_steps`, `max_clipped_share`, `min_train_loss_drop`,
-  `max_term_share`) turns the health numbers into `passed: true/false` with `reasons`.
+  `max_term_share`) turns the health numbers into `passed: true/false` with `reasons`. A non-finite
+  health number (an extreme `LAMBDA_*` blowing up training) is written to the row as `null`, never
+  as a raw NaN/Infinity (which strict JSON, and this row's own `json.dumps(allow_nan=False)`, both
+  refuse — the previous behaviour left the trial permanently unrecorded and unresumable): such a
+  trial is always `passed: false`, with a reason naming the non-finite field(s), regardless of the
+  spec's `rules:`.
+  `clipped_share` is an APPROXIMATION: `training/custom_model.py`'s `train_step` clips gradients in
+  TWO SEPARATE groups (network weights, indicator logit variables), each against its own group
+  norm, but the sampler reads the PRE-CLIP norm of the COMBINED gradients (computed once, before the
+  split) — see `_GradNormSampler`'s docstring for exactly what this over/under-counts.
+- **Timing breakdown.** `load_s` (the data load, cached-or-not), `prep_s` (windowing, cached-or-not,
+  plus the per-trial split/scale/normalise), `build_s` (`Models.build` + optimizers + compile only),
+  `train_s` (`fit`), `score_s` (health + direction AUC) and `epoch_s` (a list of per-epoch
+  wall-clock seconds). For the phase-2 tracing decision (whether the first epoch's one-off
+  `tf.function` tracing cost is worth avoiding at screen sizes), estimate
+  `trace_time ~= epoch_s[0] - median(epoch_s[1:])` from `epoch_s`.
 - **Resumable, shardable.** A trial's key is a hash of its exact Config values
-  (`experiments.scenario.config_hash`); a key already in `results.jsonl` is skipped, so the same
-  command resumes (`--max-trials` stops early on purpose). `--shard i/N`: trial index `j` runs in
-  this process only when `j % N == i` — the shards are disjoint and their union is every trial, so
-  N processes split a screen with no locking (unlike `scenario run`'s cells, nothing is written
-  until a trial finishes, so there is nothing to collide on).
+  (`experiments.scenario.config_hash`); a key already recorded is skipped, so the same command
+  resumes (`--max-trials` stops early on purpose). `--shard i/N`: trial index `j` runs in this
+  process only when `j % N == i` — the shards are disjoint and their union is every trial. Each
+  shard writes its OWN file, `results.shard-{i}-of-{N}.jsonl` (0-indexed, in
+  `<store>/screens/<name>/`), never the shared `results.jsonl` (concurrent processes used to append
+  to the same file, risking interleaved/corrupted lines); `experiments.screen.merge_results` reads
+  every shard file (and a plain `results.jsonl` from an unsharded run, if present) back together for
+  resumability checks and for reporting total progress across shards.
 - **Level 2** (survivors, real quality): re-run through `scenario run` on a real block (a
   `configs/scenarios/micro_*.yaml`-style spec), not through screen mode again.
 
