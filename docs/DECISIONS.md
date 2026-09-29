@@ -53,6 +53,7 @@ that extend or partly replace an entry.
 | D-037 | The window-free plan is approved; NT-047 in window mode first; periods held at the data bound; study budgets | owner | |
 | D-038 | The old C: copy is ignored; pushing stays automatic | owner ("push auto": lead's reading) | |
 | D-039 | The window-free build-up (NT-064 to NT-068) moves after the MVP, into R6 | owner | |
+| D-040 | One 360-day training run on the long history, set up by the lead, tracked in a notebook | owner (setup choices: lead's) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -483,3 +484,15 @@ that extend or partly replace an entry.
   model). The MVP ships with the window model as the default, as VISION defines it; D-032's commitment
   and D-037's plan stand, only later.
 - **Consequence:** ROADMAP MVP-6 and R6; about 2 days off the MVP's critical path (an estimate).
+
+## D-040 One 360-day training run on the long history, set up by the lead, tracked in a notebook (owner, 2026-09-29)
+- **Owner:** "launch 1 360 days training sample. Ensure GPU is running at full effectiveness", "use as high batch
+  size as possible" and "after the benchmark, work out yourself how to set up the 360-day training correctly and
+  launch it yourself, autonomously, preferably through a notebook" ([qa/2026-09-29-long-training.md](qa/2026-09-29-long-training.md)).
+- **Decision:** one run trains on a 360-day block of Bitcoin_BTCUSDT.csv (the local 2017-2025 file). The lead chooses the
+  layout, batch size, shuffling and learning rate from a measured benchmark (old and new code), shown to the owner
+  first, and launches the run itself; its progress is tracked in a generated notebook. The owner's request is the GPU
+  approval for this one run.
+- **Lead's reading:** the run trains on dev fold -2 (fold -1, the newest ~32 days, stays the untouched test fold, D-020),
+  so its result may inform later choices such as the training length. Defaults (the 7-day reference setup, D-022) do
+  not change.
