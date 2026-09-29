@@ -150,7 +150,8 @@ CONTINUOUS_FIELDS = (
 # streams (reset per trial, see _reset_group_trial), DATA_END only picks which rows are loaded
 # (handled by the data/window cache, keyed separately by data_key()), and EPOCHS only controls how
 # many times `fit()` is called.
-_STRUCTURAL_IGNORE = frozenset(CONTINUOUS_FIELDS) | {"SEED", "DATA_END", "EPOCHS"}
+_STRUCTURAL_IGNORE = frozenset(CONTINUOUS_FIELDS) | {"SEED", "DATA_END", "EPOCHS",
+                                                     "SEEDED_STOCHASTIC_LAYERS"}
 
 
 def structural_key(cfg: Config) -> str:
@@ -341,6 +342,13 @@ class ScreenSpec:
             self._check_fields({f: None for f in self.sample["space"]}, "sample.space")
             self._check_sample_bounds()
         base_cfg = _step(lambda: cfg.override(**overrides), "overrides", self.where())
+        # Force SEEDED_STOCHASTIC_LAYERS on for every screen trial (QA repair round 1, P1):
+        # dropout and the vacuum noise layer must draw from a resettable generator, or a reused
+        # trial's stochastic draws continue the previous trial's stream instead of its own seed
+        # (training/reset.py's module doc). Applied AFTER the spec's own overrides, so a spec cannot
+        # accidentally (or deliberately) turn this back off; it never affects the normal training
+        # path (scenario run never sets it, default False).
+        base_cfg = base_cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
         # min_epochs guard (NT-092 acceptance 5): clip_skip_epochs excludes an entire epoch's steps
         # from clipped_share; with clip_skip_epochs >= EPOCHS every trial's clipped_share would be
         # computed over ZERO steps (None, never a real pass/fail signal). Only an EXPLICIT
@@ -492,7 +500,27 @@ def build_trials(spec: ScreenSpec) -> List[Trial]:
                 trials.append(Trial(idx, source, dict(point), data_end, int(seed), cfg))
                 idx += 1
     _preflight_data_end(trials, spec)
+    _check_min_epochs_per_trial(trials, spec)
     return trials
+
+
+def _check_min_epochs_per_trial(trials: Sequence["Trial"], spec: ScreenSpec) -> None:
+    """The min_epochs guard (NT-092 acceptance 5), re-checked per trial: ``EPOCHS`` is in
+    ``_STRUCTURAL_IGNORE`` (a grid/sample axis MAY override it per trial), so an EXPLICIT
+    ``rules.clip_skip_epochs`` that is fine against the spec-wide base ``EPOCHS``
+    (:meth:`ScreenSpec.base`'s own guard) can still leave a SPECIFIC trial with fewer epochs than the
+    skip - QA repair round 1, P2: an EPOCHS=1 trial under a 2-epoch base must not silently score zero
+    steps. Only an explicit ``rules.clip_skip_epochs`` is refused (:meth:`ScreenSpec.clip_skip_epochs`
+    docstring); the unset default is clamped per trial by :meth:`ScreenSpec.effective_clip_skip_epochs`
+    and never needs this guard."""
+    if "clip_skip_epochs" not in spec.rules:
+        return
+    for trial in trials:
+        epochs = int(trial.config.EPOCHS)
+        if spec.clip_skip_epochs >= epochs:
+            raise ScreenError(f"{spec.where()}: trial {trial.index} (EPOCHS={epochs}): "
+                              f"rules.clip_skip_epochs={spec.clip_skip_epochs} must be less than this "
+                              "trial's EPOCHS (min_epochs guard: otherwise no epoch is ever scored)")
 
 
 def _preflight_data_end(trials: Sequence["Trial"], spec: ScreenSpec) -> None:
@@ -913,9 +941,12 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool,
     from neural_trade.training.lambda_calibration import calibrate_loss_weights
     from neural_trade.training.lambdas import ablate
     from neural_trade.training.optim import build_optimizers
-    from neural_trade.training.reset import reset_stateful_rngs
+    from neural_trade.training.reset import reset_stateful_rngs, seeded_stochastic_layers
     from neural_trade.utils.seeding import seed_everything
 
+    # Forced here, not only in ScreenSpec.base() (QA repair round 1): a `cfg` built any other way
+    # (a test, a direct call) must still get a resettable dropout/noise stream - see training/reset.py.
+    cfg = cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
     seed_everything(int(cfg.SEED))
     prepared = _prepare_trial_data(cfg, cache)
     train_ds, val_ds, val_block, target_scaler, y_train = (prepared.train_ds, prepared.val_ds,
@@ -923,7 +954,8 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool,
                                                            prepared.y_train)
 
     t2 = time.perf_counter()
-    base_model = Models.build(cfg.MODEL_NAME, cfg)
+    with seeded_stochastic_layers():
+        base_model = Models.build(cfg.MODEL_NAME, cfg)
     optimizer_pair = build_optimizers(cfg)
     pred_scale = np.std(y_train) if np.std(y_train) > 0 else 1.0
     pred_mean = np.mean(y_train)
@@ -970,7 +1002,14 @@ class _TrialGroup:
     - the model's WEIGHTS (a throwaway model built fresh with ``Models.build`` at the trial's seed,
       copied in with ``set_weights`` - cheap, no tracing: tracing happens inside ``fit()``'s first
       call, not at construction);
-    - every stochastic layer's dropout generator (:func:`reset_stateful_rngs`, from the trial's seed);
+    - every RESETTABLE stochastic layer's random state (:func:`reset_stateful_rngs`, from the trial's
+      seed) - dropout, MultiHeadAttention's internal dropout and ``VacuumSaturationNoise``, all built
+      under :func:`seeded_stochastic_layers` (``Config.SEEDED_STOCHASTIC_LAYERS``, forced ``True`` for
+      every screen trial by ``_run_trial_light``/this class, never by the normal training path);
+      QA repair round 1: without this, Keras 2.10's default legacy-stateful dropout and the noise
+      layer's unseeded ``tf.random.normal`` have no Python-visible state to reset at all, so a reused
+      trial's stochastic draws silently continued the group's PREVIOUS trial instead of its own seed
+      (see ``training/reset.py``'s module doc for the full story);
     - both optimizers' internal state (moments, ``iterations``): every optimizer variable assigned to
       zero;
     - the continuous hyperparameters (:data:`CONTINUOUS_FIELDS`): LR and the Adam betas via the
@@ -988,9 +1027,13 @@ class _TrialGroup:
         from neural_trade.registries.models import Models
         from neural_trade.training.custom_model import CustomTrainModel
         from neural_trade.training.optim import build_optimizers
+        from neural_trade.training.reset import seeded_stochastic_layers
 
+        # Forced here too (QA repair round 1): see _run_trial_light's identical comment.
+        first_cfg = first_cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
         self.key = structural_key(first_cfg)
-        base_model = Models.build(first_cfg.MODEL_NAME, first_cfg)
+        with seeded_stochastic_layers():
+            base_model = Models.build(first_cfg.MODEL_NAME, first_cfg)
         optimizer_pair = build_optimizers(first_cfg)
         self.optimizer_pair = optimizer_pair
         self.custom_model = CustomTrainModel(
@@ -1028,21 +1071,27 @@ class _TrialGroup:
                clip_skip_epochs: int = DEFAULT_CLIP_SKIP_EPOCHS
                ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
         """Reset this group's model/optimizers to ``cfg``'s seed and continuous values, train and
-        score - same return shape as :func:`_run_trial_light`. ``build_s`` is 0 (nothing is built:
-        the model already exists); the wall this saves versus the fresh path IS the group's amortised
-        trace cost."""
+        score - same return shape as :func:`_run_trial_light`. ``build_s`` here is the cost of the
+        throwaway shadow model (fresh initial weights only, never traced or fit - measured at about
+        0.7s on this machine's CPU, NOT the ~12s trace cost the plan measured); the wall this saves
+        versus the fresh path shows up in ``train_s`` and the total wall from the group's second
+        trial on, not in ``build_s`` being zero (docs/RUNBOOK.md 'Screen mode' has the measured
+        numbers)."""
         from neural_trade.registries.models import Models
         from neural_trade.training.lambda_calibration import calibrate_loss_weights
         from neural_trade.training.lambdas import ablate
-        from neural_trade.training.reset import reset_stateful_rngs
+        from neural_trade.training.reset import reset_stateful_rngs, seeded_stochastic_layers
         from neural_trade.utils.seeding import seed_everything
 
+        # Forced here too (QA repair round 1): see _run_trial_light's identical comment.
+        cfg = cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
         assert structural_key(cfg) == self.key, "run_one called with a config outside this group"
         seed_everything(int(cfg.SEED))
         prepared = _prepare_trial_data(cfg, cache)
 
         t2 = time.perf_counter()
-        fresh = Models.build(cfg.MODEL_NAME, cfg)  # cheap: initial weights only, never traced/fit
+        with seeded_stochastic_layers():
+            fresh = Models.build(cfg.MODEL_NAME, cfg)  # cheap: initial weights only, never traced/fit
         self.custom_model.base_model.set_weights(fresh.get_weights())
         reset_stateful_rngs(self.custom_model, int(cfg.SEED))
         self._reset_optimizer(self.optimizer_pair.main)
@@ -1277,7 +1326,6 @@ def run_screen(spec: ScreenSpec, *, store="runs", shard: Optional[Tuple[int, int
     done_keys = _merged_existing_keys(out_dir, shard)
     cache: Dict[str, Any] = {}
     report = ScreenReport(spec.name, str(results_path), len(trials))
-    clip_skip_epochs = spec.effective_clip_skip_epochs(int(spec.base().EPOCHS))
     use_groups = trainer is None and spec.run.reuse_graph
     ordered = _group_order(trials) if use_groups else trials
     group: Optional[_TrialGroup] = None
@@ -1290,14 +1338,19 @@ def run_screen(spec: ScreenSpec, *, store="runs", shard: Optional[Tuple[int, int
         logger.info("[screen %s] trial %d/%d (%s %s, slice %s, seed %s)", spec.name, position,
                     len(trials), trial.source, trial.params, trial.data_end, trial.seed)
         if use_groups:
+            # EPOCHS is in _STRUCTURAL_IGNORE (a grid/sample axis may override it per trial), so
+            # clip_skip_epochs is recomputed from THIS trial's own EPOCHS (QA repair round 1, P2),
+            # not the whole run's - _check_min_epochs_per_trial (build_trials) already refused an
+            # explicit rules.clip_skip_epochs that would leave any trial with nothing scored.
+            trial_clip_skip_epochs = spec.effective_clip_skip_epochs(int(trial.config.EPOCHS))
             key = structural_key(trial.config)
             if group is None or group.key != key:
                 if group is not None:
                     tf.keras.backend.clear_session()
                 group = _TrialGroup(trial.config)
             row = run_trial(trial, spec, cache,
-                            trainer=lambda cfg, c, *, calibrate, _g=group: _g.run_one(
-                                cfg, c, calibrate=calibrate, clip_skip_epochs=clip_skip_epochs))
+                            trainer=lambda cfg, c, *, calibrate, _g=group, _e=trial_clip_skip_epochs: _g.run_one(
+                                cfg, c, calibrate=calibrate, clip_skip_epochs=_e))
         else:
             # trainer=None here (use_groups is False and it can still be an explicit fake): run_trial's
             # own default branch computes clip_skip_epochs from spec, identically to the group branch.

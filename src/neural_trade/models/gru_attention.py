@@ -113,8 +113,10 @@ def build_gru_attention(config) -> tf.keras.Model:
     # natural_noise + artificial_noise = E_max at all times during training.
     # training=False: pure pass-through (deterministic inference).
     _e_max = float(getattr(config, 'VACUUM_E_MAX', 1.0))
-    h_perp_sat = Layers.for_role(config, 'vacuum_noise',
-        e_max=_e_max, name='vacuum_saturation')(h_perp)               # [B, T_PERP_DIM]
+    # seeded: Config.SEEDED_STOCHASTIC_LAYERS (NT-092), default False - see VacuumSaturationNoise.
+    h_perp_sat = Layers.for_role(config, 'vacuum_noise', e_max=_e_max,
+        seeded=bool(getattr(config, 'SEEDED_STOCHASTIC_LAYERS', False)),
+        name='vacuum_saturation')(h_perp)                              # [B, T_PERP_DIM]
 
     # Overflow = per-sample mean energy above E_max in the saturated subspace.
     # This is the observable T_⊥ intensity: energy that could not be absorbed by

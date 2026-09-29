@@ -745,6 +745,44 @@ def test_reused_first_trial_matches_a_fresh_trial_of_the_same_config_and_seed(ba
 
 
 @pytest.mark.slow
+def test_reused_later_trial_matches_an_independent_fresh_run_with_default_dropout_and_noise(bars_csv):
+    """Acceptance 2, QA repair round 1: trial 3 of a 4-trial group (LR, a LAMBDA, GRAD_CLIP_NORM and
+    DATA_END all changed from trial 0; calibrate on; default dropout rate 0.1 and the
+    VacuumSaturationNoise layer both ACTIVE, i.e. LAMBDA_T_PERP left at its nonzero default) matches
+    an INDEPENDENT fresh run of that exact config and seed, bit-for-bit. Before the round-1 fix,
+    Dropout/MultiHeadAttention's legacy stateful RNG and the noise layer's unseeded tf.random.normal
+    both kept advancing across the group's earlier trials instead of resetting to trial 3's own seed,
+    so this failed (QA's evidence: trial 3 val 6.5250 reused vs 6.0214 fresh, real BTC 1-minute data).
+    Config.SEEDED_STOCHASTIC_LAYERS (forced True by screen.py itself, not this test) is what fixes it."""
+    from neural_trade.experiments.screen import _TrialGroup, _run_trial_light
+
+    base_overrides = {"CSV_PATH": str(bars_csv), "MAX_SEQUENCE_COUNT": 1500, "N_FOLDS": 2,
+                      "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1, "DATA_END_PROTECTED_DAYS": SAFE_PROTECTED_DAYS,
+                      "BATCH_SIZE": 32, "EPOCHS": 2, "DATA_END": SAFE_DATA_END}
+    base = Config().override(**base_overrides)
+    trial_overrides = [
+        dict(SEED=0, LR=1e-3),
+        dict(SEED=1, LR=2e-3, LAMBDA_HD=0.3),
+        dict(SEED=2, LR=1e-3, GRAD_CLIP_NORM=0.5, ADAM_BETA1=0.8),
+        dict(SEED=3, LR=5e-4, LAMBDA_DIR_OUTER=0.3, GRAD_CLIP_NORM=0.0,
+            DATA_END="2025-10-12T04:19:00+00:00"),
+    ]
+    cfgs = [base.copy(**o) for o in trial_overrides]
+
+    group = _TrialGroup(cfgs[0])
+    for cfg in cfgs:
+        health_reused, auc_reused, _ = group.run_one(cfg, {}, calibrate=True)
+    # health_reused/auc_reused now hold trial 3's (the last one run) result.
+    health_fresh, auc_fresh, _ = _run_trial_light(cfgs[3], {}, calibrate=True)
+
+    assert health_reused["final_train_loss"] == pytest.approx(health_fresh["final_train_loss"], rel=0, abs=0), (
+        health_reused["final_train_loss"], health_fresh["final_train_loss"])
+    assert health_reused["final_val_loss"] == pytest.approx(health_fresh["final_val_loss"], rel=0, abs=0)
+    for h in auc_fresh:
+        assert auc_reused[h]["auc"] == auc_fresh[h]["auc"]
+
+
+@pytest.mark.slow
 def test_reuse_graph_median_trial_wall_after_the_first_is_well_under_the_first(bars_csv, tmp_path):
     """Acceptance 4: 8 continuous-only trials in one group, CPU: build_s is 0 for every trial but the
     first (nothing is rebuilt), and the group's later trials' median wall is well under the first
@@ -782,6 +820,21 @@ def test_min_epochs_guard_refuses_an_explicit_clip_skip_epochs_at_or_above_epoch
     s["rules"] = {"finite": True, "clip_skip_epochs": 2}
     with pytest.raises(ScreenError, match="clip_skip_epochs"):
         ScreenSpec.from_dict(s).base()
+
+
+def test_min_epochs_guard_is_checked_per_trial_when_epochs_varies_by_axis(bars_csv):
+    """QA repair round 1, P2: EPOCHS is in _STRUCTURAL_IGNORE, so a grid axis may override it per
+    trial. rules.clip_skip_epochs=1 is fine against the spec-wide base EPOCHS=2, but a trial whose
+    OWN EPOCHS axis value is 1 must still be refused (not silently scored on zero steps)."""
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["overrides"]["EPOCHS"] = 2
+    s["grid"] = {"axes": {"EPOCHS": [1, 2]}}
+    s["run"] = {"calibrate": False}
+    s["rules"] = {"finite": True, "clip_skip_epochs": 1}
+    spec = ScreenSpec.from_dict(s)
+    spec.base()  # the spec-wide base (EPOCHS=2) alone must not raise
+    with pytest.raises(ScreenError, match="clip_skip_epochs"):
+        build_trials(spec)  # the EPOCHS=1 trial must be refused
 
 
 def test_default_clip_skip_epochs_is_clamped_for_a_one_epoch_screen_not_refused(bars_csv):
