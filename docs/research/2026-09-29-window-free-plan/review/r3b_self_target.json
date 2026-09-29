@@ -1,0 +1,10 @@
+{
+ "frac0.05": {
+  "runs": 42,
+  "never_reach_self_included_target": 18
+ },
+ "frac0.1": {
+  "runs": 42,
+  "never_reach_self_included_target": 14
+ }
+}

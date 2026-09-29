@@ -1,4 +1,3 @@
-NT-053 part B: my recommendation is candidate (a), a per-bar alpha on a 60-bar trailing context, plus an upper-bound warm-up rule with a history bound derived from the data. The prototypes, precision, causality and warm-up checks all pass on CPU; GPU cost is only estimated. FINDINGS.md is **not** saved: the harness refused to let this subagent write a report file. This message is the findings. Please save it as D:/nt_research/wfp/B/FINDINGS.md if you want it on disk.
 
 Everything ran on CPU from D:/nt_research/wfp/B/: `CUDA_VISIBLE_DEVICES=-1 PYTHONIOENCODING=utf-8 C:/Users/Step/miniforge3/envs/nt/python <script>`. Nothing in D:/neural_trade changed. Measured = measured on CPU or computed from saved runs. Estimate = reasoning, basis given. CPU timings are medians of 7 interleaved repeats on a shared machine, so they are relative only. The q4b checks you asked about completed before the interruption; their results are in Q4.
 

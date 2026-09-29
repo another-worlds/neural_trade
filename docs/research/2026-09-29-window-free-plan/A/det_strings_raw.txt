@@ -1,0 +1,4 @@
+      1 Deterministic GPU implementation of unsorted segment reduction op not available..\tensorflow/core/kernels/segment_reduction_ops_gpu.cu.hGpuLaunchKernel( SetToValue<T>, con
+      1 Deterministic GPU implementation of sorted segment reduction op not available.Shape must be at least rank 1segment_ids should be the same size as dimension 0 of input.: failed to copy ou
+      1 Deterministic GPU implementation of CropAndResizeBackpropImage not available.nearestmethod must be 'bilinear' or 'nearest'Failed to launch CropAndResizeKernel.crop_size must be 1-Dcro
+      1 Deterministic GPU implementation of CropAndResizeBackpropBoxes not available.method must be 'bilinear'Failed to launch CropAndResizeBackpropImage kernel.image_size must be 1-Dima

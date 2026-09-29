@@ -1,0 +1,14 @@
+{
+ "frac0.05": {
+  "runs": 42,
+  "never_reach_leave_one_out_target": 20,
+  "share_never": 0.47619047619047616,
+  "median_sd_min_over_mean_span": 0.16936012420999647
+ },
+ "frac0.1": {
+  "runs": 42,
+  "never_reach_leave_one_out_target": 18,
+  "share_never": 0.42857142857142855,
+  "median_sd_min_over_mean_span": 0.16936012420999647
+ }
+}

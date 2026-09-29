@@ -1,0 +1,55 @@
+{
+ "run": "20260924T182915Z-1aeff1c-dirty-af67ee43",
+ "block": "val (fold -1)",
+ "n_anchors": 2866,
+ "instances": {
+  "ma_period_0": {
+   "base_period": 4.073138359383493,
+   "rel_Wp_vs_Wc_adaptation_granularity_only": 0.019031691780778806,
+   "rel_Sc_vs_Wc_memory_only": 5.951460793249991e-12,
+   "rel_Sp_vs_Wc_armB_vs_armA": 0.01903169178102303,
+   "rel_Sp_vs_Sc_adaptation_granularity_given_memory": 0.01903169178022942,
+   "corr_Sp_Wc": 0.9998237295935744
+  },
+  "ma_period_2": {
+   "base_period": 18.892922829987423,
+   "rel_Wp_vs_Wc_adaptation_granularity_only": 0.046683999262268586,
+   "rel_Sc_vs_Wc_memory_only": 0.009858244354820675,
+   "rel_Sp_vs_Wc_armB_vs_armA": 0.048675534507368994,
+   "rel_Sp_vs_Sc_adaptation_granularity_given_memory": 0.04712175348739778,
+   "corr_Sp_Wc": 0.9990337826828536
+  },
+  "macd_0_slow": {
+   "base_period": 32.322224406907445,
+   "rel_Wp_vs_Wc_adaptation_granularity_only": 0.021759637331221358,
+   "rel_Sc_vs_Wc_memory_only": 0.013333562469857054,
+   "rel_Sp_vs_Wc_armB_vs_armA": 0.023878063739924318,
+   "rel_Sp_vs_Sc_adaptation_granularity_given_memory": 0.021373645244088753,
+   "corr_Sp_Wc": 0.9997663688653766
+  },
+  "macd_1_slow": {
+   "base_period": 58.90886493787765,
+   "rel_Wp_vs_Wc_adaptation_granularity_only": 0.06190403151837518,
+   "rel_Sc_vs_Wc_memory_only": 0.20432329160163065,
+   "rel_Sp_vs_Wc_armB_vs_armA": 0.211806640966509,
+   "rel_Sp_vs_Sc_adaptation_granularity_given_memory": 0.10048145337284246,
+   "corr_Sp_Wc": 0.9810318262727397
+  },
+  "bb_period_2": {
+   "base_period": 27.159301508239434,
+   "rel_Wp_vs_Wc_adaptation_granularity_only": 0.056204661607682484,
+   "rel_Sc_vs_Wc_memory_only": 0.03704209733171093,
+   "rel_Sp_vs_Wc_armB_vs_armA": 0.07050122482199091,
+   "rel_Sp_vs_Sc_adaptation_granularity_given_memory": 0.06076132649295948,
+   "corr_Sp_Wc": 0.9980826685948787
+  },
+  "rsi_period_1": {
+   "base_period": 15.446751016991723,
+   "rel_Wp_vs_Wc_adaptation_granularity_only": 0.02285639429185815,
+   "rel_Sc_vs_Wc_memory_only": 0.00021144312843870034,
+   "rel_Sp_vs_Wc_armB_vs_armA": 0.022861110860274706,
+   "rel_Sp_vs_Sc_adaptation_granularity_given_memory": 0.022851605969628777,
+   "corr_Sp_Wc": 0.9997782957852888
+  }
+ }
+}

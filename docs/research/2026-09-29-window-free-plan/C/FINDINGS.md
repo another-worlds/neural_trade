@@ -1,4 +1,3 @@
-NT-053 part C: final report. **FINDINGS.md was NOT written.** The harness refused the file write ("Subagents should return findings as text, not write report files"), and I did not route around it. Everything that file would hold is below; the lead can save it verbatim as D:/nt_research/wfp/C/FINDINGS.md. All scripts and outputs are intact in D:/nt_research/wfp/C/. I ran CPU only and wrote nothing in D:/neural_trade. `git status` shows docs/BACKLOG.md modified; that is another session's edit, which I only read.
 
 Commands: from D:/nt_research/wfp/C, run `CUDA_VISIBLE_DEVICES=-1 PYTHONIOENCODING=utf-8 C:/Users/Step/miniforge3/envs/nt/python <script>`. Run the two re-prediction scripts from ./scratch. "Measured" means computed by a named script; "Estimate" means a stated assumption. Numbers from the test fold (fold -1) are used only for sizing, and are labelled.
 
@@ -34,7 +33,6 @@ Commands: from D:/nt_research/wfp/C, run `CUDA_VISIBLE_DEVICES=-1 PYTHONIOENCODI
 | q3_planning_counts.py | .json | Planning counts for the recommended designs |
 | q4_comparator_sim.py | .json, .log | Comparator error rates; 4,000 reps, fixed seed |
 
-scratch/ holds 34 MB of weight copies from the re-prediction and can be deleted.
 
 ---
 
