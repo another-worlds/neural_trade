@@ -105,12 +105,6 @@ def test_lambda_weights_and_ablation_names():
         Config(ABLATE_LAMBDAS=["LAMBDA_NOPE"])
 
 
-def test_legacy_import_surface_is_the_same_class():
-    import neural_trade.compat as compat
-
-    assert compat.Config is Config
-
-
 @pytest.mark.parametrize("overrides, match", [
     ({"LOOKBACK": 0}, "LOOKBACK must be positive"),
     ({"LOOKBACK": 2000}, "exceed 1 day"),

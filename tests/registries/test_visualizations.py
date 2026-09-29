@@ -1,4 +1,4 @@
-"""Visualizations registry and the model.py compatibility shim."""
+"""Visualizations registry."""
 from __future__ import annotations
 
 import pandas as pd
@@ -35,11 +35,3 @@ def test_indicator_evolution_and_qbox_html():
     html = Visualizations.build("qbox_dashboard_html", {"hd_loss": 0.5, "val_hd_loss": 0.4}, Config())
     assert "Hyper-Dec" in html
     assert Visualizations.build("qbox_dashboard_html", {"hd_loss": 0.0}, Config()) == ""
-
-
-def test_compat_module_re_exports_the_legacy_api():
-    import neural_trade.compat as compat
-    from neural_trade.training.trainer import train_and_evaluate
-
-    assert compat.train_and_evaluate is train_and_evaluate
-    assert {"Config", "CustomTrainModel", "DataProcessor", "train_and_evaluate"} <= set(compat.__all__)

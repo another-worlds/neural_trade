@@ -80,7 +80,21 @@ def test_tunable_fields_are_searchable_hyperparameters():
 def test_deprecated_fields_are_the_ones_the_code_calls_legacy_or_unused():
     deprecated = {n for n, s in Config.field_specs().items() if s.deprecated}
     assert deprecated == {"DAMPING", "LAMBDA_LOCAL_TREND", "LAMBDA_GLOBAL_TREND", "LAMBDA_QUANTILE", "TANH_SCALE",
-                          "SIGMOID_SCALE", "USE_HUBER"}
+                          "SIGMOID_SCALE", "USE_HUBER", "HUBER_DELTA"}
+
+
+def test_a_deprecated_field_set_away_from_default_warns_and_still_loads():
+    """NT-028: none of the deprecated fields is removed, so an old config still loads; setting one
+    to a non-default value warns instead of failing."""
+    with pytest.warns(DeprecationWarning, match="Config.DAMPING is deprecated"):
+        Config(DAMPING=0.9)
+    with pytest.warns(DeprecationWarning, match="Config.HUBER_DELTA is deprecated"):
+        Config(HUBER_DELTA=2.0)
+    import warnings as _warnings
+    with _warnings.catch_warnings(record=True) as caught:
+        _warnings.simplefilter("always")
+        Config()  # every deprecated field at its default: no "is deprecated" warning
+    assert not any("is deprecated and has no effect" in str(w.message) for w in caught)
 
 
 def test_a_field_spec_checks_values_on_its_own():

@@ -12,7 +12,6 @@ import logging
 import math
 from typing import Optional
 
-import joblib
 import numpy as np
 
 from neural_trade.data.loaders import validate_ohlcv_frame
@@ -177,7 +176,9 @@ class DataProcessor:
         X_test_seq_scaled = _normalise(X_test_seq, last_close_test)
         input_scaler = normalizer.per_lag  # None for window_relative (nothing to persist)
 
-        joblib.dump(target_scaler, self.config.SCALER_PATH)
+        # NT-028: the target scaler is no longer dumped here. Nothing loads SCALER_PATH (the serving
+        # bundle carries the target scale in meta.json); train_and_evaluate writes it into a run
+        # directory only, so a run without a RunContext leaves no unread file behind.
 
         # Keep references for programmatic use without changing the return signature.
         self.target_scaler = target_scaler

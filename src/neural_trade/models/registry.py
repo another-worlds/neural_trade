@@ -1,17 +1,20 @@
 """The Models registry class (registry 1 of 9): architecture builders.
 
-Moved here from ``neural_trade.registries.models`` (NT-027): ``models/facade.py`` dispatches
-through it (``Models.build(...)``), so the registry now lives in the same package as its client
-and ``models/`` no longer needs to import ``neural_trade.registries``. ``neural_trade.registries
+Moved here from ``neural_trade.registries.models`` (NT-027): ``training/trainer.py``,
+``training/custom_model.py`` and ``training/artifacts.py`` dispatch through it
+(``Models.build(...)``), so the registry now lives in the same package as its client and
+``models/`` no longer needs to import ``neural_trade.registries``. ``neural_trade.registries
 .models`` re-exports :class:`Models` and :func:`ensure_predictive_outputs` for their old callers.
+(The ``PricePredictor`` facade that used to sit in front of ``Models.build`` was removed in
+NT-028: it had no caller besides the two tests that checked it exist.)
 
 A component is ``builder(config) -> tf.keras.Model``. ``Models.build(name, config)`` checks
 the result has the 10 outputs of :class:`~neural_trade.core.outputs.PredictiveOutputs`
 (3 horizons x price/direction/variance + vacuum overflow), each of shape ``[None, 1]``, so a
 new architecture cannot silently break the training objective or the serving path.
 
-Deferred (named in REGISTRY_SPECIFICATIONS.md, no implementation exists yet):
-``lstm_transformer``, ``conv1d_attention``.
+Deferred (named in docs/archive/REGISTRY_SPECIFICATIONS.md, the pre-remediation registry design,
+no implementation exists yet): ``lstm_transformer``, ``conv1d_attention``.
 """
 from __future__ import annotations
 

@@ -10,8 +10,8 @@ the result is a ``tf.keras.layers.Layer``. ``Config.LAYERS`` maps architecture r
 (indicators, positional_encoding, vacuum_noise, energy_gate) to registered names, so an
 architecture asks for "the indicators layer" and the configuration decides which.
 
-Deferred (named in REGISTRY_SPECIFICATIONS.md, no implementation exists yet):
-``wavenet_causal``, ``squeeze_excitation``.
+Deferred (named in docs/archive/REGISTRY_SPECIFICATIONS.md, the pre-remediation registry design,
+no implementation exists yet): ``wavenet_causal``, ``squeeze_excitation``.
 """
 from __future__ import annotations
 

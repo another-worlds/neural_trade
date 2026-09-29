@@ -43,9 +43,10 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             n_sample       = max(1, round(train_batches * sample_frac))
             lam_min    = float(getattr(cfg, 'CALIB_LAMBDA_MIN', 0.1))
             lam_max    = float(getattr(cfg, 'CALIB_LAMBDA_MAX', 20.0))
-            d_global   = float(getattr(cfg, 'CALIB_DAMPING', getattr(cfg, 'DAMPING', 0.5)))
-            if 'DAMPING' in dir(cfg) and not hasattr(cfg, 'CALIB_DAMPING'):
-                logging.getLogger(__name__).warning("Config.DAMPING is legacy (P1-1); prefer CALIB_DAMPING")
+            # NT-028: the DAMPING fallback (`getattr(cfg, 'DAMPING', ...)`) was dead for a real
+            # Config, which always has CALIB_DAMPING; DAMPING itself is deprecated (Config.validate
+            # warns if it is set). Read CALIB_DAMPING directly.
+            d_global   = float(getattr(cfg, 'CALIB_DAMPING', 0.5))
             calib_outer = bool(getattr(cfg, 'CALIB_OUTER', False))
 
             def _d(attr):
