@@ -8,7 +8,7 @@ families on top of this contract.
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import List
 
 import tensorflow as tf
 
@@ -130,11 +130,6 @@ class BollingerFamily(IndicatorFamily):
     def m_eps(self, periods, eps=1e-3, logit_shift=-0.5) -> int:
         # mean EWMA feeding the variance EWMA: two tails of the same period
         return 2 * m_single_ewma(periods["period"], eps, logit_shift)
-
-
-def _instance_params(family: IndicatorFamily, instances) -> List[Dict[str, float]]:
-    """Parse a config instance list through the family (helper for callers outside the layer)."""
-    return [family.parse_instance(v) for v in instances]
 
 
 Indicators.register(name="ma", tags=["trend", "price", "default"],

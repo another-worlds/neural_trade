@@ -210,8 +210,10 @@ Results go to `runs/ablations/<name>/report.md`.
 ```
 src/neural_trade/
   core/           Config (typed, flat, YAML round-trip), BaseRegistry, exceptions, logging, plugin loader
-  registries/     the nine registries: Models, Losses, Optimizers, Metrics, Callbacks,
-                  DataLoaders, Preprocessors, Layers, Visualizations
+  registries/     the ten registries: Models, Losses, Optimizers, Metrics, Callbacks,
+                  DataLoaders, Preprocessors, Layers, Visualizations, Indicators
+  indicators/     the learnable indicator families (registry entries: inputs, learnable
+                  parameters with bounds, output channels, drawing spec, M(eps))
   data/           loaders, preprocessors, windowing, purged splits, scaling, DataProcessor
   models/         gru_attention + layers (learnable indicators, positional encoding, noise, energy gate)
   losses/         the loss terms and the custom objective
