@@ -385,8 +385,8 @@ class Config:
                                   step=1)
     TANH_SCALE: float = _f(1.0, "architecture", "unused", unit="dimensionless", deprecated=True)
     SIGMOID_SCALE: float = _f(1.0, "architecture", "unused", unit="dimensionless", deprecated=True)
-    HUBER_DELTA: float = _f(1.0, "architecture", "delta of CustomTrainModel.huber (not the point loss)",
-                            unit="scaled", gt=0.0)
+    HUBER_DELTA: float = _f(1.0, "architecture", "unused (CustomTrainModel.huber has no caller; the point "
+                            "loss is log(cosh), NT-028)", unit="scaled", gt=0.0, deprecated=True)
     USE_HUBER: bool = _f(True, "architecture", "legacy flag; the point loss is log(cosh)", unit="flag",
                          deprecated=True)
 
@@ -568,6 +568,14 @@ class Config:
                     if (msg := spec.check(getattr(self, spec.name))) is not None]
         if problems:
             bad("; ".join(problems))
+        # Deprecated fields have no effect on the objective or the training path (NT-028, D-029):
+        # a config that still sets one away from its default is warned, not refused, so old
+        # configs keep loading.
+        for spec in self.field_specs().values():
+            if spec.deprecated and getattr(self, spec.name) != spec.default:
+                warnings.warn(
+                    f"Config.{spec.name} is deprecated and has no effect (default {spec.default!r})",
+                    DeprecationWarning, stacklevel=2)
 
     # --------------------------------------------------------------- derived
     @property
