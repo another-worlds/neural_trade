@@ -345,9 +345,12 @@ class Config:
     PNL_COST_BPS: float = _f(26.0, "loss_weights", "round-trip trading cost assumed by the pnl_utility objective "
                              "(matches strategy/variance_strategies.py's DEFAULT_COST = 0.0026, 13 bps per side)",
                              unit="bps", ge=0.0, tunable=True)
-    PNL_SIGMA_SOURCE: str = _f("ewma", "loss_weights", "volatility scale for the pnl_utility objective's "
-                               "r~ = r_H / sigma_H: 'ewma' (causal, from the input window's bar-to-bar returns) or "
-                               "'model' (the variance head, stop-gradient)", unit="name", choices=("ewma", "model"))
+    PNL_SIGMA_SOURCE: str = _f("realized_vol", "loss_weights", "volatility scale for the pnl_utility objective's "
+                               "r~ = r_H / sigma_H: 'realized_vol' (causal, equal-weighted std of the input "
+                               "window's bar-to-bar RAW-price returns, reconstructed from the normalised window "
+                               "via last_close and pred_scale) or 'model' (the variance head, stop-gradient). Not "
+                               "an EWMA despite the name once used here (NT-087 repair round 1): every bar in the "
+                               "window is weighted equally.", unit="name", choices=("realized_vol", "model"))
 
     # ------------------------------------------------------------------ physics-inspired terms (T-perp / QBOX)
     T_PERP_DIM: int = _f(16, "physics", "width of the perpendicular projection", unit="count", ge=1, step=1,
@@ -577,8 +580,8 @@ class Config:
             bad("PNL_GAMMA must be > 0")
         if self.PNL_COST_BPS < 0:
             bad("PNL_COST_BPS must be >= 0")
-        if self.PNL_SIGMA_SOURCE not in ("ewma", "model"):
-            bad(f"PNL_SIGMA_SOURCE must be 'ewma' or 'model', got {self.PNL_SIGMA_SOURCE!r}")
+        if self.PNL_SIGMA_SOURCE not in ("realized_vol", "model"):
+            bad(f"PNL_SIGMA_SOURCE must be 'realized_vol' or 'model', got {self.PNL_SIGMA_SOURCE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):
             bad(f"EWMA_IMPL must be 'matrix' or 'scan', got {self.EWMA_IMPL!r}")
         if not (0 < self.MOMENTUM_CLIP_MIN < (self.MOMENTUM_CLIP_MAX or self.LOOKBACK)):

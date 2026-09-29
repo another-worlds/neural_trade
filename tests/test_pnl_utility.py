@@ -18,17 +18,28 @@ import tensorflow as tf
 
 from neural_trade.core.config import Config
 
-from tests.test_custom_loss import SCALES, _batch, _heads
+from tests.test_custom_loss import SCALES, _batch, _heads, _y_pred
 
 EDGE_BPS = 200.0        # 200 bps, well above the 26 bps default PNL_COST_BPS
 LAST_CLOSE = 100.0
 LOOKBACK = 60
 
 
-def _walk_window(rng, B, lookback=LOOKBACK, step_vol=0.001):
-    """A realistic (small, i.i.d.) random-walk price window, for PNL_SIGMA_SOURCE='ewma'."""
-    steps = rng.normal(0.0, step_vol, size=(B, lookback)).astype(np.float32)
-    return tf.constant(np.cumprod(1.0 + steps, axis=1).astype(np.float32))
+def _walk_window(rng, B, last_close=LAST_CLOSE, pred_scale=1.0, lookback=LOOKBACK, step_vol=0.001):
+    """A realistic i.i.d. random-walk price window, correctly NORMALISED the way the real data
+    pipeline feeds ``x_window`` into the loss objectives: ``window_relative`` normalisation is
+    ``x = (raw_close - last_close) / pred_scale`` (``data/scaling.py``), and the window's last bar
+    is exactly ``last_close`` (``data/windowing.py``: ``window = close[i-lookback:i]``, whose last
+    element is ``close[i-1] = last_close``). NT-087 repair round 1: an earlier version of this
+    fixture returned an UN-normalised, arbitrarily-anchored walk (values near 1.0, unrelated to
+    ``last_close``/``pred_scale``), which happened to mask the production bug this fixture is meant
+    to exercise (``PNL_SIGMA_SOURCE='realized_vol'`` reconstructing the raw window from the
+    normalised one)."""
+    steps = rng.normal(0.0, step_vol, size=(B, lookback))
+    path = np.cumprod(1.0 + steps, axis=1)                        # arbitrary starting level
+    raw = path * (last_close / path[:, -1:])                      # anchor: raw[:, -1] == last_close
+    normalized = (raw - last_close) / pred_scale
+    return tf.constant(normalized.astype(np.float32))
 
 
 def _planted_edge_batch(rng, B, last_close=LAST_CLOSE, edge_bps=EDGE_BPS):
@@ -53,7 +64,7 @@ def _no_edge_batch(rng, B, last_close=LAST_CLOSE, edge_bps=EDGE_BPS):
 
 def _toy_position_model(make_loss_model, *, lambda_pnl=1.0):
     cfg = Config(LOSS_NAME="pnl_utility", LAMBDA_PNL=lambda_pnl, PNL_GAMMA=1.0,
-                 PNL_COST_BPS=26.0, PNL_SIGMA_SOURCE="ewma")
+                 PNL_COST_BPS=26.0, PNL_SIGMA_SOURCE="realized_vol")
     return make_loss_model(1.0, 0.0, config=cfg, lambda_dir=0.0)
 
 
@@ -134,7 +145,7 @@ def _pnl_window(rng, kind, last_close, B=64, lookback=LOOKBACK):
 
 
 @pytest.mark.parametrize("pred_scale,pred_mean,last_close", SCALES)
-@pytest.mark.parametrize("sigma_source", ["ewma", "model"])
+@pytest.mark.parametrize("sigma_source", ["realized_vol", "model"])
 @pytest.mark.parametrize("window_kind", ["random", "constant", "jump"])
 def test_pnl_utility_gradients_are_finite(make_loss_model, pred_scale, pred_mean, last_close,
                                           sigma_source, window_kind):
@@ -190,3 +201,140 @@ def test_pnl_utility_end_to_end_train_and_test_step(make_loss_model):
     test_logs = m.test_step((x, y, lc, ext))
     assert np.isfinite(float(test_logs["loss"]))
     assert np.isfinite(float(test_logs["pnl_val"]))
+
+
+# ------------------------------------------------------------- repair round 1, P0 (real-data sigma scale)
+
+@pytest.mark.data
+def test_realized_vol_sigma_matches_raw_close_scale_on_the_bundled_csv():
+    """Regression pin for NT-087 repair round 1, P0: an earlier version of
+    ``PNL_SIGMA_SOURCE='realized_vol'`` computed step returns directly on the NORMALISED window
+    ``x_window`` (``(raw_close - last_close) / pred_scale``, whose last column is exactly 0 by
+    construction - ``data/scaling.py``'s ``window_relative``), instead of reconstructing the raw
+    close window first. That made sigma ~3,500x too large on the bundled CSV (median step_sd 1.73
+    on the normalised window vs 4.9e-4 on raw closes), so the utility's cost term (``c~ =
+    cost/sigma``) and gamma term were ~1e-4 of their intended scale and effectively vanished.
+
+    This test runs ``DataProcessor.prepare_datasets`` on the bundled CSV (the real production
+    pipeline, default Config: ``WINDOW_NORMALIZER='window_relative'``) and checks that the sigma
+    ``pnl_utility`` would compute from the NORMALISED windows it is actually fed (reconstructing
+    the raw window via ``x * pred_scale + last_close``, exactly as ``losses.functions.pnl_utility``
+    does) has the same scale, to within 10% at the median, as a sigma computed directly from the
+    RAW close windows (an independent ground truth taken from the same fold, never normalised).
+    """
+    from neural_trade.core.config import Config
+    from neural_trade.data.processor import DataProcessor
+    from tests.conftest import BUNDLED_CSV
+
+    cfg = Config(CSV_PATH=str(BUNDLED_CSV))
+    dp = DataProcessor(cfg)
+    df, close = dp.load_and_prepare_data()
+    (X_train, _y_tr_s, lc_train, _ext_tr, _X_te, _y_te_s, _lc_te, _ext_te,
+     _y_tr, _y_te, target_scaler) = dp.prepare_datasets(df, close)
+
+    pred_scale = float(target_scaler.scale_[0])
+    assert dp.normalizer.kind == "window_relative"
+    np.testing.assert_allclose(dp.normalizer.scale, pred_scale, rtol=1e-6)
+
+    # Ground truth: RAW close windows for the same training indices, never normalised.
+    X_raw_all, _y_all, _lc_all, _ext_all = dp.make_sequences_with_extended_trends(close, cfg.LOOKBACK)
+    X_raw_train = X_raw_all[dp.fold.train]
+    raw_step_ret = (X_raw_train[:, 1:] - X_raw_train[:, :-1]) / X_raw_train[:, :-1]
+    sd_raw = np.std(raw_step_ret, axis=1)
+
+    # What pnl_utility computes: reconstruct raw from the NORMALISED window it is actually fed.
+    reconstructed = X_train.astype(np.float64) * pred_scale + lc_train.reshape(-1, 1)
+    np.testing.assert_allclose(reconstructed, X_raw_train, rtol=1e-3, atol=1e-3)  # the reconstruction itself is exact
+    recon_step_ret = (reconstructed[:, 1:] - reconstructed[:, :-1]) / reconstructed[:, :-1]
+    sd_reconstructed = np.std(recon_step_ret, axis=1)
+
+    med_raw, med_recon = float(np.median(sd_raw)), float(np.median(sd_reconstructed))
+    assert med_raw > 0.0
+    ratio = med_recon / med_raw
+    assert 0.9 <= ratio <= 1.1, (
+        f"reconstructed sigma scale is off by {ratio:.2f}x vs the raw-close ground truth "
+        f"(median raw={med_raw:.3g}, median reconstructed={med_recon:.3g}) - this is exactly the "
+        f"bug repair round 1 fixed (the old code was off by ~3,500x)"
+    )
+    # Sanity: a 1-minute BTC bar's realised step vol is a few bps, not the ~1.7 the old bug gave.
+    assert med_raw < 0.01 and med_recon < 0.01
+
+
+# ------------------------------------------------------------- repair round 1, P2 (sanitise before use)
+
+def _extreme_window(kind, B, lookback, last_close):
+    rng = np.random.default_rng(5)
+    base = rng.normal(0.0, 0.02, size=(B, lookback)).astype(np.float64)  # a plausible normalised window
+    if kind == "normalised_zeros":
+        # Production case: many bars equal to last_close, so the NORMALISED value is exactly 0
+        # (window_relative: x = (raw - last_close) / pred_scale) - the case that triggered the
+        # original bug (the last column of every real window is always exactly 0 this way).
+        w = base.copy()
+        w[:, ::7] = 0.0
+        return w
+    if kind == "normalised_negeps":
+        # x + eps == 0 exactly in the OLD (buggy) formula's denominator; must not resurface as a
+        # problem once eps is added to the RECONSTRUCTED raw price instead.
+        w = base.copy()
+        w[:, 10] = -1e-8
+        return w
+    if kind == "window_with_inf":
+        w = base.copy()
+        w[:, 20] = np.inf
+        return w
+    raise ValueError(kind)
+
+
+@pytest.mark.parametrize("window_kind", ["normalised_zeros", "normalised_negeps", "window_with_inf"])
+@pytest.mark.parametrize("sigma_source", ["realized_vol", "model"])
+def test_pnl_utility_sanitises_sigma_before_use_on_extreme_windows(make_loss_model, sigma_source, window_kind):
+    """NT-087 repair round 1, P2: a non-finite (or wildly extreme) ``sigma`` must be caught BEFORE
+    it is used (the fix sanitises the reconstructed raw window, the step returns and ``sigma``
+    itself, not only the final per-horizon loss), so it can never turn into a NaN gradient on the
+    direction heads. Regression pin for QA's ``extreme.py`` cases."""
+    B, lookback, last_close = 64, LOOKBACK, 110_000.0
+    # LAMBDA_HD=0: hyper_decoherence_coupling_loss reads the same x_window with an UNGUARDED
+    # tf.math.reduce_std (losses/functions.py, hyper_decoherence_coupling_loss) and is not
+    # finite-safe against a +inf bar - a PRE-EXISTING custom_loss limitation, confirmed present
+    # under LOSS_NAME='custom_loss' too and therefore out of this repair round's scope (which is
+    # pnl_utility's own sigma path); flagged separately ("found, not done"). Disabling it here
+    # isolates the P2 fix actually under test.
+    cfg = Config(LOSS_NAME="pnl_utility", LAMBDA_PNL=1.0, PNL_SIGMA_SOURCE=sigma_source, LAMBDA_HD=0.0)
+    m = make_loss_model(257.5, 0.3, config=cfg)
+    rng = np.random.default_rng(6)
+    x = tf.constant(_extreme_window(window_kind, B, lookback, last_close).astype(np.float32))
+    y = tf.constant(rng.normal(0.0, 1.0, size=(B, 3)).astype(np.float32))
+    lc = tf.constant(np.full((B, 1), last_close, dtype=np.float32))
+    ext = tf.constant(rng.normal(0.0, 200.0, size=(B, 3)).astype(np.float32))
+    price, dirs, var = _heads(rng)
+
+    with tf.GradientTape(persistent=True) as tape:
+        out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+
+    for field, val in zip(out._fields, out):
+        assert np.isfinite(float(val)), f"non-finite LossComponents.{field}"
+
+    # The gradient of pnl_val into the DIRECTION heads is the exact thing this P2 fix protects (a
+    # non-finite sigma feeds r_tilde/c_tilde, which multiply the position a=2p-1). Check it
+    # directly, for every window kind. Variance and price heads are intentionally NOT connected to
+    # pnl_val's gradient (sigma is read under tf.stop_gradient even for PNL_SIGMA_SOURCE='model',
+    # by design - section 1.1 of the research note - and price heads are not read at all), so
+    # tape.gradient legitimately returns None for them here; that is not a bug.
+    pnl_dir_grads = tape.gradient(out.pnl_val, dirs)
+    for name, g in zip(["dir_h0", "dir_h1", "dir_h2"], pnl_dir_grads):
+        assert g is not None and bool(tf.reduce_all(tf.math.is_finite(g))), \
+            f"non-finite/missing pnl_val gradient on {name} ({window_kind}, {sigma_source})"
+
+    if window_kind != "window_with_inf":
+        # A literal +inf window bar also poisons the UNRELATED, pre-existing
+        # hyper_decoherence_coupling_loss term's gradient via var heads (confirmed present under
+        # plain LOSS_NAME='custom_loss' too, independent of LAMBDA_HD's value - see the repair
+        # round 1 report, "found, not done"): 0 * NaN reintroduces NaN through the chain rule even
+        # though hyper_decoherence_coupling_loss's own forward value is correctly zeroed by its
+        # tf.where guard. That is out of this repair round's scope (a different loss term, not
+        # touched by NT-087); pnl_val's own gradient (checked above, unconditionally) is exactly
+        # what P2 is about and stays clean in every case.
+        grads = tape.gradient(out.total, dirs + var + price)
+        for name, g in zip(["dir"] * 3 + ["var"] * 3 + ["price"] * 3, grads):
+            assert g is not None and bool(tf.reduce_all(tf.math.is_finite(g))), \
+                f"non-finite/missing total gradient on the {name} head ({window_kind}, {sigma_source})"

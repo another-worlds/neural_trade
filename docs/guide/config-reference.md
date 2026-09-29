@@ -111,7 +111,7 @@ Every field of `neural_trade.core.config.Config`: 119 fields, 38 tunable, 8 depr
 | `LAMBDA_PNL` | `0.0` | weight | >= 0 | yes | no | weight of the mean-variance P&L utility on the direction heads' implied positions (0 = off; NT-087) |
 | `PNL_GAMMA` | `1.0` | dimensionless | > 0 | yes | no | risk-aversion coefficient of the pnl_utility objective's quadratic penalty |
 | `PNL_COST_BPS` | `26.0` | bps | >= 0 | yes | no | round-trip trading cost assumed by the pnl_utility objective (matches strategy/variance_strategies.py's DEFAULT_COST = 0.0026, 13 bps per side) |
-| `PNL_SIGMA_SOURCE` | `"ewma"` | name | one of ewma, model | no | no | volatility scale for the pnl_utility objective's r~ = r_H / sigma_H: 'ewma' (causal, from the input window's bar-to-bar returns) or 'model' (the variance head, stop-gradient) |
+| `PNL_SIGMA_SOURCE` | `"realized_vol"` | name | one of realized_vol, model | no | no | volatility scale for the pnl_utility objective's r~ = r_H / sigma_H: 'realized_vol' (causal, equal-weighted std of the input window's bar-to-bar RAW-price returns, reconstructed from the normalised window via last_close and pred_scale) or 'model' (the variance head, stop-gradient). Not an EWMA despite the name once used here (NT-087 repair round 1): every bar in the window is weighted equally. |
 
 ## physics
 
