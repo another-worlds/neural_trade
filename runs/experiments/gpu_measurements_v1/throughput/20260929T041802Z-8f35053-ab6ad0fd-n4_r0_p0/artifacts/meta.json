@@ -1,0 +1,84 @@
+{
+  "lambda_values_final": {
+    "lambda_point": 1.0,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 1.0,
+    "lambda_vol": 1.0,
+    "lambda_short": 1.0,
+    "lambda_long": 1.0,
+    "lambda_var": 1.0,
+    "lambda_crps": 1.0,
+    "lambda_soft_ece": 1.0,
+    "lambda_t_perp": 0.10000000149011612,
+    "lambda_casimir": 0.10000000149011612,
+    "lambda_hd": 0.10000000149011612,
+    "lambda_ife": 0.10000000149011612,
+    "lambda_vac_overflow": 0.10000000149011612
+  },
+  "calibration_lambdas": null,
+  "calibration_report": {
+    "h0": {
+      "coverage90": 0.8812880044223328,
+      "width90": 586.0530178756063,
+      "temperature": 1.9302186082348594,
+      "target": 0.9,
+      "n": 7236
+    },
+    "h1": {
+      "coverage90": 0.8702321724709784,
+      "width90": 687.162318156903,
+      "temperature": 1.361481493156188,
+      "target": 0.9,
+      "n": 7236
+    },
+    "h2": {
+      "coverage90": 0.8517136539524599,
+      "width90": 763.9150215127964,
+      "temperature": 1.4975217019406113,
+      "target": 0.9,
+      "n": 7236
+    }
+  },
+  "fold": {
+    "train": 15741,
+    "val": 2866,
+    "cal": 2866,
+    "test": 7236,
+    "gap": 80
+  },
+  "epochs_run": 3,
+  "weights_epoch": 3,
+  "weights_val_loss": 9.236140251159668,
+  "weights_source": "best validation epoch, restored after training (EarlyStopping did not stop the run: 3 epochs ran)",
+  "var_scale": 0.6908251941204071,
+  "weighted_direction_quantiles": {
+    "0.05": 0.3969087154806103,
+    "0.1": 0.4040136207311565,
+    "0.2": 0.4142152256183047,
+    "0.5": 0.4424407854173871,
+    "0.8": 0.4819845371255168,
+    "0.9": 0.5051901348440291,
+    "0.95": 0.5224365015786127
+  },
+  "format_version": 1,
+  "neural_trade_version": "0.3.0",
+  "pred_scale": 281.60857025355415,
+  "pred_mean": -3.4379425478580354,
+  "normalizer": {
+    "kind": "window_relative",
+    "scale": 281.60857025355415
+  },
+  "has_calibration": true,
+  "env": {
+    "python": "3.10.21",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "numpy": "1.23.0",
+    "pandas": "2.3.3",
+    "sklearn": "1.7.2",
+    "git": "8f35053",
+    "host_sha1": "287b3e95955e",
+    "tensorflow": "2.10.0",
+    "cuda_build": "64_112",
+    "cudnn_build": "64_8"
+  }
+}
