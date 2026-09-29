@@ -1,8 +1,10 @@
 # Notebook tooling
 
-The six notebooks in `notebooks/` are **generated** by `build.py`, **executed in place** on their real
+The notebooks in `notebooks/` are **generated** by `build.py`, **executed in place** on their real
 defaults, and **committed with their outputs** (the outputs of the last real run), so they can be read
 without a kernel. The scripts here are the only way to change them.
+
+Notebooks: `00_data_and_splits`, `01_train_and_monitor` (trains a run), `02_backtest`, `03_signals_and_trades`, `04_diagnostics`, `05_compare_runs`, `07_discovered_indicators` (the learned indicators on price against their textbook periods; like 02-05 it reads the newest run).
 
 | Script | What it does |
 | --- | --- |
@@ -19,12 +21,12 @@ export PYTHONIOENCODING=utf-8                    # the console code page is cp12
 ```
 
 Notebook names are full names (`04_diagnostics`) or number prefixes (`04`). With no names, a script
-works on all six.
+works on all of them.
 
 ## The workflow
 
 1. **Edit `scripts/notebooks/build.py`**, in the cell lists (`data`, `train`, `backtest`, `signals_nb`,
-   `diag`, `compare`). Keep the cells thin: put logic in `neural_trade` (tested there) and call it from
+   `diag`, `compare`, `discovered`). Keep the cells thin: put logic in `neural_trade` (tested there) and call it from
    a cell. No `def`, `class` or `lambda` in a cell (`tests/test_notebooks_thin.py`). The first code cell
    of each notebook has the tag `parameters`.
 2. **Build** only the notebooks you changed. A build writes the notebook without outputs.
@@ -34,7 +36,7 @@ works on all six.
 3. **Execute on the real defaults**, not on small overrides:
    ```bash
    $PY scripts/notebooks/execute.py 04        # one notebook
-   $PY scripts/notebooks/execute.py           # all six, 00 -> 05
+   $PY scripts/notebooks/execute.py           # all, in file order (00 -> 07)
    ```
    `01_train_and_monitor` trains a **new run** on the GPU (about 5 minutes). 02-05 read the newest
    run under `runs/` (`pick_run`), so execute 01 first when the model, the training or the evaluation

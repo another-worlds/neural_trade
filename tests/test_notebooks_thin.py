@@ -1,5 +1,5 @@
 """Notebooks are thin (plan B17): no def/class/lambda in cells; saved with the outputs of a real run
-(D-013); all six execute end to end (the slow test runs them on synthetic bars in a temp folder)."""
+(D-013); all of them execute end to end (the slow test runs them on synthetic bars in a temp folder)."""
 from __future__ import annotations
 
 import ast
@@ -18,10 +18,11 @@ def _code_cells(path):
     return nb, [("".join(c["source"]), c) for c in nb["cells"] if c["cell_type"] == "code"]
 
 
-def test_the_six_notebooks_exist_and_the_old_ones_are_gone():
+def test_the_notebooks_exist_and_the_old_ones_are_gone():
     assert [p.name for p in NOTEBOOKS] == ["00_data_and_splits.ipynb", "01_train_and_monitor.ipynb",
                                            "02_backtest.ipynb", "03_signals_and_trades.ipynb",
-                                           "04_diagnostics.ipynb", "05_compare_runs.ipynb"]
+                                           "04_diagnostics.ipynb", "05_compare_runs.ipynb",
+                                           "07_discovered_indicators.ipynb"]
     for old in ("inference.ipynb", "trade.ipynb", "diagnostics.ipynb", "cfg.ipynb"):
         assert not (REPO / old).exists(), old
 
@@ -79,6 +80,10 @@ def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     _run(NB_DIR / "04_diagnostics.ipynb", common, tmp_path)
     _run(NB_DIR / "05_compare_runs.ipynb", {"RUNS_GLOB": str(runs / "*"), "ABLATION_DIR": str(tmp_path / "none")},
          tmp_path)
+    nb = _run(NB_DIR / "07_discovered_indicators.ipynb", common, tmp_path)
+    titles = [o["data"]["application/vnd.plotly.v1+json"]["layout"]["title"]["text"] for c in nb.cells
+              if c.cell_type == "code" for o in c.get("outputs", []) if "application/vnd.plotly.v1+json" in o.get("data", {})]
+    assert len(titles) == 1 and titles[0].startswith("<b>Discovered indicators")
 
 
 def _saved_training_dashboards():
