@@ -109,10 +109,11 @@ changes).
 | [NT-074](#nt-074) | P1 | bug | implementer | todo | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
 | [NT-075](#nt-075) | P1 | performance | experimenter | todo | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
 | [NT-076](#nt-076) | P1 | feature | implementer | done | Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU) |
-| [NT-077](#nt-077) | P1 | feature | implementer | in-progress | Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins |
+| [NT-077](#nt-077) | P1 | feature | implementer | done | Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins |
 | [NT-078](#nt-078) | P1 | research | implementer | todo | EWMA and HAR-RV variance baselines in the evaluation report, same block, with the DM test |
 | [NT-079](#nt-079) | P3 | bug | implementer | todo | Strategy study spec: values of cal-fitted strategies are not checked at load |
 | [NT-080](#nt-080) | P2 | feature | implementer | todo | Exposure-aware backtest views; explorer hides fitted knobs; YAML loading of cal-fitted strategies |
+| [NT-081](#nt-081) | P2 | bug | implementer | todo | Timing null replay micro-rebalances after a capped fill; a full target leaves cash negative by the costs |
 
 ## Items
 
@@ -1030,7 +1031,7 @@ changes).
 
 **Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins**
 
-- **status:** in-progress (implementer, branch nt-077)
+- **status:** done (2026-09-29): 4b31c7a, merged into nt-005-strategy-study as 6aa7aaf; QA PASS on every criterion (independent exposure simulator matches the engine to 8.7e-19 on 8 configurations; causality bit-identical on 20 cases x 5 probes; existing strategies' numbers identical to 560fc8c on 843 values); fast suite 870 passed at 4b31c7a; ruff clean. Declared deviations accepted: horizon default -1 (h2 here, D-022), SignalFrame.horizon_bars, a 3-line exposure branch in tests/test_notebook_ui.py. Findings: NT-080, NT-081.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/strategy/ (signals.py, backtest.py, strategies.py, performance.py), tests/
 - **depends on:** none (runs beside NT-076 on disjoint files)
@@ -1070,6 +1071,17 @@ changes).
 - **why:** NT-077 (implementer report, 2026-09-29): the exposure strategies (vol_target, net_edge_kelly) have rebalances, not trades. The trade-analytics view then says "placed N orders but none became a trade", and the dashboard draws buys and sells as long and short markers. BacktestExplorer.widget shows fitted fields (sigma_star, in_below, out_above, gate) as knobs that do nothing. params.from_file passes no calibration, so it cannot build the five cal-fitted strategies. Notebook 05's compare_strategies() builds every registered strategy, so its next execution shows the new strategies through these views.
 - **acceptance:** (1) An exposure result gets an exposure view (the target and held exposure paths, rebalances, cost drag, break-even cost) instead of the trade views (test, figure looked at, D-014). (2) The explorer skips fitted_fields (test). (3) from_file accepts a calibration (or a documented refusal) and configs/strategies/ gets an example for a cal-fitted strategy (test). (4) Notebook 05 re-executed through the routine (D-013, D-028).
 - **source:** NT-077 implementer report, 2026-09-29
+
+### NT-081
+
+**Timing null replay micro-rebalances after a capped fill; a full target leaves cash negative by the costs**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/strategy/backtest.py (_ReplayFills.target, about line 432; fill()), tests/test_exposure_backtest.py
+- **why:** QA of NT-077: on bars without an event `_ReplayFills.target` returns `current` instead of NaN. After a fill to the 1.0 cap the costs leave cash slightly negative, the exposure drifts above 1, the engine clips `current` back to 1.0 and, with band 0, re-trades on following bars. On real data (vol_target, ewma) the unshifted replay's equity differs from the strategy's by $0.0078 on $10,000 and shifted copies make 14-16 rebalances against the strategy's 10. The effect on the null's returns is about 1e-6 of equity. P3 part: a target of 1.0 holds about 1.00015 exposure after an entry (implicit leverage on spot).
+- **acceptance:** (1) The replay returns NaN (no decision) on bars without an event; the unshifted replay of a path that hits the cap reproduces the strategy's equity to 1e-9 and its rebalance count (test). (2) A full target never holds more than max_abs_exposure after costs, or the docstring states the tolerance (test).
+- **source:** QA of NT-077, 2026-09-29
 
 ## Done log
 
