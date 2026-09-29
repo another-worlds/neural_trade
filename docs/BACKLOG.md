@@ -78,7 +78,7 @@ changes).
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
-| [NT-046](#nt-046) | P1 | feature | implementer | in-progress | Indicators package and registry with today's four families |
+| [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | todo | OHLCV input and the new indicator families, all learnable and on by default |
 | [NT-048](#nt-048) | P1 | feature | implementer | todo | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
@@ -661,7 +661,7 @@ changes).
 
 **Indicators package and registry with today's four families**
 
-- **status:** in-progress (implementer, branch nt-046, 2026-09-29; pulled forward by D-041: richer inputs are the next lever after H1-H3)
+- **status:** done (2026-09-29): c919338, merged into remediation/plan; QA PASS on every criterion, the decisive one reproduced independently (QA's own golden record at f5aee70, verify at c919338: golden_equal true, 273 arrays, max|diff| 0 - bit-for-bit); layer timing equal within noise (D-018); fast 948 / slow 14 / ruff clean. QA P2/P3 findings: configured_periods cannot list an omitted dict param's textbook default (documented); dead momentum_raw_vars branch in learnable_indicators.py (D-029 candidate for a later item).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a new indicators package (for example src/neural_trade/indicators/), a new Indicators registry next to the nine of D-002 (for example src/neural_trade/registries/indicators.py), src/neural_trade/models/layers/learnable_indicators.py, src/neural_trade/models/gru_attention.py, src/neural_trade/core/config.py, src/neural_trade/registries/layers.py, tests/
 - **depends on:** NT-026 (experiment engine)
