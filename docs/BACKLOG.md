@@ -1151,7 +1151,7 @@ changes).
 
 **pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2)**
 
-- **status:** in-progress (implementer, Sonnet per D-043, branch nt-087, 2026-09-29)
+- **status:** in-progress: QA FAIL on ad8c01c (2026-09-30): the default PNL_SIGMA_SOURCE 'ewma' computes sigma on the normalised window (median step sd 1.73 vs 4.9e-4 on raw closes), so the P&L term is ~1e-4 of its intended scale and the gamma term vanishes; P2: NaN gradients to the direction heads on a non-finite sigma; P2: per-batch demeaning equals block demeaning only with a full shuffle. Everything else met (maths, round-trip cost, calibration untouched, speed, golden, LossComponents consumers). Repair round 1 sent.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/losses/functions.py, src/neural_trade/core/config.py, src/neural_trade/training/lambda_calibration.py, src/neural_trade/training/custom_model.py (only if logging requires), tests/
 - **why:** The owner's point 3 ("absence of the PnL in the models' targets") and the /goal; docs/research/2026-09-29-pnl-target/README.md section 1.1 option A and section 3 "E2". E1 (cost-sensitive labels) failed its signal gate.
