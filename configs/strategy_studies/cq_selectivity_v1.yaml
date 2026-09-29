@@ -1,0 +1,14 @@
+# H2 of the micro loop (D-041): fewer, more selective trades of the existing signal.
+# The zero-cost re-score showed calibrated_quantile carries a real timing signal (+0.88 bps gross per trade,
+# 57.5% hit rate, null percentile 100) that the 26 bps round trip eats. This sweep asks whether tightening the
+# entry quantile and holding longer turns it net-positive at the DEFAULT costs. Quick sweep: ranks on dev cells.
+#   neural-trade scenario rescore configs/scenarios/long_360d.yaml --study configs/strategy_studies/cq_selectivity_v1.yaml
+schema_version: 1
+name: cq_selectivity_v1
+description: calibrated_quantile at tighter entry quantiles and longer holds, default costs (H2, D-041).
+entries:
+  - id: cq
+    strategy: calibrated_quantile
+    grid:
+      entry_quantile: [0.9, 0.95, 0.98, 0.99, 0.995]
+      max_hold: [15, 60, 240]
