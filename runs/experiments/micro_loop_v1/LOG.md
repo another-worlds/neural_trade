@@ -65,3 +65,5 @@ itself reaches AUC 0.51-0.53. On this data, price-and-volume history alone carri
 of that size at 10 min - 5 h. The owner's target (stable >60% hit) sits far above anything any variant or
 the baseline shows: it would need a different information source or a different target, not a different
 model. Next lever inside the owner's list: the P&L-aware target (the owner's point 3), research first.
+
+| E1 | Direction exists on moves larger than the round trip, drowned by the small ones (P&L plan E1, pass lines pre-registered in a9f296f) | configs/scenarios/micro_pnl_e1.yaml: DIR_DEADBAND_BPS 5 vs 26 at horizons 60/120/240, micro layout, 3 seeds; cells under runs/scenarios/micro_pnl_e1/ | ~30 GPU-min | **Negative: signal gate failed.** Seed-mean AUC - logreg_lags: db26 -0.033 / -0.018 / -0.010, db5 -0.046 / -0.020 / -0.008 (gate: >= +0.02 on 2 of 3). The model sits below the linear baseline on the same (masked) labels at every horizon; boot z -0.1 .. -2.0. Trading: -95..-99% net on 1,196-1,568 trades, gross edge -1.2 .. +0.1 bps. Masking untradable moves does not reveal a direction the inputs do not carry. |
