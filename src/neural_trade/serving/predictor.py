@@ -116,6 +116,10 @@ class Predictor:
         lc = np.asarray(X_close[:, -1] if last_close is None else last_close,
                         dtype="float32").reshape(-1)
         Xn = self.bundle.normalizer.transform(X, lc)
+        # the Grappler arithmetic rewrite the bundle was trained and evaluated with (NT-047)
+        from neural_trade.utils.seeding import set_arithmetic_rewrite
+
+        set_arithmetic_rewrite(self.config)
         # Same batch size as training by default: GEMM tiling differs by batch shape, and matching it
         # makes served predictions bit-identical to the ones training reported.
         bs = int(batch_size or self.config.BATCH_SIZE)

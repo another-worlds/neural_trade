@@ -339,11 +339,13 @@ def _indicator_layer(net):
 
 def applied_periods(model, windows, *, normalizer=None, block: Optional[str] = None,
                     batch_size: int = 4096) -> pd.DataFrame:
-    """The period each window actually gets, per learned period: ``[N windows, 18]``.
+    """The period each window actually gets, per learned period: ``[N windows, n periods]``.
 
     ``model``: a :class:`~neural_trade.serving.Predictor` (the served weights), a ``TrainResult``
-    or a Keras model holding the ``learnable_indicators`` layer. ``windows``: raw close windows
-    ``[N, LOOKBACK]``; they are normalised as the model saw them (the predictor's / result's window
+    or a Keras model holding the ``learnable_indicators`` layer. ``windows``: the raw MODEL-INPUT
+    windows: close windows ``[N, LOOKBACK]`` for a close-only model, ``[N, LOOKBACK, C]`` for a
+    multi-series one (``Config.INPUT_SERIES``, NT-047; ``split_arrays(cfg)[block]["X_model"]`` gives
+    either); they are normalised as the model saw them (the predictor's / result's window
     normaliser, or ``normalizer=``). A bare Keras model without ``normalizer=`` takes the windows as
     already normalised. Runs only the meta-adjust Dense on the window mean and max, so it is cheap
     on the CPU.
@@ -357,9 +359,18 @@ def applied_periods(model, windows, *, normalizer=None, block: Optional[str] = N
     net, norm = _resolve_model(model, normalizer)
     layer = _indicator_layer(net)
     X = np.asarray(windows, dtype="float32")
-    if X.ndim == 1:
-        X = X[None, :]
-    Xn = norm.transform(X, X[:, -1]) if norm is not None else X
+    series = tuple(getattr(getattr(layer, "config", None), "INPUT_SERIES", None) or ["close"])
+    multi = len(net.inputs[0].shape) == 3               # the model reads [N, L, C] windows (NT-047)
+    if X.ndim == (2 if multi else 1):
+        X = X[None, ...]                                 # one window
+    if multi and X.ndim != 3:
+        raise ValueError(f"this model reads multi-series windows [N, LOOKBACK, {len(series)}] "
+                         f"(INPUT_SERIES {list(series)}), got {X.shape}: pass the model-input windows, "
+                         "e.g. split_arrays(cfg)[block]['X_model'], not the close windows")
+    if not multi and X.ndim != 2:
+        raise ValueError(f"this model reads close windows [N, LOOKBACK], got {X.shape}")
+    last_close = X[:, -1] if X.ndim == 2 else X[:, -1, series.index("close")]
+    Xn = norm.transform(X, last_close) if norm is not None else X
     meta = tf.keras.Model(net.inputs, layer.input[1])
     adj = np.asarray(meta.predict(Xn, batch_size=int(batch_size), verbose=0), dtype="float64")
     base = {k: float(v) for k, v in layer.get_learned_parameters().items()}

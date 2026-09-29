@@ -6,9 +6,11 @@ Every family is fully learnable (owner, D-031): its periods are trainable logits
 NT-046 four. Where the textbook form is not differentiable, a smooth version replaces it:
 
 * rolling max / min -> the smooth rolling extremum of ``base`` (a Boltzmann-weighted
-  average over an exact fractional rolling window, differentiable in the period through
-  the window-edge weight; window mode now, the decayed series forms come after A/B-1,
-  D-037), used by Stochastic, Williams %R and Donchian;
+  average over an exact fractional rolling window, its sharpness relative to the window's
+  own range, so scale- and level-invariant; differentiable in the period through the
+  window-edge weight; window mode now, the decayed series forms come after A/B-1, D-037),
+  used by Stochastic, Williams %R and Donchian (%K and %R clipped to their textbook
+  ranges);
 * sign branches (OBV's sign(dClose), MFI's up/down split, ADX's +DM/-DM selection) ->
   ``tanh`` / ``sigmoid`` gates at ``SOFT_SIGN_SHARPNESS`` (the MACD soft-cross scale).
 
@@ -48,7 +50,16 @@ from .base import (
 )
 from .registry import Indicators
 
-_EPS = 1e-6
+
+
+def _position_in_range(value, low, high, empty):
+    """(value - low) / (high - low), scale- and level-invariant: a window whose range is zero
+    (up to float32 resolution of its level) returns ``empty`` instead of dividing by ~0; the
+    division never sees a zero denominator, so the gradient stays finite."""
+    den = high - low
+    has_range = den > 1e-7 * (tf.abs(high) + tf.abs(low)) + 1e-30
+    ratio = (value - low) / tf.where(has_range, den, tf.ones_like(den))
+    return tf.where(has_range, ratio, tf.zeros_like(ratio) + empty)
 
 
 class ATRFamily(IndicatorFamily):
@@ -79,9 +90,9 @@ class StochasticFamily(IndicatorFamily):
     """Learnable stochastic oscillator: %K over soft rolling extrema, %D its EWMA.
 
     %K = 100 (close - LL) / (HH - LL + eps) with HH / LL the smooth rolling max of the
-    high / min of the low over the learnable k_period window (soft_rolling_extremum); %D
-    is the d_period EWMA of %K. The soft extrema lie strictly inside the true range, so
-    %K may slightly leave [0, 100]."""
+    high / min of the low over the learnable k_period window (soft_rolling_extremum),
+    clipped to [0, 100] (the soft extrema lie inside the hard ones, so the raw ratio can
+    leave the range at the window's extreme); %D is the d_period EWMA of %K."""
 
     name = "stoch"
     inputs = ("high", "low", "close")
@@ -95,7 +106,9 @@ class StochasticFamily(IndicatorFamily):
         # aggregation order (the determinism NOTE in base.py)
         hh = soft_rolling_extremum(ctx.high, alphas["k_period"], +1.0)
         ll = soft_rolling_extremum(ctx.low, alphas["k_period"], -1.0)
-        cache["k"] = 100.0 * (ctx.close - ll) / (hh - ll + _EPS)
+        # clipped to the textbook [0, 100]: the soft extrema lie inside the hard ones, so the
+        # raw ratio can leave the range when the close sits at the window's extreme
+        cache["k"] = tf.clip_by_value(100.0 * _position_in_range(ctx.close, ll, hh, 0.5), 0.0, 100.0)
         return {"d": (cache["k"], alphas["d_period"])}
 
     def outputs(self, ctx, alphas, s1, s2, cache) -> List[tf.Tensor]:
@@ -121,7 +134,8 @@ class WilliamsRFamily(IndicatorFamily):
     def outputs(self, ctx, alphas, s1, s2, cache) -> List[tf.Tensor]:
         hh = soft_rolling_extremum(ctx.high, alphas["period"], +1.0)
         ll = soft_rolling_extremum(ctx.low, alphas["period"], -1.0)
-        return [-100.0 * (hh - ctx.close) / (hh - ll + _EPS)]
+        # clipped to the textbook [-100, 0] (see the stochastic %K)
+        return [tf.clip_by_value(100.0 * (_position_in_range(ctx.close, ll, hh, 0.5) - 1.0), -100.0, 0.0)]
 
     def m_eps(self, periods, eps=1e-3, logit_shift=-0.5) -> int:
         return m_soft_extremum(periods["period"], eps, logit_shift)
