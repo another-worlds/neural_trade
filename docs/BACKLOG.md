@@ -112,6 +112,7 @@ changes).
 | [NT-077](#nt-077) | P1 | feature | implementer | in-progress | Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins |
 | [NT-078](#nt-078) | P1 | research | implementer | todo | EWMA and HAR-RV variance baselines in the evaluation report, same block, with the DM test |
 | [NT-079](#nt-079) | P3 | bug | implementer | todo | Strategy study spec: values of cal-fitted strategies are not checked at load |
+| [NT-080](#nt-080) | P2 | feature | implementer | todo | Exposure-aware backtest views; explorer hides fitted knobs; YAML loading of cal-fitted strategies |
 
 ## Items
 
@@ -1058,6 +1059,17 @@ changes).
 - **why:** QA of NT-076: `grid: {entry_quantile: [0.9, 1.5]}` or a string value is accepted at load for a from_calibration strategy and fails only during the rescore, probably with a traceback (only InvalidConfigurationError and RescoreError are caught).
 - **acceptance:** Such values are refused at load with exit 2 and nothing written (test).
 - **source:** QA of NT-076, 2026-09-29
+
+### NT-080
+
+**Exposure-aware backtest views; explorer hides fitted knobs; YAML loading of cal-fitted strategies**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/visualization/ (trade_analytics, the trading dashboard), src/neural_trade/notebook/backtest_ui.py (BacktestExplorer), src/neural_trade/strategy/params.py (from_file), scripts/notebooks/build.py (notebook 05), tests/
+- **why:** NT-077 (implementer report, 2026-09-29): the exposure strategies (vol_target, net_edge_kelly) have rebalances, not trades. The trade-analytics view then says "placed N orders but none became a trade", and the dashboard draws buys and sells as long and short markers. BacktestExplorer.widget shows fitted fields (sigma_star, in_below, out_above, gate) as knobs that do nothing. params.from_file passes no calibration, so it cannot build the five cal-fitted strategies. Notebook 05's compare_strategies() builds every registered strategy, so its next execution shows the new strategies through these views.
+- **acceptance:** (1) An exposure result gets an exposure view (the target and held exposure paths, rebalances, cost drag, break-even cost) instead of the trade views (test, figure looked at, D-014). (2) The explorer skips fitted_fields (test). (3) from_file accepts a calibration (or a documented refusal) and configs/strategies/ gets an example for a cal-fitted strategy (test). (4) Notebook 05 re-executed through the routine (D-013, D-028).
+- **source:** NT-077 implementer report, 2026-09-29
 
 ## Done log
 
