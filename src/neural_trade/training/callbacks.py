@@ -1,4 +1,12 @@
-"""Training callbacks (moved from model.py in B10; the Callbacks registry arrives in B11)."""
+"""Training callbacks (moved from model.py in B10; the Callbacks registry arrives in B11).
+
+NT-027: the builders at the bottom of this module register themselves with ``Callbacks.register``
+(the registry class is imported here, not the other way around) so that ``registries/callbacks.py``
+no longer has to import ``neural_trade.training`` to populate it; it now populates the registry
+with ``Callbacks.auto_discover()``, the project's existing dynamic-import discovery mechanism
+(``BaseRegistry.auto_discover``), which is not a static import and so is not part of the
+subpackage import graph the layering test checks.
+"""
 from __future__ import annotations
 
 import logging
@@ -11,6 +19,8 @@ import pandas as pd
 import tensorflow as tf
 from tensorflow.keras import callbacks
 from tqdm import tqdm
+
+from neural_trade.registries.callbacks import Callbacks
 
 logger = logging.getLogger(__name__)
 
@@ -325,12 +335,14 @@ class MetricThresholdStop(callbacks.Callback):
             self.model.stop_training = True
 
 
-# ---- builders registered in neural_trade.registries.callbacks: f(config, context) ----------
+# ---- builders registered in the Callbacks registry (imported above): f(config, context) -----
+@Callbacks.register(name="csv_logger", tags=["logging", "default"])
 def build_csv_logger(config, context):
     """Keras CSVLogger to training_log.csv."""
     return callbacks.CSVLogger(context.path("training_log.csv"), append=True)
 
 
+@Callbacks.register(name="early_stopping", tags=["regularization", "default"])
 def build_early_stopping(config, context):
     """EarlyStopping on val_loss, patience EARLY, keeping the best weights in memory.
 
@@ -342,33 +354,39 @@ def build_early_stopping(config, context):
     return callbacks.EarlyStopping(monitor="val_loss", patience=config.EARLY, restore_best_weights=True)
 
 
+@Callbacks.register(name="model_checkpoint", tags=["persistence", "default"])
 def build_model_checkpoint(config, context):
     """Best-on-validation weights to MODEL_PATH."""
     return callbacks.ModelCheckpoint(config.MODEL_PATH, save_best_only=True, monitor="val_loss",
                                      save_weights_only=True)
 
 
+@Callbacks.register(name="mcc_early_stopping", tags=["regularization", "direction"])
 def build_mcc_early_stopping(config, context):
     """EarlyStopping on val_dir_mcc_h1 (max); opt-in, without weight restore."""
     return callbacks.EarlyStopping(monitor="val_dir_mcc_h1", mode="max", patience=config.EARLY,
                                    restore_best_weights=False)
 
 
+@Callbacks.register(name="reduce_lr_on_plateau", tags=["schedule", "default"])
 def build_reduce_lr_on_plateau(config, context):
     """Halve the learning rate after PATIENCE epochs without val_loss improvement."""
     return callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=config.PATIENCE)
 
 
+@Callbacks.register(name="tqdm_progress", tags=["progress", "console", "default"])
 def build_tqdm_progress(config, context):
     """Console progress bars."""
     return TqdmCallback()
 
 
+@Callbacks.register(name="params_logger", tags=["logging", "indicators", "default"])
 def build_params_logger(config, context):
     """Learned indicator periods per epoch to indicator_params_history.csv (legacy CSV)."""
     return ParamsLogger(layer=context.indicator_layer, out_csv=context.path("indicator_params_history.csv"))
 
 
+@Callbacks.register(name="jsonl_epoch_logger", tags=["logging", "telemetry"])
 def build_jsonl_epoch_logger(config, context):
     """Append-only metrics.jsonl + status.json (never raises)."""
     from neural_trade.telemetry.epoch_logger import JsonlEpochLogger
@@ -376,21 +394,26 @@ def build_jsonl_epoch_logger(config, context):
     return JsonlEpochLogger(context.run_dir or ".", context.indicator_layer, context.run_id)
 
 
+@Callbacks.register(name="lambda_schedule", tags=["schedule", "loss_weights"])
 def build_lambda_schedule(config, context):
     """Config.LOSS_WEIGHT_SCHEDULE applied at each epoch start."""
     return LambdaScheduleCallback(getattr(config, "LOSS_WEIGHT_SCHEDULE", None) or {})
 
 
+@Callbacks.register(name="metric_threshold", tags=["safety"])
 def build_metric_threshold(config, context):
     """Stop on a non-finite or out-of-range metric (settings in context.extra["metric_threshold"])."""
     return MetricThresholdStop(**dict(context.extra.get("metric_threshold", {})))
 
 
+@Callbacks.register(name="tensorboard", tags=["logging", "visualization"], dependencies=["tensorboard"])
 def build_tensorboard(config, context):
     """TensorBoard scalars under <run>/tb."""
     return callbacks.TensorBoard(log_dir=context.path("tb"), write_graph=False, profile_batch=0)
 
 
+@Callbacks.register(name="interactive_plot", tags=["visualization", "notebook"],
+                    dependencies=["ipywidgets", "IPython", "plotly"])
 def build_interactive_plot(config, context):
     """The notebook's live Plotly dashboard (widgets passed in context.extra["interactive_plot"])."""
     from neural_trade.visualization.plotly_training import make_interactive_plot_callback
