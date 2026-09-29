@@ -1,5 +1,8 @@
 """Backtest a gate run's saved test predictions with every registered strategy.
 
+Frozen (D-023): kept runnable as history; nothing new builds on it. Its replacement is the
+experiment engine (neural_trade.experiments: scenario specs, `neural-trade scenario run`, NT-026).
+
     python scripts/backtest_gate.py runs/gates/m3
 
 Rebuilds the run's splits from its config (deterministic), takes the TEST block's decision bars

@@ -1,0 +1,33 @@
+# Experiment-engine scenario (NT-026): the reference setup as shipped.
+#
+# BTC/USDT 1-minute bars (binance_btcusdt_1min_ccxt.csv, 30 days), a 60-bar window, horizons of
+# 10, 15 and 20 bars (VISION "The reference setup"). The default model on the three latest purged
+# walk-forward folds x three seeds: folds -3 and -2 are dev folds (rows rank on them), fold -1 is
+# the test fold (shown, never used to rank or choose; D-020). Each cell is scored on its fold's
+# out-of-sample block, with the default strategy (calibrated_quantile, knobs fitted on the fold's
+# calibration block) after the default costs (13 bps per side, next-open fills).
+#
+#   neural-trade scenario plan configs/scenarios/reference.yaml     # check it, list the cells (no training)
+#   neural-trade scenario run  configs/scenarios/reference.yaml     # GPU: 9 cells, about 5 minutes each (estimate)
+#
+# Runs from the repository root (CSV_PATH is relative to the working directory); base_config is
+# relative to this file. Keys: src/neural_trade/experiments/scenario.py.
+schema_version: 1
+name: reference_default
+description: The default model on the reference setup, dev folds -3 and -2 and test fold -1, seeds 0-2.
+base_config: ../default.yaml
+overrides: {}
+variants:
+  default: {}
+# sweep:                      # a grid over Config fields, crossed with every variant, e.g.
+#   mode: grid
+#   axes: {LR: [0.001, 0.0003]}
+folds: [-3, -2, -1]
+seeds: [0, 1, 2]
+strategy:
+  name: calibrated_quantile
+  params: {}
+backtest: {}                  # BacktestConfig fields; empty = the default cost profile, 100 random-null seeds
+run:
+  calibrate: true             # the loss-weight calibration pass, as `neural-trade train` runs it
+  save_artifacts: false       # no serving bundle per cell (weights.h5 of the best epoch is still saved)
