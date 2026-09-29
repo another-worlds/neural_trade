@@ -105,7 +105,7 @@ NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")
 # read from history.history to compute each term's share of the final total loss.
 LOSS_TERM_KEYS = ("point_loss", "trend_loss", "dir_loss", "nll_loss", "crps_loss", "soft_ece_loss",
                   "reg_loss", "inter_reg", "vol_loss", "t_perp_loss", "casimir_loss", "vac_loss",
-                  "hd_loss", "ife_loss", "vac_overflow_loss")
+                  "hd_loss", "ife_loss", "vac_overflow_loss", "pnl_val")  # pnl_val: pnl_utility (NT-087), logged lambda-weighted
 
 
 class ScreenError(InvalidConfigurationError):

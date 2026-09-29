@@ -632,3 +632,12 @@ def test_merged_existing_keys_docstring_names_same_shard_count_only():
         assert keys == {"this-n2"}, f"expected only the N=2 shard's keys, got {keys}"
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_pnl_utility_term_counts_in_the_loss_term_shares_at_weight_one():
+    """pnl_utility (NT-087) logs pnl_val already multiplied by LAMBDA_PNL, so it joins the shares at 1.0."""
+    from neural_trade.core.config import Config
+    from neural_trade.experiments.screen import LOSS_TERM_KEYS, _term_multiplier
+
+    assert "pnl_val" in LOSS_TERM_KEYS
+    assert _term_multiplier("pnl_val", Config()) == 1.0
