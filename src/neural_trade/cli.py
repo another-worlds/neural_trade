@@ -183,22 +183,7 @@ def cmd_scenario(args) -> int:
             print(json.dumps({"scenario": runner.scenario.name, "spec_hash": runner.scenario.spec_hash,  # noqa: T201
                               "index": str(store.index_path), "counts": counts, "cells": cells}, indent=2))
             return 0
-        # Grappler's arithmetic optimizer reassociates float sums NON-reproducibly across
-        # graph REBUILDS in one process at the NT-047 default graph size (measured: 1-ulp
-        # weight differences that training amplifies to ~1e-5 relative metric noise), so a
-        # multi-cell scenario run would depend on the cell's position in the process.
-        # It is disabled for the engine's training runs only and restored afterwards:
-        # plain train_and_evaluate keeps today's numbers (scripts/golden_run.py records
-        # pre-date this switch and stay bit-for-bit).
-        import tensorflow as tf
-
-        _opts = tf.config.optimizer.get_experimental_options()
-        tf.config.optimizer.set_experimental_options({"arithmetic_optimization": False})
-        try:
-            report = runner.run(max_cells=args.max_cells, retry_failed=args.retry_failed)
-        finally:
-            tf.config.optimizer.set_experimental_options(
-                {"arithmetic_optimization": _opts.get("arithmetic_optimization", True)})
+        report = runner.run(max_cells=args.max_cells, retry_failed=args.retry_failed)
     except InvalidConfigurationError as exc:
         logger.error("scenario refused, nothing was run: %s", exc)
         return 2
