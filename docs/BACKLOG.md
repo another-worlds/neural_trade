@@ -118,6 +118,7 @@ changes).
 | [NT-083](#nt-083) | P1 | bug | implementer | todo | Adding a Config field changes every engine cell's config_hash: finished cells re-run and rescore skips them |
 | [NT-084](#nt-084) | P3 | polish | implementer | todo | Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees |
 | [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
+| [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
 
 ## Items
 
@@ -674,7 +675,7 @@ changes).
 
 **OHLCV input and the new indicator families, all learnable and on by default**
 
-- **status:** in-progress (implementer, branch nt-047, 2026-09-29; D-041: the input lever after NT-046)
+- **status:** in-progress (implementer, branch nt-047, 2026-09-29; D-041). QA of 189b844: FAIL (legacy bundles do not load; notebooks 01/04/07 crash on OHLCV models; process-wide Grappler switch leaks into later close-only runs; soft extrema not scale-invariant: %K up to ~236 on real windows); core OHLCV path and the close-only golden passed; CPU step 1.64x slower (D-018: owner). Repair round 1 sent 2026-09-29.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/data/ (sequence building: OHLCV windows), the indicators package and registry (NT-046), src/neural_trade/models/gru_attention.py, src/neural_trade/core/config.py, src/neural_trade/serving/ (input shape), tests/
 - **depends on:** NT-046 (indicators registry); NT-053 (the window-free plan: the input path and the indicator forms may change; D-032)
@@ -1131,6 +1132,17 @@ changes).
 - **why:** D-041. The 360-day run showed data volume is not the limit; the zero-cost re-score showed a real but tiny timing signal. The loop tests one hypothesis at a time on micro setups (~10-day train, batch 2048, ~4 min per cell; CPU rescore where no retraining is needed) and records each in the journal.
 - **acceptance:** Each hypothesis gets a journal row with its method, cost and result, and evidence committed (rescore dirs, scenario cells' light files). Quick sweeps stay within OPERATING_MODEL's sweep rules; a claimed improvement to the reference setup goes through D-025 before any default changes.
 - **source:** owner /goal 2026-09-29 (D-041)
+
+### NT-086
+
+**The slow notebook test runs the main checkout's src/ from a worktree (false passes)**
+
+- **status:** todo (folded into NT-047's repair round 1; closes with it if QA confirms)
+- **priority / type / role:** P1 / bug / implementer
+- **area:** tests/test_notebooks_thin.py (`_run`)
+- **why:** QA of NT-047: the Jupyter kernel of `test_all_notebooks_execute` does not get the checkout's own src/ on PYTHONPATH, so in any worktree it imports D:/neural_trade/src and passes on the main checkout's code (NT-047's notebook crash was hidden this way). CI does not run the slow suite, so nothing else catches it. Same root as NT-084 item (1).
+- **acceptance:** the kernel imports the checkout under test (as scripts/notebooks/execute.py:98 sets it); a test proves it from a worktree.
+- **source:** QA of NT-047, 2026-09-29
 
 ## Done log
 
