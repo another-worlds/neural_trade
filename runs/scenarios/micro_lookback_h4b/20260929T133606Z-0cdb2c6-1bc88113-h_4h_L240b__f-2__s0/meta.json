@@ -1,0 +1,101 @@
+{
+  "run_id": "20260929T133606Z-0cdb2c6-1bc88113-h_4h_L240b__f-2__s0",
+  "seed": 0,
+  "tags": [
+    "scenario",
+    "micro_lookback_h4b",
+    "dev"
+  ],
+  "created_utc": "20260929T133606Z",
+  "engine": {
+    "schema_version": 1,
+    "scenario": "micro_lookback_h4b",
+    "cell_key": "h_4h_L240b__f-2__s0",
+    "configuration": "h_4h_L240b",
+    "variant": "h_4h_L240b",
+    "params": {
+      "HORIZON_STEPS": [
+        160,
+        240,
+        320
+      ],
+      "EXTENDED_TREND_PERIODS": [
+        160,
+        240,
+        320
+      ]
+    },
+    "fold": -2,
+    "fold_id": 1,
+    "n_usable_folds": 2,
+    "role": "dev",
+    "seed": 0,
+    "config_hash": "427eb98015a3",
+    "settings_hash": "ff514fca1d28",
+    "spec_hash": "091ac910adb0",
+    "commit": "0cdb2c6",
+    "strategy": {
+      "name": "calibrated_quantile",
+      "params": {}
+    },
+    "backtest": {},
+    "run": {
+      "calibrate": true,
+      "save_artifacts": false
+    },
+    "spec": "configs\\scenarios\\micro_lookback_h4b.yaml"
+  },
+  "dataset": {
+    "path": "Bitcoin_BTCUSDT.csv",
+    "sha256": "67966a49634fa0a591f6fa188ec330797297d9b399b68c96b36bef06f1f50008",
+    "size_bytes": 290962077,
+    "loader": "csv",
+    "n_rows": 4598198,
+    "n_bars": 4598198,
+    "first_timestamp": "2017-01-01T00:00:00",
+    "last_timestamp": "2025-09-29T23:57:00"
+  },
+  "setup": {
+    "bar_minutes": 1,
+    "LOOKBACK": 240,
+    "HORIZON_STEPS": [
+      160,
+      240,
+      320
+    ]
+  },
+  "blocks": {
+    "fold": -2,
+    "fold_id": 1,
+    "n_usable_folds": 2,
+    "gap": 560,
+    "train": {
+      "start": 0,
+      "stop": 12956,
+      "n": 12956,
+      "first_timestamp": "2025-07-01T18:38:00",
+      "last_timestamp": "2025-07-10T18:33:00"
+    },
+    "val": {
+      "start": 13516,
+      "stop": 27798,
+      "n": 14282,
+      "first_timestamp": "2025-07-11T03:54:00",
+      "last_timestamp": "2025-07-21T01:55:00"
+    },
+    "cal": {
+      "start": 28358,
+      "stop": 42640,
+      "n": 14282,
+      "first_timestamp": "2025-07-21T11:16:00",
+      "last_timestamp": "2025-07-31T09:17:00"
+    },
+    "test": {
+      "start": 43200,
+      "stop": 86400,
+      "n": 43200,
+      "first_timestamp": "2025-07-31T18:38:00",
+      "last_timestamp": "2025-08-30T18:37:00"
+    }
+  }
+}

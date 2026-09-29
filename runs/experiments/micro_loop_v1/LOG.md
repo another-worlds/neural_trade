@@ -42,3 +42,6 @@ Operational findings of H4: (1) the attention memory wall (OOM at batch >= 512 f
 config-guard candidate (NT-038) and constrains the window-free plan's sizing; (2) five failed OOM run
 directories sit under runs/scenarios/micro_lookback/ (kept, D-029); (3) the GPU-free check's 30% sm line
 trips on the owner's active desktop with no compute process present - RUNBOOK clarification candidate.
+
+| H4b | H4's 4 h cell was merely undertrained (it served epoch 1) | Re-run with EPOCHS 60, EARLY 12, PATIENCE 6 (configs/scenarios/micro_lookback_h4b.yaml); cell under runs/scenarios/micro_lookback_h4b/ | 8.5 GPU-min | **Negative: not undertraining.** Validation loss never improved after epoch 1 in 13 epochs; the served weights are epoch 1 again. Direction still within 1 SE of logreg_lags on every horizon; variance CRPSS no better than the 60-bar window's. On the close-only input, the (window, horizon) plane is exhausted. |
+| H5 | The 4 h horizons were data-starved, not signal-free: 10-day training gives ~40 effective outcomes at 320 bars; 360 days gives ~1,600 | configs/scenarios/h4h_360d.yaml: 160/240/320-bar horizons on the 360-day block, window 60, batch 2048, one seed | ~25 GPU-min (est.) | running |
