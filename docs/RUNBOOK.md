@@ -389,6 +389,13 @@ included.
   `git log -3` before editing; give parallel implementers separate worktrees.
 - **Deleting anything** follows D-029: only what is both stale and without any effect, with the
   evidence. Runs, data and remote branches need the owner.
+- **`LOSS_NAME=pnl_utility` (NT-087) demeans its volatility-scaled return per BATCH, not per
+  training block.** This equals block demeaning only under a full reshuffle (`SHUFFLE_BUFFER: 0`,
+  the P&L micro loop's E2 scenario setting). With the default `SHUFFLE_BUFFER` (2048, a partial,
+  order-preserving shuffle) a training batch tracks local drift instead of the block mean, and
+  validation/test batches are never shuffled at all, so `val_loss`'s demeaning basis differs from
+  training's under that objective. Set `SHUFFLE_BUFFER: 0` for any run or study that uses
+  `pnl_utility`.
 
 ## Move to D: (D-030; done 2026-09-28, steps 1-6; step 7 waits for the owner)
 

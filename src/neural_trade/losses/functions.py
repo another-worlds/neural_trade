@@ -790,7 +790,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     total = tf.where(tf.math.is_finite(total), total, tf.constant(0.0, dtype=tf.float32))
 
     # Return as LossComponents (NamedTuple subclass). This preserves exact
-    # 34-element tuple shape / positional unpacking for all callers while
+    # 35-element tuple shape / positional unpacking for all callers while
     # enabling named attribute access (e.g. lc.extended_trend_h1).
     # Update the component list only by extending the namedtuple definition above.
     return LossComponents(
@@ -806,4 +806,114 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         soft_ece_h0_val, soft_ece_h1_val, soft_ece_h2_val,
         total_t_perp, casimir_val, vac_val, hd_val, ife_val,
         vac_overflow_val,
+        tf.constant(0.0, dtype=tf.float32),  # pnl_val: 0 unless wrapped by pnl_utility (NT-087)
     )
+
+
+@Losses.register_objective(name="pnl_utility", tags=["composite", "pnl"])
+def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, vacuum_overflow=None):
+    """``custom_loss`` plus a mean-variance P&L utility, with a linear cost, on the direction
+    heads' implied positions a_i = 2*p_i - 1 (NT-087, ``docs/research/2026-09-29-pnl-target/``
+    section 1.1, option A).
+
+    ``U_i = mean( a*r~ - c~*|a| - 0.5*gamma*a^2*r~^2 )``, ``r~`` the volatility-scaled forward
+    return of horizon i, winsorised at +-5 sigma; ``loss_pnl_i = -U_i``. The maximiser of U per
+    sample is the net-edge fractional-Kelly aim: a* = 0 unless the expected move exceeds the cost
+    (Garleanu and Pedersen 2013), and the quadratic term keeps a* inside (-1, 1).
+
+    ``x_window`` is the NORMALISED input window ``[B, LOOKBACK]`` (``Config.WINDOW_NORMALIZER``,
+    default ``"window_relative"``: ``x = (raw_close - last_close) / pred_scale``,
+    ``data/scaling.py``); it is NOT the raw close-price window (NT-087 repair round 1: an earlier
+    version of ``PNL_SIGMA_SOURCE='ewma'`` treated it as raw prices and computed step returns
+    ~3,500x too large, since the last window column is exactly 0 by construction). ``'realized_vol'``
+    reconstructs the raw window as ``x * model.pred_scale + last_close`` (exact for
+    ``window_relative``; not calibrated for the legacy ``per_lag_standard`` normaliser, which this
+    function cannot invert from ``x_window`` alone) before taking bar-to-bar returns. The dir/var
+    heads are sanitised for non-finite values exactly as ``custom_loss`` does internally, since
+    ``y_pred`` here is the model's raw (unsanitised) output.
+    """
+    base = custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
+                       vacuum_overflow=vacuum_overflow)
+
+    y_true = tf.cast(y_true, tf.float32)
+    y_true_raw = y_true * model.pred_scale + model.pred_mean
+    last_close_sq = tf.squeeze(last_close, axis=1)
+    _, dir_h0, var_h0, _, dir_h1, var_h1, _, dir_h2, var_h2 = y_pred
+
+    # Sanitize dir/var heads for non-finite values, mirroring custom_loss's own copies (it does
+    # not expose them): dir falls back to 0.5 (no signal), var to 1.0.
+    dir_h0 = tf.where(tf.math.is_finite(dir_h0), dir_h0, tf.ones_like(dir_h0) * 0.5)
+    dir_h1 = tf.where(tf.math.is_finite(dir_h1), dir_h1, tf.ones_like(dir_h1) * 0.5)
+    dir_h2 = tf.where(tf.math.is_finite(dir_h2), dir_h2, tf.ones_like(dir_h2) * 0.5)
+    var_h0 = tf.where(tf.math.is_finite(var_h0), var_h0, tf.ones_like(var_h0))
+    var_h1 = tf.where(tf.math.is_finite(var_h1), var_h1, tf.ones_like(var_h1))
+    var_h2 = tf.where(tf.math.is_finite(var_h2), var_h2, tf.ones_like(var_h2))
+
+    default_horizons = [10, 15, 20]
+    horizon_steps_cfg = list(getattr(model.config, 'HORIZON_STEPS', default_horizons) or default_horizons)
+    horizon_steps = (horizon_steps_cfg + default_horizons)[:3]  # defensive: always exactly 3 (D-022)
+    var_floor = tf.cast(getattr(model.config, 'VAR_FLOOR', 1e-4), tf.float32)
+    cost = tf.cast(getattr(model.config, 'PNL_COST_BPS', 26.0), tf.float32) / 10000.0
+    gamma = tf.cast(getattr(model.config, 'PNL_GAMMA', 1.0), tf.float32)
+    sigma_source = str(getattr(model.config, 'PNL_SIGMA_SOURCE', 'realized_vol'))
+    eps = model.eps
+
+    step_sd = None
+    if sigma_source == 'realized_vol':
+        # Reconstruct the RAW close-price window from the normalised one (window_relative:
+        # x = (raw - last_close) / pred_scale => raw = x * pred_scale + last_close), sanitising
+        # every stage so a single bad bar (+-inf, or a near-zero raw price) cannot turn into a
+        # non-finite sigma that would otherwise reach the direction heads as a NaN gradient
+        # (NT-087 repair round 1, P2).
+        x = tf.cast(x_window, tf.float32)
+        last_close_col = tf.expand_dims(last_close_sq, axis=1)
+        raw = x * model.pred_scale + last_close_col                        # [B, LOOKBACK]
+        raw = tf.where(tf.math.is_finite(raw), raw, tf.zeros_like(raw))
+        step_ret = (raw[:, 1:] - raw[:, :-1]) / (raw[:, :-1] + eps)        # [B, LOOKBACK-1]
+        step_ret = tf.where(tf.math.is_finite(step_ret), step_ret, tf.zeros_like(step_ret))
+        step_sd = tf.stop_gradient(tf.math.reduce_std(step_ret, axis=1))  # [B]
+        step_sd = tf.where(tf.math.is_finite(step_sd), step_sd, tf.zeros_like(step_sd))
+
+    def _one_horizon(i, dir_head, var_head, h_steps):
+        r = y_true_raw[:, i] / (last_close_sq + eps)                       # fractional forward return
+        if sigma_source == 'realized_vol':
+            sigma = step_sd * tf.sqrt(tf.cast(h_steps, tf.float32))
+        else:
+            var_c = tf.maximum(tf.squeeze(var_head, axis=1), var_floor)
+            sigma_raw = tf.sqrt(var_c) * model.pred_scale
+            sigma = tf.stop_gradient(sigma_raw / (last_close_sq + eps))
+        # Sanitise BEFORE the floor: tf.maximum(nan, 1e-6) is still nan, so a non-finite sigma
+        # (e.g. from an extreme window) must be caught here, not only on the final loss (P2).
+        sigma = tf.where(tf.math.is_finite(sigma), sigma, tf.zeros_like(sigma))
+        sigma = tf.maximum(sigma, 1e-6)
+        r_tilde = tf.clip_by_value(r / sigma, -5.0, 5.0)
+        # Demeaned over the batch (not a persistent training-block statistic): with a full reshuffle
+        # (Config.SHUFFLE_BUFFER: 0, the E2 scenario's setting) a batch is drawn uniformly from the
+        # whole training block, so its mean is an unbiased, stateless estimator of the block mean,
+        # and this avoids contaminating a running estimate with validation-block batches (the
+        # objective has no train/eval flag; test_step calls it too). NT-087 repair round 1, P2:
+        # this equality holds ONLY under a full reshuffle. With the default SHUFFLE_BUFFER (2048, a
+        # partial, order-preserving shuffle) a training batch is drawn from a local window of the
+        # block, not the whole block, so its mean tracks local drift instead of the block mean; and
+        # validation/test batches are never shuffled at all (test_step iterates them in order), so
+        # r_tilde there is demeaned by a short local window, not by anything comparable to the
+        # training-block statistic. val_loss under pnl_utility is therefore not on the same
+        # demeaning basis as the training loss unless SHUFFLE_BUFFER is 0.
+        r_tilde = r_tilde - tf.stop_gradient(tf.reduce_mean(r_tilde))
+        c_tilde = cost / sigma
+        a = 2.0 * tf.squeeze(dir_head, axis=1) - 1.0
+        util = tf.reduce_mean(a * r_tilde - c_tilde * tf.abs(a) - 0.5 * gamma * tf.square(a) * tf.square(r_tilde))
+        loss_i = -util
+        return tf.where(tf.math.is_finite(loss_i), loss_i, tf.constant(0.0, dtype=tf.float32))
+
+    loss_h0 = _one_horizon(0, dir_h0, var_h0, horizon_steps[0])
+    loss_h1 = _one_horizon(1, dir_h1, var_h1, horizon_steps[1])
+    loss_h2 = _one_horizon(2, dir_h2, var_h2, horizon_steps[2])
+
+    lambda_pnl = tf.cast(getattr(model, 'lambda_pnl', 0.0), tf.float32)
+    pnl_term = lambda_pnl * (loss_h0 + loss_h1 + loss_h2)
+    pnl_term = tf.where(tf.math.is_finite(pnl_term), pnl_term, tf.constant(0.0, dtype=tf.float32))
+
+    total = base.total + pnl_term
+    total = tf.where(tf.math.is_finite(total), total, tf.constant(0.0, dtype=tf.float32))
+    return base._replace(total=total, pnl_val=pnl_term)

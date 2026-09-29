@@ -19,8 +19,10 @@ PredictiveOutputs = namedtuple(
     ],
 )
 
-#: The 34 components returned by the training objective (``losses.custom_loss``).
+#: The 35 components returned by the training objective (``losses.custom_loss`` and any objective
+#: that wraps it, e.g. ``pnl_utility``, NT-087).
 #: ``local_*``/``global_*`` are retired trend terms kept as exact zeros so the contract holds.
+#: ``pnl_val`` is the lambda-weighted mean-variance P&L utility term (0.0 for ``custom_loss`` itself).
 LossComponents = namedtuple(
     "LossComponents",
     [
@@ -36,6 +38,7 @@ LossComponents = namedtuple(
         "soft_ece_h0", "soft_ece_h1", "soft_ece_h2",
         "t_perp_total", "casimir_val", "vac_val", "hd_val", "ife_val",
         "vac_overflow_val",
+        "pnl_val",
     ],
 )
 

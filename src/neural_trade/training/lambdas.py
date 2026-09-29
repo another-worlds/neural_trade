@@ -13,7 +13,7 @@ from typing import Dict, Iterable, List
 import tensorflow as tf
 
 _LAMBDA_VARIABLE_KEYS = ('short', 'point', 'long', 'extended_trend', 'dir', 'var', 'vol',
-                         'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow')
+                         'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'pnl')
 
 
 def _make_lambda_property(key):
@@ -31,12 +31,13 @@ def _make_lambda_property(key):
 
     return property(_get, _set, doc=f"Non-trainable tf.Variable weight for the '{key}' loss term.")
 
-# Config field -> model key, for the 14 weights that are variables.
+# Config field -> model key, for the 15 weights that are variables.
 CONFIG_NAME_OF_KEY: Dict[str, str] = {
     "short": "LAMBDA_SHORT", "point": "LAMBDA_POINT", "long": "LAMBDA_LONG",
     "extended_trend": "LAMBDA_EXTENDED_TREND", "dir": "LAMBDA_DIR", "var": "LAMBDA_VAR", "vol": "LAMBDA_VOL",
     "crps": "LAMBDA_CRPS", "soft_ece": "LAMBDA_SOFT_ECE", "t_perp": "LAMBDA_T_PERP",
     "casimir": "LAMBDA_CASIMIR", "hd": "LAMBDA_HD", "ife": "LAMBDA_IFE", "vac_overflow": "LAMBDA_VAC_OVERFLOW",
+    "pnl": "LAMBDA_PNL",
 }
 KEY_OF_CONFIG_NAME: Dict[str, str] = {v: k for k, v in CONFIG_NAME_OF_KEY.items()}
 

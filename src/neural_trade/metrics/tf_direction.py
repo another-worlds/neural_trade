@@ -89,6 +89,7 @@ STEP_MEAN_KEYS = (
     'soft_ece_loss', 'soft_ece_h0', 'soft_ece_h1', 'soft_ece_h2',
     'reg_loss', 'inter_reg', 'vol_loss',
     't_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss', 'vac_overflow_loss',
+    'pnl_val',
     'grad_global_norm',
 )
 TRAIN_ONLY_MEAN_KEYS = ('grad_global_norm',)
