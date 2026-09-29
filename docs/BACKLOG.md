@@ -120,6 +120,7 @@ changes).
 | [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
 | [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
 | [NT-087](#nt-087) | P1 | feature | implementer | in-progress | pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2) |
+| [NT-088](#nt-088) | P1 | feature | implementer | in-progress | Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses |
 
 ## Items
 
@@ -1155,6 +1156,17 @@ changes).
 - **why:** The owner's point 3 ("absence of the PnL in the models' targets") and the /goal; docs/research/2026-09-29-pnl-target/README.md section 1.1 option A and section 3 "E2". E1 (cost-sensitive labels) failed its signal gate.
 - **acceptance:** (1) synthetic data with a planted edge above cost: mean |2p - 1| grows and the utility rises; (2) synthetic data without an edge: positions go to 0 (the flat solution); (3) finite gradients on the stability cases (D-026); (4) sec_per_step not slower than custom_loss within noise (D-018); (5) `LOSS_NAME: custom_loss` runs bit-identical (golden verify); (6) fast suite, ruff, TESTING_DOCUMENTATION, config reference.
 - **source:** the P&L research note (a9f296f), E2
+
+### NT-088
+
+**Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses**
+
+- **status:** in-progress (implementer, Sonnet per D-043, branch nt-088, 2026-09-29)
+- **priority / type / role:** P1 / feature / implementer
+- **area:** a new src/neural_trade/experiments/screen.py, src/neural_trade/cli.py (`screen` command), src/neural_trade/core/config.py (DATA_END), src/neural_trade/data/processor.py (the slice), tests/, docs/RUNBOOK.md
+- **why:** owner request 2026-09-29: plan runs on 6-hour training blocks of minute data (very small runs) to mass-test maths, hyperparameters and losses; approved plan docs/research/2026-09-29-screen-plan.md. Today a cell's cost is the harness, not training: on Bitcoin_BTCUSDT.csv every cell reads and windows the whole file twice (trainer.py:292, scorer.py:265), traces the graph, fits baselines, runs 100 null backtests and writes npz files (scoring alone 56-104 s).
+- **acceptance:** (1) `neural-trade screen SPEC [--shard i/N] [--store runs]`: windows built once per data key per process and passed to training and scoring; no baselines, backtest, null, npz, checkpoints, bundle; calibrate switchable. (2) Config DATA_END (timestamp) selects the slice's end anywhere in the file; a slice overlapping the long file's dev/test period is refused (D-020) (test). (3) Trials from grid axes plus random/LHS sampling over Config.field_specs() with explicit bounds in the spec; x slices x seeds. (4) One row per trial in results.jsonl (health: finite checks, nonfinite_grad_steps, max grad norm, clipped-step share, train-loss drop, val loss, per-term shares, timings split into load / build+trace / train / score); resumable (finished trials are skipped) (test). (5) Pre-registered screen rules in the spec mark a trial pass/fail; a known-bad config (LR 1.0, a lambda of 1e6) fails (test). (6) Disjoint shards whose union is all trials (test). (7) scenario run and the golden run unchanged (bit-for-bit); fast suite, ruff, TESTING_DOCUMENTATION, config reference, RUNBOOK section.
+- **source:** owner request 2026-09-29; docs/research/2026-09-29-screen-plan.md
 
 ## Done log
 
