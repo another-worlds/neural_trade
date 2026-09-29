@@ -120,7 +120,7 @@ changes).
 | [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
 | [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
 | [NT-087](#nt-087) | P1 | feature | implementer | done | pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2) |
-| [NT-088](#nt-088) | P1 | feature | implementer | in-progress | Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses |
+| [NT-088](#nt-088) | P1 | feature | implementer | done | Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses |
 | [NT-089](#nt-089) | P2 | bug | implementer | todo | HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0 |
 | [NT-090](#nt-090) | P2 | bug | implementer | todo | pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins |
 | [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
@@ -1165,7 +1165,7 @@ changes).
 
 **Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses**
 
-- **status:** in-progress: re-QA of bf75e52 (2026-09-30) FAIL on criterion 5 only (term shares: t_perp weighted twice; calibrated/ablated lambdas ignored); 7 of 8 earlier findings fixed (windows once per data key: prep_s 0.007 s after the first trial; non-finite trials recorded; D-020 pre-flight on the long file; 360-window example; shard files; timings with epoch_s: trace ~13-14 s of a ~20 s CPU trial; bounds at load; golden bit-for-bit). Repair round 2 (the last) sent. QA P2/P3 findings filed as NT-091.
+- **status:** done (2026-09-30): 6c156da, merged into remediation/plan (3e1528d; lead fix 11c2897: pnl_val joins the term shares); final re-QA (Opus) PASS after two repair rounds: term shares re-derived from custom_loss (residual 1.2e-6 with coherence off), calibrated and ablated lambdas read from the trained model, windows built once per data key (prep_s 0.007 s after the first trial), non-finite trials recorded as failed, D-020 pre-flight on the long file, 360-window example, per-shard result files, timings with epoch_s (trace ~13-14 s of a ~20 s CPU trial), golden bit-for-bit; fast suite on the merged head 1011 passed, ruff clean. Findings: NT-091.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a new src/neural_trade/experiments/screen.py, src/neural_trade/cli.py (`screen` command), src/neural_trade/core/config.py (DATA_END), src/neural_trade/data/processor.py (the slice), tests/, docs/RUNBOOK.md
 - **why:** owner request 2026-09-29: plan runs on 6-hour training blocks of minute data (very small runs) to mass-test maths, hyperparameters and losses; approved plan docs/research/2026-09-29-screen-plan.md. Today a cell's cost is the harness, not training: on Bitcoin_BTCUSDT.csv every cell reads and windows the whole file twice (trainer.py:292, scorer.py:265), traces the graph, fits baselines, runs 100 null backtests and writes npz files (scoring alone 56-104 s).
