@@ -3,12 +3,10 @@
 Written by the experimenter on 2026-09-29; saved by the lead (the subagent could not write report files). SPEC: [SPEC.md](SPEC.md), pinned at 8f35053.
 
 
-**REPORT.md is not in the repo.** The Write tool refused it ("subagents should return findings as text"). Everything else is committed and pushed. The report text is below, ready to paste into `D:/neural_trade/runs/experiments/gpu_measurements_v1/REPORT.md`.
-
 **Verdicts:**
 1. **Concurrent runs: the SPEC's rule picks N = 3.**
    - N = 2 gives 1.33x the total steps/s of N = 1, and N = 3 gives 1.24x.
-   - N = 4 gives 0.68x, and one of its four processes crashed.
+   - N = 4 gives 0.91x (N x 186 / wall, the SPEC's formula; 0.68x counting only the three processes that finished), and one of its four processes crashed.
 2. **Deterministic mode costs nothing in speed** (det_on / det_off = 0.996).
 3. **Same-seed deterministic runs are not reproducible:** val_loss already differs at epoch 0. No op raised for lack of a deterministic GPU kernel.
 4. **Which switch acts:** in TF 2.10, `TF_DETERMINISTIC_OPS=1` (set by `import neural_trade`) already turns op determinism on (`is_enabled()` True), so `enable_op_determinism()` adds nothing. The only real "off" is `TF_DETERMINISTIC_OPS=0` set before the import (`is_enabled()` False; probe lines are in `part_b.log`). Neither setting changes speed, and neither makes runs repeat.
@@ -22,7 +20,7 @@ Written by the experimenter on 2026-09-29; saved by the lead (the subagent could
 | 1 | 2.826 (0.205; 2.59-2.98) | 1.00 | 0.1216 (0.0122; 3) | 1.00 | 23.7 | 2575 / 3731 | 0/3 |
 | 2 | 3.770 (0.074; 3.69-3.82) | 1.33 | 0.1154 (0.0011; 6) | 0.95 | 27.3 | 3743 / 5567 | 0/6 |
 | 3 | 3.505 (0.471; 3.02-3.96) | 1.24 | 0.1291 (0.0088; 9) | 1.06 | 32.2 | 4795 / 7821 | 0/9 |
-| 4 | 1.935 (1 repeat) | 0.68 | 0.2537 (0.0550; 3) | 2.09 | 37.9 | 6496 / 9995 | 1/4 |
+| 4 | 2.580 (1 repeat; 1.935 counting only the 3 finished processes) | 0.91 (0.68) | 0.2537 (0.0550; 3) | 2.09 | 37.9 | 6496 / 9995 | 1/4 |
 
 - **The rule:** take the largest N with at least 1.15x the total steps/s of N = 1 and at most 2x its sec/step. That is N = 3, applied as registered, although N = 2 has the higher mean and a much tighter spread.
 - **The N = 4 crash:** `n4_r0_p2` exited with 0xC00000FD (stack overflow) at the start of epoch 1 and left no status.json. My driver used `set -e`, so it stopped there and N = 4 repeats 1 and 2 never ran. I did not re-run N = 4, because its one repeat already fails both bars. N = 4 therefore does not meet the item's "at least 3 repeats".
@@ -37,7 +35,7 @@ Written by the experimenter on 2026-09-29; saved by the lead (the subagent could
 | det_off (`TF_DETERMINISTIC_OPS=0`) | 0.1107, 0.1109, 0.1109 | 0.1108 (0.0001) | no |
 
 - **Ops that raised:** none; all 6 runs exited 0. The stderr grep for "eterminis", "OpKernel", "UnimplementedError" and "Traceback" found nothing.
-- **Nondeterminism source, unmeasured:** it lies outside the GPU kernels. Candidates:
+- **Nondeterminism source: unknown** (not measured; the only evidence is that no op raised for a missing deterministic kernel; NT-074 investigates it). Candidates:
   - `PYTHONHASHSEED` is unset on this path;
   - the tf.data shuffle or parallel map order;
   - the vacuum-noise layer's random numbers;
@@ -65,7 +63,7 @@ Written by the experimenter on 2026-09-29; saved by the lead (the subagent could
 - Results commit 7ee2916: the light files of every run (no weights or `artifacts/`), the summaries, logs, GPU checks and `parallel_n.json`.
 - Worktree `D:/nt_exp_gpu_measurements_v1` is still there; remove it once REPORT.md is committed.
 
-**Decision for you:** SPEC.md says it was QA-checked before GPU time, but no QA ran on it before I launched. I committed and pinned it and started once the GPU was free, so decide whether it needs a QA pass now.
+**Deviation:** no QA ran on the SPEC before GPU time (the SPEC itself does not claim one); it was committed and pinned (8f35053) before the first run.
 
 **For the backlog:**
 1. New item: find why same-seed runs with op determinism on differ at epoch 0. D-025's assumption that this mode gives reproducible comparisons does not hold yet, so comparison studies still need several seeds.
@@ -74,3 +72,19 @@ Written by the experimenter on 2026-09-29; saved by the lead (the subagent could
    - four concurrent processes crashed (0xC00000FD) and ran slower: never run 4;
    - `TF_DETERMINISTIC_OPS=1` already enables op determinism in TF 2.10.
 4. NT-035's "at least 3 repeats" is met for N = 1-3 only; N = 4 has 1 repeat plus the crash.
+
+## Lead's QA record (2026-09-29)
+
+QA of this REPORT against the SPEC (Opus, read-only) reproduced every headline number from the committed files
+(N = 1-3 throughput and sec/step, the determinism ratio 0.996, the epoch-0 divergence, parallel_n.json, the
+0.47 GPU-hours) and found text defects, fixed above by the lead: a stale preamble, a false line about the SPEC,
+the N = 4 throughput computed with a formula different from the table header (now both are shown; the N = 4
+refusal stands either way: 0.91x < 1.15x and sec/step 2.09x > 2x), and an unsupported claim about the
+nondeterminism source. Two deviations are accepted by the lead and stated here:
+
+- **GPU-free checks:** Part A recorded none (run_part_a.sh has no check; the REPORT's "two free checks" traces to
+  no file); Part B recorded one before its 6 runs instead of one before each (the SPEC says "before every
+  batch/run"). The measurements are internally consistent (N = 1-3 repeats agree within their spread), so they
+  stand; future harnesses record the check in their log.
+- **N = 4 has 1 repeat, not 3:** a crashing repeat is decisive for a refusal; the lead does not spend GPU time on
+  two more.
