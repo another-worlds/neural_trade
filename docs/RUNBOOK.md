@@ -247,9 +247,9 @@ and the run index live in the repo (on D: after the move, D-030).
 
 ### Long jobs (longer than the 10-minute tool timeout)
 
-- Use only resumable harnesses: today `scripts/ablate.py` (resumes per cell) and
-  `scripts/direction_experiments.py` (skips experiments that have a `result.json`); once NT-026
-  exists, the engine's runner.
+- Use only resumable harnesses: the experiment engine (`neural-trade scenario run SPEC` resumes per
+  cell; "Experiment engine" in this file) for new work; the frozen `scripts/ablate.py` and
+  `scripts/direction_experiments.py` only to reproduce history (D-023).
 - Launch detached so the job survives the session, with its log next to its outputs, e.g. from the
   pinned worktree: `nohup env PYTHONPATH=D:/nt_exp_<name>/src $PY scripts/ablate.py ... > <out>/logs/run.log 2>&1 &`
   (Git Bash), and record in STATUS: what runs, where its log is, how to check it (`ablate.py --dry-run`
@@ -269,9 +269,10 @@ $PY scripts/notebooks/check.py             # must print "all clean"
 $PY scripts/notebooks/render.py [NN]       # PNGs (Windows + Edge); then open and LOOK at every one
 ```
 
-Notebooks 02-05 read the newest notebook/CLI run, never an engine cell. Today `pick_run`
-(`src/neural_trade/notebook/runs.py:19`) takes the newest directory anywhere under `runs/` that has
-`artifacts/weights.h5`; NT-026 keeps engine runs out of that default. Weights are not committed (a
+Notebooks 02-05 read the newest notebook/CLI run, never an engine cell: `pick_run`
+(`src/neural_trade/notebook/runs.py`) takes the newest directory under `runs/` that has
+`artifacts/weights.h5`, skipping `runs/scenarios/` and any run whose meta.json has an `engine`
+section (NT-026). Weights are not committed (a
 run's light files are: "Run directories in git" above), so in a fresh clone 02-04 fail with a clear
 message until 01 has trained. The run a new execution of 01 creates is committed with the executed
 notebooks (`check_run_evidence.py --list-untracked`). Notebook 06
