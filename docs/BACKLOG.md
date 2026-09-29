@@ -119,9 +119,10 @@ changes).
 | [NT-084](#nt-084) | P3 | polish | implementer | todo | Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees |
 | [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
 | [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
-| [NT-087](#nt-087) | P1 | feature | implementer | in-progress | pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2) |
+| [NT-087](#nt-087) | P1 | feature | implementer | done | pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2) |
 | [NT-088](#nt-088) | P1 | feature | implementer | in-progress | Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses |
 | [NT-089](#nt-089) | P2 | bug | implementer | todo | HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0 |
+| [NT-090](#nt-090) | P2 | bug | implementer | todo | pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins |
 
 ## Items
 
@@ -1152,7 +1153,7 @@ changes).
 
 **pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2)**
 
-- **status:** in-progress: QA FAIL on ad8c01c (2026-09-30): the default PNL_SIGMA_SOURCE 'ewma' computes sigma on the normalised window (median step sd 1.73 vs 4.9e-4 on raw closes), so the P&L term is ~1e-4 of its intended scale and the gamma term vanishes; P2: NaN gradients to the direction heads on a non-finite sigma; P2: per-batch demeaning equals block demeaning only with a full shuffle. Everything else met (maths, round-trip cost, calibration untouched, speed, golden, LossComponents consumers). Repair round 1 sent.
+- **status:** done (2026-09-30): 50c0b3e, merged into remediation/plan; re-QA (Opus) PASS after repair round 1: realized_vol sigma equals the raw-close value (max |ratio-1| 2.4e-7; median |r~| 0.60, c~ 1.2-1.7 on the intended scale), the cost and risk probes through pnl_utility reproduce their expected values, planted-edge / no-edge behaviour, finite pnl gradients on 36 extreme cases, golden bit-for-bit (LOSS_NAME custom_loss unchanged; LAMBDA_PNL defaults to 0), fast 977 / ruff. QA note for E2: in the full loss at LAMBDA_PNL 0.25/0.50 a realistic 60-100 bps edge in a toy acts mainly as cost shrinkage (confounded toy). Findings: NT-090 (sigma floor on flat windows), P3s listed there.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/losses/functions.py, src/neural_trade/core/config.py, src/neural_trade/training/lambda_calibration.py, src/neural_trade/training/custom_model.py (only if logging requires), tests/
 - **why:** The owner's point 3 ("absence of the PnL in the models' targets") and the /goal; docs/research/2026-09-29-pnl-target/README.md section 1.1 option A and section 3 "E2". E1 (cost-sensitive labels) failed its signal gate.
@@ -1174,12 +1175,25 @@ changes).
 
 **HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0**
 
+- **scope note (2026-09-30, re-QA of NT-087):** -inf, NaN and 1e30 bars reproduce it too (at base 268379d under custom_loss); the fix covers all of them.
+
 - **status:** todo
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/losses/functions.py (hyper_decoherence_coupling_loss: local_vol / log_vol via an unguarded tf.math.reduce_std, _z), tests/
 - **why:** NT-087 repair round 1 (2026-09-30): with a +inf bar in x_window the gradient of out.total into the variance heads is NaN under plain custom_loss, even with LAMBDA_HD 0; the term's forward value is zeroed by its tf.where guard, but the chain rule multiplies the zeroed upstream gradient by an internally NaN local Jacobian (0 x NaN). The train step zeroes and counts such steps (custom_model.py:478-486), so a step is skipped, not corrupted. D-026 stability gap; relevant to NT-036/NT-038.
 - **acceptance:** sanitise local_vol / log_vol before use (as NT-087 did for sigma); a test with a +inf bar at LAMBDA_HD 0 and > 0 gives finite gradients into every head; golden run bit-for-bit.
 - **source:** NT-087 implementer report, 2026-09-30
+
+### NT-090
+
+**pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/losses/functions.py (pnl_utility _one_horizon), src/neural_trade/core/config.py (validate), tests/test_pnl_utility.py
+- **why:** re-QA of NT-087 (2026-09-30): on Bitcoin_BTCUSDT.csv 0.017% of 60-bar windows are flat (sd 0) and 0.39% have c~ > 10; the floor sigma = max(sigma, 1e-6) makes c~ = 2600 there and the per-sample direction gradient ~80x typical (only GRAD_CLIP_NORM bounds it). Nothing refuses LOSS_NAME pnl_utility + realized_vol with WINDOW_NORMALIZER per_lag_standard (sigma silently wrong). realized_vol sanitising is inconsistent (a +-inf/NaN bar makes the term vanish; an overflowing sd hits the floor = maximum cost). The data test test_realized_vol_sigma_matches_raw_close_scale_on_the_bundled_csv never calls pnl_utility (passes on the buggy code).
+- **acceptance:** a floor relative to the typical sigma (or flat windows masked), test on a flat window; Config.validate refuses the per_lag_standard combination; consistent sanitising (test); the data test evaluates pnl_utility (e.g. the cost probe) so it pins production.
+- **source:** re-QA of NT-087, 2026-09-30
 
 ## Done log
 

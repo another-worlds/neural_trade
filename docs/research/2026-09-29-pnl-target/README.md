@@ -480,7 +480,7 @@ direction even on large moves at 1-4 hours. This strengthens the "information, n
 
 **Implementer item.** New objective `pnl_utility` in `losses/functions.py` (section 1.1, option A):
 
-- `LAMBDA_PNL`, `PNL_GAMMA` and `PNL_SIGMA_SOURCE` (ewma or model, stop-gradient) in `core/config.py` with
+- `LAMBDA_PNL`, `PNL_GAMMA` and `PNL_SIGMA_SOURCE` (realized_vol (an equal-weighted window std; named ewma in this note before NT-087 repair 1) or model, stop-gradient) in `core/config.py` with
   metadata (NT-029);
 - the λ-calibration pass skips `LAMBDA_PNL`;
 - the return is winsorised at ±5σ and demeaned over the training block;
