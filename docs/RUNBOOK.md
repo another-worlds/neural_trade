@@ -258,6 +258,73 @@ into the frozen set.
 - Notebooks 02-05 never pick an engine run by default (`pick_run` skips `runs/scenarios/` and any
   run whose meta.json has an `engine` section).
 
+### Screen mode
+
+Mass, sub-30-second CPU/GPU trials over a grid and/or a random/LHS sample of Config fields (NT-088,
+`docs/research/2026-09-29-screen-plan.md`): level 1 of the plan finds broken math and unstable
+hyperparameter regions on hundreds of tiny (reference size: a 6-hour training block) configurations;
+it ranks nothing (level 2 re-runs survivors through `scenario run` on a real block, where quality is
+measurable). Code: `src/neural_trade/experiments/screen.py`, a separate path from the experiment
+engine above (`scenario run`'s scoring is untouched; a change here never touches it).
+
+| Task | Command |
+|---|---|
+| Run or resume a screen (CPU: `CUDA_VISIBLE_DEVICES=-1`) | `CUDA_VISIBLE_DEVICES=-1 $PY -m neural_trade.cli screen configs/screens/example_6h.yaml [--store runs] [--max-trials N]` |
+| Split a screen across N processes (disjoint shards, their union is every trial) | `CUDA_VISIBLE_DEVICES=-1 $PY -m neural_trade.cli screen configs/screens/example_6h.yaml --shard 0/3` (repeat with `1/3`, `2/3`; NT-035's 3-process ceiling) |
+
+- **Spec** (YAML, `schema_version: 1`, `configs/screens/`): `name`, `base_config` (a flat Config
+  YAML, relative to the spec), `overrides` (applied to every trial), `grid: {axes: {FIELD:
+  [values]}}` (a Cartesian grid, like a scenario's `sweep.axes`), `sample: {n, method: random|lhs,
+  seed, space: {FIELD: {low, high, log}}}` (drawn in addition to, not crossed with, the grid;
+  every field needs explicit `low`/`high` bounds, since most Config fields have no upper bound),
+  `slices` (a non-empty list of `DATA_END` timestamps, or `null` for today's newest-bars behaviour;
+  a screen trains the SAME configuration on different points in history, e.g. quiet vs. volatile
+  weeks), `seeds`, `run: {calibrate, epochs}` (`epochs`, if given, sets `EPOCHS` for every trial),
+  and `rules` (below). Every `(grid point or sample point) x slice x seed` is one trial. Unknown
+  keys and unknown or invalid Config fields (in `overrides`, `grid.axes` or `sample.space`) are
+  refused before anything trains, the same way a scenario spec is (`Config.field_names()`).
+- **DATA_END** (Config field, `core/config.py`): ends the prepared data at this timestamp instead
+  of the file's newest bar (`None`, the default: today's behaviour everywhere else, including
+  `scenario run`). The slice is taken in `DataProcessor.load_and_prepare_data`, BEFORE
+  `MAX_SEQUENCE_COUNT` trims from the end of the slice, so a trial's training block sits anywhere
+  in history, not only at the file's tail. **Protected span (D-020):** a `DATA_END` that falls
+  within the last `DATA_END_PROTECTED_DAYS` days of the FULL file (default 64) is refused with a
+  clear error — a screen trial must never be able to slice into the long file's held-out dev/test
+  period. On the bundled 30-day CSV (tests, `configs/screens/example_6h.yaml`) the real 64-day
+  default would protect more history than the file has at all; the example spec lowers
+  `DATA_END_PROTECTED_DAYS` for that reason only — a real campaign against the local long
+  2017-2025 file keeps the 64-day default.
+- **The light training path.** A trial trains through `experiments.screen._run_trial_light`, not
+  `train_and_evaluate`: no baselines, backtest, random null, stored predictions (`*.npz`),
+  checkpoints or serving bundle, and — by default — no per-trial run directory at all (only the
+  JSONL row below). `run.calibrate` switches the pre-training loss-weight calibration pass on or
+  off, same meaning as a scenario's `run.calibrate`. Data (load, preprocess, the `DATA_END` slice)
+  is cached **once per data key per process**
+  (`experiments.dataset.data_key`, which already covers every Config field that can change the
+  prepared bars, `DATA_END` included): many trials that only vary a hyperparameter like `LR` share
+  one load. Each trial still builds its own model, optimizer and windows/split/scaling (cheap next
+  to the load) and trains for real (a real `CustomTrainModel`, real gradients).
+- **Health numbers and rules.** Every trial's JSONL row (`<store>/screens/<name>/results.jsonl`,
+  one line per trial) carries: whether every logged value was finite, `nonfinite_grad_steps`, the
+  max and mean of the per-logged-step `grad_global_norm` and the share of logged steps at or above
+  `GRAD_CLIP_NORM` (a small per-batch sampler reads the exact epoch accumulator
+  `CustomTrainModel` already keeps; "logged steps" respects `TRAIN_METRICS_EVERY` — screens usually
+  set it to 1 for exact per-step numbers, since the cost is negligible at screen sizes), the
+  training loss's first-to-last-epoch drop, the final validation loss, each loss term's share of
+  the final total loss, per-horizon direction AUC on the validation block (labelled with its noise
+  level, D-012: `n` and `n_eff = n // horizon bars`), the trial's config diff, `DATA_END` and seed,
+  and a `load_s` / `build_s` / `train_s` / `score_s` timing breakdown. The spec's `rules:` block
+  (`finite`, `max_nonfinite_grad_steps`, `max_clipped_share`, `min_train_loss_drop`,
+  `max_term_share`) turns the health numbers into `passed: true/false` with `reasons`.
+- **Resumable, shardable.** A trial's key is a hash of its exact Config values
+  (`experiments.scenario.config_hash`); a key already in `results.jsonl` is skipped, so the same
+  command resumes (`--max-trials` stops early on purpose). `--shard i/N`: trial index `j` runs in
+  this process only when `j % N == i` — the shards are disjoint and their union is every trial, so
+  N processes split a screen with no locking (unlike `scenario run`'s cells, nothing is written
+  until a trial finishes, so there is nothing to collide on).
+- **Level 2** (survivors, real quality): re-run through `scenario run` on a real block (a
+  `configs/scenarios/micro_*.yaml`-style spec), not through screen mode again.
+
 ### Sweeps
 
 What exists today (one GPU job at a time; `ablate.py` and `direction_experiments.py` resume,
