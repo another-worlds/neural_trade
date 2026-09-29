@@ -1,0 +1,35 @@
+# Strategy study (NT-076): strategy configurations re-scored on a scenario's stored cells, on CPU,
+# without retraining.
+#
+#   neural-trade scenario rescore configs/scenarios/reference.yaml --study configs/strategy_studies/example.yaml
+#
+# Every configuration is fitted on each cell's calibration block only and backtests the cell's
+# out-of-sample block with the scorer's rules (next-open fills, stops on high/low, the scenario's
+# `backtest:` costs with the entry's `backtest` on top, buy-and-hold, always-flat and the
+# size-matched random null). The leaderboard ranks by the mean net Sharpe over the DEV cells; the
+# test cells are shown and never rank (D-020).
+#
+# Keys: src/neural_trade/experiments/rescore.py. `grid` expands into one configuration per
+# combination, with ids like `cq[entry_quantile=0.8,require_delta_agreement=true]`. Knobs that a
+# calibrated strategy fits on the calibration block (long_above, short_below, median) and the
+# engine-owned backtest fields (bar_minutes, minutes_per_year) are refused.
+schema_version: 1
+name: example
+description: Today's registered model strategies, at their defaults and around the default one's entry quantile.
+entries:
+  - id: cq                          # the default strategy (D-009), its entry line and delta filter swept
+    strategy: calibrated_quantile
+    params: {}
+    backtest: {}
+    grid:
+      entry_quantile: [0.8, 0.9, 0.95]
+      require_delta_agreement: [false, true]
+  - id: cq_hold30                   # the default strategy held up to 30 bars
+    strategy: calibrated_quantile
+    params: {max_hold: 30}
+  - id: enhanced                    # the notebook strategies at their defaults
+    strategy: enhanced_multi_horizon
+  - id: liberal
+    strategy: liberal
+  - id: spike
+    strategy: threshold_spike

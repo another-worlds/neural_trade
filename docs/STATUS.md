@@ -33,6 +33,15 @@ D-038). Evidence in each BACKLOG entry. Decisions D-033 to D-039 (remote PRs, pu
 tracker agent, the plan, the C: copy and pushing, R6 placement). About 21 hours were lost to two spend-limit
 stalls; each agent resumed without loss.
 
+## Strategy study (owner request 2026-09-29, branch nt-005-strategy-study)
+
+NT-005 done with a clear negative: of 12 researched strategy architectures (and 8 model-free EWMA twins), none
+makes money after the 26 bps round trip on the dev folds; the recorded winner is always_flat ("do not trade this
+model"); the incumbent default calibrated_quantile is the worst of 20. Evidence: runs/experiments/strategy_study_v1/REPORT.md.
+New engine pieces: stored predictions and `scenario rescore` (NT-076), an exposure backtest mode and five
+variance-driven strategies (NT-077). Follow-ups: NT-078 (EWMA/HAR variance baselines: the EWMA twin beat the
+model's sigma), NT-079, NT-080, NT-081.
+
 ## In progress
 
 - **NT-035** (experimenter): results and REPORT committed (426de4f, 7ee2916; 0.47 GPU-hours of a 3-hour

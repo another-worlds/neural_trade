@@ -1,0 +1,42 @@
+# Strategy study v1 (NT-005): the pre-registered configurations of runs/experiments/strategy_study_v1/SPEC.md,
+# from the research note docs/research/2026-09-29-strategy-architectures/ section 3.
+#
+#   neural-trade scenario rescore configs/scenarios/reference.yaml --study configs/strategy_studies/strategy_study_v1.yaml
+#
+# 12 candidates (ids without the `_ewma` suffix) and 8 model-free twins (`*_ewma`, sigma from an EWMA of
+# squared 1-bar log returns; baselines, never the winner). Ranking, guard-rails and the winner rule: the SPEC.
+schema_version: 1
+name: strategy_study_v1
+description: NT-005 strategy study, 12 candidates and 8 EWMA twins, ranked on the reference scenario's dev cells.
+entries:
+  - id: vt                          # volatility-targeted long, exposure mode
+    strategy: vol_target
+    params: {sigma_source: model}
+    grid: {band: [0.10, 0.25]}
+  - id: vt_ewma
+    strategy: vol_target
+    params: {sigma_source: ewma}
+    grid: {band: [0.10, 0.25]}
+  - id: rs                          # long, flat while predicted sigma is high
+    strategy: vol_regime_long
+    params: {sigma_source: model}
+    grid: {q_out: [0.80, 0.95]}
+  - id: rs_ewma
+    strategy: vol_regime_long
+    params: {sigma_source: ewma}
+    grid: {q_out: [0.80, 0.95]}
+  - id: nk                          # net-edge fractional Kelly with a no-trade band, exposure mode
+    strategy: net_edge_kelly
+    grid: {f: [0.25, 0.5]}
+  - id: ec                          # discrete: enter when the expected move exceeds the round-trip cost
+    strategy: edge_over_cost
+  - id: gt                          # textbook TA primaries gated by predicted sigma
+    strategy: gated_ta
+    params: {sigma_source: model}
+    grid: {primary: [ma_cross, bollinger], q: [0.5, 0.8]}
+  - id: gt_ewma
+    strategy: gated_ta
+    params: {sigma_source: ewma}
+    grid: {primary: [ma_cross, bollinger], q: [0.5, 0.8]}
+  - id: cq                          # the incumbent default (D-009)
+    strategy: calibrated_quantile

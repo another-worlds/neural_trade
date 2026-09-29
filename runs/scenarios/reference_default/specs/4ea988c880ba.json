@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "name": "reference_default",
+  "description": "The default model on the reference setup, dev folds -3 and -2 and test fold -1, seeds 0-2.",
+  "base_config": "../default.yaml",
+  "overrides": {},
+  "variants": {
+    "default": {}
+  },
+  "sweep": {
+    "mode": "grid",
+    "axes": {}
+  },
+  "folds": [
+    -3,
+    -2,
+    -1
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "strategy": {
+    "name": "calibrated_quantile",
+    "params": {}
+  },
+  "backtest": {},
+  "run": {
+    "calibrate": true,
+    "save_artifacts": false
+  }
+}
