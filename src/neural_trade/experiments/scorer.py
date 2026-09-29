@@ -15,6 +15,10 @@ For a trained run of fold f (a TrainResult of train_and_evaluate on FOLD_INDEX f
   scale (``var_scale_from(cal)``) and, for a strategy with ``from_calibration``, its entry lines.
   The result carries buy-and-hold, always-flat and the size-matched random null
   (``random_same_frequency``: the strategy's trade rate, holding time and mean position size).
+* **The stored predictions (NT-076).** With an output directory the scorer also writes
+  ``predictions_oos.npz`` and ``predictions_cal.npz`` (:func:`save_predictions`): each block's
+  PredictionFrame with its bars, so experiments.rescore re-scores other strategies on the cell
+  through the same :func:`fit_and_backtest` without retraining.
 
 ``scores`` (what the run store indexes) are the report's flat metrics (``EvalReport.flat()``: per
 horizon direction / delta / variance, coherence, ``backtest/<summary>``), the backtest baselines
@@ -157,22 +161,103 @@ def engine_markdown(report, bt: Dict[str, Any]) -> str:
     return "\n".join(L) + "\n"
 
 
+PREDICTION_FILES = {"cal": "predictions_cal.npz", "oos": "predictions_oos.npz"}
+
+
+@dataclass
+class BlockSignals:
+    """The signals of one cell's backtest: ``var_scale`` fitted on the calibration block
+    (``var_scale_from(cal)``), the calibration block's SignalFrame (the entry lines of a strategy with
+    ``from_calibration`` come from it) and the out-of-sample block's SignalFrame at that scale."""
+
+    var_scale: float
+    cal: Any
+    oos: Any
+
+    @classmethod
+    def build(cls, cal_frame, frame) -> "BlockSignals":
+        from neural_trade.strategy import SignalFrame, var_scale_from
+
+        var_scale = var_scale_from(cal_frame)
+        return cls(float(var_scale), SignalFrame.build(cal_frame, var_scale), SignalFrame.build(frame, var_scale))
+
+
+def fit_and_backtest(signals: BlockSignals, bars, *, strategy: Optional[str] = None,
+                     strategy_params: Optional[Mapping[str, Any]] = None,
+                     backtest_params: Optional[Mapping[str, Any]] = None, bar_minutes: float = 1.0):
+    """Fit ``strategy`` on the calibration block and backtest the out-of-sample block with the
+    baselines (buy-and-hold, always-flat, the size-matched random null); returns (BacktestResult,
+    the fitted Strategy). The scorer and the re-scorer (experiments.rescore) both call this, so a
+    stored cell re-scored with the scenario's own settings reproduces its scores exactly."""
+    from neural_trade.strategy import Strategies, backtest, build_backtest_config, build_strategy
+
+    strat = build_strategy(strategy or Strategies.default, strategy_params, calibration=signals.cal)
+    bcfg = build_backtest_config({**dict(backtest_params or {}), "bar_minutes": float(bar_minutes)})
+    return backtest(signals.oos, bars, strat, bcfg), strat
+
+
+def _timestamps(df, anchors) -> np.ndarray:
+    from neural_trade.experiments.dataset import _iso
+
+    col = "timestamp" if "timestamp" in df.columns else ("Date" if "Date" in df.columns else None)
+    if col is None:
+        return np.asarray([], dtype=str)
+    times = df[col]
+    return np.asarray([_iso(times.iloc[int(i)]) for i in anchors], dtype=str)
+
+
+def save_predictions(out_dir, frame, cal, arrays, *, bar_minutes: float) -> Dict[str, Path]:
+    """Write the cell's ``predictions_oos.npz`` (the out-of-sample block) and ``predictions_cal.npz``
+    (the calibration block) into ``out_dir`` (files that must not exist yet). Each holds the block's
+    PredictionFrame (PredictionFrame.save_npz: served and raw deltas, probabilities, variances,
+    intervals, scales, betas) plus its OHLC bars at the anchor bars (``bar_open`` .. ``bar_close``),
+    ``anchor_timestamp``, ``anchor_bar``, ``sequence_index`` and ``bar_minutes``, so
+    experiments.rescore can backtest any strategy on the cell without retraining. Heavy,
+    machine-local files (``*.npz`` under runs/ is git-ignored)."""
+    from neural_trade.strategy import Bars
+
+    out = {}
+    for key, block_name, block_frame in (("oos", "test", frame), ("cal", "cal", cal)):
+        block = arrays[block_name]
+        anchors = np.asarray(block["anchor_bar"], dtype=np.int64)
+        bars = Bars.from_frame(arrays["df"], anchors)
+        extra = {"bar_open": bars.open, "bar_high": bars.high, "bar_low": bars.low, "bar_close": bars.close,
+                 "anchor_timestamp": _timestamps(arrays["df"], anchors), "anchor_bar": anchors,
+                 "sequence_index": np.asarray(block["index"], dtype=np.int64), "bar_minutes": float(bar_minutes),
+                 "block": block_name}
+        out[f"predictions_{key}"] = block_frame.save_npz(Path(out_dir) / PREDICTION_FILES[key], extra=extra)
+    return out
+
+
+def load_block(path):
+    """(PredictionFrame, Bars, extra arrays) of a file written by :func:`save_predictions`."""
+    from neural_trade.evaluation.frame import PredictionFrame
+    from neural_trade.strategy import Bars
+
+    frame = PredictionFrame.load_npz(path)
+    extra = frame.meta["extra"]
+    bars = Bars(extra["bar_open"], extra["bar_high"], extra["bar_low"], extra["bar_close"])
+    return frame, bars, extra
+
+
 def score_result(result, *, role: str, strategy: Optional[str] = None,
                  strategy_params: Optional[Mapping[str, Any]] = None,
                  backtest_params: Optional[Mapping[str, Any]] = None, run_id: Optional[str] = None,
-                 out_dir=None, meta: Optional[Mapping[str, Any]] = None, arrays=None) -> Scored:
+                 out_dir=None, meta: Optional[Mapping[str, Any]] = None, arrays=None,
+                 save_predictions_npz: bool = True) -> Scored:
     """Score a TrainResult's out-of-sample block (see the module docstring).
 
     ``role``: "dev" or "test" (the fold's role in the scenario). ``meta`` is added to the report's
     meta (fold, blocks, scenario, cell). ``arrays``: ``data.processor.split_arrays(result.config)``
-    when the caller has it. With ``out_dir`` the report is written there (files that must not exist).
+    when the caller has it. With ``out_dir`` the report is written there (files that must not exist)
+    and, unless ``save_predictions_npz`` is False, the out-of-sample and calibration predictions with
+    their bars (:func:`save_predictions`: ``predictions_oos.npz``, ``predictions_cal.npz``).
     """
     from neural_trade.data.processor import split_arrays
     from neural_trade.evaluation.baselines import BaselineSet
     from neural_trade.evaluation.frame import PredictionFrame
     from neural_trade.evaluation.report import evaluate
-    from neural_trade.strategy import (Bars, SignalFrame, Strategies, backtest, build_backtest_config,
-                                       build_strategy, var_scale_from)
+    from neural_trade.strategy import Bars, Strategies
 
     if role not in ROLES:
         raise ValueError(f"role must be one of {ROLES}, got {role!r}")
@@ -189,18 +274,16 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
     cal = PredictionFrame.from_result(result, "cal")
     baselines = BaselineSet.fit(train["X"], train["y"], train["last_close"], float(cfg.DIR_DEADBAND_BPS))
 
-    var_scale = var_scale_from(cal)
-    cal_signals = SignalFrame.build(cal, var_scale)
-    signals = SignalFrame.build(frame, var_scale)
-    name = strategy or Strategies.default
-    strat = build_strategy(name, strategy_params, calibration=cal_signals)
-    bcfg = build_backtest_config({**dict(backtest_params or {}), "bar_minutes": float(cfg.RESAMPLE_MINUTES)})
+    signals = BlockSignals.build(cal, frame)
     bars = Bars.from_frame(arrays["df"], test_block["anchor_bar"])
     if len(bars) != len(frame) or not np.allclose(bars.close, frame.last_close, rtol=1e-6):
         raise ScoringError(f"the out-of-sample bars ({len(bars)}) do not line up with its predictions ({len(frame)})")
-    res = backtest(signals, bars, strat, bcfg)
+    bar_minutes = float(cfg.RESAMPLE_MINUTES)
+    res, strat = fit_and_backtest(signals, bars, strategy=strategy or Strategies.default,
+                                  strategy_params=strategy_params, backtest_params=backtest_params,
+                                  bar_minutes=bar_minutes)
     bt = res.to_dict()
-    bt.update(params=_strategy_params(strat), fitted_on="cal", var_scale=float(var_scale), n_bars=len(bars),
+    bt.update(params=_strategy_params(strat), fitted_on="cal", var_scale=float(signals.var_scale), n_bars=len(bars),
               calibrated_probabilities=frame.direction_prob_calibrated is not None)
 
     frame.split = role
@@ -213,6 +296,8 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
         out = Path(out_dir)
         scored.paths["json"] = _write_new(out / f"eval_report_{role}.json", report.to_json())
         scored.paths["md"] = _write_new(out / f"eval_report_{role}.md", report.to_markdown() + engine_markdown(report, bt))
+        if save_predictions_npz:
+            scored.paths.update(save_predictions(out, frame, cal, arrays, bar_minutes=bar_minutes))
     return scored
 
 
@@ -220,5 +305,6 @@ def scores_json(scores: Mapping[str, Optional[float]]) -> str:
     return json.dumps(dict(scores), indent=2, sort_keys=True)
 
 
-__all__ = ["ROLES", "Scored", "ScoringError", "engine_markdown", "leaderboard_scores", "score_result",
+__all__ = ["BlockSignals", "PREDICTION_FILES", "ROLES", "Scored", "ScoringError", "engine_markdown",
+           "fit_and_backtest", "leaderboard_scores", "load_block", "save_predictions", "score_result",
            "training_facts"]
