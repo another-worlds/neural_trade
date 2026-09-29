@@ -1,0 +1,27 @@
+# Iteration 2 of the micro loop (D-041): do OHLCV input and the 14-family indicator catalogue (NT-047) give the
+# model directional skill the close-only input lacks? Quick sweep, micro layout (about 10 days of training on
+# the long file, 30-day dev block 2025-07/08, fold -1 untouched), reference horizons 10/15/20 bars, 3 seeds.
+#   close4:  the pre-NT-047 input (close only, the four original families) - bit-for-bit the old model
+#   ohlcv14: NT-047's default (open/high/low/close/volume, 14 families x 3 instances)
+# Compared per horizon against each other and against logreg_lags on the same block. Also measures the GPU
+# sec_per_step of both (D-018: the new default's CPU step is 1.41x slower).
+schema_version: 1
+name: micro_ohlcv_duel_r1
+description: "Iteration 2 re-run (D-041): ohlcv14 on NT-047 after repair round 1 (72d3838: soft extrema fixed), batch 1024, 3 seeds; close4 reference cells are in micro_ohlcv_duel."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  MAX_SEQUENCE_COUNT: 129600
+  VAL_FRACTION: 0.1102
+  CAL_FRACTION: 0.1102
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 2048
+  EPOCHS: 30
+variants:
+  ohlcv14: {BATCH_SIZE: 1024}   # deviation 2026-09-29: batch 2048 OOM (attention einsum [2048,4,128,128])
+folds: [-2]
+seeds: [0, 1, 2]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}
+run: {calibrate: true, save_artifacts: false}
