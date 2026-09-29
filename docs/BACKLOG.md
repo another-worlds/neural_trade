@@ -1212,7 +1212,7 @@ changes).
 
 **Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch**
 
-- **status:** in-progress (implementer, Sonnet per D-043, branch nt-092, 2026-09-30)
+- **status:** in-progress: QA FAIL on 0378ff2 (2026-09-30): a later reused trial does not reproduce a fresh trial of the same seed (val loss ~8% apart): Keras 2.10 legacy stateful dropout / attention RNGs and the unseeded noise in vacuum_saturation_noise are not reset between trials. Met: normal training path unchanged (golden bit-for-bit, CPU step ratio 0.995), legacy bundles and checkpoints load identically, continuous fields read at run time, clip_skip_epochs. Speed-up measured by QA 2.1x (claimed 2.6x). Repair round 1 sent.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/screen.py, src/neural_trade/training/ (only what trace reuse strictly needs), tests/test_screen.py, docs/RUNBOOK.md
 - **why:** the approved screen plan (docs/research/2026-09-29-screen-plan.md, step 3 / "phase 2"): build phase 2 if tracing exceeds 50% of a trial. GPU measurement (runs/experiments/micro_loop_v1/LOG.md, 2026-09-30): trace 12.2 s of a 16.7 s trial (73%). Also: at LR 1e-4 every 2-epoch trial fails max_clipped_share because the initial pre-clip norm exceeds the clip.
