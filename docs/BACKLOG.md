@@ -119,6 +119,7 @@ changes).
 | [NT-084](#nt-084) | P3 | polish | implementer | todo | Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees |
 | [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
 | [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
+| [NT-087](#nt-087) | P1 | feature | implementer | in-progress | pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2) |
 
 ## Items
 
@@ -1143,6 +1144,17 @@ changes).
 - **why:** QA of NT-047: the Jupyter kernel of `test_all_notebooks_execute` does not get the checkout's own src/ on PYTHONPATH, so in any worktree it imports D:/neural_trade/src and passes on the main checkout's code (NT-047's notebook crash was hidden this way). CI does not run the slow suite, so nothing else catches it. Same root as NT-084 item (1).
 - **acceptance:** the kernel imports the checkout under test (as scripts/notebooks/execute.py:98 sets it); a test proves it from a worktree.
 - **source:** QA of NT-047, 2026-09-29
+
+### NT-087
+
+**pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2)**
+
+- **status:** in-progress (implementer, Sonnet per D-043, branch nt-087, 2026-09-29)
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/losses/functions.py, src/neural_trade/core/config.py, src/neural_trade/training/lambda_calibration.py, src/neural_trade/training/custom_model.py (only if logging requires), tests/
+- **why:** The owner's point 3 ("absence of the PnL in the models' targets") and the /goal; docs/research/2026-09-29-pnl-target/README.md section 1.1 option A and section 3 "E2". E1 (cost-sensitive labels) failed its signal gate.
+- **acceptance:** (1) synthetic data with a planted edge above cost: mean |2p - 1| grows and the utility rises; (2) synthetic data without an edge: positions go to 0 (the flat solution); (3) finite gradients on the stability cases (D-026); (4) sec_per_step not slower than custom_loss within noise (D-018); (5) `LOSS_NAME: custom_loss` runs bit-identical (golden verify); (6) fast suite, ruff, TESTING_DOCUMENTATION, config reference.
+- **source:** the P&L research note (a9f296f), E2
 
 ## Done log
 
