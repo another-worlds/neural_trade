@@ -135,7 +135,7 @@ def _dense_weights(n, n_boot=1000, seed=0, block=80):
     nb = int(math.ceil(n / block))
     starts = rng.integers(0, n - block + 1, size=(n_boot, nb))
     idx = (starts[:, :, None] + np.arange(block)).reshape(n_boot, -1)[:, :n]
-    return np.stack([np.bincount(r, minlength=n) for r in idx]).astype(float)
+    return np.stack([np.bincount(r, minlength=n) for r in idx])     # int64 counts
 
 
 def test_prefix_sum_bootstrap_equals_the_dense_resample_weights():
@@ -148,12 +148,17 @@ def test_prefix_sum_bootstrap_equals_the_dense_resample_weights():
     sub = rng.random((7, n)) < np.linspace(0.05, 0.9, 7)[:, None]
     sub[3] = False                                     # an empty subset
     plan = _boot_plan(n, n_boot=300, seed=11)
+    # The reference is exact integer arithmetic: an int64 matmul does not go through BLAS (a float
+    # dgemm gave wrong sums on the CI runner's OpenBLAS, run 36532043186), and every count and sum
+    # here is an integer, so the low-memory path must match it exactly.
     W = _dense_weights(n, n_boot=300, seed=11)
-    np.testing.assert_array_equal(_resample_sums(sub, x, plan), (W @ (sub * x).T).T)
-    np.testing.assert_array_equal(_resample_sums(sub, None, plan, budget=10), (W @ sub.T).T)   # chunked
+    xi, si = x.astype(np.int64), sub.astype(np.int64)
+    sums, counts = W @ (si * xi).T, W @ si.T
+    np.testing.assert_array_equal(_resample_sums(sub, x, plan), sums.T)
+    np.testing.assert_array_equal(_resample_sums(sub, None, plan, budget=10), counts.T)   # chunked
     rate, lo, hi, cnt = _subset_rates(x, sub, plan)
     with np.errstate(invalid="ignore", divide="ignore"):
-        r = (W @ (sub * x).T) / (W @ sub.T)
+        r = sums / counts
     for k in range(len(sub)):
         if cnt[k] == 0:
             assert np.isnan(rate[k]) and np.isnan(lo[k]) and np.isnan(hi[k])
