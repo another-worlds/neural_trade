@@ -13,6 +13,7 @@ import math
 from typing import Optional
 
 import numpy as np
+import pandas as pd
 
 from neural_trade.data.loaders import validate_ohlcv_frame
 from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, transform_targets
@@ -21,6 +22,40 @@ from neural_trade.data.windowing import (compute_extended_trend_features, make_s
                                          sequence_anchor_bars)
 
 logger = logging.getLogger(__name__)
+
+
+def apply_data_end(df, config):
+    """Slice ``df`` (already preprocessed, sorted by timestamp) to end at ``Config.DATA_END``, taken
+    BEFORE ``MAX_SEQUENCE_COUNT`` trims from the end of the slice (NT-088 screen mode: trials pick a
+    volatility regime anywhere in history, not only the file's newest bars). Refuses a ``DATA_END``
+    that falls within the protected dev/test span (the file's last ``DATA_END_PROTECTED_DAYS`` days),
+    so a screen trial cannot leak the long file's held-out period into training (D-020). ``None``
+    (the default): no slicing, today's behaviour."""
+    data_end = getattr(config, "DATA_END", None)
+    if data_end is None:
+        return df
+    try:
+        end = pd.Timestamp(data_end)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"DATA_END={data_end!r} is not a valid timestamp: {exc}") from exc
+    ts = df["timestamp"]
+    tz = getattr(ts.dtype, "tz", None)
+    if end.tzinfo is None and tz is not None:
+        end = end.tz_localize(tz)
+    elif end.tzinfo is not None and tz is None:
+        end = end.tz_localize(None)
+    last = ts.max()
+    protected_days = float(getattr(config, "DATA_END_PROTECTED_DAYS", 64.0))
+    protected_start = last - pd.Timedelta(days=protected_days)
+    if end >= protected_start:
+        raise ValueError(
+            f"DATA_END={data_end} falls within the protected dev/test span: the file's last "
+            f"{protected_days:g} days start at {protected_start} (last bar {last}); choose an earlier "
+            "DATA_END, or the run's dev/test period could leak into training (D-020)")
+    sliced = df[ts <= end]
+    if sliced.empty:
+        raise ValueError(f"DATA_END={data_end} is before the data starts ({ts.min()})")
+    return sliced.reset_index(drop=True)
 
 
 def _select_fold(folds, index):
@@ -90,6 +125,7 @@ class DataProcessor:
         ``read_csv_kwargs`` is passed through to ``pd.read_csv`` for the csv loader.
         """
         df = self.preprocess(self.load_raw(read_csv_kwargs, **loader_kwargs))
+        df = apply_data_end(df, self.config)
         logger.info(f"Dataset length after cleaning: {len(df)}")
         logger.info('%s %s %s %s', "Date range after cleaning:", df['Date'].min(), "to", df['Date'].max())
 
