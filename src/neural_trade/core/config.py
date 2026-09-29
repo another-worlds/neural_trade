@@ -11,16 +11,25 @@ the docs, not in nested sub-objects.
     cfg.to_yaml("run/config.yaml")
 
 Every setting of the pre-package ``model.Config`` keeps its name and default value.
+
+Every field also declares, in its metadata, a unit (``UNITS``), a range (``ge`` / ``gt`` /
+``le`` / ``lt``) or a set of ``choices`` where one applies, whether a sweep may tune it and
+whether it is deprecated. ``Config.field_specs()`` returns them as :class:`FieldSpec` objects
+(for the control panel and the sweep search spaces), ``Config.validate`` enforces the ranges and
+choices, and ``docs/guide/config-reference.md`` is generated from them by
+``scripts/gen_config_reference.py``.
 """
 from __future__ import annotations
 
 import difflib
 import logging
+import math
+import numbers
 import typing
 import warnings
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from pathlib import Path
-from typing import Any, ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
 from .exceptions import InvalidConfigurationError
 
@@ -32,13 +41,151 @@ GROUPS = (
     "registries", "optimizers", "ops",
 )
 
+# The unit vocabulary of the field metadata. Time is either "bars" (of the resampled series) or
+# wall-clock "minutes", so fields configured in wall-clock time (NT-041) can say which they are.
+UNITS: Dict[str, str] = {
+    "bars": "bars of the (resampled) price series",
+    "minutes": "wall-clock minutes",
+    "sequences": "input windows (one sequence per anchor bar)",
+    "epochs": "training epochs",
+    "steps": "optimizer steps (training batches)",
+    "count": "a plain count",
+    "fraction": "a share between 0 and 1",
+    "bps": "basis points (1/10,000 of the price)",
+    "weight": "a dimensionless multiplier of a loss term",
+    "dimensionless": "a dimensionless number",
+    "scaled": "target-scaler units (the standardised price delta)",
+    "scaled^2": "squared target-scaler units (a variance)",
+    "quote": "quote currency of the instrument (USDT on the reference setup)",
+    "index": "a position in a list (negative counts from the end)",
+    "seed": "a random seed",
+    "flag": "true or false",
+    "name": "one of the listed names",
+    "key": "a registry key or a Config field name, checked when the registries load",
+    "path": "a file or directory path",
+    "mapping": "a nested mapping (see the doc)",
+}
 
-def _f(default, group: str, doc: str = "", **kw):
-    """A dataclass field with its group and one-line documentation in metadata."""
+
+@dataclass(frozen=True)
+class FieldSpec:
+    """The machine-readable metadata of one Config field.
+
+    ``minimum`` / ``maximum`` bound a number, or every number inside a list or dict value (for
+    example each entry of HORIZON_STEPS); ``None`` means unbounded. ``step`` and ``log`` are hints
+    for widgets and search spaces and are not enforced. ``choices`` lists the valid names of a
+    string field (compared case-insensitively when ``ignore_case``).
+    """
+    name: str
+    group: str
+    doc: str
+    unit: Optional[str]
+    type: str
+    default: Any
+    nullable: bool = False
+    minimum: Optional[float] = None
+    maximum: Optional[float] = None
+    min_inclusive: bool = True
+    max_inclusive: bool = True
+    step: Optional[float] = None
+    log: bool = False
+    choices: Optional[Tuple[str, ...]] = None
+    ignore_case: bool = False
+    tunable: bool = False
+    deprecated: bool = False
+
+    @property
+    def has_range(self) -> bool:
+        return self.minimum is not None or self.maximum is not None
+
+    @property
+    def per_item(self) -> bool:
+        """True when the range applies to each number inside a list or dict value."""
+        return self.type.startswith(("List", "Dict", "list", "dict"))
+
+    def range_text(self) -> str:
+        """The range or the choices as text: ``[1, 1440]``, ``(0, 0.5)``, ``>= 0``, ``one of a, b``."""
+        if self.choices is not None:
+            return "one of " + ", ".join(self.choices) + (" (any case)" if self.ignore_case else "")
+        if not self.has_range:
+            return ""
+        lo, hi = self.minimum, self.maximum
+        if lo is not None and hi is not None:
+            text = (f"{'[' if self.min_inclusive else '('}{_num(lo)}, "
+                    f"{_num(hi)}{']' if self.max_inclusive else ')'}")
+        elif lo is not None:
+            text = f"{'>=' if self.min_inclusive else '>'} {_num(lo)}"
+        else:
+            text = f"{'<=' if self.max_inclusive else '<'} {_num(hi)}"
+        return ("each " if self.per_item else "") + text
+
+    def check(self, value) -> Optional[str]:
+        """``None`` when ``value`` satisfies the declared range or choices, otherwise the reason
+        (naming the field). A field without a range or choices accepts any value here."""
+        if self.choices is None and not self.has_range:
+            return None
+        if value is None:
+            return None if self.nullable else f"{self.name}=None is not allowed ({self.range_text()})"
+        if self.choices is not None:
+            valid = [c.lower() for c in self.choices] if self.ignore_case else list(self.choices)
+            if (str(value).lower() if self.ignore_case else value) not in valid:
+                return f"{self.name}={value!r} is not one of {', '.join(self.choices)}"
+            return None
+        for x in _numbers_in(value):
+            if x is None:
+                return f"{self.name}={value!r} is not a number"
+            if not self._in_range(x):
+                return f"{self.name}={value!r} is outside its range {self.range_text()}"
+        return None
+
+    def _in_range(self, x) -> bool:
+        if math.isnan(float(x)):
+            return False
+        if self.minimum is not None and (x < self.minimum if self.min_inclusive else x <= self.minimum):
+            return False
+        if self.maximum is not None and (x > self.maximum if self.max_inclusive else x >= self.maximum):
+            return False
+        return True
+
+
+def _num(x) -> str:
+    return f"{x:g}" if isinstance(x, float) else str(x)
+
+
+def _numbers_in(value):
+    """Every number inside ``value`` (a number, or a list / dict of them); ``None`` for a non-number."""
+    if isinstance(value, numbers.Real):
+        yield value
+    elif isinstance(value, (list, tuple)):
+        for v in value:
+            yield from _numbers_in(v)
+    elif isinstance(value, dict):
+        for v in value.values():
+            yield from _numbers_in(v)
+    else:
+        yield None
+
+
+def _f(default, group: str, doc: str = "", *, unit: Optional[str] = None, ge=None, gt=None, le=None, lt=None,
+       step=None, log: bool = False, choices=None, ignore_case: bool = False, tunable: bool = False,
+       deprecated: bool = False, **kw):
+    """A dataclass field with its group, one-line doc and :class:`FieldSpec` metadata.
+
+    ``ge`` / ``gt`` (lower bound) and ``le`` / ``lt`` (upper bound) declare the valid range,
+    ``choices`` the valid names; ``tunable`` marks what a sweep may search and ``deprecated`` a
+    legacy field. The metadata arguments are keyword-only, so ``_f(default, group, doc)`` still works.
+    """
+    if (ge is not None and gt is not None) or (le is not None and lt is not None):
+        raise ValueError("give at most one of ge / gt and at most one of le / lt")
+    meta = {"group": group, "doc": doc, "unit": unit,
+            "minimum": gt if gt is not None else ge, "min_inclusive": gt is None,
+            "maximum": lt if lt is not None else le, "max_inclusive": lt is None,
+            "step": step, "log": bool(log), "choices": tuple(choices) if choices is not None else None,
+            "ignore_case": bool(ignore_case), "tunable": bool(tunable), "deprecated": bool(deprecated)}
     if isinstance(default, (list, dict)):
         value = default
-        return field(default_factory=lambda: _copy(value), metadata={"group": group, "doc": doc}, **kw)
-    return field(default=default, metadata={"group": group, "doc": doc}, **kw)
+        return field(default_factory=lambda: _copy(value), metadata=meta, **kw)
+    return field(default=default, metadata=meta, **kw)
 
 
 def _copy(v):
@@ -55,171 +202,269 @@ _DEFAULT_MACD = [
     {"fast": 8, "slow": 17, "signal": 9},
 ]
 
+# The valid WINDOW_NORMALIZER names; equal to neural_trade.data.scaling.WINDOW_NORMALIZERS (tested),
+# repeated here so that importing the Config does not import scikit-learn.
+_WINDOW_NORMALIZERS = ("window_relative", "per_lag_standard")
+
 
 @dataclass
 class Config:
     HOUR: ClassVar[int] = 60
     DAY: ClassVar[int] = 60 * 24
 
+    # Tunable: a model or training hyperparameter a sweep may search (NT-030). Not tunable: data,
+    # blocks, targets and folds (trials must be scored on the same blocks), the training budget,
+    # component choices (registry keys, loss and calibration switches settled in DECISIONS), paths,
+    # seeds, diagnostics, numerical guards, deprecated fields, and knobs without an effect under the
+    # default components (FOCAL_* with bce, SGD_* and WEIGHT_DECAY with adam).
+
     # ------------------------------------------------------------------ data
-    CSV_PATH: str = _f("binance_btcusdt_1min_ccxt.csv", "data", "OHLCV CSV (timestamp/datetime, open..volume)")
-    LOOKBACK: int = _f(60, "data", "input window length in bars")
-    WINDOW_STEP: int = _f(1, "data", "stride between consecutive training windows")
-    RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars)")
-    MAX_SEQUENCE_COUNT: int = _f(1440 * 37, "data", "keep only the most recent N sequences")
-    VAL_FRACTION: float = _f(0.066, "data", "validation block size (fraction of sequences)")
-    CAL_FRACTION: float = _f(0.066, "data", "calibration block size (fraction of sequences)")
-    N_FOLDS: int = _f(5, "data", "TimeSeriesSplit folds; the last fold's test block is reported")
-    FOLD_INDEX: int = _f(-1, "data", "which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)")
+    CSV_PATH: str = _f("binance_btcusdt_1min_ccxt.csv", "data", "OHLCV CSV (timestamp/datetime, open..volume)",
+                       unit="path")
+    LOOKBACK: int = _f(60, "data", "input window length in bars", unit="bars", ge=1, le=1440, step=1)
+    WINDOW_STEP: int = _f(1, "data", "stride between consecutive training windows", unit="bars", ge=1, step=1)
+    RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars); not tunable until "
+                               "NT-040, because the annualisation ignores the bar size until then",
+                               unit="minutes", ge=1, step=1)
+    MAX_SEQUENCE_COUNT: int = _f(1440 * 37, "data", "keep only the most recent N sequences (0 = keep all)",
+                                 unit="sequences", ge=0, step=1)
+    VAL_FRACTION: float = _f(0.066, "data", "validation block size (fraction of sequences)",
+                             unit="fraction", gt=0.0, lt=0.5)
+    CAL_FRACTION: float = _f(0.066, "data", "calibration block size (fraction of sequences)",
+                             unit="fraction", gt=0.0, lt=0.5)
+    N_FOLDS: int = _f(5, "data", "TimeSeriesSplit folds; the last fold's test block is reported", unit="count",
+                      ge=2, step=1)
+    FOLD_INDEX: int = _f(-1, "data", "which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)",
+                         unit="index")
 
     # ------------------------------------------------------------------ horizons
     EXTENDED_TREND_PERIODS: List[int] = _f([10, 15, 20], "horizons",
-                                           "lags (bars) of the past-delta momentum features, one per horizon")
-    HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2)")
+                                           "lags (bars) of the past-delta momentum features, one per horizon",
+                                           unit="bars", ge=1, step=1)
+    HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2)",
+                                  unit="bars", ge=1, step=1)
 
     # ------------------------------------------------------------------ training
-    BATCH_SIZE: int = _f(256, "training", "256: a step costs about the same at 64 or 256 on the GPU (launch-bound), so ~3.7x faster epochs")
-    EPOCHS: int = _f(20, "training")
-    LR: float = _f(1e-3, "training", "main optimizer learning rate")
-    PATIENCE: int = _f(3, "training", "ReduceLROnPlateau patience (was EPOCHS: disabled)")
-    EARLY: int = _f(6, "training", "EarlyStopping patience on val_loss (was EPOCHS: disabled)")
+    BATCH_SIZE: int = _f(256, "training", "256: a step costs about the same at 64 or 256 on the GPU (launch-bound), so ~3.7x faster epochs",
+                         unit="count", ge=16, le=2048, step=1, log=True, tunable=True)
+    EPOCHS: int = _f(20, "training", "maximum training epochs; EarlyStopping (EARLY) may stop sooner, and the "
+                     "best-validation epoch is served (D-011)", unit="epochs", ge=1, step=1)
+    LR: float = _f(1e-3, "training", "main optimizer learning rate", unit="dimensionless", gt=0.0, le=1.0, log=True,
+                   tunable=True)
+    PATIENCE: int = _f(3, "training", "ReduceLROnPlateau patience (was EPOCHS: disabled)", unit="epochs", ge=0, step=1,
+                       tunable=True)
+    EARLY: int = _f(6, "training", "EarlyStopping patience on val_loss (was EPOCHS: disabled)", unit="epochs", ge=0,
+                    step=1)
 
     # ------------------------------------------------------------------ calibration (pre-training lambda pass)
-    DAMPING: float = _f(0.5, "calibration", "legacy alias; use CALIB_DAMPING")
-    CALIB_WARMUP_FRACTION: float = _f(0.05, "calibration", "warm-up forward passes (fraction of an epoch)")
-    CALIB_SAMPLE_FRACTION: float = _f(0.1, "calibration", "loss-magnitude sampling (fraction of an epoch)")
-    CALIB_LAMBDA_MIN: float = _f(0.1, "calibration")
-    CALIB_LAMBDA_MAX: float = _f(20.0, "calibration")
-    CALIB_DAMPING: float = _f(1.0, "calibration", "0 = no change, 1 = full magnitude equalisation")
-    CALIB_DAMPING_POINT: Optional[float] = _f(None, "calibration")
-    CALIB_DAMPING_TREND: Optional[float] = _f(0.0, "calibration", "0: the trend prior is a regulariser, not rescaled")
-    CALIB_DAMPING_DIR: Optional[float] = _f(None, "calibration")
-    CALIB_DAMPING_VAR: Optional[float] = _f(None, "calibration")
-    CALIB_DAMPING_CRPS: Optional[float] = _f(None, "calibration")
-    CALIB_DAMPING_ECE: Optional[float] = _f(None, "calibration")
-    CALIB_DAMPING_VOL: Optional[float] = _f(None, "calibration")
+    DAMPING: float = _f(0.5, "calibration", "legacy alias; use CALIB_DAMPING", unit="dimensionless", ge=0.0, le=1.0,
+                        deprecated=True)
+    CALIB_WARMUP_FRACTION: float = _f(0.05, "calibration", "warm-up forward passes (fraction of an epoch)",
+                                      unit="fraction", ge=0.0, le=1.0)
+    CALIB_SAMPLE_FRACTION: float = _f(0.1, "calibration", "loss-magnitude sampling (fraction of an epoch)",
+                                      unit="fraction", ge=0.0, le=1.0)
+    CALIB_LAMBDA_MIN: float = _f(0.1, "calibration", "lower clamp of every loss weight the calibration pass rescales",
+                                 unit="weight", ge=0.0)
+    CALIB_LAMBDA_MAX: float = _f(20.0, "calibration", "upper clamp of every loss weight the calibration pass rescales",
+                                 unit="weight", gt=0.0)
+    CALIB_DAMPING: float = _f(1.0, "calibration", "0 = no change, 1 = full magnitude equalisation",
+                              unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_POINT: Optional[float] = _f(None, "calibration", "damping of the point-loss weights LAMBDA_SHORT, "
+                                              "LAMBDA_POINT and LAMBDA_LONG (None = CALIB_DAMPING)",
+                                              unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_TREND: Optional[float] = _f(0.0, "calibration", "0: the trend prior is a regulariser, not rescaled",
+                                              unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_DIR: Optional[float] = _f(None, "calibration", "damping of LAMBDA_DIR (None = CALIB_DAMPING)",
+                                            unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_VAR: Optional[float] = _f(None, "calibration", "damping of LAMBDA_VAR (None = CALIB_DAMPING)",
+                                            unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_CRPS: Optional[float] = _f(None, "calibration", "damping of LAMBDA_CRPS, rescaled only when it is "
+                                             "> 0 (None = CALIB_DAMPING)", unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_ECE: Optional[float] = _f(None, "calibration", "damping of LAMBDA_SOFT_ECE, rescaled only when it "
+                                            "is > 0 (None = CALIB_DAMPING)", unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_DAMPING_VOL: Optional[float] = _f(None, "calibration", "damping of LAMBDA_VOL (None = CALIB_DAMPING)",
+                                            unit="dimensionless", ge=0.0, le=1.0)
     CALIB_DAMPING_PHYSICS: Optional[float] = _f(0.0, "calibration",
-                                                "0: bounded physics regularisers are never rescaled")
-    CALIB_OUTER: bool = _f(False, "calibration", "also calibrate the outer group multipliers")
+                                                "0: bounded physics regularisers are never rescaled",
+                                                unit="dimensionless", ge=0.0, le=1.0)
+    CALIB_OUTER: bool = _f(False, "calibration", "also calibrate the outer group multipliers", unit="flag")
     DELTA_SHRINKAGE: bool = _f(True, "calibration",
-                               "serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block")
+                               "serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block",
+                               unit="flag")
     CONFORMAL_SCALE: str = _f("realized_vol", "calibration",
-                              "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'")
+                              "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'",
+                              unit="name", choices=("realized_vol", "sigma", "none"))
 
     # ------------------------------------------------------------------ loss weights
-    LAMBDA_LOCAL_TREND: float = _f(1.0, "loss_weights", "retired term (always 0 in the objective)")
-    LAMBDA_GLOBAL_TREND: float = _f(1.0, "loss_weights", "retired term (always 0 in the objective)")
-    LAMBDA_EXTENDED_TREND: float = _f(0.1, "loss_weights", "momentum prior; a regulariser, kept small")
-    LAMBDA_QUANTILE: float = _f(1.0, "loss_weights", "unused (no quantile term in the objective)")
-    LAMBDA_SHORT: float = _f(1.0, "loss_weights", "point loss weight, h0")
-    LAMBDA_POINT: float = _f(1.0, "loss_weights", "point loss weight, h1")
-    LAMBDA_LONG: float = _f(1.0, "loss_weights", "point loss weight, h2")
-    LAMBDA_DIR: float = _f(1.0, "loss_weights", "direction loss (focal + dice)")
-    LAMBDA_INTER: float = _f(1.0, "loss_weights", "weight of model.losses (layer regularisers)")
-    LAMBDA_VOL: float = _f(1.0, "loss_weights", "prediction-spread vs target-spread penalty")
-    LAMBDA_VAR: float = _f(1.0, "loss_weights", "Gaussian NLL of the variance heads")
-    LAMBDA_TREND_OUTER: float = _f(1.0, "loss_weights")
-    LAMBDA_DIR_OUTER: float = _f(1.0, "loss_weights")
-    LAMBDA_DIR_ALIGN_OUTER: float = _f(0.0, "loss_weights", "direction head vs Gaussian readout alignment")
-    LAMBDA_COHERENCE: float = _f(1.0, "loss_weights")
-    LAMBDA_NLL_OUTER: float = _f(1.0, "loss_weights")
-    LAMBDA_CRPS: float = _f(1.0, "loss_weights")
-    LAMBDA_SOFT_ECE: float = _f(1.0, "loss_weights")
-    LAMBDA_DIR_ALIGN: float = _f(0.7, "loss_weights", "inner weight of the alignment term")
+    LAMBDA_LOCAL_TREND: float = _f(1.0, "loss_weights", "retired term (always 0 in the objective)", unit="weight",
+                                   ge=0.0, deprecated=True)
+    LAMBDA_GLOBAL_TREND: float = _f(1.0, "loss_weights", "retired term (always 0 in the objective)", unit="weight",
+                                    ge=0.0, deprecated=True)
+    LAMBDA_EXTENDED_TREND: float = _f(0.1, "loss_weights", "momentum prior; a regulariser, kept small", unit="weight",
+                                      ge=0.0, tunable=True)
+    LAMBDA_QUANTILE: float = _f(1.0, "loss_weights", "unused (no quantile term in the objective)", unit="weight",
+                                ge=0.0, deprecated=True)
+    LAMBDA_SHORT: float = _f(1.0, "loss_weights", "point loss weight, h0", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_POINT: float = _f(1.0, "loss_weights", "point loss weight, h1", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_LONG: float = _f(1.0, "loss_weights", "point loss weight, h2", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_DIR: float = _f(1.0, "loss_weights", "direction loss (DIRECTION_LOSS), summed over the horizons",
+                           unit="weight", ge=0.0, tunable=True)
+    LAMBDA_INTER: float = _f(1.0, "loss_weights", "weight of model.losses (layer regularisers)", unit="weight", ge=0.0,
+                             tunable=True)
+    LAMBDA_VOL: float = _f(1.0, "loss_weights", "prediction-spread vs target-spread penalty", unit="weight", ge=0.0,
+                           tunable=True)
+    LAMBDA_VAR: float = _f(1.0, "loss_weights", "Gaussian NLL of the variance heads", unit="weight", ge=0.0,
+                           tunable=True)
+    LAMBDA_TREND_OUTER: float = _f(1.0, "loss_weights", "outer multiplier of the summed extended-trend terms; "
+                                   "rescaled by the calibration pass only with CALIB_OUTER", unit="weight", ge=0.0,
+                                   tunable=True)
+    LAMBDA_DIR_OUTER: float = _f(1.0, "loss_weights", "outer multiplier of the direction loss (LAMBDA_DIR term); "
+                                 "rescaled by the calibration pass only with CALIB_OUTER", unit="weight", ge=0.0,
+                                 tunable=True)
+    LAMBDA_DIR_ALIGN_OUTER: float = _f(0.0, "loss_weights", "direction head vs Gaussian readout alignment",
+                                       unit="weight", ge=0.0, tunable=True)
+    LAMBDA_COHERENCE: float = _f(1.0, "loss_weights", "weight of the cross-horizon coherence penalty (sign "
+                                 "disagreement and magnitude ordering of the price heads)", unit="weight", ge=0.0,
+                                 tunable=True)
+    LAMBDA_NLL_OUTER: float = _f(1.0, "loss_weights", "outer multiplier of the variance-head NLL (LAMBDA_VAR term); "
+                                 "rescaled by the calibration pass only with CALIB_OUTER", unit="weight", ge=0.0,
+                                 tunable=True)
+    LAMBDA_CRPS: float = _f(1.0, "loss_weights", "weight of the Gaussian CRPS of the price and variance heads, summed "
+                            "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_SOFT_ECE: float = _f(1.0, "loss_weights", "weight of the differentiable ECE of the direction heads, summed "
+                                "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_DIR_ALIGN: float = _f(0.7, "loss_weights", "inner weight of the alignment term", unit="weight", ge=0.0,
+                                 tunable=True)
 
     # ------------------------------------------------------------------ physics-inspired terms (T-perp / QBOX)
-    T_PERP_DIM: int = _f(16, "physics", "width of the perpendicular projection")
-    LAMBDA_T_PERP: float = _f(0.1, "physics", "batch variance tracks batch residual energy")
-    LAMBDA_CASIMIR: float = _f(0.1, "physics", "disagreeing horizons need variance")
-    LAMBDA_VAC: float = _f(0.0, "physics", "vacuum bandwidth threshold (0 = off)")
-    LAMBDA_HD: float = _f(0.1, "physics", "variance ordered like realised volatility")
-    LAMBDA_IFE: float = _f(0.1, "physics", "cross-horizon correlation hinge")
-    RHO_MAX: float = _f(0.95, "physics", "max allowed cross-horizon correlation")
-    VACUUM_E_MAX: float = _f(1.0, "physics", "per-dimension energy ceiling of the vacuum layer")
-    LAMBDA_VAC_OVERFLOW: float = _f(0.1, "physics", "overflow tracks residual magnitude")
+    T_PERP_DIM: int = _f(16, "physics", "width of the perpendicular projection", unit="count", ge=1, step=1,
+                         tunable=True)
+    LAMBDA_T_PERP: float = _f(0.1, "physics", "batch variance tracks batch residual energy", unit="weight", ge=0.0,
+                              tunable=True)
+    LAMBDA_CASIMIR: float = _f(0.1, "physics", "disagreeing horizons need variance", unit="weight", ge=0.0,
+                               tunable=True)
+    LAMBDA_VAC: float = _f(0.0, "physics", "vacuum bandwidth threshold (0 = off)", unit="scaled", ge=0.0, tunable=True)
+    LAMBDA_HD: float = _f(0.1, "physics", "variance ordered like realised volatility", unit="weight", ge=0.0,
+                          tunable=True)
+    LAMBDA_IFE: float = _f(0.1, "physics", "cross-horizon correlation hinge", unit="weight", ge=0.0, tunable=True)
+    RHO_MAX: float = _f(0.95, "physics", "max allowed cross-horizon correlation", unit="dimensionless", ge=0.0, le=1.0,
+                        tunable=True)
+    VACUUM_E_MAX: float = _f(1.0, "physics", "per-dimension energy ceiling of the vacuum layer",
+                             unit="dimensionless", gt=0.0, tunable=True)
+    LAMBDA_VAC_OVERFLOW: float = _f(0.1, "physics", "overflow tracks residual magnitude", unit="weight", ge=0.0,
+                                    tunable=True)
 
     # ------------------------------------------------------------------ learnable indicators
-    MA_SPANS: List[int] = _f([5, 10, 30], "indicators")
-    MACD_SETTINGS: List[Dict[str, int]] = _f(_DEFAULT_MACD, "indicators")
-    RSI_PERIODS: List[int] = _f([9, 14, 21], "indicators")
-    BB_PERIODS: List[int] = _f([10, 20, 25], "indicators")
-    INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits")
-    INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this")
-    INDICATOR_GRAD_MULT: float = _f(5.0, "indicators", "straight-through gradient scale")
-    MOMENTUM_CLIP_MIN: float = _f(2.0, "indicators", "period floor (1.0 saturated the logit)")
-    MOMENTUM_CLIP_MAX: Optional[float] = _f(None, "indicators", "period ceiling; None -> LOOKBACK")
-    EWMA_IMPL: str = _f("matrix", "indicators", "'matrix' (batched einsum) or 'scan' (reference)")
+    MA_SPANS: List[int] = _f([5, 10, 30], "indicators", "initial EWMA periods (bars) of the learnable moving "
+                             "averages, one learned period each", unit="bars", ge=1, step=1)
+    MACD_SETTINGS: List[Dict[str, int]] = _f(_DEFAULT_MACD, "indicators", "initial fast / slow / signal EWMA "
+                                             "periods (bars) of each learnable MACD, three learned periods each",
+                                             unit="bars", ge=1, step=1)
+    RSI_PERIODS: List[int] = _f([9, 14, 21], "indicators", "initial smoothing periods (bars) of the learnable RSIs",
+                                unit="bars", ge=1, step=1)
+    BB_PERIODS: List[int] = _f([10, 20, 25], "indicators", "initial periods (bars) of the learnable Bollinger bands",
+                               unit="bars", ge=1, step=1)
+    INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits", unit="dimensionless", ge=0.0,
+                             tunable=True)
+    INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this", unit="dimensionless",
+                                  gt=0.0, log=True, tunable=True)
+    INDICATOR_GRAD_MULT: float = _f(5.0, "indicators", "straight-through gradient scale", unit="dimensionless", gt=0.0,
+                                    tunable=True)
+    MOMENTUM_CLIP_MIN: float = _f(2.0, "indicators", "period floor (1.0 saturated the logit)", unit="bars", gt=0.0)
+    MOMENTUM_CLIP_MAX: Optional[float] = _f(None, "indicators", "period ceiling; None -> LOOKBACK", unit="bars",
+                                            gt=0.0)
+    EWMA_IMPL: str = _f("matrix", "indicators", "'matrix' (batched einsum) or 'scan' (reference)", unit="name",
+                        choices=("matrix", "scan"), ignore_case=True)
 
     # ------------------------------------------------------------------ architecture / activations
-    REG_MOMENTUM_L2: float = _f(0.0, "architecture", "L2 on the dense towers")
+    REG_MOMENTUM_L2: float = _f(0.0, "architecture", "L2 on the dense towers", unit="dimensionless", ge=0.0,
+                                tunable=True)
     TRAIN_METRICS_EVERY: int = _f(10, "training",
                                   "update the training-set diagnostics every N steps (1 = every step); the "
-                                  "training loss and all validation metrics are always exact")
-    TANH_SCALE: float = _f(1.0, "architecture", "unused")
-    SIGMOID_SCALE: float = _f(1.0, "architecture", "unused")
-    HUBER_DELTA: float = _f(1.0, "architecture", "delta of CustomTrainModel.huber (not the point loss)")
-    USE_HUBER: bool = _f(True, "architecture", "legacy flag; the point loss is log(cosh)")
+                                  "training loss and all validation metrics are always exact", unit="steps", ge=1,
+                                  step=1)
+    TANH_SCALE: float = _f(1.0, "architecture", "unused", unit="dimensionless", deprecated=True)
+    SIGMOID_SCALE: float = _f(1.0, "architecture", "unused", unit="dimensionless", deprecated=True)
+    HUBER_DELTA: float = _f(1.0, "architecture", "delta of CustomTrainModel.huber (not the point loss)",
+                            unit="scaled", gt=0.0)
+    USE_HUBER: bool = _f(True, "architecture", "legacy flag; the point loss is log(cosh)", unit="flag",
+                         deprecated=True)
 
     # ------------------------------------------------------------------ stability
-    GRAD_CLIP_NORM: float = _f(20.0, "stability", "global-norm clip, per optimizer group")
+    GRAD_CLIP_NORM: float = _f(20.0, "stability", "global-norm clip, per optimizer group", unit="dimensionless",
+                               ge=0.0)
 
     # ------------------------------------------------------------------ direction
-    FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class")
-    FOCAL_GAMMA: float = _f(2.0, "direction")
+    FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class", unit="fraction", ge=0.0, le=1.0)
+    FOCAL_GAMMA: float = _f(2.0, "direction", "focusing exponent of the focal loss (only with DIRECTION_LOSS "
+                            "'focal_dice')", unit="dimensionless", ge=0.0)
     DIRECTION_SKIP: bool = _f(True, "direction",
-                              "add a linear logit from trailing-return features of the window to each direction head")
-    DIRECTION_SKIP_L2: float = _f(1e-4, "direction", "L2 on the direction skip weights")
+                              "add a linear logit from trailing-return features of the window to each direction head",
+                              unit="flag")
+    DIRECTION_SKIP_L2: float = _f(1e-4, "direction", "L2 on the direction skip weights", unit="dimensionless",
+                                  ge=0.0, tunable=True)
     DIRECTION_LOSS: str = _f("bce", "direction",
-                             "'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)")
-    DIR_DEADBAND_BPS: float = _f(5.0, "direction", "|return| below this is neutral and masked")
+                             "'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)",
+                             unit="name", choices=("bce", "focal_dice"))
+    DIR_DEADBAND_BPS: float = _f(5.0, "direction", "|return| below this is neutral and masked", unit="bps", ge=0.0)
 
     # ------------------------------------------------------------------ variance
-    VAR_FLOOR: float = _f(1e-4, "variance", "variance floor (scaled units^2)")
-    VAR_CAP: float = _f(1e3, "variance", "variance cap for metrics (not applied in the loss)")
-    DELTA_MAPE_MIN_ABS: float = _f(1.0, "variance", "min |y| ($) for the delta safe-MAPE")
+    VAR_FLOOR: float = _f(1e-4, "variance", "variance floor (scaled units^2)", unit="scaled^2", gt=0.0, log=True)
+    VAR_CAP: float = _f(1e3, "variance", "variance cap for metrics (not applied in the loss)", unit="scaled^2",
+                        gt=0.0, log=True)
+    DELTA_MAPE_MIN_ABS: float = _f(1.0, "variance", "min |y| ($) for the delta safe-MAPE", unit="quote", ge=0.0)
 
     # ------------------------------------------------------------------ paths
-    MODEL_PATH: str = _f("nn_learnable_indicators_v3.weights.h5", "paths")
-    SCALER_PATH: str = _f("scaler_v3.joblib", "paths")
-    ARTIFACTS_DIR: str = _f("artifacts", "paths", "where Trainer writes the serving bundle")
-    PLUGINS_DIR: Optional[str] = _f(None, "paths", "directory of plugin modules to load at startup")
+    MODEL_PATH: str = _f("nn_learnable_indicators_v3.weights.h5", "paths", "weights file: model_checkpoint writes "
+                         "the best-validation weights here, and training loads it first when it exists (a warm start, "
+                         "NT-049); a RunContext points it into the run directory", unit="path")
+    SCALER_PATH: str = _f("scaler_v3.joblib", "paths", "target-scaler file (joblib) written by the data processor and "
+                          "after training; an input scaler goes next to it as *_input.joblib; a RunContext points it "
+                          "into the run directory", unit="path")
+    ARTIFACTS_DIR: str = _f("artifacts", "paths", "where Trainer writes the serving bundle", unit="path")
+    PLUGINS_DIR: Optional[str] = _f(None, "paths", "directory of plugin modules to load at startup", unit="path")
 
     # ------------------------------------------------------------------ registries (component selection)
-    MODEL_NAME: str = _f("gru_attention", "registries", "Models registry key")
-    LOSS_NAME: str = _f("custom_loss", "registries", "Losses objective key")
-    OPTIMIZER_NAME: str = _f("adam", "registries", "Optimizers key, main network")
-    INDICATOR_OPTIMIZER_NAME: str = _f("adam", "registries", "Optimizers key, indicator logits")
-    DATA_LOADER: str = _f("csv", "registries", "DataLoaders key")
+    MODEL_NAME: str = _f("gru_attention", "registries", "Models registry key", unit="key")
+    LOSS_NAME: str = _f("custom_loss", "registries", "Losses objective key", unit="key")
+    OPTIMIZER_NAME: str = _f("adam", "registries", "Optimizers key, main network", unit="key")
+    INDICATOR_OPTIMIZER_NAME: str = _f("adam", "registries", "Optimizers key, indicator logits", unit="key")
+    DATA_LOADER: str = _f("csv", "registries", "DataLoaders key", unit="key")
     PREPROCESSORS: List[str] = _f(["standardize_ohlcv", "sort_dedupe", "resample_bars", "drop_missing_close"],
-                                  "registries", "Preprocessors keys, applied in order")
-    WINDOW_NORMALIZER: str = _f("window_relative", "registries", "input normalisation of the windows")
+                                  "registries", "Preprocessors keys, applied in order", unit="key")
+    WINDOW_NORMALIZER: str = _f("window_relative", "registries", "input normalisation of the windows", unit="name",
+                                choices=_WINDOW_NORMALIZERS)
     LAYERS: Dict[str, str] = _f({"indicators": "learnable_indicators", "positional_encoding": "positional_encoding",
                                  "vacuum_noise": "vacuum_saturation_noise", "energy_gate": "energy_gate"},
-                                "registries", "Layers keys by role in the architecture")
+                                "registries", "Layers keys by role in the architecture", unit="key")
     METRICS: List[str] = _f(["mse", "rmse", "mae", "explained_variance", "corr", "r2", "safe_mape", "smape",
                              "wape", "direction_accuracy", "direction_f1", "mcc", "brier", "ece_pos",
-                             "pit_ks", "coverage"], "registries", "Metrics keys, numpy tier (evaluation)")
+                             "pit_ks", "coverage"], "registries", "Metrics keys, numpy tier (evaluation)", unit="key")
     STEP_METRICS: List[str] = _f(["dir_acc", "dir_sensitivity", "dir_specificity", "dir_bal_acc", "dir_f1",
                                   "dir_mcc", "dir_brier", "dir_ece", "pred_up_rate", "true_up_rate",
-                                  "mean_dir_prob"], "registries", "Metrics keys, TF tier (train/test step)")
+                                  "mean_dir_prob"], "registries", "Metrics keys, TF tier (train/test step)", unit="key")
     CALLBACKS: List[str] = _f(["csv_logger", "early_stopping", "model_checkpoint", "tqdm_progress",
                                "params_logger", "reduce_lr_on_plateau"], "registries",
-                              "Callbacks keys, in order")
-    VISUALIZATION: str = _f("plotly_interactive", "registries", "Visualizations key")
+                              "Callbacks keys, in order", unit="key")
+    VISUALIZATION: str = _f("plotly_interactive", "registries", "Visualizations key", unit="key")
 
     # ------------------------------------------------------------------ optimizers
-    ADAM_BETA1: float = _f(0.9, "optimizers")
-    ADAM_BETA2: float = _f(0.999, "optimizers")
-    ADAM_EPSILON: float = _f(1e-7, "optimizers", "Keras default")
-    WEIGHT_DECAY: float = _f(0.004, "optimizers", "adamw only")
-    SGD_MOMENTUM: float = _f(0.9, "optimizers")
-    SGD_NESTEROV: bool = _f(True, "optimizers")
+    ADAM_BETA1: float = _f(0.9, "optimizers", "first-moment decay of adam, adamw and nadam", unit="dimensionless",
+                           ge=0.0, lt=1.0, tunable=True)
+    ADAM_BETA2: float = _f(0.999, "optimizers", "second-moment decay of adam, adamw and nadam",
+                           unit="dimensionless", ge=0.0, lt=1.0, tunable=True)
+    ADAM_EPSILON: float = _f(1e-7, "optimizers", "Keras default", unit="dimensionless", gt=0.0, log=True)
+    WEIGHT_DECAY: float = _f(0.004, "optimizers", "adamw only", unit="dimensionless", ge=0.0)
+    SGD_MOMENTUM: float = _f(0.9, "optimizers", "momentum of the sgd_momentum optimizer", unit="dimensionless",
+                             ge=0.0, le=1.0)
+    SGD_NESTEROV: bool = _f(True, "optimizers", "Nesterov momentum for the sgd_momentum optimizer", unit="flag")
 
     # ------------------------------------------------------------------ ops
     LOSS_WEIGHT_SCHEDULE: Optional[Dict[str, Any]] = _f(None, "ops",
-                                                   "{'lambda_hd': {epoch: value, ...}, ...} for the lambda_schedule callback")
-    ABLATE_LAMBDAS: List[str] = _f([], "ops", "LAMBDA_* names forced to 0 after calibration (ablation)")
-    SEED: int = _f(42, "ops", "global seed set by train_and_evaluate")
+                                                   "{'lambda_hd': {epoch: value, ...}, ...} for the lambda_schedule callback",
+                                                   unit="mapping")
+    ABLATE_LAMBDAS: List[str] = _f([], "ops", "LAMBDA_* names forced to 0 after calibration (ablation)", unit="key")
+    SEED: int = _f(42, "ops", "global seed set by train_and_evaluate", unit="seed", ge=0, step=1)
 
     # ================================================================== behaviour
     def __post_init__(self):
@@ -230,9 +475,35 @@ class Config:
             self.MOMENTUM_CLIP_MAX = self.LOOKBACK
         self.validate()
 
+    # --------------------------------------------------------------- metadata
+    @classmethod
+    def field_specs(cls) -> Dict[str, FieldSpec]:
+        """Every field's :class:`FieldSpec` (group, doc, unit, range or choices, tunable, deprecated), in
+        declaration order."""
+        cached = _SPECS.get(cls)
+        if cached is None:
+            hints = typing.get_type_hints(cls)
+            cached = {}
+            for f in fields(cls):
+                m = f.metadata
+                default = f.default if f.default is not MISSING else f.default_factory()
+                hint = hints[f.name]
+                nullable = typing.get_origin(hint) is typing.Union and type(None) in typing.get_args(hint)
+                cached[f.name] = FieldSpec(
+                    name=f.name, group=m.get("group", "ops"), doc=m.get("doc", ""), unit=m.get("unit"),
+                    type=str(f.type), default=default, nullable=nullable,
+                    minimum=m.get("minimum"), maximum=m.get("maximum"),
+                    min_inclusive=m.get("min_inclusive", True), max_inclusive=m.get("max_inclusive", True),
+                    step=m.get("step"), log=m.get("log", False), choices=m.get("choices"),
+                    ignore_case=m.get("ignore_case", False), tunable=m.get("tunable", False),
+                    deprecated=m.get("deprecated", False))
+            _SPECS[cls] = cached
+        return dict(cached)
+
     # --------------------------------------------------------------- validation
     def validate(self) -> None:
-        """Raise :class:`InvalidConfigurationError` (a ``ValueError``) on invalid settings."""
+        """Raise :class:`InvalidConfigurationError` (a ``ValueError``) on invalid settings: the
+        cross-field rules below, then every field's declared range or choices (``field_specs``)."""
         def bad(msg):
             raise InvalidConfigurationError(msg)
 
@@ -291,6 +562,12 @@ class Config:
         unknown_ablate = [n for n in self.ABLATE_LAMBDAS if n not in self.lambda_weights()]
         if unknown_ablate:
             bad(f"ABLATE_LAMBDAS names unknown LAMBDA_* fields: {unknown_ablate}")
+        # The declared range or choices of every field (FieldSpec), after the rules above so their
+        # established messages still win where both apply.
+        problems = [msg for spec in self.field_specs().values()
+                    if (msg := spec.check(getattr(self, spec.name))) is not None]
+        if problems:
+            bad("; ".join(problems))
 
     # --------------------------------------------------------------- derived
     @property
@@ -379,6 +656,29 @@ class Config:
         return cls.from_dict(data)
 
 
+_SPECS: Dict[type, Dict[str, FieldSpec]] = {}
+
+
+def metadata_problems(cls=Config) -> List[str]:
+    """What is missing or inconsistent in a Config class's field metadata (empty = complete):
+    a field without a doc or a unit from ``UNITS``, a default outside its own range or choices, a
+    log hint without a positive lower bound, or a field that is both tunable and deprecated."""
+    problems = []
+    for spec in cls.field_specs().values():
+        if not str(spec.doc).strip():
+            problems.append(f"{spec.name}: no doc")
+        if spec.unit not in UNITS:
+            problems.append(f"{spec.name}: unit {spec.unit!r} is not in UNITS")
+        msg = spec.check(spec.default)
+        if msg is not None:
+            problems.append(f"{spec.name}: default {msg}")
+        if spec.log and (spec.minimum is None or spec.minimum < 0 or (spec.minimum == 0 and spec.min_inclusive)):
+            problems.append(f"{spec.name}: a log-scale hint needs a positive lower bound")
+        if spec.tunable and spec.deprecated:
+            problems.append(f"{spec.name}: tunable and deprecated")
+    return problems
+
+
 def _coerce(value, hint, name):
     """Coerce YAML/CLI values to the annotated type (PyYAML reads '1e-3' as a string)."""
     origin = typing.get_origin(hint)
@@ -428,4 +728,4 @@ def _coerce(value, hint, name):
     return value
 
 
-__all__ = ["Config", "GROUPS"]
+__all__ = ["Config", "FieldSpec", "GROUPS", "UNITS", "metadata_problems"]
