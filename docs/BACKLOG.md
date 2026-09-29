@@ -37,7 +37,7 @@ changes).
 | [NT-002](#nt-002) | P0 | bug | implementer | done | Engine random null ignores position size (sized strategies are ranked against a costlier null) |
 | [NT-003](#nt-003) | P1 | research | experimenter | todo | Direction skill: pass the M3 direction clauses (AUC h1 > 0.52, val MCC h1 > 0.02, Gaussian readout MCC > 0) |
 | [NT-004](#nt-004) | P1 | research | experimenter | todo | Price heads: a served delta with positive EV (M3 EV clause) |
-| [NT-005](#nt-005) | P1 | research | experimenter | in-progress | Cost-aware trading: an edge per trade above the 26 bps round trip |
+| [NT-005](#nt-005) | P1 | research | experimenter | done | Cost-aware trading: an edge per trade above the 26 bps round trip |
 | [NT-006](#nt-006) | P1 | research | experimenter | todo | Physics-term ablation re-run on the current trainer, pre-registered under D-025 |
 | [NT-007](#nt-007) | P1 | owner-decision | owner | todo | Owner decision: which delta the strategies read (served beta-shrunk vs raw heads) |
 | [NT-008](#nt-008) | P1 | owner-decision | owner | todo | Owner decision: merge remediation/plan into master |
@@ -169,7 +169,7 @@ changes).
 
 **Cost-aware trading: an edge per trade above the 26 bps round trip**
 
-- **status:** in-progress (owner request 2026-09-29: study on branch `nt-005-strategy-study`; research docs/research/2026-09-29-strategy-architectures/; engine support NT-076)
+- **status:** done (2026-09-29), acceptance (b), the negative result: runs/experiments/strategy_study_v1/REPORT.md (SPEC e2b0b74 before scoring; 9 reference-scenario cells at 82a848f, 0.56 GPU-hours; rescore runs/scenarios/reference_default/rescore/strategy_study_v1-20260929T095605Z at 6aa7aaf). 12 candidates (volatility targeting, regime stand-aside, net-edge Kelly, edge over cost, variance-gated TA, the incumbent) and 8 EWMA twins: none passes the guard-rails, all 12 lose on dev; winner always_flat. Every discrete candidate's gross edge per trade has its 80-bar block-bootstrap 95% CI below 26 bps (largest mean +4.4 bps); the incumbent calibrated_quantile is the worst of 20 (-62% per dev block, +0.47 bps gross per trade on 2,357 trades). The EWMA twin beats the model's sigma for vt and rs. QA PASS on 981cc1e (rescore bit-identical on rebuild, guard-rails recomputed independently). The default strategy is left to the owner (STATUS). Leaderboard and comparator: NT-076's rescore leaderboard stood in for NT-031; no A-beats-B claim is made, so NT-032 was not needed. Research: docs/research/2026-09-29-strategy-architectures/.
 - **priority / type / role:** P1 / research / experimenter
 - **area:** src/neural_trade/strategy/strategies.py (new or re-knobbed strategy), configs/strategies/, an engine scenario spec (NT-026), runs/experiments/trading_costs_v1/
 - **depends on:** NT-002, NT-007, NT-026 (experiment engine), NT-031 (leaderboard), NT-032 (paired comparator)

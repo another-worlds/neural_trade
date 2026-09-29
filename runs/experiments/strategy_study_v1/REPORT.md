@@ -120,8 +120,9 @@ on the forecasts themselves.
 
 1. **The incumbent default `calibrated_quantile` is the worst of 20 rows.** It lost -62% per dev block and
    -43% on the test fold, with about 390 trades per 5-day block. Its gross edge is +0.47 bps per trade against
-   a 26 bps cost. It does beat its size-matched random null (dev null percentiles 71 to 100). So the
-   calibrated P(up) carries a sliver of timing information, but about 1/50 of the cost.
+   a 26 bps cost. It beats its size-matched random null in most dev cells (percentiles 71 to 100), but not
+   by the SPEC's rule: G3 fails on fold -2, where the seed mean is 88. So the calibrated P(up) may carry a
+   sliver of timing information; its gross edge is about 1/50 of the cost.
 2. **Turnover is what separates the rows.** The ranking follows trades per cell almost monotonically. The
    near-flat rows (nk, ec, rs_ewma) cannot be told apart within the noise, about 6 Sharpe points.
 3. **Cost-aware sizing (net_edge_kelly) works as designed.** It stays flat unless the predicted edge exceeds
