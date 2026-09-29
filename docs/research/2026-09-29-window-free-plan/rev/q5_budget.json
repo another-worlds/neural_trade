@@ -1,0 +1,61 @@
+{
+ "retime_share_v1_dev": 0.11904761904761904,
+ "extension_share": 0.05,
+ "AB1_items_runs": {
+  "calibration": 1,
+  "dev (3 folds x 2 arms)": 6,
+  "judged look 1 (2 x 10)": 20,
+  "contingency look 1": 4.38,
+  "judged look 2 (2 x 10)": 20,
+  "contingency look 2": 4.38
+ },
+ "AB1_look1_only": [
+  1.36,
+  3.29
+ ],
+ "AB1_worst_two_looks": [
+  2.42,
+  5.86
+ ],
+ "AB1_expected_E[folds]=1.14F (edge .03)": [
+  1.51,
+  3.65
+ ],
+ "AB1_expected_E[folds]=1.46F (edge .02)": [
+  1.85,
+  4.47
+ ],
+ "AB2_items_runs": {
+  "calibration": 1,
+  "variant choice B (3 x 2 dev folds)": 6,
+  "dev A (3 folds)": 3,
+  "judged look 1 A": 14.63,
+  "judged look 1 B": 14.63,
+  "judged look 2 A": 14.63,
+  "judged look 2 B": 14.63
+ },
+ "AB2_look1_only": [
+  1.25,
+  2.82
+ ],
+ "AB2_look1_only_plus_Aprime": [
+  1.85,
+  3.42
+ ],
+ "AB2_worst_two_looks": [
+  2.21,
+  4.96
+ ],
+ "AB2_worst_two_looks_plus_Aprime": [
+  2.81,
+  5.56
+ ],
+ "draft_AB1_F21_one_look": [
+  1.99,
+  4.83
+ ],
+ "draft_AB1_F21_with_rerun_2F_new": [
+  5.63,
+  13.65
+ ]
+}

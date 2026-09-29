@@ -1,0 +1,223 @@
+{
+ "source": "42 v1 runs, DEV fold -2",
+ "measured": {
+  "capped_runs(no early stop within 20)": 37,
+  "runs": 42,
+  "served_epoch_early_stopped_runs": [
+   7,
+   7,
+   9,
+   9,
+   10
+  ],
+  "served_epoch_capped_runs_quantiles": {
+   "0.1": 17.0,
+   "0.5": 18.0,
+   "0.9": 19.4
+  },
+  "censored_mle_ln_served": {
+   "mu": 4.473100599221153,
+   "sigma": 1.3642440619486231,
+   "median_epochs": 87.62800154645021
+  },
+  "served_in_updates_v1(90/epoch)": {
+   "median_capped_lower_bound": 1620.0
+  },
+  "7day_equivalent_epochs": {
+   "epoch_matched": [
+    7,
+    20
+   ],
+   "step_matched_x2.25": [
+    15.8,
+    45.0
+   ]
+  },
+  "rule_cap_if_dev_like_v1(k=2, D=3 capped dev runs, served 17-20)": [
+   40,
+   46
+  ]
+ },
+ "model": {
+  "sigma=mle(1.36)|sigma_f=0.0|D=3|k=1.5": {
+   "P(judged run capped)": 0.1798,
+   "P(>25% of 10 runs capped)": 0.2888,
+   "P(any of 10 runs capped)": 0.6651
+  },
+  "sigma=mle(1.36)|sigma_f=0.0|D=3|k=2.0": {
+   "P(judged run capped)": 0.1387,
+   "P(>25% of 10 runs capped)": 0.2078,
+   "P(any of 10 runs capped)": 0.5772
+  },
+  "sigma=mle(1.36)|sigma_f=0.0|D=3|k=3.0": {
+   "P(judged run capped)": 0.0911,
+   "P(>25% of 10 runs capped)": 0.1212,
+   "P(any of 10 runs capped)": 0.4503
+  },
+  "sigma=mle(1.36)|sigma_f=0.0|D=6|k=1.5": {
+   "P(judged run capped)": 0.0935,
+   "P(>25% of 10 runs capped)": 0.1154,
+   "P(any of 10 runs capped)": 0.492
+  },
+  "sigma=mle(1.36)|sigma_f=0.0|D=6|k=2.0": {
+   "P(judged run capped)": 0.0668,
+   "P(>25% of 10 runs capped)": 0.0688,
+   "P(any of 10 runs capped)": 0.3968
+  },
+  "sigma=mle(1.36)|sigma_f=0.0|D=6|k=3.0": {
+   "P(judged run capped)": 0.0392,
+   "P(>25% of 10 runs capped)": 0.0282,
+   "P(any of 10 runs capped)": 0.2621
+  },
+  "sigma=mle(1.36)|sigma_f=0.3|D=3|k=1.5": {
+   "P(judged run capped)": 0.1871,
+   "P(>25% of 10 runs capped)": 0.3039,
+   "P(any of 10 runs capped)": 0.6703
+  },
+  "sigma=mle(1.36)|sigma_f=0.3|D=3|k=2.0": {
+   "P(judged run capped)": 0.1462,
+   "P(>25% of 10 runs capped)": 0.2195,
+   "P(any of 10 runs capped)": 0.5868
+  },
+  "sigma=mle(1.36)|sigma_f=0.3|D=3|k=3.0": {
+   "P(judged run capped)": 0.099,
+   "P(>25% of 10 runs capped)": 0.1337,
+   "P(any of 10 runs capped)": 0.4716
+  },
+  "sigma=mle(1.36)|sigma_f=0.3|D=6|k=1.5": {
+   "P(judged run capped)": 0.1013,
+   "P(>25% of 10 runs capped)": 0.1328,
+   "P(any of 10 runs capped)": 0.5037
+  },
+  "sigma=mle(1.36)|sigma_f=0.3|D=6|k=2.0": {
+   "P(judged run capped)": 0.0726,
+   "P(>25% of 10 runs capped)": 0.0788,
+   "P(any of 10 runs capped)": 0.4072
+  },
+  "sigma=mle(1.36)|sigma_f=0.3|D=6|k=3.0": {
+   "P(judged run capped)": 0.0443,
+   "P(>25% of 10 runs capped)": 0.037,
+   "P(any of 10 runs capped)": 0.2905
+  },
+  "sigma=0.40(0.40)|sigma_f=0.0|D=3|k=1.5": {
+   "P(judged run capped)": 0.0665,
+   "P(>25% of 10 runs capped)": 0.0785,
+   "P(any of 10 runs capped)": 0.372
+  },
+  "sigma=0.40(0.40)|sigma_f=0.0|D=3|k=2.0": {
+   "P(judged run capped)": 0.0189,
+   "P(>25% of 10 runs capped)": 0.0105,
+   "P(any of 10 runs capped)": 0.1361
+  },
+  "sigma=0.40(0.40)|sigma_f=0.0|D=3|k=3.0": {
+   "P(judged run capped)": 0.0016,
+   "P(>25% of 10 runs capped)": 0.0001,
+   "P(any of 10 runs capped)": 0.0155
+  },
+  "sigma=0.40(0.40)|sigma_f=0.0|D=6|k=1.5": {
+   "P(judged run capped)": 0.0261,
+   "P(>25% of 10 runs capped)": 0.0123,
+   "P(any of 10 runs capped)": 0.1855
+  },
+  "sigma=0.40(0.40)|sigma_f=0.0|D=6|k=2.0": {
+   "P(judged run capped)": 0.0049,
+   "P(>25% of 10 runs capped)": 0.0006,
+   "P(any of 10 runs capped)": 0.0444
+  },
+  "sigma=0.40(0.40)|sigma_f=0.0|D=6|k=3.0": {
+   "P(judged run capped)": 0.0003,
+   "P(>25% of 10 runs capped)": 0.0,
+   "P(any of 10 runs capped)": 0.0034
+  },
+  "sigma=0.40(0.40)|sigma_f=0.3|D=3|k=1.5": {
+   "P(judged run capped)": 0.1276,
+   "P(>25% of 10 runs capped)": 0.1897,
+   "P(any of 10 runs capped)": 0.5221
+  },
+  "sigma=0.40(0.40)|sigma_f=0.3|D=3|k=2.0": {
+   "P(judged run capped)": 0.0567,
+   "P(>25% of 10 runs capped)": 0.068,
+   "P(any of 10 runs capped)": 0.3024
+  },
+  "sigma=0.40(0.40)|sigma_f=0.3|D=3|k=3.0": {
+   "P(judged run capped)": 0.0133,
+   "P(>25% of 10 runs capped)": 0.0086,
+   "P(any of 10 runs capped)": 0.0996
+  },
+  "sigma=0.40(0.40)|sigma_f=0.3|D=6|k=1.5": {
+   "P(judged run capped)": 0.0757,
+   "P(>25% of 10 runs capped)": 0.0936,
+   "P(any of 10 runs capped)": 0.3774
+  },
+  "sigma=0.40(0.40)|sigma_f=0.3|D=6|k=2.0": {
+   "P(judged run capped)": 0.0292,
+   "P(>25% of 10 runs capped)": 0.0261,
+   "P(any of 10 runs capped)": 0.1929
+  },
+  "sigma=0.40(0.40)|sigma_f=0.3|D=6|k=3.0": {
+   "P(judged run capped)": 0.0055,
+   "P(>25% of 10 runs capped)": 0.0015,
+   "P(any of 10 runs capped)": 0.0462
+  },
+  "sigma=0.60(0.60)|sigma_f=0.0|D=3|k=1.5": {
+   "P(judged run capped)": 0.1115,
+   "P(>25% of 10 runs capped)": 0.1562,
+   "P(any of 10 runs capped)": 0.5032
+  },
+  "sigma=0.60(0.60)|sigma_f=0.0|D=3|k=2.0": {
+   "P(judged run capped)": 0.0533,
+   "P(>25% of 10 runs capped)": 0.0569,
+   "P(any of 10 runs capped)": 0.3116
+  },
+  "sigma=0.60(0.60)|sigma_f=0.0|D=3|k=3.0": {
+   "P(judged run capped)": 0.015,
+   "P(>25% of 10 runs capped)": 0.0074,
+   "P(any of 10 runs capped)": 0.1121
+  },
+  "sigma=0.60(0.60)|sigma_f=0.0|D=6|k=1.5": {
+   "P(judged run capped)": 0.0501,
+   "P(>25% of 10 runs capped)": 0.0396,
+   "P(any of 10 runs capped)": 0.318
+  },
+  "sigma=0.60(0.60)|sigma_f=0.0|D=6|k=2.0": {
+   "P(judged run capped)": 0.02,
+   "P(>25% of 10 runs capped)": 0.008,
+   "P(any of 10 runs capped)": 0.1507
+  },
+  "sigma=0.60(0.60)|sigma_f=0.0|D=6|k=3.0": {
+   "P(judged run capped)": 0.0037,
+   "P(>25% of 10 runs capped)": 0.0003,
+   "P(any of 10 runs capped)": 0.0381
+  },
+  "sigma=0.60(0.60)|sigma_f=0.3|D=3|k=1.5": {
+   "P(judged run capped)": 0.144,
+   "P(>25% of 10 runs capped)": 0.2221,
+   "P(any of 10 runs capped)": 0.5717
+  },
+  "sigma=0.60(0.60)|sigma_f=0.3|D=3|k=2.0": {
+   "P(judged run capped)": 0.0807,
+   "P(>25% of 10 runs capped)": 0.1031,
+   "P(any of 10 runs capped)": 0.4036
+  },
+  "sigma=0.60(0.60)|sigma_f=0.3|D=3|k=3.0": {
+   "P(judged run capped)": 0.03,
+   "P(>25% of 10 runs capped)": 0.0264,
+   "P(any of 10 runs capped)": 0.1973
+  },
+  "sigma=0.60(0.60)|sigma_f=0.3|D=6|k=1.5": {
+   "P(judged run capped)": 0.0797,
+   "P(>25% of 10 runs capped)": 0.0992,
+   "P(any of 10 runs capped)": 0.4128
+  },
+  "sigma=0.60(0.60)|sigma_f=0.3|D=6|k=2.0": {
+   "P(judged run capped)": 0.039,
+   "P(>25% of 10 runs capped)": 0.0343,
+   "P(any of 10 runs capped)": 0.2462
+  },
+  "sigma=0.60(0.60)|sigma_f=0.3|D=6|k=3.0": {
+   "P(judged run capped)": 0.012,
+   "P(>25% of 10 runs capped)": 0.0042,
+   "P(any of 10 runs capped)": 0.0934
+  }
+ }
+}

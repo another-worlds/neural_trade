@@ -58,16 +58,16 @@ changes).
 | [NT-023](#nt-023) | P3 | polish | implementer | todo | Theme: one reference dash, a strategy palette, legend fixes (theme.py) |
 | [NT-024](#nt-024) | P1 | infra | implementer | dropped | Multi-seed gate runs and judge: gate_run.py --seed and no silent overwrite; check_gates.py judges named runs averaged over seeds |
 | [NT-025](#nt-025) | P1 | infra | implementer | done | check.py enforces the 5 MB per-notebook limit of D-013 |
-| [NT-026](#nt-026) | P1 | infra | implementer | in-progress | Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer |
-| [NT-027](#nt-027) | P1 | refactor | implementer | todo | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
+| [NT-026](#nt-026) | P1 | infra | implementer | done | Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer |
+| [NT-027](#nt-027) | P1 | refactor | implementer | in-progress | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | todo | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
-| [NT-029](#nt-029) | P1 | infra | implementer | in-progress | Config metadata for the control panel and search spaces, and a generated config reference |
+| [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
 | [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | todo | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | todo | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
-| [NT-035](#nt-035) | P1 | infra | experimenter | todo | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
+| [NT-035](#nt-035) | P1 | infra | experimenter | in-progress | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
 | [NT-036](#nt-036) | P1 | feature | implementer | todo | Stability invariants in CI (strict mode, masks off) |
 | [NT-037](#nt-037) | P1 | feature | implementer | todo | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
 | [NT-038](#nt-038) | P1 | feature | implementer | todo | Stability harness and config guard (refuse hyperparameter regions known to fail) |
@@ -383,19 +383,20 @@ changes).
 
 **Experiment engine: one scenario and sweep spec, a resumable runner, one run store with an index, one scorer**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P1 / infra / implementer
 - **area:** src/neural_trade/experiments/ (new engine modules next to run_context.py and compare.py), src/neural_trade/cli.py, src/neural_trade/notebook/runs.py (pick_run), a folder of scenario specs (for example configs/scenarios/), the frozen set (D-023; a header note only), docs/RUNBOOK.md and scripts/notebooks/README.md (which run notebooks 02-05 read), tests/
 - **depends on:** soft: NT-010 (which run files are tracked)
 - **why:** Four experiment paths exist, each with its own run layout, scorer and resume logic: scripts/gate_run.py and its judge scripts/check_gates.py (the gates, fixed run names m1a..m6), scripts/direction_experiments.py (direction_v1), and scripts/ablate.py with experiments/ablation.py (the physics grid); CLI and notebook runs use RunContext. AUC alone is computed separately in scripts/gate_run.py:85, scripts/direction_experiments.py:55 and evaluation/report.py:116. There is no index across runs, no run records the data file it used, and gate_run.py deletes an existing run directory without asking (gate_run.py:157-158). The yardstick (VISION; D-020) needs every run scored the same way on the dev folds and the test fold, and the sweeps, leaderboard and comparator (NT-030 to NT-032) need one store to read. D-023: incremental restructure, engine first; the old paths are frozen as history (the frozen set, D-023). Supersedes NT-024. notebook/runs.py pick_run takes the newest run anywhere under runs/ (rglob, runs.py:15), so without a guard notebooks 02-05 would load an engine cell (a quick-mode or frozen-twin trial) as 'the latest run'.
 - **acceptance:** (1) A scenario and sweep spec in YAML: a base config, overrides, variants, sweep axes, folds and seeds; unknown keys and invalid Config values are refused before any run starts (test). An example spec for the reference setup is committed. (2) A resumable runner: each (variant, fold, seed) cell is one run directory in one run store (default runs/), recorded in an sqlite index with at least the run id, scenario, cell key, status, commit, config hash, dataset fingerprint and scores. A test stops a tiny CPU scenario (2 folds x 2 seeds) after its first cell and resumes it: finished cells are not re-run, and the index equals that of an uninterrupted run. (3) The runner never overwrites or deletes a non-empty run directory (test). (4) One scorer: every run gets an eval report for the out-of-sample block of its fold, labelled dev (the earlier folds) or test (the last fold), with the metrics of evaluation/report.py plus the backtest numbers the leaderboard needs: net Sharpe after costs, max drawdown, trade count, buy-and-hold and the size-matched random null (test on the tiny scenario). The backtest uses the scenario's strategy (default Strategies.default = calibrated_quantile, D-009), its knobs fitted on the fold's cal block only, next-open fills and the default cost profile (test). (5) Each run's meta.json records the dataset fingerprint (file sha256, first and last timestamp, bar count) and the setup as configured today (bar minutes from RESAMPLE_MINUTES, LOOKBACK and HORIZON_STEPS; NT-041 adds the symbol and wall-clock units) (test). (6) The frozen set (D-023) carries a header note naming the engine as its replacement and is otherwise unchanged, and its existing tests pass. No new code imports it; experiments/ablation.py stays importable (visualization/comparison.py:653 reads its analysis for notebook 05) until the engine subsumes it. (7) The CLI runs and resumes a scenario (test through neural_trade.cli.main). (8) scripts/golden_run.py verify passes against a recording made on the base commit (train_and_evaluate unchanged). (9) Engine runs live in their own subtree (runs/scenarios/<scenario>/...) or are marked in the index, and notebook/runs.py pick_run's default ignores them (test: after a tiny scenario, pick_run still returns the notebook/CLI run).
 - **source:** owner Q&A 2026-09-28 (rounds 2, 5b); docs/DECISIONS.md D-020, D-023; survey 2026-09-28
+- **evidence (done 2026-09-29):** branch nt-026, 4c72070, merged as aa0753d (+ fd960cd: `runs/index.sqlite*` ignored, RUNBOOK). experiments/{scenario,runner,store,scorer,dataset}.py, `neural-trade scenario run|plan|reindex`, configs/scenarios/reference.yaml; 39 fast + 1 slow tests. QA PASS: 26 bad specs refused before any run; a stopped scenario resumes without retraining and its index equals an uninterrupted run's (also after a doc-only Config change, since identity hashes values only); never overwrites; dev/test scoring with cal-only knobs, next-open fills, default costs and the size-matched null; dataset fingerprint in meta.json; pick_run ignores engine runs; golden run equal (273 arrays); fast 741, slow 14, ruff clean; a tiny real CLI scenario run, stopped, resumed and reindexed by QA. Merged head fd960cd: fast 795 passed. CI green on c5b8a64 (run 36519610045), which contains it. Findings: NT-030 note (cell locking before --parallel), NT-040 note.
 
 ### NT-027
 
 **Layering: no circular subpackage imports, one metrics and statistics module, figures only draw**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / refactor / implementer
 - **area:** src/neural_trade/ (every subpackage), a layering test (for example tests/test_layering.py); scripts/golden_run.py is used, not changed
 - **why:** Counting imports inside functions, the subpackages import each other in 10 mutual pairs (2026-09-28): data and registries, data and visualization, evaluation and experiments, evaluation and registries, evaluation and training, losses and registries, metrics and registries, models and registries, registries and training, serving and training; all 12 subpackages with package imports form one import cycle. evaluation/walk_forward.py launches training (it imports experiments.run_context at :47 and training.trainer at :48), and data/processor.py imports figure code (visualization.matplotlib_splits at :109). AUC is computed in five places (evaluation/report.py:116, visualization/analytics_common.py:28 roc_curve, the DeLong placements in visualization/analytics_direction.py:91, scripts/gate_run.py:85, scripts/direction_experiments.py:55). The statistics are split between visualization/stats.py (n_eff, Wilson, AUC CI) and evaluation/report.py (long-run variance, DM test, block bootstrap: report.py:331-419). D-023: module moves one at a time, each checked by `scripts/golden_run.py verify`, with the notebooks working at every step.
@@ -418,12 +419,13 @@ changes).
 
 **Config metadata for the control panel and search spaces, and a generated config reference**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P1 / infra / implementer
 - **area:** src/neural_trade/core/config.py, a generator script (for example under scripts/), docs/guide/config-reference.md (new, generated), tests/test_config.py
 - **why:** The control panel (NT-034) and the search spaces (NT-030, NT-038) need to know, for every Config field, its valid range or choices, its unit, whether a sweep may tune it and whether it is deprecated. Today a field carries only a group and a one-line doc (`_f`, core/config.py:36-41), the valid ranges live in code inside Config.validate (core/config.py:234 onward), and 26 of the 112 fields have no doc at all (2026-09-28): EPOCHS, CALIB_LAMBDA_MIN/MAX, the six CALIB_DAMPING_* fields, LAMBDA_TREND_OUTER, LAMBDA_DIR_OUTER, LAMBDA_COHERENCE, LAMBDA_NLL_OUTER, LAMBDA_CRPS, LAMBDA_SOFT_ECE, MA_SPANS, MACD_SETTINGS, RSI_PERIODS, BB_PERIODS, FOCAL_GAMMA, MODEL_PATH, SCALER_PATH, ADAM_BETA1, ADAM_BETA2, SGD_MOMENTUM, SGD_NESTEROV. D-022 moves the window and horizons to wall-clock time, so units must be explicit.
 - **acceptance:** (1) Every Config field declares in its metadata a unit (the vocabulary includes bars and wall-clock minutes, so NT-041 can declare time-based fields), a range or a set of choices where one applies, a `tunable` flag and a `deprecated` flag. A test fails on a field without a doc or a unit, and on a default outside its own range or choices. RESAMPLE_MINUTES (core/config.py:68) is marked not tunable until NT-040 is done, because the annualisation ignores the bar size until then (test; NT-040 lifts it). (2) Config.validate enforces the declared ranges and choices: a test sets one out-of-range value per numeric type and one invalid choice, and each is refused with the field name in the message. (3) The 26 fields listed above have a doc (same test). (4) docs/guide/config-reference.md is generated from the metadata (group, name, default, unit, range or choices, tunable, deprecated, doc), and a test fails when the committed file differs from a fresh generation. (5) configs/default.yaml loads unchanged, and `scripts/golden_run.py verify` passes (no behaviour change).
 - **source:** owner Q&A 2026-09-28 (rounds 3, 5, 8); docs/DECISIONS.md D-022, D-023, D-026; survey 2026-09-28 (field count re-checked with dataclasses.fields on 2026-09-28)
+- **evidence (done 2026-09-29):** branch nt-029, 013772b, merged as 3845767. Config metadata on all 112 fields (unit, range or choices, tunable (35), deprecated (7)), `Config.field_specs()`, validate enforces the ranges with the field name, 26 docs added, docs/guide/config-reference.md generated by scripts/gen_config_reference.py (staleness test). No committed config refused. QA PASS (own golden recording: equal, 273 arrays; fast 730, slow 13, ruff clean). Merged head 3845767: fast 756 passed. CI green on c5b8a64 (run 36519610045). Findings: NT-028, NT-030, NT-034 notes.
 
 ### NT-030
 
@@ -491,7 +493,7 @@ changes).
 
 **GPU measurements: concurrent-runs throughput and deterministic-mode speed**
 
-- **status:** todo
+- **status:** in-progress
 - **priority / type / role:** P1 / infra / experimenter
 - **area:** runs/experiments/gpu_measurements_v1/ (SPEC.md, REPORT.md)
 - **depends on:** NT-026 (experiment engine)
