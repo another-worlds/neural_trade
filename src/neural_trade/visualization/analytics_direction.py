@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from neural_trade.metrics.statistics import auc_difference, roc_points  # noqa: F401  (moved here in NT-027)
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.analytics_common import DOWN_COLOR, UP_COLOR, _labels
@@ -59,61 +60,6 @@ _NOTE_PX = 18            # a fourth subtitle line: the beta = 0 note
 _CONST_TOL = 1e-12       # a readout whose range is below this is a constant (beta = 0 serves exactly 0.5)
 _GAUSS = "Gaussian readout (price head)"
 _GAUSS_RAW = "Gaussian readout (raw price head)"
-_trapz = getattr(np, "trapezoid", None) or np.trapz
-
-
-# ------------------------------------------------------------------ statistics
-def roc_points(labels, scores, max_points: int = 400):
-    """(fpr, tpr, threshold, auc): the ROC with ties handled, thinned to ``max_points`` for plotting.
-
-    ``threshold[k]`` is the score at or above which a sample is called up at point k (inf at the origin).
-    The AUC is computed on the full curve before thinning (equal to the Mann-Whitney AUC); it is NaN when
-    one class is missing.
-    """
-    labels = np.asarray(labels, float)
-    scores = np.asarray(scores, float)
-    n_pos = labels.sum()
-    n_neg = len(labels) - n_pos
-    if n_pos == 0 or n_neg == 0:
-        return np.zeros(1), np.zeros(1), np.full(1, np.inf), float("nan")
-    order = np.argsort(-scores, kind="mergesort")
-    s, y = scores[order], labels[order]
-    distinct = np.r_[np.flatnonzero(np.diff(s)), len(s) - 1]
-    tps = np.cumsum(y)[distinct]
-    fps = (distinct + 1) - tps
-    tpr, fpr = np.r_[0.0, tps / n_pos], np.r_[0.0, fps / n_neg]
-    thr = np.r_[np.inf, s[distinct]]
-    auc = float(_trapz(tpr, fpr))
-    keep = S.thin(len(fpr), max_points)
-    return fpr[keep], tpr[keep], thr[keep], auc
-
-
-def _placements(labels, scores):
-    """DeLong placement values: per positive, the share of negatives it outranks; per negative, the
-    share of positives that outrank it (ties count one half). Both average to the AUC."""
-    from scipy.stats import rankdata
-
-    pos = np.asarray(labels) > 0.5
-    n1, n0 = int(pos.sum()), int((~pos).sum())
-    r = rankdata(scores)
-    v10 = (r[pos] - rankdata(scores[pos])) / n0
-    v01 = 1.0 - (r[~pos] - rankdata(scores[~pos])) / n1
-    return v10, v01
-
-
-def auc_difference(labels, scores_a, scores_b, *, steps: int = 1):
-    """(AUC_a - AUC_b, lo, hi): paired DeLong 95% interval on n / steps effective samples per class."""
-    labels = np.asarray(labels, float)
-    n1 = int((labels > 0.5).sum())
-    n0 = len(labels) - n1
-    if n1 < 2 or n0 < 2:
-        return float("nan"), float("nan"), float("nan")
-    a10, a01 = _placements(labels, np.asarray(scores_a, float))
-    b10, b01 = _placements(labels, np.asarray(scores_b, float))
-    d = float(a10.mean() - b10.mean())
-    var = np.var(a10 - b10, ddof=1) / S.n_eff(n1, steps) + np.var(a01 - b01, ddof=1) / S.n_eff(n0, steps)
-    half = S.Z95 * float(np.sqrt(max(var, 0.0)))
-    return d, d - half, d + half
 
 
 def reliability_rows(labels, probs, t_index=None, *, block: int = CI_BLOCK, n_bins: int = N_REL_BINS,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from neural_trade.metrics.statistics import roc_curve  # noqa: F401  (moved here in NT-027)
 from neural_trade.visualization import theme as T
 
 UP_COLOR = T.UP_COLOR       # realised class colours (violet / yellow): not a horizon colour
@@ -23,24 +24,6 @@ def _wilson(k, n, z=1.96):
     centre = (p + z * z / (2 * n)) / den
     half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / den
     return p, centre - half, centre + half
-
-
-def roc_curve(labels, scores, max_points: int = 400):
-    """(fpr, tpr, auc) with ties handled; thinned to ``max_points`` for plotting."""
-    labels = np.asarray(labels, float)
-    scores = np.asarray(scores, float)
-    order = np.argsort(-scores, kind="mergesort")
-    s, y = scores[order], labels[order]
-    distinct = np.r_[np.where(np.diff(s))[0], len(s) - 1]
-    tps = np.cumsum(y)[distinct]
-    fps = (distinct + 1) - tps
-    P, N = max(y.sum(), 1), max(len(y) - y.sum(), 1)
-    tpr, fpr = np.r_[0, tps / P], np.r_[0, fps / N]
-    auc = float(np.trapz(tpr, fpr))
-    if len(fpr) > max_points:
-        idx = np.unique(np.linspace(0, len(fpr) - 1, max_points).astype(int))
-        fpr, tpr = fpr[idx], tpr[idx]
-    return fpr, tpr, auc
 
 
 def _binned(x, y, n_bins=10):
