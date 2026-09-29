@@ -1,14 +1,15 @@
-"""Evaluate a finished training run, and walk-forward (several folds x seeds) evaluation.
+"""Evaluate a finished training run: baselines fit on train, an EvalReport on test (or cal).
 
     report = evaluate_result(result, run_id=ctx.run_id)          # baselines fit on train
-    reports = walk_forward(Config(EPOCHS=20), folds=(-2, -1), seeds=(0, 1))
 
-Folds double as the ablation harness's "periods" (fold -2 = P1, fold -1 = P2).
+Training several (fold, seed) runs and evaluating each is now the experiment engine's job
+(NT-026, ``neural_trade.experiments``); this module no longer launches training itself (NT-027
+removed the dead ``walk_forward`` helper that used to do that - see docs/DECISIONS.md D-023).
 """
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List, Optional
+from typing import Optional
 
 from neural_trade.evaluation.baselines import BaselineSet
 from neural_trade.evaluation.frame import PredictionFrame
@@ -39,21 +40,3 @@ def evaluate_result(result, *, run_id: Optional[str] = None, with_baselines: boo
 
             Visualizations.build("eval_report", frame, cfg).write_html(str(out / f"eval_report_{frame.split}.html"))
     return report
-
-
-def walk_forward(config, folds: Iterable[int] = (-3, -2, -1), seeds: Iterable[int] = (0,), *, root="runs",
-                 epochs: Optional[int] = None, calibrate: bool = True, tags=()) -> List[EvalReport]:
-    """Train and evaluate once per (fold, seed); each run gets its own RunContext directory."""
-    from neural_trade.experiments.run_context import RunContext
-    from neural_trade.training.trainer import train_and_evaluate
-
-    reports = []
-    for fold in folds:
-        for seed in seeds:
-            ctx = RunContext.create(config.copy(FOLD_INDEX=int(fold)), root=root, seed=int(seed),
-                                    tags=["walk_forward", f"fold{fold}", f"seed{seed}", *tags],
-                                    name=f"wf-f{fold}-s{seed}")
-            result = train_and_evaluate(config=ctx.config, run_context=ctx, force=True, epochs=epochs,
-                                        calibrate=calibrate)
-            reports.append(evaluate_result(result, run_id=ctx.run_id, out_dir=ctx.run_dir))
-    return reports

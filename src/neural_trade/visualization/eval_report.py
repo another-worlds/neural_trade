@@ -1,4 +1,10 @@
-"""Evaluation figures (registered in the Visualizations registry as ``eval_report``)."""
+"""Evaluation figures (registered in the Visualizations registry as ``eval_report``).
+
+Moved here from ``neural_trade.evaluation.plots`` in NT-027 (the layering fix, D-014 "figures only
+draw"): a figure module belongs in ``visualization/``, and moving it out of ``evaluation/`` also
+removes the registries -> evaluation import (``registries/visualizations.py`` used to reach into
+``evaluation.plots`` to register this one figure).
+"""
 from __future__ import annotations
 
 import numpy as np
