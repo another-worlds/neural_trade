@@ -51,7 +51,11 @@ def test_a_pre_nt047_bundle_loads_and_predicts_as_at_the_base_commit(tf):
     fr = p.predict_frame(df)
     assert fr.shape == (641, 25)
     assert list(fr.columns) == [str(c) for c in ref["columns"]]
-    # same code path, same weights: equal up to float32 GEMM round-off
-    np.testing.assert_allclose(fr.to_numpy(np.float64), ref["values"], rtol=1e-5, atol=1e-6)
+    # Same code path, same weights. The reference was recorded on the lead's machine, where the
+    # result is bit-for-bit equal; CI's different BLAS (float32 GEMM tiling) moves it by round-off,
+    # so the tolerance is sized for the frame's scales: prices ~1e5 (rtol 1e-4) and deltas of a
+    # few dollars (atol 1e-3). A different model (the NT-047 OHLCV default loaded by mistake)
+    # changes deltas by whole dollars and fails this.
+    np.testing.assert_allclose(fr.to_numpy(np.float64), ref["values"], rtol=1e-4, atol=1e-3)
     last = p.predict_last(df["close"].to_numpy())
-    np.testing.assert_allclose(last["h1"]["delta"], ref["last_h1_delta"][0], rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(last["h1"]["delta"], ref["last_h1_delta"][0], rtol=1e-4, atol=1e-3)
