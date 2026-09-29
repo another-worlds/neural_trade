@@ -111,7 +111,7 @@ class SignalFrame:
     var_spike: np.ndarray        # h1 variance above spike_thresh x its trailing mean
     var_scale: float
     # NT-077 read-outs (module docstring); derived from the fields above in __post_init__ when not given.
-    horizon_steps: Tuple[int, ...] = (10, 15, 20)
+    horizon_bars: Tuple[int, ...] = (10, 15, 20)   # bars ahead per horizon (not "horizon_steps": trade_analytics_figure falls back to that attribute)
     sigma_ret: Optional[np.ndarray] = None     # [N, 3] sigma / close
     mu_gauss: Optional[np.ndarray] = None      # [N, 3] sigma x Phi^-1(p), in $
     sigma_ewma: Optional[np.ndarray] = None    # [N, 3] the model-free $ sigma; NaN for the first EWMA_WARMUP bars
@@ -119,7 +119,7 @@ class SignalFrame:
     def __post_init__(self):
         from scipy.special import ndtri
 
-        self.horizon_steps = tuple(int(x) for x in self.horizon_steps)
+        self.horizon_bars = tuple(int(x) for x in self.horizon_bars)
         close = np.asarray(self.close, dtype=float)
         if self.sigma_ret is None:
             with np.errstate(divide="ignore", invalid="ignore"):
@@ -128,7 +128,7 @@ class SignalFrame:
             p = np.clip(np.asarray(self.p, dtype=float), _P_CLIP, 1.0 - _P_CLIP)
             self.mu_gauss = np.asarray(self.sigma, dtype=float) * ndtri(p)
         if self.sigma_ewma is None:
-            self.sigma_ewma = ewma_sigma(close, self.horizon_steps)
+            self.sigma_ewma = ewma_sigma(close, self.horizon_bars)
 
     def __len__(self):
         return len(self.close)

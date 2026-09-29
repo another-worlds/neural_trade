@@ -194,6 +194,9 @@ def test_backtest_explorer_compares_each_strategy_with_its_matched_random_null(v
     assert traded
     for n in traded:
         null = runs[n].baselines["random_same_freq"]
+        if runs[n].mode == "exposure":             # NT-077: exposure strategies get the circular-shift timing null
+            assert null["null"] == "circular_shift" and null["n_seeds"] == 3
+            continue
         sizes = [d["size"] for d in runs[n].decisions]
         assert null["n_seeds"] == 3 and null["size_frac"] == pytest.approx(np.mean(sizes))
         assert null["random_p05_total_return"] <= null["random_mean_total_return"] <= null["random_p95_total_return"]

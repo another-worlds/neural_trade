@@ -85,7 +85,7 @@ def test_sigma_ewma_is_the_halflife_60_ewma_of_squared_log_returns_scaled_per_ho
         v = float(np.sum(w * r2[:t]) / np.sum(w))
         expect[t] = np.sqrt(v) * np.sqrt(steps) * c[t]
     expect[:EWMA_WARMUP] = np.nan
-    assert EWMA_WARMUP == 240 and s.horizon_steps == steps
+    assert EWMA_WARMUP == 240 and s.horizon_bars == steps
     assert np.isnan(s.sigma_ewma[:240]).all() and np.isfinite(s.sigma_ewma[240:]).all()
     np.testing.assert_allclose(s.sigma_ewma[240:], expect[240:], rtol=1e-9)
 
