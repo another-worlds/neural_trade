@@ -190,13 +190,15 @@ adds:
 
 One scenario spec, one resumable runner, one run store with an sqlite index, one scorer (NT-026;
 code in `src/neural_trade/experiments/`: `scenario.py`, `runner.py`, `store.py`, `scorer.py`,
-`dataset.py`). New experiments go here, not into the frozen set.
+`dataset.py`; strategy studies on stored cells: `rescore.py`, NT-076). New experiments go here, not
+into the frozen set.
 
 | Task | Command |
 |---|---|
 | Check a spec and list its cells with their state (no training, writes nothing but the index) | `CUDA_VISIBLE_DEVICES=-1 $PY -m neural_trade.cli scenario plan configs/scenarios/reference.yaml` |
 | Run or resume a scenario (GPU unless `CUDA_VISIBLE_DEVICES=-1`; GPU rules above) | `$PY -m neural_trade.cli scenario run configs/scenarios/reference.yaml [--max-cells N] [--retry-failed]` |
 | Rebuild the index from the run directories | `$PY -m neural_trade.cli scenario reindex [--store runs]` |
+| Re-score a strategy study on the scenario's stored cells (CPU, no training) | `CUDA_VISIBLE_DEVICES=-1 $PY -m neural_trade.cli scenario rescore configs/scenarios/reference.yaml --study configs/strategy_studies/example.yaml [--store runs] [--random-seeds N]` |
 
 - **Spec** (YAML, `schema_version: 1`): `name`, `base_config` (a flat Config YAML, relative to
   the spec), `overrides`, `variants` (named Config overrides), `sweep: {mode: grid, axes: {FIELD:
@@ -210,8 +212,16 @@ code in `src/neural_trade/experiments/`: `scenario.py`, `runner.py`, `store.py`,
   directory `runs/scenarios/<name>/<run id>-<configuration>__f<fold>__s<seed>/` with the usual run
   files plus `meta.json` sections `engine`, `dataset` (file sha256, first and last timestamp, bar
   count), `setup` (bar minutes, LOOKBACK, HORIZON_STEPS) and `blocks`, the scorer's
-  `eval_report_<dev|test>.json/.md` and `result.json` (status, error, scores). The runner never
-  writes into an existing directory and deletes nothing.
+  `eval_report_<dev|test>.json/.md`, the stored predictions (below) and `result.json` (status,
+  error, scores). The runner never writes into an existing directory and deletes nothing.
+- **Stored predictions (NT-076).** Every scored cell also writes `predictions_oos.npz` (its
+  out-of-sample block) and `predictions_cal.npz` (its calibration block): the block's
+  PredictionFrame (served and raw head deltas, the delta-shrinkage betas, P(up) raw and calibrated,
+  variances, conformal intervals, pred_scale / pred_mean, HORIZON_STEPS; not the input windows) plus
+  the block's OHLC bars at its anchor bars, the anchor timestamps and the bar size
+  (`PredictionFrame.save_npz` / `load_npz`, `experiments.scorer.save_predictions` / `load_block`).
+  They are **heavy and machine-local**: about 1.2 MB per cell on the reference setup, `*.npz` under
+  `runs/` is git-ignored, so a clone has the light files only. Cells scored before NT-076 have none.
 - **Scoring.** The out-of-sample block of each cell's fold is scored with evaluation/report.py and
   backtested with the scenario's strategy (knobs fitted on the fold's cal block, next-open fills,
   buy-and-hold, always-flat and the size-matched random null). The latest usable fold is `test`
@@ -221,6 +231,29 @@ code in `src/neural_trade/experiments/`: `scenario.py`, `runner.py`, `store.py`,
   a cell counts as finished when a `done` (or, without `--retry-failed`, `failed`) run with the same
   config hash and scoring settings exists; an interrupted cell (no `result.json`) stays on disk as
   `incomplete` and trains again into a new directory.
+- **Strategy studies (`scenario rescore`, NT-076).** A study spec (YAML, `schema_version: 1`,
+  `configs/strategy_studies/`): `name`, `description`, `entries: [{id, strategy, params, backtest,
+  grid}]`; `grid: {knob: [values]}` expands into one configuration per combination with ids like
+  `cq[entry_quantile=0.8]`. Unknown keys, unregistered strategies, unknown strategy or backtest
+  knobs, knobs a calibrated strategy fits on cal (long_above, short_below, median), engine-owned
+  backtest fields and repeated ids are refused before anything runs (exit 2). Every configuration is
+  backtested on every `done` cell of the scenario spec (same config hash and run.calibrate) that has
+  stored predictions, exactly as the scorer does it (the same `scorer.fit_and_backtest`: knobs
+  fitted on the cell's cal block only, next-open fills, the scenario's `backtest:` costs with the
+  entry's `backtest` on top, bar size from the run's config, buy-and-hold, always-flat and the
+  size-matched random null, `--random-seeds` overriding its seed count); the scenario's own strategy
+  reproduces each cell's `result.json` scores exactly. Cells without stored predictions, failed or
+  incomplete runs, runs of an older spec and older duplicates of a cell are skipped and listed
+  (stdout, stderr log, meta.json); with no dev cell left the command exits 1 and writes nothing.
+  Output: a new directory `runs/scenarios/<name>/rescore/<study>-<UTC stamp>/` (never a cell
+  directory; light files, tracked like any run's): `cells.csv` (configuration x cell: fold, seed,
+  role, the backtest summary and the baselines), `leaderboard.csv` / `.md` (one row per
+  configuration, **ranked by the mean dev-cell net Sharpe**; sd, mean net return, max drawdown,
+  trades, the share of dev cells beating buy-and-hold, the mean random-null percentile; the test
+  cells in `test_` columns and a separate table, never ranking, D-020), `study.yaml` (the normalised
+  spec) and `meta.json` (git sha, scenario spec hash, cells used and skipped, configurations). Cost:
+  about 2 s per configuration and cell with 100 random-null seeds on the reference setup (measured
+  once on fake cells, CPU; an estimate for other machines).
 - **Long runs:** launch detached like any long job (next section) and resume with the same command.
 - Notebooks 02-05 never pick an engine run by default (`pick_run` skips `runs/scenarios/` and any
   run whose meta.json has an `engine` section).

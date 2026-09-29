@@ -449,6 +449,7 @@ def rescore(scenario: Scenario, study: StrategyStudy, store="runs", *, random_se
     store = store if isinstance(store, RunStore) else RunStore(store, index_path)
     if random_seeds is not None and (isinstance(random_seeds, bool) or int(random_seeds) < 0):
         raise StudyError(f"random_seeds must be >= 0, got {random_seeds!r}")
+    scenario.validate()                     # the scenario's cells and scoring settings (ScenarioError)
     configurations = study.configurations()
     for conf in configurations:            # the merged cost settings, checked before anything runs
         _backtest_params(scenario, conf, random_seeds)
