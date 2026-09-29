@@ -123,6 +123,7 @@ changes).
 | [NT-088](#nt-088) | P1 | feature | implementer | in-progress | Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses |
 | [NT-089](#nt-089) | P2 | bug | implementer | todo | HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0 |
 | [NT-090](#nt-090) | P2 | bug | implementer | todo | pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins |
+| [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
 
 ## Items
 
@@ -1164,7 +1165,7 @@ changes).
 
 **Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses**
 
-- **status:** in-progress: QA FAIL on 539b16d (2026-09-30): windows rebuilt per trial (10-18 s on the long file); a non-finite trial crashes the screen and blocks resume; the D-020 protection can be lowered and a None slice is unprotected; the example spec trains on 31 h (fold -1) not 6 h; the LAMBDA 1e6 rule test is missing; term shares mix weighted and unweighted terms; shard appends can interleave; the timing split cannot answer the phase-2 question. Met: slicing mechanism, trial generation, resumability, shards partition, engine untouched, golden bit-for-bit. Repair round 1 sent.
+- **status:** in-progress: re-QA of bf75e52 (2026-09-30) FAIL on criterion 5 only (term shares: t_perp weighted twice; calibrated/ablated lambdas ignored); 7 of 8 earlier findings fixed (windows once per data key: prep_s 0.007 s after the first trial; non-finite trials recorded; D-020 pre-flight on the long file; 360-window example; shard files; timings with epoch_s: trace ~13-14 s of a ~20 s CPU trial; bounds at load; golden bit-for-bit). Repair round 2 (the last) sent. QA P2/P3 findings filed as NT-091.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a new src/neural_trade/experiments/screen.py, src/neural_trade/cli.py (`screen` command), src/neural_trade/core/config.py (DATA_END), src/neural_trade/data/processor.py (the slice), tests/, docs/RUNBOOK.md
 - **why:** owner request 2026-09-29: plan runs on 6-hour training blocks of minute data (very small runs) to mass-test maths, hyperparameters and losses; approved plan docs/research/2026-09-29-screen-plan.md. Today a cell's cost is the harness, not training: on Bitcoin_BTCUSDT.csv every cell reads and windows the whole file twice (trainer.py:292, scorer.py:265), traces the graph, fits baselines, runs 100 null backtests and writes npz files (scoring alone 56-104 s).
@@ -1194,6 +1195,17 @@ changes).
 - **why:** re-QA of NT-087 (2026-09-30): on Bitcoin_BTCUSDT.csv 0.017% of 60-bar windows are flat (sd 0) and 0.39% have c~ > 10; the floor sigma = max(sigma, 1e-6) makes c~ = 2600 there and the per-sample direction gradient ~80x typical (only GRAD_CLIP_NORM bounds it). Nothing refuses LOSS_NAME pnl_utility + realized_vol with WINDOW_NORMALIZER per_lag_standard (sigma silently wrong). realized_vol sanitising is inconsistent (a +-inf/NaN bar makes the term vanish; an overflowing sd hits the floor = maximum cost). The data test test_realized_vol_sigma_matches_raw_close_scale_on_the_bundled_csv never calls pnl_utility (passes on the buggy code).
 - **acceptance:** a floor relative to the typical sigma (or flat windows masked), test on a flat window; Config.validate refuses the per_lag_standard combination; consistent sanitising (test); the data test evaluates pnl_utility (e.g. the cost probe) so it pins production.
 - **source:** re-QA of NT-087, 2026-09-30
+
+### NT-091
+
+**DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/screen.py, src/neural_trade/data/processor.py, src/neural_trade/core/config.py, tests/
+- **why:** re-QA of NT-088 (2026-09-30): (1) on files shorter than 64 days DATA_END_PROTECTED_DAYS can be lowered to 0, so a screen on the bundled CSV can train on its test block (the one notebooks 02-05 report); (2) outside screen mode any Config can set DATA_END_PROTECTED_DAYS 0 with a late DATA_END on the long file (only the screen pre-flight enforces the floor); (3) resume only sees shard files with the same N (a plain run after --shard 0/3 re-runs 22 duplicates); (4) the first trial of each data key windows the whole file up to DATA_END (10-20 s) and each slice reloads the CSV (6-7 s).
+- **acceptance:** a floor for short files (e.g. the default fold's test start) and the same protection in Config.validate / processor for every path (tests); resume across shard counts (test); window only the needed tail before windowing (timing before/after).
+- **source:** re-QA of NT-088, 2026-09-30
 
 ## Done log
 
