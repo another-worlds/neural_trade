@@ -79,6 +79,9 @@ behaviour or `master` goes to the owner.
   lead names (regenerating TESTING_DOCUMENTATION.md, `ruff --fix`, a dictated line). The lead hands
   such chores to the tracker instead of polling itself, and keeps every judgement (diagnosis,
   merges, criteria, verdicts).
+- **No pinging (owner, D-042).** The lead does not poll or inspect running agents, runs or suites itself,
+  and does not reply to interim "still running" notifications: the harness notifies on completion. When
+  something must be actively watched (CI, an external process), the Haiku 4.5 `tracker` watches it.
 - **Effort.** QA of a P2 or P3 item checks the criteria plus one suite run, with no mutation or
   exploratory checks. The lead skips its own integration suite run when the merged code equals the
   commit QA verified (`git diff --stat <qa sha> HEAD -- src tests scripts` empty); CI covers the

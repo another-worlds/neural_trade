@@ -55,6 +55,7 @@ that extend or partly replace an entry.
 | D-039 | The window-free build-up (NT-064 to NT-068) moves after the MVP, into R6 | owner | |
 | D-040 | One 360-day training run on the long history, set up by the lead, tracked in a notebook | owner (setup choices: lead's) | |
 | D-041 | The micro-scale loop: minutes-long runs drive hypothesis iteration toward predictive power and PnL | owner (protocol: lead's) | |
+| D-042 | No pinging: the lead waits for completion notices; active polling goes to the Haiku tracker | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -511,3 +512,12 @@ that extend or partly replace an entry.
   newest 30 days) stays the untouched test fold. Hypotheses H1 (longer horizons: 1-4 h, where the move is
   several times the 26 bps cost) and H2 (fewer, more selective trades of the existing signal) run first.
 - **Consequence:** NT-085 (the micro loop and its scenarios).
+
+## D-042 No pinging: the lead waits for completion notices; active polling goes to the Haiku tracker (owner, 2026-09-29)
+- **Owner (verbatim):** "why a are you [inging it constanly? i dont think its a good idea. If you kkep doing then
+  emply haiku 4.5".
+- **Context:** during the micro loop the lead answered every interim "still running" notification and checked
+  running agents and runs by hand, on the strong model.
+- **Decision:** the lead never polls or checks running agents, runs or suites itself, and never replies to interim
+  notifications; it waits for the completion notice. Active polling (CI, an external process) goes to the
+  `tracker` agent on Haiku 4.5 (D-036). CLAUDE.md "Project rules" and OPERATING_MODEL "Models and task tracking".

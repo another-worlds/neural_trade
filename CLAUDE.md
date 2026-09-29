@@ -64,6 +64,9 @@ Pointers only; the rule lives where the pointer says.
   `master`, never `--force`. This overrides the global "ask before pushing".
 - **Models and task tracking** (owner, D-036): OPERATING_MODEL "Models and task tracking" (a Haiku
   `tracker` agent waits, polls and makes mechanical fixes; the other roles keep the strong model).
+- **No pinging** (owner, 2026-09-29, D-042): the lead never polls or checks running agents, runs or suites
+  itself and never answers an interim "still running" notification; it waits for the completion notice.
+  Any waiting that needs active polling goes to the Haiku 4.5 `tracker`.
 - **Remote sessions** (owner, D-033): a remote (cloud) session runs review sweeps and takes no
   backlog items; its PRs into `remediation/plan` are QA'd and merged by the lead.
 - **Speed** (owner, D-018): the per-step training path must not get slower (definition of done).
