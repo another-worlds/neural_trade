@@ -1,18 +1,21 @@
-"""Learned indicator periods: the evolution figure, its table, the applied periods, period_init.json."""
+"""Learned indicators: the period figures (evolution, table, applied periods, period_init.json) and the
+discovered indicators drawn on price against the textbook defaults (NT-043), whose lines are the layer's maths."""
 from __future__ import annotations
 
 import json
 import math
+import re
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from neural_trade.core.config import Config
+from neural_trade.visualization import discovered_indicators as DI
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.indicator_evolution import (
-    applied_periods, configured_periods, indicator_applied_periods, indicator_evolution, indicator_summary,
+    applied_periods, configured_periods, indicator_applied_periods, indicator_evolution, indicator_summary, label,
 )
 
 H = ("h0", "h1", "h2")
@@ -458,3 +461,344 @@ def test_served_epoch_is_found_by_matching_the_base_periods():
     fig = indicator_evolution(rows, Config(), applied=other)
     assert "matches no logged epoch" in fig.layout.title.text
     assert not [t for t in fig.data if t.name == "applied median"]
+
+
+# ------------------------------------------------------------------ NT-043: the discovered indicators on price
+# The served base periods of the reference run 20260924T182915Z (epoch 19): off every textbook value.
+SERVED = {"ma_period_0": 4.07, "ma_period_1": 7.37, "ma_period_2": 18.89, "macd_0_fast": 6.67, "macd_0_slow": 32.32,
+          "macd_0_signal": 7.29, "macd_1_fast": 4.07, "macd_1_slow": 58.91, "macd_1_signal": 5.42,
+          "macd_2_fast": 4.51, "macd_2_slow": 22.31, "macd_2_signal": 8.90, "rsi_period_0": 6.66,
+          "rsi_period_1": 15.45, "rsi_period_2": 23.69, "bb_period_0": 9.59, "bb_period_1": 21.21,
+          "bb_period_2": 27.16}
+PCT_B = [21, 25, 29]                    # the %B channel of each Bollinger copy, in the layer's order
+PERIOD_HEADINGS = {"Moving average periods over training", "RSI periods over training",
+                   "Bollinger periods over training", "MACD fast periods over training",
+                   "MACD slow periods over training", "MACD signal periods over training"}
+
+
+def _block(n=400, L=60, seed=11, level=100_000.0):
+    """Raw close windows of a random walk, one per bar (WINDOW_STEP 1), as split_arrays gives them."""
+    close = level + np.cumsum(np.random.default_rng(seed).normal(0, 25, n + L - 1))
+    return np.lib.stride_tricks.sliding_window_view(close, L).astype("float32")
+
+
+def _fig_on(n=400, *, window="last", **kw):
+    """(windows, applied, metrics rows, figure): the served base = the last logged epoch (epoch 20)."""
+    rows = _rows(n=20)
+    X = _block(n=n)
+    app = _applied_frame(rows, n=n)
+    return X, app, rows, DI.discovered_indicators(X, Config(), applied=app, metrics=rows, window=window, **kw)
+
+
+def _heading(lg) -> str:
+    return re.sub(r"<[^>]+>", "", lg.title.text or "").strip()
+
+
+def _legend_of(fig, heading) -> str:
+    """The id of the panel legend whose title (the panel's heading) is ``heading``."""
+    ids = [k for k in fig.layout if k.startswith("legend") and k != "legend" and _heading(fig.layout[k]) == heading]
+    assert len(ids) == 1, (heading, ids)
+    return ids[0]
+
+
+def _keys(fig, lid) -> dict:
+    return {t.name: t for t in fig.data if t.legend == lid and t.showlegend is not False}
+
+
+def _assert_channels(want, got):
+    assert want.shape == got.shape
+    rest = [k for k in range(want.shape[-1]) if k not in PCT_B]
+    np.testing.assert_allclose(want[..., rest], got[..., rest], rtol=1e-4, atol=1e-4)
+    # %B divides by 4 std + 1e-8, and std is ~1e-4 at the first bar (the variance starts at 0): float32 round-off
+    np.testing.assert_allclose(want[..., PCT_B], got[..., PCT_B], atol=2e-3)
+
+
+def test_ewma_is_the_layers_recurrence():
+    np.testing.assert_allclose(DI.ewma([1.0, 2.0, 3.0, 4.0], 3.0), [1.0, 1.5, 2.25, 3.125])   # alpha = 2 / (3 + 1)
+    two = DI.ewma(np.array([[1.0, 2.0, 3.0], [1.0, 2.0, 3.0]]), np.array([3.0, 1.0]))            # a period per series
+    np.testing.assert_allclose(two, [[1.0, 1.5, 2.25], [1.0, 2.0, 3.0]], atol=1e-5)             # period 1: alpha ~1
+
+
+@pytest.mark.parametrize("impl", ["matrix", "scan"])
+def test_the_drawn_lines_are_the_layers_channels_at_the_same_periods(tf, impl):
+    """NT-043 criterion 3: the indicator maths of the figure is the layer's own. At the served periods of the
+    reference run (not the textbook ones the layer starts from), all 31 channels agree, with meta_adjust = 0 (every
+    window gets the base period) and with a per-window shift (each window its own applied period, as drawn)."""
+    import neural_trade.utils.math as mh
+    from neural_trade.models.layers.learnable_indicators import LearnableIndicators
+
+    cfg = Config(EWMA_IMPL=impl)
+    layer = LearnableIndicators(cfg)
+    rng = np.random.default_rng(5)
+    x = np.cumsum(rng.normal(0, 1, (4, cfg.LOOKBACK)), axis=1).astype("float32")      # window-relative units
+    layer([tf.constant(x), tf.zeros([4, 18])])
+    names, logits = list(layer.get_learned_parameters()), layer.get_indicator_trainable_variables()
+    for name, var in zip(names, logits):
+        var.assign(mh.logit_from_period(tf.constant(SERVED[name], tf.float32)))
+    assert layer.get_learned_parameters() == pytest.approx(SERVED, rel=1e-4)
+    got = layer([tf.constant(x), tf.zeros([4, 18])]).numpy()
+    assert got.shape == (4, cfg.LOOKBACK, 31)
+    _assert_channels(DI.layer_channels(x.astype(float), SERVED), got)
+    adj = tf.constant(np.tanh(rng.normal(0, 1.5, (4, 18))).astype("float32"))
+    got = layer([tf.constant(x), adj]).numpy()
+    per = {name: 2.0 / (layer._alpha(var, adj, j).numpy().astype(float) + 1e-8) - 1.0      # applied_periods' transform
+           for j, (name, var) in enumerate(zip(names, logits))}
+    assert np.ptp(per["ma_period_2"]) > 1.0                                                # the windows really differ
+    _assert_channels(DI.layer_channels(x.astype(float), per), got)
+
+
+def test_lines_on_the_raw_close_are_the_models_channels_mapped_back(tf):
+    """The figure draws on the raw close; the layer reads (close - last close) / scale. An EWMA's weights sum to 1,
+    so the MA and Bollinger lines map back as value * scale + last close, MACD as * scale, RSI and %B unchanged."""
+    from neural_trade.data.scaling import WindowNormalizer
+    from neural_trade.models.layers.learnable_indicators import LearnableIndicators
+
+    cfg = Config()
+    raw = _block(n=4)
+    norm = WindowNormalizer("window_relative", 250.0)
+    xn = norm.transform(raw, raw[:, -1])
+    got = LearnableIndicators(cfg)([tf.constant(xn), tf.zeros([4, 18])]).numpy()        # the textbook periods
+    lines = DI.indicator_lines(raw.astype(float), configured_periods(cfg))
+    last, s = raw[:, -1:].astype(float), 250.0
+    for i in range(3):
+        np.testing.assert_allclose((lines[f"ma_{i}"]["ma"] - last) / s, got[..., i], atol=1e-4)
+        for j, k in enumerate(("line", "signal", "hist")):
+            np.testing.assert_allclose(lines[f"macd_{i}"][k] / s, got[..., 3 + 4 * i + j], atol=1e-4)
+        np.testing.assert_allclose(lines[f"rsi_{i}"]["rsi"], got[..., 15 + i], atol=1e-2)
+        for j, k in enumerate(("mid", "upper", "lower")):
+            np.testing.assert_allclose((lines[f"bb_{i}"][k] - last) / s, got[..., 18 + 4 * i + j], atol=5e-4)
+        np.testing.assert_allclose(lines[f"bb_{i}"]["pct_b"], got[..., 21 + 4 * i], atol=5e-3)
+
+
+def test_every_family_and_copy_is_drawn_learned_solid_against_textbook_dashed():
+    """NT-043 criteria 1-2: on the price of the chosen window, each learned MA and Bollinger line next to the same
+    indicator at its configured period, and RSI and MACD panels, told apart by line style and named in the legend."""
+    X, app, rows, fig = _fig_on(window=123)
+    win = X[123].astype(float)
+    learned = DI.indicator_lines(win, app.iloc[123].to_dict())
+    textbook = DI.indicator_lines(win, configured_periods(Config()))
+    main = {"ma": "ma", "bb": "mid", "rsi": "rsi", "macd": "line"}
+    for fam, name in DI.FAMILY_NAME.items():
+        for i in range(3):
+            keys = _keys(fig, _legend_of(fig, f"{name} #{i}"))
+            want_l = f"learned {DI._periods_text(app.iloc[123].to_dict(), fam, i)}"
+            want_t = f"textbook {DI._periods_text(configured_periods(Config()), fam, i)}"
+            assert set(keys) == {want_l, want_t}, keys                    # the legend names both
+            lt, tt = keys[want_l], keys[want_t]
+            assert lt.line.dash == DI.LEARNED_DASH == "solid" and tt.line.dash == DI.TEXTBOOK_DASH
+            assert lt.line.color == tt.line.color == DI.COPY_COLORS[i]     # colour = copy, as in the period figures
+            assert lt.x0 == tt.x0 == -59 and lt.dx == tt.dx == 1           # the same window; bar 0 = its last bar
+            np.testing.assert_allclose(lt.y, learned[f"{fam}_{i}"][main[fam]], rtol=1e-6, atol=1e-3)
+            np.testing.assert_allclose(tt.y, textbook[f"{fam}_{i}"][main[fam]], rtol=1e-6, atol=1e-3)
+    assert keys[want_t].name == "textbook 8/17/9"                          # MACD #2: fast/slow/signal
+    # MA and Bollinger are drawn on the window's price
+    close = [t for t in fig.data if t.name == "close" and t.legend == _legend_of(fig, "Bollinger #1")]
+    assert len(close) == 1 and np.allclose(close[0].y, X[123])
+
+
+def test_rsi_and_macd_panels_show_learned_against_textbook_on_the_same_window():
+    X, app, rows, fig = _fig_on(window=-1)
+    win, w = X[-1].astype(float), len(X) - 1
+    learned = DI.indicator_lines(win, app.iloc[w].to_dict())["macd_1"]
+    textbook = DI.indicator_lines(win, configured_periods(Config()))["macd_1"]
+    lid = _legend_of(fig, "MACD #1")
+    panel = [t for t in fig.data if t.legend == lid]
+    for lines, grp in ((learned, "macd_1-l"), (textbook, "macd_1-t")):
+        (bar,) = [t for t in panel if t.legendgroup == grp and t.type == "bar"]
+        (sig,) = [t for t in panel if t.legendgroup == grp and (t.name or "").endswith(" signal")]
+        np.testing.assert_allclose(bar.y, lines["hist"], atol=1e-3)
+        np.testing.assert_allclose(sig.y, lines["signal"], atol=1e-3)
+        assert sig.line.color == DI.SIGNAL_COLOR and sig.line.dash == (DI.LEARNED_DASH if grp.endswith("l")
+                                                                       else DI.TEXTBOOK_DASH)
+        assert bar.x0 == -59 and bar.dx == 1
+    hollow = next(t for t in panel if t.type == "bar" and t.legendgroup == "macd_1-t")
+    assert hollow.marker.color == "rgba(0,0,0,0)"                                   # textbook: hollow bars
+    zero = [sh for sh in fig.layout.shapes if sh.type == "line" and sh.yref == hollow.yaxis and sh.y0 == sh.y1 == 0]
+    assert len(zero) == 1                                                           # the MACD zero line
+    rsi = next(t for t in fig.data if t.legend == _legend_of(fig, "RSI #2") and t.name.startswith("learned"))
+    ya = rsi.yaxis
+    levels = {sh.y0 for sh in fig.layout.shapes if sh.type == "line" and sh.yref == ya and sh.y0 == sh.y1}
+    assert levels == {30.0, 70.0}
+    assert list(fig.layout["yaxis" + ya[1:]].range) == [-3, 103]
+
+
+def test_period_panels_show_training_from_the_start_and_the_per_window_range():
+    """NT-043 criterion 3: how each period moved over training (metrics.jsonl, from its start) against its textbook
+    value, and how the applied period varies per window: 5-95%, middle 50%, median, this window, served base."""
+    X, app, rows, fig = _fig_on(window=77)
+    headings = {_heading(fig.layout[k]) for k in fig.layout if k.startswith("legend")}
+    assert PERIOD_HEADINGS <= headings
+    lid = _legend_of(fig, "Moving average periods over training")
+    panel = [t for t in fig.data if t.legend == lid]
+    traj = next(t for t in panel if t.name == "#2")
+    assert traj.x[0] == 0 and traj.y[0] == pytest.approx(30.0)                     # the configured start
+    assert list(traj.x[1:]) == list(range(1, 21))
+    np.testing.assert_allclose(traj.y[1:], [r["period/ma_period_2"] for r in rows], rtol=1e-6)
+    tb = next(t for t in panel if t.name == "#2 textbook 30")
+    assert list(tb.y) == [30.0, 30.0] and tb.line.dash == DI.TEXTBOOK_DASH and tb.line.color == DI.COPY_COLORS[2]
+    a = app["ma_period_2"].to_numpy(float)
+    q5, q25, q50, q75, q95 = np.percentile(a, [5, 25, 50, 75, 95])
+    ranges = [t for t in panel if t.name == "applied range" and t.line.color == DI.COPY_COLORS[2]]
+    assert sorted((t.line.width, *np.round(t.y, 3)) for t in ranges) == [
+        (2, *np.round(np.float32([q5, q95]), 3)), (7, *np.round(np.float32([q25, q75]), 3))]
+    strip_x = ranges[0].x[0]
+    assert strip_x > 20                                                             # right of the last epoch
+    for name, want in (("applied median", q50), ("this window", a[77]), ("served base", app.attrs["base"]["ma_period_2"])):
+        (m,) = [t for t in panel if t.name == name and t.x[0] == strip_x]
+        assert m.y[0] == pytest.approx(want, rel=1e-5), name
+    served = [sh for sh in fig.layout.shapes if sh.type == "line" and sh.x0 == 20 and sh.x1 == 20]
+    assert len(served) == 6                                                         # one per period panel
+    xa = fig.layout["xaxis" + traj.xaxis[1:]]
+    assert xa.ticktext[0] == "start" and xa.ticktext[-1] == "windows"
+
+
+def test_table_gives_learned_against_textbook_and_the_change():
+    X, app, rows, fig = _fig_on(window=5)
+    tab = DI.discovered_table(app, Config(), metrics=rows, window=5)
+    tb, base = configured_periods(Config()), app.attrs["base"]
+    assert list(tab.index) == NAMES                                                 # model order, every period
+    assert tab["textbook"].to_dict() == tb
+    assert tab["learned (served base)"].to_numpy() == pytest.approx([base[c] for c in NAMES])
+    assert tab["base vs textbook %"].to_numpy() == pytest.approx([100 * (base[c] / tb[c] - 1) for c in NAMES])
+    med = np.median(app[NAMES].to_numpy(float), axis=0)
+    assert tab["applied median"].to_numpy() == pytest.approx(med)
+    assert tab["median vs textbook %"].to_numpy() == pytest.approx([100 * (m / tb[c] - 1) for m, c in zip(med, NAMES)])
+    assert tab["this window"].to_numpy() == pytest.approx(app.iloc[5][NAMES].to_numpy(float))
+    traj = np.array([[r[f"period/{c}"] for r in rows] for c in NAMES])
+    assert tab["training min"].to_numpy() == pytest.approx(np.minimum(traj.min(axis=1), [tb[c] for c in NAMES]))
+    assert tab.attrs["window"] == 5 and tab.attrs["n"] == len(X) and tab.attrs["served_epoch"] == 20
+    (table,) = [t for t in fig.data if t.type == "table"]
+    cells = table.cells.values
+    assert list(cells[0]) == [label(c) for c in NAMES]
+    assert list(cells[1]) == [f"{tb[c]:g}" for c in NAMES]
+    b0 = base["ma_period_0"]
+    assert cells[2][0] == f"{b0:.2f} ({100 * (b0 / 5 - 1):+.1f}%)"                 # learned (change vs textbook)
+
+
+def test_no_empty_panel_no_horizon_colour_no_dotted_line_and_size_budget_on_a_full_size_block():
+    """NT-043 criterion 4 on the reference run's test block size (7,236 windows), with times."""
+    n = 7236
+    rows = _rows(n=20)
+    X = _block(n=n)
+    app = _applied_frame(rows, n=n)
+    times = pd.date_range("2025-11-05 06:34", periods=n, freq="1min", tz="UTC").to_numpy()
+    fig = DI.discovered_indicators(X, Config(), applied=app, metrics=rows, window="typical", times=times)
+    assert T.empty_panels(fig) == []
+    assert len(fig.to_json()) < 600_000
+    headings = {_heading(fig.layout[k]) for k in fig.layout if k.startswith("legend")}
+    assert {f"{nm} #{i}" for nm in DI.FAMILY_NAME.values() for i in range(3)} | PERIOD_HEADINGS <= headings
+    (table,) = [t for t in fig.data if t.type == "table"]
+    assert len(table.cells.values[0]) == 18
+    horizon = {T.HORIZON_COLORS[h] for h in H}
+    horizon_rgb = {T.rgba(c, 1)[:-2] for c in horizon}                               # 'rgba(r,g,b,' prefixes
+    colours = []
+    for t in fig.data:
+        for part in ("line", "marker"):
+            c = getattr(getattr(t, part, None), "color", None) if hasattr(t, part) else None
+            colours += list(c) if isinstance(c, (list, tuple, np.ndarray)) else [c]
+        colours.append(getattr(t, "fillcolor", None))
+        if hasattr(t, "line") and t.line.dash is not None:
+            assert t.line.dash != "dot", t.name                                      # dotted means training
+    colours = [c for c in colours if isinstance(c, str)]
+    assert not set(colours) & horizon
+    assert not [c for c in colours if any(c.startswith(p) for p in horizon_rgb)]
+    assert all(sh.line.dash != "dot" for sh in fig.layout.shapes)
+    assert "ending 2025-11-" in fig.layout.title.text                               # the window's time
+
+
+def test_window_picks():
+    rows = _rows(n=3)
+    app = _applied_frame(rows, n=50)
+    base = app.attrs["base"]
+    app.iloc[17] = [base[c] * 1.9 for c in app.columns]             # stretched most by meta_adjust
+    app.iloc[31] = [base[c] * 0.5 for c in app.columns]             # shrunk most
+    app.iloc[8] = app.median().to_numpy()                           # the block's medians themselves
+    assert DI.pick_window("longest", 50, app) == 17 and DI.pick_window("shortest", 50, app) == 31
+    assert DI.pick_window("typical", 50, app) == 8
+    assert DI.pick_window("last", 50) == DI.pick_window(None, 50) == DI.pick_window(-1, 50) == 49
+    assert DI.pick_window(3, 50) == 3
+    for bad in (50, -51):
+        with pytest.raises(ValueError, match="outside"):
+            DI.pick_window(bad, 50)
+    with pytest.raises(ValueError, match="needs the applied periods"):
+        DI.pick_window("typical", 50)
+    with pytest.raises(ValueError, match="one of"):
+        DI.pick_window("middle", 50, app)
+    X, app, rows, fig = _fig_on(n=60, window="longest")
+    assert f"window #{DI.pick_window('longest', 60, app):,} of 60" in fig.layout.title.text
+
+
+def test_the_figure_is_registered_in_visualizations():
+    """NT-043 criterion 5 (D-002)."""
+    from neural_trade.registries.visualizations import Visualizations
+
+    assert "discovered_indicators" in Visualizations.list_names()
+    assert Visualizations.get("discovered_indicators") is DI.discovered_indicators
+    assert Visualizations.validate_component(DI.discovered_indicators)
+    rows = _rows(n=4)
+    X = _block(n=30)
+    fig = Visualizations.build("discovered_indicators", X, Config(), applied=_applied_frame(rows, n=30), metrics=rows)
+    assert T.empty_panels(fig) == [] and "Discovered indicators" in fig.layout.title.text
+
+
+def test_without_applied_periods_or_metrics_it_still_draws_and_says_so(tmp_path):
+    rows = _rows(n=6)
+    X = _block(n=40)
+    fig = DI.discovered_indicators(X, Config(), metrics=rows)             # no applied: the last epoch's base periods
+    assert "no applied periods given: the learned lines use the base periods" in fig.layout.title.text
+    assert T.empty_panels(fig) == []
+    (lt,) = [t for n_, t in _keys(fig, _legend_of(fig, "Moving average #2")).items() if n_.startswith("learned ")]
+    want = DI.indicator_lines(X[-1].astype(float), {"ma_period_2": rows[-1]["period/ma_period_2"]})["ma_2"]["ma"]
+    np.testing.assert_allclose(lt.y, want, rtol=1e-6)
+    # a run directory: status.json names the served epoch (1-based), whose logged periods are the learned ones
+    (tmp_path / "metrics.jsonl").write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    (tmp_path / "status.json").write_text(json.dumps({"weights_epoch": 3}), encoding="utf-8")
+    tab = DI.discovered_table(None, Config(), metrics=tmp_path / "metrics.jsonl")
+    assert tab.loc["ma_period_2", "learned (served base)"] == pytest.approx(rows[2]["period/ma_period_2"])
+    assert tab.attrs["base_source"] == "epoch 3 of metrics.jsonl"
+    fig = DI.discovered_indicators(X, Config(), metrics=tmp_path / "metrics.jsonl")
+    assert "served weights = epoch 3" in fig.layout.title.text
+    # nothing learned at all: the textbook lines, a note, and still every heading and no empty panel
+    bare = DI.discovered_indicators(X, Config())
+    assert "no learned periods given" in bare.layout.title.text and T.empty_panels(bare) == []
+    assert not any((t.name or "").startswith("learned ") for t in bare.data)
+    assert set(_keys(bare, _legend_of(bare, "RSI periods over training"))) == {"#0 textbook 9", "#1 textbook 14",
+                                                                                "#2 textbook 21"}
+
+
+def test_learned_base_draws_the_base_periods_and_bad_arguments_are_refused():
+    rows = _rows(n=6)
+    X = _block(n=40)
+    app = _applied_frame(rows, n=40)
+    fig = DI.discovered_indicators(X, Config(), applied=app, metrics=rows, learned="base")
+    base = app.attrs["base"]
+    (name,) = [n_ for n_ in _keys(fig, _legend_of(fig, "RSI #1")) if n_.startswith("learned ")]
+    assert name == f"learned {DI._p(base['rsi_period_1'])}"
+    assert DI._p(10.04) == "10.0" and DI._p(10.0) == "10" and DI._p(4.071) == "4.07" and DI._p(123.4) == "123"
+    lt = _keys(fig, _legend_of(fig, "RSI #1"))[name]
+    np.testing.assert_allclose(lt.y, DI.indicator_lines(X[-1].astype(float), base)["rsi_1"]["rsi"], atol=1e-4)
+    assert "the base period (meta_adjust = 0)" in fig.layout.title.text
+    with pytest.raises(ValueError, match="learned must be"):
+        DI.discovered_indicators(X, Config(), learned="median")
+    with pytest.raises(ValueError, match="rows for"):
+        DI.discovered_indicators(X[:10], Config(), applied=app)
+
+
+def test_headings_subtitle_and_table_fit_an_1100_px_output():
+    """At 1100 px a panel of the 3-column grid is ~300 px wide. Each panel heading (its title, then its keys on the
+    line below; widths as calibrated on Edge renders in _heading_px) fits one panel; each subtitle line fits the
+    figure; the table shows every row (a table taller than its domain scrolls, hiding its last rows)."""
+    X, app, rows, fig = _fig_on()
+    for k in fig.layout:
+        if not k.startswith("legend") or k == "legend" or _heading(fig.layout[k]).startswith("The "):
+            continue                                                  # the block panel spans the whole width
+        lg = fig.layout[k]
+        assert lg.title.side == "top", k
+        keys_px = sum(36 + 5.0 * len(nm) for nm in _keys(fig, k))
+        assert max(5.8 * len(_heading(lg)) + 20, keys_px) < 300, (k, _heading(lg), list(_keys(fig, k)))
+    lines = fig.layout.title.text.split("<br>")[1:]
+    assert len(lines) == 4 and max(len(re.sub(r"<[^>]+>", "", ln)) for ln in lines) <= 150
+    (table,) = [t for t in fig.data if t.type == "table"]
+    plot_px = fig.layout.height - fig.layout.margin.t - fig.layout.margin.b
+    dom = table.domain.y
+    assert (dom[1] - dom[0]) * plot_px >= table.header.height + 18 * table.cells.height

@@ -72,6 +72,10 @@ Visualizations.register(name="training_loss_terms", tags=["plotly", "training", 
                         dependencies=["plotly"])(_trd.training_loss_terms)
 Visualizations.register(name="indicator_applied_periods", tags=["plotly", "indicators"],
                         dependencies=["plotly"])(_ie.indicator_applied_periods)
+from neural_trade.visualization import discovered_indicators as _di  # noqa: E402
+
+Visualizations.register(name="discovered_indicators", tags=["plotly", "indicators", "price"],
+                        dependencies=["plotly"])(_di.discovered_indicators)
 for _name, _fn, _tags in (("direction_analytics", _ma.direction_analytics, ["direction"]),
                           ("delta_analytics", _ma.delta_analytics, ["delta"]),
                           ("variance_analytics", _ma.variance_analytics, ["variance", "calibration"]),

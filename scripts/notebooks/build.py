@@ -4,7 +4,7 @@ EDIT THE NOTEBOOKS HERE, NEVER BY HAND. Every .ipynb in notebooks/ is written by
 tests/test_notebook_tooling.py fails when a committed notebook's cells (type, source, tags) differ
 from what this file generates, so a change made in Jupyter is lost at the next build or fails the test.
 
-    python scripts/notebooks/build.py                           # all six, into notebooks/
+    python scripts/notebooks/build.py                           # all of them, into notebooks/
     python scripts/notebooks/build.py 01_train_and_monitor 04   # some: full name or number prefix
     python scripts/notebooks/build.py --out D:/tmp/nb           # write somewhere else (e.g. to diff)
     python scripts/notebooks/build.py --check                   # write nothing; exit 1 on drift
@@ -494,6 +494,79 @@ else:
 """),
 ]
 
+# ---------------------------------------------------------------------------- 07 discovered indicators
+discovered = [
+    ("md", """
+# 07 - Discovered indicators
+
+The indicators the network learned, drawn on the price of one window next to the same indicators at their
+textbook periods: the discovered indicators are what a run delivers (VISION), and the prediction and trading
+quality in 01-04 are the evidence that they are good. Each copy of each family (moving average, Bollinger bands,
+RSI, MACD; the copies start from `MA_SPANS`, `BB_PERIODS`, `RSI_PERIODS` and `MACD_SETTINGS`) is drawn twice on the
+same window: solid at the period the served model applied to that window, dashed at its configured textbook
+period. The lines use the model's own formulas (an EWMA with alpha = 2 / (period + 1), started at the window's first
+bar), so they are the channels the network reads, in price units.
+
+Set `WINDOW` to a window index, or to "typical" (closest to the block's median periods), "longest" / "shortest"
+(where the per-window adjustment stretches or shrinks the periods most) or "last"; `BLOCK` to another block of
+the run's fold. Nothing here writes to the run.
+"""),
+    ("code", """
+# Parameters
+RUN_DIR = None                  # a runs/<id> directory; None -> the newest run under RUNS_DIR
+RUNS_DIR = "../runs"
+CSV_PATH = "../binance_btcusdt_1min_ccxt.csv"
+BLOCK = "test"                  # "train", "val", "cal" or "test"
+WINDOW = "typical"              # a window index, or "typical" / "longest" / "shortest" / "last"
+""", "parameters"),
+    ("code", """
+from neural_trade.data.processor import split_arrays
+from neural_trade.notebook import pick_run
+from neural_trade.registries.visualizations import Visualizations
+from neural_trade.serving.predictor import Predictor
+from neural_trade.visualization import analytics_tables as AT
+from neural_trade.visualization.discovered_indicators import discovered_table
+from neural_trade.visualization.indicator_evolution import applied_periods
+
+""" + RUN_PICK + """
+predictor = Predictor.from_artifacts(run_dir / "artifacts")
+cfg = predictor.config.copy(CSV_PATH=CSV_PATH)
+blocks = split_arrays(cfg)
+block = blocks[BLOCK]
+times = blocks["df"]["timestamp"].to_numpy()[block["anchor_bar"]]
+metrics = run_dir / "metrics.jsonl"
+applied = applied_periods(predictor, block["X"], block=BLOCK)   # the period each window gets (served weights)
+print(f"{len(block['X']):,} {BLOCK} windows of {cfg.LOOKBACK} bars; served weights: epoch",
+      predictor.bundle.meta.get("weights_epoch"))
+"""),
+    ("md", """
+## The learned indicators on price
+
+Top: the block's close, one point per window, with the drawn window shaded. The grid: one row per family, one
+column per copy; each panel's heading gives the learned and the textbook period (MACD: fast / slow / signal).
+Below it, each base period over training (from the recorded start, the dashed line is its textbook value) and,
+right of the last epoch, how the period the model applies varies across the block's windows: 5-95% and the middle
+50% of the windows, their median, this window's period and the served base period. A period longer than the
+window has not warmed up by the window's end (the EWMA starts at the window's first bar); the table's
+"applied > lookback" column counts those windows.
+"""),
+    ("code", """
+Visualizations.build("discovered_indicators", block["X"], cfg, applied=applied, metrics=metrics, window=WINDOW,
+                     times=times).show()
+"""),
+    ("md", """
+## Learned against textbook periods
+
+The table behind the figure, in bars: the served base period (the trained logit alone) and the median applied
+period, each with its change against the textbook period; the applied range over the block's windows; this
+window's period; the range the base period took during training; the share of windows whose applied period is
+longer than the window; and whether the base period sits at a clip bound.
+"""),
+    ("code", """
+AT.styled(discovered_table(applied, cfg, metrics=metrics, window=WINDOW), digits=2)
+"""),
+]
+
 # ---------------------------------------------------------------------------- the notebooks, in run order
 NOTEBOOKS = {
     "00_data_and_splits": data,
@@ -502,6 +575,7 @@ NOTEBOOKS = {
     "03_signals_and_trades": signals_nb,
     "04_diagnostics": diag,
     "05_compare_runs": compare,
+    "07_discovered_indicators": discovered,
 }
 
 
