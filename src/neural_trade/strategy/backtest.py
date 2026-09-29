@@ -16,18 +16,25 @@ Costs per side, on the mid notional: fee ``fee_bps`` + ``half_spread_bps`` + ``s
 (10 + 1 + 2 = 13 bps by default). Fills are the mid moved adversely by spread + slippage;
 gross P&L is on mids, net = gross - costs. An open position is closed at the last close
 (``EOW``) when ``mark_to_market_at_end``.
+
+Exposure mode (NT-077; docs/research/2026-09-29-strategy-architectures/README.md section 5.1):
+``run_backtest`` hands an ``ExposureStrategy`` to ``run_exposure_backtest``, which holds a signed
+QUANTITY (so the exposure drifts with the price), decides a target exposure at the close every
+``decide_every`` bars and rebalances at the next open only when the target leaves the no-trade band.
+Same timing, same cost fields, no stops. Its random baseline is a circular-shift timing null
+(``circular_shift_null``) instead of the size-matched random entries of discrete strategies.
 """
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
 
 import numpy as np
 
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
-from neural_trade.strategy.performance import MINUTES_PER_YEAR, summarize
+from neural_trade.strategy.performance import MINUTES_PER_YEAR, breakeven_cost_bps, summarize
 from neural_trade.strategy.signals import SignalFrame
-from neural_trade.strategy.strategies import RandomSignal, Strategies, Strategy
+from neural_trade.strategy.strategies import ExposureStrategy, RandomSignal, Strategies, Strategy
 from neural_trade.strategy.trades import Order, Trade
 
 
@@ -136,6 +143,11 @@ class BacktestResult:
     summary: Dict[str, float]
     config: BacktestConfig
     baselines: Dict[str, Dict[str, float]] = field(default_factory=dict)
+    # Exposure mode only (run_exposure_backtest): mode "exposure"; the target exposure in force over
+    # each bar (after that bar's open fill); every target evaluated at a decision bar.
+    mode: str = "discrete"
+    target_path: Optional[np.ndarray] = None
+    targets: List[Dict[str, Any]] = field(default_factory=list)
 
     def trades_frame(self):
         import pandas as pd
@@ -161,7 +173,10 @@ def _level(value, is_offset, base):
 
 def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
                  config: Optional[BacktestConfig] = None) -> BacktestResult:
-    """Simulate ``strategy`` over the aligned ``signals`` and ``bars`` (same length)."""
+    """Simulate ``strategy`` over the aligned ``signals`` and ``bars`` (same length). An
+    ``ExposureStrategy`` goes to ``run_exposure_backtest``."""
+    if isinstance(strategy, ExposureStrategy):
+        return run_exposure_backtest(signals, bars, strategy, config)
     cfg = config or BacktestConfig()
     n = len(bars)
     if len(signals) != n:
@@ -267,6 +282,205 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
                           decisions, position, summary, cfg)
 
 
+# ------------------------------------------------------------------ exposure mode
+def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureStrategy,
+                          config: Optional[BacktestConfig] = None) -> BacktestResult:
+    """Simulate a target-exposure strategy over the aligned ``signals`` and ``bars``.
+
+    Per bar t:
+
+    1. at the open: a queued target is filled. The traded notional is |target - held exposure| x the
+       equity at that open; the fill is the mid moved adversely by half-spread + slippage and the fee
+       is charged on the notional (``BacktestConfig``'s cost fields, as in the discrete engine). The
+       book then holds a signed QUANTITY = target x equity / open, so its exposure drifts with the price;
+    2. at the close: equity is marked (cash + quantity x close) and ``position[t]`` is the drifted
+       exposure quantity x close / equity. When t % decide_every == 0, t >= warmup and t < n - 1, the
+       strategy's ``target(s, t, current)`` (current = ``position[t]``) is clipped to
+       +-max_abs_exposure; if |target - current| > band it is queued for bar t + 1's open (with
+       ``trade_to_band_edge``: current + sign(d) x (|d| - band), d = target - current). No stops;
+    3. at the last close, with ``mark_to_market_at_end``, the book is closed out (costed like a fill).
+
+    Returns a ``BacktestResult`` with ``mode`` = "exposure", ``trades`` = [], ``decisions`` = one
+    record per fill {bar (the fill bar), decided_at, from, to, notional, costs, reason ("target",
+    "band_edge", or "EOW" for the close-out), fill (the fill price)}, ``targets`` = every target
+    evaluated {bar, current, target (None when not finite: no decision), queued (the queued exposure
+    or None)}, and ``target_path`` (the target in force over each bar). The summary has every key
+    ``summarize`` gives, with ``n_trades`` = ``n_rebalances`` (the strategy's fills, the close-out
+    excluded), so an activity floor reads one column for both modes; plus ``mean_abs_exposure``,
+    ``traded_notional`` ($, close-out included), ``turnover`` (traded_notional / initial equity),
+    ``cost_drag`` (costs / initial equity), ``breakeven_cost_bps`` (gross P&L / traded notional x 1e4
+    x 2, a round trip) and ``gross_edge_per_trade_bps`` (a round trip of notional counts as one trade,
+    so it equals ``breakeven_cost_bps``). ``avg_hold_bars`` is the mean number of bars from a fill to
+    the next fill or the block's end; ``exposure`` the share of bars with a nonzero position.
+    """
+    cfg = config or BacktestConfig()
+    n = len(bars)
+    if len(signals) != n:
+        raise ValueError(f"signals ({len(signals)}) and bars ({n}) must be aligned")
+    slip, fee = cfg.slip_rate, cfg.fee_rate
+    init = float(cfg.initial_equity)
+    every = max(1, int(strategy.decide_every))
+    band, cap = float(strategy.band), abs(float(strategy.max_abs_exposure))
+    to_edge = bool(strategy.trade_to_band_edge)
+    warmup = int(strategy.warmup())
+    cash = gross_cash = init
+    qty = 0.0
+    held_target = 0.0
+    equity = np.empty(n + 1)
+    equity_gross = np.empty(n + 1)
+    equity[0] = equity_gross[0] = init
+    position = np.zeros(n)
+    target_path = np.zeros(n)
+    decisions: List[Dict[str, Any]] = []
+    targets: List[Dict[str, Any]] = []
+    pending: Optional[tuple] = None
+    tot = {"notional": 0.0, "costs": 0.0, "fees": 0.0}
+
+    def fill(t, mid, to, decided_at, reason) -> bool:
+        nonlocal cash, gross_cash, qty
+        eq = cash + qty * mid
+        if not (eq > 0 and mid > 0):
+            return False
+        new_qty = to * eq / mid
+        dq = new_qty - qty
+        notional = abs(dq) * mid
+        fee_paid = fee * notional
+        costs = notional * slip + fee_paid
+        frm = qty * mid / eq
+        cash -= dq * mid + costs
+        gross_cash -= dq * mid
+        tot["notional"] += notional
+        tot["costs"] += costs
+        tot["fees"] += fee_paid
+        decisions.append({"bar": t, "decided_at": decided_at, "from": float(frm), "to": float(to),
+                          "notional": float(notional), "costs": float(costs), "reason": reason,
+                          "fill": float(mid * (1 + np.sign(dq) * slip))})
+        qty = new_qty
+        return True
+
+    for t in range(n):
+        o, c = bars.open[t], bars.close[t]
+        if pending is not None:
+            to, decided_at, reason = pending
+            if fill(t, o, to, decided_at, reason):
+                held_target = to
+            pending = None
+        target_path[t] = held_target
+        eq_close = cash + qty * c
+        current = qty * c / eq_close if eq_close > 0 else 0.0
+        position[t] = current
+        if t >= warmup and t < n - 1 and t % every == 0:
+            raw = strategy.target(signals, t, current)
+            rec = {"bar": t, "current": float(current), "target": None, "queued": None}
+            if raw is not None and np.isfinite(raw):
+                tgt = float(np.clip(raw, -cap, cap))
+                rec["target"] = tgt
+                d = tgt - current
+                if abs(d) > band:
+                    to = current + np.sign(d) * (abs(d) - band) if to_edge else tgt
+                    pending = (float(to), t, "band_edge" if to_edge else "target")
+                    rec["queued"] = float(to)
+            targets.append(rec)
+        if t == n - 1 and cfg.mark_to_market_at_end and qty != 0.0:
+            fill(t, c, 0.0, t, "EOW")
+        equity[t + 1] = cash + qty * c
+        equity_gross[t + 1] = gross_cash + qty * c
+
+    net_ret = np.diff(equity) / equity[:-1]
+    gross_ret = np.diff(equity_gross) / equity_gross[:-1]
+    summary = summarize(equity, net_ret, gross_ret, [], tot["fees"], float(np.mean(position != 0)) if n else 0.0,
+                        cfg.periods_per_year)
+    fills = [d["bar"] for d in decisions if d["reason"] != "EOW"]
+    gross_pnl = float(equity_gross[-1] - init)
+    be = breakeven_cost_bps(gross_pnl, tot["notional"])
+    summary.update(
+        n_trades=len(fills), n_rebalances=len(fills),
+        avg_hold_bars=float(np.mean(np.diff(fills + [n]))) if fills else 0.0,
+        mean_abs_exposure=float(np.mean(np.abs(position))) if n else 0.0,
+        traded_notional=float(tot["notional"]), turnover=float(tot["notional"] / init),
+        cost_drag=float(tot["costs"] / init), breakeven_cost_bps=be, gross_edge_per_trade_bps=be,
+        costs_paid=float(tot["costs"]), gross_pnl=gross_pnl, net_pnl=float(equity[-1] - init))
+    return BacktestResult(getattr(strategy, "name", type(strategy).__name__), equity, equity_gross, [], decisions,
+                          position, summary, cfg, mode="exposure", target_path=target_path, targets=targets)
+
+
+def fill_events(result: BacktestResult) -> np.ndarray:
+    """[N] the exposure each of the strategy's fills traded to, at its fill bar; NaN on bars without a
+    fill (the end-of-block close-out is not the strategy's and is left out)."""
+    events = np.full(len(result.position), np.nan)
+    for d in result.decisions:
+        if d.get("reason") != "EOW":
+            events[d["bar"]] = d["to"]
+    return events
+
+
+@dataclass
+class _ReplayFills(ExposureStrategy):
+    """Replays a schedule of fills (the timing null): at decision bar t it queues ``events[t + 1]``
+    when that is finite, so every fill lands on its scheduled bar (a fill scheduled at bar 0 cannot be
+    decided and is dropped)."""
+
+    name: ClassVar[str] = "timing_null"
+    events: Optional[np.ndarray] = None
+    decide_every: int = 1
+    band: float = 0.0
+
+    def target(self, s, t, current):
+        want = float(self.events[t + 1])
+        return want if np.isfinite(want) else current
+
+
+TIMING_NULL_SEED = 0
+TIMING_NULL_MARGIN = 720          # shifts stay at least min(720, n // 4) bars away from 0 and n
+
+
+def circular_shift_null(signals: SignalFrame, bars: Bars, result: BacktestResult,
+                        config: Optional[BacktestConfig] = None, seeds: Optional[int] = None) -> Dict[str, float]:
+    """Where an exposure strategy ranks among copies of its own timing shifted in time.
+
+    The strategy's own exposure path, as its schedule of fills (``fill_events``: the exposure each
+    rebalance traded to, at its fill bar), is shifted circularly by ``seeds`` offsets (default: the
+    config's ``random_seeds``) drawn by ``np.random.default_rng(TIMING_NULL_SEED)`` from [m, n - m],
+    m = min(720, n // 4). Each shifted schedule is re-traded and re-costed by ``run_exposure_backtest``
+    on the shifted path's own exposure changes (the notional at each shifted fill is |to - the drifted
+    exposure then| x the equity then); the strategy itself is never called. The same targets, the same
+    number of rebalances, random timing. Unshifted, the replay reproduces the strategy's equity.
+
+    Returns the keys of ``random_same_frequency`` (``n_seeds``, ``random_mean_total_return``,
+    ``random_mean_sharpe_net``, ``random_p05_total_return``, ``random_p95_total_return``,
+    ``random_mean_gross_return``, ``percentile_total_return``, ``percentile_sharpe_net``,
+    ``percentile_gross_return``) plus ``null`` = "circular_shift", ``shift_min`` and ``shift_max``.
+    Without rebalances, seeds or room to shift: ``n_seeds`` = 0 and NaN percentiles.
+    """
+    cfg = config or result.config
+    k = int(seeds if seeds is not None else cfg.random_seeds)
+    n = len(bars)
+    m = min(TIMING_NULL_MARGIN, n // 4)
+    if result.mode != "exposure" or k <= 0 or n < 2 or not result.summary.get("n_rebalances", 0):
+        return {"n_seeds": 0, "null": "circular_shift", "percentile_total_return": float("nan"),
+                "percentile_sharpe_net": float("nan")}
+    shifts = np.random.default_rng(TIMING_NULL_SEED).integers(m, n - m + 1, size=k)
+    events = fill_events(result)
+    init = float(cfg.initial_equity)
+    rets, sharpes, grosses = [], [], []
+    for shift in shifts:
+        r = run_exposure_backtest(signals, bars, _ReplayFills(events=np.roll(events, int(shift))), cfg)
+        rets.append(r.summary["total_return"])
+        sharpes.append(r.summary["sharpe_net"])
+        grosses.append(r.summary["gross_pnl"] / init)
+    rets, sharpes, grosses = np.array(rets), np.array(sharpes), np.array(grosses)
+    gross = result.summary.get("gross_pnl", 0.0) / init
+    return {
+        "n_seeds": k, "null": "circular_shift", "shift_min": m, "shift_max": n - m,
+        "random_mean_total_return": float(rets.mean()), "random_mean_sharpe_net": float(sharpes.mean()),
+        "random_p05_total_return": float(np.percentile(rets, 5)), "random_p95_total_return": float(np.percentile(rets, 95)),
+        "random_mean_gross_return": float(grosses.mean()),
+        "percentile_total_return": float(100.0 * np.mean(rets < result.summary["total_return"])),
+        "percentile_sharpe_net": float(100.0 * np.mean(sharpes < result.summary["sharpe_net"])),
+        "percentile_gross_return": float(100.0 * np.mean(grosses < gross)),
+    }
+
+
 # ------------------------------------------------------------------ baselines
 def _mean_fill_size(result: BacktestResult) -> float:
     """The mean size of the positions ``result`` opened (defined in ``random_same_frequency``);
@@ -296,7 +510,12 @@ def random_same_frequency(signals: SignalFrame, bars: Bars, result: BacktestResu
     before costs over the initial equity); and the strategy's percentile among the seeds (the share of
     seeds strictly below it, in %) by net return, net Sharpe and gross return. Without trades or
     seeds only ``n_seeds`` = 0 and NaN percentiles of net return and net Sharpe.
+
+    An exposure-mode ``result`` (``result.mode == "exposure"``) gets the circular-shift timing null
+    (``circular_shift_null``), with the same keys, instead.
     """
+    if result.mode == "exposure":
+        return circular_shift_null(signals, bars, result, config, seeds)
     cfg = config or result.config
     k = int(seeds if seeds is not None else cfg.random_seeds)
     n_tr = result.summary["n_trades"]
@@ -330,7 +549,8 @@ def backtest(signals: SignalFrame, bars: Bars, strategy: Strategy, config: Optio
              baselines: bool = True) -> BacktestResult:
     """``run_backtest`` plus the baselines every report carries: buy-and-hold, always-flat, and
     random entries with the strategy's trade rate, holding time and mean size
-    (``random_same_frequency``, ``config.random_seeds`` seeds)."""
+    (``random_same_frequency``, ``config.random_seeds`` seeds); for an ``ExposureStrategy`` the
+    random baseline under the same key is the circular-shift timing null (``circular_shift_null``)."""
     cfg = config or BacktestConfig()
     res = run_backtest(signals, bars, strategy, cfg)
     if baselines:
@@ -375,7 +595,11 @@ def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Calla
                         var_scale: float, probes: Sequence[int] = (), config: Optional[BacktestConfig] = None,
                         seed: int = 0) -> None:
     """Perturb every prediction and bar AFTER t; the equity curve and every decision up to t
-    must be unchanged. Raises AssertionError naming the first differing bar."""
+    must be unchanged. Raises AssertionError naming the first differing bar.
+
+    Exposure strategies too: their fills up to bar t (``decisions``, keyed by the fill bar) and every
+    target evaluated at a decision bar <= t (``targets``) must be unchanged; ``SignalFrame.build``
+    rebuilds the EWMA sigma from the perturbed closes."""
     cfg = config or BacktestConfig()
     rng = np.random.default_rng(seed)
     n = len(frame)
@@ -388,6 +612,8 @@ def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Calla
         after = [d for d in other.decisions if d["bar"] <= t]
         if before != after:
             raise AssertionError(f"look-ahead: decisions up to bar {t} changed when data after {t} changed")
+        if [d for d in base.targets if d["bar"] <= t] != [d for d in other.targets if d["bar"] <= t]:
+            raise AssertionError(f"look-ahead: targets up to bar {t} changed when data after {t} changed")
         # equity[t + 1] is the mark at bar t's close
         if not np.allclose(base.equity[: t + 2], other.equity[: t + 2], rtol=0, atol=1e-9):
             first = int(np.argmax(~np.isclose(base.equity[: t + 2], other.equity[: t + 2], rtol=0, atol=1e-9)))

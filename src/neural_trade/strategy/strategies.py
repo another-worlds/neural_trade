@@ -15,6 +15,21 @@ Ported from the notebooks, with these fixes:
 * LiberalStrategy (inference.ipynb, two identical cells): entry thresholds below 0.5 let a
   LONG fire on a bearish signal; the consensus must now match the side
   (``require_consensus_side``, on by default for both multi-horizon strategies).
+
+Two kinds of strategy (NT-077; docs/research/2026-09-29-strategy-architectures/README.md section 5.1):
+
+* **discrete** (``Strategy``): one all-or-nothing position at a time, opened by an ``Order`` and closed
+  by a stop, a target, ``exit_signal`` or ``max_hold``;
+* **exposure** (``ExposureStrategy``): a signed target exposure in [-max_abs_exposure,
+  max_abs_exposure] (units of equity), decided every ``decide_every`` bars at the close and traded
+  at the next open only when it differs from the held (drifted) exposure by more than ``band``
+  (to the target, or to the band's edge with ``trade_to_band_edge``). ``backtest.run_backtest``
+  dispatches it to ``backtest.run_exposure_backtest``.
+
+``FittedOnCalibration`` gives a strategy the ``from_calibration(cal_signalframe, **params)`` path the
+registry uses (``params.build_strategy``): every threshold named in ``fitted_fields`` is set by
+``fit`` from the calibration block's SignalFrame only. The variance-driven strategies of the research
+note live in ``strategy/variance_strategies.py``.
 """
 from __future__ import annotations
 
@@ -24,6 +39,7 @@ from typing import Any, ClassVar, Optional, Tuple
 
 import numpy as np
 
+from neural_trade.core.exceptions import InvalidConfigurationError
 from neural_trade.core.registry import BaseRegistry
 from neural_trade.strategy.signals import SignalFrame
 from neural_trade.strategy.trades import Order
@@ -43,6 +59,52 @@ class Strategy:
     def exit_signal(self, s: SignalFrame, t: int, side: str, bars_held: int, entry_price: float,
                     order: Order) -> Optional[str]:
         return None
+
+
+class FittedOnCalibration:
+    """Mixin: thresholds fitted on the CALIBRATION block's SignalFrame (``from_calibration``).
+
+    ``fitted_fields`` names the dataclass fields ``fit`` sets; values passed for them as params are
+    ignored (the fit overwrites them, as ``build_strategy`` drops calibrated_quantile's lines).
+    """
+
+    fitted_fields: ClassVar[Tuple[str, ...]] = ()
+
+    @classmethod
+    def from_calibration(cls, calibration, **params):
+        if not isinstance(calibration, SignalFrame):
+            raise InvalidConfigurationError(
+                f"strategy {getattr(cls, 'name', cls.__name__)!r} is fitted on the calibration block's SignalFrame, "
+                f"got {type(calibration).__name__}")
+        for key in cls.fitted_fields:
+            params.pop(key, None)
+        return cls(**params).fit(calibration)
+
+    def fit(self, calibration: SignalFrame):
+        """Set every threshold in ``fitted_fields`` from ``calibration`` (only). Returns self."""
+        return self
+
+
+@dataclass
+class ExposureStrategy(FittedOnCalibration, Strategy):
+    """A target-exposure strategy (the exposure mode; module docstring and ``run_exposure_backtest``).
+
+    ``target(s, t, current)`` returns the signed target exposure decided at bar t's close from
+    ``s[:t+1]`` only; ``current`` is the exposure held at that close (after drift). A non-finite
+    target means "no decision". The engine clips the target to +-``max_abs_exposure``.
+    """
+
+    name: ClassVar[str] = "exposure"
+    decide_every: int = 60           # bars between decisions (decides at t % decide_every == 0)
+    band: float = 0.10               # no-trade band, in exposure units
+    trade_to_band_edge: bool = False  # trade only to the band's edge instead of to the target
+    max_abs_exposure: float = 1.0    # spot: 1.0, no leverage
+
+    def target(self, s: SignalFrame, t: int, current: float) -> float:
+        raise NotImplementedError
+
+    def decide(self, s, t):
+        return None                  # the exposure engine calls target(), never decide()
 
 
 class Strategies(BaseRegistry):

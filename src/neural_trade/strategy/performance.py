@@ -39,9 +39,35 @@ def profit_factor(pnls: Iterable[float]) -> float:
     return float(gains / losses)
 
 
+def traded_notional(trades) -> float:
+    """$ notional traded over both sides of every trade: the entry notional (qty x entry mid) plus
+    the exit notional (qty x exit mid = entry notional + side x gross P&L, since gross P&L is on mids)."""
+    total = 0.0
+    for t in trades:
+        sign = 1.0 if t.side == "LONG" else -1.0
+        total += 2.0 * t.notional + sign * t.gross_pnl
+    return float(total)
+
+
+def breakeven_cost_bps(gross_pnl: float, notional: float) -> float:
+    """The round-trip cost (bps) at which net P&L is zero: gross P&L / traded notional x 1e4 x 2
+    (costs are charged per side on the traded notional). NaN when nothing traded."""
+    return float(gross_pnl / notional * 1e4 * 2.0) if notional > 0 else float("nan")
+
+
 def summarize(equity, bar_returns_net, bar_returns_gross, trades, fees_paid: float, exposure: float,
               periods_per_year: int = MINUTES_PER_YEAR) -> Dict[str, float]:
+    """Equity and trade statistics of one backtest.
+
+    Besides the classic keys: ``traded_notional`` ($ over both sides, ``traded_notional()``),
+    ``breakeven_cost_bps`` (the round-trip cost that would zero the net P&L) and
+    ``gross_edge_per_trade_bps`` (the mean over trades of gross P&L / entry notional, x 1e4; NaN
+    without trades). The exposure engine overrides the trade-based ones (``backtest.run_exposure_backtest``).
+    """
     net = [t.net_pnl for t in trades]
+    notional = traded_notional(trades)
+    gross = float(sum(t.gross_pnl for t in trades))
+    edges = [t.gross_pnl / t.notional for t in trades if t.notional > 0]
     return {
         "n_trades": len(trades),
         "total_return": float(equity[-1] / equity[0] - 1.0) if len(equity) else 0.0,
@@ -56,4 +82,7 @@ def summarize(equity, bar_returns_net, bar_returns_gross, trades, fees_paid: flo
         "exposure": float(exposure),
         "turnover": float(sum(2 * t.notional for t in trades) / equity[0]) if len(equity) else 0.0,
         "fees_paid": float(fees_paid),
+        "traded_notional": notional,
+        "breakeven_cost_bps": breakeven_cost_bps(gross, notional),
+        "gross_edge_per_trade_bps": float(np.mean(edges) * 1e4) if edges else float("nan"),
     }
