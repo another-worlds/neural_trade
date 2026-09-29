@@ -1162,7 +1162,7 @@ changes).
 
 **Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses**
 
-- **status:** in-progress (implementer, Sonnet per D-043, branch nt-088, 2026-09-29)
+- **status:** in-progress: QA FAIL on 539b16d (2026-09-30): windows rebuilt per trial (10-18 s on the long file); a non-finite trial crashes the screen and blocks resume; the D-020 protection can be lowered and a None slice is unprotected; the example spec trains on 31 h (fold -1) not 6 h; the LAMBDA 1e6 rule test is missing; term shares mix weighted and unweighted terms; shard appends can interleave; the timing split cannot answer the phase-2 question. Met: slicing mechanism, trial generation, resumability, shards partition, engine untouched, golden bit-for-bit. Repair round 1 sent.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a new src/neural_trade/experiments/screen.py, src/neural_trade/cli.py (`screen` command), src/neural_trade/core/config.py (DATA_END), src/neural_trade/data/processor.py (the slice), tests/, docs/RUNBOOK.md
 - **why:** owner request 2026-09-29: plan runs on 6-hour training blocks of minute data (very small runs) to mass-test maths, hyperparameters and losses; approved plan docs/research/2026-09-29-screen-plan.md. Today a cell's cost is the harness, not training: on Bitcoin_BTCUSDT.csv every cell reads and windows the whole file twice (trainer.py:292, scorer.py:265), traces the graph, fits baselines, runs 100 null backtests and writes npz files (scoring alone 56-104 s).
