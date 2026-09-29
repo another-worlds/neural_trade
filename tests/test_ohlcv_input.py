@@ -7,7 +7,6 @@ every learnable parameter of every family on bundled and extreme inputs), criter
 from __future__ import annotations
 
 import numpy as np
-import pandas as pd
 import pytest
 
 from neural_trade.core.config import Config
@@ -100,7 +99,7 @@ def test_processor_blocks_scale_ohlcv_and_keep_close_raw_windows(real_slice):
     dp = DataProcessor(cfg)
     df = dp.preprocess(real_slice.copy())
     out = dp.prepare_datasets(df, df["Close"].to_numpy(dtype="float32"))
-    X_train, X_test = out[0], out[4]
+    X_train = out[0]
     assert X_train.ndim == 3 and X_train.shape[2] == 5
     assert dp.normalizer.input_series == ("open", "high", "low", "close", "volume")
     assert dp.normalizer.vol_scale > 0

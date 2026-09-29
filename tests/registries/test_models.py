@@ -15,7 +15,7 @@ def test_default_model_builds_with_ten_named_heads_at_a_small_lookback():
     cfg = Config(LOOKBACK=32)
     model = Models.build(None, cfg)
     assert len(model.outputs) == len(PredictiveOutputs._fields) == 10
-    outs = PredictiveOutputs(*model(tf.random.normal([3, 32]), training=False))
+    outs = PredictiveOutputs(*model(tf.random.normal([3, 32, 5]), training=False))  # OHLCV input (NT-047)
     assert outs.price_h1.shape == (3, 1) and outs.vacuum_overflow.shape == (3, 1)
     assert float(tf.reduce_min(outs.variance_h2)) > 0.0
     assert 0.0 <= float(tf.reduce_min(outs.direction_h0)) <= float(tf.reduce_max(outs.direction_h0)) <= 1.0
@@ -44,7 +44,7 @@ def test_direction_skip_adds_a_linear_logit_and_can_be_turned_off():
     skip = Models.build(None, Config(LOOKBACK=32))   # on by default
     names = {layer.name for layer in skip.layers}
     assert {"direction_skip_features", "direction_h0_skip", "direction_h1_logit", "direction_h2_skip"} <= names
-    outs = PredictiveOutputs(*skip(tf.random.normal([4, 32]), training=False))
+    outs = PredictiveOutputs(*skip(tf.random.normal([4, 32, 5]), training=False))
     assert 0.0 <= float(tf.reduce_min(outs.direction_h1)) <= float(tf.reduce_max(outs.direction_h1)) <= 1.0
 
     x = np.random.default_rng(0).normal(size=(5, 32)).astype(np.float32)

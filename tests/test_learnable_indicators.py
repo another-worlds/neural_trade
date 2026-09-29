@@ -9,6 +9,9 @@ import neural_trade.utils.math as mh
 from neural_trade.core.config import Config
 from neural_trade.models.layers import LearnableIndicators
 
+# the pre-NT-047 default this file pins: close-only input, the four families (18 logits)
+OLD = dict(INPUT_SERIES=["close"], INDICATOR_FAMILIES={})
+
 B, T = 16, 60
 
 
@@ -56,7 +59,7 @@ def test_ewma_matrix_is_finite_when_sigmoid_rounds_alpha_to_one():
 
 @pytest.mark.parametrize("impl", ["matrix", "scan"])
 def test_layer_output_shape_and_gradient_reaches_all_18_logits(impl):
-    cfg = Config()
+    cfg = Config(**OLD)
     cfg.EWMA_IMPL = impl
     layer = LearnableIndicators(cfg)
     x = _x()
@@ -76,7 +79,7 @@ def test_layer_output_shape_and_gradient_reaches_all_18_logits(impl):
 def test_matrix_and_scan_layers_agree():
     outs = []
     for impl in ("scan", "matrix"):
-        cfg = Config()
+        cfg = Config(**OLD)
         cfg.EWMA_IMPL = impl
         tf.keras.utils.set_random_seed(0)
         layer = LearnableIndicators(cfg)
@@ -100,7 +103,7 @@ def test_multi_series_ewma_equals_one_call_per_series():
 def test_batched_layer_equals_per_indicator_layer_values_and_gradients():
     """The two-stage batched call (default) computes exactly the per-indicator features."""
     tf.keras.utils.set_random_seed(0)
-    layer = LearnableIndicators(Config())
+    layer = LearnableIndicators(Config(**OLD))
     x = tf.Variable(_x(4) * 0.3)
     c = layer.config
     n_logits = len(c.MA_SPANS) + 3 * len(c.MACD_SETTINGS) + len(c.RSI_PERIODS) + len(c.BB_PERIODS)
