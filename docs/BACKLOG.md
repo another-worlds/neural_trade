@@ -107,6 +107,7 @@ changes).
 | [NT-072](#nt-072) | P2 | feature | implementer | todo | Per-bar causal model as a Models registry entry (option B) |
 | [NT-073](#nt-073) | P2 | research | experimenter | todo | A/B-2: the per-bar model against the default (pre-registered) |
 | [NT-074](#nt-074) | P1 | bug | implementer | todo | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
+| [NT-075](#nt-075) | P1 | performance | experimenter | todo | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
 
 ## Items
 
@@ -995,6 +996,17 @@ changes).
 - **why:** NT-035 (2026-09-29): three runs with seed 777 and op determinism on (TF_DETERMINISTIC_OPS=1 plus enable_op_determinism) gave val_loss 9.5673 / 9.6394 / 9.6603 at epoch 0 on the GPU; no op raised. D-025 assumes a deterministic mode makes comparison studies reproducible; it does not yet, so paired studies must use several seeds. Candidates: PYTHONHASHSEED unset on this path, the tf.data shuffle or parallel map order, the vacuum-noise layer's random numbers, CPU-pinned ops.
 - **acceptance:** (1) The source is identified with evidence (a CPU test and, by the experimenter, a short GPU check). (2) Two same-seed runs in the deterministic mode give identical val_loss per epoch on the CPU (test) and, if the source is fixable on the GPU, on the GPU (3 runs, recorded). (3) If full GPU reproducibility is impossible in TF 2.10, the item records why and DECISIONS gets a corrected reading of D-025. (4) Speed unchanged (D-018); fast suite and ruff pass.
 - **source:** NT-035 REPORT (2026-09-29)
+
+### NT-075
+
+**Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each)**
+
+- **status:** todo
+- **priority / type / role:** P1 / performance / experimenter
+- **area:** runs/experiments/speed_check_mvp1/ (SPEC, REPORT)
+- **why:** The notebook run on the MVP-1 head (runs/20260929T081632Z-426de4f-dirty-aba344d6) logged sec_per_step 0.1066 against 0.0984 for the previous notebook run (runs/20260924T182915Z-1aeff1c-dirty-af67ee43), +8%. The session touched callbacks (NT-028) and moved modules (NT-027) but not the per-step path; golden runs are equal. One run per side is not noise-aware (D-012), and the desktop alone showed about 40% GPU utilisation at times (NT-035). D-018: the per-step path must not get slower.
+- **acceptance:** (1) At least 3 interleaved real runs per side (the MVP-1 head against 1aeff1c's commit or fd960cd, same data and config), each after the RUNBOOK GPU-free check; the median epoch time of epochs 1 and later and sec_per_step, with their spread. (2) A verdict: no regression within noise, or a regression with its size; in the latter case an implementer item that finds the cause. (3) GPU time under 1 hour.
+- **source:** handoff 2026-09-29
 
 ## Done log
 

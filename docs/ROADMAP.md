@@ -16,7 +16,7 @@ notebooks on real runs, D-011, D-012: done. Physics ablation v1 (84 runs): no te
 family inconclusive ([report](../runs/ablations/ablate_physics_v1-full/report.md);
 [plan](archive/REMEDIATION_PLAN_2026-09.md)).
 
-## R1: a trustworthy pipeline (in progress, first)
+## R1: a trustworthy pipeline (done 2026-09-29)
 
 - Items (nothing downstream counts while CI is red or a baseline is wrong): NT-001 (CI green),
   NT-002 (random null ignores position size), NT-010 (every cited number links to a tracked run),
@@ -24,7 +24,7 @@ family inconclusive ([report](../runs/ablations/ablate_physics_v1-full/report.md
 - **Exit:** the `ci` workflow is green on the branch head; no open P0; the numbers in STATUS and
   README each link to a committed report or run summary.
 
-## MVP-1: structure and the experiment engine (VISION MVP point 1; D-023, D-029)
+## MVP-1: structure and the experiment engine (done 2026-09-29; VISION MVP point 1; D-023, D-029)
 
 - Items: NT-026 (experiment engine: scenario and sweep spec, resumable runner, one run store with an
   index, one scorer; supersedes NT-024), NT-027 (layering: no circular imports, one metrics and
