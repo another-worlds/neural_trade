@@ -73,4 +73,4 @@ Start of session: CLAUDE.md steps (fetch, status, CI, open PRs). Then, in order:
 MVP estimate without spend-limit stalls: about 4-6 days of continuous work (an estimate; GPU queue about
 20 GPU-hours, mostly NT-050).
 
-CI on the pushed head: ae00486 pushed; the handoff commit's run is checked at the end of this handoff.
+CI on the pushed head: green on d00c73e (run 36542822585, the handoff commit); this one-line update follows it.
