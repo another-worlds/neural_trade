@@ -7,12 +7,22 @@
     neural-trade scenario reindex [--store runs] [--index runs/index.sqlite]
     neural-trade scenario rescore configs/scenarios/<name>.yaml --study configs/strategy_studies/<study>.yaml
                                   [--store runs] [--random-seeds N]
+    neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
     neural-trade registry list | info REGISTRY NAME | search QUERY
     neural-trade env
 
 ``train`` creates a run directory (runs/<UTC time>-<git sha>-<config hash>/) holding the
 config, per-epoch metrics, the serving bundle (artifacts/) and the test evaluation report.
 Values given to ``--set`` are parsed as YAML (``--set EPOCHS=5 --set HORIZON_STEPS=[5,10,20]``).
+
+``screen`` (neural_trade.experiments.screen, NT-088) is a separate, lighter path for mass sub-30-second
+trials (a grid and/or a random/LHS sample of Config fields, crossed with DATA_END slices and seeds):
+one JSON line per trial in <store>/screens/<name>/results.jsonl (health numbers, per-horizon direction
+AUC, pass/fail against the spec's rules), no baselines, backtest, random null, npz or serving bundle,
+and no per-trial run directory. It finds broken math and unstable configurations; ranking quality is
+``scenario run``'s job, on the survivors (see docs/RUNBOOK.md "Screen mode"). ``--shard i/N``: each
+shard writes its OWN file (results.shard-i-of-N.jsonl, 0-indexed), never the shared results.jsonl;
+``neural_trade.experiments.screen.merge_results`` reads every shard file back together.
 
 ``scenario run`` is the experiment engine (neural_trade.experiments.runner): every (variant,
 fold, seed) cell of the spec trains into its own directory under runs/scenarios/<name>/ and is
@@ -211,6 +221,21 @@ def _scenario_rescore(args, store) -> int:
     return 0
 
 
+def cmd_screen(args) -> int:
+    from neural_trade.core.exceptions import InvalidConfigurationError
+    from neural_trade.experiments.screen import ScreenSpec, parse_shard, run_screen
+
+    try:
+        shard = parse_shard(args.shard)
+        spec = ScreenSpec.from_yaml(args.spec)
+        report = run_screen(spec, store=args.store, shard=shard, max_trials=args.max_trials)
+    except InvalidConfigurationError as exc:
+        logger.error("screen refused, nothing was run: %s", exc)
+        return 2
+    print(json.dumps(report.to_dict(), indent=2, default=str))  # noqa: T201 - the command's result
+    return 0
+
+
 def cmd_registry(args) -> int:
     from neural_trade.registries import all_registries, load_all, registry_summary
 
@@ -316,6 +341,20 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--random-seeds", type=int, default=None,
                    help="rescore: random-null seeds per backtest (default: the scenario's backtest setting)")
     s.set_defaults(func=cmd_scenario)
+
+    sc = sub.add_parser("screen", help="mass, sub-30-second CPU/GPU trials over a grid/sample of Config fields "
+                                       "(NT-088): finds broken math and unstable hyperparameter regions, ranks "
+                                       "nothing (that is scenario run's job on the survivors)",
+                       description="one line per trial in <store>/screens/<name>/results.jsonl: health numbers, "
+                                   "per-horizon direction AUC and a pass/fail against the spec's pre-registered "
+                                   "rules. Resumable: a trial already in results.jsonl is skipped.")
+    sc.add_argument("spec", help="screen spec YAML (configs/screens/*.yaml)")
+    sc.add_argument("--shard", default=None, help="i/N: this process runs trial j only when j %% N == i "
+                                                  "(shards are disjoint; their union is every trial)")
+    sc.add_argument("--store", default="runs", help="run store root; screens go to <store>/screens/<name>/")
+    sc.add_argument("--max-trials", type=int, default=None,
+                    help="run at most N pending trials, then stop (the same command resumes)")
+    sc.set_defaults(func=cmd_screen)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")
     r.add_argument("action", choices=["list", "info", "search"])

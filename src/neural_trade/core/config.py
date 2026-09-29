@@ -64,6 +64,8 @@ UNITS: Dict[str, str] = {
     "key": "a registry key or a Config field name, checked when the registries load",
     "path": "a file or directory path",
     "mapping": "a nested mapping (see the doc)",
+    "timestamp": "an ISO-8601 timestamp (naive timestamps are read as UTC)",
+    "days": "a number of calendar days",
 }
 
 
@@ -236,6 +238,18 @@ class Config:
                       ge=2, step=1)
     FOLD_INDEX: int = _f(-1, "data", "which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)",
                          unit="index")
+
+    # NT-088 (screen mode): lets a trial's data end anywhere in history instead of only at the file's
+    # newest bar, so a screen can slice quiet/volatile regimes for its mass 6-hour training blocks.
+    # The slice is taken from load_and_prepare_data, before MAX_SEQUENCE_COUNT trims from the end of
+    # that slice. None (default) is today's behaviour: no slicing, the newest bars are used.
+    DATA_END: Optional[str] = _f(None, "data", "end the prepared data at this timestamp instead of the file's "
+                                 "newest bar (None = today's behaviour); refused when the slice would reach into "
+                                 "the protected dev/test span (DATA_END_PROTECTED_DAYS) of the full file (D-020)",
+                                 unit="timestamp")
+    DATA_END_PROTECTED_DAYS: float = _f(64.0, "data", "DATA_END is refused when it falls within this many days of "
+                                        "the full file's last bar, so a screen trial cannot slice into the "
+                                        "long file's dev/test period (D-020)", unit="days", ge=0.0)
 
     # ------------------------------------------------------------------ horizons
     EXTENDED_TREND_PERIODS: List[int] = _f([10, 15, 20], "horizons",

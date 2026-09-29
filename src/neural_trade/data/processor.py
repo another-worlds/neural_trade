@@ -13,6 +13,7 @@ import math
 from typing import Optional
 
 import numpy as np
+import pandas as pd
 
 from neural_trade.data.loaders import validate_ohlcv_frame
 from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, transform_targets
@@ -21,6 +22,40 @@ from neural_trade.data.windowing import (compute_extended_trend_features, make_s
                                          sequence_anchor_bars)
 
 logger = logging.getLogger(__name__)
+
+
+def apply_data_end(df, config):
+    """Slice ``df`` (already preprocessed, sorted by timestamp) to end at ``Config.DATA_END``, taken
+    BEFORE ``MAX_SEQUENCE_COUNT`` trims from the end of the slice (NT-088 screen mode: trials pick a
+    volatility regime anywhere in history, not only the file's newest bars). Refuses a ``DATA_END``
+    that falls within the protected dev/test span (the file's last ``DATA_END_PROTECTED_DAYS`` days),
+    so a screen trial cannot leak the long file's held-out period into training (D-020). ``None``
+    (the default): no slicing, today's behaviour."""
+    data_end = getattr(config, "DATA_END", None)
+    if data_end is None:
+        return df
+    try:
+        end = pd.Timestamp(data_end)
+    except (ValueError, TypeError) as exc:
+        raise ValueError(f"DATA_END={data_end!r} is not a valid timestamp: {exc}") from exc
+    ts = df["timestamp"]
+    tz = getattr(ts.dtype, "tz", None)
+    if end.tzinfo is None and tz is not None:
+        end = end.tz_localize(tz)
+    elif end.tzinfo is not None and tz is None:
+        end = end.tz_localize(None)
+    last = ts.max()
+    protected_days = float(getattr(config, "DATA_END_PROTECTED_DAYS", 64.0))
+    protected_start = last - pd.Timedelta(days=protected_days)
+    if end >= protected_start:
+        raise ValueError(
+            f"DATA_END={data_end} falls within the protected dev/test span: the file's last "
+            f"{protected_days:g} days start at {protected_start} (last bar {last}); choose an earlier "
+            "DATA_END, or the run's dev/test period could leak into training (D-020)")
+    sliced = df[ts <= end]
+    if sliced.empty:
+        raise ValueError(f"DATA_END={data_end} is before the data starts ({ts.min()})")
+    return sliced.reset_index(drop=True)
 
 
 def _select_fold(folds, index):
@@ -90,6 +125,7 @@ class DataProcessor:
         ``read_csv_kwargs`` is passed through to ``pd.read_csv`` for the csv loader.
         """
         df = self.preprocess(self.load_raw(read_csv_kwargs, **loader_kwargs))
+        df = apply_data_end(df, self.config)
         logger.info(f"Dataset length after cleaning: {len(df)}")
         logger.info('%s %s %s %s', "Date range after cleaning:", df['Date'].min(), "to", df['Date'].max())
 
@@ -104,7 +140,15 @@ class DataProcessor:
     def make_sequences_with_extended_trends(self, close_array, lookback):
         return make_sequences_with_extended_trends(self.config, close_array, lookback)
 
-    def prepare_datasets(self, df, close_values):
+    def build_windows(self, close_values):
+        """Sliding windows/targets (:func:`make_sequences_with_extended_trends`) trimmed to
+        ``MAX_SEQUENCE_COUNT`` (most recent kept): the part of :meth:`prepare_datasets` that loops
+        every bar and is therefore worth caching. A pure function of ``self.config`` and
+        ``close_values`` (every field it reads - LOOKBACK, HORIZON_STEPS, EXTENDED_TREND_PERIODS,
+        WINDOW_STEP, MAX_SEQUENCE_COUNT - is part of :func:`neural_trade.experiments.dataset.data_key`),
+        so a caller that trains many configurations sharing a data key (NT-088 screen mode) can build
+        it once and reuse it across all of them, only redoing the split/scale/normalise step below.
+        """
         X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
             self.config, close_values, self.config.LOOKBACK
         )
@@ -119,7 +163,21 @@ class DataProcessor:
             last_close_seq = last_close_seq[take_from:]
             extended_trends = extended_trends[take_from:]
             logger.info(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
+        return X_seq, y_seq, last_close_seq, extended_trends
 
+    def prepare_datasets(self, df, close_values):
+        X_seq, y_seq, last_close_seq, extended_trends = self.build_windows(close_values)
+        return self.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq, extended_trends)
+
+    def prepare_datasets_from_windows(self, X_seq, y_seq, last_close_seq, extended_trends):
+        """The fold split, target scaling and window normalisation of :meth:`prepare_datasets`, given
+        already-built (and, for MAX_SEQUENCE_COUNT, already-trimmed) windows. Splitting an array by
+        index and fitting a scaler on it is cheap next to building the windows themselves (no
+        per-bar Python loop), so a caller that caches :meth:`build_windows` per data key (NT-088)
+        still pays this part once per trial - the fields it reads beyond the window/data_key ones
+        (N_FOLDS, VAL_FRACTION, CAL_FRACTION, WINDOW_STEP, BATCH_SIZE, WINDOW_NORMALIZER, FOLD_INDEX)
+        may differ per trial even when the data key does not.
+        """
         logger.info("[INFO] Dataset Statistics:")
         logger.info(f"   Total sequences: {X_seq.shape[0]}")
 
