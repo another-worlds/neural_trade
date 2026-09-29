@@ -9,7 +9,7 @@ SPEC before GPU time, REPORT against it), per the experimenter agent file.
 
 ## Pinned code
 
-- Spec commit (this file, on `remediation/plan`): `<FILLED AFTER COMMIT>`
+- Spec commit (this file, on `remediation/plan`): `8f35053be2d185c5270a0135c93b1b17f2145f50`
 - Worktree: `D:/nt_exp_gpu_measurements_v1` (detached at the spec commit sha above)
 - Every job launches with `PYTHONPATH=D:/nt_exp_gpu_measurements_v1/src`, cwd
   `D:/nt_exp_gpu_measurements_v1`, so `CSV_PATH` (relative, `binance_btcusdt_1min_ccxt.csv`)
