@@ -1,0 +1,46 @@
+# Screen spec (NT-088): a tiny example over the bundled 30-day CSV.
+#
+# A screen trains hundreds of MICRO configurations (the reference size is a 6-hour training block,
+# docs/research/2026-09-29-screen-plan.md) to find broken math and unstable hyperparameter regions
+# (level 1 of the plan); it does not rank quality (that needs a real block: level 2, scenario run
+# on the survivors). No baselines, backtest, random null, npz, checkpoints or serving bundle; no
+# per-trial run directory; one JSON line per trial in <store>/screens/example_6h/results.jsonl.
+#
+#   neural-trade screen configs/screens/example_6h.yaml
+#   neural-trade screen configs/screens/example_6h.yaml --shard 0/3   # 3 processes, disjoint shards
+#
+# DATA_END_PROTECTED_DAYS is lowered to 2 only because the bundled CSV spans just 30 days (its
+# default, 64, protects more history than this file has at all, so every DATA_END would be
+# refused). A screen on the long 2017-2025 file keeps the real 64-day default (D-020): a mass
+# CPU/GPU campaign never runs against the bundled CSV in git, only against the local long file.
+schema_version: 1
+name: example_6h
+description: 4 grid cells x 2 slices x 2 seeds = 16 tiny CPU trials, math/stability screening only.
+base_config: ../default.yaml
+overrides:
+  N_FOLDS: 2
+  VAL_FRACTION: 0.1
+  CAL_FRACTION: 0.1
+  MAX_SEQUENCE_COUNT: 4500
+  DATA_END_PROTECTED_DAYS: 2.0
+  TRAIN_METRICS_EVERY: 1        # exact per-step grad_global_norm (screens are tiny; the cost is negligible)
+grid:
+  axes:
+    LR: [0.0001, 0.001]
+    BATCH_SIZE: [64, 256]
+# sample:                       # optional, in addition to (not crossed with) the grid, e.g.
+#   n: 20
+#   method: random               # or lhs
+#   seed: 0
+#   space: {LAMBDA_HD: {low: 0.0, high: 1.0}, LR: {low: 0.0001, high: 0.01, log: true}}
+slices: ["2025-10-20T00:00:00", "2025-10-28T00:00:00"]   # two DATA_END values (quieter / later regime)
+seeds: [0, 1]
+run:
+  calibrate: false
+  epochs: 2
+rules:
+  finite: true
+  max_nonfinite_grad_steps: 0
+  max_clipped_share: 0.5
+  min_train_loss_drop: -1.0     # 2 epochs on a tiny block rarely drops much; a real campaign tightens this
+  max_term_share: 0.95
