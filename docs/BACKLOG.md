@@ -121,6 +121,7 @@ changes).
 | [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
 | [NT-087](#nt-087) | P1 | feature | implementer | in-progress | pnl_utility objective: net P&L after costs on the direction heads (P&L plan E2) |
 | [NT-088](#nt-088) | P1 | feature | implementer | in-progress | Screen mode: mass ultra-small runs (6-hour training block) for maths, hyperparameters and losses |
+| [NT-089](#nt-089) | P2 | bug | implementer | todo | HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0 |
 
 ## Items
 
@@ -1168,6 +1169,17 @@ changes).
 - **why:** owner request 2026-09-29: plan runs on 6-hour training blocks of minute data (very small runs) to mass-test maths, hyperparameters and losses; approved plan docs/research/2026-09-29-screen-plan.md. Today a cell's cost is the harness, not training: on Bitcoin_BTCUSDT.csv every cell reads and windows the whole file twice (trainer.py:292, scorer.py:265), traces the graph, fits baselines, runs 100 null backtests and writes npz files (scoring alone 56-104 s).
 - **acceptance:** (1) `neural-trade screen SPEC [--shard i/N] [--store runs]`: windows built once per data key per process and passed to training and scoring; no baselines, backtest, null, npz, checkpoints, bundle; calibrate switchable. (2) Config DATA_END (timestamp) selects the slice's end anywhere in the file; a slice overlapping the long file's dev/test period is refused (D-020) (test). (3) Trials from grid axes plus random/LHS sampling over Config.field_specs() with explicit bounds in the spec; x slices x seeds. (4) One row per trial in results.jsonl (health: finite checks, nonfinite_grad_steps, max grad norm, clipped-step share, train-loss drop, val loss, per-term shares, timings split into load / build+trace / train / score); resumable (finished trials are skipped) (test). (5) Pre-registered screen rules in the spec mark a trial pass/fail; a known-bad config (LR 1.0, a lambda of 1e6) fails (test). (6) Disjoint shards whose union is all trials (test). (7) scenario run and the golden run unchanged (bit-for-bit); fast suite, ruff, TESTING_DOCUMENTATION, config reference, RUNBOOK section.
 - **source:** owner request 2026-09-29; docs/research/2026-09-29-screen-plan.md
+
+### NT-089
+
+**HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/losses/functions.py (hyper_decoherence_coupling_loss: local_vol / log_vol via an unguarded tf.math.reduce_std, _z), tests/
+- **why:** NT-087 repair round 1 (2026-09-30): with a +inf bar in x_window the gradient of out.total into the variance heads is NaN under plain custom_loss, even with LAMBDA_HD 0; the term's forward value is zeroed by its tf.where guard, but the chain rule multiplies the zeroed upstream gradient by an internally NaN local Jacobian (0 x NaN). The train step zeroes and counts such steps (custom_model.py:478-486), so a step is skipped, not corrupted. D-026 stability gap; relevant to NT-036/NT-038.
+- **acceptance:** sanitise local_vol / log_vol before use (as NT-087 did for sigma); a test with a +inf bar at LAMBDA_HD 0 and > 0 gives finite gradients into every head; golden run bit-for-bit.
+- **source:** NT-087 implementer report, 2026-09-30
 
 ## Done log
 
