@@ -29,6 +29,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO = Path(__file__).resolve().parent.parent
 PHYSICS_LAMBDAS = ("LAMBDA_T_PERP", "LAMBDA_CASIMIR", "LAMBDA_HD", "LAMBDA_IFE", "LAMBDA_VAC_OVERFLOW", "LAMBDA_VAC")
@@ -167,15 +168,20 @@ def main(argv=None) -> int:
         overrides.update({k: 0.0 for k in PHYSICS_LAMBDAS})
     overrides.update(_parse_set(args.set))
 
-    os.chdir(run_dir)  # CSVLogger / ParamsLogger write relative paths
+    os.chdir(run_dir)
     sys.path.insert(0, str(REPO))
     t0 = time.time()
     from neural_trade.training.trainer import train_and_evaluate  # noqa: E402  (after chdir so relative outputs land here)
 
+    # NT-028: csv_logger / params_logger now skip writing when TrainContext.run_dir is None (a run
+    # without a RunContext no longer litters training_log.csv where nothing reads it); this run's
+    # evidence IS read (by check_gates.py), so a minimal run_context gives it an explicit run_dir.
+    run_context = SimpleNamespace(run_dir=run_dir, run_id=args.name)
     result = train_and_evaluate(
         csv_path=str(REPO / "binance_btcusdt_1min_ccxt.csv"),
         config_overrides=overrides, epochs=args.epochs, force=True,
         calibrate=not args.no_calibrate, fit_calibration=True, save_artifacts=True,  # loadable by the notebooks
+        run_context=run_context,
     )
     wall = time.time() - t0
 

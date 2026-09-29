@@ -13,7 +13,8 @@ import tensorflow as tf
 def _build(cfg, tmp_path, synthetic_bars):
     from neural_trade.training.custom_model import CustomTrainModel
     from neural_trade.data.processor import DataProcessor
-    from neural_trade.models.facade import PricePredictor
+    from neural_trade.data.datasets import create_datasets
+    from neural_trade.models.registry import Models
 
     csv_path = tmp_path / "bars.csv"
     synthetic_bars.to_csv(csv_path, index=False)
@@ -25,8 +26,9 @@ def _build(cfg, tmp_path, synthetic_bars):
     df, close = dp.load_and_prepare_data()
     (X_tr, y_tr_s, lc_tr, ext_tr, X_te, y_te_s, lc_te, ext_te, y_tr, _y_te, _scaler) = dp.prepare_datasets(df, close)
 
-    predictor = PricePredictor(cfg)
-    base = predictor.build_model()
+    # NT-028: PricePredictor (models/facade.py) was a thin, uncalled wrapper over these two; the
+    # current API is Models.build(...) and data.datasets.create_datasets(...) directly.
+    base = Models.build(getattr(cfg, 'MODEL_NAME', None), cfg)
     std = float(np.std(y_tr))
     pred_scale = std if std > 0 else 1.0
     pred_mean = float(np.mean(y_tr))
@@ -36,7 +38,7 @@ def _build(cfg, tmp_path, synthetic_bars):
         lambda_global_trend=cfg.LAMBDA_GLOBAL_TREND, lambda_extended_trend=cfg.LAMBDA_EXTENDED_TREND,
         lambda_dir=cfg.LAMBDA_DIR, config=cfg, inputs=base.inputs, outputs=base.outputs,
     )
-    train_ds, val_ds = predictor.create_datasets(X_tr, y_tr_s, lc_tr, ext_tr, X_te, y_te_s, lc_te, ext_te)
+    train_ds, val_ds = create_datasets(cfg, X_tr, y_tr_s, lc_tr, ext_tr, X_te, y_te_s, lc_te, ext_te)
     model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=cfg.LR))
     return model, train_ds, val_ds
 
@@ -127,3 +129,27 @@ def test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_com
     for key in ("loss", "val_loss", "grad_global_norm", "point_h1", "train_dir_mcc_h1", "pit_ks_h1",
                 "val_dir_mcc_h1", "val_pit_ks_h1", "nonfinite_grad_steps"):
         assert key in h and np.isfinite(h[key][-1]), key
+
+
+def test_a_run_without_a_run_context_writes_no_file_nothing_reads(tiny_config, tmp_path, synthetic_bars,
+                                                                   monkeypatch):
+    """NT-028 acceptance (3): a 1-epoch CPU train_and_evaluate() outside any RunContext must not
+    litter files that nothing reads (training_log.csv, indicator_params_history.csv: csv_logger and
+    params_logger now skip when TrainContext.run_dir is None). MODEL_PATH stays: the warm start
+    reads it on a later run in the same directory (NT-049)."""
+    from neural_trade.training.trainer import train_and_evaluate
+
+    monkeypatch.chdir(tmp_path)
+    csv_path = tmp_path / "bars.csv"
+    synthetic_bars.to_csv(csv_path, index=False)
+    tiny_config.CSV_PATH = str(csv_path)
+    # MODEL_PATH / SCALER_PATH are left at their Config defaults (relative names).
+
+    before = {p.name for p in tmp_path.iterdir()}
+    train_and_evaluate(config=tiny_config, epochs=1, force=True, calibrate=False, fit_calibration=False,
+                       save_artifacts=False)
+    created = {p.name for p in tmp_path.iterdir()} - before
+
+    assert "training_log.csv" not in created
+    assert "indicator_params_history.csv" not in created
+    assert (tmp_path / tiny_config.MODEL_PATH).exists()

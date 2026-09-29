@@ -338,7 +338,13 @@ class MetricThresholdStop(callbacks.Callback):
 # ---- builders registered in the Callbacks registry (imported above): f(config, context) -----
 @Callbacks.register(name="csv_logger", tags=["logging", "default"])
 def build_csv_logger(config, context):
-    """Keras CSVLogger to training_log.csv."""
+    """Keras CSVLogger to training_log.csv inside the run directory.
+
+    Skipped without one (NT-028, D-029): nothing reads a training_log.csv left in the process's
+    working directory by a run that has no RunContext.
+    """
+    if context.run_dir is None:
+        return []
     return callbacks.CSVLogger(context.path("training_log.csv"), append=True)
 
 
@@ -382,7 +388,12 @@ def build_tqdm_progress(config, context):
 
 @Callbacks.register(name="params_logger", tags=["logging", "indicators", "default"])
 def build_params_logger(config, context):
-    """Learned indicator periods per epoch to indicator_params_history.csv (legacy CSV)."""
+    """Learned indicator periods per epoch to indicator_params_history.csv inside the run directory.
+
+    Skipped without one (NT-028, D-029): same reasoning as ``csv_logger``.
+    """
+    if context.run_dir is None:
+        return []
     return ParamsLogger(layer=context.indicator_layer, out_csv=context.path("indicator_params_history.csv"))
 
 
