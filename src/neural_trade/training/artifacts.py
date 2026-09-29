@@ -99,6 +99,10 @@ class ArtifactBundle:
         if meta.get("format_version", 0) > FORMAT_VERSION:
             raise ValueError(f"artifact format {meta['format_version']} is newer than this code ({FORMAT_VERSION})")
         config = Config.from_yaml(d / "config.yaml")
+        # A bundle written before NT-047 has no INPUT_SERIES key in its config.yaml: it was
+        # trained on the close-only input, so the OHLCV default must not apply to it.
+        if "INPUT_SERIES" not in (d / "config.yaml").read_text(encoding="utf-8"):
+            config = config.override(INPUT_SERIES=["close"])
         calib = None
         if meta.get("has_calibration") and (d / "calibration").is_dir():
             from neural_trade.calibration import CalibrationPipeline
