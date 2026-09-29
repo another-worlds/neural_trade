@@ -78,4 +78,5 @@ select = ["E", "F", "W", "B"]
 ignore = ["E501", "B905"]   # B905: zip(strict=) would change behaviour where lengths already match by construction
 
 [tool.ruff.lint.per-file-ignores]
-"src/neural_trade/compat.py" = ["F401"]   # the legacy re-export surface
+# neural_trade.compat (the legacy model.py re-export surface) was removed in NT-028: it had no
+# caller besides the two tests that checked it exists (D-029).

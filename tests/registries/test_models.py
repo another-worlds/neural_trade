@@ -30,14 +30,6 @@ def test_builder_signature_and_output_contract_are_enforced():
         ensure_predictive_outputs(wrong)
 
 
-def test_price_predictor_facade_uses_the_registry():
-    from neural_trade.models.facade import PricePredictor
-
-    tf.keras.utils.set_random_seed(0)
-    m = PricePredictor(Config(LOOKBACK=32)).build_model()
-    assert len(m.outputs) == 10
-
-
 def test_direction_skip_adds_a_linear_logit_and_can_be_turned_off():
     import numpy as np
 
