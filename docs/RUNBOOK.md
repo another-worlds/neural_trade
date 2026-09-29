@@ -359,6 +359,32 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   with a different `N` are ignored, never merged in.
 - **Level 2** (survivors, real quality): re-run through `scenario run` on a real block (a
   `configs/scenarios/micro_*.yaml`-style spec), not through screen mode again.
+- **Phase 2: reused-graph trials** (NT-092; `run: {reuse_graph: true}`, the default). GPU measurement
+  (`runs/experiments/micro_loop_v1/LOG.md`, 2026-09-30) found tracing at 73% of a trial's wall time
+  (12.2s of 16.7s): phase 1's fresh-model-per-trial path retraces `train_step`/`test_step` from
+  scratch on every trial's first `fit()` call, even when only a continuous hyperparameter changed.
+  Trials are grouped by `experiments.screen.structural_key` (every Config field EXCEPT `SEED`,
+  `DATA_END`, `EPOCHS` and `CONTINUOUS_FIELDS` — see that constant's docstring in `screen.py` for the
+  exact list and, for each, WHERE it is read from a live `tf.Variable`/Keras optimizer hyper at run
+  time instead of a Python constant baked into the graph); trials of one group are run contiguous
+  (`_group_order`; only reordering, never changing which trial produces which row) through one
+  `_TrialGroup`, which builds the model, both optimizers and the compiled train/test step ONCE (from
+  the group's first trial) and, before every later trial: copies in fresh initial weights (a
+  throwaway `Models.build` at the trial's seed — cheap, not traced), resets both optimizers'
+  variables to zero, resets every stochastic layer's dropout generator from the trial's seed
+  (`training/reset.reset_stateful_rngs` — also called on the fresh path, so a reused trial and a
+  fresh trial of the same seed draw the identical dropout stream), and resets every continuous field
+  to the trial's value. `run: {reuse_graph: false}` disables grouping (every trial fresh, phase 1's
+  path) for a direct comparison or to reproduce old numbers exactly; a `trainer=` override (tests
+  only) always runs ungrouped, since grouping only matters for a real, traced TF graph.
+  `rules.clip_skip_epochs` (default 1) excludes the FIRST `clip_skip_epochs` epochs' logged steps
+  from `clipped_share` (and the norm max/mean) only — `n_steps` still counts them — because the
+  initial, pre-any-update gradient norm routinely exceeds the clip on a fresh model's very first
+  steps regardless of LR, which is not the "is this config unstable" signal the rule exists for (the
+  `docs/BACKLOG.md` NT-092 "why": every 2-epoch trial at LR 1e-4 failed `max_clipped_share` on this
+  transient alone). The min_epochs guard refuses a spec whose EXPLICIT
+  `rules.clip_skip_epochs >= EPOCHS` (nothing would ever be scored); the unset default is clamped to
+  `EPOCHS - 1` instead, so an ordinary 1-epoch smoke screen is unaffected.
 
 ### Sweeps
 
