@@ -29,7 +29,7 @@ from sklearn.preprocessing import StandardScaler
 from neural_trade.core.config import Config
 from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
-from neural_trade.utils.seeding import seed_everything
+from neural_trade.utils.seeding import seed_everything, set_arithmetic_rewrite
 from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
 from neural_trade.core.postprocess import heads_to_predictions
@@ -285,14 +285,7 @@ def train_and_evaluate(
     cfg.validate()  # P0-3 / P1-4: early enforcement (added in Config refactor)
     # Seed AFTER the overrides: seeding first ignored a SEED given in config_overrides.
     seed_everything(int(getattr(cfg, 'SEED', 42)))
-    # NT-047: at the multi-series (OHLCV) default the training graph is large enough that
-    # Grappler's arithmetic rewrite reassociates float sums NON-reproducibly between graph
-    # builds (hash-ordered rewrite; measured 1-ulp weight noise that training amplifies to
-    # ~1e-5 relative metric noise between same-seed runs in one process). The rewrite is
-    # turned off for these graphs. Close-only configs keep it, so every pre-NT-047 number
-    # (scripts/golden_run.py records included) stays bit-for-bit.
-    if len(getattr(cfg, 'INPUT_SERIES', None) or ['close']) > 1:
-        tf.config.optimizer.set_experimental_options({'arithmetic_optimization': False})
+    set_arithmetic_rewrite(cfg)   # explicit per run (NT-047; utils.seeding)
     _report_device()
 
     logger.info("Starting enhanced model training with extended trend features...")

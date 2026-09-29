@@ -46,15 +46,13 @@ DERIVED_SERIES = {
 }
 
 # ------------------------------------------------------------------ soft extremum (NT-047)
-#: inverse temperature of the Boltzmann weighting inside the rolling window, PER SERIES
-#: UNIT (the model input is in target-scaler units, so this is a fixed sharpness in those
-#: units; larger = closer to the hard rolling max / min)
-SOFT_EXTREMUM_BETA = 4.0
-#: exponent clip of the Boltzmann weights ``exp(clip(+-beta*(x - x_first)))``: bounds the
-#: weights' dynamic range to e^(2*CLIP) so the float64 prefix-sum differences stay
-#: well-conditioned for any input (values further than CLIP/BETA units from the window's
-#: first value saturate the weighting toward an average of their region, never overflow)
-SOFT_EXTREMUM_CLIP = 14.0
+#: sharpness of the Boltzmann weighting inside each rolling window, in units of THAT
+#: window's own range (max - min over the bars the window holds): a bar one full range below
+#: the window's maximum gets weight e^-BETA relative to the maximum. Dimensionless, so the
+#: smooth extremum is invariant to the scale and the level of the series (NT-047 repair:
+#: the first version used a fixed sharpness per target-scaler unit and saturated on real
+#: windows). Larger = closer to the hard rolling max / min.
+SOFT_EXTREMUM_BETA = 30.0
 #: sharpness of the smooth sign / gate ``tanh(k*dx)`` / ``sigmoid(k*dx)`` used where the
 #: textbook indicator branches on the sign of a one-bar move (OBV, MFI, ADX/DMI); the same
 #: scale as the MACD soft cross of NT-046
@@ -282,18 +280,19 @@ class IndicatorFamily:
 
 
 # ------------------------------------------------------------------ soft extremum (NT-047)
-# The smooth rolling max / min: a Boltzmann-weighted average over an EXACT rolling window
-# whose (fractional) length is the learned period,
-#     soft_ext_t = sum_{k in window(t, p)} e^{+-beta x_k} x_k / sum e^{+-beta x_k},
-# computed from float64 prefix sums; the window edge bar enters with the fractional weight
-# p - floor(p), which makes the value differentiable in the learned period (the gradient is
-# the edge bar's weight density). It approaches the hard rolling extremum as beta grows,
-# always lies inside the window's value range (a convex combination), forgets a peak the
-# moment it leaves the window (an EWMA-decayed Boltzmann never does - measured mean %K
-# errors above 17 points at every beta), and is SHIFT-INVARIANT in the series (a constant
-# shift scales every weight alike). For conditioning, the exponent is taken against the
-# window's first value (a per-window constant: cancels exactly, keeps causality) and
-# clipped at +-SOFT_EXTREMUM_CLIP.
+# The smooth rolling max / min: for bar t and learned period p, a Boltzmann-weighted average
+# over an EXACT rolling window of p bars (fractional p: the oldest bar enters with weight
+# p - floor(p), which makes the value differentiable in the period),
+#     soft_ext_t = sum_k m_tk e^{+-beta x_k / r_t} x_k / sum_k m_tk e^{+-beta x_k / r_t},
+# with r_t the window's own range (max - min over the bars it holds, a temperature only:
+# stop_gradient); the exponent is taken against the window's hard extreme (it cancels in the
+# ratio). The exponent is dimensionless and lies in [-beta, 0], so the form is invariant to
+# the scale and the level of the series, cannot overflow for any beta, and needs no clip.
+# It is a convex combination of the window's values, so it always lies inside the window's
+# range and forgets a peak the moment the peak leaves the window. Causal: bar t reads only
+# bars k <= t. Computed as one [B, L, L] weight tensor per call (the same size as the
+# layer's batched EWMA matrices; no gathers, whose scatter-add gradients are not
+# reproducible on the CPU).
 
 
 def soft_rolling_extremum(series: tf.Tensor, alpha: tf.Tensor, sign: float) -> tf.Tensor:
@@ -304,37 +303,23 @@ def soft_rolling_extremum(series: tf.Tensor, alpha: tf.Tensor, sign: float) -> t
     a = tf.clip_by_value(tf.cast(alpha, tf.float32), 1e-6, 1.0 - 1e-6)
     a = a + tf.zeros_like(x[:, 0])                                  # scalar or [B] -> [B]
     p = 2.0 / a - 1.0                                               # learned period, bars
-    ref = tf.stop_gradient(x[:, :1])
-    z = tf.clip_by_value(sign * SOFT_EXTREMUM_BETA * (x - ref),
-                         -SOFT_EXTREMUM_CLIP, SOFT_EXTREMUM_CLIP)
-    w = tf.exp(tf.cast(z, tf.float64))
-    zeros = tf.zeros_like(w[:, :1])
-    qw = tf.concat([zeros, tf.cumsum(w, axis=1)], axis=1)           # exclusive prefix sums
-    qxw = tf.concat([zeros, tf.cumsum(tf.cast(x, tf.float64) * w, axis=1)], axis=1)
     n = tf.shape(x)[1]
-    t = tf.cast(tf.range(n), tf.float32)[None, :]                   # [1, L]
-    start = tf.clip_by_value(t + 1.0 - p[:, None], 0.0, tf.cast(n, tf.float32))  # [B, L]
-    lo = tf.floor(start)
-    frac = tf.cast(start - lo, tf.float64)[:, :, None]              # [B, L, 1]
-    lo_i = tf.cast(lo, tf.int32)
-    hi_i = tf.minimum(lo_i + 1, n)
-    # The window sum C[t+1] - interp(C, start) as ONE einsum against a selection matrix,
-    # instead of gathers: tf.gather's gradient is a scatter-add whose CPU thread order is
-    # not reproducible run to run, and bitwise reproducibility is a project invariant
-    # (D-023, scripts/golden_run.py). W[b, t, i] selects prefix i with weight
-    # +1 at i = t+1, -(1-frac) at floor(start), -frac at floor(start)+1.
-    end_sel = tf.cast(tf.one_hot(tf.range(1, n + 1), n + 1), tf.float64)[None]   # [1, L, L+1]
-    head_sel = ((1.0 - frac) * tf.cast(tf.one_hot(lo_i, n + 1), tf.float64)
-                + frac * tf.cast(tf.one_hot(hi_i, n + 1), tf.float64))           # [B, L, L+1]
-    sel = end_sel - head_sel
-
-    def cut(q):
-        return tf.einsum('bti,bi->bt', sel, q)
-
-    # the window always holds at least one bar of weight >= e^-CLIP, so flooring the
-    # denominator there is exact in real arithmetic and absorbs any prefix-sum round-off
-    den = tf.maximum(cut(qw), math.exp(-SOFT_EXTREMUM_CLIP))
-    return tf.cast(cut(qxw) / den, tf.float32)
+    idx = tf.range(n)
+    lag = tf.cast(idx[None, :] - idx[:, None], tf.float32)          # [L(t), L(k)]: k - t
+    causal = tf.cast(lag <= 0.0, tf.float32)
+    m = tf.clip_by_value(lag[None] + p[:, None, None], 0.0, 1.0) * causal[None]  # [B, L, L]
+    inside = m > 0.0
+    xk = x[:, None, :] + tf.zeros_like(m)                           # [B, L, L]
+    xt = x[:, :, None] + tf.zeros_like(m)
+    hi = tf.reduce_max(tf.where(inside, xk, xt), axis=2)            # the window's range
+    lo = tf.reduce_min(tf.where(inside, xk, xt), axis=2)
+    r = tf.stop_gradient(hi - lo + 1e-6 * (tf.abs(hi) + tf.abs(lo)) + 1e-12)
+    ext = tf.stop_gradient(hi if sign > 0 else lo)                  # the window's hard extreme
+    # exponent sign * beta * (x_k - extreme) / range, in [-beta, 0] inside the window (0 outside,
+    # where m = 0): every weight is at most 1, for any beta and any scale of the series
+    d = tf.where(inside, sign * (xk - ext[:, :, None]), tf.zeros_like(m))
+    w = m * tf.exp(SOFT_EXTREMUM_BETA * d / r[:, :, None])
+    return tf.reduce_sum(w * xk, axis=2) / tf.reduce_sum(w, axis=2)  # den > 0: the extreme bar
 
 
 def m_soft_extremum(period: float, eps: float = 1e-3, logit_shift: float = -META_SCALE) -> int:

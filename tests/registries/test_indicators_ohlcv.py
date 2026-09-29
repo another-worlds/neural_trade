@@ -10,6 +10,8 @@ Wilder smoothing. The smooth substitutions under test are the soft sign / gate
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -247,13 +249,17 @@ def test_adx_dmi_stays_within_2_points_of_the_textbook_reference(tf):
     assert np.abs(adx[0][40:] - ra[40:]).max() <= 2.0
 
 
-# The extremum tolerances are stated on 60-bar window-relative windows - the regime the
-# production layer computes in (windows of Config.LOOKBACK bars, values relative to the
-# window; the soft extremum's exact band surrounds each window's first value). The
-# textbook rolling extremum is DISCONTINUOUS at the bars where a peak leaves its window,
-# so any differentiable form deviates there by up to the size of that drop; the
-# tolerances are therefore stated as mean, 95th percentile and a worst-bar cap, all
-# measured with headroom over the observed values on this series (seed 3, step 0.2).
+# The extremum tolerances are stated on 60-bar windows - the regime the production layer
+# computes in (windows of Config.LOOKBACK bars) - on synthetic windows AND on real bundled
+# windows in model units. The textbook rolling extremum is DISCONTINUOUS at the bars where a
+# peak leaves its window, so any differentiable form deviates there; the tolerances are
+# stated as mean, 95th percentile and worst bar, with headroom over the measured values
+# (beta 30: synthetic %K 0.4 / 1.3 / 2.8 points, real %K 0.36 / 1.11 / 2.66 points,
+# real Donchian 0.011 / 0.029 / 0.062 channel widths; measured 2026-09-29).
+KD_TOL = (1.0, 2.5, 5.0)          # %K, %D, %R: points (of 100): mean, p95, worst bar
+DONCHIAN_TOL = (0.03, 0.06, 0.12)  # channel widths: mean, p95, worst bar
+SKIP = 20                          # the first bars, where the expanding-start forms coincide
+
 
 def _window_extrema(dw, period):
     hu = np.stack([np_roll(h.astype(np.float64), period, np.max) for h in dw["high"]])
@@ -265,47 +271,113 @@ def _extremum_windows():
     return make_windows(make_ohlcv(n=1000, step=0.2))
 
 
-def test_donchian_tolerance_of_textbook_on_60_bar_windows(tf):
-    """Textbook Donchian (hard rolling max(high, 20) / min(low, 20)) per 60-bar window;
-    the smooth rolling extremum stays within 20% of the mean channel width on average,
-    25% at the 95th percentile and 30% at the worst bar."""
-    dw = _extremum_windows()
+_REAL = {}
+
+
+def _real_windows():
+    """Every 7th model-input window of the bundled CSV's last 6,000 sequences, in MODEL units
+    (window-relative OHLC, volume over its train mean: what the layer computes on)."""
+    if "w" not in _REAL:
+        import pandas as pd
+
+        from neural_trade.core.config import Config
+        from neural_trade.data.processor import DataProcessor
+
+        csv = Path(__file__).resolve().parents[2] / "binance_btcusdt_1min_ccxt.csv"
+        if not csv.exists():
+            pytest.skip("bundled CSV absent")
+        cfg = Config(MAX_SEQUENCE_COUNT=6000)
+        dp = DataProcessor(cfg)
+        df = dp.preprocess(pd.read_csv(csv))
+        out = dp.prepare_datasets(df, df["Close"].to_numpy(dtype="float32"))
+        X = np.concatenate([out[0], out[4]])[::7]
+        _REAL["w"] = {name: X[..., j].astype(np.float32) for j, name in enumerate(cfg.INPUT_SERIES)}
+    return _REAL["w"]
+
+
+def _within(err, tol):
+    err = np.asarray(err)
+    assert err.mean() <= tol[0], f"mean {err.mean():.4f} > {tol[0]}"
+    assert np.quantile(err, 0.95) <= tol[1], f"p95 {np.quantile(err, 0.95):.4f} > {tol[1]}"
+    assert err.max() <= tol[2], f"max {err.max():.4f} > {tol[2]}"
+
+
+def _check_donchian(dw):
     up, lo, mid = channels("donchian", dw)
     hu, hl = _window_extrema(dw, 20)
-    width = float(np.mean(hu[:, 20:] - hl[:, 20:]))
-    err = np.maximum(np.abs(up[:, 20:] - hu[:, 20:]), np.abs(lo[:, 20:] - hl[:, 20:])) / width
-    assert err.mean() <= 0.20
-    assert np.quantile(err, 0.95) <= 0.25
-    assert err.max() <= 0.30
+    width = float(np.mean(hu[:, SKIP:] - hl[:, SKIP:]))
+    _within(np.maximum(np.abs(up[:, SKIP:] - hu[:, SKIP:]), np.abs(lo[:, SKIP:] - hl[:, SKIP:])) / width,
+            DONCHIAN_TOL)
     np.testing.assert_allclose(mid, (up + lo) / 2.0, atol=1e-5)
+    # a convex combination of the window's values: never outside the hard channel
+    assert np.all(up <= hu + 1e-4) and np.all(lo >= hl - 1e-4)
 
 
-def test_stochastic_tolerance_of_textbook_on_60_bar_windows(tf):
-    """Textbook %K over hard rolling extrema (14) and %D = EWMA(%K, 3) per 60-bar window;
-    the smooth extrema keep %K and %D within 12 points (of 100) on average, 27 at the
-    95th percentile and 45 at the worst bar."""
-    dw = _extremum_windows()
+def _check_stochastic(dw):
     k, dd = channels("stoch", dw)
+    assert k.min() >= 0.0 and k.max() <= 100.0 and dd.min() >= 0.0 and dd.max() <= 100.0
     hu, hl = _window_extrema(dw, 14)
-    c = dw["close"].astype(np.float64)
-    kt = 100.0 * (c - hl) / (hu - hl + 1e-9)
+    kt = 100.0 * (dw["close"].astype(np.float64) - hl) / (hu - hl + 1e-9)
     dt = np.stack([np_ewma(row, 3.0) for row in kt])
     for got, ref in ((k, kt), (dd, dt)):
-        err = np.abs(got[:, 20:] - ref[:, 20:])
-        assert err.mean() <= 12.0
-        assert np.quantile(err, 0.95) <= 27.0
-        assert err.max() <= 45.0
+        _within(np.abs(got[:, SKIP:] - ref[:, SKIP:]), KD_TOL)
 
 
-def test_williams_r_tolerance_of_textbook_on_60_bar_windows(tf):
-    dw = _extremum_windows()
+def _check_williams_r(dw):
     (w,) = channels("willr", dw)
+    assert w.min() >= -100.0 and w.max() <= 0.0
     hu, hl = _window_extrema(dw, 14)
     ref = -100.0 * (hu - dw["close"].astype(np.float64)) / (hu - hl + 1e-9)
-    err = np.abs(w[:, 20:] - ref[:, 20:])
-    assert err.mean() <= 12.0
-    assert np.quantile(err, 0.95) <= 27.0
-    assert err.max() <= 45.0
+    _within(np.abs(w[:, SKIP:] - ref[:, SKIP:]), KD_TOL)
+
+
+def test_donchian_tolerance_of_textbook_on_synthetic_60_bar_windows(tf):
+    """Textbook Donchian (hard rolling max(high, 20) / min(low, 20)) per 60-bar window."""
+    _check_donchian(_extremum_windows())
+
+
+def test_stochastic_tolerance_of_textbook_on_synthetic_60_bar_windows(tf):
+    """Textbook %K over hard rolling extrema (14) and %D = EWMA(%K, 3); %K and %D in [0, 100]."""
+    _check_stochastic(_extremum_windows())
+
+
+def test_williams_r_tolerance_of_textbook_on_synthetic_60_bar_windows(tf):
+    """Textbook %R over hard rolling extrema (14); %R in [-100, 0]."""
+    _check_williams_r(_extremum_windows())
+
+
+@pytest.mark.data
+def test_donchian_tolerance_of_textbook_on_real_bundled_windows(tf):
+    _check_donchian(_real_windows())
+
+
+@pytest.mark.data
+def test_stochastic_tolerance_of_textbook_on_real_bundled_windows(tf):
+    _check_stochastic(_real_windows())
+
+
+@pytest.mark.data
+def test_williams_r_tolerance_of_textbook_on_real_bundled_windows(tf):
+    _check_williams_r(_real_windows())
+
+
+@pytest.mark.parametrize("name", ("stoch", "willr", "donchian"))
+def test_the_soft_extremum_families_are_scale_and_level_invariant(tf, name):
+    """Scaling every price series by c and shifting it by s scales / shifts the price-drawn
+    channels (Donchian) and leaves the oscillators (%K, %D, %R) unchanged: the sharpness is
+    relative to each window's own range, not to a unit of the series."""
+    dw = _extremum_windows()
+    ref = channels(name, dw)
+    # (the level shift is kept where float32 still resolves the synthetic bars' 0.2 spreads:
+    # at a level of 5e4 the INPUT is quantised to 4e-3, which alone moves %K by ~2 points)
+    for c, sh in ((1000.0, 0.0), (1e-3, 0.0), (1.0, 1e3)):
+        moved = {k: (v * c + sh if k != "volume" else v).astype(np.float64) for k, v in dw.items()}
+        got = channels(name, moved)
+        for g, r in zip(got, ref):
+            if name == "donchian":
+                np.testing.assert_allclose((g - sh) / c, r, rtol=0, atol=2e-4 * max(1.0, abs(sh) / c) + 1e-4)
+            else:
+                np.testing.assert_allclose(g, r, rtol=0, atol=0.05 if sh == 0.0 else 0.5)
 
 
 # --------------------------------------------------------------------- criterion 2: causality
