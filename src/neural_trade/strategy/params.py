@@ -31,7 +31,7 @@ def build_strategy(name: str, params: Optional[Mapping[str, Any]] = None, *, cal
         if calibration is None:
             raise InvalidConfigurationError(f"strategy {name!r} sets its thresholds on the calibration block: "
                                             "pass calibration= (its SignalFrame or a stored quantile table)")
-        for fixed in ("long_above", "short_below", "median"):
+        for fixed in ("long_above", "short_below", "median", *getattr(cls, "fitted_fields", ())):
             params.pop(fixed, None)
         return cls.from_calibration(calibration, **params)
     return cls(**params)
