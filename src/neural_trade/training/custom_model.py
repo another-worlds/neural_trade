@@ -110,6 +110,7 @@ class CustomTrainModel(models.Model):
         self.lambda_hd           = float(getattr(config, 'LAMBDA_HD',           0.0))
         self.lambda_ife          = float(getattr(config, 'LAMBDA_IFE',          0.0))
         self.lambda_vac_overflow = float(getattr(config, 'LAMBDA_VAC_OVERFLOW', 0.0))
+        self.lambda_pnl = float(getattr(config, 'LAMBDA_PNL', 0.0))
         self.config = config or Config()
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
@@ -280,6 +281,7 @@ class CustomTrainModel(models.Model):
             'reg_loss': c.reg_loss, 'inter_reg': c.inter_reg, 'vol_loss': c.vol_loss,
             't_perp_loss': c.t_perp_total, 'casimir_loss': c.casimir_val, 'vac_loss': c.vac_val,
             'hd_loss': c.hd_val, 'ife_loss': c.ife_val, 'vac_overflow_loss': c.vac_overflow_val,
+            'pnl_val': c.pnl_val,
         }
         scalars['trend_loss'] = scalars['trend_h0'] + scalars['trend_h1'] + scalars['trend_h2']
         if training and grad_global_norm is not None:
@@ -463,7 +465,7 @@ class CustomTrainModel(models.Model):
          crps_h0, crps_h1, crps_h2,
          soft_ece_h0, soft_ece_h1, soft_ece_h2,
          t_perp_total, casimir_val, vac_val, hd_val, ife_val,
-         vac_overflow_val) = loss_components
+         vac_overflow_val, pnl_val) = loss_components
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -560,7 +562,7 @@ class CustomTrainModel(models.Model):
                                            extended_trends,
                                            vacuum_overflow=None)  # identically 0 at eval (tanh^2 < E_max): the term would be a constant lambda in every val_loss
 
-        # Unpack 34-component tuple (LossComponents NamedTuple; positional ok)
+        # Unpack 35-component tuple (LossComponents NamedTuple; positional ok)
         (total_loss_val,
          point_h0, point_h1, point_h2,
          local_h0, global_h0, extended_h0,
@@ -572,7 +574,7 @@ class CustomTrainModel(models.Model):
          crps_h0, crps_h1, crps_h2,
          soft_ece_h0, soft_ece_h1, soft_ece_h2,
          t_perp_total, casimir_val, vac_val, hd_val, ife_val,
-         vac_overflow_val) = loss_components
+         vac_overflow_val, pnl_val) = loss_components
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.

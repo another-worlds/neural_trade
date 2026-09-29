@@ -71,7 +71,7 @@ def test_all_34_components_finite_with_finite_gradients(make_loss_model, pred_sc
         total = out[0]
 
     vals = np.array([float(t) for t in out])
-    assert vals.shape == (34,), "LossComponents contract is 34 fields"
+    assert vals.shape == (35,), "LossComponents contract is 35 fields (NT-087 added pnl_val)"
     bad = [f for f, v in zip(out._fields, vals) if not np.isfinite(v)]
     assert not bad, f"non-finite components: {bad}"
     assert vals[0] > 0.0

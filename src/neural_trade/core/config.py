@@ -338,6 +338,16 @@ class Config:
                                 "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
     LAMBDA_DIR_ALIGN: float = _f(0.7, "loss_weights", "inner weight of the alignment term", unit="weight", ge=0.0,
                                  tunable=True)
+    LAMBDA_PNL: float = _f(0.0, "loss_weights", "weight of the mean-variance P&L utility on the direction heads' "
+                           "implied positions (0 = off; NT-087)", unit="weight", ge=0.0, tunable=True)
+    PNL_GAMMA: float = _f(1.0, "loss_weights", "risk-aversion coefficient of the pnl_utility objective's quadratic "
+                          "penalty", unit="dimensionless", gt=0.0, tunable=True)
+    PNL_COST_BPS: float = _f(26.0, "loss_weights", "round-trip trading cost assumed by the pnl_utility objective "
+                             "(matches strategy/variance_strategies.py's DEFAULT_COST = 0.0026, 13 bps per side)",
+                             unit="bps", ge=0.0, tunable=True)
+    PNL_SIGMA_SOURCE: str = _f("ewma", "loss_weights", "volatility scale for the pnl_utility objective's "
+                               "r~ = r_H / sigma_H: 'ewma' (causal, from the input window's bar-to-bar returns) or "
+                               "'model' (the variance head, stop-gradient)", unit="name", choices=("ewma", "model"))
 
     # ------------------------------------------------------------------ physics-inspired terms (T-perp / QBOX)
     T_PERP_DIM: int = _f(16, "physics", "width of the perpendicular projection", unit="count", ge=1, step=1,
@@ -563,6 +573,12 @@ class Config:
             bad("TRAIN_METRICS_EVERY must be >= 1")
         if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol"):
             bad(f"CONFORMAL_SCALE must be 'none', 'sigma' or 'realized_vol', got {self.CONFORMAL_SCALE!r}")
+        if self.PNL_GAMMA <= 0:
+            bad("PNL_GAMMA must be > 0")
+        if self.PNL_COST_BPS < 0:
+            bad("PNL_COST_BPS must be >= 0")
+        if self.PNL_SIGMA_SOURCE not in ("ewma", "model"):
+            bad(f"PNL_SIGMA_SOURCE must be 'ewma' or 'model', got {self.PNL_SIGMA_SOURCE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):
             bad(f"EWMA_IMPL must be 'matrix' or 'scan', got {self.EWMA_IMPL!r}")
         if not (0 < self.MOMENTUM_CLIP_MIN < (self.MOMENTUM_CLIP_MAX or self.LOOKBACK)):
