@@ -44,4 +44,14 @@ directories sit under runs/scenarios/micro_lookback/ (kept, D-029); (3) the GPU-
 trips on the owner's active desktop with no compute process present - RUNBOOK clarification candidate.
 
 | H4b | H4's 4 h cell was merely undertrained (it served epoch 1) | Re-run with EPOCHS 60, EARLY 12, PATIENCE 6 (configs/scenarios/micro_lookback_h4b.yaml); cell under runs/scenarios/micro_lookback_h4b/ | 8.5 GPU-min | **Negative: not undertraining.** Validation loss never improved after epoch 1 in 13 epochs; the served weights are epoch 1 again. Direction still within 1 SE of logreg_lags on every horizon; variance CRPSS no better than the 60-bar window's. On the close-only input, the (window, horizon) plane is exhausted. |
-| H5 | The 4 h horizons were data-starved, not signal-free: 10-day training gives ~40 effective outcomes at 320 bars; 360 days gives ~1,600 | configs/scenarios/h4h_360d.yaml: 160/240/320-bar horizons on the 360-day block, window 60, batch 2048, one seed | ~25 GPU-min (est.) | running |
+| H5 | The 4 h horizons were data-starved, not signal-free: 10-day training gives ~40 effective outcomes at 320 bars; 360 days gives ~1,600 | configs/scenarios/h4h_360d.yaml: 160/240/320-bar horizons on the 360-day block, window 60, batch 2048, one seed; cell under runs/scenarios/h4h_360d/ | 19.4 GPU-min | **Negative for direction, instructive for variance.** With n_eff 145-290 (vs ~40), direction stays within 1 SE of logreg_lags (deltas -0.011..-0.003). H1's large 4 h CRPSS (0.04-0.07) does not replicate (0.009-0.027 here): a short-block artifact. More data repairs calibration (coverage 0.906-0.921; var/err^2 Spearman 0.18-0.24, the loop's best), not direction. Betas 0.83-1.00 (the delta heads survive at these horizons), yet delta skill vs zero is ~0. |
+
+## Iteration 1 closed (2026-09-29)
+
+Eight hypotheses (H1-H5 with variants) exhaust the close-only input across horizon (10 min - 5.3 h) x window
+(60 / 240 bars) x training size (10 / 360 days) x strategy shaping (selectivity, holds, confidence buckets):
+**direction never beats a logistic regression on lagged returns anywhere**, and every gross edge is about
+1 bps per trade against the 26 bps round trip. What data volume does buy is honest uncertainty: coverage at
+target and the loop's best var/err^2 ranking. The owner's target (stable >60% hit, drawdown < 5%) is not
+reachable from this input. Iteration 2 is running: OHLCV input and the ten new indicator families (NT-047),
+then the same micro evaluation against logreg_lags on the same dev block.
