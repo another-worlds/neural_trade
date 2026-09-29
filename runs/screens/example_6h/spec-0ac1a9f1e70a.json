@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "name": "example_6h",
+  "description": "4 grid cells x 2 slices x 2 seeds = 16 tiny CPU trials, math/stability screening only.",
+  "base_config": "../default.yaml",
+  "overrides": {
+    "N_FOLDS": 2,
+    "VAL_FRACTION": 0.1,
+    "CAL_FRACTION": 0.1,
+    "MAX_SEQUENCE_COUNT": 4500,
+    "DATA_END_PROTECTED_DAYS": 2.0,
+    "TRAIN_METRICS_EVERY": 1,
+    "FOLD_INDEX": -2
+  },
+  "grid": {
+    "axes": {
+      "LR": [
+        0.0001,
+        0.001
+      ],
+      "BATCH_SIZE": [
+        64,
+        256
+      ]
+    }
+  },
+  "sample": null,
+  "slices": [
+    "2025-10-20T00:00:00",
+    "2025-10-28T00:00:00"
+  ],
+  "seeds": [
+    0,
+    1
+  ],
+  "run": {
+    "calibrate": false,
+    "epochs": 2
+  },
+  "rules": {
+    "finite": true,
+    "max_nonfinite_grad_steps": 0,
+    "max_clipped_share": 0.5,
+    "min_train_loss_drop": -1.0,
+    "max_term_share": 0.95
+  }
+}

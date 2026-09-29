@@ -78,3 +78,15 @@ eleven earlier hypotheses. Every lever inside the current data - horizon, window
 baseline's level (AUC 0.51-0.54, never significant). The P&L research note's verdict stands: the owner's
 target needs a different information source (E5: taker-buy volume, basis, funding), which is the owner's
 decision (VISION "Not in the MVP"; STATUS question 8).
+
+## Screen mode, first GPU measurement (2026-09-30, NT-088 step 3)
+
+configs/screens/example_6h.yaml (bundled CSV, 360-window = 6-hour blocks, 2 epochs, 16 trials: LR {1e-4, 1e-3} x
+BATCH {64, 256} x 2 slices x 2 seeds); results runs/screens/example_6h/results.jsonl; 4.3 GPU-min.
+- Timings (median of the 15 cache-hit trials): load 0.0001 s, prep 0.011 s, build 0.76 s, train 14.2 s, score
+  1.04 s, wall 16.7 s. Trace (epoch_s[0] - median(epoch_s[1:])): median 12.2 s = **73% of a trial** (plan
+  threshold for phase 2: 50%). Steady epoch 0.42-0.61 s at batch 256, 1.35-1.43 s at batch 64.
+- Rules: 8/16 pass. Every LR 1e-4 trial fails max_clipped_share (0.92-1.0), every LR 1e-3 trial passes. The
+  lead's reading: the pre-clip global norm at initialisation is above GRAD_CLIP_NORM 20 (the OHLCV dashboard's
+  epoch-1 mean was ~26), and a 2-epoch run at a small LR never leaves that region, so the rule measures the
+  start, not an instability. The campaign rule must skip the first epoch's steps (NT-092).

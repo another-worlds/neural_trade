@@ -124,6 +124,7 @@ changes).
 | [NT-089](#nt-089) | P2 | bug | implementer | todo | HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0 |
 | [NT-090](#nt-090) | P2 | bug | implementer | todo | pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins |
 | [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
+| [NT-092](#nt-092) | P1 | feature | implementer | in-progress | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
 
 ## Items
 
@@ -1206,6 +1207,17 @@ changes).
 - **why:** re-QA of NT-088 (2026-09-30): (1) on files shorter than 64 days DATA_END_PROTECTED_DAYS can be lowered to 0, so a screen on the bundled CSV can train on its test block (the one notebooks 02-05 report); (2) outside screen mode any Config can set DATA_END_PROTECTED_DAYS 0 with a late DATA_END on the long file (only the screen pre-flight enforces the floor); (3) resume only sees shard files with the same N (a plain run after --shard 0/3 re-runs 22 duplicates); (4) the first trial of each data key windows the whole file up to DATA_END (10-20 s) and each slice reloads the CSV (6-7 s).
 - **acceptance:** a floor for short files (e.g. the default fold's test start) and the same protection in Config.validate / processor for every path (tests); resume across shard counts (test); window only the needed tail before windowing (timing before/after).
 - **source:** re-QA of NT-088, 2026-09-30
+
+### NT-092
+
+**Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch**
+
+- **status:** in-progress (implementer, Sonnet per D-043, branch nt-092, 2026-09-30)
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/experiments/screen.py, src/neural_trade/training/ (only what trace reuse strictly needs), tests/test_screen.py, docs/RUNBOOK.md
+- **why:** the approved screen plan (docs/research/2026-09-29-screen-plan.md, step 3 / "phase 2"): build phase 2 if tracing exceeds 50% of a trial. GPU measurement (runs/experiments/micro_loop_v1/LOG.md, 2026-09-30): trace 12.2 s of a 16.7 s trial (73%). Also: at LR 1e-4 every 2-epoch trial fails max_clipped_share because the initial pre-clip norm exceeds the clip.
+- **acceptance:** (1) Trials that differ only in continuous values (LR, LAMBDA_*, ADAM betas, GRAD_CLIP_NORM, INDICATOR_LR_MULT / GRAD_MULT, loss weights) reuse one traced train/test step per structural key (model architecture, BATCH_SIZE, horizons, window, loss name, input series...); between trials weights, optimizer state and all lambda / LR variables are reset to the trial's seeded initial values. (2) A reused-graph trial equals a fresh-graph trial of the same config and seed (bit-for-bit, or within a stated float tolerance with the reason) - test. (3) Structural changes retrace (test). (4) Measured median trial wall on the GPU-free CPU path and a stated GPU estimate; target <= 5 s per trial after the first per structural key. (5) Rules: `clip_skip_epochs` (default 1) excludes the first epoch's logged steps from clipped_share; `min_epochs` guard. (6) scenario run and the golden run unchanged; fast suite, ruff, TESTING_DOCUMENTATION, RUNBOOK.
+- **source:** screen plan phase 2; NT-088 GPU measurement 2026-09-30
 
 ## Done log
 
