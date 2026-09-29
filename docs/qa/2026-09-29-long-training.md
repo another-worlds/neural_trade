@@ -26,3 +26,10 @@ as the first lever to test, with a learning-curve study as the proposal.
 - The old-against-new training-time comparison is shown before the run starts (the benchmark report).
 - The run is launched and tracked through a notebook.
 - Points 2 (noise) and 3 (P&L-aware targets) come later.
+
+## Follow-up (2026-09-29)
+
+5. (Russian) "убери коммиссию полностью" (remove the commission completely). The lead's reading: re-score the
+   trained 360-day run with fee, half-spread and slippage all 0, beside the default costs, without changing the
+   default costs (VISION "Honest trading numbers" requires them); whether the default changes is asked back.
+   Result: runs/scenarios/long_360d/rescore/zero_cost_v1-20260929T123047Z/ (configs/strategy_studies/zero_cost_v1.yaml).

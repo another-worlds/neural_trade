@@ -1,0 +1,188 @@
+schema_version: 1
+name: zero_cost_v1
+description: The NT-005 strategy configurations at the default costs and at zero costs
+  (fee, half-spread and slippage all 0), owner request 2026-09-29.
+entries:
+- id: vt
+  strategy: vol_target
+  params:
+    sigma_source: model
+  backtest: {}
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: vt_0c
+  strategy: vol_target
+  params:
+    sigma_source: model
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: vt_ewma
+  strategy: vol_target
+  params:
+    sigma_source: ewma
+  backtest: {}
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: vt_ewma_0c
+  strategy: vol_target
+  params:
+    sigma_source: ewma
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: rs
+  strategy: vol_regime_long
+  params:
+    sigma_source: model
+  backtest: {}
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: rs_0c
+  strategy: vol_regime_long
+  params:
+    sigma_source: model
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: rs_ewma
+  strategy: vol_regime_long
+  params:
+    sigma_source: ewma
+  backtest: {}
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: rs_ewma_0c
+  strategy: vol_regime_long
+  params:
+    sigma_source: ewma
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: nk
+  strategy: net_edge_kelly
+  params: {}
+  backtest: {}
+  grid:
+    f:
+    - 0.25
+    - 0.5
+- id: nk_0c
+  strategy: net_edge_kelly
+  params: {}
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    f:
+    - 0.25
+    - 0.5
+- id: ec
+  strategy: edge_over_cost
+  params: {}
+  backtest: {}
+  grid: {}
+- id: ec_0c
+  strategy: edge_over_cost
+  params: {}
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid: {}
+- id: gt
+  strategy: gated_ta
+  params:
+    sigma_source: model
+  backtest: {}
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: gt_0c
+  strategy: gated_ta
+  params:
+    sigma_source: model
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: gt_ewma
+  strategy: gated_ta
+  params:
+    sigma_source: ewma
+  backtest: {}
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: gt_ewma_0c
+  strategy: gated_ta
+  params:
+    sigma_source: ewma
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: cq
+  strategy: calibrated_quantile
+  params: {}
+  backtest: {}
+  grid: {}
+- id: cq_0c
+  strategy: calibrated_quantile
+  params: {}
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid: {}

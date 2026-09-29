@@ -1,0 +1,174 @@
+# Zero-cost re-score (owner request 2026-09-29: "remove the commission completely").
+# Every configuration of strategy_study_v1.yaml twice: at the scenario's default costs (13 bps per side) and with
+# fee, half-spread and slippage all 0 (ids ending _0c). Descriptive: gross trading quality of the model; the
+# default costs are unchanged.
+#   neural-trade scenario rescore configs/scenarios/long_360d.yaml --study configs/strategy_studies/zero_cost_v1.yaml
+schema_version: 1
+name: zero_cost_v1
+description: The NT-005 strategy configurations at the default costs and at zero costs
+  (fee, half-spread and slippage all 0), owner request 2026-09-29.
+entries:
+- id: vt
+  strategy: vol_target
+  params:
+    sigma_source: model
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: vt_0c
+  strategy: vol_target
+  params:
+    sigma_source: model
+  grid:
+    band:
+    - 0.1
+    - 0.25
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: vt_ewma
+  strategy: vol_target
+  params:
+    sigma_source: ewma
+  grid:
+    band:
+    - 0.1
+    - 0.25
+- id: vt_ewma_0c
+  strategy: vol_target
+  params:
+    sigma_source: ewma
+  grid:
+    band:
+    - 0.1
+    - 0.25
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: rs
+  strategy: vol_regime_long
+  params:
+    sigma_source: model
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: rs_0c
+  strategy: vol_regime_long
+  params:
+    sigma_source: model
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: rs_ewma
+  strategy: vol_regime_long
+  params:
+    sigma_source: ewma
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+- id: rs_ewma_0c
+  strategy: vol_regime_long
+  params:
+    sigma_source: ewma
+  grid:
+    q_out:
+    - 0.8
+    - 0.95
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: nk
+  strategy: net_edge_kelly
+  grid:
+    f:
+    - 0.25
+    - 0.5
+- id: nk_0c
+  strategy: net_edge_kelly
+  grid:
+    f:
+    - 0.25
+    - 0.5
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: ec
+  strategy: edge_over_cost
+- id: ec_0c
+  strategy: edge_over_cost
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: gt
+  strategy: gated_ta
+  params:
+    sigma_source: model
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: gt_0c
+  strategy: gated_ta
+  params:
+    sigma_source: model
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: gt_ewma
+  strategy: gated_ta
+  params:
+    sigma_source: ewma
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+- id: gt_ewma_0c
+  strategy: gated_ta
+  params:
+    sigma_source: ewma
+  grid:
+    primary:
+    - ma_cross
+    - bollinger
+    q:
+    - 0.5
+    - 0.8
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+- id: cq
+  strategy: calibrated_quantile
+- id: cq_0c
+  strategy: calibrated_quantile
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
