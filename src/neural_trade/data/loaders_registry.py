@@ -8,8 +8,8 @@ and ``data/`` no longer imports it (the mutual import the layering test forbids)
 Components are ``loader(config, **kwargs) -> pandas.DataFrame`` returning the RAW frame; the
 Preprocessors pipeline standardises it and ``validate_ohlcv_frame`` checks the result.
 
-Deferred (named in REGISTRY_SPECIFICATIONS.md, no implementation exists yet):
-``binance_api``, ``postgres``, ``ccxt``.
+Deferred (named in docs/archive/REGISTRY_SPECIFICATIONS.md, the pre-remediation registry design,
+no implementation exists yet): ``binance_api``, ``postgres``, ``ccxt``.
 """
 from __future__ import annotations
 
