@@ -54,6 +54,7 @@ that extend or partly replace an entry.
 | D-038 | The old C: copy is ignored; pushing stays automatic | owner ("push auto": lead's reading) | |
 | D-039 | The window-free build-up (NT-064 to NT-068) moves after the MVP, into R6 | owner | |
 | D-040 | One 360-day training run on the long history, set up by the lead, tracked in a notebook | owner (setup choices: lead's) | |
+| D-041 | The micro-scale loop: minutes-long runs drive hypothesis iteration toward predictive power and PnL | owner (protocol: lead's) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -496,3 +497,17 @@ that extend or partly replace an entry.
 - **Lead's reading:** the run trains on dev fold -2 (fold -1, the newest ~32 days, stays the untouched test fold, D-020),
   so its result may inform later choices such as the training length. Defaults (the 7-day reference setup, D-022) do
   not change.
+
+## D-041 The micro-scale loop: minutes-long runs drive hypothesis iteration toward predictive power and PnL (owner, 2026-09-29)
+- **Owner:** the /goal of 2026-09-29, verbatim in [qa/2026-09-29-long-training.md](qa/2026-09-29-long-training.md)
+  Follow-up 2: raise the model's predictive power and the strategy PnL "at micro-scales: hours instead of days",
+  using micro-scales for lightning-fast training, inference and hypothesis development.
+- **Decision:** hypothesis iteration runs on micro setups: small training blocks on the long file (about 10 days,
+  batch 2048: a full train + score cycle in roughly 3 minutes), strategy work on stored predictions (CPU rescore,
+  no retraining). Quick sweeps under the existing sweep rules (OPERATING_MODEL); anything claiming "A beats B"
+  still goes through D-025. The reference setup and defaults do not change without a recorded decision.
+- **Lead's protocol (first iteration):** micro layout on Bitcoin_BTCUSDT.csv: N_FOLDS 2, total 129,600 windows,
+  fold -2 = train about 10 days + val/cal about 10 days each + a 30-day dev out-of-sample block; fold -1 (the
+  newest 30 days) stays the untouched test fold. Hypotheses H1 (longer horizons: 1-4 h, where the move is
+  several times the 26 bps cost) and H2 (fewer, more selective trades of the existing signal) run first.
+- **Consequence:** NT-085 (the micro loop and its scenarios).

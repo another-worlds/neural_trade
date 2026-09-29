@@ -33,3 +33,14 @@ as the first lever to test, with a learning-curve study as the proposal.
    trained 360-day run with fee, half-spread and slippage all 0, beside the default costs, without changing the
    default costs (VISION "Honest trading numbers" requires them); whether the default changes is asked back.
    Result: runs/scenarios/long_360d/rescore/zero_cost_v1-20260929T123047Z/ (configs/strategy_studies/zero_cost_v1.yaml).
+
+## Follow-up 2 (2026-09-29, /goal)
+
+6. (Russian, verbatim) "повышение предскзаательной силы модели и PnL стратегии на микромасштабах: несколько
+   часов вместо нескольких дней. Используй микромашстабы для молниеностного трейна инференса и
+   корректировки/разработки гипотез".
+   Lead's reading: the goal is higher predictive power and strategy PnL, pursued through a micro-scale
+   experiment loop: training setups small enough that train + inference + scoring take minutes, so hypotheses
+   are developed and corrected in hours instead of days. First hypotheses: (a) strategy-knob sweeps on stored
+   predictions (CPU, no retraining); (b) longer horizons (1-4 h instead of 10-20 min), where a move's size is
+   several times the 26 bps round-trip cost.
