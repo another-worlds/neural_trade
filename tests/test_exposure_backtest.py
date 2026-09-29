@@ -138,8 +138,8 @@ def test_hand_computed_rebalances_with_drift_costs_and_close_out():
     n5 = abs(q4) * 110.0
     cash = cash + q4 * 110.0 - n5 * COST
     assert res.equity[-1] == pytest.approx(cash, rel=1e-12)
-    assert [(d["bar"], d["decided_at"], d["reason"]) for d in res.decisions] == [
-        (1, 0, "target"), (3, 2, "target"), (4, 3, "target"), (4, 4, "EOW")]
+    assert [(d["bar"], d["fill_bar"], d["reason"], d["side"]) for d in res.decisions] == [
+        (0, 1, "target", "LONG"), (2, 3, "target", "LONG"), (3, 4, "target", "SHORT"), (4, 4, "EOW", "LONG")]
     assert [d["notional"] for d in res.decisions] == pytest.approx([5_000.0, n3, n4, n5], rel=1e-12)
     assert res.decisions[1]["from"] == pytest.approx(q1 * 99.0 / eq3, rel=1e-12)
     assert res.decisions[1]["fill"] == pytest.approx(99.0 * (1 + 3e-4), rel=1e-12)
@@ -207,7 +207,7 @@ def test_cadence_warmup_band_edge_and_clipping():
     assert [d["bar"] for d in res.targets][:3] == [30, 40, 50] and res.targets[-1]["bar"] == 190
     first = res.targets[0]
     assert first["target"] == 1.0 and first["queued"] == pytest.approx(0.7)       # clipped, then the band's edge
-    assert res.decisions[0]["bar"] == 31 and res.decisions[0]["reason"] == "band_edge"
+    assert (res.decisions[0]["bar"], res.decisions[0]["fill_bar"], res.decisions[0]["reason"]) == (30, 31, "band_edge")
     assert all(abs(d["to"]) <= 1.0 for d in res.decisions)
 
 
@@ -295,7 +295,7 @@ def test_the_replay_of_an_unshifted_path_reproduces_the_strategy():
         res = run_backtest(s, bars, strat)
         replay = run_exposure_backtest(s, bars, _ReplayFills(events=fill_events(res)))
         np.testing.assert_allclose(replay.equity, res.equity, rtol=0, atol=1e-9)
-        assert [d["bar"] for d in replay.decisions] == [d["bar"] for d in res.decisions]
+        assert [d["fill_bar"] for d in replay.decisions] == [d["fill_bar"] for d in res.decisions]
         assert res.summary["n_rebalances"] > 2
 
 

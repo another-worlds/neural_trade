@@ -26,6 +26,7 @@ Same timing, same cost fields, no stops. Its random baseline is a circular-shift
 """
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
 
@@ -301,8 +302,9 @@ def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureSt
     3. at the last close, with ``mark_to_market_at_end``, the book is closed out (costed like a fill).
 
     Returns a ``BacktestResult`` with ``mode`` = "exposure", ``trades`` = [], ``decisions`` = one
-    record per fill {bar (the fill bar), decided_at, from, to, notional, costs, reason ("target",
-    "band_edge", or "EOW" for the close-out), fill (the fill price)}, ``targets`` = every target
+    record per fill {bar (the decision bar, as in the discrete engine), fill_bar (bar + 1; the last bar
+    for the close-out), from, to, notional, costs, reason ("target", "band_edge", or "EOW" for the
+    close-out), side ("LONG" for a buy, "SHORT" for a sell, so order markers work), fill (the price)}, ``targets`` = every target
     evaluated {bar, current, target (None when not finite: no decision), queued (the queued exposure
     or None)}, and ``target_path`` (the target in force over each bar). The summary has every key
     ``summarize`` gives, with ``n_trades`` = ``n_rebalances`` (the strategy's fills, the close-out
@@ -352,9 +354,9 @@ def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureSt
         tot["notional"] += notional
         tot["costs"] += costs
         tot["fees"] += fee_paid
-        decisions.append({"bar": t, "decided_at": decided_at, "from": float(frm), "to": float(to),
+        decisions.append({"bar": decided_at, "fill_bar": t, "from": float(frm), "to": float(to),
                           "notional": float(notional), "costs": float(costs), "reason": reason,
-                          "fill": float(mid * (1 + np.sign(dq) * slip))})
+                          "side": "LONG" if dq > 0 else "SHORT", "fill": float(mid * (1 + np.sign(dq) * slip))})
         qty = new_qty
         return True
 
@@ -372,12 +374,12 @@ def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureSt
         if t >= warmup and t < n - 1 and t % every == 0:
             raw = strategy.target(signals, t, current)
             rec = {"bar": t, "current": float(current), "target": None, "queued": None}
-            if raw is not None and np.isfinite(raw):
-                tgt = float(np.clip(raw, -cap, cap))
+            if raw is not None and math.isfinite(raw):
+                tgt = min(cap, max(-cap, float(raw)))
                 rec["target"] = tgt
                 d = tgt - current
                 if abs(d) > band:
-                    to = current + np.sign(d) * (abs(d) - band) if to_edge else tgt
+                    to = current + math.copysign(abs(d) - band, d) if to_edge else tgt
                     pending = (float(to), t, "band_edge" if to_edge else "target")
                     rec["queued"] = float(to)
             targets.append(rec)
@@ -390,7 +392,7 @@ def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureSt
     gross_ret = np.diff(equity_gross) / equity_gross[:-1]
     summary = summarize(equity, net_ret, gross_ret, [], tot["fees"], float(np.mean(position != 0)) if n else 0.0,
                         cfg.periods_per_year)
-    fills = [d["bar"] for d in decisions if d["reason"] != "EOW"]
+    fills = [d["fill_bar"] for d in decisions if d["reason"] != "EOW"]
     gross_pnl = float(equity_gross[-1] - init)
     be = breakeven_cost_bps(gross_pnl, tot["notional"])
     summary.update(
@@ -410,7 +412,7 @@ def fill_events(result: BacktestResult) -> np.ndarray:
     events = np.full(len(result.position), np.nan)
     for d in result.decisions:
         if d.get("reason") != "EOW":
-            events[d["bar"]] = d["to"]
+            events[d["fill_bar"]] = d["to"]
     return events
 
 
@@ -427,7 +429,7 @@ class _ReplayFills(ExposureStrategy):
 
     def target(self, s, t, current):
         want = float(self.events[t + 1])
-        return want if np.isfinite(want) else current
+        return want if math.isfinite(want) else current
 
 
 TIMING_NULL_SEED = 0
@@ -597,7 +599,7 @@ def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Calla
     """Perturb every prediction and bar AFTER t; the equity curve and every decision up to t
     must be unchanged. Raises AssertionError naming the first differing bar.
 
-    Exposure strategies too: their fills up to bar t (``decisions``, keyed by the fill bar) and every
+    Exposure strategies too: their fills up to bar t (``decisions`` with ``fill_bar`` <= t) and every
     target evaluated at a decision bar <= t (``targets``) must be unchanged; ``SignalFrame.build``
     rebuilds the EWMA sigma from the perturbed closes."""
     cfg = config or BacktestConfig()
@@ -608,8 +610,9 @@ def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Calla
     for t in probes:
         f2, b2 = _perturb_after(frame, bars, t, rng)
         other = run_backtest(SignalFrame.build(f2, var_scale), b2, make_strategy(), cfg)
-        before = [d for d in base.decisions if d["bar"] <= t]
-        after = [d for d in other.decisions if d["bar"] <= t]
+        at = "fill_bar" if base.mode == "exposure" else "bar"   # an exposure record carries its fill (open t + 1)
+        before = [d for d in base.decisions if d[at] <= t]
+        after = [d for d in other.decisions if d[at] <= t]
         if before != after:
             raise AssertionError(f"look-ahead: decisions up to bar {t} changed when data after {t} changed")
         if [d for d in base.targets if d["bar"] <= t] != [d for d in other.targets if d["bar"] <= t]:
