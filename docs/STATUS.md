@@ -55,7 +55,7 @@ model's sigma), NT-079, NT-080, NT-081.
   logreg_lags (AUC 0.51-0.53). Owner's /goal (stable >60% hit, drawdown <5%) not reached.
 - **In progress:** NT-047 repair round 1 (QA FAIL: legacy bundles, notebooks 01/04/07, Grappler leak, soft-extremum
   scale); then QA (Opus) and a re-run of the 3 ohlcv14 duel cells. P&L-target research (owner's point 3) running
-  (docs/research/2026-09-29-pnl-target/). NT-035 REPORT QA running.
+  (docs/research/2026-09-29-pnl-target/). NT-035 done (re-QA PASS).
 - **Rules added:** D-042 (no pinging; Haiku tracker polls), D-043 (model split).
 - **Owner question 7 (asked 2026-09-29):** NT-047's default input. D-031 wants all families on by default; the new
   default is 1.64x slower per CPU step (D-018 needs the owner) and showed no directional gain in the duel.

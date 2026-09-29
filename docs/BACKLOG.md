@@ -67,7 +67,7 @@ changes).
 | [NT-032](#nt-032) | P1 | feature | implementer | todo | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
-| [NT-035](#nt-035) | P1 | infra | experimenter | in-progress | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
+| [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
 | [NT-036](#nt-036) | P1 | feature | implementer | todo | Stability invariants in CI (strict mode, masks off) |
 | [NT-037](#nt-037) | P1 | feature | implementer | todo | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
 | [NT-038](#nt-038) | P1 | feature | implementer | todo | Stability harness and config guard (refuse hyperparameter regions known to fail) |
@@ -526,7 +526,7 @@ changes).
 
 **GPU measurements: concurrent-runs throughput and deterministic-mode speed**
 
-- **status:** in-progress
+- **status:** done (2026-09-29): runs/experiments/gpu_measurements_v1/REPORT.md (426de4f, text fixed 07d6e49); QA (Opus) reproduced every headline number and failed only the text; after the lead's fixes, re-QA (Sonnet) PASS on all 6 checks with the N = 4 throughput recomputed. Accepted deviations stated in the REPORT: GPU-free checks not recorded for Part A (one for Part B's 6 runs); N = 4 has 1 repeat (a crash is decisive for the refusal). Result: parallel N = 3 allowed, 4 refused; op determinism costs nothing; same-seed runs differ at epoch 0 (NT-074).
 - **priority / type / role:** P1 / infra / experimenter
 - **area:** runs/experiments/gpu_measurements_v1/ (SPEC.md, REPORT.md)
 - **depends on:** NT-026 (experiment engine)
