@@ -11,6 +11,12 @@ import pandas as pd
 import pytest
 
 from neural_trade.core.config import Config as _Config
+from neural_trade.visualization import discovered_indicators as DI
+from neural_trade.visualization import stats as S
+from neural_trade.visualization import theme as T
+from neural_trade.visualization.indicator_evolution import (
+    applied_periods, configured_periods, indicator_applied_periods, indicator_evolution, indicator_summary, label,
+)
 
 
 def Config(**kw):
@@ -21,12 +27,6 @@ def Config(**kw):
     kw.setdefault("INDICATOR_FAMILIES", {})
     return _Config(**kw)
 
-from neural_trade.visualization import discovered_indicators as DI
-from neural_trade.visualization import stats as S
-from neural_trade.visualization import theme as T
-from neural_trade.visualization.indicator_evolution import (
-    applied_periods, configured_periods, indicator_applied_periods, indicator_evolution, indicator_summary, label,
-)
 
 H = ("h0", "h1", "h2")
 NAMES = list(configured_periods(Config()))

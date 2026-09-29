@@ -315,14 +315,21 @@ def soft_rolling_extremum(series: tf.Tensor, alpha: tf.Tensor, sign: float) -> t
     t = tf.cast(tf.range(n), tf.float32)[None, :]                   # [1, L]
     start = tf.clip_by_value(t + 1.0 - p[:, None], 0.0, tf.cast(n, tf.float32))  # [B, L]
     lo = tf.floor(start)
-    frac = tf.cast(start - lo, tf.float64)
+    frac = tf.cast(start - lo, tf.float64)[:, :, None]              # [B, L, 1]
     lo_i = tf.cast(lo, tf.int32)
     hi_i = tf.minimum(lo_i + 1, n)
-    end_i = tf.tile(tf.range(1, n + 1)[None, :], [tf.shape(x)[0], 1])
+    # The window sum C[t+1] - interp(C, start) as ONE einsum against a selection matrix,
+    # instead of gathers: tf.gather's gradient is a scatter-add whose CPU thread order is
+    # not reproducible run to run, and bitwise reproducibility is a project invariant
+    # (D-023, scripts/golden_run.py). W[b, t, i] selects prefix i with weight
+    # +1 at i = t+1, -(1-frac) at floor(start), -frac at floor(start)+1.
+    end_sel = tf.cast(tf.one_hot(tf.range(1, n + 1), n + 1), tf.float64)[None]   # [1, L, L+1]
+    head_sel = ((1.0 - frac) * tf.cast(tf.one_hot(lo_i, n + 1), tf.float64)
+                + frac * tf.cast(tf.one_hot(hi_i, n + 1), tf.float64))           # [B, L, L+1]
+    sel = end_sel - head_sel
 
     def cut(q):
-        head = (1.0 - frac) * tf.gather(q, lo_i, batch_dims=1) + frac * tf.gather(q, hi_i, batch_dims=1)
-        return tf.gather(q, end_i, batch_dims=1) - head
+        return tf.einsum('bti,bi->bt', sel, q)
 
     # the window always holds at least one bar of weight >= e^-CLIP, so flooring the
     # denominator there is exact in real arithmetic and absorbs any prefix-sum round-off

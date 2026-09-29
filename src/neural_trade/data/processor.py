@@ -46,10 +46,14 @@ def split_arrays(config, read_csv_kwargs=None):
     dp = DataProcessor(config)
     df, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
     X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK)
+    # model-input windows (NT-047): identical to X in close-only mode, [N, L, C] otherwise
+    series_names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
+    Xm = X if series_names == ["close"] else make_multichannel_windows(
+        config, frame_series(config, df), config.LOOKBACK)
     n_total = X.shape[0]
     cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
     if cap and X.shape[0] > cap:
-        X, y, lc, ext = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:]
+        X, y, lc, ext, Xm = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:], Xm[-cap:]
     folds = make_purged_splits(X.shape[0], lookback=config.LOOKBACK, horizon_steps=config.HORIZON_STEPS,
                                window_step=int(max(1, getattr(config, "WINDOW_STEP", 1))),
                                n_folds=int(getattr(config, "N_FOLDS", 5)),
@@ -59,7 +63,8 @@ def split_arrays(config, read_csv_kwargs=None):
     out = {"fold": fold, "close": close, "df": df}
     for name in ("train", "val", "cal", "test"):
         idx = getattr(fold, name)
-        out[name] = {"X": X[idx], "y": y[idx], "last_close": lc[idx], "extended_trends": ext[idx], "index": idx,
+        out[name] = {"X": X[idx], "X_model": Xm[idx], "y": y[idx], "last_close": lc[idx],
+                     "extended_trends": ext[idx], "index": idx,
                      "anchor_bar": sequence_anchor_bars(config, len(close), n_total, idx)}
     return out
 
