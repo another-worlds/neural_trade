@@ -323,9 +323,10 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   `CustomTrainModel` already keeps; "logged steps" respects `TRAIN_METRICS_EVERY` — screens usually
   set it to 1 for exact per-step numbers, since the cost is negligible at screen sizes), the
   training loss's first-to-last-epoch drop, the final validation loss, each loss term's share of
-  the final total loss (WEIGHTED by that term's `LAMBDA_*`, not its raw magnitude — see
-  `experiments.screen._term_multiplier` — so a huge `LAMBDA_*` actually shows up as a large share
-  and `max_term_share` can catch it), per-horizon direction AUC on the validation block (labelled
+  the final total loss (WEIGHTED by that term's actually-applied lambda — read from the trained
+  model itself (post-`run.calibrate`, post-`ABLATE_LAMBDAS`), not the pre-run `cfg.LAMBDA_*` — see
+  `experiments.screen._term_multiplier` — so a huge `LAMBDA_*`, or one calibration rescaled, still
+  shows up as its true share and `max_term_share` can catch it), per-horizon direction AUC on the validation block (labelled
   with its noise level, D-012: `n` and `n_eff = n // horizon bars`), the trial's config diff,
   `DATA_END` and seed, and a timing breakdown (below). The spec's `rules:` block
   (`finite`, `max_nonfinite_grad_steps`, `max_clipped_share`, `min_train_loss_drop`,
@@ -353,7 +354,9 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   `<store>/screens/<name>/`), never the shared `results.jsonl` (concurrent processes used to append
   to the same file, risking interleaved/corrupted lines); `experiments.screen.merge_results` reads
   every shard file (and a plain `results.jsonl` from an unsharded run, if present) back together for
-  resumability checks and for reporting total progress across shards.
+  resumability checks and for reporting total progress across shards. Resuming one shard only ever
+  merges/considers shard files for the SAME total shard count `N`: shard files left over from a run
+  with a different `N` are ignored, never merged in.
 - **Level 2** (survivors, real quality): re-run through `scenario run` on a real block (a
   `configs/scenarios/micro_*.yaml`-style spec), not through screen mode again.
 

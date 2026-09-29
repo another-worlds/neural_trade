@@ -494,17 +494,21 @@ class _GradNormSampler(tf.keras.callbacks.Callback):
         self._prev_total = 0.0
         self._prev_count = 0.0
         self.n_steps = 0
+        self.n_valid_steps = 0  # logged steps whose sampled norm was finite (see clipped_share)
         self.max_norm: Optional[float] = None
         self._sum_norm = 0.0
         self.n_clipped = 0
 
     @property
     def mean_norm(self) -> Optional[float]:
-        return self._sum_norm / self.n_steps if self.n_steps else None
+        return self._sum_norm / self.n_valid_steps if self.n_valid_steps else None
 
     @property
     def clipped_share(self) -> Optional[float]:
-        return self.n_clipped / self.n_steps if self.n_steps else None
+        """The share of steps with a finite sampled norm that were at/above ``clip_norm``, or
+        ``None`` (JSON ``null``) when every logged step's norm was non-finite: with no valid step
+        there is no clip/no-clip signal at all, and ``0.0`` would misread as "nothing was clipped"."""
+        return self.n_clipped / self.n_valid_steps if self.n_valid_steps else None
 
     def on_epoch_begin(self, epoch, logs=None):
         self._prev_total = 0.0
@@ -522,6 +526,9 @@ class _GradNormSampler(tf.keras.callbacks.Callback):
             value = (total - self._prev_total) / (count - self._prev_count)
             self._prev_total, self._prev_count = total, count
             self.n_steps += 1
+            if not math.isfinite(value):  # no valid clip/no-clip signal from this step
+                return
+            self.n_valid_steps += 1
             self._sum_norm += value
             self.max_norm = value if self.max_norm is None else max(self.max_norm, value)
             if self.clip_norm > 0 and value >= self.clip_norm:
@@ -539,49 +546,89 @@ def _last_finite(series: Optional[Sequence[Any]]) -> Optional[float]:
     return None
 
 
-def _term_multiplier(key: str, cfg: Config) -> float:
-    """The extra factor needed to turn the RAW value ``CustomTrainModel`` logs for ``key``
+def _term_multiplier(key: str, cfg: Config, model: Any = None) -> float:
+    """The extra factor needed to turn the value ``CustomTrainModel`` logs for ``key``
     (``training/custom_model.py``'s ``_update_diagnostics`` scalars, read from ``history.history``)
     into its true contribution to the total loss (``losses/functions.py:custom_loss``'s ``total``),
     so that ``loss_term_shares`` (below) reflects what a trial's LAMBDA_* values actually did, not
-    their raw, un-weighted magnitude. Three groups (verified against ``custom_loss`` line by line):
+    their raw, un-weighted magnitude.
 
-    - already fully weighted per horizon inside ``custom_loss`` before being logged (``point_loss``:
-      LAMBDA_SHORT/POINT/LONG; ``casimir_loss``, ``vac_loss``, ``hd_loss``, ``ife_loss``,
-      ``vac_overflow_loss``: their own LAMBDA_* already applied) - multiplier 1.0;
-    - logged already-weighted but missing ONE further OUTER multiplier ``total`` applies on top
-      (``trend_loss`` needs LAMBDA_TREND_OUTER; ``inter_reg`` and ``vol_loss`` each need the fixed
-      0.1 outer weight ``custom_loss`` gives them) - handled by name below;
-    - logged RAW / un-weighted (``dir_loss``, ``nll_loss``, ``crps_loss``, ``soft_ece_loss``,
-      ``t_perp_loss``): ``total`` only ever sees them multiplied by their LAMBDA_* (and, for
-      direction, an outer multiplier too) - handled by name below. ``reg_loss`` is logged but
-      ``total`` uses ``0 * reg_loss`` (never affects it): multiplier 0.0.
+    Traced against ``custom_loss`` line by line (round 2 re-check, NT-088 QA finding 5): the
+    per-term LAMBDA_* is applied INSIDE ``custom_loss`` before the value is returned in
+    ``LossComponents`` for most of the physics/regularisation terms, so most of them are already
+    fully weighted when logged. Only direction, NLL, CRPS and soft-ECE are logged as the RAW,
+    un-weighted per-example loss (``LossComponents`` carries ``dir_loss_h*``/``nll_h*_val``/
+    ``crps_h*_val``/``soft_ece_h*_val`` straight from their computation, never ``total_dir_loss``
+    etc.). Four groups:
+
+    - already fully weighted per horizon inside ``custom_loss`` before being logged, multiplier
+      1.0: ``point_loss`` (LAMBDA_SHORT/POINT/LONG applied per horizon), ``t_perp_loss``
+      (``c.t_perp_total`` IS ``lambda_t_perp * (...)``, not the raw per-horizon sum -- round 1's
+      table put this term in the RAW group by mistake, which double-counted LAMBDA_T_PERP: a
+      LAMBDA_T_PERP of 100 reported a share of ~78 instead of the true ~0.78), ``casimir_loss``
+      (``casimir_val = lambda_casimir * casimir_interference_loss(...)``), ``hd_loss``
+      (``hd_val = lambda_hd * hyper_decoherence_coupling_loss(...)``), ``ife_loss``
+      (``ife_val = lambda_ife * information_flow_entropy_loss(...)``), ``vac_overflow_loss``
+      (``vac_overflow_val = lambda_vac_overflow * vacuum_overflow_t_perp_loss(...)``), ``vac_loss``
+      (LAMBDA_VAC is a threshold inside ``vacuum_bandwidth_loss``'s relu clamp, not a multiplicative
+      weight, and ``total`` adds ``vac_val`` with an implicit weight of 1);
+    - logged already-weighted but missing ONE further OUTER multiplier ``total`` applies on top:
+      ``trend_loss`` needs LAMBDA_TREND_OUTER; ``inter_reg`` (pre-weighted by LAMBDA_INTER, a
+      Config-only field never touched by calibration or ablation) and ``vol_loss`` (pre-weighted by
+      ``model.lambda_vol``, which calibration/ablation DO update, so it is already correct at the
+      point it is logged) each need the further fixed 0.1 outer weight ``custom_loss`` gives them;
+    - logged RAW / un-weighted: ``dir_loss``, ``nll_loss``, ``crps_loss``, ``soft_ece_loss``.
+      ``total`` only ever sees them multiplied by their LAMBDA_* (and, for direction and NLL, an
+      outer multiplier too). ``reg_loss`` is logged but ``total`` uses ``0 * reg_loss`` (never
+      affects it): multiplier 0.0.
+
+    When ``model`` (the trained ``CustomTrainModel``) is given, the multiplier for the four raw
+    terms and ``trend_loss`` is read from the model's OWN lambda attributes -- ``model.lambda_dir``,
+    ``model.lambda_var``, ``model.lambda_crps``, ``model.lambda_soft_ece`` (live ``tf.Variable``
+    properties, ``training/lambdas.py``) and ``model.lambda_dir_outer``/``lambda_nll_outer``/
+    ``lambda_trend_outer`` (plain floats set in ``CustomTrainModel.__init__``) -- rather than the
+    pre-run ``cfg.LAMBDA_*``. This matters whenever ``run.calibrate`` (default True) rescaled them
+    after training, or ``ABLATE_LAMBDAS`` zeroed one: reading ``cfg`` alone made shares sum to
+    1.232 in a calibrated repro instead of ~1 (QA finding 5). ``model=None`` (e.g. a bare
+    ``history``/``cfg`` reconstruction in a test) falls back to ``cfg.LAMBDA_*``, unchanged from
+    round 1.
 
     This is an approximation of ``total`` itself: two further terms ``custom_loss`` can add
     (``dir_align_loss`` via LAMBDA_DIR_ALIGN_OUTER, ``coherence_penalty`` via
     LAMBDA_COHERENCE_OUTER) are not logged as separate history keys at all, so they are not in
     ``loss_term_shares``; both default to an outer weight of 0 (LAMBDA_DIR_ALIGN_OUTER) or a small
     one, so shares sum close to but not always exactly 1.0."""
+    def _live(attr: str, cfg_name: str, default: float = 1.0) -> float:
+        if model is not None:
+            return float(getattr(model, attr, getattr(cfg, cfg_name, default)))
+        return float(getattr(cfg, cfg_name, default))
+
     if key == "trend_loss":
-        return float(getattr(cfg, "LAMBDA_TREND_OUTER", 1.0))
+        return _live("lambda_trend_outer", "LAMBDA_TREND_OUTER")
     if key == "dir_loss":
-        return float(getattr(cfg, "LAMBDA_DIR_OUTER", 1.0)) * float(getattr(cfg, "LAMBDA_DIR", 1.0))
+        return _live("lambda_dir_outer", "LAMBDA_DIR_OUTER") * _live("lambda_dir", "LAMBDA_DIR")
     if key == "nll_loss":
-        return float(getattr(cfg, "LAMBDA_NLL_OUTER", 1.0)) * float(getattr(cfg, "LAMBDA_VAR", 1.0))
+        return _live("lambda_nll_outer", "LAMBDA_NLL_OUTER") * _live("lambda_var", "LAMBDA_VAR")
     if key == "crps_loss":
-        return float(getattr(cfg, "LAMBDA_CRPS", 1.0))
+        return _live("lambda_crps", "LAMBDA_CRPS")
     if key == "soft_ece_loss":
-        return float(getattr(cfg, "LAMBDA_SOFT_ECE", 1.0))
-    if key == "t_perp_loss":
-        return float(getattr(cfg, "LAMBDA_T_PERP", 1.0))
+        return _live("lambda_soft_ece", "LAMBDA_SOFT_ECE")
     if key == "reg_loss":
         return 0.0
     if key in ("inter_reg", "vol_loss"):
         return 0.1
+    # already fully weighted inside custom_loss before being logged: point_loss, t_perp_loss,
+    # casimir_loss, vac_loss, hd_loss, ife_loss, vac_overflow_loss.
     return 1.0
 
 
-def _health_from_history(history, sampler: _GradNormSampler, cfg: Config) -> Dict[str, Any]:
+def _health_from_history(history, sampler: _GradNormSampler, cfg: Config, model: Any = None) -> Dict[str, Any]:
+    """The health numbers of one trial's ``history`` (``CustomTrainModel.fit``'s return). ``model``
+    is the trained ``CustomTrainModel``, when available: passed through to :func:`_term_multiplier`
+    so ``loss_term_shares`` reflects the lambdas actually applied during training -- post-calibration
+    (``run.calibrate``) and post-``ABLATE_LAMBDAS`` -- rather than the pre-run ``cfg.LAMBDA_*``
+    (NT-088 QA finding 5). ``model=None`` (tests that only have a fake ``history`` and a ``cfg``)
+    falls back to ``cfg.LAMBDA_*``, unchanged from round 1."""
     hist: Dict[str, List[Any]] = dict(getattr(history, "history", None) or {})
     all_values = [v for series in hist.values() for v in series]
     finite = all(math.isfinite(float(v)) for v in all_values) if all_values else False
@@ -598,7 +645,7 @@ def _health_from_history(history, sampler: _GradNormSampler, cfg: Config) -> Dic
         for key in LOSS_TERM_KEYS:
             v = _last_finite(hist.get(key))
             if v is not None:
-                term_shares[key] = (v * _term_multiplier(key, cfg)) / final_total
+                term_shares[key] = (v * _term_multiplier(key, cfg, model)) / final_total
     return {
         "finite": bool(finite),
         "nonfinite_grad_steps": nonfinite_total,
@@ -764,7 +811,7 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool
     t_train = time.perf_counter() - t3
 
     t4 = time.perf_counter()
-    health = _health_from_history(history, sampler, cfg)
+    health = _health_from_history(history, sampler, cfg, custom_model)
     auc = _direction_auc(custom_model, val_block, cfg, target_scaler)
     t_score = time.perf_counter() - t4
     tf.keras.backend.clear_session()
@@ -870,7 +917,11 @@ def merge_results(store="runs", name: Optional[str] = None, *, n: Optional[int] 
 
 def _merged_existing_keys(out_dir: Path, shard: Optional[Tuple[int, int]]) -> set:
     """``trial_key``s already recorded by ANY shard of this run (or the plain file), so resuming one
-    shard also skips a trial some other shard already finished, not only its own file."""
+    shard also skips a trial some other shard already finished, not only its own file -- but ONLY
+    shard files for the SAME total shard count ``N`` (``shard[1]``, via ``_shard_glob``'s
+    ``results.shard-*-of-{n}.jsonl`` glob): shard files left over from a run with a DIFFERENT ``N``
+    are never merged or considered here, since a different ``N`` partitions the trial grid
+    differently and its shard files are not comparable to this run's."""
     if shard is None:
         return _existing_keys(out_dir / RESULTS_FILE)
     keys = _existing_keys(out_dir / RESULTS_FILE)   # a prior unsharded run, if any

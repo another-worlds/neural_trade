@@ -16,7 +16,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from neural_trade.core.config import Config
+from neural_trade.core.config import Config  # import neural_trade before tensorflow (CUDA DLLs on PATH)
+import tensorflow as tf
 from neural_trade.data.processor import DataProcessor, apply_data_end
 from neural_trade.experiments.dataset import data_layout
 from neural_trade.experiments.screen import (ScreenError, ScreenSpec, _load_cached, _sanitize_nonfinite,
@@ -546,3 +547,88 @@ def test_run_trial_reports_prep_build_epoch_timings_on_real_training(bars_csv):
     assert set(t) == {"load_s", "prep_s", "build_s", "train_s", "score_s", "epoch_s"}
     assert isinstance(t["epoch_s"], list) and len(t["epoch_s"]) == 2
     assert all(isinstance(x, float) and x >= 0 for x in t["epoch_s"])
+
+
+@pytest.mark.slow
+def test_loss_term_shares_use_the_trained_models_own_lambdas_on_real_calibrated_training(bars_csv):
+    """NT-088 round 3, QA finding 5 (re-check): with ``run.calibrate: true`` AND a non-default
+    LAMBDA_T_PERP (100), the shares must (a) sum to about 1 and (b) NOT double-count t_perp.
+
+    Before this fix, on the same kind of trial (QA's repro against the reference-setup CSV):
+    reading ``cfg.LAMBDA_*`` instead of the model's actually-applied (post-calibration) lambdas made
+    calibrated shares sum to 1.232 instead of ~1, and treating ``t_perp_loss`` as RAW (applying
+    LAMBDA_T_PERP a second time on top of the ALREADY lambda_t_perp-weighted ``c.t_perp_total``)
+    reported a share around 78 for a LAMBDA_T_PERP of 100 instead of its true, order-of-magnitude-
+    smaller contribution. Recomputing both scenarios by hand from the captured history/model
+    confirms the exact old numbers (1.2322 and 78.5654 respectively; see the repair-round report)."""
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["overrides"].update(LAMBDA_T_PERP=100.0, BATCH_SIZE=32)
+    s["run"] = {"calibrate": True, "epochs": 2}
+    s["grid"] = {"axes": {}}
+    spec = ScreenSpec.from_dict(s)
+    trial = build_trials(spec)[0]
+    row = run_trial(trial, spec, {})
+    shares = row["health"]["loss_term_shares"]
+    assert shares, f"expected non-empty loss_term_shares: {row['health']}"
+
+    total_share = sum(shares.values())
+    assert total_share == pytest.approx(1.0, abs=0.2), (
+        f"loss_term_shares should sum to about 1 (the only unaccounted terms are the unlogged "
+        f"dir_align_loss/coherence_penalty); got {total_share} from {shares}")
+
+    # t_perp_loss must NOT be inflated by double-applying LAMBDA_T_PERP: its share stays a small
+    # fraction of the total, nowhere near the ~78 the double-counting bug produced.
+    t_perp_share = shares.get("t_perp_loss")
+    if t_perp_share is not None:
+        assert t_perp_share < 2.0, (
+            f"t_perp_loss share {t_perp_share} looks double-counted (LAMBDA_T_PERP applied twice); "
+            f"expected an order-of-magnitude-smaller share, well under 2.0")
+
+
+def test_grad_norm_sampler_reports_clipped_share_as_none_when_every_sampled_norm_is_nonfinite():
+    """NT-088 round 3, fix 4: an all-non-finite trial (e.g. an extreme LAMBDA_* that drives the
+    gradient norm itself to NaN on every logged step) must report ``clipped_share`` as ``None``
+    (JSON ``null``), not ``0.0`` -- ``0.0`` would misread as "nothing was clipped" when in fact there
+    was no valid clip/no-clip signal at all."""
+    from neural_trade.experiments.screen import _GradNormSampler
+
+    class _FakeMean:
+        def __init__(self):
+            self.total = tf.Variable(0.0)
+            self.count = tf.Variable(0.0)
+
+    sampler = _GradNormSampler(clip_norm=1.0)
+    sampler.model = type("M", (), {"_step_means": {"grad_global_norm": _FakeMean()}})()
+    sampler.on_epoch_begin(0)
+    # Three logged steps, each pushing the running total to NaN (a non-finite grad_global_norm
+    # sampled every time): the per-step delta is NaN throughout.
+    for i in range(1, 4):
+        sampler.model._step_means["grad_global_norm"].total.assign(float("nan"))
+        sampler.model._step_means["grad_global_norm"].count.assign(float(i))
+        sampler.on_train_batch_end(i - 1)
+
+    assert sampler.n_steps == 3
+    assert sampler.n_valid_steps == 0
+    assert sampler.clipped_share is None
+    assert sampler.mean_norm is None
+
+
+def test_merged_existing_keys_docstring_names_same_shard_count_only():
+    """NT-088 round 3, fix 4: :func:`_merged_existing_keys` only ever merges/considers shard files
+    for the SAME total shard count N; a stale-docstring regression would be easy to reintroduce
+    silently, so pin the documented behaviour by exercising it directly."""
+    import shutil
+
+    from neural_trade.experiments.screen import _append_jsonl, _merged_existing_keys, _shard_result_path
+
+    import tempfile
+    tmp = tempfile.mkdtemp()
+    try:
+        out_dir = __import__("pathlib").Path(tmp)
+        # A shard file from a DIFFERENT total shard count (N=3) must be ignored when resuming N=2.
+        _append_jsonl(_shard_result_path(out_dir, (0, 3)), {"trial_key": "stale-n3"})
+        _append_jsonl(_shard_result_path(out_dir, (0, 2)), {"trial_key": "this-n2"})
+        keys = _merged_existing_keys(out_dir, (1, 2))
+        assert keys == {"this-n2"}, f"expected only the N=2 shard's keys, got {keys}"
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
