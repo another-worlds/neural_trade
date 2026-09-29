@@ -1,0 +1,12 @@
+{
+  "run_id": "20260929T205408Z-3ffb863-4f910d32-lam_a__f-2__s2",
+  "epochs_completed": 15,
+  "done": true,
+  "sec_per_step": 0.4297985349382673,
+  "n_errors": 0,
+  "elapsed_seconds": 61.07034730911255,
+  "val_loss": 7.862248420715332,
+  "weights_epoch": 9,
+  "weights_val_loss": 7.790916919708252,
+  "weights_source": "best validation epoch, restored by EarlyStopping (stopped at epoch 15)"
+}
