@@ -1,0 +1,3 @@
+# NT-046 fixtures recorded at base commit f5aee70: the repo-wide *.h5 ignore does not apply
+# to this small committed weights fixture (tests/test_indicator_families.py).
+!nt046_model.weights.h5

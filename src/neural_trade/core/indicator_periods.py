@@ -21,11 +21,27 @@ def configured_periods(config) -> Dict[str, float]:
     if config is None:
         return {}
     try:
-        out = {f"ma_period_{i}": float(s) for i, s in enumerate(config.MA_SPANS)}
-        for i, m in enumerate(config.MACD_SETTINGS):
-            out.update({f"macd_{i}_{r}": float(m[r]) for r in MACD_ROLES})
-        out.update({f"rsi_period_{i}": float(p) for i, p in enumerate(config.RSI_PERIODS)})
-        out.update({f"bb_period_{i}": float(p) for i, p in enumerate(config.BB_PERIODS)})
+        extras = dict(getattr(config, "INDICATOR_FAMILIES", None) or {})
+        out = {}
+        if "ma" not in extras:
+            out.update({f"ma_period_{i}": float(s) for i, s in enumerate(config.MA_SPANS)})
+        if "macd" not in extras:
+            for i, m in enumerate(config.MACD_SETTINGS):
+                out.update({f"macd_{i}_{r}": float(m[r]) for r in MACD_ROLES})
+        if "rsi" not in extras:
+            out.update({f"rsi_period_{i}": float(p) for i, p in enumerate(config.RSI_PERIODS)})
+        if "bb" not in extras:
+            out.update({f"bb_period_{i}": float(p) for i, p in enumerate(config.BB_PERIODS)})
+        # Families from Config.INDICATOR_FAMILIES (NT-046), named as they are reported: a
+        # scalar instance -> '<family>_period_<i>', a dict -> '<family>_<i>_<param>'. This
+        # module stays registry-free, so a dict parameter left at its textbook default (the
+        # family fills it in) is not listed here.
+        for fam, insts in extras.items():
+            for i, inst in enumerate(insts or []):
+                if isinstance(inst, dict):
+                    out.update({f"{fam}_{i}_{k}": float(v) for k, v in inst.items()})
+                else:
+                    out[f"{fam}_period_{i}"] = float(inst)
     except (AttributeError, KeyError, TypeError, ValueError):
         return {}
     return out
