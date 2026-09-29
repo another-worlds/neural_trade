@@ -1,0 +1,86 @@
+{
+  "tag": "old_bs256",
+  "epochs": [
+    {
+      "epoch": 0,
+      "t_begin": 1790679504.631509,
+      "t_val_begin": 1790679784.0124462,
+      "t_train_end": 1790679784.0124462,
+      "t_val_end": 1790679802.8708487,
+      "t_end": 1790679803.0179765,
+      "n_steps": 118,
+      "train_seconds": 279.3809370994568,
+      "val_seconds": 18.858402490615845,
+      "step_sum_seconds": 279.3141176000936,
+      "step_median": 1.9281005000229925,
+      "step_mean_excl_first2": 2.2363103146555408,
+      "step_max": 18.22392650000984,
+      "gpu_mem_mb": {
+        "current": 15.6,
+        "peak": 647.1
+      }
+    },
+    {
+      "epoch": 1,
+      "t_begin": 1790679803.028495,
+      "t_val_begin": 1790680097.0750628,
+      "t_train_end": 1790680097.0750628,
+      "t_val_end": 1790680107.9875543,
+      "t_end": 1790680108.0966692,
+      "n_steps": 118,
+      "train_seconds": 294.04656767845154,
+      "val_seconds": 10.9124915599823,
+      "step_sum_seconds": 293.9945968996617,
+      "step_median": 1.7930028999689966,
+      "step_mean_excl_first2": 2.5025766112039807,
+      "step_max": 12.122984000016004,
+      "gpu_mem_mb": {
+        "current": 15.6,
+        "peak": 647.1
+      }
+    },
+    {
+      "epoch": 2,
+      "t_begin": 1790680108.1041787,
+      "t_val_begin": 1790680311.7368402,
+      "t_train_end": 1790680311.7368402,
+      "t_val_end": 1790680322.799761,
+      "t_end": 1790680322.8166378,
+      "n_steps": 118,
+      "train_seconds": 203.63266158103943,
+      "val_seconds": 11.062920808792114,
+      "step_sum_seconds": 203.5994702000753,
+      "step_median": 1.7764546999824233,
+      "step_mean_excl_first2": 1.7259266758623637,
+      "step_max": 1.9791195000289008,
+      "gpu_mem_mb": {
+        "current": 15.6,
+        "peak": 647.1
+      }
+    }
+  ],
+  "setup_seconds(before fit)": 172.34431838989258,
+  "fit_seconds": 818.2012214660645,
+  "post_fit_seconds(serve+calibration+predict)": 12.765265941619873,
+  "eval_report_seconds": 0.0,
+  "total_seconds": 1003.3108057975769,
+  "steady_sec_per_step(mean of epochs>=2, per-step mean excl first 2)": 2.114251643533172,
+  "steady_sec_per_step_median": 1.78472879997571,
+  "steady_train_sec_per_epoch": 248.83961462974548,
+  "steady_val_sec_per_epoch": 10.987706184387207,
+  "epoch1_train_seconds(includes tracing)": 279.3809370994568,
+  "n_steps_per_epoch": 118,
+  "peak_gpu_mem_mb": 647.1,
+  "n_train_windows": 24000,
+  "n_test_windows": 6000,
+  "steady_windows": [
+    [
+      1790679803.028495,
+      1790680097.0750628
+    ],
+    [
+      1790680108.1041787,
+      1790680311.7368402
+    ]
+  ]
+}
