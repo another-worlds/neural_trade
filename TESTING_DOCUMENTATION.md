@@ -77,7 +77,7 @@ Markers: `tf` imports TensorFlow (added automatically); `slow` trains a model or
 | `tests/test_served_epoch.py` | 4 | tf 4 | The served model is the best-validation epoch, whether or not EarlyStopping stopped the run. |
 | `tests/test_statistics_module.py` | 4 |  | NT-027: one metrics and statistics module (AUC with its DeLong variance, the effective-sample helpers, the block bootstrap, the long-run variance) - evaluation/report.py and the figure modules call it instead of computing their own. |
 | `tests/test_telemetry.py` | 6 |  | JSONL epoch telemetry never raises; convergence score NaN stays NaN; RunContext layout. |
-| `tests/test_train_smoke.py` | 4 | tf 4 | Three real training steps on synthetic bars. |
+| `tests/test_train_smoke.py` | 4 | tf 4 | Real training on synthetic bars (and on the bundled CSV for the default-Config run). |
 | `tests/test_training_wiring.py` | 3 | tf 3 | The training model resolves its objective and optimizers through the registries; ablation. |
 | `tests/test_viz_analytics_all.py` | 5 |  | Every model-analytics figure draws every panel it has data for. |
 | `tests/test_viz_confidence.py` | 48 |  | Confidence and cross-horizon coherence analytics: honest intervals, chance references, readable encodings. |

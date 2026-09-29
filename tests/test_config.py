@@ -105,8 +105,6 @@ def test_lambda_weights_and_ablation_names():
         Config(ABLATE_LAMBDAS=["LAMBDA_NOPE"])
 
 
-
-
 @pytest.mark.parametrize("overrides, match", [
     ({"LOOKBACK": 0}, "LOOKBACK must be positive"),
     ({"LOOKBACK": 2000}, "exceed 1 day"),

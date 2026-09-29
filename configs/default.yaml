@@ -89,7 +89,7 @@ REG_MOMENTUM_L2: 0.0  # L2 on the dense towers
 TRAIN_METRICS_EVERY: 10  # update the training-set diagnostics every N steps (1 = every step); training loss and validation metrics are always exact
 TANH_SCALE: 1.0  # unused
 SIGMOID_SCALE: 1.0  # unused
-HUBER_DELTA: 1.0  # delta of CustomTrainModel.huber (not the point loss)
+HUBER_DELTA: 1.0  # deprecated, no effect (CustomTrainModel.huber has no caller; NT-028)
 USE_HUBER: true  # legacy flag; the point loss is log(cosh)
 
 # ---- stability
