@@ -24,6 +24,8 @@ overrides:
   MAX_SEQUENCE_COUNT: 4500
   DATA_END_PROTECTED_DAYS: 2.0
   TRAIN_METRICS_EVERY: 1        # exact per-step grad_global_norm (screens are tiny; the cost is negligible)
+  FOLD_INDEX: -2                 # the dev fold (QA NT-088 round 2): -1 with N_FOLDS=2 here gave a
+                                  # 1,860-window (31-hour) train block, not the plan's 6-hour/360-window one
 grid:
   axes:
     LR: [0.0001, 0.001]

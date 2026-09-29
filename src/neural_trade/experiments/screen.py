@@ -30,12 +30,16 @@ A screen spec (schema_version: 1)::
 
 Every ``(grid point or sample point) x slice x seed`` is one trial. Trials are trained through a
 light internal path (not ``train_and_evaluate``, which also fits the post-hoc calibration pipeline
-and, for a run context, writes a serving bundle): data loaded and prepared ONCE per data key per
+and, for a run context, writes a serving bundle): data loaded and prepared, AND its sliding windows
+built (``DataProcessor.build_windows``, the part that loops every bar), ONCE per data key per
 process (the cache is keyed by :func:`neural_trade.experiments.dataset.data_key`, which already
-covers every Config field that can change the prepared bars, DATA_END included), a real
-``CustomTrainModel`` trained for the spec's ``run.epochs``, no checkpoints, no baselines, no
-backtest, no random null, no stored predictions, no serving bundle. ``run.calibrate`` switches the
-pre-training loss-weight calibration pass (``training.lambda_calibration.calibrate_loss_weights``)
+covers every Config field that can change the prepared bars or the windows, DATA_END included), a
+real ``CustomTrainModel`` trained for the spec's ``run.epochs``, no checkpoints, no baselines, no
+backtest, no random null, no stored predictions, no serving bundle. Only the fold split, target
+scaling and window normalisation (``DataProcessor.prepare_datasets_from_windows``, cheap: no per-bar
+loop) run per trial, since fields outside the data key (N_FOLDS, VAL_FRACTION, CAL_FRACTION,
+WINDOW_NORMALIZER, FOLD_INDEX, BATCH_SIZE, ...) may still vary trial to trial. ``run.calibrate``
+switches the pre-training loss-weight calibration pass (``training.lambda_calibration.calibrate_loss_weights``)
 on or off, same as a scenario's ``run.calibrate``.
 
 Health numbers (all finite, ``nonfinite_grad_steps``, the max and mean of the per-logged-step
@@ -46,10 +50,20 @@ come from the same per-epoch aggregates ``CustomTrainModel`` already exposes in
 sampler (:class:`_GradNormSampler`) for the max / share, which epoch aggregates alone cannot give.
 Pre-registered ``rules:`` in the spec turn the health numbers into a pass/fail with reasons.
 
-Resumable: ``results.jsonl`` already holding a trial's key (a hash of its exact Config values,
-:func:`neural_trade.experiments.scenario.config_hash`) skips it. ``--shard i/N`` runs trial index
-``j`` only when ``j % N == i``: the shards are disjoint and their union is every trial, so ``N``
-processes (NT-035's 3-process ceiling) split a screen without locking any cell.
+Resumable: a trial's key (a hash of its exact Config values,
+:func:`neural_trade.experiments.scenario.config_hash`) already present in its results file skips it.
+``--shard i/N`` runs trial index ``j`` only when ``j % N == i``: the shards are disjoint and their
+union is every trial, so ``N`` processes (NT-035's 3-process ceiling) split a screen without locking
+any cell. Each shard writes its OWN file, ``results.shard-{i}-of-{N}.jsonl`` (0-indexed), so
+concurrent processes never append to the same file; :func:`merge_results` reads every shard file
+(and a plain ``results.jsonl`` from an unsharded run, if present) back together for resumability
+checks and for reporting total progress across shards.
+
+A non-finite health number (an extreme LAMBDA_* blowing up training) is written to the JSONL row as
+``null`` (never as a raw NaN/Infinity, which ``json.dumps(allow_nan=False)`` would refuse to
+serialise and so leave the trial unrecorded and unresumable): see :func:`_sanitize_nonfinite`. Such a
+trial is always recorded ``passed: false``, regardless of the spec's ``rules:``, with a reason naming
+the non-finite field(s).
 """
 from __future__ import annotations
 
@@ -239,7 +253,29 @@ class ScreenSpec:
         self._check_fields({a: None for a in self.axes}, "grid.axes")
         if self.sample:
             self._check_fields({f: None for f in self.sample["space"]}, "sample.space")
+            self._check_sample_bounds()
         return _step(lambda: cfg.override(**overrides), "overrides", self.where())
+
+    def _check_sample_bounds(self) -> None:
+        """(P3, D-020-adjacent robustness) ``sample.space`` bounds must be sane BEFORE any drawing
+        happens: ``log: true`` needs ``low > 0`` (``math.log`` of a non-positive number is a cryptic
+        ``ValueError`` deep inside ``_draw``/``_lhs``, not a clear spec error), and ``low``/``high``
+        must fall inside the Config field's own declared range (:meth:`Config.field_specs`), so a
+        sample never draws a value ``Config.override`` would refuse mid-run."""
+        specs = Config.field_specs()
+        for fname, s in self.sample["space"].items():
+            spec = specs.get(fname)
+            if spec is None:
+                continue  # unknown field: already refused by _check_fields above
+            low, high = float(s["low"]), float(s["high"])
+            if s.get("log") and low <= 0:
+                raise ScreenError(f"{self.where()}: sample.space.{fname}: log sampling needs low > 0, "
+                                  f"got low={low!r}")
+            for bound_name, bound in (("low", low), ("high", high)):
+                msg = spec.check(bound)
+                if msg is not None:
+                    raise ScreenError(f"{self.where()}: sample.space.{fname}.{bound_name}={bound!r} is "
+                                      f"outside {fname}'s valid range {spec.range_text()}")
 
     def _check_fields(self, overrides: Mapping[str, Any], where: str) -> None:
         names = set(Config.field_names())
@@ -335,7 +371,11 @@ class Trial:
 
 def build_trials(spec: ScreenSpec) -> List[Trial]:
     """Every ``(grid point or sample point) x slice x seed``, in spec order; validates the whole
-    spec (raises :class:`ScreenError` naming the offending key). Needs no data and trains nothing."""
+    spec (raises :class:`ScreenError` naming the offending key), including, for every trial, its
+    effective ``DATA_END`` against the protected dev/test span (D-020, :func:`_preflight_data_end`).
+    That preflight check reads each distinct data file's raw bars once (to resolve the implicit
+    "use the newest data" case and the true protected-span boundary) but builds no windows and
+    trains nothing."""
     base = spec.base()
     field_specs = Config.field_specs()
     points: List[Tuple[str, Dict[str, Any]]] = [("grid", p) for p in _grid_points(spec.axes)]
@@ -356,7 +396,52 @@ def build_trials(spec: ScreenSpec) -> List[Trial]:
                            f"trial {idx} ({source} {point}, slice {data_end!r}, seed {seed})", spec.where())
                 trials.append(Trial(idx, source, dict(point), data_end, int(seed), cfg))
                 idx += 1
+    _preflight_data_end(trials, spec)
     return trials
+
+
+def _preflight_data_end(trials: Sequence["Trial"], spec: ScreenSpec) -> None:
+    """D-020: validate every trial's ``DATA_END`` - explicit, or the implicit "use the newest data"
+    case (``DATA_END`` unset, which today's ``apply_data_end`` never checks at all, since that is the
+    ordinary, correct behaviour everywhere else) - against the protected dev/test span BEFORE any
+    trial trains. A spec with any violating slice fails immediately here, with no training for ANY
+    trial, not even the ones that would have been fine. Reads each distinct data file's raw,
+    preprocessed bars once (cheap: no windows built), cached by (CSV_PATH, DATA_LOADER,
+    PREPROCESSORS) across trials that share a file.
+
+    Also closes the other half of the D-020 gap: a screen spec could otherwise lower
+    ``DATA_END_PROTECTED_DAYS`` below the Config default (64 days) to sneak a ``DATA_END`` close to
+    the true tail past the guard. Forbidden here ONLY against a file that actually spans at least the
+    default protected span - the bundled 30-day CSV and the synthetic test fixtures are shorter than
+    that to begin with, so the default would refuse every ``DATA_END`` outright; RUNBOOK "Screen mode"
+    and ``configs/screens/example_6h.yaml`` document lowering it for that reason, and a real campaign
+    against the long 2017-2025 file (which does span more than 64 days) keeps the floor."""
+    from neural_trade.data.processor import DataProcessor, apply_data_end
+
+    default_days = float(Config.field_specs()["DATA_END_PROTECTED_DAYS"].default)
+    file_cache: Dict[Tuple[str, str, Tuple[str, ...]], Tuple[Any, float]] = {}
+    for trial in trials:
+        cfg = trial.config
+        fkey = (str(cfg.CSV_PATH), str(cfg.DATA_LOADER), tuple(cfg.PREPROCESSORS))
+        cached = file_cache.get(fkey)
+        if cached is None:
+            dp = DataProcessor(cfg)
+            df = dp.preprocess(dp.load_raw())
+            ts = df["timestamp"]
+            span_days = (ts.max() - ts.min()).total_seconds() / 86400.0
+            cached = file_cache[fkey] = (df, span_days)
+        df, span_days = cached
+        if span_days >= default_days and float(cfg.DATA_END_PROTECTED_DAYS) < default_days:
+            raise ScreenError(
+                f"{spec.where()}: trial {trial.index}: DATA_END_PROTECTED_DAYS="
+                f"{float(cfg.DATA_END_PROTECTED_DAYS)!r} is below the Config default ({default_days!r}) "
+                f"against a file spanning {span_days:.1f} days; only a file shorter than the default "
+                "protected span may lower it (D-020)")
+        probe_cfg = cfg if cfg.DATA_END is not None else cfg.copy(DATA_END=str(df["timestamp"].max()))
+        try:
+            apply_data_end(df, probe_cfg)
+        except ValueError as exc:
+            raise ScreenError(f"{spec.where()}: trial {trial.index} (slice {trial.data_end!r}): {exc}") from exc
 
 
 def shard_of(index: int, shard: Optional[Tuple[int, int]]) -> bool:
@@ -389,7 +474,19 @@ class _GradNormSampler(tf.keras.callbacks.Callback):
     exact epoch-Mean accumulator ``CustomTrainModel`` already keeps (``_step_means['grad_global_norm']``,
     updated only on logged steps per ``Config.TRAIN_METRICS_EVERY``, training/custom_model.py). A
     ``tf.keras.metrics.Mean`` accumulates an exact running sum/count, reset at each epoch start, so
-    the delta between two observations equals the value of the single update between them."""
+    the delta between two observations equals the value of the single update between them.
+
+    ``clipped_share`` is an APPROXIMATION, documented here because ``training/custom_model.py``'s
+    ``train_step`` (outside this item's files) actually clips gradients in TWO SEPARATE groups by
+    ``tf.clip_by_global_norm`` - the network weights and the indicator logit variables - each against
+    its own group norm, and it is the pre-clip norm of the COMBINED (both groups') gradients that is
+    sampled here (``grad_global_norm``, computed once in ``train_step`` before the split). So
+    ``clipped_share`` is the share of logged steps where the COMBINED norm was at or above
+    ``GRAD_CLIP_NORM``, not "one particular group actually got clipped this step": the combined norm
+    can exceed the clip norm while neither group's own (smaller) norm does, and either group's own
+    norm can occasionally exceed it while the combined norm (dominated by the other, larger group)
+    does not, without this sampler seeing it separately. True per-group tracking would need a second
+    epoch accumulator inside ``CustomTrainModel``, outside NT-088's files."""
 
     def __init__(self, clip_norm: float):
         super().__init__()
@@ -442,7 +539,49 @@ def _last_finite(series: Optional[Sequence[Any]]) -> Optional[float]:
     return None
 
 
-def _health_from_history(history, sampler: _GradNormSampler) -> Dict[str, Any]:
+def _term_multiplier(key: str, cfg: Config) -> float:
+    """The extra factor needed to turn the RAW value ``CustomTrainModel`` logs for ``key``
+    (``training/custom_model.py``'s ``_update_diagnostics`` scalars, read from ``history.history``)
+    into its true contribution to the total loss (``losses/functions.py:custom_loss``'s ``total``),
+    so that ``loss_term_shares`` (below) reflects what a trial's LAMBDA_* values actually did, not
+    their raw, un-weighted magnitude. Three groups (verified against ``custom_loss`` line by line):
+
+    - already fully weighted per horizon inside ``custom_loss`` before being logged (``point_loss``:
+      LAMBDA_SHORT/POINT/LONG; ``casimir_loss``, ``vac_loss``, ``hd_loss``, ``ife_loss``,
+      ``vac_overflow_loss``: their own LAMBDA_* already applied) - multiplier 1.0;
+    - logged already-weighted but missing ONE further OUTER multiplier ``total`` applies on top
+      (``trend_loss`` needs LAMBDA_TREND_OUTER; ``inter_reg`` and ``vol_loss`` each need the fixed
+      0.1 outer weight ``custom_loss`` gives them) - handled by name below;
+    - logged RAW / un-weighted (``dir_loss``, ``nll_loss``, ``crps_loss``, ``soft_ece_loss``,
+      ``t_perp_loss``): ``total`` only ever sees them multiplied by their LAMBDA_* (and, for
+      direction, an outer multiplier too) - handled by name below. ``reg_loss`` is logged but
+      ``total`` uses ``0 * reg_loss`` (never affects it): multiplier 0.0.
+
+    This is an approximation of ``total`` itself: two further terms ``custom_loss`` can add
+    (``dir_align_loss`` via LAMBDA_DIR_ALIGN_OUTER, ``coherence_penalty`` via
+    LAMBDA_COHERENCE_OUTER) are not logged as separate history keys at all, so they are not in
+    ``loss_term_shares``; both default to an outer weight of 0 (LAMBDA_DIR_ALIGN_OUTER) or a small
+    one, so shares sum close to but not always exactly 1.0."""
+    if key == "trend_loss":
+        return float(getattr(cfg, "LAMBDA_TREND_OUTER", 1.0))
+    if key == "dir_loss":
+        return float(getattr(cfg, "LAMBDA_DIR_OUTER", 1.0)) * float(getattr(cfg, "LAMBDA_DIR", 1.0))
+    if key == "nll_loss":
+        return float(getattr(cfg, "LAMBDA_NLL_OUTER", 1.0)) * float(getattr(cfg, "LAMBDA_VAR", 1.0))
+    if key == "crps_loss":
+        return float(getattr(cfg, "LAMBDA_CRPS", 1.0))
+    if key == "soft_ece_loss":
+        return float(getattr(cfg, "LAMBDA_SOFT_ECE", 1.0))
+    if key == "t_perp_loss":
+        return float(getattr(cfg, "LAMBDA_T_PERP", 1.0))
+    if key == "reg_loss":
+        return 0.0
+    if key in ("inter_reg", "vol_loss"):
+        return 0.1
+    return 1.0
+
+
+def _health_from_history(history, sampler: _GradNormSampler, cfg: Config) -> Dict[str, Any]:
     hist: Dict[str, List[Any]] = dict(getattr(history, "history", None) or {})
     all_values = [v for series in hist.values() for v in series]
     finite = all(math.isfinite(float(v)) for v in all_values) if all_values else False
@@ -459,7 +598,7 @@ def _health_from_history(history, sampler: _GradNormSampler) -> Dict[str, Any]:
         for key in LOSS_TERM_KEYS:
             v = _last_finite(hist.get(key))
             if v is not None:
-                term_shares[key] = v / final_total
+                term_shares[key] = (v * _term_multiplier(key, cfg)) / final_total
     return {
         "finite": bool(finite),
         "nonfinite_grad_steps": nonfinite_total,
@@ -524,11 +663,54 @@ def _load_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any]:
     return cached
 
 
+def _windowed_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any, Any, Any]:
+    """``(X_seq, y_seq, last_close_seq, extended_trends)`` of ``cfg``'s sliding windows
+    (:meth:`DataProcessor.build_windows`, trimmed to ``MAX_SEQUENCE_COUNT``), computed once per
+    :func:`data_key` and cached in ``cache`` across trials that share it. Windowing loops every bar
+    (``data/windowing.py:make_sequences_with_extended_trends``) and used to re-run on every trial even
+    though every field it reads is already part of ``data_key`` (LOOKBACK, HORIZON_STEPS,
+    EXTENDED_TREND_PERIODS, WINDOW_STEP, MAX_SEQUENCE_COUNT): a 10-18 second cost per trial on the
+    long file that this cache removes for every trial after the first sharing a data key. Kept under
+    a distinct cache key (``"win:" + data_key``) so it never collides with :func:`_load_cached`'s
+    ``(df, close)`` entry for the same key."""
+    from neural_trade.data.processor import DataProcessor
+
+    key = "win:" + data_key(cfg)
+    cached = cache.get(key)
+    if cached is None:
+        df, close = _load_cached(cfg, cache)
+        cached = DataProcessor(cfg).build_windows(close)
+        cache[key] = cached
+    return cached
+
+
+class _EpochTimer(tf.keras.callbacks.Callback):
+    """Wall-clock seconds per epoch, for the phase-2 tracing decision (RUNBOOK "Screen mode"):
+    ``trace_time ~= epoch_s[0] - median(epoch_s[1:])`` estimates the one-off tf.function tracing cost
+    folded into the first epoch's wall time."""
+
+    def __init__(self):
+        super().__init__()
+        self.epoch_s: List[float] = []
+        self._t0: Optional[float] = None
+
+    def on_epoch_begin(self, epoch, logs=None):
+        self._t0 = time.perf_counter()
+
+    def on_epoch_end(self, epoch, logs=None):
+        self.epoch_s.append(time.perf_counter() - (self._t0 if self._t0 is not None else time.perf_counter()))
+
+
 def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool
-                     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, float]]:
+                     ) -> Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]:
     """Train ``cfg`` on the light path and return ``(health, direction_auc, timings)``. Data (load +
-    preprocess + the DATA_END slice) is cached in ``cache`` by :func:`data_key`, so many trials that
-    share a data key pay that cost once per process."""
+    preprocess + the DATA_END slice) AND its windows (:func:`_windowed_cached`) are cached in
+    ``cache`` by :func:`data_key`, so many trials that share a data key pay both costs once per
+    process; only the fold split / scaling / normalisation (cheap, no per-bar loop) and the model
+    itself are built fresh per trial. ``timings`` has ``load_s`` (the cached-or-not data load),
+    ``prep_s`` (windowing, cached-or-not, plus the per-trial split/scale/normalise),
+    ``build_s`` (``Models.build`` + optimizers + compile only), ``train_s`` (``fit``), ``score_s``
+    (health + direction AUC) and ``epoch_s`` (a list of per-epoch wall-clock seconds, :class:`_EpochTimer`)."""
     from neural_trade.data.processor import DataProcessor
     from neural_trade.data.datasets import create_datasets
     from neural_trade.registries.models import Models
@@ -544,14 +726,19 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool
     t_load = time.perf_counter() - t0
 
     t1 = time.perf_counter()
+    X_seq, y_seq, last_close_seq, extended_trends = _windowed_cached(cfg, cache)
     dp = DataProcessor(cfg)
     (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
      X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
-     y_train, y_test, target_scaler) = dp.prepare_datasets(df, close)
+     y_train, y_test, target_scaler) = dp.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq,
+                                                                        extended_trends)
     val_block = dp.val_block
     train_ds, val_ds = create_datasets(cfg, X_train_seq, y_train_scaled, last_close_train,
                                        extended_trends_train, val_block["X"], val_block["y_scaled"],
                                        val_block["last_close"], val_block["extended_trends"])
+    t_prep = time.perf_counter() - t1
+
+    t2 = time.perf_counter()
     base_model = Models.build(cfg.MODEL_NAME, cfg)
     optimizer_pair = build_optimizers(cfg)
     pred_scale = np.std(y_train) if np.std(y_train) > 0 else 1.0
@@ -567,20 +754,22 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool
     if cfg.ABLATE_LAMBDAS:
         ablate(custom_model, cfg.ABLATE_LAMBDAS)
     custom_model.compile(optimizer=optimizer_pair.main)
-    t_build = time.perf_counter() - t1
-
-    t2 = time.perf_counter()
-    sampler = _GradNormSampler(cfg.GRAD_CLIP_NORM)
-    history = custom_model.fit(train_ds, validation_data=val_ds, epochs=int(cfg.EPOCHS),
-                               callbacks=[sampler], verbose=0)
-    t_train = time.perf_counter() - t2
+    t_build = time.perf_counter() - t2
 
     t3 = time.perf_counter()
-    health = _health_from_history(history, sampler)
+    sampler = _GradNormSampler(cfg.GRAD_CLIP_NORM)
+    epoch_timer = _EpochTimer()
+    history = custom_model.fit(train_ds, validation_data=val_ds, epochs=int(cfg.EPOCHS),
+                               callbacks=[sampler, epoch_timer], verbose=0)
+    t_train = time.perf_counter() - t3
+
+    t4 = time.perf_counter()
+    health = _health_from_history(history, sampler, cfg)
     auc = _direction_auc(custom_model, val_block, cfg, target_scaler)
-    t_score = time.perf_counter() - t3
+    t_score = time.perf_counter() - t4
     tf.keras.backend.clear_session()
-    return health, auc, {"load_s": t_load, "build_s": t_build, "train_s": t_train, "score_s": t_score}
+    return health, auc, {"load_s": t_load, "prep_s": t_prep, "build_s": t_build, "train_s": t_train,
+                         "score_s": t_score, "epoch_s": list(epoch_timer.epoch_s)}
 
 
 # ------------------------------------------------------------------ rules
@@ -621,17 +810,72 @@ class ScreenReport:
 
 
 def _existing_keys(path: Path) -> set:
-    if not path.is_file():
-        return set()
     keys = set()
+    for row in _read_jsonl(path):
+        key = row.get("trial_key")
+        if key is not None:
+            keys.add(key)
+    return keys
+
+
+def _read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    if not path.is_file():
+        return []
+    rows = []
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
             continue
         try:
-            keys.add(json.loads(line)["trial_key"])
-        except (json.JSONDecodeError, KeyError):
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
             continue
+    return rows
+
+
+def _shard_result_path(out_dir: Path, shard: Optional[Tuple[int, int]]) -> Path:
+    """The file THIS process appends to: the plain, unsharded ``results.jsonl`` when ``shard`` is
+    ``None``, or its own ``results.shard-{i}-of-{N}.jsonl`` (0-indexed) when running as one of ``N``
+    ``--shard`` processes, so concurrent shards never append to the same file (previously they all
+    wrote ``results.jsonl``, risking interleaved/corrupted lines)."""
+    if shard is None:
+        return out_dir / RESULTS_FILE
+    i, n = shard
+    return out_dir / f"results.shard-{i}-of-{n}.jsonl"
+
+
+def _shard_glob(out_dir: Path, n: int) -> List[Path]:
+    return sorted(out_dir.glob(f"results.shard-*-of-{n}.jsonl"))
+
+
+def merge_results(store="runs", name: Optional[str] = None, *, n: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Every row of screen ``name``'s results, merged across its shard files
+    (``results.shard-{i}-of-{N}.jsonl``) and a plain ``results.jsonl`` (an unsharded run), de-duplicated
+    by ``trial_key`` (first file wins). Used for resumability (a shard skips a trial any shard already
+    finished) and for reporting total progress across concurrently running ``--shard`` processes. ``n``
+    restricts the shard files read to one shard count (glob ``results.shard-*-of-{n}.jsonl``); omitted,
+    every shard file present is read (``results.shard-*-of-*.jsonl``)."""
+    out_dir = Path(store) / "screens" / str(name)
+    paths: List[Path] = []
+    plain = out_dir / RESULTS_FILE
+    if plain.is_file():
+        paths.append(plain)
+    paths += _shard_glob(out_dir, n) if n is not None else sorted(out_dir.glob("results.shard-*-of-*.jsonl"))
+    rows: Dict[Any, Dict[str, Any]] = {}
+    for path in paths:
+        for row in _read_jsonl(path):
+            rows.setdefault(row.get("trial_key"), row)
+    return list(rows.values())
+
+
+def _merged_existing_keys(out_dir: Path, shard: Optional[Tuple[int, int]]) -> set:
+    """``trial_key``s already recorded by ANY shard of this run (or the plain file), so resuming one
+    shard also skips a trial some other shard already finished, not only its own file."""
+    if shard is None:
+        return _existing_keys(out_dir / RESULTS_FILE)
+    keys = _existing_keys(out_dir / RESULTS_FILE)   # a prior unsharded run, if any
+    for path in _shard_glob(out_dir, shard[1]):
+        keys |= _existing_keys(path)
     return keys
 
 
@@ -640,44 +884,78 @@ def _append_jsonl(path: Path, row: Mapping[str, Any]) -> None:
         fh.write(json.dumps(row, default=str, allow_nan=False) + "\n")
 
 
+def _sanitize_nonfinite(obj: Any, path: str = "") -> Tuple[Any, List[str]]:
+    """Recursively replace a non-finite float (NaN, +Inf, -Inf) anywhere inside ``obj`` with ``None``
+    (JSON ``null``), returning ``(sanitized, dotted_paths_that_were_non_finite)``. An extreme LAMBDA_*
+    can drive a health number (or the direction AUC) to NaN/Inf; ``json.dumps(..., allow_nan=False)``
+    (:func:`_append_jsonl`, D-012/D-020-adjacent: every JSONL row must stay strictly valid JSON) would
+    otherwise raise on that ONE row and leave the trial permanently unrecorded - a resume just re-runs
+    and crashes again. Writing ``null`` instead (never a raw NaN/Infinity token, which the standard
+    does not allow) keeps the row, and the trial resumable, at the cost of losing that one number."""
+    bad: List[str] = []
+
+    def walk(o: Any, p: str) -> Any:
+        if isinstance(o, float):
+            if not math.isfinite(o):
+                bad.append(p or "<root>")
+                return None
+            return o
+        if isinstance(o, dict):
+            return {k: walk(v, f"{p}.{k}" if p else str(k)) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [walk(v, f"{p}[{i}]") for i, v in enumerate(o)]
+        return o
+
+    return walk(obj, path), bad
+
+
 def run_trial(trial: Trial, spec: ScreenSpec, cache: Dict[str, Any],
              trainer: Optional[Callable[..., Any]] = None) -> Dict[str, Any]:
     """Train and score one trial; returns the JSONL row (schema_version, trial identity, config
     diff, health, direction AUC, timings, pass/fail with reasons). ``trainer`` (tests only) replaces
-    the real light path: ``trainer(cfg, cache, calibrate=...) -> (health, auc, timings)``."""
+    the real light path: ``trainer(cfg, cache, calibrate=...) -> (health, auc, timings)``.
+
+    Any non-finite number anywhere in the row (see :func:`_sanitize_nonfinite`) is written as ``null``
+    and forces ``passed: false`` with a reason naming the field(s), regardless of the spec's
+    ``rules:`` - a non-finite health number means training itself broke, not a threshold decision."""
     t0 = time.perf_counter()
     fn = trainer if trainer is not None else _run_trial_light
     health, auc, timings = fn(trial.config, cache, calibrate=spec.run.calibrate)
     passed, reasons = apply_rules(health, spec.rules)
-    return {"schema_version": SCHEMA_VERSION, "screen": spec.name, "trial_key": trial.key,
-            "trial_index": trial.index, "source": trial.source, "config_diff": trial.params,
-            "data_end": trial.data_end, "seed": trial.seed, "health": health, "direction_auc": auc,
-            "timings": timings, "passed": passed, "reasons": reasons, "wall_s": time.perf_counter() - t0}
+    row = {"schema_version": SCHEMA_VERSION, "screen": spec.name, "trial_key": trial.key,
+          "trial_index": trial.index, "source": trial.source, "config_diff": trial.params,
+          "data_end": trial.data_end, "seed": trial.seed, "health": health, "direction_auc": auc,
+          "timings": timings, "passed": passed, "reasons": reasons, "wall_s": time.perf_counter() - t0}
+    row, nonfinite_paths = _sanitize_nonfinite(row)
+    if nonfinite_paths:
+        row["passed"] = False
+        row["reasons"] = list(row["reasons"]) + [f"non-finite value(s) written as null: {', '.join(nonfinite_paths)}"]
+    return row
 
 
 def run_screen(spec: ScreenSpec, *, store="runs", shard: Optional[Tuple[int, int]] = None,
                max_trials: Optional[int] = None,
                trainer: Optional[Callable[..., Any]] = None) -> ScreenReport:
     """Run every not-yet-resumed trial of ``spec`` that belongs to ``shard`` (default: all of them),
-    appending one line per trial to ``<store>/screens/<name>/results.jsonl``. At most ``max_trials``
-    trials run in this call (the same command resumes the rest)."""
+    appending one line per trial to this shard's results file (:func:`_shard_result_path`). At most
+    ``max_trials`` trials run in this call (the same command resumes the rest)."""
     trials = [t for t in build_trials(spec) if shard_of(t.index, shard)]
     out_dir = Path(store) / "screens" / spec.name
     out_dir.mkdir(parents=True, exist_ok=True)
     spec_path = out_dir / f"spec-{spec.spec_hash}.json"
     if not spec_path.exists():
         spec_path.write_text(json.dumps(spec.to_dict(), indent=2, default=str), encoding="utf-8")
-    results_path = out_dir / RESULTS_FILE
-    done_keys = _existing_keys(results_path)
+    results_path = _shard_result_path(out_dir, shard)
+    done_keys = _merged_existing_keys(out_dir, shard)
     cache: Dict[str, Any] = {}
     report = ScreenReport(spec.name, str(results_path), len(trials))
-    for trial in trials:
+    for position, trial in enumerate(trials, start=1):
         if trial.key in done_keys:
             report.skipped += 1
             continue
         if max_trials is not None and report.ran >= max_trials:
             break
-        logger.info("[screen %s] trial %d/%d (%s %s, slice %s, seed %s)", spec.name, trial.index + 1,
+        logger.info("[screen %s] trial %d/%d (%s %s, slice %s, seed %s)", spec.name, position,
                     len(trials), trial.source, trial.params, trial.data_end, trial.seed)
         row = run_trial(trial, spec, cache, trainer=trainer)
         _append_jsonl(results_path, row)
@@ -689,4 +967,4 @@ def run_screen(spec: ScreenSpec, *, store="runs", shard: Optional[Tuple[int, int
 
 
 __all__ = ["RESULTS_FILE", "RunOptions", "ScreenError", "ScreenReport", "ScreenSpec", "SCHEMA_VERSION", "Trial",
-          "apply_rules", "build_trials", "parse_shard", "run_screen", "run_trial", "shard_of"]
+          "apply_rules", "build_trials", "merge_results", "parse_shard", "run_screen", "run_trial", "shard_of"]

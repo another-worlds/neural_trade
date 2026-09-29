@@ -20,7 +20,9 @@ trials (a grid and/or a random/LHS sample of Config fields, crossed with DATA_EN
 one JSON line per trial in <store>/screens/<name>/results.jsonl (health numbers, per-horizon direction
 AUC, pass/fail against the spec's rules), no baselines, backtest, random null, npz or serving bundle,
 and no per-trial run directory. It finds broken math and unstable configurations; ranking quality is
-``scenario run``'s job, on the survivors (see docs/RUNBOOK.md "Screen mode").
+``scenario run``'s job, on the survivors (see docs/RUNBOOK.md "Screen mode"). ``--shard i/N``: each
+shard writes its OWN file (results.shard-i-of-N.jsonl, 0-indexed), never the shared results.jsonl;
+``neural_trade.experiments.screen.merge_results`` reads every shard file back together.
 
 ``scenario run`` is the experiment engine (neural_trade.experiments.runner): every (variant,
 fold, seed) cell of the spec trains into its own directory under runs/scenarios/<name>/ and is
