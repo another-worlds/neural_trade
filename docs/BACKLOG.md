@@ -78,7 +78,7 @@ changes).
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
-| [NT-046](#nt-046) | P1 | feature | implementer | todo | Indicators package and registry with today's four families |
+| [NT-046](#nt-046) | P1 | feature | implementer | in-progress | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | todo | OHLCV input and the new indicator families, all learnable and on by default |
 | [NT-048](#nt-048) | P1 | feature | implementer | todo | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
@@ -660,7 +660,7 @@ changes).
 
 **Indicators package and registry with today's four families**
 
-- **status:** todo
+- **status:** in-progress (implementer, branch nt-046, 2026-09-29; pulled forward by D-041: richer inputs are the next lever after H1-H3)
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a new indicators package (for example src/neural_trade/indicators/), a new Indicators registry next to the nine of D-002 (for example src/neural_trade/registries/indicators.py), src/neural_trade/models/layers/learnable_indicators.py, src/neural_trade/models/gru_attention.py, src/neural_trade/core/config.py, src/neural_trade/registries/layers.py, tests/
 - **depends on:** NT-026 (experiment engine)

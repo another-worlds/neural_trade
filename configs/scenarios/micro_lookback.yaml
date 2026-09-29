@@ -1,0 +1,31 @@
+# H4 of the micro loop (D-041): the input window, not the horizon, was the mismatch.
+# H1 trained 1-4 h horizons on a 60-bar (1 h) input window: the model predicted 4 h ahead from 1 h of
+# context. This quick sweep repeats h_1h and h_4h with a 240-bar (4 h) window, everything else as in
+# configs/scenarios/micro_horizons.yaml, and h_15m_L240 as the control for the window's effect alone.
+schema_version: 1
+name: micro_lookback
+description: "H4 (D-041): LOOKBACK 240 at the 15m / 1h / 4h horizon sets, micro layout, one seed, quick sweep."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  MAX_SEQUENCE_COUNT: 129600
+  VAL_FRACTION: 0.1102
+  CAL_FRACTION: 0.1102
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 2048
+  EPOCHS: 30
+  LOOKBACK: 240
+variants:
+  h_15m_L240: {}
+  h_1h_L240:  {HORIZON_STEPS: [40, 60, 80],    EXTENDED_TREND_PERIODS: [40, 60, 80]}
+  h_4h_L240:  {HORIZON_STEPS: [160, 240, 320], EXTENDED_TREND_PERIODS: [160, 240, 320]}
+folds: [-2]
+seeds: [0]
+strategy:
+  name: calibrated_quantile
+  params: {}
+backtest: {}
+run:
+  calibrate: true
+  save_artifacts: false
