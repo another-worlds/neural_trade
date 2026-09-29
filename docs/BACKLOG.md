@@ -108,9 +108,10 @@ changes).
 | [NT-073](#nt-073) | P2 | research | experimenter | todo | A/B-2: the per-bar model against the default (pre-registered) |
 | [NT-074](#nt-074) | P1 | bug | implementer | todo | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
 | [NT-075](#nt-075) | P1 | performance | experimenter | todo | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
-| [NT-076](#nt-076) | P1 | feature | implementer | in-progress | Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU) |
+| [NT-076](#nt-076) | P1 | feature | implementer | done | Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU) |
 | [NT-077](#nt-077) | P1 | feature | implementer | in-progress | Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins |
 | [NT-078](#nt-078) | P1 | research | implementer | todo | EWMA and HAR-RV variance baselines in the evaluation report, same block, with the DM test |
+| [NT-079](#nt-079) | P3 | bug | implementer | todo | Strategy study spec: values of cal-fitted strategies are not checked at load |
 
 ## Items
 
@@ -472,6 +473,7 @@ changes).
 - **area:** src/neural_trade/experiments/ (leaderboard), src/neural_trade/visualization/ (a leaderboard table and figure, registered in Visualizations), src/neural_trade/cli.py, tests/
 - **depends on:** NT-026 (experiment engine)
 - **why:** D-020: the leaderboard ranks configurations by net Sharpe after costs on the dev folds only; guard-rails (max drawdown, the number of trades, beating buy-and-hold, beating the random null at the same frequency) sit beside it and can disqualify a row; every row also shows its test-fold numbers, which never rank. The owner accepted the pick-by-eye risk and asked that the UI make the ranking column explicit (owner Q&A 2026-09-28, round 3).
+- **note (2026-09-29, QA of NT-076):** the rescore leaderboard ranks a 0-trade row (net Sharpe 0) above every losing row; the leaderboard's activity guard-rail must disqualify it.
 - **acceptance:** (1) A leaderboard function reads the run index and returns one row per configuration: the dev-fold net Sharpe after costs (mean over the dev folds, and over seeds for re-runs, with the counts and the spread), the guard-rail columns and the test-fold columns (test). (2) Rows sort by the dev-fold net Sharpe only: a test builds an index whose test-fold order differs from its dev order and checks that the order follows dev. (3) A row that breaks a guard-rail (thresholds from the scenario) is marked disqualified, names the failing guard-rail and is not eligible as the winner (test). (4) Every row shows the dataset fingerprint, the bar size, the horizon lengths and the strategy name (test). (5) The ranking column is labelled as the ranking column, and the test-fold columns are labelled 'test, not used for ranking' in the table and the figure (test on the text). (6) Failed runs appear as failed rows (test). (7) `neural-trade leaderboard [SCENARIO]` prints the table (test through neural_trade.cli.main), and the figure follows theme.py and D-014, with each dev Sharpe drawn with its spread over folds and seeds (test: no empty panel).
 - **source:** owner Q&A 2026-09-28 (rounds 2, 3, 7); docs/DECISIONS.md D-020, D-014
 
@@ -1015,7 +1017,7 @@ changes).
 
 **Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU)**
 
-- **status:** in-progress (implementer, branch nt-076)
+- **status:** done (2026-09-29): 82a848f, merged into nt-005-strategy-study as df9a202; QA PASS on every criterion (score_result byte-identical to f8b4253 on 12 settings x 358 scores; rescore of the scenario's own strategy 0 mismatches on 342 keys; fit on cal only checked by perturbing the OOS frame); fast suite 836 passed; ruff clean. QA findings: a 0-trade row ranks first (NT-031 note), spec values of cal-fitted strategies unchecked (NT-079).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (scorer.py, runner.py, new rescore.py), src/neural_trade/evaluation/frame.py, src/neural_trade/cli.py, configs/strategy_studies/, tests/, docs/RUNBOOK.md
 - **depends on:** NT-026
@@ -1045,6 +1047,17 @@ changes).
 - **why:** The strategy research (docs/research/2026-09-29-strategy-architectures/ section 2.0) measured an EWMA of squared 1-minute returns (half-life 60) at CRPSS +0.06 to +0.07 against a constant variance on the reference file before the test block, against the model's +0.009 to +0.020 on its test block: different blocks, so a warning, not a verdict. If a free volatility forecast beats the model's sigma, the model's only measured edge is not an edge; this bears on the indicator-learning purpose (VISION) too.
 - **acceptance:** (1) The evaluation report's variance section carries EWMA (half-life 60, fitted scale on the train block) and HAR-RV (Corsi 2009, fitted on the train block) baselines on the same block, with CRPSS, the var/err^2 Spearman and the Diebold-Mariano test it already runs against const_var (noise-aware, D-012). (2) Tests on synthetic data with known variance. (3) The notebook that shows the variance baselines is updated through build.py (D-028).
 - **source:** the strategy research note 2026-09-29, section 2.0 and follow-up 1
+
+### NT-079
+
+**Strategy study spec: values of cal-fitted strategies are not checked at load**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/experiments/rescore.py (spec load, about lines 215-220), tests/test_rescore.py
+- **why:** QA of NT-076: `grid: {entry_quantile: [0.9, 1.5]}` or a string value is accepted at load for a from_calibration strategy and fails only during the rescore, probably with a traceback (only InvalidConfigurationError and RescoreError are caught).
+- **acceptance:** Such values are refused at load with exit 2 and nothing written (test).
+- **source:** QA of NT-076, 2026-09-29
 
 ## Done log
 
