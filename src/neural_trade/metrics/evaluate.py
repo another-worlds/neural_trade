@@ -190,7 +190,7 @@ def registry_metrics(config, y_true_deltas, predictions, last_close, *, pred_sca
     and ``coverage`` needs ``intervals``; each is skipped when its input is missing.
     """
     from neural_trade.metrics import numpy_metrics as npm
-    from neural_trade.registries.metrics import Metrics
+    from neural_trade.metrics.registry import Metrics
 
     names = list(names or getattr(config, "METRICS", None) or Metrics.numpy_names())
     fns = Metrics.numpy_functions(names)

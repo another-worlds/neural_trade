@@ -77,16 +77,19 @@ from scipy.stats import spearmanr
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
 from neural_trade.metrics import numpy_metrics as npm
 from neural_trade.metrics.direction_labels import direction_labels_np, gaussian_up_prob_given_move_np
+from neural_trade.metrics.statistics import BLOCK, BOOT_N, DM_LAG_PER_STEP, Z95, auc_score
+from neural_trade.metrics.statistics import block_bootstrap_counts, dm_z
+from neural_trade.metrics.statistics import long_run_variance  # noqa: F401  (re-exported: callers used it here)
+from neural_trade.metrics.statistics import ties, w_group_midranks, w_pearson, w_spearman
 
 # precision / recall / specificity / f1 are deliberately NOT here: a constant baseline (class_prior
 # calls one side only) has recall 0 or 1 and an undefined precision, so a "beats" on them is empty.
 HIGHER_IS_BETTER = {"mcc", "auc", "acc", "bal_acc", "ev", "corr", "skill_vs_zero", "corr_var_err2_spearman", "crpss"}
 LOWER_IS_BETTER = {"brier", "ece_pos", "rmse", "mae", "crps", "nll", "pit_ks"}
 DOLLAR_METRICS = {"rmse", "mae", "crps", "rmse_zero", "mae_zero", "mean_pred", "mean_true", "width90"}
-BLOCK = 80
-Z95 = 1.959964
-DM_LAG_PER_STEP = 2      # Bartlett lag of the Diebold-Mariano long-run variance, in multiples of bars ahead
-BOOT_N = 500             # resamples of the paired block bootstrap of the ranked baseline metrics
+# BLOCK, Z95, DM_LAG_PER_STEP, BOOT_N: the shared statistics module (neural_trade.metrics.statistics,
+# NT-027) is their one home now; kept as names here since NOISE_TESTS below and confidence_gap's
+# default read them under these names.
 NOISE_TESTS = {"dm_z": f"Diebold-Mariano, Bartlett (Newey-West) long-run variance, lag {DM_LAG_PER_STEP} x bars "
                        "ahead",
                "boot_z": f"paired moving-block bootstrap, block {BLOCK} bars, {BOOT_N} resamples: margin / its "
@@ -113,15 +116,6 @@ MAG_CHECKS = (("abs(d h0) <= abs(d h1)", "mag_h0_le_h1", ("h0", "h1")),
               ("full chain h0 <= h1 <= h2", "mag_order_full", HORIZONS))
 
 
-def _auc(labels, scores):
-    from sklearn.metrics import roc_auc_score
-
-    labels = np.asarray(labels)
-    if len(labels) < 2 or labels.min() == labels.max():
-        return float("nan")
-    return float(roc_auc_score(labels, scores))
-
-
 def _ratio(num, den) -> float:
     return float(num) / float(den) if den else float("nan")
 
@@ -134,7 +128,7 @@ def direction_block(labels, mask, prob) -> Dict[str, float]:
     sens, spec = _ratio(tp, tp + fn), _ratio(tn, tn + fp)
     rates = [v for v in (sens, spec) if math.isfinite(v)]
     return {
-        "mcc": npm.mcc(t, p), "auc": _auc(t, p), "brier": npm.brier(t, p), "ece_pos": npm.ece_pos(t, p),
+        "mcc": npm.mcc(t, p), "auc": auc_score(t, p), "brier": npm.brier(t, p), "ece_pos": npm.ece_pos(t, p),
         "acc": npm.direction_accuracy(t, p), "bal_acc": float(np.mean(rates)) if rates else float("nan"),
         "pred_up_rate": float(pb.mean()) if len(pb) else float("nan"),
         "true_up_rate": float(t.mean()) if len(t) else float("nan"), "n_masked": int(mask.sum()),
@@ -328,94 +322,6 @@ def _sample_loss(frame: PredictionFrame, i: int, group: str, metric: str, labels
     return None
 
 
-def long_run_variance(x: np.ndarray, lag: int) -> float:
-    """Bartlett (Newey-West) long-run variance of a time-ordered series; NaN entries (unscored bars) keep their
-    place in time and add nothing. Divide by the number of finite entries for the variance of their mean."""
-    x = np.asarray(x, float)
-    ok = np.isfinite(x)
-    n = int(ok.sum())
-    if n < 2:
-        return float("nan")
-    z = np.where(ok, x - x[ok].mean(), 0.0)
-    lrv = float(z @ z) / n
-    for k in range(1, min(int(lag), len(z) - 1) + 1):
-        lrv += 2.0 * (1.0 - k / (lag + 1.0)) * float(z[k:] @ z[:-k]) / n
-    return lrv
-
-
-def dm_z(loss_model: np.ndarray, loss_base: np.ndarray, steps: int, *, lag: Optional[int] = None) -> Optional[float]:
-    """Diebold-Mariano z of mean(loss_base - loss_model) (> 0: the model is better).
-
-    Both arrays are per bar, time-ordered (NaN = unscored). The variance of the mean difference is the
-    Bartlett (Newey-West) long-run variance with ``lag`` bars (default DM_LAG_PER_STEP x ``steps``): h-bar
-    targets overlap for h - 1 bars, so the differences are autocorrelated at least that far. None when fewer
-    than 2 non-overlapping outcomes are scored or the difference is constant.
-    """
-    diff = np.asarray(loss_base, float) - np.asarray(loss_model, float)
-    steps = max(1, int(steps))
-    n = int(np.isfinite(diff).sum())
-    if n // steps < 2:
-        return None
-    lrv = long_run_variance(diff, DM_LAG_PER_STEP * steps if lag is None else int(lag))
-    if not lrv > 0:
-        return None
-    return float(np.nanmean(diff) / math.sqrt(lrv / n))
-
-
-# ------------------------------------------------------------------ paired block bootstrap (ranked metrics)
-def block_bootstrap_counts(n: int, *, block: int = BLOCK, n_boot: int = BOOT_N, seed: int = 0) -> np.ndarray:
-    """[n_boot, n] multiplicities of each bar in moving-block bootstrap resamples of a length-n series."""
-    block = max(1, min(int(block), n))
-    rng = np.random.default_rng(seed)
-    nb = int(math.ceil(n / block))
-    starts = rng.integers(0, n - block + 1, size=(n_boot, nb))
-    idx = (starts[:, :, None] + np.arange(block)).reshape(n_boot, -1)[:, :n]
-    flat = (idx + (np.arange(n_boot) * n)[:, None]).ravel()
-    return np.bincount(flat, minlength=n_boot * n).reshape(n_boot, n).astype(float)
-
-
-def _ties(x: np.ndarray):
-    """(order, starts, group): the sort order of x, where each tie group starts in it, and each sorted item's group."""
-    order = np.argsort(x, kind="mergesort")
-    xs = x[order]
-    starts = np.flatnonzero(np.r_[True, xs[1:] != xs[:-1]])
-    return order, starts, np.repeat(np.arange(len(starts)), np.diff(np.r_[starts, len(x)]))
-
-
-def _w_group_midranks(W: np.ndarray, starts: np.ndarray, order: np.ndarray):
-    """(G, mid): per resample (rows of W: multiplicities), the weight of each tie group and its mid-rank."""
-    G = np.add.reduceat(np.take(W, order, axis=1), starts, axis=1)
-    return G, np.cumsum(G, axis=1) - G + (G + 1.0) / 2.0
-
-
-def _w_pearson(W: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Weighted Pearson correlation of two [n] series per row of W; 0 where either side is constant."""
-    a, b = a - a.mean(), b - b.mean()
-    sw = W.sum(1)
-    ma, mb = W @ a / sw, W @ b / sw
-    cov, va, vb = W @ (a * b) / sw - ma * mb, W @ (a * a) / sw - ma * ma, W @ (b * b) / sw - mb * mb
-    with np.errstate(invalid="ignore", divide="ignore"):
-        r = cov / np.sqrt(va * vb)
-    return np.where((va > 0) & (vb > 0), r, 0.0)
-
-
-def _w_spearman(W: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
-    """Spearman correlation (Pearson on tie-averaged ranks) per weighted resample; 0 where a side is constant."""
-    ox, sx, gx = _ties(x)
-    oy, sy, gy = _ties(y)
-    Gx, mx = _w_group_midranks(W, sx, ox)
-    Gy, my = _w_group_midranks(W, sy, oy)
-    group_x = np.empty(len(x), int)
-    group_x[ox] = gx
-    sw = W.sum(1)
-    m = (sw + 1.0) / 2.0                                       # the mean rank of every resample
-    cross = (np.take(W, oy, axis=1) * my[:, gy] * np.take(mx, group_x[oy], axis=1)).sum(1) / sw - m * m
-    vx, vy = (Gx * mx * mx).sum(1) / sw - m * m, (Gy * my * my).sum(1) / sw - m * m
-    with np.errstate(invalid="ignore", divide="ignore"):
-        r = cross / np.sqrt(vx * vy)
-    return np.where((vx > 1e-9) & (vy > 1e-9), r, 0.0)
-
-
 def _boot_metric(frame: PredictionFrame, i: int, group: str, metric: str, labels, W: np.ndarray):
     """``metric`` of ``frame`` on every bootstrap resample (rows of W), computed like the report computes it
     (with W = 1 it equals the report's value); None for metrics without a bootstrap here."""
@@ -433,8 +339,8 @@ def _boot_metric(frame: PredictionFrame, i: int, group: str, metric: str, labels
             return np.abs(Wm @ onehot).sum(1) / Wm.sum(1)
         if metric == "auc":  # Mann-Whitney U on the mid-ranks of P(up) among the scored bars of each resample
             npos, nneg = Wm @ up, Wm @ ~up
-            order, starts, _ = _ties(p)
-            _, mid = _w_group_midranks(Wm, starts, order)
+            order, starts, _ = ties(p)
+            _, mid = w_group_midranks(Wm, starts, order)
             gpos = np.add.reduceat(np.take(Wm * up, order, axis=1), starts, axis=1)
             u = (gpos * mid).sum(1) - npos * (npos + 1.0) / 2.0
             with np.errstate(invalid="ignore", divide="ignore"):
@@ -453,7 +359,7 @@ def _boot_metric(frame: PredictionFrame, i: int, group: str, metric: str, labels
     if group == "delta" and metric in ("corr", "ev"):
         d = np.asarray(frame.delta[h], float)
         if metric == "corr":
-            return np.zeros(len(W)) if np.ptp(d) == 0 or np.ptp(y) == 0 else _w_pearson(W, y, d)
+            return np.zeros(len(W)) if np.ptp(d) == 0 or np.ptp(y) == 0 else w_pearson(W, y, d)
         sw = W.sum(1)
         e, yc = y - d, y - y.mean()
         e = e - e.mean()
@@ -472,7 +378,7 @@ def _boot_metric(frame: PredictionFrame, i: int, group: str, metric: str, labels
             after = np.cumsum(Ws, axis=1) / sw
             return np.maximum((after - us).max(1), (us - after + Ws / sw).max(1))
         v, err2 = s ** 2, (y - mu) ** 2
-        return np.zeros(len(W)) if np.ptp(v) == 0 or np.ptp(err2) == 0 else _w_spearman(W, v, err2)
+        return np.zeros(len(W)) if np.ptp(v) == 0 or np.ptp(err2) == 0 else w_spearman(W, v, err2)
     return None
 
 

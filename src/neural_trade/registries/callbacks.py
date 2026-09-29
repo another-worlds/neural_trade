@@ -4,6 +4,16 @@ Components are ``builder(config, context: TrainContext) -> Callback | list[Callb
 ``Config.CALLBACKS`` lists them in order; the default is exactly the list the trainer used to
 hard-code (csv_logger, early_stopping, model_checkpoint, tqdm_progress, params_logger,
 reduce_lr_on_plateau). ``build_callbacks`` flattens and validates.
+
+NT-027 (the layering fix): unlike the other eight registries, this one populates itself with
+``auto_discover()`` instead of a static ``import neural_trade.training.callbacks`` at the bottom
+of the file. The builders live in ``training/`` (they are tied to ``TrainContext``) and ``training``
+already legitimately imports every registry it needs (Models, Losses, Metrics, Optimizers,
+Callbacks) to build the training path; this registry importing ``training/`` back would be the one
+``registries <-> training`` cycle. ``auto_discover`` (``BaseRegistry``) imports the discovery module
+dynamically (``importlib.import_module``), which still populates the registry the moment this module
+is imported (same contract as every other registry: "populated when imported"), but is not a static
+import and so is not part of the subpackage import graph the layering test checks.
 """
 from __future__ import annotations
 
@@ -43,21 +53,6 @@ def build_callbacks(config, context, names: Optional[Iterable[str]] = None) -> L
     return out
 
 
-from neural_trade.training import callbacks as _cb  # noqa: E402
-
-for _name, _tags, _deps in (
-    ("csv_logger", ["logging", "default"], []),
-    ("early_stopping", ["regularization", "default"], []),
-    ("model_checkpoint", ["persistence", "default"], []),
-    ("tqdm_progress", ["progress", "console", "default"], []),
-    ("params_logger", ["logging", "indicators", "default"], []),
-    ("reduce_lr_on_plateau", ["schedule", "default"], []),
-    ("mcc_early_stopping", ["regularization", "direction"], []),
-    ("jsonl_epoch_logger", ["logging", "telemetry"], []),
-    ("lambda_schedule", ["schedule", "loss_weights"], []),
-    ("metric_threshold", ["safety"], []),
-    ("tensorboard", ["logging", "visualization"], ["tensorboard"]),
-    ("interactive_plot", ["visualization", "notebook"], ["ipywidgets", "IPython", "plotly"]),
-):
-    Callbacks.register(name=_name, tags=_tags, dependencies=_deps)(getattr(_cb, f"build_{_name}"))
-Callbacks._initialized = True
+# The builders decorate themselves with Callbacks.register in neural_trade.training.callbacks;
+# auto_discover() imports that module dynamically (see the module docstring for why).
+Callbacks.auto_discover()

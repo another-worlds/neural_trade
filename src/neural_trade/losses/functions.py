@@ -1,18 +1,18 @@
 """Loss functions of the training objective (moved from the root ``losses.py`` in Phase B3).
 
-Every function registers itself in :class:`neural_trade.registries.losses.Losses`:
+Every function registers itself in :class:`neural_trade.losses.registry.Losses`:
 component losses (first parameter ``model``) with ``Losses.register`` and the full
 training objective ``custom_loss`` with ``Losses.register_objective``. The registry class
-lives in ``neural_trade/registries/losses.py``; ``LossComponents`` in
-``neural_trade/core/outputs.py``.
+lives in ``neural_trade/losses/registry.py`` (moved from ``registries/losses.py`` in NT-027,
+which now re-exports it); ``LossComponents`` in ``neural_trade/core/outputs.py``.
 """
 from __future__ import annotations
 
 import tensorflow as tf
 
 from neural_trade.core.outputs import LossComponents
+from neural_trade.losses.registry import Losses
 from neural_trade.metrics.tf_direction import direction_labels_tf, gaussian_up_prob_given_move  # noqa: F401
-from neural_trade.registries.losses import Losses
 from neural_trade.utils.math import log_ndtr  # noqa: F401  (re-exported for callers of this module)
 
 # Old private name of the TF labelling rule, kept for callers of this module.

@@ -72,7 +72,7 @@ class DataProcessor:
 
     def load_raw(self, read_csv_kwargs: Optional[dict] = None, **loader_kwargs):
         """Raw frame from the configured loader (Config.DATA_LOADER)."""
-        from neural_trade.registries.data_loaders import DataLoaders
+        from neural_trade.data.loaders_registry import DataLoaders
 
         name = getattr(self.config, 'DATA_LOADER', 'csv')
         if name == 'csv':
@@ -81,7 +81,7 @@ class DataProcessor:
 
     def preprocess(self, df):
         """Apply Config.PREPROCESSORS in order, then validate the standardised frame."""
-        from neural_trade.registries.preprocessors import run_preprocessors
+        from neural_trade.data.preprocessors_registry import run_preprocessors
 
         return validate_ohlcv_frame(run_preprocessors(df, self.config))
 
@@ -104,11 +104,6 @@ class DataProcessor:
 
     def make_sequences_with_extended_trends(self, close_array, lookback):
         return make_sequences_with_extended_trends(self.config, close_array, lookback)
-
-    def plot_splits(self, df, start_idx, tscv, X_seq_len):
-        from neural_trade.visualization.matplotlib_splits import plot_splits
-
-        return plot_splits(df, start_idx, tscv, X_seq_len)
 
     def prepare_datasets(self, df, close_values):
         X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(

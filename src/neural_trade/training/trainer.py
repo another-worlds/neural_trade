@@ -32,7 +32,7 @@ from neural_trade.data.processor import DataProcessor
 from neural_trade.utils.seeding import seed_everything
 from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
-from neural_trade.serving.postprocess import heads_to_predictions
+from neural_trade.core.postprocess import heads_to_predictions
 from neural_trade.registries.callbacks import build_callbacks
 from neural_trade.training.callbacks import TrainContext
 from neural_trade.training.custom_model import CustomTrainModel
@@ -143,7 +143,7 @@ def _predict_heads(model, X, n, target_scaler, cfg, batch_size=None):
     """Run the model on scaled windows and return the raw-unit predictions dict.
 
     {"delta": {h: raw $ deltas}, "direction_prob": {h: P(up) in [0, 1]}, "variance": {h: scaled var}}
-    Shared with serving (neural_trade.serving.postprocess), so served and reported predictions match.
+    Shared with serving (neural_trade.core.postprocess), so served and reported predictions match.
     """
     bs = int(batch_size or getattr(cfg, 'BATCH_SIZE', 64))
     ds = tf.data.Dataset.from_tensor_slices(np.asarray(X, dtype='float32')).batch(bs)
