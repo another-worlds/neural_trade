@@ -141,7 +141,8 @@ experiment log folders `runs/ablations/*/cells/`, `runs/ablations/*/logs/` and
 `runs/experiments/*/logs/` are ignored too. Tracked: `config.yaml`, `meta.json`, `status.json`,
 `env.json`, `metrics.jsonl`, `eval_report_*.json` and `.md`, `training_log.csv`,
 `indicator_params_history.csv`, `period_init.json`, `artifacts/meta.json`, `artifacts/config.yaml`,
-`artifacts/calibration/*.json` and an experiment's `result.json`.
+`artifacts/calibration/*.json`. An experiment's `result.json` (in `runs/experiments/<name>/<variant>/`,
+outside the run directories) is tracked too.
 
 `scripts/check_run_evidence.py` finds the run ids cited in `docs/**/*.md`, `README.md`,
 `runs/**/REPORT.md`, `report.md`, `summary.md` and the saved notebooks, and exits 1 when a cited run
