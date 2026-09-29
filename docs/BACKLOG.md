@@ -91,7 +91,7 @@ changes).
 | [NT-056](#nt-056) | P3 | infra | implementer | todo | CI and packaging hygiene: CI lints tests, actions off Node 20, the viz extra and jinja2 |
 | [NT-057](#nt-057) | P3 | polish | implementer | todo | Random-null follow-ups: one mean-size definition, labels with the size, the CLI prints the matched null |
 | [NT-058](#nt-058) | P2 | polish | implementer | todo | Indicator views: which period is 'learned', RSI smoothing named, no private cross-module helpers |
-| [NT-059](#nt-059) | P1 | infra | implementer | in-progress | Window-free benchmark kit in scripts/bench/ (kernel V1, assembly D6b, the A2 and today's layers, op census, TF32 check) |
+| [NT-059](#nt-059) | P1 | infra | implementer | done | Window-free benchmark kit in scripts/bench/ (kernel V1, assembly D6b, the A2 and today's layers, op census, TF32 check) |
 | [NT-060](#nt-060) | P1 | infra | experimenter | todo | GPU run of the window-free benchmark kit (G-A2) |
 | [NT-061](#nt-061) | P1 | decision | lead | todo | TF32 decision for the indicator layer (plan stage 1b) |
 | [NT-062](#nt-062) | P2 | feature | implementer | todo | VAL_BATCH_SIZE key (validation grouping independent of the training batch) |
@@ -797,14 +797,14 @@ changes).
 
 **Window-free benchmark kit in scripts/bench/ (kernel V1, assembly D6b, the A2 and today's layers, op census, TF32 check)**
 
-- **status:** in-progress
+- **status:** done
 - **priority / type / role:** P1 / infra / implementer
 - **area:** scripts/bench/ (new), tests/ (a CPU smoke test)
 - **depends on:** none (plan stage 1)
 - **why:** Every GPU number of the window-free plan is an estimate; the kit measures them (plan stages 1 and 1g).
 - **acceptance:** (1) The kit measures forward and backward time (median of at least 5 interleaved repeats) and op counts for kernel V1, assembly D6b, the whole A2 indicator layer (meta-shift included, written elementwise) and today's LearnableIndicators, at the plan's sizes, and writes JSON with the device and TF version. (2) G-A1 (docs/research/2026-09-29-window-free-plan/README.md, stages table): the census of the whole A2 layer, forward and backward, contains no MatMul, BatchMatMul or Einsum and nothing from the determinism RAISE or host-round-trip lists; CPU precision within 1e-5 x max|state| and 3e-5 x RMS per channel at 43,008 bars. (3) A CPU smoke test in the fast suite; the kit runs on the CPU in 2 minutes or less. (4) No change under src/. (5) Fast suite and ruff pass.
 - **source:** the window-free plan and D-037 (2026-09-29)
-- **evidence (2026-09-29, CI pending on the pushed head):** branch nt-059, eec1ce9 + 7fa0fe6 (MACD precision added on the lead's review), merged as 5ea8eb5. scripts/bench/{common,kernel_v1,assembly_d6b,a2_layer,window_free}.py, `window_free.py --device {cpu,gpu} --out JSON`; tests/test_bench_window_free.py. CPU: A2 layer 62 ms / 726 ops / 0.62 GB static at the 7-day block against today's layer 190-265 ms / 588 ops / 2.0 GB; worst precision 1.2e-6 of max|state| (every channel, MACD included). QA PASS (census proven to catch an injected MatMul and a densified gather; own float64 recomputation; full kit 27 s; fast 799 passed, ruff clean). Backlog notes: the census does not see a differentiable tf.gather whose IndexedSlices gradient is never densified (NT-064 note); `--reps` floor not enforced (P3).
+- **evidence (done 2026-09-29; CI green on bc42e9f, run 36525413777):** branch nt-059, eec1ce9 + 7fa0fe6 (MACD precision added on the lead's review), merged as 5ea8eb5. scripts/bench/{common,kernel_v1,assembly_d6b,a2_layer,window_free}.py, `window_free.py --device {cpu,gpu} --out JSON`; tests/test_bench_window_free.py. CPU: A2 layer 62 ms / 726 ops / 0.62 GB static at the 7-day block against today's layer 190-265 ms / 588 ops / 2.0 GB; worst precision 1.2e-6 of max|state| (every channel, MACD included). QA PASS (census proven to catch an injected MatMul and a densified gather; own float64 recomputation; full kit 27 s; fast 799 passed, ruff clean). Backlog notes: the census does not see a differentiable tf.gather whose IndexedSlices gradient is never densified (NT-064 note); `--reps` floor not enforced (P3).
 
 ### NT-060
 
