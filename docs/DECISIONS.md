@@ -52,6 +52,7 @@ that extend or partly replace an entry.
 | D-036 | A cheap tracker agent for task tracking; the other roles keep the strong model | owner | |
 | D-037 | The window-free plan is approved; NT-047 in window mode first; periods held at the data bound; study budgets | owner | |
 | D-038 | The old C: copy is ignored; pushing stays automatic | owner ("push auto": lead's reading) | |
+| D-039 | The window-free build-up (NT-064 to NT-068) moves after the MVP, into R6 | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -472,3 +473,13 @@ that extend or partly replace an entry.
   `master`, never `--force`).
 - **Lead's reading:** "revoke.push auto" read as withdrawing the question and keeping automatic pushes; if the
   owner meant the opposite, a new entry records it.
+
+## D-039 The window-free build-up moves after the MVP, into research track R6 (owner, 2026-09-29)
+- **Owner (verbatim):** "Yeah move and log the window retirement work past MVP."
+- **Decision:** NT-064 (kernel and assembly), NT-065 (INDICATOR_MEMORY switch), NT-066 (purge-rule test),
+  NT-067 (Predictor series mode) and NT-068 (per-bar reporting) leave MVP-6's exit and join research track
+  R6 with the A/Bs (NT-069 to NT-073). MVP-6's exit is NT-046 to NT-048 (the catalogue in window mode,
+  D-037) plus NT-060 and NT-061 (the kit on the GPU and the TF32 decision, which also concern today's
+  model). The MVP ships with the window model as the default, as VISION defines it; D-032's commitment
+  and D-037's plan stand, only later.
+- **Consequence:** ROADMAP MVP-6 and R6; about 2 days off the MVP's critical path (an estimate).

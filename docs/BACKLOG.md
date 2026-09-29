@@ -865,6 +865,7 @@ changes).
 - **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Kernel V1' and 'Window assembly D6b'.
 - **acceptance:** Items 1-2 of A/ in the plan's evidence, with the plan's tolerances (1e-5 x max|state| and 3e-5 x RMS per channel, at 30,720 and 43,008 bars, periods 2 to 1e6, constant and per-bar alpha, C = 16 and 64): split invariance; causality bitwise with a zero future Jacobian; gradients within 1e-3 of float64 finite differences and finite at logits +-13.8, +-30 and -40; outputs after a reset independent of earlier inputs; non-finite input refused at data load; a clean op census; utils/math.py unchanged; fast suite and ruff pass.
 - **source:** the window-free plan and D-037 (2026-09-29)
+- **placement (2026-09-29, D-039):** research track R6, after the MVP.
 - **note (2026-09-29, NT-059 QA):** the kit's op census flags a gather backward only once its IndexedSlices gradient is densified in the traced graph; the series engine's tests must census the full training step (variables, optimizer update), not a function returning IndexedSlices, and keep the D6b custom gradient.
 
 ### NT-065
@@ -878,6 +879,7 @@ changes).
 - **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Per-bar adaptive periods' and 'Warm-up, history bound and pass budget'; D-037.
 - **acceptance:** (1) Window mode is the default and `golden_run.py verify` passes. (2) Series mode: G-B1 of B/ in the plan's evidence, including the context mirror at the anchors (<= 1e-6) and the off switch = V1 with a zero shift; M(eps) per family from the registry; M_run with a 3 x lr per-step margin, geometric growth and per-step projection; a burn-in of M_run + L - 1 fixed at run start; the history bound and the pass budget (default 4 training blocks) project logits and are counted per epoch (tests with a forced drift). (3) An end-to-end causality test from the raw frame through every normaliser. (4) The plan's D-018 check (3 interleaved GPU runs per mode, by the experimenter) within 5%, else the owner decides. (5) Fast and slow suites and ruff pass.
 - **source:** the window-free plan and D-037 (2026-09-29)
+- **placement (2026-09-29, D-039):** research track R6, after the MVP.
 
 ### NT-066
 
@@ -890,6 +892,7 @@ changes).
 - **why:** D-034 records the rule; this item pins it.
 - **acceptance:** Item 1 of C/ in the plan's evidence: tests/test_purge_rule.py for W in (60, 30, 0) and two horizon sets; the reference gap stays 80 (golden run passes); Config.validate refuses a gap below max(2 max(H), W + max(H)), naming the field; the formula documented in splits.py; fast suite and ruff pass.
 - **source:** the window-free plan and D-037 (2026-09-29)
+- **placement (2026-09-29, D-039):** research track R6, after the MVP.
 
 ### NT-067
 
@@ -902,6 +905,7 @@ changes).
 - **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Data gaps and the data start'.
 - **acceptance:** G-B3 of B/ in the plan's evidence: the Predictor refuses a history since the last reset shorter than M_run + L - 1; its predictions equal the trainer's on the same block (bitwise, same pass-start rule); it takes timestamps; the bundle stores the kernel spec, eps, the M rule, M_run, the reset threshold, the bar size and the normalisation constants, with a format version bump (round-trip test); window-mode bundles still load and predict identically.
 - **source:** the window-free plan and D-037 (2026-09-29)
+- **placement (2026-09-29, D-039):** research track R6, after the MVP.
 
 ### NT-068
 
@@ -914,6 +918,7 @@ changes).
 - **why:** docs/research/2026-09-29-window-free-plan/README.md, 'Reporting'.
 - **acceptance:** G-B4: base, instantaneous and effective p5/p50/p95 per instance; the effective period equals p for a fixed alpha (test); in series mode no 'lookback' line but a history-bound line and the bound counts; the D-014 figure tests pass; notebooks rebuilt through build.py and executed, every changed figure looked at.
 - **source:** the window-free plan and D-037 (2026-09-29)
+- **placement (2026-09-29, D-039):** research track R6, after the MVP.
 
 ### NT-069
 

@@ -41,13 +41,11 @@ family inconclusive ([report](../runs/ablations/ablate_physics_v1-full/report.md
   and the new families: range / volatility, volume, trend / channels; all learnable, all on by
   default), NT-048 (the discovered-indicators report: a self-contained interactive HTML report per
   run, the same figures in notebook 07).
-- **The window (D-032, D-037):** the plan is approved ([research/2026-09-29-window-free-plan/](research/2026-09-29-window-free-plan/README.md)).
-  NT-047 is built now in window mode. In this milestone: NT-059 and NT-060 (the benchmark kit, CPU then GPU; they may run
-  now, beside MVP-1, since their files are only scripts/bench/), NT-061 (TF32 decision), NT-064 (kernel and assembly,
-  after NT-046), NT-065 (the series switch, after NT-047: shared files), NT-066 (purge-rule test; any time), NT-067 and
-  NT-068. NT-048 does not wait for them. The A/Bs form research track R6. No configured period ceiling; periods are held
-  at the data-derived bound (D-037). NT-054 (fixed costs and launches) sits in Continuous.
-- **Exit:** NT-046 to NT-048, NT-053 (done) and NT-059 to NT-068 done; VISION "Also in the MVP" holds with the design of D-031.
+- **The window (D-032, D-037, D-039):** the plan is approved; NT-047 is built in window mode. In this
+  milestone only NT-059 (done), NT-060 (the kit on the GPU) and NT-061 (TF32 decision). The series engine
+  build-up (NT-064 to NT-068) and every window-free A/B are research track R6, after the MVP (D-039).
+  NT-054 (fixed costs and launches) sits in Continuous.
+- **Exit:** NT-046 to NT-048, NT-053, NT-059, NT-060 and NT-061 done; VISION "Also in the MVP" holds with the design of D-031.
 
 ## MVP-2: control panel and model comparison (point 2, "The yardstick"; D-020, D-023 to D-025)
 
@@ -103,7 +101,8 @@ the paired comparator (D-021, D-025). R2 and R3 need NT-026, NT-031, NT-032; R4 
 
 ## Research track R6: window-free (D-032, D-037)
 
-Pre-registered studies of the approved plan, after MVP-4 (they need NT-041's folds and NT-032's amendment):
+After the MVP (D-039). The series engine build-up first: NT-064 (after NT-046), NT-065 (after NT-047),
+NT-066, NT-067, NT-068. Then the pre-registered studies (they need NT-041's folds and NT-032's amendment):
 NT-063 (engine options) and NT-062 (VAL_BATCH_SIZE) first; NT-069 (A/B-1, series engine against window
 engine); NT-070 (A/B-1b, removing the clip; after an ADOPT); NT-071 (probe), NT-072 (per-bar model) and NT-073
 (A/B-2) only if the probe says epoch-bound. GPU ceilings of D-037. **Exit:** each study's verdict recorded; an
