@@ -7,15 +7,19 @@ that predict best, shows what it learned, and is judged by net financial metrics
 costs. The design goal is that the instrument, bar size, window and horizons are configuration;
 today the code is built and tested on one reference setup.
 
-**Reference setup: BTC/USDT one-minute bars.** From the last 60 closes, one network predicts, for
-10, 15 and 20 minutes ahead:
+**Reference setup: BTC/USDT one-minute bars.** From the last 60 bars (open, high, low, close,
+volume; `Config.INPUT_SERIES`, `["close"]` reproduces the pre-NT-047 close-only input), one
+network predicts, for 10, 15 and 20 minutes ahead:
 
 - the price change in quote currency (`delta`; USDT here),
 - the probability that the price goes up (`direction`),
 - the variance of the price change (`sigma`),
 
-and learns a set of technical indicators (EMA, MACD, RSI, Bollinger periods trained by gradient
-descent). Six "physics-inspired" regularisers act on these heads. An ablation harness tests whether
+and learns a set of technical indicators, their periods trained by gradient descent: EMA, MACD,
+RSI and Bollinger on the close, and - since NT-047 - ATR, Stochastic, Williams %R, Keltner, OBV,
+VWAP, MFI, ADX/DMI, CCI and Donchian on the full OHLCV bars (14 families, 3 instances each, 54
+learned periods, 82 indicator channels; rolling max/min and sign branches use smooth
+differentiable forms). Six "physics-inspired" regularisers act on these heads. An ablation harness tests whether
 each one earns its place.
 
 The package lives in `src/neural_trade/`. Around the model it provides a typed config, nine
@@ -65,7 +69,8 @@ What made the difference:
   diagnostics are computed once per epoch and updated every `TRAIN_METRICS_EVERY` steps (10). The
   training loss and all validation metrics stay exact.
 - **Soft-ECE loss.** It is computed for all bins in one operation.
-- **Learnable indicators.** The 24 moving averages run as 2 batched matrix products.
+- **Learnable indicators.** Every EWMA of every family runs inside 2 batched matrix products
+  (57 first-stage and 12 second-stage averages at the OHLCV default; 24 in close-only mode).
 - **Batch size.** A step costs about the same at 64 or 256 because it is kernel-launch-bound.
 
 For bulk prediction, pass a larger `batch_size` to `Predictor.predict` / `predict_frame`, or
@@ -112,7 +117,8 @@ cfg = Config.from_yaml("configs/default.yaml").override(EPOCHS=10)
 result = train_and_evaluate(config=cfg, force=True)       # TrainResult: model, predictions, calibration
 
 p = Predictor.from_artifacts("runs/<run id>/artifacts")
-p.predict_last(close_series)   # {"h0": {"delta", "p_up", "p_up_calibrated", "sigma", "lo90", "hi90", ...}, ...}
+p.predict_last(ohlcv_dataframe)  # {"h0": {"delta", "p_up", "p_up_calibrated", "sigma", "lo90", "hi90", ...}, ...}
+                                 # (a bare close series suffices for close-only bundles)
 ```
 
 Evaluation and backtesting:
@@ -221,7 +227,7 @@ src/neural_trade/
   metrics/        numpy and graph-safe TF metrics, direction labels
   calibration/    temperature scaling, (normalised) conformal intervals, online calibrator
   evaluation/     PredictionFrame, baselines, evaluate(), walk-forward, report plots
-  serving/        Predictor (raw closes in, forecasts out)
+  serving/        Predictor (raw OHLCV bars in, forecasts out)
   strategy/       signals, strategies, backtest engine, performance statistics
   experiments/    RunContext (one directory per run), ablation harness
   telemetry/      JSONL epoch logger
