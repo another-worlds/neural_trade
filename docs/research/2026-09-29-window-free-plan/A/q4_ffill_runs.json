@@ -1,0 +1,154 @@
+{
+ "filled_bars": 149245,
+ "n_runs": 118923,
+ "longest_run_minutes": 287,
+ "run_quantiles": {
+  "50": 1.0,
+  "90": 2.0,
+  "99": 4.0,
+  "99.9": 8.0
+ },
+ "run_histogram": {
+  "1-1": 99830,
+  "2-5": 18644,
+  "6-15": 409,
+  "16-60": 25,
+  "61-240": 14,
+  "241-1440": 1,
+  "1441-inf": 0
+ },
+ "filled_bars_in_runs_over_60": 1648,
+ "runs_per_year": {
+  "2017": 29768,
+  "2018": 14945,
+  "2019": 14518,
+  "2020": 7123,
+  "2021": 3157,
+  "2022": 12136,
+  "2023": 18271,
+  "2024": 14081,
+  "2025": 4924
+ },
+ "runs_over_60min_per_year": {
+  "2017": 0,
+  "2018": 0,
+  "2019": 1,
+  "2020": 2,
+  "2021": 2,
+  "2022": 4,
+  "2023": 2,
+  "2024": 3,
+  "2025": 1
+ },
+ "longest_runs": [
+  {
+   "start": "2020-04-25 23:58:00",
+   "minutes": 287
+  },
+  {
+   "start": "2024-12-07 01:23:00",
+   "minutes": 192
+  },
+  {
+   "start": "2022-01-05 13:02:00",
+   "minutes": 145
+  },
+  {
+   "start": "2023-07-03 15:02:00",
+   "minutes": 143
+  },
+  {
+   "start": "2023-03-23 14:04:00",
+   "minutes": 110
+  },
+  {
+   "start": "2020-08-26 14:04:00",
+   "minutes": 108
+  },
+  {
+   "start": "2021-04-14 12:02:00",
+   "minutes": 97
+  },
+  {
+   "start": "2025-03-23 08:43:00",
+   "minutes": 84
+  }
+ ],
+ "reset_runs_over_15min_p60_M340": {
+  "mean": 0.002718819618490671,
+  "max": 0.06279761904761905,
+  "blocks_with_masked": 36,
+  "n_blocks": 456
+ },
+ "reset_runs_over_60min_p60_M340": {
+  "mean": 0.0011095446950710108,
+  "max": 0.03373015873015873,
+  "blocks_with_masked": 15,
+  "n_blocks": 456
+ },
+ "reset_runs_over_240min_p60_M340": {
+  "mean": 7.396964633806739e-05,
+  "max": 0.03373015873015873,
+  "blocks_with_masked": 1,
+  "n_blocks": 456
+ },
+ "reset_runs_over_1440min_p60_M340": {
+  "mean": 0.0,
+  "max": 0.0,
+  "blocks_with_masked": 0,
+  "n_blocks": 456
+ },
+ "reset_runs_over_15min_p240_M1365": {
+  "mean": 0.010746701824004456,
+  "max": 0.16448412698412698,
+  "blocks_with_masked": 37,
+  "n_blocks": 456
+ },
+ "reset_runs_over_60min_p240_M1365": {
+  "mean": 0.004454495614035088,
+  "max": 0.13541666666666666,
+  "blocks_with_masked": 17,
+  "n_blocks": 456
+ },
+ "reset_runs_over_240min_p240_M1365": {
+  "mean": 0.00029696637426900583,
+  "max": 0.13541666666666666,
+  "blocks_with_masked": 1,
+  "n_blocks": 456
+ },
+ "reset_runs_over_1440min_p240_M1365": {
+  "mean": 0.0,
+  "max": 0.0,
+  "blocks_with_masked": 0,
+  "n_blocks": 456
+ },
+ "reset_runs_over_15min_p1440_M8198": {
+  "mean": 0.06249825953773322,
+  "max": 1.0,
+  "blocks_with_masked": 61,
+  "n_blocks": 456
+ },
+ "reset_runs_over_60min_p1440_M8198": {
+  "mean": 0.026753080618212195,
+  "max": 0.8132936507936508,
+  "blocks_with_masked": 27,
+  "n_blocks": 456
+ },
+ "reset_runs_over_240min_p1440_M8198": {
+  "mean": 0.001783538707880813,
+  "max": 0.8132936507936508,
+  "blocks_with_masked": 1,
+  "n_blocks": 456
+ },
+ "reset_runs_over_1440min_p1440_M8198": {
+  "mean": 0.0,
+  "max": 0.0,
+  "blocks_with_masked": 0,
+  "n_blocks": 456
+ },
+ "anchors_whose_window_or_label_touches_a_filled_bar": {
+  "mean": 0.47348035888331946,
+  "p90": 0.8555059523809523,
+  "max": 1.0
+ }
+}

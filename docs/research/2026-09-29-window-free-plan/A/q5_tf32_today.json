@@ -1,0 +1,20 @@
+{
+ "fp32": {
+  "max_abs_err_scaled_units": 2.91241875238768e-06,
+  "median_rel_err_per_window_channel": 8.759763803812397e-08,
+  "p99_rel_err": 2.363694201841468e-07,
+  "max_abs_err_dollars": 0.0007500006382789539
+ },
+ "rn": {
+  "max_abs_err_scaled_units": 0.005533483801805517,
+  "median_rel_err_per_window_channel": 0.0002491742344441445,
+  "p99_rel_err": 0.0005387229435895772,
+  "max_abs_err_dollars": 1.4249724150615402
+ },
+ "rz": {
+  "max_abs_err_scaled_units": 0.011342353714674402,
+  "median_rel_err_per_window_channel": 0.0007770424882626885,
+  "p99_rel_err": 0.0011725528605264926,
+  "max_abs_err_dollars": 2.920861747170589
+ }
+}

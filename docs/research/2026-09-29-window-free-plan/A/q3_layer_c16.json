@@ -1,0 +1,101 @@
+{
+ "grad": {
+  "C16": {
+   "constant": {
+    "max_rel_err_vs_fd64": 4.345719790638861e-06,
+    "PASS_1e-3": true
+   },
+   "per_bar": {
+    "max_rel_err_vs_fd64": 9.737244119062357e-06,
+    "PASS_1e-3": true
+   }
+  },
+  "C32": {
+   "constant": {
+    "max_rel_err_vs_fd64": 5.0982919497273644e-06,
+    "PASS_1e-3": true
+   },
+   "per_bar": {
+    "max_rel_err_vs_fd64": 5.9540409906859865e-06,
+    "PASS_1e-3": true
+   }
+  }
+ },
+ "layer": {
+  "today_LearnableIndicators_B256": {
+   "fwdbwd_total_ops": 1232,
+   "fwdbwd_compute_ops": 588,
+   "largest_intermediate_MB": 63.28125,
+   "static_output_GB_fwdbwd": 2.010661616921425,
+   "raise_on_gpu": [],
+   "host_round_trip_on_gpu": [],
+   "cpu_fwdbwd": {
+    "median_s": 0.17164769995724782,
+    "min_s": 0.1606980999931693,
+    "max_s": 0.18338900001253933,
+    "iqr_s": 0.010089099931064993,
+    "reps": 9
+   }
+  },
+  "A2_N11504_C16_mulsum_D6": {
+   "fwdbwd_total_ops": 2000,
+   "fwdbwd_compute_ops": 721,
+   "largest_intermediate_MB": 81.624755859375,
+   "static_output_GB_fwdbwd": 0.6192773394286633,
+   "raise_on_gpu": [],
+   "host_round_trip_on_gpu": [],
+   "cpu_fwdbwd": {
+    "median_s": 0.05931360000977293,
+    "min_s": 0.05305520002730191,
+    "max_s": 0.06412250001449138,
+    "iqr_s": 0.00561669998569414,
+    "reps": 9
+   }
+  },
+  "A2_N11504_C64_mulsum_D6": {
+   "fwdbwd_total_ops": 2036,
+   "fwdbwd_compute_ops": 739,
+   "largest_intermediate_MB": 81.624755859375,
+   "static_output_GB_fwdbwd": 1.6741679683327675,
+   "raise_on_gpu": [],
+   "host_round_trip_on_gpu": [],
+   "cpu_fwdbwd": {
+    "median_s": 0.17478699999628589,
+    "min_s": 0.14948859997093678,
+    "max_s": 0.19000070000765845,
+    "iqr_s": 0.01587250002194196,
+    "reps": 9
+   }
+  },
+  "A2_N30720_C16_mulsum_D6": {
+   "fwdbwd_total_ops": 2354,
+   "fwdbwd_compute_ops": 833,
+   "largest_intermediate_MB": 217.96875,
+   "static_output_GB_fwdbwd": 1.6153789162635803,
+   "raise_on_gpu": [],
+   "host_round_trip_on_gpu": [],
+   "cpu_fwdbwd": {
+    "median_s": 0.17265530000440776,
+    "min_s": 0.16139880003174767,
+    "max_s": 0.20562260004226118,
+    "iqr_s": 0.015049200039356947,
+    "reps": 9
+   }
+  },
+  "A2_N30720_C64_mulsum_D6": {
+   "fwdbwd_total_ops": 1960,
+   "fwdbwd_compute_ops": 701,
+   "largest_intermediate_MB": 217.96875,
+   "static_output_GB_fwdbwd": 4.4160476587712765,
+   "raise_on_gpu": [],
+   "host_round_trip_on_gpu": [],
+   "cpu_fwdbwd": {
+    "median_s": 0.47700429998803884,
+    "min_s": 0.43928729998879135,
+    "max_s": 0.5171638999599963,
+    "iqr_s": 0.03993019997142255,
+    "reps": 9
+   }
+  }
+ }
+}

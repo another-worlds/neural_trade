@@ -1,0 +1,781 @@
+{
+  "n_seq": 43421,
+  "folds": [
+    {
+      "name": "fold 1 (index -5)",
+      "gap": 80,
+      "train": [
+        0,
+        1268
+      ],
+      "val": [
+        1349,
+        4214
+      ],
+      "cal": [
+        4295,
+        7160
+      ],
+      "test": [
+        7241,
+        14476
+      ],
+      "sizes": {
+        "train": 1269,
+        "val": 2866,
+        "cal": 2866,
+        "test": 7236
+      }
+    },
+    {
+      "name": "fold 2 (index -4)",
+      "gap": 80,
+      "train": [
+        0,
+        8504
+      ],
+      "val": [
+        8585,
+        11450
+      ],
+      "cal": [
+        11531,
+        14396
+      ],
+      "test": [
+        14477,
+        21712
+      ],
+      "sizes": {
+        "train": 8505,
+        "val": 2866,
+        "cal": 2866,
+        "test": 7236
+      }
+    },
+    {
+      "name": "fold 3 (index -3)",
+      "gap": 80,
+      "train": [
+        0,
+        15740
+      ],
+      "val": [
+        15821,
+        18686
+      ],
+      "cal": [
+        18767,
+        21632
+      ],
+      "test": [
+        21713,
+        28948
+      ],
+      "sizes": {
+        "train": 15741,
+        "val": 2866,
+        "cal": 2866,
+        "test": 7236
+      }
+    },
+    {
+      "name": "fold 4 (index -2)",
+      "gap": 80,
+      "train": [
+        0,
+        22976
+      ],
+      "val": [
+        23057,
+        25922
+      ],
+      "cal": [
+        26003,
+        28868
+      ],
+      "test": [
+        28949,
+        36184
+      ],
+      "sizes": {
+        "train": 22977,
+        "val": 2866,
+        "cal": 2866,
+        "test": 7236
+      }
+    },
+    {
+      "name": "fold 5 (index -1)",
+      "gap": 80,
+      "train": [
+        0,
+        30212
+      ],
+      "val": [
+        30293,
+        33158
+      ],
+      "cal": [
+        33239,
+        36104
+      ],
+      "test": [
+        36185,
+        43420
+      ],
+      "sizes": {
+        "train": 30213,
+        "val": 2866,
+        "cal": 2866,
+        "test": 7236
+      }
+    }
+  ],
+  "within_fold": [
+    {
+      "fold": "fold 1 (index -5)",
+      "pair": "train->val",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 1 (index -5)",
+      "pair": "train->cal",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 1 (index -5)",
+      "pair": "train->test",
+      "label_distance_bars": 5954,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 1 (index -5)",
+      "pair": "val->cal",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 1 (index -5)",
+      "pair": "val->test",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 1 (index -5)",
+      "pair": "cal->test",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 2 (index -4)",
+      "pair": "train->val",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 2 (index -4)",
+      "pair": "train->cal",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 2 (index -4)",
+      "pair": "train->test",
+      "label_distance_bars": 5954,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 2 (index -4)",
+      "pair": "val->cal",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 2 (index -4)",
+      "pair": "val->test",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 2 (index -4)",
+      "pair": "cal->test",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 3 (index -3)",
+      "pair": "train->val",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 3 (index -3)",
+      "pair": "train->cal",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 3 (index -3)",
+      "pair": "train->test",
+      "label_distance_bars": 5954,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 3 (index -3)",
+      "pair": "val->cal",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 3 (index -3)",
+      "pair": "val->test",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 3 (index -3)",
+      "pair": "cal->test",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 4 (index -2)",
+      "pair": "train->val",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 4 (index -2)",
+      "pair": "train->cal",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 4 (index -2)",
+      "pair": "train->test",
+      "label_distance_bars": 5954,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 4 (index -2)",
+      "pair": "val->cal",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 4 (index -2)",
+      "pair": "val->test",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 4 (index -2)",
+      "pair": "cal->test",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 5 (index -1)",
+      "pair": "train->val",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 5 (index -1)",
+      "pair": "train->cal",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 5 (index -1)",
+      "pair": "train->test",
+      "label_distance_bars": 5954,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 5 (index -1)",
+      "pair": "val->cal",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 5 (index -1)",
+      "pair": "val->test",
+      "label_distance_bars": 3008,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    },
+    {
+      "fold": "fold 5 (index -1)",
+      "pair": "cal->test",
+      "label_distance_bars": 62,
+      "label_disjoint_with_embargo_H": true,
+      "finite_window_clear(D-005)": true
+    }
+  ],
+  "cross_fold_overlaps": [
+    {
+      "earlier": "fold index -5 train",
+      "later": "fold index -4 train",
+      "overlap_seq": [
+        0,
+        1268
+      ],
+      "n": 1269
+    },
+    {
+      "earlier": "fold index -5 val",
+      "later": "fold index -4 train",
+      "overlap_seq": [
+        1349,
+        4214
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 cal",
+      "later": "fold index -4 train",
+      "overlap_seq": [
+        4295,
+        7160
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 test",
+      "later": "fold index -4 train",
+      "overlap_seq": [
+        7241,
+        8504
+      ],
+      "n": 1264
+    },
+    {
+      "earlier": "fold index -5 test",
+      "later": "fold index -4 val",
+      "overlap_seq": [
+        8585,
+        11450
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 test",
+      "later": "fold index -4 cal",
+      "overlap_seq": [
+        11531,
+        14396
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 train",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        0,
+        1268
+      ],
+      "n": 1269
+    },
+    {
+      "earlier": "fold index -5 val",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        1349,
+        4214
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 cal",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        4295,
+        7160
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 test",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        7241,
+        14476
+      ],
+      "n": 7236
+    },
+    {
+      "earlier": "fold index -5 train",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        0,
+        1268
+      ],
+      "n": 1269
+    },
+    {
+      "earlier": "fold index -5 val",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        1349,
+        4214
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 cal",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        4295,
+        7160
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 test",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        7241,
+        14476
+      ],
+      "n": 7236
+    },
+    {
+      "earlier": "fold index -5 train",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        0,
+        1268
+      ],
+      "n": 1269
+    },
+    {
+      "earlier": "fold index -5 val",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        1349,
+        4214
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 cal",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        4295,
+        7160
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -5 test",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        7241,
+        14476
+      ],
+      "n": 7236
+    },
+    {
+      "earlier": "fold index -4 train",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        0,
+        8504
+      ],
+      "n": 8505
+    },
+    {
+      "earlier": "fold index -4 val",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        8585,
+        11450
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 cal",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        11531,
+        14396
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 test",
+      "later": "fold index -3 train",
+      "overlap_seq": [
+        14477,
+        15740
+      ],
+      "n": 1264
+    },
+    {
+      "earlier": "fold index -4 test",
+      "later": "fold index -3 val",
+      "overlap_seq": [
+        15821,
+        18686
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 test",
+      "later": "fold index -3 cal",
+      "overlap_seq": [
+        18767,
+        21632
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 train",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        0,
+        8504
+      ],
+      "n": 8505
+    },
+    {
+      "earlier": "fold index -4 val",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        8585,
+        11450
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 cal",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        11531,
+        14396
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 test",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        14477,
+        21712
+      ],
+      "n": 7236
+    },
+    {
+      "earlier": "fold index -4 train",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        0,
+        8504
+      ],
+      "n": 8505
+    },
+    {
+      "earlier": "fold index -4 val",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        8585,
+        11450
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 cal",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        11531,
+        14396
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -4 test",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        14477,
+        21712
+      ],
+      "n": 7236
+    },
+    {
+      "earlier": "fold index -3 train",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        0,
+        15740
+      ],
+      "n": 15741
+    },
+    {
+      "earlier": "fold index -3 val",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        15821,
+        18686
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -3 cal",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        18767,
+        21632
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -3 test",
+      "later": "fold index -2 train",
+      "overlap_seq": [
+        21713,
+        22976
+      ],
+      "n": 1264
+    },
+    {
+      "earlier": "fold index -3 test",
+      "later": "fold index -2 val",
+      "overlap_seq": [
+        23057,
+        25922
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -3 test",
+      "later": "fold index -2 cal",
+      "overlap_seq": [
+        26003,
+        28868
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -3 train",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        0,
+        15740
+      ],
+      "n": 15741
+    },
+    {
+      "earlier": "fold index -3 val",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        15821,
+        18686
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -3 cal",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        18767,
+        21632
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -3 test",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        21713,
+        28948
+      ],
+      "n": 7236
+    },
+    {
+      "earlier": "fold index -2 train",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        0,
+        22976
+      ],
+      "n": 22977
+    },
+    {
+      "earlier": "fold index -2 val",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        23057,
+        25922
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -2 cal",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        26003,
+        28868
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -2 test",
+      "later": "fold index -1 train",
+      "overlap_seq": [
+        28949,
+        30212
+      ],
+      "n": 1264
+    },
+    {
+      "earlier": "fold index -2 test",
+      "later": "fold index -1 val",
+      "overlap_seq": [
+        30293,
+        33158
+      ],
+      "n": 2866
+    },
+    {
+      "earlier": "fold index -2 test",
+      "later": "fold index -1 cal",
+      "overlap_seq": [
+        33239,
+        36104
+      ],
+      "n": 2866
+    }
+  ]
+}

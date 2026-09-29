@@ -1,0 +1,77 @@
+{
+ "N_bars": 36602,
+ "missing_minutes": 3398,
+ "G_reset_minutes": 60,
+ "M_burn_in": 1365,
+ "periods": [
+  5.0,
+  30.0,
+  60.0,
+  240.0
+ ],
+ "resets_at_bars": [
+  0,
+  19908,
+  25524
+ ],
+ "reset_gap_minutes": [
+  361,
+  2881
+ ],
+ "masked_anchors": 4095,
+ "short_gaps_handled_by_elapsed_time": 61,
+ "E_elapsed_time_vs_ffill_grid_max_rel": {
+  "phantom_variance_term_False": {
+   "d_ema_minus_close": 2.3232799074467238e-07,
+   "bb_var": 0.034650176278572045,
+   "rsi_gain": 7.183105622899166e-08
+  },
+  "phantom_variance_term_True": {
+   "d_ema_minus_close": 2.3232799074467238e-07,
+   "bb_var": 2.7533847013961177e-07,
+   "rsi_gain": 7.183105622899166e-08
+  }
+ },
+ "after_2day_outage": {
+  "bar": 25524,
+  "jump_dx_scaled": 2.489367961883545,
+  "d_with_elapsed_time_only": [
+   -1.6595786809921265,
+   -2.328763484954834,
+   -2.4077494144439697,
+   -2.4687092304229736
+  ],
+  "d_with_reset": [
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "typical_abs_d_p5_p30_p60_p240": [
+   0.13068991899490356,
+   0.3789486885070801,
+   0.5483128428459167,
+   1.0790841579437256
+  ]
+ },
+ "A1_prefix_same_origin": {
+  "bitwise_equal": "29/30",
+  "max_rel": 9.479512574080495e-09
+ },
+ "A2_from_last_reset": {
+  "bitwise_equal_start_at_reset_bar": "17/30",
+  "bitwise_equal_start_aligned_to_training_chunk_grid_C": "20/30",
+  "bitwise_equal_start_aligned_to_level2_grid_CxG": "29/30",
+  "max_rel": 9.479512574080494e-08
+ },
+ "A3_cold_start_M_plus_L_back": {
+  "max_rel": 1.2209612195415677e-05,
+  "eps": 0.001,
+  "note": "truncation, not rounding: bounded by eps x the state before the pass start"
+ },
+ "B_carry_forward_float32_steps": {
+  "n_steps": 18300,
+  "max_rel": 1.516722011852879e-06,
+  "bitwise_equal_fraction": 0.15367941712204009
+ }
+}

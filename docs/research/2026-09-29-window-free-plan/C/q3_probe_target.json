@@ -1,0 +1,100 @@
+{
+  "v1_dev_fold_-2": {
+    "frac0.05": {
+      "runs": 42,
+      "runs_with_20_epochs": 37,
+      "reach_epoch_quantiles": {
+        "0.1": 7.0,
+        "0.5": 13.0,
+        "0.9": 20.0,
+        "1.0": 20.0
+      },
+      "reach_epoch_sd_log": 0.4329229604632336,
+      "min_in_last_3_epochs_share(20-epoch runs)": 0.40540540540540543,
+      "smoothed_min_epoch_quantiles": {
+        "0.1": 7.0,
+        "0.5": 14.0,
+        "0.9": 20.0
+      },
+      "late_abs_step_over_span_median": 0.1932713429131393,
+      "within_condition_sd_log_reach_epoch": 0.3993862192203323
+    },
+    "frac0.1": {
+      "runs": 42,
+      "runs_with_20_epochs": 37,
+      "reach_epoch_quantiles": {
+        "0.1": 6.0,
+        "0.5": 10.5,
+        "0.9": 19.0,
+        "1.0": 20.0
+      },
+      "reach_epoch_sd_log": 0.4584008035079964,
+      "min_in_last_3_epochs_share(20-epoch runs)": 0.40540540540540543,
+      "smoothed_min_epoch_quantiles": {
+        "0.1": 7.0,
+        "0.5": 14.0,
+        "0.9": 20.0
+      },
+      "late_abs_step_over_span_median": 0.1932713429131393,
+      "within_condition_sd_log_reach_epoch": 0.3995232944928298
+    }
+  },
+  "notebook_val_fold_-1": {
+    "20260924T114819Z-e23fd9f-dirty-af67ee43": {
+      "frac0.05": {
+        "reach_epoch": 10,
+        "T": 0.9859043061733246,
+        "span": 0.08194628357887268,
+        "min_epoch_smoothed": 11
+      },
+      "frac0.1": {
+        "reach_epoch": 9,
+        "T": 0.9859043061733246,
+        "span": 0.08194628357887268,
+        "min_epoch_smoothed": 11
+      }
+    },
+    "20260924T131735Z-609d19e-dirty-af67ee43": {
+      "frac0.05": {
+        "reach_epoch": 18,
+        "T": 0.9799362818400065,
+        "span": 0.08960530658562982,
+        "min_epoch_smoothed": 19
+      },
+      "frac0.1": {
+        "reach_epoch": 18,
+        "T": 0.9799362818400065,
+        "span": 0.08960530658562982,
+        "min_epoch_smoothed": 19
+      }
+    },
+    "20260924T165923Z-fa75177-dirty-af67ee43": {
+      "frac0.05": {
+        "reach_epoch": 10,
+        "T": 0.9880563716093699,
+        "span": 0.0545060237248739,
+        "min_epoch_smoothed": 10
+      },
+      "frac0.1": {
+        "reach_epoch": 10,
+        "T": 0.9880563716093699,
+        "span": 0.0545060237248739,
+        "min_epoch_smoothed": 10
+      }
+    },
+    "20260924T182915Z-1aeff1c-dirty-af67ee43": {
+      "frac0.05": {
+        "reach_epoch": 14,
+        "T": 0.9867348074913025,
+        "span": 0.0809185653924942,
+        "min_epoch_smoothed": 14
+      },
+      "frac0.1": {
+        "reach_epoch": 11,
+        "T": 0.9867348074913025,
+        "span": 0.0809185653924942,
+        "min_epoch_smoothed": 14
+      }
+    }
+  }
+}

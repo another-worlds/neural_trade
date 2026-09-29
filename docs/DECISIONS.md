@@ -47,6 +47,8 @@ that extend or partly replace an entry.
 | D-031 | The indicator catalogue | owner | D-032 |
 | D-032 | The fixed input window goes; the path comes from a written plan | owner (purge rule: lead) | |
 | D-033 | Remote sessions run review sweeps; the lead QA's and merges their pull requests | owner (fetch between items: lead's reading) | |
+| D-034 | The purge rule for indicators with unbounded memory: label overlap, gap kept at 80 | lead (delegated by D-032) | |
+| D-035 | Models and effort: Sonnet for implementer, QA and experimenter; the lead escalates | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -398,3 +400,33 @@ that extend or partly replace an entry.
 - **Consequence:** PR #14 (NT-001) was QA'd and merged this way (6d01d11). Findings of a remote
   review that are not fixed in its PR become backlog items, triaged as usual.
 - **Evidence:** [qa/2026-09-28-remote-sessions.md](qa/2026-09-28-remote-sessions.md).
+
+## D-034 The purge rule for indicators with unbounded memory: label overlap, gap kept at 80 (lead, 2026-09-29)
+- **Context:** D-032 left the purge rule for indicators whose state reads every earlier bar to the
+  lead ("research yourself"). D-005's invariant (no training-label bar is an evaluation input) holds
+  literally only with a state reset and a burn-in inside every gap.
+- **Decision (rule a+):** the gap between adjacent blocks is max(2 max(H), W + max(H)), W being the
+  longest finite window any consumer reads (60 today), so the reference gap stays 80 bars and today's
+  anchors are unchanged. An indicator state reads every earlier bar, as it does live, and resets
+  (with a masked burn-in) only at the data start and at long gaps. Judgement folds come after every
+  fold whose score makes a choice. Every input path must be causal and every normaliser fit on the
+  training block or trailing.
+- **Why:** no later label can reach a gradient, an epoch choice or a calibrator when the gap covers
+  the label increments; earlier labelled bars in a later block's state are its past, available live.
+  D-005 taken literally closes no further leak and would cost 12.5% / 43% / 246% / 1,711% of a 7-day
+  training block at learned periods of 60 / 240 / 1,440 / 10,080 bars.
+- **Consequence:** the plan's stage-4 item "purge rule test and config guard" (`tests/test_purge_rule.py`,
+  Config.validate refuses a smaller gap). D-005 stands for the window model.
+- **Evidence:** [research/2026-09-29-window-free-plan/](research/2026-09-29-window-free-plan/README.md)
+  "The purge rule"; C/FINDINGS.md Q1.
+
+## D-035 Models and effort: Sonnet for implementer, QA and experimenter; the lead escalates (owner, 2026-09-29)
+- **Owner:** asked how model and effort use could be optimized "autonomously without my involvement"
+  and answered "yes" to the lead's proposal (this session).
+- **Decision:** as OPERATING_MODEL "Models and effort": Sonnet 5 by default for implementer, QA and
+  experimenter; Opus 5.5 for QA of P0 and statistics or verdict items and for a second repair round;
+  Fable 5.1 or Opus 5.5 for the lead, research and adversarial reviews; lighter QA for P2 and P3; no
+  duplicate integration suite runs; at most two agents at once; reports under about 800 words. The
+  lead chooses per call without asking.
+- **Context:** the session of 2026-09-28 / 29 ran seven agents at once and hit the monthly spend limit
+  and then the weekly limit, stalling all work for about 21 hours.

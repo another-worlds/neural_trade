@@ -1,0 +1,10 @@
+{
+ "n_windows": 500,
+ "kernel_vs_today_max_abs": 2.86102294921875e-06,
+ "kernel_vs_today_max_rel_of_window_max": 3.9560917334595065e-07,
+ "kernel_vs_float64_max_abs": 2.3338556012220124e-06,
+ "today_vs_float64_max_abs": 1.8364827045758148e-06,
+ "max_abs_state": 8.250136375427246,
+ "PASS_abs_1e-6": false,
+ "PASS_rel_1e-5_of_state": true
+}

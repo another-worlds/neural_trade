@@ -1,0 +1,201 @@
+{
+ "T7": 11504,
+ "precision_T43008": {
+  "C16": {
+   "constant": {
+    "worst_rel_err_all_channels": 8.226935459446236e-07,
+    "ALL_PASS": true
+   },
+   "per_bar": {
+    "worst_rel_err_all_channels": 1.2542886431474487e-06,
+    "ALL_PASS": true
+   }
+  },
+  "C32": {
+   "constant": {
+    "worst_rel_err_all_channels": 6.675672785073585e-07,
+    "ALL_PASS": true
+   },
+   "per_bar": {
+    "worst_rel_err_all_channels": 1.370919012228276e-06,
+    "ALL_PASS": true
+   }
+  },
+  "C64": {
+   "constant": {
+    "worst_rel_err_all_channels": 1.071093199390776e-06,
+    "ALL_PASS": true
+   },
+   "per_bar": {
+    "worst_rel_err_all_channels": 1.0602017893542777e-06,
+    "ALL_PASS": true
+   }
+  }
+ },
+ "cost": {
+  "T11504_K31": {
+   "C16": {
+    "fwdbwd_total_ops": 538,
+    "fwdbwd_compute_ops": 185,
+    "largest_intermediate_MB": 21.7666015625,
+    "static_output_GB_fwdbwd": 0.599223836325109,
+    "cpu_fwdbwd": {
+     "median_s": 0.05433060001814738,
+     "min_s": 0.04695940000237897,
+     "max_s": 0.05984089997946285,
+     "iqr_s": 0.007921349999378435,
+     "reps": 7
+    }
+   },
+   "C32": {
+    "fwdbwd_total_ops": 558,
+    "fwdbwd_compute_ops": 195,
+    "largest_intermediate_MB": 43.59375,
+    "static_output_GB_fwdbwd": 1.0420797849074006,
+    "cpu_fwdbwd": {
+     "median_s": 0.09409619998768903,
+     "min_s": 0.08879340000567026,
+     "max_s": 0.10162709999713115,
+     "iqr_s": 0.00681389999226667,
+     "reps": 7
+    }
+   },
+   "C64": {
+    "fwdbwd_total_ops": 558,
+    "fwdbwd_compute_ops": 195,
+    "largest_intermediate_MB": 87.1875,
+    "static_output_GB_fwdbwd": 1.9617809364572167,
+    "cpu_fwdbwd": {
+     "median_s": 0.1882700999849476,
+     "min_s": 0.17911150000873022,
+     "max_s": 0.19984260000637732,
+     "iqr_s": 0.010011500009568408,
+     "reps": 7
+    }
+   }
+  },
+  "T11504_K87": {
+   "C16": {
+    "fwdbwd_total_ops": 542,
+    "fwdbwd_compute_ops": 187,
+    "largest_intermediate_MB": 61.0869140625,
+    "static_output_GB_fwdbwd": 1.681527084670961,
+    "cpu_fwdbwd": {
+     "median_s": 0.16058769999654032,
+     "min_s": 0.15788059998885728,
+     "max_s": 0.16453790001105517,
+     "iqr_s": 0.003197200014255941,
+     "reps": 7
+    }
+   },
+   "C32": {
+    "fwdbwd_total_ops": 566,
+    "fwdbwd_compute_ops": 199,
+    "largest_intermediate_MB": 122.34375,
+    "static_output_GB_fwdbwd": 2.9243794614449143,
+    "cpu_fwdbwd": {
+     "median_s": 0.306300199998077,
+     "min_s": 0.2847223000135273,
+     "max_s": 0.3140412000066135,
+     "iqr_s": 0.01356055002543144,
+     "reps": 7
+    }
+   },
+   "C64": {
+    "fwdbwd_total_ops": 566,
+    "fwdbwd_compute_ops": 199,
+    "largest_intermediate_MB": 244.6875,
+    "static_output_GB_fwdbwd": 5.505466268397868,
+    "cpu_fwdbwd": {
+     "median_s": 0.6018314000102691,
+     "min_s": 0.5819048999983352,
+     "max_s": 0.6652468999964185,
+     "iqr_s": 0.0531485500105191,
+     "reps": 7
+    }
+   }
+  },
+  "T30720_K31": {
+   "C16": {
+    "fwdbwd_total_ops": 715,
+    "fwdbwd_compute_ops": 241,
+    "largest_intermediate_MB": 58.125,
+    "static_output_GB_fwdbwd": 1.597137120552361,
+    "cpu_fwdbwd": {
+     "median_s": 0.15016449999529868,
+     "min_s": 0.14028289998532273,
+     "max_s": 0.171802500000922,
+     "iqr_s": 0.012617600004887208,
+     "reps": 7
+    }
+   },
+   "C32": {
+    "fwdbwd_total_ops": 518,
+    "fwdbwd_compute_ops": 175,
+    "largest_intermediate_MB": 116.25,
+    "static_output_GB_fwdbwd": 2.760157705284655,
+    "cpu_fwdbwd": {
+     "median_s": 0.29022889997577295,
+     "min_s": 0.2771229000063613,
+     "max_s": 0.3100626000086777,
+     "iqr_s": 0.01572875001875218,
+     "reps": 7
+    }
+   },
+   "C64": {
+    "fwdbwd_total_ops": 518,
+    "fwdbwd_compute_ops": 175,
+    "largest_intermediate_MB": 232.5,
+    "static_output_GB_fwdbwd": 5.2146602449938655,
+    "cpu_fwdbwd": {
+     "median_s": 0.5525376000150573,
+     "min_s": 0.5051784999959636,
+     "max_s": 0.5861611999862362,
+     "iqr_s": 0.019655599986435845,
+     "reps": 7
+    }
+   }
+  },
+  "T30720_K87": {
+   "C16": {
+    "fwdbwd_total_ops": 715,
+    "fwdbwd_compute_ops": 241,
+    "largest_intermediate_MB": 163.125,
+    "static_output_GB_fwdbwd": 4.481860396452248,
+    "cpu_fwdbwd": {
+     "median_s": 0.484233299997868,
+     "min_s": 0.42976980001549236,
+     "max_s": 0.5695946000050753,
+     "iqr_s": 0.048024050003732555,
+     "reps": 7
+    }
+   },
+   "C32": {
+    "fwdbwd_total_ops": 518,
+    "fwdbwd_compute_ops": 175,
+    "largest_intermediate_MB": 326.25,
+    "static_output_GB_fwdbwd": 7.7458210894837976,
+    "cpu_fwdbwd": {
+     "median_s": 0.8628411999961827,
+     "min_s": 0.812933899986092,
+     "max_s": 0.9087769000034314,
+     "iqr_s": 0.03155930001230445,
+     "reps": 7
+    }
+   },
+   "C64": {
+    "fwdbwd_total_ops": 518,
+    "fwdbwd_compute_ops": 175,
+    "largest_intermediate_MB": 652.5,
+    "static_output_GB_fwdbwd": 14.634255635552108,
+    "cpu_fwdbwd": {
+     "median_s": 1.6789598999894224,
+     "min_s": 1.5478481999889482,
+     "max_s": 1.7911556999897584,
+     "iqr_s": 0.09712405002210289,
+     "reps": 7
+    }
+   }
+  }
+ }
+}

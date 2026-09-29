@@ -1,0 +1,125 @@
+{
+  "sd_log_reach_epoch_per_run": 0.3993862192203323,
+  "table": {
+    "S3_rho1.0": {
+      "epoch_bound": 0.893,
+      "update_bound": 0.0,
+      "inconclusive": 0.106
+    },
+    "S3_rho1.2": {
+      "epoch_bound": 0.753,
+      "update_bound": 0.002,
+      "inconclusive": 0.244
+    },
+    "S3_rho1.5": {
+      "epoch_bound": 0.5,
+      "update_bound": 0.017,
+      "inconclusive": 0.483
+    },
+    "S3_rho2.0": {
+      "epoch_bound": 0.189,
+      "update_bound": 0.107,
+      "inconclusive": 0.704
+    },
+    "S3_rho3.0": {
+      "epoch_bound": 0.017,
+      "update_bound": 0.5,
+      "inconclusive": 0.483
+    },
+    "S3_rho4.0": {
+      "epoch_bound": 0.001,
+      "update_bound": 0.811,
+      "inconclusive": 0.188
+    },
+    "S4_rho1.0": {
+      "epoch_bound": 0.924,
+      "update_bound": 0.0,
+      "inconclusive": 0.075
+    },
+    "S4_rho1.2": {
+      "epoch_bound": 0.785,
+      "update_bound": 0.001,
+      "inconclusive": 0.214
+    },
+    "S4_rho1.5": {
+      "epoch_bound": 0.5,
+      "update_bound": 0.007,
+      "inconclusive": 0.493
+    },
+    "S4_rho2.0": {
+      "epoch_bound": 0.154,
+      "update_bound": 0.076,
+      "inconclusive": 0.77
+    },
+    "S4_rho3.0": {
+      "epoch_bound": 0.007,
+      "update_bound": 0.5,
+      "inconclusive": 0.493
+    },
+    "S4_rho4.0": {
+      "epoch_bound": 0.0,
+      "update_bound": 0.846,
+      "inconclusive": 0.154
+    },
+    "S5_rho1.0": {
+      "epoch_bound": 0.946,
+      "update_bound": 0.0,
+      "inconclusive": 0.054
+    },
+    "S5_rho1.2": {
+      "epoch_bound": 0.811,
+      "update_bound": 0.0,
+      "inconclusive": 0.188
+    },
+    "S5_rho1.5": {
+      "epoch_bound": 0.5,
+      "update_bound": 0.003,
+      "inconclusive": 0.497
+    },
+    "S5_rho2.0": {
+      "epoch_bound": 0.127,
+      "update_bound": 0.054,
+      "inconclusive": 0.818
+    },
+    "S5_rho3.0": {
+      "epoch_bound": 0.003,
+      "update_bound": 0.5,
+      "inconclusive": 0.497
+    },
+    "S5_rho4.0": {
+      "epoch_bound": 0.0,
+      "update_bound": 0.873,
+      "inconclusive": 0.127
+    },
+    "S6_rho1.0": {
+      "epoch_bound": 0.961,
+      "update_bound": 0.0,
+      "inconclusive": 0.039
+    },
+    "S6_rho1.2": {
+      "epoch_bound": 0.833,
+      "update_bound": 0.0,
+      "inconclusive": 0.167
+    },
+    "S6_rho1.5": {
+      "epoch_bound": 0.5,
+      "update_bound": 0.001,
+      "inconclusive": 0.499
+    },
+    "S6_rho2.0": {
+      "epoch_bound": 0.106,
+      "update_bound": 0.039,
+      "inconclusive": 0.855
+    },
+    "S6_rho3.0": {
+      "epoch_bound": 0.001,
+      "update_bound": 0.5,
+      "inconclusive": 0.499
+    },
+    "S6_rho4.0": {
+      "epoch_bound": 0.0,
+      "update_bound": 0.894,
+      "inconclusive": 0.106
+    }
+  }
+}
