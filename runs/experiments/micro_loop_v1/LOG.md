@@ -107,3 +107,13 @@ max_term_share failures in block B (nll_loss at 0.90-0.95 of the total with ever
 Reading: at the default clip norm 20 the pre-clip gradient of a 6-hour block often exceeds the clip; the rule
 flags heavy clipping, not divergence. Level 1 cannot rank quality. Level 2 below tests the one lead with a
 mechanism: the calibration terms (soft ECE, NLL, CRPS) that QA of NT-087 saw holding P(up) near 0.5.
+
+| L2 | Level-1 survivors / the calibration-term lead give direction on the micro layout (configs/scenarios/micro_l2.yaml; pass line pre-registered in its header, ce1e2ed) | control, clip100, ece_low, calib_low, focal x 3 seeds, horizons 60/120/240; cells under runs/scenarios/micro_l2/ | ~36 GPU-min | **Negative, and sharper: the network is significantly WORSE than logreg_lags at 1 h in every variant** (seed-mean AUC - logreg h0 -0.043..-0.051, pooled Stouffer z -3.3..-3.5; h1 -0.020..-0.025, z -1.7..-2.4; h2 -0.005..-0.010, z -0.5..-0.8). Lowering soft ECE / CRPS / NLL does not free the direction head (ece_low -0.049 / -0.025 / -0.009). logreg_lags on this dev block: AUC 0.532 / 0.525 / 0.510. |
+
+## The screen plan is closed (2026-09-30)
+
+Level 1 (960 trials) found stable maths and one failure mode (heavy clipping); level 2 found no configuration
+that recovers direction, and every one below a 3-lag logistic regression. With the P&L plan (E1, E2, E3-bar)
+and the eleven earlier hypotheses, 17 lines of attack agree: on this data the network adds nothing over a
+linear model of recent returns, whose own edge (AUC <= 0.53) is far below the owner's target. The remaining
+lever is information the inputs do not contain (STATUS question 8).

@@ -1,0 +1,12 @@
+{
+  "run_id": "20260930T040844Z-ce1e2ed-ad958ab6-focal__f-2__s1",
+  "epochs_completed": 21,
+  "done": true,
+  "sec_per_step": 0.4241088458469936,
+  "n_errors": 0,
+  "elapsed_seconds": 76.27996349334717,
+  "val_loss": 6.358801364898682,
+  "weights_epoch": 15,
+  "weights_val_loss": 6.26290225982666,
+  "weights_source": "best validation epoch, restored by EarlyStopping (stopped at epoch 21)"
+}

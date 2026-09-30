@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "name": "micro_l2",
+  "description": "Level 2 (screen plan): 5 configurations from level 1 on the micro layout, horizons 60/120/240, 3 seeds.",
+  "base_config": "../default.yaml",
+  "overrides": {
+    "CSV_PATH": "Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 2,
+    "MAX_SEQUENCE_COUNT": 129600,
+    "VAL_FRACTION": 0.1102,
+    "CAL_FRACTION": 0.1102,
+    "SHUFFLE_BUFFER": 0,
+    "BATCH_SIZE": 2048,
+    "EPOCHS": 30,
+    "HORIZON_STEPS": [
+      60,
+      120,
+      240
+    ],
+    "EXTENDED_TREND_PERIODS": [
+      60,
+      120,
+      240
+    ]
+  },
+  "variants": {
+    "control": {},
+    "clip100": {
+      "GRAD_CLIP_NORM": 100.0
+    },
+    "ece_low": {
+      "LAMBDA_SOFT_ECE": 0.1
+    },
+    "calib_low": {
+      "LAMBDA_SOFT_ECE": 0.1,
+      "LAMBDA_CRPS": 0.3,
+      "LAMBDA_NLL_OUTER": 0.5
+    },
+    "focal": {
+      "DIRECTION_LOSS": "focal_dice"
+    }
+  },
+  "sweep": {
+    "mode": "grid",
+    "axes": {}
+  },
+  "folds": [
+    -2
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "strategy": {
+    "name": "calibrated_quantile",
+    "params": {}
+  },
+  "backtest": {},
+  "run": {
+    "calibrate": true,
+    "save_artifacts": false
+  }
+}
