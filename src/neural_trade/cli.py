@@ -8,6 +8,7 @@
     neural-trade scenario rescore configs/scenarios/<name>.yaml --study configs/strategy_studies/<study>.yaml
                                   [--store runs] [--random-seeds N]
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
+    neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
     neural-trade registry list | info REGISTRY NAME | search QUERY
     neural-trade env
 
@@ -33,6 +34,13 @@ training; ``scenario reindex`` rebuilds the index from the run directories. ``sc
 (CPU, no training) backtests every configuration of a strategy study on the scenario's stored cells
 (neural_trade.experiments.rescore) into runs/scenarios/<name>/rescore/<study>-<UTC time>/: cells.csv,
 a leaderboard ranked on the dev cells' mean net Sharpe, the normalised study and meta.json.
+
+``compare`` (neural_trade.experiments.comparator, NT-032, D-025) is the paired "A beats B" verdict:
+a pre-registered spec names two engine scenarios, a metric, a minimum effect and the judgement folds;
+the comparator pairs their runs by (seed, fold), refuses a mismatched pair or too few pairs, and
+prints the paired estimate, its interval and the verdict (JSON to stdout, plus <out>/result.json and
+<out>/report.md when --out is given). ``--simulate`` adds the calibrated null/power check (spec
+needs noise_sd, or seed_sd and block_sd).
 """
 from __future__ import annotations
 
@@ -236,6 +244,35 @@ def cmd_screen(args) -> int:
     return 0
 
 
+def cmd_compare(args) -> int:
+    from neural_trade.experiments.comparator import (CompareError, CompareSpec, compare, observed_design,
+                                                     simulate_error_rates)
+
+    try:
+        spec = CompareSpec.from_yaml(args.spec)
+        result = compare(spec)
+        out = result.to_dict()
+        if args.simulate:
+            try:
+                # calibrated to the design actually paired (judgement folds x seeds per fold), not a
+                # made-up default (QA repair round 2, point 3)
+                n_folds, seeds_per_fold = observed_design(spec)
+                out["simulation"] = simulate_error_rates(spec, n_folds=n_folds, seeds_per_fold=seeds_per_fold,
+                                                         n_sim=args.n_sim)
+            except CompareError as exc:
+                out["simulation"] = {"error": str(exc)}
+    except CompareError as exc:
+        logger.error("compare refused: %s", exc)
+        return 2
+    if args.out:
+        out_dir = Path(args.out)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "result.json").write_text(json.dumps(out, indent=2, default=str), encoding="utf-8")
+        (out_dir / "report.md").write_text(result.to_markdown(), encoding="utf-8")
+    print(json.dumps(out, indent=2, default=str))  # noqa: T201 - the command's result, for scripting
+    return 1 if result.verdict == "refused" else 0
+
+
 def cmd_registry(args) -> int:
     from neural_trade.registries import all_registries, load_all, registry_summary
 
@@ -355,6 +392,15 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--max-trials", type=int, default=None,
                     help="run at most N pending trials, then stop (the same command resumes)")
     sc.set_defaults(func=cmd_screen)
+
+    cp = sub.add_parser("compare", help="a pre-registered paired \"A beats B\" verdict over two scenarios "
+                                        "(D-025, NT-032): pairs by (seed, fold), refuses fewer than 5 pairs, "
+                                        "a fold the spec does not name, or a mismatched dataset/setup fingerprint")
+    cp.add_argument("spec", help="compare spec YAML (configs/compares/*.yaml)")
+    cp.add_argument("--out", default=None, help="write result.json and report.md here")
+    cp.add_argument("--simulate", action="store_true", help="add the calibrated null/power simulation")
+    cp.add_argument("--n-sim", type=int, default=1000)
+    cp.set_defaults(func=cmd_compare)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")
     r.add_argument("action", choices=["list", "info", "search"])
