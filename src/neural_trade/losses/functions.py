@@ -18,6 +18,47 @@ from neural_trade.utils.math import log_ndtr  # noqa: F401  (re-exported for cal
 # Old private name of the TF labelling rule, kept for callers of this module.
 _compute_direction_labels_and_masks_tf = direction_labels_tf
 
+#: Names of the ``total`` addends guarded by :func:`_finite_or_zero` (NT-036, D-026). Each name is
+#: also a ``model._mask_counters`` key (a ``tf.keras.metrics.Sum``, reset every epoch by
+#: ``CustomTrainModel.metrics``) and shows up in ``metrics.jsonl`` as ``masked_<name>`` /
+#: ``val_masked_<name>``.
+MASK_TERM_NAMES = (
+    "point_loss", "dir_loss", "dir_align_loss", "nll_loss", "vol_loss", "crps_loss",
+    "soft_ece_loss", "t_perp_loss", "casimir_loss", "vac_loss", "hd_loss", "ife_loss",
+    "vac_overflow_loss", "coherence_penalty", "total_loss",
+)
+
+
+def _finite_or_zero(model, x, term):
+    """The non-finite guard for one addend of ``total`` (D-026, NT-036).
+
+    Replaces the inline ``tf.where(tf.math.is_finite(x), x, 0)`` this loss module used to repeat
+    at every term: same result by default, plus two things the inline form could not do:
+
+    * it counts the step into ``model._mask_counters[term]`` (a ``tf.keras.metrics.Sum``) whenever
+      the mask actually fired, so an unstable run can be attributed to its term instead of only
+      seeing ``total`` (or the gradient) go non-finite;
+    * in strict mode (``Config.STRICT_LOSS_MASKS``, a live ``tf.Variable`` mirrored on the model as
+      ``model._strict_loss_masks_var``) it does NOT mask: ``x`` passes through unchanged, so a
+      non-finite term makes ``total`` non-finite too and ``train_step``'s finite-gradient guard
+      fires and counts the step, instead of the term being silently replaced by 0 before it ever
+      reaches ``total``.
+
+    Strict mode defaults off (``STRICT_LOSS_MASKS: False``): with it off this is bit-for-bit the
+    old inline guard (the counting is a pure side read of ``x``, so it changes no numbers).
+    """
+    x = tf.convert_to_tensor(x, dtype=tf.float32)
+    finite = tf.math.is_finite(x)
+    all_finite = tf.reduce_all(finite) if x.shape.rank else finite
+    counters = getattr(model, "_mask_counters", None)
+    if counters is not None and term in counters:
+        counters[term].update_state(tf.cast(tf.logical_not(all_finite), tf.float32))
+    masked = tf.where(finite, x, tf.zeros_like(x))
+    strict_var = getattr(model, "_strict_loss_masks_var", None)
+    if strict_var is None:
+        return masked
+    return tf.cond(strict_var, lambda: x, lambda: masked)
+
 
 def _logcosh_safe(x):
     """log(cosh(x)) that is finite for every float32 input and has a bounded gradient.
@@ -533,7 +574,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     point_loss_h1_val = model.lambda_point * point_huber(model, y_true_h1, price_h1)
     point_loss_h2_val = model.lambda_long * point_huber(model, y_true_h2, price_h2)
     point_loss_val = point_loss_h0_val + point_loss_h1_val + point_loss_h2_val
-    point_loss_val = tf.where(tf.math.is_finite(point_loss_val), point_loss_val, tf.constant(0.0, dtype=tf.float32))
+    point_loss_val = _finite_or_zero(model, point_loss_val, "point_loss")
     point_loss_h0_val = tf.where(tf.math.is_finite(point_loss_h0_val), point_loss_h0_val, tf.constant(0.0, dtype=tf.float32))
     point_loss_h1_val = tf.where(tf.math.is_finite(point_loss_h1_val), point_loss_h1_val, tf.constant(0.0, dtype=tf.float32))
     point_loss_h2_val = tf.where(tf.math.is_finite(point_loss_h2_val), point_loss_h2_val, tf.constant(0.0, dtype=tf.float32))
@@ -591,7 +632,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     target_smoothness_loss = tf.where(tf.math.is_finite(target_smoothness_loss), target_smoothness_loss, tf.constant(0.0, dtype=tf.float32))
 
     coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
-    coherence_penalty = tf.where(tf.math.is_finite(coherence_penalty), coherence_penalty, tf.constant(0.0, dtype=tf.float32))
+    coherence_penalty = _finite_or_zero(model, coherence_penalty, "coherence_penalty")
 
     # Assign from the registered calls above (scaled correctly, using fixed delta math).
     # Multiply the extended components by the per-horizon lambda here for consistency
@@ -631,7 +672,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_loss_h1 = tf.where(tf.math.is_finite(dir_loss_h1), dir_loss_h1, tf.constant(0.0, dtype=tf.float32))
     dir_loss_h2 = tf.where(tf.math.is_finite(dir_loss_h2), dir_loss_h2, tf.constant(0.0, dtype=tf.float32))
     total_dir_loss = model.lambda_dir * (dir_loss_h0 + dir_loss_h1 + dir_loss_h2)
-    total_dir_loss = tf.where(tf.math.is_finite(total_dir_loss), total_dir_loss, tf.constant(0.0, dtype=tf.float32))
+    total_dir_loss = _finite_or_zero(model, total_dir_loss, "dir_loss")
 
     var_floor = tf.cast(getattr(model.config, 'VAR_FLOOR', 1e-4), tf.float32)
     var_cap = tf.cast(getattr(model.config, 'VAR_CAP', 1e4), tf.float32)  # noqa: F841 - unused, but removing the op shifts graph op seeds
@@ -654,7 +695,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     nll_h1_val = tf.where(tf.math.is_finite(nll_h1_val), nll_h1_val, tf.constant(0.0, dtype=tf.float32))
     nll_h2_val = tf.where(tf.math.is_finite(nll_h2_val), nll_h2_val, tf.constant(0.0, dtype=tf.float32))
     total_nll = model.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
-    total_nll = tf.where(tf.math.is_finite(total_nll), total_nll, tf.constant(0.0, dtype=tf.float32))
+    total_nll = _finite_or_zero(model, total_nll, "nll_loss")
 
     mu_h0 = tf.squeeze(price_h0, axis=1)
     mu_h1 = tf.squeeze(price_h1, axis=1)
@@ -684,6 +725,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         align_h1 = tf.reduce_sum(align_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + model.eps)
         align_h2 = tf.reduce_sum(align_h2 * mask_h2) / (tf.reduce_sum(mask_h2) + model.eps)
         dir_align_loss = lambda_dir_align * (align_h0 + align_h1 + align_h2)
+        dir_align_loss = _finite_or_zero(model, dir_align_loss, "dir_align_loss")
     else:
         dir_align_loss = tf.constant(0.0, dtype=tf.float32)
 
@@ -697,7 +739,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     vol_diff = tf.abs(pred_std - actual_std)
     vol_diff_clipped = tf.minimum(vol_diff, 10.0)
     vol_loss = vol_diff_clipped * model.lambda_vol
-    vol_loss = tf.where(tf.math.is_finite(vol_loss), vol_loss, tf.constant(0.0, dtype=tf.float32))
+    vol_loss = _finite_or_zero(model, vol_loss, "vol_loss")
 
     # === CRPS LOSSES (Gaussian Continuous Ranked Probability Score) ===
     # Controlled by lambda_crps (default 0 → no effect on existing runs).
@@ -708,7 +750,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     crps_h1_val = crps_gaussian_loss(model, y_true_h1, price_h1, var_h1_c)
     crps_h2_val = crps_gaussian_loss(model, y_true_h2, price_h2, var_h2_c)
     total_crps = lambda_crps * (crps_h0_val + crps_h1_val + crps_h2_val)
-    total_crps = tf.where(tf.math.is_finite(total_crps), total_crps, tf.constant(0.0, dtype=tf.float32))
+    total_crps = _finite_or_zero(model, total_crps, "crps_loss")
 
     # === SOFT-ECE LOSSES (differentiable Expected Calibration Error) ===
     # Directly minimizes direction-head calibration error w.r.t. realized outcomes.
@@ -719,7 +761,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     soft_ece_h1_val = soft_ece_loss(model, true_dir_h1, dir_pred_h1, mask_h1)
     soft_ece_h2_val = soft_ece_loss(model, true_dir_h2, dir_pred_h2, mask_h2)
     total_soft_ece = lambda_soft_ece * (soft_ece_h0_val + soft_ece_h1_val + soft_ece_h2_val)
-    total_soft_ece = tf.where(tf.math.is_finite(total_soft_ece), total_soft_ece, tf.constant(0.0, dtype=tf.float32))
+    total_soft_ece = _finite_or_zero(model, total_soft_ece, "soft_ece_loss")
 
     # === T_⊥ / QBOX LOSSES ===
     # T_⊥ calibration: predicted σ tracks empirical residual std (T_⊥ is what we can't explain)
@@ -728,31 +770,31 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     t_perp_h1_val = t_perp_calibration_loss(model, y_true_h1, price_h1, var_h1_c)
     t_perp_h2_val = t_perp_calibration_loss(model, y_true_h2, price_h2, var_h2_c)
     total_t_perp = lambda_t_perp * (t_perp_h0_val + t_perp_h1_val + t_perp_h2_val)
-    total_t_perp = tf.where(tf.math.is_finite(total_t_perp), total_t_perp, tf.constant(0.0, dtype=tf.float32))
+    total_t_perp = _finite_or_zero(model, total_t_perp, "t_perp_loss")
 
     # Casimir: destructive cross-horizon interference → T_⊥ (σ) must be high
     lambda_casimir = tf.cast(getattr(model, 'lambda_casimir', 0.0), tf.float32)
     casimir_val = lambda_casimir * casimir_interference_loss(
         model, price_h0, price_h1, price_h2, var_h0_c, var_h1_c, var_h2_c)
-    casimir_val = tf.where(tf.math.is_finite(casimir_val), casimir_val, tf.constant(0.0, dtype=tf.float32))
+    casimir_val = _finite_or_zero(model, casimir_val, "casimir_loss")
 
     # Vacuum bandwidth: cross-horizon spread must not exceed Λ_vac (self-limiting)
     # P0-2: now opt-in (default 0 in Config + helper). When 0 the term is 0.
     lambda_vac_cfg = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 0.0)),
                                  dtype=tf.float32)
     vac_val = vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac_cfg)
-    vac_val = tf.where(tf.math.is_finite(vac_val), vac_val, tf.constant(0.0, dtype=tf.float32))
+    vac_val = _finite_or_zero(model, vac_val, "vac_loss")
 
     # Hyper-decoherence: high local volatility should couple to high σ
     lambda_hd = tf.cast(getattr(model, 'lambda_hd', 0.0), tf.float32)
     hd_val = lambda_hd * hyper_decoherence_coupling_loss(
         model, x_window, var_h0_c, var_h1_c, var_h2_c)
-    hd_val = tf.where(tf.math.is_finite(hd_val), hd_val, tf.constant(0.0, dtype=tf.float32))
+    hd_val = _finite_or_zero(model, hd_val, "hd_loss")
 
     # Information flow entropy: each horizon must carry non-redundant information
     lambda_ife = tf.cast(getattr(model, 'lambda_ife', 0.0), tf.float32)
     ife_val = lambda_ife * information_flow_entropy_loss(model, price_h0, price_h1, price_h2)
-    ife_val = tf.where(tf.math.is_finite(ife_val), ife_val, tf.constant(0.0, dtype=tf.float32))
+    ife_val = _finite_or_zero(model, ife_val, "ife_loss")
 
     # Vacuum overflow T_⊥ precision: overflow tracks prediction residual magnitude
     # Active only when lambda_vac_overflow > 0 AND vacuum_overflow tensor is provided.
@@ -766,7 +808,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         )
     else:
         vac_overflow_val = tf.constant(0.0, dtype=tf.float32)
-    vac_overflow_val = tf.where(tf.math.is_finite(vac_overflow_val), vac_overflow_val, tf.constant(0.0, dtype=tf.float32))
+    vac_overflow_val = _finite_or_zero(model, vac_overflow_val, "vac_overflow_loss")
 
     total = (
         point_loss_val +
@@ -787,7 +829,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         ife_val +                   # Information flow entropy (active only when lambda_ife > 0)
         vac_overflow_val            # Vacuum overflow T_⊥ precision (active when lambda_vac_overflow > 0)
     )
-    total = tf.where(tf.math.is_finite(total), total, tf.constant(0.0, dtype=tf.float32))
+    total = _finite_or_zero(model, total, "total_loss")
 
     # Return as LossComponents (NamedTuple subclass). This preserves exact
     # 35-element tuple shape / positional unpacking for all callers while
@@ -807,6 +849,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         total_t_perp, casimir_val, vac_val, hd_val, ife_val,
         vac_overflow_val,
         tf.constant(0.0, dtype=tf.float32),  # pnl_val: 0 unless wrapped by pnl_utility (NT-087)
+        dir_align_loss, coherence_penalty,
     )
 
 

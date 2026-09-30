@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 ROLES = ("dev", "test")
 
@@ -290,6 +293,17 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
     report = evaluate(frame, cfg, baselines=baselines, cal_frame=cal, run_id=run_id, backtest=bt)
     report.meta.update({"role": role, "ranks": role == "dev", "block": "out-of-sample (the fold's test block)",
                         **dict(meta or {})})
+    if out_dir is not None:
+        # Training health (D-026, NT-037): best-effort - a run without a metrics.jsonl (an older
+        # run, or one scored from saved predictions only) simply gets no health section.
+        try:
+            from neural_trade.evaluation.report import health_block
+            from neural_trade.telemetry.epoch_logger import read_metrics
+            mpath = Path(out_dir) / "metrics.jsonl"
+            if mpath.exists():
+                report.health = health_block(read_metrics(mpath), cfg)
+        except Exception:
+            logger.exception("could not build the training-health section")
     scores = leaderboard_scores(report, res, result)
     scored = Scored(role, report, res, strat, scores)
     if out_dir is not None:

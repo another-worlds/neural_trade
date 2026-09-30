@@ -78,6 +78,18 @@ def gaussian_up_prob_given_move(mu_scaled, var_scaled, last_close, deadband_frac
 # last dict IS the epoch aggregate. Keras resets them via CustomTrainModel.metrics.
 DIR_N_BINS = 10
 PIT_N_BINS = 200
+#: The lambda-weighted addends of ``total`` (NT-037, D-026/D-045): logged so the report and the
+#: dashboard can attribute the loss to its terms instead of only seeing the sum. Reconstructed in
+#: ``CustomTrainModel._update_diagnostics`` from the (mostly un-weighted) ``LossComponents``
+#: fields and the live ``model.lambda_*`` variables, mirroring the ``total = (...)`` formula in
+#: ``losses/functions.py`` term for term; their sum equals ``loss``/``val_loss`` within 1e-4
+#: relative (``tests/test_custom_loss.py``).
+CONTRIB_KEYS = (
+    'contrib_point', 'contrib_trend', 'contrib_dir', 'contrib_dir_align', 'contrib_reg',
+    'contrib_inter_reg', 'contrib_vol', 'contrib_coherence', 'contrib_nll', 'contrib_crps',
+    'contrib_soft_ece', 'contrib_t_perp', 'contrib_casimir', 'contrib_vac', 'contrib_hd',
+    'contrib_ife', 'contrib_vac_overflow', 'contrib_pnl',
+)
 STEP_MEAN_KEYS = (
     'loss', 'point_loss', 'point_h0', 'point_h1', 'point_h2',
     'trend_loss', 'trend_h0', 'trend_h1', 'trend_h2',
@@ -91,7 +103,7 @@ STEP_MEAN_KEYS = (
     't_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss', 'vac_overflow_loss',
     'pnl_val',
     'grad_global_norm',
-)
+) + CONTRIB_KEYS
 TRAIN_ONLY_MEAN_KEYS = ('grad_global_norm',)
 
 

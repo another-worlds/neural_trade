@@ -9,7 +9,7 @@ import pytest
 from neural_trade.core.config import Config
 from neural_trade.evaluation.baselines import BaselineSet, lag_features
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
-from neural_trade.evaluation.report import confidence_gap, evaluate, gaussian_crps
+from neural_trade.evaluation.report import confidence_gap, evaluate, gaussian_crps, health_block
 from neural_trade.metrics import numpy_metrics as npm
 
 SCALE, LC = 250.0, 110_000.0
@@ -580,3 +580,41 @@ def test_markdown_direction_table_counts_the_effective_size_of_the_scored_moves(
     want = [rep.model["horizons"][h]["direction"]["n_masked"] // s for h, s in zip(HORIZONS, (10, 15, 20))]
     assert row == "| n_eff of the scored moves (n scored // bars ahead) | " + " | ".join(map(str, want)) + " |"
     assert "| n_eff (non-overlapping outcomes) |" not in md
+
+
+# ---------------------------------------------------------------------------- NT-037 (D-026): health_block
+
+
+def test_health_block_empty_without_rows():
+    assert health_block([]) == {}
+
+
+def test_health_block_aggregates_grad_health_and_dead_zones():
+    rows = [
+        {"epoch": 0, "grad_norm_max_main": 5.0, "grad_norm_max_indicator": 0.1,
+         "grad_clip_steps_main": 2.0, "grad_clip_steps_indicator": 0.0, "nonfinite_grad_steps": 0.0,
+         "masked_crps_loss": 1.0, "period/ma_fast": 60.0},
+        {"epoch": 1, "grad_norm_max_main": 30.0, "grad_norm_max_indicator": 0.2,
+         "grad_clip_steps_main": 0.0, "grad_clip_steps_indicator": 1.0, "nonfinite_grad_steps": 1.0,
+         "masked_crps_loss": 0.0, "period/ma_fast": 1440.0},
+    ]
+    cfg = Config(GRAD_CLIP_NORM=20.0, MOMENTUM_CLIP_MIN=1.0, MOMENTUM_CLIP_MAX=1440.0)
+    h = health_block(rows, cfg)
+    assert h["n_epochs"] == 2
+    assert h["grad_norm_max_main"] == 30.0
+    assert h["grad_clip_steps_main_total"] == 2.0
+    assert h["nonfinite_grad_steps_total"] == 1.0
+    assert h["masked_terms_total"] == {"masked_crps_loss": 1.0}
+    assert h["periods_at_bound"] == {"period/ma_fast": 1440.0}  # the LAST epoch's period, at MOMENTUM_CLIP_MAX
+
+
+def test_health_section_renders_in_the_markdown_report():
+    frame = _frame(n=2000, seed=41)
+    rep = evaluate(frame, Config())
+    rep.health = health_block([
+        {"epoch": 0, "grad_norm_max_main": 5.0, "grad_norm_max_indicator": 0.1,
+         "grad_clip_steps_main": 0.0, "grad_clip_steps_indicator": 0.0, "nonfinite_grad_steps": 0.0},
+    ], Config())
+    md = rep.to_markdown()
+    assert "## Training health" in md
+    assert "Non-finite training steps" in md

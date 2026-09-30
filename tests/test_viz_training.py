@@ -599,6 +599,64 @@ def test_gradient_panel_draws_the_clip_level(viz_config, viz_history):
     assert gn.line.color == T.INK_2
 
 
+def test_gradient_panel_draws_the_per_group_max_with_the_clip_count_in_hover(viz_config, viz_history):
+    """NT-037/D-026: with grad_norm_max_*/grad_clip_steps_* logged, the panel adds the per-group
+    PRE-CLIP maximum, and its hover names the clipped-step count. An older run without these keys
+    (the plain ``viz_history`` fixture) still renders (backward-compat, acceptance 7)."""
+    from neural_trade.visualization.training_dashboard import training_dashboard_figure
+
+    rows = viz_history()
+    fig_old = training_dashboard_figure(rows, viz_config)  # old run: no crash, no max trace expected
+    assert not [t for t in fig_old.data if t.legendgroup == "grad_norm_max_main"]
+
+    rows = [dict(r) for r in rows]
+    for e, r in enumerate(rows):
+        r["grad_norm_max_main"] = 10.0 + e
+        r["grad_norm_max_indicator"] = 0.5
+        r["grad_clip_steps_main"] = 2.0 if e == 1 else 0.0
+        r["grad_clip_steps_indicator"] = 0.0
+    fig = training_dashboard_figure(rows, viz_config)
+    (gmax,) = [t for t in fig.data if t.legendgroup == "grad_norm_max_main"]
+    assert list(gmax.customdata) == [2.0 if e == 1 else 0.0 for e in range(len(rows))]
+    assert "clipped step" in gmax.hovertemplate
+
+
+def test_other_band_uses_the_logged_coherence_penalty_when_available(viz_config, viz_history):
+    """NT-037/D-045: with contrib_coherence logged, 'other' is the real value, not an inferred
+    residual, and the stale '(not logged)' wording drops."""
+    from neural_trade.visualization.training_dashboard import loss_contributions, training_dashboard_figure
+
+    rows = [dict(r) for r in viz_history()]
+    comp_before = loss_contributions(rows, viz_config, prefix="val_")
+    assert comp_before.attrs.get("other_logged") is False
+
+    for e, r in enumerate(rows):
+        r["contrib_coherence"] = 0.2 + 0.01 * e
+        r["val_contrib_coherence"] = 0.2 + 0.01 * e
+    comp = loss_contributions(rows, viz_config, prefix="val_")
+    assert comp.attrs.get("other_logged") is True
+    np.testing.assert_allclose(comp["other"].to_numpy(), [0.2 + 0.01 * e for e in range(len(rows))])
+
+    fig = training_dashboard_figure(rows, viz_config)
+    assert not any("(not logged)" in (t.name or "") for t in fig.data)
+
+
+def test_n_eff_uses_val_dir_n_when_logged_instead_of_n_val_over_steps(viz_config, viz_history):
+    """NT-037/D-026: the deadband excludes 11-26% of validation samples; val_dir_n_h* (the actual
+    scored count) gives a smaller, more honest n_eff than the old n_val // steps."""
+    import pandas as pd
+
+    from neural_trade.visualization.training_dashboard import _Ctx, _n_eff
+
+    rows = [dict(r) for r in viz_history()]
+    for r in rows:
+        r["val_dir_n_h0"] = 1000.0  # far fewer than a typical n_val (thousands) // 10
+    df = pd.DataFrame(rows)
+    ctx = _Ctx(df, (df["epoch"] + 1).tolist(), len(df), None, None, None, len(df) - 1, len(df), "served",
+              50_000, None, viz_config)
+    assert _n_eff(ctx, "h0") == S.n_eff(1000, S.horizon_steps(viz_config, "h0"))
+
+
 def test_up_rate_panel_plots_the_bias_with_no_unexplained_style(viz_config, viz_history):
     """Finding 102: three dash-dot 'true' lines drew on top of each other with no key."""
     from neural_trade.visualization.training_dashboard import training_dashboard_figure

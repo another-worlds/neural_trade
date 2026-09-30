@@ -441,6 +441,26 @@ class Config:
         "trial's stochastic layers restart from its own seed instead of continuing whatever trial "
         "ran through the same persistent model before it - the only way phase 2 can match a fresh "
         "run bit-for-bit (docs/RUNBOOK.md 'Screen mode').", unit="flag")
+    STRICT_LOSS_MASKS: bool = _f(
+        False, "stability",
+        "turn off the per-loss-term non-finite mask (losses/functions.py replaces a non-finite "
+        "term by 0 in about 38 places, including the total itself): a non-finite value in any "
+        "term then makes the total non-finite, so train_step's finite-gradient guard "
+        "(custom_model.py) sees it and counts the step, instead of the term being silently "
+        "zeroed (D-026, NT-036). False (default) is today's behaviour, bit-for-bit "
+        "(scripts/golden_run.py verify). True is for the CI stability tests and any run that "
+        "wants a loud failure instead of a silent zero.", unit="flag")
+    PROBE_GRADIENTS: bool = _f(
+        False, "stability",
+        "per-loss-term gradient probe (NT-037, D-026 'about 10%'): every PROBE_EVERY training "
+        "steps, an extra persistent-tape backward pass measures, per loss term, its share of "
+        "the shared-trunk gradient norm, its cosine with the total gradient, and its share of "
+        "the (lambda-weighted) loss value, logged into metrics.jsonl. Off by default: the probe "
+        "subgraph is never built when this is False (no probe_* key is written, no per-step "
+        "cost).", unit="flag")
+    PROBE_EVERY: int = _f(50, "stability",
+                          "run the per-loss-term gradient probe every N training steps when "
+                          "PROBE_GRADIENTS is on", unit="steps", ge=1, step=1)
 
     # ------------------------------------------------------------------ direction
     FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class", unit="fraction", ge=0.0, le=1.0)

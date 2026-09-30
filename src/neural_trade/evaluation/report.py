@@ -68,7 +68,7 @@ import json
 import math
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from scipy.special import ndtr
@@ -401,6 +401,72 @@ def baseline_margin(metric: str, m, b) -> Dict[str, Any]:
     return out
 
 
+def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
+    """Per-run gradient/stability health from ``metrics.jsonl`` rows (D-026, NT-037).
+
+    Aggregates the per-epoch health numbers ``CustomTrainModel``/``JsonlEpochLogger`` write: the
+    per-group pre-clip gradient norm maximum and clip-step counts (train only), the non-finite
+    step count, the dead-zone counters (direction sample counts per horizon, variance-at-floor
+    counts) and the per-term non-finite mask counters (``masked_*``, NT-036). ``config``, if
+    given, supplies ``GRAD_CLIP_NORM`` and the learned-period bounds so the report can flag a
+    period sitting at its bound. An empty/missing ``rows`` returns ``{}`` (no health section).
+    """
+    if not rows:
+        return {}
+
+    def _col(key):
+        return [r[key] for r in rows if r.get(key) is not None]
+
+    def _sum(key):
+        vals = _col(key)
+        return float(sum(vals)) if vals else None
+
+    def _max(key):
+        vals = _col(key)
+        return float(max(vals)) if vals else None
+
+    per_epoch = [{
+        "epoch": r.get("epoch"),
+        "grad_norm_max_main": r.get("grad_norm_max_main"),
+        "grad_norm_max_indicator": r.get("grad_norm_max_indicator"),
+        "grad_clip_steps_main": r.get("grad_clip_steps_main"),
+        "grad_clip_steps_indicator": r.get("grad_clip_steps_indicator"),
+        "nonfinite_grad_steps": r.get("nonfinite_grad_steps"),
+        "dir_n_h0": r.get("dir_n_h0"), "dir_n_h1": r.get("dir_n_h1"), "dir_n_h2": r.get("dir_n_h2"),
+        "var_at_floor_h0": r.get("var_at_floor_h0"), "var_at_floor_h1": r.get("var_at_floor_h1"),
+        "var_at_floor_h2": r.get("var_at_floor_h2"),
+    } for r in rows]
+
+    masked: Dict[str, float] = {}
+    for r in rows:
+        for k, v in r.items():
+            if k.startswith("masked_") and v:
+                masked[k] = masked.get(k, 0.0) + float(v)
+
+    periods_at_bound: Dict[str, float] = {}
+    if config is not None and rows:
+        lo = float(getattr(config, "MOMENTUM_CLIP_MIN", 0.0))
+        hi = float(getattr(config, "MOMENTUM_CLIP_MAX", 1e9))
+        tol = 1e-3
+        for k, v in rows[-1].items():
+            if k.startswith("period/") and v is not None:
+                if abs(v - lo) <= tol * max(abs(lo), 1.0) or abs(v - hi) <= tol * max(abs(hi), 1.0):
+                    periods_at_bound[k] = v
+
+    return {
+        "n_epochs": len(rows),
+        "grad_norm_max_main": _max("grad_norm_max_main"),
+        "grad_norm_max_indicator": _max("grad_norm_max_indicator"),
+        "grad_clip_norm": float(getattr(config, "GRAD_CLIP_NORM", 0.0) or 0.0) if config is not None else None,
+        "grad_clip_steps_main_total": _sum("grad_clip_steps_main"),
+        "grad_clip_steps_indicator_total": _sum("grad_clip_steps_indicator"),
+        "nonfinite_grad_steps_total": _sum("nonfinite_grad_steps"),
+        "masked_terms_total": masked,
+        "periods_at_bound": periods_at_bound,
+        "per_epoch": per_epoch,
+    }
+
+
 @dataclass
 class EvalReport:
     run_id: Optional[str]
@@ -413,6 +479,9 @@ class EvalReport:
     backtest: Optional[Dict[str, Any]] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     baseline_margins: Dict[str, Dict[str, Dict[str, Dict[str, Any]]]] = field(default_factory=dict)
+    #: Training-time gradient/stability health (D-026, NT-037), from :func:`health_block`. None
+    #: for a report built without a metrics.jsonl (e.g. a baseline-only or legacy run).
+    health: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------ views
     def metric(self, h: str, group: str, name: str) -> float:
@@ -484,6 +553,8 @@ class EvalReport:
         if self.backtest:
             L += ["", "## Backtest (costs included)", ""]
             L += [f"- {k}: {_fmt(v)}" for k, v in (self.backtest.get("summary") or {}).items()]
+        if self.health:
+            L += self._md_health()
         text = "\n".join(L) + "\n"
         if path is not None:
             Path(path).write_text(text, encoding="utf-8")
@@ -706,6 +777,30 @@ class EvalReport:
               + " | ".join(sign_cell(f"delta_dir_align_indep_{h}", h) for h in HORIZONS)
               + f" | {sign_cell('delta_dir_align_indep_all')} |", "",
               f"- P(up) unanimity (all three horizons call the same side): {_fmt(c.get('unanimity'))}"]
+        return L
+
+    def _md_health(self):
+        """Per-run gradient/stability health (D-026, NT-037): see :func:`health_block`."""
+        h = self.health or {}
+        gcn = h.get("grad_clip_norm")
+        L = ["", "## Training health", "",
+             f"{h.get('n_epochs', 0)} epoch(s). Pre-clip gradient norm maximum: main "
+             f"{_fmt(h.get('grad_norm_max_main'))}, indicator {_fmt(h.get('grad_norm_max_indicator'))}"
+             + (f" (clip {gcn:g})" if gcn else "") + ".",
+             f"Clipped steps (norm above the clip): main {_fmt(h.get('grad_clip_steps_main_total'))}, "
+             f"indicator {_fmt(h.get('grad_clip_steps_indicator_total'))}.",
+             f"Non-finite training steps (the finite-gradient guard fired): "
+             f"{_fmt(h.get('nonfinite_grad_steps_total'))}.", ""]
+        masked = h.get("masked_terms_total") or {}
+        if masked:
+            L.append("Masked (non-finite) loss-term steps: " +
+                    ", ".join(f"{k}={v:g}" for k, v in sorted(masked.items())) + ".")
+        else:
+            L.append("No loss term ever masked a non-finite value.")
+        bound = h.get("periods_at_bound") or {}
+        if bound:
+            L.append("Learned periods sitting at their configured bound: " +
+                    ", ".join(f"{k}={v:g}" for k, v in sorted(bound.items())) + ".")
         return L
 
     def _md_baselines(self, head):

@@ -283,9 +283,21 @@ def _resolve(history, config, weights_epoch=None, n_val=None, meta=None, run_dir
 
 
 def _n_eff(ctx: _Ctx, h: str) -> Optional[int]:
-    if not ctx.n_val or ctx.config is None or getattr(ctx.config, "HORIZON_STEPS", None) is None:
+    if ctx.config is None or getattr(ctx.config, "HORIZON_STEPS", None) is None:
         return None
-    return int(S.n_eff(ctx.n_val, S.horizon_steps(ctx.config, h)))
+    steps = S.horizon_steps(ctx.config, h)
+    # NT-037 (D-026): val_dir_n_h* (DirectionStats.mask_sum, the actual scored/non-deadband count)
+    # is more accurate than n_val // steps, which over-counts by the 11-26% of validation samples
+    # the deadband excludes. Falls back to n_val for an older run without the key.
+    dir_n = _col(ctx.df, f"val_dir_n_{h}")
+    if dir_n is not None:
+        i = ctx.served if ctx.served is not None else ctx.n - 1
+        v = _at(dir_n, i)
+        if v is not None and np.isfinite(v):
+            return int(S.n_eff(int(v), steps))
+    if not ctx.n_val:
+        return None
+    return int(S.n_eff(ctx.n_val, steps))
 
 
 def _enough(ctx: _Ctx, h: str) -> Optional[int]:
@@ -429,7 +441,18 @@ def loss_contributions(history, config=None, *, prefix: str = "val_", meta: Opti
         "physics": np.sum([np.nan_to_num(c(k)) for k, _ in PHYSICS_TERMS if c(k) is not None] or [zero], axis=0),
         "regulariser": _REG_FACTOR * np.nan_to_num(c("inter_reg") if c("inter_reg") is not None else zero),
     })
-    out["other"] = total - out.sum(axis=1)
+    # NT-037/D-045: coherence_penalty (and dir_align, off by default) are now logged directly as
+    # contrib_coherence/contrib_dir_align (CustomTrainModel._update_diagnostics), so a run that has
+    # them shows the real number instead of an inferred residual. An older run without these keys
+    # still falls back to the residual (acceptance 7's backward-compat requirement).
+    coherence = c("contrib_coherence")
+    dir_align = c("contrib_dir_align")
+    if coherence is not None:
+        out["other"] = coherence + (dir_align if dir_align is not None else zero)
+        out.attrs["other_logged"] = True
+    else:
+        out["other"] = total - out.sum(axis=1)
+        out.attrs["other_logged"] = False
     out["total"] = total
     return out
 
@@ -460,7 +483,8 @@ def _weight_labels(ctx: _Ctx) -> Dict[str, str]:
         "physics": f"λ {phys_txt} (inside)",
         "regulariser": f"LAMBDA_INTER {f(o['inter'])} (inside) × {_REG_FACTOR:g}",
         "other": f"LAMBDA_COHERENCE {f(o['coherence'])}" + (
-            f", dir-align × {f(o['dir_align'])}" if o["dir_align"] > 0 else "") + " (not logged)",
+            f", dir-align × {f(o['dir_align'])}" if o["dir_align"] > 0 else "") + (
+            "" if _col(df, "contrib_coherence") is not None else " (not logged)"),
     }
 
 
@@ -974,11 +998,17 @@ def _epoch_table(ctx: _Ctx) -> str:
         tot = cv["total"].iloc[s]
         names = {k: lab for k, lab, _, _ in _CONTRIB}
         names["regulariser"] = "regulariser"
+        # NT-037/D-045: "other" is coherence_penalty (+dir_align), now logged for train too
+        # (contrib_coherence / contrib_dir_align), so its train column is no longer "-".
+        other_logged = bool(cv.attrs.get("other_logged"))
+        if other_logged:
+            names = dict(names, other="coherence (+ dir-align)")
         for key in ("point", "trend", "direction", "nll", "crps", "soft_ece", "volatility", "physics", "regulariser",
                     "other"):
             vv = cv[key].iloc[s]
+            train_known = ct is not None and (key != "other" or other_logged)
             cells = [num(vv), f"{100 * vv / tot:.1f}%" if tot else "n/a",
-                     num(ct[key].iloc[s]) if ct is not None and key != "other" else "–"]
+                     num(ct[key].iloc[s]) if train_known else "–"]
             if last != s:
                 cells.append(num(cv[key].iloc[last]))
             rows.append((names[key], wl.get(key, ""), cells))
@@ -991,10 +1021,11 @@ def _epoch_table(ctx: _Ctx) -> str:
                     rows.append((f"&nbsp;&nbsp;&nbsp;{plab}", "", cells))
         cells = [num(tot), "100%", num(_at(ctx.loss, s))] + ([num(cv["total"].iloc[last])] if last != s else [])
         rows.append(("<b>total loss</b>", "", cells))
+        other_desc = ("the logged coherence penalty (+ dir-align)" if other_logged
+                     else "total − known terms (the coherence penalty is not logged)")
         caption = ("Loss terms as they enter the total (losses.functions.custom_loss). Validation is exact; "
                    "training terms are sampled every TRAIN_METRICS_EVERY steps and the train total is a "
-                   "dropout-on running mean, so they do not add up exactly. 'other' = total − known terms "
-                   "(the coherence penalty is not logged).")
+                   f"dropout-on running mean, so they do not add up exactly. 'other' = {other_desc}.")
     else:
         for key, lab in LOSS_COMPONENTS + PHYSICS_TERMS:
             pv, pt = _col(df, f"val_{key}"), _col(df, key)
@@ -1357,7 +1388,10 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
     if comp is not None:
         factor = _weight_factors(ctx)
         tot = comp["total"].to_numpy()
+        other_logged = bool(comp.attrs.get("other_logged"))
         for k, label, color, pattern in _CONTRIB:
+            if k == "other" and other_logged:
+                label = "coherence (+ dir-align)"  # NT-037/D-045: now logged, not an inferred residual
             y = comp[k].to_numpy() + (comp["regulariser"].to_numpy() if k == "other" else 0.0)
             if k != "other" and not np.any(np.abs(y) > 0):
                 continue
@@ -1442,6 +1476,21 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
         fig.add_hline(y=clip, line=dict(color=T.NEUTRAL, dash="dash", width=1), row=6, col=2,
                       annotation_text=f"clip {clip:g} (per optimizer group)", annotation_position="top left",
                       annotation_font=dict(size=10, color=T.MUTED))
+    # NT-037/D-026: per-group PRE-CLIP maximum, with the clip-step count in the hover. Absent on an
+    # older run without these keys (backward-compat: the mean trace above still renders alone).
+    for key, label, color in (("grad_norm_max_main", "main group max (pre-clip)", T.OTHER_SERIES[1]),
+                              ("grad_norm_max_indicator", "indicator group max (pre-clip)", T.OTHER_SERIES[3])):
+        gmax = _col(df, key)
+        if gmax is None:
+            continue
+        clip_steps = _col(df, key.replace("grad_norm_max_", "grad_clip_steps_"))
+        clip_steps = np.zeros(ctx.n) if clip_steps is None else np.nan_to_num(clip_steps)
+        fig.add_trace(go.Scatter(
+            x=x, y=gmax.astype(np.float32), mode="lines+markers", name=label, legendgroup=key,
+            legend="legend5", line=dict(color=color, width=1.5, dash="dot"), marker=dict(size=4, color=color),
+            customdata=clip_steps,
+            hovertemplate=f"{label}: %{{y:.4g}}, %{{customdata:.0f}} clipped step(s) this epoch<extra></extra>"),
+            row=6, col=2)
     nf = _col(df, "nonfinite_grad_steps")
     if nf is not None and gn is not None and np.nansum(nf) > 0:
         bad = np.where(nf > 0)[0]
