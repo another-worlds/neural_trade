@@ -194,13 +194,14 @@ class CustomTrainModel(models.Model):
         self._setattr_tracking = False
         self._grad_clip_norm_var = tf.Variable(float(getattr(config, 'GRAD_CLIP_NORM', 0.0) or 0.0),
                                                trainable=False, dtype=tf.float32, name='grad_clip_norm')
-        # Strict-mode switch for the per-loss-term non-finite masks (D-026, NT-036): a live
-        # Variable, read inside the traced train/test step by losses.functions._finite_or_zero, so
-        # toggling Config.STRICT_LOSS_MASKS between builds (or via the `strict_loss_masks` property
-        # below, e.g. in a test) never needs a retrace.
-        self._strict_loss_masks_var = tf.Variable(bool(getattr(config, 'STRICT_LOSS_MASKS', False)),
-                                                   trainable=False, dtype=tf.bool, name='strict_loss_masks')
         self._setattr_tracking = True
+        # NOTE: Config.STRICT_LOSS_MASKS is NOT a live tf.Variable like grad_clip_norm above.
+        # losses.functions._finite_or_zero reads it as a plain Python bool off self.config (a
+        # trace-time branch): QA repair round 1 found that wrapping every one of that module's ~46
+        # guard sites in a tf.cond - even on a constant-False predicate - measurably changed a real
+        # training run's trajectory once merged with NT-047's larger default model (see
+        # _finite_or_zero's docstring). Toggling it after this model is already traced needs a
+        # fresh model, same as any other purely-structural Config switch.
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
         # Adam normalizes gradient magnitudes, so scaling grads is insufficient — a higher LR
@@ -312,12 +313,15 @@ class CustomTrainModel(models.Model):
 
     @property
     def strict_loss_masks(self):
-        """Live bool: True turns off the per-loss-term non-finite masks (D-026, NT-036)."""
-        return self._strict_loss_masks_var
+        """Plain bool (Config.STRICT_LOSS_MASKS): True turns off the per-loss-term non-finite
+        masks (D-026, NT-036). NOT a live tf.Variable - see losses.functions._finite_or_zero's
+        docstring for why: setting this on an already-traced model needs a fresh model to take
+        effect, same as any other structural Config switch."""
+        return bool(getattr(self.config, 'STRICT_LOSS_MASKS', False))
 
     @strict_loss_masks.setter
     def strict_loss_masks(self, value):
-        self._strict_loss_masks_var.assign(bool(value))
+        self.config.STRICT_LOSS_MASKS = bool(value)
 
     def _logit_from_alpha(self, alpha): return mh.logit_from_alpha(alpha, self.epsilon)
     def _alpha_from_logit(self, logit): return mh.alpha_from_logit(logit)

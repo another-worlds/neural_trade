@@ -668,8 +668,8 @@ def test_direction_skip_share_matches_a_direct_numpy_computation():
     from neural_trade.registries.models import Models
     from neural_trade.training.custom_model import CustomTrainModel
 
-    cfg = Config(DIRECTION_SKIP=True)
-    base = Models.build(cfg.MODEL_NAME, cfg)
+    cfg = Config(DIRECTION_SKIP=True, INPUT_SERIES=["close"], INDICATOR_FAMILIES={})  # single
+    base = Models.build(cfg.MODEL_NAME, cfg)  # channel: direction_skip_share cannot reconstruct OHLCV scaling
     m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
                          inputs=base.inputs, outputs=base.outputs)
     rng = np.random.default_rng(3)
@@ -693,8 +693,24 @@ def test_direction_skip_share_is_empty_when_the_flag_is_off():
     from neural_trade.registries.models import Models
     from neural_trade.training.custom_model import CustomTrainModel
 
-    cfg = Config(DIRECTION_SKIP=False)
+    cfg = Config(DIRECTION_SKIP=False, INPUT_SERIES=["close"], INDICATOR_FAMILIES={})
     base = Models.build(cfg.MODEL_NAME, cfg)
     m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
                          inputs=base.inputs, outputs=base.outputs)
     assert direction_skip_share(m, np.zeros((4, cfg.LOOKBACK), np.float32), np.zeros(4, np.float32)) == {}
+
+
+def test_direction_skip_share_is_empty_for_multichannel_ohlcv_input():
+    """NT-047: the volume channel's scale is a train-fit quantity this function cannot
+    reconstruct, so it declines rather than guessing (D-045 A4 is a "never raises" health number,
+    not required to work for every input mode)."""
+    from neural_trade.evaluation.report import direction_skip_share
+    from neural_trade.registries.models import Models
+    from neural_trade.training.custom_model import CustomTrainModel
+
+    cfg = Config(DIRECTION_SKIP=True)  # default INPUT_SERIES: all 5 OHLCV channels
+    base = Models.build(cfg.MODEL_NAME, cfg)
+    m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
+                         inputs=base.inputs, outputs=base.outputs)
+    X = np.zeros((4, cfg.LOOKBACK, len(cfg.INPUT_SERIES)), np.float32)
+    assert direction_skip_share(m, X, np.zeros(4, np.float32)) == {}

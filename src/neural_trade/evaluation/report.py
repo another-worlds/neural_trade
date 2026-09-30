@@ -484,16 +484,22 @@ def direction_skip_share(model, X_raw: np.ndarray, last_close: np.ndarray) -> Di
     means the head leans on the linear baseline; a low share means the deep path dominates.
 
     Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off, the model has no such named sub-layers
-    (an older run, or an architecture without a skip path), or the window normaliser is not the
+    (an older run, or an architecture without a skip path), the window normaliser is not the
     default ``window_relative`` (this reconstructs that one transform only: ``(X - last_close) /
     pred_scale``; a ``per_lag_standard`` run needs its fitted ``WindowNormalizer``, not available
-    here). Never raises: a report is worth more without this number than not at all.
+    here), or ``Config.INPUT_SERIES`` names more than one channel (NT-047 OHLCV): the volume
+    channel's scale is a TRAIN-fit quantity (``WindowNormalizer.vol_scale``) this function has no
+    access to, so it does not guess at it. Never raises: a report is worth more without this
+    number than not at all.
     """
     cfg = getattr(model, "config", None)
     if not bool(getattr(cfg, "DIRECTION_SKIP", False)):
         return {}
     normalizer = str(getattr(cfg, "WINDOW_NORMALIZER", "window_relative"))
     if normalizer != "window_relative":
+        return {}
+    input_series = list(getattr(cfg, "INPUT_SERIES", None) or ["close"])
+    if len(input_series) != 1:
         return {}
     base = getattr(model, "base_model", None)
     if base is None or len(X_raw) == 0:

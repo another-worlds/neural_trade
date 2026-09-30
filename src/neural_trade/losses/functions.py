@@ -48,24 +48,41 @@ MASK_TERM_NAMES = (
 )
 
 
-def _finite_or_zero(model, x, term):
+def _finite_or_zero(model, x, term, fallback=0.0):
     """The non-finite guard for one addend of ``total`` (D-026, NT-036).
 
-    Replaces the inline ``tf.where(tf.math.is_finite(x), x, 0)`` this loss module used to repeat
-    at every term: same result by default, plus two things the inline form could not do:
+    Replaces the inline ``tf.where(tf.math.is_finite(x), x, fallback)`` this loss module used to
+    repeat at every term (``fallback`` defaults to 0, matching most of them; the per-horizon head
+    sanitisation sites pass their ORIGINAL fallback - 0.5 for a direction head, 1.0 for a variance
+    head. QA repair round 2 caught hard-coding 0 there: it left every all-finite run, including
+    scripts/golden_run.py's, bit-for-bit, but changed a real run's trajectory the moment NT-047's
+    larger indicator set produced its first transient non-finite value): same result by default,
+    plus two things the inline form could not do:
 
     * it counts the step into ``model._mask_counters[term]`` (a plain ``_Accum("sum")``, never a
       ``tf.keras.metrics.Metric`` - see that class's docstring for why) whenever the mask actually
       fired, so an unstable run can be attributed to its term instead of only seeing ``total`` (or
       the gradient) go non-finite;
-    * in strict mode (``Config.STRICT_LOSS_MASKS``, a live ``tf.Variable`` mirrored on the model as
-      ``model._strict_loss_masks_var``) it does NOT mask: ``x`` passes through unchanged, so a
-      non-finite term makes ``total`` non-finite too and ``train_step``'s finite-gradient guard
-      fires and counts the step, instead of the term being silently replaced by 0 before it ever
-      reaches ``total``.
+    * in strict mode (``Config.STRICT_LOSS_MASKS``) it does NOT mask: ``x`` passes through
+      unchanged, so a non-finite term makes ``total`` non-finite too and ``train_step``'s
+      finite-gradient guard fires and counts the step, instead of the term being silently
+      replaced by ``fallback`` before it ever reaches ``total``.
 
     Strict mode defaults off (``STRICT_LOSS_MASKS: False``): with it off this is bit-for-bit the
     old inline guard (the counting is a pure side read of ``x``, so it changes no numbers).
+
+    ``STRICT_LOSS_MASKS`` is read as a plain Python ``bool`` off ``model.config`` (a trace-time
+    branch, NOT a graph-level ``tf.cond`` on a live ``tf.Variable``): a real repair-round-1
+    regression, found only after merging NT-047's larger default model, showed that wrapping
+    EVERY one of this module's ~46 guard sites (up from the original 15) in a ``tf.cond`` - even
+    one whose predicate is a constant-``False`` Variable - measurably changes a real training
+    run's trajectory (``scripts/golden_run.py verify`` failed on ``period/*``, ``coverage/*`` and
+    ``pred/*``; calibration itself, which never calls train_step, was unaffected). A Python branch
+    costs nothing when strict is off (confirmed bit-for-bit) and means toggling
+    ``Config.STRICT_LOSS_MASKS`` on an already-traced model needs a fresh model - matching every
+    other purely-structural Config switch in this codebase (e.g. ``LAMBDA_DIR_ALIGN_OUTER`` in
+    ``custom_loss``); every caller (the stability tests, ``CustomTrainModel.strict_loss_masks``)
+    already builds a fresh model per value.
     """
     x = tf.convert_to_tensor(x, dtype=tf.float32)
     finite = tf.math.is_finite(x)
@@ -73,11 +90,9 @@ def _finite_or_zero(model, x, term):
     counters = getattr(model, "_mask_counters", None)
     if counters is not None and term in counters:
         counters[term].update_state(tf.cast(tf.logical_not(all_finite), tf.float32))
-    masked = tf.where(finite, x, tf.zeros_like(x))
-    strict_var = getattr(model, "_strict_loss_masks_var", None)
-    if strict_var is None:
-        return masked
-    return tf.cond(strict_var, lambda: x, lambda: masked)
+    if bool(getattr(getattr(model, "config", None), "STRICT_LOSS_MASKS", False)):
+        return x
+    return tf.where(finite, x, tf.ones_like(x) * fallback)
 
 
 def _logcosh_safe(x):
@@ -581,14 +596,14 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     # Ensures no NaN/Inf reaches *any* loss term (point, dir, nll, casimir, t_perp, ife, vacuum, hd, align, etc.).
     # Prevents 0*nan pollution in total even for "inactive" (lambda=0) terms, and keeps all components finite.
     price_h0 = _finite_or_zero(model, price_h0, "head_price_h0")
-    dir_h0   = _finite_or_zero(model, dir_h0, "head_dir_h0")
-    var_h0   = _finite_or_zero(model, var_h0, "head_var_h0")
+    dir_h0   = _finite_or_zero(model, dir_h0, "head_dir_h0", fallback=0.5)
+    var_h0   = _finite_or_zero(model, var_h0, "head_var_h0", fallback=1.0)
     price_h1 = _finite_or_zero(model, price_h1, "head_price_h1")
-    dir_h1   = _finite_or_zero(model, dir_h1, "head_dir_h1")
-    var_h1   = _finite_or_zero(model, var_h1, "head_var_h1")
+    dir_h1   = _finite_or_zero(model, dir_h1, "head_dir_h1", fallback=0.5)
+    var_h1   = _finite_or_zero(model, var_h1, "head_var_h1", fallback=1.0)
     price_h2 = _finite_or_zero(model, price_h2, "head_price_h2")
-    dir_h2   = _finite_or_zero(model, dir_h2, "head_dir_h2")
-    var_h2   = _finite_or_zero(model, var_h2, "head_var_h2")
+    dir_h2   = _finite_or_zero(model, dir_h2, "head_dir_h2", fallback=0.5)
+    var_h2   = _finite_or_zero(model, var_h2, "head_var_h2", fallback=1.0)
 
     point_loss_h0_val = model.lambda_short * point_huber(model, y_true_h0, price_h0)
     point_loss_h1_val = model.lambda_point * point_huber(model, y_true_h1, price_h1)
@@ -905,12 +920,12 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
 
     # Sanitize dir/var heads for non-finite values, mirroring custom_loss's own copies (it does
     # not expose them): dir falls back to 0.5 (no signal), var to 1.0.
-    dir_h0 = _finite_or_zero(model, dir_h0, "head_dir_h0")
-    dir_h1 = _finite_or_zero(model, dir_h1, "head_dir_h1")
-    dir_h2 = _finite_or_zero(model, dir_h2, "head_dir_h2")
-    var_h0 = _finite_or_zero(model, var_h0, "head_var_h0")
-    var_h1 = _finite_or_zero(model, var_h1, "head_var_h1")
-    var_h2 = _finite_or_zero(model, var_h2, "head_var_h2")
+    dir_h0 = _finite_or_zero(model, dir_h0, "head_dir_h0", fallback=0.5)
+    dir_h1 = _finite_or_zero(model, dir_h1, "head_dir_h1", fallback=0.5)
+    dir_h2 = _finite_or_zero(model, dir_h2, "head_dir_h2", fallback=0.5)
+    var_h0 = _finite_or_zero(model, var_h0, "head_var_h0", fallback=1.0)
+    var_h1 = _finite_or_zero(model, var_h1, "head_var_h1", fallback=1.0)
+    var_h2 = _finite_or_zero(model, var_h2, "head_var_h2", fallback=1.0)
 
     default_horizons = [10, 15, 20]
     horizon_steps_cfg = list(getattr(model.config, 'HORIZON_STEPS', default_horizons) or default_horizons)
