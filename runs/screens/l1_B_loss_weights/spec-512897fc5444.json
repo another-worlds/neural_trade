@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "name": "l1_B_loss_weights",
+  "description": "Block B: the 13 loss weights, jointly by LHS in [0.1x, 10x] of their defaults (log).",
+  "base_config": "../../default.yaml",
+  "overrides": {
+    "CSV_PATH": "Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 2,
+    "VAL_FRACTION": 0.1,
+    "CAL_FRACTION": 0.1,
+    "MAX_SEQUENCE_COUNT": 4500,
+    "FOLD_INDEX": -2,
+    "BATCH_SIZE": 64,
+    "TRAIN_METRICS_EVERY": 1
+  },
+  "grid": {
+    "axes": {}
+  },
+  "sample": {
+    "n": 40,
+    "method": "lhs",
+    "seed": 2,
+    "space": {
+      "LAMBDA_POINT": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_SHORT": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_LONG": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_EXTENDED_TREND": {
+        "low": 0.010000000000000002,
+        "high": 1.0,
+        "log": true
+      },
+      "LAMBDA_DIR": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_VAR": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_VOL": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_CRPS": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_SOFT_ECE": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_COHERENCE": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_TREND_OUTER": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_DIR_OUTER": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      },
+      "LAMBDA_NLL_OUTER": {
+        "low": 0.1,
+        "high": 10.0,
+        "log": true
+      }
+    }
+  },
+  "slices": [
+    "2020-03-12T23:00:00",
+    "2021-05-19T23:00:00",
+    "2023-07-15T00:00:00",
+    "2024-12-05T00:00:00"
+  ],
+  "seeds": [
+    0,
+    1
+  ],
+  "run": {
+    "calibrate": false,
+    "epochs": 8
+  },
+  "rules": {
+    "finite": true,
+    "max_nonfinite_grad_steps": 0,
+    "max_clipped_share": 0.5,
+    "clip_skip_epochs": 1,
+    "min_train_loss_drop": 0.0,
+    "max_term_share": 0.9
+  }
+}

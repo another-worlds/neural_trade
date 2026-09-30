@@ -1,0 +1,37 @@
+# Level 2 of the screen plan (docs/research/2026-09-29-screen-plan.md): configurations from the level-1 campaign
+# (runs/experiments/micro_loop_v1/LOG.md "Level-1 screen campaign") on the micro layout, where direction is
+# measurable. Pass line fixed now, before any run (the P&L plan's signal gate): seed-mean AUC - logreg_lags >=
+# +0.02 on at least 2 of 3 horizons, pooled boot z >= 2 on each, no horizon worse than -0.01. A pass goes to the
+# long-history walk-forward and a D-025 study; no default changes.
+#   control   - today's defaults
+#   clip100   - GRAD_CLIP_NORM 100 (level 1: no clipping failures)
+#   ece_low   - LAMBDA_SOFT_ECE 0.1 (level 1: high soft-ECE weight tracks failures; QA of NT-087: calibration
+#               terms hold P(up) near 0.5)
+#   calib_low - LAMBDA_SOFT_ECE 0.1, LAMBDA_CRPS 0.3, LAMBDA_NLL_OUTER 0.5 (the calibration family lowered)
+#   focal     - DIRECTION_LOSS focal_dice (level 1 D: fewer failures than bce)
+schema_version: 1
+name: micro_l2
+description: "Level 2 (screen plan): 5 configurations from level 1 on the micro layout, horizons 60/120/240, 3 seeds."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  MAX_SEQUENCE_COUNT: 129600
+  VAL_FRACTION: 0.1102
+  CAL_FRACTION: 0.1102
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 2048
+  EPOCHS: 30
+  HORIZON_STEPS: [60, 120, 240]
+  EXTENDED_TREND_PERIODS: [60, 120, 240]
+variants:
+  control: {}
+  clip100: {GRAD_CLIP_NORM: 100.0}
+  ece_low: {LAMBDA_SOFT_ECE: 0.1}
+  calib_low: {LAMBDA_SOFT_ECE: 0.1, LAMBDA_CRPS: 0.3, LAMBDA_NLL_OUTER: 0.5}
+  focal: {DIRECTION_LOSS: focal_dice}
+folds: [-2]
+seeds: [0, 1, 2]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}
+run: {calibrate: true, save_artifacts: false}

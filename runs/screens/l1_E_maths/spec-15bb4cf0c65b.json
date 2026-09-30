@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "name": "l1_E_maths",
+  "description": "Block E: maths equivalence and stress: EWMA_IMPL matrix vs scan.",
+  "base_config": "../../default.yaml",
+  "overrides": {
+    "CSV_PATH": "Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 2,
+    "VAL_FRACTION": 0.1,
+    "CAL_FRACTION": 0.1,
+    "MAX_SEQUENCE_COUNT": 4500,
+    "FOLD_INDEX": -2,
+    "BATCH_SIZE": 64,
+    "TRAIN_METRICS_EVERY": 1
+  },
+  "grid": {
+    "axes": {
+      "EWMA_IMPL": [
+        "matrix",
+        "scan"
+      ]
+    }
+  },
+  "sample": null,
+  "slices": [
+    "2020-03-12T23:00:00",
+    "2021-05-19T23:00:00",
+    "2023-07-15T00:00:00",
+    "2024-12-05T00:00:00"
+  ],
+  "seeds": [
+    0,
+    1
+  ],
+  "run": {
+    "calibrate": false,
+    "epochs": 8
+  },
+  "rules": {
+    "finite": true,
+    "max_nonfinite_grad_steps": 0,
+    "max_clipped_share": 0.5,
+    "clip_skip_epochs": 1,
+    "min_train_loss_drop": 0.0,
+    "max_term_share": 0.9
+  }
+}

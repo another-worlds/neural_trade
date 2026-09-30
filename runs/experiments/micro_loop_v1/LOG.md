@@ -90,3 +90,20 @@ BATCH {64, 256} x 2 slices x 2 seeds); results runs/screens/example_6h/results.j
   lead's reading: the pre-clip global norm at initialisation is above GRAD_CLIP_NORM 20 (the OHLCV dashboard's
   epoch-1 mean was ~26), and a 2-epoch run at a small LR never leaves that region, so the rule measures the
   start, not an instability. The campaign rule must skip the first epoch's steps (NT-092).
+
+## Level-1 screen campaign (2026-09-30; configs/screens/campaign_l1/, results runs/screens/l1_*/)
+
+960/960 trials (6-hour blocks, 8 epochs, 4 regime slices x 2 seeds, 3 shards), 2 h 45 min wall (cap 4 h),
+537 pass / 423 fail. **No trial was non-finite and every train loss fell**: the maths is stable across the
+screened space. Every failure is max_clipped_share (> 0.5 of steps clipped after the first epoch), plus 22
+max_term_share failures in block B (nll_loss at 0.90-0.95 of the total with every step clipped).
+- E maths: EWMA matrix vs scan agree within float drift (val loss 8.725 vs 8.706); scan is 3.4x slower.
+- D loss choice: 50/64 pass; failures rise with LAMBDA_PNL (bce 1/2/2/4 of 8 at 0/0.25/0.5/1; focal_dice 0/0/1/2).
+- A hyperparameters: 202/264; GRAD_CLIP_NORM 5 fails every trial, 20 fails 3/8, 100 none; LR >= 3e-3 never fails.
+- C physics: 212/288; failures spread evenly over ablations, RHO_MAX and the physics weights: no term stands out.
+- B loss weights: 61/328; failures track higher LAMBDA_SOFT_ECE (+0.12 vs -0.58 decades), DIR_OUTER, CRPS, VAR,
+  VOL, NLL_OUTER; lower EXTENDED_TREND and COHERENCE.
+- Seed 1 fails far more often than seed 0 in D, A and C (worst: the 2024-12-05 slice).
+Reading: at the default clip norm 20 the pre-clip gradient of a 6-hour block often exceeds the clip; the rule
+flags heavy clipping, not divergence. Level 1 cannot rank quality. Level 2 below tests the one lead with a
+mechanism: the calibration terms (soft ECE, NLL, CRPS) that QA of NT-087 saw holding P(up) near 0.5.
