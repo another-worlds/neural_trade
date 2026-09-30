@@ -115,7 +115,7 @@ changes).
 | [NT-080](#nt-080) | P2 | feature | implementer | todo | Exposure-aware backtest views; explorer hides fitted knobs; YAML loading of cal-fitted strategies |
 | [NT-081](#nt-081) | P2 | bug | implementer | todo | Timing null replay micro-rebalances after a capped fill; a full target leaves cash negative by the costs |
 | [NT-082](#nt-082) | P1 | feature | implementer | done | Long-history run: SHUFFLE_BUFFER setting and notebook 08 (launch and live progress of an engine run) |
-| [NT-083](#nt-083) | P1 | bug | implementer | todo | Adding a Config field changes every engine cell's config_hash: finished cells re-run and rescore skips them |
+| [NT-083](#nt-083) | P1 | bug | implementer | done | Adding a Config field changes every engine cell's config_hash: finished cells re-run and rescore skips them |
 | [NT-084](#nt-084) | P3 | polish | implementer | todo | Notebook 08 / longrun.py edge cases; the notebook kernel's PYTHONPATH in worktrees |
 | [NT-085](#nt-085) | P1 | research | lead+experimenter | in-progress | The micro loop (D-041): minutes-long runs iterating toward predictive power and PnL |
 | [NT-086](#nt-086) | P1 | bug | implementer | todo | The slow notebook test runs the main checkout's src/ from a worktree (false passes) |
@@ -125,6 +125,7 @@ changes).
 | [NT-090](#nt-090) | P2 | bug | implementer | todo | pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins |
 | [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
 | [NT-092](#nt-092) | P1 | feature | implementer | done | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
+| [NT-093](#nt-093) | P2 | bug | implementer | todo | Identity follow-ups: notebook 08 launch guard trusts the recorded hash; screen trial keys moved once; config_identity docs |
 
 ## Items
 
@@ -1111,7 +1112,7 @@ changes).
 
 **Adding a Config field changes every engine cell's config_hash: finished cells re-run and rescore skips them**
 
-- **status:** todo
+- **status:** done (2026-09-30): e293778, merged; QA (Opus) PASS: identity = non-default fields minus run-directory fields (no collision in 3,953 random Configs; injective by construction); every committed scenario's cells show done again (58 cells pending at base -> done); strategy_study_v1 rescore reproduces the committed cells.csv exactly (180 x 87); a stale recorded hash is ignored, a changed non-default field retrains; fast 1022 / ruff; training untouched. Findings: NT-093.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/experiments/scenario.py (config_hash), src/neural_trade/experiments/runner.py, src/neural_trade/experiments/rescore.py (select_cells), tests/
 - **why:** NT-082's implementer found that the new SHUFFLE_BUFFER field changes config_hash for every existing cell: `scenario plan configs/scenarios/reference.yaml` shows the 9 reference_default cells as pending again (a re-run would retrain them, about 0.6 GPU-hours), and `scenario rescore` skips them as an older spec, so the NT-005 study (runs/experiments/strategy_study_v1) can no longer be re-scored at the merged head. Every future Config field repeats this.
@@ -1218,6 +1219,17 @@ changes).
 - **why:** the approved screen plan (docs/research/2026-09-29-screen-plan.md, step 3 / "phase 2"): build phase 2 if tracing exceeds 50% of a trial. GPU measurement (runs/experiments/micro_loop_v1/LOG.md, 2026-09-30): trace 12.2 s of a 16.7 s trial (73%). Also: at LR 1e-4 every 2-epoch trial fails max_clipped_share because the initial pre-clip norm exceeds the clip.
 - **acceptance:** (1) Trials that differ only in continuous values (LR, LAMBDA_*, ADAM betas, GRAD_CLIP_NORM, INDICATOR_LR_MULT / GRAD_MULT, loss weights) reuse one traced train/test step per structural key (model architecture, BATCH_SIZE, horizons, window, loss name, input series...); between trials weights, optimizer state and all lambda / LR variables are reset to the trial's seeded initial values. (2) A reused-graph trial equals a fresh-graph trial of the same config and seed (bit-for-bit, or within a stated float tolerance with the reason) - test. (3) Structural changes retrace (test). (4) Measured median trial wall on the GPU-free CPU path and a stated GPU estimate; target <= 5 s per trial after the first per structural key. (5) Rules: `clip_skip_epochs` (default 1) excludes the first epoch's logged steps from clipped_share; `min_epochs` guard. (6) scenario run and the golden run unchanged; fast suite, ruff, TESTING_DOCUMENTATION, RUNBOOK.
 - **source:** screen plan phase 2; NT-088 GPU measurement 2026-09-30
+
+### NT-093
+
+**Identity follow-ups: notebook 08 launch guard trusts the recorded hash; screen trial keys moved once; config_identity docs**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/notebook/longrun.py (_cells_of_spec, ~319-326), src/neural_trade/experiments/screen.py (resume keys), src/neural_trade/experiments/scenario.py (config_identity docstring), docs/RUNBOOK.md, tests/
+- **why:** QA of NT-083 (2026-09-30): (1) longrun._cells_of_spec still compares the recorded meta.json config_hash, so notebook 08's "already done" guard no longer fires (micro_l2 shows 0 of 15 done) and a relaunch starts a runner that then skips every cell (no retraining, a wasted launch). (2) The new identity moved every recorded screen trial_key (0 of 960 match in runs/screens/l1_*): re-launching a finished screen would re-run all trials and append duplicates; one-time, later field additions no longer move keys. (3) By design a new field whose default changes behaviour leaves old cells marked done, and a removed or tightened field makes from_yaml fail so old cells rerun: undocumented.
+- **acceptance:** (1) _cells_of_spec uses config_hash_of_dir (test: an old cell with a stale recorded hash counts as done); (2) screen resume recognises finished rows by recomputing the identity from each row's config diff (or a documented one-time note plus a refusal to append duplicates) (test); (3) config_identity docstring and RUNBOOK state both caveats.
+- **source:** QA of NT-083, 2026-09-30
 
 ## Done log
 
