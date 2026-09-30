@@ -134,7 +134,7 @@ changes).
 | [NT-099](#nt-099) | P1 | research | experimenter | todo | Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off |
 | [NT-100](#nt-100) | P2 | research | experimenter | todo | Pre-registered A/B: the NLL tail (lower variance weight, Student-t NLL) |
 | [NT-101](#nt-101) | P1 | feature | implementer | todo | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
-| [NT-102](#nt-102) | P2 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
+| [NT-102](#nt-102) | P1 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
 | [NT-103](#nt-103) | P1 | feature | implementer | todo | Epoch selection on proper scores (EPOCH_SELECT_METRIC); waits for the owner (D-011) |
 | [NT-104](#nt-104) | P1 | feature | implementer | todo | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
 | [NT-105](#nt-105) | P2 | feature | implementer | todo | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
@@ -1350,12 +1350,13 @@ changes).
 **Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss**
 
 - **status:** todo
-- **priority / type / role:** P2 / research / experimenter
+- **priority / type / role:** P1 / research / experimenter
 - **area:** configs/screens/ (a spec), runs/screens/, docs/DECISIONS.md (the lead records the choice)
 - **depends on:** NT-101 and NT-039 (the objective the clip is chosen for)
 - **why:** A_losses.md recommendation 10 and B_model_indicators.md 6: the mean gradient norm (about 20) sat at the clip (20); 44% of screen trials failed only the clipped-share rule; Adam bounds each step by 7.27 x lr regardless of the clip.
 - **acceptance:** (1) A quick screen of GRAD_CLIP_NORM x LR on the cleaned objective (rules fixed in the spec before it runs; within 1 GPU-hour, an estimate). (2) The report gives the gradient-norm distribution and the pass rates. (3) The new GRAD_CLIP_NORM and max_clipped_share are chosen from the dev slices and recorded in DECISIONS with the evidence.
 - **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+- **amendment (2026-10-01, D-047/D-048):** on the new default (OHLCV + 14 families, D-047) the pre-clip main-group gradient norm is about 900 against GRAD_CLIP_NORM 20, so early epochs clip on every step (NT-037 implementer, reproduced on remediation/plan af07d11; QA of NT-037 re-checks the number). Before the loss-pruning A/Bs, measure the norm distribution on the 6-hour screen layout (D-048) with the new default, and decide the clip (or accept clipping as the operating regime, since Adam bounds each step anyway: A_losses.md) with the evidence in DECISIONS.
 
 ### NT-103
 
