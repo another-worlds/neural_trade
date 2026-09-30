@@ -1,0 +1,151 @@
+trials 960
+
+=== l1_A_hyper: n=264 passed=202 (76.5%)
+ finite all: 264 / 264
+ nonfinite_grad_steps>0: 0 sum 0
+ clipped_share p0=0 p25=0.0714 p50=0.262 p75=0.5 p90=0.69 p100=1 (n=264)
+ gnorm_max p0=6.03 p25=27.9 p50=38.4 p75=51.9 p90=69.8 p100=235 (n=264)
+ gnorm_mean p0=3.38 p25=12.7 p50=17.9 p75=22.2 p90=24.5 p100=35.3 (n=264)
+ train_loss_drop p0=0.132 p25=0.22 p50=0.284 p75=0.343 p90=0.391 p100=0.593 (n=264)
+ max_term_share p0=0.372 p25=0.405 p50=0.415 p75=0.423 p90=0.429 p100=0.437 (n=264)
+ reasons {'clipped_share': 62}
+ dominant term {'nll_loss': 264}
+ median shares {'crps_loss': 0.156, 'dir_loss': 0.213, 'hd_loss': 0.0072, 'nll_loss': 0.4152, 'point_loss': 0.0922, 'soft_ece_loss': 0.0579, 't_perp_loss': 0.006, 'trend_loss': 0.0154, 'vac_overflow_loss': 0.0075, 'vol_loss': 0.0054}
+
+=== l1_B_loss_weights: n=328 passed=61 (18.6%)
+ finite all: 328 / 328
+ nonfinite_grad_steps>0: 0 sum 0
+ clipped_share p0=0 p25=0.69 p50=1 p75=1 p90=1 p100=1 (n=328)
+ gnorm_max p0=7.02 p25=59.9 p50=112 p75=260 p90=623 p100=3.82e+03 (n=328)
+ gnorm_mean p0=4.01 p25=26.9 p50=52.1 p75=96.1 p90=190 p100=758 (n=328)
+ train_loss_drop p0=0.17 p25=0.296 p50=0.348 p75=0.412 p90=0.466 p100=0.657 (n=328)
+ max_term_share p0=0.314 p25=0.435 p50=0.502 p75=0.63 p90=0.831 p100=0.952 (n=328)
+ reasons {'clipped_share': 267, 'max_term_share': 22}
+ dominant term {'nll_loss': 111, 'dir_loss': 115, 'crps_loss': 72, 'soft_ece_loss': 20, 'point_loss': 10}
+ median shares {'crps_loss': 0.0688, 'dir_loss': 0.2014, 'hd_loss': 0.0047, 'nll_loss': 0.2598, 'point_loss': 0.0741, 'soft_ece_loss': 0.0277, 't_perp_loss': 0.0062, 'trend_loss': 0.0115, 'vac_overflow_loss': 0.0036, 'vol_loss': 0.0019}
+
+=== l1_C_physics: n=288 passed=212 (73.6%)
+ finite all: 288 / 288
+ nonfinite_grad_steps>0: 0 sum 0
+ clipped_share p0=0.0238 p25=0.238 p50=0.405 p75=0.524 p90=0.571 p100=0.714 (n=288)
+ gnorm_max p0=21 p25=34.2 p50=46.8 p75=69 p90=91.3 p100=159 (n=288)
+ gnorm_mean p0=11.6 p25=16.8 p50=21.1 p75=24 p90=25.6 p100=31.9 (n=288)
+ train_loss_drop p0=0.15 p25=0.287 p50=0.315 p75=0.34 p90=0.385 p100=0.425 (n=288)
+ max_term_share p0=0.366 p25=0.405 p50=0.418 p75=0.425 p90=0.431 p100=0.446 (n=288)
+ reasons {'clipped_share': 76}
+ dominant term {'nll_loss': 288}
+ median shares {'crps_loss': 0.1517, 'dir_loss': 0.213, 'hd_loss': 0.0072, 'ife_loss': 0.001, 'nll_loss': 0.4176, 'point_loss': 0.0816, 'soft_ece_loss': 0.0559, 't_perp_loss': 0.0092, 'trend_loss': 0.0193, 'vac_overflow_loss': 0.0074, 'vol_loss': 0.0041}
+
+=== l1_D_loss_choice: n=64 passed=50 (78.1%)
+ finite all: 64 / 64
+ nonfinite_grad_steps>0: 0 sum 0
+ clipped_share p0=0.0238 p25=0.262 p50=0.345 p75=0.482 p90=0.683 p100=0.833 (n=64)
+ gnorm_max p0=27.1 p25=36.8 p50=41.3 p75=61.9 p90=92 p100=191 (n=64)
+ gnorm_mean p0=11.9 p25=17.5 p50=19.4 p75=23.4 p90=25.6 p100=32.3 (n=64)
+ train_loss_drop p0=0.236 p25=0.3 p50=0.333 p75=0.374 p90=0.384 p100=0.41 (n=64)
+ max_term_share p0=0.343 p25=0.41 p50=0.432 p75=0.486 p90=0.501 p100=0.509 (n=64)
+ reasons {'clipped_share': 14}
+ dominant term {'nll_loss': 64}
+ median shares {'crps_loss': 0.1581, 'dir_loss': 0.1292, 'hd_loss': 0.0085, 'nll_loss': 0.4322, 'pnl_val': 0.018, 'point_loss': 0.0854, 'soft_ece_loss': 0.0569, 't_perp_loss': 0.0106, 'trend_loss': 0.0202, 'vac_overflow_loss': 0.0079, 'vol_loss': 0.0041}
+
+=== l1_E_maths: n=16 passed=12 (75.0%)
+ finite all: 16 / 16
+ nonfinite_grad_steps>0: 0 sum 0
+ clipped_share p0=0.119 p25=0.25 p50=0.333 p75=0.506 p90=0.583 p100=0.595 (n=16)
+ gnorm_max p0=28.1 p25=39.9 p50=43.6 p75=66.5 p90=88.9 p100=171 (n=16)
+ gnorm_mean p0=15 p25=17.6 p50=20 p75=24.4 p90=25.6 p100=26.4 (n=16)
+ train_loss_drop p0=0.248 p25=0.291 p50=0.321 p75=0.342 p90=0.379 p100=0.411 (n=16)
+ max_term_share p0=0.409 p25=0.419 p50=0.423 p75=0.428 p90=0.431 p100=0.432 (n=16)
+ reasons {'clipped_share': 4}
+ dominant term {'nll_loss': 16}
+ median shares {'crps_loss': 0.1529, 'dir_loss': 0.2108, 'hd_loss': 0.0074, 'nll_loss': 0.4228, 'point_loss': 0.0828, 'soft_ece_loss': 0.0566, 't_perp_loss': 0.0087, 'trend_loss': 0.02, 'vac_overflow_loss': 0.0075, 'vol_loss': 0.0039}
+
+=== ALL: n=960 passed=537 (55.9%)
+ finite all: 960 / 960
+ nonfinite_grad_steps>0: 0 sum 0
+ clipped_share p0=0 p25=0.214 p50=0.464 p75=0.881 p90=1 p100=1 (n=960)
+ gnorm_max p0=6.03 p25=35.1 p50=51.7 p75=92.9 p90=218 p100=3.82e+03 (n=960)
+ gnorm_mean p0=3.38 p25=16.9 p50=22 p75=30.6 p90=89.1 p100=758 (n=960)
+ train_loss_drop p0=0.132 p25=0.274 p50=0.32 p75=0.371 p90=0.416 p100=0.657 (n=960)
+ max_term_share p0=0.314 p25=0.408 p50=0.423 p75=0.466 p90=0.606 p100=0.952 (n=960)
+ reasons {'clipped_share': 423, 'max_term_share': 22}
+ dominant term {'nll_loss': 743, 'dir_loss': 115, 'crps_loss': 72, 'soft_ece_loss': 20, 'point_loss': 10}
+ median shares {'crps_loss': 0.1519, 'dir_loss': 0.2113, 'hd_loss': 0.0067, 'nll_loss': 0.4138, 'point_loss': 0.0849, 'soft_ece_loss': 0.0544, 't_perp_loss': 0.0077, 'trend_loss': 0.0179, 'vac_overflow_loss': 0.0071, 'vol_loss': 0.0041}
+
+--- Block A by GRAD_CLIP_NORM
+5.0 n 8 pass 0 clipped_share p50=1 (n=8) gmax p50=41.4 p100=102 (n=8)
+20.0 n 8 pass 5 clipped_share p50=0.321 (n=8) gmax p50=50.3 p100=168 (n=8)
+100.0 n 8 pass 8 clipped_share p50=0 (n=8) gmax p50=44.2 p100=63.4 (n=8)
+--- Block A by LR bin
+LR [0.0001,0.0003) n 56 pass 34 nonfinite trials 0 gmax med p50=33.5 (n=56) drop p50=0.211 (n=56)
+LR [0.0003,0.001) n 64 pass 44 nonfinite trials 0 gmax med p50=41.6 (n=64) drop p50=0.288 (n=64)
+LR [0.001,0.003) n 80 pass 60 nonfinite trials 0 gmax med p50=46.2 (n=80) drop p50=0.343 (n=80)
+LR [0.003,0.0101) n 64 pass 64 nonfinite trials 0 gmax med p50=26.6 (n=64) drop p50=0.282 (n=64)
+--- Block A by INDICATOR_LR_MULT bin
+ILM [1,3) n 88 pass 67
+ILM [3,8) n 104 pass 77
+ILM [8,21) n 72 pass 58
+
+--- l1_B_loss_weights: Spearman(knob, gnorm_mean / clipped_share / pass)
+ LAMBDA_COHERENCE         n=320 rho_gmean=-0.00 rho_clip=-0.00 rho_pass=+0.12
+ LAMBDA_CRPS              n=320 rho_gmean=+0.25 rho_clip=+0.22 rho_pass=-0.26
+ LAMBDA_DIR               n=320 rho_gmean=+0.24 rho_clip=+0.14 rho_pass=-0.15
+ LAMBDA_DIR_OUTER         n=320 rho_gmean=+0.43 rho_clip=+0.45 rho_pass=-0.34
+ LAMBDA_EXTENDED_TREND    n=320 rho_gmean=-0.17 rho_clip=-0.20 rho_pass=+0.17
+ LAMBDA_LONG              n=320 rho_gmean=+0.08 rho_clip=+0.11 rho_pass=-0.11
+ LAMBDA_NLL_OUTER         n=320 rho_gmean=+0.43 rho_clip=+0.38 rho_pass=-0.22
+ LAMBDA_POINT             n=320 rho_gmean=+0.10 rho_clip=+0.09 rho_pass=-0.01
+ LAMBDA_SHORT             n=320 rho_gmean=+0.15 rho_clip=+0.12 rho_pass=-0.17
+ LAMBDA_SOFT_ECE          n=320 rho_gmean=+0.52 rho_clip=+0.59 rho_pass=-0.45
+ LAMBDA_TREND_OUTER       n=320 rho_gmean=+0.07 rho_clip=+0.09 rho_pass=-0.03
+ LAMBDA_VAR               n=320 rho_gmean=+0.58 rho_clip=+0.33 rho_pass=-0.23
+ LAMBDA_VOL               n=320 rho_gmean=+0.14 rho_clip=+0.17 rho_pass=-0.21
+ failing trials: 267
+
+--- l1_C_physics: Spearman(knob, gnorm_mean / clipped_share / pass)
+ LAMBDA_CASIMIR           n=240 rho_gmean=-0.07 rho_clip=-0.03 rho_pass=-0.00
+ LAMBDA_HD                n=240 rho_gmean=+0.04 rho_clip=+0.07 rho_pass=-0.13
+ LAMBDA_IFE               n=240 rho_gmean=+0.03 rho_clip=+0.02 rho_pass=-0.03
+ LAMBDA_T_PERP            n=240 rho_gmean=+0.17 rho_clip=+0.15 rho_pass=-0.11
+ LAMBDA_VAC_OVERFLOW      n=240 rho_gmean=-0.06 rho_clip=-0.03 rho_pass=+0.03
+ RHO_MAX                  n=240 rho_gmean=+0.11 rho_clip=+0.10 rho_pass=-0.03
+ failing trials: 76
+
+--- Block C ablations (grid)
+[] n 8 pass 7 gmean p50=21.4 (n=8)
+['LAMBDA_T_PERP'] n 8 pass 6 gmean p50=20.9 (n=8)
+['LAMBDA_CASIMIR'] n 8 pass 5 gmean p50=21.4 (n=8)
+['LAMBDA_HD'] n 8 pass 7 gmean p50=21.2 (n=8)
+['LAMBDA_IFE'] n 8 pass 8 gmean p50=21.4 (n=8)
+['LAMBDA_VAC_OVERFLOW'] n 8 pass 5 gmean p50=22.6 (n=8)
+
+--- Block D
+bce 0.0 n 8 pass 7 clip p50=0.321 (n=8) gmean p50=20.6 (n=8) reasons Counter({'clipped_share': 1})
+bce 0.25 n 8 pass 6 clip p50=0.369 (n=8) gmean p50=19.6 (n=8) reasons Counter({'clipped_share': 2})
+bce 0.5 n 8 pass 5 clip p50=0.393 (n=8) gmean p50=21.5 (n=8) reasons Counter({'clipped_share': 3})
+bce 1.0 n 8 pass 4 clip p50=0.548 (n=8) gmean p50=22 (n=8) reasons Counter({'clipped_share': 4})
+focal_dice 0.0 n 8 pass 8 clip p50=0.274 (n=8) gmean p50=17.6 (n=8) reasons Counter()
+focal_dice 0.25 n 8 pass 8 clip p50=0.286 (n=8) gmean p50=17.9 (n=8) reasons Counter()
+focal_dice 0.5 n 8 pass 7 clip p50=0.321 (n=8) gmean p50=18.9 (n=8) reasons Counter({'clipped_share': 1})
+focal_dice 1.0 n 8 pass 5 clip p50=0.44 (n=8) gmean p50=20.6 (n=8) reasons Counter({'clipped_share': 3})
+
+--- Block E
+{'EWMA_IMPL': 'matrix'} True [] 15.01 0.14285714285714285
+{'EWMA_IMPL': 'matrix'} True [] 19.89 0.35714285714285715
+{'EWMA_IMPL': 'matrix'} True [] 26.43 0.30952380952380953
+{'EWMA_IMPL': 'scan'} True [] 24.18 0.5
+{'EWMA_IMPL': 'scan'} True [] 18.4 0.30952380952380953
+{'EWMA_IMPL': 'scan'} False ['clipped_share 0.5952 > 0.5'] 25.9 0.5952380952380952
+{'EWMA_IMPL': 'matrix'} False ['clipped_share 0.5714 > 0.5'] 24.94 0.5714285714285714
+{'EWMA_IMPL': 'matrix'} True [] 18.07 0.30952380952380953
+{'EWMA_IMPL': 'matrix'} False ['clipped_share 0.5952 > 0.5'] 25.26 0.5952380952380952
+{'EWMA_IMPL': 'scan'} True [] 16.02 0.21428571428571427
+{'EWMA_IMPL': 'scan'} False ['clipped_share 0.5238 > 0.5'] 22.32 0.5238095238095238
+{'EWMA_IMPL': 'matrix'} True [] 15.32 0.11904761904761904
+{'EWMA_IMPL': 'matrix'} True [] 21.75 0.5
+{'EWMA_IMPL': 'scan'} True [] 15.04 0.11904761904761904
+{'EWMA_IMPL': 'scan'} True [] 20.21 0.38095238095238093
+{'EWMA_IMPL': 'scan'} True [] 19.88 0.2619047619047619
+
+failing reasons examples B:
+['clipped_share 1.0000 > 0.5'] {'LAMBDA_POINT': 0.526, 'LAMBDA_SHORT': 0.795, 'LAMBDA_LONG': 1.042, 'LAMBDA_EXTENDED_TREND': 0.092, 'LAMBDA_DIR': 0.465, 'LAMBDA_VAR': 3.072, 'LAMBDA_VOL': 1.416, 'LAMBDA_CRPS': 1.194, 'LAMBDA_SOFT_ECE': 7.674, 'LAMBDA_COHERENCE': 0.26, 'LAMBDA_TREND_OUTER': 0.372, 'LAMBDA_DIR_OUTER': 0.475, 'LAMBDA_NLL_OUTER': 7.36}

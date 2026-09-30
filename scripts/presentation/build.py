@@ -1,5 +1,5 @@
 """Inline the extracted data (docs/presentation/*.json) into the templates -> presentations/1_leader_C1.html,
-2_ensemble_C3.html and 3_ta_rule.html (self-contained apart from Plotly and Google Fonts, which load from their CDNs).
+2_ensemble_C3.html, 3_ta_rule.html and 4_math_report.html (self-contained apart from Plotly and Google Fonts, which load from their CDNs).
 
     python scripts/presentation/build.py
 """
@@ -27,6 +27,13 @@ def main() -> None:
         page = candidate.replace("/*__TITLE__*/", title).replace(
             "/*__DATA__*/", src.read_text(encoding="utf-8").replace("</", "<\\/"))
         dst = OUT / f"{name}.html"
+        dst.write_text(page, encoding="utf-8", newline="\n")
+        print("wrote", dst, round(dst.stat().st_size / 1e6, 2), "MB")
+    math = DOCS / "data_math.json"
+    if math.exists():
+        page = (DOCS / "template_math.html").read_text(encoding="utf-8").replace(
+            "/*__DATA__*/", math.read_text(encoding="utf-8").replace("</", "<\\/"))
+        dst = OUT / "4_math_report.html"
         dst.write_text(page, encoding="utf-8", newline="\n")
         print("wrote", dst, round(dst.stat().st_size / 1e6, 2), "MB")
 

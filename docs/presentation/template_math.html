@@ -1,0 +1,585 @@
+<meta charset="utf-8">
+<title>Gradient, Loss, Search</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --paper:#f6f6f3; --sheet:#ffffff; --ink:#0d0d0d; --ink-2:#2e2e2c; --muted:#62625d; --rule:#0d0d0d; --hair:#cfcfc8; --grid:#e4e4de;
+  --red:#d42419; --red-soft:#fbe3e0; --good:#1c7c4f; --warn:#a86a00; --blue:#1f5fbf;
+  --h0:#3987e5; --h1:#d95926; --h2:#199e70;
+  --display:'Archivo','Arial Narrow',Arial,sans-serif; --body:'Public Sans',Arial,sans-serif; --mono:'JetBrains Mono',Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --paper:#0c0c0b; --sheet:#151514; --ink:#f1f1ec; --ink-2:#d2d2cb; --muted:#9a9a92; --rule:#f1f1ec; --hair:#3a3a36; --grid:#262623;
+  --red:#ff4b3e; --red-soft:#3a1512; --good:#4cc68d; --warn:#e2a236; --blue:#6aa0ff;}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --paper:#0c0c0b; --sheet:#151514; --ink:#f1f1ec; --ink-2:#d2d2cb; --muted:#9a9a92; --rule:#f1f1ec; --hair:#3a3a36; --grid:#262623;
+  --red:#ff4b3e; --red-soft:#3a1512; --good:#4cc68d; --warn:#e2a236; --blue:#6aa0ff;}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--body)}
+.wrap{max-width:1320px;margin:0 auto;padding-inline:clamp(16px,4vw,48px);padding-block:0 120px}
+@media (min-width:1200px){.wrap{padding-left:260px;max-width:1560px}}
+h1,h2,h3,.disp{font-family:var(--display);margin:0;text-wrap:balance}
+h1{font-size:clamp(52px,9vw,148px);line-height:.86;font-weight:900;font-stretch:78%;letter-spacing:-.02em;text-transform:uppercase}
+h2{font-size:clamp(38px,5.6vw,84px);line-height:.9;font-weight:900;font-stretch:80%;letter-spacing:-.015em;text-transform:uppercase}
+h3{font-size:22px;line-height:1.15;font-weight:800;font-stretch:90%;text-transform:uppercase;letter-spacing:.01em}
+p{margin:0}
+.lede{font-size:clamp(18px,1.7vw,22px);line-height:1.5;max-width:62ch;color:var(--ink-2)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.tag{font:600 12px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase}
+.red{color:var(--red)}
+/* index rail */
+.rail{position:fixed;left:0;top:env(safe-area-inset-top,0px);bottom:0;width:232px;padding:26px 22px;border-right:6px solid var(--rule);background:var(--paper);display:none;flex-direction:column;gap:2px;z-index:5;overflow-y:auto}
+@media (min-width:1200px){.rail{display:flex}}
+.rail .brand{font:900 26px/.9 var(--display);font-stretch:78%;text-transform:uppercase;margin-bottom:18px}
+.rail .brand span{display:block;font:600 11px/1.4 var(--mono);letter-spacing:.1em;color:var(--red);margin-top:8px}
+.rail a{display:grid;grid-template-columns:34px 1fr;gap:4px;text-decoration:none;color:var(--muted);padding:5px 0;font:600 13px/1.25 var(--body);border-top:1px solid var(--hair)}
+.rail a b{font:700 12px var(--mono);color:var(--muted)}
+.rail a:hover,.rail a.on{color:var(--ink)} .rail a.on b{color:var(--red)}
+.topnav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);border-bottom:4px solid var(--rule);overflow-x:auto;white-space:nowrap;padding:10px 16px;display:flex;gap:14px}
+@media (min-width:1200px){.topnav{display:none}}
+.topnav a{font:700 12px var(--mono);text-decoration:none;color:var(--muted);text-transform:uppercase}
+.topnav a.on{color:var(--red)}
+/* sections */
+section.s{padding-top:110px;display:flex;flex-direction:column;gap:30px;scroll-margin-top:30px}
+.shead{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;border-top:6px solid var(--rule);padding-top:18px}
+.shead .num{font:900 clamp(64px,8vw,120px)/.8 var(--display);font-stretch:75%;color:var(--red)}
+@media (min-width:900px){.shead{grid-template-columns:170px minmax(0,1fr)}}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,520px),1fr));gap:24px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:24px}
+.box{background:var(--sheet);border:2px solid var(--rule);padding:18px 18px 12px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.box .cap{font-size:14.5px;line-height:1.5;color:var(--ink-2)} .box .cap b{color:var(--ink)}
+.chart{width:100%;min-height:340px} .chart.mid{min-height:420px} .chart.tall{min-height:540px}
+.ctrl{display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:space-between}
+/* statements */
+.thesis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));border-top:6px solid var(--rule);border-bottom:6px solid var(--rule)}
+.thesis > div{padding:22px 20px 24px;display:flex;flex-direction:column;gap:10px;border-right:2px solid var(--rule)}
+.thesis > div:last-child{border-right:0}
+.thesis .q{font:700 12px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.thesis .big{font:900 clamp(48px,6vw,92px)/.85 var(--display);font-stretch:75%}
+.thesis .a{font-size:15.5px;line-height:1.45;color:var(--ink-2)}
+.figs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:2px solid var(--rule)}
+@media (max-width:700px){.figs{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.fig{padding:14px 16px;border-right:2px solid var(--rule);border-bottom:2px solid var(--rule);display:flex;flex-direction:column;gap:6px;background:var(--sheet)}
+.fig .v{font:800 34px/1 var(--display);font-stretch:80%;font-variant-numeric:tabular-nums}
+.fig .k{font-size:13px;color:var(--muted);line-height:1.35}
+/* math */
+.eq{background:var(--sheet);border-left:8px solid var(--red);padding:16px 20px;overflow-x:auto;font-size:17px}
+.eq mjx-container{margin:0!important}
+/* controls */
+.seg{display:inline-flex;flex-wrap:wrap;border:2px solid var(--rule)}
+.seg button{border:0;background:var(--sheet);color:var(--ink);padding:7px 12px;font:700 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;cursor:pointer}
+.seg button+button{border-left:2px solid var(--rule)}
+.seg button.on{background:var(--ink);color:var(--paper)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.sliders{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:16px}
+.sliders label{display:flex;flex-direction:column;gap:6px;font:600 13px var(--body);color:var(--ink-2)}
+.sliders label .v{font:700 16px var(--mono);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--red)}
+select{font:600 14px var(--body);padding:6px 8px;border:2px solid var(--rule);background:var(--sheet);color:var(--ink)}
+/* term explorer */
+.terms{display:flex;flex-wrap:wrap;gap:0;border:2px solid var(--rule)}
+.terms button{flex:1 1 120px;border:0;border-right:2px solid var(--rule);border-bottom:2px solid var(--rule);background:var(--sheet);color:var(--ink);padding:10px 10px;font:800 13px var(--display);text-transform:uppercase;cursor:pointer;text-align:left}
+.terms button.on{background:var(--red);color:#fff}
+.termcard{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:24px}
+.facts{display:grid;grid-template-columns:130px 1fr;border-top:2px solid var(--rule)}
+.facts div{padding:8px 0;border-bottom:1px solid var(--hair);font-size:14.5px}
+.facts div:nth-child(odd){font:700 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding-top:10px}
+.chip{display:inline-block;font:700 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:5px 7px;border:2px solid currentColor}
+.chip.ok{color:var(--good)} .chip.bad{color:var(--red)} .chip.mid{color:var(--warn)}
+/* proof ladder */
+.ladder{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));border:2px solid var(--rule)}
+.step{padding:16px 16px 18px;border-right:2px solid var(--rule);border-bottom:2px solid var(--rule);background:var(--sheet);display:flex;flex-direction:column;gap:8px}
+.step .n{font:900 44px/.9 var(--display);font-stretch:75%}
+.step.proven .n{color:var(--good)} .step.floor .n{color:var(--warn)} .step.no .n{color:var(--red)}
+.step p{font-size:14.5px;color:var(--ink-2);line-height:1.45}
+/* recommendations */
+.recs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,380px),1fr));gap:0;border-top:2px solid var(--rule);border-left:2px solid var(--rule)}
+.rec{border-right:2px solid var(--rule);border-bottom:2px solid var(--rule);padding:16px 18px 18px;background:var(--sheet);display:flex;flex-direction:column;gap:9px}
+.rec .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.rec .id{font:900 30px/.9 var(--display);font-stretch:75%}
+.rec h3{font-size:19px}
+.rec .row{font-size:14px;line-height:1.45;color:var(--ink-2)}
+.rec .row b{font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:2px}
+.pri{font:800 12px var(--mono);padding:4px 8px;background:var(--ink);color:var(--paper)}
+.pri.p1{background:var(--red);color:#fff}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--hair);text-align:right;white-space:nowrap}
+th{font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.note{border-left:8px solid var(--ink);padding:6px 0 6px 16px;color:var(--ink-2);max-width:85ch}
+.note b{color:var(--ink)}
+.foot{margin-top:90px;border-top:6px solid var(--rule);padding-top:16px;color:var(--muted);font-size:13px}
+.foot code{font-family:var(--mono);font-size:12px}
+</style>
+
+<nav class="rail" id="rail" aria-label="Sections"></nav>
+<nav class="topnav" id="topnav" aria-label="Sections"></nav>
+
+<div class="wrap">
+<header id="s0" style="padding-top:48px;display:flex;flex-direction:column;gap:34px">
+  <p class="tag red">neural_trade · a report on the mathematics · 2026-09-30</p>
+  <h1>Gradient.<br>Loss.<br>Search.</h1>
+  <p class="lede">Three questions about the model behind the leader C1. Is its training gradient stable, and what can be proven? Can its loss be solved at all, given the data? What does learning the indicator periods by gradient descent buy over a manual search? The answers come from the code line by line, from 960 screen trials, from six 360-day trainings and from a gradient probe of the served model. Each ends in recommendations.</p>
+  <div class="thesis">
+    <div><span class="q">Stability</span><span class="big red">97%</span><p class="a">of the gradient's direction comes from one term, soft calibration error, which is 4–8% of the loss. Updates stay bounded because the code zeroes non-finite steps and Adam moves each weight at most 7.27 × lr per step. Clipping is not what keeps them bounded.</p></div>
+    <div><span class="q">Solvability</span><span class="big">0.09%</span><p class="a">of the direction loss is all that AUC 0.52 can buy: 6.3·10⁻⁴ nats below ln 2. The combined validation loss moves 100–200× more between epochs. Volatility is the part that can be solved: CRPS skill 4–8%.</p></div>
+    <div><span class="q">Search</span><span class="big">10<sup style="font-size:.5em">31.9</sup></span><p class="a">integer settings of 18 periods are replaced by one 23-minute run. But gradient descent refines the textbook values locally. The six runs agree on the value of only 3 of the 18 periods.</p></div>
+  </div>
+</header>
+
+<section class="s" id="s1">
+  <div class="shead"><div class="num">01</div><div style="display:flex;flex-direction:column;gap:14px"><h2>The objective</h2><p class="lede">The model minimises one weighted sum of 14 active terms over nine heads: price change, P(up) and variance at 10, 15 and 20 minutes. Each weight is recalibrated before training so that every term's <i>value</i> is about the same size. The term that matters most, though, is the one whose <i>gradient</i> is largest.</p></div></div>
+  <div class="eq" id="eqTotal">$$L=\sum_h\lambda^{pt}_h\,\ell^{\log\cosh}_h+\lambda_{ext}\sum_h\ell^{trend}_h+\lambda_{dir}\sum_h\ell^{BCE}_h+\lambda_{var}\sum_h\ell^{NLL}_h+\lambda_{crps}\sum_h\ell^{CRPS}_h+\lambda_{ece}\sum_h\ell^{sECE}_h+0.1\lambda_{vol}\ell^{vol}+\lambda_{coh}\ell^{coh}+\underbrace{\lambda_{tp}\ell^{T\perp}+\lambda_{cas}\ell^{cas}+\lambda_{hd}\ell^{HD}+\lambda_{ife}\ell^{IFE}+\lambda_{vo}\ell^{vo}}_{\text{physics, }\lambda=0.1}$$</div>
+  <div class="box">
+    <div class="ctrl"><div class="cap"><b>Share of the loss value against share of the gradient</b>, leader model (fold −2, seed 0, served weights). Value shares come from its training log; gradient norms from a CPU probe of the served model on three batches (batch A recorded only the six largest terms). Norms do not add up, because gradients are vectors; each bar is the term's norm divided by the total norm.</div>
+      <div class="seg" id="probeSeg"><button data-v="0">batch 2048 · A</button><button data-v="1" class="on">2048 · B</button><button data-v="2">512 · C</button></div></div>
+    <div id="shares" class="chart tall"></div>
+  </div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>How the weights were set.</b> The pre-training pass puts each term's median value on the mean: λ ← clip(λ₀·(L̄/median)<sup>d</sup>, 0.1, 20). The small-valued soft ECE is multiplied up to 2.91, and that makes its large gradient larger.</div><div id="lambdas" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>Cosine between each term's gradient and the total gradient</b> (probe batches B and C). Soft ECE's 0.98–0.99 means the update points almost exactly where the soft-ECE gradient points. BCE's cosine is high too, but its norm is 15–30× smaller. HD and CRPS point against the update.</div><div id="cosines" class="chart"></div></div>
+  </div>
+</section>
+
+<section class="s" id="s2">
+  <div class="shead"><div class="num">02</div><div style="display:flex;flex-direction:column;gap:14px"><h2>Anatomy of each term</h2><p class="lede">For each term: its formula as implemented, its gradient with respect to the head it trains, the bound on that gradient, and whether it is a <i>proper scoring rule</i>, a loss whose minimum is the true conditional distribution. Pick a term. The chart plots its gradient against its input, with the bound drawn in red.</p></div></div>
+  <div class="terms" id="termBtns"></div>
+  <div class="termcard">
+    <div class="box"><div class="eq" id="termEq" style="border-left-width:6px"></div><div class="facts" id="termFacts"></div></div>
+    <div class="box"><div class="sliders" id="termSliders"></div><div id="termPlot" class="chart mid"></div><div class="cap" id="termCap"></div></div>
+  </div>
+  <div class="box">
+    <div class="cap"><b>Why soft ECE dominates. A simulation.</b> Take a perfectly calibrated model and draw batches. The batch's observed up-rate still differs from the prediction by sampling noise. BCE's pull on the direction bias is proportional to that gap, so it is small and centred on zero. Soft ECE takes the absolute value of the gap, so its pull on the bias has full size, ±c, at every batch, however small the gap. Move the batch size.</div>
+    <div class="sliders"><label>Batch size (masked examples) <span class="v" id="vN"></span><input type="range" id="sN" min="6" max="13" step="1" value="11"></label><label>Soft-ECE pull size c (weighted, relative) <span class="v" id="vC"></span><input type="range" id="sC" min="0" max="6" step="0.1" value="2.9"></label></div>
+    <div id="eceSim" class="chart"></div>
+  </div>
+</section>
+
+<section class="s" id="s3">
+  <div class="shead"><div class="num">03</div><div style="display:flex;flex-direction:column;gap:14px"><h2>The stability argument</h2><p class="lede">What the code guarantees, in order of strength. Green steps are proven under the implemented clamps. Amber steps hold only through a floor or a clip that is far from the operating point. Red steps are not guaranteed. The measurements follow.</p></div></div>
+  <div class="ladder" id="ladder"></div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>Adam's step bound.</b> For any finite gradient sequence, a single weight moves at most B(t)·lr per step, with B(t) = (1−β₁)/(1−β₁ᵗ) · √((1−rᵗ)/(1−r)) · √((1−β₂ᵗ)/(1−β₂)) and r = β₁²/β₂. B(1) = 1; the supremum at 0.9 / 0.999 is 7.27. This holds with or without clipping.</div>
+      <div class="sliders"><label>β₁ <span class="v" id="vB1"></span><input type="range" id="sB1" min="0.5" max="0.99" step="0.01" value="0.9"></label><label>β₂ <span class="v" id="vB2"></span><input type="range" id="sB2" min="0.9" max="0.9999" step="0.0001" value="0.999"></label></div>
+      <div id="adam" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>Six 360-day trainings.</b> Mean pre-clip gradient norm per epoch (the clip is 20), and the learning rate halving under the plateau schedule. Zero non-finite steps in every epoch of every run. The leader (bold) runs hottest: epochs 1–3 sit at the clip.</div><div id="longruns" class="chart"></div></div>
+  </div>
+  <div class="box">
+    <div class="ctrl"><div class="cap"><b>960 screen trials</b> (6-hour training blocks, batch 64, 8 epochs). Mean gradient norm against the share of steps clipped. All 960 stayed finite; the 423 failures are all "more than half the steps clipped". Pick a block, and colour by a knob to see what drives the clipping.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><div class="seg" id="blockSeg"><button data-v="all" class="on">all</button><button data-v="A_hyper">A hyper</button><button data-v="B_loss_weights">B loss wts</button><button data-v="C_physics">C physics</button><button data-v="D_loss_choice">D loss</button><button data-v="E_maths">E maths</button></div>
+      <select id="knobSel" aria-label="Colour by"><option value="passed">colour: pass / fail</option><option value="LAMBDA_SOFT_ECE">λ soft ECE</option><option value="LAMBDA_VAR">λ variance (NLL)</option><option value="LAMBDA_DIR_OUTER">λ direction outer</option><option value="LR">learning rate</option><option value="ADAM_BETA1">Adam β₁</option><option value="INDICATOR_LR_MULT">indicator LR mult</option><option value="seed">seed</option></select></div></div>
+    <div id="screen" class="chart tall"></div>
+  </div>
+  <div class="grid3">
+    <div class="box"><div class="cap"><b>Pass rate by clip norm</b> (block A). The median gradient norm is about 20 in all three settings; only the threshold moved.</div><div id="clipBars" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>Pass rate by learning rate</b> (block A). A higher rate gives smaller gradient norms and more passes. The mechanism is not yet explained.</div><div id="lrBars" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>What drives clipping</b> (block B, Spearman ρ of each loss weight with the clipped share). Soft ECE leads; coherence, trend and point weights are ≈ 0.</div><div id="rhoBars" class="chart"></div></div>
+  </div>
+</section>
+
+<section class="s" id="s4">
+  <div class="shead"><div class="num">04</div><div style="display:flex;flex-direction:column;gap:14px"><h2>Can the loss be solved?</h2><p class="lede">A proper score's minimum is set by the information in the inputs. For direction that information is tiny: at the AUC the data allow, the best possible cross-entropy is a hair below ln 2. For volatility the information is real. Move the AUC and watch how little the optimum moves.</p></div></div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>Best achievable direction loss against AUC</b> (a binormal model: the score is Gaussian in each class with the same variance; the Bayes posterior is σ(d·s) and AUC = Φ(d/√2)). The markers are measured AUCs.</div>
+      <div class="sliders"><label>AUC <span class="v" id="vAuc"></span><input type="range" id="sAuc" min="0.5" max="0.7" step="0.001" value="0.52"></label></div>
+      <div id="solv" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>At this AUC</b></div><div class="figs" id="solvFigs" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+      <div class="cap" id="solvNote"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>Validation direction BCE per epoch</b> of the six models (h0), against ln 2 (dashed). Most epochs sit at or above ln 2: the head loses more to miscalibration than its AUC earns.</div><div id="bceEpochs" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>What epoch selection sees.</b> The served epoch is chosen on the combined validation loss. Its epoch-to-epoch swings (bars) against the entire achievable direction gain (red line, three horizons, weighted): selection is blind to direction.</div><div id="selNoise" class="chart"></div></div>
+  </div>
+  <div class="box">
+    <div class="cap"><b>Who pulls the price head, and where.</b> Three proper terms agree on the conditional mean E[Y|x]. Three priors pull elsewhere: the trend term toward the last move, coherence toward ordered magnitudes, and the volatility term toward predictions as widely spread as the targets. With R² ≈ 0, the conditional mean's spread is √R² × std(y), almost zero. The vol term asks for std(y), about 1.1. Move R².</div>
+    <div class="sliders"><label>R² of the price head <span class="v" id="vR2"></span><input type="range" id="sR2" min="0" max="0.3" step="0.001" value="0.001"></label></div>
+    <div id="volConflict" class="chart"></div>
+  </div>
+</section>
+
+<section class="s" id="s5">
+  <div class="shead"><div class="num">05</div><div style="display:flex;flex-direction:column;gap:14px"><h2>Learning an indicator</h2><p class="lede">Every indicator is built from exponential moving averages. A period p enters as α = 2/(p+1) through a logit ℓ, so ℓ behaves like −log(p−1): one gradient step changes the period by a fixed <i>fraction</i>, whatever its size. Inside a 60-bar window the kernel is cut at the first bar, which takes all the older weight. Move the period.</p></div></div>
+  <div class="eq">$$e_t=(1-\alpha)^t x_0+\sum_{k=1}^{t}\alpha(1-\alpha)^{t-k}x_k,\qquad \alpha_{b,i}=\sigma\!\big(\ell_i+0.5\tanh(Wz_b+c)_i\big),\qquad \frac{\partial e_t}{\partial \ell}=(1-\alpha)\sum_{j\ge0}(1-\alpha)^j\,\Delta e_{t-j}$$</div>
+  <div class="grid2">
+    <div class="box"><div class="sliders"><label>Period p (bars) <span class="v" id="vP"></span><input type="range" id="sP" min="0" max="1" step="0.001" value="0.45"></label><label>Per-window shift (logit units) <span class="v" id="vSh"></span><input type="range" id="sSh" min="-0.5" max="0.5" step="0.01" value="0"></label></div>
+      <div id="kernel" class="chart"></div><div class="cap" id="kernelCap"></div></div>
+    <div class="box"><div class="cap"><b>How strongly the loss can feel the period</b>: mean |∂e<sub>59</sub>/∂ℓ| on simulated random-walk windows, against p. The signal vanishes as p → 1 (the average becomes the price) and fades beyond the window (only α × weight is identified). The shaded band is the allowed range [2, 60]; the per-window shift lets the applied period leave it (dev blocks: 1.6 to 74.7).</div><div id="gradP" class="chart"></div></div>
+  </div>
+</section>
+
+<section class="s" id="s6">
+  <div class="shead"><div class="num">06</div><div style="display:flex;flex-direction:column;gap:14px"><h2>The search it replaces</h2><p class="lede">A manual search enumerates settings. The network does two things at once: it moves 18 periods continuously, and it learns the combination rule as a function with 296,591 parameters. Here are the numbers, and what the six runs say it actually found.</p></div></div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>Size of the grid</b> (log₁₀ of the number of combinations) and the GPU time a full search would take at 22.6 minutes per training.</div><div id="space" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>Cost of each way to search</b> (GPU-hours, log scale). Gradient descent moves all periods jointly in one training. The catch: it minimises the training loss, not the dev-fold Sharpe, and it stays near where it starts.</div><div id="cost" class="chart"></div></div>
+  </div>
+  <div class="box">
+    <div class="ctrl"><div class="cap"><b>What the six runs agree on.</b> For each of the 18 periods: the textbook start (◇) and the served value in each run (●, fold −3 in blue, fold −2 in red). Colour of the label = verdict under a fixed rule: identified (6/6 same direction, |t| > 3, CV < 0.10), direction only, weak, not identified.</div></div>
+    <div id="ident" class="chart" style="min-height:640px"></div>
+  </div>
+  <div class="box">
+    <div class="ctrl"><div class="cap"><b>Periods over training</b>, all six runs. The fast legs keep falling to the floor of 2 until early stopping cuts them. The indicator learning rate never decays (it stays 0.005 while the main rate halves), so the periods drift rather than settle.</div><select id="perSel" aria-label="Period"></select></div>
+    <div id="perTraj" class="chart"></div>
+  </div>
+</section>
+
+<section class="s" id="s7">
+  <div class="shead"><div class="num">07</div><div style="display:flex;flex-direction:column;gap:14px"><h2>Architecture</h2><p class="lede">The 18 periods are 0.006% of the parameters. 44.6% sit in one temporal attention. A block labelled "attend across indicators" actually attends across the 128 GRU units, with the 60 time positions as features. That block and the final Flatten → Dense tie the model to the 60-bar window.</p></div></div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>Where the 296,591 parameters are</b> (model built on CPU from the leader's configuration).</div><div id="params" class="chart mid"></div></div>
+    <div class="box"><div class="cap"><b>Memory against window length.</b> Two tensor groups grow as L²: the batched EWMA weights [B, 18, L, L] and the attention scores [B, 8, L, L]. One float32 copy each; the backward pass keeps several. The dashed line is the GPU's 12 GB. This is an estimate from the shapes, not a profile.</div>
+      <div class="sliders"><label>Batch B <span class="v" id="vBB"></span><input type="range" id="sBB" min="6" max="12" step="1" value="11"></label></div><div id="mem" class="chart"></div></div>
+  </div>
+</section>
+
+<section class="s" id="s8">
+  <div class="shead"><div class="num">08</div><div style="display:flex;flex-direction:column;gap:14px"><h2>How general it is</h2><p class="lede">Ticker, bar size, window and horizons are meant to be configuration (D-022). Today most of them are still measured in bars of the reference setup, and the inputs are scaled in dollars, so one number carries both the price level and the volatility.</p></div></div>
+  <div class="grid2">
+    <div class="box"><div class="cap"><b>The same volatility in two units.</b> The standard deviation of 10-minute moves in two months a year apart. In basis points they differ by 12%; in the dollar units the model reads, by 40%. The model has to learn the price level too.</div><div id="scale" class="chart"></div></div>
+    <div class="box"><div class="cap"><b>Units of every length in the model</b></div><div class="tbl"><table id="unitsTbl"></table></div></div>
+  </div>
+</section>
+
+<section class="s" id="s9">
+  <div class="shead"><div class="num">09</div><div style="display:flex;flex-direction:column;gap:14px"><h2>Recommendations</h2><p class="lede">Twenty-two growth points in four groups. Each states the problem, the evidence behind it, the action, and how to test it. None changes a default without a pre-registered A/B under D-025. Priorities are the report's proposal; the owner decides.</p></div></div>
+  <div class="ctrl"><div class="seg" id="recSeg"><button data-v="all" class="on">all</button><button data-v="Losses">losses</button><button data-v="Architecture">architecture</button><button data-v="Stability">stability</button><button data-v="Universality">universality</button></div><div class="seg" id="priSeg"><button data-v="all" class="on">any priority</button><button data-v="P1">P1</button><button data-v="P2">P2</button><button data-v="P3">P3</button></div></div>
+  <div class="recs" id="recs"></div>
+  <div class="box"><div class="cap"><b>A proposed sequence</b>: measure first, then remove what the measurements condemn, then rebuild the objective and the architecture on the cleaned loss. Every arrow is one pre-registered A/B.</div><div id="seq" class="chart"></div></div>
+</section>
+
+<div class="foot">Sources: the research notes <code>docs/research/2026-09-30-math-report/A_losses.md</code> (loss terms, gradients, bounds, stability, solvability; per-term probe) and <code>B_model_indicators.md</code> (architecture, indicators, search space, identifiability, generality); data <code>docs/presentation/data_math.json</code> from <code>scripts/presentation/extract_math.py</code> (six runs of <code>runs/scenarios/long_360d_stab</code>, 960 trials of <code>runs/screens/l1_*</code>). Analytic curves are computed in the page. Dev folds only; the test fold is never read (D-020). The gradient probe used three CPU batches of the bundled Oct–Nov 2025 file; it is a sample, not a distribution over training.</div>
+</div>
+
+<script>
+window.MathJax = {tex:{inlineMath:[['\\(','\\)']]}, svg:{fontCache:'global'}, startup:{typeset:true}};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.34.0/plotly.min.js"></script>
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById('data').textContent);
+const el = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (x,d=3) => x==null?'–':Number(x).toFixed(d);
+const pct = (x,d=1) => x==null?'–':(100*x).toFixed(d)+'%';
+function T(){ return {ink:css('--ink'),ink2:css('--ink-2'),muted:css('--muted'),grid:css('--grid'),hair:css('--hair'),red:css('--red'),good:css('--good'),warn:css('--warn'),blue:css('--blue'),sheet:css('--sheet'),paper:css('--paper'),mono:"JetBrains Mono, Consolas, monospace",body:"Public Sans, Arial, sans-serif"}; }
+function L(extra){ const t=T(); extra=extra||{};
+  const ax={gridcolor:t.grid,zerolinecolor:t.ink,zerolinewidth:1.5,linecolor:t.ink,linewidth:2,showline:true,ticks:'outside',tickcolor:t.ink,tickfont:{family:t.mono,size:11,color:t.ink2},title:{font:{family:t.body,size:12,color:t.ink2}},automargin:true};
+  const base={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:t.body,color:t.ink2,size:12},margin:{l:60,r:18,t:44,b:48},hovermode:'closest',
+    legend:{orientation:'h',x:0,y:1.02,yanchor:'bottom',font:{size:12,color:t.ink2}},hoverlabel:{font:{family:t.mono,size:12},bgcolor:t.sheet,bordercolor:t.ink},xaxis:{...ax},yaxis:{...ax}};
+  const out={...base,...extra}; out.legend={...base.legend,...(extra.legend||{})}; if(extra.margin) out.margin={...base.margin,...extra.margin};
+  for (const k of Object.keys(extra)) if (/^[xy]axis\d*$/.test(k)) out[k]={...ax,...extra[k]};
+  return out; }
+const CFG={displaylogo:false,responsive:true,displayModeBar:'hover',modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d','toggleSpikelines']};
+const plot=(id,data,layout)=>{ const e=el(id); if(e) Plotly.react(e,data,L(layout),CFG); };
+const seg=(id,fn)=>el(id).addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; el(id).querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); fn(b.dataset.v); });
+const typeset=node=>{ if(window.MathJax&&MathJax.typesetPromise) MathJax.typesetPromise(node?[node]:undefined).catch(()=>{}); };
+// maths helpers
+const phi=x=>Math.exp(-x*x/2)/Math.sqrt(2*Math.PI);
+function Phi(x){ const t=1/(1+0.2316419*Math.abs(x)); const d=0.3989423*Math.exp(-x*x/2); const p=d*t*(0.3193815+t*(-0.3565638+t*(1.781478+t*(-1.821256+t*1.330274)))); return x>0?1-p:p; }
+function Phinv(p){ const a=[-39.6968302866538,220.946098424521,-275.928510446969,138.357751867269,-30.6647980661472,2.50662827745924],b=[-54.4760987982241,161.585836858041,-155.698979859887,66.8013118877197,-13.2806815528857],c=[-0.00778489400243029,-0.322396458041136,-2.40075827716184,-2.54973253934373,4.37466414146497,2.93816398269878],d=[0.00778469570904146,0.32246712907004,2.445134137143,3.75440866190742];
+  const pl=0.02425; let q,r; if(p<pl){ q=Math.sqrt(-2*Math.log(p)); return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+  if(p<=1-pl){ q=p-0.5; r=q*q; return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1); }
+  q=Math.sqrt(-2*Math.log(1-p)); return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1); }
+const sig=z=>1/(1+Math.exp(-z));
+const range=(a,b,n)=>Array.from({length:n},(_,i)=>a+(b-a)*i/(n-1));
+let seed=12345; const rnd=()=>{ seed=(seed*1664525+1013904223)%4294967296; return seed/4294967296; };
+const gauss=()=>{ let u=0,v=0; while(!u) u=rnd(); v=rnd(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+
+/* ---------------- navigation ---------------- */
+const CH=[['s0','Cover'],['s1','The objective'],['s2','Anatomy of each term'],['s3','Stability'],['s4','Solvability'],['s5','Learning an indicator'],['s6','The search'],['s7','Architecture'],['s8','Generality'],['s9','Recommendations']];
+el('rail').innerHTML='<div class="brand">Gradient<br>Loss<br>Search<span>neural_trade · maths report</span></div>'+CH.map((c,i)=>`<a href="#${c[0]}" data-c="${c[0]}"><b>${String(i).padStart(2,'0')}</b>${c[1]}</a>`).join('');
+el('topnav').innerHTML=CH.map(c=>`<a href="#${c[0]}" data-c="${c[0]}">${c[1]}</a>`).join('');
+const secs=CH.map(c=>el(c[0]));
+const cur=()=>{ let b=0; secs.forEach((s,i)=>{ if(s.getBoundingClientRect().top<window.innerHeight*0.3) b=i; }); return b; };
+const mark=()=>{ const i=cur(); document.querySelectorAll('[data-c]').forEach(a=>a.classList.toggle('on',a.dataset.c===CH[i][0])); };
+window.addEventListener('scroll',mark,{passive:true}); mark();
+document.addEventListener('keydown',e=>{ if(e.target.closest('input,select,textarea')) return; const i=cur(); if(e.key==='j') secs[Math.min(i+1,secs.length-1)].scrollIntoView(); if(e.key==='k') secs[Math.max(i-1,0)].scrollIntoView(); });
+
+/* ---------------- 01 the objective (numbers: A_losses.md, per-term shares and the probe) ---------------- */
+const TERMS=['soft ECE','Gaussian NLL','CRPS','point (log-cosh)','direction BCE','vol','coherence','T-perp','HD','Casimir','vac. overflow','extended trend'];
+const VALUE_SHARE={'point (log-cosh)':0.172,'extended trend':0.013,'direction BCE':0.263,'Gaussian NLL':0.215,'CRPS':0.193,'soft ECE':0.079,'vol':0.023,'T-perp':0.0027,'Casimir':0.0000,'HD':0.0025,'vac. overflow':0,'coherence':0.038};
+// probe gradient norms and cosines with the total (D:/nt_math_scratch/probe_s1.txt, probe_b512.txt; batch A: only the
+// terms A_losses.md section 7 lists). Terms missing for a batch are null.
+const PROBE=[{label:'batch 2048 · seed 0',total:10.19,g:{'soft ECE':10.15,'direction BCE':0.44,'Gaussian NLL':0.63,'CRPS':0.89,'point (log-cosh)':0.54},cos:{'soft ECE':0.973}},
+ {label:'batch 2048 · seed 1',total:17.266,g:{'soft ECE':15.2473,'Gaussian NLL':2.8417,'point (log-cosh)':0.983,'vol':0.9901,'coherence':0.9296,'CRPS':0.8488,'direction BCE':0.5764,'T-perp':0.3099,'HD':0.1943,'extended trend':0.1911,'vac. overflow':0.0055,'Casimir':0.0042},
+   cos:{'soft ECE':0.986,'Gaussian NLL':0.554,'point (log-cosh)':0.151,'vol':0.010,'coherence':0.145,'CRPS':-0.300,'direction BCE':0.862,'T-perp':0.516,'HD':-0.384,'extended trend':0.205,'vac. overflow':-0.013,'Casimir':0.527}},
+ {label:'batch 512 · seed 2',total:20.871,g:{'soft ECE':17.3525,'Gaussian NLL':4.6118,'point (log-cosh)':1.0152,'vol':0.9933,'coherence':0.832,'CRPS':0.7295,'direction BCE':1.0316,'T-perp':0.1578,'HD':0.1912,'extended trend':0.1468,'vac. overflow':0.0058,'Casimir':0.0042},
+   cos:{'soft ECE':0.977,'Gaussian NLL':0.612,'point (log-cosh)':0.150,'vol':0.101,'coherence':0.071,'CRPS':-0.172,'direction BCE':0.904,'T-perp':0.251,'HD':-0.435,'extended trend':0.145,'vac. overflow':-0.025,'Casimir':0.608}}];
+let probeI=1;
+function drawShares(){ const t=T(), P=PROBE[probeI];
+  const terms=TERMS.filter(k=>P.g[k]!=null);
+  const vs=terms.map(k=>VALUE_SHARE[k]||0), gs=terms.map(k=>P.g[k]/P.total);
+  plot('shares',[
+    {type:'bar',orientation:'h',y:terms,x:vs.map(v=>-v),name:'share of the loss value',marker:{color:t.ink},text:vs.map(v=>pct(v)),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{y}: %{text} of the value<extra></extra>'},
+    {type:'bar',orientation:'h',y:terms,x:gs,name:'gradient norm ÷ total norm',marker:{color:terms.map(k=>k==='soft ECE'?t.red:t.muted)},text:terms.map((k,i)=>`${pct(gs[i],0)} (‖g‖ ${fmt(P.g[k],2)})`),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{y}: %{text}<extra></extra>'}],
+    {barmode:'relative',margin:{l:150,r:120,t:44,b:48},xaxis:{range:[-0.42,1.25],tickvals:[-0.4,-0.2,0,0.2,0.4,0.6,0.8,1],ticktext:['40%','20%','0','20%','40%','60%','80%','100%'],title:{text:'◀ share of loss value   |   gradient norm ÷ total ▶'}},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:13,color:t.ink}},
+     shapes:[{type:'line',x0:0,x1:0,yref:'paper',y0:0,y1:1,line:{color:t.ink,width:2}}]}); }
+seg('probeSeg',v=>{probeI=+v;drawShares();});
+function drawLambdas(){ const t=T();
+  const k=['soft ECE','vol','point h1','point h2','CRPS','direction','point h0','variance (NLL)','physics (each)','extended trend'], v=[2.907,1.817,1.703,1.542,0.896,0.749,0.644,0.382,0.1,0.1];
+  plot('lambdas',[{type:'bar',x:k,y:v,marker:{color:k.map(x=>x==='soft ECE'?t.red:t.ink)},text:v.map(x=>x.toFixed(2)),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{x}: λ = %{y}<extra></extra>'}],
+    {showlegend:false,margin:{t:24,b:90},yaxis:{title:{text:'calibrated weight λ'},range:[0,3.4]},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:1,y1:1,line:{color:t.muted,dash:'dot'}}],
+     annotations:[{xref:'paper',x:1,y:1,text:'default 1',showarrow:false,xanchor:'right',yanchor:'bottom',font:{family:t.mono,size:11,color:t.muted}}]}); }
+function drawCos(){ const t=T(), terms=TERMS.filter(k=>PROBE[1].cos[k]!=null);
+  plot('cosines',[1,2].map(b=>({type:'bar',orientation:'h',y:terms,x:terms.map(k=>PROBE[b].cos[k]),name:PROBE[b].label,marker:{color:b===1?t.ink:t.muted},hovertemplate:`%{y}: cos %{x:.3f} (${PROBE[b].label})<extra></extra>`})),
+    {barmode:'group',margin:{l:150,t:44},xaxis:{range:[-1,1],title:{text:'cosine of the term’s gradient with the total gradient'},dtick:0.5},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink}},
+     shapes:[{type:'line',x0:0,x1:0,yref:'paper',y0:0,y1:1,line:{color:t.ink,width:2}}]}); }
+
+/* ---------------- 02 anatomy ---------------- */
+const TERMDEF={
+ logcosh:{name:'Point · log-cosh',eq:'$$\\ell^{pt}=\\frac1B\\sum_i\\log\\cosh(y_i-\\mu_i),\\qquad \\frac{\\partial\\ell}{\\partial\\mu_i}=-\\frac{\\tanh(e_i)}{B}$$',bound:['ok','bounded by 1/B'],proper:['mid','point loss: a location between mean and median'],
+   code:'losses/functions.py:121-138',weight:'0.64 / 1.70 / 1.54 per horizon',share:'16–20% of the value',note:'Quadratic near zero, linear in the tails: the gradient saturates at ±1/B. A test covers the bound (tests/test_custom_loss.py:48-60).',
+   sliders:[], draw:()=>{ const x=range(-6,6,241); return {data:[{x,y:x.map(e=>Math.tanh(e)),name:'B·∂ℓ/∂μ = tanh(e)'}],xl:'residual e = y − μ (target sd units)',yl:'B · gradient',bound:1}; }},
+ bce:{name:'Direction · BCE',eq:'$$\\ell^{bce}=-\\frac{\\sum_i m_i[y_i\\log p_i+(1-y_i)\\log(1-p_i)]}{\\sum_i m_i},\\qquad \\frac{\\partial\\ell}{\\partial z_i}=\\frac{m_i(p_i-y_i)}{\\sum m}$$',bound:['ok','|p − y| ≤ 1 per example'],proper:['ok','strictly proper: minimiser P(up | move, x)'],
+   code:'losses/functions.py:83-97, 622-634',weight:'0.75 (calibrated)',share:'about 25% of the value',note:'The logit gradient is exactly p − y. If σ(z) saturates past 1−10⁻⁷ the clip zeroes it: a vanishing risk, not an exploding one. The probe batches had p in [0.09, 0.89].',
+   sliders:[], draw:()=>{ const z=range(-8,8,241); return {data:[{x:z,y:z.map(v=>sig(v)-1),name:'label y = 1'},{x:z,y:z.map(v=>sig(v)),name:'label y = 0'}],xl:'logit z',yl:'∂ℓ/∂z (per example)',bound:1}; }},
+ nll:{name:'Variance · Gaussian NLL',eq:'$$\\ell^{nll}=\\frac1B\\sum_i\\Big[\\tfrac12\\log v_i+\\frac{e_i^2}{2v_i}\\Big],\\; v=\\max(\\mathrm{softplus}(a),10^{-4}),\\quad \\Big|\\frac{\\partial\\ell}{\\partial a_i}\\Big|\\le\\frac{1}{2B}\\Big(1+\\frac{e_i^2}{v_i}\\Big)$$',bound:['mid','finite only via the variance floor and the ±100 price clip'],proper:['ok','log score: minimiser E[Y|x], Var[Y|x]'],
+   code:'losses/functions.py:645-657',weight:'0.38 (calibrated)',share:'about 21% of the value',note:'Softplus plus the floor removes the log-variance explosion, but e²/v is still unbounded in practice: a large residual on a small-variance example. It was the most batch-sensitive term in the probe (0.63 → 4.61).',
+   sliders:[['e','residual |e|',0,6,0.05,2]], draw:s=>{ const v=range(0.02,4,300), e=s.e; return {data:[{x:v,y:v.map(x=>0.5*Math.abs(1-e*e/x)*sig(Math.log(Math.expm1(x)))/1),name:'|∂ℓ/∂a| · B'},{x:v,y:v.map(x=>0.5*(1+e*e/x)),name:'bound ½(1 + e²/v)',line:{dash:'dot'}}],xl:'predicted variance v',yl:'B · |gradient| (log)',logy:true}; }},
+ crps:{name:'Variance · CRPS',eq:'$$\\mathrm{CRPS}=\\sigma\\big[\\omega(2\\Phi(\\omega)-1)+2\\varphi(\\omega)-\\tfrac{1}{\\sqrt\\pi}\\big],\\;\\omega=\\frac{e}{\\sigma},\\quad \\frac{\\partial}{\\partial\\mu}\\in[-1,1],\\;\\frac{\\partial}{\\partial\\sigma}\\in[-0.564,0.234]$$',bound:['ok','bounded by constants: |∂/∂a| ≤ 0.282'],proper:['ok','strictly proper for distributions'],
+   code:'losses/functions.py:200-226',weight:'0.90 (calibrated)',share:'about 19% of the value',note:'The best-behaved term: every derivative is bounded independently of the data. It supervises the same variance as NLL, with bounded gradients.',
+   sliders:[], draw:()=>{ const w=range(-5,5,241); return {data:[{x:w,y:w.map(o=>2*Phi(o)-1),name:'∂CRPS/∂(−μ) = 2Φ(ω) − 1'},{x:w,y:w.map(o=>2*phi(o)-1/Math.sqrt(Math.PI)),name:'∂CRPS/∂σ'}],xl:'standardised residual ω',yl:'gradient',bound:1}; }},
+ ece:{name:'Calibration · soft ECE',eq:'$$\\ell^{ece}=\\sum_b\\frac{W_b}{N}\\,\\big|a_b-f_b\\big|,\\quad w_{ib}=m_i e^{-(p_i-c_b)^2/2h^2},\\quad \\frac{\\partial\\ell}{\\partial p_i}\\ni-\\frac{\\mathrm{sign}(D_b)\\,w_{ib}}{N}$$',bound:['mid','finite (≈61/N per example), but does not shrink as the gap → 0'],proper:['bad','improper: a constant at the base rate scores 0'],
+   code:'losses/functions.py:229-259',weight:'2.91 (calibrated up from 1)',share:'3.6–11% of the value, 97% of the gradient direction',note:'The absolute value has a kink at a zero gap. Every example in a bin gets a push of the same sign and full size whenever the batch\'s up-rate differs from the prediction, which it always does by sampling noise.',
+   sliders:[], draw:()=>{ const D=range(-0.08,0.08,321); return {data:[{x:D,y:D.map(d=>-d),name:'BCE: pull on the bias = −gap'},{x:D,y:D.map(d=>d===0?0:-Math.sign(d)*0.05),name:'soft ECE: −sign(gap) · c'}],xl:'batch gap D = observed up-rate − mean prediction',yl:'gradient on the direction bias'}; }},
+ vol:{name:'Volatility penalty',eq:'$$\\ell^{vol}=0.1\\,\\lambda_{vol}\\min\\big(|\\mathrm{std}_B(\\mu_{h1})-\\mathrm{std}_B(y_{h1})|,10\\big)$$',bound:['mid','norm 0.1λ/√B, NaN at std(μ)=0 (never seen)'],proper:['bad','opposes the proper scores: asks std(μ) = std(y)'],
+   code:'losses/functions.py:693-700',weight:'1.82 (calibrated)',share:'2.3% of the value, gradient ≈ the point loss',note:'The conditional mean has spread √R² · std(y), close to 0 here. The penalty pulls predictions apart to the noise level. It is always active in the leader (|Δstd| = 0.75).',
+   sliders:[], draw:()=>{ const s=range(0,2,201); return {data:[{x:s,y:s.map(x=>Math.abs(x-1.1)),name:'|std(μ) − std(y)|'}],xl:'spread of predictions std(μ)  (std(y) ≈ 1.1)',yl:'penalty (before weight)'}; }},
+ tperp:{name:'Physics · T-perp',eq:'$$\\ell^{T\\perp}=\\big(\\log(\\mathrm{sg}(\\overline{e^2})+\\epsilon)-\\log(\\bar v+\\epsilon)\\big)^2$$',bound:['ok','bounded via v̄ ≥ 10⁻⁴; scale-free in level'],proper:['mid','a moment condition, compatible with NLL, redundant'],
+   code:'losses/functions.py:262-286',weight:'0.1 (fixed)',share:'0.1–0.4% of the value',note:'Its zero set E[v] = E[e²] contains the NLL optimum. Tiny in value, yet its gradient norm reached 0.16–0.99 in the probe: it pushes every example the same way.',
+   sliders:[], draw:()=>{ const r=range(0.1,10,300); return {data:[{x:r,y:r.map(x=>2*Math.log(x)),name:'∂ℓ/∂log v̄ = −2 log(R/v̄) (sign flipped)'}],xl:'R / v̄ (realised over predicted variance)',yl:'gradient on log v̄',logx:true}; }},
+ hd:{name:'Physics · HD',eq:'$$\\ell^{HD}=1-\\mathrm{Pearson}_B\\big(z(\\log\\mathrm{sg}\\,\\mathrm{std}\\,x),\\,z(\\log\\bar v)\\big)$$',bound:['mid','grows like 1/std(log v̄) as the variance head flattens'],proper:['bad','an ordering prior'],
+   code:'losses/functions.py:369-400',weight:'0.1 (fixed)',share:'0.1–0.3% of the value',note:'Asks the variance to be ordered like the window\'s realised volatility. Value 0.01 (correlation 0.85–0.91 already). Its gradient points against the net update (cosine −0.15 to −0.44).',
+   sliders:[], draw:()=>{ const s=range(0.01,1,200); return {data:[{x:s,y:s.map(x=>2/(x+1e-3)),name:'bound ∝ 1 / std(log v̄)'}],xl:'batch std of log v̄',yl:'gradient scale (relative)',logy:true}; }},
+ coh:{name:'Coherence',eq:'$$\\ell^{coh}=\\tfrac13\\big[\\underbrace{\\text{dir\\_disagree}}_{\\nabla=0}+\\text{magnitude}+\\underbrace{\\text{smoothness}}_{\\text{labels only}}\\big]$$',bound:['ok','≤ 2/(3B) per head'],proper:['bad','a prior |μ₀| ≤ |μ₁| ≤ |μ₂|'],
+   code:'losses/functions.py:566-594',weight:'1 (not calibrated)',share:'3.8–5.1% (not logged; residual)',note:'Two of its three parts have zero gradient: one uses tf.sign, the other depends only on labels. The third orders the price heads\' magnitudes. Its gradient norm is about 0.9, as large as the point loss. It is not logged.',
+   sliders:[], draw:()=>{ const d=range(-1,1,201); return {data:[{x:d,y:d.map(x=>x>0?1/3:0),name:'magnitude part: ∂/∂|μ₀| (× 1/B)'}],xl:'|μ₀| − |μ₁|',yl:'B · gradient'}; }},
+};
+let termKey='ece', termS={};
+el('termBtns').innerHTML=Object.entries(TERMDEF).map(([k,v])=>`<button data-k="${k}" class="${k===termKey?'on':''}">${v.name}</button>`).join('');
+el('termBtns').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; termKey=b.dataset.k; el('termBtns').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); showTerm(); });
+function showTerm(){ const T0=TERMDEF[termKey];
+  el('termEq').innerHTML=T0.eq; typeset(el('termEq'));
+  const chip=c=>`<span class="chip ${c[0]}">${c[0]==='ok'?'yes':c[0]==='bad'?'no':'partly'}</span> ${c[1]}`;
+  el('termFacts').innerHTML=`<div>code</div><div class="mono" style="font-size:13px">${T0.code}</div><div>gradient bound</div><div>${chip(T0.bound)}</div><div>proper score</div><div>${chip(T0.proper)}</div><div>weight</div><div>${T0.weight}</div><div>share</div><div>${T0.share}</div><div>reading</div><div>${T0.note}</div>`;
+  termS={}; el('termSliders').innerHTML=T0.sliders.map(s=>{ termS[s[0]]=s[5]; return `<label>${s[1]} <span class="v" id="tv_${s[0]}">${s[5]}</span><input type="range" data-k="${s[0]}" min="${s[2]}" max="${s[3]}" step="${s[4]}" value="${s[5]}"></label>`; }).join('');
+  el('termSliders').querySelectorAll('input').forEach(i=>i.addEventListener('input',()=>{ termS[i.dataset.k]=+i.value; el('tv_'+i.dataset.k).textContent=(+i.value).toFixed(2); drawTerm(); }));
+  drawTerm(); }
+function drawTerm(){ const t=T(), T0=TERMDEF[termKey], r=T0.draw(termS), pal=[t.red,t.ink,t.muted];
+  const data=r.data.map((d,i)=>({type:'scatter',mode:'lines',...d,line:{color:pal[i],width:i===0?3:2,...(d.line||{})},hovertemplate:`${d.name}<br>%{x:.3f} → %{y:.3f}<extra></extra>`}));
+  const shapes=r.bound?[{type:'line',xref:'paper',x0:0,x1:1,y0:r.bound,y1:r.bound,line:{color:t.red,dash:'dash',width:1.5}},{type:'line',xref:'paper',x0:0,x1:1,y0:-r.bound,y1:-r.bound,line:{color:t.red,dash:'dash',width:1.5}}]:[];
+  plot('termPlot',data,{xaxis:{title:{text:r.xl},type:r.logx?'log':'linear'},yaxis:{title:{text:r.yl},type:r.logy?'log':'linear'},shapes});
+  el('termCap').innerHTML=r.bound?'<b>Red dashed</b>: the proven bound.':''; }
+// soft-ECE simulation
+function drawEce(){ const t=T(), N=Math.round(2**(+el('sN').value)), c=+el('sC').value; el('vN').textContent=N.toLocaleString('en'); el('vC').textContent=c.toFixed(1);
+  seed=777; const bce=[], ece=[]; const sd=0.5/Math.sqrt(N);
+  for(let i=0;i<3000;i++){ const D=gauss()*sd; bce.push(-D); ece.push(-Math.sign(D)*c*0.05); }
+  plot('eceSim',[{type:'histogram',x:bce,name:'BCE pull (∝ −gap)',marker:{color:t.ink},opacity:0.85,nbinsx:120},{type:'histogram',x:ece,name:'soft-ECE pull (−sign(gap)·c)',marker:{color:t.red},opacity:0.85,nbinsx:120}],
+    {barmode:'overlay',xaxis:{title:{text:`gradient on the direction bias, 3,000 batches of ${N.toLocaleString('en')} from a perfectly calibrated model`}},yaxis:{title:{text:'batches'}}}); }
+['sN','sC'].forEach(k=>el(k).addEventListener('input',drawEce));
+
+/* ---------------- 03 stability ---------------- */
+el('ladder').innerHTML=[
+ ['proven','1','Finite updates','A step whose total or any gradient is non-finite is zeroed and counted (custom_model.py:498-512). Weights stay finite as long as each applied update is finite.'],
+ ['proven','2','Adam bounds each step','|Δθⱼ| ≤ 7.27 · lr for any finite gradients (β₁ 0.9, β₂ 0.999): 0.0073 at lr 1e-3. No clipping needed. Clipping mainly stops one spike from damping the next ~1,000 steps.'],
+ ['proven','3','Bounded head gradients','Point, trend, CRPS, BCE, Casimir and coherence have gradients bounded by constants of order 1/B at the heads they train.'],
+ ['floor','4','Floor-bounded terms','NLL (≤ ½(1+10⁴e²)/B), T-perp, HD and IFE are finite only through the 10⁻⁴ variance floor, the ±100 price clip and ε. HD and IFE scale like 1/batch-std.'],
+ ['no','5','No bound on ‖∇θL‖','The chain rule multiplies head gradients by the network Jacobian, which nothing bounds. Clip-by-norm at 20 (per group) caps what is applied, not what is computed.'],
+ ['no','6','No convergence proof','Non-convex, with conflicting terms. A NaN in the forward pass is hidden by the guard, not prevented; reduce_std of a constant gives a NaN gradient (never observed).'],
+].map(s=>`<div class="step ${s[0]}"><span class="n">${s[1]}</span><h3>${s[2]}</h3><p>${s[3]}</p></div>`).join('');
+function drawAdam(){ const t=T(), b1=+el('sB1').value, b2=+el('sB2').value; el('vB1').textContent=b1.toFixed(2); el('vB2').textContent=b2.toFixed(4);
+  const r=b1*b1/b2, ts=range(0,4,200).map(x=>Math.round(10**x)).filter((v,i,a)=>a.indexOf(v)===i);
+  const B=tt=>(1-b1)/(1-b1**tt)*Math.sqrt((1-r**tt)/(1-r))*Math.sqrt((1-b2**tt)/(1-b2));
+  const sup=(1-b1)*Math.sqrt(1/(1-r))*Math.sqrt(1/(1-b2));
+  plot('adam',[{type:'scatter',mode:'lines',x:ts,y:ts.map(B),name:'bound B(t)',line:{color:t.red,width:3},hovertemplate:'step %{x}: %{y:.2f} × lr<extra></extra>'}],
+    {xaxis:{type:'log',title:{text:'step t'}},yaxis:{title:{text:'max |step| ÷ lr'},rangemode:'tozero'},showlegend:false,
+     shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:sup,y1:sup,line:{color:t.ink,dash:'dash'}}],
+     annotations:[{xref:'paper',x:0,y:sup,text:`supremum ${sup.toFixed(2)}`,showarrow:false,xanchor:'left',yanchor:'bottom',font:{family:t.mono,size:12,color:t.ink}}]}); }
+['sB1','sB2'].forEach(k=>el(k).addEventListener('input',drawAdam));
+function drawLong(){ const t=T();
+  const tr=D.runs.flatMap(r=>{ const lead=r.fold==='f-2'&&r.seed==='s0', col=r.fold==='f-2'?t.red:t.blue;
+    return [{type:'scatter',mode:'lines+markers',name:`${r.fold} ${r.seed}`,x:r.epoch,y:r.grad_norm,line:{color:col,width:lead?4:1.6,dash:['solid','dash','dot'][+r.seed.slice(1)]},marker:{size:lead?7:4},hovertemplate:`${r.fold} ${r.seed} epoch %{x}: ‖g‖ %{y:.1f}<extra></extra>`},
+            {type:'scatter',mode:'lines',x:r.epoch,y:r.lr,yaxis:'y2',showlegend:false,line:{color:col,width:1,dash:'dot'},opacity:0.5,hovertemplate:`${r.fold} ${r.seed} lr %{y}<extra></extra>`}]; });
+  plot('longruns',tr,{xaxis:{title:{text:'epoch'}},yaxis:{title:{text:'mean pre-clip ‖∇L‖'},domain:[0.3,1]},yaxis2:{domain:[0,0.22],type:'log',title:{text:'lr'}},
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:20,y1:20,line:{color:t.ink,dash:'dash',width:2}}],annotations:[{xref:'paper',x:1,yref:'y',y:20,text:'clip 20',showarrow:false,xanchor:'right',yanchor:'bottom',font:{family:t.mono,size:12,color:t.ink}}],legend:{font:{size:11}}}); }
+let blk='all';
+function drawScreen(){ const t=T(), knob=el('knobSel').value, S=D.screens.filter(r=>blk==='all'||r.block===blk);
+  const symbols={A_hyper:'circle',B_loss_weights:'square',C_physics:'diamond',D_loss_choice:'triangle-up',E_maths:'cross'};
+  let tr;
+  if(knob==='passed'){ tr=[true,false].map(p=>{ const r=S.filter(x=>x.passed===p); return {type:'scattergl',mode:'markers',name:p?`pass (${r.length})`:`fail (${r.length})`,x:r.map(x=>x.gmean),y:r.map(x=>x.clipped),
+      marker:{size:7,color:p?t.ink:t.red,symbol:r.map(x=>symbols[x.block]),opacity:0.75,line:{width:0}},text:r.map(x=>`${x.block} · seed ${x.seed}<br>max ‖g‖ ${fmt(x.gmax,1)} · loss drop ${pct(x.drop,0)}<br>top term ${x.top_term} ${pct(x.top_share,0)}<br>${Object.entries(x.knobs).map(([k,v])=>k+'='+(typeof v==='number'?+v.toPrecision(3):v)).join(', ')}`),hovertemplate:'%{text}<br>mean ‖g‖ %{x:.1f} · clipped %{y:.0%}<extra></extra>'}; }); }
+  else { const r=S.filter(x=>knob==='seed'?true:x.knobs[knob]!=null); const val=x=>knob==='seed'?x.seed:x.knobs[knob];
+    tr=[{type:'scattergl',mode:'markers',name:knob,x:r.map(x=>x.gmean),y:r.map(x=>x.clipped),marker:{size:7,color:r.map(val),colorscale:[[0,t.ink],[0.5,t.muted],[1,t.red]],showscale:true,colorbar:{title:{text:knob,font:{size:11}},thickness:10,tickfont:{family:t.mono,size:10}},symbol:r.map(x=>symbols[x.block]),opacity:0.85,line:{width:0},
+      ...(knob==='LR'||knob==='INDICATOR_LR_MULT'?{color:r.map(x=>Math.log10(val(x))),colorbar:{title:{text:'log₁₀ '+knob,font:{size:11}},thickness:10,tickfont:{family:t.mono,size:10}}}:{})},
+      text:r.map(x=>`${x.block} · ${knob} ${typeof val(x)==='number'?(+val(x)).toPrecision(3):val(x)} · ${x.passed?'pass':'fail'}`),hovertemplate:'%{text}<br>mean ‖g‖ %{x:.1f} · clipped %{y:.0%}<extra></extra>'}]; }
+  plot('screen',tr,{xaxis:{type:'log',title:{text:'mean gradient norm over the trial (log)'}},yaxis:{title:{text:'share of steps clipped'},tickformat:'.0%',range:[-0.03,1.05]},
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0.5,y1:0.5,line:{color:t.red,dash:'dash',width:2}},{type:'line',x0:20,x1:20,yref:'paper',y0:0,y1:1,line:{color:t.ink,dash:'dot'}}],
+    annotations:[{xref:'paper',x:0,y:0.5,text:'fail line: 50% clipped',showarrow:false,xanchor:'left',yanchor:'bottom',font:{family:t.mono,size:11,color:t.red}},{x:Math.log10(20),y:1,yref:'paper',text:'clip 20',showarrow:false,xanchor:'left',yanchor:'top',font:{family:t.mono,size:11,color:t.ink}}]}); }
+seg('blockSeg',v=>{blk=v;drawScreen();}); el('knobSel').addEventListener('change',drawScreen);
+function passBars(id,groups,xl){ const t=T();
+  plot(id,[{type:'bar',x:groups.map(g=>g[0]),y:groups.map(g=>g[1]),marker:{color:groups.map(g=>g[1]>=0.8?t.ink:t.red)},text:groups.map(g=>`${Math.round(g[1]*100)}%${g[2]?' · n '+g[2]:''}`),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{x}: %{text}<extra></extra>'}],
+    {showlegend:false,margin:{t:24},yaxis:{tickformat:'.0%',range:[0,1.15],title:{text:'pass rate'}},xaxis:{title:{text:xl},type:'category'}}); }
+function drawBars(){ const t=T(), A=D.screens.filter(r=>r.block==='A_hyper');
+  const byClip=[5,20,100].map(c=>{ const r=A.filter(x=>x.knobs.GRAD_CLIP_NORM===c); return [String(c),r.length?r.filter(x=>x.passed).length/r.length:0,r.length]; });
+  passBars('clipBars',byClip,'GRAD_CLIP_NORM');
+  const bins=[[0,3e-4,'≤ 3e-4'],[3e-4,1e-3,'3e-4 – 1e-3'],[1e-3,3e-3,'1e-3 – 3e-3'],[3e-3,1,'3e-3 – 1e-2']];
+  const byLr=bins.map(b=>{ const r=A.filter(x=>x.knobs.LR!=null&&x.knobs.LR>b[0]&&x.knobs.LR<=b[1]); return [b[2],r.length?r.filter(x=>x.passed).length/r.length:0,r.length]; });
+  passBars('lrBars',byLr,'learning rate');
+  const k=['λ soft ECE','λ direction outer','λ NLL outer','λ variance','λ CRPS'], v=[0.59,0.45,0.38,0.33,0.22];
+  plot('rhoBars',[{type:'bar',orientation:'h',y:k,x:v,marker:{color:k.map(x=>x==='λ soft ECE'?t.red:t.ink)},text:v.map(x=>'+'+x.toFixed(2)),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{y}: ρ %{x}<extra></extra>'}],
+    {showlegend:false,margin:{l:130,t:24},xaxis:{range:[0,0.75],title:{text:'Spearman ρ with clipped share'}},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink}}}); }
+
+/* ---------------- 04 solvability ---------------- */
+function bayes(auc){ const d=Math.SQRT2*Phinv(Math.min(Math.max(auc,1e-6),1-1e-6)); const s=range(-9,9,1801), ds=s[1]-s[0];
+  let bce=0,brier=0,m=0,m2=0; for(const x of s){ const f=0.5*phi(x-d/2)+0.5*phi(x+d/2); const p=sig(d*x); const H=(p<=0||p>=1)?0:-(p*Math.log(p)+(1-p)*Math.log(1-p)); bce+=f*H*ds; brier+=f*p*(1-p)*ds; m+=f*p*ds; m2+=f*p*p*ds; }
+  return {bce, gain:Math.log(2)-bce, brierGain:0.25-brier, sd:Math.sqrt(Math.max(m2-m*m,0))}; }
+const AUC_CURVE=range(0.5,0.7,101).map(a=>[a,bayes(a).gain]);
+function drawSolv(){ const t=T(), a=+el('sAuc').value, r=bayes(a); el('vAuc').textContent=a.toFixed(3);
+  const marks=[[0.52,'leader C1 ≈ 0.52'],[0.531,'logistic, 3 lags 0.531'],[0.554,'best condition bucket 0.554'],[0.64,'≈ 60% hit rate needs 0.64']];
+  plot('solv',[{type:'scatter',mode:'lines',x:AUC_CURVE.map(p=>p[0]),y:AUC_CURVE.map(p=>p[1]),line:{color:t.ink,width:3},name:'ln 2 − Bayes BCE',hovertemplate:'AUC %{x:.3f}: gain %{y:.2e} nats<extra></extra>'},
+    {type:'scatter',mode:'markers+text',x:marks.map(m=>m[0]),y:marks.map(m=>bayes(m[0]).gain),text:marks.map(m=>m[1]),textposition:'top left',textfont:{family:t.mono,size:11,color:t.ink2},marker:{size:10,color:t.ink,symbol:'diamond'},hovertemplate:'%{text}<extra></extra>',name:'measured'},
+    {type:'scatter',mode:'markers',x:[a],y:[r.gain],marker:{size:16,color:t.red},name:'selected',hovertemplate:'AUC %{x:.3f}<extra></extra>'}],
+    {showlegend:false,xaxis:{title:{text:'AUC'}},yaxis:{type:'log',title:{text:'achievable BCE gain below ln 2 (nats, log)'},exponentformat:'e',range:[-5.5,-1]}});
+  el('solvFigs').innerHTML=[[r.gain.toExponential(1),'nats below ln 2'],[pct(r.gain/Math.log(2),2),'of the BCE'],[r.sd.toFixed(3),'sd of the Bayes P(up)'],[Math.round((2*0.04/Math.max(r.gain,1e-9))**2).toLocaleString('en'),'effective samples to see it at 2σ']].map(f=>`<div class="fig"><span class="v">${f[0]}</span><span class="k">${f[1]}</span></div>`).join('');
+  el('solvNote').innerHTML=`With overlapping labels n<sub>eff</sub> ≈ N / horizon, so seeing this gain takes about ${Math.round(10*(2*0.04/Math.max(r.gain,1e-9))**2).toLocaleString('en')} labelled bars at 10 minutes. One minibatch holds 2,048. At this AUC the direction gradient of each step is mostly noise.`; }
+el('sAuc').addEventListener('input',drawSolv);
+function drawBceEp(){ const t=T();
+  plot('bceEpochs',[...D.runs.map(r=>({type:'scatter',mode:'lines+markers',name:`${r.fold} ${r.seed}`,x:r.epoch,y:r.val_dir_loss.h0,line:{color:r.fold==='f-2'?t.red:t.blue,width:r.fold==='f-2'&&r.seed==='s0'?3.5:1.4,dash:['solid','dash','dot'][+r.seed.slice(1)]},marker:{size:4},hovertemplate:`${r.fold} ${r.seed} epoch %{x}: %{y:.5f}<extra></extra>`}))],
+    {xaxis:{title:{text:'epoch'}},yaxis:{title:{text:'validation BCE, h0'},range:[0.6905,0.7005]},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:Math.log(2),y1:Math.log(2),line:{color:t.ink,dash:'dash',width:2}}],
+     annotations:[{xref:'paper',x:1,y:Math.log(2),text:'ln 2 = 0.6931',showarrow:false,xanchor:'right',yanchor:'top',font:{family:t.mono,size:12,color:t.ink}}],legend:{font:{size:11}}}); }
+function drawSel(){ const t=T(), swings=[];
+  D.runs.forEach(r=>{ for(let i=1;i<r.val_loss.length;i++) swings.push(Math.abs(r.val_loss[i]-r.val_loss[i-1])); });
+  const gain=0.749*3*6.3e-4;
+  plot('selNoise',[{type:'histogram',x:swings,marker:{color:t.ink},nbinsx:30,name:'|Δ val_loss| between epochs',hovertemplate:'%{x}: %{y} epochs<extra></extra>'}],
+    {xaxis:{title:{text:'epoch-to-epoch change of the combined validation loss'},type:'linear'},yaxis:{title:{text:'epochs'}},
+     shapes:[{type:'line',x0:gain,x1:gain,yref:'paper',y0:0,y1:1,line:{color:t.red,width:4}}],annotations:[{x:gain,y:1,yref:'paper',text:`achievable direction gain ${gain.toExponential(1)}`,showarrow:false,xanchor:'left',yanchor:'top',font:{family:t.mono,size:12,color:t.red}}]}); }
+function drawVol(){ const t=T(), R2=+el('sR2').value, sy=1.1; el('vR2').textContent=R2.toFixed(3);
+  const s=range(0,1.6,161), opt=Math.sqrt(R2)*sy;
+  const exc=s.map(x=>(x-opt)**2), vol=s.map(x=>Math.abs(x-sy));
+  plot('volConflict',[{type:'scatter',mode:'lines',x:s,y:exc,name:'proper scores: excess error ≈ (std(μ) − √R²·std(y))² (illustration)',line:{color:t.ink,width:3}},{type:'scatter',mode:'lines',x:s,y:vol,name:'vol penalty |std(μ) − std(y)|',line:{color:t.red,width:3}},
+    {type:'scatter',mode:'markers',x:[opt,0.185],y:[0,Math.abs(0.185-sy)],marker:{size:[14,12],color:[t.ink,t.red],symbol:['diamond','circle']},text:['optimum of the proper scores','the leader: std(μ) ≈ 0.16–0.21'],hovertemplate:'%{text}<extra></extra>',name:'points'}],
+    {xaxis:{title:{text:'spread of the price head std(μ), target-sd units'}},yaxis:{title:{text:'penalty'},rangemode:'tozero'},
+     shapes:[{type:'line',x0:sy,x1:sy,yref:'paper',y0:0,y1:1,line:{color:t.red,dash:'dot'}}],annotations:[{x:sy,y:1,yref:'paper',text:'std(y) ≈ 1.1',showarrow:false,xanchor:'left',yanchor:'top',font:{family:t.mono,size:11,color:t.red}}]}); }
+el('sR2').addEventListener('input',drawVol);
+
+/* ---------------- 05 indicators ---------------- */
+const pFrom=v=>1.05*Math.exp(v*Math.log(240/1.05));
+function ewmaGrad(p,shift){ const a=sig(Math.log(2/(p+1)/(1-2/(p+1)))+shift); let tot=0; seed=99;
+  for(let w=0;w<300;w++){ let x=0,e=0,g=0; for(let t2=0;t2<60;t2++){ x+=gauss(); if(t2===0){ e=x; g=0; } else { g=(x-e)+(1-a)*g; e=a*x+(1-a)*e; } } tot+=Math.abs(g*a*(1-a)); }
+  return tot/300; }
+const GRADP=(()=>{ const ps=range(0,1,90).map(pFrom); return ps.map(p=>[p,ewmaGrad(p,0)]); })();
+function drawKernel(){ const t=T(), p=pFrom(+el('sP').value), sh=+el('sSh').value; el('vP').textContent=p.toFixed(1); el('vSh').textContent=(sh>0?'+':'')+sh.toFixed(2);
+  const a0=2/(p+1), a=sig(Math.log(a0/(1-a0))+sh), pa=2/a-1, n=60;
+  const w=Array.from({length:n},(_,k)=>k===0?(1-a)**(n-1):a*(1-a)**(n-1-k));
+  plot('kernel',[{type:'bar',x:[...Array(n).keys()].map(k=>k-(n-1)),y:w,marker:{color:w.map((_,k)=>k===0?t.red:t.ink)},hovertemplate:'bar %{x}: weight %{y:.4f}<extra></extra>',name:'weight'}],
+    {showlegend:false,margin:{t:24},xaxis:{title:{text:'bar relative to the last (0 = now)'}},yaxis:{title:{text:'EWMA weight at the last position'},rangemode:'tozero'}});
+  el('kernelCap').innerHTML=`Applied period <b>${pa.toFixed(1)}</b> bars (α = ${a.toFixed(3)}). The first bar of the window (red) carries <b>${pct(w[0])}</b> of the weight: everything older than the window is folded into it. ${pa<2?'<b class="red">Below the floor of 2</b>: the shift escapes the bound.':pa>60?'<b class="red">Above the ceiling of 60</b>: the shift escapes the bound.':''}`; }
+['sP','sSh'].forEach(k=>el(k).addEventListener('input',drawKernel));
+function drawGradP(){ const t=T();
+  plot('gradP',[{type:'scatter',mode:'lines',x:GRADP.map(g=>g[0]),y:GRADP.map(g=>g[1]),line:{color:t.ink,width:3},name:'mean |∂e₅₉/∂ℓ|',hovertemplate:'p %{x:.1f}: %{y:.3f}<extra></extra>'}],
+    {showlegend:false,xaxis:{type:'log',title:{text:'period p (bars, log)'}},yaxis:{title:{text:'mean |∂e/∂ℓ| (random walk, unit steps)'},rangemode:'tozero'},
+     shapes:[{type:'rect',x0:2,x1:60,yref:'paper',y0:0,y1:1,fillcolor:t.red,opacity:0.07,line:{width:0}},{type:'line',x0:60,x1:60,yref:'paper',y0:0,y1:1,line:{color:t.red,dash:'dot'}},{type:'line',x0:2,x1:2,yref:'paper',y0:0,y1:1,line:{color:t.red,dash:'dot'}}],
+     annotations:[{x:Math.log10(10),y:1,yref:'paper',text:'allowed [2, 60]',showarrow:false,yanchor:'top',font:{family:t.mono,size:11,color:t.red}}]}); }
+
+/* ---------------- 06 search ---------------- */
+function drawSpace(){ const t=T();
+  const k=['18 periods, 2..60','18 periods, 2..200','54 periods (14 families), 2..60','54 periods, 2..200'], v=[31.9,41.4,95.6,124.1];
+  const yrs=v.map(x=>x+Math.log10(22.6/60/24/365.25));
+  plot('space',[{type:'bar',x:k,y:v,name:'log₁₀ combinations',marker:{color:t.ink},text:v.map(x=>'10^'+x.toFixed(1)),textposition:'inside',insidetextanchor:'end',textfont:{family:t.mono,size:12,color:t.paper}},
+    {type:'scatter',mode:'markers+text',x:k,y:yrs,name:'log₁₀ years of GPU time',marker:{size:12,color:t.red,symbol:'diamond'},text:yrs.map(x=>'10^'+x.toFixed(0)+' years'),textposition:'top center',textfont:{family:t.mono,size:11,color:t.red}}],
+    {margin:{t:44,b:100},yaxis:{title:{text:'log₁₀'}},xaxis:{tickfont:{family:t.body,size:11,color:t.ink}}}); }
+function drawCost(){ const t=T(), h=22.6/60;
+  const k=['gradient descent (today)','random / Optuna, 100 trials','coordinate search, 18 × 59','full grid, 18 × 2..60'], v=[h,100*h,1062*h,7.5e31*h];
+  plot('cost',[{type:'bar',orientation:'h',y:k,x:v,marker:{color:k.map((_,i)=>i===0?t.red:t.ink)},text:v.map(x=>x<1000?x.toFixed(1)+' h':'10^'+Math.log10(x).toFixed(0)+' h'),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{y}: %{text}<extra></extra>'}],
+    {showlegend:false,margin:{l:210,r:70,t:24},xaxis:{type:'log',title:{text:'GPU-hours (log)'},exponentformat:'power'},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink}}}); }
+const VERDICT={ma_period_0:'direction',ma_period_1:'weak',ma_period_2:'weak',macd_0_fast:'direction',macd_0_slow:'direction',macd_0_signal:'weak',macd_1_fast:'direction',macd_1_slow:'none',macd_1_signal:'identified',macd_2_fast:'direction',macd_2_slow:'weak',macd_2_signal:'none',rsi_period_0:'none',rsi_period_1:'weak',rsi_period_2:'identified',bb_period_0:'identified',bb_period_1:'weak',bb_period_2:'weak'};
+function drawIdent(){ const t=T(), names=Object.keys(D.runs[0].period_init), vc={identified:t.good,direction:t.ink,weak:t.warn,none:t.red};
+  const lab=n=>`<span style="color:${vc[VERDICT[n]]}">${n}  ·  ${VERDICT[n]==='none'?'not identified':VERDICT[n]}</span>`;
+  const tr=[{type:'scatter',mode:'markers',name:'textbook start',x:names.map(n=>D.runs[0].period_init[n]),y:names.map(lab),marker:{size:14,symbol:'diamond-open',color:t.ink,line:{width:2.5}},hovertemplate:'start %{x}<extra></extra>'}];
+  D.runs.forEach(r=>tr.push({type:'scatter',mode:'markers',name:`${r.fold} ${r.seed}`,x:names.map(n=>r.periods[n][r.periods[n].length-1]),y:names.map(lab),marker:{size:9,color:r.fold==='f-2'?t.red:t.blue,opacity:0.8,symbol:['circle','square','triangle-up'][+r.seed.slice(1)]},hovertemplate:`${r.fold} ${r.seed}: %{x:.1f}<extra></extra>`}));
+  plot('ident',tr,{margin:{l:250,t:44},xaxis:{type:'log',title:{text:'period (bars, log)'},range:[Math.log10(1.7),Math.log10(62)]},yaxis:{autorange:'reversed',tickfont:{family:t.mono,size:12}},
+    shapes:[{type:'line',x0:2,x1:2,yref:'paper',y0:0,y1:1,line:{color:t.red,dash:'dot'}},{type:'line',x0:60,x1:60,yref:'paper',y0:0,y1:1,line:{color:t.red,dash:'dot'}}]}); }
+const perNames=Object.keys(D.runs[0].period_init);
+el('perSel').innerHTML=perNames.map(n=>`<option value="${n}" ${n==='ma_period_0'?'selected':''}>${n}</option>`).join('');
+function drawPer(){ const t=T(), n=el('perSel').value;
+  plot('perTraj',[...D.runs.map(r=>({type:'scatter',mode:'lines+markers',name:`${r.fold} ${r.seed}`,x:r.periods[n].map((_,i)=>i+1),y:r.periods[n],line:{color:r.fold==='f-2'?t.red:t.blue,dash:['solid','dash','dot'][+r.seed.slice(1)],width:2},marker:{size:4},hovertemplate:`${r.fold} ${r.seed} epoch %{x}: %{y:.2f}<extra></extra>`})),
+    {type:'scatter',mode:'lines',x:[1,25],y:[D.runs[0].period_init[n],D.runs[0].period_init[n]],line:{color:t.ink,dash:'dash',width:2},name:'textbook start'}],
+    {xaxis:{title:{text:'epoch (last point = served epoch)'}},yaxis:{title:{text:`${n} (bars)`}},legend:{font:{size:11}}}); }
+el('perSel').addEventListener('change',drawPer);
+
+/* ---------------- 07 architecture ---------------- */
+function drawParams(){ const t=T();
+  const k=['temporal attention (8 × 32)','Conv1D × 3 (k 3/7/15)','Bi-GRU(64)','"cross-indicator" attention','Flatten → Dense(32)','2 transformer blocks','towers + heads','T-perp, gates, meta','18 indicator periods'], v=[132224,51248,37248,31284,30752,10880,2535,402,18];
+  plot('params',[{type:'bar',orientation:'h',y:k,x:v,marker:{color:k.map(x=>x.startsWith('18')?t.red:x.startsWith('"cross')||x.startsWith('Flatten')?t.warn:t.ink)},text:v.map(x=>`${x.toLocaleString('en')}  (${(100*x/296591).toFixed(x<100?3:1)}%)`),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:12,color:t.ink},hovertemplate:'%{y}: %{x:,}<extra></extra>'}],
+    {showlegend:false,margin:{l:220,r:150,t:24},xaxis:{type:'log',title:{text:'parameters (log)'},range:[1,5.6]},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink}},
+     annotations:[{xref:'paper',x:1,y:1,yref:'paper',text:'amber: tied to the window length',showarrow:false,xanchor:'right',yanchor:'bottom',font:{family:t.mono,size:11,color:t.warn}}]}); }
+function drawMem(){ const t=T(), B=2**(+el('sBB').value); el('vBB').textContent=B.toLocaleString('en');
+  const Ls=range(20,480,93), gb=(K,L)=>B*K*L*L*4/1e9;
+  plot('mem',[{type:'scatter',mode:'lines',x:Ls,y:Ls.map(L=>gb(18,L)),name:'EWMA weights [B,18,L,L]',line:{color:t.red,width:3}},{type:'scatter',mode:'lines',x:Ls,y:Ls.map(L=>gb(8,L)),name:'attention scores [B,8,L,L]',line:{color:t.ink,width:3}}],
+    {xaxis:{title:{text:'window length L (bars)'}},yaxis:{type:'log',title:{text:'GB per copy (float32, log)'}},
+     shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:12,y1:12,line:{color:t.ink,dash:'dash',width:2}},{type:'line',x0:60,x1:60,yref:'paper',y0:0,y1:1,line:{color:t.muted,dash:'dot'}},{type:'line',x0:240,x1:240,yref:'paper',y0:0,y1:1,line:{color:t.muted,dash:'dot'}}],
+     annotations:[{xref:'paper',x:0,y:Math.log10(12),text:'12 GB GPU',showarrow:false,xanchor:'left',yanchor:'bottom',font:{family:t.mono,size:11,color:t.ink}},{x:240,y:1,yref:'paper',text:'L = 240: OOM (H4)',showarrow:false,xanchor:'left',yanchor:'top',font:{family:t.mono,size:11,color:t.muted}}]}); }
+el('sBB').addEventListener('input',drawMem);
+
+/* ---------------- 08 generality ---------------- */
+function drawScale(){ const t=T();
+  plot('scale',[{type:'bar',x:['June 2024 (BTC ≈ 66k)','June 2025 (BTC ≈ 106k)'],y:[16.0,14.1],name:'basis points',marker:{color:t.ink},text:['16.0 bps','14.1 bps'],textposition:'outside',cliponaxis:false,yaxis:'y',offsetgroup:1,textfont:{family:t.mono,size:12,color:t.ink}},
+    {type:'bar',x:['June 2024 (BTC ≈ 66k)','June 2025 (BTC ≈ 106k)'],y:[105.6,148.4],name:'dollars (what the model reads)',marker:{color:t.red},text:['$105.6','$148.4'],textposition:'outside',cliponaxis:false,yaxis:'y2',offsetgroup:2,textfont:{family:t.mono,size:12,color:t.red}}],
+    {barmode:'group',yaxis:{title:{text:'bps'},range:[0,22]},yaxis2:{overlaying:'y',side:'right',title:{text:'$'},range:[0,200],showgrid:false}}); }
+el('unitsTbl').innerHTML='<tr><th>quantity</th><th>unit today</th><th>where</th></tr>'+[
+ ['window LOOKBACK','bars','core/config.py:226'],['horizons, trend periods','bars','config.py:255, 258'],['indicator periods and bounds','bars','config.py:411-412'],['skip lags (1, 5, 10, 15, 20, 30)','bars, hard-coded','gru_attention.py:20'],['number of horizons','exactly 3','config.py:577'],['input and target scale','dollars ÷ one scale per block','data/scaling.py:22-30'],['soft-sign sharpness (MACD, NT-047)','dollar-scaled units','families.py'],['annualisation','engine only (NT-040)','BACKLOG']
+].map(r=>`<tr><td>${r[0]}</td><td style="text-align:left">${r[1]}</td><td>${r[2]}</td></tr>`).join('');
+
+/* ---------------- 09 recommendations ---------------- */
+const RECS=[
+ ['L1','Losses','P1','Take soft ECE out of the gradient','It is 4–8% of the loss and 97% of the gradient\'s direction (cosine 0.97–0.99). It is the strongest screen driver of clipping (ρ +0.59). It is improper, and its gradient does not shrink at calibration.','Set λ_ece = 0, or move calibration entirely to the existing post-hoc temperature on the calibration block.','Pre-registered A/B (D-025): direction AUC and BCE, CRPSS, clipped share; multi-seed.'],
+ ['L2','Losses','P1','Weight terms by gradient, not by value','The calibration pass equalises values: soft ECE went 1 → 2.91 because its value is small, while its gradient was already the largest.','Measure per-term ‖∇θLᵢ‖ on the shared trunk (NT-037), then set weights so the gradients, not the values, are balanced (GradNorm-style), or freeze the weights.','NT-039 is exactly this A/B; it needs the probe first.'],
+ ['L3','Losses','P2','Drop the volatility penalty','It asks std(μ) = std(y), which opposes every proper score at R² ≈ 0. It is always active (|Δstd| = 0.75) and its gradient equals the point loss\'s.','Set λ_vol = 0; the served delta is shrunk on the calibration block anyway (D-007).','Same A/B as L1, as a second variant.'],
+ ['L4','Losses','P2','Clean up coherence and log it','Two of its three parts have zero gradient; one is a label-only constant that shifts val_loss. The live part (magnitude ordering) has gradient ≈ 0.9 and is not logged.','Remove the dead parts, log the remaining one, and treat the ordering as an A/B-tested prior.','Golden-run check for the dead parts (no gradient change expected); A/B for the prior.'],
+ ['L5','Losses','P1','Select the epoch on proper scores','Epoch-to-epoch swings of the combined val_loss are 100–200× the achievable direction gain; the served epoch is blind to direction.','Select on a pre-registered sum of proper scores (BCE for direction, CRPS for variance), or one per head.','Needs an owner decision: D-011 fixes the rule on val_loss.'],
+ ['L6','Losses','P2','Tame the NLL tail','The μ-gradient e/v and variance gradient e²/v are bounded only by the floor and the ±100 clip; NLL was the most batch-sensitive term (0.63–4.61).','Rely on CRPS (bounded by 1 and 0.282) with a lower λ_var, or use a Student-t / winsorised NLL.','A/B with CRPSS and coverage as metrics.'],
+ ['L7','Losses','P3','Count the terms honestly','14 active terms, of which 3 proper scores carry the task, 5 physics terms are 0.3–0.5% of the value together, and 3 priors pull away from the optimum.','Report every term\'s value and gradient share in each run; define a minimal proper core (log-cosh or CRPS, BCE, NLL/CRPS) as the reference objective. The physics terms stay (D-003); NT-006 judges them.','Telemetry item; no default change.'],
+ ['A1','Architecture','P2','Fix or remove the mislabelled attention','"Attend across indicators" attends across 128 GRU units with 60 time positions as features (gru_attention.py:69-73); 513L + 384 parameters tie it to the window.','Attend across the 31 indicator channels before the GRU, or remove the block; replace Flatten → Dense by pooling.','A/B; also a prerequisite for window-free runs.'],
+ ['A2','Architecture','P1','Match capacity to the signal','296,591 parameters, 44.6% in one attention, and the network never beats a logistic regression on 3 lags (significantly below it at 1 h, z −3.4).','A pre-registered capacity study: indicators → small GRU or linear → heads, against today\'s stack.','Paired comparator (D-025) on direction and CRPS.'],
+ ['A3','Architecture','P2','Budget memory by B·K·L²','Two quadratic sources: EWMA weights [B,18,L,L] (≈ 8.5 GB per copy at B 2048, L 240) and attention scores.','Put B·K·L² in the config guard (NT-038); the series engine of the window-free plan removes the EWMA matrix.','A GPU memory profile to confirm the estimate.'],
+ ['A4','Architecture','P3','Keep the linear skip, make depth residual','The direction head already contains a logistic regression on trailing returns (DIRECTION_SKIP); the deep part adds nothing measurable.','Initialise the deep logit at zero and report the skip\'s share of the logit, so any deep contribution is visible.','Telemetry, then capacity study A2.'],
+ ['S1','Stability','P1','Build the stability marker and the gradient probe','NT-036 (stability pytest marker) and NT-037 (per-term gradient probe) are todo; the soft-ECE finding came from a scratch script.','Implement both; the probe logs per-term norms and cosines every N steps at < 2% cost (D-026).','Their own acceptance tests; then re-run the screen.'],
+ ['S2','Stability','P2','Re-choose the clip after L1','The mean gradient norm (≈ 20) sits at the clip (20); 44% of screen trials fail only the clipped-share rule, not by diverging. Under Adam the clip does not bound the weights.','After L1, re-measure the norm distribution, then set GRAD_CLIP_NORM and the max_clipped_share rule from it.','Screen re-run with the rule fixed before it runs.'],
+ ['S3','Stability','P3','Put ε inside every square root','reduce_std of a batch-constant head gives √0′ = ∞ and a NaN gradient in vol, HD, IFE and vacuum; the guard hides it. Never observed (0 of 960 trials).','sqrt(var + ε) in those terms.','Unit test with a constant head.'],
+ ['S4','Stability','P2','Decay the indicator learning rate','ReduceLROnPlateau acts only on the main optimizer: the indicator rate stays 0.005 while the main one falls to 0.000125. Periods drift until early stopping cuts them.','Apply the schedule to both optimizers (or keep a fixed ratio).','Period trajectories flatten; A/B on stability of the served periods.'],
+ ['S5','Stability','P3','Retire INDICATOR_GRAD_MULT','Adam is invariant to a constant gradient scale, so the ×5 only changes how often the indicator group is clipped.','Set it to 1 (D-029 evidence needed to remove it); use INDICATOR_LR_MULT as the one control.','Golden run: no change expected beyond clipping.'],
+ ['S6','Stability','P1','Evaluate over seeds, not one run','The seed decides more than any hyperparameter: pass rate 97% (seed 0) against 56% (seed 1); the direction pattern is set by the seed (Z5).','Every verdict on ≥ 3 seeds and several folds; fix NT-074 (same-seed runs differ).','Built into the comparator (NT-032).'],
+ ['U1','Universality','P2','Bound the applied period, not just the base','The per-window shift (±0.5 logit) lets applied periods reach 1.6 and 74.7 bars, outside [2, 60].','Clip ℓ + shift into the logit range, or scale the shift; report the applied p5/p50/p95.','Golden-run record + D-018 speed check.'],
+ ['U2','Universality','P2','Remove the redundant period bias','ℓᵢ and the meta Dense bias cᵢ enter only as ℓᵢ + 0.5·tanh(… + cᵢ): one direction is unidentifiable and trained by two optimizers.','use_bias = False on meta_adjust, so ℓ alone carries the mean period.','Golden run; A/B not needed if numbers match.'],
+ ['U3','Universality','P2','Parametrise MACD as slow × ratio','Fast legs sit at the floor of 2 in 5 of 6 runs (macd_1_fast); fast < slow is not enforced.','fast = r · slow with r ∈ (0, 1); allow a fast leg to reach the price explicitly.','A/B on the identified periods and direction AUC.'],
+ ['U4','Universality','P1','Measure every length in wall-clock time','Window, horizons, periods, skip lags are bars; skip lags are hard-coded (gru_attention.py:20).','NT-041 (wall-clock config), NT-040 (annualisation), NT-042 (N horizons); report periods in minutes.','Prerequisites for any second ticker or bar size.'],
+ ['U5','Universality','P2','Make the inputs scale-free','Inputs are dollars ÷ one scale per block: the same 16 → 14 bps volatility reads as $106 → $148 a year later.','Normalise each window by its own realised σ, feed σ separately, rescale the dollar target at the output (D-022 keeps dollars).','Pre-registered A/B on CRPSS and direction.'],
+];
+let recG='all', recP='all';
+function drawRecs(){ el('recs').innerHTML=RECS.filter(r=>(recG==='all'||r[1]===recG)&&(recP==='all'||r[2]===recP)).map(r=>`<div class="rec"><div class="top"><span class="id">${r[0]}</span><span class="pri ${r[2].toLowerCase()}">${r[2]}</span></div><h3>${r[3]}</h3>
+  <div class="row"><b>evidence</b>${r[4]}</div><div class="row"><b>action</b>${r[5]}</div><div class="row"><b>test</b>${r[6]}</div></div>`).join(''); }
+seg('recSeg',v=>{recG=v;drawRecs();}); seg('priSeg',v=>{recP=v;drawRecs();});
+function drawSeq(){ const t=T();
+  const nodes=[['S1 probe + marker',0,2],['L5 epoch on proper scores',0,0.6],['S6 seeds × folds',0,-0.8],['L1 soft ECE out',1,2],['L3 vol out',1,1.2],['L2 gradient weights',2,1.6],['S2 re-choose clip',2,0.4],['A2 capacity study',3,1.6],['A1 attention fix',3,0.6],['U1–U3 period maths',3,-0.4],['U4–U5 generality',4,0.6]];
+  const edges=[[0,3],[0,5],[3,4],[3,5],[4,5],[3,6],[5,7],[1,7],[2,7],[7,8],[8,9],[9,10],[7,10]];
+  const lines=edges.map(e=>({type:'scatter',mode:'lines',x:[nodes[e[0]][1],nodes[e[1]][1]],y:[nodes[e[0]][2],nodes[e[1]][2]],line:{color:t.hair,width:2},hoverinfo:'skip',showlegend:false}));
+  plot('seq',[...lines,{type:'scatter',mode:'markers+text',x:nodes.map(n=>n[1]),y:nodes.map(n=>n[2]),text:nodes.map(n=>n[0]),textposition:'top center',textfont:{family:t.body,size:13,color:t.ink},marker:{size:18,color:nodes.map((n,i)=>i<3?t.red:t.ink),symbol:'square'},hoverinfo:'text',showlegend:false}],
+    {margin:{l:20,r:20,t:30,b:40},xaxis:{showgrid:false,zeroline:false,showline:false,ticks:'',tickvals:[0,1,2,3,4],ticktext:['1 · measure','2 · remove','3 · reweigh','4 · rebuild','5 · generalise'],tickfont:{family:t.mono,size:12,color:t.ink},range:[-0.5,4.6]},yaxis:{visible:false,range:[-1.4,2.6]}}); }
+
+/* ---------------- render ---------------- */
+function renderAll(){ drawShares(); drawLambdas(); drawCos(); drawTerm(); drawEce(); drawAdam(); drawLong(); drawScreen(); drawBars(); drawSolv(); drawBceEp(); drawSel(); drawVol(); drawKernel(); drawGradP(); drawSpace(); drawCost(); drawIdent(); drawPer(); drawParams(); drawMem(); drawScale(); drawSeq(); }
+showTerm(); drawRecs();
+if (window.Plotly) renderAll(); else window.addEventListener('load',renderAll);
+const mq=window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener&&mq.addEventListener('change',renderAll);
+new MutationObserver(renderAll).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+})();
+</script>

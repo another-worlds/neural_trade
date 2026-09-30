@@ -1,0 +1,75 @@
+VALIDATION (exact) epoch index 0: total 6.2165
+  point (log-cosh, x lambda_short/point/long)         1.0220   16.44%
+  extended trend (x lambda_ext, x outer)              0.0737    1.19%
+  direction BCE                                       1.5770   25.37%
+  Gaussian NLL                                        1.3108   21.09%
+  CRPS                                                1.1530   18.55%
+  soft ECE                                            0.6308   10.15%
+  vol (0.1 x lambda_vol x |std diff|)                 0.1327    2.14%
+  inter_reg (0.1 x LAMBDA_INTER x layer L2)           0.0000    0.00%
+  T-perp                                              0.0235    0.38%
+  Casimir                                             0.0007    0.01%
+  vacuum bandwidth                                    0.0000    0.00%
+  HD                                                  0.0106    0.17%
+  IFE                                                 0.0000    0.00%
+  vacuum overflow                                     0.0000    0.00%
+  pnl                                                 0.0000    0.00%
+  coherence (residual = total - sum)                  0.2818    4.53%
+
+VALIDATION (exact) epoch index 3: total 5.9269
+  point (log-cosh, x lambda_short/point/long)         1.0206   17.22%
+  extended trend (x lambda_ext, x outer)              0.0741    1.25%
+  direction BCE                                       1.5585   26.30%
+  Gaussian NLL                                        1.2715   21.45%
+  CRPS                                                1.1445   19.31%
+  soft ECE                                            0.4669    7.88%
+  vol (0.1 x lambda_vol x |std diff|)                 0.1358    2.29%
+  inter_reg (0.1 x LAMBDA_INTER x layer L2)           0.0000    0.00%
+  T-perp                                              0.0160    0.27%
+  Casimir                                             0.0001    0.00%
+  vacuum bandwidth                                    0.0000    0.00%
+  HD                                                  0.0147    0.25%
+  IFE                                                 0.0000    0.00%
+  vacuum overflow                                     0.0000    0.00%
+  pnl                                                 0.0000    0.00%
+  coherence (residual = total - sum)                  0.2243    3.79%
+
+TRAINING (loss exact; terms sampled every 10 steps) epoch index 0: total 7.1206
+  point (log-cosh, x lambda_short/point/long)         1.2863   18.06%
+  extended trend (x lambda_ext, x outer)              0.0969    1.36%
+  direction BCE                                       1.7178   24.12%
+  Gaussian NLL                                        1.4959   21.01%
+  CRPS                                                1.3468   18.91%
+  soft ECE                                            0.7931   11.14%
+  vol (0.1 x lambda_vol x |std diff|)                 0.1545    2.17%
+  inter_reg (0.1 x LAMBDA_INTER x layer L2)           0.0000    0.00%
+  T-perp                                              0.0181    0.25%
+  Casimir                                             0.0010    0.01%
+  vacuum bandwidth                                    0.0000    0.00%
+  HD                                                  0.0192    0.27%
+  IFE                                                 0.0000    0.00%
+  vacuum overflow                                     0.0777    1.09%
+  pnl                                                 0.0000    0.00%
+  coherence (residual = total - sum)                  0.1132    1.59%
+
+TRAINING (loss exact; terms sampled every 10 steps) epoch index 3: total 6.2072
+  point (log-cosh, x lambda_short/point/long)         1.2107   19.50%
+  extended trend (x lambda_ext, x outer)              0.0895    1.44%
+  direction BCE                                       1.5635   25.19%
+  Gaussian NLL                                        1.3114   21.13%
+  CRPS                                                1.2414   20.00%
+  soft ECE                                            0.2256    3.63%
+  vol (0.1 x lambda_vol x |std diff|)                 0.1403    2.26%
+  inter_reg (0.1 x LAMBDA_INTER x layer L2)           0.0000    0.00%
+  T-perp                                              0.0069    0.11%
+  Casimir                                             0.0004    0.01%
+  vacuum bandwidth                                    0.0000    0.00%
+  HD                                                  0.0089    0.14%
+  IFE                                                 0.0000    0.00%
+  vacuum overflow                                     0.0941    1.52%
+  pnl                                                 0.0000    0.00%
+  coherence (residual = total - sum)                  0.3144    5.07%
+
+raw val per-horizon, epoch 0 {'dir_loss_h0': 0.7126, 'dir_loss_h1': 0.694, 'dir_loss_h2': 0.6987, 'nll_h0': 0.9532, 'nll_h1': 1.1597, 'nll_h2': 1.314, 'crps_h0': 0.3528, 'crps_h1': 0.4335, 'crps_h2': 0.5005, 'soft_ece_h0': 0.0921, 'soft_ece_h1': 0.0502, 'soft_ece_h2': 0.0747, 'point_h0': 0.1158, 'point_h1': 0.4232, 'point_h2': 0.483, 'vol_loss': 1.3274, 'pit_ks_h0': 0.0513, 'pit_ks_h1': 0.0622, 'pit_ks_h2': 0.0443}
+
+raw val per-horizon, epoch 3 {'dir_loss_h0': 0.6937, 'dir_loss_h1': 0.6932, 'dir_loss_h2': 0.6937, 'nll_h0': 0.9195, 'nll_h1': 1.1284, 'nll_h2': 1.2762, 'crps_h0': 0.3507, 'crps_h1': 0.4299, 'crps_h2': 0.4967, 'soft_ece_h0': 0.046, 'soft_ece_h1': 0.0487, 'soft_ece_h2': 0.0659, 'point_h0': 0.1155, 'point_h1': 0.4239, 'point_h2': 0.4812, 'vol_loss': 1.3578, 'pit_ks_h0': 0.0521, 'pit_ks_h1': 0.0536, 'pit_ks_h2': 0.0507}
