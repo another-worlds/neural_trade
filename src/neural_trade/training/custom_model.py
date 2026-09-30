@@ -31,26 +31,46 @@ from neural_trade.training.optim import build_indicator_optimizer
 logger = logging.getLogger(__name__)
 
 
-class _MaxMetric(tf.keras.metrics.Metric):
-    """Epoch running maximum of a scalar (Keras has Mean/Sum built in, no Max variant).
+class _Accum:
+    """A minimal sum/max/mean accumulator over plain ``tf.Variable`` s (NT-037, D-026).
 
-    Used for the per-group pre-clip gradient norm maximum (NT-037, D-026): a plain Variable would
-    work numerically but is not a ``tf.keras.metrics.Metric``, so ``CustomTrainModel.metrics``
-    could not hand it to Keras for the automatic per-epoch ``reset_state()``.
+    Deliberately NOT a ``tf.keras.metrics.Metric`` (a ``Metric`` is a ``tf.Module``): even behind
+    ``_setattr_tracking = False`` (which only keeps an attribute out of the checkpoint/weights
+    file), a ``Module``-derived object stored on ``CustomTrainModel`` still shows up in
+    ``model.submodules`` - a separate, tracking-flag-independent walk. ``training/reset.py``'s
+    ``reset_stateful_rngs`` derives each stochastic layer's reset seed from ITS POSITION in
+    ``model.submodules`` ("different layers do not share one stream"); adding new submodules
+    anywhere in that traversal shifts every later real layer's derived seed, silently changing
+    screen mode's (``SEEDED_STOCHASTIC_LAYERS=True``) training numbers even though nothing about
+    dropout/noise changed (caught by a QA repro of ``tests/test_screen.py::test_loss_term_shares_
+    ...``: identical calibration inputs, different sampled medians once these were ``Metric``s).
+    Reset manually by ``CustomTrainModel._reset_light_accumulators`` (see ``_EpochTrainLogs``),
+    since these are invisible to Keras's own ``reset_metrics()``.
     """
 
-    def __init__(self, name):
-        super().__init__(name=name)
-        self.value = self.add_weight(name="value", shape=(), initializer="zeros")
+    def __init__(self, kind: str = "sum"):
+        self.kind = kind
+        self._value = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self._count = tf.Variable(0.0, trainable=False, dtype=tf.float32) if kind == "mean" else None
 
-    def update_state(self, x, sample_weight=None):  # noqa: ARG002 - sample_weight unused, Metric contract
-        self.value.assign(tf.maximum(self.value, tf.cast(x, tf.float32)))
+    def update_state(self, x):
+        x = tf.cast(x, tf.float32)
+        if self.kind == "max":
+            self._value.assign(tf.maximum(self._value, x))
+        else:
+            self._value.assign_add(x)
+            if self._count is not None:
+                self._count.assign_add(1.0)
 
     def result(self):
-        return self.value
+        if self._count is not None:
+            return self._value / tf.maximum(self._count, 1.0)
+        return self._value
 
     def reset_state(self):
-        self.value.assign(0.0)
+        self._value.assign(0.0)
+        if self._count is not None:
+            self._count.assign(0.0)
 
 
 class _EpochTrainLogs(tf.keras.callbacks.Callback):
@@ -61,6 +81,12 @@ class _EpochTrainLogs(tf.keras.callbacks.Callback):
     step. The aggregates are read right after the last training batch - before Keras's validation
     pass resets the accumulators - and merged into the epoch logs ahead of every other callback
     (CustomTrainModel.fit puts this callback first), so loggers and stoppers see the same keys.
+
+    Also resets the model's ``_Accum``-based health/probe counters (NT-037): once at epoch begin
+    (mirrors Keras's own ``reset_metrics()`` at the start of an epoch) and again right after the
+    train-epoch aggregates are stashed, just before Keras's validation pass starts (mirrors
+    Keras's ``reset_metrics()`` at the start of ``evaluate()``) - these plain-Variable counters are
+    invisible to that mechanism, so they need the same two reset points by hand.
     """
 
     def __init__(self, model):
@@ -71,11 +97,13 @@ class _EpochTrainLogs(tf.keras.callbacks.Callback):
 
     def on_epoch_begin(self, epoch, logs=None):
         self._stash = None
+        self._model_ref._reset_light_accumulators()
 
     def on_train_batch_end(self, batch, logs=None):
         steps = (self.params or {}).get("steps")
         if steps is None or batch + 1 >= steps:  # the last batch (every batch if the length is unknown)
             self._stash = self._model_ref.train_epoch_logs()
+            self._model_ref._reset_light_accumulators()
 
     def on_epoch_end(self, epoch, logs=None):
         if logs is not None and self._stash:
@@ -189,26 +217,24 @@ class CustomTrainModel(models.Model):
         self._pit_acc = PITAccumulator(var_floor=float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                         var_cap=float(getattr(self.config, 'VAR_CAP', 1e3)),
                                         name='pit_accumulator')
-        # Per-term non-finite mask counters (D-026, NT-036): one tf.keras.metrics.Sum per name in
+        # Per-term non-finite mask counters (D-026, NT-036): one _Accum('sum') per name in
         # losses.functions.MASK_TERM_NAMES, updated by _finite_or_zero every time that term's mask
-        # actually fires. Logged as masked_<term> / val_masked_<term> (see _epoch_results).
-        self._mask_counters = {t: tf.keras.metrics.Sum(name=f'masked_{t}') for t in _losses.MASK_TERM_NAMES}
+        # actually fires. Logged as masked_<term> / val_masked_<term> (see _epoch_results). Plain
+        # _Accum, not tf.keras.metrics.Sum: see _Accum's docstring (model.submodules / seed drift).
+        self._mask_counters = {t: _Accum("sum") for t in _losses.MASK_TERM_NAMES}
         # Per-group gradient health (NT-037, D-026): train only (test_step never computes
         # gradients). grad_norm_max_* is the epoch maximum of the PRE-CLIP global norm of that
-        # group (a plain Variable, since tf.keras.metrics.Max computes the max of |values| it is
-        # given, which is exactly what a single running scalar assign(tf.maximum(...)) does more
-        # cheaply here); grad_clip_steps_* counts steps whose pre-clip norm exceeded GRAD_CLIP_NORM.
+        # group; grad_clip_steps_* counts steps whose pre-clip norm exceeded GRAD_CLIP_NORM.
         self._grad_health = {
-            'grad_norm_max_main': _MaxMetric(name='grad_norm_max_main'),
-            'grad_norm_max_indicator': _MaxMetric(name='grad_norm_max_indicator'),
-            'grad_clip_steps_main': tf.keras.metrics.Sum(name='grad_clip_steps_main'),
-            'grad_clip_steps_indicator': tf.keras.metrics.Sum(name='grad_clip_steps_indicator'),
+            'grad_norm_max_main': _Accum("max"),
+            'grad_norm_max_indicator': _Accum("max"),
+            'grad_clip_steps_main': _Accum("sum"),
+            'grad_clip_steps_indicator': _Accum("sum"),
         }
         # Dead-zone counters (D-026, NT-037 acceptance 2): how many variance outputs this epoch sat
-        # exactly at VAR_FLOOR, per horizon (a Sum of a per-batch count, so `.result()` is the raw
-        # epoch total, not an average).
-        self._var_floor_counters = {f'var_at_floor_h{i}': tf.keras.metrics.Sum(name=f'var_at_floor_h{i}')
-                                    for i in range(3)}
+        # exactly at VAR_FLOOR, per horizon (a running sum, so `.result()` is the raw epoch total,
+        # not an average).
+        self._var_floor_counters = {f'var_at_floor_h{i}': _Accum("sum") for i in range(3)}
         # Per-loss-term gradient probe (D-026 "about 10%", NT-037 acceptance 6): off unless
         # Config.PROBE_GRADIENTS is set, in which case an extra persistent-tape backward pass every
         # PROBE_EVERY steps measures, per term, its share of the shared-trunk (main-group) gradient
@@ -217,9 +243,9 @@ class CustomTrainModel(models.Model):
                              'inter_reg', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'coherence')
         self._probe_means = {}
         for t in self._probe_terms:
-            self._probe_means[f'probe_grad_share_{t}'] = tf.keras.metrics.Mean(name=f'probe_grad_share_{t}')
-            self._probe_means[f'probe_value_share_{t}'] = tf.keras.metrics.Mean(name=f'probe_value_share_{t}')
-            self._probe_means[f'probe_cos_{t}'] = tf.keras.metrics.Mean(name=f'probe_cos_{t}')
+            self._probe_means[f'probe_grad_share_{t}'] = _Accum("mean")
+            self._probe_means[f'probe_value_share_{t}'] = _Accum("mean")
+            self._probe_means[f'probe_cos_{t}'] = _Accum("mean")
         self._setattr_tracking = True
 
         # Robust (non-string) collection of indicator vars for gradient routing
@@ -288,12 +314,26 @@ class CustomTrainModel(models.Model):
         extra = list(getattr(self, '_step_means', {}).values())
         extra += [m for m in (getattr(self, '_dir_head_acc', None), getattr(self, '_dir_gauss_acc', None),
                               getattr(self, '_pit_acc', None)) if m is not None]
-        extra += list(getattr(self, '_mask_counters', {}).values())
-        extra += list(getattr(self, '_grad_health', {}).values())
-        extra += list(getattr(self, '_var_floor_counters', {}).values())
-        extra += list(getattr(self, '_probe_means', {}).values())
+        # NOTE: the NT-037/D-026 health/probe counters (_mask_counters, _grad_health,
+        # _var_floor_counters, _probe_means) are deliberately NOT listed here: they are plain
+        # _Accum objects, not tf.keras.metrics.Metric (see _Accum's docstring), so Keras's own
+        # reset_metrics() would not know what to do with them anyway. _EpochTrainLogs resets them
+        # by hand instead (on_epoch_begin and right after the train-epoch stash).
         seen = {id(m) for m in base}
         return base + [m for m in extra if id(m) not in seen]
+
+    def _reset_light_accumulators(self):
+        """Zero every NT-037/D-026 ``_Accum`` counter (mask/grad-health/var-floor/probe).
+
+        Called by ``_EpochTrainLogs`` at epoch begin and again right after the train-epoch
+        aggregates are stashed (mirrors the two points Keras's own ``reset_metrics()`` fires at:
+        the start of an epoch, and the start of ``evaluate()``'s validation pass) - see
+        ``_Accum``'s docstring for why these are not plain ``tf.keras.metrics.Metric`` instances
+        that Keras could reset on its own.
+        """
+        for d in (self._mask_counters, self._grad_health, self._var_floor_counters, self._probe_means):
+            for acc in d.values():
+                acc.reset_state()
 
     def _epoch_logs(self, loss_components, y_true, y_pred_9, last_close, head_prefix, gauss_prefix, training,
                     grad_global_norm=None):
