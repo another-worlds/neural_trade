@@ -1,0 +1,386 @@
+<meta charset="utf-8">
+<title>/*__TITLE__*/</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#f2f4f7; --surface:#ffffff; --surface-2:#e8ecf1; --ink:#131b27; --ink-2:#3d4757; --muted:#667085;
+  --line:#d3d9e2; --grid:#e3e7ed; --accent:#9a6200; --accent-soft:#f6e7c8;
+  --good:#1d7a50; --bad:#b4235a; --h0:#3987e5; --h1:#d95926; --h2:#199e70; --neutral:#7b8594; --alt:#6a5acd;
+  --shadow:0 1px 2px rgba(19,27,39,.06),0 8px 24px rgba(19,27,39,.06);
+  --display:'Bricolage Grotesque','IBM Plex Sans',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark; --ground:#0d131d; --surface:#151d2a; --surface-2:#1c2636; --ink:#e7ecf3; --ink-2:#c3cbd8; --muted:#95a1b3;
+  --line:#2a3547; --grid:#212b3b; --accent:#e3aa3c; --accent-soft:#3a2d12; --good:#46b988; --bad:#f06292; --neutral:#8c97a8; --alt:#a99cf0;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);}}
+:root[data-theme="dark"]{
+  color-scheme:dark; --ground:#0d131d; --surface:#151d2a; --surface-2:#1c2636; --ink:#e7ecf3; --ink-2:#c3cbd8; --muted:#95a1b3;
+  --line:#2a3547; --grid:#212b3b; --accent:#e3aa3c; --accent-soft:#3a2d12; --good:#46b988; --bad:#f06292; --neutral:#8c97a8; --alt:#a99cf0;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+body{background:var(--ground);color:var(--ink);font:16px/1.6 var(--body);margin:0}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:clamp(16px,4vw,40px);padding-block:0 96px}
+@media (min-width:1180px){.wrap{padding-left:240px;max-width:1440px}}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(38px,6vw,78px);line-height:1.02;font-weight:750}
+h2{font-size:clamp(27px,3.4vw,42px);line-height:1.1;font-weight:700}
+h3{font-size:19px;line-height:1.3;font-weight:650}
+p{margin:0}
+.lede{font-size:clamp(17px,1.6vw,20px);color:var(--ink-2);max-width:68ch}
+.muted{color:var(--muted)} .mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:500 12px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.rail{position:fixed;left:0;top:env(safe-area-inset-top,0px);bottom:0;width:212px;padding:28px 18px;border-right:1px solid var(--line);background:var(--ground);display:none;flex-direction:column;gap:4px;z-index:5}
+@media (min-width:1180px){.rail{display:flex}}
+.rail .brand{font:700 15px/1.2 var(--display);margin-bottom:18px}
+.rail .brand span{display:block;font:400 12px/1.4 var(--mono);color:var(--muted);margin-top:4px}
+.rail a{display:flex;gap:10px;align-items:baseline;text-decoration:none;color:var(--muted);padding:6px 8px;border-radius:6px;font-size:14px}
+.rail a b{font:500 11px var(--mono);min-width:18px}
+.rail a:hover{color:var(--ink);background:var(--surface-2)}
+.rail a.on{color:var(--ink);background:var(--surface)} .rail a.on b{color:var(--accent)}
+.topnav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ground);border-bottom:1px solid var(--line);overflow-x:auto;white-space:nowrap;padding:10px 16px;display:flex;gap:6px}
+@media (min-width:1180px){.topnav{display:none}}
+.topnav a{font-size:13px;text-decoration:none;color:var(--muted);padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+.topnav a.on{color:var(--ink);border-color:var(--accent)}
+section.ch{padding-top:84px;display:flex;flex-direction:column;gap:26px;scroll-margin-top:40px}
+.head{display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:20px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 18px 12px;display:flex;flex-direction:column;gap:10px;min-width:0;box-shadow:var(--shadow)}
+.panel .cap{font-size:14px;color:var(--ink-2)} .panel .cap b{color:var(--ink)}
+.chart{width:100%;min-height:320px} .chart.mid{min-height:390px} .chart.tall{min-height:680px}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;color:var(--ink-2);max-width:80ch} .note b{color:var(--ink)}
+.hero{padding-top:56px;display:grid;gap:32px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--surface);padding:16px;display:flex;flex-direction:column;gap:4px}
+.kpi .v{font:600 26px/1.1 var(--mono);font-variant-numeric:tabular-nums}
+.kpi .k{font-size:13px;color:var(--muted)}
+.kpi .v.good{color:var(--good)} .kpi .v.bad{color:var(--bad)} .kpi .v.lead{color:var(--accent)}
+.pipe{display:flex;flex-wrap:wrap;gap:8px}
+.stage{flex:1 1 150px;min-width:130px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:4px}
+.stage:hover{border-color:var(--accent)}
+.stage .n{font:500 11px var(--mono);color:var(--muted)} .stage .t{font:650 15px/1.2 var(--display)} .stage .s{font-size:12.5px;color:var(--muted);line-height:1.35}
+.stage.on{border-color:var(--accent);background:var(--accent-soft)}
+.stageDetail{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px;color:var(--ink-2)}
+.stageDetail b{color:var(--ink)}
+button:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:var(--surface);color:var(--ink-2);padding:6px 12px;font:13px var(--body);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--ink);color:var(--ground)}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:500 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.lead td{background:var(--accent-soft)}
+.up{color:var(--good)} .dn{color:var(--bad)}
+.verdict{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
+.foot{margin-top:72px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+.foot code{font-family:var(--mono);font-size:12px}
+.corrgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
+</style>
+
+<nav class="rail" id="rail" aria-label="Chapters"></nav>
+<nav class="topnav" id="topnav" aria-label="Chapters"></nav>
+<div class="wrap" id="app"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.34.0/plotly.min.js"></script>
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById('data').textContent);
+const pct=(x,d=1)=>x==null?'–':(x>0?'+':'')+(100*x).toFixed(d)+'%';
+const pct0=(x,d=1)=>x==null?'–':(100*x).toFixed(d)+'%';
+const fmt=(x,d=3)=>x==null?'–':Number(x).toFixed(d);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const el=id=>document.getElementById(id);
+const mean=a=>a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
+function T(){ return {ink:css('--ink'),ink2:css('--ink-2'),muted:css('--muted'),grid:css('--grid'),line:css('--line'),accent:css('--accent'),good:css('--good'),bad:css('--bad'),
+  neutral:css('--neutral'),alt:css('--alt'),surface:css('--surface'),h0:css('--h0'),h1:css('--h1'),h2:css('--h2'),mono:"IBM Plex Mono, Consolas, monospace",body:"IBM Plex Sans, system-ui, sans-serif"}; }
+function L(extra){
+  const t=T(); extra=extra||{};
+  const ax={gridcolor:t.grid,zerolinecolor:t.line,linecolor:t.line,tickfont:{family:t.mono,size:11,color:t.muted},title:{font:{size:12,color:t.muted}},automargin:true};
+  const base={paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{family:t.body,color:t.ink2,size:12},margin:{l:56,r:16,t:44,b:44},hovermode:'closest',
+    legend:{orientation:'h',x:0,y:1.02,yanchor:'bottom',font:{size:12,color:t.ink2}},hoverlabel:{font:{family:t.mono,size:12}},xaxis:{...ax},yaxis:{...ax}};
+  const out={...base,...extra};
+  out.legend={...base.legend,...(extra.legend||{})};
+  if (extra.margin) out.margin={...base.margin,...extra.margin};
+  for (const k of Object.keys(extra)) if (/^[xy]axis\d*$/.test(k)) out[k]={...ax,...extra[k]};
+  return out;
+}
+const CFG={displaylogo:false,responsive:true,modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d','toggleSpikelines'],displayModeBar:'hover'};
+const plot=(id,data,layout)=>{ const e=el(id); if(e) Plotly.react(e,data,L(layout),CFG); };
+const segHandler=(id,fn)=>el(id).addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; el(id).querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); fn(b.dataset.v); });
+const kpis=list=>`<div class="kpis">${list.map(k=>`<div class="kpi"><div class="v ${k[2]||''}">${k[0]}</div><div class="k">${k[1]}</div></div>`).join('')}</div>`;
+const panel=(cap,id,cls='',extra='')=>`<div class="panel">${extra}<div class="cap">${cap}</div><div id="${id}" class="chart ${cls}"></div></div>`;
+const chapter=(id,eyebrow,h,lede,body)=>`<section class="ch" id="${id}"><div class="head"><p class="eyebrow">${eyebrow}</p><h2>${h}</h2>${lede?`<p class="lede">${lede}</p>`:''}</div>${body}</section>`;
+
+/* shared: a price + trades + equity + drawdown panel */
+function drawTradePanel(id, V, opts){
+  const t=T(), TD=V.trades, n=TD.side.length, which=opts.trades||'all';
+  const idx=[...Array(n).keys()].filter(i=>which==='all'||(which==='long'&&TD.side[i]>0)||(which==='short'&&TD.side[i]<0));
+  const mk=win=>{ const ii=idx.filter(i=>(TD.ret_bps[i]>0)===win); return {type:'scatter',mode:'markers',xaxis:'x',yaxis:'y',name:win?'winning trade':'losing trade',
+    x:ii.map(i=>TD.t_entry[i]),y:ii.map(i=>TD.px[i]),marker:{size:opts.msize||6,symbol:ii.map(i=>TD.side[i]>0?(win?'triangle-up':'triangle-up-open'):(win?'triangle-down':'triangle-down-open')),color:win?t.good:t.bad,line:{width:1,color:win?t.good:t.bad}},
+    text:ii.map(i=>`${TD.side[i]>0?'LONG':'SHORT'} ${TD.t_entry[i]} → ${TD.t_exit[i]}<br>${TD.ret_bps[i]>0?'+':''}${TD.ret_bps[i]} bps · ${TD.bars[i]} bars · exit ${TD.reason[i]}`),hovertemplate:'%{text}<extra></extra>'}; };
+  const data=[{type:'scatter',mode:'lines',name:'BTC/USDT close',x:V.t,y:V.close,line:{color:t.ink2,width:1},xaxis:'x',yaxis:'y',hovertemplate:'%{x}<br>$%{y:,.0f}<extra></extra>'}];
+  (opts.extraPrice||[]).forEach(tr=>data.push({...tr,xaxis:'x',yaxis:'y'}));
+  data.push(mk(true),mk(false),
+    {type:'scatter',mode:'lines',name:opts.eqName||'equity',x:V.t,y:V.equity,line:{color:t.accent,width:2.2},xaxis:'x',yaxis:'y2',hovertemplate:'$%{y:,.0f}<extra></extra>'},
+    {type:'scatter',mode:'lines',name:'buy-and-hold',x:V.t,y:V.bh,line:{color:t.neutral,width:1.4,dash:'dot'},xaxis:'x',yaxis:'y2',hovertemplate:'B&H $%{y:,.0f}<extra></extra>'},
+    {type:'scatter',mode:'lines',name:'drawdown',x:V.t,y:V.dd.map(v=>-v),fill:'tozeroy',line:{color:t.bad,width:1},fillcolor:'rgba(180,35,90,0.18)',xaxis:'x',yaxis:'y3',hovertemplate:'drawdown %{y:.2%}<extra></extra>'});
+  const shapes=opts.ddLine?[{type:'line',xref:'paper',x0:0,x1:1,yref:'y3',y0:-opts.ddLine,y1:-opts.ddLine,line:{color:t.bad,dash:'dash',width:1}}]:[];
+  plot(id,data,{margin:{l:64,r:16,t:44,b:40},xaxis:{type:'date'},yaxis:{domain:[0.52,1],title:{text:'price ($)'},tickformat:',.0f'},
+    yaxis2:{domain:[0.2,0.48],title:{text:'equity ($)'},tickformat:',.0f'},yaxis3:{domain:[0,0.16],title:{text:'drawdown'},tickformat:'.0%'},shapes});
+}
+function nullPanel(id, R, ret, bh, label){
+  const t=T();
+  plot(id,[
+    {type:'scatter',x:[R.random_p05_total_return,R.random_p95_total_return],y:[0,0],mode:'lines',line:{color:t.neutral,width:22},opacity:0.35,name:'random: 5th–95th percentile',hoverinfo:'skip'},
+    {type:'scatter',x:[ret],y:[0],mode:'markers+text',marker:{size:18,color:t.accent,symbol:'diamond'},text:[`${label} ${pct(ret)}`],textposition:'top center',textfont:{family:t.mono,color:t.ink},name:label,hovertemplate:'%{x:.1%}<extra></extra>'},
+    {type:'scatter',x:[bh],y:[0],mode:'markers+text',marker:{size:12,color:t.bad,symbol:'x'},text:['buy-and-hold'],textposition:'bottom center',textfont:{family:t.mono,color:t.ink2},name:'buy-and-hold',hovertemplate:'%{x:.1%}<extra></extra>'}],
+    {xaxis:{tickformat:'.0%',title:{text:'return on the block'},range:[Math.min(R.random_p05_total_return,bh,ret)-0.04,Math.max(R.random_p95_total_return,bh,ret)+0.05]},yaxis:{visible:false,range:[-1,1]}});
+}
+function nav(CH, brand){
+  el('rail').innerHTML=`<div class="brand">neural_trade<span>${brand}</span></div>`+CH.map((c,i)=>`<a href="#${c[0]}" data-c="${c[0]}"><b>${String(i).padStart(2,'0')}</b>${c[1]}</a>`).join('');
+  el('topnav').innerHTML=CH.map(c=>`<a href="#${c[0]}" data-c="${c[0]}">${c[1]}</a>`).join('');
+  const secs=CH.map(c=>el(c[0]));
+  const cur=()=>{ let b=0; secs.forEach((s,i)=>{ if(s&&s.getBoundingClientRect().top<window.innerHeight*0.35) b=i; }); return b; };
+  const mark=()=>{ const i=cur(); document.querySelectorAll('[data-c]').forEach(a=>a.classList.toggle('on',a.dataset.c===CH[i][0])); };
+  window.addEventListener('scroll',mark,{passive:true}); mark();
+  document.addEventListener('keydown',e=>{ if(e.target.closest('input,select,textarea')) return; const i=cur();
+    if(e.key==='j'){ secs[Math.min(i+1,secs.length-1)].scrollIntoView(); } if(e.key==='k'){ secs[Math.max(i-1,0)].scrollIntoView(); } });
+}
+function stages(id, list){
+  el(id).innerHTML=`<div class="pipe">${list.map((s,i)=>`<button class="stage" data-i="${i}"><span class="n">${String(i+1).padStart(2,'0')}</span><span class="t">${s[0]}</span><span class="s">${s[1]}</span></button>`).join('')}</div><div class="stageDetail" id="${id}D"></div>`;
+  const show=i=>{ el(id).querySelectorAll('.stage').forEach(b=>b.classList.toggle('on',+b.dataset.i===i)); el(id+'D').innerHTML=list[i][2]; };
+  el(id).addEventListener('click',e=>{ const b=e.target.closest('.stage'); if(b) show(+b.dataset.i); }); show(0);
+}
+
+/* =============================== #3 · SEED ENSEMBLE =============================== */
+function ensemblePage(){
+  const F=D.folds, M=D.manifest, fk=['f-3','f-2'];
+  const st={fold:'f-2',trades:'all'};
+  const CH=[['e0','Seed ensemble C3'],['e1','How it works'],['e2','The members'],['e3','What averaging does'],['e4','Backtest'],['e5','Sizing'],['e6','Verdict']];
+  const cRet=fk.map(f=>F[f].c3.ret), cDD=fk.map(f=>F[f].c3.dd);
+  el('app').innerHTML = `
+  <header class="hero" id="e0"><div class="head" style="gap:20px;max-width:980px">
+    <p class="eyebrow">neural_trade · candidate #3 · BTC/USDT 1-minute · zero trading costs</p>
+    <h1>C3: three seeds, one position</h1>
+    <p class="lede">Three copies of the 360-day model, trained with different random seeds, are averaged into one forecast. The default strategy trades it at 70% position size. It is the only candidate whose drawdown stays under 5% on both evaluation blocks: ${pct0(cDD[0])} and ${pct0(cDD[1])}. It earns ${pct(cRet[0])} and ${pct(cRet[1])}. Averaging did not raise the win share; the smaller position did the work.</p></div>
+    ${kpis([[pct(M.mean_return),'mean return per block','lead'],[M.profitable_cells,'blocks profitable','good'],[pct0(M.mean_win_share),'winning trades',''],[pct0(M.max_drawdown),'worst drawdown','good'],
+      [pct(F['f-3'].c3.ret),'fold −3 (B&H '+pct(F['f-3'].c3.bh)+')',''],[pct(F['f-2'].c3.ret),'fold −2 (B&H '+pct(F['f-2'].c3.bh)+')',''],[(F['f-3'].c3.trades+F['f-2'].c3.trades).toLocaleString('en'),'trades in 2 blocks',''],['0.7','position size','']])}
+    ${panel('<b>Equity of $10,000 on both evaluation blocks</b> (days into the block). Gold = C3, dotted = buy-and-hold on the same block.','heroEq')}
+  </header>
+  ${chapter('e1','Chapter 1 · How it works','From three forecasts to one trade','Click a stage.',`<div id="stg"></div>`)}
+  ${chapter('e2','Chapter 2 · The members','Six models, two blocks, three seeds each','The members are the six 360-day models of the stability check: folds −3 and −2 × seeds 0–2. Same data, same code, same settings; only the random seed differs. They still train differently.',
+    `<div class="grid2">${panel('<b>Validation loss of each member.</b> Stars mark the served epoch (best validation loss). Fold −3 in blue, fold −2 in gold.','members')}
+      ${panel('<b>Direction AUC on the dev block</b>, per seed and for the ensemble (diamond). Averaging lands the ensemble near the seeds\' level, not above it.','aucs','','<div class="ctrl"><div class="seg" id="aucSeg"><button data-v="f-3">fold −3</button><button data-v="f-2" class="on">fold −2</button></div></div>')}</div>
+      <div class="panel"><div class="cap"><b>Fit of each member</b> (dev block, h0 / h1 / h2). The logistic column is a regression on three lagged returns; CRPSS is the variance forecast's skill against a constant variance.</div><div class="tbl"><table id="fitTbl"></table></div></div>`)}
+  ${chapter('e3','Chapter 3 · What averaging does','The seeds barely agree','The traded signal is the confidence-weighted P(up). If the seeds shared one real signal, their signals would be strongly correlated and averaging would clean it. They are almost uncorrelated. Each seed\'s signal is mostly its own noise around a very small common part, and averaging keeps the small common part.',
+    `<div class="ctrl"><div class="seg" id="corrSeg"><button data-v="f-3">fold −3</button><button data-v="f-2" class="on">fold −2</button></div></div>
+     <div class="corrgrid">${panel('<b>Correlation of the traded signal</b> between seeds and the ensemble, bar by bar on the dev block.','corr')}
+      ${panel('<b>Distribution of the traded signal.</b> The ensemble (gold) is narrower: averaging independent noise shrinks it toward 0.5.','whist')}
+      ${panel('<b>Shared entries.</b> Share of the ensemble\'s trades that a single seed also opened within ±2 bars. The ensemble trades different moments than any member.','overlap')}</div>
+     <div class="note" id="ensNote"></div>`)}
+  ${chapter('e4','Chapter 4 · Backtest','Two blocks, two different markets','Fold −3 was a rising market (buy-and-hold ' + pct(F['f-3'].c3.bh) + '), fold −2 a falling one (' + pct(F['f-2'].c3.bh) + '). The strategy trades both directions, so the market\'s drift barely matters.',
+    `<div class="ctrl"><div class="seg" id="foldSeg"><button data-v="f-3">fold −3</button><button data-v="f-2" class="on">fold −2</button></div><div class="seg" id="trSeg"><button data-v="all" class="on">all trades</button><button data-v="long">longs</button><button data-v="short">shorts</button><button data-v="none">no markers</button></div></div>
+     ${panel('<b>Price, trades, equity and drawdown.</b> ▲ long, ▼ short, filled = winning. The dashed line in the drawdown panel is the 5% limit.','bt','tall','')}
+     <div class="grid2">${panel('<b>Ensemble against its own members</b> on this block, all at position 0.7: return, win share and drawdown.','vsSeeds')}
+      ${panel('<b>Against luck:</b> 100 random strategies with the same trade frequency (5th–95th percentile) against C3.','nullc')}</div>`)}
+  ${chapter('e5','Chapter 5 · Sizing','Drawdown is a position-size choice','Return and drawdown both scale almost linearly with position size, and the win share does not change. The 0.7 in C3 was chosen as the largest size that keeps both dev blocks under 5% drawdown. That is a choice made on dev data, not a forecast.',
+    `<div class="grid2">${panel('<b>Return and worst drawdown against position size</b>, both blocks. The dashed line is the 5% drawdown limit.','sizes')}
+      ${panel('<b>Entry line</b> at position 0.7: return of the ensemble (gold) and of each seed (thin) as the entry quantile tightens.','qcurve','','<div class="ctrl"><div class="seg" id="qSeg"><button data-v="f-3">fold −3</button><button data-v="f-2" class="on">fold −2</button></div></div>')}</div>
+     ${panel('<b>Costs.</b> Return per block of C3 against the round-trip cost. Like C1, it needs costs below about 1 bps.','costc')}`)}
+  ${chapter('e6','Chapter 6 · Verdict','What C3 is good for','',`<div class="verdict" id="verdict"></div>`)}
+  <div class="foot">Built by <code>scripts/presentation/extract_candidate.py ensemble</code> from <code>runs/scenarios/long_360d_stab</code> (the six 360-day models) and <code>configs/candidates/manifest.json</code> (C3). Zero trading costs (D-044) unless a chart says otherwise; the test fold (−1) is never used (D-020). Correction: an earlier chat summary said the seeds "make the same mistakes"; the correlations in Chapter 3 show the opposite.</div>`;
+  nav(CH,'candidate #3 · seed ensemble');
+  stages('stg',[
+    ['Three seeds','the same 360-day model',`<b>Three trainings of the 360-day model</b> per dev fold, identical except for the random seed (weight initialisation, dropout, shuffling). They serve different epochs and, as Chapter 3 shows, learn different direction signals.`],
+    ['Average','every head, both blocks',`<b>The mean of the three seeds' predictions</b>, bar by bar: P(up) (raw and calibrated), the price change and the variance, on the calibration block and on the dev block. No retraining.`],
+    ['Signal','confidence-weighted P(up)',`<b>The traded signal</b> weights each horizon's P(up) by its confidence (exp(−variance / scale)). With three seeds averaged, it is narrower than any member's.`],
+    ['Entry lines','fitted on calibration',`<b>calibrated_quantile 0.9</b>: long above the signal's 90th percentile on the ensemble's calibration block, short below its 10th; exit through the median, after 15 bars or at a 2σ stop.`],
+    ['Position 0.7','70% of equity per trade',`<b>Size 0.7</b>: each trade uses 70% of equity. Chosen as the largest size that kept both dev blocks' drawdown under 5% (Chapter 5).`],
+    ['Backtest','two dev blocks, 0 costs',`<b>Next-open fills, stops on high/low, zero costs (D-044)</b>, against buy-and-hold and 100 random strategies with the same frequency. Fold −3 and fold −2 are ~32-day blocks the models never trained on.`]]);
+  function drawAll(){
+    const t=T();
+    // hero
+    plot('heroEq', fk.flatMap(f=>{ const V=F[f].view, x=V.t.map((_,i)=>i*15/1440), col=f==='f-2'?t.accent:t.h0;
+      return [{type:'scatter',mode:'lines',name:`C3 ${f}`,x,y:V.equity,line:{color:col,width:2.4},hovertemplate:`${f} day %{x:.1f}: $%{y:,.0f}<extra></extra>`},
+              {type:'scatter',mode:'lines',name:`buy-and-hold ${f}`,x,y:V.bh,line:{color:col,width:1.2,dash:'dot'},hovertemplate:`B&H ${f}: $%{y:,.0f}<extra></extra>`}]; }),
+      {xaxis:{title:{text:'days into the block'}},yaxis:{title:{text:'equity ($)'},tickformat:',.0f'}});
+    // members
+    plot('members', fk.flatMap(f=>F[f].training.map((tr,i)=>{ const e=tr.epoch.map(x=>x+1), col=f==='f-2'?t.accent:t.h0, s=tr.served_epoch;
+      return [{type:'scatter',mode:'lines',name:`${f} seed ${i}`,x:e,y:tr.val_loss,line:{color:col,dash:['solid','dash','dot'][i]},legendgroup:f+i,hovertemplate:`${f} s${i} epoch %{x}: %{y:.3f}<extra></extra>`},
+              {type:'scatter',mode:'markers',x:[s],y:[tr.val_loss[s-1]],marker:{symbol:'star',size:11,color:col},showlegend:false,legendgroup:f+i,hovertemplate:`served epoch ${s}<extra></extra>`}]; }).flat()),
+      {xaxis:{title:{text:'epoch'}},yaxis:{title:{text:'validation loss'}}});
+    drawAuc(); drawCorr(); drawFold(); drawQ();
+    let rows='<tr><th>member</th><th>AUC h0 / h1 / h2</th><th>logistic</th><th>ECE h1</th><th>CRPSS h1</th><th>coverage h1</th></tr>';
+    fk.forEach(f=>{ F[f].fit.forEach((m,i)=>{ rows+=`<tr><td>${f} seed ${i}</td><td>${fmt(m.h0.auc)} / ${fmt(m.h1.auc)} / ${fmt(m.h2.auc)}</td><td>${fmt(m.h0.auc_logreg)} / ${fmt(m.h1.auc_logreg)} / ${fmt(m.h2.auc_logreg)}</td><td>${fmt(m.h1.ece)}</td><td>${pct0(m.h1.crpss)}</td><td>${pct0(m.h1.coverage90)}</td></tr>`; });
+      const a=F[f].auc.ensemble; rows+=`<tr class="lead"><td>${f} ensemble</td><td>${fmt(a[0])} / ${fmt(a[1])} / ${fmt(a[2])}</td><td>–</td><td>–</td><td>–</td><td>–</td></tr>`; });
+    el('fitTbl').innerHTML=rows;
+    plot('sizes', fk.flatMap(f=>{ const sc=F[f].size_curve, col=f==='f-2'?t.accent:t.h0;
+      return [{type:'scatter',mode:'lines+markers',name:`return ${f}`,x:sc.map(s=>s.size),y:sc.map(s=>s.ret),line:{color:col,width:2.2},hovertemplate:`${f} size %{x}: %{y:.1%}<extra></extra>`},
+              {type:'scatter',mode:'lines+markers',name:`drawdown ${f}`,x:sc.map(s=>s.size),y:sc.map(s=>s.dd),line:{color:col,dash:'dot'},marker:{symbol:'x'},hovertemplate:`${f} size %{x}: DD %{y:.1%}<extra></extra>`}]; }),
+      {xaxis:{title:{text:'position size'}},yaxis:{title:{text:'return / drawdown'},tickformat:'.0%'},
+       shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0.05,y1:0.05,line:{color:t.bad,dash:'dash'}},{type:'line',x0:0.7,x1:0.7,yref:'paper',y0:0,y1:1,line:{color:t.muted,dash:'dot'}}],
+       annotations:[{xref:'paper',x:0,y:0.05,text:'5% drawdown limit',showarrow:false,xanchor:'left',yanchor:'bottom',font:{size:11,color:t.bad,family:t.mono}}]});
+    plot('costc', fk.map(f=>{ const k=Object.keys(F[f].cost_curve).map(Number).sort((a,b)=>a-b);
+      return {type:'scatter',mode:'lines+markers',name:f,x:k,y:k.map(c=>F[f].cost_curve[String(c)]),line:{color:f==='f-2'?t.accent:t.h0,width:2.2},hovertemplate:`${f}: %{y:.1%} at %{x} bps<extra></extra>`}; }),
+      {xaxis:{title:{text:'round-trip cost (bps)'}},yaxis:{title:{text:'return per block'},tickformat:'.0%'},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]});
+  }
+  let aucFold='f-2', corrFold='f-2', qFold='f-2';
+  function drawAuc(){ const t=T(), A=F[aucFold].auc, H=['h0 · 10 min','h1 · 15 min','h2 · 20 min'];
+    plot('aucs',[...A.seeds.map((s,i)=>({type:'scatter',mode:'markers',name:`seed ${i}`,x:H,y:s,marker:{size:11,color:t.neutral,symbol:['circle','square','triangle-up'][i]},hovertemplate:`seed ${i} %{x}: %{y:.4f}<extra></extra>`})),
+      {type:'scatter',mode:'markers',name:'ensemble',x:H,y:A.ensemble,marker:{size:16,color:t.accent,symbol:'diamond'},hovertemplate:'ensemble %{x}: %{y:.4f}<extra></extra>'}],
+      {yaxis:{title:{text:'direction AUC'},range:[0.485,0.535]},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0.5,y1:0.5,line:{color:t.muted,dash:'dot'}}]}); }
+  function drawCorr(){ const t=T(), f=F[corrFold];
+    plot('corr',[{type:'heatmap',z:f.corr,x:f.corr_labels,y:f.corr_labels,zmin:-1,zmax:1,colorscale:[[0,t.bad],[0.5,t.surface],[1,t.h0]],text:f.corr.map(r=>r.map(v=>v.toFixed(2))),texttemplate:'%{text}',
+      textfont:{family:t.mono,size:13,color:t.ink},hovertemplate:'%{y} × %{x}: %{z:.3f}<extra></extra>',colorbar:{thickness:10,tickfont:{family:t.mono,size:10,color:t.muted}}}],{margin:{l:80,t:12},yaxis:{autorange:'reversed'},showlegend:false});
+    const x=Array.from({length:50},(_,i)=>0.44+(i+0.5)*0.12/50);
+    plot('whist',[...['s0','s1','s2'].map((k,i)=>({type:'scatter',mode:'lines',name:`seed ${i}`,x,y:f.wd_hist[k],line:{color:t.neutral,width:1.2,dash:['solid','dash','dot'][i]},hovertemplate:`seed ${i} %{x:.3f}: %{y}<extra></extra>`})),
+      {type:'scatter',mode:'lines',name:'ensemble',x,y:f.wd_hist.ens,line:{color:t.accent,width:2.6},fill:'tozeroy',fillcolor:'rgba(154,98,0,0.12)',hovertemplate:'ensemble %{x:.3f}: %{y}<extra></extra>'}],
+      {xaxis:{title:{text:'confidence-weighted P(up)'}},yaxis:{title:{text:'bars'}}});
+    plot('overlap',[{type:'bar',x:['seed 0','seed 1','seed 2'],y:f.entry_overlap,marker:{color:t.neutral},text:f.entry_overlap.map(v=>pct0(v,0)),textposition:'outside',cliponaxis:false,hovertemplate:'%{x}: %{y:.0%}<extra></extra>'}],
+      {showlegend:false,yaxis:{tickformat:'.0%',range:[0,1],title:{text:'share of the ensemble\'s entries'}}});
+    const off=f.corr.slice(0,3).flatMap((r,i)=>r.slice(0,3).filter((_,j)=>j>i));
+    el('ensNote').innerHTML=`<b>Fold ${corrFold.replace('f','')}:</b> the seeds' signals correlate at ${off.map(v=>v.toFixed(2)).join(', ')} with each other, and ${f.corr[3].slice(0,3).map(v=>v.toFixed(2)).join(', ')} with the ensemble. The ensemble wins ${pct0(f.c3.win)} of its trades; its seeds win ${f.seeds.map(s=>pct0(s.win)).join(', ')}. The average of three near-independent weak signals is about as weak as each of them. That is why averaging does not lift the win share.`; }
+  function drawFold(){ const t=T(), f=F[st.fold];
+    drawTradePanel('bt', f.view, {trades:st.trades, eqName:'C3 equity', ddLine:0.05});
+    const lab=['seed 0','seed 1','seed 2','ensemble (C3)'], rows=[...f.seeds07,f.c3];
+    plot('vsSeeds',[
+      {type:'bar',name:'return',x:lab,y:rows.map(r=>r.ret),marker:{color:lab.map((_,i)=>i===3?t.accent:t.neutral)},hovertemplate:'%{x}: %{y:.1%}<extra></extra>'},
+      {type:'scatter',mode:'markers',name:'win share',x:lab,y:rows.map(r=>r.win),yaxis:'y2',marker:{size:12,symbol:'diamond',color:t.ink},hovertemplate:'%{x}: %{y:.1%} wins<extra></extra>'},
+      {type:'scatter',mode:'markers',name:'max drawdown',x:lab,y:rows.map(r=>r.dd),marker:{size:12,symbol:'x',color:t.bad},hovertemplate:'%{x}: DD %{y:.1%}<extra></extra>'}],
+      {yaxis:{tickformat:'.0%',title:{text:'return / drawdown'}},yaxis2:{overlaying:'y',side:'right',tickformat:'.0%',range:[0.45,0.6],gridcolor:'rgba(0,0,0,0)',tickfont:{family:t.mono,size:11,color:t.muted}}});
+    nullPanel('nullc', f.random_null, f.c3.ret, f.c3.bh, 'C3'); }
+  function drawQ(){ const t=T(), qc=F[qFold].q_curve;
+    plot('qcurve',[...[0,1,2].map(i=>({type:'scatter',mode:'lines+markers',name:`seed ${i}`,x:qc.map(q=>q.q),y:qc.map(q=>q.seeds[i].ret),line:{color:t.neutral,width:1.2,dash:['solid','dash','dot'][i]},hovertemplate:`seed ${i} q %{x}: %{y:.1%}<extra></extra>`})),
+      {type:'scatter',mode:'lines+markers',name:'ensemble',x:qc.map(q=>q.q),y:qc.map(q=>q.ens.ret),line:{color:t.accent,width:2.6},hovertemplate:'ensemble q %{x}: %{y:.1%}<extra></extra>'}],
+      {xaxis:{title:{text:'entry quantile'}},yaxis:{title:{text:'return (position 0.7)'},tickformat:'.0%'},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]}); }
+  segHandler('aucSeg',v=>{aucFold=v;drawAuc();}); segHandler('corrSeg',v=>{corrFold=v;drawCorr();}); segHandler('qSeg',v=>{qFold=v;drawQ();});
+  segHandler('foldSeg',v=>{st.fold=v;drawFold();}); segHandler('trSeg',v=>{st.trades=v;drawFold();});
+  el('verdict').innerHTML=[
+    ['Use it for',`A drawdown limit. At position 0.7 both dev blocks stay under 5% (${pct0(cDD[0])} and ${pct0(cDD[1])}), with a mean return of ${pct(M.mean_return)} per block.`],
+    ['Do not expect',`A better forecast. The ensemble's AUC and win share sit among its seeds'. Single models at the same 0.7 size (Chapter 4, grey bars) give a comparable trade-off; the ensemble's real benefit is that it does not depend on one lucky seed.`],
+    ['Why the seeds disagree','The direction signal is so weak that each training run fits mostly its own noise. More seeds would shrink that noise further, but they cannot add information the inputs do not carry.'],
+    ['Limits','Two blocks only (fold −3 and −2); the 0.7 size was chosen on those same blocks; zero costs (break-even below 1 bps); the test fold is untouched.']]
+    .map(v=>`<div class="panel"><h3>${v[0]}</h3><p class="muted">${v[1]}</p></div>`).join('');
+  return drawAll;
+}
+
+/* =============================== #4 · GATED TA =============================== */
+function taPage(){
+  const C=D.cells, c0=C[0], st={cell:0,trades:'all'};
+  const CH=[['t0','TA rule #4'],['t1','How it works'],['t2','The gate on the chart'],['t3','The model behind the gate'],['t4','Backtest'],['t5','Does the model add value?'],['t6','Verdict']];
+  const rets=C.map(c=>c.summary.ret), wins=C.map(c=>c.summary.win);
+  const ew=C[0].variants['ewma|0.8'], ng=C[0].variants['none|0.001'];
+  el('app').innerHTML=`
+  <header class="hero" id="t0"><div class="head" style="gap:20px;max-width:980px">
+    <p class="eyebrow">neural_trade · candidate #4 · BTC/USDT 1-minute · dev fold −2 · zero trading costs</p>
+    <h1>#4: a textbook trend rule, switched on by volatility</h1>
+    <p class="lede">A 20/50-bar moving-average cross, the most classic rule in technical analysis. It is traded only when the network's 10-day model forecasts high volatility. It loses on 58–63% of its trades and still makes money: winners run about twice as far as losers. The honest finding is on this page too. A model-free volatility estimate used as the same gate earns ${pct(ew.ret)}, more than the network's gate.</p></div>
+    ${kpis([[pct(mean(rets)),'mean return, 3 models','lead'],[`${rets.filter(r=>r>0).length}/3`,'models profitable','good'],[pct0(mean(wins)),'winning trades',''],[pct(c0.summary.bh),'buy-and-hold, same block','bad'],
+      [Math.round(mean(C.map(c=>c.summary.trades))).toString(),'trades per block',''],[`${fmt(mean(C.map(c=>c.summary.avg_win_bps)),0)} / ${fmt(mean(C.map(c=>c.summary.avg_loss_bps)),0)}`,'avg win / loss (bps)',''],
+      [pct0(Math.max(...C.map(c=>c.summary.dd))),'worst drawdown',''],[pct(ew.ret),'same rule, EWMA gate','good']])}
+    ${panel('<b>Equity of $10,000</b> for the three models (seeds 0–2) on the same 30-day dev block, against buy-and-hold (dotted) and the same rule gated by a model-free EWMA volatility (purple).','heroEq')}
+  </header>
+  ${chapter('t1','Chapter 1 · How it works','A crossover, a gate, a patient exit','Click a stage.',`<div id="stg"></div>`)}
+  ${chapter('t2','Chapter 2 · The gate on the chart','Crosses happen all the time; the gate picks the moving ones',`Upper panel: price with the 20- and 50-bar averages. Lower panel: the model's predicted volatility against the gate. The gate is open on ${pct0(c0.gate_share,0)} of bars. Zoom into any day to see crosses that were skipped (gate closed) and taken.`,
+    panel('<b>Seed 0, the whole dev block.</b> Drag to zoom; double-click to reset. Grey = model σ, purple = EWMA σ, gold dashed = the gate (the 80th percentile of model σ on the calibration block).','gate','','').replace('class="chart "','class="chart" style="min-height:640px"'))}
+  ${chapter('t3','Chapter 3 · The model behind the gate','A 10-day model with a loose gradient clip',`The gate reads the variance head at 20 minutes of a model trained on about 10 days (the micro layout), with the gradient clip raised to 100 (variant clip100 of the level-2 screen). Its direction is no better than the other models'. Its volatility forecast is also weak: the rank correlation of predicted σ² with the squared error is 0.09–0.12 (0.34 for the 360-day model), and its 90% intervals cover only 86%. A gate built on it is a noisy gate.`,
+    `<div class="grid2">${panel('<b>Training of the three models</b> (validation loss; stars = served epoch).','train')}${panel('<b>Volatility forecast at 20 minutes</b> (seed 0): predicted σ against the realised RMS move, by decile. This is the only thing the gate uses.','sigcal')}</div>
+     <div class="panel"><div class="cap"><b>Fit of each model</b> on the dev block (h0 / h1 / h2).</div><div class="tbl"><table id="fitTbl"></table></div></div>`)}
+  ${chapter('t4','Chapter 4 · Backtest','Lose often, win big','',
+    `<div class="ctrl"><div class="seg" id="cellSeg">${C.map((c,i)=>`<button data-v="${i}" class="${i===0?'on':''}">model ${c.seed.replace('s','seed ')}</button>`).join('')}</div><div class="seg" id="trSeg"><button data-v="all" class="on">all trades</button><button data-v="long">longs</button><button data-v="short">shorts</button><button data-v="none">no markers</button></div></div>
+     ${panel('<b>Price, trades, equity and drawdown.</b> ▲ long, ▼ short, filled = winning. Trades are rare (about 3–5 a day) and held about 35–40 minutes.','bt','tall')}
+     <div class="grid3">${panel('<b>Trade returns</b> (bps). Most trades lose a little; a few win a lot.','thist')}${panel('<b>Return against holding time.</b> Winners are the trades that last: a trend that holds until the opposite cross.','hold')}${panel('<b>Against luck:</b> random strategies with the same frequency and holding time.','nullc')}</div>`)}
+  ${chapter('t5','Chapter 5 · Does the model add value?','The gate matters; the network does not',`Same block, same rule, three gates. Without a gate the cross loses ${pct(ng.ret)}. With the network's volatility forecast it earns ${pct(mean(rets))} on average over three models. With a plain EWMA of past squared returns it earns ${pct(ew.ret)}. The money comes from trading trends only when the market moves, and a model-free volatility estimate measures that at least as well.`,
+    `<div class="grid2">${panel('<b>Return by gate</b> at the 80th percentile: no gate, EWMA σ (model-free), and the network\'s σ for each of the three models. The Bollinger breakout under the network\'s gate is shown for contrast.','gates')}
+      ${panel('<b>Gate strictness.</b> Return as the gate tightens from the 50th to the 95th percentile. Network σ (three models, gold) against EWMA σ (purple).','qcurve')}</div>
+     ${panel('<b>Costs.</b> The TA rule trades rarely and wins big, so it survives costs that kill C1: return against the round-trip cost for the three models.','costc')}`)}
+  ${chapter('t6','Chapter 6 · Verdict','What #4 is, and what it is not','',`<div class="verdict" id="verdict"></div>`)}
+  <div class="foot">Built by <code>scripts/presentation/extract_candidate.py ta</code> from <code>runs/scenarios/micro_l2/*-clip100__f-2__s*</code>; the rule is <code>gated_ta</code> (<code>src/neural_trade/strategy/variance_strategies.py</code>) with primary ma_cross, q 0.8 (<code>configs/strategy_studies/zero_cost_status.yaml</code>, id gt). Zero trading costs (D-044) unless a chart says otherwise; the test fold (−1) is never used (D-020).</div>`;
+  nav(CH,'candidate #4 · gated TA');
+  stages('stg',[
+    ['Price','1-minute closes','<b>The close of every one-minute bar</b> on the dev block (30 days). Nothing else goes into the rule itself.'],
+    ['Crossover','SMA 20 against SMA 50','<b>Trailing simple moving averages</b> of 20 and 50 bars. A long signal when the 20-bar average crosses above the 50-bar one, a short signal on the cross below. Textbook settings, not tuned.'],
+    ['Gate','network σ ≥ its 80th pct',`<b>The model's predicted σ at 20 minutes</b>, divided by price, must be at least the 80th percentile of the same quantity on the calibration block (${fmt(c0.gate*1e4,2)} bps for seed 0). Otherwise the cross is ignored. The gate is open on ${pct0(c0.gate_share,0)} of dev bars (more than 20%, because the dev block was more volatile than calibration).`],
+    ['Exit','opposite cross or 60 bars','<b>Held until the averages cross back</b>, or at most 60 bars. No stop, no target: the rule lets a trend run.'],
+    ['Backtest','next-open fills, 0 costs','<b>Full position, next-open fills, zero costs (D-044)</b>; baselines: buy-and-hold and random strategies with the same trade frequency and holding time.']]);
+  function drawAll(){
+    const t=T();
+    const x=c0.view.t;
+    plot('heroEq',[...C.map((c,i)=>({type:'scatter',mode:'lines',name:`model seed ${i}`,x:c.view.t,y:c.view.equity,line:{color:t.accent,width:[2.4,1.6,1.6][i],dash:['solid','dash','dot'][i]},hovertemplate:`seed ${i}: $%{y:,.0f}<extra></extra>`})),
+      {type:'scatter',mode:'lines',name:'buy-and-hold',x,y:c0.view.bh,line:{color:t.neutral,dash:'dot',width:1.3},hovertemplate:'B&H $%{y:,.0f}<extra></extra>'},
+      {type:'scatter',mode:'markers',name:`EWMA gate (end ${pct(ew.ret)})`,x:[x[x.length-1]],y:[10000*(1+ew.ret)],marker:{size:14,symbol:'diamond',color:t.alt},hovertemplate:'EWMA-gated rule ends at $%{y:,.0f}<extra></extra>'}],
+      {xaxis:{type:'date'},yaxis:{title:{text:'equity ($)'},tickformat:',.0f'}});
+    const G=c0.gate_view, gate=c0.gate*1e4;
+    const open=G.sigma_model_bps.map(v=>v!=null&&v>=gate);
+    plot('gate',[
+      {type:'scatter',mode:'lines',name:'close',x:G.t,y:G.close,line:{color:t.ink2,width:1},xaxis:'x',yaxis:'y',hovertemplate:'$%{y:,.0f}<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'SMA 20',x:G.t,y:G.sma20,line:{color:t.h0,width:1.2},xaxis:'x',yaxis:'y',hovertemplate:'SMA20 $%{y:,.0f}<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'SMA 50',x:G.t,y:G.sma50,line:{color:t.h1,width:1.2},xaxis:'x',yaxis:'y',hovertemplate:'SMA50 $%{y:,.0f}<extra></extra>'},
+      {type:'scatter',mode:'markers',name:'trade entries (seed 0)',x:c0.view.trades.t_entry,y:c0.view.trades.px,marker:{size:9,symbol:c0.view.trades.side.map(s=>s>0?'triangle-up':'triangle-down'),color:c0.view.trades.ret_bps.map(r=>r>0?t.good:t.bad)},xaxis:'x',yaxis:'y',
+       text:c0.view.trades.ret_bps.map((r,i)=>`${c0.view.trades.side[i]>0?'LONG':'SHORT'} ${r>0?'+':''}${r} bps, ${c0.view.trades.bars[i]} bars`),hovertemplate:'%{text}<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'model σ (bps)',x:G.t,y:G.sigma_model_bps,line:{color:t.neutral,width:1},xaxis:'x',yaxis:'y2',hovertemplate:'model σ %{y:.2f} bps<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'EWMA σ (bps)',x:G.t,y:G.sigma_ewma_bps,line:{color:t.alt,width:1},opacity:0.7,xaxis:'x',yaxis:'y2',hovertemplate:'EWMA σ %{y:.2f} bps<extra></extra>'},
+      {type:'scatter',mode:'lines',name:'gate',x:[G.t[0],G.t[G.t.length-1]],y:[gate,gate],line:{color:t.accent,dash:'dash',width:2},xaxis:'x',yaxis:'y2',hoverinfo:'skip'}],
+      {margin:{l:64,r:16,t:44,b:40},xaxis:{type:'date'},yaxis:{domain:[0.4,1],title:{text:'price ($)'},tickformat:',.0f'},yaxis2:{domain:[0,0.32],title:{text:'σ of the 20-min move (bps)'}}});
+    plot('train',C.flatMap((c,i)=>{ const e=c.training.epoch.map(v=>v+1), s=c.training.served_epoch;
+      return [{type:'scatter',mode:'lines',name:`seed ${i}`,x:e,y:c.training.val_loss,line:{color:t.accent,dash:['solid','dash','dot'][i]},legendgroup:'s'+i,hovertemplate:`seed ${i} epoch %{x}: %{y:.3f}<extra></extra>`},
+              {type:'scatter',mode:'markers',x:[s],y:[c.training.val_loss[s-1]],marker:{symbol:'star',size:11,color:t.accent},showlegend:false,legendgroup:'s'+i,hovertemplate:`served epoch ${s}<extra></extra>`}]; }),
+      {xaxis:{title:{text:'epoch'}},yaxis:{title:{text:'validation loss'}}});
+    const sc=c0.sigma_cal, mx=Math.max(...sc.map(b=>Math.max(b.sigma,b.rms)))*1.08;
+    plot('sigcal',[{type:'scatter',mode:'lines',x:[0,mx],y:[0,mx],line:{color:t.muted,dash:'dot'},name:'perfect',hoverinfo:'skip'},
+      {type:'scatter',mode:'lines+markers',name:'h2 deciles',x:sc.map(b=>b.sigma),y:sc.map(b=>b.rms),line:{color:t.h2},marker:{size:9,color:t.h2},hovertemplate:'predicted $%{x:.0f} · realised $%{y:.0f}<extra></extra>'}],
+      {xaxis:{title:{text:'predicted σ of the 20-min move ($)'},range:[0,mx]},yaxis:{title:{text:'realised RMS move ($)'},range:[0,mx]}});
+    let rows='<tr><th>model</th><th>AUC h0 / h1 / h2</th><th>logistic</th><th>CRPSS h2</th><th>coverage h2</th><th>σ² vs err² h2</th></tr>';
+    C.forEach((c,i)=>{ const m=c.fit; rows+=`<tr><td>seed ${i}</td><td>${fmt(m.h0.auc)} / ${fmt(m.h1.auc)} / ${fmt(m.h2.auc)}</td><td>${fmt(m.h0.auc_logreg)} / ${fmt(m.h1.auc_logreg)} / ${fmt(m.h2.auc_logreg)}</td><td>${pct0(m.h2.crpss)}</td><td>${pct0(m.h2.coverage90)}</td><td>${fmt(m.h2.spearman,2)}</td></tr>`; });
+    el('fitTbl').innerHTML=rows;
+    drawCell();
+    const gl=['no gate','EWMA σ (model-free)','network σ, seed 0','network σ, seed 1','network σ, seed 2','Bollinger + network σ (seed 0)'];
+    const gv=[ng,ew,...C.map(c=>c.variants['model|0.8']),C[0].variants['bollinger|0.8']];
+    plot('gates',[{type:'bar',x:gl,y:gv.map(v=>v.ret),marker:{color:[t.neutral,t.alt,t.accent,t.accent,t.accent,t.h1]},text:gv.map(v=>`${pct(v.ret)} · ${v.trades} tr · ${pct0(v.win,0)} wins`),textposition:'outside',cliponaxis:false,textfont:{family:t.mono,size:11,color:t.ink2},hovertemplate:'%{x}<br>%{text}<extra></extra>'}],
+      {showlegend:false,margin:{t:24,b:90},yaxis:{tickformat:'.0%',title:{text:'return on the block'}},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]});
+    const qs=[0.5,0.6,0.7,0.8,0.9,0.95];
+    plot('qcurve',[...C.map((c,i)=>({type:'scatter',mode:'lines+markers',name:`network σ, seed ${i}`,x:qs,y:qs.map(q=>c.variants[`model|${q}`].ret),line:{color:t.accent,dash:['solid','dash','dot'][i]},hovertemplate:`seed ${i} q %{x}: %{y:.1%}<extra></extra>`})),
+      {type:'scatter',mode:'lines+markers',name:'EWMA σ',x:qs,y:qs.map(q=>C[0].variants[`ewma|${q}`].ret),line:{color:t.alt,width:2.6},hovertemplate:'EWMA q %{x}: %{y:.1%}<extra></extra>'}],
+      {xaxis:{title:{text:'gate quantile (calibration block)'}},yaxis:{tickformat:'.0%',title:{text:'return'}},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]});
+    plot('costc',C.map((c,i)=>{ const k=Object.keys(c.cost_curve).map(Number).sort((a,b)=>a-b);
+      return {type:'scatter',mode:'lines+markers',name:`seed ${i}`,x:k,y:k.map(v=>c.cost_curve[String(v)]),line:{color:t.accent,dash:['solid','dash','dot'][i]},hovertemplate:`seed ${i}: %{y:.1%} at %{x} bps<extra></extra>`}; }),
+      {xaxis:{title:{text:'round-trip cost (bps)'}},yaxis:{tickformat:'.0%',title:{text:'return'}},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]});
+  }
+  function drawCell(){ const t=T(), c=C[st.cell], V=c.view, TD=V.trades;
+    drawTradePanel('bt',V,{trades:st.trades,eqName:`seed ${st.cell} equity`,msize:9});
+    const w=TD.ret_bps.filter(v=>v>0), l=TD.ret_bps.filter(v=>v<=0);
+    plot('thist',[{type:'histogram',x:w,name:`winning (${w.length})`,marker:{color:t.good,opacity:0.75},xbins:{size:5}},{type:'histogram',x:l,name:`losing (${l.length})`,marker:{color:t.bad,opacity:0.75},xbins:{size:5}}],
+      {barmode:'overlay',xaxis:{title:{text:'trade return (bps)'}},yaxis:{title:{text:'trades'}}});
+    plot('hold',[{type:'scatter',mode:'markers',x:TD.bars,y:TD.ret_bps,marker:{size:8,color:TD.ret_bps.map(v=>v>0?t.good:t.bad),symbol:TD.side.map(s=>s>0?'triangle-up':'triangle-down')},text:TD.t_entry,hovertemplate:'%{text}<br>%{x} bars · %{y:+.1f} bps<extra></extra>',name:'trades'}],
+      {showlegend:false,xaxis:{title:{text:'bars held'}},yaxis:{title:{text:'return (bps)'}},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]});
+    nullPanel('nullc',c.random_null,c.summary.ret,c.summary.bh,`seed ${st.cell}`); }
+  segHandler('cellSeg',v=>{st.cell=+v;drawCell();}); segHandler('trSeg',v=>{st.trades=v;drawCell();});
+  el('verdict').innerHTML=[
+    ['What it is','A classic trend-following rule with a volatility filter. It makes money on this block because trends that start in high-volatility minutes tend to run, and the rule holds them to the opposite cross.'],
+    ['What the network adds',`Little. Its volatility forecast is a working gate (no gate: ${pct(ng.ret)}), but an EWMA of past returns does the same job, better here (${pct(ew.ret)} against ${pct(mean(rets))}). The direction heads play no part.`],
+    ['Why it looks robust','Wins are about twice the size of losses, so a 40% win share is enough. It trades 3–5 times a day and needs costs below a few bps, not below 1 bps like C1.'],
+    ['Limits',`One block (fold −2, ${c0.view.first.slice(0,10)} → ${c0.view.last.slice(0,10)}), 83–151 trades per model: a 40% win share is known only to about ±8–11 points. The three models share the block, so they are not three independent tests. The EWMA variant is a single rule on the same block. Zero costs; the test fold is untouched.`]]
+    .map(v=>`<div class="panel"><h3>${v[0]}</h3><p class="muted">${v[1]}</p></div>`).join('');
+  return drawAll;
+}
+
+const draw = D.subject==='ensemble' ? ensemblePage() : taPage();
+const renderAll=()=>draw();
+if (window.Plotly) renderAll(); else window.addEventListener('load',renderAll);
+const mq=window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener&&mq.addEventListener('change',renderAll);
+new MutationObserver(renderAll).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+})();
+</script>
