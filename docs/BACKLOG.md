@@ -64,7 +64,7 @@ changes).
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
 | [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | todo | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
-| [NT-032](#nt-032) | P1 | feature | implementer | todo | Paired comparator for "A beats B" verdicts (D-025) |
+| [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
@@ -509,7 +509,7 @@ changes).
 
 **Paired comparator for "A beats B" verdicts (D-025)**
 
-- **status:** todo
+- **status:** done (2026-09-30): 11296af, merged 89c9443; QA (Opus) FAIL on 2aef6ca (pair-level inference anti-conservative for one fold x seeds: false-'beats' 0.069-0.314; string-compared registration times; blocks not fingerprinted; configurations mixed) -> D-046 (fold is the unit of inference, >= 5 judgement folds) -> repair 1 (27da376, PASS on the criteria, one P1) -> repair 2 (285a64c) -> the lead's one-line fix (11296af: an uncommitted spec edit counts as registered at compare time) -> PASS. `neural-trade compare SPEC`, src/neural_trade/experiments/comparator.py, 59 tests; fast suite 1097 passed on 285a64c; RUNBOOK 'Paired comparator'. Deferred with reasons (module docstring): GPU-contention metadata, A/B-1's literal retention metric, infinite pairs kept in the ranks.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** the statistics module (NT-027) or src/neural_trade/experiments/ (comparator), tests/
 - **depends on:** NT-026 (experiment engine)
