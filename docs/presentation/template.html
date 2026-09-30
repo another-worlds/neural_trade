@@ -1,0 +1,828 @@
+<title>The Climb to C1</title>
+<meta name="description" content="neural_trade: the pipeline, the hypotheses, and why the 360-day model C1 leads">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#f2f4f7; --surface:#ffffff; --surface-2:#e8ecf1; --ink:#131b27; --ink-2:#3d4757; --muted:#667085;
+  --line:#d3d9e2; --grid:#e3e7ed; --accent:#9a6200; --accent-soft:#f6e7c8;
+  --good:#1d7a50; --bad:#b4235a; --h0:#3987e5; --h1:#d95926; --h2:#199e70; --neutral:#7b8594;
+  --shadow:0 1px 2px rgba(19,27,39,.06),0 8px 24px rgba(19,27,39,.06);
+  --display:'Bricolage Grotesque','IBM Plex Sans',system-ui,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0d131d; --surface:#151d2a; --surface-2:#1c2636; --ink:#e7ecf3; --ink-2:#c3cbd8; --muted:#95a1b3;
+  --line:#2a3547; --grid:#212b3b; --accent:#e3aa3c; --accent-soft:#3a2d12;
+  --good:#46b988; --bad:#f06292; --neutral:#8c97a8;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0d131d; --surface:#151d2a; --surface-2:#1c2636; --ink:#e7ecf3; --ink-2:#c3cbd8; --muted:#95a1b3;
+  --line:#2a3547; --grid:#212b3b; --accent:#e3aa3c; --accent-soft:#3a2d12;
+  --good:#46b988; --bad:#f06292; --neutral:#8c97a8;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+body{background:var(--ground);color:var(--ink);font:16px/1.6 var(--body);margin:0}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:clamp(16px,4vw,40px);padding-block:0 96px}
+@media (min-width:1180px){.wrap{padding-left:240px;max-width:1440px}}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(40px,6.4vw,84px);line-height:1.02;font-weight:750}
+h2{font-size:clamp(28px,3.6vw,44px);line-height:1.1;font-weight:700}
+h3{font-size:19px;line-height:1.3;font-weight:650}
+p{margin:0}
+.lede{font-size:clamp(17px,1.6vw,20px);color:var(--ink-2);max-width:68ch}
+.muted{color:var(--muted)}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.eyebrow{font:500 12px/1.2 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+a{color:inherit}
+/* rail */
+.rail{position:fixed;left:0;top:env(safe-area-inset-top,0px);bottom:0;width:212px;padding:28px 18px;border-right:1px solid var(--line);background:var(--ground);display:none;flex-direction:column;gap:4px;z-index:5}
+@media (min-width:1180px){.rail{display:flex}}
+@media (max-width:560px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.rail .brand{font:700 15px/1.2 var(--display);margin-bottom:18px}
+.rail .brand span{display:block;font:400 12px/1.4 var(--mono);color:var(--muted);margin-top:4px}
+.rail a{display:flex;gap:10px;align-items:baseline;text-decoration:none;color:var(--muted);padding:6px 8px;border-radius:6px;font-size:14px}
+.rail a b{font:500 11px var(--mono);color:var(--muted);min-width:18px}
+.rail a:hover{color:var(--ink);background:var(--surface-2)}
+.rail a.on{color:var(--ink);background:var(--surface)}
+.rail a.on b{color:var(--accent)}
+.rail .keys{margin-top:auto;font:12px/1.5 var(--mono);color:var(--muted)}
+.topnav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--ground);border-bottom:1px solid var(--line);overflow-x:auto;white-space:nowrap;padding:10px 16px;display:flex;gap:6px}
+@media (min-width:1180px){.topnav{display:none}}
+.topnav a{font-size:13px;text-decoration:none;color:var(--muted);padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+.topnav a.on{color:var(--ink);border-color:var(--accent)}
+/* sections */
+section.ch{padding-top:88px;display:flex;flex-direction:column;gap:28px;scroll-margin-top:40px}
+.head{display:flex;flex-direction:column;gap:12px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:20px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 18px 12px;display:flex;flex-direction:column;gap:10px;min-width:0;box-shadow:var(--shadow)}
+.panel .cap{font-size:14px;color:var(--ink-2)}
+.panel .cap b{color:var(--ink)}
+.chart{width:100%;min-height:300px}
+.chart.tall{min-height:520px}
+.chart.mid{min-height:380px}
+.note{border-left:3px solid var(--accent);padding:4px 0 4px 14px;color:var(--ink-2);max-width:78ch}
+.note b{color:var(--ink)}
+/* hero */
+.hero{padding-top:56px;display:grid;gap:36px}
+.hero .thesis{display:flex;flex-direction:column;gap:20px;max-width:980px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.kpi{background:var(--surface);padding:16px 16px 14px;display:flex;flex-direction:column;gap:4px}
+.kpi .v{font:600 28px/1.1 var(--mono);font-variant-numeric:tabular-nums}
+.kpi .k{font-size:13px;color:var(--muted)}
+.kpi .v.good{color:var(--good)} .kpi .v.bad{color:var(--bad)} .kpi .v.lead{color:var(--accent)}
+.heroChart{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+/* pipeline */
+.pipe{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch}
+.stage{flex:1 1 130px;min-width:120px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;color:var(--ink);font:inherit;display:flex;flex-direction:column;gap:4px;position:relative;transition:border-color .15s,transform .15s}
+.stage:hover{border-color:var(--accent);transform:translateY(-1px)}
+.stage:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage .n{font:500 11px var(--mono);color:var(--muted)}
+.stage .t{font:650 15px/1.2 var(--display)}
+.stage .s{font-size:12.5px;color:var(--muted);line-height:1.35}
+.stage.on{border-color:var(--accent);background:var(--accent-soft)}
+.stageDetail{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:20px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px}
+.stageDetail h3{margin-bottom:8px}
+.stageDetail ul{margin:0;padding-left:18px;color:var(--ink-2)}
+.stageDetail li{margin:4px 0}
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:999px;padding:5px 12px;font:13px var(--body);cursor:pointer}
+.chip.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);color:var(--ink-2);padding:6px 12px;font:13px var(--body);cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--ink);color:var(--ground)}
+.ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+/* milestones */
+.miles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:10px}
+.mile{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:12px 14px;cursor:pointer;display:flex;flex-direction:column;gap:6px;text-align:left;color:var(--ink);font:inherit}
+.mile .when{font:500 11px var(--mono);color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.mile .what{font:650 15px/1.25 var(--display)}
+.mile .res{font:500 14px var(--mono)}
+.mile.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.mileDetail{background:var(--surface-2);border-radius:10px;padding:16px 18px;color:var(--ink-2);min-height:72px}
+.mileDetail b{color:var(--ink)}
+/* hypothesis board */
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr));gap:10px}
+.hyp{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.hyp .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.hyp .id{font:500 12px var(--mono);color:var(--muted)}
+.hyp .txt{font-size:14.5px;line-height:1.4}
+.hyp .res{font:13px/1.4 var(--mono);color:var(--ink-2)}
+.pill{font:600 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:4px 7px;border-radius:4px;white-space:nowrap}
+.pill.neg{color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,transparent)}
+.pill.mix{color:var(--accent);background:var(--accent-soft)}
+.pill.pos{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+/* tables */
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font:500 12px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+td.num{font-family:var(--mono)}
+tr.lead td{background:var(--accent-soft)}
+.up{color:var(--good)} .dn{color:var(--bad)}
+/* calculator */
+.calc{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:18px;align-items:end}
+.calc label{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--ink-2)}
+.calc label span.v{font:600 15px var(--mono);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.bigout{font:700 clamp(36px,5vw,56px)/1 var(--mono);font-variant-numeric:tabular-nums}
+select{font:14px var(--body);padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.foot{margin-top:72px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+.foot code{font-family:var(--mono);font-size:12px}
+.legend-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+</style>
+
+<nav class="rail" id="rail" aria-label="Chapters"></nav>
+<nav class="topnav" id="topnav" aria-label="Chapters"></nav>
+
+<div class="wrap">
+
+<header class="hero" id="c0">
+  <div class="thesis">
+    <p class="eyebrow">neural_trade · BTC/USDT 1-minute · dev fold −2 · zero trading costs</p>
+    <h1>The climb to C1</h1>
+    <p class="lede" id="heroLede"></p>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="panel heroChart">
+    <div class="cap" id="heroCap"></div>
+    <div id="heroEq" class="chart" style="min-height:260px"></div>
+  </div>
+</header>
+
+<section class="ch" id="c1">
+  <div class="head">
+    <p class="eyebrow">Chapter 1 · The pipeline</p>
+    <h2>From one-minute bars to a trade</h2>
+    <p class="lede">The network learns its own technical indicators. It predicts three things per horizon and calibrates them on a block it never trained on. Then a strategy turns them into trades. Click a stage to see what it does in the leader run.</p>
+  </div>
+  <div class="pipe" id="pipe"></div>
+  <div class="stageDetail" id="stageDetail"></div>
+  <div class="panel">
+    <div class="cap"><b>Where every block sits in time.</b> The model trains on 360 days, stops on the validation block, calibrates on its own block, and is scored on the dev block. The newest ~32 days (fold −1, the test fold) are after the dev block and were never used.</div>
+    <div id="blocks" class="chart" style="min-height:210px"></div>
+  </div>
+</section>
+
+<section class="ch" id="c2">
+  <div class="head">
+    <p class="eyebrow">Chapter 2 · The climb</p>
+    <h2>Twenty-four hypotheses, one change that mattered</h2>
+    <p class="lede">We started from a 7-day model that lost money at 26 bps per round trip, and tried to raise both the model's predictive power and the strategy's P&amp;L. Most lines of attack were negative. The two changes that moved the result were longer training and zero trading costs.</p>
+  </div>
+  <div class="panel">
+    <div class="cap"><b>Return per ~32-day evaluation block, by milestone.</b> Bars below −25% are cut and labelled with their value. Click a bar or a card to see what that step taught us.</div>
+    <div id="climb" class="chart mid"></div>
+  </div>
+  <div class="miles" id="miles"></div>
+  <div class="mileDetail" id="mileDetail"></div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="cap"><b>The direction ceiling.</b> Best direction AUC from every source we tried: the network, a logistic baseline, order flow, futures, conditional buckets. A stable 60% hit rate needs about 0.64. Everything sits between 0.52 and 0.56.</div>
+      <div id="ceiling" class="chart mid"></div>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Maths and stability screen:</b> 960 trials on 6-hour training blocks. They found no broken maths, but no configuration that recovers direction either. Almost every failure is a run whose gradient hit the clip on more than half its steps; extreme loss weights cause most of them.</div>
+      <div id="screens" class="chart mid"></div>
+    </div>
+  </div>
+  <div class="ctrl"><h3>Every line of attack</h3><div class="chips" id="hypFilter"></div></div>
+  <div class="board" id="board"></div>
+</section>
+
+<section class="ch" id="c3">
+  <div class="head">
+    <p class="eyebrow">Chapter 3 · Choosing the leader</p>
+    <h2>Why C1 and not the others</h2>
+    <p class="lede">At zero cost we re-scored every stored model with every strategy. Each point is one model × strategy, averaged over its evaluation blocks. C1 is the 360-day model with the default strategy at the 90th-percentile entry line. It is the only configuration that is both the most profitable and profitable on every block of six.</p>
+  </div>
+  <div class="panel">
+    <div class="ctrl"><div class="cap"><b>The field at zero cost.</b> Point size = trades per block; filled = profitable on every block; hover for details.</div><div class="chips" id="fieldFilter"></div></div>
+    <div id="field" class="chart tall"></div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="cap"><b>C1 on all six 360-day models</b> (folds −3 / −2 × seeds 0–2). Every one ends above its start; the spread between seeds of the same block is the model's nondeterminism (NT-074).</div>
+      <div id="sixEq" class="chart mid"></div>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Same strategy, 7-day against 360-day training</b>, per dev cell at zero cost. The 360-day model wins on every block; the 7-day model is a coin flip across blocks.</div>
+      <div id="refVs" class="chart mid"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="cap"><b>The saved candidates</b> (configs/candidates/manifest.json). The row in gold is the model this presentation opens up.</div>
+    <div class="tbl"><table id="candTbl"></table></div>
+  </div>
+</section>
+
+<section class="ch" id="c4">
+  <div class="head">
+    <p class="eyebrow">Chapter 4 · Training</p>
+    <h2>How the leader trained, and why it stopped at epoch 4</h2>
+    <p class="lede" id="trainLede"></p>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="cap"><b>Total loss.</b> Dotted = training, solid = validation. The gold marker is the served epoch: the best validation loss, restored after early stopping.</div>
+      <div id="loss" class="chart"></div>
+    </div>
+    <div class="panel">
+      <div class="ctrl"><div class="cap"><b>What the loss is made of</b></div><div class="seg" id="termSeg"><button data-v="val" class="on">validation</button><button data-v="train">training</button><button data-v="share">share</button></div></div>
+      <div id="terms" class="chart"></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="cap"><b>Validation direction MCC per horizon</b>, with its 95% chance band (from n<sub>eff</sub> = bars ÷ horizon). The direction heads never leave the band. The model knows very little about direction, and its loss says so: direction BCE sits at 3 × ln 2.</div>
+      <div id="mcc" class="chart"></div>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Gradient norm and learning rate.</b> A healthy run: no non-finite steps and a gradient norm that settles. The plateau schedule halves the learning rate at epoch 8.</div>
+      <div id="grad" class="chart"></div>
+    </div>
+  </div>
+  <div class="panel">
+    <div class="cap"><b>Validation loss of all six 360-day models.</b> Every one flattens within a few epochs of 250 steps each; the served epochs (markers) scatter from 4 to 19. More data made the model saturate early, not learn more.</div>
+    <div id="sixVal" class="chart"></div>
+  </div>
+  <div class="head" style="margin-top:12px">
+    <h3>The discovered indicators</h3>
+    <p class="muted" style="max-width:78ch">The 18 indicator periods start at textbook values and move by gradient descent. Pick a family to see how its three instances moved over training (dashed = textbook start), and where the same period ended in each of the six models.</p>
+  </div>
+  <div class="ctrl"><div class="chips" id="famFilter"></div></div>
+  <div class="grid2">
+    <div class="panel"><div class="cap" id="famCap"></div><div id="periods" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>Final period in each of the six models</b> against the textbook value (◇). Wide scatter means the data does not pin the period down: the network uses the indicator, but not one specific period.</div><div id="spread" class="chart"></div></div>
+  </div>
+</section>
+
+<section class="ch" id="c5">
+  <div class="head">
+    <p class="eyebrow">Chapter 5 · Fit evaluation</p>
+    <h2>Weak on direction, honest about it, strong on volatility</h2>
+    <p class="lede" id="fitLede"></p>
+  </div>
+  <div class="panel">
+    <div class="cap"><b>Direction AUC on the dev block</b> against the class prior (0.5) and a logistic regression on three lagged returns. The error bars are ±1.96 standard errors from the effective sample size.</div>
+    <div id="auc" class="chart"></div>
+  </div>
+  <div class="ctrl"><h3>Per horizon</h3><div class="seg" id="hzSeg"><button data-h="h0" class="on">h0 · 10 min</button><button data-h="h1">h1 · 15 min</button><button data-h="h2">h2 · 20 min</button></div></div>
+  <div class="grid2">
+    <div class="panel"><div class="cap"><b>Reliability of calibrated P(up)</b>, in ten equal-count bins. On the diagonal = honest. The bins span only 0.48–0.54: the model rarely claims to know much, and when it does it is roughly right.</div><div id="reliab" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>Distribution of calibrated P(up)</b> on the dev block, with the strategy's entry lines (fitted on the calibration block). Only the tails beyond the lines trade.</div><div id="phist" class="chart"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><div class="cap"><b>Volatility forecast.</b> Predicted σ against the realised RMS move, by decile of predicted σ. The model ranks calm and wild minutes well: this is its real skill.</div><div id="sigcal" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>PIT histogram</b> (Gaussian). Flat = well-calibrated distribution. The hump means the true moves are fat-tailed; the conformal intervals correct the coverage.</div><div id="pit" class="chart"></div></div>
+  </div>
+  <div class="kpis" id="fitKpis"></div>
+</section>
+
+<section class="ch" id="c6">
+  <div class="head">
+    <p class="eyebrow">Chapter 6 · Backtest</p>
+    <h2>1,968 small bets on a falling market</h2>
+    <p class="lede" id="btLede"></p>
+  </div>
+  <div class="panel">
+    <div class="ctrl"><div class="cap"><b>Price, trades, equity and drawdown</b>, on one time axis. Drag to zoom (double-click resets); ▲ long, ▼ short, filled = winning trade.</div><div class="seg" id="trSeg"><button data-v="all" class="on">all trades</button><button data-v="long">longs</button><button data-v="short">shorts</button><button data-v="none">no markers</button></div></div>
+    <div id="bt" class="chart" style="min-height:720px"></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><div class="cap"><b>Against luck.</b> 100 random strategies with the same trade frequency and holding time (grey, 5th–95th percentile shaded) against C1 (gold).</div><div id="nullc" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>Trade returns</b> in basis points. Wins and losses are almost symmetric around zero; the mean is +0.8 bps. The edge is a slight shift of the whole distribution, not a few big winners.</div><div id="thist" class="chart"></div></div>
+  </div>
+  <div class="grid3">
+    <div class="panel"><div class="cap"><b>By confidence</b> at entry (distance of P(up) from its median), in quintiles. Confidence does not rank the trades; the most confident fifth earns least.</div><div id="byConf" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>By volatility</b> at entry (predicted σ, terciles). The edge lives in calm minutes: the calmest third wins 62%, while the most volatile third loses.</div><div id="byVol" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>How trades end:</b> reversal through the median line, the 15-bar time limit, or the 2σ stop.</div><div id="exits" class="chart"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="panel"><div class="cap"><b>Daily P&amp;L</b> (UTC days). The gains come from many ordinary days, not from one lucky day.</div><div id="daily" class="chart"></div></div>
+    <div class="panel"><div class="cap"><b>By hour of day</b> (UTC, entry time): total P&amp;L in $ and trades per hour.</div><div id="hours" class="chart"></div></div>
+  </div>
+</section>
+
+<section class="ch" id="c7">
+  <div class="head">
+    <p class="eyebrow">Chapter 7 · Why it went this way</p>
+    <h2>A 0.8 bps edge, compounded 1,968 times</h2>
+    <p class="lede">The whole result is arithmetic: a tiny, stable average edge per trade multiplied by many trades. Costs decide everything. The same model and trades turn +16.7% into −99% at the 26 bps the project paid before D-044, and into a loss at about 1 bps.</p>
+  </div>
+  <div class="panel">
+    <div class="cap"><b>Try it.</b> Compounded return = (1 + (edge − cost) / 10⁴)<sup>trades</sup> − 1. The defaults are C1's measured numbers.</div>
+    <div class="calc">
+      <label>Gross edge per trade <span class="v" id="vEdge"></span><input type="range" id="sEdge" min="-2" max="3" step="0.05"></label>
+      <label>Trades per block <span class="v" id="vTr"></span><input type="range" id="sTr" min="100" max="7000" step="10"></label>
+      <label>Round-trip cost <span class="v" id="vCost"></span><input type="range" id="sCost" min="0" max="26" step="0.1"></label>
+      <div><div class="muted" style="font-size:14px">Return per ~32-day block</div><div class="bigout" id="calcOut"></div></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="panel">
+      <div class="ctrl"><div class="cap"><b>Entry line × cost</b>, actual backtests of the leader model.</div><select id="heatMetric" aria-label="Metric"><option value="ret">return</option><option value="sharpe">Sharpe</option><option value="win">win share</option><option value="dd">max drawdown</option><option value="trades">trades</option></select></div>
+      <div id="heat" class="chart mid"></div>
+    </div>
+    <div class="panel">
+      <div class="cap"><b>Break-even cost of each of the six models.</b> All cross zero between 0.3 and 1 bps per round trip. That is roughly 1/30 of a retail taker's cost.</div>
+      <div id="costc" class="chart mid"></div>
+    </div>
+  </div>
+  <div class="note" id="whyNote"></div>
+</section>
+
+<section class="ch" id="c8">
+  <div class="head">
+    <p class="eyebrow">Chapter 8 · Limits and next steps</p>
+    <h2>What this result is, and what it is not</h2>
+  </div>
+  <div class="grid3" id="limits"></div>
+</section>
+
+<div class="foot" id="foot"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.34.0/plotly.min.js"></script>
+<script id="data" type="application/json">/*__DATA__*/</script>
+<script>
+(function(){
+"use strict";
+const D = JSON.parse(document.getElementById('data').textContent);
+const HZ = ['h0','h1','h2'], HB = {h0:10,h1:15,h2:20};
+const pct = (x,d=1)=> x==null?'–':(x>0?'+':'')+(100*x).toFixed(d)+'%';
+const pct0 = (x,d=1)=> x==null?'–':(100*x).toFixed(d)+'%';
+const fmt = (x,d=3)=> x==null?'–':Number(x).toFixed(d);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const el = id => document.getElementById(id);
+const mean = a => a.reduce((s,x)=>s+x,0)/a.length;
+const S = D.summary, BT = D.backtest, TR = D.training, F = D.fit;
+const state = {hz:'h0', term:'val', fam:'ma', trades:'all', hyp:'All', field:'All'};
+
+function T(){ return {ink:css('--ink'), ink2:css('--ink-2'), muted:css('--muted'), grid:css('--grid'), line:css('--line'),
+  accent:css('--accent'), good:css('--good'), bad:css('--bad'), neutral:css('--neutral'), surface:css('--surface'),
+  h0:css('--h0'), h1:css('--h1'), h2:css('--h2'), mono:"IBM Plex Mono, Consolas, monospace", body:"IBM Plex Sans, system-ui, sans-serif"}; }
+function L(extra){
+  const t=T();
+  const ax = {gridcolor:t.grid, zerolinecolor:t.line, linecolor:t.line, tickfont:{family:t.mono,size:11,color:t.muted},
+              title:{font:{size:12,color:t.muted}}, automargin:true};
+  const base = {paper_bgcolor:'rgba(0,0,0,0)', plot_bgcolor:'rgba(0,0,0,0)', font:{family:t.body,color:t.ink2,size:12},
+    margin:{l:56,r:16,t:12,b:44}, hovermode:'closest', showlegend:true,
+    legend:{orientation:'h',y:-0.2,x:0,font:{size:12,color:t.ink2}},
+    hoverlabel:{font:{family:t.mono,size:12}}, xaxis:{...ax}, yaxis:{...ax}};
+  const out = {...base, ...extra};
+  if (!(extra&&extra.legend&&extra.legend.keep)) out.legend = {...base.legend, ...((extra&&extra.legend)||{}), x:0, y:1.02, yanchor:'bottom', orientation:'h'};
+  if (out.showlegend!==false && !(extra&&extra.margin&&extra.margin.t)) out.margin = {...out.margin, t:44};
+  for (const k of Object.keys(extra||{})) if (/^[xy]axis\d*$/.test(k)) out[k] = {...ax, ...extra[k]};
+  return out;
+}
+const CFG = {displaylogo:false, responsive:true, modeBarButtonsToRemove:['lasso2d','select2d','autoScale2d','toggleSpikelines'], displayModeBar:'hover'};
+function plot(id, data, layout){ const e=el(id); if(!e) return; Plotly.react(e, data, L(layout||{}), CFG); }
+function hz(h){ return T()[h]; }
+
+/* ---------- navigation ---------- */
+const CH = [['c0','The climb to C1'],['c1','Pipeline'],['c2','The climb'],['c3','Choosing the leader'],['c4','Training'],['c5','Fit evaluation'],['c6','Backtest'],['c7','Why it went this way'],['c8','Limits and next']];
+el('rail').innerHTML = '<div class="brand">neural_trade<span>leader model C1</span></div>' +
+  CH.map((c,i)=>`<a href="#${c[0]}" data-c="${c[0]}"><b>${String(i).padStart(2,'0')}</b>${c[1]}</a>`).join('') +
+  '<div class="keys">j / k or ↓ / ↑<br>jump between chapters</div>';
+el('topnav').innerHTML = CH.map(c=>`<a href="#${c[0]}" data-c="${c[0]}">${c[1]}</a>`).join('');
+const secs = CH.map(c=>el(c[0]));
+function current(){ let best=0; secs.forEach((s,i)=>{ if(s.getBoundingClientRect().top < window.innerHeight*0.35) best=i; }); return best; }
+function markNav(){ const i=current(); document.querySelectorAll('[data-c]').forEach(a=>a.classList.toggle('on', a.dataset.c===CH[i][0])); }
+window.addEventListener('scroll', markNav, {passive:true}); markNav();
+document.addEventListener('keydown', e=>{
+  if (e.target.closest('input,select,textarea')) return;
+  const i=current();
+  if (e.key==='j'||e.key==='ArrowDown'&&e.altKey||e.key==='PageDown'&&e.altKey){ e.preventDefault(); secs[Math.min(i+1,secs.length-1)].scrollIntoView(); }
+  if (e.key==='k'||e.key==='ArrowUp'&&e.altKey||e.key==='PageUp'&&e.altKey){ e.preventDefault(); secs[Math.max(i-1,0)].scrollIntoView(); }
+});
+
+/* ---------- static text from data ---------- */
+const nCells = D.cells.length, c1 = D.manifest.C1;
+el('heroLede').innerHTML = `A neural network that learns its own technical indicators, trained on 360 days of one-minute BTC/USDT and traded by its default strategy. On a 32-day block it had never seen (${BT.first.slice(0,10)} → ${BT.last.slice(0,10)}), it made <b>${pct(S.ret)}</b> while buy-and-hold lost ${pct(S.bh)}. This is not a strong direction signal: its direction AUC is about 0.52. It is a very small, stable edge taken ${S.trades.toLocaleString('en')} times, at zero trading costs.`;
+const kp = [[pct(S.ret),'return on the dev block','lead'],[pct(S.bh),'buy-and-hold, same block','bad'],[`${c1.profitable_cells}`,'blocks profitable (6 models)','good'],
+  [pct(c1.mean_return),'mean return per block','good'],[S.trades.toLocaleString('en'),'trades in 32 days',''],[pct0(S.win),'winning trades',''],
+  [pct0(S.dd),'max drawdown',''],[fmt(S.edge_bps,2)+' bps','edge per trade','']];
+el('kpis').innerHTML = kp.map(k=>`<div class="kpi"><div class="v ${k[2]}">${k[0]}</div><div class="k">${k[1]}</div></div>`).join('');
+el('heroCap').innerHTML = `<b>Equity of $10,000</b>: C1 (gold) against buy-and-hold (grey) on the dev block. Leader run <span class="mono">${D.leader}</span>.`;
+
+/* ---------- pipeline ---------- */
+const B = D.blocks;
+const days = b => (b.n/1440).toFixed(0);
+const STAGES = [
+ ['Data','BTC/USDT 1-min bars', ['The local 2017–2025 BTC/USDT file (fingerprinted, not in git).', `Training block: ${B.train.first_timestamp.slice(0,10)} → ${B.train.last_timestamp.slice(0,10)}, ${B.train.n.toLocaleString('en')} windows (${days(B.train)} days).`, `Validation ${days(B.val)} days, calibration ${days(B.cal)} days, dev ${days(B.test)} days, each after an 80-bar purge gap.`], 'The leader trains on 360 days. The reference setup trains on 7, and that difference is the main one in this whole story.'],
+ ['Windows','60 bars in, 3 targets out', ['Each sample is the last 60 one-minute bars.', 'Targets: the price change in $ at +10, +15 and +20 bars (h0, h1, h2).', 'Gaps of 80 bars (window + longest horizon) keep every label out of the next block.'], 'Consecutive windows share most of their future, so the effective sample is bars ÷ horizon: about 4,650 independent outcomes on the dev block at 10 minutes.'],
+ ['Indicators','18 learnable periods', ['Moving averages ×3, MACD ×3 (fast, slow, signal), RSI ×3, Bollinger ×3.', 'Each period starts at a textbook value and moves by gradient descent with its own learning rate (5× the network\'s).', 'Chapter 4 shows where they went.'], 'This is the project\'s purpose: replace a manual search over indicator settings with a learned one.'],
+ ['Network','GRU + attention', ['A recurrent layer with attention reads the indicator channels.', 'Three heads per horizon: the price change, P(up), and the variance of the change.', 'Batch 2048, learning rate 1e-3, early stopping on validation loss.'], 'The price heads end up shrunk to zero (β = 0 on the calibration block): what trades is P(up), weighted by the variance heads.'],
+ ['Loss','7 core + 6 physics terms', ['Point and trend errors, direction cross-entropy, Gaussian NLL, CRPS, soft calibration error, volatility.', 'Six physics-inspired terms (T-perp, Casimir, vacuum, vacuum overflow, HD, IFE), kept by owner decision D-003.', 'Chapter 4 shows each term\'s share.'], 'The direction term stays at 3 × ln 2 (chance) all run long; the variance terms carry the learning.'],
+ ['Calibration','on its own 30-day block', ['Temperature scaling of P(up).', 'Conformal 90% intervals scaled by realised volatility.', 'Delta shrinkage β = clip(E[yd]/E[d²], 0, 1).'], 'Calibration is why the probabilities are honest (Chapter 5) and why the entry lines are fitted where the model never trained.'],
+ ['Strategy','calibrated_quantile', [`Long when the confidence-weighted P(up) is above ${fmt(BT.thresholds.long_above,4)} (its 90th percentile on the calibration block); short below ${fmt(BT.thresholds.short_below,4)} (10th).`, `Exit when the signal crosses the median (${fmt(BT.thresholds.median,4)}), after 15 bars, or at a 2σ stop.`, 'One position at a time, full size.'], 'The default strategy of the project (D-009). At zero cost its high trade count stops being a liability and becomes the engine.'],
+ ['Backtest','next-open fills, 0 costs', ['Orders fill at the next bar\'s open; stops are checked on the bar\'s high and low.', 'Zero fees, spread and slippage (owner decision D-044).', 'Baselines: buy-and-hold, always flat, and 100 random strategies with the same trade frequency.'], 'Everything in Chapter 6 is this backtest on the dev block; the test fold (−1) was never used.'],
+];
+el('pipe').innerHTML = STAGES.map((s,i)=>`<button class="stage" data-i="${i}"><span class="n">${String(i+1).padStart(2,'0')}</span><span class="t">${s[0]}</span><span class="s">${s[1]}</span></button>`).join('');
+function showStage(i){
+  document.querySelectorAll('.stage').forEach(b=>b.classList.toggle('on', +b.dataset.i===i));
+  const s=STAGES[i];
+  el('stageDetail').innerHTML = `<div><h3>${s[0]} · ${s[1]}</h3><ul>${s[2].map(x=>`<li>${x}</li>`).join('')}</ul></div><div><h3>Why it matters here</h3><p class="muted">${s[3]}</p></div>`;
+}
+el('pipe').addEventListener('click', e=>{ const b=e.target.closest('.stage'); if(b) showStage(+b.dataset.i); });
+showStage(0);
+
+/* ---------- climb data (from committed reports) ---------- */
+const refZero = D.reference_7d.map(x=>x.zero.ret), ref26 = D.reference_7d.map(x=>x.c26.ret);
+const MILES = [
+ {k:'7-day model, 26 bps', when:'start · 2026-09-29', v:mean(ref26), cost:26, text:`<b>The reference setup</b> trains on 7 days. On its six dev cells the default strategy loses ${pct(mean(ref26),0)} per block after a 26 bps round trip, measured here with the leader's strategy settings. Its direction AUC is 0.505–0.511: no skill.`, src:'runs/scenarios/reference_default'},
+ {k:'20 strategies, 26 bps', when:'NT-005', v:-0.0035, cost:26, text:'<b>Twelve strategy architectures and eight model-free twins</b>, each fitted on the calibration block. All twenty lose money on the dev cells; the best one barely trades (−0.35%). The recorded winner is <b>always_flat</b>: do not trade this model. The gross edge per trade is 1/30 of the cost.', src:'runs/experiments/strategy_study_v1/REPORT.md'},
+ {k:'360 days of training, 26 bps', when:'D-040', v:-0.990, cost:26, text:'<b>One 360-day run</b> (518,432 windows, 19 minutes on the GPU). Direction stays at a logistic baseline\'s level and the variance edge grows a little. Gross: +1.5% (+0.88 bps per trade). Net after 26 bps: −99%. More data is not what is missing for direction.', src:'runs/scenarios/long_360d/RESULT.md'},
+ {k:'24 hypotheses', when:'micro loop · D-041', v:null, cost:26, text:'<b>Micro loop:</b> horizons from 10 minutes to 5 hours, windows of 60 and 240 bars, OHLCV with 14 indicator families, P&amp;L objectives, triple-barrier labels, a 960-trial screen, order flow, futures and order-book depth. <b>None beats a 3-lag logistic regression on direction.</b> The ceiling is AUC ≈ 0.52–0.55.', src:'runs/experiments/micro_loop_v1/LOG.md'},
+ {k:'Costs set to 0', when:'D-044 · owner', v:mean(refZero), cost:0, text:`<b>The owner set trading costs to zero</b> (no tick order-book data, no fees). Re-scoring every stored model: 42 of 119 model × strategy rows profitable on every cell. The 7-day model now makes ${pct(mean(refZero))} per block on average, and is profitable on 4 of 6 blocks.`, src:'runs/experiments/micro_loop_v1/zero_cost_status.csv'},
+ {k:'360 days × 6 models', when:'stability check', v:c1.mean_return, cost:0, text:`<b>Six 360-day models</b> (two dev folds × three seeds) re-trained to test stability. With the default strategy at the 90th percentile, every one is profitable: ${pct(c1.mean_return)} per block on average, ${pct0(c1.mean_win_share)} winning trades. The pre-registered 60% goal fails; the profit holds. This is candidate C1.`, src:'runs/scenarios/long_360d_stab'},
+ {k:'Leader cell', when:'fold −2 · seed 0', v:S.ret, cost:0, text:`<b>The model opened up in this presentation</b>: fold −2, seed 0. ${pct(S.ret)} on its dev block, ${S.trades.toLocaleString('en')} trades, ${pct0(S.win)} wins, ${pct0(S.dd)} max drawdown, while buy-and-hold lost ${pct(S.bh)}.`, src:D.leader},
+];
+function showMile(i){
+  document.querySelectorAll('.mile').forEach(b=>b.classList.toggle('on', +b.dataset.i===i));
+  const m=MILES[i]; el('mileDetail').innerHTML = `${m.text} <span class="mono muted" style="font-size:12px">· ${m.src}</span>`;
+  drawClimb(i);
+}
+el('miles').innerHTML = MILES.map((m,i)=>`<button class="mile" data-i="${i}"><span class="when">${m.when}</span><span class="what">${m.k}</span><span class="res ${m.v==null?'':(m.v>0?'up':'dn')}">${m.v==null?'no gain':pct(m.v)}</span></button>`).join('');
+el('miles').addEventListener('click', e=>{ const b=e.target.closest('.mile'); if(b) showMile(+b.dataset.i); });
+
+let climbSel = 6;
+function drawClimb(sel){
+  if (sel!=null) climbSel = sel;
+  const t=T(), lo=-0.25;
+  const x = MILES.map(m=>m.k), y = MILES.map(m=>m.v==null?0:Math.max(m.v,lo));
+  const colors = MILES.map((m,i)=> i===climbSel? t.accent : (m.v==null? t.neutral : (m.v>0? t.good : t.bad)));
+  const text = MILES.map(m=> m.v==null?'no gain': pct(m.v));
+  plot('climb', [{type:'bar', x, y, marker:{color:colors, line:{color:t.line,width:0}}, text, textposition:'outside', cliponaxis:false,
+      textfont:{family:t.mono,size:12,color:t.ink2}, hovertemplate:'%{x}<br>%{text}<extra></extra>'}], {
+    showlegend:false, margin:{l:56,r:16,t:26,b:90}, yaxis:{tickformat:'.0%', range:[lo-0.03,0.24], title:{text:'return per block'}},
+    xaxis:{tickfont:{size:11,family:t.body,color:t.ink2}},
+    shapes:[{type:'rect',xref:'x',yref:'paper',x0:-0.5,x1:3.5,y0:0,y1:1,fillcolor:t.bad,opacity:0.05,line:{width:0}},
+            {type:'rect',xref:'x',yref:'paper',x0:3.5,x1:6.5,y0:0,y1:1,fillcolor:t.good,opacity:0.05,line:{width:0}}],
+    annotations:[{x:1.5,y:1,yref:'paper',text:'26 bps round trip',showarrow:false,font:{family:t.mono,size:11,color:t.muted},yanchor:'bottom'},
+                 {x:5,y:1,yref:'paper',text:'zero costs (D-044)',showarrow:false,font:{family:t.mono,size:11,color:t.muted},yanchor:'bottom'}]});
+  el('climb').on && el('climb').removeAllListeners && el('climb').removeAllListeners('plotly_click');
+  el('climb').on && el('climb').on('plotly_click', ev=>{ showMile(ev.points[0].pointIndex); });
+}
+
+const CEIL = [
+ ['7-day network (dev mean)',0.511,'net'],['360-day network, h2',0.528,'net'],['Leader C1, h2',F.metrics.h2.auc,'net'],['Logistic, 3 lags (360d block)',0.531,'lin'],
+ ['Triple-barrier labels k=1.5',0.542,'lin'],['After a 2σ shock, logistic',0.541,'lin'],['Best condition bucket',0.554,'lin'],
+ ['+ spot order flow',0.532,'info'],['+ futures basis & flow',0.537,'info'],['+ order-book depth',0.537,'info'],
+];
+function drawCeiling(){
+  const t=T(); const col={net:t.accent,lin:t.neutral,info:t.h0};
+  const lbl={net:'the network',lin:'linear / conditional baselines',info:'new information (logistic)'};
+  const traces = ['net','lin','info'].map(k=>{ const r=CEIL.filter(c=>c[2]===k); return {type:'scatter',mode:'markers',name:lbl[k],
+    y:r.map(c=>c[0]), x:r.map(c=>c[1]), marker:{size:13,color:col[k],symbol:k==='net'?'diamond':(k==='info'?'square':'circle'),line:{width:1,color:t.surface}},
+    hovertemplate:'%{y}: AUC %{x:.3f}<extra></extra>'}; });
+  plot('ceiling', traces, {margin:{l:200,r:16,t:12,b:60}, xaxis:{range:[0.49,0.66],title:{text:'direction AUC'}}, yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink2}},
+    shapes:[{type:'line',x0:0.5,x1:0.5,yref:'paper',y0:0,y1:1,line:{color:t.muted,dash:'dot'}},{type:'line',x0:0.64,x1:0.64,yref:'paper',y0:0,y1:1,line:{color:t.good,dash:'dash',width:2}}],
+    annotations:[{x:0.64,y:1,yref:'paper',text:'≈ needed for 60% hits',showarrow:false,xanchor:'right',yanchor:'bottom',font:{size:11,color:t.good,family:t.mono}},
+                 {x:0.5,y:1,yref:'paper',text:'chance',showarrow:false,xanchor:'left',yanchor:'bottom',font:{size:11,color:t.muted,family:t.mono}}]});
+}
+function drawScreens(){
+  const t=T(); const names={l1_A_hyper:'A · hyperparameters',l1_B_loss_weights:'B · loss weights',l1_C_physics:'C · physics terms',l1_D_loss_choice:'D · loss choice',l1_E_maths:'E · maths'};
+  const k=Object.keys(D.screens); const y=k.map(x=>names[x]||x);
+  plot('screens', [
+    {type:'bar',orientation:'h',y,x:k.map(x=>D.screens[x].survivors),name:'pass',marker:{color:t.good},hovertemplate:'%{y}: %{x} pass<extra></extra>'},
+    {type:'bar',orientation:'h',y,x:k.map(x=>D.screens[x].trials-D.screens[x].survivors),name:'fail (unstable, flat or dominated loss)',marker:{color:t.bad},hovertemplate:'%{y}: %{x} fail<extra></extra>'}],
+    {barmode:'stack',margin:{l:150,r:16,t:12,b:60},xaxis:{title:{text:'trials'}},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink2}}});
+}
+
+const HYP = [
+ ['H2','Trading the signal','Fewer, more selective trades survive the 26 bps cost','neg','gross edge ~1 bps per trade at every threshold'],
+ ['H2b','Trading the signal','The signal lasts beyond ~10 bars, so holding longer pays','neg','IC peaks at 0.027 (15–20 bars), gone by 120'],
+ ['H3','Trading the signal','Trading only the most confident bars reaches 60% hits','neg','top 10% of bars: 51.0–52.9% hit'],
+ ['NT-005','Trading the signal','A better strategy architecture (12 + 8 twins)','neg','all 20 lose at 26 bps; winner always_flat'],
+ ['Goal-sel','Trading the signal','60% winning trades on the most confident setups','neg','net wins 22–36%, net −44..−62%'],
+ ['H1','What to predict','Horizons of 1–4 h carry a tradable edge','neg','no horizon beats the logistic; variance edge grows'],
+ ['H1b','What to predict','Confident tails at 1–4 h reach 60%','neg','top 10%: 44–55% hit'],
+ ['H4 / H4b','What to predict','A 240-bar window unlocks the longer horizons','neg','validation loss never improves after epoch 1'],
+ ['D-040','What to predict','360 days of training instead of 7','mix','direction unchanged; the base of C1'],
+ ['H5','What to predict','4 h horizons were data-starved','mix','direction flat; coverage repaired to 0.91–0.92'],
+ ['I2-duel','Inputs','OHLCV + 14 learnable indicator families','neg','AUC − logistic −0.006 / −0.005 / −0.016'],
+ ['E1','Labels and objective','Drop moves smaller than the cost from the labels','neg','AUC − logistic −0.033 / −0.018 / −0.010'],
+ ['E2','Labels and objective','Train the direction heads on net P&L','neg','the term optimises; AUC − logistic −0.039'],
+ ['E3','Labels and objective','Triple-barrier labels are easier to predict','neg','AUC ≤ 0.542, every z ≤ 1.5'],
+ ['L1','Maths and hyperparameters','960-trial maths, hyperparameter and loss screen','mix','maths stable; 537 of 960 pass; no direction'],
+ ['L2','Maths and hyperparameters','The screen\'s survivors on a 10-day layout','neg','significantly below the logistic at 1 h (z −3.4)'],
+ ['H6','Conditions','Hour of day, volatility or volume regimes','neg','best bucket AUC 0.554, z 2.2'],
+ ['H6b','Conditions','After a large move the next one is predictable','mix','reversal hit 54.2% (z 4.1), edge −0.39 bps'],
+ ['Q8-1','New information','Spot taker-buy order flow','mix','+0.010 AUC (z 3.2) at 15 min'],
+ ['Q8-2','New information','Futures basis, futures flow, futures lead','neg','+0.001 AUC'],
+ ['Q8-3','New information','Order-book depth at ±1–5%','neg','+0.003 AUC; hit 51–53% on all bars'],
+ ['Z0','Costs','Every stored model at zero cost','pos','42 of 119 rows profitable on every cell'],
+ ['Z1','Costs','The 360-day zero-cost result is stable','pos','6 of 6 profitable, 54.1% wins; 60% goal fails'],
+ ['Z2','Costs','A seed ensemble lifts the win share to 60%','mix','no lift; at size 0.7 drawdown < 5%'],
+];
+const AREAS = ['All', ...new Set(HYP.map(h=>h[1]))];
+el('hypFilter').innerHTML = AREAS.map(a=>`<button class="chip ${a==='All'?'on':''}" data-a="${a}">${a}</button>`).join('');
+el('hypFilter').addEventListener('click', e=>{ const b=e.target.closest('.chip'); if(!b) return; state.hyp=b.dataset.a;
+  el('hypFilter').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c===b)); drawBoard(); });
+function drawBoard(){
+  const lab={neg:'negative',mix:'partial',pos:'positive'};
+  el('board').innerHTML = HYP.filter(h=>state.hyp==='All'||h[1]===state.hyp).map(h=>`<div class="hyp"><div class="top"><span class="id">${h[0]} · ${h[1]}</span><span class="pill ${h[3]}">${lab[h[3]]}</span></div><div class="txt">${h[2]}</div><div class="res">${h[4]}</div></div>`).join('');
+}
+
+/* ---------- chapter 3: the field ---------- */
+function family(r){
+  if (r.scenario==='long_360d_stab'||r.scenario==='long_360d') return '360-day';
+  if (r.scenario==='h4h_360d') return '360-day, 4 h horizons';
+  if (r.scenario==='reference_default') return '7-day reference';
+  return '10-day micro';
+}
+const STRAT = {cq:'calibrated quantile', ec0:'edge > 0', gt:'TA trend filter', nk0:'Kelly', vt:'vol targeting'};
+const stratName = id => { const k=id.split('[')[0]; return (STRAT[k]||k) + (id.includes('entry_quantile')?' '+id.match(/entry_quantile=([\d.]+)/)[1]:''); };
+const FAMS = ['All','360-day','360-day, 4 h horizons','7-day reference','10-day micro'];
+el('fieldFilter').innerHTML = FAMS.map(a=>`<button class="chip ${a==='All'?'on':''}" data-a="${a}">${a}</button>`).join('');
+el('fieldFilter').addEventListener('click', e=>{ const b=e.target.closest('.chip'); if(!b) return; state.field=b.dataset.a;
+  el('fieldFilter').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c===b)); drawField(); });
+function drawField(){
+  const t=T(); const colors={'360-day':t.accent,'360-day, 4 h horizons':t.h1,'7-day reference':t.h0,'10-day micro':t.neutral};
+  const rows = D.zero_cost_status.filter(r=>r.hit!=null && r.ret!=null);
+  const traces = FAMS.slice(1).filter(f=>state.field==='All'||state.field===f).map(f=>{
+    const rr = rows.filter(r=>family(r)===f);
+    return {type:'scatter',mode:'markers',name:f,x:rr.map(r=>r.hit),y:rr.map(r=>r.ret),
+      marker:{size:rr.map(r=>Math.max(6,Math.sqrt(r.trades)/2.2)),color:colors[f],opacity:0.85,
+        symbol:rr.map(r=>(r.ret_min!=null&&r.ret_min>0)?'circle':'circle-open'),line:{width:1.5,color:colors[f]}},
+      text:rr.map(r=>`${r.scenario} · ${r.variant}<br>${stratName(r.config_id)}<br>cells ${r.cells} · worst cell ${pct(r.ret_min)}<br>trades/cell ${Math.round(r.trades)} · DD ${pct0(r.dd_max)}`),
+      hovertemplate:'%{text}<br>return %{y:.1%} · wins %{x:.1%}<extra></extra>'};
+  });
+  const ann = [];
+  const e3 = D.manifest.C3; const tag=(x,y,txt)=>ann.push({x,y,text:txt,showarrow:true,arrowhead:0,ax:40,ay:-34,font:{family:t.mono,size:12,color:t.ink},bgcolor:t.surface,bordercolor:t.line,borderpad:3});
+  if (state.field==='All'||state.field==='360-day'){ tag(c1.mean_win_share,c1.mean_return,'C1 · leader'); tag(D.manifest.C2.mean_win_share,D.manifest.C2.mean_return,'C2'); }
+  const ta = rows.find(r=>r.scenario==='micro_l2'&&r.variant==='clip100'&&r.config_id==='gt');
+  if (ta && (state.field==='All'||state.field==='10-day micro')) tag(ta.hit,ta.ret,'#4 · TA filter');
+  const traces2 = traces.slice();
+  if (state.field==='All'||state.field==='360-day') traces2.push({type:'scatter',mode:'markers',name:'C3 · seed ensemble, size 0.7',x:[e3.mean_win_share],y:[e3.mean_return],
+    marker:{size:16,symbol:'star',color:t.accent,line:{width:1,color:t.surface}},hovertemplate:'C3: mean of 3 seeds per fold, size 0.7<br>return %{y:.1%} · wins %{x:.1%}<extra></extra>'});
+  plot('field', traces2, {xaxis:{title:{text:'share of winning trades'},tickformat:'.0%'}, yaxis:{title:{text:'mean return per block'},tickformat:'.0%'},
+    shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}},{type:'line',yref:'paper',y0:0,y1:1,x0:0.6,x1:0.6,line:{color:t.good,dash:'dash'}}],
+    annotations:[...ann,{x:0.6,y:1,yref:'paper',text:'owner goal: 60% wins',showarrow:false,xanchor:'right',yanchor:'bottom',font:{size:11,color:t.good,family:t.mono}}], legend:{orientation:'h',y:-0.16}});
+}
+function drawSix(){
+  const t=T(); const dash={s0:'solid',s1:'dash',s2:'dot'};
+  plot('sixEq', D.cells.map(c=>({type:'scatter',mode:'lines',name:`${c.fold} ${c.seed}`,y:c.equity,x:c.equity.map((_,i)=>i*BT.thin*2/1440),
+    line:{color:c.fold==='f-2'?t.accent:t.h0,width:c.name===D.leader?3:1.6,dash:dash[c.seed]},
+    hovertemplate:`${c.fold} ${c.seed}: $%{y:,.0f} on day %{x:.1f}<extra></extra>`})),
+    {xaxis:{title:{text:'days into the dev block'}},yaxis:{title:{text:'equity ($)'},tickformat:',.0f'},
+     shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:10000,y1:10000,line:{color:t.muted,dash:'dot'}}]});
+  const labels = D.cells.map(c=>`${c.fold} ${c.seed}`);
+  const r7 = D.reference_7d.map(x=>x.zero.ret);
+  plot('refVs', [
+    {type:'bar',name:'7-day model',x:labels,y:r7,marker:{color:t.h0},hovertemplate:'7-day %{x}: %{y:.1%}<extra></extra>'},
+    {type:'bar',name:'360-day model',x:labels,y:D.cells.map(c=>c.c1.ret),marker:{color:t.accent},hovertemplate:'360-day %{x}: %{y:.1%}<extra></extra>'}],
+    {barmode:'group',yaxis:{tickformat:'.0%',title:{text:'return per block (C1 strategy, 0 cost)'}},xaxis:{title:{text:'dev cell (fold, seed); blocks differ between the two setups'}}});
+  const rowsC = [['C1','360 days → default strategy, entry line 0.9',D.manifest.C1],['C2','360 days → default strategy, entry line 0.95',D.manifest.C2],['C3','3-seed ensemble per fold → 0.9, position 0.7',D.manifest.C3]];
+  el('candTbl').innerHTML = '<tr><th>id</th><th style="text-align:left">what</th><th>mean return</th><th>profitable</th><th>wins</th><th>max drawdown</th></tr>' +
+    rowsC.map(r=>`<tr class="${r[0]==='C1'?'lead':''}"><td><b>${r[0]}</b></td><td style="text-align:left">${r[1]}</td><td class="num up">${pct(r[2].mean_return)}</td><td class="num">${r[2].profitable_cells}</td><td class="num">${pct0(r[2].mean_win_share)}</td><td class="num">${pct0(r[2].max_drawdown)}</td></tr>`).join('');
+}
+
+/* ---------- chapter 4: training ---------- */
+const ep = TR.epoch.map(e=>e+1), served = TR.served_epoch;
+el('trainLede').innerHTML = `${ep.length} epochs of 250 steps (batch 2048, ${fmt(TR.sec_per_step,2)} s per step, ${(TR.elapsed_s/60).toFixed(0)} minutes). Validation loss is best at epoch ${served} and never improves again, so early stopping restores epoch ${served}'s weights. The training loss keeps falling while validation stays flat: after about 1,000 updates, what is left to learn is noise.`;
+function drawTraining(){
+  const t=T(); const si = served-1;
+  plot('loss', [
+    {type:'scatter',mode:'lines+markers',name:'training',x:ep,y:TR.loss,line:{color:t.ink2,dash:'dot'},marker:{size:5}},
+    {type:'scatter',mode:'lines+markers',name:'validation',x:ep,y:TR.val_loss,line:{color:t.ink,width:2.5},marker:{size:6}},
+    {type:'scatter',mode:'markers',name:`served (epoch ${served})`,x:[served],y:[TR.val_loss[si]],marker:{size:16,color:t.accent,symbol:'star'}}],
+    {xaxis:{title:{text:'epoch'},dtick:1},yaxis:{title:{text:'total loss'}}});
+  const names = {point_loss:'point',trend_loss:'trend',dir_loss:'direction BCE',nll_loss:'Gaussian NLL',crps_loss:'CRPS',soft_ece_loss:'soft ECE',vol_loss:'volatility',t_perp_loss:'T-perp',casimir_loss:'Casimir',vac_loss:'vacuum',hd_loss:'HD',ife_loss:'IFE',vac_overflow_loss:'vac. overflow',reg_loss:'regulariser'};
+  const pal = ['#3987e5','#7aa7e8','#d95926','#199e70','#5ec4a0','#b38600','#8b6fd6','#c05b8e','#9aa3ad','#6d7784','#b0a36a','#7f9c6b','#a3796b','#556070'];
+  const keys = Object.keys(TR.terms).filter(k=>TR.terms[k].val.some(v=>v&&Math.abs(v)>1e-4)||TR.terms[k].train.some(v=>v&&Math.abs(v)>1e-4));
+  const src = state.term==='train'?'train':'val';
+  const tot = ep.map((_,i)=>keys.reduce((s,k)=>s+Math.max(0,TR.terms[k][src][i]||0),0));
+  plot('terms', keys.map((k,j)=>({type:'bar',name:names[k]||k,x:ep,y:TR.terms[k][src].map((v,i)=> state.term==='share'? Math.max(0,v||0)/tot[i] : v),
+      marker:{color:pal[j%pal.length]},hovertemplate:`${names[k]||k}: %{y:.4f}<extra></extra>`})),
+    {barmode:'stack',xaxis:{title:{text:'epoch'},dtick:1},yaxis:{title:{text:state.term==='share'?'share of the total':'loss'},tickformat:state.term==='share'?'.0%':''},legend:{orientation:'h',y:-0.25,font:{size:11}}});
+  const band = 1.96/Math.sqrt(43200/10);
+  plot('mcc', [
+    {type:'scatter',x:[ep[0],ep[ep.length-1],ep[ep.length-1],ep[0]],y:[band,band,-band,-band],fill:'toself',fillcolor:t.grid,line:{width:0},name:'95% chance band',hoverinfo:'skip'},
+    ...HZ.map(h=>({type:'scatter',mode:'lines+markers',name:`${h} · ${HB[h]} min`,x:ep,y:TR.val_dir_mcc[h],line:{color:hz(h)},marker:{size:5},hovertemplate:`${h}: MCC %{y:.3f}<extra></extra>`}))],
+    {xaxis:{title:{text:'epoch'},dtick:1},yaxis:{title:{text:'validation MCC'},range:[-0.06,0.06]},
+     shapes:[{type:'line',x0:served,x1:served,yref:'paper',y0:0,y1:1,line:{color:t.accent,dash:'dot'}}]});
+  plot('grad', [
+    {type:'scatter',mode:'lines+markers',name:'gradient norm',x:ep,y:TR.grad_norm,line:{color:t.ink},yaxis:'y'},
+    {type:'scatter',mode:'lines',name:'learning rate (network)',x:ep,y:TR.lr,line:{color:t.h0,dash:'dot'},yaxis:'y2'},
+    {type:'scatter',mode:'lines',name:'learning rate (indicator periods)',x:ep,y:TR.lr_indicator,line:{color:t.accent,dash:'dot'},yaxis:'y2'}],
+    {xaxis:{title:{text:'epoch'},dtick:1},yaxis:{title:{text:'global gradient norm'}},yaxis2:{overlaying:'y',side:'right',type:'log',title:{text:'learning rate'},gridcolor:'rgba(0,0,0,0)',tickfont:{family:t.mono,size:11,color:t.muted}}});
+  plot('sixVal', D.cells.flatMap(c=>{ const e=c.training.epoch.map(x=>x+1); const col=c.fold==='f-2'?t.accent:t.h0; const s=c.training.served_epoch;
+    return [{type:'scatter',mode:'lines',name:`${c.fold} ${c.seed}`,x:e,y:c.training.val_loss,line:{color:col,width:c.name===D.leader?3:1.4},legendgroup:c.name,hovertemplate:`${c.fold} ${c.seed} epoch %{x}: %{y:.3f}<extra></extra>`},
+            {type:'scatter',mode:'markers',x:[s],y:[c.training.val_loss[s-1]],marker:{size:11,symbol:'star',color:col},showlegend:false,legendgroup:c.name,hovertemplate:`served epoch ${s}<extra></extra>`}]; }),
+    {xaxis:{title:{text:'epoch'}},yaxis:{title:{text:'validation loss'}}});
+}
+const FAM = {ma:['Moving averages',['ma_period_0','ma_period_1','ma_period_2']],macd:['MACD',['macd_0_fast','macd_0_slow','macd_0_signal','macd_1_fast','macd_1_slow','macd_1_signal','macd_2_fast','macd_2_slow','macd_2_signal']],rsi:['RSI',['rsi_period_0','rsi_period_1','rsi_period_2']],bb:['Bollinger',['bb_period_0','bb_period_1','bb_period_2']]};
+el('famFilter').innerHTML = Object.entries(FAM).map(([k,v])=>`<button class="chip ${k==='ma'?'on':''}" data-f="${k}">${v[0]}</button>`).join('');
+el('famFilter').addEventListener('click', e=>{ const b=e.target.closest('.chip'); if(!b) return; state.fam=b.dataset.f;
+  el('famFilter').querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c===b)); drawPeriods(); });
+function drawPeriods(){
+  const t=T(), I=D.indicators, keys=FAM[state.fam][1], pal=[t.h0,t.h1,t.h2,'#8b6fd6','#b38600','#c05b8e','#5ec4a0','#6d7784','#a3796b'];
+  const e = I.epoch.map(x=>x+1);
+  const moved = keys.map(k=>{ const h=I.history[k]; return (h[h.length-1]-I.init[k])/I.init[k]; });
+  el('famCap').innerHTML = `<b>${FAM[state.fam][0]}: learned periods over training</b> (bars). Largest move: <span class="mono">${keys[moved.map(Math.abs).indexOf(Math.max(...moved.map(Math.abs)))]}</span> ${pct(moved[moved.map(Math.abs).indexOf(Math.max(...moved.map(Math.abs)))],0)} from its textbook value.`;
+  plot('periods', keys.flatMap((k,j)=>[
+    {type:'scatter',mode:'lines+markers',name:k,x:e,y:I.history[k],line:{color:pal[j],width:2},marker:{size:5},legendgroup:k,hovertemplate:`${k} epoch %{x}: %{y:.2f} bars<extra></extra>`},
+    {type:'scatter',mode:'lines',x:[e[0],e[e.length-1]],y:[I.init[k],I.init[k]],line:{color:pal[j],dash:'dash',width:1},showlegend:false,legendgroup:k,hoverinfo:'skip'}]),
+    {xaxis:{title:{text:'epoch'},dtick:1},yaxis:{title:{text:'period (bars)'}},legend:{orientation:'h',y:-0.25,font:{size:11}}});
+  plot('spread', [
+    ...D.cells.map(c=>({type:'scatter',mode:'markers',name:`${c.fold} ${c.seed}`,x:keys.map(k=>c.final_periods[k]),y:keys,
+      marker:{size:10,color:c.fold==='f-2'?t.accent:t.h0,opacity:0.8,symbol:c.name===D.leader?'star':'circle'},hovertemplate:`${c.fold} ${c.seed} · %{y}: %{x:.1f}<extra></extra>`})),
+    {type:'scatter',mode:'markers',name:'textbook',x:keys.map(k=>I.init[k]),y:keys,marker:{size:12,symbol:'diamond-open',color:t.ink,line:{width:2}},hovertemplate:'textbook %{y}: %{x}<extra></extra>'}],
+    {margin:{l:110,r:16,t:12,b:60},xaxis:{title:{text:'final period (bars)'}},yaxis:{autorange:'reversed',tickfont:{family:t.mono,size:11,color:t.ink2}},legend:{orientation:'h',y:-0.2,font:{size:11}}});
+}
+
+/* ---------- chapter 5: fit ---------- */
+const M = F.metrics;
+el('fitLede').innerHTML = `Direction AUC is ${fmt(M.h0.auc,3)} / ${fmt(M.h1.auc,3)} / ${fmt(M.h2.auc,3)} at 10 / 15 / 20 minutes: above chance, but no better than a logistic regression on three lagged returns. The probabilities are honest (calibration error ${fmt(M.h0.ece,3)}–${fmt(M.h2.ece,3)}). The variance forecast beats a constant-variance model by ${pct0(M.h0.crpss)}–${pct0(M.h2.crpss)} in CRPS, and the 90% intervals cover ${pct0(M.h0.coverage90)}–${pct0(M.h2.coverage90)} of outcomes.`;
+function drawFit(){
+  const t=T(); const ne = HZ.map(h=>F.n_eff[h]||F.n/HB[h]);
+  plot('auc', [
+    {type:'bar',name:'network (C1)',x:HZ.map(h=>`${h} · ${HB[h]} min`),y:HZ.map(h=>M[h].auc),marker:{color:HZ.map(h=>hz(h))},
+      error_y:{type:'data',array:HZ.map((h,i)=>1.96/Math.sqrt(3*ne[i])),color:t.ink2},hovertemplate:'network %{x}: %{y:.4f}<extra></extra>'},
+    {type:'bar',name:'logistic, 3 lagged returns',x:HZ.map(h=>`${h} · ${HB[h]} min`),y:HZ.map(h=>M[h].auc_logreg),marker:{color:t.neutral},hovertemplate:'logistic %{x}: %{y:.4f}<extra></extra>'}],
+    {barmode:'group',yaxis:{range:[0.48,0.56],title:{text:'direction AUC'}},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0.5,y1:0.5,line:{color:t.muted,dash:'dot'}}],
+     annotations:[{xref:'paper',x:1,y:0.5,text:'chance',showarrow:false,xanchor:'right',yanchor:'bottom',font:{size:11,family:t.mono,color:t.muted}}]});
+  const h=state.hz, rel=F.reliability[h], col=hz(h);
+  plot('reliab', [
+    {type:'scatter',mode:'lines',x:[0.46,0.56],y:[0.46,0.56],line:{color:t.muted,dash:'dot'},name:'perfect calibration',hoverinfo:'skip'},
+    {type:'scatter',mode:'markers+lines',name:`${h} bins`,x:rel.map(b=>b.p),y:rel.map(b=>b.up),error_y:{type:'data',array:rel.map(b=>1.96*b.se),color:col,thickness:1},
+     line:{color:col},marker:{size:9,color:col},text:rel.map(b=>b.n),hovertemplate:'predicted %{x:.3f}<br>observed %{y:.3f}<br>%{text} bars<extra></extra>'}],
+    {xaxis:{title:{text:'mean calibrated P(up) in the bin'},range:[0.46,0.56]},yaxis:{title:{text:'observed share up'},range:[0.40,0.62]}});
+  const ph=F.p_hist[h], w=(ph.hi-ph.lo)/ph.counts.length, xs=ph.counts.map((_,i)=>ph.lo+(i+0.5)*w);
+  plot('phist', [{type:'bar',x:xs,y:ph.counts,marker:{color:col,opacity:0.8},name:`${h} P(up)`,hovertemplate:'P(up) %{x:.3f}: %{y} bars<extra></extra>'}],
+    {showlegend:false,xaxis:{title:{text:`calibrated P(up), ${h}`}},yaxis:{title:{text:'bars'}},
+     shapes:[['long_above','long'],['short_below','short']].map(([k])=>({type:'line',x0:BT.thresholds[k],x1:BT.thresholds[k],yref:'paper',y0:0,y1:1,line:{color:t.accent,width:2,dash:'dash'}})),
+     annotations:[{x:BT.thresholds.long_above,y:1,yref:'paper',text:'long above',showarrow:false,xanchor:'left',yanchor:'top',font:{size:11,family:t.mono,color:t.accent}},
+                  {x:BT.thresholds.short_below,y:1,yref:'paper',text:'short below',showarrow:false,xanchor:'right',yanchor:'top',font:{size:11,family:t.mono,color:t.accent}}]});
+  const sc=F.sigma_cal[h], mx=Math.max(...sc.map(b=>Math.max(b.sigma,b.rms)))*1.08;
+  plot('sigcal', [
+    {type:'scatter',mode:'lines',x:[0,mx],y:[0,mx],line:{color:t.muted,dash:'dot'},name:'perfect',hoverinfo:'skip'},
+    {type:'scatter',mode:'markers+lines',name:`${h} deciles`,x:sc.map(b=>b.sigma),y:sc.map(b=>b.rms),line:{color:col},marker:{size:9,color:col},hovertemplate:'predicted σ $%{x:.0f}<br>realised RMS $%{y:.0f}<extra></extra>'}],
+    {xaxis:{title:{text:'predicted σ of the move ($)'},range:[0,mx]},yaxis:{title:{text:'realised RMS move ($)'},range:[0,mx]}});
+  const pit=F.pit[h], ex=pit.reduce((a,b)=>a+b,0)/pit.length;
+  plot('pit', [{type:'bar',x:pit.map((_,i)=>(i+0.5)/pit.length),y:pit,marker:{color:col,opacity:0.85},name:'PIT',hovertemplate:'PIT %{x:.2f}: %{y}<extra></extra>'}],
+    {showlegend:false,xaxis:{title:{text:'Φ(move / σ)'},range:[0,1]},yaxis:{title:{text:'bars'}},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:ex,y1:ex,line:{color:t.muted,dash:'dot'}}]});
+  const m=M[h];
+  const fk=[[fmt(m.auc,3),`direction AUC ${h}`],[fmt(m.auc_logreg,3),'logistic AUC'],[fmt(m.ece,3),'calibration error'],[fmt(m.brier,4),'Brier (0.25 = chance)'],
+            [pct0(m.crpss),'CRPS skill vs const σ'],[pct0(m.coverage90),'90% interval coverage'],[fmt(m.spearman_var_err2,2),'σ² vs error² (Spearman)'],[`$${fmt(m.width90,0)}`,'90% interval width']];
+  el('fitKpis').innerHTML = fk.map(k=>`<div class="kpi"><div class="v">${k[0]}</div><div class="k">${k[1]}</div></div>`).join('');
+}
+el('hzSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; state.hz=b.dataset.h;
+  el('hzSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); drawFit(); });
+
+/* ---------- chapter 6: backtest ---------- */
+const TD = BT.trades, nT = TD.side.length;
+const longs = TD.side.filter(s=>s>0).length;
+el('btLede').innerHTML = `The dev block ran from ${BT.first.slice(0,10)} to ${BT.last.slice(0,10)}; BTC fell ${pct(S.bh)}. The strategy took ${nT.toLocaleString('en')} trades (${longs} long, ${nT-longs} short), about one every 24 minutes, each held about 8 minutes. It was in the market ${pct0(S.exposure,0)} of the time. It ended at ${pct(S.ret)} with a worst peak-to-trough of ${pct0(S.dd)}. That is the 100th percentile of 100 random strategies with the same frequency.`;
+function drawBacktest(){
+  const t=T();
+  const sel = i => state.trades==='all' || (state.trades==='long'&&TD.side[i]>0) || (state.trades==='short'&&TD.side[i]<0);
+  const idx = state.trades==='none'?[]:[...Array(nT).keys()].filter(sel);
+  const mk = (win) => { const ii=idx.filter(i=>(TD.ret_bps[i]>0)===win); return {type:'scatter',mode:'markers',xaxis:'x',yaxis:'y',
+    name: win?'winning trade':'losing trade', x:ii.map(i=>TD.t_entry[i]), y:ii.map(i=>TD.px[i]),
+    marker:{size:6,symbol:ii.map(i=>TD.side[i]>0?(win?'triangle-up':'triangle-up-open'):(win?'triangle-down':'triangle-down-open')),color:win?t.good:t.bad,line:{width:1,color:win?t.good:t.bad}},
+    text:ii.map(i=>`${TD.side[i]>0?'LONG':'SHORT'} ${TD.t_entry[i]} → ${TD.t_exit[i]}<br>${TD.ret_bps[i]>0?'+':''}${TD.ret_bps[i]} bps · ${TD.bars[i]} bars · exit ${TD.reason[i]}`),
+    hovertemplate:'%{text}<extra></extra>'}; };
+  const data = [
+    {type:'scatter',mode:'lines',name:'BTC/USDT close',x:BT.t,y:BT.close,line:{color:t.ink2,width:1},xaxis:'x',yaxis:'y',hovertemplate:'%{x}<br>$%{y:,.0f}<extra></extra>'},
+    mk(true), mk(false),
+    {type:'scatter',mode:'lines',name:'C1 equity',x:BT.t,y:BT.equity,line:{color:t.accent,width:2.2},xaxis:'x',yaxis:'y2',hovertemplate:'C1 $%{y:,.0f}<extra></extra>'},
+    {type:'scatter',mode:'lines',name:'buy-and-hold',x:BT.t,y:BT.bh,line:{color:t.neutral,width:1.4,dash:'dot'},xaxis:'x',yaxis:'y2',hovertemplate:'B&H $%{y:,.0f}<extra></extra>'},
+    {type:'scatter',mode:'lines',name:'drawdown',x:BT.t,y:BT.dd.map(v=>-v),fill:'tozeroy',line:{color:t.bad,width:1},fillcolor:'rgba(180,35,90,0.18)',xaxis:'x',yaxis:'y3',hovertemplate:'drawdown %{y:.2%}<extra></extra>'}];
+  plot('bt', data, {hovermode:'closest', margin:{l:64,r:16,t:12,b:40},
+    grid:{rows:3,columns:1,pattern:'coupled',roworder:'top to bottom'},
+    xaxis:{type:'date',rangeslider:{visible:false}},
+    yaxis:{domain:[0.52,1],title:{text:'price ($)'},tickformat:',.0f'},
+    yaxis2:{domain:[0.2,0.48],title:{text:'equity ($)'},tickformat:',.0f'},
+    yaxis3:{domain:[0,0.16],title:{text:'drawdown'},tickformat:'.0%'},
+    legend:{orientation:'h',y:-0.06}});
+  // null
+  const R=D.random_null;
+  plot('nullc', [
+    {type:'scatter',x:[R.random_p05_total_return,R.random_p95_total_return],y:[0,0],mode:'lines',line:{color:t.neutral,width:22},name:'random: 5th–95th percentile',hoverinfo:'skip',opacity:0.35},
+    {type:'scatter',x:[R.random_mean_total_return],y:[0],mode:'markers',marker:{size:14,color:t.neutral,symbol:'line-ns-open',line:{width:3}},name:'random: mean',hovertemplate:'random mean %{x:.1%}<extra></extra>'},
+    {type:'scatter',x:[S.ret],y:[0],mode:'markers+text',marker:{size:18,color:t.accent,symbol:'diamond'},text:[`C1 ${pct(S.ret)}`],textposition:'top center',textfont:{family:t.mono,color:t.ink},name:'C1',hovertemplate:'C1 %{x:.1%}<extra></extra>'},
+    {type:'scatter',x:[S.bh],y:[0],mode:'markers+text',marker:{size:12,color:t.bad,symbol:'x'},text:['buy-and-hold'],textposition:'bottom center',textfont:{family:t.mono,color:t.ink2},name:'buy-and-hold',hovertemplate:'B&H %{x:.1%}<extra></extra>'}],
+    {xaxis:{tickformat:'.0%',title:{text:'return on the dev block'},range:[-0.16,0.22]},yaxis:{visible:false,range:[-1,1]}});
+  const wins = TD.ret_bps.filter(v=>v>0), loss = TD.ret_bps.filter(v=>v<=0);
+  plot('thist', [
+    {type:'histogram',x:wins,name:`winning (${wins.length})`,marker:{color:t.good,opacity:0.75},xbins:{start:-80,end:80,size:2.5}},
+    {type:'histogram',x:loss,name:`losing (${loss.length})`,marker:{color:t.bad,opacity:0.75},xbins:{start:-80,end:80,size:2.5}}],
+    {barmode:'overlay',xaxis:{title:{text:'trade return (bps)'},range:[-60,60]},yaxis:{title:{text:'trades'}},
+     shapes:[{type:'line',x0:mean(TD.ret_bps),x1:mean(TD.ret_bps),yref:'paper',y0:0,y1:1,line:{color:t.accent,width:2}}],
+     annotations:[{x:mean(TD.ret_bps),y:1,yref:'paper',text:`mean ${fmt(mean(TD.ret_bps),2)} bps`,showarrow:false,xanchor:'left',yanchor:'top',font:{family:t.mono,size:11,color:t.accent}}]});
+  // buckets
+  const med = BT.thresholds.median;
+  const bucket = (vals, q, labels, id, xlab) => {
+    const order=[...vals.keys()].sort((a,b)=>vals[a]-vals[b]); const per=Math.ceil(order.length/q); const g=[];
+    for(let k=0;k<q;k++){ const ii=order.slice(k*per,(k+1)*per); g.push({n:ii.length,m:mean(ii.map(i=>TD.ret_bps[i])),w:ii.filter(i=>TD.ret_bps[i]>0).length/ii.length}); }
+    plot(id, [
+      {type:'bar',x:labels,y:g.map(b=>b.m),name:'mean bps per trade',marker:{color:g.map(b=>b.m>0?t.good:t.bad)},text:g.map(b=>`${b.n}`),hovertemplate:'%{x}: %{y:.2f} bps (%{text} trades)<extra></extra>'},
+      {type:'scatter',mode:'lines+markers',x:labels,y:g.map(b=>b.w),name:'win share',yaxis:'y2',line:{color:t.ink},marker:{size:7},hovertemplate:'%{x}: %{y:.1%} wins<extra></extra>'}],
+      {xaxis:{title:{text:xlab}},yaxis:{title:{text:'mean bps per trade'}},yaxis2:{overlaying:'y',side:'right',tickformat:'.0%',gridcolor:'rgba(0,0,0,0)',tickfont:{family:t.mono,size:11,color:t.muted}},legend:{orientation:'h',y:-0.3}});
+  };
+  bucket(TD.wd.map(v=>Math.abs(v-med)), 5, ['Q1 least','Q2','Q3','Q4','Q5 most'], 'byConf', 'confidence quintile');
+  bucket(TD.sigma_bps.map(v=>v==null?0:v), 3, ['calm','middle','volatile'], 'byVol', 'predicted σ tercile');
+  const reasons = {REV:'signal reversal',TIME:'15-bar limit',SL:'2σ stop',EOW:'end of block'};
+  const rk = Object.keys(reasons).filter(k=>TD.reason.includes(k));
+  const rs = rk.map(k=>{ const ii=[...Array(nT).keys()].filter(i=>TD.reason[i]===k); return {n:ii.length,m:mean(ii.map(i=>TD.ret_bps[i]))}; });
+  plot('exits', [
+    {type:'bar',x:rk.map(k=>reasons[k]),y:rs.map(r=>r.n),name:'trades',marker:{color:t.neutral},hovertemplate:'%{x}: %{y} trades<extra></extra>'},
+    {type:'scatter',mode:'markers',x:rk.map(k=>reasons[k]),y:rs.map(r=>r.m),name:'mean bps',yaxis:'y2',marker:{size:12,symbol:'diamond',color:rs.map(r=>r.m>0?t.good:t.bad)},hovertemplate:'%{x}: %{y:.2f} bps<extra></extra>'}],
+    {yaxis:{title:{text:'trades'}},yaxis2:{overlaying:'y',side:'right',title:{text:'mean bps'},gridcolor:'rgba(0,0,0,0)',zeroline:true,zerolinecolor:t.line,tickfont:{family:t.mono,size:11,color:t.muted}},legend:{orientation:'h',y:-0.3}});
+  // daily & hours ($ approx from bps on running equity: use bps x 1 (equity ~10k) -> $ = bps)
+  const day = {}; TD.t_entry.forEach((ts,i)=>{ const d=ts.slice(0,10); day[d]=(day[d]||0)+TD.ret_bps[i]; });
+  const dk = Object.keys(day).sort();
+  plot('daily', [{type:'bar',x:dk,y:dk.map(k=>day[k]),marker:{color:dk.map(k=>day[k]>0?t.good:t.bad)},name:'daily sum of trade returns',hovertemplate:'%{x}: %{y:+.0f} bps<extra></extra>'}],
+    {showlegend:false,xaxis:{type:'date'},yaxis:{title:{text:'sum of trade returns (bps)'}}});
+  const hr = Array.from({length:24},()=>({s:0,n:0})); TD.hour.forEach((h,i)=>{ if(h>=0){ hr[h].s+=TD.ret_bps[i]; hr[h].n++; } });
+  plot('hours', [
+    {type:'bar',x:[...Array(24).keys()],y:hr.map(v=>v.s),name:'sum of trade returns (bps)',marker:{color:hr.map(v=>v.s>0?t.good:t.bad)},hovertemplate:'%{x}:00 UTC: %{y:+.0f} bps<extra></extra>'},
+    {type:'scatter',mode:'lines',x:[...Array(24).keys()],y:hr.map(v=>v.n),name:'trades',yaxis:'y2',line:{color:t.ink,width:1.5},hovertemplate:'%{x}:00: %{y} trades<extra></extra>'}],
+    {xaxis:{title:{text:'hour (UTC)'},dtick:3},yaxis:{title:{text:'bps'}},yaxis2:{overlaying:'y',side:'right',gridcolor:'rgba(0,0,0,0)',tickfont:{family:t.mono,size:11,color:t.muted}},legend:{orientation:'h',y:-0.3}});
+}
+el('trSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; state.trades=b.dataset.v;
+  el('trSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); drawBacktest(); });
+
+/* ---------- chapter 7: economics ---------- */
+const sE=el('sEdge'), sT=el('sTr'), sC=el('sCost');
+sE.value=S.edge_bps; sT.value=S.trades; sC.value=0;
+function calc(){
+  const e=+sE.value, n=+sT.value, c=+sC.value;
+  el('vEdge').textContent=`${e.toFixed(2)} bps`; el('vTr').textContent=n.toLocaleString('en'); el('vCost').textContent=`${c.toFixed(1)} bps`;
+  const r=Math.exp(n*Math.log(1+(e-c)/1e4))-1; const o=el('calcOut'); o.textContent=pct(r); o.style.color = r>0? css('--good'): css('--bad');
+}
+[sE,sT,sC].forEach(s=>s.addEventListener('input',calc)); calc();
+function drawHeat(){
+  const t=T(), W=D.whatif, m=el('heatMetric').value;
+  const z = W.q.map(q=>W.cost.map(c=>{ const g=W.grid[`${q}|${c}`]; return g? g[m] : null; }));
+  const fmtv = v => v==null?'':(m==='ret'||m==='win'||m==='dd')? (100*v).toFixed(m==='win'?1:0)+'%' : (m==='trades'? String(v): v.toFixed(1));
+  const scale = m==='ret'||m==='sharpe' ? [[0,t.bad],[0.5,t.surface],[1,t.good]] : (m==='dd'? [[0,t.surface],[1,t.bad]] : [[0,t.surface],[1,t.h0]]);
+  const zc = m==='ret'? {zmid:0, zmin:-0.3, zmax:0.3} : (m==='sharpe'? {zmid:0, zmin:-10, zmax:10} : {});
+  plot('heat', [{type:'heatmap',x:W.cost.map(String),y:W.q.map(String),z,colorscale:scale,...zc,text:z.map(r=>r.map(fmtv)),texttemplate:'%{text}',
+     textfont:{family:t.mono,size:10,color:t.ink},hovertemplate:'entry line %{y} · cost %{x} bps<br>%{text}<extra></extra>',colorbar:{thickness:10,tickfont:{family:t.mono,size:10,color:t.muted}}}],
+    {showlegend:false,margin:{l:60,r:10,t:12,b:50},xaxis:{title:{text:'round-trip cost (bps)'},type:'category'},yaxis:{title:{text:'entry quantile'},type:'category'},
+     shapes:[{type:'rect',xref:'x',yref:'y',x0:-0.5,x1:0.5,y0:4.5,y1:5.5,line:{color:t.accent,width:3}}]});
+}
+el('heatMetric').addEventListener('change', drawHeat);
+function drawCost(){
+  const t=T(); const dash={s0:'solid',s1:'dash',s2:'dot'};
+  plot('costc', D.cells.map(c=>{ const k=Object.keys(c.cost_curve).map(Number).sort((a,b)=>a-b);
+    return {type:'scatter',mode:'lines+markers',name:`${c.fold} ${c.seed}`,x:k,y:k.map(x=>c.cost_curve[String(x)]),line:{color:c.fold==='f-2'?t.accent:t.h0,dash:dash[c.seed],width:c.name===D.leader?3:1.6},marker:{size:5},hovertemplate:`${c.fold} ${c.seed}: %{y:.1%} at %{x} bps<extra></extra>`}; }),
+    {xaxis:{title:{text:'round-trip cost (bps)'}},yaxis:{title:{text:'return per block'},tickformat:'.0%'},
+     shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:t.muted,dash:'dot'}}]});
+}
+el('whyNote').innerHTML = `<b>Why it went this way, in one paragraph.</b> The model's direction forecast is slightly better than a coin: ${pct0(S.win)} of trades win, and wins and losses are the same size (about ±10 bps). Calibration keeps the probabilities honest, so the entry lines sit in the real tails of P(up). The edge is concentrated in calm minutes, where the calmest third of trades wins 62%; in volatile minutes it disappears. The strategy takes ${S.trades.toLocaleString('en')} such bets in 32 days, long ${longs} times and short ${nT-longs}, so the falling market barely matters. At zero cost the ${fmt(S.edge_bps,2)} bps average edge compounds to ${pct(S.ret)}. Any cost above about 1 bps per round trip erases it, which is why the same model lost 99% before D-044.`;
+
+/* ---------- chapter 8 ---------- */
+const LIM = [
+ ['Zero costs are an assumption','Every profit here uses zero fees, spread and slippage (owner decision D-044). The break-even is about 1 bps per round trip; any real venue with taker fees would turn C1 into a loss.'],
+ ['The 60% goal is not met','54.7% of this cell\'s trades win and 54.1% over six models. The pre-registered goal of 60% wins with drawdown under 5% fails. Only C3, at position 0.7, stays under 5% drawdown.'],
+ ['One block per model','Each number is one ~32-day block. The six models agree on the sign, but block-to-block spread is large (+2.9% to +17.3%). Seeds of the same fold differ (NT-074).'],
+ ['The test fold is untouched','Fold −1, the newest ~32 days, has never been scored. A single, final check of the chosen candidate on it is the honest next step.'],
+ ['Direction is the bottleneck','The network does not beat a logistic regression on three lagged returns. Better direction needs new information; order flow added only +0.01 AUC.'],
+ ['What the indicators say','The learned periods move, but differently in every model. The network uses the indicators; the data does not pin down a single "best" period.'],
+];
+el('limits').innerHTML = LIM.map(l=>`<div class="panel"><h3>${l[0]}</h3><p class="muted">${l[1]}</p></div>`).join('');
+el('foot').innerHTML = `Built from committed runs by <code>scripts/presentation/extract.py</code> and <code>build.py</code>. Leader: <code>runs/scenarios/long_360d_stab/${D.leader}</code>. Evidence: <code>runs/experiments/micro_loop_v1/LOG.md</code>, <code>runs/experiments/strategy_study_v1/REPORT.md</code>, <code>configs/candidates/manifest.json</code>. Zero trading costs (D-044) unless a chart says otherwise; no number uses the test fold (D-020).`;
+
+function drawBlocks(){
+  const t=T(); const b=D.blocks; const rows=[['train','training · 360 days',t.h0],['val','validation',t.neutral],['cal','calibration',t.h2],['test','dev block (scored)',t.accent]];
+  const traces = rows.map(([k,lab,c])=>({type:'scatter',mode:'lines',name:lab,x:[b[k].first_timestamp,b[k].last_timestamp],y:[lab,lab],line:{color:c,width:18},
+    hovertemplate:`${lab}<br>${b[k].first_timestamp.slice(0,10)} → ${b[k].last_timestamp.slice(0,10)}<br>${b[k].n.toLocaleString('en')} windows<extra></extra>`}));
+  const end = new Date(b.test.last_timestamp); const f1 = new Date(end.getTime()+32*864e5);
+  traces.push({type:'scatter',mode:'lines',name:'fold −1 · untouched',x:[b.test.last_timestamp,f1.toISOString().slice(0,19)],y:['fold −1 · untouched','fold −1 · untouched'],line:{color:t.line,width:18,dash:'dot'},hovertemplate:'the newest ~32 days: untouched<extra></extra>'});
+  plot('blocks', traces, {showlegend:false,margin:{l:window.innerWidth<700?130:280,r:16,t:8,b:36},xaxis:{type:'date'},yaxis:{autorange:'reversed',tickfont:{family:t.body,size:12,color:t.ink2}}});
+}
+
+/* ---------- hero chart & render all ---------- */
+function drawHero(){
+  const t=T();
+  plot('heroEq', [
+    {type:'scatter',mode:'lines',name:'C1',x:BT.t,y:BT.equity,line:{color:t.accent,width:2.4},hovertemplate:'C1 $%{y:,.0f}<extra></extra>'},
+    {type:'scatter',mode:'lines',name:'buy-and-hold',x:BT.t,y:BT.bh,line:{color:t.neutral,width:1.4,dash:'dot'},hovertemplate:'B&H $%{y:,.0f}<extra></extra>'}],
+    {xaxis:{type:'date'},yaxis:{tickformat:',.0f',title:{text:'equity ($)'}},margin:{l:60,r:16,t:8,b:36},legend:{orientation:'h',y:1.1,x:0,keep:true}});
+}
+function renderAll(){ drawHero(); drawBlocks(); drawClimb(); drawCeiling(); drawScreens(); drawBoard(); drawField(); drawSix(); drawTraining(); drawPeriods(); drawFit(); drawBacktest(); drawHeat(); drawCost(); }
+el('termSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); if(!b) return; state.term=b.dataset.v;
+  el('termSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); drawTraining(); });
+showMile(6);
+if (window.Plotly) renderAll(); else window.addEventListener('load', renderAll);
+const mq = window.matchMedia('(prefers-color-scheme: dark)'); mq.addEventListener && mq.addEventListener('change', renderAll);
+new MutationObserver(renderAll).observe(document.documentElement, {attributes:true, attributeFilter:['data-theme']});
+})();
+</script>
