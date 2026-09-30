@@ -60,6 +60,7 @@ that extend or partly replace an entry.
 | D-044 | Trading costs are 0; no tick order-book data | owner | |
 | D-045 | The maths report's 22 recommendations are implemented by a staged plan: measure, prune, reweigh, rebuild, generalise | owner (the plan: lead's) | |
 | D-046 | Verdicts are inferred over folds, at least 5 judgement folds; one fold x seeds is not enough | lead | |
+| D-047 | NT-047's default: OHLCV input with all 14 indicator families; the 1.6x slower step is accepted | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -568,3 +569,13 @@ that extend or partly replace an entry.
   (long_360d_stab meta, n_usable_folds 13); a study places its judgement folds after every fold its choices used (D-034).
 - **Consequence:** NT-032 (repair round 1), OPERATING_MODEL "Sweeps and pre-registered studies"; every A/B of D-045
   (NT-097, NT-099-NT-107, NT-039) is designed with at least 5 judgement folds.
+
+## D-047 NT-047's default: OHLCV input with all 14 indicator families; the slower step is accepted (owner, 2026-10-01)
+- **Owner (verbatim):** "2" (option 2 of question 7: all 14 families on by default, as D-031 says; accept the 1.6x
+  slowdown), [qa/2026-10-01-nt047-default.md](qa/2026-10-01-nt047-default.md).
+- **Decision:** D-031's default stands: OHLCV input and all 14 families with 3 instances each. The per-step cost
+  (0.1735 against 0.1066 s on the GPU, 1.63x) is accepted under D-018. The lead's recommendation (close-only default)
+  is declined; the duel showed no directional gain for either input.
+- **Consequence:** NT-047 is merged as built (72d3838). The D-045 studies (NT-098 onward) and the golden record use the
+  new default; the golden run is re-recorded on the merged head.
+
