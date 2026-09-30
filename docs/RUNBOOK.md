@@ -258,12 +258,20 @@ into the frozen set.
 - Notebooks 02-05 never pick an engine run by default (`pick_run` skips `runs/scenarios/` and any
   run whose meta.json has an `engine` section).
 
-### Paired comparator ("A beats B", NT-032, D-025)
+### Paired comparator ("A beats B", NT-032, D-025, D-046)
 
 `src/neural_trade/experiments/comparator.py`: a pre-registered paired test over two engine scenarios'
 runs, for every "A beats B" verdict D-025 asks for (learned against frozen, a loss term on against
-off, any two scenarios). It never trains; it only reads the run store two scenarios already wrote
-(`scenario run`, above).
+off, any two scenarios). It never trains, and it never touches the sqlite index: it reads the run
+directories `scenario run` already wrote directly (meta.json / result.json), so `runs/index.sqlite`
+is unchanged by a compare.
+
+**The unit of inference is the judgement fold, not the (seed, fold) pair (D-046).** Seeds trained on
+the same fold share that fold's block noise (the same bars, the same realised path); treating them as
+independent pairs inflates the false-"beats" rate well past 5% (measured: 0.069-0.314 for one fold x
+5 seeds, depending on the minimum effect). A comparison therefore needs `min_folds` (>= 5, never
+lower) distinct judgement folds with a usable pair; within each fold, its seeds' paired differences
+are averaged first, and the paired test runs over those fold means.
 
 | Task | Command |
 |---|---|
@@ -271,67 +279,101 @@ off, any two scenarios). It never trains; it only reads the run store two scenar
 | ...and write `result.json` / `report.md` | `$PY -m neural_trade.cli compare configs/compares/<name>.yaml --out runs/compares/<name>` |
 | ...and add the calibrated null/power simulation | `$PY -m neural_trade.cli compare configs/compares/<name>.yaml --simulate [--n-sim N]` |
 
-**Writing a spec** (YAML; `neural_trade.experiments.comparator.CompareSpec`), *before* either
-scenario's runs start (the comparator refuses a spec that a compared run's `created_utc` predates,
-below):
+Exit codes: `0` a verdict was reached (any of "A beats B" / "B beats A" / "inconclusive"); `1` the
+comparison was refused (too few judgement folds, a pre-registration violation, an ambiguous
+configuration, a pair-count mismatch: see `refusal_reason` and `excluded_pairs`); `2` the spec itself
+is malformed (unknown key, invalid value) before any comparison is attempted.
+
+**Writing a spec** (YAML; `neural_trade.experiments.comparator.CompareSpec`):
 
 ```yaml
-name: learned_vs_frozen_h1_auc          # the run store subtree name is not derived from this
+name: learned_vs_frozen_h1_auc          # also the registration sidecar's name (below): pick a new name for
+                                         # a materially different comparison, never reuse one for an edited spec
 scenario_a: reference_learned           # runs/scenarios/<scenario_a>/ (must already exist when you compare)
 scenario_b: reference_frozen            # runs/scenarios/<scenario_b>/
+configuration_a: default                # optional: which scenario configuration to use, when a scenario has
+configuration_b: default                #  more than one (a spec's variants/grid, NT-026); required whenever a
+                                         #  (seed, fold) is shared by more than one configuration (refused
+                                         #  otherwise -- never guessed, D-046)
+duplicate_policy: refuse                # refuse (default; lists the run ids), latest, or average: how to
+                                         #  handle more than one done run for the SAME (seed, fold, configuration)
 metric: h1/direction/auc                # a key of result.json's "scores" (the same names the index's
                                          # scores table and notebooks use, e.g. h1/variance/crpss,
-                                         # backtest/sharpe_net)
+                                         # backtest/sharpe_net, a coverage metric -- any of them work the same)
 direction: higher_better                # or lower_better
 metric_kind: diff                       # or log_ratio: ln(A/B) (or ln(B/A) under lower_better)
 min_effect: 0.01                        # the minimum practical effect, fixed before any GPU time
-judgment_folds: [-1]                    # FOLD_INDEX values no earlier choice used (D-025); a pair on
+judgment_folds: [-5, -4, -3, -2, -1]    # FOLD_INDEX values no earlier choice used (D-025); a pair on
                                          # any other fold is excluded, not silently dropped
-min_pairs: 5                            # >= 5 (refused below this; D-025's lead reading)
+min_folds: 5                            # >= 5, never lower (D-046): the number of DISTINCT judgement
+                                         # folds needed for a verdict, not the pair count
+min_pairs: 5                            # a secondary floor on the total (seed, fold) pair count
 pairs_planned: 5                        # optional: refuses a comparison with any other pair count
-                                         # (no peeking) unless looks > 1
+                                         # (no peeking); a list (one per look) when looks > 1
 alpha: 0.05
-registered_utc: "2026-09-30T12:00:00Z"  # stamp this to the moment you commit the spec, not "now";
-                                         # left out, it defaults to "now", which is only honest when
-                                         # you load and compare the spec in the same act of registration
-estimator: mean                         # or hodges_lehmann (+ its Wilcoxon interval): robust to one
-                                         # bad (seed, fold) pair, D-037
+registered_utc: "2026-09-30T12:00:00Z"  # REQUIRED: there is no "now" default (a spec that does not
+                                         # declare this is not pre-registered). Refused if any compared
+                                         # run started before it. Accepts this ISO form or the run
+                                         # store's compact form (20260930T120000Z). If the spec file is
+                                         # committed to git, its last commit time is used instead (more
+                                         # trustworthy than a string nothing stops you editing) -- see
+                                         # "registered_utc_source" in the output.
+estimator: mean                         # or hodges_lehmann (+ its exact Wilcoxon interval): robust to
+                                         # one bad fold, D-037. No exact 95% Wilcoxon interval exists
+                                         # below n = 6 folds (n_folds = 5 always falls back); the
+                                         # comparator falls back to the t interval rather than
+                                         # mislabelling a lower attained confidence as 95% (D-046)
 non_inferiority_margin: 0.02            # optional: adds a pass/breach/undecided non-inferiority read
 looks: 1                                # > 1: a Pocock two-look design (D-037); the per-look alpha
-                                         # tightens automatically (neural_trade.metrics.statistics.pocock_alpha)
-guard_rails:                            # judged by the SAME paired test, never a point tolerance (D-025)
+                                         # tightens automatically (neural_trade.metrics.statistics.pocock_alpha);
+                                         # pairs_planned is still enforced at every look
+guard_rails:                            # judged by the SAME paired test over folds, never a point tolerance
   - metric: h1/variance/crpss
     direction: higher_better
     max_degradation: 0.01               # breach iff the CI is confidently worse than this
-noise_sd: 0.02                          # for --simulate: the null/power check (see below); or give
-seed_sd: 0.015                          #  seed_sd and block_sd (D-037's two variance components) and
-block_sd: 0.01                          #  the comparator combines them as sqrt(seed_sd^2 + block_sd^2)
+noise_sd: 0.02                          # for --simulate: the null/power check (see below), when the fold and
+                                         # seed noise are not modelled separately; or give
+seed_sd: 0.015                          #  seed_sd (between seeds sharing a fold) and
+block_sd: 0.01                          #  block_sd (the fold's own, shared-by-every-seed noise)
 root: runs                              # the run store root (default "runs")
 ```
 
-Unknown keys are refused. A pair is excluded (listed, with its reason, in `excluded_pairs`), not
-silently dropped, when its fold is not in `judgment_folds`, its dataset or setup fingerprint
-(`dataset_sha256`, `bar_minutes`, `HORIZON_STEPS`) differs between A and B, its metric is missing, or
-a `log_ratio` metric is non-positive. The whole comparison is refused (`verdict: "refused"`, a
-`refusal_reason`, exit code 2) when fewer than `min_pairs` pairs survive, a compared run started
-before `registered_utc` (the spec was written or edited after GPU time began), or the actual pair
-count does not match a pre-registered `pairs_planned` (no peeking, unless `looks > 1`). The verdict
-("A beats B" / "B beats A" / "inconclusive" / "refused") comes from the paired interval against
-`min_effect`; every guard-rail gets its own pass/breach/undecided from the same paired interval
-against its `max_degradation`.
+**Registration is two separate, both-enforced checks (D-046).** (1) `registered_utc` (or the spec
+file's git commit time, when it has one) must predate every compared run's `created_utc`. (2) The
+spec's *content* is locked the first time a `name` is compared: `<root>/compares/<name>/registration.json`
+records its `spec_hash`, and a later call under the same name whose hash differs (anything edited,
+even with `registered_utc` untouched) is refused. Practically: write the spec, run `compare` on it
+once (even before enough runs exist -- it still records the hash) to lock it in, and give a genuinely
+revised comparison a new `name`.
+
+A pair is excluded (listed, with its reason, in `excluded_pairs`), not silently dropped, when its
+fold is not in `judgment_folds`; its dataset, setup or **judged out-of-sample block** fingerprint
+(`dataset_sha256`, `bar_minutes`, `HORIZON_STEPS`, `LOOKBACK`, and the block's own start/stop or
+timestamps -- an anchor hash per block, D-037) differs between A and B; its metric is missing; a
+`log_ratio` metric is non-positive; more than one configuration shares a (seed, fold) and none was
+named (`configuration_a` / `configuration_b`); or more than one done run exists for the same
+(seed, fold, configuration) and `duplicate_policy` is `refuse` (the default). The whole comparison is
+refused (`verdict: "refused"`, exit code 1) when fewer than `min_folds` judgement folds have a usable
+pair, fewer than `min_pairs` total pairs survive, either registration check fails, or the pair count
+does not match a pre-registered `pairs_planned`. The verdict ("A beats B" / "B beats A" /
+"inconclusive" / "refused") comes from the paired interval, over fold means, against `min_effect`;
+every guard-rail gets its own pass/breach/undecided the same way.
 
 `--simulate` adds a fast (well under a second for 1,000+ simulations), seeded null/power check
-(D-025's acceptance criterion, D-037's "calibrated to the measured variance components"): the false
-"beats" rate under a true null effect (must be <= 0.05 + its own Monte Carlo error) and the power at
-twice `min_effect`. It needs `noise_sd`, or both `seed_sd` and `block_sd`, in the spec.
+(D-025's acceptance criterion, D-037's "calibrated to the measured variance components") that models
+the real fold x seed structure: each simulated fold draws one shared `block_sd` value (or `noise_sd`
+when seed/block are not modelled separately), and each of its seeds adds independent `seed_sd` noise
+on top, then the fold mean is what the paired test actually runs over -- the false "beats" rate under
+a true null effect (must be <= 0.05 + its own Monte Carlo error) and the power at twice `min_effect`.
 
 Two building blocks the D-037 amendment asks for are library functions, not spec keys (a study wires
 them into its own spec / reporting): `comparator.per_fold_retention` (the generic
 `r_f = mean(diff) - baseline / denom` one-sided check A/B-1 will use for its CRPS-edge retention
 margin) and `comparator.intersection_union_verdict` (ADOPT only when every named component passes;
 a breach on a name in `owner_route` routes to the owner instead of rejecting, for a D-018 speed
-guard-rail). What is not implemented (contention/re-time metadata, the literal A/B-1 primary metric)
-is documented in `comparator.py`'s module docstring and the NT-032 backlog entry.
+guard-rail). What is not implemented (contention/re-time metadata, the literal A/B-1 primary metric,
+infinite pairs kept in the rank statistic rather than excluded) is documented in `comparator.py`'s
+module docstring and the NT-032 backlog entry.
 
 ### Screen mode
 

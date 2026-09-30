@@ -1,28 +1,38 @@
-# Example paired-comparator spec (NT-032, D-025): docs/RUNBOOK.md "Paired comparator".
+# Example paired-comparator spec (NT-032, D-025; D-046): docs/RUNBOOK.md "Paired comparator".
 #
 #   neural-trade compare configs/compares/example.yaml --out runs/compares/example
 #
 # This spec names two placeholder scenarios (they must already exist as runs/scenarios/<name>/,
-# produced by `neural-trade scenario run`, with matching (seed, fold) cells on the named judgement
-# fold): replace scenario_a / scenario_b before using it for a real verdict. Keys:
+# produced by `neural-trade scenario run`, with matching (seed, fold) cells on at least 5 of the
+# named judgement folds -- D-046: the unit of inference is the judgement fold, not the pair):
+# replace scenario_a / scenario_b before using it for a real verdict. Keys:
 # src/neural_trade/experiments/comparator.py (CompareSpec).
 name: example_learned_vs_frozen
 description: >
   Template: does the learned-period model beat the frozen-period twin (D-020's manual-search
-  baseline) on out-of-sample direction AUC at h1, on the test fold, with today's noise level as the
-  minimum effect?
+  baseline) on out-of-sample direction AUC at h1, over 5 held-out judgement folds, with today's
+  noise level as the minimum effect?
 scenario_a: reference_learned
 scenario_b: reference_frozen
+# configuration_a: default              # uncomment and set if either scenario has more than one
+# configuration_b: default              #  configuration sharing a (seed, fold) (refused otherwise)
 metric: h1/direction/auc
 direction: higher_better
 min_effect: 0.01
-judgment_folds: [-1]
+judgment_folds: [-5, -4, -3, -2, -1]     # at least min_folds of these need a usable pair
+min_folds: 5                            # D-046: never lower than 5
 min_pairs: 5
 alpha: 0.05
+# Required: there is no "now" default. Set this to when you actually wrote/committed this spec,
+# before any of the runs it will compare started. If this file is committed to git, its commit
+# time is used instead (RUNBOOK "Paired comparator").
 registered_utc: "2026-09-30T00:00:00Z"
 estimator: mean
 guard_rails:
   - metric: h1/variance/crpss
     direction: higher_better
     max_degradation: 0.01
+# For --simulate (the calibrated null/power check): either noise_sd, or seed_sd + block_sd
+# (D-037's two variance components: seed_sd between seeds sharing a fold, block_sd the fold's own
+# shared noise).
 noise_sd: 0.02

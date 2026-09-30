@@ -311,11 +311,15 @@ def hodges_lehmann(diffs) -> float:
 
 
 def wilcoxon_hl_ci(diffs, *, alpha: float = 0.05) -> Tuple[float, float]:
-    """(lo, hi): the distribution-free confidence interval for the Hodges-Lehmann estimator, from the
-    normal approximation to the Wilcoxon signed-rank statistic (no ties / zeros assumed; exact for
-    n >= ~10, conservative below). NaN, NaN when there are fewer than 4 finite pairs."""
-    from scipy.stats import norm
+    """(lo, hi): the EXACT distribution-free confidence interval for the Hodges-Lehmann estimator,
+    from the exact null distribution of the Wilcoxon signed-rank statistic (no ties / zeros assumed).
 
+    NaN, NaN when there are fewer than 4 finite pairs, OR when no interval at this confidence level
+    exists at this n (an exact two-sided 1 - alpha interval needs n large enough that some subset sum
+    has null probability <= alpha / 2; n = 5 cannot reach 95%, the smallest attainable two-sided level
+    there being 1 - 2/32 = 93.75%). Reporting a 93.75% interval as "95%" would be worse than refusing
+    it (NT-032 QA repair, D-046): a caller (:func:`neural_trade.experiments.comparator._estimate`)
+    falls back to the t interval around the mean instead of mislabelling the confidence level."""
     d = np.asarray(diffs, float)
     d = np.sort(d[np.isfinite(d)])
     n = len(d)
@@ -324,12 +328,20 @@ def wilcoxon_hl_ci(diffs, *, alpha: float = 0.05) -> Tuple[float, float]:
     i, j = np.triu_indices(n)
     walsh = np.sort((d[i] + d[j]) / 2.0)
     N = len(walsh)
-    mu = n * (n + 1) / 4.0
-    sigma = math.sqrt(n * (n + 1) * (2 * n + 1) / 24.0)
-    z = float(norm.ppf(1.0 - alpha / 2.0))
-    k = int(round(mu - z * sigma))
-    k = max(1, min(k, N))
-    lo, hi = walsh[k - 1], walsh[N - k]
+    # exact null distribution of W+ = sum of the ranks 1..n assigned a positive sign (2^n equally
+    # likely sign patterns): counts[s] = the number of sign patterns summing to s.
+    counts = np.zeros(n * (n + 1) // 2 + 1)
+    counts[0] = 1.0
+    for k in range(1, n + 1):
+        shifted = counts.copy()
+        shifted[k:] += counts[:-k]
+        counts = shifted
+    cdf = np.cumsum(counts / counts.sum())
+    below = np.flatnonzero(cdf <= alpha / 2.0)
+    if len(below) == 0:
+        return float("nan"), float("nan")          # no exact interval reaches this confidence at this n
+    c = int(below[-1]) + 1
+    lo, hi = walsh[c - 1], walsh[N - c]
     return float(min(lo, hi)), float(max(lo, hi))
 
 
