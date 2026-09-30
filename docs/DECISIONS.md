@@ -57,6 +57,7 @@ that extend or partly replace an entry.
 | D-041 | The micro-scale loop: minutes-long runs drive hypothesis iteration toward predictive power and PnL | owner (protocol: lead's) | |
 | D-042 | No pinging: the lead waits for completion notices; active polling goes to the Haiku tracker | owner | |
 | D-043 | Model split: Opus for the lead, P0/P1 QA and research; Sonnet for implementer, experimenter and P2/P3 QA | owner (the split: lead's proposal) | |
+| D-044 | Trading costs are 0; no tick order-book data | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -530,3 +531,11 @@ that extend or partly replace an entry.
   lead (the session), QA of P0/P1 items and research run on Opus 5.5 at medium effort; implementer, experimenter and
   QA of P2/P3 items run on Sonnet 5 at medium effort (the lead passes the model per call); the tracker stays on Haiku
   4.5 (D-036, D-042). Supersedes D-036's "implementer, QA and experimenter keep the strong model" for those roles.
+
+## D-044 Trading costs are 0; no tick order-book data (owner, 2026-09-30)
+- **Owner (verbatim):** "1 нет / 2 издержки делай 0 / дай статус по текущим моделям с издержкой 0" (the lead's four
+  options after the micro loop's report: 1 tick order-book data - no; 2 lower costs - make them 0).
+- **Decision:** backtests and scoring use zero trading costs (fee, half-spread, slippage all 0; the P&L objective's
+  and the cost-aware strategies' cost 0). Tick order-book data is not collected. This supersedes VISION "The
+  yardstick" and "Principles" on costs (the owner's document; the lead updates VISION's wording in the same change).
+- **Consequence:** NT-094 (defaults to zero costs); the zero-cost status of every stored model (rescore, CPU).

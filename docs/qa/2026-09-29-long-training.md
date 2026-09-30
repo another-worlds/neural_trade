@@ -44,3 +44,9 @@ as the first lever to test, with a learning-curve study as the proposal.
    are developed and corrected in hours instead of days. First hypotheses: (a) strategy-knob sweeps on stored
    predictions (CPU, no retraining); (b) longer horizons (1-4 h instead of 10-20 min), where a move's size is
    several times the 26 bps round-trip cost.
+
+## Follow-up 3 (2026-09-30, answer to the goal options)
+
+7. (Russian, verbatim) "1 нет / 2 издержки делай 0 / дай статус по текущим моделям с издержкой 0" (1: no tick
+   order-book data; 2: make the costs 0; give the status of the current models at zero cost).
+   Recorded as D-044. The zero-cost status is computed by re-scoring every stored engine cell (no retraining).
