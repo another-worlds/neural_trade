@@ -245,7 +245,8 @@ def cmd_screen(args) -> int:
 
 
 def cmd_compare(args) -> int:
-    from neural_trade.experiments.comparator import CompareError, CompareSpec, compare, simulate_error_rates
+    from neural_trade.experiments.comparator import (CompareError, CompareSpec, compare, observed_design,
+                                                     simulate_error_rates)
 
     try:
         spec = CompareSpec.from_yaml(args.spec)
@@ -253,7 +254,11 @@ def cmd_compare(args) -> int:
         out = result.to_dict()
         if args.simulate:
             try:
-                out["simulation"] = simulate_error_rates(spec, n_sim=args.n_sim)
+                # calibrated to the design actually paired (judgement folds x seeds per fold), not a
+                # made-up default (QA repair round 2, point 3)
+                n_folds, seeds_per_fold = observed_design(spec)
+                out["simulation"] = simulate_error_rates(spec, n_folds=n_folds, seeds_per_fold=seeds_per_fold,
+                                                         n_sim=args.n_sim)
             except CompareError as exc:
                 out["simulation"] = {"error": str(exc)}
     except CompareError as exc:

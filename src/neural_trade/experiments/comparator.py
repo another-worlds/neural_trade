@@ -126,7 +126,10 @@ def _parse_utc(s: str) -> datetime:
 def _git_commit_time(path) -> Optional[str]:
     """The last git commit time of ``path`` (ISO 8601 with offset), or None (no git, not committed,
     git unavailable). :func:`CompareSpec.from_yaml` prefers this over a spec's self-declared
-    ``registered_utc`` when it exists (RUNBOOK "Paired comparator")."""
+    ``registered_utc`` when it exists AND the working tree copy matches that commit exactly
+    (:func:`_git_file_matches_head`): otherwise the commit time is stale evidence of a file that has
+    since changed, and using it would let an uncommitted post-hoc edit borrow an old, honest-looking
+    timestamp (QA repair round 2, point 1)."""
     path = Path(path)
     try:
         out = subprocess.run(["git", "log", "-1", "--format=%cI", "--", path.name], cwd=str(path.resolve().parent),
@@ -135,6 +138,22 @@ def _git_commit_time(path) -> Optional[str]:
         return None
     ts = (out.stdout or "").strip()
     return ts if out.returncode == 0 and ts else None
+
+
+def _git_file_matches_head(path) -> Optional[bool]:
+    """True: ``path`` is identical to its committed HEAD version (no staged or unstaged edits).
+    False: it differs. None: git is unavailable, this is not a git repository, or there is no HEAD
+    to compare against (an untracked file already returns None from :func:`_git_commit_time`, so the
+    caller never reaches this uncertain case for that one)."""
+    path = Path(path)
+    try:
+        out = subprocess.run(["git", "diff", "--quiet", "HEAD", "--", path.name], cwd=str(path.resolve().parent),
+                             capture_output=True, timeout=5, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode in (0, 1):
+        return out.returncode == 0
+    return None
 
 
 # --------------------------------------------------------------------------------------------- spec
@@ -274,9 +293,14 @@ class CompareSpec:
             raise CompareError(f"{path}: a compare spec must be a YAML mapping")
         spec = CompareSpec.from_dict(data)
         git_time = _git_commit_time(path)
-        if git_time:
+        if git_time and _git_file_matches_head(path) is not False:
             spec.registered_utc_effective = git_time
             spec.registered_utc_source = "git_commit_time"
+        elif git_time:
+            # a committed history exists, but the working copy no longer matches it: an uncommitted
+            # edit must not borrow the old commit's timestamp (QA repair round 2, point 1)
+            spec.registered_utc_effective = spec.registered_utc
+            spec.registered_utc_source = "declared (working tree differs from HEAD)"
         return spec
 
     def to_dict(self) -> Dict[str, Any]:
@@ -370,11 +394,13 @@ def _load_scenario_rows(scenario: str, root) -> List[Dict[str, Any]]:
     return out
 
 
-def _block_fingerprint(row: Mapping[str, Any]):
+def _block_fingerprint(row: Mapping[str, Any]) -> Tuple[Any, Any, Any, Any]:
+    """(start, stop, first_timestamp, last_timestamp) of the judged out-of-sample block, whichever
+    of these meta.json's "blocks"."test" section carries (missing ones are None). All four are
+    compared, not just start/stop: two blocks can share the same bar indices while being different
+    slices of different files (QA repair round 2, point 2)."""
     block = (row.get("_blocks") or {}).get("test") or {}
-    if "start" in block and "stop" in block:
-        return ("start_stop", block.get("start"), block.get("stop"))
-    return ("timestamps", block.get("first_timestamp"), block.get("last_timestamp"))
+    return (block.get("start"), block.get("stop"), block.get("first_timestamp"), block.get("last_timestamp"))
 
 
 def _group_rows(rows: Sequence[Dict[str, Any]], configuration: Optional[str]) -> Dict[Tuple[int, int], Dict[str, Any]]:
@@ -487,12 +513,15 @@ def pair_runs(spec: CompareSpec, *, metric: Optional[str] = None, direction: Opt
                                      f"{list(spec.judgment_folds)}"))
             continue
         mismatched = [f for f in FINGERPRINT_FIELDS if a.get(f) != b.get(f)]
-        if _block_fingerprint(a) != _block_fingerprint(b):
+        block_a, block_b = _block_fingerprint(a), _block_fingerprint(b)
+        if block_a != block_b:
             mismatched = mismatched + ["judged_block"]
         if mismatched:
+            a_vals = [block_a if f == "judged_block" else a.get(f) for f in mismatched]
+            b_vals = [block_b if f == "judged_block" else b.get(f) for f in mismatched]
             excluded.append(Excluded(seed, fold, a["run_id"],
-                                     f"fingerprint mismatch on {mismatched}: A={[a.get(f) for f in mismatched if f != 'judged_block']} "
-                                     f"B={[b.get(f) for f in mismatched if f != 'judged_block']}"))
+                                     f"fingerprint mismatch on {mismatched}: A={a_vals} B={b_vals} "
+                                     f"(judged_block = start, stop, first_timestamp, last_timestamp)"))
             continue
         av, bv = _metric_value(entry_a, metric), _metric_value(entry_b, metric)
         if av is None or bv is None:
@@ -684,6 +713,21 @@ class CompareResult:
         return "\n".join(lines)
 
 
+def observed_design(spec: CompareSpec) -> Tuple[int, int]:
+    """(n_folds, seeds_per_fold): the design ``--simulate`` should be calibrated to, read from the
+    spec's ACTUAL paired runs rather than assumed (QA repair round 2, point 3: a null/power check
+    run against a made-up default design says nothing about the comparison that was actually made).
+    ``n_folds`` is the number of judgement folds with at least one usable pair; ``seeds_per_fold`` is
+    the total pair count divided by that (rounded, since real designs are seldom perfectly uniform
+    across folds), at least 1. Falls back to ``(spec.min_folds, 1)`` when no pair survives yet (a
+    spec compared before its runs exist), so ``simulate_error_rates`` still has a usable design."""
+    pairs, _ = pair_runs(spec)
+    fold_rows = _fold_rows(pairs)
+    if not fold_rows:
+        return spec.min_folds, 1
+    return len(fold_rows), max(1, round(len(pairs) / len(fold_rows)))
+
+
 def _refuse(spec: CompareSpec, reason: str, *, pairs=(), excluded=()) -> CompareResult:
     return CompareResult(spec, list(pairs), list(excluded), [], {"estimate": float("nan"), "ci_lo": float("nan"),
                                                                   "ci_hi": float("nan"), "statistic": float("nan")},
@@ -821,5 +865,5 @@ def simulate_error_rates(spec: CompareSpec, *, n_folds: Optional[int] = None, se
 
 
 __all__ = ["CompareError", "CompareResult", "CompareSpec", "Excluded", "FoldRow", "GuardRail", "Pair", "compare",
-          "intersection_union_verdict", "non_inferiority_verdict", "pair_runs", "per_fold_retention",
+          "intersection_union_verdict", "non_inferiority_verdict", "observed_design", "pair_runs", "per_fold_retention",
           "simulate_error_rates"]

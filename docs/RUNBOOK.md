@@ -315,9 +315,15 @@ registered_utc: "2026-09-30T12:00:00Z"  # REQUIRED: there is no "now" default (a
                                          # declare this is not pre-registered). Refused if any compared
                                          # run started before it. Accepts this ISO form or the run
                                          # store's compact form (20260930T120000Z). If the spec file is
-                                         # committed to git, its last commit time is used instead (more
+                                         # committed to git AND the working copy matches that commit
+                                         # exactly, its last commit time is used instead (more
                                          # trustworthy than a string nothing stops you editing) -- see
-                                         # "registered_utc_source" in the output.
+                                         # "registered_utc_source" in the output. An uncommitted edit
+                                         # (the working copy differs from HEAD) never borrows the old
+                                         # commit's time even if one exists: it falls back to this
+                                         # declared value, source "declared (working tree differs from
+                                         # HEAD)" (QA repair round 2: an uncommitted post-hoc edit must
+                                         # not inherit an earlier, honest-looking commit timestamp).
 estimator: mean                         # or hodges_lehmann (+ its exact Wilcoxon interval): robust to
                                          # one bad fold, D-037. No exact 95% Wilcoxon interval exists
                                          # below n = 6 folds (n_folds = 5 always falls back); the
@@ -339,19 +345,22 @@ root: runs                              # the run store root (default "runs")
 ```
 
 **Registration is two separate, both-enforced checks (D-046).** (1) `registered_utc` (or the spec
-file's git commit time, when it has one) must predate every compared run's `created_utc`. (2) The
-spec's *content* is locked the first time a `name` is compared: `<root>/compares/<name>/registration.json`
+file's git commit time, when it has one AND the working copy matches that commit -- an uncommitted
+edit falls back to the declared value instead) must predate every compared run's `created_utc`.
+(2) The spec's *content* is locked the first time a `name` is compared: `<root>/compares/<name>/registration.json`
 records its `spec_hash`, and a later call under the same name whose hash differs (anything edited,
 even with `registered_utc` untouched) is refused. Practically: write the spec, run `compare` on it
 once (even before enough runs exist -- it still records the hash) to lock it in, and give a genuinely
 revised comparison a new `name`.
 
-A pair is excluded (listed, with its reason, in `excluded_pairs`), not silently dropped, when its
-fold is not in `judgment_folds`; its dataset, setup or **judged out-of-sample block** fingerprint
-(`dataset_sha256`, `bar_minutes`, `HORIZON_STEPS`, `LOOKBACK`, and the block's own start/stop or
-timestamps -- an anchor hash per block, D-037) differs between A and B; its metric is missing; a
-`log_ratio` metric is non-positive; more than one configuration shares a (seed, fold) and none was
-named (`configuration_a` / `configuration_b`); or more than one done run exists for the same
+A pair is excluded (listed, with its reason and BOTH sides' values, in `excluded_pairs`), not
+silently dropped, when its fold is not in `judgment_folds`; its dataset, setup or **judged
+out-of-sample block** fingerprint (`dataset_sha256`, `bar_minutes`, `HORIZON_STEPS`, `LOOKBACK`, and
+all four of the block's own `start`, `stop`, `first_timestamp`, `last_timestamp` when present -- an
+anchor hash per block, D-037; two blocks sharing the same bar indices but different timestamps, e.g.
+a slice of a different file, still count as a mismatch) differs between A and B; its metric is
+missing; a `log_ratio` metric is non-positive; more than one configuration shares a (seed, fold) and
+none was named (`configuration_a` / `configuration_b`); or more than one done run exists for the same
 (seed, fold, configuration) and `duplicate_policy` is `refuse` (the default). The whole comparison is
 refused (`verdict: "refused"`, exit code 1) when fewer than `min_folds` judgement folds have a usable
 pair, fewer than `min_pairs` total pairs survive, either registration check fails, or the pair count
@@ -365,6 +374,10 @@ the real fold x seed structure: each simulated fold draws one shared `block_sd` 
 when seed/block are not modelled separately), and each of its seeds adds independent `seed_sd` noise
 on top, then the fold mean is what the paired test actually runs over -- the false "beats" rate under
 a true null effect (must be <= 0.05 + its own Monte Carlo error) and the power at twice `min_effect`.
+The CLI calibrates the simulated design (`n_folds`, `seeds_per_fold`, shown in the output) to the
+comparison's OWN actual pairing (`comparator.observed_design`: the number of judgement folds that
+paired at least one run, and the pair count divided by that), not a guessed default -- a simulation
+run before any pairs exist falls back to `(spec.min_folds, 1)`.
 
 Two building blocks the D-037 amendment asks for are library functions, not spec keys (a study wires
 them into its own spec / reporting): `comparator.per_fold_retention` (the generic

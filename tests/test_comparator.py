@@ -16,7 +16,7 @@ import yaml
 
 from neural_trade.experiments.comparator import (
     CompareError, CompareSpec, _estimate, _verdict_from_ci, compare, intersection_union_verdict,
-    non_inferiority_verdict, pair_runs, per_fold_retention, simulate_error_rates,
+    non_inferiority_verdict, observed_design, pair_runs, per_fold_retention, simulate_error_rates,
 )
 from neural_trade.experiments.store import RunStore
 from neural_trade.metrics.statistics import hodges_lehmann, pocock_alpha, wilcoxon_hl_ci
@@ -28,7 +28,7 @@ FIVE_FOLDS = (-1, -2, -3, -4, -5)
 def _write_run(root: Path, scenario: str, *, seed: int, fold: int, scores: dict, run_id=None,
                dataset_sha256="ds-1", bar_minutes=1.0, horizon_steps=(10, 15, 20), lookback=60,
                created_utc="20260101T000000Z", status="done", configuration="default",
-               test_block=(0, 43200)):
+               test_block=(0, 43200), test_block_timestamps=("2020-06-01T00:00:00", "2020-06-08T00:00:00")):
     run_id = run_id or f"{created_utc}-{scenario}-s{seed}-f{fold}-{configuration}"
     d = root / "scenarios" / scenario / run_id
     d.mkdir(parents=True, exist_ok=True)
@@ -40,7 +40,8 @@ def _write_run(root: Path, scenario: str, *, seed: int, fold: int, scores: dict,
         "dataset": {"sha256": dataset_sha256, "path": "bars.csv", "first_timestamp": "2020-01-01",
                    "last_timestamp": "2020-01-08", "n_bars": 10000},
         "setup": {"bar_minutes": bar_minutes, "LOOKBACK": lookback, "HORIZON_STEPS": list(horizon_steps)},
-        "blocks": {"test": {"start": test_block[0], "stop": test_block[1]}},
+        "blocks": {"test": {"start": test_block[0], "stop": test_block[1],
+                            "first_timestamp": test_block_timestamps[0], "last_timestamp": test_block_timestamps[1]}},
     }
     (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
     result = {"status": status, "scores": scores, "wall_s": 1.0, "sec_per_step": 0.1, "finished_utc": created_utc}
@@ -235,6 +236,30 @@ def test_git_commit_time_of_the_spec_file_is_preferred_over_the_declared_string(
     assert spec.registered_utc_source == "git_commit_time"
     assert spec.registered_utc == "19990101T000000Z"          # the declared string is untouched
     assert spec.effective_registered_utc != "19990101T000000Z"
+
+
+def test_an_uncommitted_edit_does_not_borrow_the_old_commit_time(tmp_path):
+    """QA repair round 2, point 1: committing a spec, then editing it WITHOUT committing (keeping the
+    same declared registered_utc) must not let the stale git commit time stand in for the edit's real
+    (unknown) time -- the comparator falls back to the declared string and says so."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
+    d = dict(name="t", scenario_a="A", scenario_b="B", metric="m", min_effect=0.01,
+            judgment_folds=list(FIVE_FOLDS), registered_utc="19990101T000000Z", root=str(tmp_path))
+    path = repo / "spec.yaml"
+    path.write_text(yaml.safe_dump(d), encoding="utf-8")
+    subprocess.run(["git", "add", "spec.yaml"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "spec"], cwd=repo, check=True)
+    committed = CompareSpec.from_yaml(path)
+    assert committed.registered_utc_source == "git_commit_time"
+
+    path.write_text(yaml.safe_dump(dict(d, min_effect=0.0)), encoding="utf-8")   # edited, NOT committed
+    edited = CompareSpec.from_yaml(path)
+    assert edited.registered_utc_source == "declared (working tree differs from HEAD)"
+    assert edited.effective_registered_utc == edited.registered_utc == "19990101T000000Z"
 
 
 # --------------------------------------------------------------------------------------- (3) guard-rails
@@ -509,6 +534,41 @@ def test_a_moved_test_block_between_a_and_b_excludes_the_pair(tmp_path):
     assert len(pairs) == 4                    # the other 4 folds still pair
 
 
+def test_identical_start_stop_but_different_block_timestamps_still_excludes_the_pair(tmp_path):
+    """QA repair round 2, point 2: the same integer bar indices can be a slice of a different file
+    (or a different resample); the block's own timestamps must be compared too, not just start/stop."""
+    _populate(tmp_path)
+    for d in (tmp_path / "scenarios" / "B").iterdir():
+        meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        if meta["engine"]["fold"] == -1:
+            meta["blocks"]["test"]["first_timestamp"] = "2099-01-01T00:00:00"   # start/stop UNCHANGED
+            (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    spec = _base_spec(tmp_path)
+    pairs, excluded = pair_runs(spec)
+    moved = [e for e in excluded if e.fold == -1]
+    assert moved and all("judged_block" in e.reason for e in moved)
+    assert len(pairs) == 4
+
+
+def test_the_judged_block_mismatch_message_shows_both_full_blocks(tmp_path):
+    """QA repair round 2, point 4: the excluded reason must print both sides' full block tuples, not
+    hide them behind a bare 'judged_block' tag."""
+    _populate(tmp_path)
+    for d in (tmp_path / "scenarios" / "B").iterdir():
+        meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+        if meta["engine"]["fold"] == -1:
+            meta["blocks"]["test"] = {"start": 999999, "stop": 1043199, "first_timestamp": "2099-01-01T00:00:00",
+                                      "last_timestamp": "2099-01-08T00:00:00"}
+            (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    spec = _base_spec(tmp_path)
+    _pairs, excluded = pair_runs(spec)
+    moved = [e for e in excluded if e.fold == -1]
+    assert moved
+    reason = moved[0].reason
+    assert "999999" in reason and "1043199" in reason and "2099-01-01T00:00:00" in reason
+    assert "0" in reason and "43200" in reason and "2020-06-01T00:00:00" in reason        # A's own block
+
+
 def test_a_lookback_mismatch_excludes_the_pair(tmp_path):
     for i, f in enumerate(FIVE_FOLDS):
         _write_run(tmp_path, "A", seed=0, fold=f, created_utc=f"202601{i + 1:02d}T000000Z",
@@ -606,3 +666,36 @@ def test_scenario_run_dirs_are_still_readable_by_the_ordinary_run_store(tmp_path
     _populate(tmp_path, a_auc=0.55, b_auc=0.50)
     store = RunStore(tmp_path)
     assert len(store.run_dirs("A")) == 5
+
+
+# -------------------------------------------------------------------------- QA repair round 2, point 3
+def test_observed_design_reflects_the_actual_pairing_not_a_default(tmp_path):
+    _populate(tmp_path, seeds_per_fold=3, a_auc=0.6, b_auc=0.5)
+    spec = _base_spec(tmp_path, min_effect=0.02)
+    n_folds, seeds_per_fold = observed_design(spec)
+    assert (n_folds, seeds_per_fold) == (5, 3)
+
+
+def test_observed_design_falls_back_to_min_folds_and_one_seed_when_no_pair_exists(tmp_path):
+    spec = _base_spec(tmp_path, min_effect=0.02, min_folds=7)
+    n_folds, seeds_per_fold = observed_design(spec)
+    assert (n_folds, seeds_per_fold) == (7, 1)
+
+
+def test_cli_simulate_calibrates_to_the_observed_design_not_the_default_one_seed(tmp_path, capsys, monkeypatch):
+    """QA repair round 2, point 3: --simulate must read the actual (n_folds, seeds_per_fold) of the
+    comparison, not silently assume 1 seed per fold. 5 folds x 4 seeds each should show up in the
+    simulation block as such."""
+    _populate(tmp_path, seeds_per_fold=4, a_auc=0.6, b_auc=0.5)
+    spec_path = tmp_path / "spec.yaml"
+    spec_path.write_text(yaml.safe_dump(dict(name="t", scenario_a="A", scenario_b="B", metric=AUC_KEY,
+                                             min_effect=0.02, judgment_folds=list(FIVE_FOLDS),
+                                             registered_utc="20260101T000000Z", noise_sd=0.02,
+                                             root=str(tmp_path))), encoding="utf-8")
+    from neural_trade.cli import main
+    monkeypatch.chdir(tmp_path)
+    rc = main(["compare", str(spec_path), "--simulate"])
+    out = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert out["simulation"]["n_folds"] == 5
+    assert out["simulation"]["seeds_per_fold"] == 4
