@@ -1,0 +1,43 @@
+{
+  "months": "2024-01..2025-07",
+  "fit": "2024",
+  "score": "2025-01..2025-07-20",
+  "rows": [
+    {
+      "H": 15,
+      "n_score": 57888,
+      "n_eff": 19296.0,
+      "auc_price": 0.5142,
+      "auc_flow": 0.5239,
+      "lift": 0.0097,
+      "lift_z": 3.17,
+      "hit_flow": 0.5184,
+      "hit_flow_top10": 0.5386,
+      "meets_bar": false
+    },
+    {
+      "H": 60,
+      "n_score": 57888,
+      "n_eff": 4824.0,
+      "auc_price": 0.5138,
+      "auc_flow": 0.5262,
+      "lift": 0.0124,
+      "lift_z": 2.32,
+      "hit_flow": 0.5198,
+      "hit_flow_top10": 0.5588,
+      "meets_bar": false
+    },
+    {
+      "H": 240,
+      "n_score": 57888,
+      "n_eff": 1206.0,
+      "auc_price": 0.5255,
+      "auc_flow": 0.5315,
+      "lift": 0.006,
+      "lift_z": 0.9,
+      "hit_flow": 0.5257,
+      "hit_flow_top10": 0.5471,
+      "meets_bar": false
+    }
+  ]
+}
