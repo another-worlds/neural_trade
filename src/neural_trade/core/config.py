@@ -429,11 +429,38 @@ class Config:
                              tunable=True)
     INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this", unit="dimensionless",
                                   gt=0.0, log=True, tunable=True)
-    INDICATOR_GRAD_MULT: float = _f(5.0, "indicators", "straight-through gradient scale", unit="dimensionless", gt=0.0,
-                                    tunable=True)
+    INDICATOR_GRAD_MULT: float = _f(5.0, "indicators", "straight-through gradient scale on the indicator logits' "
+                                    "backward pass; Adam normalises gradient magnitude, so this is a no-op under "
+                                    "Adam except for how often the indicator group hits GRAD_CLIP_NORM (NT-097, "
+                                    "B_model_indicators.md 2.2/7.9: derivation and training/optim.py's module "
+                                    "docstring); the math report recommends 1 (remove the multiplier) with "
+                                    "INDICATOR_LR_MULT as the one control, decided together with NT-097's other "
+                                    "fixes by its pre-registered A/B (point 7) rather than changed here", unit="dimensionless",
+                                    gt=0.0, tunable=True)
     MOMENTUM_CLIP_MIN: float = _f(2.0, "indicators", "period floor (1.0 saturated the logit)", unit="bars", gt=0.0)
     MOMENTUM_CLIP_MAX: Optional[float] = _f(None, "indicators", "period ceiling; None -> LOOKBACK", unit="bars",
                                             gt=0.0)
+    INDICATOR_BOUND_APPLIED: bool = _f(False, "indicators", "clip the per-window applied logit (base logit + the "
+                                       "meta_adjust shift) into [logit(MOMENTUM_CLIP_MAX), logit(MOMENTUM_CLIP_MIN)] "
+                                       "before the sigmoid, so the APPLIED period can never leave "
+                                       "[MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX] even though the shift itself is "
+                                       "unbounded; off (default, today's behaviour) lets it through unclipped "
+                                       "(measured on real runs: 1.6-1.8 bars below the floor of 2, up to 74.7 "
+                                       "above a ceiling of 60, NT-097 / B_model_indicators.md 2.2, 4.2, 7.5)",
+                                       unit="flag")
+    META_ADJUST_BIAS: bool = _f(True, "indicators", "bias term of the meta_adjust Dense layer that produces the "
+                                "per-window shift (alpha = sigmoid(logit + 0.5*tanh(Wz + c))); the base logit and "
+                                "this bias are one unidentifiable direction trained by two different optimizers "
+                                "(the indicator and main LR); True (default, today's behaviour) keeps it; the new "
+                                "default is decided by NT-097's A/B (point 7), not changed here "
+                                "(B_model_indicators.md 2.2, 7.6)", unit="flag")
+    LR_SCHEDULE_BOTH_OPTIMIZERS: bool = _f(False, "indicators", "ReduceLROnPlateau's factor also scales the "
+                                           "indicator optimizer's learning rate (training.callbacks."
+                                           "ReduceLRBothOptimizers), instead of the main optimizer alone; off "
+                                           "(default, today's behaviour) leaves the indicator LR at "
+                                           "LR * INDICATOR_LR_MULT for the whole run while the main LR decays, so "
+                                           "the ratio between them grows 5x-40x (NT-097 / B_model_indicators.md "
+                                           "2.2, 7.10)", unit="flag")
     EWMA_IMPL: str = _f("matrix", "indicators", "'matrix' (batched einsum) or 'scan' (reference)", unit="name",
                         choices=("matrix", "scan"), ignore_case=True)
 

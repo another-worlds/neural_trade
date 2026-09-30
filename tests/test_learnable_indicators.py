@@ -117,3 +117,59 @@ def test_batched_layer_equals_per_indicator_layer_values_and_gradients():
     targets = [x, meta] + layer.get_indicator_trainable_variables()
     for gb, gr in zip(tape.gradient(lb, targets), tape.gradient(lr, targets)):
         np.testing.assert_allclose(gb.numpy(), gr.numpy(), rtol=1e-3, atol=1e-3)
+
+
+# ---------------------------------------------------------------- NT-097: applied-period bounds
+
+
+def test_applied_period_unbounded_by_default_can_leave_the_clip_range():
+    """INDICATOR_BOUND_APPLIED off (default) reproduces today's behaviour: an extreme per-window
+    meta shift can push the applied period outside [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX]
+    (B_model_indicators.md 4.2: up to 74.7 bars above a ceiling of 60 on real runs)."""
+    cfg = Config(**OLD, MOMENTUM_CLIP_MIN=2.0, MOMENTUM_CLIP_MAX=60.0)
+    assert cfg.INDICATOR_BOUND_APPLIED is False
+    layer = LearnableIndicators(cfg)
+    x = _x()
+    meta_zero = tf.zeros([B, 18])
+    layer([x, meta_zero])  # build
+    n_logits = 18
+    extreme = tf.ones([B, n_logits]) * 10.0  # tanh saturates at +1, the largest possible shift
+    samples = layer.applied_period_samples(extreme)
+    # macd_1_fast inits at period 5 (logit-space floor-adjacent); a maximal positive shift on the
+    # base logit pushes the applied period below the floor of 2 (period is decreasing in logit).
+    assert any(np.any(v < cfg.MOMENTUM_CLIP_MIN) or np.any(v > cfg.MOMENTUM_CLIP_MAX)
+              for v in samples.values()), "an extreme meta shift should leave the bound when unclipped"
+
+
+def test_applied_period_bounded_stays_inside_the_clip_range():
+    """INDICATOR_BOUND_APPLIED on: no applied period, on any window, can leave
+    [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX], however extreme the per-window meta shift."""
+    cfg = Config(**OLD, MOMENTUM_CLIP_MIN=2.0, MOMENTUM_CLIP_MAX=60.0, INDICATOR_BOUND_APPLIED=True)
+    layer = LearnableIndicators(cfg)
+    x = _x()
+    meta_zero = tf.zeros([B, 18])
+    layer([x, meta_zero])  # build
+    for shift in (-10.0, 10.0):  # tanh saturates well before +-10
+        extreme = tf.ones([B, 18]) * shift
+        samples = layer.applied_period_samples(extreme)
+        for name, v in samples.items():
+            assert np.all(v >= cfg.MOMENTUM_CLIP_MIN - 1e-4), (name, v.min())
+            assert np.all(v <= cfg.MOMENTUM_CLIP_MAX + 1e-4), (name, v.max())
+
+
+def test_applied_period_samples_matches_forward_pass_alpha():
+    """applied_period_samples must use exactly the alpha the forward pass computes (not a copy)."""
+    cfg = Config(**OLD)
+    layer = LearnableIndicators(cfg)
+    x = _x()
+    meta = tf.random.normal([B, 18], seed=7) * 0.3
+    layer([x, meta])  # build
+    samples = layer.applied_period_samples(meta)
+    # Recompute the first family's first parameter's alpha directly, the same way _alpha does.
+    family, _insts, varmaps = layer._families[0]
+    first_param = family.params[0].name
+    logit = varmaps[0][first_param]
+    alpha = layer._alpha(logit, meta, 0)
+    expected_period = (2.0 / (alpha.numpy() + layer.epsilon)) - 1.0
+    key = family.learned_name(0, first_param)
+    np.testing.assert_allclose(samples[key], expected_period, rtol=1e-6, atol=1e-6)

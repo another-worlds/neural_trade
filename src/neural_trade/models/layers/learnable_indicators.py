@@ -48,6 +48,15 @@ class LearnableIndicators(layers.Layer):
         self.meta_scale = 0.5  # == neural_trade.indicators.META_SCALE (kept as attribute)
         self.grad_multiplier = config.INDICATOR_GRAD_MULT  # Apply gradient boost
         self.adaptive = bool(getattr(config, "ADAPTIVE_INDICATORS", True))
+        # NT-097 (B_model_indicators.md 2.2, 4.2, 7.5): off (default) reproduces today's behaviour,
+        # where only the base logit is clipped to [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX]
+        # (CustomTrainModel.train_step -> clip_learned_periods) and the per-window meta shift can
+        # push the APPLIED period outside that bound (measured 1.6-1.8 below the floor of 2, up to
+        # 74.7 above a ceiling of 60). On, the combined logit (base + shift) is clipped into the
+        # same bound before the sigmoid, every forward pass.
+        self.bound_applied = bool(getattr(config, "INDICATOR_BOUND_APPLIED", False))
+        self._applied_logit_lo = None  # set in build(): logit(period=MOMENTUM_CLIP_MAX)
+        self._applied_logit_hi = None  # set in build(): logit(period=MOMENTUM_CLIP_MIN)
 
     # Period <-> alpha <-> logit transforms: one definition, in neural_trade.utils.math.
     def _logit_from_alpha(self, alpha):
@@ -99,6 +108,14 @@ class LearnableIndicators(layers.Layer):
             elif name == "bb":
                 self.bb_alpha_vars = [vm["period"] for vm in varmaps]
 
+        if self.bound_applied:
+            min_p = float(self.config.MOMENTUM_CLIP_MIN)
+            max_p = float(getattr(self.config, "MOMENTUM_CLIP_MAX", None) or self.config.LOOKBACK)
+            # logit is decreasing in period: the period floor is the logit ceiling and vice versa
+            # (the same convention as clip_learned_periods below).
+            self._applied_logit_hi = float(self._logit_from_period(min_p).numpy())
+            self._applied_logit_lo = float(self._logit_from_period(max_p).numpy())
+
         super().build(input_shape)
 
     def ewma_seq(self, x_seq, alpha_scalar):
@@ -107,11 +124,20 @@ class LearnableIndicators(layers.Layer):
         return mh.ewma_sequence_matrix(x_seq, alpha_scalar)
 
     def _alpha(self, logit, meta_adjust, col):
-        """Per-sample alpha for one learned period: STE-scaled logit + the meta adjustment."""
+        """Per-sample alpha for one learned period: STE-scaled logit + the meta adjustment.
+
+        With ``INDICATOR_BOUND_APPLIED`` on (NT-097), the combined logit is clipped into
+        [logit(MOMENTUM_CLIP_MAX), logit(MOMENTUM_CLIP_MIN)] first, so the APPLIED period this
+        alpha implies can never leave [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX] even though the shift
+        itself is unbounded; off (default), this reproduces today's behaviour exactly.
+        """
         # Correct STE gradient trick: forward=logit (unchanged), backward=logit * grad_multiplier
         logit_for_alpha = (self.grad_multiplier * logit
                            - tf.stop_gradient((self.grad_multiplier - 1.0) * logit))
-        return self._alpha_from_logit(logit_for_alpha + meta_adjust[:, col] * self.meta_scale)
+        combined = logit_for_alpha + meta_adjust[:, col] * self.meta_scale
+        if self.bound_applied:
+            combined = tf.clip_by_value(combined, self._applied_logit_lo, self._applied_logit_hi)
+        return self._alpha_from_logit(combined)
 
     def call(self, inputs, training=None):
         x, meta_adjust = inputs
@@ -232,6 +258,30 @@ class LearnableIndicators(layers.Layer):
                     period = self._period_from_logit(vm[p.name]).numpy()
                     learned[family.learned_name(i, p.name)] = float(period)
         return learned
+
+    def applied_period_samples(self, meta_adjust):
+        """Per-window APPLIED period for every learnable parameter (NT-097 point 5, 7).
+
+        ``meta_adjust`` is ``[N, num_logits]`` (the model's ``meta_adjust`` tensor evaluated on a
+        batch of real windows, ``neural_trade.evaluation.applied_periods``). Reuses ``_alpha``
+        exactly as the forward pass does (respecting ``ADAPTIVE_INDICATORS`` and
+        ``INDICATOR_BOUND_APPLIED``), so the numbers match what the model actually applied, not
+        just the logged base period of ``get_learned_parameters``. Returns
+        ``{family.learned_name(i, p): np.ndarray[N]}`` of applied periods (``2/alpha - 1``).
+        """
+        meta_adjust = tf.cast(meta_adjust, tf.float32)
+        if not self.adaptive:
+            meta_adjust = meta_adjust * 0.0
+        out = {}
+        col = 0
+        for family, _insts, varmaps in self._families:
+            for i, vm in enumerate(varmaps):
+                for p in family.params:
+                    alpha = self._alpha(vm[p.name], meta_adjust, col)
+                    period = 2.0 / (alpha + self.epsilon) - 1.0
+                    out[family.learned_name(i, p.name)] = period.numpy()
+                    col += 1
+        return out
 
     def get_indicator_trainable_variables(self):
         """Return all trainable logit/period variables owned by this indicator layer.
