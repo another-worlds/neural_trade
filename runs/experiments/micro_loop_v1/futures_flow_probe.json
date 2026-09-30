@@ -1,0 +1,39 @@
+{
+  "months": "2024-01..2025-07",
+  "n_common_bars": 832318,
+  "rows": [
+    {
+      "H": 15,
+      "n_score": 57888,
+      "auc_base_spotflow": 0.524,
+      "auc_full": 0.525,
+      "lift": 0.001,
+      "lift_z": 0.95,
+      "hit_full": 0.5184,
+      "hit_full_top10": 0.5448,
+      "meets_bar": false
+    },
+    {
+      "H": 60,
+      "n_score": 57888,
+      "auc_base_spotflow": 0.5265,
+      "auc_full": 0.5266,
+      "lift": 0.0001,
+      "lift_z": 0.2,
+      "hit_full": 0.5211,
+      "hit_full_top10": 0.5605,
+      "meets_bar": false
+    },
+    {
+      "H": 240,
+      "n_score": 57888,
+      "auc_base_spotflow": 0.5413,
+      "auc_full": 0.5369,
+      "lift": -0.0044,
+      "lift_z": -2.66,
+      "hit_full": 0.5314,
+      "hit_full_top10": 0.5545,
+      "meets_bar": false
+    }
+  ]
+}
