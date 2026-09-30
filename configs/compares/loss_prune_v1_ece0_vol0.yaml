@@ -20,7 +20,7 @@ non_inferiority_margin: 0.005
 judgment_folds: [-39, -38, -37, -36, -35]
 min_folds: 5
 min_pairs: 5
-pairs_planned: 10                       # 5 folds x 2 seeds, both configurations
+pairs_planned: 5                        # 5 folds x 1 seed, both configurations (amended 2026-10-01: batch OOM fix)
 alpha: 0.05
 registered_utc: "2026-10-01T00:00:00Z"  # overridden by this file's git commit time once committed
                                          # and unedited (RUNBOOK "Paired comparator")

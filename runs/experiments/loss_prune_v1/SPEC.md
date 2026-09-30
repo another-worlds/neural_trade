@@ -45,6 +45,20 @@ parallel on the screen layout and is reported beside this study, not as its gate
 training as it is; the per-variant pre-clip gradient norm distribution (`training_log`
 `grad_global_norm`) is reported as a descriptive result, and NT-102 decides the clip separately.
 
+(c) **Amendment 2026-10-01, before any successful cell (batch-size OOM):** the only cell attempted at
+the original design, `control__f-39__s0` at `BATCH_SIZE 2048`, failed with a clean
+`RESOURCE_EXHAUSTED` OOM in `multi_head_attention`'s einsum on its very first training step (run dir
+`runs/scenarios/loss_prune_v1/20260930T225007Z-fb840fd-7d108cb2-control__f-39__s0`, kept as evidence,
+D-029) -- no data from it enters any score or verdict. This is the known confound
+`runs/experiments/micro_loop_v1/LOG.md`'s "I2-duel" already recorded for the OHLCV+14-family default
+(OOM at batch 2048, ran at 1024). Fixed by lowering `BATCH_SIZE` to **1024** and seeds from `[0, 1]`
+to **`[0]`** (1 seed), both in `configs/scenarios/loss_prune_v1.yaml`, so the recomputed GPU estimate
+(below) stays comfortably under the 3-hour cap. D-046's own simulation of this exact design (RUNBOOK
+"Paired comparator") found 5 judgement folds x 1 seed the *safest* documented layout (false-"beats"
+rate 0.000, better than a seeded-pair design at the same fold count), so dropping to 1 seed is not a
+statistical weakening. Both comparator specs' `pairs_planned` changed from 10 to 5 to match. No
+metric, threshold, fold selection or minimum effect changed.
+
 ## Conditions (3, at most 3 allowed by OPERATING_MODEL)
 
 One engine scenario, `loss_prune_v1`, three variants (`configs/scenarios/loss_prune_v1.yaml`):
@@ -102,10 +116,11 @@ OOS 2025-09-13..2025-09-29) and every fold from -34 to -1 are **not** requested 
 -2 through -39 are `dev` in this spec's own layout — none of which is the same fold this project's
 earlier choices actually scored, since those used a different override set entirely.)
 
-Seeds: **0, 1** (2 seeds per fold; the budget comfortably allows 2, see below). 5 folds x 2 seeds x
-3 variants = 30 cells; each verdict pairs `control` against one other variant over the same 5 folds
-x 2 seeds = 10 pairs (>= the 5-pair floor, D-046's unit of inference is still the fold: 5 distinct
-judgement folds, each fold's 2 seeds averaged first by the comparator's `_fold_rows`).
+Seeds: **0** (1 seed per fold; see amendment (c) above -- 2 seeds at `BATCH_SIZE 1024` would not fit
+the 3-hour cap with the margin this design wants, and D-046's own simulation makes 5 folds x 1 seed
+the safest documented layout, not a weaker one). 5 folds x 1 seed x 3 variants = **15 cells**; each
+verdict pairs `control` against one other variant over the same 5 folds = 5 pairs (>= the 5-pair
+floor, D-046's unit of inference is the fold).
 
 ## Metrics, minimum effect and thresholds
 
@@ -145,26 +160,32 @@ judgement folds, each fold's 2 seeds averaged first by the comparator's `_fold_r
 
 ## GPU-time estimate
 
-`sec_per_step` **0.1735 s** (D-047's measured figure for the OHLCV + 14-family default on the GPU;
-the STATUS-recorded number, not a fresh timing run for this SPEC — no GPU time has been spent on
-this item yet, and re-measuring it was not worth a separate GPU touch when a recent same-default
-number already exists). Steps, from the fold layout above at `BATCH_SIZE 2048`, `EPOCHS 20`
-(`ceil(train_n / 2048)` per fold, summed over the 5 judgement folds):
+**Revised 2026-10-01 for `BATCH_SIZE 1024` / 1 seed (amendment (c) above).** `sec_per_step` at batch
+1024 is **interpolated**, not directly measured: D-047's 0.1735 s/step for the OHLCV+14-family
+default was measured at `BATCH_SIZE 256` (matching `runs/experiments/gpu_batch_bench_v1/REPORT.md`'s
+own 256-batch figure for the pre-OHLCV code, 0.104 s, which the 1.63x factor was built from). That
+report's batch-scaling on the same architecture (256 -> 1024 -> 2048: 0.104 -> 0.198 -> 0.325 s/step)
+gives a 256->1024 ratio of **1.90x**. Applying the same ratio to the OHLCV default: 0.1735 x 1.90 ~=
+**0.33 s/step** (an estimate; the real number is measured and reported from this run's own
+`training_log.csv` in REPORT.md). Steps, from the fold layout above at `BATCH_SIZE 1024`, `EPOCHS 20`
+(`ceil(train_n / 1024)` per fold, summed over the 5 judgement folds):
 
 | fold | train_n | steps/epoch |
 |---|---|---|
-| -39 | 8,550 | 5 |
-| -38 | 32,940 | 17 |
-| -37 | 57,330 | 28 |
-| -36 | 81,720 | 40 |
-| -35 | 106,110 | 52 |
-| **sum** | | **142** |
+| -39 | 8,550 | 9 |
+| -38 | 32,940 | 33 |
+| -37 | 57,330 | 56 |
+| -36 | 81,720 | 80 |
+| -35 | 106,110 | 104 |
+| **sum** | | **282** |
 
-Total steps = 142 steps/epoch x 20 epochs x 3 variants x 2 seeds = **17,040 steps** (worst case, no
-early stopping; `EARLY: 6` will usually stop sooner). At 0.1735 s/step: **2,956 s = 0.82 GPU-hours**.
-Adding ~15% for the calibration pre-pass, evaluation and per-cell overhead: **~0.94 GPU-hours**,
-against the **3-hour** cap (OPERATING_MODEL). Well inside budget; no owner escalation needed for the
-GPU time itself.
+Total steps = 282 steps/epoch x 20 epochs x 3 variants x 1 seed = **16,920 steps** (worst case, no
+early stopping; `EARLY: 6` will usually stop sooner). At ~0.33 s/step: **~5,584 s ~= 1.55 GPU-hours**.
+Adding ~15% for the calibration pre-pass, evaluation and per-cell overhead: **~1.78 GPU-hours**,
+against the **3-hour** cap (OPERATING_MODEL) — with room for the interpolated `sec_per_step` to be
+meaningfully off and still fit. The run stops at 3 GPU-hours regardless of how many of the 15 cells
+have finished (the lead's instruction); a partial run that has not reached 5 folds x every
+configuration for a verdict is reported as such, not padded.
 
 ## Guard-rails on the design itself
 

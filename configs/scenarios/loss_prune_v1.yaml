@@ -23,11 +23,21 @@
 #   neural-trade scenario plan configs/scenarios/loss_prune_v1.yaml     # check the cells, no training
 #   neural-trade scenario run  configs/scenarios/loss_prune_v1.yaml     # GPU (RUNBOOK "GPU rules")
 #
+# Amendment 2026-10-01 (pre-registered in SPEC.md before any successful cell; the only prior attempt,
+# control__f-39__s0 at BATCH_SIZE 2048, failed with a clean RESOURCE_EXHAUSTED OOM in multi-head
+# attention on its very first training step -- no data from it enters any result): BATCH_SIZE 2048
+# OOMs on the new OHLCV+14-family default's attention (matches the known confound in
+# runs/experiments/micro_loop_v1/LOG.md "I2-duel": OOM at 2048, ran at 1024). BATCH_SIZE lowered to
+# 1024 and seeds cut from [0, 1] to [0] so the GPU estimate stays under the 3-hour cap (SPEC.md "GPU
+# time estimate"); D-046's own simulation found 5 folds x 1 seed the *safest* documented design
+# (false-"beats" rate 0.000, better than any seeded-pair design), so this is not a statistical
+# weakening.
+#
 # Runs from the repository root (CSV_PATH is relative to the working directory); base_config is
 # relative to this file. Keys: src/neural_trade/experiments/scenario.py.
 schema_version: 1
 name: loss_prune_v1
-description: "NT-099: soft ECE off, and soft ECE + vol penalty off, vs today's defaults; 5 pre-2024-06 judgement folds x 2 seeds."
+description: "NT-099: soft ECE off, and soft ECE + vol penalty off, vs today's defaults; 5 pre-2024-06 judgement folds, seed 0."
 base_config: ../default.yaml
 overrides:
   CSV_PATH: Bitcoin_BTCUSDT.csv
@@ -36,13 +46,13 @@ overrides:
   VAL_FRACTION: 0.02
   CAL_FRACTION: 0.02
   SHUFFLE_BUFFER: 0
-  BATCH_SIZE: 2048
+  BATCH_SIZE: 1024
 variants:
   control: {}
   ece0: {LAMBDA_SOFT_ECE: 0.0}
   ece0_vol0: {LAMBDA_SOFT_ECE: 0.0, LAMBDA_VOL: 0.0}
 folds: [-39, -38, -37, -36, -35]
-seeds: [0, 1]
+seeds: [0]
 strategy: {name: calibrated_quantile, params: {}}
 backtest: {}                  # default cost profile: 0 (D-044)
 run:
