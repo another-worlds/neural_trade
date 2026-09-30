@@ -267,6 +267,93 @@ def w_pearson(W: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.where((va > 0) & (vb > 0), r, 0.0)
 
 
+# ------------------------------------------------------------------- paired comparisons (NT-032, D-025)
+# Building blocks for the paired comparator (neural_trade.experiments.comparator): a t-based paired
+# interval, the Hodges-Lehmann estimator with its Wilcoxon-signed-rank interval (D-037's "robust
+# estimator" amendment: the mean is sensitive to a single bad (seed, fold) pair; HL is not), and the
+# Pocock two-look boundary for a pre-registered interim analysis.
+
+
+def paired_t_ci(diffs, *, alpha: float = 0.05) -> Tuple[float, float, float, float]:
+    """(mean, lo, hi, t_stat) of a paired sample on its own n - 1 degrees of freedom (n = len(diffs)
+    finite pairs). NaN entries are dropped. Unlike :func:`mean_ci`, pairs are already one independent
+    unit each (one seed x one judgement fold), so no ``steps`` correction applies here."""
+    from scipy import stats as _st
+
+    d = np.asarray(diffs, float)
+    d = d[np.isfinite(d)]
+    n = len(d)
+    if n < 2:
+        m = float(d.mean()) if n else float("nan")
+        return m, float("nan"), float("nan"), float("nan")
+    m = float(d.mean())
+    se = float(d.std(ddof=1) / np.sqrt(n))
+    if se == 0.0:
+        return m, m, m, float("inf") if m != 0 else 0.0
+    t_stat = m / se
+    tcrit = float(_st.t.ppf(1.0 - alpha / 2.0, n - 1))
+    return m, m - tcrit * se, m + tcrit * se, t_stat
+
+
+def hodges_lehmann(diffs) -> float:
+    """The Hodges-Lehmann estimator: the median of the Walsh averages (d_i + d_j) / 2, i <= j.
+
+    A robust alternative to the paired mean: unaffected by one extreme (seed, fold) pair the way a
+    mean is, and consistent for the median of the paired-difference distribution under symmetry."""
+    d = np.asarray(diffs, float)
+    d = np.sort(d[np.isfinite(d)])
+    n = len(d)
+    if n == 0:
+        return float("nan")
+    i, j = np.triu_indices(n)
+    walsh = (d[i] + d[j]) / 2.0
+    return float(np.median(walsh))
+
+
+def wilcoxon_hl_ci(diffs, *, alpha: float = 0.05) -> Tuple[float, float]:
+    """(lo, hi): the distribution-free confidence interval for the Hodges-Lehmann estimator, from the
+    normal approximation to the Wilcoxon signed-rank statistic (no ties / zeros assumed; exact for
+    n >= ~10, conservative below). NaN, NaN when there are fewer than 4 finite pairs."""
+    from scipy.stats import norm
+
+    d = np.asarray(diffs, float)
+    d = np.sort(d[np.isfinite(d)])
+    n = len(d)
+    if n < 4:
+        return float("nan"), float("nan")
+    i, j = np.triu_indices(n)
+    walsh = np.sort((d[i] + d[j]) / 2.0)
+    N = len(walsh)
+    mu = n * (n + 1) / 4.0
+    sigma = math.sqrt(n * (n + 1) * (2 * n + 1) / 24.0)
+    z = float(norm.ppf(1.0 - alpha / 2.0))
+    k = int(round(mu - z * sigma))
+    k = max(1, min(k, N))
+    lo, hi = walsh[k - 1], walsh[N - k]
+    return float(min(lo, hi)), float(max(lo, hi))
+
+
+# Standard one-sided nominal per-look significance levels for a Pocock group-sequential boundary
+# (equal information fractions, the classic O'Brien / Pocock tables; Pocock 1977). Two-sided alpha
+# 0.05 gives a one-sided per-look alpha of about 0.0294 at two looks, matching the window-free plan's
+# "about 0.030 per look" (D-037).
+_POCOCK_TWO_SIDED = {1: {0.05: 0.05, 0.01: 0.01}, 2: {0.05: 0.0294, 0.01: 0.0056},
+                    3: {0.05: 0.0221, 0.01: 0.0039}, 4: {0.05: 0.0182, 0.01: 0.0031},
+                    5: {0.05: 0.0158, 0.01: 0.0026}}
+
+
+def pocock_alpha(alpha: float, looks: int, *, one_sided: bool = True) -> float:
+    """The per-look significance level of a Pocock group-sequential design with ``looks`` equally
+    spaced interim analyses at overall two-sided ``alpha`` (0.05 or 0.01; nearest table value
+    otherwise, looks 1-5). ``one_sided``: the per-look alpha for a one-sided test (half the two-sided
+    table value, as the window-free plan uses for its t-test / coverage looks)."""
+    looks = max(1, min(int(looks), 5))
+    table = _POCOCK_TWO_SIDED[looks]
+    key = min(table, key=lambda k: abs(k - alpha))
+    two_sided = table[key]
+    return two_sided / 2.0 if one_sided else two_sided
+
+
 def w_spearman(W: np.ndarray, x: np.ndarray, y: np.ndarray) -> np.ndarray:
     """Spearman correlation (Pearson on tie-averaged ranks) per weighted resample; 0 where a side is constant."""
     ox, sx, gx = ties(x)

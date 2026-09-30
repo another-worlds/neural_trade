@@ -1,0 +1,28 @@
+# Example paired-comparator spec (NT-032, D-025): docs/RUNBOOK.md "Paired comparator".
+#
+#   neural-trade compare configs/compares/example.yaml --out runs/compares/example
+#
+# This spec names two placeholder scenarios (they must already exist as runs/scenarios/<name>/,
+# produced by `neural-trade scenario run`, with matching (seed, fold) cells on the named judgement
+# fold): replace scenario_a / scenario_b before using it for a real verdict. Keys:
+# src/neural_trade/experiments/comparator.py (CompareSpec).
+name: example_learned_vs_frozen
+description: >
+  Template: does the learned-period model beat the frozen-period twin (D-020's manual-search
+  baseline) on out-of-sample direction AUC at h1, on the test fold, with today's noise level as the
+  minimum effect?
+scenario_a: reference_learned
+scenario_b: reference_frozen
+metric: h1/direction/auc
+direction: higher_better
+min_effect: 0.01
+judgment_folds: [-1]
+min_pairs: 5
+alpha: 0.05
+registered_utc: "2026-09-30T00:00:00Z"
+estimator: mean
+guard_rails:
+  - metric: h1/variance/crpss
+    direction: higher_better
+    max_degradation: 0.01
+noise_sd: 0.02
