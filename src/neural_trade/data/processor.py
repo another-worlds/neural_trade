@@ -18,7 +18,9 @@ import pandas as pd
 from neural_trade.data.loaders import validate_ohlcv_frame
 from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, transform_targets
 from neural_trade.data.splits import make_purged_splits
-from neural_trade.data.windowing import (compute_extended_trend_features, make_sequences_with_extended_trends,
+from neural_trade.data.windowing import (compute_extended_trend_features, frame_series,
+                                         make_multichannel_windows,
+                                         make_sequences_with_extended_trends,
                                          sequence_anchor_bars)
 
 logger = logging.getLogger(__name__)
@@ -68,8 +70,10 @@ def _select_fold(folds, index):
 
 
 def split_arrays(config, read_csv_kwargs=None):
-    """RAW (unscaled) windows, targets, last closes and trend features of every block of the
-    configured fold: ``{"train": {...}, "val": {...}, "cal": {...}, "test": {...}, "fold": FoldIndices}``.
+    """RAW (unscaled) CLOSE windows, targets, last closes and trend features of every block of
+    the configured fold: ``{"train": {...}, "val": {...}, "cal": {...}, "test": {...}, "fold": FoldIndices}``.
+    Every consumer of these blocks (baselines, realized vol, backtests) reads close windows;
+    the model's multi-series input (Config.INPUT_SERIES, NT-047) is built by ``prepare_datasets``.
 
     Deterministic given the config, so any saved run can rebuild its splits (baselines,
     backtests, re-evaluation) without having stored them.
@@ -77,10 +81,14 @@ def split_arrays(config, read_csv_kwargs=None):
     dp = DataProcessor(config)
     df, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
     X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK)
+    # model-input windows (NT-047): identical to X in close-only mode, [N, L, C] otherwise
+    series_names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
+    Xm = X if series_names == ["close"] else make_multichannel_windows(
+        config, frame_series(config, df), config.LOOKBACK)
     n_total = X.shape[0]
     cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
     if cap and X.shape[0] > cap:
-        X, y, lc, ext = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:]
+        X, y, lc, ext, Xm = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:], Xm[-cap:]
     folds = make_purged_splits(X.shape[0], lookback=config.LOOKBACK, horizon_steps=config.HORIZON_STEPS,
                                window_step=int(max(1, getattr(config, "WINDOW_STEP", 1))),
                                n_folds=int(getattr(config, "N_FOLDS", 5)),
@@ -90,7 +98,8 @@ def split_arrays(config, read_csv_kwargs=None):
     out = {"fold": fold, "close": close, "df": df}
     for name in ("train", "val", "cal", "test"):
         idx = getattr(fold, name)
-        out[name] = {"X": X[idx], "y": y[idx], "last_close": lc[idx], "extended_trends": ext[idx], "index": idx,
+        out[name] = {"X": X[idx], "X_model": Xm[idx], "y": y[idx], "last_close": lc[idx],
+                     "extended_trends": ext[idx], "index": idx,
                      "anchor_bar": sequence_anchor_bars(config, len(close), n_total, idx)}
     return out
 
@@ -140,7 +149,7 @@ class DataProcessor:
     def make_sequences_with_extended_trends(self, close_array, lookback):
         return make_sequences_with_extended_trends(self.config, close_array, lookback)
 
-    def build_windows(self, close_values):
+    def build_windows(self, close_values, df=None):
         """Sliding windows/targets (:func:`make_sequences_with_extended_trends`) trimmed to
         ``MAX_SEQUENCE_COUNT`` (most recent kept): the part of :meth:`prepare_datasets` that loops
         every bar and is therefore worth caching. A pure function of ``self.config`` and
@@ -148,28 +157,50 @@ class DataProcessor:
         WINDOW_STEP, MAX_SEQUENCE_COUNT - is part of :func:`neural_trade.experiments.dataset.data_key`),
         so a caller that trains many configurations sharing a data key (NT-088 screen mode) can build
         it once and reuse it across all of them, only redoing the split/scale/normalise step below.
+
+        Returns ``(X_seq, y_seq, last_close_seq, extended_trends, X_model)``: ``X_model`` is the model
+        input (NT-047), ``X_seq`` itself in close-only mode, otherwise the [N, LOOKBACK, C] windows over
+        ``Config.INPUT_SERIES`` built from ``df`` (required then; INPUT_SERIES is part of the data key).
         """
         X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
             self.config, close_values, self.config.LOOKBACK
         )
         logger.info(f"Sequences with extended trends: {X_seq.shape}, {y_seq.shape}, Extended: {extended_trends.shape}")
 
+        # Model input windows (NT-047): the close windows themselves in close-only mode
+        # (Config.INPUT_SERIES == ['close']: the pre-NT-047 path, bit-for-bit), otherwise
+        # [N, LOOKBACK, C] over the configured series, on the SAME anchors. The raw close
+        # windows (X_seq) stay what every downstream consumer of "raw windows" reads
+        # (conformal realized vol, baselines, backtests).
+        series_names = list(getattr(self.config, 'INPUT_SERIES', None) or ['close'])
+        if series_names == ['close']:
+            X_model = X_seq
+        else:
+            if df is None:
+                raise ValueError(f"INPUT_SERIES={series_names} needs the bar frame: call build_windows(close, df)")
+            X_model = make_multichannel_windows(self.config, frame_series(self.config, df),
+                                                self.config.LOOKBACK)
+            if X_model.shape[0] != X_seq.shape[0]:
+                raise RuntimeError(f"model windows ({X_model.shape[0]}) and close windows "
+                                   f"({X_seq.shape[0]}) disagree - a windowing bug")
+
         max_sequences = getattr(self.config, 'MAX_SEQUENCE_COUNT', None)
         if max_sequences and X_seq.shape[0] > max_sequences:
             original_count = X_seq.shape[0]
             take_from = original_count - max_sequences
             X_seq = X_seq[take_from:]
+            X_model = X_model[take_from:]
             y_seq = y_seq[take_from:]
             last_close_seq = last_close_seq[take_from:]
             extended_trends = extended_trends[take_from:]
             logger.info(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
-        return X_seq, y_seq, last_close_seq, extended_trends
+        return X_seq, y_seq, last_close_seq, extended_trends, X_model
 
     def prepare_datasets(self, df, close_values):
-        X_seq, y_seq, last_close_seq, extended_trends = self.build_windows(close_values)
-        return self.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq, extended_trends)
+        X_seq, y_seq, last_close_seq, extended_trends, X_model = self.build_windows(close_values, df)
+        return self.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq, extended_trends, X_model=X_model)
 
-    def prepare_datasets_from_windows(self, X_seq, y_seq, last_close_seq, extended_trends):
+    def prepare_datasets_from_windows(self, X_seq, y_seq, last_close_seq, extended_trends, X_model=None):
         """The fold split, target scaling and window normalisation of :meth:`prepare_datasets`, given
         already-built (and, for MAX_SEQUENCE_COUNT, already-trimmed) windows. Splitting an array by
         index and fitting a scaler on it is cheap next to building the windows themselves (no
@@ -178,6 +209,11 @@ class DataProcessor:
         (N_FOLDS, VAL_FRACTION, CAL_FRACTION, WINDOW_STEP, BATCH_SIZE, WINDOW_NORMALIZER, FOLD_INDEX)
         may differ per trial even when the data key does not.
         """
+        series_names = list(getattr(self.config, 'INPUT_SERIES', None) or ['close'])
+        if X_model is None:
+            if series_names != ['close']:
+                raise ValueError(f"INPUT_SERIES={series_names}: pass X_model from build_windows(close, df)")
+            X_model = X_seq
         logger.info("[INFO] Dataset Statistics:")
         logger.info(f"   Total sequences: {X_seq.shape[0]}")
 
@@ -200,7 +236,7 @@ class DataProcessor:
         self.fold = fold
 
         def _take(idx):
-            return X_seq[idx], y_seq[idx], last_close_seq[idx], extended_trends[idx]
+            return X_model[idx], y_seq[idx], last_close_seq[idx], extended_trends[idx]
 
         X_train_seq, y_train, last_close_train, extended_trends_train = _take(fold.train)
         X_val_seq, y_val, last_close_val, extended_trends_val = _take(fold.val)
@@ -226,7 +262,8 @@ class DataProcessor:
         # absolute price LEVEL, so the model's dominant signal was "where is BTC vs. its multi-week
         # mean" - noise w.r.t. a delta target. See neural_trade.data.scaling.
         normalizer = WindowNormalizer.fit(getattr(self.config, 'WINDOW_NORMALIZER', 'window_relative'),
-                                          X_train_seq, target_scaler)
+                                          X_train_seq, target_scaler,
+                                          input_series=series_names if X_train_seq.ndim == 3 else None)
         input_scale = normalizer.scale
         _normalise = normalizer.transform
 
@@ -244,12 +281,19 @@ class DataProcessor:
         self.input_scale = input_scale
         self.normalizer = normalizer
         # Validation and calibration blocks, consumed by train_and_evaluate.
+        # RAW close windows for the consumers of "raw windows" (conformal realized vol,
+        # baselines, backtests): in multi-series mode (NT-047) that is the close CHANNEL of
+        # the model windows (identical to the close windows: same anchors).
+        def _raw_close(Xb):
+            return Xb if Xb.ndim == 2 else np.ascontiguousarray(Xb[..., series_names.index('close')])
+
         self.val_block = dict(X=_normalise(X_val_seq, last_close_val), y_scaled=y_val_scaled, y_raw=y_val,
                               last_close=last_close_val, extended_trends=extended_trends_val)
         self.cal_block = dict(X=_normalise(X_cal_seq, last_close_cal), y_scaled=y_cal_scaled, y_raw=y_cal,
-                              last_close=last_close_cal, extended_trends=extended_trends_cal, X_raw=X_cal_seq)
-        # RAW test windows (conformal realized-vol scales, baselines, backtests).
-        self.test_windows_raw = X_test_seq
+                              last_close=last_close_cal, extended_trends=extended_trends_cal,
+                              X_raw=_raw_close(X_cal_seq))
+        # RAW test CLOSE windows (conformal realized-vol scales, baselines, backtests).
+        self.test_windows_raw = _raw_close(X_test_seq)
 
         return (X_train_seq_scaled, y_train_scaled, last_close_train, extended_trends_train,
                 X_test_seq_scaled, y_test_scaled, last_close_test, extended_trends_test,

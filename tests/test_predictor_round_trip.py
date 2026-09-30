@@ -32,11 +32,17 @@ def trained(tmp_path_factory, synthetic_bars):
 
 
 def _raw_test_windows(cfg, result):
+    """The raw MODEL-INPUT windows of the test block: OHLCV [N, L, C] at the NT-047
+    default, close windows [N, L] in close-only mode."""
     from neural_trade.data.processor import DataProcessor
-    from neural_trade.data.windowing import make_sequences_with_extended_trends
+    from neural_trade.data.windowing import (frame_series, make_multichannel_windows,
+                                             make_sequences_with_extended_trends)
 
-    _, close = DataProcessor(cfg).load_and_prepare_data()
-    X = make_sequences_with_extended_trends(cfg, close, cfg.LOOKBACK)[0]
+    df, close = DataProcessor(cfg).load_and_prepare_data()
+    if len(cfg.input_series()) > 1:
+        X = make_multichannel_windows(cfg, frame_series(cfg, df), cfg.LOOKBACK)
+    else:
+        X = make_sequences_with_extended_trends(cfg, close, cfg.LOOKBACK)[0]
     X = X[-cfg.MAX_SEQUENCE_COUNT:] if len(X) > cfg.MAX_SEQUENCE_COUNT else X
     return X[result.fold.test]
 
@@ -90,7 +96,7 @@ def test_predict_frame_and_predict_last(trained, synthetic_bars):
     frame = p.predict_frame(synthetic_bars)
     assert frame.index[-1] == synthetic_bars["datetime"].iloc[-1]
     assert {"h1_delta", "h1_p_up_calibrated", "h1_lo90", "h1_hi90", "h1_gauss_p_up"} <= set(frame.columns)
-    last = p.predict_last(synthetic_bars["close"].to_numpy())
+    last = p.predict_last(synthetic_bars)  # OHLCV bundle: predict_last takes the raw frame (NT-047)
     assert set(last) == {"h0", "h1", "h2"} and last["h1"]["horizon_bars"] == cfg.HORIZON_STEPS[1]
     # one window vs a batch: different GEMM tiling, float32 round-off only
     np.testing.assert_allclose(last["h2"]["delta"], frame["h2_delta"].iloc[-1], rtol=1e-4)

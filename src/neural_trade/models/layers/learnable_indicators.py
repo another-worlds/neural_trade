@@ -12,7 +12,8 @@ import tensorflow as tf
 from tensorflow.keras import initializers, layers, regularizers
 
 import neural_trade.utils.math as mh
-from neural_trade.indicators import FamilyContext, Indicators, indicator_instances
+from neural_trade.indicators import (DERIVED_SERIES, FamilyContext, Indicators,
+                                     indicator_instances)
 
 from typing import TYPE_CHECKING
 
@@ -26,8 +27,10 @@ class LearnableIndicators(layers.Layer):
     Each family parameter is a trainable logit (alpha = sigmoid(logit), period = 2/alpha - 1),
     adjusted per sample by ``meta_adjust`` (off with ``Config.ADAPTIVE_INDICATORS = False``:
     every applied period then equals the learned global value) and trained through a
-    straight-through gradient multiplier. Inputs: ``[close_window [B, L],
-    meta_adjust [B, num_logits]]``; output ``[B, L, num_channels + 1]`` (raw close appended).
+    straight-through gradient multiplier. Inputs: ``[window, meta_adjust [B, num_logits]]``
+    where the window is the close sequence ``[B, L]`` (``Config.INPUT_SERIES = ['close']``,
+    the pre-NT-047 input) or the multi-series window ``[B, L, len(INPUT_SERIES)]``; output
+    ``[B, L, num_channels + 1]`` (the raw close sequence appended).
     """
 
     def __init__(self, config: "Config", **kwargs):
@@ -60,9 +63,17 @@ class LearnableIndicators(layers.Layer):
         return mh.period_from_logit(logit, self.epsilon)
 
     def build(self, input_shape):
-        # input_shape[0] is close_seq, [1] is meta_adjust [B, num_logits]
+        # input_shape[0] is the window ([B, L] close or [B, L, C] multi-series),
+        # [1] is meta_adjust [B, num_logits]
+        available = set(getattr(self.config, "INPUT_SERIES", None) or ["close"])
         for name, raw in indicator_instances(self.config).items():
             family = Indicators.get(name)
+            missing = sorted(set(family.inputs) - available
+                             - {d for d, req in DERIVED_SERIES.items() if set(req) <= available})
+            if missing:
+                raise ValueError(
+                    f"indicator family '{name}' reads {missing}, which Config.INPUT_SERIES "
+                    f"{sorted(available)} does not carry (NT-047)")
             insts = [family.parse_instance(v) for v in raw]
             varmaps = []
             for i, inst in enumerate(insts):
@@ -151,6 +162,15 @@ class LearnableIndicators(layers.Layer):
         rows.sort(key=lambda row: first_seen[id(row[2])])
         return rows
 
+    def _context(self, x):
+        """The FamilyContext of the input window: ``[B, L]`` is the close sequence alone;
+        ``[B, L, C]`` carries Config.INPUT_SERIES in order (NT-047)."""
+        if x.shape.rank == 2:
+            return FamilyContext(x)
+        series = list(getattr(self.config, "INPUT_SERIES", None) or ["close"])
+        cols = {name: x[:, :, i] for i, name in enumerate(series)}
+        return FamilyContext(cols.pop("close"), **cols)
+
     def _run(self, x, meta_adjust, batched: bool):
         """Assemble every family's channels; ``batched`` batches each EWMA stage into one
         matrix product (Config.EWMA_IMPL = "matrix"), otherwise one scan per request.
@@ -158,7 +178,7 @@ class LearnableIndicators(layers.Layer):
         The two agree to float32 round-off (tests/test_learnable_indicators.py); a batched
         row's value does not depend on its position (each EWMA only reads its own sequence
         and alpha)."""
-        ctx = FamilyContext(x)
+        ctx = self._context(x)
         flat = self._plans(meta_adjust)
         caches = [{} for _ in flat]
         groups, k = [], 0
@@ -189,7 +209,7 @@ class LearnableIndicators(layers.Layer):
         features = []
         for k, (family, alphas) in enumerate(flat):
             features.extend(family.outputs(ctx, alphas, s1[k], s2[k], caches[k]))
-        features.append(x)  # raw close as the last "indicator" sequence
+        features.append(ctx.close)  # raw close as the last "indicator" sequence
         output = tf.stack(features, axis=-1)
         output.set_shape([None, self.config.LOOKBACK, len(features)])
         return output

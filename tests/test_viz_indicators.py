@@ -10,13 +10,23 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from neural_trade.core.config import Config
+from neural_trade.core.config import Config as _Config
 from neural_trade.visualization import discovered_indicators as DI
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.indicator_evolution import (
     applied_periods, configured_periods, indicator_applied_periods, indicator_evolution, indicator_summary, label,
 )
+
+
+def Config(**kw):
+    """This module pins the pre-NT-047 default (close-only input, the four families):
+    the figure logic is default-agnostic and the fixtures enumerate the 18 historical
+    periods; the OHLCV default is pinned by tests/test_ohlcv_input.py."""
+    kw.setdefault("INPUT_SERIES", ["close"])
+    kw.setdefault("INDICATOR_FAMILIES", {})
+    return _Config(**kw)
+
 
 H = ("h0", "h1", "h2")
 NAMES = list(configured_periods(Config()))

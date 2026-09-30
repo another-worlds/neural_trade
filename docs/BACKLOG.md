@@ -64,7 +64,7 @@ changes).
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
 | [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | todo | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
-| [NT-032](#nt-032) | P1 | feature | implementer | todo | Paired comparator for "A beats B" verdicts (D-025) |
+| [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
@@ -79,7 +79,7 @@ changes).
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
-| [NT-047](#nt-047) | P1 | feature | implementer | in-progress | OHLCV input and the new indicator families, all learnable and on by default |
+| [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
 | [NT-048](#nt-048) | P1 | feature | implementer | todo | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
@@ -140,6 +140,7 @@ changes).
 | [NT-105](#nt-105) | P2 | feature | implementer | todo | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
 | [NT-106](#nt-106) | P3 | feature | implementer | todo | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
+| [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
 
 ## Items
 
@@ -509,7 +510,7 @@ changes).
 
 **Paired comparator for "A beats B" verdicts (D-025)**
 
-- **status:** todo
+- **status:** done (2026-09-30): 11296af, merged 89c9443; QA (Opus) FAIL on 2aef6ca (pair-level inference anti-conservative for one fold x seeds: false-'beats' 0.069-0.314; string-compared registration times; blocks not fingerprinted; configurations mixed) -> D-046 (fold is the unit of inference, >= 5 judgement folds) -> repair 1 (27da376, PASS on the criteria, one P1) -> repair 2 (285a64c) -> the lead's one-line fix (11296af: an uncommitted spec edit counts as registered at compare time) -> PASS. `neural-trade compare SPEC`, src/neural_trade/experiments/comparator.py, 59 tests; fast suite 1097 passed on 285a64c; RUNBOOK 'Paired comparator'. Deferred with reasons (module docstring): GPU-contention metadata, A/B-1's literal retention metric, infinite pairs kept in the ranks.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** the statistics module (NT-027) or src/neural_trade/experiments/ (comparator), tests/
 - **depends on:** NT-026 (experiment engine)
@@ -699,7 +700,7 @@ changes).
 
 **OHLCV input and the new indicator families, all learnable and on by default**
 
-- **status:** in-progress: QA PASS on 72d3838 after repair round 1 (2026-09-30): legacy bundles load and predict as at base (diff 0.0); notebooks 01/04/07 executed on the OHLCV default and check clean; Grappler switch explicit per run (mixed-order golden 0/273 diffs); soft extrema scale-invariant (%K error mean 0.22-0.47, max 3.3 points on real windows); close-only golden bit-for-bit; fast 1007 / slow 15 / ruff. **Merge waits on owner question 7 (STATUS):** the OHLCV default is 1.63x slower per GPU step (0.1735 vs 0.1066 s; CPU 1.60-1.64x), D-018. QA findings: period figures draw only the four original families (18 of 54 periods; folded into NT-048); notebooks 02/03/05 still show the close-only run (re-execute at integration); applied_periods gives a Keras error instead of its own for close windows on a multi-series model (P3, NT-084).
+- **status:** done (2026-10-01): QA PASS on 72d3838 (after repair round 1); merged 7b1a8ae on the owner's answer to question 7 (D-047: OHLCV with all 14 families by default, the 1.6x step cost accepted). Merge resolution: build_windows(close, df) returns the model windows and prepare_datasets_from_windows takes them (NT-088's split), so the screen cache carries them; test_pnl_utility reads the close channel. Fast suite 1156 passed, slow suite 24 passed on the merge.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/data/ (sequence building: OHLCV windows), the indicators package and registry (NT-046), src/neural_trade/models/gru_attention.py, src/neural_trade/core/config.py, src/neural_trade/serving/ (input shape), tests/
 - **depends on:** NT-046 (indicators registry); NT-053 (the window-free plan: the input path and the indicator forms may change; D-032)
@@ -1413,6 +1414,18 @@ changes).
 - **why:** B_model_indicators.md 5.2 and 7 item 14: inputs are dollars / one scale per block, so a 16.0 -> 14.1 bps volatility reads as $105.6 -> $148.4 a year later; the variance head must learn the price level.
 - **acceptance:** (1) An input-normalisation switch: each window divided by its own realised sigma, sigma fed as a separate feature; the target stays in dollars (D-022) and is rescaled at the output (test: served predictions in dollars match the old path's units). (2) Default unchanged (golden run). (3) An A/B through NT-032 on CRPSS and direction.
 - **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-108
+
+**Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/training/reset.py, tests/
+- **depends on:** none
+- **why:** found by the NT-037 implementer (2026-09-30): `reset_stateful_rngs` derives each stochastic layer's seed from its position in `model.submodules`; adding tf.keras Metric counters to CustomTrainModel (a Metric is a tf.Module) shifted every later layer's seed and changed SEEDED_STOCHASTIC_LAYERS screen numbers (caught by tests/test_screen.py, e.g. lambda_t_perp 1.29 vs 0.89). NT-037 at 541dee0 did not avoid it after all: its 18 contrib_* Mean metrics still shift the positions (QA: model.submodules 168 -> 186 entries); NT-037's repair round 1 must keep the positions unchanged. The mechanism stays fragile to any future Metric, Layer or nested Model attribute.
+- **acceptance:** (1) Seeds derive from a stable identity (the layer's name or path), not its enumeration position (test: adding an unrelated tf.Module attribute to the model leaves every stochastic layer's derived seed unchanged). (2) A golden screen record made before the change is reproduced or the difference is documented and a new record committed (the derived seeds change once). (3) Fast and slow suites, ruff.
+- **source:** NT-037 implementer report (nt-037 541dee0)
 
 ## Done log
 

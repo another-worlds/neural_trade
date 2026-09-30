@@ -19,6 +19,26 @@ import sys
 import numpy as np
 
 
+def set_arithmetic_rewrite(config) -> bool:
+    """Set Grappler's arithmetic rewrite EXPLICITLY for ``config``'s model (NT-047); returns it.
+
+    At the multi-series (OHLCV) input the graph is large enough that the rewrite reassociates
+    float sums non-reproducibly between graph builds (hash-ordered; measured 1-ulp weight noise
+    that training amplifies to ~1e-5 relative metric noise between same-seed runs in one
+    process), so it is OFF for those configs. Close-only configs run with it ON, TensorFlow's
+    default, so every pre-NT-047 number (scripts/golden_run.py records included) stays
+    bit-for-bit. The option is process-wide and applies to graphs traced afterwards, so every
+    training run (trainer.train_and_evaluate) and every served prediction (Predictor.predict)
+    sets it for its own config: nothing is left over from an earlier run in the same process
+    (tests/test_reproducibility.py), and a bundle is served with the rewrite it was trained
+    and evaluated with."""
+    import tensorflow as tf
+
+    on = len(getattr(config, "INPUT_SERIES", None) or ["close"]) <= 1
+    tf.config.optimizer.set_experimental_options({"arithmetic_optimization": on})
+    return on
+
+
 def seed_everything(seed: int, *, deterministic: bool = False) -> int:
     seed = int(seed)
     random.seed(seed)

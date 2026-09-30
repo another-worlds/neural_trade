@@ -73,12 +73,14 @@ def test_prepare_datasets_scaler_on_train_only_and_window_relative_input(tf, tin
     # NT-028: the processor no longer writes the target scaler (nothing loads SCALER_PATH)
     assert not (tmp_path / "scaler.joblib").exists() and not (tmp_path / "scaler_input.joblib").exists()
 
-    # window-relative input: last element is the anchor close (0), and the raw window is recoverable
-    np.testing.assert_allclose(X_tr[:, -1], 0.0, atol=1e-6)
+    # window-relative input: the CLOSE channel's last element is the anchor close (0), and
+    # the raw close window is recoverable (X_tr is [N, L, 5] at the NT-047 OHLCV default)
+    Xc_tr = X_tr[..., cfg.close_channel()] if X_tr.ndim == 3 else X_tr
+    np.testing.assert_allclose(Xc_tr[:, -1], 0.0, atol=1e-6)
     X_all = dp.make_sequences_with_extended_trends(close, cfg.LOOKBACK)[0]
     X_all = X_all[-cfg.MAX_SEQUENCE_COUNT:] if X_all.shape[0] > cfg.MAX_SEQUENCE_COUNT else X_all
     raw_train = X_all[f.train]
-    np.testing.assert_allclose(X_tr * dp.input_scale + lc_tr[:, None], raw_train, atol=2.0)
+    np.testing.assert_allclose(Xc_tr * dp.input_scale + lc_tr[:, None], raw_train, atol=2.0)
     # level invariance: the same window shifted by a constant normalises identically
     shifted = ((raw_train + 5_000.0) - (lc_tr[:, None] + 5_000.0)) / dp.input_scale
-    np.testing.assert_allclose(shifted, X_tr, atol=1e-3)
+    np.testing.assert_allclose(shifted, Xc_tr, atol=1e-3)

@@ -224,6 +224,13 @@ class Config:
     CSV_PATH: str = _f("binance_btcusdt_1min_ccxt.csv", "data", "OHLCV CSV (timestamp/datetime, open..volume)",
                        unit="path")
     LOOKBACK: int = _f(60, "data", "input window length in bars", unit="bars", ge=1, le=1440, step=1)
+    INPUT_SERIES: List[str] = _f(["open", "high", "low", "close", "volume"], "data",
+                                 "which bar series each input window carries, in this fixed order (a "
+                                 "subsequence of open, high, low, close, volume that includes 'close'; "
+                                 "['close'] is the pre-NT-047 close-only input, and the model input is then "
+                                 "[B, LOOKBACK] instead of [B, LOOKBACK, len(INPUT_SERIES)]); OHLC channels "
+                                 "are window-relative, volume has its own train-fit scale "
+                                 "(neural_trade.data.scaling)", unit="name")
     WINDOW_STEP: int = _f(1, "data", "stride between consecutive training windows", unit="bars", ge=1, step=1)
     RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars); not tunable until "
                                "NT-040, because the annualisation ignores the bar size until then",
@@ -394,10 +401,26 @@ class Config:
                                 unit="bars", ge=1, step=1)
     BB_PERIODS: List[int] = _f([10, 20, 25], "indicators", "initial periods (bars) of the learnable Bollinger bands",
                                unit="bars", ge=1, step=1)
-    INDICATOR_FAMILIES: Dict[str, List] = _f({}, "indicators", "instances of further Indicators-registry families "
+    INDICATOR_FAMILIES: Dict[str, List] = _f({
+        "atr": [7, 14, 28],
+        "stoch": [{"k_period": 14, "d_period": 3}, {"k_period": 9, "d_period": 3},
+                  {"k_period": 21, "d_period": 5}],
+        "willr": [7, 14, 28],
+        "keltner": [{"period": 20, "atr_period": 10}, {"period": 10, "atr_period": 10},
+                    {"period": 40, "atr_period": 20}],
+        "obv": [10, 20, 40],
+        "vwap": [10, 20, 40],
+        "mfi": [7, 14, 28],
+        "adx": [7, 14, 28],
+        "cci": [10, 20, 40],
+        "donchian": [10, 20, 55],
+    }, "indicators", "instances of further Indicators-registry families "
                                              "(family name -> list of instances, each a starting period in bars or a "
                                              "dict of parameter periods); naming ma / macd / rsi / bb here overrides "
-                                             "the four fields above (neural_trade.indicators.indicator_instances)",
+                                             "the four fields above (neural_trade.indicators.indicator_instances); "
+                                             "the default lists the ten OHLCV families of D-031 with 3 instances "
+                                             "each ({} = the four close-only families alone); families that read "
+                                             "high / low / volume need those series in INPUT_SERIES",
                                              unit="mapping", ge=1)
     ADAPTIVE_INDICATORS: bool = _f(True, "indicators", "shift each learned period per window through the meta_adjust "
                                    "network; off, every applied period in every window equals the family's learned "
@@ -631,6 +654,12 @@ class Config:
             bad(f"PNL_SIGMA_SOURCE must be 'realized_vol' or 'model', got {self.PNL_SIGMA_SOURCE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):
             bad(f"EWMA_IMPL must be 'matrix' or 'scan', got {self.EWMA_IMPL!r}")
+        canonical = ("open", "high", "low", "close", "volume")
+        series = list(self.INPUT_SERIES or [])
+        if "close" not in series:
+            bad(f"INPUT_SERIES must include 'close', got {series}")
+        if [s for s in canonical if s in series] != series or len(set(series)) != len(series):
+            bad(f"INPUT_SERIES must be a subsequence of {list(canonical)} without repeats, got {series}")
         if not (0 < self.MOMENTUM_CLIP_MIN < (self.MOMENTUM_CLIP_MAX or self.LOOKBACK)):
             bad("need 0 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX")
         negative = [k for k, v in self.lambda_weights().items() if v < 0]
@@ -662,6 +691,14 @@ class Config:
     @property
     def effective_var_floor(self) -> float:
         return self.VAR_FLOOR
+
+    def input_series(self) -> Tuple[str, ...]:
+        """The bar series of each input window (NT-047); ``('close',)`` = the legacy 2-D input."""
+        return tuple(self.INPUT_SERIES or ["close"])
+
+    def close_channel(self) -> int:
+        """Index of the close channel inside a multi-series input window."""
+        return self.input_series().index("close")
 
     def lambda_weights(self) -> Dict[str, float]:
         """Every ``LAMBDA_*`` loss weight (the thresholds LAMBDA_VAC / RHO_MAX included as-is)."""

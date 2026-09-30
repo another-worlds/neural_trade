@@ -1,8 +1,10 @@
-"""Predictor: raw closes in, per-horizon forecasts out (plan section B5).
+"""Predictor: raw bars in, per-horizon forecasts out (plan section B5).
 
     p = Predictor.from_artifacts("runs/<id>/artifacts")
-    p.predict_last(close_series)        # the newest window -> one Prediction
-    p.predict(windows)                   # [N, LOOKBACK] raw close windows -> PredictionBatch
+    p.predict_last(close_series_or_df)   # the newest window -> one Prediction
+    p.predict(windows)                   # raw input windows -> PredictionBatch:
+                                         #   [N, LOOKBACK] close windows (INPUT_SERIES=['close'])
+                                         #   [N, LOOKBACK, C] OHLCV windows otherwise (NT-047)
     p.predict_frame(ohlcv_dataframe)     # every complete window of a raw frame -> DataFrame
 
 For each horizon: the forecast price change in dollars, P(up) from the direction head (raw and
@@ -67,6 +69,18 @@ class PredictionBatch:
         return pd.DataFrame(cols, index=index)
 
 
+def _tail_batch(b: PredictionBatch) -> PredictionBatch:
+    """The last window's PredictionBatch (predict_last on a DataFrame)."""
+    def take(d):
+        return {h: v[-1:] for h, v in d.items()}
+
+    iv = {h: (lo[-1:], hi[-1:]) for h, (lo, hi) in b.interval.items()}
+    return PredictionBatch(take(b.delta), take(b.direction_prob),
+                           take(b.direction_prob_calibrated), take(b.sigma),
+                           take(b.variance_scaled), take(b.gauss_up_prob), iv,
+                           b.last_close[-1:], b.horizon_steps)
+
+
 class Predictor:
     def __init__(self, bundle: ArtifactBundle, model=None):
         self.bundle = bundle
@@ -80,19 +94,32 @@ class Predictor:
     # ------------------------------------------------------------------ core
     def predict(self, windows, last_close: Optional[np.ndarray] = None, alpha: float = 0.1,
                 batch_size: Optional[int] = None, calibrated: bool = True) -> PredictionBatch:
-        """Forecast from raw close windows ``[N, LOOKBACK]`` (the last column is the last close).
+        """Forecast from raw input windows: ``[N, LOOKBACK]`` close windows when the bundle's
+        ``Config.INPUT_SERIES`` is close-only, otherwise ``[N, LOOKBACK, len(INPUT_SERIES)]``
+        raw OHLCV windows (NT-047; one window may drop its leading batch axis). Each window
+        ends at the decision bar; the default ``last_close`` is the close channel's last bar.
 
         ``calibrated=False`` returns the raw heads (no temperature, delta shrinkage or intervals),
         e.g. to refit the calibration pipeline."""
         import tensorflow as tf
 
+        series = tuple(getattr(self.config, "INPUT_SERIES", None) or ["close"])
         X = np.asarray(windows, dtype="float32")
-        if X.ndim == 1:
-            X = X[None, :]
-        if X.shape[1] != self.config.LOOKBACK:
-            raise ValueError(f"windows must have {self.config.LOOKBACK} bars, got {X.shape[1]}")
-        lc = np.asarray(X[:, -1] if last_close is None else last_close, dtype="float32").reshape(-1)
+        want_rank = 2 if len(series) == 1 else 3
+        if X.ndim == want_rank - 1:
+            X = X[None, ...]
+        expect = (self.config.LOOKBACK,) if len(series) == 1 else (self.config.LOOKBACK, len(series))
+        if X.ndim != want_rank or X.shape[1:] != expect:
+            raise ValueError(f"windows must be [N, {', '.join(str(d) for d in expect)}] for "
+                             f"INPUT_SERIES {list(series)}, got {X.shape}")
+        X_close = X if X.ndim == 2 else np.ascontiguousarray(X[..., series.index("close")])
+        lc = np.asarray(X_close[:, -1] if last_close is None else last_close,
+                        dtype="float32").reshape(-1)
         Xn = self.bundle.normalizer.transform(X, lc)
+        # the Grappler arithmetic rewrite the bundle was trained and evaluated with (NT-047)
+        from neural_trade.utils.seeding import set_arithmetic_rewrite
+
+        set_arithmetic_rewrite(self.config)
         # Same batch size as training by default: GEMM tiling differs by batch shape, and matching it
         # makes served predictions bit-identical to the ones training reported.
         bs = int(batch_size or self.config.BATCH_SIZE)
@@ -102,7 +129,8 @@ class Predictor:
         prob_cal = {h: preds["direction_prob"][h] for h in HORIZONS}
         intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
         if calibrated and self.bundle.calibration_pipeline is not None:
-            cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X)
+            # conformal realized vol reads raw CLOSE windows in every input mode
+            cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X_close)
             prob_cal, intervals = cal["direction_prob"], cal["intervals"]
             preds = dict(preds, delta=cal["delta"])  # delta shrinkage (identity when not fitted)
         sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in HORIZONS}
@@ -113,9 +141,21 @@ class Predictor:
                                gauss, intervals, lc, tuple(self.config.HORIZON_STEPS))
 
     def predict_last(self, close, alpha: float = 0.1) -> Dict[str, dict]:
-        """Forecast from the newest ``LOOKBACK`` closes of ``close``; one dict per horizon."""
-        close = np.asarray(close, dtype="float32").reshape(-1)
-        batch = self.predict(close[-self.config.LOOKBACK:][None, :], alpha=alpha)
+        """Forecast from the newest complete window; one dict per horizon.
+
+        ``close`` is the raw close series (close-only bundles), or - with a multi-series
+        ``Config.INPUT_SERIES`` (NT-047) - a raw OHLCV DataFrame, from which the newest
+        window over every configured series is taken (a bare close series cannot fill an
+        OHLCV window)."""
+        if isinstance(close, pd.DataFrame):
+            batch, _df, _anchors = self.predict_windows_frame(close, alpha=alpha)
+            batch = _tail_batch(batch)
+        else:
+            if len(self.config.input_series()) > 1:
+                raise ValueError("this bundle's INPUT_SERIES needs OHLCV input: pass the raw "
+                                 "OHLCV DataFrame to predict_last (or use predict_frame)")
+            close = np.asarray(close, dtype="float32").reshape(-1)
+            batch = self.predict(close[-self.config.LOOKBACK:][None, :], alpha=alpha)
         row = batch.to_frame().iloc[0]
         return {h: {k.split("_", 1)[1]: float(v) for k, v in row.items() if k.startswith(h)} | {
             "horizon_bars": int(steps), "last_close": float(batch.last_close[0])}
@@ -125,28 +165,24 @@ class Predictor:
         """``(PredictionBatch, preprocessed df, anchor rows)`` for every complete window of a raw frame;
         anchor row i of the df is the last bar of window i (for Bars.from_frame)."""
         from neural_trade.data.loaders import validate_ohlcv_frame
-        from neural_trade.data.windowing import make_inference_windows
+        from neural_trade.data.windowing import make_inference_input_windows
         from neural_trade.registries.preprocessors import run_preprocessors
 
         df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config))
-        close = df["Close"].to_numpy(dtype="float32")
-        X, lc, _ = make_inference_windows(close, self.config.LOOKBACK,
-                                          extended_trend_periods=self.config.EXTENDED_TREND_PERIODS)
+        X, lc, _ = make_inference_input_windows(self.config, df)
         start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
-        return self.predict(X, lc, alpha=alpha, batch_size=batch_size), df, np.arange(start - 1, len(close))
+        return self.predict(X, lc, alpha=alpha, batch_size=batch_size), df, np.arange(start - 1, len(df))
 
     def predict_frame(self, frame: pd.DataFrame, alpha: float = 0.1, batch_size: Optional[int] = None) -> pd.DataFrame:
         """``batch_size``: None = the training batch (bit-identical to training); larger (e.g. 4096)
         is much faster on a GPU for bulk scoring and differs only at float32 round-off."""
         """Preprocess a raw OHLCV frame (Config.PREPROCESSORS) and forecast every complete window."""
         from neural_trade.data.loaders import validate_ohlcv_frame
-        from neural_trade.data.windowing import make_inference_windows
+        from neural_trade.data.windowing import make_inference_input_windows
         from neural_trade.registries.preprocessors import run_preprocessors
 
         df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config))
-        close = df["Close"].to_numpy(dtype="float32")
-        X, lc, _ = make_inference_windows(close, self.config.LOOKBACK,
-                                          extended_trend_periods=self.config.EXTENDED_TREND_PERIODS)
+        X, lc, _ = make_inference_input_windows(self.config, df)
         start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
         index = pd.DatetimeIndex(df["timestamp"].iloc[start - 1:].to_numpy(), name="timestamp")
         return self.predict(X, lc, alpha=alpha, batch_size=batch_size).to_frame(index=index)

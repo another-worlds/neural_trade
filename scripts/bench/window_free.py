@@ -145,7 +145,9 @@ def today_layer_pass(close, scale, B, seed=0):
     from neural_trade.core.config import Config
     from neural_trade.models.layers.learnable_indicators import LearnableIndicators
 
-    cfg = Config(CSV_PATH=CSV)
+    # the kit benchmarks the CLOSE-ONLY window layer (18 logits -> 31 channels, a2_layer's
+    # subject); NT-047's OHLCV default is pinned away so the comparison stays like-for-like
+    cfg = Config(CSV_PATH=CSV, INPUT_SERIES=["close"], INDICATOR_FAMILIES={})
     rng = np.random.default_rng(seed)
     idx = rng.integers(100, len(close), size=B)
     X = np.stack([(close[i - 60:i] - close[i - 1]) / scale for i in idx]).astype(np.float32)

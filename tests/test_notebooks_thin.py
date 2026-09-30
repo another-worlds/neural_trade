@@ -48,6 +48,16 @@ def test_parameters_come_first_and_no_saved_output_is_an_error(path):
     assert not errors, f"{path.name} was saved with an error output: {errors[0].get('ename')}"
 
 
+def _kernel_pythonpath() -> str:
+    """PYTHONPATH that makes the kernel import THIS checkout's src/ (as scripts/notebooks/execute.py
+    does): the editable install points at the main checkout, so without it a worktree's slow test
+    would silently execute another checkout's code."""
+    import os
+
+    src = str(REPO / "src")
+    return os.pathsep.join([src] + [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and p != src])
+
+
 def _run(path, params, tmp_path):
     import nbformat
     from nbclient import NotebookClient
@@ -63,6 +73,7 @@ def _run(path, params, tmp_path):
 @pytest.mark.notebook
 def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "-1")
+    monkeypatch.setenv("PYTHONPATH", _kernel_pythonpath())
     csv = tmp_path / "bars.csv"
     synthetic_bars.to_csv(csv, index=False)
     runs = tmp_path / "runs"
@@ -126,3 +137,10 @@ def test_saved_training_dashboards_mark_each_chance_band_edge_in_its_horizon_col
         if rects:   # a run with too small a validation block has no chance range and no such phrase
             assert any("dashed = each horizon's limit, in its colour" in ln for ln in lines), (name, cell, lines[-2:])
     assert set(found) == {"01_train_and_monitor.ipynb", "04_diagnostics.ipynb"}, found
+
+
+def test_the_notebook_kernel_imports_this_checkouts_src():
+    import os
+
+    first = _kernel_pythonpath().split(os.pathsep)[0]
+    assert Path(first) == REPO / "src"

@@ -41,15 +41,34 @@ def _direction_head(config, tower, skip_features, name, bias_init):
 
 
 def build_gru_attention(config) -> tf.keras.Model:
-    """Build the gru_attention architecture for ``config`` (LOOKBACK, indicators, T_PERP_DIM...)."""
-    inp = layers.Input(shape=(config.LOOKBACK,), name='close_sequence')
+    """Build the gru_attention architecture for ``config`` (LOOKBACK, indicators, T_PERP_DIM...).
 
-    # Compute meta_adjust from raw input stats
-    inp_resh = layers.Reshape((config.LOOKBACK, 1))(inp)  # [B, LOOKBACK, 1] for pooling
-    meta_inp = layers.Concatenate()([
-        layers.GlobalAveragePooling1D()(inp_resh),
-        layers.GlobalMaxPooling1D()(inp_resh)
-    ])
+    The input is the close sequence ``[B, LOOKBACK]`` (``Config.INPUT_SERIES = ['close']``,
+    the pre-NT-047 graph, kept bit-for-bit) or the multi-series window
+    ``[B, LOOKBACK, len(INPUT_SERIES)]`` (NT-047). The close-derived paths (meta pooling in
+    close mode, energy gate, regime gate, trailing-return skip) keep their semantics: in
+    multi-series mode they read the close channel; only the meta_adjust pooling reads every
+    channel (window statistics of the whole input)."""
+    series = tuple(getattr(config, 'INPUT_SERIES', None) or ['close'])
+    if len(series) > 1:
+        inp = layers.Input(shape=(config.LOOKBACK, len(series)), name='input_window')
+        _ci = series.index('close')
+        close_seq = layers.Lambda(lambda t: t[:, :, _ci], name='close_channel')(inp)
+        # meta_adjust reads avg/max pooled stats of EVERY input channel
+        meta_inp = layers.Concatenate()([
+            layers.GlobalAveragePooling1D()(inp),
+            layers.GlobalMaxPooling1D()(inp)
+        ])
+    else:
+        inp = layers.Input(shape=(config.LOOKBACK,), name='close_sequence')
+        close_seq = inp
+
+        # Compute meta_adjust from raw input stats
+        inp_resh = layers.Reshape((config.LOOKBACK, 1))(inp)  # [B, LOOKBACK, 1] for pooling
+        meta_inp = layers.Concatenate()([
+            layers.GlobalAveragePooling1D()(inp_resh),
+            layers.GlobalMaxPooling1D()(inp_resh)
+        ])
     num_logits = num_learnable_logits(config)  # one meta-adjust column per learnable period
     meta_adjust = layers.Dense(num_logits, activation='tanh')(meta_inp)
 
@@ -79,7 +98,7 @@ def build_gru_attention(config) -> tf.keras.Model:
 
     # === ENERGY GATE - k(E) adaptive kernel weighting (neural_trade.models.layers.EnergyGate) ===
     # High local volatility (energy) -> short kernel dominates; low -> long kernel.
-    x = Layers.for_role(config, 'energy_gate', n_branches=3, name='energy_gate')([inp, x_short, x_med, x_long])  # [B, LOOKBACK, 16]
+    x = Layers.for_role(config, 'energy_gate', n_branches=3, name='energy_gate')([close_seq, x_short, x_med, x_long])  # [B, LOOKBACK, 16]
     x = layers.LayerNormalization()(x)
 
     # Positional encoding
@@ -144,7 +163,7 @@ def build_gru_attention(config) -> tf.keras.Model:
     #   macro news shocks), making the current visible projection insufficient.
     # Regime gate ≈ 0.0 = "black hole" state: coherent trend, info is observable.
     # Computed from local price std (volatility level) fused with global context.
-    _inp_for_gate = layers.Reshape((config.LOOKBACK, 1))(inp)
+    _inp_for_gate = layers.Reshape((config.LOOKBACK, 1))(close_seq)
     _gate_vol = layers.GlobalAveragePooling1D()(
         layers.Lambda(lambda t: tf.abs(t - tf.reduce_mean(t, axis=1, keepdims=True)))(
             _inp_for_gate)
@@ -178,7 +197,7 @@ def build_gru_attention(config) -> tf.keras.Model:
     # the deep path alone did not recover.
     skip_features = None
     if bool(getattr(config, 'DIRECTION_SKIP', False)):
-        skip_features = layers.Lambda(_trailing_return_features, name='direction_skip_features')(inp)
+        skip_features = layers.Lambda(_trailing_return_features, name='direction_skip_features')(close_seq)
 
     # ---- TOWER 0 (1-minute horizon) ----
     tower_h0 = layers.Dense(16, activation='gelu',

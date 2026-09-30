@@ -99,6 +99,7 @@ class ArtifactBundle:
         if meta.get("format_version", 0) > FORMAT_VERSION:
             raise ValueError(f"artifact format {meta['format_version']} is newer than this code ({FORMAT_VERSION})")
         config = Config.from_yaml(d / "config.yaml")
+        config = _pin_legacy_input(config, d / "config.yaml")
         calib = None
         if meta.get("has_calibration") and (d / "calibration").is_dir():
             from neural_trade.calibration import CalibrationPipeline
@@ -117,6 +118,26 @@ class ArtifactBundle:
             raise FileNotFoundError("this bundle has no weights.h5")
         model.load_weights(str(self.weights_path))
         return model
+
+
+def _pin_legacy_input(config: Config, yaml_path: Path) -> Config:
+    """Keep a bundle written before NT-047 on the model it was trained as.
+
+    Such a bundle's config.yaml has no ``INPUT_SERIES`` key (close-only input) and, before
+    NT-046, no ``INDICATOR_FAMILIES`` key either; the NT-047 defaults of those fields
+    (OHLCV input, fourteen families) would otherwise build a different model that its
+    weights do not fit. A missing key is pinned to its pre-NT-047 value; a key the bundle
+    does record is kept as recorded. The keys are read from the parsed YAML, not by a text
+    search (a comment or a doc string could name them)."""
+    import yaml
+
+    keys = set((yaml.safe_load(Path(yaml_path).read_text(encoding="utf-8")) or {}).keys())
+    pins = {}
+    if "INPUT_SERIES" not in keys:
+        pins["INPUT_SERIES"] = ["close"]
+        if "INDICATOR_FAMILIES" not in keys:
+            pins["INDICATOR_FAMILIES"] = {}
+    return config.override(**pins) if pins else config
 
 
 def _var_scale(predictions) -> Optional[float]:

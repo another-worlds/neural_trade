@@ -55,7 +55,7 @@ def test_three_steps_keep_weights_finite_and_val_loss_moves(tf, tiny_config, tmp
     layer = model._indicator_layer
     assert layer is not None, "indicator layer not located; gradient routing would silently degrade"
     before_params = layer.get_learned_parameters()
-    assert len(before_params) == 18 and all(np.isfinite(v) for v in before_params.values())
+    assert len(before_params) == 54 and all(np.isfinite(v) for v in before_params.values())  # 14 families x 3 (NT-047)
 
     before = model.evaluate(val_ds, verbose=0, return_dict=True)["loss"]
     assert np.isfinite(before)

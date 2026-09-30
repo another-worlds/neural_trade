@@ -21,7 +21,8 @@ class Indicators(BaseRegistry):
     registry = {}
     strict = True
     default = None  # a config always names its families; there is no 'default family'
-    discovery_modules: ClassVar[Tuple[str, ...]] = ("neural_trade.indicators.families",)
+    discovery_modules: ClassVar[Tuple[str, ...]] = ("neural_trade.indicators.families",
+                                                    "neural_trade.indicators.families_ohlcv")
 
     @classmethod
     def validate_component(cls, component: Any) -> bool:
