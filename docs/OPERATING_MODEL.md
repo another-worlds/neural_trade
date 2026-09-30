@@ -144,9 +144,11 @@ live here only; RUNBOOK, the agent files and the backlog point here.
   guard-rails before any GPU time, and the GPU limit below applies. "A beats B" is judged only by
   the paired comparator (D-025, NT-032): a paired test over (seed, fold) pairs on the same blocks
   plus the pre-registered minimum effect, guard-rails by the same test.
-  - **Verdict folds** (lead's reading of D-025): a verdict's pairs are (seed, fold) over judgement
-    folds that no choice used; the SPEC names them before any GPU time (fold -1 x at least 5 seeds
-    today; more held-out folds from the long history once NT-041 exists); at least 5 pairs.
+  - **Verdict folds** (D-046, superseding the lead's earlier reading of D-025): the unit of
+    inference is the fold. Paired differences are averaged over a fold's seeds and the test runs over
+    at least 5 distinct judgement folds that no choice used, named in the SPEC before any GPU time
+    (the long history has 13 usable folds). Seeds on one fold share its sampling noise, so one fold x
+    several seeds cannot give a verdict.
   - **Exception:** a physics-term ablation (NT-006) may carry one condition per term plus the
     family (D-003) instead of at most three variants; its GPU time still needs the owner.
   - The v1 physics ablation stays the record under its own criteria (D-003, D-025). A negative or

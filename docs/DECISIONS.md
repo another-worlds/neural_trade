@@ -38,7 +38,7 @@ that extend or partly replace an entry.
 | D-022 | Generality designed in; only the reference setup tested in the MVP | owner (24/7 market, N = 3 scaling: lead's reading) | |
 | D-023 | Experiment engine first; a control-panel notebook; quick and Optuna sweeps | owner | D-024 |
 | D-024 | GPU use for sweeps | owner (A/B studies keep the old limit, one-night cap: lead's reading) | |
-| D-025 | Verdict rule: paired test plus a pre-registered minimum effect | owner (verdict folds: lead's reading) | |
+| D-025 | Verdict rule: paired test plus a pre-registered minimum effect | owner (verdict folds: lead's reading) | D-046 |
 | D-026 | Gradient stability: invariants, per-run health, stress harness, config guard | owner | |
 | D-027 | Indicators extend through a registry; learned indicators on price first; D-014 on every figure | owner | D-031 |
 | D-028 | Notebooks persist and evolve | owner | |
@@ -59,6 +59,7 @@ that extend or partly replace an entry.
 | D-043 | Model split: Opus for the lead, P0/P1 QA and research; Sonnet for implementer, experimenter and P2/P3 QA | owner (the split: lead's proposal) | |
 | D-044 | Trading costs are 0; no tick order-book data | owner | |
 | D-045 | The maths report's 22 recommendations are implemented by a staged plan: measure, prune, reweigh, rebuild, generalise | owner (the plan: lead's) | |
+| D-046 | Verdicts are inferred over folds, at least 5 judgement folds; one fold x seeds is not enough | lead | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -556,3 +557,14 @@ that extend or partly replace an entry.
   GPU-hours, including the final 360-day confirmation (about 3.5 GPU-hours, an estimate).
 - **Consequence:** NT-096 to NT-107; amendments to NT-037, NT-038, NT-041.
 
+## D-046 Verdicts are inferred over folds: at least 5 judgement folds (lead, 2026-09-30)
+- **Context:** D-025's verdict-fold reading (lead's) was "fold -1 x at least 5 seeds today, at least 5 pairs". QA of
+  NT-032 simulated that design with the block noise shared by every seed on the fold: the false-'beats' rate was
+  0.069 / 0.146 / 0.314 at minimum effects 0.01 / 0.005 / 0, against the nominal 0.05; with 5 folds x 1 seed it was
+  0.000 (QA report on nt-032 2aef6ca; scripts D:/nt_qa/nt032_sim.py).
+- **Decision:** supersedes the lead's reading in D-025. The fold is the unit of inference: the paired differences are
+  averaged over each fold's seeds and the test runs over at least 5 distinct judgement folds that no choice used, named
+  in the SPEC before any GPU time. Seeds still reduce the within-fold noise. The long history has 13 usable folds
+  (long_360d_stab meta, n_usable_folds 13); a study places its judgement folds after every fold its choices used (D-034).
+- **Consequence:** NT-032 (repair round 1), OPERATING_MODEL "Sweeps and pre-registered studies"; every A/B of D-045
+  (NT-097, NT-099-NT-107, NT-039) is designed with at least 5 judgement folds.
