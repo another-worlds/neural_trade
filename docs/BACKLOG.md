@@ -126,6 +126,7 @@ changes).
 | [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
 | [NT-092](#nt-092) | P1 | feature | implementer | done | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
 | [NT-093](#nt-093) | P2 | bug | implementer | todo | Identity follow-ups: notebook 08 launch guard trusts the recorded hash; screen trial keys moved once; config_identity docs |
+| [NT-094](#nt-094) | P1 | feature | implementer | in-progress | Trading costs default to 0 (D-044) |
 
 ## Items
 
@@ -1230,6 +1231,17 @@ changes).
 - **why:** QA of NT-083 (2026-09-30): (1) longrun._cells_of_spec still compares the recorded meta.json config_hash, so notebook 08's "already done" guard no longer fires (micro_l2 shows 0 of 15 done) and a relaunch starts a runner that then skips every cell (no retraining, a wasted launch). (2) The new identity moved every recorded screen trial_key (0 of 960 match in runs/screens/l1_*): re-launching a finished screen would re-run all trials and append duplicates; one-time, later field additions no longer move keys. (3) By design a new field whose default changes behaviour leaves old cells marked done, and a removed or tightened field makes from_yaml fail so old cells rerun: undocumented.
 - **acceptance:** (1) _cells_of_spec uses config_hash_of_dir (test: an old cell with a stale recorded hash counts as done); (2) screen resume recognises finished rows by recomputing the identity from each row's config diff (or a documented one-time note plus a refusal to append duplicates) (test); (3) config_identity docstring and RUNBOOK state both caveats.
 - **source:** QA of NT-083, 2026-09-30
+
+### NT-094
+
+**Trading costs default to 0 (D-044)**
+
+- **status:** in-progress (implementer, Sonnet, branch nt-094, 2026-09-30)
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/strategy/ (BacktestConfig, cost-aware strategies), src/neural_trade/core/config.py (PNL_COST_BPS), configs/, README, RUNBOOK, docs/VISION.md (cost wording), tests/
+- **why:** owner decision D-044 (2026-09-30): "издержки делай 0" (make the costs 0).
+- **acceptance:** every default trading cost is 0 (fee, half-spread, slippage, the cost-aware strategies' cost, PNL_COST_BPS), the cost fields stay settable; tests pinning cost arithmetic pass explicit costs; docs and VISION wording updated; golden run bit-for-bit; fast suite, ruff, TESTING_DOCUMENTATION, config reference.
+- **source:** D-044
 
 ## Done log
 

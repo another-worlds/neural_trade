@@ -1,0 +1,26 @@
+# Zero-cost status (D-044, owner 2026-09-30: "costs 0"): every stored engine cell re-scored with fee, half-spread
+# and slippage all 0, and the cost-aware strategies' own cost 0. No retraining.
+#   neural-trade scenario rescore <scenario> --study configs/strategy_studies/zero_cost_status.yaml --random-seeds 20
+schema_version: 1
+name: zero_cost_status
+description: "D-044 status: the main strategies at zero trading costs."
+entries:
+  - id: cq
+    strategy: calibrated_quantile
+    backtest: {fee_bps: 0.0, half_spread_bps: 0.0, slippage_bps: 0.0}
+    grid: {entry_quantile: [0.9, 0.95, 0.99]}
+  - id: ec0
+    strategy: edge_over_cost
+    params: {cost: 0.0}
+    backtest: {fee_bps: 0.0, half_spread_bps: 0.0, slippage_bps: 0.0}
+  - id: nk0
+    strategy: net_edge_kelly
+    params: {cost: 0.0}
+    backtest: {fee_bps: 0.0, half_spread_bps: 0.0, slippage_bps: 0.0}
+  - id: vt
+    strategy: vol_target
+    backtest: {fee_bps: 0.0, half_spread_bps: 0.0, slippage_bps: 0.0}
+  - id: gt
+    strategy: gated_ta
+    params: {primary: ma_cross, q: 0.8}
+    backtest: {fee_bps: 0.0, half_spread_bps: 0.0, slippage_bps: 0.0}
