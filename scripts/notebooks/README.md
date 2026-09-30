@@ -4,7 +4,7 @@ The notebooks in `notebooks/` are **generated** by `build.py`, **executed in pla
 defaults, and **committed with their outputs** (the outputs of the last real run), so they can be read
 without a kernel. The scripts here are the only way to change them.
 
-Notebooks: `00_data_and_splits`, `01_train_and_monitor` (trains a run), `02_backtest`, `03_signals_and_trades`, `04_diagnostics`, `05_compare_runs`, `07_discovered_indicators` (the learned indicators on price against their textbook periods; like 02-05 it reads the newest run), `08_long_run` (launches and tracks the 360-day run of `configs/scenarios/long_360d.yaml`, D-040; with `LAUNCH = False`, the default, executing it starts nothing and only shows the run's state, so the routine may execute it at any time; re-run its monitor cell to refresh).
+Notebooks: `00_data_and_splits`, `01_train_and_monitor` (trains a run), `02_backtest`, `03_signals_and_trades`, `04_diagnostics`, `05_compare_runs`, `07_discovered_indicators` (the learned indicators on price against their textbook periods; like 02-05 it reads the newest run), `08_long_run` (launches and tracks the 360-day run of `configs/scenarios/long_360d.yaml`, D-040; with `LAUNCH = False`, the default, executing it starts nothing and only shows the run's state, so the routine may execute it at any time; re-run its monitor cell to refresh), `09_candidate_run` (one saved run's summary, training record, fit evaluation and backtest, read from its own saved files - config, metrics, evaluation report, saved prediction blocks - so it needs neither the training CSV nor a fresh inference pass; the default `RUN_DIR` is candidate C1, `configs/candidates/README.md`).
 
 | Script | What it does |
 | --- | --- |
@@ -26,7 +26,7 @@ works on all of them.
 ## The workflow
 
 1. **Edit `scripts/notebooks/build.py`**, in the cell lists (`data`, `train`, `backtest`, `signals_nb`,
-   `diag`, `compare`, `discovered`, `long_run`). Keep the cells thin: put logic in `neural_trade` (tested there) and call it from
+   `diag`, `compare`, `discovered`, `long_run`, `candidate_run`). Keep the cells thin: put logic in `neural_trade` (tested there) and call it from
    a cell. No `def`, `class` or `lambda` in a cell (`tests/test_notebooks_thin.py`). The first code cell
    of each notebook has the tag `parameters`.
 2. **Build** only the notebooks you changed. A build writes the notebook without outputs.

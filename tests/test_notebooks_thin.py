@@ -22,7 +22,8 @@ def test_the_notebooks_exist_and_the_old_ones_are_gone():
     assert [p.name for p in NOTEBOOKS] == ["00_data_and_splits.ipynb", "01_train_and_monitor.ipynb",
                                            "02_backtest.ipynb", "03_signals_and_trades.ipynb",
                                            "04_diagnostics.ipynb", "05_compare_runs.ipynb",
-                                           "07_discovered_indicators.ipynb", "08_long_run.ipynb"]
+                                           "07_discovered_indicators.ipynb", "08_long_run.ipynb",
+                                           "09_candidate_run.ipynb"]
     for old in ("inference.ipynb", "trade.ipynb", "diagnostics.ipynb", "cfg.ipynb"):
         assert not (REPO / old).exists(), old
 
