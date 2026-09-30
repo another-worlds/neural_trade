@@ -6,7 +6,7 @@ every hypothesis, its method, cost, evidence path and result: [LOG.md](LOG.md).
 
 ## Verdict
 
-**The target is not reached, and on the information available to this project it is not reachable.** Twenty-one
+**The target is not reached, and on the information available to this project it is not reachable.** Twenty-two
 lines of attack were tested with committed evidence. Directional predictability of BTC/USDT from 1-minute price,
 volume, spot order flow and futures signals peaks at AUC about 0.52-0.54 (51-53% of calls right; 54-56% on the
 most confident tenth), at horizons from 10 minutes to 5 hours. The neural network never beats a logistic
@@ -22,6 +22,7 @@ variant).
 | Inputs | OHLCV + 14 learnable indicator families (NT-047) | no gain over close-only |
 | Labels and objective | cost-sensitive labels (E1), net-P&L objective (E2, NT-087), triple-barrier labels (E3 bar) | all below or at the logistic baseline |
 | Maths and hyperparameters | 960-trial screen (NT-088/NT-092), level 2 on 5 configurations | maths stable; no configuration recovers direction |
+| The target read as selective trading | 60% net winning trades on the most confident setups, >= 300 trades, drawdown < 5% (held-out 2025) | top 1%: 53-55% gross wins, 22-36% net, -44..-62% |
 | Conditions | hour of day, volatility and volume regimes, after large moves | post-shock reversal: hit 54.2%, z 4.1 out of sample, but gross edge -0.4 bps |
 | New information (evidence for owner question 8) | spot taker-buy order flow; futures basis, futures flow, futures-spot lead; futures order-book depth (+-1-5%, minute snapshots) | spot flow +0.010 AUC (z 3.2) at 15 min; futures and depth add nothing; best hit on all bars 53% (1 min, a 2 bps move) |
 

@@ -1,0 +1,29 @@
+{
+  "cost_round_trip": 0.0026,
+  "rows": [
+    {
+      "H": 60,
+      "valid_threshold_found": false,
+      "note": "no threshold reached 60% net wins with >= 60 VALID trades; TEST shown at the 99th pct",
+      "threshold_quantile": 0.99,
+      "test_trades": 388,
+      "test_win_net": 0.2165,
+      "test_win_gross": 0.5284,
+      "test_net_pnl_pct": -62.25,
+      "test_max_drawdown_pct": 62.05,
+      "passes": false
+    },
+    {
+      "H": 240,
+      "valid_threshold_found": false,
+      "note": "no threshold reached 60% net wins with >= 60 VALID trades; TEST shown at the 99th pct",
+      "threshold_quantile": 0.99,
+      "test_trades": 280,
+      "test_win_net": 0.3571,
+      "test_win_gross": 0.5464,
+      "test_net_pnl_pct": -44.09,
+      "test_max_drawdown_pct": 46.29,
+      "passes": false
+    }
+  ]
+}
