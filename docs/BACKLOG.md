@@ -79,7 +79,7 @@ changes).
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
-| [NT-047](#nt-047) | P1 | feature | implementer | in-progress | OHLCV input and the new indicator families, all learnable and on by default |
+| [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
 | [NT-048](#nt-048) | P1 | feature | implementer | todo | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
@@ -700,7 +700,7 @@ changes).
 
 **OHLCV input and the new indicator families, all learnable and on by default**
 
-- **status:** in-progress: QA PASS on 72d3838 after repair round 1 (2026-09-30): legacy bundles load and predict as at base (diff 0.0); notebooks 01/04/07 executed on the OHLCV default and check clean; Grappler switch explicit per run (mixed-order golden 0/273 diffs); soft extrema scale-invariant (%K error mean 0.22-0.47, max 3.3 points on real windows); close-only golden bit-for-bit; fast 1007 / slow 15 / ruff. **Merge waits on owner question 7 (STATUS):** the OHLCV default is 1.63x slower per GPU step (0.1735 vs 0.1066 s; CPU 1.60-1.64x), D-018. QA findings: period figures draw only the four original families (18 of 54 periods; folded into NT-048); notebooks 02/03/05 still show the close-only run (re-execute at integration); applied_periods gives a Keras error instead of its own for close windows on a multi-series model (P3, NT-084).
+- **status:** done (2026-10-01): QA PASS on 72d3838 (after repair round 1); merged 7b1a8ae on the owner's answer to question 7 (D-047: OHLCV with all 14 families by default, the 1.6x step cost accepted). Merge resolution: build_windows(close, df) returns the model windows and prepare_datasets_from_windows takes them (NT-088's split), so the screen cache carries them; test_pnl_utility reads the close channel. Fast suite 1156 passed, slow suite 24 passed on the merge.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/data/ (sequence building: OHLCV windows), the indicators package and registry (NT-046), src/neural_trade/models/gru_attention.py, src/neural_trade/core/config.py, src/neural_trade/serving/ (input shape), tests/
 - **depends on:** NT-046 (indicators registry); NT-053 (the window-free plan: the input path and the indicator forms may change; D-032)
@@ -1423,7 +1423,7 @@ changes).
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/training/reset.py, tests/
 - **depends on:** none
-- **why:** found by the NT-037 implementer (2026-09-30): `reset_stateful_rngs` derives each stochastic layer's seed from its position in `model.submodules`; adding tf.keras Metric counters to CustomTrainModel (a Metric is a tf.Module) shifted every later layer's seed and changed SEEDED_STOCHASTIC_LAYERS screen numbers (caught by tests/test_screen.py, e.g. lambda_t_perp 1.29 vs 0.89). NT-037 avoided it with plain Variables; the mechanism stays fragile to any future Metric, Layer or nested Model attribute.
+- **why:** found by the NT-037 implementer (2026-09-30): `reset_stateful_rngs` derives each stochastic layer's seed from its position in `model.submodules`; adding tf.keras Metric counters to CustomTrainModel (a Metric is a tf.Module) shifted every later layer's seed and changed SEEDED_STOCHASTIC_LAYERS screen numbers (caught by tests/test_screen.py, e.g. lambda_t_perp 1.29 vs 0.89). NT-037 at 541dee0 did not avoid it after all: its 18 contrib_* Mean metrics still shift the positions (QA: model.submodules 168 -> 186 entries); NT-037's repair round 1 must keep the positions unchanged. The mechanism stays fragile to any future Metric, Layer or nested Model attribute.
 - **acceptance:** (1) Seeds derive from a stable identity (the layer's name or path), not its enumeration position (test: adding an unrelated tf.Module attribute to the model leaves every stochastic layer's derived seed unchanged). (2) A golden screen record made before the change is reproduced or the difference is documented and a new record committed (the derived seeds change once). (3) Fast and slow suites, ruff.
 - **source:** NT-037 implementer report (nt-037 541dee0)
 
