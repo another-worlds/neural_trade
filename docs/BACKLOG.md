@@ -127,6 +127,7 @@ changes).
 | [NT-092](#nt-092) | P1 | feature | implementer | done | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
 | [NT-093](#nt-093) | P2 | bug | implementer | todo | Identity follow-ups: notebook 08 launch guard trusts the recorded hash; screen trial keys moved once; config_identity docs |
 | [NT-094](#nt-094) | P1 | feature | implementer | done | Trading costs default to 0 (D-044) |
+| [NT-095](#nt-095) | P2 | feature | implementer | done | Notebook 09: the candidate run (training, fit, backtest) |
 
 ## Items
 
@@ -1242,6 +1243,17 @@ changes).
 - **why:** owner decision D-044 (2026-09-30): "издержки делай 0" (make the costs 0).
 - **acceptance:** every default trading cost is 0 (fee, half-spread, slippage, the cost-aware strategies' cost, PNL_COST_BPS), the cost fields stay settable; tests pinning cost arithmetic pass explicit costs; docs and VISION wording updated; golden run bit-for-bit; fast suite, ruff, TESTING_DOCUMENTATION, config reference.
 - **source:** D-044
+
+### NT-095
+
+**Notebook 09: the candidate run (training, fit, backtest)**
+
+- **status:** done (2026-09-30): 228e52d, merged; QA (Sonnet, P2) PASS: build --check and check.py clean (09: 3.9 MB, 8 figures), notebooks 00-08 untouched; the backtest reproduces manifest C1 f-2/s0 exactly (+16.71%, 1,968 trades, 54.7% wins, max DD 4.66%, buy-and-hold -4.85%) and the key-numbers table matches eval_report_dev.json; `max_line_points=None` default byte-identical (02/03 unaffected); logic in notebook/run_report.py (11 tests); fast 1038 / ruff / TESTING_DOCUMENTATION.
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/notebook/run_report.py (new), notebook/backtest_ui.py, visualization/trading_dashboard.py (optional line thinning for the 5 MB limit), scripts/notebooks/build.py, notebooks/09_candidate_run.ipynb, tests/
+- **why:** owner 2026-09-30: "Загрузи прогон с лучшей стратегиией в ноутбук. Я хочу суммаризацию с графиками ее трейна, оценки фита, бэктест" (load the run with the best strategy into a notebook: training, fit evaluation, backtest).
+- **acceptance:** a generated, executed notebook 09 under 5 MB on candidate C1's run (long_360d_stab f-2/s0, calibrated_quantile 0.9, zero cost); its numbers match the manifest and the run's dev report; figure defaults of 02/03 unchanged; logic outside the notebook with tests; suites.
+- **source:** the owner request above; configs/candidates/ (C1)
 
 ## Done log
 
