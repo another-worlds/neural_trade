@@ -298,7 +298,7 @@ select{font:14px var(--body);padding:6px 8px;border-radius:8px;border:1px solid 
     <p class="lede" id="btLede"></p>
   </div>
   <div class="panel">
-    <div class="ctrl"><div class="cap"><b>Price, trades, equity and drawdown</b>, on one time axis. Drag to zoom (double-click resets); ▲ long, ▼ short, filled = winning trade.</div><div class="seg" id="trSeg"><button data-v="all" class="on">all trades</button><button data-v="long">longs</button><button data-v="short">shorts</button><button data-v="none">no markers</button></div></div>
+    <div class="ctrl"><div class="cap"><b>Price, trades, equity and drawdown</b>, on one time axis. Drag to zoom (double-click resets). The line is every 1-minute close, drawn at the end of its bar; a marker is the fill at the next bar's open (the decision is made on the close just before it). ▲ long, ▼ short, filled = winning trade.</div><div class="seg" id="trSeg"><button data-v="all" class="on">all trades</button><button data-v="long">longs</button><button data-v="short">shorts</button><button data-v="none">no markers</button></div></div>
     <div id="bt" class="chart" style="min-height:720px"></div>
   </div>
   <div class="grid2">
@@ -686,6 +686,28 @@ el('hzSeg').addEventListener('click', e=>{ const b=e.target.closest('button'); i
   el('hzSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); drawFit(); });
 
 /* ---------- chapter 6: backtest ---------- */
+// Bar closes drawn at each bar's END (t0 + (i + 1) min; bars are consecutive minutes), so a fill at the next bar's
+// open, drawn at that bar's start, sits on the line up to the open-to-previous-close gap.
+function barEnds(t0, n){ const b=Date.parse(t0+':00Z'), out=new Array(n); for(let i=0;i<n;i++) out[i]=new Date(b+(i+1)*60000).toISOString().slice(0,16); return out; }
+const BT_X = barEnds(BT.t0, BT.close_full.length);
+// On an x zoom, fit each y axis to what is visible (price, equity, drawdown share one x axis).
+function autoY(div, X, series){
+  if (div._autoY) return; div._autoY = true;
+  div.on('plotly_relayout', ev=>{
+    const a = ev['xaxis.range[0]'] || (ev['xaxis.range']&&ev['xaxis.range'][0]), b = ev['xaxis.range[1]'] || (ev['xaxis.range']&&ev['xaxis.range'][1]);
+    if (ev['xaxis.autorange']) { Plotly.relayout(div, Object.fromEntries(series.map(s=>[s.axis+'.autorange', true]))); return; }
+    if (!a || !b) return;
+    const lo = String(a).slice(0,16).replace(' ','T'), hi = String(b).slice(0,16).replace(' ','T');
+    let i0 = X.findIndex(x=>x>=lo), i1 = X.length-1; while (i1>0 && X[i1]>hi) i1--;
+    if (i0<0 || i1<=i0) return;
+    const upd = {};
+    series.forEach(s=>{ let mn=Infinity, mx=-Infinity; (s.ys||[s.y]).forEach(y=>{ for(let i=i0;i<=i1;i++){ const v=y[i]; if(v==null) continue; if(v<mn) mn=v; if(v>mx) mx=v; } });
+      if (mn<Infinity) { const pad=(mx-mn)*0.08 || Math.abs(mx)*0.001 || 0.001; upd[s.axis+'.range']=[mn-pad, mx+pad]; } });
+    Plotly.relayout(div, upd);
+  });
+}
+const BT_BH = BT.close_full.map(c=>10000*c/BT.close_full[0]);
+const BT_DD = (()=>{ let pk=-Infinity; return BT.equity_full.map(v=>{ pk=Math.max(pk,v); return -(1-v/pk); }); })();
 const TD = BT.trades, nT = TD.side.length;
 const longs = TD.side.filter(s=>s>0).length;
 el('btLede').innerHTML = `The dev block ran from ${BT.first.slice(0,10)} to ${BT.last.slice(0,10)}; BTC fell ${pct(S.bh)}. The strategy took ${nT.toLocaleString('en')} trades (${longs} long, ${nT-longs} short), about one every 24 minutes, each held about 8 minutes. It was in the market ${pct0(S.exposure,0)} of the time. It ended at ${pct(S.ret)} with a worst peak-to-trough of ${pct0(S.dd)}. That is the 100th percentile of 100 random strategies with the same frequency.`;
@@ -699,18 +721,19 @@ function drawBacktest(){
     text:ii.map(i=>`${TD.side[i]>0?'LONG':'SHORT'} ${TD.t_entry[i]} → ${TD.t_exit[i]}<br>${TD.ret_bps[i]>0?'+':''}${TD.ret_bps[i]} bps · ${TD.bars[i]} bars · exit ${TD.reason[i]}`),
     hovertemplate:'%{text}<extra></extra>'}; };
   const data = [
-    {type:'scatter',mode:'lines',name:'BTC/USDT close',x:BT.t,y:BT.close,line:{color:t.ink2,width:1},xaxis:'x',yaxis:'y',hovertemplate:'%{x}<br>$%{y:,.0f}<extra></extra>'},
+    {type:'scattergl',mode:'lines',name:'BTC/USDT close (1-min)',x:BT_X,y:BT.close_full,line:{color:t.ink2,width:1},xaxis:'x',yaxis:'y',hovertemplate:'close %{x}<br>$%{y:,.0f}<extra></extra>'},
     mk(true), mk(false),
-    {type:'scatter',mode:'lines',name:'C1 equity',x:BT.t,y:BT.equity,line:{color:t.accent,width:2.2},xaxis:'x',yaxis:'y2',hovertemplate:'C1 $%{y:,.0f}<extra></extra>'},
-    {type:'scatter',mode:'lines',name:'buy-and-hold',x:BT.t,y:BT.bh,line:{color:t.neutral,width:1.4,dash:'dot'},xaxis:'x',yaxis:'y2',hovertemplate:'B&H $%{y:,.0f}<extra></extra>'},
-    {type:'scatter',mode:'lines',name:'drawdown',x:BT.t,y:BT.dd.map(v=>-v),fill:'tozeroy',line:{color:t.bad,width:1},fillcolor:'rgba(180,35,90,0.18)',xaxis:'x',yaxis:'y3',hovertemplate:'drawdown %{y:.2%}<extra></extra>'}];
+    {type:'scattergl',mode:'lines',name:'C1 equity',x:BT_X,y:BT.equity_full,line:{color:t.accent,width:2},xaxis:'x',yaxis:'y2',hovertemplate:'C1 $%{y:,.0f}<extra></extra>'},
+    {type:'scattergl',mode:'lines',name:'buy-and-hold',x:BT_X,y:BT_BH,line:{color:t.neutral,width:1.2,dash:'dot'},xaxis:'x',yaxis:'y2',hovertemplate:'B&H $%{y:,.0f}<extra></extra>'},
+    {type:'scattergl',mode:'lines',name:'drawdown',x:BT_X,y:BT_DD,fill:'tozeroy',line:{color:t.bad,width:1},fillcolor:'rgba(180,35,90,0.18)',xaxis:'x',yaxis:'y3',hovertemplate:'drawdown %{y:.2%}<extra></extra>'}];
   plot('bt', data, {hovermode:'closest', margin:{l:64,r:16,t:12,b:40},
     grid:{rows:3,columns:1,pattern:'coupled',roworder:'top to bottom'},
     xaxis:{type:'date',rangeslider:{visible:false}},
     yaxis:{domain:[0.52,1],title:{text:'price ($)'},tickformat:',.0f'},
     yaxis2:{domain:[0.2,0.48],title:{text:'equity ($)'},tickformat:',.0f'},
-    yaxis3:{domain:[0,0.16],title:{text:'drawdown'},tickformat:'.0%'},
+    yaxis3:{domain:[0,0.16],title:{text:'drawdown'},tickformat:'.1%'},
     legend:{orientation:'h',y:-0.06}});
+  autoY(el('bt'), BT_X, [{axis:'yaxis',y:BT.close_full},{axis:'yaxis2',ys:[BT.equity_full,BT_BH]},{axis:'yaxis3',y:BT_DD}]);
   // null
   const R=D.random_null;
   plot('nullc', [

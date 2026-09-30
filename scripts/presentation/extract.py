@@ -169,6 +169,8 @@ def backtest_view(sig, bars, extra, bt, strat) -> dict:
         params[key] = r(v, 5)
     return {
         "t": [ts[i][:16] for i in pick], "close": [r(close[i], 1) for i in pick],
+        # every bar's close, drawn at the bar's END (t0 + (i + 1) minutes): a fill at the next bar's open then sits on it
+        "close_full": [r(x, 2) for x in close], "t0": ts[0][:16], "equity_full": [r(x, 2) for x in eq],
         "equity": [r(eq[i], 2) for i in pick], "bh": [r(10000 * close[i] / close[0], 2) for i in pick],
         "dd": [r(x, 5) for x in dd_b], "wd": [r(wd[i], 4) for i in pick],
         "thresholds": params,

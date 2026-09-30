@@ -1,0 +1,91 @@
+{
+ "A_rows_found": "46544/46544",
+ "A_max_abs_diff_open": 0.0,
+ "A_max_abs_diff_high": 0.0,
+ "A_max_abs_diff_low": 0.0,
+ "A_max_abs_diff_close": 0.0,
+ "A_next_row_minutes_after_anchor": [
+  1
+ ],
+ "A_open_t1_equals_csv_next_open": true,
+ "B_y_h0_equals_close_t+10_minus_close_t": true,
+ "B_y_h1_equals_close_t+15_minus_close_t": true,
+ "B_y_h2_equals_close_t+20_minus_close_t": true,
+ "C_trades": 1968,
+ "C_entry_price_equals_open_of_entry_bar": true,
+ "C_entry_bar_minus_decision_bar": [
+  1
+ ],
+ "C_rev_time_exit_price_equals_open_of_exit_bar": true,
+ "D_anchor_bars_consecutive": true,
+ "D_last_close_equals_bar_close": true,
+ "E_open_vs_previous_close_bps": {
+  "median": 0.088,
+  "p95": 2.379,
+  "max": 12.05,
+  "share_exactly_equal": 0.3189
+ },
+ "E_marker_vs_drawn_line_bps": {
+  "median": 4.3,
+  "p90": 14.89,
+  "max": 102.8
+ },
+ "E_marker_vs_close_same_bar_bps": {
+  "median": 2.55,
+  "p90": 8.8,
+  "max": 118.3
+ },
+ "E_marker_vs_decision_close_bps": {
+  "median": 0.17,
+  "p90": 1.96,
+  "max": 9.6
+ },
+ "E_worst_by_drawn_line": [
+  {
+   "entry_time": "2025-08-14 12:35:00",
+   "fill_open": 118750.0,
+   "drawn_line": 119983.3,
+   "close_same_bar": 118700.0,
+   "decision_close": 118750.0,
+   "bar_low": 117719.0,
+   "bar_high": 118857.0
+  },
+  {
+   "entry_time": "2025-08-24 19:33:00",
+   "fill_open": 114417.0,
+   "drawn_line": 113402.5,
+   "close_same_bar": 114266.0,
+   "decision_close": 114417.0,
+   "bar_low": 114266.0,
+   "bar_high": 114417.0
+  },
+  {
+   "entry_time": "2025-08-27 20:22:00",
+   "fill_open": 111012.0,
+   "drawn_line": 111873.2,
+   "close_same_bar": 111708.0,
+   "decision_close": 111011.0,
+   "bar_low": 110998.0,
+   "bar_high": 111762.0
+  },
+  {
+   "entry_time": "2025-08-24 19:45:00",
+   "fill_open": 113039.0,
+   "drawn_line": 112281.0,
+   "close_same_bar": 112728.0,
+   "decision_close": 113039.0,
+   "bar_low": 112727.0,
+   "bar_high": 113039.0
+  },
+  {
+   "entry_time": "2025-08-24 19:35:00",
+   "fill_open": 113856.0,
+   "drawn_line": 113106.3,
+   "close_same_bar": 113333.0,
+   "decision_close": 113856.0,
+   "bar_low": 113333.0,
+   "bar_high": 113862.0
+  }
+ ],
+ "E_fill_inside_bar_range": true
+}

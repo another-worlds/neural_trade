@@ -62,6 +62,7 @@ def view(bars, extra, bt, sig=None, feature=None) -> dict:
     eb = tf["entry_bar"].to_numpy(int) if len(tf) else np.array([], int)
     xb = tf["exit_bar"].to_numpy(int) if len(tf) else np.array([], int)
     out = {"t": [ts[i][:16] for i in pick], "close": [r(close[i], 1) for i in pick],
+           "close_full": [r(x, 2) for x in close], "t0": ts[0][:16], "equity_full": [r(x, 2) for x in eq],
            "equity": [r(eq[i], 2) for i in pick], "bh": [r(10000 * close[i] / close[0], 2) for i in pick],
            "dd": [r(float(dd[a:a + THIN].max()), 5) for a in pick], "first": ts[0][:16], "last": ts[-1][:16],
            "trades": {"side": side.tolist(), "ret_bps": [r(x, 2) for x in tf["return_pct"].to_numpy(float) * 100] if len(tf) else [],
@@ -183,7 +184,7 @@ def ta() -> dict:
                 "cost_curve": {c: summ(bt_run(sig, bars, gt, base, c)[0])["ret"] for c in (0, 1, 2, 4, 6, 10, 16, 26)}}
         if k == 0:
             s = pd.Series(close)
-            pick = np.arange(0, len(close), 3)
+            pick = np.arange(0, len(close), 1)
             ts = np.asarray(extra["anchor_timestamp"]).astype(str)
             cell["gate_view"] = {"t": [ts[i][:16] for i in pick], "close": [r(close[i], 1) for i in pick],
                                  "sma20": [r(x, 1) for x in s.rolling(20).mean().to_numpy()[pick]],
