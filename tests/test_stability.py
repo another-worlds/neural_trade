@@ -193,12 +193,18 @@ def test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_sta
     (health_block) empty, every epoch.
 
     The third condition (a gradient group clipped on every single step that epoch) is NOT
-    asserted per epoch here: on NT-047's larger default model (14 indicator families, D-047), a
-    pre-clip main-group norm around 900 against the default ``GRAD_CLIP_NORM: 20`` legitimately
-    clips every step of some early epochs (confirmed identical on origin/remediation/plan's own
-    HEAD, unrelated to this item) - not a regression, but real, accepted behaviour of the new
-    default (D-047: "the 1.6x step cost is accepted"). Only the weaker, still meaningful claim
-    is checked: clipping is not stuck at 100% for the WHOLE run.
+    asserted per epoch here: on NT-047's larger default model (14 indicator families, D-047), the
+    pre-clip norm on this exact config (bundled CSV, 3 epochs, batch 64, 3,000 sequences) measures
+    up to ~171 (main) / ~235 (indicator) against the default ``GRAD_CLIP_NORM: 20`` (QA repair
+    round 2 measured the same numbers independently), so it legitimately clips every step of some
+    early epochs (confirmed identical on origin/remediation/plan's own HEAD, unrelated to this
+    item) - not a regression, but real, accepted behaviour of the new default (D-047: "the 1.6x
+    step cost is accepted"). Only the weaker, still meaningful claim is checked: clipping is not
+    stuck at 100% for the WHOLE run. The per-term mask counters (masked_head_dir_h*/
+    masked_head_var_h*, NT-036) DO stay at 0 every epoch: this run never actually produces a
+    non-finite head output, so the strict-mode/mask machinery is never exercised - that is
+    covered on synthetic NaN injections elsewhere (test_strict_mode_makes_every_qa_listed_
+    injection_site_nonfinite and friends), not here.
     """
     from neural_trade.core.config import Config
     from neural_trade.evaluation.report import health_block
@@ -223,6 +229,14 @@ def test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_sta
         for k, v in r.items():
             if k.startswith("period/"):
                 assert np.isfinite(v), (k, r)
+        # Head outputs finite every epoch (QA repair round 2 fix 2): the head-sanitisation mask
+        # counters (masked_head_price_h*/head_dir_h*/head_var_h*, NT-036) only rise when a raw
+        # head output was actually non-finite that step; staying at 0 is direct evidence the
+        # price/direction/variance heads themselves were finite throughout, not only the loss.
+        for pre in ("price", "dir", "var"):
+            for h in ("h0", "h1", "h2"):
+                key = f"masked_head_{pre}_{h}"
+                assert (r.get(key) or 0) == 0.0, f"epoch {r.get('epoch')} {key}: a head output went non-finite"
         n_steps = r.get("n_steps") or 0
         assert n_steps > 0, r
         for h in ("h0", "h1", "h2"):

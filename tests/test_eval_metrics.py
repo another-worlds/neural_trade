@@ -660,7 +660,8 @@ def test_health_section_renders_the_per_epoch_table_and_the_numbers():
 
 
 def test_direction_skip_share_matches_a_direct_numpy_computation():
-    """D-045 A4: var(skip_logit) / var(skip_logit + tower_logit), on the validation block."""
+    """D-045 A4: var(skip_logit) / var(skip_logit + tower_logit), on the (already-scaled)
+    validation block - the close-only case."""
     import numpy as np
     import tensorflow as tf
 
@@ -668,17 +669,59 @@ def test_direction_skip_share_matches_a_direct_numpy_computation():
     from neural_trade.registries.models import Models
     from neural_trade.training.custom_model import CustomTrainModel
 
-    cfg = Config(DIRECTION_SKIP=True, INPUT_SERIES=["close"], INDICATOR_FAMILIES={})  # single
-    base = Models.build(cfg.MODEL_NAME, cfg)  # channel: direction_skip_share cannot reconstruct OHLCV scaling
+    cfg = Config(DIRECTION_SKIP=True, INPUT_SERIES=["close"], INDICATOR_FAMILIES={})
+    base = Models.build(cfg.MODEL_NAME, cfg)
     m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
                          inputs=base.inputs, outputs=base.outputs)
     rng = np.random.default_rng(3)
     X = rng.normal(110_000.0, 500.0, size=(128, cfg.LOOKBACK)).astype(np.float32)
     lc = X[:, -1]
-    out = direction_skip_share(m, X, lc)
+    x_scaled = ((X.astype(np.float64) - lc.astype(np.float64)[:, None]) / float(m.pred_scale.numpy())).astype(np.float32)
+    out = direction_skip_share(m, x_scaled)
     assert set(out) == {"h0", "h1", "h2"}
 
-    x_scaled = ((X.astype(np.float64) - lc.astype(np.float64)[:, None]) / float(m.pred_scale.numpy())).astype(np.float32)
+    tower = base.get_layer("direction_h0_logit")
+    skip = base.get_layer("direction_h0_skip")
+    sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
+    t, s = sub.predict(x_scaled, verbose=0)
+    t, s = np.asarray(t).reshape(-1), np.asarray(s).reshape(-1)
+    ref = float(np.var(s) / np.var(t + s))
+    assert out["h0"] == pytest.approx(ref, rel=1e-5)
+
+
+def test_direction_skip_share_matches_a_direct_numpy_computation_on_ohlcv():
+    """QA repair round 2, fix A4: the OHLCV default (NT-047, [N, LOOKBACK, C], the volume channel
+    on its train-fit vol_scale) through the run's real WindowNormalizer.transform, not a hand
+    reconstruction - matches a direct numpy computation exactly like the close-only case."""
+    import numpy as np
+    import tensorflow as tf
+
+    from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler
+    from neural_trade.evaluation.report import direction_skip_share
+    from neural_trade.registries.models import Models
+    from neural_trade.training.custom_model import CustomTrainModel
+
+    cfg = Config(DIRECTION_SKIP=True)  # default INPUT_SERIES: all 5 OHLCV channels
+    base = Models.build(cfg.MODEL_NAME, cfg)
+    m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
+                         inputs=base.inputs, outputs=base.outputs)
+
+    rng = np.random.default_rng(4)
+    n, c = 96, len(cfg.INPUT_SERIES)
+    X_model = rng.normal(110_000.0, 500.0, size=(n, cfg.LOOKBACK, c)).astype(np.float32)
+    vol_idx = cfg.INPUT_SERIES.index("volume")
+    X_model[..., vol_idx] = rng.gamma(2.0, 20.0, size=(n, cfg.LOOKBACK)).astype(np.float32)
+    lc = X_model[:, -1, cfg.INPUT_SERIES.index("close")]
+
+    target_scaler = fit_target_scaler(rng.normal(0, 250.0, size=(500, 3)))
+    normalizer = WindowNormalizer.fit("window_relative", X_model, target_scaler,
+                                      input_series=tuple(cfg.INPUT_SERIES))
+    x_scaled = normalizer.transform(X_model, lc)
+    assert x_scaled.shape == X_model.shape  # still [N, LOOKBACK, C]: this is the real run shape
+
+    out = direction_skip_share(m, x_scaled)
+    assert set(out) == {"h0", "h1", "h2"}
+
     tower = base.get_layer("direction_h0_logit")
     skip = base.get_layer("direction_h0_skip")
     sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
@@ -697,20 +740,4 @@ def test_direction_skip_share_is_empty_when_the_flag_is_off():
     base = Models.build(cfg.MODEL_NAME, cfg)
     m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
                          inputs=base.inputs, outputs=base.outputs)
-    assert direction_skip_share(m, np.zeros((4, cfg.LOOKBACK), np.float32), np.zeros(4, np.float32)) == {}
-
-
-def test_direction_skip_share_is_empty_for_multichannel_ohlcv_input():
-    """NT-047: the volume channel's scale is a train-fit quantity this function cannot
-    reconstruct, so it declines rather than guessing (D-045 A4 is a "never raises" health number,
-    not required to work for every input mode)."""
-    from neural_trade.evaluation.report import direction_skip_share
-    from neural_trade.registries.models import Models
-    from neural_trade.training.custom_model import CustomTrainModel
-
-    cfg = Config(DIRECTION_SKIP=True)  # default INPUT_SERIES: all 5 OHLCV channels
-    base = Models.build(cfg.MODEL_NAME, cfg)
-    m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
-                         inputs=base.inputs, outputs=base.outputs)
-    X = np.zeros((4, cfg.LOOKBACK, len(cfg.INPUT_SERIES)), np.float32)
-    assert direction_skip_share(m, X, np.zeros(4, np.float32)) == {}
+    assert direction_skip_share(m, np.zeros((4, cfg.LOOKBACK), np.float32)) == {}

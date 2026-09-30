@@ -305,13 +305,17 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
         except Exception:
             logger.exception("could not build the training-health section")
         # DIRECTION_SKIP's share of the direction-logit variance (D-045 A4), on the validation
-        # block: also best-effort (an older model, or a non-default window normaliser, returns {}).
+        # block, through the run's own fitted WindowNormalizer (QA repair round 2: X_model/
+        # normalizer.transform handles the OHLCV default's 3-D windows and volume scaling, unlike
+        # the naive (X - last_close) / pred_scale this used to reconstruct by hand). Also
+        # best-effort (an older run with no stored normalizer, or no skip layers, returns {}).
         try:
             from neural_trade.evaluation.report import direction_skip_share
             val = arrays.get("val") if arrays else None
-            if val is not None and report.health is not None:
-                report.health["direction_skip_share"] = direction_skip_share(
-                    result.model, val["X"], val["last_close"])
+            normalizer = getattr(result, "normalizer", None)
+            if val is not None and normalizer is not None and report.health is not None:
+                x_scaled = normalizer.transform(val["X_model"], val["last_close"])
+                report.health["direction_skip_share"] = direction_skip_share(result.model, x_scaled)
         except Exception:
             logger.exception("could not compute the DIRECTION_SKIP variance share")
     scores = leaderboard_scores(report, res, result)

@@ -209,6 +209,28 @@ def test_contrib_terms_sum_to_the_total(make_loss_model):
     assert total == pytest.approx(float(logs['loss']), rel=1e-4)
 
 
+def test_contrib_terms_sum_to_the_train_loss(make_loss_model):
+    """QA repair round 2 fix 3: the TRAIN-side companion of test_contrib_terms_sum_to_the_total
+    (round 1's contrib_* bug - accumulated only on TRAIN_METRICS_EVERY-sampled steps, so it did
+    not sum to the train loss - had no test on the train path; this is that test). Multiple
+    train_step calls: contrib_* and 'loss' are both running means over every step, and must
+    average exactly the same steps."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_CRPS=0.3, LAMBDA_SOFT_ECE=0.2, LAMBDA_T_PERP=0.1,
+                                      LAMBDA_CASIMIR=0.1, LAMBDA_HD=0.1, LAMBDA_IFE=0.1,
+                                      LAMBDA_VAC_OVERFLOW=0.1, LAMBDA_VAC=0.1,
+                                      TRAIN_METRICS_EVERY=10))  # the default: most train diagnostics
+    m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))          # are sampled; contrib_* must not be
+    rng = np.random.default_rng(13)
+    for _ in range(4):
+        x, y, lc, ext = _batch(rng, 110_000.0)
+        m.train_step((x, y, lc, ext))
+    logs = m.train_epoch_logs()
+    total = sum(float(logs[f'contrib_{k}']) for k in CONTRIB_TERM_KEYS)
+    assert total == pytest.approx(float(logs['loss']), rel=1e-4)
+
+
 def test_mask_counters_count_only_the_injected_term(make_loss_model, monkeypatch):
     import neural_trade.losses.functions as lf
     from neural_trade.core.config import Config

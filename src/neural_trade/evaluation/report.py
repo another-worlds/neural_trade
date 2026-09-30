@@ -473,43 +473,36 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
     }
 
 
-def direction_skip_share(model, X_raw: np.ndarray, last_close: np.ndarray) -> Dict[str, float]:
+def direction_skip_share(model, x_scaled: np.ndarray) -> Dict[str, float]:
     """Share of each direction head's pre-sigmoid logit variance carried by the DIRECTION_SKIP
     linear path (NT-037, D-045 recommendation A4): ``var(skip_logit) / var(skip_logit +
-    tower_logit)`` on ``X_raw``/``last_close`` (the validation block).
+    tower_logit)`` on ``x_scaled`` (the validation block, already through the model's actual
+    fitted input transform - QA repair round 2: the caller passes
+    ``result.normalizer.transform(val["X_model"], val["last_close"])``, the same
+    ``data.scaling.WindowNormalizer`` the run trained on, so this works for the OHLCV default
+    (``Config.INPUT_SERIES``, NT-047: ``[N, LOOKBACK, C]``, the volume channel on its train-fit
+    ``vol_scale``) exactly as for a legacy close-only run (``[N, LOOKBACK]``) - this function no
+    longer reconstructs the transform itself, which is what made it silently wrong on OHLCV).
 
     ``models/gru_attention.py``'s ``_direction_head`` names the two pre-Add sub-layers
     ``direction_h{i}_logit`` (the deep path) and ``direction_h{i}_skip`` (the trailing-return
     linear path, ``Config.DIRECTION_SKIP``); their sum is the logit the sigmoid sees. A high share
     means the head leans on the linear baseline; a low share means the deep path dominates.
 
-    Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off, the model has no such named sub-layers
-    (an older run, or an architecture without a skip path), the window normaliser is not the
-    default ``window_relative`` (this reconstructs that one transform only: ``(X - last_close) /
-    pred_scale``; a ``per_lag_standard`` run needs its fitted ``WindowNormalizer``, not available
-    here), or ``Config.INPUT_SERIES`` names more than one channel (NT-047 OHLCV): the volume
-    channel's scale is a TRAIN-fit quantity (``WindowNormalizer.vol_scale``) this function has no
-    access to, so it does not guess at it. Never raises: a report is worth more without this
-    number than not at all.
+    Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off or the model has no such named sub-layers
+    (an older run, or an architecture without a skip path). Never raises: a report is worth more
+    without this number than not at all.
     """
     cfg = getattr(model, "config", None)
     if not bool(getattr(cfg, "DIRECTION_SKIP", False)):
         return {}
-    normalizer = str(getattr(cfg, "WINDOW_NORMALIZER", "window_relative"))
-    if normalizer != "window_relative":
-        return {}
-    input_series = list(getattr(cfg, "INPUT_SERIES", None) or ["close"])
-    if len(input_series) != 1:
-        return {}
     base = getattr(model, "base_model", None)
-    if base is None or len(X_raw) == 0:
+    if base is None or len(x_scaled) == 0:
         return {}
     try:
         import tensorflow as tf
 
-        pred_scale = float(model.pred_scale.numpy() if hasattr(model.pred_scale, "numpy") else model.pred_scale)
-        x = ((np.asarray(X_raw, dtype=np.float64) - np.asarray(last_close, dtype=np.float64)[:, None])
-            / (pred_scale if pred_scale else 1.0)).astype(np.float32)
+        x = np.asarray(x_scaled, dtype=np.float32)
         out: Dict[str, float] = {}
         for i, h in enumerate(("h0", "h1", "h2")):
             try:
