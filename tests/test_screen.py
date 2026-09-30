@@ -483,8 +483,11 @@ def test_a_known_bad_learning_rate_fails_the_rules_on_real_cpu_training(bars_csv
     s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
     s["overrides"].update(LR=1.0, BATCH_SIZE=32)
     s["grid"] = {"axes": {}}
+    # clip_skip_epochs: 0 (NT-092's default is 1, which excludes epoch 0's steps from clipped_share -
+    # exactly the epoch where this LR=1.0 config's damage shows up in a 2-epoch trial; the whole point
+    # of this test is to prove real bad training IS caught, so it turns the skip back off).
     s["rules"] = {"finite": True, "max_nonfinite_grad_steps": 0, "max_clipped_share": 0.3,
-                 "min_train_loss_drop": 0.0, "max_term_share": 0.9}
+                 "min_train_loss_drop": 0.0, "max_term_share": 0.9, "clip_skip_epochs": 0}
     spec = ScreenSpec.from_dict(s)
     trial = build_trials(spec)[0]
     row = run_trial(trial, spec, {})   # the real light path: no trainer override
@@ -641,3 +644,261 @@ def test_pnl_utility_term_counts_in_the_loss_term_shares_at_weight_one():
 
     assert "pnl_val" in LOSS_TERM_KEYS
     assert _term_multiplier("pnl_val", Config()) == 1.0
+
+
+# ------------------------------------------------------------------ (9) phase 2: reused-graph trials (NT-092)
+def test_structural_key_ignores_continuous_fields_seed_data_end_and_epochs(bars_csv):
+    """Two configs differing only in a CONTINUOUS_FIELDS entry, SEED, DATA_END or EPOCHS share one
+    structural_key; a BATCH_SIZE (structural) difference gets a different one."""
+    from neural_trade.experiments.screen import structural_key
+
+    base_overrides = {"CSV_PATH": str(bars_csv), "MAX_SEQUENCE_COUNT": 1500, "N_FOLDS": 2,
+                      "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1, "DATA_END_PROTECTED_DAYS": SAFE_PROTECTED_DAYS}
+    base = Config().override(**base_overrides).copy()  # .copy() twice: normalises numeric field types
+    same = base.copy(LR=0.01, LAMBDA_HD=0.5, GRAD_CLIP_NORM=5.0, ADAM_BETA1=0.8, INDICATOR_LR_MULT=2.0,
+                     SEED=7, DATA_END=SAFE_DATA_END, EPOCHS=3)
+    assert structural_key(base) == structural_key(same), "continuous-only + SEED/DATA_END/EPOCHS changes must not retrace"
+    different = base.copy(BATCH_SIZE=64)
+    assert structural_key(base) != structural_key(different), "BATCH_SIZE is structural"
+
+
+def test_group_order_keeps_each_structural_groups_trials_contiguous(bars_csv):
+    from neural_trade.experiments.screen import _group_order, structural_key
+
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["grid"] = {"axes": {"BATCH_SIZE": [32, 64], "LR": [0.001, 0.002]}}
+    spec = ScreenSpec.from_dict(s)
+    trials = build_trials(spec)
+    ordered = _group_order(trials)
+    assert {t.index for t in ordered} == {t.index for t in trials}          # every trial, once
+    keys = [structural_key(t.config) for t in ordered]
+    seen = []
+    for k in keys:
+        if k not in seen:
+            seen.append(k)
+        else:
+            assert k == seen[-1], f"group {k!r} is not contiguous in {keys}"
+
+
+@pytest.mark.slow
+def test_reuse_graph_compiles_once_per_structural_group_not_once_per_trial(bars_csv, monkeypatch, tmp_path):
+    """Acceptance 1/3/4: continuous-only trials of one screen share one compiled model (one
+    ``CustomTrainModel.compile`` call, real CPU training); a structural axis alongside them starts a
+    second group (a second compile)."""
+    from neural_trade.training.custom_model import CustomTrainModel
+
+    calls = {"n": 0}
+    orig_compile = CustomTrainModel.compile
+
+    def counting_compile(self, *a, **kw):
+        calls["n"] += 1
+        return orig_compile(self, *a, **kw)
+
+    monkeypatch.setattr(CustomTrainModel, "compile", counting_compile)
+
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0, 1])
+    s["overrides"]["BATCH_SIZE"] = 32
+    s["grid"] = {"axes": {"LR": [0.001, 0.002, 0.003]}}   # continuous only: one structural group
+    s["run"] = {"calibrate": False, "epochs": 1}
+    spec = ScreenSpec.from_dict(s)
+    report = run_screen(spec, store=str(tmp_path / "continuous_only"))
+    assert report.ran == 6      # 3 LR x 1 slice x 2 seeds
+    assert report.failed == 0, "every trial should train and be scored"
+    assert calls["n"] == 1, f"6 continuous-only trials should share one compiled graph, compiled {calls['n']} times"
+
+    calls["n"] = 0
+    s2 = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s2["grid"] = {"axes": {"BATCH_SIZE": [32, 64]}}       # structural: two groups
+    s2["run"] = {"calibrate": False, "epochs": 1}
+    spec2 = ScreenSpec.from_dict(s2)
+    report2 = run_screen(spec2, store=str(tmp_path / "structural"))
+    assert report2.ran == 2
+    assert calls["n"] == 2, f"a structural (BATCH_SIZE) change must start a new group, compiled {calls['n']} times"
+
+
+@pytest.mark.slow
+def test_reused_first_trial_matches_a_fresh_trial_of_the_same_config_and_seed(bars_csv):
+    """Acceptance 2: a reused-graph trial (here, the first trial of a fresh _TrialGroup - the case
+    every later trial in the group also resets weights/optimizer/RNGs to, per training/reset.py's
+    module doc) equals a standalone fresh-graph trial of the exact same config and seed. Compared on
+    the final train/val loss (the scalar every other health number derives from) and the direction
+    AUCs; both are exact floats from the same deterministic CPU op set, so this is bit-for-bit, not a
+    tolerance."""
+    from neural_trade.experiments.screen import _TrialGroup, _run_trial_light
+
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[3])
+    s["grid"] = {"axes": {}}
+    s["overrides"]["LR"] = 0.002
+    s["run"] = {"calibrate": False, "epochs": 1}
+    spec = ScreenSpec.from_dict(s)
+    trial = build_trials(spec)[0]
+
+    health_fresh, auc_fresh, _ = _run_trial_light(trial.config, {}, calibrate=False)
+    group = _TrialGroup(trial.config)
+    health_reused, auc_reused, _ = group.run_one(trial.config, {}, calibrate=False)
+
+    assert health_reused["final_train_loss"] == pytest.approx(health_fresh["final_train_loss"], rel=0, abs=0), (
+        health_reused["final_train_loss"], health_fresh["final_train_loss"])
+    assert health_reused["final_val_loss"] == pytest.approx(health_fresh["final_val_loss"], rel=0, abs=0)
+    for h in auc_fresh:
+        assert auc_reused[h]["auc"] == auc_fresh[h]["auc"]
+
+
+@pytest.mark.slow
+def test_reused_later_trial_matches_an_independent_fresh_run_with_default_dropout_and_noise(bars_csv):
+    """Acceptance 2, QA repair round 1: trial 3 of a 4-trial group (LR, a LAMBDA, GRAD_CLIP_NORM and
+    DATA_END all changed from trial 0; calibrate on; default dropout rate 0.1 and the
+    VacuumSaturationNoise layer both ACTIVE, i.e. LAMBDA_T_PERP left at its nonzero default) matches
+    an INDEPENDENT fresh run of that exact config and seed, bit-for-bit. Before the round-1 fix,
+    Dropout/MultiHeadAttention's legacy stateful RNG and the noise layer's unseeded tf.random.normal
+    both kept advancing across the group's earlier trials instead of resetting to trial 3's own seed,
+    so this failed (QA's evidence: trial 3 val 6.5250 reused vs 6.0214 fresh, real BTC 1-minute data).
+    Config.SEEDED_STOCHASTIC_LAYERS (forced True by screen.py itself, not this test) is what fixes it."""
+    from neural_trade.experiments.screen import _TrialGroup, _run_trial_light
+
+    base_overrides = {"CSV_PATH": str(bars_csv), "MAX_SEQUENCE_COUNT": 1500, "N_FOLDS": 2,
+                      "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1, "DATA_END_PROTECTED_DAYS": SAFE_PROTECTED_DAYS,
+                      "BATCH_SIZE": 32, "EPOCHS": 2, "DATA_END": SAFE_DATA_END}
+    base = Config().override(**base_overrides)
+    trial_overrides = [
+        dict(SEED=0, LR=1e-3),
+        dict(SEED=1, LR=2e-3, LAMBDA_HD=0.3),
+        dict(SEED=2, LR=1e-3, GRAD_CLIP_NORM=0.5, ADAM_BETA1=0.8),
+        dict(SEED=3, LR=5e-4, LAMBDA_DIR_OUTER=0.3, GRAD_CLIP_NORM=0.0,
+            DATA_END="2025-10-12T04:19:00+00:00"),
+    ]
+    cfgs = [base.copy(**o) for o in trial_overrides]
+
+    group = _TrialGroup(cfgs[0])
+    for cfg in cfgs:
+        health_reused, auc_reused, _ = group.run_one(cfg, {}, calibrate=True)
+    # health_reused/auc_reused now hold trial 3's (the last one run) result.
+    health_fresh, auc_fresh, _ = _run_trial_light(cfgs[3], {}, calibrate=True)
+
+    assert health_reused["final_train_loss"] == pytest.approx(health_fresh["final_train_loss"], rel=0, abs=0), (
+        health_reused["final_train_loss"], health_fresh["final_train_loss"])
+    assert health_reused["final_val_loss"] == pytest.approx(health_fresh["final_val_loss"], rel=0, abs=0)
+    for h in auc_fresh:
+        assert auc_reused[h]["auc"] == auc_fresh[h]["auc"]
+
+
+@pytest.mark.slow
+def test_reuse_graph_median_trial_wall_after_the_first_is_well_under_the_first(bars_csv, tmp_path):
+    """Acceptance 4: 8 continuous-only trials in one group, CPU: build_s is 0 for every trial but the
+    first (nothing is rebuilt), and the group's later trials' median wall is well under the first
+    trial's (which pays the one-off trace cost inside its first `fit()` call)."""
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["overrides"]["BATCH_SIZE"] = 32
+    s["grid"] = {"axes": {"LR": [0.001 * i for i in range(1, 9)]}}   # 8 continuous-only trials
+    s["run"] = {"calibrate": False, "epochs": 1}
+    spec = ScreenSpec.from_dict(s)
+    store = tmp_path / "timing"
+    run_screen(spec, store=str(store))
+    rows = sorted(merge_results(store=str(store), name="tiny_screen"), key=lambda r: r["trial_index"])
+    assert len(rows) == 8
+    wall = [r["wall_s"] for r in rows]
+    train_s = [r["timings"]["train_s"] for r in rows]
+    # build_s (Models.build for fresh initial weights + optimizer/lambda reset) is a real, roughly
+    # constant per-trial cost in this design (~0.7s on this machine) - it is NOT the ~12s trace cost
+    # the plan measured, which lives inside train_s's first `fit()` call. The trace saving shows up as
+    # a much smaller train_s (and total wall) from trial 2 on, not as build_s == 0.
+    median_train_rest = float(np.median(train_s[1:]))
+    median_rest = float(np.median(wall[1:]))
+    logging.getLogger(__name__).info(
+        "NT-092 CPU timing (8-trial group, 1 epoch each): trial0 wall=%.3fs train_s=%.3fs | "
+        "trials 2..8 median wall=%.3fs median train_s=%.3fs | full breakdown=%s",
+        wall[0], train_s[0], median_rest, median_train_rest, rows[0]["timings"])
+    assert median_train_rest < train_s[0], (
+        f"trials after the first should train faster (no retrace of train_step): train_s={train_s}")
+    assert median_rest < wall[0], f"trials after the first should have a lower total wall: {wall}"
+
+
+def test_min_epochs_guard_refuses_an_explicit_clip_skip_epochs_at_or_above_epochs(bars_csv):
+    """Acceptance 5: rules.clip_skip_epochs explicitly >= EPOCHS is refused before any trial trains."""
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["run"] = {"calibrate": False, "epochs": 2}
+    s["rules"] = {"finite": True, "clip_skip_epochs": 2}
+    with pytest.raises(ScreenError, match="clip_skip_epochs"):
+        ScreenSpec.from_dict(s).base()
+
+
+def test_min_epochs_guard_is_checked_per_trial_when_epochs_varies_by_axis(bars_csv):
+    """QA repair round 1, P2: EPOCHS is in _STRUCTURAL_IGNORE, so a grid axis may override it per
+    trial. rules.clip_skip_epochs=1 is fine against the spec-wide base EPOCHS=2, but a trial whose
+    OWN EPOCHS axis value is 1 must still be refused (not silently scored on zero steps)."""
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["overrides"]["EPOCHS"] = 2
+    s["grid"] = {"axes": {"EPOCHS": [1, 2]}}
+    s["run"] = {"calibrate": False}
+    s["rules"] = {"finite": True, "clip_skip_epochs": 1}
+    spec = ScreenSpec.from_dict(s)
+    spec.base()  # the spec-wide base (EPOCHS=2) alone must not raise
+    with pytest.raises(ScreenError, match="clip_skip_epochs"):
+        build_trials(spec)  # the EPOCHS=1 trial must be refused
+
+
+def test_default_clip_skip_epochs_is_clamped_for_a_one_epoch_screen_not_refused(bars_csv):
+    """The unset default (1) must not trip the min_epochs guard for an ordinary 1-epoch smoke screen
+    (effective_clip_skip_epochs clamps it to 0 instead)."""
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["run"] = {"calibrate": False, "epochs": 1}
+    spec = ScreenSpec.from_dict(s)
+    spec.base()  # must not raise
+    assert spec.effective_clip_skip_epochs(1) == 0
+
+
+def test_grad_norm_sampler_excludes_the_first_clip_skip_epochs_from_clipped_share():
+    """clip_skip_epochs (default 1): steps logged during the skipped epoch(s) count toward n_steps
+    but never toward clipped_share / the norm max/mean."""
+    from neural_trade.experiments.screen import _GradNormSampler
+
+    class _FakeMean:
+        def __init__(self):
+            self.total = tf.Variable(0.0)
+            self.count = tf.Variable(0.0)
+
+    sampler = _GradNormSampler(clip_norm=1.0, clip_skip_epochs=1)
+    sampler.model = type("M", (), {"_step_means": {"grad_global_norm": _FakeMean()}})()
+    m = sampler.model._step_means["grad_global_norm"]
+    # Epoch 0 (skipped): two steps, both loudly over the clip norm. Keras resets a Mean metric at
+    # every epoch boundary, so this fake resets total/count too (on_epoch_begin only resets the
+    # sampler's OWN _prev_total/_prev_count, matching that reset).
+    sampler.on_epoch_begin(0)
+    total, count = 0.0, 0.0
+    for value in (5.0, 5.0):
+        total += value
+        count += 1.0
+        m.total.assign(total)
+        m.count.assign(count)
+        sampler.on_train_batch_end(int(count) - 1)
+    # Epoch 1 (counted): one step, under the clip norm.
+    sampler.on_epoch_begin(1)
+    total, count = 0.0, 0.0
+    total += 0.2
+    count += 1.0
+    m.total.assign(total)
+    m.count.assign(count)
+    sampler.on_train_batch_end(0)
+
+    assert sampler.n_steps == 3
+    assert sampler.n_valid_steps == 1
+    assert sampler.n_clipped == 0
+    assert sampler.clipped_share == 0.0
+    assert sampler.max_norm == pytest.approx(0.2)
+
+
+def test_continuous_fields_are_exactly_the_ones_this_module_documents_as_variable_backed():
+    """CONTINUOUS_FIELDS matches training/lambdas.py's variable-backed lambda keys plus the
+    Keras-hyper/tf.Variable fields this item added (LR, betas, GRAD_CLIP_NORM, INDICATOR_LR_MULT)."""
+    from neural_trade.experiments.screen import CONTINUOUS_FIELDS
+    from neural_trade.training.lambdas import CONFIG_NAME_OF_KEY
+
+    for name in CONFIG_NAME_OF_KEY.values():
+        assert name in CONTINUOUS_FIELDS, f"{name} is a tf.Variable-backed lambda but missing from CONTINUOUS_FIELDS"
+    for extra in ("LR", "ADAM_BETA1", "ADAM_BETA2", "GRAD_CLIP_NORM", "INDICATOR_LR_MULT"):
+        assert extra in CONTINUOUS_FIELDS
+    # Known NOT continuous (documented exclusions): baked as plain Config reads outside training/, or
+    # gating a Python `if` inside the traced loss.
+    for excluded in ("LAMBDA_VAC", "LAMBDA_DIR_ALIGN", "LAMBDA_INTER", "LAMBDA_DIR_ALIGN_OUTER",
+                     "INDICATOR_GRAD_MULT", "ABLATE_LAMBDAS"):
+        assert excluded not in CONTINUOUS_FIELDS

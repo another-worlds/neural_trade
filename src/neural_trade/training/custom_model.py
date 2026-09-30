@@ -80,9 +80,16 @@ class CustomTrainModel(models.Model):
         self._lambda_vars = {}
         self._setattr_tracking = True
 
-        # Cast important scalars to float32 early
-        self.pred_scale = tf.cast(pred_scale, tf.float32)
-        self.pred_mean = tf.cast(pred_mean, tf.float32)
+        # pred_scale/pred_mean as live tf.Variables (NT-092), not a cast constant: screen phase 2
+        # reuses one persistent model across trials that may read a different data slice (DATA_END is
+        # not part of the structural key), so the target-scaling constants must be resettable
+        # per-trial via .assign() without retracing. `_setattr_tracking = False` keeps them out of
+        # Keras's tracked weights (get_weights/set_weights unchanged; the golden run, checkpoints and
+        # the serving bundle never see these two extra scalars), matching `_grad_clip_norm_var` above.
+        self._setattr_tracking = False
+        self.pred_scale = tf.Variable(float(pred_scale), trainable=False, dtype=tf.float32, name='pred_scale')
+        self.pred_mean = tf.Variable(float(pred_mean), trainable=False, dtype=tf.float32, name='pred_mean')
+        self._setattr_tracking = True
 
         # Basic numeric guard
         if tf.keras.backend.get_value(self.pred_scale) < 1e-6:
@@ -112,6 +119,17 @@ class CustomTrainModel(models.Model):
         self.lambda_vac_overflow = float(getattr(config, 'LAMBDA_VAC_OVERFLOW', 0.0))
         self.lambda_pnl = float(getattr(config, 'LAMBDA_PNL', 0.0))
         self.config = config or Config()
+        # GRAD_CLIP_NORM as a live tf.Variable (NT-092): train_step used to read
+        # `getattr(self.config, 'GRAD_CLIP_NORM', 0.0)`, a plain Python float baked into the traced
+        # graph as a constant, so changing it meant rebuilding and retracing the model. Screen phase
+        # 2 reuses one traced graph across trials that only differ in continuous values; the clip
+        # norm's *magnitude* is now read from this Variable at run time (`self.grad_clip_norm`), and
+        # whether clipping runs at all (norm > 0) is a graph-safe `tf.cond` on that Variable's value,
+        # not a Python `if`, so 0 <-> nonzero no longer needs its own structural group either.
+        self._setattr_tracking = False
+        self._grad_clip_norm_var = tf.Variable(float(getattr(config, 'GRAD_CLIP_NORM', 0.0) or 0.0),
+                                               trainable=False, dtype=tf.float32, name='grad_clip_norm')
+        self._setattr_tracking = True
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
         # Adam normalizes gradient magnitudes, so scaling grads is insufficient — a higher LR
@@ -166,6 +184,14 @@ class CustomTrainModel(models.Model):
         # point loss delegates to the registered "point_huber" which implements log(cosh).
         # A separate piecewise Huber lives in CustomTrainModel.huber (unused for the main loss).
         # Config.USE_HUBER is legacy and not consulted by the active custom_loss.
+    @property
+    def grad_clip_norm(self):
+        return self._grad_clip_norm_var
+
+    @grad_clip_norm.setter
+    def grad_clip_norm(self, value):
+        self._grad_clip_norm_var.assign(float(value))
+
     def _logit_from_alpha(self, alpha): return mh.logit_from_alpha(alpha, self.epsilon)
     def _alpha_from_logit(self, logit): return mh.alpha_from_logit(logit)
     def _logit_from_period(self, period): return mh.logit_from_period(period, self.epsilon)
@@ -497,16 +523,19 @@ class CustomTrainModel(models.Model):
         # Clip NN grads by global norm only (indicator grads are small scalars; Adam handles scale)
         # Also clip indicator grads for stability (high INDICATOR_LR_MULT + STE can produce large updates
         # on the scalar logit vars, leading to extreme alphas/periods and NaN cascade in features/preds).
-        clip_norm = float(getattr(self.config, 'GRAD_CLIP_NORM', 0.0) or 0.0)
-        if clip_norm > 0.0:
-            if nn_gvs:
-                nn_gs_clipped, _ = tf.clip_by_global_norm(
-                    [g for g, v in nn_gvs], clip_norm)
-                nn_gvs = list(zip(nn_gs_clipped, [v for g, v in nn_gvs]))
-            if ind_gvs:
-                ind_gs_clipped, _ = tf.clip_by_global_norm(
-                    [g for g, v in ind_gvs], clip_norm)
-                ind_gvs = list(zip(ind_gs_clipped, [v for g, v in ind_gvs]))
+        # `clip_norm` is read from the live Variable (NT-092), and whether clipping runs is a
+        # tf.cond on its runtime value rather than a Python `if` on a baked-in float, so this whole
+        # branch structure is the same graph regardless of GRAD_CLIP_NORM's value (including 0).
+        clip_norm = self.grad_clip_norm
+        do_clip = clip_norm > 0.0
+        if nn_gvs:
+            nn_gs = [g for g, v in nn_gvs]
+            nn_gs = tf.cond(do_clip, lambda gs=nn_gs: tf.clip_by_global_norm(gs, clip_norm)[0], lambda gs=nn_gs: gs)
+            nn_gvs = list(zip(nn_gs, [v for g, v in nn_gvs]))
+        if ind_gvs:
+            ind_gs = [g for g, v in ind_gvs]
+            ind_gs = tf.cond(do_clip, lambda gs=ind_gs: tf.clip_by_global_norm(gs, clip_norm)[0], lambda gs=ind_gs: gs)
+            ind_gvs = list(zip(ind_gs, [v for g, v in ind_gvs]))
 
         # Apply gradients with separate optimizers
         self.optimizer.apply_gradients(nn_gvs)

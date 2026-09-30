@@ -284,9 +284,12 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             lambda_vac_orig = float(getattr(cfg, 'LAMBDA_VAC', 0.0))
             logger.info('%s', _fmt_row("Λ_vac(thr)", lambda_vac_orig, med_vac, lambda_vac_orig, active=True) + "  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)")
             if calib_outer:
-                logger.info(f"  [outer] λ_trend_outer={custom_model.lambda_trend_outer:.4f}  "
-                      f"λ_dir_outer={custom_model.lambda_dir_outer:.4f}  "
-                      f"λ_nll_outer={custom_model.lambda_nll_outer:.4f}")
+                # float(): NT-092 turned these three into tf.Variable-backed properties (screen
+                # phase 2 needs them settable without retracing); a bare ResourceVariable has no
+                # ':.4f' formatter.
+                logger.info(f"  [outer] λ_trend_outer={float(custom_model.lambda_trend_outer):.4f}  "
+                      f"λ_dir_outer={float(custom_model.lambda_dir_outer):.4f}  "
+                      f"λ_nll_outer={float(custom_model.lambda_nll_outer):.4f}")
             logger.info(f"[calib] ref_loss={ref_loss:.6f}  d_global={d_global}  "
                   f"warmup={n_warmup}/{train_batches}  sample={n_sample}/{train_batches}  clamp=[{lam_min}, {lam_max}]")
 
@@ -307,10 +310,11 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 'ref_loss':              ref_loss,
             }
             if calib_outer:
+                # float(): see the log line above (NT-092, these are now tf.Variable-backed).
                 _calib_lambdas.update({
-                    'lambda_trend_outer': custom_model.lambda_trend_outer,
-                    'lambda_dir_outer':   custom_model.lambda_dir_outer,
-                    'lambda_nll_outer':   custom_model.lambda_nll_outer,
+                    'lambda_trend_outer': float(custom_model.lambda_trend_outer),
+                    'lambda_dir_outer':   float(custom_model.lambda_dir_outer),
+                    'lambda_nll_outer':   float(custom_model.lambda_nll_outer),
                 })
 
         except Exception as e:

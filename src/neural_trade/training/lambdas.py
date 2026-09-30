@@ -13,7 +13,24 @@ from typing import Dict, Iterable, List
 import tensorflow as tf
 
 _LAMBDA_VARIABLE_KEYS = ('short', 'point', 'long', 'extended_trend', 'dir', 'var', 'vol',
-                         'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'pnl')
+                         'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'pnl',
+                         # Four of the five outer multipliers (NT-092): CustomTrainModel.__init__
+                         # already assigns them through `self.lambda_<key> = ...`, so adding them here
+                         # turns that assignment into the same tf.Variable property as the 15 above,
+                         # with no other code change - losses/functions.py's
+                         # `model.lambda_trend_outer * x` etc. already work on a tf.Variable exactly
+                         # as they did on a plain float. Needed so screen phase 2 (a group of trials
+                         # that reuse one traced graph) can change these values between trials without
+                         # retracing. NOT 'dir_align_outer': losses/functions.py:675 does
+                         # `if float(getattr(model, 'lambda_dir_align_outer', 0.0)) > 0.0:` - a
+                         # Python-level branch that SKIPS THE OP ENTIRELY when the value is 0, traced
+                         # once at graph-build time. `float()` on a Variable read INSIDE the traced
+                         # function raises (it is a symbolic Tensor there, not a concrete Python
+                         # value); turning it into a Variable does not just fail to help, it breaks
+                         # training outright. Fixing that call site is outside this item's files
+                         # (losses/), so LAMBDA_DIR_ALIGN_OUTER stays a plain float and, for screen
+                         # phase 2, a STRUCTURAL field (see screen.py's STRUCTURAL_ONLY_LAMBDA_FIELDS).
+                         'trend_outer', 'dir_outer', 'nll_outer', 'coherence_outer')
 
 
 def _make_lambda_property(key):
@@ -38,6 +55,12 @@ CONFIG_NAME_OF_KEY: Dict[str, str] = {
     "crps": "LAMBDA_CRPS", "soft_ece": "LAMBDA_SOFT_ECE", "t_perp": "LAMBDA_T_PERP",
     "casimir": "LAMBDA_CASIMIR", "hd": "LAMBDA_HD", "ife": "LAMBDA_IFE", "vac_overflow": "LAMBDA_VAC_OVERFLOW",
     "pnl": "LAMBDA_PNL",
+    # Four of the five outer multipliers: LAMBDA_COHERENCE (no "_OUTER" suffix in Config) is the one
+    # irregular name; the rest are LAMBDA_<KEY_UPPER>. LAMBDA_DIR_ALIGN_OUTER is deliberately absent
+    # (see _LAMBDA_VARIABLE_KEYS above); `ablate()`'s explicit `elif name == "LAMBDA_DIR_ALIGN_OUTER"`
+    # branch below still handles it.
+    "trend_outer": "LAMBDA_TREND_OUTER", "dir_outer": "LAMBDA_DIR_OUTER", "nll_outer": "LAMBDA_NLL_OUTER",
+    "coherence_outer": "LAMBDA_COHERENCE",
 }
 KEY_OF_CONFIG_NAME: Dict[str, str] = {v: k for k, v in CONFIG_NAME_OF_KEY.items()}
 

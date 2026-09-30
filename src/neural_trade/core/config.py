@@ -431,6 +431,16 @@ class Config:
     # ------------------------------------------------------------------ stability
     GRAD_CLIP_NORM: float = _f(20.0, "stability", "global-norm clip, per optimizer group", unit="dimensionless",
                                ge=0.0)
+    SEEDED_STOCHASTIC_LAYERS: bool = _f(
+        False, "stability",
+        "dropout (models/gru_attention.py) and VacuumSaturationNoise draw from a resettable "
+        "tf.random.Generator per layer instead of TF's legacy stateful random ops, whose per-op "
+        "state cannot be reset from Python. False (default) is today's behaviour everywhere the "
+        "normal training path runs (scenario run, the golden run): unaffected. Screen mode "
+        "(NT-092 phase 2) forces this True on every trial it builds, fresh or reused, so a reused "
+        "trial's stochastic layers restart from its own seed instead of continuing whatever trial "
+        "ran through the same persistent model before it - the only way phase 2 can match a fresh "
+        "run bit-for-bit (docs/RUNBOOK.md 'Screen mode').", unit="flag")
 
     # ------------------------------------------------------------------ direction
     FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class", unit="fraction", ge=0.0, le=1.0)

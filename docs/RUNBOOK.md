@@ -359,6 +359,75 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   with a different `N` are ignored, never merged in.
 - **Level 2** (survivors, real quality): re-run through `scenario run` on a real block (a
   `configs/scenarios/micro_*.yaml`-style spec), not through screen mode again.
+- **Phase 2: reused-graph trials** (NT-092; `run: {reuse_graph: true}`, the default). GPU measurement
+  (`runs/experiments/micro_loop_v1/LOG.md`, 2026-09-30) found tracing at 73% of a trial's wall time
+  (12.2s of 16.7s): phase 1's fresh-model-per-trial path retraces `train_step`/`test_step` from
+  scratch on every trial's first `fit()` call, even when only a continuous hyperparameter changed.
+  Trials are grouped by `experiments.screen.structural_key` (every Config field EXCEPT `SEED`,
+  `DATA_END`, `EPOCHS`, `SEEDED_STOCHASTIC_LAYERS` (below) and `CONTINUOUS_FIELDS` — see that
+  constant's docstring in `screen.py` for the exact list and, for each, WHERE it is read from a live
+  `tf.Variable`/Keras optimizer hyper at run time instead of a Python constant baked into the graph);
+  trials of one group are run contiguous (`_group_order`; only reordering, never changing which trial
+  produces which row) through one `_TrialGroup`, which builds the model, both optimizers and the
+  compiled train/test step ONCE (from the group's first trial) and resets, before every later trial:
+  the model's WEIGHTS (a throwaway `Models.build` at the trial's seed, cheap and not traced, its
+  weights copied in), both optimizers' variables to zero, every RESETTABLE stochastic layer's random
+  state (below) from the trial's seed, and every continuous field to the trial's value.
+  `run: {reuse_graph: false}` disables grouping (every trial fresh, phase 1's path) for a direct
+  comparison or to reproduce old numbers exactly; a `trainer=` override (tests only) always runs
+  ungrouped, since grouping only matters for a real, traced TF graph.
+  - **What makes a reused trial reproduce a fresh one (`Config.SEEDED_STOCHASTIC_LAYERS`, default
+    `False`, forced `True` by screen.py itself on every trial it builds — never by the normal
+    training path, so `scenario run` and the golden run are bit-for-bit unaffected).** Round 1 of
+    this item reset only `training/lambdas.py`'s `tf.Variable`-backed loss weights and
+    `training/custom_model.py`'s new `grad_clip_norm`/`pred_scale`/`pred_mean` Variables — real, but
+    not the whole picture: Keras 2.10's `layers.Dropout` and `layers.MultiHeadAttention`'s internal
+    attention dropout (both used in `models/gru_attention.py`, rate 0.1) default to
+    `rng_type='legacy_stateful'`, a plain `tf.nn.dropout` backed by TF's LEGACY stateful random ops,
+    which have NO Python-visible state at all — nothing to reset — and
+    `models/layers/vacuum_saturation_noise.py`'s `VacuumSaturationNoise` (active whenever
+    `LAMBDA_T_PERP > 0`, the default) called unseeded `tf.random.normal`, same problem. A reused
+    trial's dropout/noise draws kept advancing the PREVIOUS trial's stream instead of starting from
+    its own seed, so round 1 only matched a fresh run when the model happened to be noise-free
+    (dropout 0, `LAMBDA_T_PERP` 0) — QA repair round 1 caught this on real data (trial 3 of a 4-trial
+    group: val loss 6.5250 reused vs 6.0214 fresh). The fix: `training/reset.seeded_stochastic_layers()`
+    is a context manager around every `Models.build(...)` screen mode makes; inside it, Keras's global
+    `tf.keras.backend.experimental.enable_tf_random_generator()` is on, so a Dropout/MultiHeadAttention
+    layer CONSTRUCTED WHILE IT IS ON (read once, at construction, never at call time — a layer built
+    outside this context, i.e. every layer the normal training path builds, is untouched) gets a real,
+    resettable `tf.random.Generator` instead; `VacuumSaturationNoise` takes an explicit `seeded=`
+    argument (`Config.SEEDED_STOCHASTIC_LAYERS`) and, when true, draws from its own
+    `tf.random.Generator` (a plain, untracked attribute — not a layer weight) instead of the unseeded
+    call. `training/reset.reset_stateful_rngs` (extended) finds and resets BOTH shapes of generator
+    from the trial's seed; called on both the fresh and reused paths, so they draw the identical
+    stream (`tests/test_screen.py`'s `test_reused_later_trial_matches_an_independent_fresh_run_...`
+    reproduces QA's exact scenario — real BTC-shaped data, calibrate on, LR/a LAMBDA/GRAD_CLIP_NORM/
+    DATA_END all changed, default dropout and noise ACTIVE — bit-for-bit). A grep of `tf.random\.`,
+    `Dropout`, `GaussianNoise` and `MultiHeadAttention` across `src/neural_trade/models/` found no
+    other stateful random op.
+  - `rules.clip_skip_epochs` (default 1) excludes the FIRST `clip_skip_epochs` epochs' logged steps
+    from `clipped_share` (and the norm max/mean) only — `n_steps` still counts them — because the
+    initial, pre-any-update gradient norm routinely exceeds the clip on a fresh model's very first
+    steps regardless of LR, which is not the "is this config unstable" signal the rule exists for
+    (the `docs/BACKLOG.md` NT-092 "why": every 2-epoch trial at LR 1e-4 failed `max_clipped_share` on
+    this transient alone). The min_epochs guard refuses a spec whose EXPLICIT
+    `rules.clip_skip_epochs >= EPOCHS` (nothing would ever be scored); the unset default is clamped to
+    `EPOCHS - 1` instead, so an ordinary 1-epoch smoke screen is unaffected. `EPOCHS` is NOT part of
+    `structural_key` (a grid/sample axis may set it per trial), so this guard, and the effective
+    `clip_skip_epochs` value passed to a trial, are both computed from THAT TRIAL's own `EPOCHS`, not
+    the spec-wide base (an `EPOCHS=1` trial under a 2-epoch base is refused, not silently scored on
+    zero steps).
+  - **Measured speed-up (CPU, this machine, one 8-trial continuous-only group, 1 epoch each):** trial
+    0 (builds + traces) wall 15.97s (`train_s` 14.13s); trials 2-8 median wall 6.24s (`train_s` 5.02s,
+    `build_s` 0.66s — the throwaway shadow model, not the trace — `score_s` 1.14s). About 2.1-2.6x,
+    short of the ≤5s-per-trial target on total wall (QA measured a similar ratio on its machine:
+    trial 0 19.11s, trials 2-8 median 9.08s). **GPU estimate (not measured — no GPU access from this
+    item):** the original single-trial GPU measurement was 16.7s total with a 12.2s trace
+    (`runs/experiments/micro_loop_v1/LOG.md`); subtracting that trace from a non-first trial's wall
+    (16.7 - 12.2 ≈ 4.5s of load/prep/train/score) suggests trials after the first should land near or
+    under the 5s target on GPU, since GPU trains and predicts faster than CPU while `build_s`'s
+    throwaway-model cost stays roughly fixed; this is an estimate to confirm on a real GPU run, not a
+    measured number.
 
 ### Sweeps
 

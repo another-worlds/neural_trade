@@ -27,10 +27,20 @@ class VacuumSaturationNoise(layers.Layer):
     prediction residual that lives in the hidden perpendicular subspace.
     """
 
-    def __init__(self, e_max=1.0, eps=1e-8, **kwargs):
+    def __init__(self, e_max=1.0, eps=1e-8, seeded=False, **kwargs):
         super().__init__(**kwargs)
         self.e_max = float(e_max)
         self.eps   = float(eps)
+        # seeded (NT-092, Config.SEEDED_STOCHASTIC_LAYERS, default False): tf.random.normal below is
+        # otherwise TF's legacy stateful random op, whose per-op state advances on every call and
+        # cannot be reset from Python - fine for one training run, wrong for screen phase 2's reused
+        # model (a later trial's noise draws would continue an earlier trial's stream instead of
+        # starting from its own seed). When True, a per-layer tf.random.Generator (a plain attribute,
+        # not tracked as a weight - the same pattern Keras's own Dropout uses) replaces it;
+        # training/reset.reset_stateful_rngs finds and resets it exactly like a Dropout layer's own
+        # generator. False (default) is bit-for-bit the pre-NT-092 behaviour.
+        self.seeded = bool(seeded)
+        self._generator = tf.random.Generator.from_seed(0) if self.seeded else None
 
     def call(self, h_perp, training=None):
         if not training:
@@ -53,10 +63,13 @@ class VacuumSaturationNoise(layers.Layer):
             tf.sqrt(deficit + tf.constant(self.eps, dtype=tf.float32))
         )                                                                # [T_PERP_DIM]
 
-        noise = tf.random.normal(shape=tf.shape(h), dtype=tf.float32)  # [B, T_PERP_DIM]
+        if self._generator is not None:
+            noise = self._generator.normal(shape=tf.shape(h), dtype=tf.float32)
+        else:
+            noise = tf.random.normal(shape=tf.shape(h), dtype=tf.float32)  # [B, T_PERP_DIM]
         return h + noise * noise_std                                    # broadcast over B
 
     def get_config(self):
         cfg = super().get_config()
-        cfg.update({'e_max': self.e_max, 'eps': self.eps})
+        cfg.update({'e_max': self.e_max, 'eps': self.eps, 'seeded': self.seeded})
         return cfg
