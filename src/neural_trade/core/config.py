@@ -474,6 +474,13 @@ class Config:
                               unit="flag")
     DIRECTION_SKIP_L2: float = _f(1e-4, "direction", "L2 on the direction skip weights", unit="dimensionless",
                                   ge=0.0, tunable=True)
+    DIRECTION_DEEP_ZERO_INIT: bool = _f(False, "direction",
+                                        "zero-initialise the deep (tower) direction logit's Dense kernel, so each "
+                                        "direction head starts exactly at the DIRECTION_SKIP linear logit "
+                                        "(has no effect when DIRECTION_SKIP is off: the bias is already 0, and "
+                                        "without a skip there is nothing for the deep logit to start from - the "
+                                        "head keeps its usual glorot-initialised Dense(1, sigmoid)); default off "
+                                        "keeps the golden run bit-for-bit (NT-104)", unit="flag")
     DIRECTION_LOSS: str = _f("bce", "direction",
                              "'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)",
                              unit="name", choices=("bce", "focal_dice"))

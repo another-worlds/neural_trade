@@ -46,7 +46,11 @@ class Models(BaseRegistry):
     registry = {}
     strict = True
     default = "gru_attention"
-    discovery_modules: ClassVar[Tuple[str, ...]] = ("neural_trade.models.gru_attention",)
+    discovery_modules: ClassVar[Tuple[str, ...]] = (
+        "neural_trade.models.gru_attention",
+        "neural_trade.models.gru_small",
+        "neural_trade.models.linear_indicators",
+    )
 
     @classmethod
     def validate_component(cls, component: Any) -> bool:
@@ -66,9 +70,19 @@ class Models(BaseRegistry):
 
 
 from neural_trade.models.gru_attention import build_gru_attention  # noqa: E402
+from neural_trade.models.gru_small import build_gru_small  # noqa: E402
+from neural_trade.models.linear_indicators import build_linear_indicators  # noqa: E402
 
 Models.register(name="gru_attention", version="3.0.0",
                 tags=["rnn", "attention", "transformer", "multi_horizon", "default"],
                 description="Learnable indicators + Bi-GRU + attention + energy-gated convs, 3 horizon towers")(
     build_gru_attention)
+Models.register(name="gru_small", version="1.0.0",
+                tags=["rnn", "multi_horizon", "capacity_study"],
+                description="Learnable indicators + one GRU(32), same towers/heads as gru_attention (NT-104)")(
+    build_gru_small)
+Models.register(name="linear_indicators", version="1.0.0",
+                tags=["linear", "multi_horizon", "capacity_study"],
+                description="Learnable indicators, pooled, linear heads (NT-104)")(
+    build_linear_indicators)
 Models._initialized = True
