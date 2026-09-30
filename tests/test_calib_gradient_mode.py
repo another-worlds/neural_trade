@@ -157,6 +157,48 @@ def test_gradient_mode_end_to_end_records_weights_and_gradient_shares(tiny_confi
         assert 0.1 - 1e-9 <= value <= 20.0 + 1e-9, f"{name}={value} outside the [0.1, 20] clamp"
 
 
+def test_active_terms_built_from_multiple_horizons_keep_a_nonzero_trunk_gradient(
+        tiny_config, tmp_path, synthetic_bars, monkeypatch):
+    """Regression test for a real NT-101 defect: ``_term_values`` averages three horizons
+    (``(h0+h1+h2)/3``) for 'ext', 'dir', 'var', 'crps' and 'ece'. The first version of the
+    gradient branch built that average from ``tf.GradientTape``-recorded tensors but OUTSIDE the
+    tape's ``with`` block, so the +/÷ ops were never recorded: ``tape.gradient()`` on the
+    resulting (perfectly real, nonzero-valued) sum found no path into the tape's graph and
+    returned None for every trunk variable, silently leaving those five terms' weights at their
+    original value every run (the same fallback used for a genuinely inactive term). The nine
+    single-field terms (short/point/long/vol/t_perp/casimir/hd/ife/vac_overflow) were unaffected,
+    which is what made this look like batch noise in a subset of terms rather than a tape-scope
+    bug in every multi-horizon one. ``DIR_DEADBAND_BPS=0`` guarantees a nonzero direction mask
+    (every example is labelled up or down), so 'dir' is genuinely active on every sampled batch.
+    """
+    from neural_trade.training.trainer import train_and_evaluate
+
+    monkeypatch.chdir(tmp_path)
+    synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)
+    cfg = tiny_config
+    cfg.CSV_PATH = str(tmp_path / "bars.csv")
+    cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
+    cfg.MODEL_PATH = str(tmp_path / "weights.h5")
+    cfg.CALIB_MODE = "gradient"
+    cfg.DIR_DEADBAND_BPS = 0.0  # every example gets a direction label: 'dir' cannot be masked to 0
+    cfg.validate()
+
+    result = train_and_evaluate(config=cfg, epochs=0, force=True, calibrate=True, fit_calibration=False)
+    cal = result.calibration_lambdas
+    assert cal is not None
+    grad_norms = cal["grad_norms"]
+
+    # These four are built from a 3-horizon average in _term_values and are always active at the
+    # tiny_config defaults (LAMBDA_DIR/VAR/CRPS/EXTENDED_TREND all > 0): each must show a real,
+    # nonzero trunk gradient. Before the fix every one of them was exactly 0.0 here.
+    for lam in ("lambda_dir", "lambda_var", "lambda_crps", "lambda_extended_trend"):
+        assert grad_norms[lam] > 0.0, (
+            f"{lam}'s measured gradient norm is exactly 0 with DIR_DEADBAND_BPS=0 (a nonzero-value, "
+            f"zero-gradient term almost always means the averaged tensor was built outside the "
+            f"GradientTape's `with` block, not that the term is genuinely inactive): {grad_norms}"
+        )
+
+
 def test_gradient_mode_restores_lambdas_on_failure(tiny_config, tmp_path, synthetic_bars, monkeypatch):
     """The gradient branch must restore-on-failure exactly like the value branch (test_calibration_pass.py)."""
     from neural_trade.training.custom_model import CustomTrainModel

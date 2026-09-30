@@ -202,7 +202,18 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                             x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
                             vacuum_overflow=_vac_overflow_batch
                         )
-                    terms = _term_values(loss_components)
+                        # NT-101 fix: the per-horizon average (h0+h1+h2)/3 for ext/dir/var/crps/ece
+                        # must be built INSIDE the tape's `with` block. Built outside (as an earlier
+                        # version of this branch did), the +/÷ ops are not recorded, so
+                        # tape.gradient() on that unrecorded sum finds no path back into the traced
+                        # graph at all and returns None for every trunk variable, for that whole
+                        # aggregated term (reproduced with a plain `tf.Variable` sum outside a
+                        # `with tf.GradientTape()` block: even x0 + x0 loses its gradient). Terms
+                        # passed straight through with no extra arithmetic (short/point/long/vol/
+                        # t_perp/casimir/hd/ife/vac/vac_overflow) were unaffected, which is what
+                        # made the bug look like noise in a subset of terms rather than a tape scope
+                        # bug in every combined one.
+                        terms = _term_values(loss_components)
                     for name in _CALIB_TERM_NAMES:
                         grads = tape.gradient(terms[name], trunk_vars)
                         present = [g for g in grads if g is not None]
