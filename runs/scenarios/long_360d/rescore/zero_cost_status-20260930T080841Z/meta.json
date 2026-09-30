@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "created_utc": "20260930T080841Z",
+  "git_sha": "925398d",
+  "scenario": "long_360d",
+  "scenario_spec": "configs\\scenarios\\long_360d.yaml",
+  "scenario_spec_hash": "e23742608cc0",
+  "scenario_backtest": {},
+  "study": "zero_cost_status",
+  "study_spec": "configs\\strategy_studies\\zero_cost_status.yaml",
+  "study_spec_hash": "56a934021996",
+  "random_seeds_override": 20,
+  "n_configurations": 7,
+  "configurations": [
+    {
+      "id": "cq[entry_quantile=0.9]",
+      "entry": "cq",
+      "strategy": "calibrated_quantile",
+      "params": {
+        "entry_quantile": 0.9
+      },
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    },
+    {
+      "id": "cq[entry_quantile=0.95]",
+      "entry": "cq",
+      "strategy": "calibrated_quantile",
+      "params": {
+        "entry_quantile": 0.95
+      },
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    },
+    {
+      "id": "cq[entry_quantile=0.99]",
+      "entry": "cq",
+      "strategy": "calibrated_quantile",
+      "params": {
+        "entry_quantile": 0.99
+      },
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    },
+    {
+      "id": "ec0",
+      "entry": "ec0",
+      "strategy": "edge_over_cost",
+      "params": {
+        "cost": 0.0
+      },
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    },
+    {
+      "id": "nk0",
+      "entry": "nk0",
+      "strategy": "net_edge_kelly",
+      "params": {
+        "cost": 0.0
+      },
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    },
+    {
+      "id": "vt",
+      "entry": "vt",
+      "strategy": "vol_target",
+      "params": {},
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    },
+    {
+      "id": "gt",
+      "entry": "gt",
+      "strategy": "gated_ta",
+      "params": {
+        "primary": "ma_cross",
+        "q": 0.8
+      },
+      "backtest": {
+        "fee_bps": 0.0,
+        "half_spread_bps": 0.0,
+        "slippage_bps": 0.0
+      }
+    }
+  ],
+  "ranked_by": "mean net Sharpe after costs over the dev cells (test cells shown, never ranked; D-020)",
+  "cells": [
+    {
+      "run_dir": "scenarios/long_360d/20260929T115241Z-1a9e068-95fe35a6-default__f-2__s0",
+      "run_id": "20260929T115241Z-1a9e068-95fe35a6-default__f-2__s0",
+      "cell_key": "default__f-2__s0",
+      "fold": -2,
+      "seed": 0,
+      "role": "dev",
+      "bar_minutes": 1.0
+    }
+  ],
+  "skipped": [],
+  "missing": []
+}

@@ -1,0 +1,52 @@
+schema_version: 1
+name: zero_cost_status
+description: 'D-044 status: the main strategies at zero trading costs.'
+entries:
+- id: cq
+  strategy: calibrated_quantile
+  params: {}
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid:
+    entry_quantile:
+    - 0.9
+    - 0.95
+    - 0.99
+- id: ec0
+  strategy: edge_over_cost
+  params:
+    cost: 0.0
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid: {}
+- id: nk0
+  strategy: net_edge_kelly
+  params:
+    cost: 0.0
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid: {}
+- id: vt
+  strategy: vol_target
+  params: {}
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid: {}
+- id: gt
+  strategy: gated_ta
+  params:
+    primary: ma_cross
+    q: 0.8
+  backtest:
+    fee_bps: 0.0
+    half_spread_bps: 0.0
+    slippage_bps: 0.0
+  grid: {}
