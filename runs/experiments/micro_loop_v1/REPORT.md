@@ -6,7 +6,7 @@ every hypothesis, its method, cost, evidence path and result: [LOG.md](LOG.md).
 
 ## Verdict
 
-**The target is not reached, and on the information available to this project it is not reachable.** Twenty
+**The target is not reached, and on the information available to this project it is not reachable.** Twenty-one
 lines of attack were tested with committed evidence. Directional predictability of BTC/USDT from 1-minute price,
 volume, spot order flow and futures signals peaks at AUC about 0.52-0.54 (51-53% of calls right; 54-56% on the
 most confident tenth), at horizons from 10 minutes to 5 hours. The neural network never beats a logistic
@@ -23,7 +23,7 @@ variant).
 | Labels and objective | cost-sensitive labels (E1), net-P&L objective (E2, NT-087), triple-barrier labels (E3 bar) | all below or at the logistic baseline |
 | Maths and hyperparameters | 960-trial screen (NT-088/NT-092), level 2 on 5 configurations | maths stable; no configuration recovers direction |
 | Conditions | hour of day, volatility and volume regimes, after large moves | post-shock reversal: hit 54.2%, z 4.1 out of sample, but gross edge -0.4 bps |
-| New information (evidence for owner question 8) | spot taker-buy order flow; futures basis, futures flow, futures-spot lead | spot flow +0.010 AUC (z 3.2) at 15 min; futures add nothing |
+| New information (evidence for owner question 8) | spot taker-buy order flow; futures basis, futures flow, futures-spot lead; futures order-book depth (+-1-5%, minute snapshots) | spot flow +0.010 AUC (z 3.2) at 15 min; futures and depth add nothing; best hit on all bars 53% (1 min, a 2 bps move) |
 
 ## What the numbers say about the target
 
@@ -37,9 +37,10 @@ variant).
 
 ## What could still move it (owner decisions)
 
-1. **Order-book data** (depth and its imbalance, at seconds): the one information source the literature ties to
-   high hit rates. Binance's free archives carry trades and klines but not historical depth; collecting it live or
-   buying it is an owner decision, and its horizons clash with the cost structure.
+1. **Tick-level order-book data** (the full book and its updates, at sub-second horizons): the one information
+   source the literature ties to high hit rates. The free minute-level depth snapshots add nothing (Q8-probe-3);
+   tick depth (bookTicker is ~340 MB per day) or a live collector is an owner decision, and at those horizons a move
+   is far below the 13 bps per side this project pays.
 2. **Lower costs**: the timing signal the models do carry is worth ~0.9-1.2 bps per trade; the zero-cost rescore
    of the 360-day run made +17% in 32 days. A venue or fee tier near zero changes the economics, not the
    predictive power.
