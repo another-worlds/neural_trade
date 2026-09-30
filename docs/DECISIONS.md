@@ -58,6 +58,7 @@ that extend or partly replace an entry.
 | D-042 | No pinging: the lead waits for completion notices; active polling goes to the Haiku tracker | owner | |
 | D-043 | Model split: Opus for the lead, P0/P1 QA and research; Sonnet for implementer, experimenter and P2/P3 QA | owner (the split: lead's proposal) | |
 | D-044 | Trading costs are 0; no tick order-book data | owner | |
+| D-045 | The maths report's 22 recommendations are implemented by a staged plan: measure, prune, reweigh, rebuild, generalise | owner (the plan: lead's) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -539,3 +540,19 @@ that extend or partly replace an entry.
   and the cost-aware strategies' cost 0). Tick order-book data is not collected. This supersedes VISION "The
   yardstick" and "Principles" on costs (the owner's document; the lead updates VISION's wording in the same change).
 - **Consequence:** NT-094 (defaults to zero costs); the zero-cost status of every stored model (rescore, CPU).
+
+## D-045 The maths report's 22 recommendations are implemented by a staged plan (owner, 2026-09-30)
+- **Owner:** asked for a plan to implement all recommendations of the maths report ("Напиши план по внедрению всех
+  рекоммендаций") and approved the lead's plan.
+- **Decision:** the recommendations of [research/2026-09-30-math-report/](research/2026-09-30-math-report/A_losses.md)
+  (A_losses.md, B_model_indicators.md; presentations/4_math_report.html) are implemented in five phases: (0) foundations
+  on CPU: NT-036, NT-037 (with the D-045 amendment), NT-032, NT-096, NT-074; (1) measure the per-term gradient shares on
+  real trainings (NT-098); (2) prune what the measurements condemn (NT-099 soft ECE and vol, NT-100 NLL tail); (3) reweigh
+  (NT-101 -> NT-039, then NT-102 clip); (4) rebuild (NT-104 capacity, NT-105 attention; NT-097 -> NT-106 indicators);
+  (5) generalise (NT-040/041/042 -> NT-107). Every change that moves numbers is a Config switch with today's default
+  (golden run unchanged) until a pre-registered A/B judged by NT-032 adopts it (D-025); the per-step path keeps D-018;
+  the physics terms stay (D-003; NT-006 decides them).
+- **Gates for the owner:** epoch selection on proper scores (NT-103) changes the rule of D-011; any study above 3
+  GPU-hours, including the final 360-day confirmation (about 3.5 GPU-hours, an estimate).
+- **Consequence:** NT-096 to NT-107; amendments to NT-037, NT-038, NT-041.
+

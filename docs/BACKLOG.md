@@ -128,6 +128,18 @@ changes).
 | [NT-093](#nt-093) | P2 | bug | implementer | todo | Identity follow-ups: notebook 08 launch guard trusts the recorded hash; screen trial keys moved once; config_identity docs |
 | [NT-094](#nt-094) | P1 | feature | implementer | done | Trading costs default to 0 (D-044) |
 | [NT-095](#nt-095) | P2 | feature | implementer | done | Notebook 09: the candidate run (training, fit, backtest) |
+| [NT-096](#nt-096) | P1 | bug | implementer | todo | Loss hygiene: epsilon inside every batch std, coherence without its zero-gradient parts and logged, stale comments |
+| [NT-097](#nt-097) | P2 | feature | implementer | todo | Indicator hygiene: bound the applied period, no meta bias, LR schedule for both optimizers, GRAD_MULT 1, applied-period report |
+| [NT-098](#nt-098) | P1 | research | experimenter | todo | Per-term gradient shares measured on real trainings (the probe of NT-037) |
+| [NT-099](#nt-099) | P1 | research | experimenter | todo | Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off |
+| [NT-100](#nt-100) | P2 | research | experimenter | todo | Pre-registered A/B: the NLL tail (lower variance weight, Student-t NLL) |
+| [NT-101](#nt-101) | P1 | feature | implementer | todo | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
+| [NT-102](#nt-102) | P2 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
+| [NT-103](#nt-103) | P1 | feature | implementer | todo | Epoch selection on proper scores (EPOCH_SELECT_METRIC); waits for the owner (D-011) |
+| [NT-104](#nt-104) | P1 | feature | implementer | todo | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
+| [NT-105](#nt-105) | P2 | feature | implementer | todo | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
+| [NT-106](#nt-106) | P3 | feature | implementer | todo | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
+| [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
 
 ## Items
 
@@ -565,6 +577,7 @@ changes).
 - **why:** D-026: health numbers in every run at no more than 2% of the training step's time, and a detailed per-loss-term probe (about 10%) behind a flag, so an unstable run can be attributed to its loss term. Only the epoch mean of the pre-clip global gradient norm is logged (custom_model.py:475, 286); there is no per-group maximum and no count of clipped steps (the clip is at custom_model.py:498-507). From NT-012 (absorbed): coherence_penalty is computed (losses/functions.py:593) but not logged, so the training dashboard draws an inferred 'other: coherence (not logged)' band (training_dashboard.py:98) and repeats the 0.1 factors of custom_loss by hand; the direction chance bands use n_val // steps although 11-17% of validation samples (19-26% on test) sit inside the deadband and are not scored (training_dashboard.py:1133).
 - **acceptance:** (1) Per group (main, indicator), train only: grad_norm_max_main, grad_norm_max_indicator, grad_clip_steps_main and grad_clip_steps_indicator (steps whose pre-clip norm exceeded GRAD_CLIP_NORM) in metrics.jsonl (test on a 1-epoch CPU smoke run). (2) Dead-zone counters: val_dir_n_h0/h1/h2, equal to DirectionStats.mask_sum, and the counts of variance outputs at VAR_FLOOR and of learned periods at their bounds (test). (3) Per-term contributions for train and val_: contrib_* for every term of the total (losses/functions.py:770-788) with coherence_penalty among them; their sum equals loss / val_loss within 1e-4 relative (test). (4) The run's report shows the health numbers per group and per epoch: maximum norm against the clip, the share of clipped steps, non-finite steps and dead-zone counts (test on the text). (5) Cost: a micro-benchmark with the health numbers on and off (same seed, at least 5 repeats) shows at most 2% more time per step; the implementer reports the numbers, and the GPU check is the definition of done's sec_per_step comparison (D-018). (6) A probe behind a flag, off by default: per loss term, its share of the gradient norm and the cosine conflict between term gradients, per group, every K steps; with the flag on, a 1-epoch CPU smoke run has the probe keys and the shares sum to 1 within 1e-4; with it off, no probe key is written (test). (7) The training dashboard has no 'other: coherence (not logged)' trace for runs with these keys, the gradient panel draws the maximum with the clip count in the hover, and the direction chance bands use val_dir_n // steps; older runs without these keys still render (tests in tests/test_viz_training.py). (8) tests/test_custom_loss.py and tests/test_telemetry.py pass.
 - **source:** owner Q&A 2026-09-28 (round 8); docs/DECISIONS.md D-018, D-026; NT-012 (integration_todo.md training requests: findings 38, 106b, NEW val_dir_n); survey 2026-09-28
+- **amendment (2026-09-30, D-045):** the probe (6) also records, per term, the gradient norm on the shared trunk and the cosine with the total gradient, and the value share beside it (recommendation L7: every run reports both shares); the report shows the DIRECTION_SKIP logit's share of the direction logit variance (A4). Evidence: soft ECE 97% of the gradient direction in the CPU probe (A_losses.md section 7).
 
 ### NT-038
 
@@ -579,6 +592,7 @@ changes).
 - **note (2026-09-29, micro loop H4):** the config guard should refuse (or warn on) BATCH_SIZE x LOOKBACK^2 combinations that exceed GPU memory: at LOOKBACK 240, batch 2048 and 512 both OOM on the RTX 4070 Ti (attention softmax [B, 4, L, L]); measured in runs/scenarios/micro_lookback/ failed cells.
 - **source:** owner Q&A 2026-09-28 (rounds 1, 8); docs/DECISIONS.md D-021, D-026
 - **amendment (2026-09-29, D-037):** a named long-memory case: slow periods starting at 1,440 and 10,080 bars with INDICATOR_LR_MULT 5 and 1, plus the per-channel scale normalisation variant (B/ item 5 of the plan's evidence).
+- **amendment (2026-09-30, D-045):** the memory guard counts both L^2 tensors: the batched EWMA weights [B, K, L, L] (K = 18 today; about 8.5 GB per float32 copy at B 2048, L 240, an estimate) and the attention scores [B, 8, L, L]; the threshold comes from a GPU memory profile the experimenter records (B_model_indicators.md 1.3).
 
 ### NT-039
 
@@ -617,6 +631,7 @@ changes).
 - **acceptance:** (1) A dataset spec: symbol, quote currency, bar size and data file; the window and horizons in wall-clock minutes, converted to bars from the bar size; a length that does not divide exactly is refused (test). (2) The reference defaults give today's bars (a 60-minute window is 60 bars, horizons 10/15/20 minutes are 10/15/20 bars) and `scripts/golden_run.py verify` passes. (3) Every run's meta.json and every leaderboard row carry the dataset fingerprint (file sha256, first and last timestamp, bar count) and the setup (test). (4) Costs are a per-instrument profile (fee, half-spread, slippage per side) whose default equals today's 13 bps per side, and backtests read it from the spec (test). (5) Labels come from the spec: figure titles and axes name the symbol, the bar size and the quote currency, and a test finds no hard-coded 'BTC' label and no hard-coded '$' currency label (text or d3 format) left in src/neural_trade/visualization. (6) The training block is 7 days by default, and the val, cal and out-of-sample blocks have their own configured lengths in time; the purge gap stays (D-005) (test on the block lengths in bars). (7) Walk-forward folds over the long history: the data file is configurable, folds are placed at configured dates or spacing, and each fold records its dates in meta.json (test on a synthetic multi-month file: the folds fall in different months and their blocks never overlap). The bundled 30-day file stays the default for tests and CI. (8) Gap policy: missing bars are detected, no input window or target spans a gap, and the number of windows dropped is recorded in meta.json (test on a synthetic file with holes).
 - **source:** owner Q&A 2026-09-28 (rounds 1, 5, 5b); VISION "The reference setup"; docs/DECISIONS.md D-022; survey 2026-09-28
 - **amendment (2026-09-29, D-037):** from the window-free plan: detect forward-filled flat zero-volume runs; gaps and flat runs of 60 minutes or less are elapsed time, longer ones reset (series mode) and are counted in meta.json; do not drop anchors for short filled runs; fold roles (dev or judgement), a judgement fold's read range disjoint from every choice run's blocks (refused otherwise, test); a configurable out-of-sample length (5 days for the A/Bs); meta.json records each run's read range (A/ item 4 and C/ item 3 of the plan's evidence).
+- **amendment (2026-09-30, D-045):** SKIP_LAGS (gru_attention.py:20, hard-coded bars) becomes a config field in wall-clock minutes, and learned periods are reported in minutes as well as bars (recommendation U4).
 
 ### NT-042
 
@@ -1254,6 +1269,150 @@ changes).
 - **why:** owner 2026-09-30: "Загрузи прогон с лучшей стратегиией в ноутбук. Я хочу суммаризацию с графиками ее трейна, оценки фита, бэктест" (load the run with the best strategy into a notebook: training, fit evaluation, backtest).
 - **acceptance:** a generated, executed notebook 09 under 5 MB on candidate C1's run (long_360d_stab f-2/s0, calibrated_quantile 0.9, zero cost); its numbers match the manifest and the run's dev report; figure defaults of 02/03 unchanged; logic outside the notebook with tests; suites.
 - **source:** the owner request above; configs/candidates/ (C1)
+
+### NT-096
+
+**Loss hygiene: epsilon inside every batch std, coherence without its zero-gradient parts and logged, stale comments**
+
+- **status:** todo
+- **priority / type / role:** P1 / bug / implementer
+- **area:** src/neural_trade/losses/functions.py, src/neural_trade/models/gru_attention.py (comments), src/neural_trade/core/outputs.py, tests/
+- **depends on:** none
+- **why:** A_losses.md sections 3, 8, 10: `reduce_std` of a batch-constant head differentiates sqrt(0) and gives a NaN gradient in vol, HD, IFE and vacuum (hidden by the step guard, never observed); coherence has two parts with zero gradient (tf.sign, a label-only constant) and a live magnitude-ordering part with gradient norm about 0.9 that is not logged; gru_attention.py:183, 214, 235 call the towers 1-, 5- and 15-minute and :198-201 is a no-op clip.
+- **acceptance:** (1) sqrt(var + eps) (or an equivalent guard) in every batch std of the loss; a test feeds a batch-constant head and gets finite gradients for vol, HD, IFE and vacuum. (2) Coherence keeps only the magnitude-ordering part; the logged contrib of coherence equals it (test); the dead parts' removal is shown not to change any gradient (test comparing gradients before and after on a fixed batch). (3) `scripts/golden_run.py verify` passes on the weights, or the implementer shows the only difference is the val_loss offset of the removed constant and the served epoch is unchanged on the golden config. (4) Comments name the configured horizons; the no-op clip is removed with D-029 evidence. (5) Fast suite, ruff, TESTING_DOCUMENTATION.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-097
+
+**Indicator hygiene: bound the applied period, no meta bias, LR schedule for both optimizers, GRAD_MULT 1, applied-period report**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/models/layers/learnable_indicators.py, src/neural_trade/models/gru_attention.py (meta_adjust), src/neural_trade/training/callbacks.py, src/neural_trade/training/optim.py, src/neural_trade/core/config.py, src/neural_trade/evaluation/, tests/
+- **depends on:** NT-032 (comparator, for the A/B)
+- **why:** B_model_indicators.md 2.2, 4.2, 7 items 5, 6, 7, 9, 10: the per-window shift lets applied periods reach 1.6 and 74.7 bars outside [2, 60]; the base logit and the meta Dense bias are one unidentifiable direction trained by two optimizers; ReduceLROnPlateau never lowers the indicator LR (0.005 while the main one falls to 0.000125); INDICATOR_GRAD_MULT is a no-op under Adam apart from clipping; the logged period is the base value only.
+- **acceptance:** (1) The applied period is bounded to [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX] (test on extreme meta inputs). (2) meta_adjust has no bias (config switch, new default after the A/B). (3) The plateau schedule scales both optimizers (config switch; test that both LRs fall). (4) INDICATOR_GRAD_MULT default 1 (config change, documented). (5) Each run reports p5 / p50 / p95 of every applied period on the evaluation block (test). (6) Each change is a Config switch; with all switches at today's values `scripts/golden_run.py verify` passes. (7) A pre-registered A/B (SPEC before GPU, at most 3 variants: today / all four fixes / fixes without the bias change) judged by NT-032 decides the new defaults; D-018 sec_per_step check.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-098
+
+**Per-term gradient shares measured on real trainings (the probe of NT-037)**
+
+- **status:** todo
+- **priority / type / role:** P1 / research / experimenter
+- **area:** runs/experiments/grad_shares_v1/ (SPEC, REPORT), no code
+- **depends on:** NT-037 (probe)
+- **why:** A_losses.md section 7: soft ECE carried 97% of the gradient direction on three CPU batches of the served model; a sample, not a distribution over training. The A/Bs of D-045 phase 2 are gated on this being true during training.
+- **acceptance:** (1) The probe of NT-037 on, on one 360-day run (fold -2, seed 0, the long_360d_stab config) and three micro-layout runs; GPU budget stated in the SPEC (estimate about 0.7 GPU-hours). (2) REPORT: per term, the gradient-norm share and the cosine with the total per epoch (median and range), and the value share beside it. (3) The gate for NT-099 is written in the SPEC before the runs: soft ECE's gradient share above 50% in most epochs.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-099
+
+**Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off**
+
+- **status:** todo
+- **priority / type / role:** P1 / research / experimenter
+- **area:** runs/experiments/loss_prune_v1/ (SPEC, REPORT), an engine scenario; no code beyond config
+- **depends on:** NT-032 (comparator), NT-098 (the gate)
+- **why:** A_losses.md sections 7-8 and recommendations 1, 3: soft ECE is improper and its |.| kink gives an O(1) gradient that does not vanish at calibration; the vol term demands std(mu) = std(y) against every proper score and is always active in the leader.
+- **acceptance:** (1) SPEC committed before any GPU time: variants control / LAMBDA_SOFT_ECE 0 / LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0; the micro layout; judgement folds and at least 5 (seed, fold) pairs named; primary metric CRPSS non-inferiority (margin -0.005); secondary direction BCE and AUC against logreg_lags; guard-rails clipped_share, 90% coverage, 0 non-finite steps; minimum effects; GPU estimate within 3 hours (about 1.5, an estimate). (2) One verdict per variant by NT-032. (3) REPORT with every run id and NT-037 health numbers. (4) An adopted variant becomes the default through a DECISIONS entry citing the verdict.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-100
+
+**Pre-registered A/B: the NLL tail (lower variance weight, Student-t NLL)**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **area:** runs/experiments/nll_tail_v1/; src/neural_trade/losses/functions.py (NLL_KIND option), src/neural_trade/core/config.py, tests/ (through an implementer sub-item)
+- **depends on:** NT-099
+- **why:** A_losses.md section 5 and recommendation 7: the NLL mean gradient e/v and variance gradient e^2/v are bounded only by the variance floor and the +-100 clip; NLL was the most batch-sensitive term (norm 0.63-4.61); LAMBDA_VAR correlates +0.58 with the screen's mean gradient norm.
+- **acceptance:** (1) Code: NLL_KIND gaussian (default, golden run unchanged) or student_t with fixed dof (test: finite, bounded gradients on large residuals). (2) SPEC before GPU: control (NT-099's winner) / LAMBDA_VAR x 0.3 / student_t; metrics CRPSS and coverage, guard-rails as NT-099; within 3 GPU-hours. (3) Verdict by NT-032; adoption through DECISIONS.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-101
+
+**Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/training/lambda_calibration.py, src/neural_trade/core/config.py, tests/
+- **depends on:** NT-037 (per-term gradients), NT-099 (the cleaned objective)
+- **why:** A_losses.md recommendation 2: the calibration pass equalises loss values (lambda_calibration.py:207-210), so soft ECE went 1 -> 2.907 because its value is small while its gradient was already the largest.
+- **acceptance:** (1) CALIB_MODE value (default, golden run unchanged) or gradient: weights set so each term's gradient norm on the shared trunk is equal (GradNorm-style, measured over the same calibration steps), clipped to [0.1, 20] (test on a synthetic two-term loss: equal gradient norms after calibration). (2) The chosen weights and each term's gradient share are written to meta.json (test). (3) Cost of the calibration pass reported. (4) NT-039 (the existing A/B) runs this mode against value calibration.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-102
+
+**Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **area:** configs/screens/ (a spec), runs/screens/, docs/DECISIONS.md (the lead records the choice)
+- **depends on:** NT-101 and NT-039 (the objective the clip is chosen for)
+- **why:** A_losses.md recommendation 10 and B_model_indicators.md 6: the mean gradient norm (about 20) sat at the clip (20); 44% of screen trials failed only the clipped-share rule; Adam bounds each step by 7.27 x lr regardless of the clip.
+- **acceptance:** (1) A quick screen of GRAD_CLIP_NORM x LR on the cleaned objective (rules fixed in the spec before it runs; within 1 GPU-hour, an estimate). (2) The report gives the gradient-norm distribution and the pass rates. (3) The new GRAD_CLIP_NORM and max_clipped_share are chosen from the dev slices and recorded in DECISIONS with the evidence.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-103
+
+**Epoch selection on proper scores (EPOCH_SELECT_METRIC); waits for the owner (D-011)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/training/callbacks.py (EarlyStopping / best-epoch restore), src/neural_trade/training/trainer.py, src/neural_trade/core/config.py, tests/
+- **depends on:** an owner decision (the rule of D-011 is on val_loss); NT-032
+- **why:** A_losses.md solvability: epoch-to-epoch swings of the combined val_loss (0.1-0.3) are 100-200x the whole achievable direction gain (about 1.4e-3 weighted), so the served epoch is blind to direction.
+- **acceptance:** (1) Not picked before the owner answers (STATUS question). (2) EPOCH_SELECT_METRIC: val_loss (default, golden run unchanged) or a pre-registered sum of proper scores (val direction BCE + val CRPS, each normalised by its epoch-1 value) (test: the restored epoch is the argmin of the chosen metric). (3) An A/B through NT-032 decides the default.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-104
+
+**Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/models/ (new registered variants), src/neural_trade/core/config.py, tests/; runs/experiments/capacity_v1/
+- **depends on:** NT-099 or NT-101 (the objective), NT-032
+- **why:** B_model_indicators.md 1.1 and 7 item 2: 296,591 parameters, 44.6% in one attention; the network is never above a 3-lag logistic regression and significantly below it at 1 h (LOG.md L2, z -3.3..-3.5). The direction head already holds a logistic skip (DIRECTION_SKIP).
+- **acceptance:** (1) Registered model variants (D-002): gru_small (indicators -> GRU(32) -> heads) and linear_indicators (indicators -> linear heads), same heads and losses; default unchanged (golden run). (2) A config switch zero-initialises the deep direction logit, and the run reports the skip's share of the logit variance (test). (3) SPEC and A/B (at most 3 variants: today / gru_small / linear_indicators) through NT-032 on direction AUC, BCE and CRPSS; within 3 GPU-hours or the owner.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-105
+
+**Attention across the indicator channels and pooling instead of Flatten; then an A/B**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/models/gru_attention.py, tests/
+- **depends on:** NT-104
+- **why:** B_model_indicators.md 1.4 and 7 item 1: the block commented 'attend across indicators' (gru_attention.py:69-73) attends across the 128 GRU units with the 60 time positions as features (513L + 384 parameters); Flatten -> Dense adds 512L + 32; both tie the model to the window length.
+- **acceptance:** (1) A config switch: attention across the 31 indicator channels before the GRU (tokens = channels) or no block; pooling instead of Flatten. (2) Default unchanged (golden run); a test builds the model at L = 60 and L = 120 with the new switches and the parameter count does not depend on L. (3) An A/B through NT-032 decides.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-106
+
+**MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B**
+
+- **status:** todo
+- **priority / type / role:** P3 / feature / implementer
+- **area:** src/neural_trade/indicators/families.py, src/neural_trade/models/layers/learnable_indicators.py, tests/
+- **depends on:** NT-097
+- **why:** B_model_indicators.md 4.1 and 7 item 8: macd_1_fast sits at the floor of 2 in 5 of 6 runs, ma_period_0 and macd_2_fast in 2 of 6; fast < slow is not enforced (a mirror symmetry).
+- **acceptance:** (1) A MACD parametrisation switch: fast = r x slow with r in (0, 1) learned as a logit; the floor lets a fast leg reach p = 1 explicitly. (2) Default unchanged (golden run); a test shows fast < slow always holds under the switch. (3) An A/B through NT-032 on the identified periods and direction AUC.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-107
+
+**Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/data/scaling.py, src/neural_trade/data/processor.py, src/neural_trade/models/gru_attention.py (a sigma input), src/neural_trade/training/trainer.py, tests/
+- **depends on:** NT-041 (units), NT-032
+- **why:** B_model_indicators.md 5.2 and 7 item 14: inputs are dollars / one scale per block, so a 16.0 -> 14.1 bps volatility reads as $105.6 -> $148.4 a year later; the variance head must learn the price level.
+- **acceptance:** (1) An input-normalisation switch: each window divided by its own realised sigma, sigma fed as a separate feature; the target stays in dollars (D-022) and is rescaled at the output (test: served predictions in dollars match the old path's units). (2) Default unchanged (golden run). (3) An A/B through NT-032 on CRPSS and direction.
+- **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
 
 ## Done log
 
