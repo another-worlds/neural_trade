@@ -62,6 +62,14 @@ model's sigma), NT-079, NT-080, NT-081.
   Recommendation: keep the close-only input and the four families as the default; the new families stay available
   by config until an A/B shows value.
 
+## Level-1 screen campaign (2026-09-30; approved plan docs/research/2026-09-29-screen-plan.md)
+
+Specs configs/screens/campaign_l1/ (A hyperparameters 264, B loss weights 328, C physics 288, D loss choice 64,
+E maths 16 = 960 trials; rules and slices fixed in the specs before launch). **GPU budget (estimate, stated
+before launch):** ~12 s per trial (8 epochs x ~1.4 s at batch 64 + ~1 s scoring, graph reuse per structural
+group) = ~3.2 h in one process, ~1.2-1.5 h with 3 shards (NT-035: N = 3 allowed); cap 4 GPU-hours. Screens
+maths and stability only; quality comes from level 2 on the survivors.
+
 ## In progress
 
 - **NT-035** (experimenter): results and REPORT committed (426de4f, 7ee2916; 0.47 GPU-hours of a 3-hour

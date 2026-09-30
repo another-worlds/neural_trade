@@ -1,0 +1,102 @@
+"""Level-1 screen campaign (docs/research/2026-09-29-screen-plan.md): writes the five block specs next to this
+file and prints each block's trial count, validated by the screen's own trial builder (no training).
+
+    python configs/screens/campaign_l1/make_specs.py
+
+Common to every block (fixed before any trial runs):
+- the long file Bitcoin_BTCUSDT.csv; four 6-hour slices from different regimes, all before the protected
+  last 64 days (D-020): 2020-03-12 23:00 (COVID crash), 2021-05-19 23:00 (May-2021 crash),
+  2023-07-15 00:00 (calm summer), 2024-12-05 00:00 (post-100k, volatile);
+- layout N_FOLDS 2, VAL/CAL 0.1, MAX_SEQUENCE_COUNT 4500, FOLD_INDEX -2 = 360 training windows (6 h);
+  BATCH_SIZE 64 (6 steps per epoch), EPOCHS 8, calibrate off, seeds 0 and 1, TRAIN_METRICS_EVERY 1;
+- rules: all finite, no non-finite gradient step, clipped share <= 0.5 after the first epoch
+  (clip_skip_epochs 1), train loss must fall (drop >= 0.0), no loss term above 0.9 of the total.
+Level 1 screens maths and stability only; it does not rank quality (the plan's level 2 does).
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import yaml
+
+HERE = Path(__file__).parent
+SLICES = ["2020-03-12T23:00:00", "2021-05-19T23:00:00", "2023-07-15T00:00:00", "2024-12-05T00:00:00"]
+COMMON = {
+    "schema_version": 1,
+    "base_config": "../../default.yaml",
+    "overrides": {"CSV_PATH": "Bitcoin_BTCUSDT.csv", "N_FOLDS": 2, "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1,
+                  "MAX_SEQUENCE_COUNT": 4500, "FOLD_INDEX": -2, "BATCH_SIZE": 64, "TRAIN_METRICS_EVERY": 1},
+    "slices": SLICES,
+    "seeds": [0, 1],
+    "run": {"calibrate": False, "epochs": 8},
+    "rules": {"finite": True, "max_nonfinite_grad_steps": 0, "max_clipped_share": 0.5, "clip_skip_epochs": 1,
+              "min_train_loss_drop": 0.0, "max_term_share": 0.9},
+}
+
+LOSS_LAMBDAS = {  # default -> sampled log-uniformly in [0.1x, 10x]
+    "LAMBDA_POINT": 1.0, "LAMBDA_SHORT": 1.0, "LAMBDA_LONG": 1.0, "LAMBDA_EXTENDED_TREND": 0.1,
+    "LAMBDA_DIR": 1.0, "LAMBDA_VAR": 1.0, "LAMBDA_VOL": 1.0, "LAMBDA_CRPS": 1.0, "LAMBDA_SOFT_ECE": 1.0,
+    "LAMBDA_COHERENCE": 1.0, "LAMBDA_TREND_OUTER": 1.0, "LAMBDA_DIR_OUTER": 1.0, "LAMBDA_NLL_OUTER": 1.0,
+}
+PHYSICS = {"LAMBDA_T_PERP": 0.1, "LAMBDA_CASIMIR": 0.1, "LAMBDA_HD": 0.1, "LAMBDA_IFE": 0.1,
+           "LAMBDA_VAC_OVERFLOW": 0.1}
+
+BLOCKS = {
+    "A_hyper": {
+        "description": "Block A: optimiser hyperparameters (LR, Adam betas, indicator LR multiplier) by LHS, "
+                       "plus GRAD_CLIP_NORM on a grid.",
+        "grid": {"axes": {"GRAD_CLIP_NORM": [5.0, 20.0, 100.0]}},
+        "sample": {"n": 30, "method": "lhs", "seed": 1,
+                   "space": {"LR": {"low": 1e-4, "high": 1e-2, "log": True},
+                             "ADAM_BETA1": {"low": 0.8, "high": 0.95},
+                             "ADAM_BETA2": {"low": 0.99, "high": 0.9999},
+                             "INDICATOR_LR_MULT": {"low": 1.0, "high": 20.0, "log": True}}},
+    },
+    "B_loss_weights": {
+        "description": "Block B: the 13 loss weights, jointly by LHS in [0.1x, 10x] of their defaults (log).",
+        "sample": {"n": 40, "method": "lhs", "seed": 2,
+                   "space": {k: {"low": 0.1 * v, "high": 10.0 * v, "log": True} for k, v in LOSS_LAMBDAS.items()}},
+    },
+    "C_physics": {
+        "description": "Block C: the physics terms (D-003): one-at-a-time ablations on a grid, and their weights "
+                       "jointly by LHS in [0.1x, 10x] (log), RHO_MAX in [0.5, 0.99].",
+        "grid": {"axes": {"ABLATE_LAMBDAS": [[]] + [[k] for k in PHYSICS]}},
+        "sample": {"n": 30, "method": "lhs", "seed": 3,
+                   "space": {**{k: {"low": 0.1 * v, "high": 10.0 * v, "log": True} for k, v in PHYSICS.items()},
+                             "RHO_MAX": {"low": 0.5, "high": 0.99}}},
+    },
+    "D_loss_choice": {
+        "description": "Block D: the direction loss (bce, focal_dice) and the pnl_utility objective "
+                       "(LAMBDA_PNL 0 / 0.25 / 0.5 / 1, realised-vol sigma, full shuffle).",
+        "overrides": {"LOSS_NAME": "pnl_utility", "SHUFFLE_BUFFER": 0},
+        "grid": {"axes": {"DIRECTION_LOSS": ["bce", "focal_dice"], "LAMBDA_PNL": [0.0, 0.25, 0.5, 1.0]}},
+    },
+    "E_maths": {
+        "description": "Block E: maths equivalence and stress: EWMA_IMPL matrix vs scan.",
+        "grid": {"axes": {"EWMA_IMPL": ["matrix", "scan"]}},
+    },
+}
+
+
+def main() -> None:
+    from neural_trade.experiments.screen import ScreenSpec, build_trials
+
+    total = 0
+    for name, block in BLOCKS.items():
+        spec = {**COMMON, "name": f"l1_{name}", "description": block["description"],
+                "overrides": {**COMMON["overrides"], **block.get("overrides", {})}}
+        for key in ("grid", "sample"):
+            if key in block:
+                spec[key] = block[key]
+        path = HERE / f"{name}.yaml"
+        header = ("# Level-1 screen campaign block (generated by make_specs.py; edit there). Pre-registered: the\n"
+                  "# rules and the slices are fixed before any trial runs. docs/research/2026-09-29-screen-plan.md\n")
+        path.write_text(header + yaml.safe_dump(spec, sort_keys=False), encoding="utf-8", newline="\n")
+        n = len(build_trials(ScreenSpec.from_yaml(path)))
+        total += n
+        print(f"{name}: {n} trials -> {path.name}")
+    print(f"total: {total} trials")
+
+
+if __name__ == "__main__":
+    main()
