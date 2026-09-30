@@ -652,6 +652,8 @@ MANIFEST_PATH = "../configs/candidates/manifest.json"
 STRATEGY = "calibrated_quantile"
 STRATEGY_PARAMS = {"entry_quantile": 0.9}
 BACKTEST_PARAMS = {"fee_bps": 0.0, "half_spread_bps": 0.0, "slippage_bps": 0.0, "random_seeds": 20}
+MAX_DASHBOARD_POINTS = 6000      # thins the trading dashboard's per-bar lines on this long a block (D-013 size)
+MAX_ROC_POINTS = 300             # direction_analytics' own ROC-curve resolution
 """, "parameters"),
     ("md", "## Summary"),
     ("code", """
@@ -717,7 +719,7 @@ display(AT.styled(AT.classification_table(oos_frame, cfg)))
 display(AT.styled(AT.delta_quality_table(oos_frame, cfg, raw_delta=raw_delta)))
 """),
     ("code", """
-Visualizations.build("direction_analytics", oos_frame, cfg, raw_delta=raw_delta).show()
+Visualizations.build("direction_analytics", oos_frame, cfg, raw_delta=raw_delta, max_points=MAX_ROC_POINTS).show()
 Visualizations.build("delta_analytics", oos_frame, cfg, raw_delta=raw_delta).show()
 Visualizations.build("variance_analytics", oos_frame, cfg, raw_delta=raw_delta).show()
 """),
@@ -726,13 +728,14 @@ Visualizations.build("variance_analytics", oos_frame, cfg, raw_delta=raw_delta).
 
 `calibrated_quantile` at `entry_quantile` 0.9, fitted on the calibration block, at zero trading costs
 (D-044): the summary against buy-and-hold, always-flat and the size-matched random null, the trading
-dashboard (equity vs buy-and-hold, drawdown, positions) and the per-trade analytics.
+dashboard (equity vs buy-and-hold, drawdown, positions; its per-bar lines thinned to `MAX_DASHBOARD_POINTS`
+on a block this long, every trade and decision marker still at its own bar) and the per-trade analytics.
 """),
     ("code", """
 explorer = BacktestExplorer(run_report.load_saved_blocks(run_dir))
 res = explorer.run(STRATEGY, STRATEGY_PARAMS, BACKTEST_PARAMS)
 display(explorer.summary_frame(res, styled=True))
-explorer.dashboard(res).show()
+explorer.dashboard(res, max_line_points=MAX_DASHBOARD_POINTS).show()
 explorer.trade_analytics(res).show()
 """),
 ]

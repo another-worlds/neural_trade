@@ -397,6 +397,54 @@ def test_size_budget_x0_dx_and_float32(viz_backtest):
     assert len(fig.to_json()) < 600_000 * n / 7236 + 200 * res.summary["n_trades"]
 
 
+def test_max_line_points_is_none_by_default_and_keeps_full_resolution(viz_backtest):
+    """The default (``max_line_points=None``) must reproduce today's byte-for-byte output: every
+    per-bar line at full resolution with the compact x0/dx encoding (no thinning), same as before
+    the parameter existed."""
+    res, bars, sig, strat = viz_backtest
+    n = len(bars)
+    default = _fig(viz_backtest)
+    explicit_none = _fig(viz_backtest, max_line_points=None)
+    assert default.to_json() == explicit_none.to_json()
+    for name in ("close", "weighted", "avg confidence", "signal strength", "sigma h1", "net P&L",
+                "strategy before costs", "drawdown"):
+        t = _trace(default, name)
+        assert t.x is None and t.dx == 1                    # x0/dx, not an explicit x array
+        assert len(t.y) == n
+
+
+def test_max_line_points_thins_the_per_bar_lines_not_the_markers(viz_backtest):
+    res, bars, sig, strat = viz_backtest
+    n = len(bars)
+    full = _fig(viz_backtest)
+    thin = _fig(viz_backtest, max_line_points=500)
+    thinned_names = ("close", "weighted", "avg confidence", "signal strength", "sigma h1", "net P&L",
+                     "strategy before costs", "buy & hold (no costs)", "drawdown")
+    for name in thinned_names:
+        t_full, t_thin = _trace(full, name), _trace(thin, name)
+        assert len(t_full.y) == n
+        assert t_thin.x is not None and t_thin.dx is None        # switched to an explicit (thinned) x array
+        assert len(t_thin.y) <= 500 < len(t_full.y)
+        assert np.asarray(t_thin.y).dtype == np.float32
+        assert int(t_thin.x[0]) == 0 and int(t_thin.x[-1]) == n - 1     # first and last bar always kept
+    # markers (trades, decisions) are never thinned: the same count in both
+    for name in ("long entry", "decided long"):
+        names_full = [t for t in full.data if t.name == name]
+        names_thin = [t for t in thin.data if t.name == name]
+        if names_full:
+            assert len(names_full[0].x) == len(names_thin[0].x)
+    assert thin.to_json() != full.to_json()
+    assert f"thinned to 500 of {n:,} bars" in thin.layout.title.text.replace("<br>", " ")
+
+
+def test_max_line_points_larger_than_the_window_changes_nothing(viz_backtest):
+    res, bars, sig, strat = viz_backtest
+    n = len(bars)
+    full = _fig(viz_backtest)
+    generous = _fig(viz_backtest, max_line_points=n * 10)
+    assert full.to_json() == generous.to_json()
+
+
 def test_registry_entry_passes_the_config_through(viz_backtest, viz_config):
     from neural_trade.registries.visualizations import Visualizations
 
