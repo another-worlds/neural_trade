@@ -56,7 +56,7 @@ import numpy as np
 
 from neural_trade.core.exceptions import InvalidConfigurationError
 from neural_trade.experiments.scenario import (DERIVED_STRATEGY_PARAMS, RESERVED_BACKTEST, NAME_RE, Scenario,
-                                               canonical_json, config_hash, short_hash)
+                                               canonical_json, config_hash, config_hash_of_dir, short_hash)
 from neural_trade.experiments.scorer import PREDICTION_FILES, BlockSignals, fit_and_backtest, load_block
 from neural_trade.experiments.store import RESULT_FILE, RunStore
 
@@ -299,8 +299,10 @@ def select_cells(scenario: Scenario, store: RunStore) -> Tuple[List[StoredCell],
     """(cells to re-score, skipped run directories with the reason, the spec's cells with no usable run).
 
     A cell is used when its run directory is ``done``, belongs to a cell of this spec with the same
-    config hash and calibration pass, and has both stored prediction files; when a cell has several
-    such runs, the newest is used and the others are listed as skipped."""
+    config identity (NT-083: recomputed from that run's config.yaml, never trusted from the
+    config_hash recorded in its meta.json) and calibration pass, and has both stored prediction
+    files; when a cell has several such runs, the newest is used and the others are listed as
+    skipped."""
     expected = {cell.key: config_hash(cfg) for cell, cfg in scenario.validate()}
     candidates: Dict[str, List[Tuple[str, StoredCell]]] = {}
     skipped: List[Dict[str, str]] = []
@@ -318,7 +320,7 @@ def select_cells(scenario: Scenario, store: RunStore) -> Tuple[List[StoredCell],
             skip(d, key, f"status {status}")
         elif key not in expected:
             skip(d, key, "not a cell of this scenario spec")
-        elif eng.get("config_hash") != expected[key]:
+        elif config_hash_of_dir(d) != expected[key]:
             skip(d, key, "config hash differs from the spec's (a run of an earlier version of the scenario)")
         elif bool((eng.get("run") or {}).get("calibrate", True)) != bool(scenario.run.calibrate):
             skip(d, key, "trained with a different run.calibrate than the spec's")
