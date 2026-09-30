@@ -33,6 +33,18 @@ has not run yet either. Both are `todo`. This SPEC does not depend on their outc
 NT-098/NT-102 before authorising step 2's GPU time, or to run loss_prune_v1 as originally scheduled
 and let NT-102's clip choice apply to a later iteration if it changes.
 
+**Amendments, pre-registered 2026-10-01 before the first study run (lead's review of commit
+c756729):**
+
+(a) **The lead waived the NT-098 gate (2026-10-01):** the gate's evidence is the CPU probe of
+`A_losses.md` section 7 (soft ECE ~97% of the gradient direction on three batches). NT-098 runs in
+parallel on the screen layout and is reported beside this study, not as its gate.
+
+(b) **Clipping:** on the new default the pre-clip gradient norm is ~900 against `GRAD_CLIP_NORM` 20
+(NT-102). All three variants run with the same clip, so the paired comparison is of the default
+training as it is; the per-variant pre-clip gradient norm distribution (`training_log`
+`grad_global_norm`) is reported as a descriptive result, and NT-102 decides the clip separately.
+
 ## Conditions (3, at most 3 allowed by OPERATING_MODEL)
 
 One engine scenario, `loss_prune_v1`, three variants (`configs/scenarios/loss_prune_v1.yaml`):
