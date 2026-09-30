@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "name": "long_360d_stab",
+  "description": "Stability of the 360-day model at zero cost (D-044): folds -3 and -2 x seeds 0-2; goal check pre-registered in the header.",
+  "base_config": "../default.yaml",
+  "overrides": {
+    "CSV_PATH": "Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 14,
+    "MAX_SEQUENCE_COUNT": 698160,
+    "VAL_FRACTION": 0.061877,
+    "CAL_FRACTION": 0.061877,
+    "SHUFFLE_BUFFER": 0,
+    "BATCH_SIZE": 2048,
+    "EPOCHS": 40
+  },
+  "variants": {
+    "default": {}
+  },
+  "sweep": {
+    "mode": "grid",
+    "axes": {}
+  },
+  "folds": [
+    -3,
+    -2
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "strategy": {
+    "name": "calibrated_quantile",
+    "params": {}
+  },
+  "backtest": {},
+  "run": {
+    "calibrate": true,
+    "save_artifacts": true
+  }
+}

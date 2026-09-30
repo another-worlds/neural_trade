@@ -1,0 +1,104 @@
+{
+  "lambda_values_final": {
+    "lambda_point": 1.422053337097168,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 0.7002950310707092,
+    "lambda_vol": 1.2666199207305908,
+    "lambda_short": 1.1419585943222046,
+    "lambda_long": 1.2775545120239258,
+    "lambda_var": 0.33700689673423767,
+    "lambda_trend_outer": 1.0,
+    "lambda_dir_outer": 1.0,
+    "lambda_coherence_outer": 1.0,
+    "lambda_nll_outer": 1.0,
+    "lambda_crps": 0.9135849475860596,
+    "lambda_soft_ece": 2.3588757514953613,
+    "lambda_t_perp": 0.10000000149011612,
+    "lambda_casimir": 0.10000000149011612,
+    "lambda_hd": 0.10000000149011612,
+    "lambda_ife": 0.10000000149011612,
+    "lambda_vac_overflow": 0.10000000149011612,
+    "lambda_pnl": 0.0
+  },
+  "calibration_lambdas": {
+    "lambda_short": 1.1419585975528452,
+    "lambda_point": 1.4220533158075128,
+    "lambda_long": 1.277554454565022,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 0.7002950525939275,
+    "lambda_var": 0.33700690983199927,
+    "lambda_vol": 1.266619929765393,
+    "lambda_crps": 0.913584974861992,
+    "lambda_soft_ece": 2.358875773862251,
+    "lambda_t_perp": 0.10000000149011612,
+    "lambda_casimir": 0.10000000149011612,
+    "lambda_hd": 0.10000000149011612,
+    "lambda_ife": 0.10000000149011612,
+    "ref_loss": 0.6447445159921279
+  },
+  "calibration_report": {
+    "h0": {
+      "coverage90": 0.9070127191474734,
+      "width90": 518.3309423679898,
+      "temperature": 1.0002324086256646,
+      "target": 0.9,
+      "n": 46544
+    },
+    "h1": {
+      "coverage90": 0.9081299415606737,
+      "width90": 634.6883756713969,
+      "temperature": 1.0358480182637981,
+      "target": 0.9,
+      "n": 46544
+    },
+    "h2": {
+      "coverage90": 0.9077646957717429,
+      "width90": 728.9424923742437,
+      "temperature": 1.0504106150418562,
+      "target": 0.9,
+      "n": 46544
+    }
+  },
+  "fold": {
+    "train": 518432,
+    "val": 43200,
+    "cal": 43200,
+    "test": 46544,
+    "gap": 80
+  },
+  "epochs_run": 17,
+  "weights_epoch": 11,
+  "weights_val_loss": 5.379043102264404,
+  "weights_source": "best validation epoch, restored by EarlyStopping (stopped at epoch 17)",
+  "var_scale": 0.4103226810693741,
+  "weighted_direction_quantiles": {
+    "0.05": 0.4862638630294574,
+    "0.1": 0.4891503698072833,
+    "0.2": 0.4922674945928698,
+    "0.5": 0.4979869358794917,
+    "0.8": 0.5049347939885845,
+    "0.9": 0.5093911696936971,
+    "0.95": 0.5136570691650798
+  },
+  "format_version": 1,
+  "neural_trade_version": "0.3.0",
+  "pred_scale": 223.70014069126645,
+  "pred_mean": 1.1918605847375676,
+  "normalizer": {
+    "kind": "window_relative",
+    "scale": 223.70014069126645
+  },
+  "has_calibration": true,
+  "env": {
+    "python": "3.10.21",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "numpy": "1.23.0",
+    "pandas": "2.3.3",
+    "sklearn": "1.7.2",
+    "git": "dce15ed",
+    "host_sha1": "287b3e95955e",
+    "tensorflow": "2.10.0",
+    "cuda_build": "64_112",
+    "cudnn_build": "64_8"
+  }
+}
