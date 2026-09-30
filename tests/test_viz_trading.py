@@ -299,7 +299,9 @@ def _other(viz_backtest, name, params=None):
 
     res, bars, sig, _ = viz_backtest
     strat = build_strategy(name, params, calibration=sig)
-    return backtest(sig, bars, strat, build_backtest_config({"random_seeds": 0})), bars, sig, strat
+    # Same explicit cost profile as the viz_backtest fixture (D-044: BacktestConfig's own default is 0).
+    cfg = build_backtest_config({"random_seeds": 0, "fee_bps": 10.0, "half_spread_bps": 1.0, "slippage_bps": 2.0})
+    return backtest(sig, bars, strat, cfg), bars, sig, strat
 
 
 def test_a_strategy_without_trades_reads_cleanly(viz_backtest):

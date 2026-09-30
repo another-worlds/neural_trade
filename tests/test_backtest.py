@@ -2,7 +2,7 @@
 high/low, next-open fills, look-ahead self-test for every registered strategy, causal features."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import ClassVar, Dict, Optional
 
 import numpy as np
@@ -17,6 +17,9 @@ from neural_trade.strategy import (BacktestConfig, Bars, Order, SignalFrame, Str
                                    assert_no_lookahead, backtest, build_strategy, run_backtest, var_scale_from)
 
 COST = 13e-4  # 10 fee + 1 half-spread + 2 slippage bps per side
+# BacktestConfig's own default cost is 0 (D-044); PRICED pins the hand-computed cost arithmetic
+# below at the pre-D-044 profile these tests were written against.
+PRICED = BacktestConfig(fee_bps=10.0, half_spread_bps=1.0, slippage_bps=2.0)
 
 
 def _frame(n=400, seed=0, informative=True):
@@ -54,7 +57,7 @@ def test_long_pnl_after_costs_matches_hand_computation():
     o = np.array([100.0, 101.0, 102.0, 103.0, 104.0, 105.0])
     bars = Bars(o, o + 0.5, o - 0.5, o + 0.25)
     strat = Scripted(orders={0: Order("LONG", 1.0, max_hold=2)})
-    res = run_backtest(_signals(6), bars, strat, BacktestConfig())
+    res = run_backtest(_signals(6), bars, strat, PRICED)
     (tr,) = res.trades
     assert (tr.entry_bar, tr.exit_bar, tr.exit_reason) == (1, 3, "TIME")  # decided at close 0, filled at open 1
     qty = 10_000 / 101.0
@@ -71,7 +74,7 @@ def test_long_pnl_after_costs_matches_hand_computation():
 def test_short_pnl_after_costs():
     o = np.array([100.0, 100.0, 98.0, 97.0, 96.0])
     bars = Bars(o, o + 0.1, o - 0.1, o)
-    res = run_backtest(_signals(5), bars, Scripted(orders={0: Order("SHORT", 0.5, max_hold=1)}), BacktestConfig())
+    res = run_backtest(_signals(5), bars, Scripted(orders={0: Order("SHORT", 0.5, max_hold=1)}), PRICED)
     (tr,) = res.trades
     qty = 5_000 / 100.0
     assert (tr.entry_bar, tr.exit_bar) == (1, 2)
@@ -85,7 +88,8 @@ def test_stop_and_target_on_high_low_with_tiebreak(tiebreak, reason, price):
     lo = np.array([100.0, 99.8, 98.5, 100.4, 100.4])
     bars = Bars(o, h, lo, o)
     order = Order("LONG", 1.0, tp=2.0, sl=-1.0, tp_is_offset=True, max_hold=10)
-    res = run_backtest(_signals(5), bars, Scripted(orders={0: order}), BacktestConfig(same_bar_tiebreak=tiebreak))
+    res = run_backtest(_signals(5), bars, Scripted(orders={0: order}),
+                       replace(PRICED, same_bar_tiebreak=tiebreak))
     (tr,) = res.trades
     assert tr.exit_reason == reason and tr.exit_bar == 2
     assert tr.exit_price == pytest.approx(price * (1 - 3e-4), rel=1e-12)
@@ -94,7 +98,7 @@ def test_stop_and_target_on_high_low_with_tiebreak(tiebreak, reason, price):
 def test_gap_through_stop_fills_at_the_open():
     o = np.array([100.0, 100.0, 95.0, 95.0])
     bars = Bars(o, o + 0.1, o - 0.1, o)
-    res = run_backtest(_signals(4), bars, Scripted(orders={0: Order("LONG", 1.0, sl=99.0, max_hold=10)}))
+    res = run_backtest(_signals(4), bars, Scripted(orders={0: Order("LONG", 1.0, sl=99.0, max_hold=10)}), PRICED)
     (tr,) = res.trades
     assert tr.exit_reason == "SL" and tr.exit_price == pytest.approx(95.0 * (1 - 3e-4))
 
@@ -109,7 +113,7 @@ def test_close_only_tp_sl_ignores_wicks():
 
 def test_end_of_window_marks_open_position_and_buy_and_hold():
     f, bars = _frame(200)
-    res = run_backtest(SignalFrame.build(f, 1.0), bars, build_strategy("buy_and_hold"))
+    res = run_backtest(SignalFrame.build(f, 1.0), bars, build_strategy("buy_and_hold"), PRICED)
     (tr,) = res.trades
     assert tr.exit_reason == "EOW" and tr.exit_bar == 199 and tr.entry_bar == 1
     qty = 10_000 / bars.open[1]

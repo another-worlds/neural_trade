@@ -19,6 +19,9 @@ from neural_trade.strategy import (EWMA_WARMUP, BacktestConfig, Bars, ExposureSt
 from neural_trade.strategy.backtest import _ReplayFills, fill_events
 
 COST = 13e-4  # 10 fee + 1 half-spread + 2 slippage bps per side
+# BacktestConfig's own default cost is 0 (D-044); PRICED pins the hand-computed cost arithmetic
+# below at the pre-D-044 profile these tests were written against.
+PRICED = BacktestConfig(fee_bps=10.0, half_spread_bps=1.0, slippage_bps=2.0)
 
 
 def _frame(n=700, seed=0, steps=(10, 15, 20)):
@@ -116,7 +119,7 @@ def test_hand_computed_rebalances_with_drift_costs_and_close_out():
     c = np.array([100.0, 104.0, 100.0, 105.0, 110.0])
     bars = Bars(o, np.maximum(o, c) + 1, np.minimum(o, c) - 1, c)
     strat = Scripted(targets_by_bar={0: 0.5, 2: 1.0, 3: -0.5}, band=0.1)
-    res = run_backtest(_signals(5), bars, strat, BacktestConfig())
+    res = run_backtest(_signals(5), bars, strat, PRICED)
     assert res.mode == "exposure" and res.trades == []
     # bar 1 open: 0 -> 0.5 of 10,000
     q1 = 0.5 * 10_000 / 100.0
@@ -239,7 +242,7 @@ def test_discrete_summary_reports_notional_breakeven_and_gross_edge():
     o = np.array([100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 104.0, 102.0])
     bars = Bars(o, o + 0.5, o - 0.5, o + 0.25)
     strat = ScriptedOrders(orders={0: Order("LONG", 1.0, max_hold=2), 4: Order("SHORT", 0.5, max_hold=2)})
-    res = run_backtest(_signals(8), bars, strat, BacktestConfig())
+    res = run_backtest(_signals(8), bars, strat, PRICED)
     long_, short = res.trades
     ql = 10_000 / 101.0                                   # long: bar 1 open 101 -> bar 3 open 103
     qs = 0.5 * (10_000 + long_.net_pnl) / 105.0           # short, half the equity: bar 5 open 105 -> bar 7 open 102

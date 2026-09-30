@@ -8,7 +8,8 @@ import pytest
 
 from neural_trade.visualization import theme as T
 
-SLIP = 3e-4   # the engine's default half-spread + slippage (1 + 2 bps)
+SLIP = 3e-4   # an assumed half-spread + slippage (1 + 2 bps) for these hand-built trade fixtures
+              # (the engine's own default cost is 0, D-044)
 
 
 def _bars(rows):
@@ -100,8 +101,12 @@ def test_excursions_bound_the_realised_move_and_every_winner_passed_break_even(v
     for t, f in zip(res.trades, mfe):
         if t.net_pnl > 0:
             assert f >= break_even_pct(res.config, t.side) - 1e-9
-    # exact break-even on mids: 2c / (1 - c) for a long with c = 13 bps per side
-    assert break_even_pct(res.config, "LONG") == pytest.approx(100 * 2 * 0.0013 / (1 - 0.0013))
+    # exact break-even on mids: 2c / (1 - c) for a long with c = 13 bps per side (an explicit cost
+    # profile, pinning the formula's arithmetic; the engine's own default cost is 0, D-044)
+    from neural_trade.strategy import BacktestConfig
+
+    priced = BacktestConfig(fee_bps=10.0, half_spread_bps=1.0, slippage_bps=2.0)
+    assert break_even_pct(priced, "LONG") == pytest.approx(100 * 2 * 0.0013 / (1 - 0.0013))
 
 
 # ------------------------------------------------------------------ the per-trade figure

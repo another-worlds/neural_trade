@@ -853,7 +853,7 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
     horizon_steps_cfg = list(getattr(model.config, 'HORIZON_STEPS', default_horizons) or default_horizons)
     horizon_steps = (horizon_steps_cfg + default_horizons)[:3]  # defensive: always exactly 3 (D-022)
     var_floor = tf.cast(getattr(model.config, 'VAR_FLOOR', 1e-4), tf.float32)
-    cost = tf.cast(getattr(model.config, 'PNL_COST_BPS', 26.0), tf.float32) / 10000.0
+    cost = tf.cast(getattr(model.config, 'PNL_COST_BPS', 0.0), tf.float32) / 10000.0
     gamma = tf.cast(getattr(model.config, 'PNL_GAMMA', 1.0), tf.float32)
     sigma_source = str(getattr(model.config, 'PNL_SIGMA_SOURCE', 'realized_vol'))
     eps = model.eps

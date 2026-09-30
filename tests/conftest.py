@@ -243,6 +243,10 @@ def viz_backtest(viz_frame):
     fr.last_close = close
     sig = SignalFrame.build(fr, 1.0)
     strat = build_strategy("calibrated_quantile", None, calibration=sig)
-    res = backtest(sig, bars, strat, build_backtest_config({"random_seeds": 0}))
+    # BacktestConfig's own default cost is 0 (D-044); this fixture keeps the pre-D-044 13 bps
+    # profile explicitly so the many visualization tests built on it (cost drag panels, drawdown
+    # ranges, break-even lines) keep pinning their existing behaviour.
+    res = backtest(sig, bars, strat, build_backtest_config(
+        {"random_seeds": 0, "fee_bps": 10.0, "half_spread_bps": 1.0, "slippage_bps": 2.0}))
     assert res.summary["n_trades"] > 5
     return res, bars, sig, strat

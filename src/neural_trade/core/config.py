@@ -356,8 +356,8 @@ class Config:
                            "implied positions (0 = off; NT-087)", unit="weight", ge=0.0, tunable=True)
     PNL_GAMMA: float = _f(1.0, "loss_weights", "risk-aversion coefficient of the pnl_utility objective's quadratic "
                           "penalty", unit="dimensionless", gt=0.0, tunable=True)
-    PNL_COST_BPS: float = _f(26.0, "loss_weights", "round-trip trading cost assumed by the pnl_utility objective "
-                             "(matches strategy/variance_strategies.py's DEFAULT_COST = 0.0026, 13 bps per side)",
+    PNL_COST_BPS: float = _f(0.0, "loss_weights", "round-trip trading cost assumed by the pnl_utility objective "
+                             "(matches strategy/variance_strategies.py's DEFAULT_COST; 0 by default, D-044)",
                              unit="bps", ge=0.0, tunable=True)
     PNL_SIGMA_SOURCE: str = _f("realized_vol", "loss_weights", "volatility scale for the pnl_utility objective's "
                                "r~ = r_H / sigma_H: 'realized_vol' (causal, equal-weighted std of the input "

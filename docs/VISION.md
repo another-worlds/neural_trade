@@ -40,8 +40,9 @@ The indicators are the product. The prediction and trading quality are the evide
 A search over configurations finds the one with the best financial metrics.
 
 - **Leaderboard:** ranked by the net Sharpe ratio after trading costs (next-open fills, fees, spread,
-  slippage). Guard-rails shown beside it and able to disqualify a row: maximum drawdown, the number of
-  trades, beating buy-and-hold and random entries at the same frequency.
+  slippage; these default to 0, D-044: "издержки делай 0" - trading costs are zero unless a study sets
+  them explicitly). Guard-rails shown beside it and able to disqualify a row: maximum drawdown, the
+  number of trades, beating buy-and-hold and random entries at the same frequency.
 - **Honest ranking:** rows are ranked on the development folds only (the out-of-sample blocks of the
   earlier walk-forward folds). Every row also shows its numbers on the held-out test fold, but those
   never rank.
@@ -99,7 +100,8 @@ registry (the design comes from the owner's indicator Q&A).
 - **Choices never use test data.** Sweeps rank on the development folds; A/B verdicts are pre-registered
   and judged once.
 - **Honest trading numbers.** Next-open fills, fees, spread and slippage, stops on high/low, baselines
-  in every report, and a random null at the same trade frequency.
+  in every report, and a random null at the same trade frequency. The default cost profile is 0 (D-044,
+  owner decision: no tick order-book data, costs set to 0); a study states any non-zero cost it assumes.
 - **Fast training.** Fast GPU training and solid optimisation are first-class requirements; inference
   speed is negligible (D-018).
 - **Extendable by registries.** Components (models, losses, metrics, indicators, strategies, ...) are

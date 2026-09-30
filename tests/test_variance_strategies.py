@@ -57,8 +57,8 @@ def test_new_strategies_are_registered_with_the_specified_defaults(blocks):
     assert not isinstance(eoc, ExposureStrategy) and not isinstance(rs, ExposureStrategy)
     assert (vt.decide_every, vt.band, vt.trade_to_band_edge, vt.max_abs_exposure, vt.sigma_source) == \
         (60, 0.10, False, 1.0, "model")
-    assert (nk.decide_every, nk.band, nk.trade_to_band_edge, nk.f, nk.cost) == (20, 0.10, True, 0.25, 0.0026)
-    assert (eoc.cost, eoc.size, eoc.max_hold) == (0.0026, 1.0, 20)
+    assert (nk.decide_every, nk.band, nk.trade_to_band_edge, nk.f, nk.cost) == (20, 0.10, True, 0.25, 0.0)
+    assert (eoc.cost, eoc.size, eoc.max_hold) == (0.0, 1.0, 20)
     assert (rs.q_out, rs.q_in, rs.max_hold, rs.sigma_source) == (0.80, 0.70, 10 ** 9, "model")
     assert (gt.primary, gt.q, gt.max_hold, gt.fast, gt.slow, gt.bb_window, gt.bb_k) == \
         ("ma_cross", 0.5, 60, 20, 50, 20, 2.0)
