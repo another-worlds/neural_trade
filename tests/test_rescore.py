@@ -422,6 +422,33 @@ def test_only_finished_runs_of_the_specs_cells_are_used_and_the_newest_run_of_a_
     assert second in [c.run_dir for c in used] and len(skipped) == 3
 
 
+def test_a_stored_cell_missing_a_newer_config_field_matches_only_while_it_stays_at_default(tmp_path, stored):
+    """NT-083: select_cells recomputes a stored cell's identity from its config.yaml (never trusts
+    the config_hash recorded in meta.json), so a cell that predates a Config field is still used
+    while the current spec leaves that field at its default, and is skipped once the spec sets it
+    away from default."""
+    st = copy_of(stored, tmp_path)
+    sc = Scenario.from_yaml(st.spec)
+    d = st.store.run_dirs("tiny")[0]
+    cfg = yaml.safe_load((d / "config.yaml").read_text(encoding="utf-8"))
+    del cfg["LR"]                                                   # as if LR did not exist yet
+    (d / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    meta = json.loads((d / "meta.json").read_text(encoding="utf-8"))
+    meta["engine"]["config_hash"] = "stale-hash-from-an-earlier-engine-version"
+    (d / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    used, skipped, missing = select_cells(sc, st.store)
+    assert d in [c.run_dir for c in used] and missing == []
+    assert not any(Path(s["run_dir"]).name == d.name for s in skipped)
+
+    moved = Scenario.from_dict(spec(Path(sc.overrides["CSV_PATH"]), folds=list(sc.folds), seeds=list(sc.seeds),
+                                    overrides={**sc.overrides, "LR": 0.0007}))
+    used2, skipped2, _ = select_cells(moved, st.store)
+    assert d not in [c.run_dir for c in used2]
+    reasons = {Path(s["run_dir"]).name: s["reason"] for s in skipped2}
+    assert reasons[d.name].startswith("config hash differs")
+
+
 def test_the_rescore_module_does_not_build_on_the_frozen_set():
     from tests.test_experiment_engine import FROZEN_MODULES, _imports
 

@@ -21,7 +21,9 @@ writes into an existing directory, never overwrites a file and deletes nothing: 
 taken gets a ``-2``, ``-3`` ... suffix.
 
 **Resume.** Re-running the same scenario skips every cell that already has a finished run
-(``done``; ``failed`` too unless ``retry_failed``) with the same config hash and settings hash.
+(``done``; ``failed`` too unless ``retry_failed``) with the same config identity (NT-083: the
+fields that are not at their Config default, recomputed from that run's config.yaml) and settings
+hash.
 A cell whose directory has no result.json (interrupted) is kept as it is, indexed as
 ``incomplete``, and trained again into a new directory. Cells run one at a time in this process;
 each starts from a cleared Keras session and a seeded state, so a resumed scenario reproduces
@@ -40,7 +42,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from neural_trade.core.config import Config
 from neural_trade.experiments.dataset import LayoutCache, setup_of
-from neural_trade.experiments.scenario import Cell, Scenario, ScenarioError, config_hash
+from neural_trade.experiments.scenario import Cell, Scenario, ScenarioError, config_hash, config_hash_of_dir
 from neural_trade.experiments.store import RESULT_FILE, RunStore
 
 logger = logging.getLogger(__name__)
@@ -167,6 +169,9 @@ class Runner:
                                 f"registered: {missing}")
 
     def _mark_states(self, planned: List[PlannedCell]) -> None:
+        """A cell's earlier attempts: same cell key and settings hash, AND the same config identity
+        (NT-083: recomputed from that run directory's config.yaml, never trusted from the index's
+        cached config_hash column, which mirrors whatever the writing engine version recorded)."""
         rows = self.store.sync(self.scenario.name) if self.store.scenario_dir(self.scenario.name).is_dir() else []
         settings = self.scenario.settings_hash
         by_cell: Dict[str, List[Dict[str, Any]]] = {}
@@ -174,7 +179,8 @@ class Runner:
             by_cell.setdefault(r["cell_key"], []).append(r)
         for pc in planned:
             attempts = [r for r in by_cell.get(pc.key, [])
-                        if r["config_hash"] == pc.config_hash and r["settings_hash"] == settings]
+                        if r["settings_hash"] == settings
+                        and config_hash_of_dir(self.store.root / r["run_dir"]) == pc.config_hash]
             pc.runs = [r["run_id"] for r in attempts]
             states = {r["status"] for r in attempts}
             pc.state = "done" if "done" in states else ("failed" if "failed" in states else "pending")

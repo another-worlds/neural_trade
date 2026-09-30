@@ -24,7 +24,7 @@ import yaml
 
 from neural_trade.core.config import Config
 from neural_trade.experiments.runner import Runner
-from neural_trade.experiments.scenario import Scenario, ScenarioError, config_hash
+from neural_trade.experiments.scenario import Scenario, ScenarioError, config_hash, config_hash_of_dir, config_identity
 from neural_trade.experiments.store import RunStore
 
 HORIZONS = ("h0", "h1", "h2")
@@ -158,6 +158,42 @@ def test_a_spec_expands_variants_axes_folds_and_seeds_into_cells_with_stable_has
     assert first.key == "default__f-2__s0" and (first.config().EPOCHS, first.config().LR) == (3, 0.002)
 
 
+def test_config_identity_ignores_default_valued_fields_nt083(bars_csv):
+    """NT-083: config_hash hashes only the fields that differ from Config()'s default, so a Config
+    field added later that a cell (or the current spec) leaves at its default does not appear in
+    the identity, while overriding it away from default does."""
+    base = Config().override(CSV_PATH=str(bars_csv), MAX_SEQUENCE_COUNT=1500)
+    at_default = base.copy()                    # LR untouched: at Config()'s default
+    away_from_default = base.copy(LR=0.0005)     # LR set away from default
+
+    assert "LR" not in config_identity(at_default)
+    assert config_identity(away_from_default)["LR"] == pytest.approx(0.0005)
+    assert config_hash(at_default) == config_hash(base)          # an explicit default changes nothing
+    assert config_hash(away_from_default) != config_hash(at_default)
+
+    # explicitly re-setting a field back to its own default is the same identity as never touching it
+    back_to_default = away_from_default.copy(LR=Config().LR)
+    assert config_hash(back_to_default) == config_hash(at_default)
+
+
+def test_config_hash_of_dir_recomputes_from_config_yaml_not_the_recorded_meta_json_value(tmp_path, bars_csv):
+    """NT-083: config_hash_of_dir is the same identity hash config_hash would compute for the Config
+    that config.yaml describes; it does not read meta.json's (possibly stale) config_hash at all."""
+    sc = Scenario.from_dict(spec(bars_csv, folds=[-1], seeds=[0]))
+    store = RunStore(tmp_path / "runs")
+    Runner(sc, store, trainer=FakeTrainer()).run()
+    [run_dir] = store.run_dirs("tiny")
+    cfg_from_disk = Config.from_yaml(run_dir / "config.yaml")
+    assert config_hash_of_dir(run_dir) == config_hash(cfg_from_disk)
+
+    meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+    meta["engine"]["config_hash"] = "garbage"
+    (run_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+    assert config_hash_of_dir(run_dir) == config_hash(cfg_from_disk)     # unaffected by meta.json
+
+    assert config_hash_of_dir(tmp_path / "no-such-run-dir") is None
+
+
 def _clash(s):
     s["variants"] = {"a": {"LR": 0.002}}
     s["sweep"] = {"axes": {"LR": [0.001, 0.0005]}}
@@ -233,6 +269,36 @@ def test_a_stopped_scenario_resumes_without_rerunning_and_matches_an_uninterrupt
     assert len(store.index.rows()) == len(uninterrupted.index.rows()) == 4
     third = Runner(sc, store, trainer=trainer).run()
     assert third.ran == [] and len(third.skipped) == 4 and len(trainer.calls) == 4
+
+
+def test_a_config_field_that_predates_a_cell_does_not_retrain_it_unless_set_away_from_default(tmp_path, bars_csv):
+    """NT-083: simulates a Config field added after a cell ran, by deleting it from that cell's
+    stored config.yaml and replacing its meta.json config_hash with a value no current code would
+    compute (a stand-in for a hash recorded under an earlier hash rule)."""
+    sc = Scenario.from_dict(spec(bars_csv, folds=[-1], seeds=[0]))
+    store = RunStore(tmp_path / "runs")
+    Runner(sc, store, trainer=FakeTrainer()).run()
+    [run_dir] = store.run_dirs("tiny")
+
+    def drop_lr_and_stale_the_recorded_hash():
+        cfg = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8"))
+        del cfg["LR"]                                                    # as if LR did not exist yet
+        (run_dir / "config.yaml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
+        meta = json.loads((run_dir / "meta.json").read_text(encoding="utf-8"))
+        meta["engine"]["config_hash"] = "stale-hash-from-an-earlier-engine-version"
+        (run_dir / "meta.json").write_text(json.dumps(meta), encoding="utf-8")
+
+    drop_lr_and_stale_the_recorded_hash()
+    # LR stays at its default in the current spec too: the cell is recognised as done, and the
+    # stale, unrecognisable recorded hash is not trusted for that decision
+    [pc] = Runner(sc, store, trainer=FakeTrainer()).plan()
+    assert pc.state == "done" and pc.runs == [run_dir.name]
+
+    # the current spec now sets LR away from its default: the field's absence no longer matches
+    assert Config().LR != 0.0007
+    away = Scenario.from_dict(spec(bars_csv, folds=[-1], seeds=[0], overrides={**sc.overrides, "LR": 0.0007}))
+    [pc2] = Runner(away, store, trainer=FakeTrainer()).plan()
+    assert pc2.state == "pending" and pc2.runs == []
 
 
 def test_an_interrupted_cell_is_kept_indexed_incomplete_and_trained_again(tmp_path, bars_csv, uninterrupted):

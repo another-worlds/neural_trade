@@ -26,9 +26,16 @@ unknown keys at any level are refused, and :meth:`Scenario.validate` builds ever
 sets itself (FOLD_INDEX and SEED from ``folds`` / ``seeds``; MODEL_PATH, SCALER_PATH and
 ARTIFACTS_DIR from the run directory) are refused in overrides, variants and axes.
 
-Hashes (the run store's resume keys): ``config_hash(config)`` of a cell's Config values;
-``settings_hash`` of what else changes a cell's numbers (strategy, backtest, the calibration
-pass); ``spec_hash`` of the whole normalised spec, recorded with every run.
+Hashes (the run store's resume keys): ``config_hash(config)`` of a cell's Config values that are
+NOT at their class default (NT-083: a Config field added later, left at its default, does not
+change any existing cell's identity; overriding it away from default does); ``settings_hash`` of
+what else changes a cell's numbers (strategy, backtest, the calibration pass); ``spec_hash`` of
+the whole normalised spec, recorded with every run. Because a cell's meta.json records the
+``config_hash`` computed by whatever engine version wrote it, resuming or rescoring a cell never
+trusts that recorded value: :func:`config_hash_of_dir` recomputes it from the cell's own
+``config.yaml`` (which ``Config.from_yaml`` reads with today's field set, filling in a field that
+did not exist back then at its current default), so it is directly comparable with a freshly
+computed identity from the current spec.
 
 Extension points (the schema version rises when a key changes meaning): NT-030 adds sweep modes
 (quick, optuna) and a search space, NT-031 guard-rail thresholds, NT-033 rule-based scenarios
@@ -82,10 +89,56 @@ def short_hash(obj: Any, n: int = 12) -> str:
     return hashlib.sha256(canonical_json(obj).encode("utf-8")).hexdigest()[:n]
 
 
+_DEFAULT_CONFIG_DICT: Optional[Dict[str, Any]] = None
+
+
+def _default_config_dict() -> Dict[str, Any]:
+    global _DEFAULT_CONFIG_DICT
+    if _DEFAULT_CONFIG_DICT is None:
+        _DEFAULT_CONFIG_DICT = Config().to_dict()
+    return _DEFAULT_CONFIG_DICT
+
+
+_IDENTITY_EXCLUDED = {"MODEL_PATH", "SCALER_PATH", "ARTIFACTS_DIR"}   # RESERVED_FIELDS set to the
+# run directory only after the identity is first computed in Runner.plan() (run_context.RunContext
+# .create): a run's config.yaml always has them at that run's own paths, never at their class
+# default, so they would make config_hash_of_dir disagree with every cell's own pc.config_hash.
+
+
+def config_identity(config: Config) -> Dict[str, Any]:
+    """``config``'s resume/rescore identity (NT-083): its VALUES (field docs and YAML layout do not
+    count), but only the fields that differ from ``Config()``'s default, and never the run
+    directory's own paths (``_IDENTITY_EXCLUDED``). A field's identity contribution is the same
+    whether it was never set or set back to its own default, so a Config field added later that
+    stays at its default leaves every existing cell's identity unchanged; setting it away from
+    default changes the identity like any other field does."""
+    defaults = _default_config_dict()
+    missing = object()
+    return {k: v for k, v in config.to_dict().items()
+            if k not in _IDENTITY_EXCLUDED and v != defaults.get(k, missing)}
+
+
 def config_hash(config: Config) -> str:
-    """Hash of a Config's VALUES (field docs and YAML layout do not count). A cell counts as done
-    for a resume only when its finished run has the same config hash."""
-    return short_hash(config.to_dict())
+    """Hash of :func:`config_identity`. A cell counts as done for a resume, and is selected for a
+    rescore, only when its identity hash matches (see :func:`config_hash_of_dir` for how an
+    existing run directory's identity is recomputed, rather than trusted from its meta.json)."""
+    return short_hash(config_identity(config))
+
+
+def config_hash_of_dir(run_dir) -> Optional[str]:
+    """:func:`config_hash` recomputed from a run directory's ``config.yaml`` (NT-083), instead of
+    trusting the ``config_hash`` recorded in its meta.json (computed by whatever engine version
+    wrote it, under whatever hash rule was current then). ``Config.from_yaml`` builds the Config
+    with today's field set, so a field the cell predates is filled in at its current default and,
+    since :func:`config_identity` ignores default-valued fields, does not affect the result: an old
+    cell is recognised as done exactly when it should be. Returns None when ``config.yaml`` is
+    missing or does not parse as a Config (the caller then treats the run as not matching)."""
+    path = Path(run_dir) / "config.yaml"
+    try:
+        cfg = Config.from_yaml(path)
+    except (OSError, InvalidConfigurationError, ValueError):
+        return None
+    return config_hash(cfg)
 
 
 # ------------------------------------------------------------------ the spec
@@ -420,4 +473,4 @@ def _configuration_name(variant: str, grid: Mapping[str, Any]) -> str:
 
 
 __all__ = ["Cell", "Configuration", "RunOptions", "SCHEMA_VERSION", "Scenario", "ScenarioError", "StrategySpec",
-           "canonical_json", "cell_key", "config_hash", "short_hash"]
+           "canonical_json", "cell_key", "config_hash", "config_hash_of_dir", "config_identity", "short_hash"]
