@@ -28,6 +28,7 @@ from typing import Optional, Sequence
 
 import numpy as np
 
+from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.trade_analytics import (  # noqa: F401  (re-exported)
     excursions, strategy_comparison_figure, trade_analytics_figure,
@@ -183,6 +184,28 @@ def _band(values, lo, hi, k, fn):
     return fn(v, axis=1)
 
 
+def _line(y, lo, max_points, *, text=None):
+    """Plotly ``Scatter`` position kwargs for one of the dashboard's per-bar lines (``y`` already the
+    window's own slice, one point per bar starting at ``lo``): full resolution with the compact
+    ``x0``/``dx`` encoding (``max_points`` is ``None``, or the window already fits) - byte-for-byte
+    today's output; otherwise evenly thinned to at most ``max_points`` points (:func:`stats.thin`), so
+    a whole-block view of tens of thousands of bars stays a readable file size. Trade and decision
+    markers are drawn separately, at their own bars, and are never thinned. ``text``, when given (a
+    per-bar hover annotation, one entry per ``y``), is thinned along with ``y``; an event that falls
+    between two kept bars is then only in the marker's own hover, not the line's."""
+    y = _f32(y)
+    if max_points is None or len(y) <= max_points:
+        kw = {"x0": lo, "dx": 1, "y": y}
+        if text is not None:
+            kw["text"] = text
+        return kw
+    idx = S.thin(len(y), int(max_points))
+    kw = {"x": _f32(idx + lo), "y": y[idx]}
+    if text is not None:
+        kw["text"] = [text[i] for i in idx]
+    return kw
+
+
 def _pup_range(pv, wv, line_values, *, reach: float = _PUP_REACH, pad: float = _PUP_PAD):
     """(y_lo, y_hi, n_clipped) of the P(up) axis. The core is the traded (weighted) series and the
     strategy's lines, all always inside. The horizons widen it to their 0.2% / 99.8% quantiles, by at
@@ -230,14 +253,23 @@ def detail_window(result, n_bars: int = 600, *, around: str = "steepest_fall"):
 # ------------------------------------------------------------------ the dashboard
 def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, start: Optional[int] = None,
                              end: Optional[int] = None, title: Optional[str] = None, height: Optional[int] = None,
-                             config=None, times=None, detail_max_bars: int = DETAIL_MAX_BARS):
+                             config=None, times=None, detail_max_bars: int = DETAIL_MAX_BARS,
+                             max_line_points: Optional[int] = None):
     """``result``: BacktestResult; ``bars``: its Bars; ``signals``: its SignalFrame; ``strategy``:
     the Strategy instance (its entry / exit lines go on the P(up) panel); ``start``/``end``: the
     bars to show, [start, end) (default: the whole block; the data are sliced so every y axis fits
     the window); ``config``: the run's Config (horizon lengths in the labels); ``times``: one
     timestamp per bar of the block (the window's time span goes in the subtitle, and on a view of
     at most ``detail_max_bars`` bars into the hover); ``detail_max_bars``: the longest view that
-    still draws holding periods, stop / take-profit levels and entry-to-exit lines."""
+    still draws holding periods, stop / take-profit levels and entry-to-exit lines.
+
+    ``max_line_points``: ``None`` (the default) draws every per-bar line (price close, weighted
+    P(up), confidence, strength, sigma, net/before-costs P&L, buy & hold, drawdown) at full
+    resolution, one point per bar - today's byte-for-byte output. A number evenly thins each of
+    those lines to at most that many points (:func:`stats.thin`) when the window has more bars than
+    that, so a whole-block view of a long run stays a small file; every trade and decision marker
+    (entries, exits, decision triangles, variance spikes) is still drawn at its own bar, never
+    thinned, and the subtitle says a line was thinned and to how many points."""
     import plotly.graph_objects as go
 
     n = len(result.position)
@@ -363,8 +395,9 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             s = (f" · {tstr[i]}" if (tstr is not None and detail) else "")
             s += "".join("<br>" + e for e in events.get(i, ()))
             text.append(s)
-        add(go.Scatter(x0=lo, dx=1, y=_f32(np.asarray(bars.close, float)[lo:hi]), mode="lines", name="close",
-                       line=dict(color=T.INK_2, width=1.2), text=text if any(text) else None,
+        add(go.Scatter(**_line(np.asarray(bars.close, float)[lo:hi], lo, max_line_points,
+                              text=text if any(text) else None),
+                       mode="lines", name="close", line=dict(color=T.INK_2, width=1.2),
                        hovertemplate="close %{y:$,.2f}" + ("%{text}" if any(text) else "") + "<extra></extra>"),
             "price")
         hi_px, lo_px = np.nanmax(bars.high[lo:hi]), np.nanmin(bars.low[lo:hi])
@@ -459,7 +492,8 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             add(go.Scatter(y=_f32(_band(np.nanmin(pv, 1), 0, nv, k, np.nanmin)), name=band_name,
                            fill="tonexty", fillcolor=T.rgba(T.INK_2, 0.28),
                            hovertemplate=f"h0-h2 min{over} %{{y:.3f}}<extra></extra>", **rng), "signal")
-        add(go.Scatter(x0=lo, dx=1, y=_f32(wv), mode="lines", name="weighted", line=dict(color=T.INK, width=1.5),
+        add(go.Scatter(**_line(wv, lo, max_line_points), mode="lines", name="weighted",
+                       line=dict(color=T.INK, width=1.5),
                        hovertemplate="weighted P(up) %{y:.3f}<extra></extra>"), "signal")
         for _series, role, v, _ in lines:
             if role != "exit":
@@ -481,18 +515,18 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             _end_labels(fig, ax["signal"], [(v, lab) for _, _, v, lab in lines], y_hi - y_lo)
         yaxis("signal", tickformat=".2f")
 
-        add(go.Scatter(x0=lo, dx=1, y=_f32(np.asarray(signals.avg_confidence, float)[lo:hi]), mode="lines",
-                       name="avg confidence", line=dict(color=T.SERIES[4], width=1.2),
+        add(go.Scatter(**_line(np.asarray(signals.avg_confidence, float)[lo:hi], lo, max_line_points),
+                       mode="lines", name="avg confidence", line=dict(color=T.SERIES[4], width=1.2),
                        hovertemplate="confidence %{y:.3f}<extra></extra>"), "conf")
-        add(go.Scatter(x0=lo, dx=1, y=_f32(np.asarray(signals.strength, float)[lo:hi]), mode="lines",
-                       name="signal strength", line=dict(color=T.INK_2, width=1), fill="tozeroy",
+        add(go.Scatter(**_line(np.asarray(signals.strength, float)[lo:hi], lo, max_line_points),
+                       mode="lines", name="signal strength", line=dict(color=T.INK_2, width=1), fill="tozeroy",
                        fillcolor=T.rgba(T.INK_2, 0.15), hovertemplate="strength %{y:.3f}<extra></extra>"), "conf")
         sig1 = np.asarray(signals.sigma, float)[lo:hi, 1]
         spike = np.asarray(signals.var_spike, bool)[lo:hi]
         spikes = np.where(spike)[0]
-        add(go.Scatter(x0=lo, dx=1, y=_f32(sig1), mode="lines", name="sigma h1",
-                       line=dict(color=T.HORIZON_COLORS["h1"], width=1),
-                       text=np.where(spike, " · variance spike", "").tolist() if len(spikes) else None,
+        add(go.Scatter(**_line(sig1, lo, max_line_points,
+                              text=np.where(spike, " · variance spike", "").tolist() if len(spikes) else None),
+                       mode="lines", name="sigma h1", line=dict(color=T.HORIZON_COLORS["h1"], width=1),
                        hovertemplate=f"sigma {hl('h1')} %{{y:$,.1f}}" + ("%{text}" if len(spikes) else "")
                                      + "<extra></extra>"), "sigma")
         if len(spikes):   # the flag is in the sigma hover of that exact bar, not on a nearby marker
@@ -505,7 +539,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     net = e_w - E[lo]
     pre = g_w - G[lo]
     _hline(fig, ax["equity"], 0.0, T.NEUTRAL, "4px,3px", 1.0, layer="below")
-    add(go.Scatter(x0=lo, dx=1, y=_f32(net), mode="lines", name="net P&L", line=dict(color=T.INK, width=2),
+    add(go.Scatter(**_line(net, lo, max_line_points), mode="lines", name="net P&L", line=dict(color=T.INK, width=2),
                    hovertemplate=f"net P&L {since} %{{y:$,.0f}}<extra></extra>"), "equity")
     for outcome, _, color, symbol in outcomes:
         sel = [t for t in exited if (t.net_pnl > 0) == (outcome == "win")]
@@ -523,7 +557,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
 
     # ---------------------------------------------------------------- 6. before costs vs buy & hold
     _hline(fig, ax["pre"], 0.0, T.NEUTRAL, "4px,3px", 1.0, layer="below")
-    add(go.Scatter(x0=lo, dx=1, y=_f32(pre), mode="lines", name="strategy before costs",
+    add(go.Scatter(**_line(pre, lo, max_line_points), mode="lines", name="strategy before costs",
                    line=dict(color=T.INK_2, width=1.5),
                    hovertemplate=f"before costs {since} %{{y:$,.0f}}<extra></extra>"), "pre")
     ends = [(pre[-1], f"before costs {_usd(pre[-1], signed=True)}")]
@@ -533,7 +567,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         p0 = c[max(lo - 1, 0)]      # the close before the view (bar 0's close for the whole block)
         bh = E[lo] * (c[lo:hi] / p0 - 1.0)       # the equity at the start of the view, held, no costs
         bh_ret = c[hi - 1] / p0 - 1.0
-        add(go.Scatter(x0=lo, dx=1, y=_f32(bh), mode="lines", name="buy & hold (no costs)",
+        add(go.Scatter(**_line(bh, lo, max_line_points), mode="lines", name="buy & hold (no costs)",
                        line=dict(color=T.NEUTRAL, width=1.5, dash="6px,3px"),
                        hovertemplate=f"buy & hold {since} %{{y:$,.0f}} ({_usd(E[lo])} held, no costs)<extra></extra>"),
             "pre")
@@ -550,7 +584,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     peak = np.maximum.accumulate(E[lo:hi + 1])[1:]      # includes the equity at the start of the view
     dd = e_w / peak - 1.0
     max_dd = max(0.0, -float(np.nanmin(dd)))            # 0.0, never -0.0, when there is no drawdown
-    add(go.Scatter(x0=lo, dx=1, y=_f32(dd), mode="lines", name="drawdown",
+    add(go.Scatter(**_line(dd, lo, max_line_points), mode="lines", name="drawdown",
                    line=dict(color=T.CRITICAL, width=1), fill="tozeroy", fillcolor=T.rgba(T.CRITICAL, 0.25),
                    hovertemplate="drawdown %{y:.2%}<extra></extra>"), "dd")
     yaxis("dd", tickformat=".1%")
@@ -593,6 +627,10 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     if not detail:
         third.append(f"holding periods, stop / take-profit levels and entry-to-exit lines are drawn on views of "
                      f"{detail_max_bars} bars or fewer (start= / end=)")
+    if max_line_points is not None and nv > max_line_points:
+        third.append(f"the per-bar lines (price, P(up), confidence, sigma, P&L, drawdown) are thinned to "
+                     f"{max_line_points:,} of {nv:,} bars; every trade and decision marker is still drawn at its "
+                     "own bar")
     groups.append(third)
     lines_sub = [ln for g in groups for ln in _wrap(g)]
     T.apply(fig, title=title or f"{result.strategy}", subtitle="<br>".join(lines_sub),

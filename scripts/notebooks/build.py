@@ -629,6 +629,117 @@ show_results(results(SPEC, STORE, root=ROOT))
 """),
 ]
 
+# ---------------------------------------------------------------------------- 09 candidate run
+candidate_run = [
+    ("md", """
+# 09 - A candidate run: training, fit and backtest
+
+One saved run, end to end: what it is, its training record, how its heads score on the out-of-sample
+(dev) block against the baselines, and a backtest at the notebook's own strategy and costs. Everything
+here reads the run's saved files (config, metrics, the evaluation report, the saved prediction blocks)
+so it needs neither the training CSV nor a fresh inference pass (`neural_trade.notebook.run_report`).
+
+The default `RUN_DIR` is candidate **C1** (owner "сохрани 1-3", `configs/candidates/README.md`): the
+360-day model's fold -2, seed 0 cell, `calibrated_quantile` at `entry_quantile` 0.9, full size, at
+**zero trading costs** (D-044). Its dev (out-of-sample) block is 2025-07-27 to 2025-08-28.
+"""),
+    ("code", """
+# Parameters
+ROOT = ".."
+RUN_DIR = "../runs/scenarios/long_360d_stab/20260930T094257Z-dce15ed-e3669618-default__f-2__s0"
+CANDIDATE_ID = "C1"
+MANIFEST_PATH = "../configs/candidates/manifest.json"
+STRATEGY = "calibrated_quantile"
+STRATEGY_PARAMS = {"entry_quantile": 0.9}
+BACKTEST_PARAMS = {"fee_bps": 0.0, "half_spread_bps": 0.0, "slippage_bps": 0.0, "random_seeds": 20}
+MAX_DASHBOARD_POINTS = 6000      # thins the trading dashboard's per-bar lines on this long a block (D-013 size)
+MAX_ROC_POINTS = 300             # direction_analytics' own ROC-curve resolution
+""", "parameters"),
+    ("md", "## Summary"),
+    ("code", """
+from pathlib import Path
+
+from IPython.display import HTML, Markdown, display
+
+from neural_trade.notebook import BacktestExplorer, run_report
+from neural_trade.visualization import analytics_tables as AT
+
+run_dir = Path(RUN_DIR)
+print("run:", run_dir)
+display(Markdown(run_report.overview_markdown(run_dir, candidate_id=CANDIDATE_ID, manifest_path=MANIFEST_PATH)))
+run_report.blocks_table(run_dir)
+"""),
+    ("md", "### Key numbers (dev block): direction AUC against the logistic-regression-on-lags baseline, variance CRPSS against constant variance, and 0.90-target conformal coverage."),
+    ("code", """
+display(AT.styled(run_report.key_numbers_table(run_dir)))
+"""),
+    ("md", "### The candidate's six cells, for context (`configs/candidates/manifest.json`; already verified, not recomputed here)"),
+    ("code", """
+run_report.candidate_cells_table(CANDIDATE_ID, MANIFEST_PATH).round(4)
+"""),
+    ("md", """
+## Training
+
+The training dashboard (every logged validation metric per horizon with its chance range) and the loss
+terms, from the run's `metrics.jsonl`; then the learned indicator periods over training (the per-window
+applied range needs the training CSV and is not shown here; see notebook 07 on a run with it at hand).
+"""),
+    ("code", """
+from neural_trade.registries.visualizations import Visualizations
+from neural_trade.visualization.indicator_evolution import indicator_summary
+from neural_trade.visualization.training_dashboard import training_health_html
+
+cfg = run_report.load_config(run_dir)
+metrics_path = run_dir / "metrics.jsonl"
+display(HTML(training_health_html(metrics_path, cfg)))
+Visualizations.build("training_dashboard", metrics_path, cfg).show()
+Visualizations.build("training_loss_terms", metrics_path, cfg).show()
+"""),
+    ("code", """
+Visualizations.build("indicator_evolution", metrics_path, cfg).show()
+display(AT.styled(indicator_summary(metrics_path, cfg)))
+"""),
+    ("md", """
+## Fit evaluation on the out-of-sample block
+
+The evaluation report already scored on the run (`eval_report_dev.md`/`.json`) against every baseline;
+then the per-horizon direction, price and variance diagnostics notebook 04 draws, and the reliability /
+coverage tables, all from the saved `predictions_oos.npz`.
+"""),
+    ("code", """
+from neural_trade.evaluation.report import EvalReport
+from neural_trade.experiments.scorer import load_block
+
+report = EvalReport.from_json(run_dir / "eval_report_dev.json")
+display(Markdown(report.to_markdown()))
+display(AT.styled(AT.baseline_table(report)))
+oos_frame, oos_bars, oos_extra = load_block(run_dir / "predictions_oos.npz")
+raw_delta = oos_frame.meta.get("delta_raw")
+display(AT.styled(AT.classification_table(oos_frame, cfg)))
+display(AT.styled(AT.delta_quality_table(oos_frame, cfg, raw_delta=raw_delta)))
+"""),
+    ("code", """
+Visualizations.build("direction_analytics", oos_frame, cfg, raw_delta=raw_delta, max_points=MAX_ROC_POINTS).show()
+Visualizations.build("delta_analytics", oos_frame, cfg, raw_delta=raw_delta).show()
+Visualizations.build("variance_analytics", oos_frame, cfg, raw_delta=raw_delta).show()
+"""),
+    ("md", """
+## Backtest
+
+`calibrated_quantile` at `entry_quantile` 0.9, fitted on the calibration block, at zero trading costs
+(D-044): the summary against buy-and-hold, always-flat and the size-matched random null, the trading
+dashboard (equity vs buy-and-hold, drawdown, positions; its per-bar lines thinned to `MAX_DASHBOARD_POINTS`
+on a block this long, every trade and decision marker still at its own bar) and the per-trade analytics.
+"""),
+    ("code", """
+explorer = BacktestExplorer(run_report.load_saved_blocks(run_dir))
+res = explorer.run(STRATEGY, STRATEGY_PARAMS, BACKTEST_PARAMS)
+display(explorer.summary_frame(res, styled=True))
+explorer.dashboard(res, max_line_points=MAX_DASHBOARD_POINTS).show()
+explorer.trade_analytics(res).show()
+"""),
+]
+
 # ---------------------------------------------------------------------------- the notebooks, in run order
 NOTEBOOKS = {
     "00_data_and_splits": data,
@@ -639,6 +750,7 @@ NOTEBOOKS = {
     "05_compare_runs": compare,
     "07_discovered_indicators": discovered,
     "08_long_run": long_run,
+    "09_candidate_run": candidate_run,
 }
 
 

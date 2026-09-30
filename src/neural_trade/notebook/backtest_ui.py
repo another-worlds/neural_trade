@@ -283,14 +283,19 @@ class BacktestExplorer:
         self.last, self.last_strategy = self._backtest(strategy, params, costs, baselines)
         return self.last
 
-    def dashboard(self, res=None, *, start=None, end=None):
-        """Price / signals / confidence / sigma / equity / drawdown for the last run (or ``res``)."""
+    def dashboard(self, res=None, *, start=None, end=None, max_line_points=None):
+        """Price / signals / confidence / sigma / equity / drawdown for the last run (or ``res``).
+
+        ``max_line_points``: ``None`` (the default) draws every per-bar line at full resolution, as
+        before; a number thins them for a long whole-block view (``trading_dashboard_figure``'s own
+        parameter; trade and decision markers are never thinned)."""
         from neural_trade.visualization.trading_dashboard import trading_dashboard_figure
 
         res = res or self.last
         strat = self.last_strategy if res is self.last else None
         return trading_dashboard_figure(res, self.bars, self.signals, strat, start=start, end=end,
-                                        config=self.config, times=self.blocks.get("times"))
+                                        config=self.config, times=self.blocks.get("times"),
+                                        max_line_points=max_line_points)
 
     def trade_analytics(self, res=None):
         """Per-trade view of the last run (or ``res``): P&L before / after costs, exit reasons,

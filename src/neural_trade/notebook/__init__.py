@@ -18,3 +18,7 @@ from neural_trade.notebook.session import TrainingSession
 
 __all__ = ["BacktestExplorer", "CalibrationExplorer", "TrainingSession", "load_run_blocks", "pick_run",
            "servable_runs"]
+
+# neural_trade.notebook.run_report is imported by its own name (`from neural_trade.notebook import run_report`),
+# like the other per-notebook modules; it is not re-exported here to keep this import cheap (no pandas at
+# `import neural_trade.notebook` time for the interactive classes above).
