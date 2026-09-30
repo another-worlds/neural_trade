@@ -126,7 +126,7 @@ changes).
 | [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
 | [NT-092](#nt-092) | P1 | feature | implementer | done | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
 | [NT-093](#nt-093) | P2 | bug | implementer | todo | Identity follow-ups: notebook 08 launch guard trusts the recorded hash; screen trial keys moved once; config_identity docs |
-| [NT-094](#nt-094) | P1 | feature | implementer | in-progress | Trading costs default to 0 (D-044) |
+| [NT-094](#nt-094) | P1 | feature | implementer | done | Trading costs default to 0 (D-044) |
 
 ## Items
 
@@ -1236,7 +1236,7 @@ changes).
 
 **Trading costs default to 0 (D-044)**
 
-- **status:** in-progress (implementer, Sonnet, branch nt-094, 2026-09-30)
+- **status:** done (2026-09-30): 69972e0, merged; QA (Opus) PASS: every default cost 0 at runtime (BacktestConfig, build_backtest_config, scorer / rescore / CLI / notebook UI, cost-aware strategies, PNL_COST_BPS), explicit 13 bps reproduces the base numbers byte-for-byte, arithmetic tests pass explicit costs, golden bit-for-bit, fast 1022 / ruff. Lead fixed the reference.yaml comment. Open: notebook 02's prose 'After costs the return is mostly cost x trade count' (scripts/notebooks/build.py:285) is rewritten at the next notebook routine; notebooks 02/03/05 show zero-cost numbers once executed.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/strategy/ (BacktestConfig, cost-aware strategies), src/neural_trade/core/config.py (PNL_COST_BPS), configs/, README, RUNBOOK, docs/VISION.md (cost wording), tests/
 - **why:** owner decision D-044 (2026-09-30): "издержки делай 0" (make the costs 0).

@@ -5,7 +5,8 @@
 # walk-forward folds x three seeds: folds -3 and -2 are dev folds (rows rank on them), fold -1 is
 # the test fold (shown, never used to rank or choose; D-020). Each cell is scored on its fold's
 # out-of-sample block, with the default strategy (calibrated_quantile, knobs fitted on the fold's
-# calibration block) after the default costs (13 bps per side, next-open fills).
+# calibration block) at the default costs (0 since D-044; the cells scored before 2026-09-30 used 13 bps per
+# side; next-open fills).
 #
 #   neural-trade scenario plan configs/scenarios/reference.yaml     # check it, list the cells (no training)
 #   neural-trade scenario run  configs/scenarios/reference.yaml     # GPU: 9 cells, about 5 minutes each (estimate)
