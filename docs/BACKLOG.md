@@ -140,6 +140,7 @@ changes).
 | [NT-105](#nt-105) | P2 | feature | implementer | todo | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
 | [NT-106](#nt-106) | P3 | feature | implementer | todo | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
+| [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
 
 ## Items
 
@@ -1413,6 +1414,18 @@ changes).
 - **why:** B_model_indicators.md 5.2 and 7 item 14: inputs are dollars / one scale per block, so a 16.0 -> 14.1 bps volatility reads as $105.6 -> $148.4 a year later; the variance head must learn the price level.
 - **acceptance:** (1) An input-normalisation switch: each window divided by its own realised sigma, sigma fed as a separate feature; the target stays in dollars (D-022) and is rescaled at the output (test: served predictions in dollars match the old path's units). (2) Default unchanged (golden run). (3) An A/B through NT-032 on CRPSS and direction.
 - **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+
+### NT-108
+
+**Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/training/reset.py, tests/
+- **depends on:** none
+- **why:** found by the NT-037 implementer (2026-09-30): `reset_stateful_rngs` derives each stochastic layer's seed from its position in `model.submodules`; adding tf.keras Metric counters to CustomTrainModel (a Metric is a tf.Module) shifted every later layer's seed and changed SEEDED_STOCHASTIC_LAYERS screen numbers (caught by tests/test_screen.py, e.g. lambda_t_perp 1.29 vs 0.89). NT-037 avoided it with plain Variables; the mechanism stays fragile to any future Metric, Layer or nested Model attribute.
+- **acceptance:** (1) Seeds derive from a stable identity (the layer's name or path), not its enumeration position (test: adding an unrelated tf.Module attribute to the model leaves every stochastic layer's derived seed unchanged). (2) A golden screen record made before the change is reproduced or the difference is documented and a new record committed (the derived seeds change once). (3) Fast and slow suites, ruff.
+- **source:** NT-037 implementer report (nt-037 541dee0)
 
 ## Done log
 
