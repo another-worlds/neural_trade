@@ -199,7 +199,9 @@ def load_run_blocks(run_dir, csv_path: Optional[str] = None) -> Dict[str, Any]:
     for name in ("test", "cal"):
         b = blocks[name]
         for served in (True, False):
-            batch = predictor.predict(b["X"], b["last_close"], calibrated=served)
+            # b["X_model"] is the model-input window (OHLCV, NT-047); b["X"] stays the raw
+            # close windows every other consumer reads
+            batch = predictor.predict(b.get("X_model", b["X"]), b["last_close"], calibrated=served)
             key = name if served else f"{name}_raw"
             out[key] = batch.to_prediction_frame(predictor.bundle.pred_scale, predictor.bundle.pred_mean,
                                                  y=b["y"], split=name)

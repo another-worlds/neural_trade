@@ -461,7 +461,14 @@ class CustomTrainModel(models.Model):
     # -------------------------
     def custom_loss(self, x_window, y_true, y_pred, last_close, extended_trends,
                     vacuum_overflow=None):
-        """The configured training objective (Losses registry, objective tier)."""
+        """The configured training objective (Losses registry, objective tier).
+
+        With a multi-series input (Config.INPUT_SERIES, NT-047) the objective and every
+        loss term keep their close-window contract: the close channel is extracted here,
+        once, for every caller (train_step, test_step, the calibration pass)."""
+        series = list(getattr(self.config, "INPUT_SERIES", None) or ["close"])
+        if len(series) > 1 and x_window.shape.rank == 3:
+            x_window = x_window[:, :, series.index("close")]
         return self.objective(self, x_window, y_true, y_pred, last_close, extended_trends,
                               vacuum_overflow=vacuum_overflow)
 

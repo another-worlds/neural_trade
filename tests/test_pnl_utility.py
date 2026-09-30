@@ -234,6 +234,8 @@ def test_realized_vol_sigma_matches_raw_close_scale_on_the_bundled_csv():
      _y_tr, _y_te, target_scaler) = dp.prepare_datasets(df, close)
 
     pred_scale = float(target_scaler.scale_[0])
+    if X_train.ndim == 3:   # OHLCV input (NT-047): the loss reads the close channel (custom_model.custom_loss)
+        X_train = X_train[..., cfg.close_channel()]
     assert dp.normalizer.kind == "window_relative"
     np.testing.assert_allclose(dp.normalizer.scale, pred_scale, rtol=1e-6)
 

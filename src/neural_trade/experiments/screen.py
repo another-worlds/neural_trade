@@ -842,8 +842,8 @@ def _load_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any]:
     return cached
 
 
-def _windowed_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any, Any, Any]:
-    """``(X_seq, y_seq, last_close_seq, extended_trends)`` of ``cfg``'s sliding windows
+def _windowed_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any, Any, Any, Any]:
+    """``(X_seq, y_seq, last_close_seq, extended_trends, X_model)`` of ``cfg``'s sliding windows
     (:meth:`DataProcessor.build_windows`, trimmed to ``MAX_SEQUENCE_COUNT``), computed once per
     :func:`data_key` and cached in ``cache`` across trials that share it. Windowing loops every bar
     (``data/windowing.py:make_sequences_with_extended_trends``) and used to re-run on every trial even
@@ -858,7 +858,7 @@ def _windowed_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any, Any,
     cached = cache.get(key)
     if cached is None:
         df, close = _load_cached(cfg, cache)
-        cached = DataProcessor(cfg).build_windows(close)
+        cached = DataProcessor(cfg).build_windows(close, df)
         cache[key] = cached
     return cached
 
@@ -907,12 +907,12 @@ def _prepare_trial_data(cfg: Config, cache: Dict[str, Any]) -> _PreparedTrial:
     t_load = time.perf_counter() - t0
 
     t1 = time.perf_counter()
-    X_seq, y_seq, last_close_seq, extended_trends = _windowed_cached(cfg, cache)
+    X_seq, y_seq, last_close_seq, extended_trends, X_model = _windowed_cached(cfg, cache)
     dp = DataProcessor(cfg)
     (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
      X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
      y_train, y_test, target_scaler) = dp.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq,
-                                                                        extended_trends)
+                                                                        extended_trends, X_model=X_model)
     val_block = dp.val_block
     train_ds, val_ds = create_datasets(cfg, X_train_seq, y_train_scaled, last_close_train,
                                        extended_trends_train, val_block["X"], val_block["y_scaled"],

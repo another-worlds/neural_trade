@@ -2,8 +2,10 @@
 
 One registry entry per family. An entry is an :class:`IndicatorFamily` instance that declares
 
-* its **inputs** (which series of the bar it reads; only ``close`` today, and the derived
-  ``gains`` / ``losses`` a :class:`FamilyContext` computes from it),
+* its **inputs** (which base series of the bar it reads: ``open`` / ``high`` / ``low`` /
+  ``close`` / ``volume``; the derived series a :class:`FamilyContext` computes from them,
+  such as ``gains`` / ``losses``, ``typical_price`` and ``true_range``, are declared through
+  their base series),
 * its **learnable parameters** (:class:`ParamSpec`: textbook default and bounds, in bars),
 * its **output channels** (:class:`ChannelSpec`) and its **drawing spec** (``draw``: on the
   price chart or in its own panel),
@@ -29,6 +31,32 @@ import tensorflow as tf
 META_SCALE = 0.5
 
 DRAW_TARGETS = ("price", "panel")
+
+#: the base bar series a family may declare in ``inputs`` (order = channel order of the
+#: model input; ``Config.INPUT_SERIES`` selects a subsequence containing at least 'close')
+BASE_SERIES = ("open", "high", "low", "close", "volume")
+
+#: derived context series -> the base series they are computed from (used by the layer's
+#: input check; families declare only base series in ``inputs``)
+DERIVED_SERIES = {
+    "gains": ("close",),
+    "losses": ("close",),
+    "typical_price": ("high", "low", "close"),
+    "true_range": ("high", "low", "close"),
+}
+
+# ------------------------------------------------------------------ soft extremum (NT-047)
+#: sharpness of the Boltzmann weighting inside each rolling window, in units of THAT
+#: window's own range (max - min over the bars the window holds): a bar one full range below
+#: the window's maximum gets weight e^-BETA relative to the maximum. Dimensionless, so the
+#: smooth extremum is invariant to the scale and the level of the series (NT-047 repair:
+#: the first version used a fixed sharpness per target-scaler unit and saturated on real
+#: windows). Larger = closer to the hard rolling max / min.
+SOFT_EXTREMUM_BETA = 30.0
+#: sharpness of the smooth sign / gate ``tanh(k*dx)`` / ``sigmoid(k*dx)`` used where the
+#: textbook indicator branches on the sign of a one-bar move (OBV, MFI, ADX/DMI); the same
+#: scale as the MACD soft cross of NT-046
+SOFT_SIGN_SHARPNESS = 10.0
 
 
 @dataclass(frozen=True)
@@ -56,34 +84,94 @@ class ChannelSpec:
 class FamilyContext:
     """The tensors one forward pass shares between the families.
 
-    ``close`` is the (window-relative) close sequence ``[B, L]``; ``gains`` / ``losses`` are
-    derived from it lazily (zero-padded one-bar up/down moves, as RSI reads them). NT-047
-    extends this with the other OHLCV series.
+    ``close`` is the (window-relative) close sequence ``[B, L]``. ``open`` / ``high`` /
+    ``low`` / ``volume`` are the other bar series when the model input carries them
+    (``Config.INPUT_SERIES``, NT-047); reading an absent one raises. Derived series are
+    computed lazily and CACHED, so every consumer shares one op (the determinism NOTE
+    below): ``gains`` / ``losses`` (zero-padded one-bar up/down close moves, as RSI reads
+    them), ``prev_close`` (the close shifted one bar, first bar repeated),
+    ``typical_price`` ((high + low + close) / 3) and ``true_range``
+    (max(high - low, |high - prev_close|, |low - prev_close|); the first bar's true range
+    is high - low).
     """
 
-    def __init__(self, close: tf.Tensor):
+    def __init__(self, close: tf.Tensor, open: Optional[tf.Tensor] = None,  # noqa: A002
+                 high: Optional[tf.Tensor] = None, low: Optional[tf.Tensor] = None,
+                 volume: Optional[tf.Tensor] = None):
         self.close = close
-        self._gains: Optional[tf.Tensor] = None
-        self._losses: Optional[tf.Tensor] = None
+        self._series = {"open": open, "high": high, "low": low, "volume": volume}
+        self._cache: Dict[str, tf.Tensor] = {}
+
+    def _base(self, name: str) -> tf.Tensor:
+        t = self._series.get(name)
+        if t is None:
+            raise ValueError(f"the model input carries no {name!r} series: add it to "
+                             "Config.INPUT_SERIES (NT-047)")
+        return t
+
+    @property
+    def open(self) -> tf.Tensor:
+        return self._base("open")
+
+    @property
+    def high(self) -> tf.Tensor:
+        return self._base("high")
+
+    @property
+    def low(self) -> tf.Tensor:
+        return self._base("low")
+
+    @property
+    def volume(self) -> tf.Tensor:
+        return self._base("volume")
+
+    def available(self) -> Tuple[str, ...]:
+        """The base series this context carries (close always; the rest when present)."""
+        return tuple(["close"] + [n for n in ("open", "high", "low", "volume")
+                                  if self._series.get(n) is not None])
 
     def _split_moves(self) -> None:
         x = self.close
         diffs = x[:, 1:] - x[:, :-1]
         zero = tf.zeros((tf.shape(x)[0], 1), dtype=x.dtype)
-        self._gains = tf.concat([zero, tf.where(diffs > 0, diffs, tf.zeros_like(diffs))], axis=1)
-        self._losses = tf.concat([zero, tf.where(diffs < 0, -diffs, tf.zeros_like(diffs))], axis=1)
+        self._cache["gains"] = tf.concat(
+            [zero, tf.where(diffs > 0, diffs, tf.zeros_like(diffs))], axis=1)
+        self._cache["losses"] = tf.concat(
+            [zero, tf.where(diffs < 0, -diffs, tf.zeros_like(diffs))], axis=1)
 
     @property
     def gains(self) -> tf.Tensor:
-        if self._gains is None:
+        if "gains" not in self._cache:
             self._split_moves()
-        return self._gains
+        return self._cache["gains"]
 
     @property
     def losses(self) -> tf.Tensor:
-        if self._losses is None:
+        if "losses" not in self._cache:
             self._split_moves()
-        return self._losses
+        return self._cache["losses"]
+
+    @property
+    def prev_close(self) -> tf.Tensor:
+        if "prev_close" not in self._cache:
+            x = self.close
+            self._cache["prev_close"] = tf.concat([x[:, :1], x[:, :-1]], axis=1)
+        return self._cache["prev_close"]
+
+    @property
+    def typical_price(self) -> tf.Tensor:
+        if "typical_price" not in self._cache:
+            self._cache["typical_price"] = (self.high + self.low + self.close) / 3.0
+        return self._cache["typical_price"]
+
+    @property
+    def true_range(self) -> tf.Tensor:
+        if "true_range" not in self._cache:
+            pc = self.prev_close
+            self._cache["true_range"] = tf.maximum(
+                self.high - self.low,
+                tf.maximum(tf.abs(self.high - pc), tf.abs(self.low - pc)))
+        return self._cache["true_range"]
 
 
 def alpha_from_period(period: float) -> float:
@@ -191,20 +279,74 @@ class IndicatorFamily:
         return sum(m_single_ewma(periods[p.name], eps, logit_shift) for p in self.params)
 
 
+# ------------------------------------------------------------------ soft extremum (NT-047)
+# The smooth rolling max / min: for bar t and learned period p, a Boltzmann-weighted average
+# over an EXACT rolling window of p bars (fractional p: the oldest bar enters with weight
+# p - floor(p), which makes the value differentiable in the period),
+#     soft_ext_t = sum_k m_tk e^{+-beta x_k / r_t} x_k / sum_k m_tk e^{+-beta x_k / r_t},
+# with r_t the window's own range (max - min over the bars it holds, a temperature only:
+# stop_gradient); the exponent is taken against the window's hard extreme (it cancels in the
+# ratio). The exponent is dimensionless and lies in [-beta, 0], so the form is invariant to
+# the scale and the level of the series, cannot overflow for any beta, and needs no clip.
+# It is a convex combination of the window's values, so it always lies inside the window's
+# range and forgets a peak the moment the peak leaves the window. Causal: bar t reads only
+# bars k <= t. Computed as one [B, L, L] weight tensor per call (the same size as the
+# layer's batched EWMA matrices; no gathers, whose scatter-add gradients are not
+# reproducible on the CPU).
+
+
+def soft_rolling_extremum(series: tf.Tensor, alpha: tf.Tensor, sign: float) -> tf.Tensor:
+    """Smooth rolling max (``sign`` +1) / min (-1) of ``series`` ``[B, L]`` over the
+    learned period ``2 / alpha - 1`` bars (``alpha`` scalar or ``[B]``), truncated at the
+    window start like the textbook expanding-start rolling extremum."""
+    x = tf.cast(series, tf.float32)
+    a = tf.clip_by_value(tf.cast(alpha, tf.float32), 1e-6, 1.0 - 1e-6)
+    a = a + tf.zeros_like(x[:, 0])                                  # scalar or [B] -> [B]
+    p = 2.0 / a - 1.0                                               # learned period, bars
+    n = tf.shape(x)[1]
+    idx = tf.range(n)
+    lag = tf.cast(idx[None, :] - idx[:, None], tf.float32)          # [L(t), L(k)]: k - t
+    causal = tf.cast(lag <= 0.0, tf.float32)
+    m = tf.clip_by_value(lag[None] + p[:, None, None], 0.0, 1.0) * causal[None]  # [B, L, L]
+    inside = m > 0.0
+    xk = x[:, None, :] + tf.zeros_like(m)                           # [B, L, L]
+    xt = x[:, :, None] + tf.zeros_like(m)
+    hi = tf.reduce_max(tf.where(inside, xk, xt), axis=2)            # the window's range
+    lo = tf.reduce_min(tf.where(inside, xk, xt), axis=2)
+    r = tf.stop_gradient(hi - lo + 1e-6 * (tf.abs(hi) + tf.abs(lo)) + 1e-12)
+    ext = tf.stop_gradient(hi if sign > 0 else lo)                  # the window's hard extreme
+    # exponent sign * beta * (x_k - extreme) / range, in [-beta, 0] inside the window (0 outside,
+    # where m = 0): every weight is at most 1, for any beta and any scale of the series
+    d = tf.where(inside, sign * (xk - ext[:, :, None]), tf.zeros_like(m))
+    w = m * tf.exp(SOFT_EXTREMUM_BETA * d / r[:, :, None])
+    return tf.reduce_sum(w * xk, axis=2) / tf.reduce_sum(w, axis=2)  # den > 0: the extreme bar
+
+
+def m_soft_extremum(period: float, eps: float = 1e-3, logit_shift: float = -META_SCALE) -> int:
+    """M(eps) of one soft rolling extremum: the window itself (the learned period after the
+    maximal slowing shift), plus the fractional edge bar and one bar of headroom."""
+    alpha = shifted_alpha(period, logit_shift)
+    return int(math.ceil(2.0 / alpha - 1.0)) + 2
+
+
 def compute_reference(family: IndicatorFamily, close, periods: Mapping[str, float],
-                      logit_shift: float = 0.0):
+                      logit_shift: float = 0.0, *, series: Optional[Mapping[str, "object"]] = None):
     """Eagerly compute one instance's channels with fixed periods (scan EWMAs, no layer).
 
-    ``close`` is ``[L]`` or ``[B, L]``. Used by the offset-invariance tests of M(eps) and by
-    drawing code that needs a family's channels outside the model."""
+    ``close`` is ``[L]`` or ``[B, L]``; ``series`` optionally maps the other base series
+    ('open' / 'high' / 'low' / 'volume') to arrays of the same shape (NT-047). Used by the
+    offset-invariance tests of M(eps) and by drawing code that needs a family's channels
+    outside the model."""
     import numpy as np
 
     import neural_trade.utils.math as mh
 
-    x = np.asarray(close, dtype=np.float32)
-    if x.ndim == 1:
-        x = x[None, :]
-    ctx = FamilyContext(tf.constant(x))
+    def _prep(arr):
+        a = np.asarray(arr, dtype=np.float32)
+        return tf.constant(a[None, :] if a.ndim == 1 else a)
+
+    extra = {k: _prep(v) for k, v in (series or {}).items()}
+    ctx = FamilyContext(_prep(close), **extra)
     alphas = {p.name: tf.constant(shifted_alpha(periods[p.name], logit_shift), tf.float32)
               for p in family.params}
     cache: dict = {}

@@ -29,7 +29,7 @@ from sklearn.preprocessing import StandardScaler
 from neural_trade.core.config import Config
 from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
-from neural_trade.utils.seeding import seed_everything
+from neural_trade.utils.seeding import seed_everything, set_arithmetic_rewrite
 from neural_trade.metrics.evaluate import _compute_all_horizon_metrics
 from neural_trade.registries.models import Models
 from neural_trade.core.postprocess import heads_to_predictions
@@ -285,6 +285,7 @@ def train_and_evaluate(
     cfg.validate()  # P0-3 / P1-4: early enforcement (added in Config refactor)
     # Seed AFTER the overrides: seeding first ignored a SEED given in config_overrides.
     seed_everything(int(getattr(cfg, 'SEED', 42)))
+    set_arithmetic_rewrite(cfg)   # explicit per run (NT-047; utils.seeding)
     _report_device()
 
     logger.info("Starting enhanced model training with extended trend features...")

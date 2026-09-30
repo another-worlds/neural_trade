@@ -224,7 +224,7 @@ start. The correlation bars are epoch-to-epoch changes against a noise band.
 """),
     ("code", """
 metrics_path = ctx.path("metrics.jsonl")
-applied = applied_periods(result, result.windows_test, block="test")
+applied = applied_periods(result, blocks["test"]["X_model"], block="test")   # the model-input windows
 Visualizations.build("indicator_evolution", metrics_path, ctx.config, applied=applied).show()
 indicator_applied_periods(applied, ctx.config, metrics=metrics_path).show()
 display(AT.styled(indicator_summary(metrics_path, ctx.config, applied=applied)))
@@ -431,7 +431,7 @@ display(AT.styled(AT.trailing_move_table({"cal": blocks["cal_raw"], "test": bloc
 """),
     ("md", "## Learned indicator periods\n\nBase periods per epoch; the diamonds are the median applied (per-window shifted) periods of the served weights on the test windows."),
     ("code", """
-applied = applied_periods(blocks["predictor"], test.X_raw, block="test")
+applied = applied_periods(blocks["predictor"], blocks["blocks"]["test"]["X_model"], block="test")
 Visualizations.build("indicator_evolution", metrics, cfg, applied=applied).show()
 indicator_applied_periods(applied, cfg, metrics=metrics).show()
 AT.styled(indicator_summary(metrics, cfg, applied=applied))
@@ -535,7 +535,7 @@ blocks = split_arrays(cfg)
 block = blocks[BLOCK]
 times = blocks["df"]["timestamp"].to_numpy()[block["anchor_bar"]]
 metrics = run_dir / "metrics.jsonl"
-applied = applied_periods(predictor, block["X"], block=BLOCK)   # the period each window gets (served weights)
+applied = applied_periods(predictor, block["X_model"], block=BLOCK)   # the period each window gets (served weights)
 print(f"{len(block['X']):,} {BLOCK} windows of {cfg.LOOKBACK} bars; served weights: epoch",
       predictor.bundle.meta.get("weights_epoch"))
 """),

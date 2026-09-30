@@ -100,6 +100,40 @@ def make_sequences_with_extended_trends(config, close_array, lookback):
     )
 
 
+#: bar series a window may carry, in channel order (Config.INPUT_SERIES is a subsequence);
+#: keys = the standardised OHLCV frame's column names (data.loaders.validate_ohlcv_frame)
+SERIES_COLUMNS = {"open": "Open", "high": "High", "low": "Low", "close": "Close",
+                  "volume": "Volume"}
+
+
+def frame_series(config, df) -> dict:
+    """``{series name: float32 array}`` for the configured ``Config.INPUT_SERIES`` of a
+    standardised OHLCV frame (NT-047)."""
+    return {name: df[SERIES_COLUMNS[name]].to_numpy(dtype="float32")
+            for name in (getattr(config, "INPUT_SERIES", None) or ["close"])}
+
+
+def make_multichannel_windows(config, series: dict, lookback):
+    """Input windows ``[N, lookback, C]`` over the ``Config.INPUT_SERIES`` channels (NT-047).
+
+    ``series`` maps each configured series name to its bar array (:func:`frame_series`); the
+    anchors (start, end, step and count) are exactly those of
+    :func:`make_sequences_with_extended_trends`, so window k here and window k there end at
+    the same decision bar (asserted by the processor). Every channel's window ends at the
+    decision bar; the close channel equals the close window bit-for-bit."""
+    names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
+    arrays = [np.asarray(series[name], dtype="float32").reshape(-1) for name in names]
+    n = arrays[0].shape[0]
+    if any(a.shape[0] != n for a in arrays):
+        raise ValueError("all INPUT_SERIES arrays must have the same length")
+    start_idx = int(max(lookback, int(max(config.EXTENDED_TREND_PERIODS))))
+    step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
+    end_idx = int(n - (int(max(config.HORIZON_STEPS)) - 1))
+    X = [np.stack([a[i - lookback:i] for a in arrays], axis=-1)
+         for i in range(start_idx, end_idx, step)]
+    return np.array(X, dtype="float32")
+
+
 def sequence_anchor_bars(config, n_bars, n_total_seq=None, seq_index=None):
     """Bar index of each sequence's LAST input bar (its decision bar), for ``make_sequences_with_extended_trends``.
 
@@ -138,3 +172,22 @@ def make_inference_windows(close_array, lookback, *, extended_trend_periods=None
         ext.append(compute_extended_trend_features(close, i - 1, periods) if periods else np.zeros(0, "float32"))
     return (np.array(X, dtype="float32"), np.array(lc, dtype="float32"),
             np.array(ext, dtype="float32").reshape(len(X), len(periods)))
+
+
+def make_inference_input_windows(config, df):
+    """:func:`make_inference_windows` over the configured ``Config.INPUT_SERIES`` (NT-047).
+
+    ``df`` is a standardised OHLCV frame. Returns ``(X, last_close, extended)`` with ``X``
+    ``[N, LOOKBACK]`` (close-only mode: exactly :func:`make_inference_windows`) or
+    ``[N, LOOKBACK, C]``; ``last_close`` is always the close channel's last bar."""
+    names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
+    close = df["Close"].to_numpy(dtype="float32")
+    Xc, lc, ext = make_inference_windows(close, config.LOOKBACK,
+                                         extended_trend_periods=config.EXTENDED_TREND_PERIODS)
+    if names == ["close"]:
+        return Xc, lc, ext
+    arrays = [df[SERIES_COLUMNS[name]].to_numpy(dtype="float32") for name in names]
+    start = int(max([config.LOOKBACK] + [int(p) for p in config.EXTENDED_TREND_PERIODS]))
+    X = np.stack([np.stack([a[i - config.LOOKBACK:i] for a in arrays], axis=-1)
+                  for i in range(start, len(close) + 1)]).astype("float32")
+    return X, lc, ext

@@ -53,10 +53,11 @@ def test_registry_is_strict():
         Indicators.register(name="ma")(Indicators.get("rsi"))
 
 
-def test_default_config_declares_18_logits():
+def test_default_config_declares_54_logits_and_the_old_default_18():
     from neural_trade.core.config import Config
 
-    assert num_learnable_logits(Config()) == 18
+    assert num_learnable_logits(Config()) == 54  # 14 families x 3 instances (NT-047)
+    assert num_learnable_logits(Config(INDICATOR_FAMILIES={})) == 18  # the NT-046 four
 
 
 def _empirical_offset_invariance(fam, periods, n=1400, k=400):

@@ -123,6 +123,9 @@ def cmd_predict(args) -> int:
     predictor = Predictor.from_artifacts(args.artifacts)
     df = pd.read_csv(args.csv)
     if args.last:
+        if len(predictor.config.input_series()) > 1:  # OHLCV input (NT-047)
+            print(json.dumps(predictor.predict_last(df, alpha=args.alpha), indent=2))  # noqa: T201
+            return 0
         close = df[[c for c in df.columns if c.lower() == "close"][0]].to_numpy()
         print(json.dumps(predictor.predict_last(close, alpha=args.alpha), indent=2))  # noqa: T201
         return 0

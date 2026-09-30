@@ -140,4 +140,6 @@ Indicators.register(name="rsi", tags=["momentum", "panel", "default"],
                     description="Learnable RSI (EWMA-smoothed gains/losses)")(RSIFamily())
 Indicators.register(name="bb", tags=["volatility", "price", "default"],
                     description="Learnable Bollinger bands (EWMA mean/variance, +/- 2 sigma, %B)")(BollingerFamily())
-Indicators._initialized = True
+
+# The OHLCV families (NT-047) register in families_ohlcv; the package __init__ imports
+# both and then marks the registry initialized.

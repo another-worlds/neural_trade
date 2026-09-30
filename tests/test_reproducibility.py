@@ -7,7 +7,7 @@ import pytest
 pytestmark = pytest.mark.slow
 
 
-def _run(tmp_path, synthetic_bars, seed, tag):
+def _run(tmp_path, synthetic_bars, seed, tag, **overrides):
     import tensorflow as tf
 
     from neural_trade.core.config import Config
@@ -18,7 +18,7 @@ def _run(tmp_path, synthetic_bars, seed, tag):
     synthetic_bars.to_csv(d / "bars.csv", index=False)
     cfg = Config().override(EPOCHS=1, BATCH_SIZE=32, MAX_SEQUENCE_COUNT=600, CSV_PATH=str(d / "bars.csv"),
                             SCALER_PATH=str(d / "scaler.joblib"), MODEL_PATH=str(d / "weights.h5"),
-                            CALLBACKS=["early_stopping"])
+                            CALLBACKS=["early_stopping"], **overrides)
     # Unseeded Keras/TF ops take their op seed from per-process counters: repeating a run in the
     # same process needs a cleared session (the ablation runner uses one process per run).
     tf.keras.backend.clear_session()
@@ -46,3 +46,20 @@ def test_seed_everything_seeds_python_numpy_and_tf(tf):
     r1, n1, t1 = random.random(), np.random.rand(), float(tf.random.uniform(()))
     seed_everything(5)
     assert (r1, n1, t1) == (random.random(), np.random.rand(), float(tf.random.uniform(())))
+
+
+CLOSE_ONLY = {"INPUT_SERIES": ["close"], "INDICATOR_FAMILIES": {}}
+
+
+def test_a_close_only_run_after_an_ohlcv_run_in_one_process_is_unchanged(tf, tmp_path, synthetic_bars, monkeypatch):
+    """NT-047: the OHLCV run turns Grappler's arithmetic rewrite off (process-wide); the next
+    close-only run must set it back, or it trains a different graph (QA c7_grappler: 226 of
+    273 golden arrays changed). Close-only, then OHLCV, then close-only again: bit-for-bit."""
+    monkeypatch.chdir(tmp_path)
+    before = _run(tmp_path, synthetic_bars, 11, "close_a", **CLOSE_ONLY)
+    assert tf.config.optimizer.get_experimental_options().get("arithmetic_optimization", True) is True
+    _run(tmp_path, synthetic_bars, 11, "ohlcv")
+    assert tf.config.optimizer.get_experimental_options()["arithmetic_optimization"] is False
+    after = _run(tmp_path, synthetic_bars, 11, "close_b", **CLOSE_ONLY)
+    assert tf.config.optimizer.get_experimental_options()["arithmetic_optimization"] is True
+    np.testing.assert_array_equal(before, after)

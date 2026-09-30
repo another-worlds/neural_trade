@@ -22,8 +22,9 @@ def test_build_by_role_from_config():
     tf.keras.utils.set_random_seed(0)  # TF_DETERMINISTIC_OPS requires seeded random ops
     cfg = Config()
     ind = Layers.for_role(cfg, "indicators", cfg)
-    out = ind([tf.random.normal([4, cfg.LOOKBACK]), tf.zeros([4, 18])])
-    assert out.shape == (4, cfg.LOOKBACK, 31)
+    # the NT-047 default: OHLCV windows [B, L, 5], 54 logits, 82 channels
+    out = ind([tf.random.normal([4, cfg.LOOKBACK, 5]), tf.zeros([4, 54])])
+    assert out.shape == (4, cfg.LOOKBACK, 82)
     assert set(Layers.as_custom_objects()) >= {"LearnableIndicators", "EnergyGate"}
 
 
