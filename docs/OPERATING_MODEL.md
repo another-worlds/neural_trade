@@ -117,6 +117,17 @@ behaviour or `master` goes to the owner.
   STATUS and take the next item that does not. Stop the run only when no actionable item is left,
   or the owner said stop; then hand off.
 
+## Tiny first (owner, D-048)
+
+- **Maths, stability and architecture checks** (gradient shares, non-finite steps, clipping, loss terms, shapes,
+  memory) run first on the 6-hour screen layout (`neural-trade screen`, NT-088: seconds per trial). A GPU run of
+  minutes or hours is for questions a 6-hour block cannot answer.
+- **Quality verdicts** (direction, CRPS, trading) use the micro layout with at least 5 judgement folds (D-046);
+  360-day runs only confirm what the micro layout adopted.
+- **Tests:** the suites run with `-n 8` (pytest-xdist). QA runs the tests an item touches plus one full suite;
+  the lead does not re-run a suite QA ran on the same code. No two full suites run at the same time in different
+  checkouts: an agent that needs one while another runs waits for it, or runs only its targeted tests.
+
 ## Sweeps and pre-registered studies
 
 GPU work is one of two kinds, with different limits. An item says which kind it is. The sweep rules

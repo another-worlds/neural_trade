@@ -55,9 +55,9 @@ so `RESAMPLE_MINUTES` is not tunable and a sweep refuses any other bar size (NT-
 
 | Task | Command | Time |
 |---|---|---|
-| Fast suite | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"` | 5-6 min idle; 14 min seen while the machine was busy (2026-09-25): run it in the background |
-| Slow suite (training, CLI and predictor round trips, reproducibility, notebook execution on synthetic bars) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow` | ~4 min |
-| Stability invariants (from NT-036; the marker does not exist yet) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m stability` | not measured |
+| Fast suite | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8` | 3 min 26 s at 8 workers (2026-10-01; 7 min 20 s serial; 16 workers are not faster: six ~30-55 s training tests bound it, NT-109). Never two full suites at once (D-048) |
+| Slow suite (training, CLI and predictor round trips, reproducibility, notebook execution on synthetic bars) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow -n 8` | ~4 min serial on an idle machine; 38 min seen when three suites ran at once (2026-10-01) |
+| Stability invariants (NT-036) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m stability` | not measured |
 | Lint | `$PY -m ruff check src tests scripts` (CI lints `src scripts` with ruff 0.6.9; locally 0.16.8) | seconds |
 | Coverage and per-package gates | `COVERAGE_FILE=<scratch>/.coverage CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" --cov=neural_trade --cov-report=json:<scratch>/coverage.json` then `$PY scripts/check_coverage.py <scratch>/coverage.json` | ~6 min |
 | Refactor guard: a small deterministic CPU run (D-023: every module move) | `$PY scripts/golden_run.py record OUT.npz` before, `$PY scripts/golden_run.py verify OUT.npz` after | not measured |

@@ -61,6 +61,7 @@ that extend or partly replace an entry.
 | D-045 | The maths report's 22 recommendations are implemented by a staged plan: measure, prune, reweigh, rebuild, generalise | owner (the plan: lead's) | |
 | D-046 | Verdicts are inferred over folds, at least 5 judgement folds; one fold x seeds is not enough | lead | |
 | D-047 | NT-047's default: OHLCV input with all 14 indicator families; the 1.6x slower step is accepted | owner | |
+| D-048 | Tiny first: maths and stability checks on the 6-hour screen layout; test-run discipline; pytest-xdist | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -578,4 +579,19 @@ that extend or partly replace an entry.
   is declined; the duel showed no directional gain for either input.
 - **Consequence:** NT-047 is merged as built (72d3838). The D-045 studies (NT-098 onward) and the golden record use the
   new default; the golden run is re-recorded on the merged head.
+
+## D-048 Tiny first: maths and stability on the 6-hour layout; test-run discipline; pytest-xdist (owner, 2026-10-01)
+- **Owner:** "I expect this session and whole testing regarding maths and architecture to take place nearly
+  instantly", then approved the lead's three rules and the install: "да, внедряй правила и ставь xdist".
+- **Context:** on 2026-09-30 / 10-01 no GPU training of the D-045 plan had run yet; the wall time went to test suites
+  run 3-5 times per item (fast 6-9 min, slow 17-38 min, inflated by agents running suites at the same time on one CPU).
+- **Decision:** (1) maths, stability and architecture checks (gradient shares, non-finite steps, clipping, loss
+  terms, shapes, memory) run first on the 6-hour screen layout (NT-088, seconds per trial); quality verdicts use the
+  micro layout with at least 5 judgement folds (D-046); 360-day runs only for final confirmations. (2) Test runs: QA
+  runs the tests an item touches plus ONE full suite; no two full suites run at the same time in different
+  checkouts; slow tests are profiled and shrunk or moved. (3) pytest-xdist 3.8.0 (with execnet 2.1.2) is installed in
+  the nt env (owner-approved env change) and the suites run with `-n 8` (measured: fast suite 1,156 passed in 3 min 26
+  s at 8 workers against 7 min 20 s serial; 16 workers 3 min 40 s, bound by six ~30-55 s training tests).
+- **Consequence:** OPERATING_MODEL "Tiny first", CLAUDE.md commands, RUNBOOK, the agent files; NT-098 runs on the
+  screen and micro layouts; NT-109 (shrink the slowest tests); requirements-ci.txt and CI use xdist.
 

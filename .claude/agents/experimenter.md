@@ -99,3 +99,7 @@ write and when.
 The verdict (or the sweep ranking), the table of numbers with noise, run ids, the paths of SPEC.md (or
 the sweep spec) and REPORT.md, the commit shas, the GPU time used against the stated budget, and
 follow-up items for the backlog.
+
+**Tiny first (owner, D-048):** a maths, stability or architecture question is answered on the 6-hour screen
+layout (`neural-trade screen`, seconds per trial) before any micro or long run; quality verdicts use the micro
+layout with at least 5 judgement folds (D-046); 360-day runs only confirm.

@@ -20,7 +20,8 @@ reason the lead can trust "done". A criterion is met only if you checked it.
    is tracked, so your worktree has it. Read run directories (`runs/<id>/`) and gitignored data (the
    long-history file, RUNBOOK "Data") from the main checkout by absolute path. At the end:
    `git worktree remove --force <path>` from the main checkout, then `git worktree prune`.
-2. Run the checks yourself: `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"`,
+2. Run the checks yourself (D-048: the tests the item touches, then ONE full run of each suite, with `-n 8`; never
+   while another full suite runs elsewhere): `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8`,
    the slow suite if training, serving or notebooks are involved, and `$PY -m ruff check src tests scripts`
    (`$PY` = `C:/Users/Step/miniforge3/envs/nt/python`). Once the `stability` marker exists (NT-036),
    also `-m stability` when loss, model, indicator or train-step code changed. For a refactor that

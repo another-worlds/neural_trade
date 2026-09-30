@@ -73,6 +73,8 @@ Pointers only; the rule lives where the pointer says.
 - **Evidence** (D-012, D-020, VISION "Principles"): no choice uses test-block numbers, the notebooks'
   and the leaderboard's test columns included.
 - **Sweeps and the GPU:** OPERATING_MODEL "Sweeps and pre-registered studies"; RUNBOOK "GPU rules".
+- **Tiny first** (owner, D-048): maths, stability and architecture checks on the 6-hour screen layout first; test-run
+  discipline and `-n 8` (OPERATING_MODEL "Tiny first").
 - **Notebooks** (D-013, D-028): OPERATING_MODEL work loop step 6; never add an nbstripout filter or
   hook (NT-011).
 - **Figures** (D-014, D-022, D-027): `src/neural_trade/visualization/theme.py`; no simplified tier.
@@ -101,8 +103,8 @@ Pointers only; the rule lives where the pointer says.
 
 ```bash
 PY=C:/Users/Step/miniforge3/envs/nt/python
-CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"   # fast suite, 5-6 min (up to 14 min on a busy machine)
-CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow        # slow suite, ~4 min
+CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8   # fast suite, ~3.5 min (pytest-xdist, D-048)
+CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow -n 8   # slow suite; never two full suites at once (D-048)
 $PY -m ruff check src tests scripts
 $PY scripts/notebooks/build.py            # regenerate notebooks/ from the generator
 $PY scripts/notebooks/execute.py          # execute in place (01 trains ~5 min on the GPU)

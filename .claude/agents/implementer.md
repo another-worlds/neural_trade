@@ -32,8 +32,9 @@ files you may change. Nothing else.
    `$PY scripts/golden_run.py record <scratch>/before.npz` on the base commit and
    `$PY scripts/golden_run.py verify <scratch>/before.npz` after each move, and quote the result.
 6. Tests: every correctness fix and every new behaviour is pinned by a test. Run
-   `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow"` (and `-m slow` if you
-   touched training, serving or notebooks) plus `$PY -m ruff check src tests scripts`
+   `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8` (and `-m slow -n 8` if you
+   touched training, serving or notebooks) plus `$PY -m ruff check src tests scripts`. While iterating run only
+   the tests you touch; run the full suites once at the end (D-048), never while another full suite runs elsewhere
    (`$PY` = `C:/Users/Step/miniforge3/envs/nt/python`). All must pass. Once the `stability` marker
    exists (NT-036), also run `-m stability` when you changed loss, model, indicator or train-step code.
 7. Figures: if you changed or added a figure, render it on real data (`docs/RUNBOOK.md`) and look at
