@@ -50,3 +50,10 @@ as the first lever to test, with a learning-curve study as the proposal.
 7. (Russian, verbatim) "1 нет / 2 издержки делай 0 / дай статус по текущим моделям с издержкой 0" (1: no tick
    order-book data; 2: make the costs 0; give the status of the current models at zero cost).
    Recorded as D-044. The zero-cost status is computed by re-scoring every stored engine cell (no retraining).
+
+## Follow-up 4 (2026-09-30)
+
+8. (Russian, verbatim) "сделай рейтинг лучших результатов дл меня и интерпретацию почему результаты были хорошими
+   или плозими для каждой строки" - answered in the session (ranking of every zero-cost result with reasons).
+9. (Russian, verbatim) "сохрани 1-3" - the ranking's rows 1-3 saved as candidates C1-C3: configs/candidates/
+   (README, manifest with sha256, save_candidates.py); model files in saved_models/long_360d/ (git-ignored).
