@@ -124,7 +124,7 @@ changes).
 | [NT-089](#nt-089) | P2 | bug | implementer | todo | HD physics term: a +inf bar in x_window sends NaN gradients to the variance heads even at LAMBDA_HD 0 |
 | [NT-090](#nt-090) | P2 | bug | implementer | todo | pnl_utility: sigma floor 1e-6 makes flat windows a 2600x cost; config guard; test pins |
 | [NT-091](#nt-091) | P2 | bug | implementer | todo | DATA_END protection: floor for short files and outside screen mode; screen resume across shard counts; first-trial windowing of the whole file |
-| [NT-092](#nt-092) | P1 | feature | implementer | in-progress | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
+| [NT-092](#nt-092) | P1 | feature | implementer | done | Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch |
 
 ## Items
 
@@ -1212,7 +1212,7 @@ changes).
 
 **Screen phase 2: reuse the traced graph across trials (trace is 73% of a 6-hour trial); clip rule skips the first epoch**
 
-- **status:** in-progress: QA FAIL on 0378ff2 (2026-09-30): a later reused trial does not reproduce a fresh trial of the same seed (val loss ~8% apart): Keras 2.10 legacy stateful dropout / attention RNGs and the unseeded noise in vacuum_saturation_noise are not reset between trials. Met: normal training path unchanged (golden bit-for-bit, CPU step ratio 0.995), legacy bundles and checkpoints load identically, continuous fields read at run time, clip_skip_epochs. Speed-up measured by QA 2.1x (claimed 2.6x). Repair round 1 sent.
+- **status:** done (2026-09-30): 57768cb, merged (7a1b8b0); re-QA (Opus) PASS after repair round 1: later reused trials equal independent fresh runs bit-for-bit (4- and 6-trial groups, calibrate on, ablation group), Keras RNG flag restored on exit and on error, a normal run after screen trials in one process equals the golden record, default path unchanged (SEEDED_STOCHASTIC_LAYERS off; CPU step ratio 0.984; checkpoints and pre-NT-092 bundles predict identically), per-trial clip_skip_epochs; fast 1018 / ruff. Speed-up ~2.0-2.6x on CPU after the first trial of a group; GPU per-trial time an estimate until the campaign measures it.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/screen.py, src/neural_trade/training/ (only what trace reuse strictly needs), tests/test_screen.py, docs/RUNBOOK.md
 - **why:** the approved screen plan (docs/research/2026-09-29-screen-plan.md, step 3 / "phase 2"): build phase 2 if tracing exceeds 50% of a trial. GPU measurement (runs/experiments/micro_loop_v1/LOG.md, 2026-09-30): trace 12.2 s of a 16.7 s trial (73%). Also: at LR 1e-4 every 2-epoch trial fails max_clipped_share because the initial pre-clip norm exceeds the clip.
