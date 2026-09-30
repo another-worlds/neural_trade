@@ -10,7 +10,7 @@ For a trained run of fold f (a TrainResult of train_and_evaluate on FOLD_INDEX f
 * **The backtest.** The scenario's strategy (default ``Strategies.default``, calibrated_quantile,
   D-009) trades the same block through :func:`neural_trade.strategy.backtest.backtest`: decisions at
   a bar's close, fills at the next bar's open, stops on high/low, the cost profile of
-  ``BacktestConfig`` (10 + 1 + 2 = 13 bps per side unless the scenario sets it) and the annualisation
+  ``BacktestConfig`` (0 per side by default, D-044, unless the scenario sets it) and the annualisation
   of the run's bar size. Its knobs are fitted on the fold's CALIBRATION block only: the confidence
   scale (``var_scale_from(cal)``) and, for a strategy with ``from_calibration``, its entry lines.
   The result carries buy-and-hold, always-flat and the size-matched random null

@@ -203,7 +203,7 @@ into the frozen set.
 - **Spec** (YAML, `schema_version: 1`): `name`, `base_config` (a flat Config YAML, relative to
   the spec), `overrides`, `variants` (named Config overrides), `sweep: {mode: grid, axes: {FIELD:
   [values]}}`, `folds` (FOLD_INDEX values), `seeds`, `strategy: {name, params}` (Strategies registry,
-  default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 13 bps per side),
+  default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 0, D-044),
   `run: {calibrate, save_artifacts}`. Unknown keys, unknown or invalid Config values, unregistered
   components, folds the data does not have and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH,
   SCALER_PATH, ARTIFACTS_DIR, bar_minutes) are refused before anything trains. Run from the

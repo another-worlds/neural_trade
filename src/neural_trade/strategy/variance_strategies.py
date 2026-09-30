@@ -38,7 +38,7 @@ from neural_trade.strategy.signals import EWMA_WARMUP, SIGMA_SOURCES, SignalFram
 from neural_trade.strategy.strategies import ExposureStrategy, FittedOnCalibration, Strategies, Strategy
 from neural_trade.strategy.trades import Order
 
-DEFAULT_COST = 0.0026        # 13 bps per side, as a round-trip return (BacktestConfig's default costs)
+DEFAULT_COST = 0.0           # a round-trip return; 0 by default (D-044, matches BacktestConfig's default costs)
 PRIMARIES = ("ma_cross", "bollinger")
 
 

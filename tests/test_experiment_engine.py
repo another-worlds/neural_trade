@@ -439,9 +439,9 @@ def test_the_scorer_fits_the_strategy_on_the_cal_block_and_fills_at_the_next_ope
     assert (moved.strategy.long_above, moved.strategy.short_below) == (s.long_above, s.short_below)
     assert moved.report.backtest["var_scale"] == scored.report.backtest["var_scale"]
 
-    # next-open fills and the default cost profile (13 bps per side)
+    # next-open fills and the default cost profile (0 per side, D-044)
     bc = scored.backtest.config
-    assert (bc.fill, bc.fee_bps, bc.half_spread_bps, bc.slippage_bps) == ("next_open", 10.0, 1.0, 2.0)
+    assert (bc.fill, bc.fee_bps, bc.half_spread_bps, bc.slippage_bps) == ("next_open", 0.0, 0.0, 0.0)
     assert bc.bar_minutes == 1.0 and bc.minutes_per_year == BacktestConfig().minutes_per_year
     arrays = split_arrays(cfg)
     bars = Bars.from_frame(arrays["df"], arrays["test"]["anchor_bar"])

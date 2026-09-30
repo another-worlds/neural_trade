@@ -524,7 +524,7 @@ def leaderboard_markdown(report: RescoreReport) -> str:
     m = report.meta
     n_dev = sum(c.role == "dev" for c in report.cells)
     n_test = len(report.cells) - n_dev
-    costs = m["scenario_backtest"] or "the default cost profile (13 bps per side)"
+    costs = m["scenario_backtest"] or "the default cost profile (0 per side, D-044)"
     L = [f"# Strategy study `{report.study}` on scenario `{report.scenario}`", "",
          f"{m['n_configurations']} configurations x {len(report.cells)} stored cells ({n_dev} dev, {n_test} test); "
          f"{len(report.skipped)} run directories skipped, {len(report.missing)} cells without a usable run "

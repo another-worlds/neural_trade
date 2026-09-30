@@ -173,7 +173,9 @@ horizon keeps its colour in every figure (`visualization/theme.py`).
 ## Backtests
 
 `neural_trade.strategy` places orders at a bar's close and fills them at the next bar's
-open. Each side pays a 10 bps fee, 1 bps half-spread and 2 bps slippage. Take-profit and
+open. Each side pays a fee, a half-spread and a slippage cost, `BacktestConfig` fields that
+default to 0 bps each (D-044: no trading costs assumed by default; set them explicitly to
+backtest at a cost). Take-profit and
 stop-loss are checked against each bar's high and low; if both are hit in the same bar, the
 stop is assumed to fill first, and a gap through the stop fills at the open. Trades are
 capped at 30 bars, and any open position is marked to market at the end. Every result

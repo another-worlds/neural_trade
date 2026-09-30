@@ -20,7 +20,8 @@ from neural_trade.core.config import Config
 
 from tests.test_custom_loss import SCALES, _batch, _heads, _y_pred
 
-EDGE_BPS = 200.0        # 200 bps, well above the 26 bps default PNL_COST_BPS
+EDGE_BPS = 200.0        # 200 bps, well above the 26 bps PNL_COST_BPS this test sets explicitly (the
+                        # config default is 0, D-044)
 LAST_CLOSE = 100.0
 LOOKBACK = 60
 

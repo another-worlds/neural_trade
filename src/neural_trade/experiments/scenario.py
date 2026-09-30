@@ -16,7 +16,7 @@ A scenario says what to train and how to score it, in one YAML file (``configs/s
     folds: [-3, -2, -1]              # FOLD_INDEX values; the latest usable fold is the test fold
     seeds: [0, 1, 2]
     strategy: {name: calibrated_quantile, params: {}}   # Strategies registry; knobs fit on cal
-    backtest: {random_seeds: 100}    # BacktestConfig fields; the costs default to 13 bps per side
+    backtest: {random_seeds: 100}    # BacktestConfig fields; the costs default to 0 per side (D-044)
     run: {calibrate: true, save_artifacts: false}
 
 A **configuration** is one variant at one grid point; a **cell** is one (configuration, fold,

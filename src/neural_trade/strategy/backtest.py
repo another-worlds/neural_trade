@@ -13,7 +13,8 @@ Per bar t the engine
    exit; a flat book asks ``decide`` for a pending entry; equity is marked to the close.
 
 Costs per side, on the mid notional: fee ``fee_bps`` + ``half_spread_bps`` + ``slippage_bps``
-(10 + 1 + 2 = 13 bps by default). Fills are the mid moved adversely by spread + slippage;
+(0 by default, D-044: no trading costs assumed; set them explicitly to backtest at a cost). Fills
+are the mid moved adversely by spread + slippage;
 gross P&L is on mids, net = gross - costs. An open position is closed at the last close
 (``EOW``) when ``mark_to_market_at_end``.
 
@@ -42,9 +43,9 @@ from neural_trade.strategy.trades import Order, Trade
 @dataclass
 class BacktestConfig:
     fill: str = "next_open"
-    fee_bps: float = 10.0
-    half_spread_bps: float = 1.0
-    slippage_bps: float = 2.0
+    fee_bps: float = 0.0
+    half_spread_bps: float = 0.0
+    slippage_bps: float = 0.0
     tp_sl_on: str = "high_low"          # or "close"
     same_bar_tiebreak: str = "sl_first"  # or "tp_first"
     max_hold: int = 30
