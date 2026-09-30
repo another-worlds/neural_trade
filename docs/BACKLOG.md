@@ -141,6 +141,7 @@ changes).
 | [NT-106](#nt-106) | P3 | feature | implementer | todo | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
 | [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
+| [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
 
 ## Items
 
@@ -1306,6 +1307,7 @@ changes).
 - **why:** A_losses.md section 7: soft ECE carried 97% of the gradient direction on three CPU batches of the served model; a sample, not a distribution over training. The A/Bs of D-045 phase 2 are gated on this being true during training.
 - **acceptance:** (1) The probe of NT-037 on, on one 360-day run (fold -2, seed 0, the long_360d_stab config) and three micro-layout runs; GPU budget stated in the SPEC (estimate about 0.7 GPU-hours). (2) REPORT: per term, the gradient-norm share and the cosine with the total per epoch (median and range), and the value share beside it. (3) The gate for NT-099 is written in the SPEC before the runs: soft ECE's gradient share above 50% in most epochs.
 - **source:** docs/research/2026-09-30-math-report/ (A_losses.md, B_model_indicators.md); presentations/4_math_report.html; D-045
+- **amendment (2026-10-01, D-048):** run on the 6-hour screen layout first (at least 20 trials: 4 volatility slices x 5 seeds, seconds each) and three micro-layout runs; the 360-day run only if the two disagree.
 
 ### NT-099
 
@@ -1426,6 +1428,18 @@ changes).
 - **why:** found by the NT-037 implementer (2026-09-30): `reset_stateful_rngs` derives each stochastic layer's seed from its position in `model.submodules`; adding tf.keras Metric counters to CustomTrainModel (a Metric is a tf.Module) shifted every later layer's seed and changed SEEDED_STOCHASTIC_LAYERS screen numbers (caught by tests/test_screen.py, e.g. lambda_t_perp 1.29 vs 0.89). NT-037 at 541dee0 did not avoid it after all: its 18 contrib_* Mean metrics still shift the positions (QA: model.submodules 168 -> 186 entries); NT-037's repair round 1 must keep the positions unchanged. The mechanism stays fragile to any future Metric, Layer or nested Model attribute.
 - **acceptance:** (1) Seeds derive from a stable identity (the layer's name or path), not its enumeration position (test: adding an unrelated tf.Module attribute to the model leaves every stochastic layer's derived seed unchanged). (2) A golden screen record made before the change is reproduced or the difference is documented and a new record committed (the derived seeds change once). (3) Fast and slow suites, ruff.
 - **source:** NT-037 implementer report (nt-037 541dee0)
+
+### NT-109
+
+**Shrink the six slowest fast-suite tests (28-55 s default-config trainings)**
+
+- **status:** todo
+- **priority / type / role:** P2 / performance / implementer
+- **area:** tests/test_served_epoch.py, tests/registries/test_contracts.py, tests/test_train_smoke.py, tests/conftest.py
+- **depends on:** none
+- **why:** D-048: with `-n 8` the fast suite takes 3 min 26 s and is bound by six tests that train the default config (OHLCV, 14 families since D-047) for 28-55 s each (test_served_epoch 55 s, test_training_and_reporting_query_all_ten_registries 49 s, three test_train_smoke tests 43-48 s, test_training_diagnostics_are_subsampled 29 s; `--durations` of 2026-10-01).
+- **acceptance:** (1) Each of the six keeps what it asserts, on a smaller config (fewer windows or families, a short lookback, fewer steps) or a shared session fixture, and runs in under 10 s on CPU (report before/after). (2) At least one test still trains the full default config, marked slow. (3) The fast suite with `-n 8` runs in under 2 minutes on an idle machine (report). (4) Fast suite, ruff, TESTING_DOCUMENTATION.
+- **source:** D-048
 
 ## Done log
 

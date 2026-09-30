@@ -44,7 +44,7 @@ jobs:
           pip install --no-deps -e .
 
       - name: Unit tests (CPU, no slow/gpu)
-        run: pytest -m "not gpu and not slow" --timeout=600 --junitxml=junit.xml --cov=neural_trade --cov-report=xml --cov-report=json:coverage.json --cov-report=term
+        run: pytest -m "not gpu and not slow" -n auto --timeout=600 --junitxml=junit.xml --cov=neural_trade --cov-report=xml --cov-report=json:coverage.json --cov-report=term
 
       # Failed test names as annotations: readable in the checks API without auth (NT-001).
       - name: Annotate failed tests
