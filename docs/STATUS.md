@@ -62,6 +62,23 @@ model's sigma), NT-079, NT-080, NT-081.
   Recommendation: keep the close-only input and the four families as the default; the new families stay available
   by config until an A/B shows value.
 
+## Owner goal (/goal 2026-09-29): stable >60% hit, drawdown < 5% - where it stands (2026-09-30)
+
+Not reached. 17 lines of attack, all negative, each with committed runs (runs/experiments/micro_loop_v1/LOG.md):
+selectivity, holds, confidence buckets, horizons 10 min-5 h, windows 60/240, 10 vs 360 days of training, OHLCV +
+14 indicator families (NT-047), cost-sensitive labels (E1), a net-P&L objective (E2, NT-087), triple-barrier labels
+(E3 model-free bar), a 960-trial maths/hyperparameter/loss screen (NT-088/NT-092) and its level 2. The network never
+beats a 3-lag logistic regression (and is significantly below it at 1 h, z -3.3..-3.5); that baseline's own AUC is
+<= 0.53. Research verdict (docs/research/2026-09-29-pnl-target/): the target needs a different information source.
+**Next step waits on owner question 8** (a new data source, taker-buy volume first); without it, the lead closes
+the micro loop with its report and returns to the MVP backlog.
+Done today: NT-035, NT-046, NT-076, NT-077, NT-082, NT-083, NT-087, NT-088, NT-092 (all QA PASS). NT-047 passed QA
+and waits on question 7. Open follow-ups: NT-078, NT-079, NT-080, NT-081, NT-084, NT-086, NT-089-NT-091, NT-093.
+
+8. **New data source** (asked 2026-09-30): add Binance taker-buy volume (1-minute klines include it; the local file
+   does not), then basis and funding? A new source is outside the MVP (VISION). Recommendation: yes, starting with a
+   CPU-only logistic check on 2024-2025 (does order flow lift AUC above 0.53?) before any model work.
+
 ## Level-1 screen campaign (2026-09-30; approved plan docs/research/2026-09-29-screen-plan.md)
 
 Specs configs/screens/campaign_l1/ (A hyperparameters 264, B loss weights 328, C physics 288, D loss choice 64,
