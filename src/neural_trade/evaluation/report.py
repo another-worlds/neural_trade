@@ -425,12 +425,18 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
         vals = _col(key)
         return float(max(vals)) if vals else None
 
+    def _share(num, den):
+        return float(num) / float(den) if num is not None and den else None
+
     per_epoch = [{
         "epoch": r.get("epoch"),
+        "n_steps": r.get("n_steps"),
         "grad_norm_max_main": r.get("grad_norm_max_main"),
         "grad_norm_max_indicator": r.get("grad_norm_max_indicator"),
         "grad_clip_steps_main": r.get("grad_clip_steps_main"),
         "grad_clip_steps_indicator": r.get("grad_clip_steps_indicator"),
+        "grad_clip_share_main": _share(r.get("grad_clip_steps_main"), r.get("n_steps")),
+        "grad_clip_share_indicator": _share(r.get("grad_clip_steps_indicator"), r.get("n_steps")),
         "nonfinite_grad_steps": r.get("nonfinite_grad_steps"),
         "dir_n_h0": r.get("dir_n_h0"), "dir_n_h1": r.get("dir_n_h1"), "dir_n_h2": r.get("dir_n_h2"),
         "var_at_floor_h0": r.get("var_at_floor_h0"), "var_at_floor_h1": r.get("var_at_floor_h1"),
@@ -465,6 +471,54 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
         "periods_at_bound": periods_at_bound,
         "per_epoch": per_epoch,
     }
+
+
+def direction_skip_share(model, X_raw: np.ndarray, last_close: np.ndarray) -> Dict[str, float]:
+    """Share of each direction head's pre-sigmoid logit variance carried by the DIRECTION_SKIP
+    linear path (NT-037, D-045 recommendation A4): ``var(skip_logit) / var(skip_logit +
+    tower_logit)`` on ``X_raw``/``last_close`` (the validation block).
+
+    ``models/gru_attention.py``'s ``_direction_head`` names the two pre-Add sub-layers
+    ``direction_h{i}_logit`` (the deep path) and ``direction_h{i}_skip`` (the trailing-return
+    linear path, ``Config.DIRECTION_SKIP``); their sum is the logit the sigmoid sees. A high share
+    means the head leans on the linear baseline; a low share means the deep path dominates.
+
+    Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off, the model has no such named sub-layers
+    (an older run, or an architecture without a skip path), or the window normaliser is not the
+    default ``window_relative`` (this reconstructs that one transform only: ``(X - last_close) /
+    pred_scale``; a ``per_lag_standard`` run needs its fitted ``WindowNormalizer``, not available
+    here). Never raises: a report is worth more without this number than not at all.
+    """
+    cfg = getattr(model, "config", None)
+    if not bool(getattr(cfg, "DIRECTION_SKIP", False)):
+        return {}
+    normalizer = str(getattr(cfg, "WINDOW_NORMALIZER", "window_relative"))
+    if normalizer != "window_relative":
+        return {}
+    base = getattr(model, "base_model", None)
+    if base is None or len(X_raw) == 0:
+        return {}
+    try:
+        import tensorflow as tf
+
+        pred_scale = float(model.pred_scale.numpy() if hasattr(model.pred_scale, "numpy") else model.pred_scale)
+        x = ((np.asarray(X_raw, dtype=np.float64) - np.asarray(last_close, dtype=np.float64)[:, None])
+            / (pred_scale if pred_scale else 1.0)).astype(np.float32)
+        out: Dict[str, float] = {}
+        for i, h in enumerate(("h0", "h1", "h2")):
+            try:
+                tower = base.get_layer(f"direction_h{i}_logit")
+                skip = base.get_layer(f"direction_h{i}_skip")
+            except ValueError:
+                continue
+            sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
+            t_out, s_out = sub.predict(x, verbose=0)
+            t_flat, s_flat = np.asarray(t_out, dtype=np.float64).reshape(-1), np.asarray(s_out, dtype=np.float64).reshape(-1)
+            denom = float(np.var(t_flat + s_flat))
+            out[h] = float(np.var(s_flat) / denom) if denom > 0 else float("nan")
+        return out
+    except Exception:
+        return {}
 
 
 @dataclass
@@ -780,17 +834,43 @@ class EvalReport:
         return L
 
     def _md_health(self):
-        """Per-run gradient/stability health (D-026, NT-037): see :func:`health_block`."""
+        """Per-run gradient/stability health (D-026, NT-037): see :func:`health_block`.
+
+        QA repair round 1 fix 2: an actual per-epoch table (per group: max norm vs the clip, the
+        SHARE of steps clipped, non-finite steps), not only the run-total summary line.
+        """
         h = self.health or {}
         gcn = h.get("grad_clip_norm")
         L = ["", "## Training health", "",
-             f"{h.get('n_epochs', 0)} epoch(s). Pre-clip gradient norm maximum: main "
+             f"{h.get('n_epochs', 0)} epoch(s). Pre-clip gradient norm maximum over the run: main "
              f"{_fmt(h.get('grad_norm_max_main'))}, indicator {_fmt(h.get('grad_norm_max_indicator'))}"
              + (f" (clip {gcn:g})" if gcn else "") + ".",
-             f"Clipped steps (norm above the clip): main {_fmt(h.get('grad_clip_steps_main_total'))}, "
+             f"Clipped steps over the run: main {_fmt(h.get('grad_clip_steps_main_total'))}, "
              f"indicator {_fmt(h.get('grad_clip_steps_indicator_total'))}.",
-             f"Non-finite training steps (the finite-gradient guard fired): "
+             f"Non-finite training steps over the run (the finite-gradient guard fired): "
              f"{_fmt(h.get('nonfinite_grad_steps_total'))}.", ""]
+
+        per_epoch = h.get("per_epoch") or []
+        if per_epoch:
+
+            def pct(v):
+                return f"{100 * v:.1f}%" if v is not None else "n/a"
+
+            L += ["| epoch | grad norm max (main / indicator) | clipped steps (main / indicator) | "
+                 "clipped share (main / indicator) | non-finite steps | dir_n (h0/h1/h2) | "
+                 "var@floor (h0/h1/h2) |",
+                 "|---|---|---|---|---|---|---|"]
+            for r in per_epoch:
+                L.append(
+                    f"| {r.get('epoch')} | {_fmt(r.get('grad_norm_max_main'))} / "
+                    f"{_fmt(r.get('grad_norm_max_indicator'))} | {_fmt(r.get('grad_clip_steps_main'))} / "
+                    f"{_fmt(r.get('grad_clip_steps_indicator'))} | {pct(r.get('grad_clip_share_main'))} / "
+                    f"{pct(r.get('grad_clip_share_indicator'))} | {_fmt(r.get('nonfinite_grad_steps'))} | "
+                    f"{_fmt(r.get('dir_n_h0'))} / {_fmt(r.get('dir_n_h1'))} / {_fmt(r.get('dir_n_h2'))} | "
+                    f"{_fmt(r.get('var_at_floor_h0'))} / {_fmt(r.get('var_at_floor_h1'))} / "
+                    f"{_fmt(r.get('var_at_floor_h2'))} |")
+            L.append("")
+
         masked = h.get("masked_terms_total") or {}
         if masked:
             L.append("Masked (non-finite) loss-term steps: " +
@@ -801,6 +881,10 @@ class EvalReport:
         if bound:
             L.append("Learned periods sitting at their configured bound: " +
                     ", ".join(f"{k}={v:g}" for k, v in sorted(bound.items())) + ".")
+        skip = h.get("direction_skip_share") or {}
+        if skip:
+            L.append("DIRECTION_SKIP logit's share of the direction-logit variance (validation "
+                    "block): " + ", ".join(f"{h_}={v:.3f}" for h_, v in skip.items()) + ".")
         return L
 
     def _md_baselines(self, head):

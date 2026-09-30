@@ -304,6 +304,16 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
                 report.health = health_block(read_metrics(mpath), cfg)
         except Exception:
             logger.exception("could not build the training-health section")
+        # DIRECTION_SKIP's share of the direction-logit variance (D-045 A4), on the validation
+        # block: also best-effort (an older model, or a non-default window normaliser, returns {}).
+        try:
+            from neural_trade.evaluation.report import direction_skip_share
+            val = arrays.get("val") if arrays else None
+            if val is not None and report.health is not None:
+                report.health["direction_skip_share"] = direction_skip_share(
+                    result.model, val["X"], val["last_close"])
+        except Exception:
+            logger.exception("could not compute the DIRECTION_SKIP variance share")
     scores = leaderboard_scores(report, res, result)
     scored = Scored(role, report, res, strat, scores)
     if out_dir is not None:

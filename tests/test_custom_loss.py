@@ -257,8 +257,12 @@ def test_gradient_probe_off_by_default_writes_no_probe_key(make_loss_model):
 
 
 def test_gradient_probe_shares_sum_to_one_and_every_key_is_written(make_loss_model):
-    """NT-037 acceptance (6): with the flag on, a 1-epoch CPU smoke run has the probe keys and the
-    value/gradient shares sum to 1 within 1e-4."""
+    """NT-037 acceptance (6), QA repair round 1 fix 5: with the flag on, a 1-epoch CPU smoke run
+    has the probe keys (per group) and the value/gradient shares sum to 1 within 1e-4. The
+    ``make_loss_model`` fixture's tiny functional model has no indicator layer and no head-named
+    Dense layers, so every trainable variable falls into the 'trunk' group - the 'head' and
+    'indicator' groups are legitimately empty and untested here (see the real-model probe check
+    used in QA, D:/nt_qa/nt037-out/probe_check.py)."""
     from neural_trade.core.config import Config
 
     m = make_loss_model(config=Config(PROBE_GRADIENTS=True, PROBE_EVERY=1, LAMBDA_CRPS=0.2,
@@ -271,8 +275,10 @@ def test_gradient_probe_shares_sum_to_one_and_every_key_is_written(make_loss_mod
     logs = m.train_epoch_logs()
     terms = m._probe_terms
     value_shares = [logs[f"probe_value_share_{t}"] for t in terms]
-    grad_shares = [logs[f"probe_grad_share_{t}"] for t in terms]
+    grad_shares = [logs[f"probe_grad_share_{t}_trunk"] for t in terms]
     assert sum(value_shares) == pytest.approx(1.0, abs=1e-4)
     assert sum(grad_shares) == pytest.approx(1.0, abs=1e-4)
+    assert -1.0 - 1e-6 <= logs["probe_conflict_mean_trunk"] <= 1.0 + 1e-6
+    assert -1.0 - 1e-6 <= logs["probe_conflict_min_trunk"] <= 1.0 + 1e-6
     for t in terms:
-        assert -1.0 - 1e-6 <= logs[f"probe_cos_{t}"] <= 1.0 + 1e-6
+        assert -1.0 - 1e-6 <= logs[f"probe_cos_{t}_trunk"] <= 1.0 + 1e-6

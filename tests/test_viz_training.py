@@ -792,3 +792,20 @@ def test_training_session_passes_the_served_epoch_and_validation_size(viz_config
     assert s.direction_figure() is not None and s.loss_terms_figure() is not None
     frame = s.history_frame()
     assert list(frame["epoch"])[:2] == [1, 2] and "val_dir_mcc_h2" in frame.columns
+
+
+def test_validation_size_unknown_does_not_fire_when_val_dir_n_bands_are_drawn(viz_config, viz_history):
+    """QA repair round 1 fix 7: with val_dir_n_h* logged but no meta.json fold.val (so ctx.n_val
+    itself is unset), the per-horizon n_eff from val_dir_n still lets the dashboard draw its chance
+    context - the "validation size unknown" header must not appear."""
+    from neural_trade.visualization.training_dashboard import _context_parts, _resolve
+
+    rows = [dict(r) for r in viz_history()]
+    for r in rows:
+        for h in H:
+            r[f"val_dir_n_{h}"] = 5000.0
+    ctx = _resolve(rows, viz_config, n_val=None, meta={})
+    assert ctx.n_val is None
+    parts = _context_parts(ctx)
+    assert not any("size unknown" in p for p in parts)
+    assert any("n_eff" in p for p in parts)

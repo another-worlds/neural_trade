@@ -608,6 +608,17 @@ def test_health_block_aggregates_grad_health_and_dead_zones():
     assert h["periods_at_bound"] == {"period/ma_fast": 1440.0}  # the LAST epoch's period, at MOMENTUM_CLIP_MAX
 
 
+def test_health_block_per_epoch_carries_n_steps_and_clip_share():
+    """QA repair round 1 fix 2: a per-epoch clip SHARE, from JsonlEpochLogger's n_steps."""
+    rows = [
+        {"epoch": 0, "n_steps": 10, "grad_clip_steps_main": 4.0, "grad_clip_steps_indicator": 0.0},
+        {"epoch": 1, "n_steps": 8, "grad_clip_steps_main": 0.0, "grad_clip_steps_indicator": 2.0},
+    ]
+    h = health_block(rows)
+    assert h["per_epoch"][0]["grad_clip_share_main"] == pytest.approx(0.4)
+    assert h["per_epoch"][1]["grad_clip_share_indicator"] == pytest.approx(0.25)
+
+
 def test_health_section_renders_in_the_markdown_report():
     frame = _frame(n=2000, seed=41)
     rep = evaluate(frame, Config())
@@ -618,3 +629,72 @@ def test_health_section_renders_in_the_markdown_report():
     md = rep.to_markdown()
     assert "## Training health" in md
     assert "Non-finite training steps" in md
+
+
+def test_health_section_renders_the_per_epoch_table_and_the_numbers():
+    """QA repair round 1 fix 2: an actual per-epoch table (not just the run-total summary), and
+    (when present) the DIRECTION_SKIP variance share - assert the NUMBERS, not only the heading."""
+    frame = _frame(n=2000, seed=42)
+    rep = evaluate(frame, Config())
+    rows = [
+        {"epoch": 0, "n_steps": 10, "grad_norm_max_main": 5.0, "grad_norm_max_indicator": 0.1,
+         "grad_clip_steps_main": 4.0, "grad_clip_steps_indicator": 0.0, "nonfinite_grad_steps": 0.0,
+         "dir_n_h0": 100.0, "dir_n_h1": 90.0, "dir_n_h2": 80.0,
+         "var_at_floor_h0": 3.0, "var_at_floor_h1": 0.0, "var_at_floor_h2": 0.0},
+        {"epoch": 1, "n_steps": 10, "grad_norm_max_main": 6.0, "grad_norm_max_indicator": 0.2,
+         "grad_clip_steps_main": 0.0, "grad_clip_steps_indicator": 0.0, "nonfinite_grad_steps": 0.0,
+         "dir_n_h0": 100.0, "dir_n_h1": 90.0, "dir_n_h2": 80.0,
+         "var_at_floor_h0": 0.0, "var_at_floor_h1": 0.0, "var_at_floor_h2": 0.0},
+    ]
+    h = health_block(rows, Config(GRAD_CLIP_NORM=20.0))
+    h["direction_skip_share"] = {"h0": 0.321, "h1": 0.5, "h2": 0.099}
+    rep.health = h
+    md = rep.to_markdown()
+    assert "## Training health" in md
+    # the per-epoch table: an actual row with the actual max-norm and clip-share numbers
+    assert "| 0 | 5.0000 / 0.1000 | 4.0000 / 0.0000" in md
+    assert "40.0%" in md                                   # epoch 0's clip share (4/10)
+    assert "100.0000 / 90.0000 / 80.0000" in md             # dir_n_h0/h1/h2, epoch 0
+    assert "3.0000 / 0.0000 / 0.0000" in md                 # var_at_floor_h0/h1/h2, epoch 0
+    assert "DIRECTION_SKIP" in md and "h0=0.321" in md and "h1=0.500" in md
+
+
+def test_direction_skip_share_matches_a_direct_numpy_computation():
+    """D-045 A4: var(skip_logit) / var(skip_logit + tower_logit), on the validation block."""
+    import numpy as np
+    import tensorflow as tf
+
+    from neural_trade.evaluation.report import direction_skip_share
+    from neural_trade.registries.models import Models
+    from neural_trade.training.custom_model import CustomTrainModel
+
+    cfg = Config(DIRECTION_SKIP=True)
+    base = Models.build(cfg.MODEL_NAME, cfg)
+    m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
+                         inputs=base.inputs, outputs=base.outputs)
+    rng = np.random.default_rng(3)
+    X = rng.normal(110_000.0, 500.0, size=(128, cfg.LOOKBACK)).astype(np.float32)
+    lc = X[:, -1]
+    out = direction_skip_share(m, X, lc)
+    assert set(out) == {"h0", "h1", "h2"}
+
+    x_scaled = ((X.astype(np.float64) - lc.astype(np.float64)[:, None]) / float(m.pred_scale.numpy())).astype(np.float32)
+    tower = base.get_layer("direction_h0_logit")
+    skip = base.get_layer("direction_h0_skip")
+    sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
+    t, s = sub.predict(x_scaled, verbose=0)
+    t, s = np.asarray(t).reshape(-1), np.asarray(s).reshape(-1)
+    ref = float(np.var(s) / np.var(t + s))
+    assert out["h0"] == pytest.approx(ref, rel=1e-5)
+
+
+def test_direction_skip_share_is_empty_when_the_flag_is_off():
+    from neural_trade.evaluation.report import direction_skip_share
+    from neural_trade.registries.models import Models
+    from neural_trade.training.custom_model import CustomTrainModel
+
+    cfg = Config(DIRECTION_SKIP=False)
+    base = Models.build(cfg.MODEL_NAME, cfg)
+    m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
+                         inputs=base.inputs, outputs=base.outputs)
+    assert direction_skip_share(m, np.zeros((4, cfg.LOOKBACK), np.float32), np.zeros(4, np.float32)) == {}

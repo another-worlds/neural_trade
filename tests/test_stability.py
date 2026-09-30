@@ -6,6 +6,8 @@ Marked ``stability`` (registered in pyproject.toml); the CI unit job runs it (no
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -151,32 +153,56 @@ def test_nan_in_one_gradient_leaves_weights_finite_and_raises_the_guard(make_los
 
 
 def test_per_group_clip_keeps_the_post_clip_norm_at_or_below_grad_clip_norm(make_loss_model):
+    """QA repair round 1, fix 6: the POST-clip norm of BOTH groups (not just whether the pre-clip
+    norm exceeded the threshold) is at or below GRAD_CLIP_NORM."""
     from neural_trade.core.config import Config
 
-    m = make_loss_model(config=Config(GRAD_CLIP_NORM=0.01, LAMBDA_POINT=1000.0))
+    clip = 0.01
+    m = make_loss_model(config=Config(GRAD_CLIP_NORM=clip, LAMBDA_POINT=1000.0))
     m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))
     rng = np.random.default_rng(4)
     x, y, lc, ext = _batch(rng)
+
+    # Independent recomputation (a fresh tape, not train_step's own) of exactly the clip train_step
+    # applies: per-group tf.clip_by_global_norm on the pre-finite-guard gradients.
+    with tf.GradientTape() as tape:
+        y_pred = m(x, training=True)
+        loss_components = m.custom_loss(x, y, y_pred[:9], lc, ext, vacuum_overflow=y_pred[9])
+    grads = tape.gradient(loss_components.total, m.trainable_variables)
+    nn_gs = [g for g, v in zip(grads, m.trainable_variables) if g is not None and id(v) not in m._indicator_var_ids]
+    ind_gs = [g for g, v in zip(grads, m.trainable_variables) if g is not None and id(v) in m._indicator_var_ids]
+    pre_nn = float(tf.linalg.global_norm(nn_gs))
+    assert pre_nn > clip, "the test setup must actually need clipping (main group)"
+    post_nn = float(tf.linalg.global_norm(tf.clip_by_global_norm(nn_gs, clip)[0]))
+    post_ind = float(tf.linalg.global_norm(tf.clip_by_global_norm(ind_gs, clip)[0])) if ind_gs else 0.0
+    assert post_nn <= clip * 1.0001
+    assert post_ind <= clip * 1.0001
+
     m.train_step((x, y, lc, ext))
-    assert float(m._grad_health["grad_norm_max_main"].result()) > float(m.grad_clip_norm.numpy())
+    assert float(m._grad_health["grad_norm_max_main"].result()) == pytest.approx(pre_nn, rel=1e-3)
     assert float(m._grad_health["grad_clip_steps_main"].result()) == 1.0
 
 
-def test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_state(tf, tmp_path, synthetic_bars,
-                                                                                   monkeypatch):
-    """D-026 acceptance (4): a short CPU run of the default config, N=3 consecutive epochs, no
-    non-finite steps, finite weights/heads/periods after every epoch, and no gradient group/
-    variance head/period pinned at its bound on every single epoch."""
+@pytest.mark.data
+def test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_state(tf, monkeypatch, tmp_path):
+    """D-026 acceptance (4), QA repair round 1 fix 6: a short CPU run of the default config **on
+    the bundled CSV**, N=3 consecutive epochs: zero non-finite steps; finite weights, head outputs
+    and learned periods after every epoch; and, for every one of the N epochs, none of the three
+    'not stuck' conditions holds (a gradient group clipped on every single step that epoch, a
+    variance head at VAR_FLOOR for every sample, a learned period sitting at its configured bound)
+    - the stated levels: clip share < 1.0, var-at-floor share < 1.0 (of ``n_steps`` /
+    ``dir_n_h0`` samples respectively), and ``periods_at_bound`` (health_block) empty every epoch.
+    """
     from neural_trade.core.config import Config
-    from neural_trade.telemetry.epoch_logger import read_metrics
+    from neural_trade.evaluation.report import health_block
     from neural_trade.experiments.run_context import RunContext
+    from neural_trade.telemetry.epoch_logger import read_metrics
     from neural_trade.training.trainer import train_and_evaluate
 
     monkeypatch.chdir(tmp_path)
-    csv = tmp_path / "bars.csv"
-    synthetic_bars.to_csv(csv, index=False)
     n_epochs = 3
-    cfg = Config(EPOCHS=n_epochs, BATCH_SIZE=32, MAX_SEQUENCE_COUNT=600, CSV_PATH=str(csv))
+    csv = str((Path(__file__).resolve().parent.parent / "binance_btcusdt_1min_ccxt.csv"))
+    cfg = Config(EPOCHS=n_epochs, BATCH_SIZE=64, MAX_SEQUENCE_COUNT=3000, CSV_PATH=csv)
     ctx = RunContext.create(cfg, root=tmp_path / "runs")
     tf.keras.backend.clear_session()
     res = train_and_evaluate(config=ctx.config, run_context=ctx, epochs=n_epochs, force=True, calibrate=False,
@@ -190,4 +216,121 @@ def test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_sta
         for k, v in r.items():
             if k.startswith("period/"):
                 assert np.isfinite(v), (k, r)
+        n_steps = r.get("n_steps") or 0
+        assert n_steps > 0, r
+        for grp in ("main", "indicator"):
+            clipped = r.get(f"grad_clip_steps_{grp}") or 0
+            assert clipped < n_steps, f"epoch {r.get('epoch')} clipped EVERY {grp} step ({clipped}/{n_steps})"
+        for h in ("h0", "h1", "h2"):
+            n_dir = r.get(f"dir_n_{h}")
+            at_floor = r.get(f"var_at_floor_{h}") or 0
+            if n_dir:  # n_dir counts the deadband-surviving samples, an upper bound on the batch size
+                assert at_floor < n_dir, f"epoch {r.get('epoch')} {h}: every sample at VAR_FLOOR"
+    h = health_block(rows, cfg)
+    assert not h.get("periods_at_bound"), f"a learned period sat at its bound: {h['periods_at_bound']}"
     assert all(bool(tf.reduce_all(tf.math.is_finite(v))) for v in res.model.trainable_variables)
+
+
+def test_probe_does_not_double_count_a_masked_step(make_loss_model, monkeypatch):
+    """QA repair round 1 fix 5: the probe's own custom_loss call must not double-count a step
+    train_step's own call already counted into _mask_counters."""
+    import neural_trade.losses.functions as lf
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_CRPS=1.0, PROBE_GRADIENTS=True, PROBE_EVERY=1))
+    m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))
+    rng = np.random.default_rng(20)
+    x, y, lc, ext = _batch(rng)
+    monkeypatch.setattr(lf, "crps_gaussian_loss", lambda *a, **k: tf.constant(float("nan"), dtype=tf.float32))
+    m.train_step((x, y, lc, ext))
+    assert float(m._mask_counters["crps_loss"].result()) == 1.0
+
+
+def test_probe_on_or_off_reaches_the_same_weights_after_n_steps(tf):
+    """QA repair round 1 fix 5: the probe forwards with training=False (no dropout/noise draw), so
+    it must not perturb the legacy stateful-RNG stream the rest of training depends on - same
+    seed, same weights after N steps, whether or not PROBE_GRADIENTS is on."""
+    from neural_trade.core.config import Config
+    from neural_trade.registries.models import Models
+    from neural_trade.training.custom_model import CustomTrainModel
+    from neural_trade.utils.seeding import seed_everything
+
+    def run(probe):
+        seed_everything(7)
+        tf.keras.backend.clear_session()
+        cfg = Config(PROBE_GRADIENTS=probe, PROBE_EVERY=1)
+        base = Models.build(cfg.MODEL_NAME, cfg)
+        m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
+                             inputs=base.inputs, outputs=base.outputs)
+        m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))
+        rng = np.random.default_rng(0)
+        for _ in range(3):
+            x = tf.constant(rng.normal(0, 1, size=(16, cfg.LOOKBACK)).astype(np.float32))
+            y = tf.constant(rng.normal(0, 1, size=(16, 3)).astype(np.float32))
+            lc = tf.constant((110_000.0 + rng.normal(0, 500, size=(16, 1))).astype(np.float32))
+            ext = tf.constant(rng.normal(0, 200, size=(16, 3)).astype(np.float32))
+            m.train_step((x, y, lc, ext))
+        return [w.numpy().copy() for w in m.trainable_variables]
+
+    w_off = run(False)
+    w_on = run(True)
+    assert len(w_off) == len(w_on)
+    for a, b in zip(w_off, w_on):
+        np.testing.assert_allclose(a, b, rtol=1e-6, atol=1e-6)
+
+
+def test_strict_mode_makes_every_qa_listed_injection_site_nonfinite(make_loss_model, monkeypatch):
+    """QA repair round 1 fix 1 (D:/nt_qa/nt037-out/strict_gaps.py): every non-finite guard in
+    losses/functions.py, not only the 15 that feed `total` directly - direction BCE, inside
+    point_huber, a variance/price head output, and pnl_utility's own total - must make the total
+    non-finite in strict mode."""
+    import neural_trade.losses.functions as lf
+    from neural_trade.core.config import Config
+
+    rng = np.random.default_rng(0)
+    x, y, lc, ext = _batch(rng)
+    price, dirs, var = _heads(rng)
+    y_pred = _y_pred(price, dirs, var)
+
+    def _case(strict, patch=None, loss_name="custom_loss", y_pred_override=None, **cfgkw):
+        m = make_loss_model(config=Config(STRICT_LOSS_MASKS=strict, **cfgkw))
+        saved = {}
+        for k, v in (patch or {}).items():
+            saved[k] = getattr(lf, k)
+            monkeypatch.setattr(lf, k, v)
+        try:
+            f = getattr(lf, loss_name)
+            out = f(m, x, y, y_pred_override or y_pred, lc, ext)
+        finally:
+            for k, v in saved.items():
+                monkeypatch.setattr(lf, k, v)
+        return out, m
+
+    def nan_bce(*a, **k):
+        return tf.fill([B], float("nan"))
+
+    def nan_scalar(*a, **k):
+        return tf.constant(float("nan"))
+
+    out, m = _case(True, {"binary_cross_entropy_loss": nan_bce})
+    assert not np.isfinite(float(out.total))
+    assert float(m._mask_counters["dir_loss"].result()) == 1.0
+
+    out, m = _case(True, {"_logcosh_safe": lambda d: d * float("nan")})
+    assert not np.isfinite(float(out.total))
+    assert float(m._mask_counters["point_huber_raw"].result()) > 0
+
+    vnan = [tf.constant(np.full((B, 1), np.nan, np.float32)), var[1], var[2]]
+    out, m = _case(True, y_pred_override=_y_pred(price, dirs, vnan))
+    assert not np.isfinite(float(out.total))
+    assert float(m._mask_counters["head_var_h0"].result()) == 1.0
+
+    pnan = [tf.constant(np.full((B, 1), np.nan, np.float32)), price[1], price[2]]
+    out, m = _case(True, y_pred_override=_y_pred(pnan, dirs, var))
+    assert not np.isfinite(float(out.total))
+    assert float(m._mask_counters["head_price_h0"].result()) == 1.0
+
+    out, m = _case(True, {"crps_gaussian_loss": nan_scalar}, loss_name="pnl_utility", LAMBDA_CRPS=1.0)
+    assert not np.isfinite(float(out.total))
+    assert float(m._mask_counters["crps_loss"].result()) == 1.0
+    assert float(m._mask_counters["pnl_total"].result()) == 1.0

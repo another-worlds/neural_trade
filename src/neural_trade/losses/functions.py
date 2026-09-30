@@ -18,14 +18,33 @@ from neural_trade.utils.math import log_ndtr  # noqa: F401  (re-exported for cal
 # Old private name of the TF labelling rule, kept for callers of this module.
 _compute_direction_labels_and_masks_tf = direction_labels_tf
 
-#: Names of the ``total`` addends guarded by :func:`_finite_or_zero` (NT-036, D-026). Each name is
-#: also a ``model._mask_counters`` key (a ``tf.keras.metrics.Sum``, reset every epoch by
-#: ``CustomTrainModel.metrics``) and shows up in ``metrics.jsonl`` as ``masked_<name>`` /
-#: ``val_masked_<name>``.
+#: Every non-finite guard in this module, wired through :func:`_finite_or_zero` (NT-036, D-026,
+#: QA repair round 1): the 15 addends of ``total`` (``custom_loss``) and ``pnl_utility``'s own
+#: extra total, plus every intermediate site upstream of them (point_huber/local_trend/
+#: extended_trend's own guards, the per-horizon head sanitisation, the coherence sub-terms, the
+#: per-horizon dir/nll pre-guards, and pnl_utility's internal window/sigma/per-horizon guards) -
+#: so ``STRICT_LOSS_MASKS`` genuinely lifts every mask, not only the ones ``total`` sees directly.
+#: Each name is also a ``model._mask_counters`` key (a plain ``_Accum("sum")``,
+#: ``training/custom_model.py`` - not a ``tf.keras.metrics.Metric``, see ``_Accum``'s docstring
+#: for why) and shows up in ``metrics.jsonl`` as ``masked_<name>`` / ``val_masked_<name>``.
 MASK_TERM_NAMES = (
     "point_loss", "dir_loss", "dir_align_loss", "nll_loss", "vol_loss", "crps_loss",
     "soft_ece_loss", "t_perp_loss", "casimir_loss", "vac_loss", "hd_loss", "ife_loss",
     "vac_overflow_loss", "coherence_penalty", "total_loss",
+    # QA repair round 1 (NT-036/037 fix 1): every remaining tf.where(is_finite, x, 0) site in this
+    # module, so STRICT_LOSS_MASKS truly lifts EVERY mask, not only the ones that feed `total`
+    # directly, and every one of them counts its own steps.
+    "point_huber_raw", "local_trend_raw", "extended_trend_raw",
+    "head_price_h0", "head_price_h1", "head_price_h2",
+    "head_dir_h0", "head_dir_h1", "head_dir_h2",
+    "head_var_h0", "head_var_h1", "head_var_h2",
+    "point_loss_h0", "point_loss_h1", "point_loss_h2",
+    "dir_disagree_loss", "magnitude_loss", "target_smoothness_loss",
+    "dir_loss_h0", "dir_loss_h1", "dir_loss_h2",
+    "nll_h0", "nll_h1", "nll_h2",
+    # pnl_utility (NT-087) only:
+    "pnl_raw_window", "pnl_step_ret", "pnl_step_sd", "pnl_sigma", "pnl_loss_h", "pnl_term",
+    "pnl_total",
 )
 
 
@@ -35,9 +54,10 @@ def _finite_or_zero(model, x, term):
     Replaces the inline ``tf.where(tf.math.is_finite(x), x, 0)`` this loss module used to repeat
     at every term: same result by default, plus two things the inline form could not do:
 
-    * it counts the step into ``model._mask_counters[term]`` (a ``tf.keras.metrics.Sum``) whenever
-      the mask actually fired, so an unstable run can be attributed to its term instead of only
-      seeing ``total`` (or the gradient) go non-finite;
+    * it counts the step into ``model._mask_counters[term]`` (a plain ``_Accum("sum")``, never a
+      ``tf.keras.metrics.Metric`` - see that class's docstring for why) whenever the mask actually
+      fired, so an unstable run can be attributed to its term instead of only seeing ``total`` (or
+      the gradient) go non-finite;
     * in strict mode (``Config.STRICT_LOSS_MASKS``, a live ``tf.Variable`` mirrored on the model as
       ``model._strict_loss_masks_var``) it does NOT mask: ``x`` passes through unchanged, so a
       non-finite term makes ``total`` non-finite too and ``train_step``'s finite-gradient guard
@@ -175,7 +195,7 @@ def point_huber(model, y_true_scaled, y_pred_scaled, last_close_scaled=None, del
     diffs = y_true - y_pred
     per_elem = _logcosh_safe(diffs)
     result = tf.reduce_mean(tf.cast(per_elem, tf.float32))
-    result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
+    result = _finite_or_zero(model, result, "point_huber_raw")
     return result
 
 
@@ -194,7 +214,7 @@ def local_trend_loss(model, x_window, y_true_raw, y_pred_raw, last_close_raw):
     per_elem = _logcosh_safe(trend_diffs)
 
     result = model._reduce_mean(per_elem)
-    result = tf.where(tf.math.is_finite(result), result, tf.constant(0.0, dtype=tf.float32))
+    result = _finite_or_zero(model, result, "local_trend_raw")
     return result
 
 
@@ -234,7 +254,7 @@ def extended_trend_loss(model, x_window, y_true_raw, y_pred_scaled, extended_tre
     y_pred = tf.cast(y_pred_scaled, tf.float32)
 
     ext = model._reduce_mean(_logcosh_safe(y_pred - past_delta_scaled))
-    ext = tf.where(tf.math.is_finite(ext), ext, zero)
+    ext = _finite_or_zero(model, ext, "extended_trend_raw")
     return zero, ext
 
 
@@ -560,24 +580,24 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     # Sanitize heads (belt-and-suspenders with output clips in build_model).
     # Ensures no NaN/Inf reaches *any* loss term (point, dir, nll, casimir, t_perp, ife, vacuum, hd, align, etc.).
     # Prevents 0*nan pollution in total even for "inactive" (lambda=0) terms, and keeps all components finite.
-    price_h0 = tf.where(tf.math.is_finite(price_h0), price_h0, tf.zeros_like(price_h0))
-    dir_h0   = tf.where(tf.math.is_finite(dir_h0),   dir_h0,   tf.ones_like(dir_h0) * 0.5)
-    var_h0   = tf.where(tf.math.is_finite(var_h0),   var_h0,   tf.ones_like(var_h0))
-    price_h1 = tf.where(tf.math.is_finite(price_h1), price_h1, tf.zeros_like(price_h1))
-    dir_h1   = tf.where(tf.math.is_finite(dir_h1),   dir_h1,   tf.ones_like(dir_h1) * 0.5)
-    var_h1   = tf.where(tf.math.is_finite(var_h1),   var_h1,   tf.ones_like(var_h1))
-    price_h2 = tf.where(tf.math.is_finite(price_h2), price_h2, tf.zeros_like(price_h2))
-    dir_h2   = tf.where(tf.math.is_finite(dir_h2),   dir_h2,   tf.ones_like(dir_h2) * 0.5)
-    var_h2   = tf.where(tf.math.is_finite(var_h2),   var_h2,   tf.ones_like(var_h2))
+    price_h0 = _finite_or_zero(model, price_h0, "head_price_h0")
+    dir_h0   = _finite_or_zero(model, dir_h0, "head_dir_h0")
+    var_h0   = _finite_or_zero(model, var_h0, "head_var_h0")
+    price_h1 = _finite_or_zero(model, price_h1, "head_price_h1")
+    dir_h1   = _finite_or_zero(model, dir_h1, "head_dir_h1")
+    var_h1   = _finite_or_zero(model, var_h1, "head_var_h1")
+    price_h2 = _finite_or_zero(model, price_h2, "head_price_h2")
+    dir_h2   = _finite_or_zero(model, dir_h2, "head_dir_h2")
+    var_h2   = _finite_or_zero(model, var_h2, "head_var_h2")
 
     point_loss_h0_val = model.lambda_short * point_huber(model, y_true_h0, price_h0)
     point_loss_h1_val = model.lambda_point * point_huber(model, y_true_h1, price_h1)
     point_loss_h2_val = model.lambda_long * point_huber(model, y_true_h2, price_h2)
     point_loss_val = point_loss_h0_val + point_loss_h1_val + point_loss_h2_val
     point_loss_val = _finite_or_zero(model, point_loss_val, "point_loss")
-    point_loss_h0_val = tf.where(tf.math.is_finite(point_loss_h0_val), point_loss_h0_val, tf.constant(0.0, dtype=tf.float32))
-    point_loss_h1_val = tf.where(tf.math.is_finite(point_loss_h1_val), point_loss_h1_val, tf.constant(0.0, dtype=tf.float32))
-    point_loss_h2_val = tf.where(tf.math.is_finite(point_loss_h2_val), point_loss_h2_val, tf.constant(0.0, dtype=tf.float32))
+    point_loss_h0_val = _finite_or_zero(model, point_loss_h0_val, "point_loss_h0")
+    point_loss_h1_val = _finite_or_zero(model, point_loss_h1_val, "point_loss_h1")
+    point_loss_h2_val = _finite_or_zero(model, point_loss_h2_val, "point_loss_h2")
 
     # Trend supervision, in consistent scaled-delta units.
     # The local and global trend terms are retired: both reduced algebraically to the
@@ -611,7 +631,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_agree_h01 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h0, sign_pred_h1), tf.float32))
     dir_agree_h12 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h1, sign_pred_h2), tf.float32))
     dir_disagree_loss = 1.0 - (dir_agree_h01 + dir_agree_h12) / 2.0
-    dir_disagree_loss = tf.where(tf.math.is_finite(dir_disagree_loss), dir_disagree_loss, tf.constant(0.0, dtype=tf.float32))
+    dir_disagree_loss = _finite_or_zero(model, dir_disagree_loss, "dir_disagree_loss")
 
     abs_pred_h0 = tf.abs(price_h0)
     abs_pred_h1 = tf.abs(price_h1)
@@ -620,7 +640,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     magnitude_h01_violation = tf.nn.relu(abs_pred_h0 - abs_pred_h1)
     magnitude_h12_violation = tf.nn.relu(abs_pred_h1 - abs_pred_h2)
     magnitude_loss = tf.reduce_mean(magnitude_h01_violation + magnitude_h12_violation)
-    magnitude_loss = tf.where(tf.math.is_finite(magnitude_loss), magnitude_loss, tf.constant(0.0, dtype=tf.float32))
+    magnitude_loss = _finite_or_zero(model, magnitude_loss, "magnitude_loss")
 
     sign_target_h0 = tf.sign(y_true_raw_h0)
     sign_target_h1 = tf.sign(y_true_raw_h1)
@@ -629,7 +649,7 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
         tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0,
                                      sign_target_h1 == sign_target_h2), tf.float32)
     )
-    target_smoothness_loss = tf.where(tf.math.is_finite(target_smoothness_loss), target_smoothness_loss, tf.constant(0.0, dtype=tf.float32))
+    target_smoothness_loss = _finite_or_zero(model, target_smoothness_loss, "target_smoothness_loss")
 
     coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
     coherence_penalty = _finite_or_zero(model, coherence_penalty, "coherence_penalty")
@@ -668,9 +688,9 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_loss_h0 = tf.reduce_sum(per_ex_h0 * mask_h0) / (tf.reduce_sum(mask_h0) + model.eps)
     dir_loss_h1 = tf.reduce_sum(per_ex_h1 * mask_h1) / (tf.reduce_sum(mask_h1) + model.eps)
     dir_loss_h2 = tf.reduce_sum(per_ex_h2 * mask_h2) / (tf.reduce_sum(mask_h2) + model.eps)
-    dir_loss_h0 = tf.where(tf.math.is_finite(dir_loss_h0), dir_loss_h0, tf.constant(0.0, dtype=tf.float32))
-    dir_loss_h1 = tf.where(tf.math.is_finite(dir_loss_h1), dir_loss_h1, tf.constant(0.0, dtype=tf.float32))
-    dir_loss_h2 = tf.where(tf.math.is_finite(dir_loss_h2), dir_loss_h2, tf.constant(0.0, dtype=tf.float32))
+    dir_loss_h0 = _finite_or_zero(model, dir_loss_h0, "dir_loss_h0")
+    dir_loss_h1 = _finite_or_zero(model, dir_loss_h1, "dir_loss_h1")
+    dir_loss_h2 = _finite_or_zero(model, dir_loss_h2, "dir_loss_h2")
     total_dir_loss = model.lambda_dir * (dir_loss_h0 + dir_loss_h1 + dir_loss_h2)
     total_dir_loss = _finite_or_zero(model, total_dir_loss, "dir_loss")
 
@@ -691,9 +711,9 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     nll_h1_val = tf.reduce_mean(nll_h1)
     nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + model.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + model.eps)
     nll_h2_val = tf.reduce_mean(nll_h2)
-    nll_h0_val = tf.where(tf.math.is_finite(nll_h0_val), nll_h0_val, tf.constant(0.0, dtype=tf.float32))
-    nll_h1_val = tf.where(tf.math.is_finite(nll_h1_val), nll_h1_val, tf.constant(0.0, dtype=tf.float32))
-    nll_h2_val = tf.where(tf.math.is_finite(nll_h2_val), nll_h2_val, tf.constant(0.0, dtype=tf.float32))
+    nll_h0_val = _finite_or_zero(model, nll_h0_val, "nll_h0")
+    nll_h1_val = _finite_or_zero(model, nll_h1_val, "nll_h1")
+    nll_h2_val = _finite_or_zero(model, nll_h2_val, "nll_h2")
     total_nll = model.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
     total_nll = _finite_or_zero(model, total_nll, "nll_loss")
 
@@ -885,12 +905,12 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
 
     # Sanitize dir/var heads for non-finite values, mirroring custom_loss's own copies (it does
     # not expose them): dir falls back to 0.5 (no signal), var to 1.0.
-    dir_h0 = tf.where(tf.math.is_finite(dir_h0), dir_h0, tf.ones_like(dir_h0) * 0.5)
-    dir_h1 = tf.where(tf.math.is_finite(dir_h1), dir_h1, tf.ones_like(dir_h1) * 0.5)
-    dir_h2 = tf.where(tf.math.is_finite(dir_h2), dir_h2, tf.ones_like(dir_h2) * 0.5)
-    var_h0 = tf.where(tf.math.is_finite(var_h0), var_h0, tf.ones_like(var_h0))
-    var_h1 = tf.where(tf.math.is_finite(var_h1), var_h1, tf.ones_like(var_h1))
-    var_h2 = tf.where(tf.math.is_finite(var_h2), var_h2, tf.ones_like(var_h2))
+    dir_h0 = _finite_or_zero(model, dir_h0, "head_dir_h0")
+    dir_h1 = _finite_or_zero(model, dir_h1, "head_dir_h1")
+    dir_h2 = _finite_or_zero(model, dir_h2, "head_dir_h2")
+    var_h0 = _finite_or_zero(model, var_h0, "head_var_h0")
+    var_h1 = _finite_or_zero(model, var_h1, "head_var_h1")
+    var_h2 = _finite_or_zero(model, var_h2, "head_var_h2")
 
     default_horizons = [10, 15, 20]
     horizon_steps_cfg = list(getattr(model.config, 'HORIZON_STEPS', default_horizons) or default_horizons)
@@ -911,11 +931,11 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
         x = tf.cast(x_window, tf.float32)
         last_close_col = tf.expand_dims(last_close_sq, axis=1)
         raw = x * model.pred_scale + last_close_col                        # [B, LOOKBACK]
-        raw = tf.where(tf.math.is_finite(raw), raw, tf.zeros_like(raw))
+        raw = _finite_or_zero(model, raw, "pnl_raw_window")
         step_ret = (raw[:, 1:] - raw[:, :-1]) / (raw[:, :-1] + eps)        # [B, LOOKBACK-1]
-        step_ret = tf.where(tf.math.is_finite(step_ret), step_ret, tf.zeros_like(step_ret))
+        step_ret = _finite_or_zero(model, step_ret, "pnl_step_ret")
         step_sd = tf.stop_gradient(tf.math.reduce_std(step_ret, axis=1))  # [B]
-        step_sd = tf.where(tf.math.is_finite(step_sd), step_sd, tf.zeros_like(step_sd))
+        step_sd = _finite_or_zero(model, step_sd, "pnl_step_sd")
 
     def _one_horizon(i, dir_head, var_head, h_steps):
         r = y_true_raw[:, i] / (last_close_sq + eps)                       # fractional forward return
@@ -927,7 +947,7 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
             sigma = tf.stop_gradient(sigma_raw / (last_close_sq + eps))
         # Sanitise BEFORE the floor: tf.maximum(nan, 1e-6) is still nan, so a non-finite sigma
         # (e.g. from an extreme window) must be caught here, not only on the final loss (P2).
-        sigma = tf.where(tf.math.is_finite(sigma), sigma, tf.zeros_like(sigma))
+        sigma = _finite_or_zero(model, sigma, "pnl_sigma")
         sigma = tf.maximum(sigma, 1e-6)
         r_tilde = tf.clip_by_value(r / sigma, -5.0, 5.0)
         # Demeaned over the batch (not a persistent training-block statistic): with a full reshuffle
@@ -947,7 +967,7 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
         a = 2.0 * tf.squeeze(dir_head, axis=1) - 1.0
         util = tf.reduce_mean(a * r_tilde - c_tilde * tf.abs(a) - 0.5 * gamma * tf.square(a) * tf.square(r_tilde))
         loss_i = -util
-        return tf.where(tf.math.is_finite(loss_i), loss_i, tf.constant(0.0, dtype=tf.float32))
+        return _finite_or_zero(model, loss_i, "pnl_loss_h")
 
     loss_h0 = _one_horizon(0, dir_h0, var_h0, horizon_steps[0])
     loss_h1 = _one_horizon(1, dir_h1, var_h1, horizon_steps[1])
@@ -955,8 +975,8 @@ def pnl_utility(model, x_window, y_true, y_pred, last_close, extended_trends, va
 
     lambda_pnl = tf.cast(getattr(model, 'lambda_pnl', 0.0), tf.float32)
     pnl_term = lambda_pnl * (loss_h0 + loss_h1 + loss_h2)
-    pnl_term = tf.where(tf.math.is_finite(pnl_term), pnl_term, tf.constant(0.0, dtype=tf.float32))
+    pnl_term = _finite_or_zero(model, pnl_term, "pnl_term")
 
     total = base.total + pnl_term
-    total = tf.where(tf.math.is_finite(total), total, tf.constant(0.0, dtype=tf.float32))
+    total = _finite_or_zero(model, total, "pnl_total")
     return base._replace(total=total, pnl_val=pnl_term)

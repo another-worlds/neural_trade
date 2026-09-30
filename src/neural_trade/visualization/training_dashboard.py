@@ -310,6 +310,14 @@ def _too_few(ctx: _Ctx) -> bool:
     return any(_n_eff(ctx, h) is not None and _enough(ctx, h) is None for h in T.HORIZONS)
 
 
+def _any_n_eff(ctx: _Ctx) -> bool:
+    """True when at least one horizon has a usable n_eff (QA repair round 1 fix 7): with
+    val_dir_n_h* logged, _n_eff can compute a real number even when ctx.n_val itself is unknown
+    (no meta.json fold.val, e.g. a bare history without a run_dir) - the "validation size unknown"
+    headers must not fire in that case."""
+    return any(_n_eff(ctx, h) is not None for h in T.HORIZONS)
+
+
 def _chance(ctx: _Ctx, h: str) -> Optional[float]:
     """Half-width of the 95% band an MCC stays inside by chance on the validation block (n_eff = n / h bars),
     in MCC (r) units, so below 1 (not the Fisher-z half-width: n_eff 10 gives 0.63, not 0.74); None when
@@ -890,7 +898,7 @@ def _skill_tile(ctx: _Ctx, s: int) -> Optional[dict]:
     notes = []
     if known:
         notes.append("chance ceiling " + " / ".join(f"+{100 * c:.1f}%" for _, c in pairs))
-    elif ctx.n_val:
+    elif _any_n_eff(ctx):
         notes.append("too few validation samples for a chance ceiling")
     else:
         notes.append("no chance ceiling (validation size unknown)")
@@ -947,6 +955,9 @@ def _context_parts(ctx: _Ctx, served: bool = True) -> List[str]:
         if _too_few(ctx):
             few = [h for h in T.HORIZONS if _n_eff(ctx, h) is not None and _enough(ctx, h) is None]
             parts.append(f"fewer than {_MIN_N_EFF} effective samples for {' / '.join(few)}: no chance range there")
+    elif _any_n_eff(ctx):
+        effs = [f"{h} {_n_eff(ctx, h)}" for h in T.HORIZONS if _n_eff(ctx, h)]
+        parts.append(f"validation block sample count not recorded; n_eff {' / '.join(effs)} (from val_dir_n)")
     else:
         parts.append("validation size unknown: no chance ranges")
     if served and ctx.served_epoch is not None:
@@ -1163,6 +1174,9 @@ def _epoch_table(ctx: _Ctx) -> str:
                       + (f" (none below {_MIN_N_EFF} effective samples)" if _too_few(ctx) else "")
                       + "; the direction metrics skip moves inside the deadband (not logged), so their true n_eff "
                         "is smaller and their ranges somewhat wider than shown.")
+        elif _any_n_eff(ctx):
+            effs = " / ".join(f"{h} {_n_eff(ctx, h)}" for h in T.HORIZONS if _n_eff(ctx, h))
+            ranges = f"Chance ranges: 95% on n_eff = {effs} (from val_dir_n; the total sample count was not recorded)."
         else:
             ranges = "Validation size unknown: no chance ranges."
         cap = f"Direction metrics at epoch {ctx.x[s]} (served): validation, training in brackets. " + ranges
@@ -1487,7 +1501,7 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
         clip_steps = np.zeros(ctx.n) if clip_steps is None else np.nan_to_num(clip_steps)
         fig.add_trace(go.Scatter(
             x=x, y=gmax.astype(np.float32), mode="lines+markers", name=label, legendgroup=key,
-            legend="legend5", line=dict(color=color, width=1.5, dash="dot"), marker=dict(size=4, color=color),
+            legend="legend6", line=dict(color=color, width=1.5, dash="dot"), marker=dict(size=4, color=color),
             customdata=clip_steps,
             hovertemplate=f"{label}: %{{y:.4g}}, %{{customdata:.0f}} clipped step(s) this epoch<extra></extra>"),
             row=6, col=2)
@@ -1509,7 +1523,7 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
         fig.update_xaxes(title_text="epoch", row=n_rows, col=c)
     head_titles = {(i // 2 + 1, i % 2 + 1): t for i, t in enumerate(titles)}
     plot_px, rows_of = _grid_layout(fig, n_rows, 2, panel_px, {"legend2": (1, 1), "legend3": (1, 2), "legend4": (5, 2),
-                                                               "legend5": (6, 1)}, head_titles)
+                                                               "legend5": (6, 1), "legend6": (6, 2)}, head_titles)
     T.note_on_empty(fig)
     sub = _title_lines(ctx)
     T.apply(fig, title=title or "Training dashboard", subtitle="<br>".join(sub))
@@ -1760,7 +1774,7 @@ def direction_detail_figure(history, config=None, *, weights_epoch: Optional[int
     if banded:
         parts += ["shaded = where a no-skill head lands by chance (95%, n_eff " + " / ".join(effs)
                   + "; Brier: no information)"]
-    elif ctx.n_val:
+    elif effs:
         parts += [f"too few validation samples for noise ranges (n_eff {' / '.join(effs)})"]
     else:
         parts += ["validation size unknown: no noise ranges"]
