@@ -320,10 +320,11 @@ registered_utc: "2026-09-30T12:00:00Z"  # REQUIRED: there is no "now" default (a
                                          # trustworthy than a string nothing stops you editing) -- see
                                          # "registered_utc_source" in the output. An uncommitted edit
                                          # (the working copy differs from HEAD) never borrows the old
-                                         # commit's time even if one exists: it falls back to this
-                                         # declared value, source "declared (working tree differs from
-                                         # HEAD)" (QA repair round 2: an uncommitted post-hoc edit must
-                                         # not inherit an earlier, honest-looking commit timestamp).
+                                         # commit's time, nor this declared value (an edit keeps it):
+                                         # it counts as registered at compare time, source "compare
+                                         # time (working tree differs from HEAD)", so any run that
+                                         # already exists makes it post hoc and it is refused. Commit
+                                         # the spec before the runs start.
 estimator: mean                         # or hodges_lehmann (+ its exact Wilcoxon interval): robust to
                                          # one bad fold, D-037. No exact 95% Wilcoxon interval exists
                                          # below n = 6 folds (n_folds = 5 always falls back); the

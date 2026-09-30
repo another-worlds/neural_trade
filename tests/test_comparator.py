@@ -238,7 +238,7 @@ def test_git_commit_time_of_the_spec_file_is_preferred_over_the_declared_string(
     assert spec.effective_registered_utc != "19990101T000000Z"
 
 
-def test_an_uncommitted_edit_does_not_borrow_the_old_commit_time(tmp_path):
+def test_an_uncommitted_edit_is_dated_now_and_refused_against_existing_runs(tmp_path):
     """QA repair round 2, point 1: committing a spec, then editing it WITHOUT committing (keeping the
     same declared registered_utc) must not let the stale git commit time stand in for the edit's real
     (unknown) time -- the comparator falls back to the declared string and says so."""
@@ -247,7 +247,7 @@ def test_an_uncommitted_edit_does_not_borrow_the_old_commit_time(tmp_path):
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.name", "t"], cwd=repo, check=True)
-    d = dict(name="t", scenario_a="A", scenario_b="B", metric="m", min_effect=0.01,
+    d = dict(name="t", scenario_a="A", scenario_b="B", metric=AUC_KEY, min_effect=0.01,
             judgment_folds=list(FIVE_FOLDS), registered_utc="19990101T000000Z", root=str(tmp_path))
     path = repo / "spec.yaml"
     path.write_text(yaml.safe_dump(d), encoding="utf-8")
@@ -258,8 +258,15 @@ def test_an_uncommitted_edit_does_not_borrow_the_old_commit_time(tmp_path):
 
     path.write_text(yaml.safe_dump(dict(d, min_effect=0.0)), encoding="utf-8")   # edited, NOT committed
     edited = CompareSpec.from_yaml(path)
-    assert edited.registered_utc_source == "declared (working tree differs from HEAD)"
-    assert edited.effective_registered_utc == edited.registered_utc == "19990101T000000Z"
+    assert edited.registered_utc_source == "compare time (working tree differs from HEAD)"
+    assert edited.effective_registered_utc != edited.registered_utc
+    # runs that exist already (created before now) make the dirty spec a post-hoc edit: refused
+    for i, f in enumerate(FIVE_FOLDS):
+        _write_run(tmp_path, "A", seed=0, fold=f, created_utc=f"202601{i + 1:02d}T000000Z", scores={AUC_KEY: 0.60})
+        _write_run(tmp_path, "B", seed=0, fold=f, created_utc=f"202601{i + 1:02d}T000000Z", scores={AUC_KEY: 0.50})
+    result = compare(edited)
+    assert result.verdict == "refused"
+    assert "before the spec's effective registration" in result.refusal_reason
 
 
 # --------------------------------------------------------------------------------------- (3) guard-rails

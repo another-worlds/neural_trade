@@ -298,9 +298,11 @@ class CompareSpec:
             spec.registered_utc_source = "git_commit_time"
         elif git_time:
             # a committed history exists, but the working copy no longer matches it: an uncommitted
-            # edit must not borrow the old commit's timestamp (QA repair round 2, point 1)
-            spec.registered_utc_effective = spec.registered_utc
-            spec.registered_utc_source = "declared (working tree differs from HEAD)"
+            # edit can date neither from the old commit nor from its own declared string (an edit keeps
+            # that string), so it counts as registered now and every run that already exists is later
+            # than nothing: the comparison is refused (QA of repair round 2)
+            spec.registered_utc_effective = _utcnow()
+            spec.registered_utc_source = "compare time (working tree differs from HEAD)"
         return spec
 
     def to_dict(self) -> Dict[str, Any]:
