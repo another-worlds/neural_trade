@@ -276,7 +276,8 @@ class BacktestExplorer:
         from neural_trade.strategy import backtest, build_backtest_config, build_strategy
 
         strat = build_strategy(strategy, params, calibration=self.cal_signals)
-        res = backtest(self.signals, self.bars, strat, build_backtest_config(costs or {}), baselines=baselines)
+        bcfg = build_backtest_config({**dict(costs or {}), "bar_minutes": float(self.config.RESAMPLE_MINUTES)})
+        res = backtest(self.signals, self.bars, strat, bcfg, baselines=baselines)
         return res, strat
 
     def run(self, strategy: str, params: Optional[Dict[str, Any]] = None, costs: Optional[Dict[str, Any]] = None,
@@ -330,7 +331,8 @@ class BacktestExplorer:
         if names is None:
             names = [n for n in Strategies.list_names() if n not in baseline] + \
                     [n for n in _BENCHMARKS if Strategies.has(n)]
-        k = build_backtest_config(dict(costs or {})).random_seeds if null_seeds is None else int(null_seeds)
+        k = (build_backtest_config({**dict(costs or {}), "bar_minutes": float(self.config.RESAMPLE_MINUTES)}).random_seeds
+             if null_seeds is None else int(null_seeds))
         runs, labels = {}, {}
         for n in names:
             res, strat = self._backtest(n, costs=costs, baselines=False)

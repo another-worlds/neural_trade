@@ -140,7 +140,7 @@ def execute_cell(spec: AblationSpec, cell: Cell, scale: str, out_dir, frozen: Op
     from neural_trade.evaluation.frame import PredictionFrame
     from neural_trade.evaluation.report import evaluate
     from neural_trade.experiments.run_context import RunContext
-    from neural_trade.strategy import Bars, SignalFrame, build_strategy, run_backtest, var_scale_from
+    from neural_trade.strategy import BacktestConfig, Bars, SignalFrame, build_strategy, run_backtest, var_scale_from
     from neural_trade.training.trainer import train_and_evaluate
 
     out_dir = Path(out_dir)
@@ -162,7 +162,8 @@ def execute_cell(spec: AblationSpec, cell: Cell, scale: str, out_dir, frozen: Op
     bars = Bars.from_frame(blocks["df"], blocks["test"]["anchor_bar"])
     var_scale = var_scale_from(cal) if cal is not None else var_scale_from(test)
     cal_signals = SignalFrame.build(cal, var_scale) if cal is not None else None
-    bt = run_backtest(SignalFrame.build(test, var_scale), bars, build_strategy(spec.strategy, calibration=cal_signals))
+    bt = run_backtest(SignalFrame.build(test, var_scale), bars, build_strategy(spec.strategy, calibration=cal_signals),
+                      BacktestConfig(bar_minutes=float(ctx.config.RESAMPLE_MINUTES)))
     report = evaluate(test, ctx.config, baselines=base, cal_frame=cal, run_id=ctx.run_id,
                       backtest={"strategy": spec.strategy, "summary": bt.summary})
     report.to_json(ctx.path("eval_report_test.json"))

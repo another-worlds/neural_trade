@@ -34,7 +34,7 @@ from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
 import numpy as np
 
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
-from neural_trade.strategy.performance import MINUTES_PER_YEAR, breakeven_cost_bps, summarize
+from neural_trade.strategy.performance import MINUTES_PER_YEAR, breakeven_cost_bps, periods_per_year, summarize
 from neural_trade.strategy.signals import SignalFrame
 from neural_trade.strategy.strategies import ExposureStrategy, RandomSignal, Strategies, Strategy
 from neural_trade.strategy.trades import Order, Trade
@@ -73,7 +73,9 @@ class BacktestConfig:
 
     @property
     def periods_per_year(self) -> int:
-        return int(round(self.minutes_per_year / self.bar_minutes))
+        """Bars per year at ``bar_minutes``, from ``performance.periods_per_year`` (the one function
+        of the bar size and a named calendar; the 24/7 default gives ``minutes_per_year``)."""
+        return periods_per_year(self.bar_minutes)
 
 
 @dataclass

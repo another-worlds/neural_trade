@@ -47,9 +47,12 @@ project is about. Every result names the setup it was measured on.
 
 Today the data file is `CSV_PATH`, and the window (`LOOKBACK`), the horizons (`HORIZON_STEPS`,
 exactly three) and the bar size (`RESAMPLE_MINUTES`) are Config keys in bars. NT-041 moves the
-window and horizons to wall-clock time and NT-042 allows any number of horizons (D-022). Until NT-040
-is fixed, backtest Sharpe and Sortino are right only for one-minute bars (and assume a 24/7 market),
-so `RESAMPLE_MINUTES` is not tunable and a sweep refuses any other bar size (NT-029, NT-030).
+window and horizons to wall-clock time and NT-042 allows any number of horizons (D-022). Backtest
+Sharpe and Sortino are annualised from the run's own bar size through one function,
+`strategy.performance.periods_per_year(bar_minutes, calendar="24/7")` (NT-040): every live path (the
+CLI backtest, the notebook explorer, the engine's scorer) sets `BacktestConfig.bar_minutes` from
+`RESAMPLE_MINUTES`, so `RESAMPLE_MINUTES` is tunable (NT-029's metadata; a sweep may search it once
+NT-030 exists).
 
 ## Tests, lint, coverage, docs
 

@@ -8,6 +8,25 @@ import numpy as np
 
 MINUTES_PER_YEAR = 525_600
 
+# Minutes per year under a named calendar assumption (NT-040). The default, ``"24/7"``, is the
+# MVP's assumption (VISION "Not in the MVP": no trading sessions, D-022). A market with sessions
+# registers its own minutes-per-year here instead of changing the annualisation formula.
+CALENDARS: Dict[str, int] = {"24/7": MINUTES_PER_YEAR}
+
+
+def periods_per_year(bar_minutes: float, calendar: str = "24/7") -> int:
+    """Bars per year at ``bar_minutes``-minute bars, from one named calendar assumption.
+
+    Every live path (the CLI backtest, the notebook explorer, the engine's scorer) and
+    ``BacktestConfig.periods_per_year`` annualise Sharpe and Sortino through this one function, so
+    the bar size always has to be set, and a market with sessions can switch calendars without a
+    second formula to keep in sync."""
+    try:
+        minutes_per_year = CALENDARS[calendar]
+    except KeyError:
+        raise ValueError(f"unknown calendar {calendar!r}; known calendars: {sorted(CALENDARS)}") from None
+    return int(round(minutes_per_year / bar_minutes))
+
 
 def sharpe(returns, periods_per_year: int = MINUTES_PER_YEAR) -> float:
     """Annualised mean/std of per-bar returns (0 when flat)."""

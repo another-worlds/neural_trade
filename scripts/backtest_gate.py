@@ -53,7 +53,7 @@ def main(argv=None) -> int:
     var_scale = var_scale_from(cal)
     signals = SignalFrame.build(test, var_scale, calibrated=not args.uncalibrated)
     cal_signals = SignalFrame.build(cal, var_scale, calibrated=not args.uncalibrated)
-    cfg = BacktestConfig(random_seeds=args.random_seeds)
+    cfg = BacktestConfig(random_seeds=args.random_seeds, bar_minutes=float(config.RESAMPLE_MINUTES))
     out = {"run": run.name, "var_scale": var_scale, "calibrated": not args.uncalibrated, "n_bars": len(bars),
            "strategies": {}}
     for name in Strategies.list_names():

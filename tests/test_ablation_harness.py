@@ -234,3 +234,59 @@ def test_one_real_cell_and_calibrate_once(tmp_path, synthetic_bars, monkeypatch)
     for key in ("h1/variance/crpss", "h1/direction/auc", "backtest/n_trades", "coherence/coherence_primary"):
         assert key in row, key
     assert row["condition"] == "all_on" and (tmp_path / "runs" / row["run_id"] / "eval_report_test.json").exists()
+
+
+def test_execute_cell_sets_bar_minutes_from_resample_minutes(tmp_path, synthetic_bars, monkeypatch):
+    """NT-040 (1): the frozen ablation harness (D-023) must not leave BacktestConfig at its 1-minute
+    default when the cell's RESAMPLE_MINUTES differs. Training is faked (real blocks, seeded-noise
+    predictions, as the experiment-engine tests do) so this stays fast: only the wiring is checked."""
+    from types import SimpleNamespace
+
+    from sklearn.preprocessing import StandardScaler
+
+    import neural_trade.strategy as strategy_mod
+    import neural_trade.training.trainer as trainer_mod
+    from neural_trade.data.processor import split_arrays
+    from neural_trade.evaluation.frame import HORIZONS
+    from neural_trade.experiments.ablation import execute_cell
+
+    monkeypatch.chdir(tmp_path)
+    csv = tmp_path / "bars.csv"
+    synthetic_bars.to_csv(csv, index=False)
+    spec = AblationSpec(name="rm5", terms={"LAMBDA_HD": 0.1}, modes=["all_on"], seeds=[0], periods={"P": -1},
+                        calibrate="none", strategy="liberal",
+                        base_overrides={"BATCH_SIZE": 32, "CALLBACKS": [], "RESAMPLE_MINUTES": 5},
+                        scales={"smoke": {"MAX_SEQUENCE_COUNT": 1500, "EPOCHS": 1}})
+
+    def fake_train_and_evaluate(*, config, run_context=None, **_kw):
+        arrays = split_arrays(config)
+        rng = np.random.default_rng(0)
+        scaler = StandardScaler().fit(arrays["train"]["y"].reshape(-1, 1))
+        scale = float(scaler.scale_[0])
+
+        def heads(block):
+            y = np.asarray(block["y"], float)
+            signal = y / scale + rng.normal(0.0, 3.0, y.shape)
+            return {"delta": {h: 0.1 * scale * signal[:, i] for i, h in enumerate(HORIZONS)},
+                    "direction_prob": {h: 1 / (1 + np.exp(-0.5 * signal[:, i])) for i, h in enumerate(HORIZONS)},
+                    "variance": {h: 1.0 + 0.2 * rng.random(len(y)) for h in HORIZONS}}
+
+        return SimpleNamespace(
+            config=config, target_scaler=scaler, predictions=heads(arrays["test"]), y_test=arrays["test"]["y"],
+            last_close_test=arrays["test"]["last_close"], predictions_calibrated=None, windows_test=arrays["test"]["X"],
+            predictions_cal=heads(arrays["cal"]), y_cal=arrays["cal"]["y"], last_close_cal=arrays["cal"]["last_close"],
+            windows_cal=arrays["cal"]["X"], calibration_pipeline=None, history=None, weights_epoch=1,
+            weights_val_loss=0.5, calibration_lambdas=None)
+
+    captured = {}
+    real_run_backtest = strategy_mod.run_backtest
+
+    def spy_run_backtest(signals, bars, strategy, config=None):
+        captured["bar_minutes"] = config.bar_minutes
+        return real_run_backtest(signals, bars, strategy, config)
+
+    monkeypatch.setattr(trainer_mod, "train_and_evaluate", fake_train_and_evaluate)
+    monkeypatch.setattr(strategy_mod, "run_backtest", spy_run_backtest)
+    row = execute_cell(spec, spec.cells()[0], "smoke", tmp_path, {}, str(csv))
+    assert captured["bar_minutes"] == 5.0
+    assert row["condition"] == "all_on"
