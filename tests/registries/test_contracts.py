@@ -15,7 +15,13 @@ ALL_TEN = TRAINING_REGISTRIES | {"Visualizations"}
 REPO = Path(__file__).resolve().parents[2]
 
 
-def test_training_and_reporting_query_all_ten_registries(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+def test_training_and_reporting_query_all_ten_registries(tf, tiny_close_only_config, tmp_path, synthetic_bars,
+                                                          monkeypatch, run_eagerly):
+    """NT-109: which registries get queried does not depend on the indicator family count (the
+    Indicators registry is queried whether it builds 4 close-only families or the full 14-family
+    OHLCV default), so this runs on ``tiny_close_only_config``, and eagerly (``run_eagerly``) to skip
+    the graph-trace cost - every registry is still queried once per component name regardless of
+    execution mode (the checks happen at Python build time, not inside the traced graph)."""
     from neural_trade.training.trainer import train_and_evaluate
 
     hits = set()
@@ -28,7 +34,8 @@ def test_training_and_reporting_query_all_ten_registries(tf, tiny_config, tmp_pa
     monkeypatch.setattr(BaseRegistry, "_checked_component", classmethod(spy))
     monkeypatch.chdir(tmp_path)
     synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)
-    cfg = tiny_config
+    cfg = tiny_close_only_config
+    cfg.BATCH_SIZE = 64   # fewer, bigger steps (NT-109, eager mode): which registries get hit does not care
     cfg.CSV_PATH, cfg.MODEL_PATH, cfg.SCALER_PATH = (str(tmp_path / "bars.csv"), str(tmp_path / "w.h5"),
                                                      str(tmp_path / "s.joblib"))
     result = train_and_evaluate(config=cfg, epochs=1, force=True, calibrate=False, fit_calibration=False)

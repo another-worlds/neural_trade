@@ -49,6 +49,7 @@ neither :class:`neural_trade.training.custom_model.CustomTrainModel` nor
 from __future__ import annotations
 
 import contextlib
+import hashlib
 
 import tensorflow as tf
 
@@ -70,25 +71,43 @@ def seeded_stochastic_layers():
             tf.keras.backend.experimental.disable_tf_random_generator()
 
 
+def _identity_offset(layer: tf.Module, slot: int) -> int:
+    """A deterministic offset from the layer's own name (NT-108), not its enumeration position in
+    ``model.submodules``: that position shifts whenever an unrelated ``tf.Module`` attribute is added
+    anywhere on the model (``model.submodules`` orders by attribute name, so a new attribute that sorts
+    earlier pushes every later layer's index up), silently changing every derived seed after it. A
+    layer's Keras-assigned ``name`` is unique within the model and does not depend on what else is
+    attached to it. ``slot`` (0 for the Keras ``_random_generator._generator`` candidate, 1 for a bare
+    ``_generator``) keeps the two candidate generators on one layer from sharing a stream; it is a
+    property of the candidate, not of enumeration order, so it is as stable as the layer's name.
+    ``hashlib.sha256`` (not the builtin ``hash()``, which is salted per process by ``PYTHONHASHSEED``)
+    gives the same offset for the same name on every run."""
+    name = getattr(layer, "name", None) or repr(layer)
+    digest = hashlib.sha256(f"{name}#{slot}".encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
 def reset_stateful_rngs(model: tf.keras.Model, seed: int) -> int:
     """Reset every resettable stochastic layer under ``model`` from ``seed``.
 
     Walks ``model.submodules`` (every nested layer, including a ``MultiHeadAttention``'s internal
-    dropout layers) in a fixed, deterministic order and, for each with a Keras
-    ``_random_generator._generator`` (Dropout and similar layers, only present when built under
-    :func:`seeded_stochastic_layers`) OR a bare ``_generator`` attribute that is itself a
-    ``tf.random.Generator`` (``VacuumSaturationNoise``, when ``seeded=True``), calls
-    ``reset_from_seed`` with a seed derived from ``seed`` and the layer's position, so different
-    layers do not share one stream. Returns the number of generators reset (0 for a model with no
-    stochastic layers, or one built with ``SEEDED_STOCHASTIC_LAYERS`` off - the common case for
-    ordinary training; nothing to do, and nothing wrong, either)."""
+    dropout layers) and, for each with a Keras ``_random_generator._generator`` (Dropout and similar
+    layers, only present when built under :func:`seeded_stochastic_layers`) OR a bare ``_generator``
+    attribute that is itself a ``tf.random.Generator`` (``VacuumSaturationNoise``, when
+    ``seeded=True``), calls ``reset_from_seed`` with a seed derived from ``seed`` and the layer's own
+    name (:func:`_identity_offset`, NT-108), so different layers do not share one stream and adding an
+    unrelated ``tf.Module`` attribute elsewhere on the model leaves every derived seed unchanged.
+    Returns the number of generators reset (0 for a model with no stochastic layers, or one built with
+    ``SEEDED_STOCHASTIC_LAYERS`` off - the common case for ordinary training; nothing to do, and
+    nothing wrong, either)."""
     n = 0
-    for i, layer in enumerate(model.submodules):
+    for layer in model.submodules:
         candidates = (getattr(getattr(layer, "_random_generator", None), "_generator", None),
                      getattr(layer, "_generator", None))
-        for generator in candidates:
+        for slot, generator in enumerate(candidates):
             reset_from_seed = getattr(generator, "reset_from_seed", None)
             if callable(reset_from_seed):
-                reset_from_seed(int(seed) * 1_000_003 + i)
+                offset = _identity_offset(layer, slot)
+                reset_from_seed((int(seed) * 1_000_003 + offset) % (2**31 - 1))
                 n += 1
     return n

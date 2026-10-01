@@ -171,6 +171,46 @@ def tiny_config(tf):
     cfg.validate()
     return cfg
 
+
+@pytest.fixture
+def tiny_close_only_config(tiny_config):
+    """``tiny_config``, further shrunk to one close-only instance per indicator family (NT-109): the
+    default OHLCV/14-family catalogue (D-047) costs real wall time a test pays for nothing unless its
+    assertions are actually about family count or channel wiring (``INPUT_SERIES``). Keeps
+    ``tiny_config``'s ``MAX_SEQUENCE_COUNT`` (600): the purged split (gap 80, N_FOLDS 5) needs that
+    much to leave a non-empty train block, independent of family count. Every registry still gets
+    queried (Indicators included: ``INDICATOR_FAMILIES = {}`` still runs the four close-only families -
+    ma / macd / rsi / bb - one instance each, not zero)."""
+    cfg = tiny_config
+    cfg.INPUT_SERIES = ["close"]
+    cfg.INDICATOR_FAMILIES = {}
+    cfg.MA_SPANS = [5]
+    cfg.MACD_SETTINGS = [{"fast": 12, "slow": 26, "signal": 9}]
+    cfg.RSI_PERIODS = [14]
+    cfg.BB_PERIODS = [20]
+    cfg.validate()
+    return cfg
+
+
+@pytest.fixture
+def run_eagerly(tf):
+    """Force every ``tf.function`` (``Model.fit``'s compiled ``train_step``/``test_step`` included) to
+    execute eagerly for one test (NT-109). Profiling a real training smoke test showed the cost this
+    item is about is almost entirely the ONE-OFF graph trace of the backward pass (physics loss terms
+    and gradient routing; the forward pass alone traces in well under a second) - about 10-20s on this
+    machine, independent of the indicator family count or ``INPUT_SERIES`` width, so shrinking those
+    alone (:func:`tiny_close_only_config`) cannot get a real training test under 10s. Eager execution
+    skips that trace and runs each op directly: slower per step, negligible for the few steps/epochs a
+    smoke test needs. Numerically identical to the compiled path (same ops; ``TF_DETERMINISTIC_OPS``
+    still applies in eager mode). Restores whatever the setting was before, so it never leaks into
+    another test."""
+    import tensorflow as tf
+
+    previous = tf.config.functions_run_eagerly()
+    tf.config.run_functions_eagerly(True)
+    yield
+    tf.config.run_functions_eagerly(previous)
+
 # ---------------------------------------------------------------------------- dashboards (no TensorFlow)
 VIZ_HORIZONS = ("h0", "h1", "h2")
 

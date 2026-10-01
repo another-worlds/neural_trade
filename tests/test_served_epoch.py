@@ -39,15 +39,19 @@ def _same(a, b) -> bool:
     return len(a) == len(b) and all(np.array_equal(x, y) for x, y in zip(a, b))
 
 
-def test_a_run_that_reaches_the_epoch_cap_serves_the_best_validation_epoch(tf, tiny_config, tmp_path,
-                                                                          synthetic_bars, monkeypatch):
+def test_a_run_that_reaches_the_epoch_cap_serves_the_best_validation_epoch(tf, tiny_close_only_config, tmp_path,
+                                                                          synthetic_bars, monkeypatch, run_eagerly):
+    """NT-109: which weights get served does not depend on the indicator family count or the input
+    channels, so this runs on ``tiny_close_only_config`` (close-only, one instance per family)
+    instead of the full OHLCV/14-family default, and eagerly (``run_eagerly``) to skip the graph-trace
+    cost that dominates a fresh model's first fit/evaluate call."""
     import neural_trade.training.trainer as trainer_mod
     from neural_trade.experiments.run_context import RunContext
 
     monkeypatch.chdir(tmp_path)
     csv = tmp_path / "bars.csv"
     synthetic_bars.to_csv(csv, index=False)
-    cfg = tiny_config
+    cfg = tiny_close_only_config
     cfg.CSV_PATH = str(csv)
     cfg.MAX_SEQUENCE_COUNT, cfg.BATCH_SIZE = 400, 32   # a few steps per epoch: this test is about which weights are kept
     cfg.EARLY = 50            # early stopping can never fire in 3 epochs

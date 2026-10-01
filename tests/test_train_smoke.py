@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 import tensorflow as tf
 
 
@@ -47,7 +48,11 @@ def _build(cfg, tmp_path, synthetic_bars):
     return model, train_ds, val_ds
 
 
+@pytest.mark.slow
 def test_three_steps_keep_weights_finite_and_val_loss_moves(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+    """NT-109: kept on the full OHLCV/14-family default (``tiny_config``, unshrunk families) and
+    marked slow - the assertion below is exactly about that family count (D-047's gradient-routing
+    completeness), so it is one of the tests this item's acceptance (2) keeps training the default."""
     monkeypatch.chdir(tmp_path)  # CSVLogger / ParamsLogger write relative paths
     tf.keras.utils.set_random_seed(0)
     model, train_ds, val_ds = _build(tiny_config, tmp_path, synthetic_bars)
@@ -84,23 +89,29 @@ class _FreezeLearning(tf.keras.callbacks.Callback):
         tf.keras.backend.set_value(self.model.indicator_optimizer.learning_rate, 0.0)
 
 
-def test_early_stopping_fires_on_a_plateau(tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+def test_early_stopping_fires_on_a_plateau(tf, tiny_close_only_config, tmp_path, synthetic_bars, monkeypatch,
+                                           run_eagerly):
     """M4: 'early stopping fires on a plateaued run'.
 
     Before Phase A, EARLY and PATIENCE both equalled EPOCHS and were read from the class, not
     the instance, so no stopper could ever fire. With a frozen model val_loss is exactly flat
     and EarlyStopping(patience=EARLY) must stop after EARLY + 1 epochs, restoring the best.
+
+    NT-109: whether the stopper fires does not depend on the indicator family count, so this runs on
+    ``tiny_close_only_config``, and eagerly (``run_eagerly``) to skip the graph-trace cost.
     """
     from neural_trade.training.trainer import train_and_evaluate
 
     monkeypatch.chdir(tmp_path)
     synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)
-    cfg = tiny_config
+    cfg = tiny_close_only_config
     cfg.CSV_PATH = str(tmp_path / "bars.csv")
     cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
     cfg.MODEL_PATH = str(tmp_path / "weights.h5")
     cfg.EARLY = 2
     cfg.PATIENCE = 1
+    cfg.BATCH_SIZE = 64   # fewer, bigger steps per epoch (NT-109, eager mode): irrelevant to which epoch wins
+    cfg.MAX_SEQUENCE_COUNT = 450   # smaller than tiny_config's 600, still enough for the purged split
 
     result = train_and_evaluate(config=cfg, epochs=8, force=True, calibrate=False,
                                 fit_calibration=False, extra_callbacks=[_FreezeLearning()])
@@ -110,13 +121,16 @@ def test_early_stopping_fires_on_a_plateau(tf, tiny_config, tmp_path, synthetic_
 
 
 def test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_complete(
-        tf, tiny_config, tmp_path, synthetic_bars, monkeypatch):
+        tf, tiny_close_only_config, tmp_path, synthetic_bars, monkeypatch, run_eagerly):
     """TRAIN_METRICS_EVERY=4: the loss accumulates every step, the diagnostics every 4th step
     (steps 1, 5, 9 of 10), and the epoch logs still carry the full train_*/val_* keys (added once per
-    epoch by _EpochTrainLogs, before validation resets the accumulators)."""
+    epoch by _EpochTrainLogs, before validation resets the accumulators).
+
+    NT-109: subsampling counts and log keys do not depend on the indicator family count, so this runs
+    on ``tiny_close_only_config``, and eagerly (``run_eagerly``) to skip the graph-trace cost."""
     monkeypatch.chdir(tmp_path)
-    tiny_config.TRAIN_METRICS_EVERY = 4
-    model, train_ds, val_ds = _build(tiny_config, tmp_path, synthetic_bars)
+    tiny_close_only_config.TRAIN_METRICS_EVERY = 4
+    model, train_ds, val_ds = _build(tiny_close_only_config, tmp_path, synthetic_bars)
     seen = {}
 
     class Probe(tf.keras.callbacks.Callback):
@@ -126,7 +140,7 @@ def test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_com
             seen["logs"] = sorted(logs or {})
 
     hist = model.fit(train_ds, epochs=1, steps_per_epoch=10, validation_data=val_ds, verbose=0, callbacks=[Probe()])
-    b = tiny_config.BATCH_SIZE
+    b = tiny_close_only_config.BATCH_SIZE
     assert seen["loss"] == 10 * b and seen["diag"] == 3 * b
     assert seen["logs"] == ["loss", "nonfinite_grad_steps"]  # lean per-step logs
     h = hist.history
@@ -135,13 +149,17 @@ def test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_com
         assert key in h and np.isfinite(h[key][-1]), key
 
 
+@pytest.mark.slow
 def test_a_default_config_run_without_a_run_context_leaves_only_the_weights(tf, tmp_path, monkeypatch):
     """NT-028 acceptance (3): a 1-epoch CPU train_and_evaluate() with the default Config and no
     RunContext creates no file in its working directory that nothing reads. training_log.csv and
     indicator_params_history.csv (csv_logger / params_logger skip without a run directory) and
     SCALER_PATH (nothing loads it) are gone; the MODEL_PATH weights stay, because the warm start
     reads them on a later run in the same directory (NT-049). Only the data is shrunk
-    (MAX_SEQUENCE_COUNT) and read from the bundled CSV by absolute path."""
+    (MAX_SEQUENCE_COUNT) and read from the bundled CSV by absolute path.
+
+    NT-109: this is the item's "at least one test still trains the full default config", so it keeps
+    the unmodified default ``Config()`` (all 14 OHLCV families) and moves to the slow suite."""
     from pathlib import Path
 
     import pytest

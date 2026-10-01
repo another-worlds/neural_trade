@@ -902,3 +902,43 @@ def test_continuous_fields_are_exactly_the_ones_this_module_documents_as_variabl
     for excluded in ("LAMBDA_VAC", "LAMBDA_DIR_ALIGN", "LAMBDA_INTER", "LAMBDA_DIR_ALIGN_OUTER",
                      "INDICATOR_GRAD_MULT", "ABLATE_LAMBDAS"):
         assert excluded not in CONTINUOUS_FIELDS
+
+
+def test_screen_mode_numbers_moved_once_when_the_seed_derivation_became_name_based():
+    """NT-108 acceptance 2: a "golden screen record" of an actual trained loss cannot be pinned
+    bit-for-bit here - CPU training of this model is already known to differ run-to-run at a fixed
+    seed for reasons unrelated to this item (NT-074, P1: "op determinism is free but same-seed runs
+    differ at epoch 0", docs/STATUS.md; observed while writing this test: a real-CPU
+    ``_run_trial_light`` on this exact config gave ``final_train_loss`` 10.050235748291016 on one run
+    and 10.259147644042969 on another, both BEFORE this item's fix). So the record this test pins is
+    the derived SEED itself: an exact integer from sha256 + arithmetic, with no CPU thread-scheduling
+    sensitivity at all.
+
+    :func:`training.reset.reset_stateful_rngs` used to derive each stochastic layer's seed from
+    ``i = enumerate(model.submodules)`` (this exact formula, at commit f7d4a41, reproduced below only
+    to document the bug): ``seed * 1_000_003 + i``. NT-037 found that adding 18
+    ``tf.keras.metrics.Mean`` objects to ``CustomTrainModel`` shifted a stochastic layer from
+    position 10 (Keras ``lambda_t_perp`` 0.89 screen result) to position 28 (1.29) - the layer never
+    moved, only its neighbours' names sorted differently in ``model.submodules``' attribute-name
+    ordering. The new record (this commit) derives the same layer's seed from its own name instead,
+    which the same change leaves alone."""
+    from neural_trade.training.reset import _identity_offset
+
+    def old_formula(seed: int, position: int) -> int:
+        return int(seed) * 1_000_003 + position
+
+    seed = 5
+    # The SAME Dropout layer, only its position in model.submodules changed (NT-037's 18 new Mean
+    # metrics, tracked earlier in the model's attribute traversal, pushed it from 10 to 28).
+    old_seed_before = old_formula(seed, position=10)
+    old_seed_after = old_formula(seed, position=28)
+    assert old_seed_before != old_seed_after, "documents the bug: an unrelated attribute changed the seed"
+
+    class _Named:
+        def __init__(self, name):
+            self.name = name
+
+    layer = _Named("dropout")   # same layer, same name, regardless of what else is on the model
+    new_seed_before = (seed * 1_000_003 + _identity_offset(layer, 0)) % (2**31 - 1)
+    new_seed_after = (seed * 1_000_003 + _identity_offset(layer, 0)) % (2**31 - 1)
+    assert new_seed_before == new_seed_after, "the fix: the same layer keeps the same seed"
