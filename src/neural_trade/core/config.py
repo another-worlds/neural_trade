@@ -471,6 +471,29 @@ class Config:
         "trial's stochastic layers restart from its own seed instead of continuing whatever trial "
         "ran through the same persistent model before it - the only way phase 2 can match a fresh "
         "run bit-for-bit (docs/RUNBOOK.md 'Screen mode').", unit="flag")
+    STRICT_LOSS_MASKS: bool = _f(
+        False, "stability",
+        "turn off every non-finite mask in losses/functions.py (about 46 sites, including the "
+        "total itself and pnl_utility's own extra total, not only the ones that feed `total` "
+        "directly): a non-finite value anywhere then makes the total non-finite, so train_step's "
+        "finite-gradient guard (custom_model.py) sees it and counts the step, instead of the term "
+        "being silently zeroed (D-026, NT-036). False (default) is today's behaviour, bit-for-bit "
+        "(scripts/golden_run.py verify). True is for the CI stability tests and any run that "
+        "wants a loud failure instead of a silent zero.", unit="flag")
+    PROBE_GRADIENTS: bool = _f(
+        False, "stability",
+        "per-loss-term gradient probe (NT-037, D-026 'about 10%'): every PROBE_EVERY training "
+        "steps, an extra persistent-tape backward pass (training=False, so it never perturbs "
+        "dropout/noise) measures, per term and per variable group ('trunk', 'head', "
+        "'indicator' - CustomTrainModel._probe_groups_of), its share of that group's gradient "
+        "norm, its cosine with the group's total gradient, and (once per group) the mean and "
+        "worst pairwise cosine conflict between any two terms; the value share is reported once, "
+        "ungrouped. Logged into metrics.jsonl as probe_*. Off by default: the probe subgraph is "
+        "never built when this is False (no probe_* key is written, no per-step cost).",
+        unit="flag")
+    PROBE_EVERY: int = _f(50, "stability",
+                          "run the per-loss-term gradient probe every N training steps when "
+                          "PROBE_GRADIENTS is on", unit="steps", ge=1, step=1)
 
     # ------------------------------------------------------------------ direction
     FOCAL_ALPHA: float = _f(0.5, "direction", "weight of the DOWN class", unit="fraction", ge=0.0, le=1.0)

@@ -71,7 +71,8 @@ def test_all_34_components_finite_with_finite_gradients(make_loss_model, pred_sc
         total = out[0]
 
     vals = np.array([float(t) for t in out])
-    assert vals.shape == (35,), "LossComponents contract is 35 fields (NT-087 added pnl_val)"
+    assert vals.shape == (37,), ("LossComponents contract is 37 fields (NT-087 added pnl_val; "
+                                 "NT-037/D-045 added dir_align_val, coherence_penalty_val)")
     bad = [f for f, v in zip(out._fields, vals) if not np.isfinite(v)]
     assert not bad, f"non-finite components: {bad}"
     assert vals[0] > 0.0
@@ -182,3 +183,124 @@ def test_vacuum_bandwidth_term_is_zero_unless_lambda_vac_is_set(make_loss_model)
     on, (_, _, price, _) = _components(make_loss_model(config=Config(LAMBDA_VAC=0.1)))
     spread = np.std(np.stack([p.numpy()[:, 0] for p in price], 1), axis=1)
     assert float(on.vac_val) == pytest.approx(np.mean(np.maximum(spread - 0.1, 0.0)), rel=1e-4)
+
+
+# ---------------------------------------------------------------------------- NT-037 (D-026/D-045)
+# Per-term contributions, mask counters and the dead-zone counters, all reached through
+# test_step (no gradients needed): it runs the same _update_diagnostics path as train_step.
+
+CONTRIB_TERM_KEYS = ('point', 'trend', 'dir', 'dir_align', 'reg', 'inter_reg', 'vol', 'coherence',
+                     'nll', 'crps', 'soft_ece', 't_perp', 'casimir', 'vac', 'hd', 'ife',
+                     'vac_overflow', 'pnl')
+
+
+def test_contrib_terms_sum_to_the_total(make_loss_model):
+    """Every named contrib_* (the addends of `total`, D-026/D-045) sums to `loss`/`val_loss`
+    within 1e-4 relative - the acceptance criterion of NT-037 (3)."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_CRPS=0.3, LAMBDA_SOFT_ECE=0.2, LAMBDA_T_PERP=0.1,
+                                      LAMBDA_CASIMIR=0.1, LAMBDA_HD=0.1, LAMBDA_IFE=0.1,
+                                      LAMBDA_VAC_OVERFLOW=0.1, LAMBDA_VAC=0.1))
+    rng = np.random.default_rng(7)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    logs = m.test_step((x, y, lc, ext))
+    total = sum(float(logs[f'contrib_{k}']) for k in CONTRIB_TERM_KEYS)
+    assert total == pytest.approx(float(logs['loss']), rel=1e-4)
+
+
+def test_contrib_terms_sum_to_the_train_loss(make_loss_model):
+    """QA repair round 2 fix 3: the TRAIN-side companion of test_contrib_terms_sum_to_the_total
+    (round 1's contrib_* bug - accumulated only on TRAIN_METRICS_EVERY-sampled steps, so it did
+    not sum to the train loss - had no test on the train path; this is that test). Multiple
+    train_step calls: contrib_* and 'loss' are both running means over every step, and must
+    average exactly the same steps."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_CRPS=0.3, LAMBDA_SOFT_ECE=0.2, LAMBDA_T_PERP=0.1,
+                                      LAMBDA_CASIMIR=0.1, LAMBDA_HD=0.1, LAMBDA_IFE=0.1,
+                                      LAMBDA_VAC_OVERFLOW=0.1, LAMBDA_VAC=0.1,
+                                      TRAIN_METRICS_EVERY=10))  # the default: most train diagnostics
+    m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))          # are sampled; contrib_* must not be
+    rng = np.random.default_rng(13)
+    for _ in range(4):
+        x, y, lc, ext = _batch(rng, 110_000.0)
+        m.train_step((x, y, lc, ext))
+    logs = m.train_epoch_logs()
+    total = sum(float(logs[f'contrib_{k}']) for k in CONTRIB_TERM_KEYS)
+    assert total == pytest.approx(float(logs['loss']), rel=1e-4)
+
+
+def test_mask_counters_count_only_the_injected_term(make_loss_model, monkeypatch):
+    import neural_trade.losses.functions as lf
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_CRPS=1.0))
+    rng = np.random.default_rng(8)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+
+    monkeypatch.setattr(lf, "crps_gaussian_loss", lambda *a, **k: tf.constant(float("nan"), dtype=tf.float32))
+    m.test_step((x, y, lc, ext))
+    fired = {t: float(c.result()) for t, c in m._mask_counters.items()}
+    assert fired.pop("crps_loss") == 1.0
+    assert not any(v > 0 for v in fired.values()), f"unexpected: {fired}"
+
+
+def test_dead_zone_counters_dir_n_and_var_at_floor(make_loss_model):
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(VAR_FLOOR=0.5))
+    rng = np.random.default_rng(9)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+
+    logs = m.test_step((x, y, lc, ext))
+    for h in ("h0", "h1", "h2"):
+        assert logs[f"dir_n_{h}"] is not None
+
+    # Direct custom_loss/_update_diagnostics call with every variance head below the floor: every
+    # sample of every horizon must be counted "at floor".
+    price, dirs, _ = _heads(rng)
+    var = [tf.Variable(np.full((B, 1), 0.1, np.float32)) for _ in range(3)]  # < VAR_FLOOR (0.5)
+    y_pred = _y_pred(price, dirs, var)
+    out = m.custom_loss(x, y, y_pred, lc, ext)
+    m._update_diagnostics(out, tf.cast(tf.shape(y)[0], tf.float32), y, y_pred, lc, training=False)
+    for h in range(3):
+        assert float(m._var_floor_counters[f'var_at_floor_h{h}'].result()) >= B - 1e-6
+
+
+def test_gradient_probe_off_by_default_writes_no_probe_key(make_loss_model):
+    m = make_loss_model()  # PROBE_GRADIENTS defaults False
+    m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))
+    rng = np.random.default_rng(10)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    m.train_step((x, y, lc, ext))
+    logs = m.train_epoch_logs()
+    assert not any(k.startswith("probe_") for k in logs)
+
+
+def test_gradient_probe_shares_sum_to_one_and_every_key_is_written(make_loss_model):
+    """NT-037 acceptance (6), QA repair round 1 fix 5: with the flag on, a 1-epoch CPU smoke run
+    has the probe keys (per group) and the value/gradient shares sum to 1 within 1e-4. The
+    ``make_loss_model`` fixture's tiny functional model has no indicator layer and no head-named
+    Dense layers, so every trainable variable falls into the 'trunk' group - the 'head' and
+    'indicator' groups are legitimately empty and untested here (see the real-model probe check
+    used in QA, D:/nt_qa/nt037-out/probe_check.py)."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(PROBE_GRADIENTS=True, PROBE_EVERY=1, LAMBDA_CRPS=0.2,
+                                      LAMBDA_SOFT_ECE=0.2, LAMBDA_T_PERP=0.1, LAMBDA_CASIMIR=0.1,
+                                      LAMBDA_HD=0.1, LAMBDA_IFE=0.1, LAMBDA_VAC_OVERFLOW=0.1))
+    m.compile(optimizer=tf.keras.optimizers.Adam(1e-3))
+    rng = np.random.default_rng(11)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    m.train_step((x, y, lc, ext))
+    logs = m.train_epoch_logs()
+    terms = m._probe_terms
+    value_shares = [logs[f"probe_value_share_{t}"] for t in terms]
+    grad_shares = [logs[f"probe_grad_share_{t}_trunk"] for t in terms]
+    assert sum(value_shares) == pytest.approx(1.0, abs=1e-4)
+    assert sum(grad_shares) == pytest.approx(1.0, abs=1e-4)
+    assert -1.0 - 1e-6 <= logs["probe_conflict_mean_trunk"] <= 1.0 + 1e-6
+    assert -1.0 - 1e-6 <= logs["probe_conflict_min_trunk"] <= 1.0 + 1e-6
+    for t in terms:
+        assert -1.0 - 1e-6 <= logs[f"probe_cos_{t}_trunk"] <= 1.0 + 1e-6

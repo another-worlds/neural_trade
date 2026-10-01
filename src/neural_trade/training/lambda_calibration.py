@@ -252,7 +252,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                      crps_h0_c, crps_h1_c, crps_h2_c,
                      soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c,
                      t_perp_c, casimir_c, vac_c, hd_c, ife_c,
-                     vac_overflow_c, _pnl_c) = custom_model.custom_loss(
+                     vac_overflow_c, _pnl_c, _dir_align_c, _coherence_c) = custom_model.custom_loss(
                         x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
                         vacuum_overflow=_vac_overflow_batch
                     )

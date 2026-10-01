@@ -125,6 +125,9 @@ class JsonlEpochLogger(tf.keras.callbacks.Callback):
         dt = time.time() - (self._t_epoch or time.time())
         rec["epoch_seconds"] = dt
         rec["sec_per_step"] = dt / self._steps if self._steps else None
+        # Training batches this epoch (NT-037, D-026 QA repair round 1 fix 2): lets a report turn
+        # grad_clip_steps_* into a SHARE of steps clipped, not just a raw count.
+        rec["n_steps"] = self._steps
         return rec
 
     def _write(self, rec):
