@@ -642,6 +642,19 @@ class Config:
     VAR_CAP: float = _f(1e3, "variance", "variance cap for metrics (not applied in the loss)", unit="scaled^2",
                         gt=0.0, log=True)
     DELTA_MAPE_MIN_ABS: float = _f(1.0, "variance", "min |y| ($) for the delta safe-MAPE", unit="quote", ge=0.0)
+    NLL_KIND: str = _f("gaussian", "variance",
+                       "the NLL term's assumed law (A_losses.md section 5): 'gaussian' (default, today's "
+                       "formula, unchanged) or 'student_t' (fixed-dof Student-t, heavier tails, bounded "
+                       "mean- and variance-gradients on large residuals, NT-100). The variance head always "
+                       "predicts Var[Y|x] in both cases: for student_t the implied scale^2 is derived as "
+                       "var * (NLL_STUDENT_DOF - 2) / NLL_STUDENT_DOF so the served variance, conformal "
+                       "intervals and CRPS keep their usual meaning regardless of NLL_KIND. Chosen once at "
+                       "trace time (a Python if, not tf.cond): the gaussian branch's ops are untouched.",
+                       unit="name", choices=("gaussian", "student_t"))
+    NLL_STUDENT_DOF: float = _f(5.0, "variance",
+                                "fixed degrees of freedom of the student_t NLL (NLL_KIND), unused otherwise; "
+                                "must be > 2 so Var[Y|x] = scale^2 * dof / (dof - 2) exists; larger values "
+                                "approach the gaussian NLL", unit="dimensionless", gt=2.0)
 
     # ------------------------------------------------------------------ paths
     MODEL_PATH: str = _f("nn_learnable_indicators_v3.weights.h5", "paths", "weights file: model_checkpoint writes "
@@ -777,6 +790,10 @@ class Config:
             bad("DIR_DEADBAND_BPS must be >= 0")
         if self.DIRECTION_LOSS not in ("bce", "focal_dice"):
             bad(f"DIRECTION_LOSS must be 'bce' or 'focal_dice', got {self.DIRECTION_LOSS!r}")
+        if self.NLL_KIND not in ("gaussian", "student_t"):
+            bad(f"NLL_KIND must be 'gaussian' or 'student_t', got {self.NLL_KIND!r}")
+        if self.NLL_STUDENT_DOF <= 2.0:
+            bad(f"NLL_STUDENT_DOF must be > 2 (so the Student-t variance exists), got {self.NLL_STUDENT_DOF}")
         if int(self.TRAIN_METRICS_EVERY) < 1:
             bad("TRAIN_METRICS_EVERY must be >= 1")
         if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol"):

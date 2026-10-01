@@ -8,6 +8,8 @@ which now re-exports it); ``LossComponents`` in ``neural_trade/core/outputs.py``
 """
 from __future__ import annotations
 
+import math
+
 import tensorflow as tf
 
 from neural_trade.core.outputs import LossComponents
@@ -792,14 +794,49 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     var_h1_c = tf.maximum(var_h1, var_floor)
     var_h2_c = tf.maximum(var_h2, var_floor)
 
-    log_2pi = tf.constant(1.8378770664093453, dtype=tf.float32)
+    # NLL_KIND is read from the config once, at trace time (a Python if, not tf.cond): the 'gaussian'
+    # branch below is the original formula, kept byte-for-byte so the default graph (and the golden
+    # run) is unaffected by this option's existence (D-023, NT-100 criterion 1).
+    nll_kind = str(getattr(model.config, 'NLL_KIND', 'gaussian'))
+    if nll_kind == 'student_t':
+        # A_losses.md section 5: the gaussian NLL's mean-gradient e/v and variance-gradient e^2/v
+        # are bounded only by the variance floor and the +-100 output clip, so a single large
+        # residual can dominate a batch. A fixed-dof Student-t has heavier tails: its mean gradient
+        # saturates at +-(dof+1)/(2*|e|) as |e| -> infinity instead of growing like e/v, and its
+        # scale gradient is bounded likewise. The variance head keeps predicting Var[Y|x] in both
+        # cases: the implied Student-t scale^2 is derived from it so the served variance, the
+        # conformal intervals and the CRPS path (all built on var_h{0,1,2}_c) keep their meaning.
+        dof = float(getattr(model.config, 'NLL_STUDENT_DOF', 5.0))
+        # log of the dof-only normalising constant of the Student-t density, -lgamma((dof+1)/2) +
+        # lgamma(dof/2) + 0.5*log(dof*pi): a fixed Python float (dof is not learned), so this adds a
+        # plain scalar constant to the graph, not a tf op per call.
+        nll_const = tf.constant(
+            math.lgamma(dof / 2.0) - math.lgamma((dof + 1.0) / 2.0) + 0.5 * math.log(dof * math.pi),
+            dtype=tf.float32)
+        scale_factor = (dof - 2.0) / dof  # scale^2 = var_c * scale_factor; dof > 2 (Config.validate)
+        half_dof_p1 = (dof + 1.0) / 2.0
 
-    nll_h0 = 0.5 * (log_2pi + tf.math.log(var_h0_c + model.eps)) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + model.eps)
-    nll_h0_val = tf.reduce_mean(nll_h0)
-    nll_h1 = 0.5 * (log_2pi + tf.math.log(var_h1_c + model.eps)) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + model.eps)
-    nll_h1_val = tf.reduce_mean(nll_h1)
-    nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + model.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + model.eps)
-    nll_h2_val = tf.reduce_mean(nll_h2)
+        def _student_t_nll(y_true, price, var_c):
+            scale_sq = var_c * scale_factor
+            resid_sq = tf.square(y_true - price)
+            return (nll_const + 0.5 * tf.math.log(scale_sq + model.eps)
+                    + half_dof_p1 * tf.math.log1p(resid_sq / ((dof - 2.0) * var_c + model.eps)))
+
+        nll_h0 = _student_t_nll(y_true_h0, price_h0, var_h0_c)
+        nll_h0_val = tf.reduce_mean(nll_h0)
+        nll_h1 = _student_t_nll(y_true_h1, price_h1, var_h1_c)
+        nll_h1_val = tf.reduce_mean(nll_h1)
+        nll_h2 = _student_t_nll(y_true_h2, price_h2, var_h2_c)
+        nll_h2_val = tf.reduce_mean(nll_h2)
+    else:
+        log_2pi = tf.constant(1.8378770664093453, dtype=tf.float32)
+
+        nll_h0 = 0.5 * (log_2pi + tf.math.log(var_h0_c + model.eps)) + 0.5 * tf.square(y_true_h0 - price_h0) / (var_h0_c + model.eps)
+        nll_h0_val = tf.reduce_mean(nll_h0)
+        nll_h1 = 0.5 * (log_2pi + tf.math.log(var_h1_c + model.eps)) + 0.5 * tf.square(y_true_h1 - price_h1) / (var_h1_c + model.eps)
+        nll_h1_val = tf.reduce_mean(nll_h1)
+        nll_h2 = 0.5 * (log_2pi + tf.math.log(var_h2_c + model.eps)) + 0.5 * tf.square(y_true_h2 - price_h2) / (var_h2_c + model.eps)
+        nll_h2_val = tf.reduce_mean(nll_h2)
     nll_h0_val = _finite_or_zero(model, nll_h0_val, "nll_h0")
     nll_h1_val = _finite_or_zero(model, nll_h1_val, "nll_h1")
     nll_h2_val = _finite_or_zero(model, nll_h2_val, "nll_h2")
