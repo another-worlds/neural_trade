@@ -213,7 +213,7 @@ def build_gru_attention(config) -> tf.keras.Model:
     if bool(getattr(config, 'DIRECTION_SKIP', False)):
         skip_features = layers.Lambda(_trailing_return_features, name='direction_skip_features')(close_seq)
 
-    # ---- TOWER 0 (1-minute horizon) ----
+    # ---- TOWER 0 (horizon 0: config.HORIZON_STEPS[0] bars) ----
     tower_h0 = layers.Dense(16, activation='gelu',
                            kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
     price_h0 = layers.Dense(1, name='price_h0')(tower_h0)
@@ -226,8 +226,15 @@ def build_gru_attention(config) -> tf.keras.Model:
         name='price_h0_clip'
     )(price_h0)
     direction_h0 = _direction_head(config, tower_h0, skip_features, 'direction_h0', dir_bias_init)
-    # Clip dir probs to [0,1]. (NaN/Inf protection is handled by loss guards + post-extraction sanitization
-    # to avoid any appearance of hard-coded 0.5 in the architecture.)
+    # Clip dir probs to [0,1]. Mathematically a no-op (the head's sigmoid activation already
+    # guarantees [0,1], and clip_by_value does not sanitize NaN/Inf: clip(nan, 0, 1) == nan) -
+    # NT-096 (D-029) looked at removing it, but the layer graph it sits in is load-bearing for
+    # backward-compatible HDF5 weight loading: removing it shifts Keras's auto-numbering of the
+    # unnamed Dense layers downstream (DIRECTION_SKIP's '*_skip'/'*_logit' layers), which broke
+    # tests/test_legacy_bundle.py and tests/test_indicator_families.py (a real saved bundle failed
+    # to load: "Weight count mismatch ... direction_h0_skip"). That is an effect, so D-029 does not
+    # allow removing it; the layer stays. (NaN/Inf protection is the loss guards + post-extraction
+    # sanitization, not this clip.)
     direction_h0 = layers.Lambda(
         lambda t: tf.clip_by_value(t, 0.0, 1.0),
         name='direction_h0_clip'
@@ -244,7 +251,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         name='variance_h0_clip'
     )(variance_h0)
 
-    # ---- TOWER 1 (5-minute horizon - PRIMARY) ----
+    # ---- TOWER 1 (horizon 1: config.HORIZON_STEPS[1] bars) ----
     tower_h1 = layers.Dense(16, activation='gelu',
                            kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
     price_h1 = layers.Dense(1, name='price_h1')(tower_h1)
@@ -253,6 +260,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         name='price_h1_clip'
     )(price_h1)
     direction_h1 = _direction_head(config, tower_h1, skip_features, 'direction_h1', dir_bias_init)
+    # Kept (NT-096, D-029): see the identical comment on direction_h0_clip above.
     direction_h1 = layers.Lambda(
         lambda t: tf.clip_by_value(t, 0.0, 1.0),
         name='direction_h1_clip'
@@ -265,7 +273,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         name='variance_h1_clip'
     )(variance_h1)
 
-    # ---- TOWER 2 (15-minute horizon) ----
+    # ---- TOWER 2 (horizon 2: config.HORIZON_STEPS[2] bars) ----
     tower_h2 = layers.Dense(16, activation='gelu',
                            kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
     price_h2 = layers.Dense(1, name='price_h2')(tower_h2)
@@ -274,6 +282,7 @@ def build_gru_attention(config) -> tf.keras.Model:
         name='price_h2_clip'
     )(price_h2)
     direction_h2 = _direction_head(config, tower_h2, skip_features, 'direction_h2', dir_bias_init)
+    # Kept (NT-096, D-029): see the identical comment on direction_h0_clip above.
     direction_h2 = layers.Lambda(
         lambda t: tf.clip_by_value(t, 0.0, 1.0),
         name='direction_h2_clip'

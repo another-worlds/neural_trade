@@ -304,3 +304,193 @@ def test_gradient_probe_shares_sum_to_one_and_every_key_is_written(make_loss_mod
     assert -1.0 - 1e-6 <= logs["probe_conflict_min_trunk"] <= 1.0 + 1e-6
     for t in terms:
         assert -1.0 - 1e-6 <= logs[f"probe_cos_{t}_trunk"] <= 1.0 + 1e-6
+
+
+# ---------------------------------------------------------------------------- NT-096 (D-045)
+# (1) sqrt(var + eps) inside every batch std of the loss (vol, HD, IFE, vacuum); (2) coherence
+# keeps only the magnitude-ordering part.
+
+def test_vol_loss_std_is_gradient_safe_at_an_exactly_constant_price_head(make_loss_model):
+    """A1 (NT-096): `tf.math.reduce_std` differentiates `sqrt` at the computed variance, so a
+    price_h1 head that is literally the same value for every example in the batch (variance
+    exactly 0) gave an infinite - NaN after the division - gradient through vol_loss's
+    `abs(pred_std - actual_std)` before the eps guard (confirmed directly:
+    `tf.gradients(tf.abs(tf.math.reduce_std(const) - c), const)` is all-NaN on the pre-fix
+    `tf.math.reduce_std`). The per-term `_finite_or_zero` guard hides it (vol_loss's own value
+    stays finite - the NaN is in the gradient, which the guard does not see) so it was never
+    actually observed in a real run, where a batch is never perfectly constant. The guard is
+    opt-in (`Config.LOSS_SAFE_STD`, repair round 1: D-045 ships a value-moving change behind a
+    switch whose default keeps today's graph); this test turns it on, see
+    `test_loss_safe_std_defaults_off_and_vol_loss_still_nans_there` for the default path."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_VOL=1.0, LOSS_SAFE_STD=True))
+    rng = np.random.default_rng(21)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price = [tf.Variable(tf.fill((B, 1), tf.constant(0.5, dtype=tf.float32))) for _ in range(3)]
+    dirs = [tf.Variable(rng.uniform(0.3, 0.7, size=(B, 1)).astype(np.float32)) for _ in range(3)]
+    var = [tf.Variable(rng.uniform(0.5, 2.0, size=(B, 1)).astype(np.float32)) for _ in range(3)]
+
+    with tf.GradientTape() as tape:
+        out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+        total = out[0]
+    assert np.isfinite(float(out.vol_loss))
+    grads = tape.gradient(total, price)
+    for g in grads:
+        assert g is not None
+        assert bool(tf.reduce_all(tf.math.is_finite(g))), "non-finite gradient from vol_loss's std"
+
+
+def test_std_based_losses_finite_gradient_on_batch_constant_heads(make_loss_model):
+    """NT-096 acceptance (1): feeding a batch-constant head (every price/variance head the same
+    value for every example, which is also constant ACROSS the three horizons, the degenerate
+    point of vacuum's per-example cross-horizon std) into vol, HD, IFE and vacuum together gives
+    finite gradients on every head, with all four terms active and `Config.LOSS_SAFE_STD=True`."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(LAMBDA_VOL=1.0, LAMBDA_HD=0.1, LAMBDA_IFE=0.1, LAMBDA_VAC=0.05,
+                                      LOSS_SAFE_STD=True))
+    rng = np.random.default_rng(22)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price = [tf.Variable(tf.fill((B, 1), tf.constant(0.5, dtype=tf.float32))) for _ in range(3)]
+    dirs = [tf.Variable(tf.fill((B, 1), tf.constant(0.6, dtype=tf.float32))) for _ in range(3)]
+    var = [tf.Variable(tf.fill((B, 1), tf.constant(1.0, dtype=tf.float32))) for _ in range(3)]
+
+    with tf.GradientTape() as tape:
+        out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+        total = out[0]
+    assert np.isfinite(float(total))
+    grads = tape.gradient(total, price + dirs + var)
+    names = ["price0", "price1", "price2", "dir0", "dir1", "dir2", "var0", "var1", "var2"]
+    for name, g in zip(names, grads):
+        assert g is not None, f"no gradient reached {name}"
+        assert bool(tf.reduce_all(tf.math.is_finite(g))), f"non-finite gradient on {name}"
+
+
+def test_loss_safe_std_defaults_off_and_vol_loss_still_nans_there(make_loss_model):
+    """NT-096 repair round 1 (D-045, same ruling as NT-037's tf.cond guards): `LOSS_SAFE_STD`
+    defaults to False, which must be bit-for-bit today's graph (`scripts/golden_run.py verify`),
+    so the known hazard this field documents - vol_loss's gradient is NaN at an exactly
+    batch-constant price_h1 head - is still live at the default. This is the mirror image of
+    `test_vol_loss_std_is_gradient_safe_at_an_exactly_constant_price_head` (which turns the
+    switch on and shows the NaN is gone)."""
+    from neural_trade.core.config import Config
+
+    assert Config().LOSS_SAFE_STD is False
+    m = make_loss_model(config=Config(LAMBDA_VOL=1.0))  # LOSS_SAFE_STD left at its default
+    rng = np.random.default_rng(21)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price = [tf.Variable(tf.fill((B, 1), tf.constant(0.5, dtype=tf.float32))) for _ in range(3)]
+    dirs = [tf.Variable(rng.uniform(0.3, 0.7, size=(B, 1)).astype(np.float32)) for _ in range(3)]
+    var = [tf.Variable(rng.uniform(0.5, 2.0, size=(B, 1)).astype(np.float32)) for _ in range(3)]
+
+    with tf.GradientTape() as tape:
+        out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+        total = out[0]
+    assert np.isfinite(float(out.vol_loss))  # the forward value is fine; the NaN is in the gradient
+    grads = tape.gradient(total, price)
+    nonfinite = [not bool(tf.reduce_all(tf.math.is_finite(g))) for g in grads]
+    assert any(nonfinite), ("expected the documented default-path hazard (a NaN gradient from "
+                            "vol_loss's unguarded std) to still be present with LOSS_SAFE_STD=False")
+
+
+def test_safe_std_matches_reduce_std_away_from_zero_variance(tf):
+    """`_safe_std`'s 1e-12 guard is far below float32 precision at realistic variances: its
+    VALUE matches `tf.math.reduce_std` bit-for-bit there (only the gradient at variance 0
+    changes), so the eps guard does not perturb any normal run (`scripts/golden_run.py`)."""
+    from neural_trade.losses.functions import _safe_std
+
+    rng = np.random.default_rng(23)
+    x = tf.constant(rng.normal(0.0, 1.0, size=(64,)).astype(np.float32))
+    np.testing.assert_array_equal(_safe_std(x).numpy(), tf.math.reduce_std(x).numpy())
+    x2 = tf.constant(rng.normal(0.0, 1.0, size=(64, 3)).astype(np.float32))
+    np.testing.assert_array_equal(_safe_std(x2, axis=1).numpy(), tf.math.reduce_std(x2, axis=1).numpy())
+
+
+def test_coherence_penalty_is_exactly_the_magnitude_ordering_term(make_loss_model):
+    """NT-096 acceptance (2), repair round 2 (c): with `Config.COHERENCE_MAGNITUDE_ONLY=True`,
+    coherence's logged contribution equals the magnitude-ordering term alone
+    (`relu(|p0|-|p1|) + relu(|p1|-|p2|)`, batch mean, /3 - the old three-term average's weight
+    on this term) - the only part of the old three-term average with a non-zero gradient. The
+    default (False) keeps today's three-term value; see the switch comparison below."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(COHERENCE_MAGNITUDE_ONLY=True))
+    rng = np.random.default_rng(24)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price, dirs, var = _heads(rng)
+    out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+
+    abs0, abs1, abs2 = (tf.abs(tf.squeeze(p, axis=1)) for p in price)
+    expected = tf.reduce_mean(tf.nn.relu(abs0 - abs1) + tf.nn.relu(abs1 - abs2)) / 3.0
+    np.testing.assert_allclose(float(out.coherence_penalty_val), float(expected), rtol=1e-6)
+
+
+def test_coherence_default_is_the_three_term_value_not_magnitude_only(make_loss_model):
+    """NT-096 repair round 2: `Config.COHERENCE_MAGNITUDE_ONLY` defaults to False, which must
+    stay today's exact three-term coherence_penalty (dir_disagree_loss + magnitude_loss +
+    target_smoothness_loss) / 3 - NOT the magnitude-only form - so a real run's served epoch,
+    EarlyStopping and ReduceLROnPlateau are untouched at the default (QA of repair round 1:
+    dir_disagree_loss's value depends on the weights and is not a per-batch constant)."""
+    from neural_trade.core.config import Config
+
+    assert Config().COHERENCE_MAGNITUDE_ONLY is False
+    m = make_loss_model()  # COHERENCE_MAGNITUDE_ONLY left at its default
+    rng = np.random.default_rng(24)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price, dirs, var = _heads(rng)
+    out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+
+    p0, p1, p2 = (tf.squeeze(p, axis=1) for p in price)
+    sign0, sign1, sign2 = tf.sign(p0), tf.sign(p1), tf.sign(p2)
+    agree01 = tf.reduce_mean(tf.cast(tf.equal(sign0, sign1), tf.float32))
+    agree12 = tf.reduce_mean(tf.cast(tf.equal(sign1, sign2), tf.float32))
+    dir_disagree_loss = 1.0 - (agree01 + agree12) / 2.0
+
+    y_true_raw = y * m.pred_scale + m.pred_mean  # custom_loss's own raw-units transform
+    y_true_raw_h0, y_true_raw_h1, y_true_raw_h2 = y_true_raw[:, 0], y_true_raw[:, 1], y_true_raw[:, 2]
+    sign_t0, sign_t1, sign_t2 = (tf.sign(t) for t in (y_true_raw_h0, y_true_raw_h1, y_true_raw_h2))
+    target_smoothness_loss = tf.reduce_mean(tf.cast(
+        tf.math.logical_xor(sign_t1 == sign_t0, sign_t1 == sign_t2), tf.float32))
+
+    abs0, abs1, abs2 = tf.abs(p0), tf.abs(p1), tf.abs(p2)
+    magnitude_loss = tf.reduce_mean(tf.nn.relu(abs0 - abs1) + tf.nn.relu(abs1 - abs2))
+
+    expected = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
+    np.testing.assert_allclose(float(out.coherence_penalty_val), float(expected), rtol=1e-6)
+    # sanity: this is NOT the magnitude-only value (dir_disagree/target_smoothness are non-zero here)
+    assert abs(float(out.coherence_penalty_val) - float(magnitude_loss) / 3.0) > 1e-6
+
+
+def test_coherence_dead_parts_removal_does_not_change_any_gradient(make_loss_model):
+    """NT-096 acceptance (2), repair round 2 (b): dir_disagree_loss (`tf.sign`/`tf.equal`, both
+    non-differentiable) and target_smoothness_loss (reads only the labels) are the two
+    sub-terms `Config.COHERENCE_MAGNITUDE_ONLY=True` drops from coherence_penalty; both have
+    ZERO gradient everywhere, so comparing the two switch settings through the actual model's
+    `custom_loss`, on the SAME fixed batch and heads, shows the gradients on every price head
+    are bit-for-bit identical - only the forward value (dir_disagree_loss's weight-dependent,
+    non-constant contribution plus target_smoothness_loss's label-constant one) differs."""
+    from neural_trade.core.config import Config
+
+    rng = np.random.default_rng(25)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price0, dirs, var = _heads(np.random.default_rng(26))
+    price_false = [tf.Variable(p.numpy()) for p in price0]
+    price_true = [tf.Variable(p.numpy()) for p in price0]  # identical starting values
+
+    m_false = make_loss_model(config=Config(COHERENCE_MAGNITUDE_ONLY=False))
+    m_true = make_loss_model(config=Config(COHERENCE_MAGNITUDE_ONLY=True))
+
+    with tf.GradientTape() as tape_false:
+        out_false = m_false.custom_loss(x, y, _y_pred(price_false, dirs, var), lc, ext)
+        coherence_false = out_false.coherence_penalty_val
+    with tf.GradientTape() as tape_true:
+        out_true = m_true.custom_loss(x, y, _y_pred(price_true, dirs, var), lc, ext)
+        coherence_true = out_true.coherence_penalty_val
+
+    g_false = tape_false.gradient(coherence_false, price_false)
+    g_true = tape_true.gradient(coherence_true, price_true)
+    for gf, gt in zip(g_false, g_true):
+        np.testing.assert_array_equal(gf.numpy(), gt.numpy())
+    # the forward values differ: the two dropped terms contributed a non-zero offset
+    assert abs(float(coherence_false) - float(coherence_true)) > 1e-6

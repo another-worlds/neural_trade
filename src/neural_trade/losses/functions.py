@@ -39,6 +39,10 @@ MASK_TERM_NAMES = (
     "head_dir_h0", "head_dir_h1", "head_dir_h2",
     "head_var_h0", "head_var_h1", "head_var_h2",
     "point_loss_h0", "point_loss_h1", "point_loss_h2",
+    # dir_disagree_loss/target_smoothness_loss (NT-096): kept unconditionally, even though
+    # Config.COHERENCE_MAGNITUDE_ONLY=True skips computing both - this tuple is built once,
+    # independently of that config value, so the names must stay static; when skipped their
+    # counters simply read 0 rather than being dropped.
     "dir_disagree_loss", "magnitude_loss", "target_smoothness_loss",
     "dir_loss_h0", "dir_loss_h1", "dir_loss_h2",
     "nll_h0", "nll_h1", "nll_h2",
@@ -93,6 +97,49 @@ def _finite_or_zero(model, x, term, fallback=0.0):
     if bool(getattr(getattr(model, "config", None), "STRICT_LOSS_MASKS", False)):
         return x
     return tf.where(finite, x, tf.ones_like(x) * fallback)
+
+
+#: Added to the variance before its square root in :func:`_safe_std` (NT-096, D-045,
+#: ``docs/research/2026-09-30-math-report/A_losses.md`` section 3). ``tf.math.reduce_std`` is
+#: ``sqrt(reduce_variance(x))`` with no guard: ``d/dvar sqrt(var) = 1 / (2*sqrt(var))`` is
+#: infinite at ``var = 0``, so a batch (or, for an axis-1 reduction, one example's horizons)
+#: that is exactly constant gives an infinite upstream gradient - a NaN training step hidden by
+#: the ``_finite_or_zero`` guards above and never actually observed, because a real batch is
+#: never perfectly constant. 1e-12 is far below float32's representable precision at the
+#: variances these losses see in practice (>= ~1e-4: ``x + 1e-12 == x`` there in float32), so it
+#: changes no normal run's forward value or gradient (``scripts/golden_run.py verify``); it only
+#: bounds the gradient at the degenerate point the fix targets.
+_STD_EPS = tf.constant(1e-12, dtype=tf.float32)
+
+
+def _safe_std(x, axis=None):
+    """A gradient-safe ``tf.math.reduce_std`` (see ``_STD_EPS``).
+
+    Every call site below used to add its own small eps AFTER the square root (to keep a
+    denominator off exactly zero); that does nothing for the gradient, since the derivative of
+    ``sqrt`` is taken at the UNGUARDED variance. The guard has to be on the variance, before the
+    ``sqrt``.
+    """
+    variance = tf.math.reduce_variance(tf.cast(x, tf.float32), axis=axis)
+    return tf.sqrt(variance + _STD_EPS)
+
+
+def _std(model, x, axis=None):
+    """``tf.math.reduce_std``, or :func:`_safe_std` when ``Config.LOSS_SAFE_STD`` is set
+    (NT-096 repair round 1, D-045).
+
+    A trace-time Python branch, NOT a ``tf.cond`` - same reasoning as ``STRICT_LOSS_MASKS``
+    (``_finite_or_zero``'s docstring): wrapping these call sites in a ``tf.cond``, even one whose
+    predicate never changes, was found (via ``scripts/golden_run.py verify``) to change a real
+    run's trajectory through CPU floating-point reduction-order sensitivity, not through any
+    value or gradient difference. ``False`` (the default) is bit-for-bit today's graph - no
+    ``reduce_variance``/``sqrt(+eps)`` node is even built. ``True`` (``Config.LOSS_SAFE_STD``)
+    swaps in the gradient-safe form; see its field docstring for which terms this actually
+    protects against an observable NaN versus an unbounded-but-finite gradient.
+    """
+    if bool(getattr(getattr(model, "config", None), "LOSS_SAFE_STD", False)):
+        return _safe_std(x, axis=axis)
+    return tf.math.reduce_std(x, axis=axis)
 
 
 def _logcosh_safe(x):
@@ -428,7 +475,7 @@ def vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac=None):
     p2 = tf.cast(tf.squeeze(price_h2, axis=1), tf.float32)
 
     stacked = tf.stack([p0, p1, p2], axis=1)                   # [B, 3]
-    cross_std = tf.math.reduce_std(stacked, axis=1)             # [B]
+    cross_std = _std(model, stacked, axis=1)                   # [B] (NT-096: gradient-safe when LOSS_SAFE_STD)
     violation = tf.nn.relu(cross_std - lv)
     mean_viol = tf.reduce_mean(violation)
 
@@ -461,7 +508,7 @@ def hyper_decoherence_coupling_loss(model, x_window, var_h0, var_h1, var_h2):
     """
     eps = tf.constant(1e-3, dtype=tf.float32)
     x = tf.cast(x_window, tf.float32)                                  # [B, LOOKBACK]
-    local_vol = tf.stop_gradient(tf.math.reduce_std(x, axis=1))         # [B]
+    local_vol = tf.stop_gradient(_std(model, x, axis=1))                # [B]
     log_vol = tf.math.log(local_vol + eps)
 
     v0 = tf.cast(tf.squeeze(var_h0, axis=1), tf.float32)
@@ -470,7 +517,7 @@ def hyper_decoherence_coupling_loss(model, x_window, var_h0, var_h1, var_h2):
     log_var = tf.math.log((v0 + v1 + v2) / 3.0 + eps)                   # [B]
 
     def _z(a):
-        return (a - tf.reduce_mean(a)) / (tf.math.reduce_std(a) + eps)
+        return (a - tf.reduce_mean(a)) / (_std(model, a) + eps)  # NT-096: eps guards the sqrt when LOSS_SAFE_STD
 
     pearson = tf.reduce_mean(_z(log_vol) * _z(log_var))
     return 1.0 - pearson
@@ -505,8 +552,8 @@ def information_flow_entropy_loss(model, price_h0, price_h1, price_h2, rho_max=N
         ma = a - tf.reduce_mean(a)
         mb = b - tf.reduce_mean(b)
         cov = tf.reduce_mean(ma * mb)
-        std_a = tf.math.reduce_std(a) + eps
-        std_b = tf.math.reduce_std(b) + eps
+        std_a = _std(model, a) + eps  # NT-096: eps guards the sqrt when LOSS_SAFE_STD
+        std_b = _std(model, b) + eps
         return cov / (std_a * std_b)
 
     r01 = _pearson(p0, p1)
@@ -639,15 +686,30 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     trend_loss_h1 = ext1
     trend_loss_h2 = ext2
 
-    sign_pred_h0 = tf.sign(price_h0)
-    sign_pred_h1 = tf.sign(price_h1)
-    sign_pred_h2 = tf.sign(price_h2)
-
-    dir_agree_h01 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h0, sign_pred_h1), tf.float32))
-    dir_agree_h12 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h1, sign_pred_h2), tf.float32))
-    dir_disagree_loss = 1.0 - (dir_agree_h01 + dir_agree_h12) / 2.0
-    dir_disagree_loss = _finite_or_zero(model, dir_disagree_loss, "dir_disagree_loss")
-
+    # Coherence averages three sub-terms. Two of them have ZERO GRADIENT everywhere
+    # (NT-096, D-045, A_losses.md section 8):
+    #   * dir_disagree_loss compares tf.sign(price_h*) across horizons with tf.equal - both
+    #     non-differentiable (tf.sign's gradient is 0 a.e., tf.equal/tf.cast have none at all),
+    #     so it can never receive or pass a gradient to the price heads. Its VALUE, though, is
+    #     NOT a per-batch constant: it depends on the price heads' sign agreement, which moves
+    #     as the weights train (QA of repair round 1: its own val_loss contribution moved from
+    #     0.2197 to 0.1793 between the two golden-run epochs - a real run's epoch-to-epoch
+    #     val_loss gaps near the best epoch are about 0.06, so dropping this term CAN change
+    #     which epoch is served, D-011, and ReduceLROnPlateau/EarlyStopping's state).
+    #   * target_smoothness_loss reads only tf.sign(y_true_raw_h*) - the LABELS, which are a
+    #     true per-batch constant as far as the model's trainable variables are concerned, so
+    #     it is both zero-gradient and value-constant across weight updates (within a batch).
+    # Removing dir_disagree_loss is therefore a value-moving change (even though it moves no
+    # gradient): D-045 ships it behind Config.COHERENCE_MAGNITUDE_ONLY (default False = today's
+    # exact three-term graph, bit-for-bit), chosen at trace time in Python, not a tf.cond (same
+    # reasoning as LOSS_SAFE_STD's docstring). True drops both dead terms and keeps only
+    # magnitude_loss (the ordering hinge on |price_h0| <= |price_h1| <= |price_h2|), still /3.0
+    # (the old three-term average's weight on it), so that path's own gradient is unchanged too
+    # (tests/test_custom_loss.py::test_coherence_dead_parts_removal_does_not_change_any_gradient
+    # compares both switch settings' gradients on a fixed batch). MASK_TERM_NAMES keeps
+    # "dir_disagree_loss"/"target_smoothness_loss" unconditionally (the counters dict is built
+    # once, independently of this config value); when True they are simply never touched, so
+    # they read 0 rather than being dropped.
     abs_pred_h0 = tf.abs(price_h0)
     abs_pred_h1 = tf.abs(price_h1)
     abs_pred_h2 = tf.abs(price_h2)
@@ -657,16 +719,28 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     magnitude_loss = tf.reduce_mean(magnitude_h01_violation + magnitude_h12_violation)
     magnitude_loss = _finite_or_zero(model, magnitude_loss, "magnitude_loss")
 
-    sign_target_h0 = tf.sign(y_true_raw_h0)
-    sign_target_h1 = tf.sign(y_true_raw_h1)
-    sign_target_h2 = tf.sign(y_true_raw_h2)
-    target_smoothness_loss = tf.reduce_mean(
-        tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0,
-                                     sign_target_h1 == sign_target_h2), tf.float32)
-    )
-    target_smoothness_loss = _finite_or_zero(model, target_smoothness_loss, "target_smoothness_loss")
+    if bool(getattr(getattr(model, "config", None), "COHERENCE_MAGNITUDE_ONLY", False)):
+        coherence_penalty = magnitude_loss / 3.0
+    else:
+        sign_pred_h0 = tf.sign(price_h0)
+        sign_pred_h1 = tf.sign(price_h1)
+        sign_pred_h2 = tf.sign(price_h2)
 
-    coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
+        dir_agree_h01 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h0, sign_pred_h1), tf.float32))
+        dir_agree_h12 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h1, sign_pred_h2), tf.float32))
+        dir_disagree_loss = 1.0 - (dir_agree_h01 + dir_agree_h12) / 2.0
+        dir_disagree_loss = _finite_or_zero(model, dir_disagree_loss, "dir_disagree_loss")
+
+        sign_target_h0 = tf.sign(y_true_raw_h0)
+        sign_target_h1 = tf.sign(y_true_raw_h1)
+        sign_target_h2 = tf.sign(y_true_raw_h2)
+        target_smoothness_loss = tf.reduce_mean(
+            tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0,
+                                         sign_target_h1 == sign_target_h2), tf.float32)
+        )
+        target_smoothness_loss = _finite_or_zero(model, target_smoothness_loss, "target_smoothness_loss")
+
+        coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
     coherence_penalty = _finite_or_zero(model, coherence_penalty, "coherence_penalty")
 
     # Assign from the registered calls above (scaled correctly, using fixed delta math).
@@ -769,8 +843,8 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
 
     actual_trend = y_true[:, 1]
     pred_trend_scaled = tf.squeeze(price_h1, axis=1)
-    actual_std = tf.math.reduce_std(actual_trend)
-    pred_std = tf.math.reduce_std(pred_trend_scaled)
+    actual_std = _std(model, actual_trend)
+    pred_std = _std(model, pred_trend_scaled)  # NT-096: finite gradient when price_h1 is batch-constant (if LOSS_SAFE_STD)
     vol_diff = tf.abs(pred_std - actual_std)
     vol_diff_clipped = tf.minimum(vol_diff, 10.0)
     vol_loss = vol_diff_clipped * model.lambda_vol

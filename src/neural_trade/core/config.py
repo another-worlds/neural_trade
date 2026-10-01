@@ -530,6 +530,50 @@ class Config:
         "being silently zeroed (D-026, NT-036). False (default) is today's behaviour, bit-for-bit "
         "(scripts/golden_run.py verify). True is for the CI stability tests and any run that "
         "wants a loud failure instead of a silent zero.", unit="flag")
+    LOSS_SAFE_STD: bool = _f(
+        False, "stability",
+        "guard every batch std inside the loss (vacuum_bandwidth_loss, hyper_decoherence_"
+        "coupling_loss, information_flow_entropy_loss, vol_loss) with sqrt(variance + 1e-12) "
+        "instead of tf.math.reduce_std's unguarded sqrt(variance) (NT-096, D-045, A_losses.md "
+        "section 3). tf.math.reduce_std differentiates sqrt at the raw variance: d/dvar "
+        "sqrt(var) = 1/(2*sqrt(var)) is infinite at var = 0, so a batch-constant head gives an "
+        "infinite (NaN after the division) gradient. Confirmed by direct probe: only vol_loss "
+        "(a plain function of std, abs(pred_std - actual_std)) produces an observable NaN "
+        "gradient at the exact degenerate point; hyper_decoherence_coupling_loss and "
+        "information_flow_entropy_loss are quotients ((a-mean(a))/std(a)) whose numerator is "
+        "also exactly 0 there, which cancels the NaN algebraically, and vacuum_bandwidth_loss's "
+        "relu(cross_std - lambda_vac) has zero local gradient away from its kink - but all three "
+        "still have an UNBOUNDED (though finite) gradient arbitrarily close to that point, which "
+        "this guard also bounds. False (default) is today's behaviour, bit-for-bit "
+        "(scripts/golden_run.py verify): chosen at trace time in Python, not a tf.cond, because "
+        "wrapping these call sites even in a structurally inert tf.cond was found to measurably "
+        "change a real run's trajectory (the same CPU floating-point reduction-order sensitivity "
+        "documented for STRICT_LOSS_MASKS/NT-037's guard sites). True adopts the guard; the "
+        "golden run then diverges from the False baseline starting at the first affected "
+        "gradient (confirmed: identical divergence whether the added epsilon is 1e-12 or 0.0, "
+        "i.e. the cause is the extra graph node, not the guard's value) - a later study (batched "
+        "with NT-099) may adopt True as the default once judged under D-025.", unit="flag")
+    COHERENCE_MAGNITUDE_ONLY: bool = _f(
+        False, "stability",
+        "coherence_penalty keeps only the magnitude-ordering sub-term (NT-096 repair round 2, "
+        "D-045), dropping dir_disagree_loss and target_smoothness_loss. Both are zero-gradient "
+        "everywhere (dir_disagree_loss compares tf.sign(price_h*) with tf.equal, both "
+        "non-differentiable; target_smoothness_loss reads only the labels' tf.sign), so dropping "
+        "them changes no gradient - but dir_disagree_loss's VALUE is NOT a per-batch constant: "
+        "it depends on the price heads' sign agreement and moves as the weights train (QA of "
+        "repair round 1: its own val_loss contribution moved from 0.2197 to 0.1793 between the "
+        "golden run's two epochs, against a real 20-epoch run's near-best-epoch val_loss gaps of "
+        "about 0.06), so it can change the served epoch (D-011), EarlyStopping and "
+        "ReduceLROnPlateau on a real run. target_smoothness_loss alone IS a true per-batch "
+        "constant (labels only). False (default) is today's exact three-term graph, bit-for-bit "
+        "(scripts/golden_run.py verify): chosen at trace time in Python, not a tf.cond (same "
+        "reasoning as LOSS_SAFE_STD). True computes only magnitude_loss, still divided by 3.0 "
+        "(the old three-term average's weight on it, so this path's own gradient is also "
+        "unchanged from the three-term form - tests/test_custom_loss.py::"
+        "test_coherence_dead_parts_removal_does_not_change_any_gradient compares both settings); "
+        "the dropped terms' mask counters (MASK_TERM_NAMES is static either way) simply read 0 "
+        "instead of being removed. A later study (batched with NT-099) may adopt True as the "
+        "default once judged under D-025.", unit="flag")
     PROBE_GRADIENTS: bool = _f(
         False, "stability",
         "per-loss-term gradient probe (NT-037, D-026 'about 10%'): every PROBE_EVERY training "
