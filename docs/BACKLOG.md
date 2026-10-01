@@ -1033,8 +1033,7 @@ changes).
 
 **Same-seed runs differ at epoch 0 with op determinism on: find and fix the source**
 
-- **status:** in-progress (2026-10-01): CPU part done, QA (Opus) PASS on 90d79bb, merged: screen mode was non-reproducible because (a) training/reset.py keyed each stochastic layer's seed on its Keras auto-name (a per-process counter: 7 of 12 generators changed seed between builds) and (b) screen.py never set the arithmetic rewrite; both fixes needed (bisection: base 7.6811 vs 8.0246, reset only 8.08085 vs 8.08021, both bit-equal); default training path golden-equal (reset_stateful_rngs is screen-only); the main CPU trainer was already reproducible (the new test passes at base). NOT explained: NT-035's GPU epoch-0 divergence (separate processes, main trainer). Open: the experimenter's GPU check (3 separate-process seed-777 runs in the deterministic mode at the merged head; if they differ, bisect cuDNN GRU vs plain GRU, stateful dropout via SEEDED_STOCHASTIC_LAYERS, CPU/XLA-pinned ops, tf.data order), then (3). P3: custom_model.py:40-45 docstring still says seeds come from the position in model.submodules.
-- **priority / type / role:** P1 / bug / implementer
+- **status:** in-progress (2026-10-01): CPU part merged (d71e3b4; screen-mode RNG keyed on Keras auto-names + arithmetic rewrite). GPU check done (runs/experiments/nt074_gpu_check/REPORT.md, 0.26 GPU-hours, merged): with seed 777 and the deterministic mode, 3 separate processes give val_loss 9.5906 / 9.7052 / 9.6122 at epoch 0 (SEEDED_STOCHASTIC_LAYERS on: still different); with the GRU forced off cuDNN (unroll=True, the same maths) 9.57204818725586 x3, bit for bit. Source: TF 2.10's enable_op_determinism does not cover the cuDNN-fused GRU kernel. (3): full GPU reproducibility is possible off cuDNN, at an estimated 1.2-1.4x step cost (rough). The fix is NT-114; this item closes when NT-114 is merged and its GPU check passes.
 - **area:** src/neural_trade/utils/seeding.py, the data pipeline (tf.data shuffle and map), models/layers/vacuum_saturation_noise.py, training/trainer.py, tests/
 - **why:** NT-035 (2026-09-29): three runs with seed 777 and op determinism on (TF_DETERMINISTIC_OPS=1 plus enable_op_determinism) gave val_loss 9.5673 / 9.6394 / 9.6603 at epoch 0 on the GPU; no op raised. D-025 assumes a deterministic mode makes comparison studies reproducible; it does not yet, so paired studies must use several seeds. Candidates: PYTHONHASHSEED unset on this path, the tf.data shuffle or parallel map order, the vacuum-noise layer's random numbers, CPU-pinned ops.
 - **acceptance:** (1) The source is identified with evidence (a CPU test and, by the experimenter, a short GPU check). (2) Two same-seed runs in the deterministic mode give identical val_loss per epoch on the CPU (test) and, if the source is fixable on the GPU, on the GPU (3 runs, recorded). (3) If full GPU reproducibility is impossible in TF 2.10, the item records why and DECISIONS gets a corrected reading of D-025. (4) Speed unchanged (D-018); fast suite and ruff pass.
@@ -1330,7 +1329,7 @@ changes).
 
 **Pre-registered A/B: the NLL tail (lower variance weight, Student-t NLL)**
 
-- **status:** todo
+- **status:** in-progress (2026-10-01): (1) code merged a24f52f: NLL_KIND gaussian|student_t, NLL_STUDENT_DOF (default 5, > 2); the variance head keeps Var[Y|x] (scale^2 = var (dof-2)/dof), so served variance, conformal and CRPS are unchanged; QA PASS on 0a0e17b (scipy t.logpdf match to 1.6e-7; at |e| = 1e3 sigma the gradient is 9.4e-5 vs gaussian 15.6; dof 1e6 = gaussian; golden equal); integration: fast 1879, slow 30, stability 11, ruff clean. (2)-(3) the SPEC and A/B wait for NT-099's verdict (owner question 9). SPEC note: the student_t arm with dof 4-7.
 - **priority / type / role:** P2 / research / experimenter
 - **area:** runs/experiments/nll_tail_v1/; src/neural_trade/losses/functions.py (NLL_KIND option), src/neural_trade/core/config.py, tests/ (through an implementer sub-item)
 - **depends on:** NT-099
@@ -1494,6 +1493,18 @@ changes).
 - **why:** QA of NT-040 (09bdbc3): BacktestConfig.minutes_per_year is still accepted by build_backtest_config (CLI --params, explorer costs) but ignored since NT-040 (a silent change; no stored run or config ever set it: 90/90 stored values are 525,600), and scorer.py:144 prints it as the annualisation basis; fit_and_backtest(bar_minutes=1.0) has a silent 1-minute default that the presentation extractors, save_candidates.py and several runs/experiments scripts rely on (correct today on 1-minute runs, sqrt(k) too high on a k-minute run).
 - **acceptance:** (1) minutes_per_year is refused with a clear error naming periods_per_year and the calendar (or removed with D-029 evidence; its asdict key in stored backtest.json files stays readable). (2) fit_and_backtest has no bar_minutes default: every caller passes it, the live ones from the run's stored bar_minutes (load_block); test. (3) The CLI and explorer tests assert the Sharpe identity, not only bar_minutes == 5. (4) 1-minute outputs byte-identical (the QA's before/after rescore of runs/scenarios/reference_default, sha256 fc1bad3f...66b6); fast suite, ruff.
 - **source:** QA of NT-040 (D:/nt_qa/nt040/)
+
+### NT-114
+
+**A deterministic GRU path for comparison studies (DETERMINISTIC_GRU)**
+
+- **status:** in-progress (2026-10-01): implementer
+- **priority / type / role:** P1 / feature / implementer, then experimenter
+- **area:** src/neural_trade/core/config.py, src/neural_trade/models/gru_attention.py, src/neural_trade/models/gru_small.py (and any other recurrent builder), src/neural_trade/training/trainer.py (only if a hook is needed), tests/
+- **depends on:** NT-074 (GPU check)
+- **why:** NT-074's GPU check: the cuDNN-fused GRU kernel is the only source of same-seed GPU divergence in the deterministic mode; unroll=True gives bit-equal runs across processes. D-025's deterministic mode for comparison studies needs it.
+- **acceptance:** (1) Config DETERMINISTIC_GRU (default False): every recurrent layer built off cuDNN with the same maths and weights layout (test). (2) Default unchanged (golden run; legacy bundles load). (3) Switch on vs off with identical weights: the same forward outputs within float tolerance (test). (4) CPU step time off vs on reported; then the experimenter: 3 separate-process GPU runs, seed 777, deterministic mode + DETERMINISTIC_GRU, 3 epochs, bit-equal val_loss per epoch, and the GPU sec_per_step cost (D-018: an opt-in path, reported, not gated). (5) Fast suite, stability, ruff.
+- **source:** runs/experiments/nt074_gpu_check/REPORT.md
 
 
 Items closed at earlier milestone reviews: the remediation plan's phases 0, A (M1, M2, M4), B and C, and
