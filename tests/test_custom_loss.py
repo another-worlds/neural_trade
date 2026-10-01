@@ -408,11 +408,14 @@ def test_safe_std_matches_reduce_std_away_from_zero_variance(tf):
 
 
 def test_coherence_penalty_is_exactly_the_magnitude_ordering_term(make_loss_model):
-    """NT-096 acceptance (2): coherence's logged contribution equals the magnitude-ordering
-    term alone (`relu(|p0|-|p1|) + relu(|p1|-|p2|)`, batch mean, /3 - the old three-term average's
-    weight on this term, kept so the fix changes no gradient, see the dead-parts test below) -
-    the only part of the old three-term average with a non-zero gradient."""
-    m = make_loss_model()
+    """NT-096 acceptance (2), repair round 2 (c): with `Config.COHERENCE_MAGNITUDE_ONLY=True`,
+    coherence's logged contribution equals the magnitude-ordering term alone
+    (`relu(|p0|-|p1|) + relu(|p1|-|p2|)`, batch mean, /3 - the old three-term average's weight
+    on this term) - the only part of the old three-term average with a non-zero gradient. The
+    default (False) keeps today's three-term value; see the switch comparison below."""
+    from neural_trade.core.config import Config
+
+    m = make_loss_model(config=Config(COHERENCE_MAGNITUDE_ONLY=True))
     rng = np.random.default_rng(24)
     x, y, lc, ext = _batch(rng, 110_000.0)
     price, dirs, var = _heads(rng)
@@ -423,47 +426,71 @@ def test_coherence_penalty_is_exactly_the_magnitude_ordering_term(make_loss_mode
     np.testing.assert_allclose(float(out.coherence_penalty_val), float(expected), rtol=1e-6)
 
 
-def test_coherence_dead_parts_removal_does_not_change_any_gradient(tf):
-    """NT-096 acceptance (2): dir_disagree_loss (`tf.sign`/`tf.equal`, both non-differentiable)
-    and target_smoothness_loss (reads only the labels - a constant w.r.t. the model's trainable
-    variables) are the two removed sub-terms of the old `coherence_penalty =
-    (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3`. Reimplementing the old
-    formula here and comparing its gradient to the new one's, on the SAME fixed batch of price
-    heads, shows the gradients are bit-for-bit identical - only the forward value (the constant
-    offset the removed terms added) differs."""
+def test_coherence_default_is_the_three_term_value_not_magnitude_only(make_loss_model):
+    """NT-096 repair round 2: `Config.COHERENCE_MAGNITUDE_ONLY` defaults to False, which must
+    stay today's exact three-term coherence_penalty (dir_disagree_loss + magnitude_loss +
+    target_smoothness_loss) / 3 - NOT the magnitude-only form - so a real run's served epoch,
+    EarlyStopping and ReduceLROnPlateau are untouched at the default (QA of repair round 1:
+    dir_disagree_loss's value depends on the weights and is not a per-batch constant)."""
+    from neural_trade.core.config import Config
+
+    assert Config().COHERENCE_MAGNITUDE_ONLY is False
+    m = make_loss_model()  # COHERENCE_MAGNITUDE_ONLY left at its default
+    rng = np.random.default_rng(24)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price, dirs, var = _heads(rng)
+    out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+
+    p0, p1, p2 = (tf.squeeze(p, axis=1) for p in price)
+    sign0, sign1, sign2 = tf.sign(p0), tf.sign(p1), tf.sign(p2)
+    agree01 = tf.reduce_mean(tf.cast(tf.equal(sign0, sign1), tf.float32))
+    agree12 = tf.reduce_mean(tf.cast(tf.equal(sign1, sign2), tf.float32))
+    dir_disagree_loss = 1.0 - (agree01 + agree12) / 2.0
+
+    y_true_raw = y * m.pred_scale + m.pred_mean  # custom_loss's own raw-units transform
+    y_true_raw_h0, y_true_raw_h1, y_true_raw_h2 = y_true_raw[:, 0], y_true_raw[:, 1], y_true_raw[:, 2]
+    sign_t0, sign_t1, sign_t2 = (tf.sign(t) for t in (y_true_raw_h0, y_true_raw_h1, y_true_raw_h2))
+    target_smoothness_loss = tf.reduce_mean(tf.cast(
+        tf.math.logical_xor(sign_t1 == sign_t0, sign_t1 == sign_t2), tf.float32))
+
+    abs0, abs1, abs2 = tf.abs(p0), tf.abs(p1), tf.abs(p2)
+    magnitude_loss = tf.reduce_mean(tf.nn.relu(abs0 - abs1) + tf.nn.relu(abs1 - abs2))
+
+    expected = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
+    np.testing.assert_allclose(float(out.coherence_penalty_val), float(expected), rtol=1e-6)
+    # sanity: this is NOT the magnitude-only value (dir_disagree/target_smoothness are non-zero here)
+    assert abs(float(out.coherence_penalty_val) - float(magnitude_loss) / 3.0) > 1e-6
+
+
+def test_coherence_dead_parts_removal_does_not_change_any_gradient(make_loss_model):
+    """NT-096 acceptance (2), repair round 2 (b): dir_disagree_loss (`tf.sign`/`tf.equal`, both
+    non-differentiable) and target_smoothness_loss (reads only the labels) are the two
+    sub-terms `Config.COHERENCE_MAGNITUDE_ONLY=True` drops from coherence_penalty; both have
+    ZERO gradient everywhere, so comparing the two switch settings through the actual model's
+    `custom_loss`, on the SAME fixed batch and heads, shows the gradients on every price head
+    are bit-for-bit identical - only the forward value (dir_disagree_loss's weight-dependent,
+    non-constant contribution plus target_smoothness_loss's label-constant one) differs."""
+    from neural_trade.core.config import Config
+
     rng = np.random.default_rng(25)
-    price_h0 = tf.Variable(rng.normal(0.0, 1.0, size=(B, 1)).astype(np.float32))
-    price_h1 = tf.Variable(rng.normal(0.0, 1.0, size=(B, 1)).astype(np.float32))
-    price_h2 = tf.Variable(rng.normal(0.0, 1.0, size=(B, 1)).astype(np.float32))
-    y_true_raw_h0 = tf.constant(rng.normal(0.0, 50.0, size=(B,)).astype(np.float32))
-    y_true_raw_h1 = tf.constant(rng.normal(0.0, 50.0, size=(B,)).astype(np.float32))
-    y_true_raw_h2 = tf.constant(rng.normal(0.0, 50.0, size=(B,)).astype(np.float32))
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price0, dirs, var = _heads(np.random.default_rng(26))
+    price_false = [tf.Variable(p.numpy()) for p in price0]
+    price_true = [tf.Variable(p.numpy()) for p in price0]  # identical starting values
 
-    def _magnitude_loss():
-        abs0, abs1, abs2 = tf.abs(price_h0), tf.abs(price_h1), tf.abs(price_h2)
-        return tf.reduce_mean(tf.nn.relu(abs0 - abs1) + tf.nn.relu(abs1 - abs2))
+    m_false = make_loss_model(config=Config(COHERENCE_MAGNITUDE_ONLY=False))
+    m_true = make_loss_model(config=Config(COHERENCE_MAGNITUDE_ONLY=True))
 
-    def _new_coherence():
-        return _magnitude_loss() / 3.0  # the production formula (functions.py)
+    with tf.GradientTape() as tape_false:
+        out_false = m_false.custom_loss(x, y, _y_pred(price_false, dirs, var), lc, ext)
+        coherence_false = out_false.coherence_penalty_val
+    with tf.GradientTape() as tape_true:
+        out_true = m_true.custom_loss(x, y, _y_pred(price_true, dirs, var), lc, ext)
+        coherence_true = out_true.coherence_penalty_val
 
-    def _old_coherence():
-        sign0, sign1, sign2 = tf.sign(price_h0), tf.sign(price_h1), tf.sign(price_h2)
-        agree01 = tf.reduce_mean(tf.cast(tf.equal(sign0, sign1), tf.float32))
-        agree12 = tf.reduce_mean(tf.cast(tf.equal(sign1, sign2), tf.float32))
-        dir_disagree_loss = 1.0 - (agree01 + agree12) / 2.0
-
-        sign_t0, sign_t1, sign_t2 = (tf.sign(t) for t in (y_true_raw_h0, y_true_raw_h1, y_true_raw_h2))
-        target_smoothness_loss = tf.reduce_mean(tf.cast(
-            tf.math.logical_xor(sign_t1 == sign_t0, sign_t1 == sign_t2), tf.float32))
-
-        return (dir_disagree_loss + _magnitude_loss() + target_smoothness_loss) / 3.0
-
-    with tf.GradientTape(persistent=True) as tape:
-        old = _old_coherence()
-        new = _new_coherence()
-    g_old = tape.gradient(old, [price_h0, price_h1, price_h2])
-    g_new = tape.gradient(new, [price_h0, price_h1, price_h2])
-    for go, gn in zip(g_old, g_new):
-        np.testing.assert_array_equal(go.numpy(), gn.numpy())
-    # the forward values differ: the two removed terms contributed a non-zero constant offset
-    assert abs(float(old) - float(new)) > 1e-6
+    g_false = tape_false.gradient(coherence_false, price_false)
+    g_true = tape_true.gradient(coherence_true, price_true)
+    for gf, gt in zip(g_false, g_true):
+        np.testing.assert_array_equal(gf.numpy(), gt.numpy())
+    # the forward values differ: the two dropped terms contributed a non-zero offset
+    assert abs(float(coherence_false) - float(coherence_true)) > 1e-6

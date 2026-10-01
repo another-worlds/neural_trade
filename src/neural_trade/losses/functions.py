@@ -39,8 +39,11 @@ MASK_TERM_NAMES = (
     "head_dir_h0", "head_dir_h1", "head_dir_h2",
     "head_var_h0", "head_var_h1", "head_var_h2",
     "point_loss_h0", "point_loss_h1", "point_loss_h2",
-    "magnitude_loss",  # NT-096: coherence's other two sub-terms (dir_disagree_loss,
-                        # target_smoothness_loss) had zero gradient everywhere and are removed
+    # dir_disagree_loss/target_smoothness_loss (NT-096): kept unconditionally, even though
+    # Config.COHERENCE_MAGNITUDE_ONLY=True skips computing both - this tuple is built once,
+    # independently of that config value, so the names must stay static; when skipped their
+    # counters simply read 0 rather than being dropped.
+    "dir_disagree_loss", "magnitude_loss", "target_smoothness_loss",
     "dir_loss_h0", "dir_loss_h1", "dir_loss_h2",
     "nll_h0", "nll_h1", "nll_h2",
     # pnl_utility (NT-087) only:
@@ -683,21 +686,30 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     trend_loss_h1 = ext1
     trend_loss_h2 = ext2
 
-    # Coherence used to average three sub-terms; the other two had zero gradient everywhere
-    # (NT-096, D-045, A_losses.md section 8) and are removed, not just left unused:
-    #   * dir_disagree_loss compared tf.sign(price_h*) across horizons with tf.equal - both
+    # Coherence averages three sub-terms. Two of them have ZERO GRADIENT everywhere
+    # (NT-096, D-045, A_losses.md section 8):
+    #   * dir_disagree_loss compares tf.sign(price_h*) across horizons with tf.equal - both
     #     non-differentiable (tf.sign's gradient is 0 a.e., tf.equal/tf.cast have none at all),
-    #     so it could never receive or pass a gradient to the price heads.
-    #   * target_smoothness_loss read only tf.sign(y_true_raw_h*) - the labels, a constant as
-    #     far as the model's trainable variables are concerned - so it is exactly a per-batch
-    #     constant, again contributing nothing to any gradient.
-    # Only magnitude_loss (the ordering hinge on |price_h0| <= |price_h1| <= |price_h2|) ever
-    # moved a weight. coherence_penalty keeps the /3.0 the old three-term average applied to it,
-    # so the dead terms' removal changes the forward VALUE by exactly the constant per-batch
-    # offset they used to add, and changes NO gradient anywhere - the gradient of
-    # (dead1 + magnitude_loss + dead2) / 3 w.r.t. any price head was already exactly
-    # (d magnitude_loss) / 3, since dead1/dead2 are zero-gradient everywhere (see the docstring
-    # test, tests/test_custom_loss.py::test_coherence_dead_parts_removal_does_not_change_any_gradient).
+    #     so it can never receive or pass a gradient to the price heads. Its VALUE, though, is
+    #     NOT a per-batch constant: it depends on the price heads' sign agreement, which moves
+    #     as the weights train (QA of repair round 1: its own val_loss contribution moved from
+    #     0.2197 to 0.1793 between the two golden-run epochs - a real run's epoch-to-epoch
+    #     val_loss gaps near the best epoch are about 0.06, so dropping this term CAN change
+    #     which epoch is served, D-011, and ReduceLROnPlateau/EarlyStopping's state).
+    #   * target_smoothness_loss reads only tf.sign(y_true_raw_h*) - the LABELS, which are a
+    #     true per-batch constant as far as the model's trainable variables are concerned, so
+    #     it is both zero-gradient and value-constant across weight updates (within a batch).
+    # Removing dir_disagree_loss is therefore a value-moving change (even though it moves no
+    # gradient): D-045 ships it behind Config.COHERENCE_MAGNITUDE_ONLY (default False = today's
+    # exact three-term graph, bit-for-bit), chosen at trace time in Python, not a tf.cond (same
+    # reasoning as LOSS_SAFE_STD's docstring). True drops both dead terms and keeps only
+    # magnitude_loss (the ordering hinge on |price_h0| <= |price_h1| <= |price_h2|), still /3.0
+    # (the old three-term average's weight on it), so that path's own gradient is unchanged too
+    # (tests/test_custom_loss.py::test_coherence_dead_parts_removal_does_not_change_any_gradient
+    # compares both switch settings' gradients on a fixed batch). MASK_TERM_NAMES keeps
+    # "dir_disagree_loss"/"target_smoothness_loss" unconditionally (the counters dict is built
+    # once, independently of this config value); when True they are simply never touched, so
+    # they read 0 rather than being dropped.
     abs_pred_h0 = tf.abs(price_h0)
     abs_pred_h1 = tf.abs(price_h1)
     abs_pred_h2 = tf.abs(price_h2)
@@ -707,7 +719,28 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     magnitude_loss = tf.reduce_mean(magnitude_h01_violation + magnitude_h12_violation)
     magnitude_loss = _finite_or_zero(model, magnitude_loss, "magnitude_loss")
 
-    coherence_penalty = magnitude_loss / 3.0
+    if bool(getattr(getattr(model, "config", None), "COHERENCE_MAGNITUDE_ONLY", False)):
+        coherence_penalty = magnitude_loss / 3.0
+    else:
+        sign_pred_h0 = tf.sign(price_h0)
+        sign_pred_h1 = tf.sign(price_h1)
+        sign_pred_h2 = tf.sign(price_h2)
+
+        dir_agree_h01 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h0, sign_pred_h1), tf.float32))
+        dir_agree_h12 = tf.reduce_mean(tf.cast(tf.equal(sign_pred_h1, sign_pred_h2), tf.float32))
+        dir_disagree_loss = 1.0 - (dir_agree_h01 + dir_agree_h12) / 2.0
+        dir_disagree_loss = _finite_or_zero(model, dir_disagree_loss, "dir_disagree_loss")
+
+        sign_target_h0 = tf.sign(y_true_raw_h0)
+        sign_target_h1 = tf.sign(y_true_raw_h1)
+        sign_target_h2 = tf.sign(y_true_raw_h2)
+        target_smoothness_loss = tf.reduce_mean(
+            tf.cast(tf.math.logical_xor(sign_target_h1 == sign_target_h0,
+                                         sign_target_h1 == sign_target_h2), tf.float32)
+        )
+        target_smoothness_loss = _finite_or_zero(model, target_smoothness_loss, "target_smoothness_loss")
+
+        coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
     coherence_penalty = _finite_or_zero(model, coherence_penalty, "coherence_penalty")
 
     # Assign from the registered calls above (scaled correctly, using fixed delta math).
