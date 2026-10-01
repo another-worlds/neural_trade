@@ -31,10 +31,16 @@ def _trailing_return_features(x, lags=SKIP_LAGS):
 
 
 def _direction_head(config, tower, skip_features, name, bias_init):
-    """P(up) head. Without the skip this is exactly the original Dense(1, sigmoid) layer."""
+    """P(up) head. Without the skip this is exactly the original Dense(1, sigmoid) layer.
+
+    ``Config.DIRECTION_DEEP_ZERO_INIT`` (NT-104, default off) zero-initialises the deep tower's
+    kernel so the head starts exactly at the DIRECTION_SKIP linear logit (the bias is already 0);
+    off keeps today's glorot-uniform kernel, bit-for-bit (golden run)."""
     if skip_features is None:
         return layers.Dense(1, activation='sigmoid', name=name, bias_initializer=bias_init)(tower)
-    tower_logit = layers.Dense(1, name=f'{name}_logit', bias_initializer=bias_init)(tower)
+    tower_kernel_init = 'zeros' if bool(getattr(config, 'DIRECTION_DEEP_ZERO_INIT', False)) else 'glorot_uniform'
+    tower_logit = layers.Dense(1, name=f'{name}_logit', bias_initializer=bias_init,
+                               kernel_initializer=tower_kernel_init)(tower)
     skip_logit = layers.Dense(1, name=f'{name}_skip', use_bias=False,
                               kernel_regularizer=regularizers.L2(float(config.DIRECTION_SKIP_L2)))(skip_features)
     return layers.Activation('sigmoid', name=name)(layers.Add()([tower_logit, skip_logit]))

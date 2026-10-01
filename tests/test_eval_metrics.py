@@ -647,7 +647,11 @@ def test_health_section_renders_the_per_epoch_table_and_the_numbers():
          "var_at_floor_h0": 0.0, "var_at_floor_h1": 0.0, "var_at_floor_h2": 0.0},
     ]
     h = health_block(rows, Config(GRAD_CLIP_NORM=20.0))
-    h["direction_skip_share"] = {"h0": 0.321, "h1": 0.5, "h2": 0.099}
+    h["direction_skip_share"] = {
+        "h0": {"skip_share": 0.321, "tower_share": 0.679, "corr_skip_tower": -0.8},
+        "h1": {"skip_share": 0.5, "tower_share": 0.5, "corr_skip_tower": -0.9},
+        "h2": {"skip_share": 0.099, "tower_share": 0.901, "corr_skip_tower": -0.5},
+    }
     rep.health = h
     md = rep.to_markdown()
     assert "## Training health" in md
@@ -656,12 +660,13 @@ def test_health_section_renders_the_per_epoch_table_and_the_numbers():
     assert "40.0%" in md                                   # epoch 0's clip share (4/10)
     assert "100.0000 / 90.0000 / 80.0000" in md             # dir_n_h0/h1/h2, epoch 0
     assert "3.0000 / 0.0000 / 0.0000" in md                 # var_at_floor_h0/h1/h2, epoch 0
-    assert "DIRECTION_SKIP" in md and "h0=0.321" in md and "h1=0.500" in md
+    assert "DIRECTION_SKIP" in md and "covariance share" in md
+    assert "h0=0.321" in md and "h1=0.500" in md and "corr skip/tower=-0.800" in md
 
 
 def test_direction_skip_share_matches_a_direct_numpy_computation():
-    """D-045 A4: var(skip_logit) / var(skip_logit + tower_logit), on the (already-scaled)
-    validation block - the close-only case."""
+    """D-045 A4, redefined by NT-110: cov(skip_logit, logit) / var(logit) (skip_share + tower_share
+    == 1), on the (already-scaled) validation block - the close-only case."""
     import numpy as np
     import tensorflow as tf
 
@@ -684,9 +689,16 @@ def test_direction_skip_share_matches_a_direct_numpy_computation():
     skip = base.get_layer("direction_h0_skip")
     sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
     t, s = sub.predict(x_scaled, verbose=0)
-    t, s = np.asarray(t).reshape(-1), np.asarray(s).reshape(-1)
-    ref = float(np.var(s) / np.var(t + s))
-    assert out["h0"] == pytest.approx(ref, rel=1e-5)
+    t, s = np.asarray(t, dtype=np.float64).reshape(-1), np.asarray(s, dtype=np.float64).reshape(-1)
+    logit = t + s
+    var_logit = np.var(logit)
+    ref_skip = float(np.cov(s, logit, ddof=0)[0, 1] / var_logit)
+    ref_tower = float(np.cov(t, logit, ddof=0)[0, 1] / var_logit)
+    ref_corr = float(np.corrcoef(s, t)[0, 1])
+    assert out["h0"]["skip_share"] == pytest.approx(ref_skip, rel=1e-5)
+    assert out["h0"]["tower_share"] == pytest.approx(ref_tower, rel=1e-5)
+    assert out["h0"]["corr_skip_tower"] == pytest.approx(ref_corr, rel=1e-5)
+    assert out["h0"]["skip_share"] + out["h0"]["tower_share"] == pytest.approx(1.0)
 
 
 def test_direction_skip_share_matches_a_direct_numpy_computation_on_ohlcv():
@@ -726,9 +738,11 @@ def test_direction_skip_share_matches_a_direct_numpy_computation_on_ohlcv():
     skip = base.get_layer("direction_h0_skip")
     sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
     t, s = sub.predict(x_scaled, verbose=0)
-    t, s = np.asarray(t).reshape(-1), np.asarray(s).reshape(-1)
-    ref = float(np.var(s) / np.var(t + s))
-    assert out["h0"] == pytest.approx(ref, rel=1e-5)
+    t, s = np.asarray(t, dtype=np.float64).reshape(-1), np.asarray(s, dtype=np.float64).reshape(-1)
+    logit = t + s
+    ref_skip = float(np.cov(s, logit, ddof=0)[0, 1] / np.var(logit))
+    assert out["h0"]["skip_share"] == pytest.approx(ref_skip, rel=1e-5)
+    assert out["h0"]["skip_share"] + out["h0"]["tower_share"] == pytest.approx(1.0)
 
 
 def test_direction_skip_share_is_empty_when_the_flag_is_off():

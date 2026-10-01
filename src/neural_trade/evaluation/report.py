@@ -473,25 +473,23 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
     }
 
 
-def direction_skip_share(model, x_scaled: np.ndarray) -> Dict[str, float]:
-    """Share of each direction head's pre-sigmoid logit variance carried by the DIRECTION_SKIP
-    linear path (NT-037, D-045 recommendation A4): ``var(skip_logit) / var(skip_logit +
-    tower_logit)`` on ``x_scaled`` (the validation block, already through the model's actual
-    fitted input transform - QA repair round 2: the caller passes
-    ``result.normalizer.transform(val["X_model"], val["last_close"])``, the same
-    ``data.scaling.WindowNormalizer`` the run trained on, so this works for the OHLCV default
-    (``Config.INPUT_SERIES``, NT-047: ``[N, LOOKBACK, C]``, the volume channel on its train-fit
-    ``vol_scale``) exactly as for a legacy close-only run (``[N, LOOKBACK]``) - this function no
-    longer reconstructs the transform itself, which is what made it silently wrong on OHLCV).
+def direction_skip_share(model, x_scaled: np.ndarray) -> Dict[str, Dict[str, float]]:
+    """Each direction head's logit covariance decomposition between the DIRECTION_SKIP linear path
+    and the deep tower path (NT-037, D-045 recommendation A4; redefined by NT-110), on ``x_scaled``
+    (the validation block, already through the model's actual fitted input transform - QA repair
+    round 2: the caller passes ``result.normalizer.transform(val["X_model"], val["last_close"])``,
+    the same ``data.scaling.WindowNormalizer`` the run trained on, so this works for the OHLCV
+    default (``Config.INPUT_SERIES``, NT-047: ``[N, LOOKBACK, C]``, the volume channel on its
+    train-fit ``vol_scale``) exactly as for a legacy close-only run (``[N, LOOKBACK]``)).
 
-    ``models/gru_attention.py``'s ``_direction_head`` names the two pre-Add sub-layers
-    ``direction_h{i}_logit`` (the deep path) and ``direction_h{i}_skip`` (the trailing-return
-    linear path, ``Config.DIRECTION_SKIP``); their sum is the logit the sigmoid sees. A high share
-    means the head leans on the linear baseline; a low share means the deep path dominates.
-
-    Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off or the model has no such named sub-layers
-    (an older run, or an architecture without a skip path). Never raises: a report is worth more
-    without this number than not at all.
+    A thin wrapper around :func:`neural_trade.models.direction_diagnostics
+    .direction_skip_covariance_share` (NT-110: one implementation): unwraps
+    ``CustomTrainModel.base_model`` and never raises (a report is worth more without this number
+    than not at all). Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off or the model has no such
+    named sub-layers (an older run, or an architecture without a skip path); otherwise
+    ``{horizon: {"skip_share": .., "tower_share": .., "corr_skip_tower": ..}}`` - ``skip_share +
+    tower_share == 1`` (NT-110: ``var(skip) / var(skip + tower)`` alone is not bounded by 1 once the
+    two paths are correlated, which they were found to be on a real run, corr -0.76 to -0.92).
     """
     cfg = getattr(model, "config", None)
     if not bool(getattr(cfg, "DIRECTION_SKIP", False)):
@@ -500,22 +498,9 @@ def direction_skip_share(model, x_scaled: np.ndarray) -> Dict[str, float]:
     if base is None or len(x_scaled) == 0:
         return {}
     try:
-        import tensorflow as tf
+        from neural_trade.models.direction_diagnostics import direction_skip_covariance_share
 
-        x = np.asarray(x_scaled, dtype=np.float32)
-        out: Dict[str, float] = {}
-        for i, h in enumerate(("h0", "h1", "h2")):
-            try:
-                tower = base.get_layer(f"direction_h{i}_logit")
-                skip = base.get_layer(f"direction_h{i}_skip")
-            except ValueError:
-                continue
-            sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
-            t_out, s_out = sub.predict(x, verbose=0)
-            t_flat, s_flat = np.asarray(t_out, dtype=np.float64).reshape(-1), np.asarray(s_out, dtype=np.float64).reshape(-1)
-            denom = float(np.var(t_flat + s_flat))
-            out[h] = float(np.var(s_flat) / denom) if denom > 0 else float("nan")
-        return out
+        return direction_skip_covariance_share(base, np.asarray(x_scaled, dtype=np.float32))
     except Exception:
         return {}
 
@@ -882,8 +867,12 @@ class EvalReport:
                     ", ".join(f"{k}={v:g}" for k, v in sorted(bound.items())) + ".")
         skip = h.get("direction_skip_share") or {}
         if skip:
-            L.append("DIRECTION_SKIP logit's share of the direction-logit variance (validation "
-                    "block): " + ", ".join(f"{h_}={v:.3f}" for h_, v in skip.items()) + ".")
+            parts = ", ".join(
+                f"{h_}={v.get('skip_share', float('nan')):.3f} "
+                f"(corr skip/tower={v.get('corr_skip_tower', float('nan')):.3f})"
+                for h_, v in skip.items())
+            L.append("DIRECTION_SKIP logit's covariance share of the direction-logit variance "
+                    "(validation block, skip_share + tower_share = 1, NT-110): " + parts + ".")
         return L
 
     def _md_baselines(self, head):
