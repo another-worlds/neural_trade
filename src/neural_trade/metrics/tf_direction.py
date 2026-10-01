@@ -78,6 +78,23 @@ def gaussian_up_prob_given_move(mu_scaled, var_scaled, last_close, deadband_frac
 # last dict IS the epoch aggregate. Keras resets them via CustomTrainModel.metrics.
 DIR_N_BINS = 10
 PIT_N_BINS = 200
+#: The lambda-weighted addends of ``total`` (NT-037, D-026/D-045): logged so the report and the
+#: dashboard can attribute the loss to its terms instead of only seeing the sum. Reconstructed in
+#: ``CustomTrainModel._contrib_terms`` from the (mostly un-weighted) ``LossComponents`` fields and
+#: the live ``model.lambda_*`` variables, mirroring the ``total = (...)`` formula in
+#: ``losses/functions.py`` term for term; their sum equals ``loss``/``val_loss`` within 1e-4
+#: relative (``tests/test_custom_loss.py``). Accumulated via ``CustomTrainModel._contrib_means``
+#: (plain ``_Accum`` objects, NOT ``tf.keras.metrics.Mean``/``STEP_MEAN_KEYS``: a ``Metric`` is a
+#: ``tf.Module`` and would shift ``model.submodules`` - QA repair round 1, see ``_Accum``'s
+#: docstring), updated every step, train and val alike (not gated by ``TRAIN_METRICS_EVERY`` the
+#: way the rest of the training diagnostics are), so their sum matches ``loss``/``val_loss`` over
+#: exactly the same steps.
+CONTRIB_KEYS = (
+    'contrib_point', 'contrib_trend', 'contrib_dir', 'contrib_dir_align', 'contrib_reg',
+    'contrib_inter_reg', 'contrib_vol', 'contrib_coherence', 'contrib_nll', 'contrib_crps',
+    'contrib_soft_ece', 'contrib_t_perp', 'contrib_casimir', 'contrib_vac', 'contrib_hd',
+    'contrib_ife', 'contrib_vac_overflow', 'contrib_pnl',
+)
 STEP_MEAN_KEYS = (
     'loss', 'point_loss', 'point_h0', 'point_h1', 'point_h2',
     'trend_loss', 'trend_h0', 'trend_h1', 'trend_h2',

@@ -18,8 +18,8 @@ import neural_trade.losses.functions as _losses
 import neural_trade.utils.math as mh
 from neural_trade.core.config import Config
 from neural_trade.core.outputs import PredictiveOutputs
-from neural_trade.metrics.tf_direction import (DirectionAccumulator, PITAccumulator, STEP_MEAN_KEYS,
-                                               TRAIN_ONLY_MEAN_KEYS, direction_counts,
+from neural_trade.metrics.tf_direction import (CONTRIB_KEYS, DirectionAccumulator, PITAccumulator,
+                                               STEP_MEAN_KEYS, TRAIN_ONLY_MEAN_KEYS, direction_counts,
                                                direction_labels_tf, direction_metrics_from_stats,
                                                direction_stats)
 from neural_trade.registries.losses import Losses
@@ -31,6 +31,63 @@ from neural_trade.training.optim import build_indicator_optimizer
 logger = logging.getLogger(__name__)
 
 
+class _Accum:
+    """A minimal sum/max/mean accumulator over plain ``tf.Variable`` s (NT-037, D-026).
+
+    Deliberately NOT a ``tf.keras.metrics.Metric`` (a ``Metric`` is a ``tf.Module``): even behind
+    ``_setattr_tracking = False`` (which only keeps an attribute out of the checkpoint/weights
+    file), a ``Module``-derived object stored on ``CustomTrainModel`` still shows up in
+    ``model.submodules`` - a separate, tracking-flag-independent walk. ``training/reset.py``'s
+    ``reset_stateful_rngs`` derives each stochastic layer's reset seed from ITS POSITION in
+    ``model.submodules`` ("different layers do not share one stream"); adding new submodules
+    anywhere in that traversal shifts every later real layer's derived seed, silently changing
+    screen mode's (``SEEDED_STOCHASTIC_LAYERS=True``) training numbers even though nothing about
+    dropout/noise changed (caught by a QA repro of ``tests/test_screen.py::test_loss_term_shares_
+    ...``: identical calibration inputs, different sampled medians once these were ``Metric``s).
+    Reset manually by ``CustomTrainModel._reset_light_accumulators`` (see ``_EpochTrainLogs``),
+    since these are invisible to Keras's own ``reset_metrics()``.
+    """
+
+    def __init__(self, kind: str = "sum"):
+        self.kind = kind
+        self._value = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self._count = tf.Variable(0.0, trainable=False, dtype=tf.float32) if kind == "mean" else None
+
+    def update_state(self, x, weight=None):
+        x = tf.cast(x, tf.float32)
+        if self.kind == "max":
+            self._value.assign(tf.maximum(self._value, x))
+        elif self.kind == "mean":
+            w = tf.cast(weight, tf.float32) if weight is not None else tf.constant(1.0, tf.float32)
+            self._value.assign_add(x * w)
+            self._count.assign_add(w)
+        else:
+            self._value.assign_add(x)
+
+    def result(self):
+        if self._count is not None:
+            return self._value / tf.maximum(self._count, 1.0)
+        return self._value
+
+    def reset_state(self):
+        self._value.assign(0.0)
+        if self._count is not None:
+            self._count.assign(0.0)
+
+    def snapshot(self):
+        """A graph-safe copy of the current state, for a caller that wants to (maybe) undo an
+        update - see ``_run_gradient_probe``'s mask-counter save/restore (QA repair round 1 fix 5:
+        the probe's own ``custom_loss`` call must not double-count a step train_step already
+        counted)."""
+        return tf.identity(self._value), (tf.identity(self._count) if self._count is not None else None)
+
+    def restore(self, snap):
+        v, c = snap
+        self._value.assign(v)
+        if c is not None and self._count is not None:
+            self._count.assign(c)
+
+
 class _EpochTrainLogs(tf.keras.callbacks.Callback):
     """Adds the full training-set metrics to the epoch logs, computed ONCE per epoch.
 
@@ -39,6 +96,12 @@ class _EpochTrainLogs(tf.keras.callbacks.Callback):
     step. The aggregates are read right after the last training batch - before Keras's validation
     pass resets the accumulators - and merged into the epoch logs ahead of every other callback
     (CustomTrainModel.fit puts this callback first), so loggers and stoppers see the same keys.
+
+    Also resets the model's ``_Accum``-based health/probe counters (NT-037): once at epoch begin
+    (mirrors Keras's own ``reset_metrics()`` at the start of an epoch) and again right after the
+    train-epoch aggregates are stashed, just before Keras's validation pass starts (mirrors
+    Keras's ``reset_metrics()`` at the start of ``evaluate()``) - these plain-Variable counters are
+    invisible to that mechanism, so they need the same two reset points by hand.
     """
 
     def __init__(self, model):
@@ -49,11 +112,13 @@ class _EpochTrainLogs(tf.keras.callbacks.Callback):
 
     def on_epoch_begin(self, epoch, logs=None):
         self._stash = None
+        self._model_ref._reset_light_accumulators()
 
     def on_train_batch_end(self, batch, logs=None):
         steps = (self.params or {}).get("steps")
         if steps is None or batch + 1 >= steps:  # the last batch (every batch if the length is unknown)
             self._stash = self._model_ref.train_epoch_logs()
+            self._model_ref._reset_light_accumulators()
 
     def on_epoch_end(self, epoch, logs=None):
         if logs is not None and self._stash:
@@ -130,6 +195,13 @@ class CustomTrainModel(models.Model):
         self._grad_clip_norm_var = tf.Variable(float(getattr(config, 'GRAD_CLIP_NORM', 0.0) or 0.0),
                                                trainable=False, dtype=tf.float32, name='grad_clip_norm')
         self._setattr_tracking = True
+        # NOTE: Config.STRICT_LOSS_MASKS is NOT a live tf.Variable like grad_clip_norm above.
+        # losses.functions._finite_or_zero reads it as a plain Python bool off self.config (a
+        # trace-time branch): QA repair round 1 found that wrapping every one of that module's ~46
+        # guard sites in a tf.cond - even on a constant-False predicate - measurably changed a real
+        # training run's trajectory once merged with NT-047's larger default model (see
+        # _finite_or_zero's docstring). Toggling it after this model is already traced needs a
+        # fresh model, same as any other purely-structural Config switch.
 
         # Dedicated optimizer for indicator logit vars (LR = main LR * INDICATOR_LR_MULT).
         # Adam normalizes gradient magnitudes, so scaling grads is insufficient — a higher LR
@@ -161,6 +233,53 @@ class CustomTrainModel(models.Model):
         self._pit_acc = PITAccumulator(var_floor=float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                         var_cap=float(getattr(self.config, 'VAR_CAP', 1e3)),
                                         name='pit_accumulator')
+        # Per-term non-finite mask counters (D-026, NT-036): one _Accum('sum') per name in
+        # losses.functions.MASK_TERM_NAMES, updated by _finite_or_zero every time that term's mask
+        # actually fires. Logged as masked_<term> / val_masked_<term> (see _epoch_results). Plain
+        # _Accum, not tf.keras.metrics.Sum: see _Accum's docstring (model.submodules / seed drift).
+        self._mask_counters = {t: _Accum("sum") for t in _losses.MASK_TERM_NAMES}
+        # Per-group gradient health (NT-037, D-026): train only (test_step never computes
+        # gradients). grad_norm_max_* is the epoch maximum of the PRE-CLIP global norm of that
+        # group; grad_clip_steps_* counts steps whose pre-clip norm exceeded GRAD_CLIP_NORM.
+        self._grad_health = {
+            'grad_norm_max_main': _Accum("max"),
+            'grad_norm_max_indicator': _Accum("max"),
+            'grad_clip_steps_main': _Accum("sum"),
+            'grad_clip_steps_indicator': _Accum("sum"),
+        }
+        # Dead-zone counters (D-026, NT-037 acceptance 2): how many variance outputs this epoch sat
+        # exactly at VAR_FLOOR, per horizon (a running sum, so `.result()` is the raw epoch total,
+        # not an average).
+        self._var_floor_counters = {f'var_at_floor_h{i}': _Accum("sum") for i in range(3)}
+        # Per-term contributions to `total` (NT-037, D-026/D-045, QA repair round 1 fix 3+4): a
+        # plain _Accum("mean") per neural_trade.metrics.tf_direction.CONTRIB_KEYS, updated every
+        # single step (train AND val, never gated by TRAIN_METRICS_EVERY) so their sum matches
+        # loss/val_loss over exactly the same steps, within float precision. Not a
+        # tf.keras.metrics.Mean (would shift model.submodules - see _Accum's docstring).
+        self._contrib_means = {k: _Accum("mean") for k in CONTRIB_KEYS}
+        # Per-loss-term gradient probe (D-026 "about 10%", NT-037 acceptance 6): off unless
+        # Config.PROBE_GRADIENTS is set, in which case an extra persistent-tape backward pass every
+        # PROBE_EVERY steps measures, per term and per variable GROUP (QA repair round 1 fix 5):
+        # 'trunk' (shared body: everything but the per-horizon output heads and the indicator
+        # logits), 'head' (the price/direction/variance Dense layers - price_h*/direction_h*/
+        # variance_h* by name), and 'indicator' (the learned-indicator logit variables). Each
+        # group gets: per term, its share of that group's gradient norm and its cosine with the
+        # group's total gradient; and, once per group, the mean and the worst (most negative)
+        # pairwise cosine between any two terms' gradients (the "conflict"). The value share
+        # (a property of the loss, not of a variable group) is reported once, ungrouped.
+        self._probe_terms = ('point', 'trend', 'dir', 'dir_align', 'nll', 'crps', 'soft_ece', 'vol',
+                             'inter_reg', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'vac',
+                             'pnl', 'coherence')
+        self._probe_groups = ('trunk', 'head', 'indicator')
+        self._probe_means = {}
+        for t in self._probe_terms:
+            self._probe_means[f'probe_value_share_{t}'] = _Accum("mean")
+            for g in self._probe_groups:
+                self._probe_means[f'probe_grad_share_{t}_{g}'] = _Accum("mean")
+                self._probe_means[f'probe_cos_{t}_{g}'] = _Accum("mean")
+        for g in self._probe_groups:
+            self._probe_means[f'probe_conflict_mean_{g}'] = _Accum("mean")
+            self._probe_means[f'probe_conflict_min_{g}'] = _Accum("mean")
         self._setattr_tracking = True
 
         # Robust (non-string) collection of indicator vars for gradient routing
@@ -192,6 +311,18 @@ class CustomTrainModel(models.Model):
     def grad_clip_norm(self, value):
         self._grad_clip_norm_var.assign(float(value))
 
+    @property
+    def strict_loss_masks(self):
+        """Plain bool (Config.STRICT_LOSS_MASKS): True turns off the per-loss-term non-finite
+        masks (D-026, NT-036). NOT a live tf.Variable - see losses.functions._finite_or_zero's
+        docstring for why: setting this on an already-traced model needs a fresh model to take
+        effect, same as any other structural Config switch."""
+        return bool(getattr(self.config, 'STRICT_LOSS_MASKS', False))
+
+    @strict_loss_masks.setter
+    def strict_loss_masks(self, value):
+        self.config.STRICT_LOSS_MASKS = bool(value)
+
     def _logit_from_alpha(self, alpha): return mh.logit_from_alpha(alpha, self.epsilon)
     def _alpha_from_logit(self, logit): return mh.alpha_from_logit(logit)
     def _logit_from_period(self, period): return mh.logit_from_period(period, self.epsilon)
@@ -220,8 +351,27 @@ class CustomTrainModel(models.Model):
         extra = list(getattr(self, '_step_means', {}).values())
         extra += [m for m in (getattr(self, '_dir_head_acc', None), getattr(self, '_dir_gauss_acc', None),
                               getattr(self, '_pit_acc', None)) if m is not None]
+        # NOTE: the NT-037/D-026 health/probe counters (_mask_counters, _grad_health,
+        # _var_floor_counters, _probe_means) are deliberately NOT listed here: they are plain
+        # _Accum objects, not tf.keras.metrics.Metric (see _Accum's docstring), so Keras's own
+        # reset_metrics() would not know what to do with them anyway. _EpochTrainLogs resets them
+        # by hand instead (on_epoch_begin and right after the train-epoch stash).
         seen = {id(m) for m in base}
         return base + [m for m in extra if id(m) not in seen]
+
+    def _reset_light_accumulators(self):
+        """Zero every NT-037/D-026 ``_Accum`` counter (mask/grad-health/var-floor/probe).
+
+        Called by ``_EpochTrainLogs`` at epoch begin and again right after the train-epoch
+        aggregates are stashed (mirrors the two points Keras's own ``reset_metrics()`` fires at:
+        the start of an epoch, and the start of ``evaluate()``'s validation pass) - see
+        ``_Accum``'s docstring for why these are not plain ``tf.keras.metrics.Metric`` instances
+        that Keras could reset on its own.
+        """
+        for d in (self._mask_counters, self._grad_health, self._var_floor_counters, self._probe_means,
+                 self._contrib_means):
+            for acc in d.values():
+                acc.reset_state()
 
     def _epoch_logs(self, loss_components, y_true, y_pred_9, last_close, head_prefix, gauss_prefix, training,
                     grad_global_norm=None):
@@ -252,9 +402,17 @@ class CustomTrainModel(models.Model):
     def train_epoch_logs(self):
         """The training-set epoch aggregates as floats (called once per epoch by _EpochTrainLogs)."""
         if getattr(self, "_train_results_fn", None) is None:
-            self._train_results_fn = tf.function(
-                lambda: dict(self._epoch_results("train_", "train_gauss_", True),
-                             nonfinite_grad_steps=self.nonfinite_grad_steps.result()))
+            def _all():
+                logs = dict(self._epoch_results("train_", "train_gauss_", True),
+                           nonfinite_grad_steps=self.nonfinite_grad_steps.result())
+                # Per-group gradient health (NT-037, D-026): train only.
+                logs.update({k: m.result() for k, m in self._grad_health.items()})
+                # Probe keys only exist when the flag is on (acceptance 6): with it off, no
+                # probe_* key is written, not even a stale/never-updated 0.
+                if bool(getattr(self.config, 'PROBE_GRADIENTS', False)) and self._probe_means:
+                    logs.update({k: m.result() for k, m in self._probe_means.items()})
+                return logs
+            self._train_results_fn = tf.function(_all)
         return {k: float(v) for k, v in self._train_results_fn().items()}
 
     def fit(self, *args, callbacks=None, **kwargs):
@@ -263,12 +421,42 @@ class CustomTrainModel(models.Model):
             cbs.insert(0, _EpochTrainLogs(self))
         return super().fit(*args, callbacks=cbs, **kwargs)
 
+    def _contrib_terms(self, c):
+        """Every addend of the `total = (...)` formula in losses/functions.py, named contrib_*
+        (NT-037, D-026/D-045). Reconstructed from the (mostly un-weighted) LossComponents fields
+        and the live model.lambda_* weights; their sum equals `c.total` exactly (to float
+        precision), by construction - see tests/test_custom_loss.py."""
+        contrib_point = c.point_h0 + c.point_h1 + c.point_h2
+        return {
+            'contrib_point': contrib_point,
+            'contrib_trend': self.lambda_trend_outer * (c.extended_h0 + c.extended_h1 + c.extended_h2),
+            'contrib_dir': self.lambda_dir_outer * self.lambda_dir * (c.dir_h0 + c.dir_h1 + c.dir_h2),
+            'contrib_dir_align': self.lambda_dir_align_outer * c.dir_align_val,
+            'contrib_reg': tf.constant(0.0, dtype=tf.float32) * c.reg_loss,
+            'contrib_inter_reg': 0.1 * c.inter_reg,
+            'contrib_vol': 0.1 * c.vol_loss,
+            'contrib_coherence': self.lambda_coherence_outer * c.coherence_penalty_val,
+            'contrib_nll': self.lambda_nll_outer * self.lambda_var * (c.nll_h0 + c.nll_h1 + c.nll_h2),
+            'contrib_crps': self.lambda_crps * (c.crps_h0 + c.crps_h1 + c.crps_h2),
+            'contrib_soft_ece': self.lambda_soft_ece * (c.soft_ece_h0 + c.soft_ece_h1 + c.soft_ece_h2),
+            'contrib_t_perp': c.t_perp_total,
+            'contrib_casimir': c.casimir_val,
+            'contrib_vac': c.vac_val,
+            'contrib_hd': c.hd_val,
+            'contrib_ife': c.ife_val,
+            'contrib_vac_overflow': c.vac_overflow_val,
+            'contrib_pnl': c.pnl_val,
+        }
+
     def _update_epoch_metrics(self, loss_components, y_true, y_pred_9, last_close, training, grad_global_norm=None):
-        """Accumulate this batch. The loss is always exact; in training the other diagnostics are
-        updated every Config.TRAIN_METRICS_EVERY steps (and on the first step of every epoch)."""
+        """Accumulate this batch. The loss and the contrib_* decomposition are always exact
+        (every step, train and val); the other diagnostics are updated every
+        Config.TRAIN_METRICS_EVERY steps (and on the first step of every epoch)."""
         c = loss_components
         batch = tf.cast(tf.shape(y_true)[0], tf.float32)
         self._step_means['loss'].update_state(tf.cast(c.total, tf.float32), sample_weight=batch)
+        for k, v in self._contrib_terms(c).items():
+            self._contrib_means[k].update_state(tf.cast(v, tf.float32), weight=batch)
         every = int(getattr(self.config, 'TRAIN_METRICS_EVERY', 1) or 1) if training else 1
         if every <= 1:
             self._update_diagnostics(c, batch, y_true, y_pred_9, last_close, training, grad_global_norm)
@@ -312,6 +500,20 @@ class CustomTrainModel(models.Model):
         scalars['trend_loss'] = scalars['trend_h0'] + scalars['trend_h1'] + scalars['trend_h2']
         if training and grad_global_norm is not None:
             scalars['grad_global_norm'] = grad_global_norm
+        # contrib_* (NT-037, D-026/D-045) is accumulated unconditionally in _update_epoch_metrics
+        # (every step, not gated by TRAIN_METRICS_EVERY) via self._contrib_means - see
+        # _contrib_terms. Not computed here: this method only runs on "due" steps.
+
+        # Dead-zone counters (D-026, NT-037 acceptance 2): variance outputs sitting exactly at
+        # VAR_FLOOR, per horizon, mirroring the `tf.maximum(var, var_floor)` floor custom_loss
+        # applies internally (var_h*_c is not itself exposed on LossComponents).
+        var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
+        tol = var_floor * 1e-6 + 1e-12
+        for i, var_head in enumerate((y_pred_9[2], y_pred_9[5], y_pred_9[8])):
+            v = tf.maximum(tf.where(tf.math.is_finite(var_head), var_head, tf.ones_like(var_head)), var_floor)
+            at_floor = tf.reduce_sum(tf.cast(tf.abs(v - var_floor) <= tol, tf.float32))
+            self._var_floor_counters[f'var_at_floor_h{i}'].update_state(at_floor)
+
         scalars.pop('loss')  # updated every step by _update_epoch_metrics
         for k, v in scalars.items():
             self._step_means[k].update_state(tf.cast(v, tf.float32), sample_weight=batch)
@@ -328,6 +530,16 @@ class CustomTrainModel(models.Model):
         logs.update(self._pit_acc.logs())
         logs.update(self._dir_head_acc.logs(head_prefix, self._step_metric_fns))
         logs.update(self._dir_gauss_acc.logs(gauss_prefix, self._step_metric_fns))
+        # Dead-zone counters (D-026, NT-037 acceptance 2): dir_n_h{0,1,2} is DirectionStats.mask_sum
+        # per horizon (the deadband-surviving sample count Keras logs as val_dir_n_h* during
+        # evaluation, via its own automatic "val_" prefix - see test_step's comment on prefixing).
+        for i, h in enumerate(("h0", "h1", "h2")):
+            logs[f'dir_n_{h}'] = self._dir_head_acc.counts[i][6]
+        logs.update({k: m.result() for k, m in getattr(self, '_var_floor_counters', {}).items()})
+        # Per-term non-finite mask counters (D-026, NT-036): masked_<term> / val_masked_<term>.
+        logs.update({f'masked_{t}': m.result() for t, m in getattr(self, '_mask_counters', {}).items()})
+        # contrib_* (NT-037, D-026/D-045): computed every step in _update_epoch_metrics.
+        logs.update({k: m.result() for k, m in getattr(self, '_contrib_means', {}).items()})
         return logs
 
 
@@ -498,7 +710,7 @@ class CustomTrainModel(models.Model):
          crps_h0, crps_h1, crps_h2,
          soft_ece_h0, soft_ece_h1, soft_ece_h2,
          t_perp_total, casimir_val, vac_val, hd_val, ife_val,
-         vac_overflow_val, pnl_val) = loss_components
+         vac_overflow_val, pnl_val, dir_align_val, coherence_penalty_val) = loss_components
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -526,6 +738,22 @@ class CustomTrainModel(models.Model):
             if g is None:
                 continue
             (ind_gvs if id(v) in self._indicator_var_ids else nn_gvs).append((g, v))
+
+        # Per-group gradient health (NT-037, D-026): the PRE-CLIP global norm of each optimizer
+        # group, and whether that norm exceeded GRAD_CLIP_NORM (the clip below is about to fire).
+        # Two tf.linalg.global_norm calls and two comparisons per step (~2% cost; see the item's
+        # micro-benchmark) - a per-run health number, not the ~10% per-term probe (that one is
+        # opt-in, below).
+        nn_pre_norm = tf.linalg.global_norm([g for g, v in nn_gvs]) if nn_gvs else tf.constant(0.0, dtype=tf.float32)
+        ind_pre_norm = (tf.linalg.global_norm([g for g, v in ind_gvs]) if ind_gvs
+                       else tf.constant(0.0, dtype=tf.float32))
+        clip_norm_now = self.grad_clip_norm
+        self._grad_health['grad_norm_max_main'].update_state(nn_pre_norm)
+        self._grad_health['grad_norm_max_indicator'].update_state(ind_pre_norm)
+        self._grad_health['grad_clip_steps_main'].update_state(
+            tf.cast(tf.logical_and(clip_norm_now > 0.0, nn_pre_norm > clip_norm_now), tf.float32))
+        self._grad_health['grad_clip_steps_indicator'].update_state(
+            tf.cast(tf.logical_and(clip_norm_now > 0.0, ind_pre_norm > clip_norm_now), tf.float32))
 
         # Clip NN grads by global norm only (indicator grads are small scalars; Adam handles scale)
         # Also clip indicator grads for stability (high INDICATOR_LR_MULT + STE can produce large updates
@@ -568,10 +796,133 @@ class CustomTrainModel(models.Model):
         # the steps where the training diagnostics are skipped they cost nothing.
         self._update_epoch_metrics(loss_components, y_true, y_pred_9, last_close,
                                    training=True, grad_global_norm=grad_global_norm)
+
+        # Per-loss-term gradient probe (D-026 "about 10%", NT-037 acceptance 6): a Python-level
+        # branch, so with PROBE_GRADIENTS off (the default) none of this is even traced into the
+        # graph - zero cost, and no probe_* key is ever written. When on, the cadence (every
+        # PROBE_EVERY steps) IS a runtime tf.cond, so it can change without retracing.
+        if bool(getattr(self.config, 'PROBE_GRADIENTS', False)):
+            probe_every = max(1, int(getattr(self.config, 'PROBE_EVERY', 50)))
+            do_probe = tf.equal(tf.math.floormod(self.optimizer.iterations, probe_every), 0)
+
+            def _run_probe():
+                self._run_gradient_probe(x_window, y_true, last_close, extended_trends)
+                return tf.constant(0.0)
+
+            tf.cond(do_probe, _run_probe, lambda: tf.constant(0.0))
+
         # Lean per-step logs: the full training aggregates are added once per epoch by
         # _EpochTrainLogs (see CustomTrainModel.fit), not recomputed after every batch.
         return {"loss": self._step_means['loss'].result(),
                 "nonfinite_grad_steps": self.nonfinite_grad_steps.result()}
+
+    #: Substrings of a trainable variable's name that mark it as one of the per-horizon OUTPUT
+    #: heads (price/direction/variance Dense layers, models/gru_attention.py's _direction_head
+    #: included), as opposed to the shared trunk (indicators, GRU/attention body). Used only to
+    #: split the gradient probe's variable groups honestly (QA repair round 1 fix 5); not used
+    #: anywhere else (the optimizer split is main vs indicator, unaffected).
+    _PROBE_HEAD_NAME_MARKERS = ('price_h', 'direction_h', 'variance_h')
+
+    def _probe_groups_of(self):
+        """{'trunk', 'head', 'indicator'} -> that group's trainable variables, this instance."""
+        trunk, head, indicator = [], [], []
+        for v in self.trainable_variables:
+            if id(v) in self._indicator_var_ids:
+                indicator.append(v)
+            elif any(s in v.name for s in self._PROBE_HEAD_NAME_MARKERS):
+                head.append(v)
+            else:
+                trunk.append(v)
+        return {'trunk': trunk, 'head': head, 'indicator': indicator}
+
+    def _run_gradient_probe(self, x_window, y_true, last_close, extended_trends):
+        """One persistent-tape backward pass per loss term, per variable group (D-026, NT-037;
+        QA repair round 1 fix 5).
+
+        Recomputes the forward pass and the objective (the training step's own tape is not
+        persistent, to keep the normal per-step cost at zero when the probe is off) and measures,
+        per term and per group ('trunk', 'head', 'indicator' - see ``_probe_groups_of``): its
+        share of that group's gradient norm (``norm_i / sum_j norm_j``, so the shares sum to 1 by
+        construction) and its cosine with the group's total gradient; once per group, the mean and
+        the worst (most negative) pairwise cosine between any two terms' gradients (a "conflict"
+        summary, not the full pairwise matrix - logged as two scalars per group). The (ungrouped)
+        value share is a property of the loss, not of a variable group. Mirrors
+        ``docs/research/2026-09-30-math-report/scripts/probe.py``'s term decomposition.
+
+        Two things this does NOT do, on purpose:
+        - it forwards with ``training=False`` (no dropout / stochastic-layer draw), so probing
+          never perturbs the legacy stateful-RNG stream the rest of training depends on - the
+          model reaches the same weights after N steps whether or not the probe is on;
+        - it snapshots and restores ``self._mask_counters`` around its own ``custom_loss`` call,
+          so this extra forward pass does not double-count a step ``train_step``'s own call
+          already counted.
+        """
+        groups = self._probe_groups_of()
+        mask_snapshot = {k: acc.snapshot() for k, acc in self._mask_counters.items()}
+        with tf.GradientTape(persistent=True) as tape:
+            y_pred_list = self(x_window, training=False)
+            heads = PredictiveOutputs(*y_pred_list)
+            y_pred_9 = y_pred_list[:9]
+            c = self.custom_loss(x_window, y_true, y_pred_9, last_close, extended_trends,
+                                 vacuum_overflow=heads.vacuum_overflow)
+            terms = {
+                'point': c.point_h0 + c.point_h1 + c.point_h2,
+                'trend': self.lambda_trend_outer * (c.extended_h0 + c.extended_h1 + c.extended_h2),
+                'dir': self.lambda_dir_outer * self.lambda_dir * (c.dir_h0 + c.dir_h1 + c.dir_h2),
+                'dir_align': self.lambda_dir_align_outer * c.dir_align_val,
+                'nll': self.lambda_nll_outer * self.lambda_var * (c.nll_h0 + c.nll_h1 + c.nll_h2),
+                'crps': self.lambda_crps * (c.crps_h0 + c.crps_h1 + c.crps_h2),
+                'soft_ece': self.lambda_soft_ece * (c.soft_ece_h0 + c.soft_ece_h1 + c.soft_ece_h2),
+                'vol': 0.1 * c.vol_loss,
+                'inter_reg': 0.1 * c.inter_reg,
+                't_perp': c.t_perp_total,
+                'casimir': c.casimir_val,
+                'hd': c.hd_val,
+                'ife': c.ife_val,
+                'vac_overflow': c.vac_overflow_val,
+                'vac': c.vac_val,
+                'pnl': c.pnl_val,
+                'coherence': self.lambda_coherence_outer * c.coherence_penalty_val,
+            }
+        for k, acc in self._mask_counters.items():
+            acc.restore(mask_snapshot[k])
+
+        abs_values = {k: tf.abs(v) for k, v in terms.items()}
+        value_sum = tf.add_n(list(abs_values.values())) + self.eps
+        for name in terms:
+            self._probe_means[f'probe_value_share_{name}'].update_state(abs_values[name] / value_sum)
+
+        def _flat_grad(target, vs, _tape=tape):
+            gs = _tape.gradient(target, vs)
+            return tf.concat([tf.reshape(g if g is not None else tf.zeros_like(v), [-1])
+                              for g, v in zip(gs, vs)], axis=0)
+
+        for gname, vs in groups.items():
+            if not vs:
+                continue
+            total_flat = _flat_grad(c.total, vs)
+            total_norm = tf.norm(total_flat)
+            flats, norms = {}, {}
+            for name, val in terms.items():
+                flats[name] = _flat_grad(val, vs)
+                norms[name] = tf.norm(flats[name])
+            norm_sum = tf.add_n(list(norms.values())) + self.eps
+            for name in terms:
+                cos = tf.reduce_sum(flats[name] * total_flat) / (norms[name] * total_norm + self.eps)
+                self._probe_means[f'probe_cos_{name}_{gname}'].update_state(cos)
+                self._probe_means[f'probe_grad_share_{name}_{gname}'].update_state(norms[name] / norm_sum)
+            names = list(terms)
+            pair_cos = []
+            for i in range(len(names)):
+                for j in range(i + 1, len(names)):
+                    a, b = flats[names[i]], flats[names[j]]
+                    na, nb = norms[names[i]], norms[names[j]]
+                    pair_cos.append(tf.reduce_sum(a * b) / (na * nb + self.eps))
+            if pair_cos:
+                stacked = tf.stack(pair_cos)
+                self._probe_means[f'probe_conflict_mean_{gname}'].update_state(tf.reduce_mean(stacked))
+                self._probe_means[f'probe_conflict_min_{gname}'].update_state(tf.reduce_min(stacked))
+        del tape
 
     def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):
         """Direction metrics (acc, sensitivity, specificity, balanced acc, F1, MCC, Brier,
@@ -610,7 +961,7 @@ class CustomTrainModel(models.Model):
          crps_h0, crps_h1, crps_h2,
          soft_ece_h0, soft_ece_h1, soft_ece_h2,
          t_perp_total, casimir_val, vac_val, hd_val, ife_val,
-         vac_overflow_val, pnl_val) = loss_components
+         vac_overflow_val, pnl_val, dir_align_val, coherence_penalty_val) = loss_components
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.

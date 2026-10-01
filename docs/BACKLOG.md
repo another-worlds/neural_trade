@@ -68,8 +68,8 @@ changes).
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
-| [NT-036](#nt-036) | P1 | feature | implementer | todo | Stability invariants in CI (strict mode, masks off) |
-| [NT-037](#nt-037) | P1 | feature | implementer | todo | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
+| [NT-036](#nt-036) | P1 | feature | implementer | done | Stability invariants in CI (strict mode, masks off) |
+| [NT-037](#nt-037) | P1 | feature | implementer | done | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
 | [NT-038](#nt-038) | P1 | feature | implementer | todo | Stability harness and config guard (refuse hyperparameter regions known to fail) |
 | [NT-039](#nt-039) | P1 | research | experimenter | todo | Pre-registered A/B: gradient-based loss weighting against today's value calibration |
 | [NT-040](#nt-040) | P1 | bug | implementer | todo | Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars) |
@@ -142,6 +142,7 @@ changes).
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
 | [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
 | [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
+| [NT-110](#nt-110) | P2 | bug | implementer | todo | One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit)) |
 
 ## Items
 
@@ -562,7 +563,7 @@ changes).
 
 **Stability invariants in CI (strict mode, masks off)**
 
-- **status:** todo
+- **status:** done (2026-10-01): merged with NT-037 (nt-037 18b3479; QA Opus FAIL 541dee0 -> repair 1 -> FAIL on A4 only (2ffb6b4) -> repair 2 -> PASS on 18b3479). Strict mode lifts all 46 loss guards with per-guard counters (STRICT_LOSS_MASKS, default off, golden bit-for-bit); stability marker 11 tests in CI; NaN injection in input, gradient and loss term; post-clip norm of both groups tested; short run on the bundled CSV with per-epoch invariants.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/losses/functions.py, src/neural_trade/training/custom_model.py, src/neural_trade/core/config.py, pyproject.toml (marker), .github/workflows/ci.yml, tests/ (new stability tests)
 - **why:** D-026: hard invariants in CI, with a strict mode that turns the masks off. The loss replaces non-finite values by 0 in 38 places (`tf.where(tf.math.is_finite(...))` in losses/functions.py), including the total loss itself (losses/functions.py:790). The total-loss part of the finite-step guard (custom_model.py:476) can therefore never fire: a NaN in any term becomes a silent 0, the step proceeds, and nothing counts how often it happened. Only non-finite gradients are counted (nonfinite_grad_steps, custom_model.py:132, 482).
@@ -573,7 +574,7 @@ changes).
 
 **Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012)**
 
-- **status:** todo
+- **status:** done (2026-10-01): nt-037 18b3479 (see NT-036). Per-group grad norm max and clip counts, dead zones, contrib_* for every term summing to loss and val_loss (train and val, 1e-4), report 'Training health' with a per-epoch table, the probe (PROBE_GRADIENTS) per group trunk/head/indicator with value and gradient shares, cosine with the total and pairwise conflicts, verified against QA's own GradientTape to 7.4e-6; A4: DIRECTION_SKIP variance ratio per horizon on the default OHLCV config (definition to revisit, NT-110). Golden bit-for-bit; CPU cost within noise; model.submodules unchanged (168).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/training/custom_model.py (_update_diagnostics, train_step), src/neural_trade/core/outputs.py (LossComponents), src/neural_trade/losses/functions.py, src/neural_trade/metrics/tf_direction.py, src/neural_trade/telemetry/epoch_logger.py, src/neural_trade/evaluation/report.py (health section), src/neural_trade/visualization/training_dashboard.py, tests/
 - **why:** D-026: health numbers in every run at no more than 2% of the training step's time, and a detailed per-loss-term probe (about 10%) behind a flag, so an unstable run can be attributed to its loss term. Only the epoch mean of the pre-clip global gradient norm is logged (custom_model.py:475, 286); there is no per-group maximum and no count of clipped steps (the clip is at custom_model.py:498-507). From NT-012 (absorbed): coherence_penalty is computed (losses/functions.py:593) but not logged, so the training dashboard draws an inferred 'other: coherence (not logged)' band (training_dashboard.py:98) and repeats the 0.1 factors of custom_loss by hand; the direction chance bands use n_val // steps although 11-17% of validation samples (19-26% on test) sit inside the deadband and are not scored (training_dashboard.py:1133).
@@ -607,6 +608,7 @@ changes).
 - **why:** D-026: measure first, then one pre-registered A/B of gradient-based loss weighting against today's value-based calibration of the loss weights (training/lambda_calibration.py). NT-037's per-term gradient shares and conflicts are the measurement.
 - **acceptance:** (1) A SPEC committed before any GPU time: the hypothesis, at most 3 variants against today's calibration as the baseline, the dev folds and seeds for any choice, the judgement folds and seeds of (3), the metrics with their minimum effects, the guard-rails, and a GPU-time estimate within 3 hours (pre-registered A/B studies keep that limit, D-024) or the owner's approval. (2) The code for the variants is merged through an implementer item that the SPEC names. (3) One verdict by the paired comparator (NT-032). A verdict's pairs are (seed, fold) over judgement folds that no choice used; the SPEC names them before any GPU time (fold -1 x at least 5 seeds today; more held-out folds from the long history once NT-041 exists); at least 5 pairs (lead's reading of D-025, OPERATING_MODEL "Sweeps and pre-registered studies"). (4) REPORT.md gives the verdict, the numbers with their noise, every run id and NT-037's health numbers per variant. A negative or inconclusive verdict closes the item.
 - **source:** owner Q&A 2026-09-28 (round 8: measure, then one pre-registered A/B); docs/DECISIONS.md D-024, D-025, D-026
+- **amendment (2026-10-01, QA of NT-101):** today's value calibration (lambda_calibration.py:41-56) equalises the per-horizon AVERAGES of dir, NLL, CRPS and soft ECE and vol without its 0.1 factor, while the total uses horizon SUMS and 0.1 x vol: after value calibration these four terms weigh 3x a point term and vol 0.1x (QA script D:/nt_qa/nt101_check.py). The SPEC must state this for the baseline arm; the gradient arm (NT-101 after its repair) equalises the terms as they enter the total.
 
 ### NT-040
 
@@ -1442,7 +1444,18 @@ changes).
 - **acceptance:** (1) Each of the six keeps what it asserts, on a smaller config (fewer windows or families, a short lookback, fewer steps) or a shared session fixture, and runs in under 10 s on CPU (report before/after). (2) At least one test still trains the full default config, marked slow. (3) The fast suite with `-n 8` runs in under 2 minutes on an idle machine (report). (4) Fast suite, ruff, TESTING_DOCUMENTATION.
 - **source:** D-048
 
-## Done log
+### NT-110
+
+**One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit))**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/evaluation/report.py (direction_skip_share), src/neural_trade/models/direction_diagnostics.py (NT-104's direction_skip_variance_share), tests/
+- **depends on:** NT-104 merged
+- **why:** QA of NT-037 (18b3479): var(skip)/var(skip + tower) is not bounded by 1 and read 2.0 / 5.95 / 3.53 on a real default run because the skip and tower logits are anti-correlated (corr -0.76 / -0.92 / -0.91), yet the report calls it a share. NT-104 added a second helper with the same definition.
+- **acceptance:** (1) One helper, used by the report and by NT-104's diagnostics, returning per horizon cov(skip, logit)/var(logit) (skip and tower shares sum to 1) plus the correlation of skip and tower; (2) the report labels it as such; (3) tests against a numpy computation on OHLCV; (4) fast suite, ruff.
+- **source:** QA of NT-037; NT-104 implementer report
+
 
 Items closed at earlier milestone reviews: the remediation plan's phases 0, A (M1, M2, M4), B and C, and
 the notebook review rounds (see [STATUS.md](STATUS.md) and `git log`).
