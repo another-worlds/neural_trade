@@ -400,7 +400,15 @@ def test_default_model_gradient_mode_equalises_terms_as_they_enter_total(tmp_pat
     values = list(mean_norms.values())
     assert all(v > 0.0 for v in values), f"an independently-recomputed term has a zero trunk gradient: {mean_norms}"
     spread = (max(values) - min(values)) / (float(np.mean(values)) + 1e-8)
-    # A generous tolerance: this re-samples fresh batches from train_ds (shuffled independently of
-    # calibration's own sample), not the exact batches calibration measured, so some spread from
-    # sampling noise is expected; the claim under test is "roughly equal", not "bit-identical".
-    assert spread < 0.5, f"independently-recomputed gradient norms are not equalised (spread {spread:.3f}): {mean_norms}"
+    # Tolerance derived from measured noise (NT-111; QA of NT-101 flagged the old 0.5 threshold as
+    # already sitting at the measured noise, 0.58 on 12 fresh batches, on the production-scale
+    # dataset). This test's own 602-train-sequence bound is noisier still, even after the fixes
+    # above (full-fraction calibration sampling, 4 reshuffled recompute passes = 12 samples/term):
+    # 10 independent seeds of this exact computation (same cfg, same synthetic data, only SEED and
+    # the calibration/recompute sampling varying) gave spread = 0.297, 0.689, 0.770, 0.680, 0.350,
+    # 0.633, 0.121, 0.261, 0.500, 0.118 -- mean 0.442, std 0.231, max 0.770. A fixed 0.5 tolerance
+    # would flake on about half of these seeds. 0.9 (above the observed max, with margin) comfortably
+    # covers all 10 measured seeds while still catching the failure this test guards against: before
+    # the NT-101 QA repair, an un-equalised term differed from the others by whole orders of
+    # magnitude (spread >> 1), not by this test's noise band.
+    assert spread < 0.9, f"independently-recomputed gradient norms are not equalised (spread {spread:.3f}): {mean_norms}"
