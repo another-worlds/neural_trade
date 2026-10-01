@@ -497,6 +497,25 @@ class Config:
     # ------------------------------------------------------------------ architecture / activations
     REG_MOMENTUM_L2: float = _f(0.0, "architecture", "L2 on the dense towers", unit="dimensionless", ge=0.0,
                                 tunable=True)
+    ATTENTION_MODE: str = _f("time", "architecture",
+                             "the cross-unit attention block after the Bi-GRU (gru_attention.py, "
+                             "NT-105, B_model_indicators.md 1.4): 'time' (today) attends over the 128 GRU "
+                             "units with the LOOKBACK time positions as each unit's features (513*L + 384 "
+                             "parameters: ties the model to the window length); 'channels' attends across "
+                             "the indicator channels instead (tokens = channels, run before the GRU on the "
+                             "LearnableIndicators output; every channel is summarised by its own mean and "
+                             "std over the window, so the block's parameter count depends on the channel "
+                             "count, not on LOOKBACK) and gates each channel 0..1 before the GRU; 'none' "
+                             "drops the block", unit="name", choices=("time", "channels", "none"),
+                             ignore_case=True)
+    HEAD_POOL: str = _f("flatten", "architecture",
+                        "how the final [B, LOOKBACK, 16] sequence is summarised before the shared dense "
+                        "layer (gru_attention.py, NT-105): 'flatten' (today, Flatten -> Dense(32): 512*L + "
+                        "32 parameters, ties the model to the window length); 'mean' (GlobalAveragePooling1D "
+                        "-> Dense(32), parameter count independent of LOOKBACK); 'attention' (a single "
+                        "learned query attends over the LOOKBACK positions, weighted sum -> Dense(32), also "
+                        "independent of LOOKBACK)", unit="name", choices=("flatten", "mean", "attention"),
+                        ignore_case=True)
     TRAIN_METRICS_EVERY: int = _f(10, "training",
                                   "update the training-set diagnostics every N steps (1 = every step); the "
                                   "training loss and all validation metrics are always exact", unit="steps", ge=1,

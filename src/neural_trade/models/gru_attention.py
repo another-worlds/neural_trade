@@ -7,6 +7,10 @@ plus the T-perp / vacuum-overflow side outputs. Returns an uncompiled functional
 with the 10 outputs of :class:`neural_trade.core.outputs.PredictiveOutputs`, in that order.
 
 Custom layers are resolved by role through the Layers registry (``Config.LAYERS``).
+
+``Config.ATTENTION_MODE`` ('time' default, 'channels', 'none') and ``Config.HEAD_POOL``
+('flatten' default, 'mean', 'attention') switch two blocks whose parameter count otherwise
+depends on LOOKBACK (NT-105, B_model_indicators.md 1.1/1.4/7.1): the default path is unchanged.
 """
 from __future__ import annotations
 
@@ -28,6 +32,47 @@ def _trailing_return_features(x, lags=SKIP_LAGS):
     cols = [last - x[:, -1 - k:-k] for k in lags] + [last - x[:, :1]]
     vol = tf.math.reduce_std(x[:, 1:] - x[:, :-1], axis=1, keepdims=True)
     return tf.concat(cols + [tf.math.log(vol + 1e-6)], axis=1)
+
+
+def _channel_attention_gate(ind_seq, key_dim=8, num_heads=2):
+    """ATTENTION_MODE='channels' (NT-105, B_model_indicators.md 1.4): attention across the
+    indicator channels (tokens = channels) instead of across the 128 GRU units with the window
+    length as each unit's features. Runs on the LearnableIndicators output ``[B, L, C]``,
+    before the GRU. Each channel is summarised by its mean and standard deviation over the
+    window (2 numbers, independent of L), the channels attend over each other, and a sigmoid
+    gate (0..1 per channel) re-weights ``ind_seq`` before it reaches the GRU. Every weight
+    matrix here is sized by the fixed key_dim / head count, not by L, so (unlike the 'time'
+    block it replaces) the parameter count does not depend on the window length."""
+    mean = layers.Lambda(lambda t: tf.reduce_mean(t, axis=1), name='channel_mean')(ind_seq)  # [B, C]
+    std = layers.Lambda(lambda t: tf.math.reduce_std(t, axis=1), name='channel_std')(ind_seq)  # [B, C]
+    stats = layers.Lambda(lambda ts: tf.stack(ts, axis=-1), name='channel_stats')([mean, std])  # [B, C, 2]
+    tokens = layers.Dense(key_dim, name='channel_embed')(stats)  # [B, C, key_dim]
+    att = layers.MultiHeadAttention(num_heads=num_heads, key_dim=key_dim,
+                                    name='channel_attention')(tokens, tokens)
+    tokens = layers.Add(name='channel_attention_add')([tokens, att])
+    tokens = layers.LayerNormalization(name='channel_attention_ln')(tokens)
+    gate = layers.Dense(1, activation='sigmoid', name='channel_gate')(tokens)  # [B, C, 1]
+    gate = layers.Lambda(lambda t: tf.transpose(t, [0, 2, 1]), name='channel_gate_transpose')(gate)  # [B, 1, C]
+    return layers.Multiply(name='channel_gated')([ind_seq, gate])
+
+
+def _attention_pool(x, key_dim=16):
+    """HEAD_POOL='attention' (NT-105): a single learned query attends over the LOOKBACK
+    positions of ``x`` ``[B, L, C]`` and returns the weighted sum ``[B, C]``; every weight here
+    is sized by C and key_dim, not by L."""
+    channels = x.shape[-1]
+    query = layers.Dense(key_dim, use_bias=False, name='head_pool_query')(
+        layers.Lambda(lambda t: tf.ones_like(t[:, :1, :1]), name='head_pool_query_seed')(x))  # [B, 1, key_dim]
+    key = layers.Dense(key_dim, name='head_pool_key')(x)  # [B, L, key_dim]
+    value = layers.Dense(channels, name='head_pool_value')(x)  # [B, L, C]
+    scores = layers.Lambda(
+        lambda qk: tf.matmul(qk[0], qk[1], transpose_b=True) / (float(key_dim) ** 0.5),
+        name='head_pool_scores'
+    )([query, key])  # [B, 1, L]
+    weights = layers.Softmax(axis=-1, name='head_pool_softmax')(scores)
+    pooled = layers.Lambda(lambda vw: tf.matmul(vw[0], vw[1]), name='head_pool_weighted_sum')(
+        [weights, value])  # [B, 1, C]
+    return layers.Reshape((channels,), name='head_pool_flatten')(pooled)  # [B, C]
 
 
 def _direction_head(config, tower, skip_features, name, bias_init):
@@ -89,6 +134,14 @@ def build_gru_attention(config) -> tf.keras.Model:
     # Enhanced Learnable Indicators: Now takes [inp, meta_adjust], outputs sequences [B, LOOKBACK, num_ind]
     ind_seq = Layers.for_role(config, 'indicators', config, name='learnable_indicators')([inp, meta_adjust])
 
+    # ATTENTION_MODE (NT-105, B_model_indicators.md 1.4): 'channels' attends across the indicator
+    # channels (tokens = channels) before the GRU, instead of the post-GRU 'time' block below.
+    attention_mode = str(getattr(config, 'ATTENTION_MODE', 'time')).lower()
+    if attention_mode == 'channels':
+        ind_seq = _channel_attention_gate(ind_seq)
+    elif attention_mode not in ('time', 'none'):
+        raise ValueError(f"ATTENTION_MODE={attention_mode!r} is not one of time, channels, none")
+
     # Memory-Supplemented Layers: Capture temporal interconnections
     memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
     memory = layers.Dropout(0.1)(memory)
@@ -99,11 +152,16 @@ def build_gru_attention(config) -> tf.keras.Model:
     x = layers.Add()([memory, att])
     x = layers.LayerNormalization()(x)
 
-    # Graph-like view: Attend across indicators
-    x_perm = layers.Permute((2, 1))(x)  # [B, num_ind, LOOKBACK]
-    inter_att = layers.MultiHeadAttention(num_heads=4, key_dim=att_key_dim)(x_perm, x_perm)
-    x_perm = layers.Add()([x_perm, inter_att])
-    x = layers.Permute((2, 1))(layers.LayerNormalization()(x_perm))  # Back to [B, LOOKBACK, num_ind]
+    if attention_mode == 'time':
+        # Graph-like view (today's default): attends over the 128 GRU units, with the LOOKBACK
+        # time positions as each unit's features; ties the parameter count to LOOKBACK (D-045
+        # math report 1.4: this is NOT attention across the 31 indicator channels, despite the
+        # name - see ATTENTION_MODE='channels' above for that).
+        x_perm = layers.Permute((2, 1))(x)  # [B, num_ind, LOOKBACK]
+        inter_att = layers.MultiHeadAttention(num_heads=4, key_dim=att_key_dim)(x_perm, x_perm)
+        x_perm = layers.Add()([x_perm, inter_att])
+        x = layers.Permute((2, 1))(layers.LayerNormalization()(x_perm))  # Back to [B, LOOKBACK, num_ind]
+    # 'channels': already mixed before the GRU, above. 'none': no cross-unit block here.
 
     # Multi-scale Conv feature extractor
     x_short = layers.Conv1D(16, 3, padding='same', activation='gelu')(x)
@@ -186,12 +244,22 @@ def build_gru_attention(config) -> tf.keras.Model:
                                name='regime_gate')(
         layers.Concatenate()([_gate_vol, context]))                  # [B, 1]
 
-    # Sequence summary for regression
-    seq_flat = layers.Flatten()(x)
+    # Sequence summary for regression. HEAD_POOL (NT-105, B_model_indicators.md 1.1/7.1):
+    # 'flatten' (today) ties the Dense(32) below to LOOKBACK (512*L + 32 parameters); 'mean' and
+    # 'attention' summarise x into a fixed-size vector first, independent of LOOKBACK.
+    head_pool = str(getattr(config, 'HEAD_POOL', 'flatten')).lower()
+    if head_pool == 'flatten':
+        seq_summary = layers.Flatten()(x)
+    elif head_pool == 'mean':
+        seq_summary = layers.GlobalAveragePooling1D()(x)
+    elif head_pool == 'attention':
+        seq_summary = _attention_pool(x)
+    else:
+        raise ValueError(f"HEAD_POOL={head_pool!r} is not one of flatten, mean, attention")
 
     # Shared dense layer for all output heads
     shared_dense = layers.Dense(32, activation='gelu',
-                               kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(seq_flat)
+                               kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(seq_summary)
     shared_dense = layers.Concatenate()([shared_dense, context])
 
     # === THREE INDEPENDENT OUTPUT TOWERS (h0, h1, h2) ===
