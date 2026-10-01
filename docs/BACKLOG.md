@@ -136,13 +136,13 @@ changes).
 | [NT-101](#nt-101) | P1 | feature | implementer | todo | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
 | [NT-102](#nt-102) | P1 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
 | [NT-103](#nt-103) | P1 | feature | implementer | todo | Epoch selection on proper scores (EPOCH_SELECT_METRIC); waits for the owner (D-011) |
-| [NT-104](#nt-104) | P1 | feature | implementer | todo | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
+| [NT-104](#nt-104) | P1 | feature | implementer | in-progress | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
 | [NT-105](#nt-105) | P2 | feature | implementer | todo | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
 | [NT-106](#nt-106) | P3 | feature | implementer | todo | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
 | [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
 | [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
-| [NT-110](#nt-110) | P2 | bug | implementer | todo | One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit)) |
+| [NT-110](#nt-110) | P2 | bug | implementer | done | One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit)) |
 
 ## Items
 
@@ -1376,7 +1376,7 @@ changes).
 
 **Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B**
 
-- **status:** todo
+- **status:** in-progress (2026-10-01): (1) and (2) done, QA (Opus) FAIL on a68d72b (linear_indicators unnormalised: loss 542,944, 50% saturated P(up); share not reported) -> repair 1 e15e4f6 -> PASS; merged. gru_small 77,138 params and linear_indicators 7,610 (default LOOKBACK 60) vs gru_attention 316,751; DIRECTION_DEEP_ZERO_INIT; one covariance-share helper (NT-110). Open: (3) the capacity A/B. SPEC notes from QA: linear_indicators applies a per-sample LayerNormalization over its 246 pooled+last-bar features (a nonlinear readout; per-feature standardisation fit on the training block is the strictly linear alternative); the report should print tower_share beside skip_share (a covariance share can leave [0, 1]: gru_small h0 skip 1.074, tower -0.074).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/models/ (new registered variants), src/neural_trade/core/config.py, tests/; runs/experiments/capacity_v1/
 - **depends on:** NT-099 or NT-101 (the objective), NT-032
@@ -1448,7 +1448,7 @@ changes).
 
 **One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit))**
 
-- **status:** todo
+- **status:** done (2026-10-01): folded into NT-104 repair 1 (e15e4f6), QA PASS: one helper (models/direction_diagnostics.py::direction_logit_decomposition), report label 'covariance share', hand recomputation matches to 6 decimals for gru_attention, gru_small, linear_indicators; a scored gru_small run prints it.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/evaluation/report.py (direction_skip_share), src/neural_trade/models/direction_diagnostics.py (NT-104's direction_skip_variance_share), tests/
 - **depends on:** NT-104 merged
