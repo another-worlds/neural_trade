@@ -140,8 +140,8 @@ changes).
 | [NT-105](#nt-105) | P2 | feature | implementer | todo | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
 | [NT-106](#nt-106) | P3 | feature | implementer | todo | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
-| [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
-| [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
+| [NT-108](#nt-108) | P2 | bug | implementer | done | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
+| [NT-109](#nt-109) | P2 | performance | implementer | done | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
 | [NT-110](#nt-110) | P2 | bug | implementer | done | One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit)) |
 
 ## Items
@@ -1038,6 +1038,7 @@ changes).
 - **why:** NT-035 (2026-09-29): three runs with seed 777 and op determinism on (TF_DETERMINISTIC_OPS=1 plus enable_op_determinism) gave val_loss 9.5673 / 9.6394 / 9.6603 at epoch 0 on the GPU; no op raised. D-025 assumes a deterministic mode makes comparison studies reproducible; it does not yet, so paired studies must use several seeds. Candidates: PYTHONHASHSEED unset on this path, the tf.data shuffle or parallel map order, the vacuum-noise layer's random numbers, CPU-pinned ops.
 - **acceptance:** (1) The source is identified with evidence (a CPU test and, by the experimenter, a short GPU check). (2) Two same-seed runs in the deterministic mode give identical val_loss per epoch on the CPU (test) and, if the source is fixable on the GPU, on the GPU (3 runs, recorded). (3) If full GPU reproducibility is impossible in TF 2.10, the item records why and DECISIONS gets a corrected reading of D-025. (4) Speed unchanged (D-018); fast suite and ruff pass.
 - **source:** NT-035 REPORT (2026-09-29)
+- **note (2026-10-01):** tests/test_screen.py::test_reused_later_trial_matches_an_independent_fresh_run_with_default_dropout_and_noise fails deterministically in the slow suite on this machine at f7d4a41 and af1cbce (7.4939 != 7.7375, 3/3 on each; QA of NT-108), and CPU training of the same config differs run to run (NT-108 implementer: final_train_loss 10.050 vs 10.259). The slow suite has this one red test until NT-074 is fixed.
 
 ### NT-075
 
@@ -1424,7 +1425,7 @@ changes).
 
 **Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers**
 
-- **status:** todo
+- **status:** done (2026-10-01): af1cbce, QA (Sonnet) PASS, merged 4bbbf1b: seeds from a sha256 of the layer name (tests/test_reset.py); the old formula's shift pinned in test_screen.py; default path golden bit-for-bit.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/training/reset.py, tests/
 - **depends on:** none
@@ -1436,7 +1437,7 @@ changes).
 
 **Shrink the six slowest fast-suite tests (28-55 s default-config trainings)**
 
-- **status:** todo
+- **status:** done (2026-10-01): af1cbce, QA PASS, merged 4bbbf1b: the shrunk tests run in 4-8 s (base 48-148 s on QA's machine), assertions unchanged; two full-default tests marked slow; fast suite -n 8: 71 s (implementer), 113-129 s (QA), 280 s on the merged tree under load.
 - **priority / type / role:** P2 / performance / implementer
 - **area:** tests/test_served_epoch.py, tests/registries/test_contracts.py, tests/test_train_smoke.py, tests/conftest.py
 - **depends on:** none
