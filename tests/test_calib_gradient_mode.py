@@ -95,13 +95,16 @@ def test_trunk_variables_excludes_price_direction_variance_heads_and_indicator_v
 
 def test_term_values_reads_by_attribute_not_by_position():
     """NT-101: the gradient branch reads LossComponents by attribute so it keeps working once a
-    later change (e.g. nt-037) appends fields after ``pnl_val`` — unpacking by position would
-    silently misalign as soon as the tuple grows."""
+    later change (nt-037 already did this once, adding dir_align_val/coherence_penalty_val after
+    pnl_val; LossComponents now has 37 fields) appends fields — unpacking by position would
+    silently misalign as soon as the tuple grows. Simulated here with two more hypothetical
+    fields appended after today's last one, so this test keeps testing forward-compatibility
+    regardless of how many fields nt-037 itself ends up adding."""
     from collections import namedtuple
 
     from neural_trade.core.outputs import LossComponents
 
-    Extended = namedtuple("Extended", LossComponents._fields + ("dir_align_val", "coherence_penalty_val"))
+    Extended = namedtuple("Extended", LossComponents._fields + ("future_field_a", "future_field_b"))
     values = {name: float(i) for i, name in enumerate(Extended._fields)}
     lc = Extended(**values)
 
@@ -115,14 +118,17 @@ def test_term_values_reads_by_attribute_not_by_position():
     assert terms["hd"] == values["hd_val"]
     assert terms["ife"] == values["ife_val"]
     assert terms["vac_overflow"] == values["vac_overflow_val"]
-    # the two nt-037 fields are simply not read: no crash, no misalignment.
+    # the appended fields (nt-037's real ones, and these two hypothetical ones) are simply not
+    # read: no crash, no misalignment.
 
 
 def test_gradient_mode_end_to_end_records_weights_and_gradient_shares(tiny_config, tmp_path, synthetic_bars,
                                                                       monkeypatch):
-    """Acceptance (1)+(2): CALIB_MODE='gradient' runs through train_and_evaluate's calibration
-    pass, changes the served lambdas, and meta.json's calibration_lambdas (TrainResult.calibration_lambdas)
-    carries the chosen weights plus each rescaled term's gradient norm and share of the total."""
+    """Acceptance (1)+(2)+(3, QA repair round 1): CALIB_MODE='gradient' runs through
+    train_and_evaluate's calibration pass, changes the served lambdas, and meta.json's
+    calibration_lambdas (TrainResult.calibration_lambdas) carries the chosen weights plus, for
+    every measured (non-skipped) term, its pre- and post-calibration gradient norm and its share
+    of the pre-calibration total."""
     from neural_trade.training.trainer import train_and_evaluate
 
     monkeypatch.chdir(tmp_path)
@@ -146,12 +152,22 @@ def test_gradient_mode_end_to_end_records_weights_and_gradient_shares(tiny_confi
     for name, value in recorded.items():
         assert np.isclose(live[name], value, rtol=1e-6), (name, live[name], value)
 
-    assert "grad_norms" in cal and "grad_shares" in cal
-    assert set(cal["grad_norms"]) == set(cal["grad_shares"])
-    assert set(cal["grad_norms"]) <= set(recorded), "a gradient share was reported for an unrescaled lambda"
+    assert "grad_norms_pre" in cal and "grad_norms_post" in cal and "grad_shares" in cal
+    assert set(cal["grad_norms_pre"]) == set(cal["grad_norms_post"]) == set(cal["grad_shares"])
+    assert set(cal["grad_norms_pre"]) <= set(recorded), "a gradient share was reported for an unrescaled lambda"
+    # vac/vac_overflow never receive a weight; ext/t_perp/casimir/hd/ife default to damping 0 (a
+    # no-op): none of these five are measured, so none should appear in the pre/post/share dicts.
+    assert not ({"lambda_extended_trend", "lambda_t_perp", "lambda_casimir", "lambda_hd", "lambda_ife"}
+               & set(cal["grad_norms_pre"])), "a damping-0 (no-op) term was measured; should have been skipped"
     shares = list(cal["grad_shares"].values())
     assert all(s >= 0.0 for s in shares)
-    assert np.isclose(sum(shares), 1.0, atol=1e-6), "gradient shares must sum to 1 over the rescaled terms"
+    assert np.isclose(sum(shares), 1.0, atol=1e-6), "gradient shares must sum to 1 over the measured terms"
+
+    # Post-calibration norms should all equal ref_loss (within the [0.1, 20] clamp): that is the
+    # whole point of CALIB_MODE=gradient (A_losses.md recommendation 2).
+    for name, post in cal["grad_norms_post"].items():
+        if 0.1 + 1e-6 < cal[name] < 20.0 - 1e-6:  # not clamp-limited: equality should be exact
+            assert np.isclose(post, cal["ref_loss"], rtol=1e-3), (name, post, cal["ref_loss"])
 
     for name, value in recorded.items():
         assert 0.1 - 1e-9 <= value <= 20.0 + 1e-9, f"{name}={value} outside the [0.1, 20] clamp"
@@ -180,21 +196,23 @@ def test_active_terms_built_from_multiple_horizons_keep_a_nonzero_trunk_gradient
     cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
     cfg.MODEL_PATH = str(tmp_path / "weights.h5")
     cfg.CALIB_MODE = "gradient"
-    cfg.DIR_DEADBAND_BPS = 0.0  # every example gets a direction label: 'dir' cannot be masked to 0
+    cfg.DIR_DEADBAND_BPS = 0.0     # every example gets a direction label: 'dir' cannot be masked to 0
+    cfg.CALIB_DAMPING_TREND = 1.0  # force 'ext' to be measured too (default 0 would skip it entirely)
     cfg.validate()
 
     result = train_and_evaluate(config=cfg, epochs=0, force=True, calibrate=True, fit_calibration=False)
     cal = result.calibration_lambdas
     assert cal is not None
-    grad_norms = cal["grad_norms"]
+    grad_norms = cal["grad_norms_pre"]
 
-    # These four are built from a 3-horizon average in _term_values and are always active at the
-    # tiny_config defaults (LAMBDA_DIR/VAR/CRPS/EXTENDED_TREND all > 0): each must show a real,
-    # nonzero trunk gradient. Before the fix every one of them was exactly 0.0 here.
+    # These four are built from a multi-horizon sum (dir/var/crps) or a lambda_trend_outer-scaled
+    # sum (ext), per _total_term_tensors, and are measured (CALIB_DAMPING_TREND=1 forces 'ext' on)
+    # at the tiny_config defaults (LAMBDA_DIR/VAR/CRPS/EXTENDED_TREND all > 0): each must show a
+    # real, nonzero trunk gradient. Before the fix every one of them was exactly 0.0 here.
     for lam in ("lambda_dir", "lambda_var", "lambda_crps", "lambda_extended_trend"):
         assert grad_norms[lam] > 0.0, (
             f"{lam}'s measured gradient norm is exactly 0 with DIR_DEADBAND_BPS=0 (a nonzero-value, "
-            f"zero-gradient term almost always means the averaged tensor was built outside the "
+            f"zero-gradient term almost always means the combined tensor was built outside the "
             f"GradientTape's `with` block, not that the term is genuinely inactive): {grad_norms}"
         )
 
@@ -258,3 +276,105 @@ def test_gradient_mode_cost_is_reported(tiny_config, tmp_path, synthetic_bars, m
           f"(x{t_gradient / t_value:.2f})")
     assert t_value > 0.0 and t_gradient > 0.0
     assert t_gradient < 120.0, "the gradient pass on a tiny model should not take minutes"
+
+
+@pytest.mark.slow
+def test_default_model_gradient_mode_equalises_terms_as_they_enter_total(tmp_path, synthetic_bars, monkeypatch):
+    """Acceptance (1), QA repair round 1 on 119319f: on the REAL DEFAULT model (not tiny_config —
+    the full OHLCV + 14 indicator-family input, D-047), after a CALIB_MODE='gradient' calibration
+    pass, recompute each default-damped term's trunk gradient norm **independently** of
+    ``_total_term_tensors`` (written from scratch here, mirroring losses/functions.py's `total =`
+    composition by inspection, not by import) and check they land within a stated tolerance of
+    each other. Equalising the /3-per-horizon-average the pre-repair code measured is a different,
+    weaker claim than equalising what `total` actually sums (horizon SUMS times outer
+    multipliers) — this test exercises the real claim end to end.
+    """
+    import tensorflow as tf
+
+    from neural_trade.core.config import Config
+    from neural_trade.data.datasets import create_datasets
+    from neural_trade.data.processor import DataProcessor
+    from neural_trade.registries.models import Models
+    from neural_trade.training.custom_model import CustomTrainModel
+    from neural_trade.training.lambda_calibration import calibrate_loss_weights
+    from neural_trade.training.trainer import train_and_evaluate  # noqa: F401 (keeps import style consistent)
+    from neural_trade.utils.seeding import seed_everything
+
+    monkeypatch.chdir(tmp_path)
+    synthetic_bars.to_csv(tmp_path / "bars.csv", index=False)
+    cfg = Config()
+    cfg.CSV_PATH = str(tmp_path / "bars.csv")
+    cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
+    cfg.MODEL_PATH = str(tmp_path / "weights.h5")
+    cfg.CALIB_MODE = "gradient"
+    cfg.MAX_SEQUENCE_COUNT = 1200  # bound the real default model's calibration pass for a test
+    cfg.DIR_DEADBAND_BPS = 0.0     # every example gets a direction label: 'dir'/'ece' can't mask to 0
+    cfg.validate()
+    seed_everything(0)
+
+    dp = DataProcessor(cfg)
+    df, close_values = dp.load_and_prepare_data()
+    (X_train, y_train, lc_train, ext_train, _X_test, _y_test, _lc_test, _ext_test,
+    _y_train_raw, _y_test_raw, _target_scaler) = dp.prepare_datasets(df, close_values)
+    vb = dp.val_block
+    train_ds, _val_ds = create_datasets(
+        cfg, X_train, y_train, lc_train, ext_train,
+        vb["X"], vb["y_scaled"], vb["last_close"], vb["extended_trends"],
+    )
+
+    base = Models.build(cfg.MODEL_NAME, cfg)
+    pred_scale = float(np.std(y_train)) or 1.0
+    model = CustomTrainModel(base_model=base, pred_scale=pred_scale, pred_mean=float(np.mean(y_train)),
+                             config=cfg, inputs=base.inputs, outputs=base.outputs)
+
+    cal = calibrate_loss_weights(model, train_ds, cfg, X_train.shape[0])
+    assert cal is not None, "the real default model's calibration pass failed"
+
+    from neural_trade.training.lambda_calibration import _LAMBDA_NAME_OF, _trunk_variables
+    trunk_vars = _trunk_variables(model)
+    # Default-damped terms (CALIB_DAMPING default 1.0; CALIB_DAMPING_TREND/PHYSICS default 0, so
+    # ext/t_perp/casimir/hd/ife are legitimately excluded — same set the implementation measures).
+    default_damped = ("short", "point", "long", "dir", "var", "vol", "crps", "ece")
+    assert {_LAMBDA_NAME_OF[name] for name in default_damped} == set(cal["grad_norms_pre"])
+
+    def independent_terms(lc):
+        """Built from scratch here, independently of _total_term_tensors, evaluated AFTER
+        calibration with the model's own (now-calibrated) weights, exactly as `total` would
+        combine them on the next real training step. point_h0/h1/h2 and vol_loss already carry
+        their own lambda inside the returned LossComponents field (see losses/functions.py:
+        point_loss_h0_val = model.lambda_short * point_huber(...), vol_loss = vol_diff *
+        model.lambda_vol); dir_h0/nll_h0/crps_h0/soft_ece_h0 do not (lambda_dir/var/crps/soft_ece
+        are only applied when `total` builds total_dir_loss/total_nll/total_crps/total_soft_ece),
+        so those four need their inner lambda multiplied in here explicitly.
+        """
+        return {
+            'short': lc.point_h0, 'point': lc.point_h1, 'long': lc.point_h2,
+            'dir': model.lambda_dir_outer * model.lambda_dir * (lc.dir_h0 + lc.dir_h1 + lc.dir_h2),
+            'var': model.lambda_nll_outer * model.lambda_var * (lc.nll_h0 + lc.nll_h1 + lc.nll_h2),
+            'vol': 0.1 * lc.vol_loss,
+            'crps': model.lambda_crps * (lc.crps_h0 + lc.crps_h1 + lc.crps_h2),
+            'ece': model.lambda_soft_ece * (lc.soft_ece_h0 + lc.soft_ece_h1 + lc.soft_ece_h2),
+        }
+
+    norms = {name: [] for name in default_damped}
+    for batch in train_ds.take(3):
+        x_batch, y_batch, last_batch, ext_batch = batch
+        with tf.GradientTape(persistent=True) as tape:
+            raw = model(x_batch, training=True)
+            (*yp, vac_of) = raw
+            lc = model.custom_loss(x_batch, y_batch, yp, last_batch, ext_batch, vacuum_overflow=vac_of)
+            terms = independent_terms(lc)
+        for name in default_damped:
+            g = tape.gradient(terms[name], trunk_vars)
+            present = [gg for gg in g if gg is not None]
+            norms[name].append(float(tf.linalg.global_norm(present)) if present else 0.0)
+        del tape
+
+    mean_norms = {name: float(np.mean(v)) for name, v in norms.items()}
+    values = list(mean_norms.values())
+    assert all(v > 0.0 for v in values), f"an independently-recomputed term has a zero trunk gradient: {mean_norms}"
+    spread = (max(values) - min(values)) / (float(np.mean(values)) + 1e-8)
+    # A generous tolerance: this re-samples fresh batches from train_ds (shuffled independently of
+    # calibration's own sample), not the exact batches calibration measured, so some spread from
+    # sampling noise is expected; the claim under test is "roughly equal", not "bit-identical".
+    assert spread < 0.5, f"independently-recomputed gradient norms are not equalised (spread {spread:.3f}): {mean_norms}"
