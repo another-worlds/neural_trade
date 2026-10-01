@@ -1039,6 +1039,7 @@ changes).
 - **why:** NT-035 (2026-09-29): three runs with seed 777 and op determinism on (TF_DETERMINISTIC_OPS=1 plus enable_op_determinism) gave val_loss 9.5673 / 9.6394 / 9.6603 at epoch 0 on the GPU; no op raised. D-025 assumes a deterministic mode makes comparison studies reproducible; it does not yet, so paired studies must use several seeds. Candidates: PYTHONHASHSEED unset on this path, the tf.data shuffle or parallel map order, the vacuum-noise layer's random numbers, CPU-pinned ops.
 - **acceptance:** (1) The source is identified with evidence (a CPU test and, by the experimenter, a short GPU check). (2) Two same-seed runs in the deterministic mode give identical val_loss per epoch on the CPU (test) and, if the source is fixable on the GPU, on the GPU (3 runs, recorded). (3) If full GPU reproducibility is impossible in TF 2.10, the item records why and DECISIONS gets a corrected reading of D-025. (4) Speed unchanged (D-018); fast suite and ruff pass.
 - **source:** NT-035 REPORT (2026-09-29)
+- **note (2026-10-01, QA of NT-096):** tests/test_screen.py::test_reused_first_trial_matches_a_fresh_trial_of_the_same_config_and_seed also fails under `-m slow -n 8` load (12.9853 vs 13.1904) and passes alone, on be63e6e and 4d63f31: likely the same CPU nondeterminism.
 - **note (2026-10-01):** tests/test_screen.py::test_reused_later_trial_matches_an_independent_fresh_run_with_default_dropout_and_noise fails deterministically in the slow suite on this machine at f7d4a41 and af1cbce (7.4939 != 7.7375, 3/3 on each; QA of NT-108), and CPU training of the same config differs run to run (NT-108 implementer: final_train_loss 10.050 vs 10.259). The slow suite has this one red test until NT-074 is fixed.
 
 ### NT-075
@@ -1280,7 +1281,7 @@ changes).
 
 **Loss hygiene: epsilon inside every batch std, coherence without its zero-gradient parts and logged, stale comments**
 
-- **status:** todo
+- **status:** done (2026-10-01): (1) eps guard behind LOSS_SAFE_STD (default off: at eps 0 the restructured graph alone moves the CPU trajectory; on: vol NaN gone, IFE near-degenerate gradient bounded ~100x); (2) coherence magnitude-only behind COHERENCE_MAGNITUDE_ONLY (default off: the removed dir_disagree part has zero gradient but a weight-dependent value that can move the served epoch), gradient bit-exact between settings (eager); (3) golden fully equal on 4345464 vs 53ce28c (455/455); (4) horizon comments fixed; the 'no-op' direction clips stay (removing them breaks legacy weight loading: test_legacy_bundle, test_indicator_families; D-029). QA (Opus) PASS on 4d63f31 then re-QA PASS on 4345464 (fast 1842, stability 11, ruff clean); merged. Adopting either switch as default is batched with NT-099's default change. P3 note: the switch docstring's 'gradient unchanged' holds for the coherence term, not bit-for-bit for the total under tf.function (~1e-6).
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/losses/functions.py, src/neural_trade/models/gru_attention.py (comments), src/neural_trade/core/outputs.py, tests/
 - **depends on:** none
