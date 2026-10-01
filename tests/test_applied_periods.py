@@ -94,3 +94,38 @@ def test_write_applied_period_report_writes_valid_json(tmp_path):
     for name, s in stats.items():
         for k, v in s.items():
             assert on_disk[name][k] == pytest.approx(v)
+
+
+# ---------------------------------------------------------------- NT-097 point 5: wired into score_result
+
+
+@pytest.mark.slow
+def test_a_scored_default_config_run_carries_the_applied_period_report_in_its_health_section(tmp_path, synthetic_bars):
+    """A real, 1-epoch, default-config run scored through the engine (experiments.scorer.score_result,
+    called by the Runner exactly as production does) must carry p5/p50/p95 of every learnable
+    parameter's applied period in its health section and its eval_report_*.json on disk."""
+    from neural_trade.experiments.runner import Runner
+    from neural_trade.experiments.scenario import Scenario
+    from neural_trade.experiments.store import RunStore
+
+    bars_csv = tmp_path / "bars.csv"
+    synthetic_bars.to_csv(bars_csv, index=False)
+    spec = {"schema_version": 1, "name": "applied_periods_smoke", "description": "NT-097 point 5",
+           "overrides": {"CSV_PATH": str(bars_csv), "MAX_SEQUENCE_COUNT": 1500, "EPOCHS": 1, "BATCH_SIZE": 32},
+           "variants": {"default": {}}, "folds": [-1], "seeds": [0],
+           "strategy": {"name": "calibrated_quantile", "params": {}}, "backtest": {"random_seeds": 5},
+           "run": {"calibrate": False, "save_artifacts": False}}
+    store = RunStore(tmp_path / "runs")
+    report = Runner(Scenario.from_dict(spec), store).run()
+    assert len(report.ran) == 1 and not report.failed
+
+    from pathlib import Path
+
+    run_dir = Path(report.ran[0]["run_dir"])
+    doc = json.loads((run_dir / "eval_report_test.json").read_text(encoding="utf-8"))
+    applied = doc["health"]["applied_periods"]
+    assert applied, "a default-config run must report at least one learnable parameter"
+    for name, s in applied.items():
+        assert set(s) == {"p5", "p50", "p95"}, name
+        assert s["p5"] <= s["p50"] <= s["p95"], (name, s)
+        assert all(np.isfinite(v) for v in s.values()), (name, s)
