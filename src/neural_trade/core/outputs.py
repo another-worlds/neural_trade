@@ -19,10 +19,16 @@ PredictiveOutputs = namedtuple(
     ],
 )
 
-#: The 35 components returned by the training objective (``losses.custom_loss`` and any objective
+#: The 37 components returned by the training objective (``losses.custom_loss`` and any objective
 #: that wraps it, e.g. ``pnl_utility``, NT-087).
 #: ``local_*``/``global_*`` are retired trend terms kept as exact zeros so the contract holds.
 #: ``pnl_val`` is the lambda-weighted mean-variance P&L utility term (0.0 for ``custom_loss`` itself).
+#: ``dir_align_val``/``coherence_penalty_val`` (NT-037, D-045 amendment) are the two addends of
+#: ``total`` that had no field before: the direction/Gaussian alignment term (already multiplied
+#: by its inner ``LAMBDA_DIR_ALIGN``; ``total`` applies ``lambda_dir_align_outer`` on top, default
+#: 0) and the raw coherence penalty (``total`` applies ``lambda_coherence_outer`` on top). Added at
+#: the end so every existing positional unpack keeps working; the two call sites that unpack the
+#: full tuple (``training/custom_model.py`` train_step/test_step) were updated in the same change.
 LossComponents = namedtuple(
     "LossComponents",
     [
@@ -39,6 +45,7 @@ LossComponents = namedtuple(
         "t_perp_total", "casimir_val", "vac_val", "hd_val", "ife_val",
         "vac_overflow_val",
         "pnl_val",
+        "dir_align_val", "coherence_penalty_val",
     ],
 )
 

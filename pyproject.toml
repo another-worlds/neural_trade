@@ -54,6 +54,7 @@ markers = [
     "gpu: requires a GPU; never selected in CI",
     "data: requires the bundled binance_btcusdt_1min_ccxt.csv",
     "notebook: requires ipywidgets / IPython",
+    "stability: gradient/loss stability invariants (D-026, NT-036); CPU, run by the CI unit job",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:tensorflow.*",

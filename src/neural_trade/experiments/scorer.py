@@ -30,12 +30,15 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 ROLES = ("dev", "test")
 
@@ -290,6 +293,31 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
     report = evaluate(frame, cfg, baselines=baselines, cal_frame=cal, run_id=run_id, backtest=bt)
     report.meta.update({"role": role, "ranks": role == "dev", "block": "out-of-sample (the fold's test block)",
                         **dict(meta or {})})
+    if out_dir is not None:
+        # Training health (D-026, NT-037): best-effort - a run without a metrics.jsonl (an older
+        # run, or one scored from saved predictions only) simply gets no health section.
+        try:
+            from neural_trade.evaluation.report import health_block
+            from neural_trade.telemetry.epoch_logger import read_metrics
+            mpath = Path(out_dir) / "metrics.jsonl"
+            if mpath.exists():
+                report.health = health_block(read_metrics(mpath), cfg)
+        except Exception:
+            logger.exception("could not build the training-health section")
+        # DIRECTION_SKIP's share of the direction-logit variance (D-045 A4), on the validation
+        # block, through the run's own fitted WindowNormalizer (QA repair round 2: X_model/
+        # normalizer.transform handles the OHLCV default's 3-D windows and volume scaling, unlike
+        # the naive (X - last_close) / pred_scale this used to reconstruct by hand). Also
+        # best-effort (an older run with no stored normalizer, or no skip layers, returns {}).
+        try:
+            from neural_trade.evaluation.report import direction_skip_share
+            val = arrays.get("val") if arrays else None
+            normalizer = getattr(result, "normalizer", None)
+            if val is not None and normalizer is not None and report.health is not None:
+                x_scaled = normalizer.transform(val["X_model"], val["last_close"])
+                report.health["direction_skip_share"] = direction_skip_share(result.model, x_scaled)
+        except Exception:
+            logger.exception("could not compute the DIRECTION_SKIP variance share")
     scores = leaderboard_scores(report, res, result)
     scored = Scored(role, report, res, strat, scores)
     if out_dir is not None:
