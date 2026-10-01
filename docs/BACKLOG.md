@@ -615,7 +615,7 @@ changes).
 
 **Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars)**
 
-- **status:** todo
+- **status:** done (2026-10-01): performance.periods_per_year(bar_minutes, calendar='24/7') is the one function; the CLI backtest, the notebook explorer (run, compare_strategies), the engine scorer, rescore and the frozen set (backtest_gate.py, ablation.py: fixed, not refused) set bar_minutes from RESAMPLE_MINUTES; RESAMPLE_MINUTES tunable. QA (Opus) PASS on 09bdbc3: its own RESAMPLE_MINUTES=5 run through CLI, explorer.run, explorer.compare, scorer and rescore gives sharpe_net = per-bar x sqrt(105,120) on all five; 1-minute rescore of runs/scenarios/reference_default (72 entries) byte-identical (sha256 fc1bad3f...66b6); golden equal; stability 11. Merged 571e5de (fast 1875, ruff clean). Follow-up: NT-113.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/strategy/backtest.py (BacktestConfig), src/neural_trade/strategy/performance.py, src/neural_trade/strategy/params.py (build_backtest_config), src/neural_trade/cli.py, src/neural_trade/notebook/backtest_ui.py, the frozen set (D-023; a bar-size guard only), the engine's scorer (NT-026), the tunable flag of RESAMPLE_MINUTES (NT-029) and the sweep's bar-size refusal (NT-030), tests/
 - **depends on:** NT-026 (experiment engine: the scorer)
