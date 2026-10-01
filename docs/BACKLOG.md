@@ -1391,7 +1391,7 @@ changes).
 
 **Attention across the indicator channels and pooling instead of Flatten; then an A/B**
 
-- **status:** todo
+- **status:** in-progress (2026-10-01): (1)-(2) met: ATTENTION_MODE time|channels|none (channels = attention across the 82 indicator channels of the OHLCV 14-family default, scores [B, heads, 82, 82], before the GRU) and HEAD_POOL flatten|mean|attention; parameters independent of L under the new switches (channels/mean 255,876 at L 60 and 120; default 316,751 / 378,371); golden equal 455/455; QA PASS on 0f10e08 (QA timing: default 0.062, channels/mean 0.044, none/mean 0.044 s/step on a tiny CPU setup; the implementer's none-slower ordering did not reproduce); merged b5cd772 (fast 1866, ruff clean, slow 27 + the two known NT-074 screen failures). (3) the A/B is open.
 - **priority / type / role:** P2 / feature / implementer
 - **area:** src/neural_trade/models/gru_attention.py, tests/
 - **depends on:** NT-104
