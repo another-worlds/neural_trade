@@ -1463,13 +1463,25 @@ changes).
 
 **Loss-weight calibration fails loudly in gradient mode; a steadier slow-test tolerance**
 
-- **status:** todo
+- **status:** done (2026-10-01): records calib_failed / calib_mode / calib_error (gradient mode always; value mode behind CALIB_FAIL_LOUD, default off) in meta.json and status.json; the scorer raises ScoringError so the engine marks the run failed (QA's own engine-level OOM injection: result.json failed). Slow test: all 3 batches, 12 verification samples, tolerance 0.9 from a 10-seed measurement (max 0.770); QA: an unequalised weighting gives spread 3.08, still rejected. Golden equal (455/455). QA PASS on d846e1c (fast 1222, ruff clean); merged 02b4c14; integration run on the merged head: fast 1847 passed + 1 failure under machine load (tests/test_experiment_engine.py::test_an_interrupted_cell_is_kept_indexed_incomplete_and_trained_again: uses FakeTrainer, not NT-111's code; passes alone and 3/3 under -n 8), ruff clean, slow 28 passed + the known NT-074 failure. The implementer's push of nt-111 was refused by the permission classifier; the commit reached origin through the remediation/plan merge. Follow-up: NT-112.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/training/lambda_calibration.py, tests/test_calib_gradient_mode.py
 - **depends on:** NT-101 (merged)
 - **why:** re-QA of NT-101 (2026-10-01): an error inside calibrate_loss_weights (QA saw a CPU OOM in the backward pass on the default model, shape [256,57,60,60], on a loaded machine) is caught and the configured lambdas are restored with only a warning, so a run can silently train with uncalibrated weights; the slow test's 0.5 relative-spread tolerance on 3 fresh batches sits at the measured noise (0.58 on 12 fresh real batches).
 - **acceptance:** (1) When CALIB_MODE is gradient (and, behind a switch, value), a failed calibration raises (or records `calib_failed: true` with the error in meta.json and status.json, and the scorer marks the run failed); test with an injected error. (2) The slow test's tolerance is derived from the measured per-batch noise (or uses more batches) so it does not flake; 10 repeated runs with different seeds pass. (3) Fast suite, ruff.
 - **source:** NT-101 re-QA report (D:/nt_qa/nt101r_check.log, nt101r_noise.log)
+
+### NT-112
+
+**The screen layout surfaces a failed loss-weight calibration**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/screen.py, tests/test_screen.py
+- **depends on:** NT-111 (merged)
+- **why:** QA of NT-111 (2026-10-01): screen.py:974 and :1105 call calibrate_loss_weights and discard the return value, so a screen trial whose calibration fails trains and scores with restored, uncalibrated lambdas and no record, even in gradient mode or with CALIB_FAIL_LOUD; D-048 made the screen layout the first venue for maths and stability checks.
+- **acceptance:** (1) A screen trial whose calibration returns calib_failed is recorded as failed (or carries calib_failed with the error in its JSONL row and is excluded from rankings), test by injection. (2) Default screen numbers unchanged (a trial with a successful calibration gives the same row). (3) Fast suite, ruff.
+- **source:** QA of NT-111 (d846e1c)
 
 
 Items closed at earlier milestone reviews: the remediation plan's phases 0, A (M1, M2, M4), B and C, and
