@@ -9,6 +9,8 @@ Every test here fails on the pre-fix code.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 import tensorflow as tf
@@ -173,6 +175,82 @@ def test_nll_is_exact_at_the_variance_floor(make_loss_model):
         err = y.numpy()[:, h] - price[h].numpy()[:, 0]
         ref = np.mean(0.5 * (np.log(2 * np.pi) + np.log(floor)) + 0.5 * err ** 2 / floor)
         assert float(getattr(out, f"nll_h{h}")) == pytest.approx(ref, rel=1e-4)
+
+
+def test_nll_kind_defaults_to_gaussian(make_loss_model):
+    """Config() default is 'gaussian'; NT-100 adds the option without changing today's behaviour."""
+    from neural_trade.core.config import Config
+
+    assert Config().NLL_KIND == "gaussian"
+    m = make_loss_model()
+    assert m.config.NLL_KIND == "gaussian"
+
+
+def test_nll_student_t_matches_closed_form(make_loss_model):
+    """NLL_KIND='student_t' matches the fixed-dof Student-t negative log density, with the
+    variance head's var_c converted to scale^2 = var_c * (dof - 2) / dof (criterion 1)."""
+    from neural_trade.core.config import Config
+
+    dof = 5.0
+    var_value = 2.0
+    cfg = Config(NLL_KIND="student_t", NLL_STUDENT_DOF=dof)
+    m = make_loss_model(config=cfg)
+    out, (_, y, price, _) = _components(m, var_value=var_value)
+    scale_sq = var_value * (dof - 2.0) / dof
+    const = math.lgamma(dof / 2.0) - math.lgamma((dof + 1.0) / 2.0) + 0.5 * math.log(dof * math.pi)
+    for h in range(3):
+        err = y.numpy()[:, h] - price[h].numpy()[:, 0]
+        ref = np.mean(const + 0.5 * np.log(scale_sq)
+                      + 0.5 * (dof + 1.0) * np.log1p(err ** 2 / ((dof - 2.0) * var_value)))
+        assert float(getattr(out, f"nll_h{h}")) == pytest.approx(ref, rel=1e-4)
+
+
+def test_nll_student_t_agrees_with_gaussian_at_large_dof(make_loss_model):
+    """As dof -> infinity the Student-t NLL converges to the Gaussian NLL (A_losses.md section 5)."""
+    from neural_trade.core.config import Config
+
+    var_value = 1.7
+    m_gauss = make_loss_model(config=Config())
+    out_gauss, _ = _components(m_gauss, rng_seed=3, var_value=var_value)
+    m_student = make_loss_model(config=Config(NLL_KIND="student_t", NLL_STUDENT_DOF=1.0e6))
+    out_student, _ = _components(m_student, rng_seed=3, var_value=var_value)
+    for h in range(3):
+        assert float(getattr(out_student, f"nll_h{h}")) == pytest.approx(
+            float(getattr(out_gauss, f"nll_h{h}")), rel=1e-3)
+
+
+def test_nll_student_t_has_bounded_gradients_on_large_residuals(make_loss_model):
+    """On a |e| = 1e3*sigma residual, student_t's price-head gradient stays finite and is much
+    smaller in magnitude than gaussian's (A_losses.md section 5: the gaussian mean-gradient is
+    e/v, unbounded in e; the Student-t one saturates like 1/|e|)."""
+    from neural_trade.core.config import Config
+
+    b = 8
+    var_value = 1.0
+    sigma = math.sqrt(var_value)
+    rng = np.random.default_rng(7)
+    x = tf.constant(rng.normal(size=(b, 60)).astype(np.float32))
+    y = tf.constant(np.zeros((b, 3), dtype=np.float32))  # true deltas all 0
+    lc = tf.constant(np.full((b, 1), 110_000.0, dtype=np.float32))
+    ext = tf.constant(rng.normal(0.0, 200.0, size=(b, 3)).astype(np.float32))
+    dirs = [tf.Variable(rng.uniform(0.05, 0.95, size=(b, 1)).astype(np.float32)) for _ in range(3)]
+    var = [tf.Variable(np.full((b, 1), var_value, np.float32)) for _ in range(3)]
+
+    def _nll_total_and_grad(cfg):
+        price = [tf.Variable(np.full((b, 1), 1.0e3 * sigma, np.float32)) for _ in range(3)]
+        m = make_loss_model(config=cfg)
+        with tf.GradientTape() as tape:
+            out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+            nll_total = out.nll_h0 + out.nll_h1 + out.nll_h2
+        grad = tape.gradient(nll_total, price[0])
+        return float(nll_total), grad.numpy()
+
+    gauss_val, gauss_grad = _nll_total_and_grad(Config())
+    student_val, student_grad = _nll_total_and_grad(Config(NLL_KIND="student_t", NLL_STUDENT_DOF=5.0))
+
+    assert np.all(np.isfinite(gauss_grad)) and np.all(np.isfinite(student_grad))
+    assert np.all(np.isfinite([gauss_val, student_val]))
+    assert np.max(np.abs(student_grad)) < 0.01 * np.max(np.abs(gauss_grad))
 
 
 def test_vacuum_bandwidth_term_is_zero_unless_lambda_vac_is_set(make_loss_model):
