@@ -68,7 +68,7 @@ import json
 import math
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 from scipy.special import ndtr
@@ -401,6 +401,125 @@ def baseline_margin(metric: str, m, b) -> Dict[str, Any]:
     return out
 
 
+def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
+    """Per-run gradient/stability health from ``metrics.jsonl`` rows (D-026, NT-037).
+
+    Aggregates the per-epoch health numbers ``CustomTrainModel``/``JsonlEpochLogger`` write: the
+    per-group pre-clip gradient norm maximum and clip-step counts (train only), the non-finite
+    step count, the dead-zone counters (direction sample counts per horizon, variance-at-floor
+    counts) and the per-term non-finite mask counters (``masked_*``, NT-036). ``config``, if
+    given, supplies ``GRAD_CLIP_NORM`` and the learned-period bounds so the report can flag a
+    period sitting at its bound. An empty/missing ``rows`` returns ``{}`` (no health section).
+    """
+    if not rows:
+        return {}
+
+    def _col(key):
+        return [r[key] for r in rows if r.get(key) is not None]
+
+    def _sum(key):
+        vals = _col(key)
+        return float(sum(vals)) if vals else None
+
+    def _max(key):
+        vals = _col(key)
+        return float(max(vals)) if vals else None
+
+    def _share(num, den):
+        return float(num) / float(den) if num is not None and den else None
+
+    per_epoch = [{
+        "epoch": r.get("epoch"),
+        "n_steps": r.get("n_steps"),
+        "grad_norm_max_main": r.get("grad_norm_max_main"),
+        "grad_norm_max_indicator": r.get("grad_norm_max_indicator"),
+        "grad_clip_steps_main": r.get("grad_clip_steps_main"),
+        "grad_clip_steps_indicator": r.get("grad_clip_steps_indicator"),
+        "grad_clip_share_main": _share(r.get("grad_clip_steps_main"), r.get("n_steps")),
+        "grad_clip_share_indicator": _share(r.get("grad_clip_steps_indicator"), r.get("n_steps")),
+        "nonfinite_grad_steps": r.get("nonfinite_grad_steps"),
+        "dir_n_h0": r.get("dir_n_h0"), "dir_n_h1": r.get("dir_n_h1"), "dir_n_h2": r.get("dir_n_h2"),
+        "var_at_floor_h0": r.get("var_at_floor_h0"), "var_at_floor_h1": r.get("var_at_floor_h1"),
+        "var_at_floor_h2": r.get("var_at_floor_h2"),
+    } for r in rows]
+
+    masked: Dict[str, float] = {}
+    for r in rows:
+        for k, v in r.items():
+            if k.startswith("masked_") and v:
+                masked[k] = masked.get(k, 0.0) + float(v)
+
+    periods_at_bound: Dict[str, float] = {}
+    if config is not None and rows:
+        lo = float(getattr(config, "MOMENTUM_CLIP_MIN", 0.0))
+        hi = float(getattr(config, "MOMENTUM_CLIP_MAX", 1e9))
+        tol = 1e-3
+        for k, v in rows[-1].items():
+            if k.startswith("period/") and v is not None:
+                if abs(v - lo) <= tol * max(abs(lo), 1.0) or abs(v - hi) <= tol * max(abs(hi), 1.0):
+                    periods_at_bound[k] = v
+
+    return {
+        "n_epochs": len(rows),
+        "grad_norm_max_main": _max("grad_norm_max_main"),
+        "grad_norm_max_indicator": _max("grad_norm_max_indicator"),
+        "grad_clip_norm": float(getattr(config, "GRAD_CLIP_NORM", 0.0) or 0.0) if config is not None else None,
+        "grad_clip_steps_main_total": _sum("grad_clip_steps_main"),
+        "grad_clip_steps_indicator_total": _sum("grad_clip_steps_indicator"),
+        "nonfinite_grad_steps_total": _sum("nonfinite_grad_steps"),
+        "masked_terms_total": masked,
+        "periods_at_bound": periods_at_bound,
+        "per_epoch": per_epoch,
+    }
+
+
+def direction_skip_share(model, x_scaled: np.ndarray) -> Dict[str, float]:
+    """Share of each direction head's pre-sigmoid logit variance carried by the DIRECTION_SKIP
+    linear path (NT-037, D-045 recommendation A4): ``var(skip_logit) / var(skip_logit +
+    tower_logit)`` on ``x_scaled`` (the validation block, already through the model's actual
+    fitted input transform - QA repair round 2: the caller passes
+    ``result.normalizer.transform(val["X_model"], val["last_close"])``, the same
+    ``data.scaling.WindowNormalizer`` the run trained on, so this works for the OHLCV default
+    (``Config.INPUT_SERIES``, NT-047: ``[N, LOOKBACK, C]``, the volume channel on its train-fit
+    ``vol_scale``) exactly as for a legacy close-only run (``[N, LOOKBACK]``) - this function no
+    longer reconstructs the transform itself, which is what made it silently wrong on OHLCV).
+
+    ``models/gru_attention.py``'s ``_direction_head`` names the two pre-Add sub-layers
+    ``direction_h{i}_logit`` (the deep path) and ``direction_h{i}_skip`` (the trailing-return
+    linear path, ``Config.DIRECTION_SKIP``); their sum is the logit the sigmoid sees. A high share
+    means the head leans on the linear baseline; a low share means the deep path dominates.
+
+    Returns ``{}`` when ``Config.DIRECTION_SKIP`` is off or the model has no such named sub-layers
+    (an older run, or an architecture without a skip path). Never raises: a report is worth more
+    without this number than not at all.
+    """
+    cfg = getattr(model, "config", None)
+    if not bool(getattr(cfg, "DIRECTION_SKIP", False)):
+        return {}
+    base = getattr(model, "base_model", None)
+    if base is None or len(x_scaled) == 0:
+        return {}
+    try:
+        import tensorflow as tf
+
+        x = np.asarray(x_scaled, dtype=np.float32)
+        out: Dict[str, float] = {}
+        for i, h in enumerate(("h0", "h1", "h2")):
+            try:
+                tower = base.get_layer(f"direction_h{i}_logit")
+                skip = base.get_layer(f"direction_h{i}_skip")
+            except ValueError:
+                continue
+            sub = tf.keras.Model(base.inputs, [tower.output, skip.output])
+            t_out, s_out = sub.predict(x, verbose=0)
+            t_flat, s_flat = np.asarray(t_out, dtype=np.float64).reshape(-1), np.asarray(s_out, dtype=np.float64).reshape(-1)
+            denom = float(np.var(t_flat + s_flat))
+            out[h] = float(np.var(s_flat) / denom) if denom > 0 else float("nan")
+        return out
+    except Exception:
+        return {}
+
+
 @dataclass
 class EvalReport:
     run_id: Optional[str]
@@ -413,6 +532,9 @@ class EvalReport:
     backtest: Optional[Dict[str, Any]] = None
     meta: Dict[str, Any] = field(default_factory=dict)
     baseline_margins: Dict[str, Dict[str, Dict[str, Dict[str, Any]]]] = field(default_factory=dict)
+    #: Training-time gradient/stability health (D-026, NT-037), from :func:`health_block`. None
+    #: for a report built without a metrics.jsonl (e.g. a baseline-only or legacy run).
+    health: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------ views
     def metric(self, h: str, group: str, name: str) -> float:
@@ -484,6 +606,8 @@ class EvalReport:
         if self.backtest:
             L += ["", "## Backtest (costs included)", ""]
             L += [f"- {k}: {_fmt(v)}" for k, v in (self.backtest.get("summary") or {}).items()]
+        if self.health:
+            L += self._md_health()
         text = "\n".join(L) + "\n"
         if path is not None:
             Path(path).write_text(text, encoding="utf-8")
@@ -706,6 +830,60 @@ class EvalReport:
               + " | ".join(sign_cell(f"delta_dir_align_indep_{h}", h) for h in HORIZONS)
               + f" | {sign_cell('delta_dir_align_indep_all')} |", "",
               f"- P(up) unanimity (all three horizons call the same side): {_fmt(c.get('unanimity'))}"]
+        return L
+
+    def _md_health(self):
+        """Per-run gradient/stability health (D-026, NT-037): see :func:`health_block`.
+
+        QA repair round 1 fix 2: an actual per-epoch table (per group: max norm vs the clip, the
+        SHARE of steps clipped, non-finite steps), not only the run-total summary line.
+        """
+        h = self.health or {}
+        gcn = h.get("grad_clip_norm")
+        L = ["", "## Training health", "",
+             f"{h.get('n_epochs', 0)} epoch(s). Pre-clip gradient norm maximum over the run: main "
+             f"{_fmt(h.get('grad_norm_max_main'))}, indicator {_fmt(h.get('grad_norm_max_indicator'))}"
+             + (f" (clip {gcn:g})" if gcn else "") + ".",
+             f"Clipped steps over the run: main {_fmt(h.get('grad_clip_steps_main_total'))}, "
+             f"indicator {_fmt(h.get('grad_clip_steps_indicator_total'))}.",
+             f"Non-finite training steps over the run (the finite-gradient guard fired): "
+             f"{_fmt(h.get('nonfinite_grad_steps_total'))}.", ""]
+
+        per_epoch = h.get("per_epoch") or []
+        if per_epoch:
+
+            def pct(v):
+                return f"{100 * v:.1f}%" if v is not None else "n/a"
+
+            L += ["| epoch | grad norm max (main / indicator) | clipped steps (main / indicator) | "
+                 "clipped share (main / indicator) | non-finite steps | dir_n (h0/h1/h2) | "
+                 "var@floor (h0/h1/h2) |",
+                 "|---|---|---|---|---|---|---|"]
+            for r in per_epoch:
+                L.append(
+                    f"| {r.get('epoch')} | {_fmt(r.get('grad_norm_max_main'))} / "
+                    f"{_fmt(r.get('grad_norm_max_indicator'))} | {_fmt(r.get('grad_clip_steps_main'))} / "
+                    f"{_fmt(r.get('grad_clip_steps_indicator'))} | {pct(r.get('grad_clip_share_main'))} / "
+                    f"{pct(r.get('grad_clip_share_indicator'))} | {_fmt(r.get('nonfinite_grad_steps'))} | "
+                    f"{_fmt(r.get('dir_n_h0'))} / {_fmt(r.get('dir_n_h1'))} / {_fmt(r.get('dir_n_h2'))} | "
+                    f"{_fmt(r.get('var_at_floor_h0'))} / {_fmt(r.get('var_at_floor_h1'))} / "
+                    f"{_fmt(r.get('var_at_floor_h2'))} |")
+            L.append("")
+
+        masked = h.get("masked_terms_total") or {}
+        if masked:
+            L.append("Masked (non-finite) loss-term steps: " +
+                    ", ".join(f"{k}={v:g}" for k, v in sorted(masked.items())) + ".")
+        else:
+            L.append("No loss term ever masked a non-finite value.")
+        bound = h.get("periods_at_bound") or {}
+        if bound:
+            L.append("Learned periods sitting at their configured bound: " +
+                    ", ".join(f"{k}={v:g}" for k, v in sorted(bound.items())) + ".")
+        skip = h.get("direction_skip_share") or {}
+        if skip:
+            L.append("DIRECTION_SKIP logit's share of the direction-logit variance (validation "
+                    "block): " + ", ".join(f"{h_}={v:.3f}" for h_, v in skip.items()) + ".")
         return L
 
     def _md_baselines(self, head):
