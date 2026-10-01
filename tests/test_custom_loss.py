@@ -318,10 +318,13 @@ def test_vol_loss_std_is_gradient_safe_at_an_exactly_constant_price_head(make_lo
     `tf.gradients(tf.abs(tf.math.reduce_std(const) - c), const)` is all-NaN on the pre-fix
     `tf.math.reduce_std`). The per-term `_finite_or_zero` guard hides it (vol_loss's own value
     stays finite - the NaN is in the gradient, which the guard does not see) so it was never
-    actually observed in a real run, where a batch is never perfectly constant."""
+    actually observed in a real run, where a batch is never perfectly constant. The guard is
+    opt-in (`Config.LOSS_SAFE_STD`, repair round 1: D-045 ships a value-moving change behind a
+    switch whose default keeps today's graph); this test turns it on, see
+    `test_loss_safe_std_defaults_off_and_vol_loss_still_nans_there` for the default path."""
     from neural_trade.core.config import Config
 
-    m = make_loss_model(config=Config(LAMBDA_VOL=1.0))
+    m = make_loss_model(config=Config(LAMBDA_VOL=1.0, LOSS_SAFE_STD=True))
     rng = np.random.default_rng(21)
     x, y, lc, ext = _batch(rng, 110_000.0)
     price = [tf.Variable(tf.fill((B, 1), tf.constant(0.5, dtype=tf.float32))) for _ in range(3)]
@@ -342,10 +345,11 @@ def test_std_based_losses_finite_gradient_on_batch_constant_heads(make_loss_mode
     """NT-096 acceptance (1): feeding a batch-constant head (every price/variance head the same
     value for every example, which is also constant ACROSS the three horizons, the degenerate
     point of vacuum's per-example cross-horizon std) into vol, HD, IFE and vacuum together gives
-    finite gradients on every head, with all four terms active."""
+    finite gradients on every head, with all four terms active and `Config.LOSS_SAFE_STD=True`."""
     from neural_trade.core.config import Config
 
-    m = make_loss_model(config=Config(LAMBDA_VOL=1.0, LAMBDA_HD=0.1, LAMBDA_IFE=0.1, LAMBDA_VAC=0.05))
+    m = make_loss_model(config=Config(LAMBDA_VOL=1.0, LAMBDA_HD=0.1, LAMBDA_IFE=0.1, LAMBDA_VAC=0.05,
+                                      LOSS_SAFE_STD=True))
     rng = np.random.default_rng(22)
     x, y, lc, ext = _batch(rng, 110_000.0)
     price = [tf.Variable(tf.fill((B, 1), tf.constant(0.5, dtype=tf.float32))) for _ in range(3)]
@@ -361,6 +365,33 @@ def test_std_based_losses_finite_gradient_on_batch_constant_heads(make_loss_mode
     for name, g in zip(names, grads):
         assert g is not None, f"no gradient reached {name}"
         assert bool(tf.reduce_all(tf.math.is_finite(g))), f"non-finite gradient on {name}"
+
+
+def test_loss_safe_std_defaults_off_and_vol_loss_still_nans_there(make_loss_model):
+    """NT-096 repair round 1 (D-045, same ruling as NT-037's tf.cond guards): `LOSS_SAFE_STD`
+    defaults to False, which must be bit-for-bit today's graph (`scripts/golden_run.py verify`),
+    so the known hazard this field documents - vol_loss's gradient is NaN at an exactly
+    batch-constant price_h1 head - is still live at the default. This is the mirror image of
+    `test_vol_loss_std_is_gradient_safe_at_an_exactly_constant_price_head` (which turns the
+    switch on and shows the NaN is gone)."""
+    from neural_trade.core.config import Config
+
+    assert Config().LOSS_SAFE_STD is False
+    m = make_loss_model(config=Config(LAMBDA_VOL=1.0))  # LOSS_SAFE_STD left at its default
+    rng = np.random.default_rng(21)
+    x, y, lc, ext = _batch(rng, 110_000.0)
+    price = [tf.Variable(tf.fill((B, 1), tf.constant(0.5, dtype=tf.float32))) for _ in range(3)]
+    dirs = [tf.Variable(rng.uniform(0.3, 0.7, size=(B, 1)).astype(np.float32)) for _ in range(3)]
+    var = [tf.Variable(rng.uniform(0.5, 2.0, size=(B, 1)).astype(np.float32)) for _ in range(3)]
+
+    with tf.GradientTape() as tape:
+        out = m.custom_loss(x, y, _y_pred(price, dirs, var), lc, ext)
+        total = out[0]
+    assert np.isfinite(float(out.vol_loss))  # the forward value is fine; the NaN is in the gradient
+    grads = tape.gradient(total, price)
+    nonfinite = [not bool(tf.reduce_all(tf.math.is_finite(g))) for g in grads]
+    assert any(nonfinite), ("expected the documented default-path hazard (a NaN gradient from "
+                            "vol_loss's unguarded std) to still be present with LOSS_SAFE_STD=False")
 
 
 def test_safe_std_matches_reduce_std_away_from_zero_variance(tf):

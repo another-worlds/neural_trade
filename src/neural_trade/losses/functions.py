@@ -121,6 +121,24 @@ def _safe_std(x, axis=None):
     return tf.sqrt(variance + _STD_EPS)
 
 
+def _std(model, x, axis=None):
+    """``tf.math.reduce_std``, or :func:`_safe_std` when ``Config.LOSS_SAFE_STD`` is set
+    (NT-096 repair round 1, D-045).
+
+    A trace-time Python branch, NOT a ``tf.cond`` - same reasoning as ``STRICT_LOSS_MASKS``
+    (``_finite_or_zero``'s docstring): wrapping these call sites in a ``tf.cond``, even one whose
+    predicate never changes, was found (via ``scripts/golden_run.py verify``) to change a real
+    run's trajectory through CPU floating-point reduction-order sensitivity, not through any
+    value or gradient difference. ``False`` (the default) is bit-for-bit today's graph - no
+    ``reduce_variance``/``sqrt(+eps)`` node is even built. ``True`` (``Config.LOSS_SAFE_STD``)
+    swaps in the gradient-safe form; see its field docstring for which terms this actually
+    protects against an observable NaN versus an unbounded-but-finite gradient.
+    """
+    if bool(getattr(getattr(model, "config", None), "LOSS_SAFE_STD", False)):
+        return _safe_std(x, axis=axis)
+    return tf.math.reduce_std(x, axis=axis)
+
+
 def _logcosh_safe(x):
     """log(cosh(x)) that is finite for every float32 input and has a bounded gradient.
 
@@ -454,7 +472,7 @@ def vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac=None):
     p2 = tf.cast(tf.squeeze(price_h2, axis=1), tf.float32)
 
     stacked = tf.stack([p0, p1, p2], axis=1)                   # [B, 3]
-    cross_std = _safe_std(stacked, axis=1)                     # [B] (NT-096: gradient-safe at p0==p1==p2)
+    cross_std = _std(model, stacked, axis=1)                   # [B] (NT-096: gradient-safe when LOSS_SAFE_STD)
     violation = tf.nn.relu(cross_std - lv)
     mean_viol = tf.reduce_mean(violation)
 
@@ -487,7 +505,7 @@ def hyper_decoherence_coupling_loss(model, x_window, var_h0, var_h1, var_h2):
     """
     eps = tf.constant(1e-3, dtype=tf.float32)
     x = tf.cast(x_window, tf.float32)                                  # [B, LOOKBACK]
-    local_vol = tf.stop_gradient(_safe_std(x, axis=1))                  # [B]
+    local_vol = tf.stop_gradient(_std(model, x, axis=1))                # [B]
     log_vol = tf.math.log(local_vol + eps)
 
     v0 = tf.cast(tf.squeeze(var_h0, axis=1), tf.float32)
@@ -496,7 +514,7 @@ def hyper_decoherence_coupling_loss(model, x_window, var_h0, var_h1, var_h2):
     log_var = tf.math.log((v0 + v1 + v2) / 3.0 + eps)                   # [B]
 
     def _z(a):
-        return (a - tf.reduce_mean(a)) / (_safe_std(a) + eps)  # NT-096: eps guards the sqrt, not just the ratio
+        return (a - tf.reduce_mean(a)) / (_std(model, a) + eps)  # NT-096: eps guards the sqrt when LOSS_SAFE_STD
 
     pearson = tf.reduce_mean(_z(log_vol) * _z(log_var))
     return 1.0 - pearson
@@ -531,8 +549,8 @@ def information_flow_entropy_loss(model, price_h0, price_h1, price_h2, rho_max=N
         ma = a - tf.reduce_mean(a)
         mb = b - tf.reduce_mean(b)
         cov = tf.reduce_mean(ma * mb)
-        std_a = _safe_std(a) + eps  # NT-096: eps guards the sqrt, not just the ratio
-        std_b = _safe_std(b) + eps
+        std_a = _std(model, a) + eps  # NT-096: eps guards the sqrt when LOSS_SAFE_STD
+        std_b = _std(model, b) + eps
         return cov / (std_a * std_b)
 
     r01 = _pearson(p0, p1)
@@ -792,8 +810,8 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
 
     actual_trend = y_true[:, 1]
     pred_trend_scaled = tf.squeeze(price_h1, axis=1)
-    actual_std = _safe_std(actual_trend)
-    pred_std = _safe_std(pred_trend_scaled)  # NT-096: finite gradient when price_h1 is batch-constant
+    actual_std = _std(model, actual_trend)
+    pred_std = _std(model, pred_trend_scaled)  # NT-096: finite gradient when price_h1 is batch-constant (if LOSS_SAFE_STD)
     vol_diff = tf.abs(pred_std - actual_std)
     vol_diff_clipped = tf.minimum(vol_diff, 10.0)
     vol_loss = vol_diff_clipped * model.lambda_vol
