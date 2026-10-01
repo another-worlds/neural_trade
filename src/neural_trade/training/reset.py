@@ -45,6 +45,21 @@ wraps every ``Models.build`` call in :func:`seeded_stochastic_layers` for EVERY 
 or reused, so the two paths draw the identical stochastic-layer stream for a given seed. Called from
 neither :class:`neural_trade.training.custom_model.CustomTrainModel` nor
 :mod:`neural_trade.training.trainer`, so ordinary training is untouched.
+
+**NT-108 / NT-074:** round 2's :func:`reset_stateful_rngs` derived each layer's seed offset from its
+Keras-assigned ``name`` instead of its position in ``model.submodules`` (NT-108: that position shifts
+whenever an unrelated ``tf.Module`` attribute is added anywhere on the model). That traded one process-
+dependence for another: an unnamed ``Dropout``/``MultiHeadAttention`` is auto-named from a GLOBAL,
+process-wide Keras counter, so the SAME architecture built twice in the SAME PROCESS - screen phase 2's
+persistent group model versus the throwaway shadow model ``Models.build`` rebuilds every trial for fresh
+initial weights, or versus an independent ``_run_trial_light`` call made afterwards for the bit-for-bit
+comparison test - gets DIFFERENT auto-generated names, hence a different offset and a different noise
+stream for the identical config and seed (NT-074: `tests/test_screen.py`'s reused-vs-fresh test failed,
+final_train_loss 7.4939 vs 7.7375). :func:`_identity_offset` now keys on neither: it uses the resettable
+generator's POSITION AMONG RESETTABLE GENERATORS ONLY, in :func:`reset_stateful_rngs`'s own traversal
+order - a property of the model-building code's attribute structure, unaffected by an unrelated
+non-stochastic attribute (NT-108's complaint: never enters the filtered sequence) and unaffected by any
+other model built earlier in the same process (NT-074: no global counter involved).
 """
 from __future__ import annotations
 
@@ -71,19 +86,32 @@ def seeded_stochastic_layers():
             tf.keras.backend.experimental.disable_tf_random_generator()
 
 
-def _identity_offset(layer: tf.Module, slot: int) -> int:
-    """A deterministic offset from the layer's own name (NT-108), not its enumeration position in
-    ``model.submodules``: that position shifts whenever an unrelated ``tf.Module`` attribute is added
-    anywhere on the model (``model.submodules`` orders by attribute name, so a new attribute that sorts
-    earlier pushes every later layer's index up), silently changing every derived seed after it. A
-    layer's Keras-assigned ``name`` is unique within the model and does not depend on what else is
-    attached to it. ``slot`` (0 for the Keras ``_random_generator._generator`` candidate, 1 for a bare
-    ``_generator``) keeps the two candidate generators on one layer from sharing a stream; it is a
-    property of the candidate, not of enumeration order, so it is as stable as the layer's name.
-    ``hashlib.sha256`` (not the builtin ``hash()``, which is salted per process by ``PYTHONHASHSEED``)
-    gives the same offset for the same name on every run."""
-    name = getattr(layer, "name", None) or repr(layer)
-    digest = hashlib.sha256(f"{name}#{slot}".encode("utf-8")).digest()
+def _identity_offset(index: int) -> int:
+    """A deterministic offset from a resettable generator's POSITION among resettable generators only
+    (NT-074), not from the layer's Keras-assigned ``name`` (NT-108's own fix) and not from its raw
+    enumeration position in ``model.submodules`` (NT-108's original complaint).
+
+    NT-108 moved off ``model.submodules`` position because an unrelated ``tf.Module`` attribute added
+    anywhere on the model shifts every later index. But the replacement - the layer's own ``name`` -
+    has the same disease from a different angle: Keras auto-names an unnamed ``Dropout`` /
+    ``MultiHeadAttention`` from a GLOBAL, process-wide counter (``dropout``, ``dropout_1``,
+    ``dropout_2``, ...), so the identical architecture built a second time in the SAME PROCESS - for
+    example screen phase 2's persistent group model, built once, versus a throwaway shadow model
+    ``Models.build`` rebuilds on every trial to get fresh initial weights, or an independent
+    ``_run_trial_light`` call made afterwards for the bit-for-bit comparison test - gets DIFFERENT
+    auto-generated names for the SAME layer, hence a different ``_identity_offset`` and a different
+    noise/dropout stream for an identical config and seed (measured: ``tests/test_screen.py``'s reused-
+    vs-fresh test, final_train_loss 7.4939 vs 7.7375; reproduced directly by building the same
+    ``Config`` three times in one process and printing each resettable layer's name - position 0 reads
+    'dropout', 'dropout_3', 'dropout_6' on the three builds).
+
+    ``index`` is this generator's position in the FILTERED sequence of resettable candidates only (built
+    by :func:`reset_stateful_rngs`'s own traversal order of ``model.submodules``, which is a property of
+    the model-building code's attribute structure, not of a global naming counter or of unrelated
+    non-stochastic attributes elsewhere on the model - those never enter the filtered sequence, so they
+    cannot shift it). ``hashlib.sha256`` (not the builtin ``hash()``, which is salted per process by
+    ``PYTHONHASHSEED``) spreads nearby indices to well-separated 64-bit offsets."""
+    digest = hashlib.sha256(f"stochastic_layer#{index}".encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "big")
 
 
@@ -94,20 +122,23 @@ def reset_stateful_rngs(model: tf.keras.Model, seed: int) -> int:
     dropout layers) and, for each with a Keras ``_random_generator._generator`` (Dropout and similar
     layers, only present when built under :func:`seeded_stochastic_layers`) OR a bare ``_generator``
     attribute that is itself a ``tf.random.Generator`` (``VacuumSaturationNoise``, when
-    ``seeded=True``), calls ``reset_from_seed`` with a seed derived from ``seed`` and the layer's own
-    name (:func:`_identity_offset`, NT-108), so different layers do not share one stream and adding an
-    unrelated ``tf.Module`` attribute elsewhere on the model leaves every derived seed unchanged.
+    ``seeded=True``), calls ``reset_from_seed`` with a seed derived from ``seed`` and the generator's
+    own POSITION among resettable generators (:func:`_identity_offset`, NT-074), so different layers do
+    not share one stream, and neither an unrelated ``tf.Module`` attribute elsewhere on the model
+    (NT-108) nor another model build earlier in the same process (NT-074) changes any derived seed.
     Returns the number of generators reset (0 for a model with no stochastic layers, or one built with
     ``SEEDED_STOCHASTIC_LAYERS`` off - the common case for ordinary training; nothing to do, and
     nothing wrong, either)."""
     n = 0
+    index = 0
     for layer in model.submodules:
         candidates = (getattr(getattr(layer, "_random_generator", None), "_generator", None),
                      getattr(layer, "_generator", None))
-        for slot, generator in enumerate(candidates):
+        for generator in candidates:
             reset_from_seed = getattr(generator, "reset_from_seed", None)
             if callable(reset_from_seed):
-                offset = _identity_offset(layer, slot)
+                offset = _identity_offset(index)
                 reset_from_seed((int(seed) * 1_000_003 + offset) % (2**31 - 1))
                 n += 1
+                index += 1
     return n
