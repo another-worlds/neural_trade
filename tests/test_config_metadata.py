@@ -54,25 +54,28 @@ def test_the_metadata_check_fails_on_a_missing_doc_or_unit_and_on_a_default_outs
     assert len(metadata_problems(_BrokenMetadata)) == 6
 
 
-def test_resample_minutes_is_not_tunable_until_nt040():
-    """The annualisation ignores the bar size until NT-040 (which lifts this), so a sweep must not vary it."""
+def test_resample_minutes_is_tunable_now_that_nt040_fixed_the_annualisation():
+    """NT-040: every live backtest path annualises Sharpe/Sortino from the bar size, so a sweep may
+    vary RESAMPLE_MINUTES without overstating them."""
     spec = Config.field_specs()["RESAMPLE_MINUTES"]
-    assert spec.unit == "minutes" and not spec.tunable and "NT-040" in spec.doc
+    assert spec.unit == "minutes" and spec.tunable and "NT-040" in spec.doc
 
 
 def test_tunable_fields_are_searchable_hyperparameters():
-    """A sweep can build a search space from every tunable field; data, blocks, targets, paths, seeds,
-    registry keys and deprecated fields are never tunable."""
+    """A sweep can build a search space from every tunable field; blocks, targets, paths, seeds,
+    registry keys and deprecated fields are never tunable. RESAMPLE_MINUTES is the one tunable
+    'data' field (NT-040 fixed its annualisation; sweeps still rank each trial on its own bar size)."""
     specs = Config.field_specs()
     tunable = {n for n, s in specs.items() if s.tunable}
-    assert {"LR", "BATCH_SIZE", "LAMBDA_HD", "INDICATOR_LR_MULT"} <= tunable
+    assert {"LR", "BATCH_SIZE", "LAMBDA_HD", "INDICATOR_LR_MULT", "RESAMPLE_MINUTES"} <= tunable
     for name in tunable:
         s = specs[name]
         assert s.has_range or s.choices, name
         assert s.unit not in ("path", "key", "seed", "index", "mapping"), name
-        assert s.group not in ("data", "horizons", "paths", "registries"), name
+        assert s.group not in ("horizons", "paths", "registries"), name
+        assert s.group != "data" or name == "RESAMPLE_MINUTES", name
         assert not s.deprecated, name
-    for name in ("RESAMPLE_MINUTES", "SEED", "CSV_PATH", "MODEL_PATH", "MODEL_NAME", "LOOKBACK", "HORIZON_STEPS",
+    for name in ("SEED", "CSV_PATH", "MODEL_PATH", "MODEL_NAME", "LOOKBACK", "HORIZON_STEPS",
                  "FOLD_INDEX", "EPOCHS", "DIRECTION_LOSS"):
         assert name not in tunable, name
 

@@ -150,6 +150,29 @@ def test_backtest_explorer_runs_every_strategy_from_the_widget(session_run):
     assert res.config.fee_bps == 0.0 and box is ex.widget()
 
 
+def test_backtest_explorer_sets_bar_minutes_from_the_run_config(viz_frame, viz_backtest):
+    """NT-040 (1): the notebook explorer is a live path, so run() and compare_strategies() must
+    annualise Sharpe from the run's own RESAMPLE_MINUTES, not the BacktestConfig default of 1."""
+    import copy
+    from types import SimpleNamespace
+
+    from neural_trade.core.config import Config
+    from neural_trade.notebook import BacktestExplorer
+    from neural_trade.strategy.performance import periods_per_year
+
+    _, bars, _, _ = viz_backtest
+    fr = copy.deepcopy(viz_frame)
+    fr.last_close = bars.close
+    predictor = SimpleNamespace(bundle=SimpleNamespace(meta={"var_scale": 1.0}))
+    ex = BacktestExplorer({"config": Config(RESAMPLE_MINUTES=5), "test": fr, "cal": fr, "bars": bars,
+                           "predictor": predictor})
+    res = ex.run("always_flat", costs={"random_seeds": 0})
+    assert res.config.bar_minutes == 5.0 and res.config.periods_per_year == periods_per_year(5.0)
+
+    runs, _ = ex.compare_strategies(names=["always_flat"], null_seeds=0)
+    assert runs["always_flat"].config.bar_minutes == 5.0
+
+
 def test_backtest_explorer_compare_strategies_keeps_the_last_run(viz_frame, viz_backtest):
     """compare_strategies must not replace the explorer's current result: dashboard(), trade_analytics()
     and summary_frame() after it still show the strategy the user ran (not the last one compared)."""

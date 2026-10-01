@@ -151,7 +151,8 @@ def cmd_backtest(args) -> int:
     params = load_params(args.params) if args.params else {}
     strategy = build_strategy(args.strategy or params.get("strategy", Strategies.default), params.get("params"),
                               calibration=predictor.bundle.meta.get("weighted_direction_quantiles"))
-    bcfg = build_backtest_config({**(params.get("backtest") or {}), "random_seeds": args.random_seeds})
+    bcfg = build_backtest_config({**(params.get("backtest") or {}), "random_seeds": args.random_seeds,
+                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)})
     var_scale = predictor.bundle.meta.get("var_scale")
     if var_scale is None:
         logger.warning("the artifacts carry no calibration-split var_scale; using this data's own (look-ahead)")

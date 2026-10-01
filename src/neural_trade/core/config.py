@@ -232,9 +232,9 @@ class Config:
                                  "are window-relative, volume has its own train-fit scale "
                                  "(neural_trade.data.scaling)", unit="name")
     WINDOW_STEP: int = _f(1, "data", "stride between consecutive training windows", unit="bars", ge=1, step=1)
-    RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars); not tunable until "
-                               "NT-040, because the annualisation ignores the bar size until then",
-                               unit="minutes", ge=1, step=1)
+    RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars); every live "
+                               "backtest path annualises Sharpe/Sortino from this bar size (NT-040)",
+                               unit="minutes", ge=1, step=1, tunable=True)
     MAX_SEQUENCE_COUNT: int = _f(1440 * 37, "data", "keep only the most recent N sequences (0 = keep all)",
                                  unit="sequences", ge=0, step=1)
     VAL_FRACTION: float = _f(0.066, "data", "validation block size (fraction of sequences)",

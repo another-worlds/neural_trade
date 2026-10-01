@@ -2,6 +2,7 @@
 high/low, next-open fills, look-ahead self-test for every registered strategy, causal features."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 from typing import ClassVar, Dict, Optional
 
@@ -237,6 +238,96 @@ def test_params_reject_unknown_knobs_and_load_yaml(tmp_path):
 def test_backtest_config_rejects_close_fill():
     with pytest.raises(ValueError, match="look-ahead"):
         BacktestConfig(fill="close")
+
+
+# ------------------------------------------------------------------ NT-040: annualisation follows the bar size
+def test_periods_per_year_is_one_function_of_bar_size_and_a_named_calendar():
+    from neural_trade.strategy.performance import MINUTES_PER_YEAR, periods_per_year
+
+    assert periods_per_year(1.0) == MINUTES_PER_YEAR == 525_600          # the default calendar, 1-minute bars
+    assert periods_per_year(5.0) == round(MINUTES_PER_YEAR / 5)          # a market with sessions can add one
+    with pytest.raises(ValueError, match="calendar"):
+        periods_per_year(1.0, calendar="nyse")
+
+
+def test_backtest_config_periods_per_year_follows_bar_minutes():
+    assert BacktestConfig().periods_per_year == 525_600                  # bar_minutes defaults to 1
+    assert BacktestConfig(bar_minutes=5.0).periods_per_year == round(525_600 / 5)
+
+
+def test_resample_minutes_5_annualised_sharpe_equals_the_per_bar_sharpe_times_sqrt_scaling():
+    """The literal acceptance check (NT-040 (2)): at RESAMPLE_MINUTES = 5, the annualised Sharpe
+    equals the per-bar Sharpe (periods_per_year=1) x sqrt(525,600 / 5)."""
+    from neural_trade.strategy.performance import periods_per_year, sharpe
+
+    rng = np.random.default_rng(7)
+    r = rng.normal(0.0002, 0.01, 2000)
+    per_bar = sharpe(r, periods_per_year=1)
+    five_minute = sharpe(r, periods_per_year=periods_per_year(5.0))
+    assert five_minute == pytest.approx(per_bar * math.sqrt(525_600 / 5), rel=1e-9)
+
+
+def test_resample_minutes_5_scales_annualised_sharpe_by_sqrt_of_the_period_ratio():
+    """Every live path's BacktestConfig.periods_per_year must give the same k-minute-bar Sharpe as
+    the 1-minute Sharpe x sqrt(525,600 / k) (NT-040 acceptance 2): run the SAME engine on the SAME
+    per-bar returns at bar_minutes=1 and bar_minutes=5 and compare the engine's own summary."""
+    f, bars = _frame(600, seed=3)
+    vs = var_scale_from(f)
+    signals = SignalFrame.build(f, vs)
+    strat = build_strategy("liberal")
+    one = backtest(signals, bars, strat, BacktestConfig(bar_minutes=1.0), baselines=False)
+    five = backtest(signals, bars, strat, BacktestConfig(bar_minutes=5.0), baselines=False)
+    assert one.summary["n_trades"] == five.summary["n_trades"] and one.summary["n_trades"] > 0
+    k = 5.0
+    expected = one.summary["sharpe_net"] * math.sqrt(525_600 / k / 525_600)
+    assert five.summary["sharpe_net"] == pytest.approx(expected, rel=1e-9)
+    assert five.summary["sortino"] == pytest.approx(one.summary["sortino"] * math.sqrt((525_600 / k) / 525_600),
+                                                     rel=1e-9)
+
+
+def test_backtest_gate_sets_bar_minutes_from_the_run_overrides(tmp_path, synthetic_bars):
+    """NT-040 (1): scripts/backtest_gate.py is frozen (D-023) but must not leave BacktestConfig at
+    its 1-minute default when the gate run's own RESAMPLE_MINUTES differs. No training needed: the
+    stored predictions are built straight from split_arrays, as the gate run format stores them."""
+    import importlib.util
+    import json as json_mod
+    from pathlib import Path
+
+    from neural_trade.data.processor import split_arrays
+
+    csv = tmp_path / "bars.csv"
+    synthetic_bars.to_csv(csv, index=False)
+    overrides = {"MAX_SEQUENCE_COUNT": 1500, "RESAMPLE_MINUTES": 5}
+    cfg = Config().override(CSV_PATH=str(csv), **overrides)
+    blocks = split_arrays(cfg)
+    rng = np.random.default_rng(0)
+
+    def _npz(path, block):
+        y = np.asarray(block["y"], float)
+        arrays = {"y": y, "last_close": np.asarray(block["last_close"], float).reshape(-1)}
+        for i, h in enumerate(HORIZONS):
+            signal = y[:, i] + rng.normal(0.0, 3.0, len(y))
+            arrays[f"delta_{h}"] = 0.1 * signal
+            arrays[f"direction_prob_{h}"] = 1 / (1 + np.exp(-0.5 * np.clip(signal, -30, 30)))
+            arrays[f"variance_{h}"] = 1.0 + 0.2 * rng.random(len(y))
+        np.savez_compressed(path, **arrays)
+
+    run = tmp_path / "gate_run"
+    run.mkdir()
+    _npz(run / "predictions_test.npz", blocks["test"])
+    _npz(run / "predictions_cal.npz", blocks["cal"])
+    (run / "meta.json").write_text(json_mod.dumps({"overrides": overrides}), encoding="utf-8")
+    (run / "analytics.json").write_text(json_mod.dumps({"pred_scale": 100.0, "pred_mean": 0.0}), encoding="utf-8")
+
+    spec = importlib.util.spec_from_file_location("backtest_gate", Path(__file__).resolve().parent.parent /
+                                                   "scripts" / "backtest_gate.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rc = mod.main([str(run), "--csv", str(csv), "--random-seeds", "5"])
+    assert rc is None or rc == 0
+    out = json_mod.loads((run / "backtest.json").read_text(encoding="utf-8"))
+    bar_minutes = {row["config"]["bar_minutes"] for row in out["strategies"].values()}
+    assert bar_minutes == {5.0}
 
 
 def test_anchor_bars_match_windowing_and_bars_from_frame():

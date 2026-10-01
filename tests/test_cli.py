@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 
 from neural_trade.cli import _parse_sets, build_parser, main
@@ -64,6 +66,62 @@ def test_train_predict_backtest_round_trip(tmp_path, synthetic_bars, monkeypatch
     summary = json.loads(capsys.readouterr().out)
     assert summary["strategy"] == "liberal" and "buy_and_hold_return" in summary
     assert (out / "backtest.json").exists() and (out / "trades.csv").exists() and (out / "backtest.html").exists()
+
+
+def test_cli_backtest_sets_bar_minutes_from_the_artifacts_config(tmp_path, monkeypatch):
+    """NT-040 (1): the CLI backtest is a live path, so it must set BacktestConfig.bar_minutes from
+    the artifacts' own RESAMPLE_MINUTES, not leave it at the 1.0 default. No training needed: the
+    Predictor is faked (PredictionBatch built by hand), so this stays fast."""
+    import neural_trade.serving.predictor as predictor_mod
+    from neural_trade.core.config import Config
+    from neural_trade.serving.predictor import PredictionBatch
+
+    rng = np.random.default_rng(0)
+    n = 300
+    close = 100_000 * np.exp(np.cumsum(rng.normal(0, 8e-4, n)))
+    df = pd.DataFrame({"Open": close, "High": close * 1.001, "Low": close * 0.999, "Close": close,
+                       "Volume": np.full(n, 1.0)})
+    csv = tmp_path / "bars.csv"
+    df.to_csv(csv, index=False)
+
+    horizons = ("h0", "h1", "h2")
+    batch = PredictionBatch(
+        delta={h: rng.normal(0, 50, n) for h in horizons},
+        direction_prob={h: rng.uniform(0.3, 0.7, n) for h in horizons},
+        direction_prob_calibrated={h: rng.uniform(0.3, 0.7, n) for h in horizons},
+        sigma={h: np.full(n, 50.0) for h in horizons},
+        variance_scaled={h: np.full(n, 0.25) for h in horizons},
+        gauss_up_prob={h: rng.uniform(0.3, 0.7, n) for h in horizons},
+        interval={h: (close - 100, close + 100) for h in horizons},
+        last_close=close, horizon_steps=(10, 15, 20))
+    anchors = np.arange(n)
+
+    class FakePredictor:
+        def __init__(self):
+            self.config = Config(RESAMPLE_MINUTES=5)
+
+            class _Bundle:
+                pred_scale, pred_mean = 100.0, 0.0
+                meta = {"var_scale": 1.0, "weighted_direction_quantiles": None}
+            self.bundle = _Bundle()
+
+        def predict_windows_frame(self, raw_df, batch_size=None):
+            return batch, df, anchors
+
+    monkeypatch.setattr(predictor_mod.Predictor, "from_artifacts", classmethod(lambda cls, d: FakePredictor()))
+    captured = {}
+    real_build = __import__("neural_trade.strategy.params", fromlist=["build_backtest_config"]).build_backtest_config
+
+    def spy(params=None):
+        captured["params"] = dict(params or {})
+        return real_build(params)
+
+    monkeypatch.setattr("neural_trade.strategy.build_backtest_config", spy)
+
+    rc = main(["backtest", "--artifacts", str(tmp_path / "artifacts"), "--csv", str(csv),
+               "--strategy", "always_flat", "--random-seeds", "0"])
+    assert rc == 0
+    assert captured["params"]["bar_minutes"] == 5.0
 
 
 def test_registry_listing_includes_the_repository_plugins(capsys, monkeypatch):
