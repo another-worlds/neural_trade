@@ -404,6 +404,28 @@ class Config:
     MACD_SETTINGS: List[Dict[str, int]] = _f(_DEFAULT_MACD, "indicators", "initial fast / slow / signal EWMA "
                                              "periods (bars) of each learnable MACD, three learned periods each",
                                              unit="bars", ge=1, step=1)
+    MACD_PARAM: str = _f("independent", "indicators",
+                         "MACD fast/slow parametrisation (NT-106, B_model_indicators.md 4.1 and 7 item 8: "
+                         "macd_1_fast sat at the floor of 2 in 5/6 runs, a mirror symmetry since fast < slow "
+                         "is not enforced); 'independent' (default, today's behaviour) learns fast and slow "
+                         "as two separate periods, each floored like every other period by MOMENTUM_CLIP_MIN "
+                         "(2 bars) through clip_learned_periods, so a fast leg can never reach the raw price "
+                         "(period 1); 'ratio' keeps slow as its own learned period and replaces the fast "
+                         "period by fast = 1 + r * (slow_eff - 1), r in (0, 1) its own learned logit "
+                         "(sigmoid), slow_eff = max(slow, ~1); this construction guarantees fast < slow for "
+                         "any logit or meta_adjust shift and, as r -> 0, lets the fast leg reach p = 1 (the "
+                         "raw price) explicitly, instead of 'independent's hard floor at MOMENTUM_CLIP_MIN. "
+                         "MOMENTUM_CLIP_MIN / MOMENTUM_CLIP_MAX still clip the 'slow' and 'ratio' logits "
+                         "themselves (clip_learned_periods treats every learnable logit as a period logit, "
+                         "'ratio' included, so after each optimizer step r is kept inside the alpha interval "
+                         "[2/(MOMENTUM_CLIP_MAX+1), 2/(MOMENTUM_CLIP_MIN+1)], about [0.033, 0.667] at the "
+                         "defaults) and INDICATOR_BOUND_APPLIED (NT-097), if on, applies the same clip to the "
+                         "combined per-window logit every forward pass; both narrow how close to the slow "
+                         "leg or to p = 1 the fast leg can be pushed by training, but never break fast < "
+                         "slow (that guarantee is structural, in MACDRatioFamily, not from either clip) and "
+                         "are not changed by this switch. A pre-registered A/B on the identified periods and "
+                         "direction AUC (NT-106 point 3) decides whether 'ratio' becomes the default", unit="name",
+                         choices=("independent", "ratio"), ignore_case=True)
     RSI_PERIODS: List[int] = _f([9, 14, 21], "indicators", "initial smoothing periods (bars) of the learnable RSIs",
                                 unit="bars", ge=1, step=1)
     BB_PERIODS: List[int] = _f([10, 20, 25], "indicators", "initial periods (bars) of the learnable Bollinger bands",
@@ -695,6 +717,8 @@ class Config:
             bad(f"PNL_SIGMA_SOURCE must be 'realized_vol' or 'model', got {self.PNL_SIGMA_SOURCE!r}")
         if str(self.EWMA_IMPL).lower() not in ("matrix", "scan"):
             bad(f"EWMA_IMPL must be 'matrix' or 'scan', got {self.EWMA_IMPL!r}")
+        if str(self.MACD_PARAM).lower() not in ("independent", "ratio"):
+            bad(f"MACD_PARAM must be 'independent' or 'ratio', got {self.MACD_PARAM!r}")
         canonical = ("open", "high", "low", "close", "volume")
         series = list(self.INPUT_SERIES or [])
         if "close" not in series:

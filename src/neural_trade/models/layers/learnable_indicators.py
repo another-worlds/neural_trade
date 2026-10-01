@@ -75,8 +75,13 @@ class LearnableIndicators(layers.Layer):
         # input_shape[0] is the window ([B, L] close or [B, L, C] multi-series),
         # [1] is meta_adjust [B, num_logits]
         available = set(getattr(self.config, "INPUT_SERIES", None) or ["close"])
+        macd_ratio = (str(getattr(self.config, "MACD_PARAM", "independent")).lower() == "ratio")
         for name, raw in indicator_instances(self.config).items():
-            family = Indicators.get(name)
+            # NT-106: Config.MACD_PARAM = "ratio" substitutes the ratio-parametrised family for
+            # the "macd" instances (MACD_SETTINGS); off (default) resolves "macd" as always, so
+            # the default path is byte-for-byte today's lookup.
+            registry_name = "macd_ratio" if (name == "macd" and macd_ratio) else name
+            family = Indicators.get(registry_name)
             missing = sorted(set(family.inputs) - available
                              - {d for d, req in DERIVED_SERIES.items() if set(req) <= available})
             if missing:
@@ -101,8 +106,9 @@ class LearnableIndicators(layers.Layer):
             if name == "ma":
                 self.alpha_vars_ma = [vm["period"] for vm in varmaps]
             elif name == "macd":
+                param_names = ("slow", "ratio", "signal") if macd_ratio else ("fast", "slow", "signal")
                 self.macd_alpha_vars = {f"macd_{i}_{p}": vm[p] for i, vm in enumerate(varmaps)
-                                        for p in ("fast", "slow", "signal")}
+                                        for p in param_names}
             elif name == "rsi":
                 self.rsi_alpha_vars = [vm["period"] for vm in varmaps]
             elif name == "bb":
@@ -249,14 +255,31 @@ class LearnableIndicators(layers.Layer):
         return self._run(x, meta_adjust, batched=False)
 
     # ------------------------------------------------------------------ introspection
+    @staticmethod
+    def _report_entries(family, index, alphas):
+        """One instance's reporting entries, keyed as telemetry reports them.
+
+        ``alphas`` carries the per-param alpha of this instance (``{param name: tensor}``,
+        scalar or per-window), computed the SAME way by both callers below. A family with its
+        own ``applied_report(index, alphas)`` hook (NT-106: a derived parametrisation, such as
+        MACDRatioFamily's fast = r x slow) reports its own, interpretable names instead of the
+        identity map; every other family (unchanged) reports ``learned_name(i, p): 2/alpha - 1``
+        exactly as before NT-106.
+        """
+        hook = getattr(family, "applied_report", None)
+        if hook is not None:
+            return hook(index, alphas)
+        return {family.learned_name(index, p.name): tf.maximum(2.0 / (alphas[p.name] + 1e-8) - 1.0, 0.0)
+                for p in family.params}
+
     def get_learned_parameters(self):
         """Learned period per logit, keyed as telemetry reports them (``ma_period_0``, ...)."""
         learned = {}
         for family, _insts, varmaps in self._families:
             for i, vm in enumerate(varmaps):
-                for p in family.params:
-                    period = self._period_from_logit(vm[p.name]).numpy()
-                    learned[family.learned_name(i, p.name)] = float(period)
+                alphas = {p.name: self._alpha_from_logit(vm[p.name]) for p in family.params}
+                for key, value in self._report_entries(family, i, alphas).items():
+                    learned[key] = float(tf.convert_to_tensor(value).numpy())
         return learned
 
     def applied_period_samples(self, meta_adjust):
@@ -267,7 +290,8 @@ class LearnableIndicators(layers.Layer):
         exactly as the forward pass does (respecting ``ADAPTIVE_INDICATORS`` and
         ``INDICATOR_BOUND_APPLIED``), so the numbers match what the model actually applied, not
         just the logged base period of ``get_learned_parameters``. Returns
-        ``{family.learned_name(i, p): np.ndarray[N]}`` of applied periods (``2/alpha - 1``).
+        ``{name: np.ndarray[N]}`` of applied periods (``2/alpha - 1``, or a family's own
+        ``applied_report`` conversion, NT-106).
         """
         meta_adjust = tf.cast(meta_adjust, tf.float32)
         if not self.adaptive:
@@ -276,11 +300,12 @@ class LearnableIndicators(layers.Layer):
         col = 0
         for family, _insts, varmaps in self._families:
             for i, vm in enumerate(varmaps):
+                alphas = {}
                 for p in family.params:
-                    alpha = self._alpha(vm[p.name], meta_adjust, col)
-                    period = 2.0 / (alpha + self.epsilon) - 1.0
-                    out[family.learned_name(i, p.name)] = period.numpy()
+                    alphas[p.name] = self._alpha(vm[p.name], meta_adjust, col)
                     col += 1
+                for key, value in self._report_entries(family, i, alphas).items():
+                    out[key] = tf.convert_to_tensor(value).numpy()
         return out
 
     def get_indicator_trainable_variables(self):
