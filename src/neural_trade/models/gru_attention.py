@@ -76,7 +76,15 @@ def build_gru_attention(config) -> tf.keras.Model:
             layers.GlobalMaxPooling1D()(inp_resh)
         ])
     num_logits = num_learnable_logits(config)  # one meta-adjust column per learnable period
-    meta_adjust = layers.Dense(num_logits, activation='tanh')(meta_inp)
+    # NT-097 (B_model_indicators.md 2.2, 7.6): alpha = sigmoid(logit + 0.5*tanh(Wz + c)) - the base
+    # logit and this Dense's bias c are one unidentifiable direction, trained by two different
+    # optimizers (indicator LR 0.005 vs. the main LR). META_ADJUST_BIAS keeps the bias on by
+    # default (today's behaviour, golden-run bit-for-bit); the A/B of NT-097 point 7 decides
+    # whether "no bias" becomes the new default. Named so evaluation code can recover this tensor
+    # from the built model (neural_trade.evaluation.applied_periods, NT-097 point 5).
+    meta_adjust = layers.Dense(num_logits, activation='tanh',
+                               use_bias=bool(getattr(config, 'META_ADJUST_BIAS', True)),
+                               name='meta_adjust')(meta_inp)
 
     # Enhanced Learnable Indicators: Now takes [inp, meta_adjust], outputs sequences [B, LOOKBACK, num_ind]
     ind_seq = Layers.for_role(config, 'indicators', config, name='learnable_indicators')([inp, meta_adjust])

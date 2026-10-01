@@ -374,10 +374,42 @@ def build_mcc_early_stopping(config, context):
                                    restore_best_weights=False)
 
 
+class ReduceLRBothOptimizers(callbacks.ReduceLROnPlateau):
+    """``ReduceLROnPlateau``, but the same factor also scales ``model.indicator_optimizer``.
+
+    Keras's ``ReduceLROnPlateau`` only ever reads and writes ``model.optimizer`` (Keras 2.10
+    source): the indicator logits' own optimizer (``CustomTrainModel.indicator_optimizer``) is
+    never touched. NT-097 / ``B_model_indicators.md`` 2.2 and 7.10: in six real runs the indicator
+    LR stayed at ``LR * INDICATOR_LR_MULT`` (0.005) for the whole run while the main LR fell to
+    0.000125-0.0005, so the ratio between them grew from 5 to 10-40 late in training and the
+    periods drifted instead of settling. ``Config.LR_SCHEDULE_BOTH_OPTIMIZERS`` selects this class
+    instead of the plain one; off (default) reproduces today's behaviour exactly.
+    """
+
+    def on_epoch_end(self, epoch, logs=None):
+        opt = getattr(self.model, "optimizer", None)
+        before = float(tf.keras.backend.get_value(opt.lr)) if opt is not None else None
+        super().on_epoch_end(epoch, logs)
+        ind_opt = getattr(self.model, "indicator_optimizer", None)
+        if opt is None or ind_opt is None or not before or before <= 0:
+            return
+        after = float(tf.keras.backend.get_value(opt.lr))
+        if after != before:
+            ind_lr = float(tf.keras.backend.get_value(ind_opt.lr))
+            tf.keras.backend.set_value(ind_opt.lr, ind_lr * (after / before))
+
+
 @Callbacks.register(name="reduce_lr_on_plateau", tags=["schedule", "default"])
 def build_reduce_lr_on_plateau(config, context):
-    """Halve the learning rate after PATIENCE epochs without val_loss improvement."""
-    return callbacks.ReduceLROnPlateau(monitor="val_loss", factor=0.5, patience=config.PATIENCE)
+    """Halve the learning rate after PATIENCE epochs without val_loss improvement.
+
+    ``Config.LR_SCHEDULE_BOTH_OPTIMIZERS`` (default False, today's behaviour): scales only the
+    main optimizer. True (NT-097 point 10) also scales the indicator optimizer by the same factor
+    every time the plateau callback would touch the main one (:class:`ReduceLRBothOptimizers`).
+    """
+    cls = (ReduceLRBothOptimizers if getattr(config, "LR_SCHEDULE_BOTH_OPTIMIZERS", False)
+          else callbacks.ReduceLROnPlateau)
+    return cls(monitor="val_loss", factor=0.5, patience=config.PATIENCE)
 
 
 @Callbacks.register(name="tqdm_progress", tags=["progress", "console", "default"])

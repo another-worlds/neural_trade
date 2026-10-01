@@ -2,8 +2,17 @@
 
 The indicator logits get their own optimizer at ``LR * INDICATOR_LR_MULT``: Adam normalises
 gradient magnitudes, so scaling their gradients cannot give them a larger step - only a larger
-learning rate can. Gradient clipping is NOT configured on the optimizers; it happens once, per
-group, in CustomTrainModel.train_step.
+learning rate can (this is also why ``Config.INDICATOR_GRAD_MULT``, a straight-through gradient
+scale applied inside ``LearnableIndicators``, changes nothing under Adam except how often the
+indicator group hits ``GRAD_CLIP_NORM``; NT-097, ``B_model_indicators.md`` 2.2/7.9). Gradient
+clipping is NOT configured on the optimizers; it happens once, per group, in
+CustomTrainModel.train_step.
+
+Left to itself, this indicator optimizer's rate never decays: ``training/callbacks.py``'s
+``reduce_lr_on_plateau`` builder only ever touches the main optimizer by default. NT-097 point 10
+adds ``Config.LR_SCHEDULE_BOTH_OPTIMIZERS`` (default False, unchanged behaviour): when True, the
+same plateau schedule scales this optimizer's rate by the same factor
+(``training.callbacks.ReduceLRBothOptimizers``), so the ratio between the two rates stops growing.
 """
 from __future__ import annotations
 

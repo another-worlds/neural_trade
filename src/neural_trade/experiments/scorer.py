@@ -318,6 +318,21 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
                 report.health["direction_skip_share"] = direction_skip_share(result.model, x_scaled)
         except Exception:
             logger.exception("could not compute the DIRECTION_SKIP variance share")
+        # Applied-period p5/p50/p95 (NT-097 point 5): the per-window period each learnable
+        # indicator actually applies (base logit + the per-window meta_adjust shift), measured on
+        # the validation block through the run's own fitted WindowNormalizer - the same block and
+        # the same pattern as direction_skip_share above. Best-effort: an older run with no stored
+        # normalizer, or a model without a 'meta_adjust' layer, simply gets no applied_periods
+        # section.
+        try:
+            from neural_trade.evaluation.applied_periods import applied_period_stats
+            val = arrays.get("val") if arrays else None
+            normalizer = getattr(result, "normalizer", None)
+            if val is not None and normalizer is not None and report.health is not None:
+                x_scaled = normalizer.transform(val["X_model"], val["last_close"])
+                report.health["applied_periods"] = applied_period_stats(result.model, x_scaled)
+        except Exception:
+            logger.exception("could not compute the applied-period report")
     scores = leaderboard_scores(report, res, result)
     scored = Scored(role, report, res, strat, scores)
     if out_dir is not None:
