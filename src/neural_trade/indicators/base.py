@@ -61,16 +61,25 @@ SOFT_SIGN_SHARPNESS = 10.0
 
 @dataclass(frozen=True)
 class ParamSpec:
-    """One learnable parameter of a family: an EWMA period in bars.
+    """One learnable parameter of a family: an EWMA period in bars, by default.
 
     ``default`` is the textbook value; ``minimum`` / ``maximum`` bound the learned period
     (``maximum=None``: the configured ceiling, ``MOMENTUM_CLIP_MAX`` or ``LOOKBACK`` today).
+
+    ``kind`` says what the learned value MEANS, for code that clips or reports it
+    (``LearnableIndicators.clip_learned_periods`` / ``._alpha`` / ``._report_entries``, NT-106):
+    ``'period'`` (default; an EWMA period in bars - the period<->alpha<->logit transform
+    applies, and MOMENTUM_CLIP_MIN/MAX bound it) or ``'ratio'`` (a dimensionless fraction in
+    (0, 1); its logit maps to the value directly through ``sigmoid``, with its own bound, not
+    MOMENTUM_CLIP_MIN/MAX's period-space one - see ``MACDRatioFamily``'s ``'ratio'`` param).
+    Such code must branch on this field, not guess a parameter's meaning from its name.
     """
 
     name: str
     default: float
     minimum: float = 2.0
     maximum: Optional[float] = None
+    kind: str = "period"
 
 
 @dataclass(frozen=True)
