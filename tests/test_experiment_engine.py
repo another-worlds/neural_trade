@@ -442,7 +442,7 @@ def test_the_scorer_fits_the_strategy_on_the_cal_block_and_fills_at_the_next_ope
     # next-open fills and the default cost profile (0 per side, D-044)
     bc = scored.backtest.config
     assert (bc.fill, bc.fee_bps, bc.half_spread_bps, bc.slippage_bps) == ("next_open", 0.0, 0.0, 0.0)
-    assert bc.bar_minutes == 1.0 and bc.minutes_per_year == BacktestConfig().minutes_per_year
+    assert bc.bar_minutes == 1.0 and bc.periods_per_year == BacktestConfig().periods_per_year  # NT-113: no field
     arrays = split_arrays(cfg)
     bars = Bars.from_frame(arrays["df"], arrays["test"]["anchor_bar"])
     decided = {d["bar"] for d in scored.backtest.decisions}

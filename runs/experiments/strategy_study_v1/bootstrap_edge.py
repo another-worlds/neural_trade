@@ -35,17 +35,18 @@ def main(rescore_dir: str) -> None:
     for d in dev_dirs:
         p = next(q for q in (Path("runs") / d, Path(d)) if (q / "predictions_oos.npz").exists())
         cal, _, _ = load_block(p / "predictions_cal.npz")
-        oos, bars, _ = load_block(p / "predictions_oos.npz")
-        blocks[d] = (BlockSignals.build(cal, oos), bars)
+        oos, bars, extra = load_block(p / "predictions_oos.npz")
+        blocks[d] = (BlockSignals.build(cal, oos), bars, float(extra["bar_minutes"]))
     rng = np.random.default_rng(0)
     result = {}
     for conf in study.configurations():
         if conf.strategy in EXPOSURE or "_ewma" in conf.id:
             continue
         rows = []
-        for d, (sig, bars) in blocks.items():
+        for d, (sig, bars, bar_minutes) in blocks.items():
             res, _ = fit_and_backtest(sig, bars, strategy=conf.strategy, strategy_params=conf.params,
-                                      backtest_params={**conf.backtest, "random_seeds": 0})
+                                      backtest_params={**conf.backtest, "random_seeds": 0},
+                                      bar_minutes=bar_minutes)
             rows += [(d, t.entry_bar // BLOCK, 1e4 * t.gross_pnl / t.notional) for t in res.trades if t.notional > 0]
         if not rows:
             result[conf.id] = {"n_trades": 0}

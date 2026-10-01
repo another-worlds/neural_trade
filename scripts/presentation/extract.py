@@ -48,9 +48,10 @@ def load_cell(d: Path):
     return BlockSignals.build(cal, oos), bars, extra, oos
 
 
-def run(sig, bars, params=C1, cost_rt=0.0, seeds=0, strategy="calibrated_quantile"):
+def run(sig, bars, bar_minutes, params=C1, cost_rt=0.0, seeds=0, strategy="calibrated_quantile"):
     bt, strat = fit_and_backtest(sig, bars, strategy=strategy, strategy_params=params,
-                                 backtest_params={**costs(cost_rt), "random_seeds": seeds})
+                                 backtest_params={**costs(cost_rt), "random_seeds": seeds},
+                                 bar_minutes=bar_minutes)
     return bt, strat
 
 
@@ -184,13 +185,13 @@ def backtest_view(sig, bars, extra, bt, strat) -> dict:
     }
 
 
-def whatif(sig, bars) -> dict:
+def whatif(sig, bars, bar_minutes) -> dict:
     qs = [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.93, 0.95, 0.97, 0.99]
     cs = [0, 0.5, 1, 2, 4, 6, 10, 16, 26]
     grid = {}
     for q in qs:
         for c in cs:
-            bt, _ = run(sig, bars, {"entry_quantile": q, "size": 1.0}, c)
+            bt, _ = run(sig, bars, bar_minutes, {"entry_quantile": q, "size": 1.0}, c)
             grid[f"{q}|{c}"] = summary(bt)
     return {"q": qs, "cost": cs, "grid": grid}
 
@@ -198,30 +199,32 @@ def whatif(sig, bars) -> dict:
 def main() -> None:
     data = {"leader": LEADER.name}
     sig, bars, extra, oos = load_cell(LEADER)
-    bt, strat = run(sig, bars, C1, 0.0, seeds=100)
+    bar_minutes = float(extra["bar_minutes"])
+    bt, strat = run(sig, bars, bar_minutes, C1, 0.0, seeds=100)
     data["summary"] = summary(bt)
     rnd = bt.baselines.get("random_same_freq", {})
     data["random_null"] = {k: r(v) for k, v in rnd.items() if isinstance(v, (int, float))}
-    bt26, _ = run(sig, bars, C1, 26.0, seeds=0)
+    bt26, _ = run(sig, bars, bar_minutes, C1, 26.0, seeds=0)
     data["summary_26bps"] = summary(bt26)
     data["gross_equity_26bps"] = [r(x, 2) for x in np.asarray(bt26.equity, dtype=float)[1::THIN]]
     data["backtest"] = backtest_view(sig, bars, extra, bt, strat)
     data["training"] = training(LEADER)
     data["indicators"] = indicators(LEADER)
     data["fit"] = fit(LEADER, oos, sig)
-    data["whatif"] = whatif(sig, bars)
+    data["whatif"] = whatif(sig, bars, bar_minutes)
     rep = json.loads((LEADER / "eval_report_dev.json").read_text(encoding="utf-8"))
     data["blocks"] = rep["meta"]["blocks"]
 
     # the six 360-day cells (folds -3 / -2 x seeds 0-2): training curves, periods, C1/C2 at zero cost, cost curves
     cells = []
     for d in sorted(Path(p) for p in glob.glob(str(STAB / "2026*"))):
-        s2, b2, _, _ = load_cell(d)
-        c1, _ = run(s2, b2, C1)
-        c2, _ = run(s2, b2, {"entry_quantile": 0.95, "size": 1.0})
-        c1s, _ = run(s2, b2, {"entry_quantile": 0.9, "size": 0.7})
+        s2, b2, e2, _ = load_cell(d)
+        bm2 = float(e2["bar_minutes"])
+        c1, _ = run(s2, b2, bm2, C1)
+        c2, _ = run(s2, b2, bm2, {"entry_quantile": 0.95, "size": 1.0})
+        c1s, _ = run(s2, b2, bm2, {"entry_quantile": 0.9, "size": 0.7})
         eq = np.asarray(c1.equity, dtype=float)[1::THIN * 2]
-        cost_curve = {c: summary(run(s2, b2, C1, c)[0])["ret"] for c in (0, 0.5, 1, 1.5, 2, 3, 4)}
+        cost_curve = {c: summary(run(s2, b2, bm2, C1, c)[0])["ret"] for c in (0, 0.5, 1, 1.5, 2, 3, 4)}
         ind = indicators(d)
         cells.append({"name": d.name, "fold": d.name.split("__")[1], "seed": d.name.split("__")[2],
                       "c1": summary(c1), "c2": summary(c2), "c1_size07": summary(c1s),
@@ -238,8 +241,10 @@ def main() -> None:
     for d in sorted(Path(p) for p in glob.glob(str(REFERENCE / "2026*__f-[23]__s*"))):
         if not (d / "predictions_oos.npz").exists():
             continue
-        s3, b3, _, _ = load_cell(d)
-        ref.append({"name": d.name, "zero": summary(run(s3, b3, C1)[0]), "c26": summary(run(s3, b3, C1, 26.0)[0])})
+        s3, b3, e3, _ = load_cell(d)
+        bm3 = float(e3["bar_minutes"])
+        ref.append({"name": d.name, "zero": summary(run(s3, b3, bm3, C1)[0]),
+                    "c26": summary(run(s3, b3, bm3, C1, 26.0)[0])})
     data["reference_7d"] = ref
 
     # every stored model x strategy at zero cost (Z0), dev cells only

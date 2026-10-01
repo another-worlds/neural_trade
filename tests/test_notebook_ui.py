@@ -151,9 +151,12 @@ def test_backtest_explorer_runs_every_strategy_from_the_widget(session_run):
 
 
 def test_backtest_explorer_sets_bar_minutes_from_the_run_config(viz_frame, viz_backtest):
-    """NT-040 (1): the notebook explorer is a live path, so run() and compare_strategies() must
-    annualise Sharpe from the run's own RESAMPLE_MINUTES, not the BacktestConfig default of 1."""
+    """NT-040 (1), strengthened by NT-113 (3): the notebook explorer is a live path, so run() and
+    compare_strategies() must annualise Sharpe from the run's own RESAMPLE_MINUTES, not the
+    BacktestConfig default of 1 -- checked by the Sharpe identity itself (annualised ==
+    per-bar x sqrt(periods_per_year(5))), not only by reading back ``bar_minutes``."""
     import copy
+    import math
     from types import SimpleNamespace
 
     from neural_trade.core.config import Config
@@ -171,6 +174,19 @@ def test_backtest_explorer_sets_bar_minutes_from_the_run_config(viz_frame, viz_b
 
     runs, _ = ex.compare_strategies(names=["always_flat"], null_seeds=0)
     assert runs["always_flat"].config.bar_minutes == 5.0
+
+    # the Sharpe identity, on a strategy that actually trades: run() at bar_minutes=1 and 5 on the
+    # SAME signals and bars and compare the engine's own summary, not just the stored bar size.
+    ex1 = BacktestExplorer({"config": Config(RESAMPLE_MINUTES=1), "test": fr, "cal": fr, "bars": bars,
+                            "predictor": predictor})
+    one = ex1.run("liberal", costs={"random_seeds": 0})
+    five = ex.run("liberal", costs={"random_seeds": 0})
+    assert one.summary["n_trades"] > 0
+    k = 5.0
+    assert five.summary["sharpe_net"] == pytest.approx(
+        one.summary["sharpe_net"] * math.sqrt(periods_per_year(k) / periods_per_year(1.0)), rel=1e-9)
+    runs5, _ = ex.compare_strategies(names=["liberal"], null_seeds=0)
+    assert runs5["liberal"].summary["sharpe_net"] == pytest.approx(five.summary["sharpe_net"], rel=1e-9)
 
 
 def test_backtest_explorer_compare_strategies_keeps_the_last_run(viz_frame, viz_backtest):

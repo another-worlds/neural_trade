@@ -42,15 +42,17 @@ def main() -> None:
         cals, oos = [], []
         for d in dirs:
             c, _, _ = load_block(Path(d) / "predictions_cal.npz")
-            o, bars, _ = load_block(Path(d) / "predictions_oos.npz")
+            o, bars, extra = load_block(Path(d) / "predictions_oos.npz")
             cals.append(c)
             oos.append(o)
         assert all(np.allclose(o.last_close, oos[0].last_close) for o in oos), "blocks differ across seeds"
         sig = BlockSignals.build(mean_frame(cals), mean_frame(oos))
+        bar_minutes = float(extra["bar_minutes"])
         for q in (0.9, 0.95, 0.99):
             for size in (1.0, 0.7):
                 bt, _ = fit_and_backtest(sig, bars, strategy="calibrated_quantile",
-                                         strategy_params={"entry_quantile": q, "size": size}, backtest_params=ZERO)
+                                         strategy_params={"entry_quantile": q, "size": size}, backtest_params=ZERO,
+                                         bar_minutes=bar_minutes)
                 s = bt.summary
                 row = {"fold": fold, "n_seeds": len(dirs), "entry_quantile": q, "size": size,
                        "return": round(float(s["total_return"]), 4), "sharpe_net": round(float(s["sharpe_net"]), 2),
