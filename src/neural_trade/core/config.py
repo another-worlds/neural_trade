@@ -312,6 +312,14 @@ class Config:
                                                 "0: bounded physics regularisers are never rescaled",
                                                 unit="dimensionless", ge=0.0, le=1.0)
     CALIB_OUTER: bool = _f(False, "calibration", "also calibrate the outer group multipliers", unit="flag")
+    CALIB_FAIL_LOUD: bool = _f(False, "calibration",
+                               "CALIB_MODE='value': when the calibration pass fails, record "
+                               "calib_failed: true (with the error) in calibration_lambdas instead of "
+                               "silently restoring the configured lambdas and only warning (NT-111); "
+                               "False keeps the pre-NT-111 behaviour byte-for-byte (golden-run default). "
+                               "CALIB_MODE='gradient' always records the failure this way, regardless of "
+                               "this switch: a run with an uncalibrated trunk must not be scored as if it "
+                               "were a normal one.", unit="flag")
     CALIB_MODE: str = _f("value", "calibration",
                          "'value': rescale weights so each term's median value matches the reference "
                          "(today's behaviour, lambda_calibration.py:207-210); 'gradient': rescale so each "

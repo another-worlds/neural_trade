@@ -212,6 +212,29 @@ def _record_served_epoch_in_status(run_context, epoch, val_loss, source) -> None
         logger.warning("could not record the served epoch in %s", path, exc_info=True)
 
 
+def _record_calib_failure_in_status(run_context, calib_lambdas) -> None:
+    """Merge the loss-weight calibration's failure (NT-111: ``calib_failed`` true, ``calib_mode``,
+    ``calib_error``) into the run's status.json (telemetry: never raises). Called twice: right
+    after ``calibrate_loss_weights`` returns (covers a warm-started run that never calls ``fit``,
+    so JsonlEpochLogger never writes status.json at all) and again after ``fit`` completes (every
+    epoch's own status.json write replaces the file wholesale, see JsonlEpochLogger._write_status,
+    so the first call's flag would otherwise be overwritten the moment training produced any epoch).
+    """
+    if not calib_lambdas or not calib_lambdas.get('calib_failed'):
+        return
+    run_dir = getattr(run_context, "run_dir", None)
+    if run_dir is None:
+        return
+    path = Path(run_dir) / "status.json"
+    try:
+        status = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        status.update(calib_failed=True, calib_mode=calib_lambdas.get('calib_mode'),
+                     calib_error=calib_lambdas.get('calib_error'))
+        path.write_text(json.dumps(status, indent=2), encoding="utf-8")
+    except Exception:
+        logger.warning("could not record the calibration failure in %s", path, exc_info=True)
+
+
 def _with_epoch_logger(names: List[str]) -> List[str]:
     """``names`` plus 'jsonl_epoch_logger', placed before 'reduce_lr_on_plateau'.
 
@@ -326,6 +349,10 @@ def train_and_evaluate(
     _calib_lambdas: Optional[Dict[str, float]] = None
     if calibrate is True:
         _calib_lambdas = calibrate_loss_weights(custom_model, train_ds, cfg, X_train_seq.shape[0])
+        if run_context is not None:
+            # First write: covers a warm-started run (below) that never calls fit(), so no other
+            # status.json write would ever happen.
+            _record_calib_failure_in_status(run_context, _calib_lambdas)
     # Ablations (Config.ABLATE_LAMBDAS) apply AFTER calibration so toggling one term never
     # rescales the others through the calibration reference.
     if getattr(cfg, 'ABLATE_LAMBDAS', None):
@@ -394,6 +421,9 @@ def train_and_evaluate(
             logger.info("model_checkpoint wrote the best-on-validation weights to %s", cfg.MODEL_PATH)
         if run_context is not None:
             _record_served_epoch_in_status(run_context, weights_epoch, weights_val_loss, weights_source)
+            # Second write: the per-epoch logger rewrites status.json wholesale on every epoch
+            # (and once more on_train_end), which would otherwise erase the first write above.
+            _record_calib_failure_in_status(run_context, _calib_lambdas)
         # NT-028: nothing loads SCALER_PATH; it is written only as part of a run directory's record
         # (RunContext.create points it there), never into a bare working directory.
         if getattr(run_context, 'run_dir', None) is not None:

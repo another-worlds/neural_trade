@@ -264,6 +264,16 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
 
     if role not in ROLES:
         raise ValueError(f"role must be one of {ROLES}, got {role!r}")
+    _calib = getattr(result, "calibration_lambdas", None) or {}
+    if _calib.get("calib_failed"):
+        # NT-111: a run whose pre-training loss-weight calibration failed must not be scored and
+        # ranked as if it were an ordinary one (the configured lambdas it trained with were never
+        # measured against each other). The caller (experiments.runner.run_cell) catches this the
+        # same way as any other scoring failure and marks the run "failed" in result.json.
+        _err = _calib.get("calib_error") or {}
+        raise ScoringError(
+            f"loss-weight calibration failed (CALIB_MODE={_calib.get('calib_mode', '?')}): "
+            f"{_err.get('type', 'Error')}: {_err.get('message', '?')}")
     cfg = result.config
     arrays = arrays if arrays is not None else split_arrays(cfg)
     test_block, train = arrays["test"], arrays["train"]

@@ -218,7 +218,11 @@ def test_active_terms_built_from_multiple_horizons_keep_a_nonzero_trunk_gradient
 
 
 def test_gradient_mode_restores_lambdas_on_failure(tiny_config, tmp_path, synthetic_bars, monkeypatch):
-    """The gradient branch must restore-on-failure exactly like the value branch (test_calibration_pass.py)."""
+    """The gradient branch restores the configured lambdas on failure exactly like the value branch
+    (test_calibration_pass.py) — but (NT-111) it must not silently report this as an ordinary
+    calibration: ``calibration_lambdas`` is a dict with ``calib_failed: true`` and the error,
+    never ``None`` (CALIB_MODE='gradient' always fails loud, no switch needed; see
+    test_calib_fail_loud.py for the value-mode switch and the scorer check)."""
     from neural_trade.training.custom_model import CustomTrainModel
     from neural_trade.training.trainer import train_and_evaluate
 
@@ -244,8 +248,14 @@ def test_gradient_mode_restores_lambdas_on_failure(tiny_config, tmp_path, synthe
     result = train_and_evaluate(config=cfg, epochs=0, force=True, calibrate=True, fit_calibration=False)
 
     assert calls["n"] >= 1
-    assert result.calibration_lambdas is None
     assert np.isclose(float(result.model.lambda_dir), 0.83)
+    assert result.calibration_lambdas is not None, "NT-111: a gradient-mode failure must be recorded, not silent"
+    cal = result.calibration_lambdas
+    assert cal["calib_failed"] is True
+    assert cal["calib_mode"] == "gradient"
+    assert cal["calib_error"]["type"] == "RuntimeError"
+    assert "boom inside the gradient-norm sampler" in cal["calib_error"]["message"]
+    assert np.isclose(cal["lambda_dir"], 0.83), "the recorded dict carries the RESTORED (not reset-to-1.0) lambdas"
 
 
 def test_gradient_mode_cost_is_reported(tiny_config, tmp_path, synthetic_bars, monkeypatch):
@@ -309,6 +319,15 @@ def test_default_model_gradient_mode_equalises_terms_as_they_enter_total(tmp_pat
     cfg.CALIB_MODE = "gradient"
     cfg.MAX_SEQUENCE_COUNT = 1200  # bound the real default model's calibration pass for a test
     cfg.DIR_DEADBAND_BPS = 0.0     # every example gets a direction label: 'dir'/'ece' can't mask to 0
+    # NT-111 (QA of NT-101: 0.5 relative-spread tolerance measured at 0.58 on 12 fresh real
+    # batches, i.e. already above tolerance before counting this test's own extra sampling noise).
+    # At MAX_SEQUENCE_COUNT=1200 there are only 3 train batches total (602 train sequences, batch
+    # 256), so CALIB_SAMPLE_FRACTION's default 0.1 rounds down to n_sample=1: the calibration pass
+    # itself picks weights off a SINGLE batch. Using every available batch for calibration (still
+    # only 3, but 3x the information of 1) measurably steadies the lambdas it chooses; see
+    # "more batches" below for the independent verification side of the same fix.
+    cfg.CALIB_WARMUP_FRACTION = 1.0
+    cfg.CALIB_SAMPLE_FRACTION = 1.0
     cfg.validate()
     seed_everything(0)
 
@@ -356,19 +375,26 @@ def test_default_model_gradient_mode_equalises_terms_as_they_enter_total(tmp_pat
             'ece': model.lambda_soft_ece * (lc.soft_ece_h0 + lc.soft_ece_h1 + lc.soft_ece_h2),
         }
 
+    # NT-111: only 3 batches exist in this bounded dataset per pass, so "more batches" means more
+    # PASSES over it — train_ds reshuffles on every fresh iteration (data/datasets.py,
+    # reshuffle_each_iteration=True), so each of the 4 passes below draws a different batching of
+    # the same 602 sequences, giving 12 genuinely-independent (not just repeated) samples per term
+    # instead of 3, the same reduction in the mean's sampling noise a 4x larger dataset would buy.
     norms = {name: [] for name in default_damped}
-    for batch in train_ds.take(3):
-        x_batch, y_batch, last_batch, ext_batch = batch
-        with tf.GradientTape(persistent=True) as tape:
-            raw = model(x_batch, training=True)
-            (*yp, vac_of) = raw
-            lc = model.custom_loss(x_batch, y_batch, yp, last_batch, ext_batch, vacuum_overflow=vac_of)
-            terms = independent_terms(lc)
-        for name in default_damped:
-            g = tape.gradient(terms[name], trunk_vars)
-            present = [gg for gg in g if gg is not None]
-            norms[name].append(float(tf.linalg.global_norm(present)) if present else 0.0)
-        del tape
+    n_recompute_passes = 4
+    for _pass in range(n_recompute_passes):
+        for batch in train_ds:
+            x_batch, y_batch, last_batch, ext_batch = batch
+            with tf.GradientTape(persistent=True) as tape:
+                raw = model(x_batch, training=True)
+                (*yp, vac_of) = raw
+                lc = model.custom_loss(x_batch, y_batch, yp, last_batch, ext_batch, vacuum_overflow=vac_of)
+                terms = independent_terms(lc)
+            for name in default_damped:
+                g = tape.gradient(terms[name], trunk_vars)
+                present = [gg for gg in g if gg is not None]
+                norms[name].append(float(tf.linalg.global_norm(present)) if present else 0.0)
+            del tape
 
     mean_norms = {name: float(np.mean(v)) for name, v in norms.items()}
     values = list(mean_norms.values())

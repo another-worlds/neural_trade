@@ -147,7 +147,21 @@ def _trunk_variables(custom_model):
 
 
 def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optional[Dict[str, float]]:
-    """Run the calibration pass on ``custom_model``; return the calibrated weights (or None)."""
+    """Run the calibration pass on ``custom_model``; return the calibrated weights (or None).
+
+    On failure (NT-111): the configured lambdas are always restored (never left at the 1.0 reset
+    used for sampling). What happens next depends on ``CALIB_MODE`` and ``Config.CALIB_FAIL_LOUD``:
+
+    - ``CALIB_MODE='gradient'``: always returns a dict with ``calib_failed: true`` and
+      ``calib_error`` (never ``None``), so a trained run's ``calibration_lambdas`` (and so
+      ``artifacts/meta.json``) records the failure instead of looking like an ordinary
+      calibration; ``experiments.scorer.score_result`` refuses to score such a run (NT-111).
+    - ``CALIB_MODE='value'`` with ``CALIB_FAIL_LOUD`` False (the default): unchanged, golden-run
+      bit-for-bit — logs a warning and returns ``None``.
+    - ``CALIB_MODE='value'`` with ``CALIB_FAIL_LOUD`` True: the same loud ``calib_failed`` dict as
+      the gradient branch.
+    """
+    calib_mode_for_failure = str(getattr(cfg, 'CALIB_MODE', 'value')).lower()  # safe even if Phase 1/2 never run
     _calib_lambdas: Optional[Dict[str, float]] = None  # set below if calibrate=True
     _CALIB_LAMBDA_NAMES = (
         'lambda_short', 'lambda_point', 'lambda_long', 'lambda_extended_trend', 'lambda_dir',
@@ -177,6 +191,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # NT-101: 'value' (default) measures each term's median value, as before; 'gradient'
             # measures each term's gradient norm on the shared trunk instead (GradNorm-style).
             calib_mode = str(getattr(cfg, 'CALIB_MODE', 'value')).lower()
+            calib_mode_for_failure = calib_mode  # keep in sync now that Phase 1 knows the real value
 
             def _d(attr):
                 """Resolve per-component damping, falling back to global."""
@@ -588,5 +603,15 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 setattr(custom_model, _name, _value)
             logger.warning(f"[calib] Calibration pass failed — restored configured lambdas and continuing: {e}")
             traceback.print_exc()
+            # NT-111: a failure must not look like an ordinary, successful calibration downstream.
+            # CALIB_MODE='gradient' always records it (the gradient pass is newer and the one QA
+            # caught silently falling back); CALIB_MODE='value' only when CALIB_FAIL_LOUD is set
+            # (default False keeps this branch's pre-NT-111 "return None" byte-for-byte).
+            fail_loud = calib_mode_for_failure == 'gradient' or bool(getattr(cfg, 'CALIB_FAIL_LOUD', False))
+            if fail_loud:
+                _calib_lambdas = dict(_calib_saved)
+                _calib_lambdas['calib_failed'] = True
+                _calib_lambdas['calib_mode'] = calib_mode_for_failure
+                _calib_lambdas['calib_error'] = {'type': type(e).__name__, 'message': str(e)}
 
     return _calib_lambdas
