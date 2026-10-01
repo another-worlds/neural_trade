@@ -20,6 +20,20 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # annotations only
     from neural_trade.core.config import Config
 
+# ------------------------------------------------------------------ NT-106 repair round 1
+# A ParamSpec.kind == "ratio" learnable parameter (today only MACDRatioFamily's 'ratio') is a
+# dimensionless fraction r in (0, 1), not a period: clipping it through the period<->logit
+# transform (as clip_learned_periods and the bound_applied path in _alpha do for every other
+# learnable parameter) silently re-floors it in PERIOD space - QA of NT-106 measured r pinned
+# to [0.0328, 0.6667] at the MOMENTUM_CLIP_MIN/MAX defaults (2, 60), which never let the fast
+# leg of MACDRatioFamily below about 1.82, defeating the item's purpose (B_model_indicators.md
+# 4.1: fast legs pinned at the floor of 2). A ratio parameter gets its OWN bound instead,
+# independent of MOMENTUM_CLIP_MIN/MAX: r in [_RATIO_CLIP_MIN, _RATIO_CLIP_MAX].
+_RATIO_CLIP_MIN = 1e-3  # eps_r: keeps r (and so every ratio-derived period) away from 0
+_RATIO_CLIP_MAX = 1.0 - 2e-4  # keeps r below 1 by the same margin families._MACD_RATIO_EPS
+                              # uses, so a ratio-derived period stays float32-distinguishable
+                              # from whatever it is a fraction of (see that module's comment)
+
 
 class LearnableIndicators(layers.Layer):
     """Learnable indicator channels built from the configured family instances.
@@ -129,18 +143,31 @@ class LearnableIndicators(layers.Layer):
             return mh.ewma_sequence(x_seq, alpha_scalar)
         return mh.ewma_sequence_matrix(x_seq, alpha_scalar)
 
-    def _alpha(self, logit, meta_adjust, col):
-        """Per-sample alpha for one learned period: STE-scaled logit + the meta adjustment.
+    def _alpha(self, logit, meta_adjust, col, kind="period"):
+        """Per-sample alpha for one learned parameter: STE-scaled logit + the meta adjustment.
 
-        With ``INDICATOR_BOUND_APPLIED`` on (NT-097), the combined logit is clipped into
-        [logit(MOMENTUM_CLIP_MAX), logit(MOMENTUM_CLIP_MIN)] first, so the APPLIED period this
-        alpha implies can never leave [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX] even though the shift
-        itself is unbounded; off (default), this reproduces today's behaviour exactly.
+        ``kind`` (``ParamSpec.kind``, NT-106) says what the resulting value MEANS:
+
+        * ``"period"`` (default): with ``INDICATOR_BOUND_APPLIED`` on (NT-097), the combined
+          logit is clipped into [logit(MOMENTUM_CLIP_MAX), logit(MOMENTUM_CLIP_MIN)] first, so
+          the APPLIED period this alpha implies can never leave
+          [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX] even though the shift itself is unbounded;
+          off (default), this reproduces today's behaviour exactly.
+        * ``"ratio"``: the result is a dimensionless fraction r in (0, 1), not a period, so
+          ``INDICATOR_BOUND_APPLIED`` (if on) clips r itself into
+          [_RATIO_CLIP_MIN, _RATIO_CLIP_MAX] instead of period-clipping the logit (repair round
+          1 of NT-106: clipping the ratio logit as a period logit re-floored it, so r never
+          reached near 0 and the fast leg this parametrisation exists for never reached p = 1).
         """
         # Correct STE gradient trick: forward=logit (unchanged), backward=logit * grad_multiplier
         logit_for_alpha = (self.grad_multiplier * logit
                            - tf.stop_gradient((self.grad_multiplier - 1.0) * logit))
         combined = logit_for_alpha + meta_adjust[:, col] * self.meta_scale
+        if kind == "ratio":
+            alpha = self._alpha_from_logit(combined)
+            if self.bound_applied:
+                alpha = tf.clip_by_value(alpha, _RATIO_CLIP_MIN, _RATIO_CLIP_MAX)
+            return alpha
         if self.bound_applied:
             combined = tf.clip_by_value(combined, self._applied_logit_lo, self._applied_logit_hi)
         return self._alpha_from_logit(combined)
@@ -163,7 +190,8 @@ class LearnableIndicators(layers.Layer):
         col = 0
         for family, _insts, varmaps in self._families:
             for vm in varmaps:
-                alphas = {p.name: self._alpha(vm[p.name], meta_adjust, col + j)
+                alphas = {p.name: self._alpha(vm[p.name], meta_adjust, col + j,
+                                              getattr(p, "kind", "period"))
                           for j, p in enumerate(family.params)}
                 col += len(family.params)
                 plans.append((family, alphas))
@@ -302,7 +330,8 @@ class LearnableIndicators(layers.Layer):
             for i, vm in enumerate(varmaps):
                 alphas = {}
                 for p in family.params:
-                    alphas[p.name] = self._alpha(vm[p.name], meta_adjust, col)
+                    alphas[p.name] = self._alpha(vm[p.name], meta_adjust, col,
+                                                 getattr(p, "kind", "period"))
                     col += 1
                 for key, value in self._report_entries(family, i, alphas).items():
                     out[key] = tf.convert_to_tensor(value).numpy()
@@ -317,7 +346,9 @@ class LearnableIndicators(layers.Layer):
         return list(self.all_logit_vars)
 
     def clip_learned_periods(self, min_p, max_p):
-        """Clip every learned period into [min_p, max_p] by clipping its LOGIT.
+        """Clip every learned PERIOD into [min_p, max_p] by clipping its LOGIT; a ``"ratio"``
+        parameter (``ParamSpec.kind``, NT-106) is clipped as the fraction it is instead
+        (``[_RATIO_CLIP_MIN, _RATIO_CLIP_MAX]``, independent of ``min_p`` / ``max_p``).
 
         Clipping happens in logit space (no period -> logit -> period round trip), so a
         clip can never write a saturated logit. The old round trip with
@@ -325,12 +356,29 @@ class LearnableIndicators(layers.Layer):
         float32 sigmoid is exactly 1.0 and its derivative exactly 0: any indicator that
         touched the bound was frozen for the rest of training. Logit is decreasing in
         period, so the period floor is the logit ceiling.
+
+        Repair round 1 of NT-106: this used to clip EVERY variable (``get_indicator_trainable_
+        variables()``, flat, kind-blind) through the period transform above; for a 'ratio'
+        variable that re-floored r into the alpha interval [2/(max_p+1), 2/(min_p+1)] (about
+        [0.033, 0.667] at the MOMENTUM_CLIP_MIN/MAX defaults), which never let the fast leg of
+        MACDRatioFamily below about 1.82 - defeating the item's purpose. Branching by kind
+        here (instead of by variable identity) leaves every existing 'period' variable's
+        clip byte-for-byte unchanged (same bounds, same op, same per-variable independence, so
+        the default path is unaffected regardless of iteration order).
         Called from CustomTrainModel.train_step after the optimizer step.
         """
         logit_hi = self._logit_from_period(tf.cast(min_p, tf.float32))
         logit_lo = self._logit_from_period(tf.cast(max_p, tf.float32))
-        for var in self.get_indicator_trainable_variables():
-            var.assign(tf.clip_by_value(var, logit_lo, logit_hi))
+        ratio_logit_hi = self._logit_from_alpha(tf.cast(_RATIO_CLIP_MAX, tf.float32))
+        ratio_logit_lo = self._logit_from_alpha(tf.cast(_RATIO_CLIP_MIN, tf.float32))
+        for family, _insts, varmaps in self._families:
+            kind_of = {p.name: getattr(p, "kind", "period") for p in family.params}
+            for vm in varmaps:
+                for name, var in vm.items():
+                    if kind_of[name] == "ratio":
+                        var.assign(tf.clip_by_value(var, ratio_logit_lo, ratio_logit_hi))
+                    else:
+                        var.assign(tf.clip_by_value(var, logit_lo, logit_hi))
 
         # Legacy momentum_raw support (if any such vars exist on the layer)
         # The original clipping lived in train_step string checks; we keep the

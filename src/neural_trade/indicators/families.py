@@ -151,7 +151,8 @@ class MACDRatioFamily(IndicatorFamily):
     name = "macd_ratio"
     inputs = ("close",)
     params = (ParamSpec("slow", default=26.0, minimum=2.0),
-              ParamSpec("ratio", default=_MACD_RATIO_TEXTBOOK_PSEUDO_PERIOD, minimum=0.0),
+              ParamSpec("ratio", default=_MACD_RATIO_TEXTBOOK_PSEUDO_PERIOD, minimum=0.0,
+                        kind="ratio"),
               ParamSpec("signal", default=9.0, minimum=2.0))
     channels = (ChannelSpec("macd_line"), ChannelSpec("macd_signal"),
                 ChannelSpec("macd_hist"), ChannelSpec("macd_cross"))

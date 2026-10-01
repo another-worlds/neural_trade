@@ -20,6 +20,7 @@ from neural_trade.evaluation.applied_periods import applied_period_samples, appl
 from neural_trade.indicators import Indicators
 from neural_trade.indicators.families import _macd_ratio_periods
 from neural_trade.models.layers import LearnableIndicators
+from neural_trade.models.layers.learnable_indicators import _RATIO_CLIP_MAX, _RATIO_CLIP_MIN
 from neural_trade.models.registry import Models
 
 OLD = dict(INPUT_SERIES=["close"], INDICATOR_FAMILIES={})  # the pre-NT-047 four families
@@ -111,6 +112,95 @@ def test_model_builds_and_predicts_under_ratio_mode():
     x = _x()
     out = model(x, training=False)
     assert out is not None
+
+
+# --------------------------------- repair round 1: the ratio leg must be clipped AS A FRACTION
+
+
+def _vars_by_kind(layer):
+    """``{"ratio": [(family, name, var), ...], "period": [...]}`` for every learned parameter."""
+    out = {"ratio": [], "period": []}
+    for family, _insts, varmaps in layer._families:
+        kind_of = {p.name: getattr(p, "kind", "period") for p in family.params}
+        for vm in varmaps:
+            for name, var in vm.items():
+                out[kind_of[name]].append((family.name, name, var))
+    return out
+
+
+@pytest.mark.parametrize("extreme_logit", [-1e6, 1e6])
+def test_clip_learned_periods_and_bound_applied_clip_ratio_as_a_fraction_not_a_period(extreme_logit):
+    """QA of NT-106 found that clip_learned_periods (and INDICATOR_BOUND_APPLIED's per-window
+    clip in ``_alpha``) treated the 'ratio' parameter as a period, re-flooring r into
+    [0.0328, 0.6667] at the MOMENTUM_CLIP_MIN/MAX defaults and never letting the fast leg below
+    about 1.82 - defeating the item's purpose (B_model_indicators.md 4.1: fast legs pinned at
+    the floor of 2). This pins the fix: pushing the ratio logit to +-1e6, then running
+    clip_learned_periods and a forward pass with INDICATOR_BOUND_APPLIED on, must (a) let
+    fast reach close to p = 1 when the ratio logit was driven very negative (r -> 0), (b) keep
+    fast < slow regardless, and (c) leave every PERIOD-kind logit's clip exactly as it always
+    was (inside [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX])."""
+    cfg = Config(**OLD, MACD_PARAM="ratio", INDICATOR_BOUND_APPLIED=True,
+                 MOMENTUM_CLIP_MIN=2.0, MOMENTUM_CLIP_MAX=60.0)
+    layer = LearnableIndicators(cfg)
+    meta = tf.zeros((B, 18), dtype=tf.float32)
+    layer([_x(), meta])  # builds the weights
+
+    by_kind = _vars_by_kind(layer)
+    ratio_vars = [v for fam, name, v in by_kind["ratio"] if fam == "macd_ratio" and name == "ratio"]
+    period_vars = by_kind["period"]
+    assert len(ratio_vars) == 3  # the three macd_ratio instances
+
+    for var in ratio_vars:
+        var.assign(extreme_logit)
+
+    layer.clip_learned_periods(cfg.MOMENTUM_CLIP_MIN, cfg.MOMENTUM_CLIP_MAX)
+
+    # (c) every PERIOD-kind logit is still clipped into [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX],
+    # exactly as before this repair (the ratio vars were never touched by this assertion before
+    # either, so period behaviour for 'independent' mode and macd_ratio's 'slow'/'signal' is
+    # provably unaffected by the kind-aware branching)
+    for _fam, _name, var in period_vars:
+        p = float(layer._period_from_logit(var).numpy())
+        assert cfg.MOMENTUM_CLIP_MIN - 1e-3 <= p <= cfg.MOMENTUM_CLIP_MAX + 1e-3
+
+    # the ratio var itself is clipped as a FRACTION, not re-floored into the period-implied
+    # alpha interval [2/61, 2/3] ~= [0.033, 0.667]
+    for var in ratio_vars:
+        r = float(tf.sigmoid(var).numpy())
+        assert _RATIO_CLIP_MIN - 1e-6 <= r <= _RATIO_CLIP_MAX + 1e-6
+        if extreme_logit < 0:
+            assert r == pytest.approx(_RATIO_CLIP_MIN, abs=1e-6)
+        else:
+            assert r == pytest.approx(_RATIO_CLIP_MAX, abs=1e-6)
+
+    # the forward pass (applied_period_samples, which reuses _alpha exactly as call() does,
+    # INDICATOR_BOUND_APPLIED on) shows the same effect per window
+    applied = layer.applied_period_samples(meta)
+    for i in range(3):
+        fast = applied[f"macd_{i}_fast"]
+        slow = applied[f"macd_{i}_slow"]
+        assert np.all(fast < slow), i
+        if extreme_logit < 0:
+            assert np.all(fast < 1.1), (i, fast)  # (a): p = 1 is reachable, not floored near 2
+
+
+def test_bound_applied_clips_ratio_as_a_fraction_without_clip_learned_periods():
+    """The per-window INDICATOR_BOUND_APPLIED clip in ``_alpha`` (not just the post-optimizer-
+    step clip_learned_periods) must not period-clip the ratio parameter either."""
+    cfg = Config(**OLD, MACD_PARAM="ratio", INDICATOR_BOUND_APPLIED=True,
+                 MOMENTUM_CLIP_MIN=2.0, MOMENTUM_CLIP_MAX=60.0)
+    layer = LearnableIndicators(cfg)
+    meta = tf.zeros((B, 18), dtype=tf.float32)
+    layer([_x(), meta])
+    ratio_vars = [v for fam, name, v in _vars_by_kind(layer)["ratio"]
+                 if fam == "macd_ratio" and name == "ratio"]
+    for var in ratio_vars:
+        var.assign(-1e6)  # r -> 0, no clip_learned_periods call this time
+    applied = layer.applied_period_samples(meta)
+    for i in range(3):
+        fast, slow = applied[f"macd_{i}_fast"], applied[f"macd_{i}_slow"]
+        assert np.all(fast < slow), i
+        assert np.all(fast < 1.1), (i, fast)
 
 
 # ---------------------------------------------------------------- reporting (NT-097 + NT-106)
