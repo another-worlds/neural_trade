@@ -942,12 +942,18 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool,
     from neural_trade.training.lambdas import ablate
     from neural_trade.training.optim import build_optimizers
     from neural_trade.training.reset import reset_stateful_rngs, seeded_stochastic_layers
-    from neural_trade.utils.seeding import seed_everything
+    from neural_trade.utils.seeding import seed_everything, set_arithmetic_rewrite
 
     # Forced here, not only in ScreenSpec.base() (QA repair round 1): a `cfg` built any other way
     # (a test, a direct call) must still get a resettable dropout/noise stream - see training/reset.py.
     cfg = cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
     seed_everything(int(cfg.SEED))
+    # NT-074: trainer.py and Predictor already set this per run (utils/seeding.py); screen.py never
+    # did, so every screen trial built its graph under Grappler's default arithmetic_optimization
+    # (ON), whose non-reproducible float reassociation on a multi-series (OHLCV) graph is most of the
+    # residual bit-for-bit gap between a reused-group trial and an independent fresh run of the same
+    # config and seed.
+    set_arithmetic_rewrite(cfg)
     prepared = _prepare_trial_data(cfg, cache)
     train_ds, val_ds, val_block, target_scaler, y_train = (prepared.train_ds, prepared.val_ds,
                                                            prepared.val_block, prepared.target_scaler,
@@ -1028,10 +1034,12 @@ class _TrialGroup:
         from neural_trade.training.custom_model import CustomTrainModel
         from neural_trade.training.optim import build_optimizers
         from neural_trade.training.reset import seeded_stochastic_layers
+        from neural_trade.utils.seeding import set_arithmetic_rewrite
 
         # Forced here too (QA repair round 1): see _run_trial_light's identical comment.
         first_cfg = first_cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
         self.key = structural_key(first_cfg)
+        set_arithmetic_rewrite(first_cfg)  # NT-074: see _run_trial_light's identical comment.
         with seeded_stochastic_layers():
             base_model = Models.build(first_cfg.MODEL_NAME, first_cfg)
         optimizer_pair = build_optimizers(first_cfg)
@@ -1081,12 +1089,13 @@ class _TrialGroup:
         from neural_trade.training.lambda_calibration import calibrate_loss_weights
         from neural_trade.training.lambdas import ablate
         from neural_trade.training.reset import reset_stateful_rngs, seeded_stochastic_layers
-        from neural_trade.utils.seeding import seed_everything
+        from neural_trade.utils.seeding import seed_everything, set_arithmetic_rewrite
 
         # Forced here too (QA repair round 1): see _run_trial_light's identical comment.
         cfg = cfg.copy(SEEDED_STOCHASTIC_LAYERS=True)
         assert structural_key(cfg) == self.key, "run_one called with a config outside this group"
         seed_everything(int(cfg.SEED))
+        set_arithmetic_rewrite(cfg)  # NT-074: explicit per trial too (global option; defence in depth).
         prepared = _prepare_trial_data(cfg, cache)
 
         t2 = time.perf_counter()

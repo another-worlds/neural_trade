@@ -37,6 +37,40 @@ def test_same_seed_identical_and_seed_override_is_honoured(tf, tmp_path, synthet
     assert not np.allclose(a, c), "SEED override had no effect (seeded before overrides were applied)"
 
 
+def test_deterministic_mode_same_seed_gives_identical_val_loss_per_epoch(tf, tmp_path, synthetic_bars,
+                                                                         monkeypatch):
+    """NT-074 acceptance 2: with ``seed_everything(seed, deterministic=True)``, two same-seed CPU runs
+    of the default (OHLCV) config give identical ``val_loss`` for every epoch, not only the same final
+    predictions. The normal training path (``trainer.train_and_evaluate``) was already bit-for-bit
+    reproducible in-process for the main model (see
+    ``test_same_seed_identical_and_seed_override_is_honoured``, pre-existing): NT-074's actual bug was
+    confined to screen mode's reused-graph path (``tests/test_screen.py``,
+    ``tests/test_reset.py``). This test pins the acceptance criterion directly for the path NT-035
+    originally measured (a full ``train_and_evaluate`` run), over several epochs."""
+    from neural_trade.core.config import Config
+    from neural_trade.training.trainer import train_and_evaluate
+    from neural_trade.utils.seeding import seed_everything
+
+    def run(tag):
+        d = tmp_path / tag
+        d.mkdir()
+        synthetic_bars.to_csv(d / "bars.csv", index=False)
+        cfg = Config().override(EPOCHS=3, BATCH_SIZE=32, MAX_SEQUENCE_COUNT=600, CSV_PATH=str(d / "bars.csv"),
+                                SCALER_PATH=str(d / "scaler.joblib"), MODEL_PATH=str(d / "weights.h5"),
+                                CALLBACKS=[])
+        tf.keras.backend.clear_session()
+        seed_everything(11, deterministic=True)
+        res = train_and_evaluate(config=cfg, config_overrides={"SEED": 11}, epochs=3, force=True,
+                                 calibrate=False, fit_calibration=False, save_artifacts=False)
+        return list(res.history.history["val_loss"])
+
+    monkeypatch.chdir(tmp_path)
+    val_loss_a = run("det_a")
+    val_loss_b = run("det_b")
+    assert len(val_loss_a) == 3
+    assert val_loss_a == val_loss_b, (val_loss_a, val_loss_b)
+
+
 def test_seed_everything_seeds_python_numpy_and_tf(tf):
     import random
 
