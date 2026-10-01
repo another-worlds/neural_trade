@@ -1033,7 +1033,7 @@ changes).
 
 **Same-seed runs differ at epoch 0 with op determinism on: find and fix the source**
 
-- **status:** todo
+- **status:** in-progress (2026-10-01): CPU part done, QA (Opus) PASS on 90d79bb, merged: screen mode was non-reproducible because (a) training/reset.py keyed each stochastic layer's seed on its Keras auto-name (a per-process counter: 7 of 12 generators changed seed between builds) and (b) screen.py never set the arithmetic rewrite; both fixes needed (bisection: base 7.6811 vs 8.0246, reset only 8.08085 vs 8.08021, both bit-equal); default training path golden-equal (reset_stateful_rngs is screen-only); the main CPU trainer was already reproducible (the new test passes at base). NOT explained: NT-035's GPU epoch-0 divergence (separate processes, main trainer). Open: the experimenter's GPU check (3 separate-process seed-777 runs in the deterministic mode at the merged head; if they differ, bisect cuDNN GRU vs plain GRU, stateful dropout via SEEDED_STOCHASTIC_LAYERS, CPU/XLA-pinned ops, tf.data order), then (3). P3: custom_model.py:40-45 docstring still says seeds come from the position in model.submodules.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/utils/seeding.py, the data pipeline (tf.data shuffle and map), models/layers/vacuum_saturation_noise.py, training/trainer.py, tests/
 - **why:** NT-035 (2026-09-29): three runs with seed 777 and op determinism on (TF_DETERMINISTIC_OPS=1 plus enable_op_determinism) gave val_loss 9.5673 / 9.6394 / 9.6603 at epoch 0 on the GPU; no op raised. D-025 assumes a deterministic mode makes comparison studies reproducible; it does not yet, so paired studies must use several seeds. Candidates: PYTHONHASHSEED unset on this path, the tf.data shuffle or parallel map order, the vacuum-noise layer's random numbers, CPU-pinned ops.
@@ -1480,8 +1480,20 @@ changes).
 - **area:** src/neural_trade/experiments/screen.py, tests/test_screen.py
 - **depends on:** NT-111 (merged)
 - **why:** QA of NT-111 (2026-10-01): screen.py:974 and :1105 call calibrate_loss_weights and discard the return value, so a screen trial whose calibration fails trains and scores with restored, uncalibrated lambdas and no record, even in gradient mode or with CALIB_FAIL_LOUD; D-048 made the screen layout the first venue for maths and stability checks.
-- **acceptance:** (1) A screen trial whose calibration returns calib_failed is recorded as failed (or carries calib_failed with the error in its JSONL row and is excluded from rankings), test by injection. (2) Default screen numbers unchanged (a trial with a successful calibration gives the same row). (3) Fast suite, ruff.
+- **acceptance:** (1) A screen trial whose calibration returns calib_failed is recorded as failed (or carries calib_failed with the error in its JSONL row and is excluded from rankings), test by injection. (2) Default screen numbers unchanged (a trial with a successful calibration gives the same row). (3) A direct unit test that _term_multiplier(key, cfg, model) uses model.lambda_* when a model is given: since NT-074's stream change the total_share sum check in tests/test_screen.py (~588) no longer detects NT-088's cfg-lambdas bug (bug-A sums 0.84-1.11 on seeds 0-4; QA of NT-074). (4) Fast suite, ruff.
 - **source:** QA of NT-111 (d846e1c)
+
+### NT-113
+
+**No silent annualisation defaults: minutes_per_year and fit_and_backtest's bar_minutes**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/strategy/backtest.py, src/neural_trade/strategy/params.py, src/neural_trade/experiments/scorer.py, scripts/presentation/extract.py, scripts/presentation/extract_candidate.py, configs/candidates/save_candidates.py, tests/
+- **depends on:** NT-040 (merged)
+- **why:** QA of NT-040 (09bdbc3): BacktestConfig.minutes_per_year is still accepted by build_backtest_config (CLI --params, explorer costs) but ignored since NT-040 (a silent change; no stored run or config ever set it: 90/90 stored values are 525,600), and scorer.py:144 prints it as the annualisation basis; fit_and_backtest(bar_minutes=1.0) has a silent 1-minute default that the presentation extractors, save_candidates.py and several runs/experiments scripts rely on (correct today on 1-minute runs, sqrt(k) too high on a k-minute run).
+- **acceptance:** (1) minutes_per_year is refused with a clear error naming periods_per_year and the calendar (or removed with D-029 evidence; its asdict key in stored backtest.json files stays readable). (2) fit_and_backtest has no bar_minutes default: every caller passes it, the live ones from the run's stored bar_minutes (load_block); test. (3) The CLI and explorer tests assert the Sharpe identity, not only bar_minutes == 5. (4) 1-minute outputs byte-identical (the QA's before/after rescore of runs/scenarios/reference_default, sha256 fc1bad3f...66b6); fast suite, ruff.
+- **source:** QA of NT-040 (D:/nt_qa/nt040/)
 
 
 Items closed at earlier milestone reviews: the remediation plan's phases 0, A (M1, M2, M4), B and C, and
