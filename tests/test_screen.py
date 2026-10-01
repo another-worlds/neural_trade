@@ -992,3 +992,158 @@ def test_screen_mode_numbers_moved_once_when_the_seed_derivation_became_name_bas
     # _identity_offset itself: same index always gives the same offset (no process-dependent input).
     assert _identity_offset(3) == _identity_offset(3)
     assert _identity_offset(3) != _identity_offset(4)
+
+
+# ------------------------------------------------------------------ (10) NT-112: a failed calibration
+def _fake_calib_failure(mode: str, message: str):
+    def fail(custom_model, train_ds, cfg, n_train):
+        return {"calib_failed": True, "calib_mode": mode,
+                "calib_error": {"type": "RuntimeError", "message": message},
+                # a real failure still carries the RESTORED configured lambdas (NT-111); irrelevant
+                # to this test beyond proving the dict is not mistaken for an empty/ordinary one.
+                "lambda_dir": float(cfg.LAMBDA_DIR)}
+    return fail
+
+
+@pytest.mark.slow
+def test_run_trial_light_records_a_failed_calibration_as_failed(bars_csv, monkeypatch):
+    """NT-112 acceptance 1, light-trial call site: ``_run_trial_light`` discarded
+    ``calibrate_loss_weights``'s NT-111 return value, so a trial whose calibration failed trained and
+    scored with restored, uncalibrated lambdas and no record at all. Injected directly at the call
+    site (``training.lambda_calibration.calibrate_loss_weights``, imported locally inside
+    ``_run_trial_light`` on every call, so patching the source module's attribute is picked up).
+    Chosen fix: ``passed: False`` (excluded from rankings, same as any other failed rule) AND
+    ``calib_failed``/``calib_mode``/``calib_error`` carried in the row's ``health`` (so a run can be
+    told apart from an ordinary rule failure) - the engine's own ``scorer.score_result`` already
+    raises on this exact condition for a normal training run (NT-111); the screen layout cannot raise
+    (one trial's failure must not stop the whole screen), so it fails the row instead."""
+    import neural_trade.training.lambda_calibration as lambda_calibration
+
+    monkeypatch.setattr(lambda_calibration, "calibrate_loss_weights",
+                        _fake_calib_failure("gradient", "boom in the light trial"))
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["run"] = {"calibrate": True, "epochs": 1}
+    s["grid"] = {"axes": {}}
+    spec = ScreenSpec.from_dict(s)
+    trial = build_trials(spec)[0]
+
+    row = run_trial(trial, spec, {})   # trainer=None: the real _run_trial_light path
+
+    assert row["passed"] is False, f"a failed calibration must fail the row: {row['reasons']}"
+    assert any("calibration failed" in r for r in row["reasons"])
+    assert row["health"]["calib_failed"] is True
+    assert row["health"]["calib_mode"] == "gradient"
+    assert row["health"]["calib_error"]["message"] == "boom in the light trial"
+
+
+@pytest.mark.slow
+def test_trial_group_run_one_records_a_failed_calibration_as_failed(bars_csv, monkeypatch):
+    """NT-112 acceptance 1, group-trial call site: ``_TrialGroup.run_one`` discarded
+    ``calibrate_loss_weights``'s return value identically to the light path. Injected at this call
+    site directly on :class:`_TrialGroup`, not through ``run_trial``'s fake-``trainer`` indirection
+    (a fake trainer would bypass this code path entirely), so the failure is proven to reach
+    ``health`` from the reused-graph path too, not only the fresh-model-per-trial one."""
+    from neural_trade.experiments.screen import _TrialGroup
+    import neural_trade.training.lambda_calibration as lambda_calibration
+
+    monkeypatch.setattr(lambda_calibration, "calibrate_loss_weights",
+                        _fake_calib_failure("value", "boom in the group trial"))
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["run"] = {"calibrate": True, "epochs": 1}
+    s["grid"] = {"axes": {}}
+    spec = ScreenSpec.from_dict(s)
+    trial = build_trials(spec)[0]
+    group = _TrialGroup(trial.config)
+
+    health, auc, timings = group.run_one(trial.config, {}, calibrate=True)
+
+    assert health["calib_failed"] is True
+    assert health["calib_mode"] == "value"
+    assert health["calib_error"]["message"] == "boom in the group trial"
+
+
+@pytest.mark.slow
+def test_run_screen_excludes_a_calibration_failure_from_the_passed_count_and_records_it(tmp_path, bars_csv, monkeypatch):
+    """NT-112 acceptance 1, end to end through :func:`run_screen` (the reused-graph path, the one a
+    real screen uses by default): the failed trial is written to the JSONL file (never silently
+    dropped), counted as ``failed`` (so it is excluded from any downstream ranking that filters on
+    ``passed``, e.g. ``scripts/presentation/extract.py``'s survivor count), and a resume does not
+    re-attempt it."""
+    import neural_trade.training.lambda_calibration as lambda_calibration
+
+    monkeypatch.setattr(lambda_calibration, "calibrate_loss_weights",
+                        _fake_calib_failure("gradient", "boom end to end"))
+    s = spec_dict(bars_csv, slices=[SAFE_DATA_END], seeds=[0])
+    s["run"] = {"calibrate": True, "epochs": 1}
+    s["grid"] = {"axes": {}}
+    spec = ScreenSpec.from_dict(s)
+    store = tmp_path / "runs"
+
+    report = run_screen(spec, store=store)
+    assert report.ran == 1 and report.passed == 0 and report.failed == 1
+
+    lines = (store / "screens" / spec.name / "results.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    row = json.loads(lines[0])
+    assert row["passed"] is False
+    assert row["health"]["calib_failed"] is True
+    assert any("calibration failed" in r for r in row["reasons"])
+
+    report2 = run_screen(spec, store=store)   # resumed: the failed trial is not retried
+    assert report2.ran == 0 and report2.skipped == 1
+
+
+def test_a_successful_calibration_never_adds_calib_failed_to_health(bars_csv):
+    """NT-112 acceptance 2: :func:`_note_calib_failure` must be a strict no-op whenever calibration
+    succeeds (the overwhelming default case) - a trial with a successful calibration gives the exact
+    same row as before this item (see also the before/after comparison against commit d71e3b4 in the
+    item's report: identical rows but for the worktree-local CSV_PATH inside trial_key)."""
+    from neural_trade.experiments.screen import _note_calib_failure
+
+    health = {"finite": True}
+    _note_calib_failure(health, None)                               # calibrate: false
+    assert health == {"finite": True}
+    _note_calib_failure(health, {"lambda_dir": 0.83})                # an ordinary, successful result
+    assert health == {"finite": True}
+    assert "calib_failed" not in health and "calib_mode" not in health and "calib_error" not in health
+
+
+def test_term_multiplier_uses_the_models_own_lambdas_not_cfg_when_a_model_is_given():
+    """NT-112 acceptance 3: a direct unit test of :func:`_term_multiplier` itself. Since NT-074's
+    stochastic-layer RNG fix changed this spec's actual dropout/vacuum-noise stream, the total_share
+    sum check in test_loss_term_shares_use_the_trained_models_own_lambdas_on_real_calibrated_training
+    (~line 588) widened to ``abs=0.3`` and no longer reliably catches a regression that reads
+    ``cfg.LAMBDA_*`` instead of the model's own live ``lambda_*`` Variables when a model is given
+    (NT-088 QA finding 5: this exact bug made calibrated shares sum to 1.232 instead of ~1). This test
+    pins the behaviour directly, with no training and no tolerance: a fake ``model`` whose lambda_*
+    attributes differ from ``cfg``'s must be the ones used for every live-backed key."""
+    from neural_trade.core.config import Config
+    from neural_trade.experiments.screen import _term_multiplier
+
+    cfg = Config(LAMBDA_DIR_OUTER=2.0, LAMBDA_DIR=3.0, LAMBDA_NLL_OUTER=4.0, LAMBDA_VAR=5.0,
+                LAMBDA_CRPS=6.0, LAMBDA_SOFT_ECE=7.0, LAMBDA_TREND_OUTER=8.0)
+
+    class FakeModel:
+        lambda_dir_outer = 20.0
+        lambda_dir = 30.0
+        lambda_nll_outer = 40.0
+        lambda_var = 50.0
+        lambda_crps = 60.0
+        lambda_soft_ece = 70.0
+        lambda_trend_outer = 80.0
+
+    model = FakeModel()
+
+    # model=None (round 1, unchanged): falls back to cfg.LAMBDA_*.
+    assert _term_multiplier("dir_loss", cfg) == pytest.approx(2.0 * 3.0)
+    assert _term_multiplier("nll_loss", cfg) == pytest.approx(4.0 * 5.0)
+    assert _term_multiplier("crps_loss", cfg) == pytest.approx(6.0)
+    assert _term_multiplier("soft_ece_loss", cfg) == pytest.approx(7.0)
+    assert _term_multiplier("trend_loss", cfg) == pytest.approx(8.0)
+
+    # a model given: ITS OWN lambda_* Variables, not cfg's (NT-088 QA finding 5).
+    assert _term_multiplier("dir_loss", cfg, model) == pytest.approx(20.0 * 30.0)
+    assert _term_multiplier("nll_loss", cfg, model) == pytest.approx(40.0 * 50.0)
+    assert _term_multiplier("crps_loss", cfg, model) == pytest.approx(60.0)
+    assert _term_multiplier("soft_ece_loss", cfg, model) == pytest.approx(70.0)
+    assert _term_multiplier("trend_loss", cfg, model) == pytest.approx(80.0)
