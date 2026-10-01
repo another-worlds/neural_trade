@@ -87,6 +87,7 @@ Every field of `neural_trade.core.config.Config`: 127 fields, 38 tunable, 8 depr
 | `CALIB_DAMPING_VOL` | `null` | dimensionless | [0, 1]; null allowed | no | no | damping of LAMBDA_VOL (None = CALIB_DAMPING) |
 | `CALIB_DAMPING_PHYSICS` | `0.0` | dimensionless | [0, 1]; null allowed | no | no | 0: bounded physics regularisers are never rescaled |
 | `CALIB_OUTER` | `false` | flag |  | no | no | also calibrate the outer group multipliers |
+| `CALIB_MODE` | `"value"` | name | one of value, gradient | no | no | 'value': rescale weights so each term's median value matches the reference (today's behaviour, lambda_calibration.py:207-210); 'gradient': rescale so each term's gradient norm on the shared trunk (main-group variables minus the price/direction/variance head Dense layers) matches the reference (GradNorm-style, NT-101), clipped to [CALIB_LAMBDA_MIN, CALIB_LAMBDA_MAX] |
 | `DELTA_SHRINKAGE` | `true` | flag |  | no | no | serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block |
 | `CONFORMAL_SCALE` | `"realized_vol"` | name | one of realized_vol, sigma, none | no | no | conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none' |
 

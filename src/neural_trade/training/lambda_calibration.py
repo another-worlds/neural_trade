@@ -8,6 +8,22 @@ Measures the natural magnitude of each loss component over a few batches with ev
 with ``ref`` the mean of the non-zero medians. Components with damping 0 (the trend prior and
 the bounded physics regularisers, by default) keep their configured weight. If anything fails,
 the configured weights are restored and ``None`` is returned.
+
+``Config.CALIB_MODE`` (NT-101) selects the measurement:
+
+- ``"value"`` (default): the above, unchanged (golden-run bit-for-bit).
+- ``"gradient"``: ``median_component`` is replaced by the term's mean gradient norm, on the trunk
+  (incl. per-horizon towers: every main-group trainable variable except the indicator logits and
+  the price/direction/variance head Dense layers), of the term exactly **as it enters `total`**
+  in ``losses.functions.custom_loss`` — horizon sums (not an average) times whatever outer
+  multiplier `total` applies (``lambda_trend_outer``/``lambda_dir_outer``/``lambda_nll_outer``,
+  or ``0.1`` for the volatility penalty); see ``_total_term_tensors``. Sampled over the same
+  calibration steps (GradNorm-style; A_losses.md recommendation 2). A term this pass never
+  assigns a weight to (``vac``, ``vac_overflow``) or whose rescale would be a no-op (damping 0,
+  or the term's own config weight is 0) is skipped entirely — no backward pass is run for it. The
+  chosen weights, plus each measured term's pre- and post-calibration gradient norm and its share
+  of the pre-calibration total, are added to the returned dict (and so to ``artifacts/meta.json``,
+  via ``TrainResult.calibration_lambdas``).
 """
 from __future__ import annotations
 
@@ -16,8 +32,118 @@ import math
 from typing import Dict, Optional
 
 import numpy as np
+import tensorflow as tf
 
 logger = logging.getLogger(__name__)
+
+#: The terms the calibration pass measures and (mostly) rescales, in a fixed order. Matches the
+#: 13 rescaled lambdas of ``_CALIB_LAMBDA_NAMES`` plus ``vac``/``vac_overflow``, which only feed the
+#: shared reference (their weight is a threshold, never rescaled).
+_CALIB_TERM_NAMES = ('short', 'point', 'long', 'ext', 'dir', 'var', 'vol', 'crps', 'ece',
+                     't_perp', 'casimir', 'vac', 'hd', 'ife', 'vac_overflow')
+
+#: short term-key -> the ``lambda_*`` attribute it calibrates (the 13 rescaled lambdas; ``vac``
+#: and ``vac_overflow`` are never assigned a weight by this pass and have no entry here).
+_LAMBDA_NAME_OF = {
+    'short': 'lambda_short', 'point': 'lambda_point', 'long': 'lambda_long',
+    'ext': 'lambda_extended_trend', 'dir': 'lambda_dir', 'var': 'lambda_var', 'vol': 'lambda_vol',
+    'crps': 'lambda_crps', 'ece': 'lambda_soft_ece', 't_perp': 'lambda_t_perp',
+    'casimir': 'lambda_casimir', 'hd': 'lambda_hd', 'ife': 'lambda_ife',
+}
+
+
+def _term_values(loss_components):
+    """The calibration pass's 15 measured quantities, read from ``LossComponents`` **by attribute**,
+    not by position (NT-101): forward-compatible with fields a later change appends after
+    ``pnl_val`` (for example NT-037's ``dir_align_val``/``coherence_penalty_val``), since attribute
+    access does not depend on the tuple's length or field order.
+    """
+    lc = loss_components
+    ext = (lc.extended_h0 + lc.extended_h1 + lc.extended_h2) / 3.0
+    dirn = (lc.dir_h0 + lc.dir_h1 + lc.dir_h2) / 3.0
+    var = (lc.nll_h0 + lc.nll_h1 + lc.nll_h2) / 3.0
+    crps = (lc.crps_h0 + lc.crps_h1 + lc.crps_h2) / 3.0
+    ece = (lc.soft_ece_h0 + lc.soft_ece_h1 + lc.soft_ece_h2) / 3.0
+    return {
+        'short': lc.point_h0, 'point': lc.point_h1, 'long': lc.point_h2,
+        'ext': ext, 'dir': dirn, 'var': var, 'vol': lc.vol_loss,
+        'crps': crps, 'ece': ece,
+        't_perp': lc.t_perp_total, 'casimir': lc.casimir_val, 'vac': lc.vac_val,
+        'hd': lc.hd_val, 'ife': lc.ife_val, 'vac_overflow': lc.vac_overflow_val,
+    }
+
+
+def _total_term_tensors(custom_model, loss_components):
+    """``CALIB_MODE=gradient``'s measured quantities (NT-101 QA repair round 1): each term
+    exactly as it enters ``losses.functions.custom_loss``'s ``total`` (see that function,
+    building its ``total =`` expression, roughly :771-789) — horizon **sums**, not
+    ``_term_values``'s ``/3`` averages, and multiplied by whatever outer multiplier ``total``
+    applies to that group (``lambda_trend_outer`` for the extended-trend sum, ``lambda_dir_outer``
+    for the direction sum, ``lambda_nll_outer`` for the NLL sum, ``0.1`` for the volatility
+    penalty; CRPS and soft ECE have no outer multiplier). Call with the term's OWN weight already
+    reset to 1.0 (as ``calibrate_loss_weights`` does for every sampled component) so each tensor
+    reads "this term, at weight 1, exactly as `total` would otherwise combine it" — the model's
+    *current* (not reset) outer multipliers are used, matching how `total` actually weights them
+    during this pass. ``value`` mode is unaffected: it keeps using ``_term_values``'s pre-existing
+    ``/3`` averages unchanged (golden-run bit-for-bit); that mode's own inconsistency with how its
+    measured quantity enters `total` is a separate, filed issue (NT-039 note, QA of NT-101), not
+    something this item changes.
+
+    ``vac`` and ``vac_overflow`` are not included here: this pass never assigns either a weight
+    (see ``_LAMBDA_NAME_OF``), so there is nothing to equalise them against; the caller skips their
+    backward pass entirely rather than measuring an unused quantity.
+    """
+    lc = loss_components
+    m = custom_model
+    return {
+        'short': lc.point_h0, 'point': lc.point_h1, 'long': lc.point_h2,
+        'ext': m.lambda_trend_outer * (lc.extended_h0 + lc.extended_h1 + lc.extended_h2),
+        'dir': m.lambda_dir_outer * (lc.dir_h0 + lc.dir_h1 + lc.dir_h2),
+        'var': m.lambda_nll_outer * (lc.nll_h0 + lc.nll_h1 + lc.nll_h2),
+        'vol': 0.1 * lc.vol_loss,
+        'crps': lc.crps_h0 + lc.crps_h1 + lc.crps_h2,
+        'ece': lc.soft_ece_h0 + lc.soft_ece_h1 + lc.soft_ece_h2,
+        't_perp': lc.t_perp_total, 'casimir': lc.casimir_val,
+        'hd': lc.hd_val, 'ife': lc.ife_val,
+    }
+
+
+def rescale_weight(orig: float, measured: float, damping: float, ref: float, lam_min: float,
+                    lam_max: float, eps: float = 1e-8) -> float:
+    """The calibration pass's damped rescale-and-clamp, shared by every term and both
+    ``CALIB_MODE`` values (NT-101): ``measured`` is a median value in 'value' mode or a mean
+    gradient norm in 'gradient' mode; either way, ``damping=1`` makes ``orig * measured`` (the
+    weighted quantity, or its gradient) equal to ``ref`` for every term with ``measured > eps``.
+    A component with ``measured <= eps`` (inactive, or disconnected from the measured graph) keeps
+    its original weight.
+    """
+    if measured > eps:
+        return float(np.clip(orig * (ref / (measured + eps)) ** damping, lam_min, lam_max))
+    return orig
+
+
+def _trunk_variables(custom_model):
+    """The trunk, incl. per-horizon towers — the variables gradient-norm calibration equalises
+    against (NT-101): every main-group trainable variable (the indicator logits, routed to the
+    second optimizer, are excluded) except the price/direction/variance head Dense layers,
+    identified by their layer name (``price_h*``, ``direction_h*[_logit|_skip]``, ``variance_h*``;
+    see ``models/gru_attention.py``). This keeps each horizon's own ``tower_h*`` Dense layer (the
+    16-unit block that feeds that horizon's heads) in the "trunk": it is not literally shared
+    across horizons, but it is not a head either, and excluding it would leave several of the
+    larger per-horizon variable groups out of every gradient-norm measurement. A variable's layer
+    name is the part of its TF name before the first ``/`` (or the whole name for an unscoped
+    variable)."""
+    head_prefixes = ('price_h', 'direction_h', 'variance_h')
+    indicator_ids = getattr(custom_model, '_indicator_var_ids', set())
+    out = []
+    for v in custom_model.trainable_variables:
+        if id(v) in indicator_ids:
+            continue
+        layer_name = v.name.split('/', 1)[0]
+        if layer_name.startswith(head_prefixes):
+            continue
+        out.append(v)
+    return out
 
 
 def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optional[Dict[str, float]]:
@@ -48,6 +174,9 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # warns if it is set). Read CALIB_DAMPING directly.
             d_global   = float(getattr(cfg, 'CALIB_DAMPING', 0.5))
             calib_outer = bool(getattr(cfg, 'CALIB_OUTER', False))
+            # NT-101: 'value' (default) measures each term's median value, as before; 'gradient'
+            # measures each term's gradient norm on the shared trunk instead (GradNorm-style).
+            calib_mode = str(getattr(cfg, 'CALIB_MODE', 'value')).lower()
 
             def _d(attr):
                 """Resolve per-component damping, falling back to global."""
@@ -96,6 +225,17 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             custom_model.lambda_hd               = 1.0
             custom_model.lambda_ife              = 1.0
 
+            # Whether each config-gated term is active at all (its OWN configured weight is
+            # > 0), independent of damping. Needed before Phase 2 in gradient mode (an inactive
+            # term, like a damping-0 one, is never rescaled, so its backward pass is skipped —
+            # see "to_measure" below); value mode only reads these afterwards, in Phase 3, as before.
+            crps_active = float(getattr(cfg, 'LAMBDA_CRPS', 0.0)) > 0.0
+            ece_active  = float(getattr(cfg, 'LAMBDA_SOFT_ECE', 0.0)) > 0.0
+            t_perp_active  = float(getattr(cfg, 'LAMBDA_T_PERP',  0.0)) > 0.0
+            casimir_active = float(getattr(cfg, 'LAMBDA_CASIMIR', 0.0)) > 0.0
+            hd_active      = float(getattr(cfg, 'LAMBDA_HD',      0.0)) > 0.0
+            ife_active     = float(getattr(cfg, 'LAMBDA_IFE',     0.0)) > 0.0
+
             # ----------------------------------------------------------------
             # Phase 1 — warm-up forward passes (no sampling, no gradient). There is no BatchNorm in the graph; this builds the graph and model.losses before sampling.
             # ----------------------------------------------------------------
@@ -105,78 +245,151 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 _ = custom_model(x_batch, training=True)
 
             # ----------------------------------------------------------------
-            # Phase 2 — Sample loss magnitudes
+            # Phase 2 — Sample loss magnitudes (CALIB_MODE=value) or per-term gradient norms on
+            # the shared trunk (CALIB_MODE=gradient, NT-101). Either way this phase produces one
+            # "med_*" measurement per term; phases 3+ (reference, damped rescale, clamp, report)
+            # read only those and do not care which measurement produced them.
             # ----------------------------------------------------------------
-            logger.info(f"[calib] Sampling loss magnitudes over {n_sample}/{train_batches} batches ({sample_frac:.0%} of epoch)...")
-            short_buf, point_buf, long_buf = [], [], []
-            ext_buf, dir_buf, var_buf, vol_buf = [], [], [], []
-            crps_buf, ece_buf = [], []
-            t_perp_buf, casimir_buf, vac_buf, hd_buf, ife_buf, vac_overflow_buf = [], [], [], [], [], []
+            if calib_mode == 'gradient':
+                # NT-101 QA repair round 1: equalise each term's gradient norm AS IT ENTERS
+                # `total` (horizon sums times outer multipliers; see _total_term_tensors), not
+                # _term_values' /3-per-horizon-average reading (that reading stays correct for
+                # value mode, where it is the pre-existing, unchanged behaviour).
+                #
+                # Performance: a term that this pass never assigns a weight to (vac,
+                # vac_overflow — see _LAMBDA_NAME_OF) is never measured at all; a term whose
+                # effective damping is 0, or whose own config weight is 0 (inactive), is rescaled
+                # as a no-op regardless of what we measure (rescale_weight(d=0) always returns
+                # orig; "measured <= eps" also returns orig), so its backward pass is skipped too
+                # ("report the cost of the pass" below is for the terms that are actually
+                # equalised). At the CALIB_* defaults this skips ext/t_perp/casimir/hd/ife
+                # (CALIB_DAMPING_TREND and CALIB_DAMPING_PHYSICS both default to 0) and always
+                # skips vac/vac_overflow, leaving short/point/long/dir/var/vol/crps/ece measured.
+                _damping_of_term = {
+                    'short': d_point, 'point': d_point, 'long': d_point, 'ext': d_trend,
+                    'dir': d_dir, 'var': d_var, 'vol': d_vol, 'crps': d_crps, 'ece': d_ece,
+                    't_perp': d_physics, 'casimir': d_physics, 'hd': d_physics, 'ife': d_physics,
+                }
+                _active_of_term = {
+                    'crps': crps_active, 'ece': ece_active, 't_perp': t_perp_active,
+                    'casimir': casimir_active, 'hd': hd_active, 'ife': ife_active,
+                }
+                to_measure = [name for name, d in _damping_of_term.items()
+                             if d != 0.0 and _active_of_term.get(name, True)]
+                logger.info(f"[calib] Sampling the trunk gradient norm of {sorted(to_measure)} "
+                            f"(as each enters `total`) over {n_sample}/{train_batches} batches "
+                            f"({sample_frac:.0%} of epoch); skipped (never weighted, or a no-op "
+                            f"at damping 0 / inactive): "
+                            f"{sorted(set(_damping_of_term) - set(to_measure))} and vac/vac_overflow...")
+                trunk_vars = _trunk_variables(custom_model)
+                if not trunk_vars:
+                    raise RuntimeError("CALIB_MODE=gradient: no shared-trunk variables found "
+                                       "(every trainable variable was an indicator or a head)")
+                norm_bufs = {name: [] for name in to_measure}
+                for batch in train_ds.take(n_sample):
+                    x_batch, y_batch, last_batch, ext_batch = batch
+                    with tf.GradientTape(persistent=True) as tape:
+                        _y_pred_raw = custom_model(x_batch, training=True)
+                        (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
+                        loss_components = custom_model.custom_loss(
+                            x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
+                            vacuum_overflow=_vac_overflow_batch
+                        )
+                        # NT-101 fix (QA of 119319f): the measured tensors must be built INSIDE
+                        # the tape's `with` block. Built outside (an earlier version of this
+                        # branch did, via _term_values called after the block had closed), the
+                        # +/x ops are not recorded, so tape.gradient() on the resulting (real,
+                        # nonzero-valued) tensor finds no path back into the traced graph at all
+                        # and returns None for every trunk variable (reproduced with a plain
+                        # tf.Variable sum built outside a `with tf.GradientTape()` block: even
+                        # x0 + x0 loses its gradient). Single-field terms with no extra arithmetic
+                        # were unaffected, which is what made the bug look like batch noise in a
+                        # subset of terms rather than a tape-scope bug in every combined one.
+                        terms = _total_term_tensors(custom_model, loss_components)
+                    for name in to_measure:
+                        grads = tape.gradient(terms[name], trunk_vars)
+                        present = [g for g in grads if g is not None]
+                        gnorm = float(tf.linalg.global_norm(present)) if present else 0.0
+                        norm_bufs[name].append(gnorm)
+                    del tape  # persistent tapes must be released explicitly
 
-            for batch in train_ds.take(n_sample):
-                x_batch, y_batch, last_batch, ext_batch = batch
-                _y_pred_raw = custom_model(x_batch, training=True)
-                # Strip 10th output (vacuum_overflow) before passing to custom_loss
-                (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
-                (total,
-                 point_h0, point_h1, point_h2,
-                 local_h0, global_h0, ext_h0,
-                 local_h1, global_h1, ext_h1,
-                 local_h2, global_h2, ext_h2,
-                 dir_h0, dir_h1, dir_h2,
-                 nll_h0, nll_h1, nll_h2,
-                 reg_val, inter_reg, vol_loss_val,
-                 crps_h0_c, crps_h1_c, crps_h2_c,
-                 soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c,
-                 t_perp_c, casimir_c, vac_c, hd_c, ife_c,
-                 vac_overflow_c, _pnl_c, _dir_align_c, _coherence_c) = custom_model.custom_loss(
-                    x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
-                    vacuum_overflow=_vac_overflow_batch
-                )
+                def _mean(buf):
+                    return float(np.mean(np.array(buf))) if buf else 0.0
 
-                short_buf.append(float(point_h0))
-                point_buf.append(float(point_h1))
-                long_buf.append(float(point_h2))
-                ext_buf.append(float((ext_h0 + ext_h1 + ext_h2) / 3.0))
-                dir_buf.append(float((dir_h0 + dir_h1 + dir_h2) / 3.0))
-                var_buf.append(float((nll_h0 + nll_h1 + nll_h2) / 3.0))
-                vol_buf.append(float(vol_loss_val))
-                crps_buf.append(float((crps_h0_c + crps_h1_c + crps_h2_c) / 3.0))
-                ece_buf.append(float((soft_ece_h0_c + soft_ece_h1_c + soft_ece_h2_c) / 3.0))
-                t_perp_buf.append(float(t_perp_c))
-                casimir_buf.append(float(casimir_c))
-                vac_buf.append(float(vac_c))
-                hd_buf.append(float(hd_c))
-                ife_buf.append(float(ife_c))
-                vac_overflow_buf.append(float(vac_overflow_c))
+                med_short, med_point, med_long = (_mean(norm_bufs.get(n, [])) for n in ('short', 'point', 'long'))
+                med_ext, med_dir, med_var, med_vol = (_mean(norm_bufs.get(n, [])) for n in ('ext', 'dir', 'var', 'vol'))
+                med_crps, med_ece = _mean(norm_bufs.get('crps', [])), _mean(norm_bufs.get('ece', []))
+                med_t_perp, med_casimir = (_mean(norm_bufs.get(n, [])) for n in ('t_perp', 'casimir'))
+                med_hd, med_ife = (_mean(norm_bufs.get(n, [])) for n in ('hd', 'ife'))
+                med_vac = 0.0             # never measured: no weight is ever derived from it
+                med_vac_overflow = 0.0    # never measured: not one of the 13 rescaled lambdas
+            else:
+                logger.info(f"[calib] Sampling loss magnitudes over {n_sample}/{train_batches} batches ({sample_frac:.0%} of epoch)...")
+                short_buf, point_buf, long_buf = [], [], []
+                ext_buf, dir_buf, var_buf, vol_buf = [], [], [], []
+                crps_buf, ece_buf = [], []
+                t_perp_buf, casimir_buf, vac_buf, hd_buf, ife_buf, vac_overflow_buf = [], [], [], [], [], []
 
-            def _med(buf):
-                return float(np.median(np.array(buf))) if buf else 0.0
+                for batch in train_ds.take(n_sample):
+                    x_batch, y_batch, last_batch, ext_batch = batch
+                    _y_pred_raw = custom_model(x_batch, training=True)
+                    # Strip 10th output (vacuum_overflow) before passing to custom_loss
+                    (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
+                    (total,
+                     point_h0, point_h1, point_h2,
+                     local_h0, global_h0, ext_h0,
+                     local_h1, global_h1, ext_h1,
+                     local_h2, global_h2, ext_h2,
+                     dir_h0, dir_h1, dir_h2,
+                     nll_h0, nll_h1, nll_h2,
+                     reg_val, inter_reg, vol_loss_val,
+                     crps_h0_c, crps_h1_c, crps_h2_c,
+                     soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c,
+                     t_perp_c, casimir_c, vac_c, hd_c, ife_c,
+                     vac_overflow_c, _pnl_c, _dir_align_c, _coherence_c) = custom_model.custom_loss(
+                        x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
+                        vacuum_overflow=_vac_overflow_batch
+                    )
 
-            med_short = _med(short_buf)
-            med_point = _med(point_buf)
-            med_long  = _med(long_buf)
-            med_ext   = _med(ext_buf)
-            med_dir   = _med(dir_buf)
-            med_var   = _med(var_buf)
-            med_vol   = _med(vol_buf)
-            med_crps  = _med(crps_buf)
-            med_ece   = _med(ece_buf)
-            med_t_perp  = _med(t_perp_buf)
-            med_casimir = _med(casimir_buf)
-            med_vac     = _med(vac_buf)
-            med_hd      = _med(hd_buf)
-            med_ife     = _med(ife_buf)
-            med_vac_overflow = _med(vac_overflow_buf)
+                    short_buf.append(float(point_h0))
+                    point_buf.append(float(point_h1))
+                    long_buf.append(float(point_h2))
+                    ext_buf.append(float((ext_h0 + ext_h1 + ext_h2) / 3.0))
+                    dir_buf.append(float((dir_h0 + dir_h1 + dir_h2) / 3.0))
+                    var_buf.append(float((nll_h0 + nll_h1 + nll_h2) / 3.0))
+                    vol_buf.append(float(vol_loss_val))
+                    crps_buf.append(float((crps_h0_c + crps_h1_c + crps_h2_c) / 3.0))
+                    ece_buf.append(float((soft_ece_h0_c + soft_ece_h1_c + soft_ece_h2_c) / 3.0))
+                    t_perp_buf.append(float(t_perp_c))
+                    casimir_buf.append(float(casimir_c))
+                    vac_buf.append(float(vac_c))
+                    hd_buf.append(float(hd_c))
+                    ife_buf.append(float(ife_c))
+                    vac_overflow_buf.append(float(vac_overflow_c))
 
-            # Reference = mean of all active (non-zero) component medians.
-            # CRPS and ECE are included only when their config lambda is active.
-            crps_active = float(getattr(cfg, 'LAMBDA_CRPS', 0.0)) > 0.0
-            ece_active  = float(getattr(cfg, 'LAMBDA_SOFT_ECE', 0.0)) > 0.0
-            t_perp_active  = float(getattr(cfg, 'LAMBDA_T_PERP',  0.0)) > 0.0
-            casimir_active = float(getattr(cfg, 'LAMBDA_CASIMIR', 0.0)) > 0.0
-            hd_active      = float(getattr(cfg, 'LAMBDA_HD',      0.0)) > 0.0
-            ife_active     = float(getattr(cfg, 'LAMBDA_IFE',     0.0)) > 0.0
+                def _med(buf):
+                    return float(np.median(np.array(buf))) if buf else 0.0
+
+                med_short = _med(short_buf)
+                med_point = _med(point_buf)
+                med_long  = _med(long_buf)
+                med_ext   = _med(ext_buf)
+                med_dir   = _med(dir_buf)
+                med_var   = _med(var_buf)
+                med_vol   = _med(vol_buf)
+                med_crps  = _med(crps_buf)
+                med_ece   = _med(ece_buf)
+                med_t_perp  = _med(t_perp_buf)
+                med_casimir = _med(casimir_buf)
+                med_vac     = _med(vac_buf)
+                med_hd      = _med(hd_buf)
+                med_ife     = _med(ife_buf)
+                med_vac_overflow = _med(vac_overflow_buf)
+
+            # Reference = mean of all active (non-zero) component medians (CALIB_MODE=value) or
+            # mean gradient norms (CALIB_MODE=gradient).
+            # CRPS and ECE are included only when their config lambda is active (crps_active etc.
+            # were computed earlier, before Phase 2, so gradient mode can also use them there).
             candidate_meds = [med_short, med_point, med_long, med_ext, med_dir, med_var, med_vol]
             if crps_active:
                 candidate_meds.append(med_crps)
@@ -205,9 +418,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             eps = 1e-8
 
             def _rescale(orig, med, damping):
-                if med > eps:
-                    return float(np.clip(orig * (ref_loss / (med + eps)) ** damping, lam_min, lam_max))
-                return orig  # component inactive — keep original
+                return rescale_weight(orig, med, damping, ref_loss, lam_min, lam_max, eps)
 
             new_short = _rescale(orig_short, med_short, d_point)
             new_point = _rescale(orig_point, med_point, d_point)
@@ -237,6 +448,32 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             custom_model.lambda_hd             = new_hd
             custom_model.lambda_ife            = new_ife
 
+            # Post-calibration weighted gradient norms (CALIB_MODE=gradient only; NT-101 QA repair
+            # round 1, acceptance (1)'s "equal after calibration" check and meta.json's "post"
+            # record). Computed analytically, not by a second backward pass: _total_term_tensors
+            # scales each measured term by a *scalar* (its own weight — reset to 1.0 for Phase 2 —
+            # times the current outer multiplier), and gradient is linear in a scalar factor,
+            # so ``||grad(new_lambda * term)|| == new_lambda * ||grad(term)||`` exactly (new_lambda
+            # >= 0 always, by its [0.1, 20] clamp). This reuses the Phase 2 measurement instead of
+            # re-running the sampled batches with the new weights, at no accuracy cost.
+            if calib_mode == 'gradient':
+                _new_of_term = {
+                    'short': new_short, 'point': new_point, 'long': new_long, 'ext': new_ext,
+                    'dir': new_dir, 'var': new_var, 'vol': new_vol, 'crps': new_crps, 'ece': new_ece,
+                    't_perp': new_t_perp, 'casimir': new_casimir, 'hd': new_hd, 'ife': new_ife,
+                }
+                _pre_of_term = {
+                    'short': med_short, 'point': med_point, 'long': med_long, 'ext': med_ext,
+                    'dir': med_dir, 'var': med_var, 'vol': med_vol, 'crps': med_crps, 'ece': med_ece,
+                    't_perp': med_t_perp, 'casimir': med_casimir, 'hd': med_hd, 'ife': med_ife,
+                }
+                post_of_term = {name: _new_of_term[name] * _pre_of_term[name] for name in to_measure}
+                # Caveat: this reflects Phase 3's weights. CALIB_OUTER (Phase 4, below, default
+                # False) may further change lambda_trend_outer/dir_outer/nll_outer, which would
+                # move ext/dir/var's "as it enters total" value again; re-deriving post_of_term
+                # after Phase 4 is not done here (CALIB_OUTER=False is the default this item
+                # targets; combining the two is left for whoever next changes CALIB_OUTER's design).
+
             # ----------------------------------------------------------------
             # Phase 4 — Optional outer-multiplier calibration (CALIB_OUTER)
             # Calibrates lambda_trend_outer, lambda_dir_outer, lambda_nll_outer
@@ -262,12 +499,15 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # ----------------------------------------------------------------
             # Print report
             # ----------------------------------------------------------------
+            _measure_label = "||g||" if calib_mode == 'gradient' else "med"
+
             def _fmt_row(name, orig, med, new, active=True):
                 skip = "" if active else " [skipped — inactive]"
                 arrow = f"{orig:.4f} → {new:.4f}"
-                return f"  {name:<14} med={med:.6f}  {arrow}{skip}"
+                return f"  {name:<14} {_measure_label}={med:.6f}  {arrow}{skip}"
 
-            logger.info("[calib] Sampled medians and updated lambdas:")
+            logger.info("[calib] Sampled %s and updated lambdas (CALIB_MODE=%s):",
+                        "gradient norms" if calib_mode == 'gradient' else "medians", calib_mode)
             logger.info('%s', _fmt_row("λ_short",  orig_short, med_short, new_short))
             logger.info('%s', _fmt_row("λ_point",  orig_point, med_point, new_point))
             logger.info('%s', _fmt_row("λ_long",   orig_long,  med_long,  new_long))
@@ -309,6 +549,28 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 'lambda_ife':            new_ife,
                 'ref_loss':              ref_loss,
             }
+            if calib_mode == 'gradient':
+                # NT-101 acceptance (2): the chosen weights are the lambda_* entries above; also
+                # record the mode plus, for every term this pass actually measured and equalised
+                # (``to_measure`` — damping 0 and inactive terms are no-ops and were never
+                # measured, see Phase 2 above; "equalised", not "rescaled": a damping-0 term is
+                # technically still passed through rescale_weight, but as a no-op, so calling it
+                # "rescaled" overstates what happened to it), its gradient norm before calibration
+                # (lambda reset to 1.0, as it enters `total`) and after (the now-assigned weight
+                # times that same measurement — see the "Post-calibration" comment above for why
+                # this is exact without a second backward pass), plus each term's share of the
+                # pre-calibration total, so a run's meta.json shows what the equalisation pass saw
+                # and that it worked (post norms should all be close to ref_loss). The 'calib_mode'
+                # key is added only here (not for the default 'value' branch) so every value in the
+                # dict stays a plain float there, as scripts/golden_run.py (and any other consumer
+                # of calibration_lambdas) assumes.
+                _calib_lambdas['calib_mode'] = calib_mode
+                _grad_norms_pre = {_LAMBDA_NAME_OF[name]: _pre_of_term[name] for name in to_measure}
+                _grad_norms_post = {_LAMBDA_NAME_OF[name]: post_of_term[name] for name in to_measure}
+                _total_grad_norm_pre = sum(_grad_norms_pre.values()) or 1.0
+                _calib_lambdas['grad_norms_pre'] = _grad_norms_pre
+                _calib_lambdas['grad_norms_post'] = _grad_norms_post
+                _calib_lambdas['grad_shares'] = {k: v / _total_grad_norm_pre for k, v in _grad_norms_pre.items()}
             if calib_outer:
                 # float(): see the log line above (NT-092, these are now tf.Variable-backed).
                 _calib_lambdas.update({

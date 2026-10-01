@@ -312,6 +312,13 @@ class Config:
                                                 "0: bounded physics regularisers are never rescaled",
                                                 unit="dimensionless", ge=0.0, le=1.0)
     CALIB_OUTER: bool = _f(False, "calibration", "also calibrate the outer group multipliers", unit="flag")
+    CALIB_MODE: str = _f("value", "calibration",
+                         "'value': rescale weights so each term's median value matches the reference "
+                         "(today's behaviour, lambda_calibration.py:207-210); 'gradient': rescale so each "
+                         "term's gradient norm on the shared trunk (main-group variables minus the price/"
+                         "direction/variance head Dense layers) matches the reference (GradNorm-style, "
+                         "NT-101), clipped to [CALIB_LAMBDA_MIN, CALIB_LAMBDA_MAX]",
+                         unit="name", choices=("value", "gradient"))
     DELTA_SHRINKAGE: bool = _f(True, "calibration",
                                "serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block",
                                unit="flag")
