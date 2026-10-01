@@ -609,6 +609,7 @@ changes).
 - **acceptance:** (1) A SPEC committed before any GPU time: the hypothesis, at most 3 variants against today's calibration as the baseline, the dev folds and seeds for any choice, the judgement folds and seeds of (3), the metrics with their minimum effects, the guard-rails, and a GPU-time estimate within 3 hours (pre-registered A/B studies keep that limit, D-024) or the owner's approval. (2) The code for the variants is merged through an implementer item that the SPEC names. (3) One verdict by the paired comparator (NT-032). A verdict's pairs are (seed, fold) over judgement folds that no choice used; the SPEC names them before any GPU time (fold -1 x at least 5 seeds today; more held-out folds from the long history once NT-041 exists); at least 5 pairs (lead's reading of D-025, OPERATING_MODEL "Sweeps and pre-registered studies"). (4) REPORT.md gives the verdict, the numbers with their noise, every run id and NT-037's health numbers per variant. A negative or inconclusive verdict closes the item.
 - **source:** owner Q&A 2026-09-28 (round 8: measure, then one pre-registered A/B); docs/DECISIONS.md D-024, D-025, D-026
 - **amendment (2026-10-01, QA of NT-101):** today's value calibration (lambda_calibration.py:41-56) equalises the per-horizon AVERAGES of dir, NLL, CRPS and soft ECE and vol without its 0.1 factor, while the total uses horizon SUMS and 0.1 x vol: after value calibration these four terms weigh 3x a point term and vol 0.1x (QA script D:/nt_qa/nt101_check.py). The SPEC must state this for the baseline arm; the gradient arm (NT-101 after its repair) equalises the terms as they enter the total.
+- **amendment (2026-10-01, re-QA of NT-101, PASS on 0a563e1):** the SPEC must also account for: (a) gradient-mode weights come from a 12-batch MEAN of heavy-tailed per-batch norms, relative SE 9-40% (ece and long worst; fresh-batch spread max/min 1.6-1.9); consider a median or more batches as a variant setting, not a silent change; (b) the reference scale differs between modes (gradient: mean of the 8 measured terms; value: all 13 active terms), so ext and the physics terms (unrescaled, damping 0) sit at a different relative weight per arm; (c) coherence (trunk norm 5.6, about 36% of an equalised term) is calibrated by neither mode; (d) the gradient pass costs x7-9 the value pass on CPU (GPU not measured); (e) an OOM inside calibrate_loss_weights falls back silently to the configured lambdas with only a warning: the SPEC's guard-rail must check meta.json calib_mode per run. Evidence: QA scripts D:/nt_qa/nt101r_check.py, nt101r_noise.py.
 
 ### NT-040
 
@@ -1291,7 +1292,7 @@ changes).
 
 **Indicator hygiene: bound the applied period, no meta bias, LR schedule for both optimizers, GRAD_MULT 1, applied-period report**
 
-- **status:** todo
+- **status:** in-progress (2026-10-01): criteria (1)-(6) met, QA PASS on 1812682 (golden run equal, 455 arrays; fast 1198 passed); merged be63e6e with all switches at today's values; (4) kept default 5 by the lead's ruling (no-op under Adam, documented), the change goes to the A/B; (7) the A/B is open.
 - **priority / type / role:** P2 / feature / implementer
 - **area:** src/neural_trade/models/layers/learnable_indicators.py, src/neural_trade/models/gru_attention.py (meta_adjust), src/neural_trade/training/callbacks.py, src/neural_trade/training/optim.py, src/neural_trade/core/config.py, src/neural_trade/evaluation/, tests/
 - **depends on:** NT-032 (comparator, for the A/B)
@@ -1340,7 +1341,7 @@ changes).
 
 **Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off**
 
-- **status:** todo
+- **status:** done (2026-10-01): criteria (1)-(3) met, re-QA (Opus) PASS on 0a563e1 (equal weighted trunk norms 15.467 on the calibration batches, residual vs total 1.9e-6; golden run equal, 455 arrays; gradient pass x7-9 the value pass on CPU); merged b0d2afa; criterion (4) is NT-039. Fast suite 1216 passed, ruff clean, slow suite 28 passed + 1 known failure (NT-074 note) on be63e6e. Follow-ups: NT-111, NT-039 amendment.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/training/lambda_calibration.py, src/neural_trade/core/config.py, tests/
 - **depends on:** NT-037 (per-term gradients), NT-099 (the cleaned objective)
@@ -1456,6 +1457,18 @@ changes).
 - **why:** QA of NT-037 (18b3479): var(skip)/var(skip + tower) is not bounded by 1 and read 2.0 / 5.95 / 3.53 on a real default run because the skip and tower logits are anti-correlated (corr -0.76 / -0.92 / -0.91), yet the report calls it a share. NT-104 added a second helper with the same definition.
 - **acceptance:** (1) One helper, used by the report and by NT-104's diagnostics, returning per horizon cov(skip, logit)/var(logit) (skip and tower shares sum to 1) plus the correlation of skip and tower; (2) the report labels it as such; (3) tests against a numpy computation on OHLCV; (4) fast suite, ruff.
 - **source:** QA of NT-037; NT-104 implementer report
+
+### NT-111
+
+**Loss-weight calibration fails loudly in gradient mode; a steadier slow-test tolerance**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/training/lambda_calibration.py, tests/test_calib_gradient_mode.py
+- **depends on:** NT-101 (merged)
+- **why:** re-QA of NT-101 (2026-10-01): an error inside calibrate_loss_weights (QA saw a CPU OOM in the backward pass on the default model, shape [256,57,60,60], on a loaded machine) is caught and the configured lambdas are restored with only a warning, so a run can silently train with uncalibrated weights; the slow test's 0.5 relative-spread tolerance on 3 fresh batches sits at the measured noise (0.58 on 12 fresh real batches).
+- **acceptance:** (1) When CALIB_MODE is gradient (and, behind a switch, value), a failed calibration raises (or records `calib_failed: true` with the error in meta.json and status.json, and the scorer marks the run failed); test with an injected error. (2) The slow test's tolerance is derived from the measured per-batch noise (or uses more batches) so it does not flake; 10 repeated runs with different seeds pass. (3) Fast suite, ruff.
+- **source:** NT-101 re-QA report (D:/nt_qa/nt101r_check.log, nt101r_noise.log)
 
 
 Items closed at earlier milestone reviews: the remediation plan's phases 0, A (M1, M2, M4), B and C, and
