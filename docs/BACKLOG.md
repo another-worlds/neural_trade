@@ -1402,7 +1402,7 @@ changes).
 
 **MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B**
 
-- **status:** todo
+- **status:** in-progress (2026-10-01): criteria (1)-(2) met; repair round 1 (the ratio logit was period-clipped to r in [0.033, 0.667], fast >= 1.82; now ParamSpec.kind='ratio' is clipped as a fraction [1e-3, 1-2e-4]); re-QA PASS on 76bea90 (fast reaches 1.016-1.034 at slow 17-35; golden 455/455 equal; fast 1835, stability 11 passed, ruff clean); merged. (3) the A/B is open.
 - **priority / type / role:** P3 / feature / implementer
 - **area:** src/neural_trade/indicators/families.py, src/neural_trade/models/layers/learnable_indicators.py, tests/
 - **depends on:** NT-097
