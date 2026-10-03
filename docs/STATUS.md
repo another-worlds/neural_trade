@@ -1,22 +1,18 @@
 # Status
 
-_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-03 (NT-099 adoption recorded as D-057; the 2026-09-29 body below is otherwise unchanged)._
+_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-04 (NT-099, NT-115, and NT-117 passed QA and are done; the 2026-09-29 body below is otherwise unchanged)._
 
 ## Owner quiz (answered 2026-10-03)
 
 Seven open decisions, recorded in [qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md) and D-050 to D-056.
-No new data source. Strategies use raw heads for coherence and the served delta for size (NT-115 has the code).
+No new data source. Strategies use raw heads for coherence and the served delta for size (NT-115 is done).
 The physics re-run is approved and not started. Epoch selection may grow a switch; validation loss stays the
 default. `remediation/plan` is not merged into `master`. Predictor latency is filed as NT-116 and not started.
 The licence is MIT (`LICENSE`); QA has not passed that file. Nothing in the list below is still waiting.
 
-## Owner question 9 (answered 2026-10-03; cells finished the same day)
+## NT-099, NT-115, and NT-117 (done 2026-10-04)
 
-NT-099 (`loss_prune_v1`) spent the extra GPU time D-049 allowed. `ece0_vol0` fold −35 took 588 s and the
-`ece0` fold −39 re-run took 210 s (about 13 minutes, not the 30–35 that were estimated). Both
-non-inferiority checks pass; the ordinary beats verdicts stay inconclusive. The suspect cell is kept and
-is not in verdict 1. The adoption entry is D-057. NT-117 set both shipped defaults to 0 and stays
-in progress until QA, as does NT-115. The study stays open until QA passes the report. No other owner question was closed in this note.
+QA passed all three on `91fa363` (fast suite 1163 passed, ruff clean). NT-099's two non-inferiority checks pass (means +0.002556 and +0.002661); guard-rails pass; the suspect cell stays out of verdict 1; D-057 adopts both variants. NT-117 set both shipped defaults to 0. Calibration lifts a configured `LAMBDA_VOL` of 0 to the floor 0.1 and leaves `LAMBDA_SOFT_ECE` 0 at 0. NT-115 reads coherence from the raw heads. Notebooks 01-04 ran on `20261003T225052Z-91fa363-11993eec` (served epoch 8, sec_per_step 0.1724, a record; 29 figures, 0 errors, 0 empty panels). The three items are done. No other owner question was closed in this note.
 
 ## Where things stand
 

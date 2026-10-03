@@ -131,7 +131,7 @@ changes).
 | [NT-096](#nt-096) | P1 | bug | implementer | todo | Loss hygiene: epsilon inside every batch std, coherence without its zero-gradient parts and logged, stale comments |
 | [NT-097](#nt-097) | P2 | feature | implementer | todo | Indicator hygiene: bound the applied period, no meta bias, LR schedule for both optimizers, GRAD_MULT 1, applied-period report |
 | [NT-098](#nt-098) | P1 | research | experimenter | todo | Per-term gradient shares measured on real trainings (the probe of NT-037) |
-| [NT-099](#nt-099) | P1 | research | experimenter | in-progress | Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off |
+| [NT-099](#nt-099) | P1 | research | experimenter | done | Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off |
 | [NT-100](#nt-100) | P2 | research | experimenter | todo | Pre-registered A/B: the NLL tail (lower variance weight, Student-t NLL) |
 | [NT-101](#nt-101) | P1 | feature | implementer | todo | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
 | [NT-102](#nt-102) | P1 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
@@ -142,9 +142,9 @@ changes).
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
 | [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
 | [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
-| [NT-115](#nt-115) | P1 | feature | implementer | in-progress | Strategies: raw heads for coherence, served delta for size |
+| [NT-115](#nt-115) | P1 | feature | implementer | done | Strategies: raw heads for coherence, served delta for size |
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
-| [NT-117](#nt-117) | P1 | feature | implementer | in-progress | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
+| [NT-117](#nt-117) | P1 | feature | implementer | done | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
 
 ## Items
 
@@ -1316,7 +1316,7 @@ changes).
 
 **Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off**
 
-- **status:** in-progress (2026-10-03): both verdicts are final and both non-inferiority checks pass. Criterion 4 is D-057 (adopt both variants). The default edit is NT-117 and is not done in this entry. QA has not passed, so the item is not done. Report: `runs/experiments/loss_prune_v1/REPORT.md`.
+- **status:** done (2026-10-04): QA PASS on 91fa363 (fast suite 1163 passed, ruff clean). Both verdicts recomputed from the cell scores match the stored estimates. Verdict 1 mean h1 CRPSS +0.002556, 95% CI [-0.000997, +0.006109]; verdict 2 mean +0.002661, 95% CI [-0.002927, +0.008249]. Both non-inferiority checks pass; the ordinary beats verdicts stay inconclusive. Guard-rails pass. Suspect cell `20261001T000824Z-fb840fd-d0074ed7-ece0__f-39__s0` is kept and is not in verdict 1. D-057 cites both verdicts and adopts both variants. This entry does not edit the defaults; that edit is NT-117. Report: `runs/experiments/loss_prune_v1/REPORT.md`.
 - **priority / type / role:** P1 / research / experimenter
 - **area:** runs/experiments/loss_prune_v1/ (SPEC, REPORT), an engine scenario; no code beyond config
 - **depends on:** NT-032 (comparator), NT-098 (the gate)
@@ -1449,11 +1449,11 @@ changes).
 
 **Strategies: raw heads for coherence, served delta for size**
 
-- **status:** in-progress (2026-10-03): raw-head flags, served-delta entry and take-profit. Hand-built frame (N=8): enhanced entries 8 to 8, liberal entries 8 to 8, INCOH 0 to 4 when only the raw order changes. QA has not passed, so the item is not done.
+- **status:** done (2026-10-04): QA PASS on 91fa363 (fast suite 1163 passed, ruff clean). Acceptance (4) is the hand-built frame, N=8: before, enhanced 8, liberal 8, INCOH 0; after the first 4 bars break the raw magnitude order and the served h1 is unchanged, enhanced 8, liberal 8, INCOH 4. Notebooks 01-04 executed on run `20261003T225052Z-91fa363-11993eec` (served epoch 8). check.py: 29 figures, 0 errors, 0 empty panels. The coherence panels name the raw heads; a served delta of 0 does not decide those flags. On that run enhanced_multi_horizon takes no trades, because the served h1 beta is 0. sec_per_step 0.1724 is a record, not a gate.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/strategy/signals.py, src/neural_trade/strategy/strategies.py, tests/
 - **depends on:** NT-007 (D-051)
-- **why:** D-051. `magnitude_coherent` and `direction_aligned` were computed on the served delta, so they mostly reflected the beta ratio. The owner moved those two checks to the raw heads. Take-profit sizing stays on the served delta. The enhanced_multi_horizon `d1 > 0` entry rule was not part of the choice and stays on the served delta, so a zero beta still blocks that entry. The code on this branch waits on QA.
+- **why:** D-051. `magnitude_coherent` and `direction_aligned` were computed on the served delta, so they mostly reflected the beta ratio. The owner moved those two checks to the raw heads. Take-profit sizing stays on the served delta. The enhanced_multi_horizon `d1 > 0` entry rule was not part of the choice and stays on the served delta, so a zero beta still blocks that entry.
 - **acceptance:** (1) `magnitude_coherent` and `direction_aligned` are computed on the raw heads (test). (2) Take-profit sizing for enhanced_multi_horizon and liberal stays on the served delta (test). (3) The `d1 > 0` entry rule stays on the served delta (test: beta 0 still produces no entry from that rule). (4) Before/after trade and INCOH counts on the reference run. (5) Fast suite, ruff.
 - **source:** D-051; NT-007
 
@@ -1473,11 +1473,11 @@ changes).
 
 **Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0**
 
-- **status:** in-progress (2026-10-03): both defaults are 0 in config.py, default.yaml, and config-reference.md. Golden record: tests/fixtures/golden_nt117.npz. QA has not passed, so the item is not done.
+- **status:** done (2026-10-04): QA PASS on 91fa363 (fast suite 1163 passed, ruff clean). Both defaults are 0 in config.py, configs/default.yaml, and docs/guide/config-reference.md. The golden note is tests/fixtures/golden_nt117.md (39 arrays equal, 272 differ). Configured LAMBDA_VOL 0 is lifted to the calibration floor 0.1, and LAMBDA_SOFT_ECE 0 stays 0. The notebook run `20261003T225052Z-91fa363-11993eec` (served epoch 8) records the same pair at epoch 0: lambda_vol 0.1, lambda_soft_ece 0.0. check.py: 29 figures, 0 errors, 0 empty panels. sec_per_step 0.1724 is a record, not a gate. Does not start NT-100.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/core/config.py, configs/default.yaml, docs/guide/config-reference.md, the golden-run record, tests that pin the two defaults
 - **depends on:** NT-099 (D-057)
-- **why:** D-057. Both `loss_prune_v1` non-inferiority checks and both guard-rails passed. The SPEC says the shipped defaults become `LAMBDA_SOFT_ECE: 0` and `LAMBDA_VOL: 0`, and that the study itself does not edit them. The edit landed on this branch and waits on QA.
+- **why:** D-057. Both `loss_prune_v1` non-inferiority checks and both guard-rails passed. The SPEC says the shipped defaults become `LAMBDA_SOFT_ECE: 0` and `LAMBDA_VOL: 0`, and that the study itself does not edit them.
 - **acceptance:** (1) Both defaults are 0 in `core/config.py` and `configs/default.yaml`, and `docs/guide/config-reference.md` matches. (2) A test pins both. (3) The golden run is re-recorded, or the difference from the previous record is documented and a new record is committed. (4) Fast suite, ruff. (5) Does not start NT-100 and does not change any other default.
 - **source:** D-057; runs/experiments/loss_prune_v1/SPEC.md; runs/experiments/loss_prune_v1/REPORT.md
 
