@@ -62,6 +62,14 @@ that extend or partly replace an entry.
 | D-046 | Verdicts are inferred over folds, at least 5 judgement folds; one fold x seeds is not enough | lead | |
 | D-047 | NT-047's default: OHLCV input with all 14 indicator families; the 1.6x slower step is accepted | owner | |
 | D-048 | Tiny first: maths and stability checks on the 6-hour screen layout; test-run discipline; pytest-xdist | owner | |
+| D-049 | NT-099 may finish its two open cells past the 3-hour cap | owner | |
+| D-050 | No new data source; the micro loop does not go looking for taker-buy volume | owner | |
+| D-051 | Strategies: raw heads for coherence, served delta for size | owner | |
+| D-052 | NT-006 may spend about 7-10 GPU-hours on the physics re-run | owner | |
+| D-053 | Epoch selection may grow a switch; validation loss stays the default | owner | |
+| D-054 | remediation/plan is not merged into master yet | owner | |
+| D-055 | File a P3 item for Predictor.predict GPU latency | owner | |
+| D-056 | The repository licence is MIT | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -602,4 +610,65 @@ that extend or partly replace an entry.
   vol off) has 4 of 5 folds; `ece0_vol0` fold −35 never logged a step. Both gaps were estimated at 30–35 GPU minutes.
 - **Decision:** run both. The original suspect cell stays. Its replacement is a new run on the same spec and code,
   scored in place of it for verdict 1. No loss-weight default changes from the provisional verdict.
+- **Consequence:** NT-099 (the two cells ran the same day; the verdicts are in `runs/experiments/loss_prune_v1/REPORT.md`).
+
+## D-050 No new data source; the micro loop does not go looking for taker-buy volume (owner, 2026-10-03)
+- **Owner (verbatim):** "No new source" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** question 8, asked 2026-09-30. The micro loop had not reached the owner's hit-rate and drawdown
+  goal, and the research note said that goal needs a different information source. The recommendation with the
+  question was a CPU logistic check of Binance taker-buy volume on 2024-2025, then basis and funding. A new
+  source is outside the MVP.
+- **Decision:** do not add taker-buy volume, basis, or funding. Close the micro loop on its journal and return
+  to the MVP backlog.
+- **Consequence:** NT-085.
+
+## D-051 Strategies: raw heads for coherence, served delta for size (owner, 2026-10-03)
+- **Owner (verbatim):** "Split raw and served (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** NT-007. Served delta is beta times the raw head. On served deltas, magnitude agreement is true on
+  7.2% of test bars against 56.2% on the raw heads, and it drove most of the enhanced_multi_horizon exits. With
+  beta 0 the same strategy cannot enter, because entry still requires served d1 > 0.
+- **Decision:** `magnitude_coherent` and `direction_aligned` use the raw heads. Take-profit sizing stays on the
+  served delta. The enhanced_multi_horizon d1 > 0 entry rule was not in the option, so it stays on the served
+  delta. A zero beta still blocks that entry.
+- **Consequence:** NT-007 (the decision), NT-115 (the code).
+
+## D-052 NT-006 may spend about 7-10 GPU-hours on the physics re-run (owner, 2026-10-03)
+- **Owner (verbatim):** "Approve the re-run (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** the v1 physics grid was scored on the last epoch, before D-011, and its family verdict is
+  inconclusive. A re-run under D-025 was estimated at 7-10 GPU-hours on 2026-09-25, over the 3-hour cap that
+  pre-registered studies keep unless the owner approves (D-024). That estimate has not been remeasured.
+- **Decision:** the re-run is approved. It still needs its own SPEC before any GPU time. This answer does not
+  start it.
+- **Consequence:** NT-006.
+
+## D-053 Epoch selection may grow a switch; validation loss stays the default (owner, 2026-10-03)
+- **Owner (verbatim):** "Add the switch (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** D-011 serves the best validation-loss epoch. NT-103 was not to be picked until the owner
+  answered, because that rule is D-011's. Validation loss moves 0.1-0.3 per epoch, far more than the direction
+  signal.
+- **Decision:** an implementer may add `EPOCH_SELECT_METRIC`. The default stays validation loss, and the golden
+  run stays put, until a paired test chooses otherwise. The other registered choice is direction BCE plus CRPS,
+  each divided by its epoch-1 value.
+- **Consequence:** NT-103.
+
+## D-054 remediation/plan is not merged into master yet (owner, 2026-10-03)
+- **Owner (verbatim):** "Not yet (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** NT-008. D-004 leaves the merge into `master` to the owner. `master` still holds the
+  pre-remediation code, so the nightly workflow has never run. `nt-099` is not on `remediation/plan`.
+- **Decision:** do not merge. `master` stays untouched. NT-008 stays open until a later yes.
+- **Consequence:** NT-008.
+
+## D-055 File a P3 item for Predictor.predict GPU latency (owner, 2026-10-03)
+- **Owner (verbatim):** "File the P3 item (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** asked 2026-09-29. One single window and one batch, a few GPU-minutes. Inference speed is not a
+  yardstick (D-018).
+- **Decision:** file the item at P3. Do not run it ahead of P1 work, and do not start it with this entry.
+- **Consequence:** NT-116.
+
+## D-056 The repository licence is MIT (owner, 2026-10-03)
+- **Owner (verbatim):** "MIT" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** NT-017. The repository is public and had no LICENSE file. The owner had left the choice open
+  (2026-09-28, round 9); D-019 lowered it to P3.
+- **Decision:** MIT, copyright 2026 another-world. `LICENSE` is that text. The README points at it.
+- **Consequence:** NT-017. QA has not passed the file.
 

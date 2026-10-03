@@ -1,6 +1,14 @@
 # Status
 
-_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-03 (question 9 and the two NT-099 cells; the 2026-09-29 body below is otherwise unchanged)._
+_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-03 (question 9, the two NT-099 cells, and the owner quiz; the 2026-09-29 body below is otherwise unchanged)._
+
+## Owner quiz (answered 2026-10-03)
+
+Seven open decisions, recorded in [qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md) and D-050 to D-056.
+No new data source. Strategies use raw heads for coherence and the served delta for size (NT-115 has the code).
+The physics re-run is approved and not started. Epoch selection may grow a switch; validation loss stays the
+default. `remediation/plan` is not merged into `master`. Predictor latency is filed as NT-116 and not started.
+The licence is MIT (`LICENSE`); QA has not passed that file. Nothing in the list below is still waiting.
 
 ## Owner question 9 (answered 2026-10-03; cells finished the same day)
 
@@ -78,14 +86,14 @@ selectivity, holds, confidence buckets, horizons 10 min-5 h, windows 60/240, 10 
 (E3 model-free bar), a 960-trial maths/hyperparameter/loss screen (NT-088/NT-092) and its level 2. The network never
 beats a 3-lag logistic regression (and is significantly below it at 1 h, z -3.3..-3.5); that baseline's own AUC is
 <= 0.53. Research verdict (docs/research/2026-09-29-pnl-target/): the target needs a different information source.
-**Next step waits on owner question 8** (a new data source, taker-buy volume first); without it, the lead closes
-the micro loop with its report and returns to the MVP backlog.
+**Question 8 was answered on 2026-10-03: no new source (D-050).** The lead closes the micro loop on its journal
+and returns to the MVP backlog. No taker-buy volume, basis, or funding.
 Done today: NT-035, NT-046, NT-076, NT-077, NT-082, NT-083, NT-087, NT-088, NT-092 (all QA PASS). NT-047 passed QA
 and waits on question 7. Open follow-ups: NT-078, NT-079, NT-080, NT-081, NT-084, NT-086, NT-089-NT-091, NT-093.
 
-8. **New data source** (asked 2026-09-30): add Binance taker-buy volume (1-minute klines include it; the local file
-   does not), then basis and funding? A new source is outside the MVP (VISION). Recommendation: yes, starting with a
-   CPU-only logistic check on 2024-2025 (does order flow lift AUC above 0.53?) before any model work.
+8. **New data source** (asked 2026-09-30, answered 2026-10-03: no, D-050): add Binance taker-buy volume
+   (1-minute klines include it; the local file does not), then basis and funding? A new source is outside the MVP
+   (VISION). The recommendation was a CPU-only logistic check on 2024-2025 first. The owner declined.
 
 ## Level-1 screen campaign (2026-09-30; approved plan docs/research/2026-09-29-screen-plan.md)
 
@@ -109,13 +117,7 @@ maths and stability only; quality comes from level 2 on the survivors.
 
 ## Waiting for the owner
 
-1. **NT-007** which delta the strategies read (asked 2026-09-25; recommendation: raw heads for the
-   coherence check, served delta for sizing).
-2. **NT-006** GPU time for the physics re-run, about 7-10 GPU-hours (asked 2026-09-25).
-3. **NT-008** merge into `master` when you are ready (asked 2026-09-25).
-4. **NT-017** licence (left open; P3).
-5. **Inference latency** (asked 2026-09-29): file a P3 item to measure `Predictor.predict` on the GPU
-   (single window and batched, a few GPU-minutes)? Recommendation: yes, as P3.
+None. The five items that stood here, question 8, and NT-103 were answered on 2026-10-03 (D-050 to D-056).
 
 ## Next
 
