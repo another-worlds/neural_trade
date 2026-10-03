@@ -1,6 +1,12 @@
 # Status
 
-_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-09-29 (end of session)._
+_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-03 (question 9 only; the 2026-09-29 body below is otherwise unchanged)._
+
+## Owner question 9 (answered 2026-10-03)
+
+NT-099 (`loss_prune_v1`) may spend about 30–35 more GPU minutes on `ece0_vol0` fold −35 and a re-run of suspect
+`ece0` fold −39. Owner: "Q-9 - okay." D-049. The study stays open until those cells are in the verdicts. No other
+owner question was closed in this note.
 
 ## Where things stand
 

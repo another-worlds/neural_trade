@@ -595,3 +595,11 @@ that extend or partly replace an entry.
 - **Consequence:** OPERATING_MODEL "Tiny first", CLAUDE.md commands, RUNBOOK, the agent files; NT-098 runs on the
   screen and micro layouts; NT-109 (shrink the slowest tests); requirements-ci.txt and CI use xdist.
 
+## D-049 NT-099 may finish its two open cells past the 3-hour cap (owner, 2026-10-03)
+- **Owner (verbatim):** "Q-9 - okay." ([qa/2026-10-03-nt099-gpu.md](qa/2026-10-03-nt099-gpu.md)).
+- **Context:** `loss_prune_v1` stopped over its stated 3 GPU-hour cap (about 3.2 hours used). Verdict 1 (soft ECE
+  off) is provisional because `ece0` fold −39 trained during a 27-second code-tree mix-up. Verdict 2 (soft ECE and
+  vol off) has 4 of 5 folds; `ece0_vol0` fold −35 never logged a step. Both gaps were estimated at 30–35 GPU minutes.
+- **Decision:** run both. The original suspect cell stays. Its replacement is a new run on the same spec and code,
+  scored in place of it for verdict 1. No loss-weight default changes from the provisional verdict.
+

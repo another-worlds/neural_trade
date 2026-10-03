@@ -131,7 +131,7 @@ changes).
 | [NT-096](#nt-096) | P1 | bug | implementer | todo | Loss hygiene: epsilon inside every batch std, coherence without its zero-gradient parts and logged, stale comments |
 | [NT-097](#nt-097) | P2 | feature | implementer | todo | Indicator hygiene: bound the applied period, no meta bias, LR schedule for both optimizers, GRAD_MULT 1, applied-period report |
 | [NT-098](#nt-098) | P1 | research | experimenter | todo | Per-term gradient shares measured on real trainings (the probe of NT-037) |
-| [NT-099](#nt-099) | P1 | research | experimenter | todo | Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off |
+| [NT-099](#nt-099) | P1 | research | experimenter | in-progress | Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off |
 | [NT-100](#nt-100) | P2 | research | experimenter | todo | Pre-registered A/B: the NLL tail (lower variance weight, Student-t NLL) |
 | [NT-101](#nt-101) | P1 | feature | implementer | todo | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
 | [NT-102](#nt-102) | P1 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
@@ -1313,7 +1313,7 @@ changes).
 
 **Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off**
 
-- **status:** todo
+- **status:** in-progress (2026-10-03): step 2 committed on fde4f30 (14 of 15 cells, both comparator calls, REPORT). Over the 3-hour cap, not closed. Owner question 9 answered: run `ece0_vol0` fold −35 and re-run suspect `ece0` fold −39 (D-049). No default change until those two cells are in the verdicts.
 - **priority / type / role:** P1 / research / experimenter
 - **area:** runs/experiments/loss_prune_v1/ (SPEC, REPORT), an engine scenario; no code beyond config
 - **depends on:** NT-032 (comparator), NT-098 (the gate)
