@@ -463,15 +463,18 @@ def test_sign_agreement_reads_the_raw_heads_when_beta_is_0():
     sub = fig.layout.title.text
     assert (f"same sign on all 3 horizons: {cb['delta_dir_align_all']:.1%} "
             f"({cb['delta_dir_align_indep_all']:.1%} if independent)") in sub
-    # the strategies' gate on the served deltas is n/a as an alignment; its pass rate is named for what it is
-    assert "(SignalFrame.direction_aligned)" not in sub
-    assert "n/a (beta = 0 on h0, h1, h2: served delta is 0)" in sub
+    # D-051: with raw heads the strategies' flags are those heads. A served delta of 0 does not decide them.
+    from neural_trade.strategy import SignalFrame
+
+    sf = SignalFrame.build(fr, 1.0, raw_delta=raw)
+    assert f"raw heads: SignalFrame.direction_aligned {sf.direction_aligned.mean():.1%}" in sub
+    assert f"SignalFrame.magnitude_coherent (|h0| &#8804; |h1| &#8804; |h2|) {sf.magnitude_coherent.mean():.1%}" in sub
+    assert "a served delta of 0 on h0, h1, h2 does not decide these flags" in sub
+    assert "the DDD share" not in sub and "P(up) &#8804; 0.5 on all 3" not in sub
     from neural_trade.visualization.analytics_confidence import PATTERNS
 
-    ddd = _one(fig, 1, 2, "share of bars").y[PATTERNS.index("DDD")]     # beta = 0 everywhere: the gate is DDD
+    ddd = _one(fig, 1, 2, "share of bars").y[PATTERNS.index("DDD")]     # the vote pattern, not the flag
     assert ddd == pytest.approx((P <= 0.5).all(1).mean())
-    assert (f"direction_aligned then passes {ddd:.1%} of bars (P(up) &#8804; 0.5 on all 3: the DDD share)"
-            in sub)
 
 
 def test_served_delta_ordering_is_na_not_100_percent_when_beta_is_0():
@@ -495,8 +498,12 @@ def test_served_delta_ordering_is_na_not_100_percent_when_beta_is_0():
     note = fig.layout.legend4.title.text
     assert "beta = 0 on h0, h1, h2" in note and "different factor" not in note
     sub = fig.layout.title.text
-    assert "100.0%" not in sub and "(SignalFrame.magnitude_coherent)" not in sub
-    assert "magnitude_coherent: n/a" in sub
+    assert "100.0%" not in sub and "magnitude_coherent: n/a" not in sub
+    from neural_trade.strategy import SignalFrame
+
+    sf = SignalFrame.build(fr, 1.0, raw_delta=raw)
+    assert f"SignalFrame.magnitude_coherent (|h0| &#8804; |h1| &#8804; |h2|) {sf.magnitude_coherent.mean():.1%}" in sub
+    assert "a served delta of 0 on h0, h1, h2 does not decide these flags" in sub
     assert f"on the raw price heads: {magnitude_ordering(A)[2]:.1%}" in sub
     js = fig.to_json()
     assert "nan%" not in js and "+nan" not in js
@@ -580,10 +587,13 @@ def test_positive_betas_keep_measured_served_statistics_and_name_the_betas():
     cb = coherence_block(fr, raw)
     np.testing.assert_allclose(_one(fig, 2, 1, "share of bars").y, _one(_coh(fr), 2, 1, "share of bars").y)
     assert _one(fig, 2, 1, "share of bars").y[3] == pytest.approx(cb["delta_dir_align_all"])
-    sf = SignalFrame.build(fr, 1.0)
+    served = SignalFrame.build(fr, 1.0)
+    raw_sf = SignalFrame.build(fr, 1.0, raw_delta=raw)
+    # a positive beta keeps the sign, so the alignment rate matches; the magnitude flag is the raw heads
+    assert served.direction_aligned.mean() == pytest.approx(raw_sf.direction_aligned.mean())
     sub = fig.layout.title.text
-    assert f"SignalFrame.direction_aligned {sf.direction_aligned.mean():.1%}" in sub
-    assert f"SignalFrame.magnitude_coherent (|h0| &#8804; |h1| &#8804; |h2|) {sf.magnitude_coherent.mean():.1%}" in sub
+    assert f"raw heads: SignalFrame.direction_aligned {raw_sf.direction_aligned.mean():.1%}" in sub
+    assert f"SignalFrame.magnitude_coherent (|h0| &#8804; |h1| &#8804; |h2|) {raw_sf.magnitude_coherent.mean():.1%}" in sub
     assert "n/a" not in sub
     # the betas given (or carried by the frame) win over the ones read off the frame
     fig2 = _coh(fr, raw_delta=raw, delta_scale={"h0": 0.2, "h1": 0.02, "h2": 0.3})
@@ -615,9 +625,10 @@ def test_partial_beta_0_ordering_note_names_what_is_na_and_keeps_the_other_betas
     assert _note(_coh(fr_m), "legend4") == f"<span style='font-size:11px;color:{T.MUTED}'>{want} · pass raw_delta</span>"
 
 
-def test_gate_line_gives_the_whole_gate_pass_rate_and_its_condition():
-    """One horizon at beta = 0: direction_aligned then passes P(up) <= 0.5 there AND the sign match on the
-    other two. The line gives the gate's pass rate as such, not as the P(up) <= 0.5 share of that horizon."""
+def test_gate_line_reports_the_raw_flags_when_the_raw_heads_are_present():
+    """One horizon at beta = 0. Without raw heads, direction_aligned is the served rule: P(up) <= 0.5 on
+    that horizon and the sign match on the others. With raw heads the subtitle reports that raw flag and
+    does not call it the P(up) <= 0.5 share."""
     from neural_trade.strategy import SignalFrame
 
     fr, raw = _shrunk((0.3, 0.2, 0.0))
@@ -626,7 +637,10 @@ def test_gate_line_gives_the_whole_gate_pass_rate_and_its_condition():
     want = ((P[:, 2] <= 0.5) & ((P[:, :2] > 0.5) == (D[:, :2] > 0)).all(1)).mean()
     assert gate == pytest.approx(want) and abs(gate - (P[:, 2] <= 0.5).mean()) > 0.05
     sub = _coh(fr, raw_delta=raw).layout.title.text
-    assert f"direction_aligned then passes {gate:.1%} of bars (P(up) &#8804; 0.5 on h2 and sign match on h0, h1)" in sub
+    raw_sf = SignalFrame.build(fr, 1.0, raw_delta=raw)
+    assert f"raw heads: SignalFrame.direction_aligned {raw_sf.direction_aligned.mean():.1%}" in sub
+    assert "a served delta of 0 on h2 does not decide these flags" in sub
+    assert "P(up) &#8804; 0.5 on h2" not in sub
     assert "there" not in sub and f"{(P[:, 2] <= 0.5).mean():.1%}" not in sub
 
 

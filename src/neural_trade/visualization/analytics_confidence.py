@@ -653,12 +653,13 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     served_order = np.where(order_na, np.nan, order_rates(D))
     realised = order_rates(frame.y)
     # 6. the strategies' votes (SignalFrame's own rule)
-    sf = SignalFrame.build(frame, 1.0)          # agreement / consensus do not depend on var_scale
+    # D-051: the two flags follow the raw heads when this figure has them. Agreement does not.
+    sf = SignalFrame.build(frame, 1.0, raw_delta=raw)
     agr = np.round(sf.agreement * 3).astype(int)
     agr_share = np.array([(agr == a).mean() for a in (1, 2, 3)])
     agr_up = np.array([((agr == a) & (sf.consensus > 0)).mean() for a in (1, 2, 3)])
     agr_dn = np.array([((agr == a) & (sf.consensus < 0)).mean() for a in (1, 2, 3)])
-    gate = float(sf.direction_aligned.mean())               # the strategies' gates, on the served deltas
+    gate = float(sf.direction_aligned.mean())
     mag_gate = float(sf.magnitude_coherent.mean())
     vote_up, vote_dn = _vote_lines()
 
@@ -839,9 +840,14 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
         heads_line = f"P(up) and the served delta give the same sign on all 3 horizons: {NA_BETA0}"
     if raw is not None:
         heads_line += f" · {chain} on the raw price heads: {order_rates(raw)[2]:.1%}"
-    if zero.any():
-        # SignalFrame.direction_aligned then asks P(up) <= 0.5 of those horizons (and the sign match of the
-        # others): a pass rate, not an alignment. At beta = 0 on all three it is the DDD share.
+    if raw is not None:
+        # The flags are the raw heads. A served delta of 0 does not decide them (D-051).
+        gate_line = (f"raw heads: SignalFrame.direction_aligned {gate:.1%} · "
+                     f"SignalFrame.magnitude_coherent ({chain}) {mag_gate:.1%}")
+        if zero.any():
+            gate_line += f" · a served delta of 0 on {zero_txt} does not decide these flags"
+    elif zero.any():
+        # No raw heads: the served delta is 0, so the flags are the tie / P(up) rule, not an alignment.
         live = ", ".join(h for h, z in zip(H, zero) if not z)
         passes = ("P(up) &#8804; 0.5 on all 3: the DDD share" if not live
                   else f"P(up) &#8804; 0.5 on {zero_txt} and sign match on {live}")

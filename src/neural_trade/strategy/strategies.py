@@ -204,6 +204,7 @@ class EnhancedMultiHorizonStrategy(Strategy):
             return None
         if s.strength[t] < self.min_signal_strength:
             return None
+        # d1 stays the served delta (D-051). Coherence flags may use the raw heads; this entry does not.
         thr, wdir, d1 = self._threshold(s, t), s.weighted_direction[t], s.delta[t, 1]
         size = float(np.clip(self.size_base + s.avg_confidence[t] * self.size_confidence_mult
                              + s.strength[t] * self.size_strength_mult, 0.1, 1.0))
@@ -270,7 +271,7 @@ class LiberalStrategy(Strategy):
             thr = self.base_entry_threshold + self.low_quality_threshold_increase
         if strength < self.min_signal_strength or conf < self.min_confidence or agree < self.min_agreement:
             return None
-        d1 = max(abs(s.delta[t, 1]), self.min_move_sigma * s.sigma[t, 1])
+        d1 = max(abs(s.delta[t, 1]), self.min_move_sigma * s.sigma[t, 1])  # served h1 (D-051)
         wdir = s.weighted_direction[t]
         for sign, ok in ((1, wdir > thr), (-1, wdir < 1.0 - thr)):
             if ok and (not self.require_consensus_side or s.consensus[t] == sign):
