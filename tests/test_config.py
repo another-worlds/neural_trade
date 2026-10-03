@@ -8,7 +8,8 @@ from neural_trade.core.config import Config
 from neural_trade.core.exceptions import InvalidConfigurationError
 
 # Every setting of the pre-package model.Config with its default (extracted from the
-# class before the move). The typed Config must keep all of them, unchanged.
+# class before the move). The typed Config must keep all of them, except LAMBDA_VOL and
+# LAMBDA_SOFT_ECE, which D-057 set to 0 (NT-117).
 LEGACY_DEFAULTS = {
     "CSV_PATH": "binance_btcusdt_1min_ccxt.csv", "LOOKBACK": 60, "WINDOW_STEP": 1, "RESAMPLE_MINUTES": 1,
     "BATCH_SIZE": 256, "EPOCHS": 20,  # BATCH_SIZE: 64 before the GPU-speed work
@@ -23,9 +24,9 @@ LEGACY_DEFAULTS = {
     "LAMBDA_QUANTILE": 1.0, "REG_MOMENTUM_L2": 0, "INDICATOR_L2": 0, "INDICATOR_LR_MULT": 5.0,
     "MOMENTUM_CLIP_MIN": 2.0, "EWMA_IMPL": "matrix", "MOMENTUM_CLIP_MAX": 60, "USE_HUBER": True,
     "LAMBDA_SHORT": 1.0, "LAMBDA_POINT": 1.0, "LAMBDA_LONG": 1.0, "LAMBDA_DIR": 1.0, "LAMBDA_INTER": 1.0,
-    "LAMBDA_VOL": 1.0, "LAMBDA_VAR": 1.0, "LAMBDA_TREND_OUTER": 1.0, "LAMBDA_DIR_OUTER": 1.0,
+    "LAMBDA_VOL": 0.0, "LAMBDA_VAR": 1.0, "LAMBDA_TREND_OUTER": 1.0, "LAMBDA_DIR_OUTER": 1.0,
     "LAMBDA_DIR_ALIGN_OUTER": 0.0, "LAMBDA_COHERENCE": 1.0, "LAMBDA_NLL_OUTER": 1.0, "LAMBDA_CRPS": 1.0,
-    "LAMBDA_SOFT_ECE": 1.0, "T_PERP_DIM": 16, "LAMBDA_T_PERP": 0.1, "LAMBDA_CASIMIR": 0.1,
+    "LAMBDA_SOFT_ECE": 0.0, "T_PERP_DIM": 16, "LAMBDA_T_PERP": 0.1, "LAMBDA_CASIMIR": 0.1,
     "LAMBDA_VAC": 0.0, "LAMBDA_HD": 0.1, "LAMBDA_IFE": 0.1, "RHO_MAX": 0.95, "VACUUM_E_MAX": 1.0,
     "LAMBDA_VAC_OVERFLOW": 0.1, "MODEL_PATH": "nn_learnable_indicators_v3.weights.h5",
     "SCALER_PATH": "scaler_v3.joblib", "MA_SPANS": [5, 10, 30],
@@ -45,6 +46,20 @@ def test_every_legacy_setting_keeps_its_name_and_default():
     changed = {k: (v, getattr(cfg, k)) for k, v in LEGACY_DEFAULTS.items() if getattr(cfg, k) != v}
     assert not changed, changed
     assert Config.HOUR == 60 and Config.DAY == 1440
+
+
+def test_loss_prune_defaults_ship_at_zero():
+    """NT-117 (D-057): LAMBDA_VOL and LAMBDA_SOFT_ECE are 0 in Config and configs/default.yaml."""
+    import yaml
+    from pathlib import Path
+
+    cfg = Config()
+    assert cfg.LAMBDA_VOL == 0.0
+    assert cfg.LAMBDA_SOFT_ECE == 0.0
+    repo = Path(__file__).resolve().parents[1]
+    data = yaml.safe_load((repo / "configs" / "default.yaml").read_text(encoding="utf-8"))
+    assert float(data["LAMBDA_VOL"]) == 0.0
+    assert float(data["LAMBDA_SOFT_ECE"]) == 0.0
 
 
 def test_keyword_construction_and_real_fields():

@@ -335,8 +335,8 @@ class Config:
                            unit="weight", ge=0.0, tunable=True)
     LAMBDA_INTER: float = _f(1.0, "loss_weights", "weight of model.losses (layer regularisers)", unit="weight", ge=0.0,
                              tunable=True)
-    LAMBDA_VOL: float = _f(1.0, "loss_weights", "prediction-spread vs target-spread penalty", unit="weight", ge=0.0,
-                           tunable=True)
+    LAMBDA_VOL: float = _f(0.0, "loss_weights", "prediction-spread vs target-spread penalty (0 = off; D-057)",
+                           unit="weight", ge=0.0, tunable=True)
     LAMBDA_VAR: float = _f(1.0, "loss_weights", "Gaussian NLL of the variance heads", unit="weight", ge=0.0,
                            tunable=True)
     LAMBDA_TREND_OUTER: float = _f(1.0, "loss_weights", "outer multiplier of the summed extended-trend terms; "
@@ -355,7 +355,7 @@ class Config:
                                  tunable=True)
     LAMBDA_CRPS: float = _f(1.0, "loss_weights", "weight of the Gaussian CRPS of the price and variance heads, summed "
                             "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
-    LAMBDA_SOFT_ECE: float = _f(1.0, "loss_weights", "weight of the differentiable ECE of the direction heads, summed "
+    LAMBDA_SOFT_ECE: float = _f(0.0, "loss_weights", "weight of the differentiable ECE of the direction heads, summed "
                                 "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
     LAMBDA_DIR_ALIGN: float = _f(0.7, "loss_weights", "inner weight of the alignment term", unit="weight", ge=0.0,
                                  tunable=True)
