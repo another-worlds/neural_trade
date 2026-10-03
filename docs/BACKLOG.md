@@ -1313,7 +1313,7 @@ changes).
 
 **Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off**
 
-- **status:** in-progress (2026-10-03): step 2 committed on fde4f30 (14 of 15 cells, both comparator calls, REPORT). Over the 3-hour cap, not closed. Owner question 9 answered: run `ece0_vol0` fold −35 and re-run suspect `ece0` fold −39 (D-049). No default change until those two cells are in the verdicts.
+- **status:** in-progress (2026-10-03): both D-049 cells are in the verdicts. `ece0` vs control (fold −39 is the re-run `20261003T093120Z-2573116-d0074ed7-ece0__f-39__s0`; the suspect cell stays out of the verdict) and `ece0_vol0` vs control (fold −35 is `20261003T091952Z-2573116-063f015e-ece0_vol0__f-35__s0`) are each non-inferiority PASS, ordinary beats inconclusive, h0 and h2 guard-rails PASS. Defaults are not changed. SPEC adoption is a lead DECISIONS entry plus a follow-up implementer edit. QA has not passed, so the item is not done. Report: `runs/experiments/loss_prune_v1/REPORT.md`.
 - **priority / type / role:** P1 / research / experimenter
 - **area:** runs/experiments/loss_prune_v1/ (SPEC, REPORT), an engine scenario; no code beyond config
 - **depends on:** NT-032 (comparator), NT-098 (the gate)

@@ -7,8 +7,29 @@ Non-inferiority: does also turning off the volatility penalty (A_losses.md secti
 
 spec hash `eb47e789da74` · registered 2026-10-01T00:00:00Z (effective 2026-10-01T03:55:40+05:00, source git_commit_time)
 
-**Refused: only 4 judgement fold(s) had a usable pair ([-39, -38, -37, -36]), need >= 5 (D-046)**
+**Verdict: inconclusive** (mean: 0.002661, 95% CI [-0.002927, 0.008249], n = 5 folds, 5 pairs)
 
-1 pair(s) excluded:
+| fold | seeds | mean diff |
+|---|---|---|
+| -39 | [0] | 0.002256 |
+| -38 | [0] | -0.001345 |
+| -37 | [0] | -0.0007315 |
+| -36 | [0] | 0.009942 |
+| -35 | [0] | 0.003184 |
 
-- seed 0, fold -35: side A: no matching (seed, fold) run
+| seed | fold | A | B | diff |
+|---|---|---|---|---|
+| 0 | -39 | 0.01048 | 0.008227 | 0.002256 |
+| 0 | -38 | 0.01943 | 0.02078 | -0.001345 |
+| 0 | -37 | 0.03889 | 0.03962 | -0.0007315 |
+| 0 | -36 | 0.02566 | 0.01572 | 0.009942 |
+| 0 | -35 | 0.0417 | 0.03851 | 0.003184 |
+
+## Guard-rails
+
+| metric | verdict | estimate | CI |
+|---|---|---|---|
+| h0/variance/crpss | pass | 0.0006548 | [-0.004193, 0.005503] |
+| h2/variance/crpss | pass | 0.002798 | [-0.002951, 0.008547] |
+
+Non-inferiority (margin 0.005): **pass**
