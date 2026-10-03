@@ -142,9 +142,9 @@ changes).
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
 | [NT-108](#nt-108) | P2 | bug | implementer | todo | Stochastic-layer reset seeds derived from model.submodules position: any new tf.Module attribute silently changes screen-mode numbers |
 | [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
-| [NT-115](#nt-115) | P1 | feature | implementer | todo | Strategies: raw heads for coherence, served delta for size |
+| [NT-115](#nt-115) | P1 | feature | implementer | in-progress | Strategies: raw heads for coherence, served delta for size |
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
-| [NT-117](#nt-117) | P1 | feature | implementer | todo | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
+| [NT-117](#nt-117) | P1 | feature | implementer | in-progress | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
 
 ## Items
 
@@ -1449,11 +1449,11 @@ changes).
 
 **Strategies: raw heads for coherence, served delta for size**
 
-- **status:** todo
+- **status:** in-progress (2026-10-03): raw-head flags, served-delta entry and take-profit. Hand-built frame (N=8): enhanced entries 8 to 8, liberal entries 8 to 8, INCOH 0 to 4 when only the raw order changes. QA has not passed, so the item is not done.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/strategy/signals.py, src/neural_trade/strategy/strategies.py, tests/
 - **depends on:** NT-007 (D-051)
-- **why:** D-051. `magnitude_coherent` and `direction_aligned` are computed on the served delta today, so they mostly reflect the beta ratio. The owner moved those two checks to the raw heads. Take-profit sizing stays on the served delta. The enhanced_multi_horizon `d1 > 0` entry rule was not part of the choice and stays on the served delta, so a zero beta still blocks that entry.
+- **why:** D-051. `magnitude_coherent` and `direction_aligned` were computed on the served delta, so they mostly reflected the beta ratio. The owner moved those two checks to the raw heads. Take-profit sizing stays on the served delta. The enhanced_multi_horizon `d1 > 0` entry rule was not part of the choice and stays on the served delta, so a zero beta still blocks that entry. The code on this branch waits on QA.
 - **acceptance:** (1) `magnitude_coherent` and `direction_aligned` are computed on the raw heads (test). (2) Take-profit sizing for enhanced_multi_horizon and liberal stays on the served delta (test). (3) The `d1 > 0` entry rule stays on the served delta (test: beta 0 still produces no entry from that rule). (4) Before/after trade and INCOH counts on the reference run. (5) Fast suite, ruff.
 - **source:** D-051; NT-007
 
@@ -1473,11 +1473,11 @@ changes).
 
 **Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0**
 
-- **status:** todo
+- **status:** in-progress (2026-10-03): both defaults are 0 in config.py, default.yaml, and config-reference.md. Golden record: tests/fixtures/golden_nt117.npz. QA has not passed, so the item is not done.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/core/config.py, configs/default.yaml, docs/guide/config-reference.md, the golden-run record, tests that pin the two defaults
 - **depends on:** NT-099 (D-057)
-- **why:** D-057. Both `loss_prune_v1` non-inferiority checks and both guard-rails passed. The SPEC says the shipped defaults become `LAMBDA_SOFT_ECE: 0` and `LAMBDA_VOL: 0`, and that the study itself does not edit them. Both are 1.0 today.
+- **why:** D-057. Both `loss_prune_v1` non-inferiority checks and both guard-rails passed. The SPEC says the shipped defaults become `LAMBDA_SOFT_ECE: 0` and `LAMBDA_VOL: 0`, and that the study itself does not edit them. The edit landed on this branch and waits on QA.
 - **acceptance:** (1) Both defaults are 0 in `core/config.py` and `configs/default.yaml`, and `docs/guide/config-reference.md` matches. (2) A test pins both. (3) The golden run is re-recorded, or the difference from the previous record is documented and a new record is committed. (4) Fast suite, ruff. (5) Does not start NT-100 and does not change any other default.
 - **source:** D-057; runs/experiments/loss_prune_v1/SPEC.md; runs/experiments/loss_prune_v1/REPORT.md
 

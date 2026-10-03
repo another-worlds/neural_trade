@@ -15,8 +15,8 @@ The licence is MIT (`LICENSE`); QA has not passed that file. Nothing in the list
 NT-099 (`loss_prune_v1`) spent the extra GPU time D-049 allowed. `ece0_vol0` fold −35 took 588 s and the
 `ece0` fold −39 re-run took 210 s (about 13 minutes, not the 30–35 that were estimated). Both
 non-inferiority checks pass; the ordinary beats verdicts stay inconclusive. The suspect cell is kept and
-is not in verdict 1. `LAMBDA_SOFT_ECE` and `LAMBDA_VOL` are unchanged. The adoption entry is D-057;
-the default edit is NT-117. The study stays open until QA passes the report. No other owner question was closed in this note.
+is not in verdict 1. The adoption entry is D-057. NT-117 set both shipped defaults to 0 and stays
+in progress until QA, as does NT-115. The study stays open until QA passes the report. No other owner question was closed in this note.
 
 ## Where things stand
 
