@@ -70,6 +70,7 @@ that extend or partly replace an entry.
 | D-054 | remediation/plan is not merged into master yet | owner | |
 | D-055 | File a P3 item for Predictor.predict GPU latency | owner | |
 | D-056 | The repository licence is MIT | owner | |
+| D-057 | NT-099 adopts both loss-prune variants; the default edit is a follow-up | lead | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -671,4 +672,20 @@ that extend or partly replace an entry.
   (2026-09-28, round 9); D-019 lowered it to P3.
 - **Decision:** MIT, copyright 2026 another-world. `LICENSE` is that text. The README points at it.
 - **Consequence:** NT-017. QA has not passed the file.
+
+## D-057 NT-099 adopts both loss-prune variants; the default edit is a follow-up (lead, 2026-10-03)
+- **Context:** `runs/experiments/loss_prune_v1/SPEC.md`, "What adopting a variant means". Both non-inferiority
+  checks passed (margin 0.005) and both h0 and h2 CRPSS guard-rails passed. Ordinary "beats" is inconclusive
+  on both, which the SPEC does not treat as a failure. This entry is the lead's reading of that pre-registered
+  rule, not a new owner choice.
+- **Verdict 1, ece0 vs control.** `runs/loss_prune_v1_ece0_f39_rerun/compares/loss_prune_v1_ece0/result.json`.
+  Fold −39 is the re-run `20261003T093120Z-2573116-d0074ed7-ece0__f-39__s0`. Mean h1 CRPSS diff +0.002556,
+  95% CI [−0.000997, +0.006109]. The suspect cell `20261001T000824Z-fb840fd-d0074ed7-ece0__f-39__s0` is kept
+  and is not in this verdict.
+- **Verdict 2, ece0_vol0 vs control.** `runs/compares/loss_prune_v1_ece0_vol0/result.json`. Fold −35 is
+  `20261003T091952Z-2573116-063f015e-ece0_vol0__f-35__s0`. Mean h1 CRPSS diff +0.002661, 95% CI
+  [−0.002927, +0.008249].
+- **Decision:** both variants are adopted. The shipped defaults become `LAMBDA_SOFT_ECE: 0` and
+  `LAMBDA_VOL: 0`. This entry does not edit `core/config.py` or `configs/default.yaml`. Both are still 1.0.
+- **Consequence:** NT-099 stays in progress until QA passes. NT-117 is the implementer edit of the two defaults.
 

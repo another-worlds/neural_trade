@@ -144,6 +144,7 @@ changes).
 | [NT-109](#nt-109) | P2 | performance | implementer | todo | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
 | [NT-115](#nt-115) | P1 | feature | implementer | todo | Strategies: raw heads for coherence, served delta for size |
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
+| [NT-117](#nt-117) | P1 | feature | implementer | todo | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
 
 ## Items
 
@@ -1315,7 +1316,7 @@ changes).
 
 **Pre-registered A/B: soft ECE off, and soft ECE plus the vol penalty off**
 
-- **status:** in-progress (2026-10-03): both D-049 cells are in the verdicts. `ece0` vs control (fold −39 is the re-run `20261003T093120Z-2573116-d0074ed7-ece0__f-39__s0`; the suspect cell stays out of the verdict) and `ece0_vol0` vs control (fold −35 is `20261003T091952Z-2573116-063f015e-ece0_vol0__f-35__s0`) are each non-inferiority PASS, ordinary beats inconclusive, h0 and h2 guard-rails PASS. Defaults are not changed. SPEC adoption is a lead DECISIONS entry plus a follow-up implementer edit. QA has not passed, so the item is not done. Report: `runs/experiments/loss_prune_v1/REPORT.md`.
+- **status:** in-progress (2026-10-03): both verdicts are final and both non-inferiority checks pass. Criterion 4 is D-057 (adopt both variants). The default edit is NT-117 and is not done in this entry. QA has not passed, so the item is not done. Report: `runs/experiments/loss_prune_v1/REPORT.md`.
 - **priority / type / role:** P1 / research / experimenter
 - **area:** runs/experiments/loss_prune_v1/ (SPEC, REPORT), an engine scenario; no code beyond config
 - **depends on:** NT-032 (comparator), NT-098 (the gate)
@@ -1467,6 +1468,18 @@ changes).
 - **why:** D-055. Asked 2026-09-29: one single window and one batch, a few GPU-minutes. Inference speed is not a yardstick (D-018). Filed because the owner said to file it, not to run it ahead of P1 work.
 - **acceptance:** (1) One single-window latency and one batched latency of `Predictor.predict` on the GPU, with the batch size, the commit, and the device recorded. (2) GPU time within a few minutes. (3) No default change.
 - **source:** D-055; docs/STATUS.md question of 2026-09-29
+
+### NT-117
+
+**Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/core/config.py, configs/default.yaml, docs/guide/config-reference.md, the golden-run record, tests that pin the two defaults
+- **depends on:** NT-099 (D-057)
+- **why:** D-057. Both `loss_prune_v1` non-inferiority checks and both guard-rails passed. The SPEC says the shipped defaults become `LAMBDA_SOFT_ECE: 0` and `LAMBDA_VOL: 0`, and that the study itself does not edit them. Both are 1.0 today.
+- **acceptance:** (1) Both defaults are 0 in `core/config.py` and `configs/default.yaml`, and `docs/guide/config-reference.md` matches. (2) A test pins both. (3) The golden run is re-recorded, or the difference from the previous record is documented and a new record is committed. (4) Fast suite, ruff. (5) Does not start NT-100 and does not change any other default.
+- **source:** D-057; runs/experiments/loss_prune_v1/SPEC.md; runs/experiments/loss_prune_v1/REPORT.md
 
 ## Done log
 

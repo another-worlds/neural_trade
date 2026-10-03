@@ -1,6 +1,6 @@
 # Status
 
-_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-03 (question 9, the two NT-099 cells, and the owner quiz; the 2026-09-29 body below is otherwise unchanged)._
+_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-03 (NT-099 adoption recorded as D-057; the 2026-09-29 body below is otherwise unchanged)._
 
 ## Owner quiz (answered 2026-10-03)
 
@@ -15,8 +15,8 @@ The licence is MIT (`LICENSE`); QA has not passed that file. Nothing in the list
 NT-099 (`loss_prune_v1`) spent the extra GPU time D-049 allowed. `ece0_vol0` fold −35 took 588 s and the
 `ece0` fold −39 re-run took 210 s (about 13 minutes, not the 30–35 that were estimated). Both
 non-inferiority checks pass; the ordinary beats verdicts stay inconclusive. The suspect cell is kept and
-is not in verdict 1. `LAMBDA_SOFT_ECE` and `LAMBDA_VOL` are unchanged. The study stays open until the lead
-records the SPEC's adoption entry and QA passes the report. No other owner question was closed in this note.
+is not in verdict 1. `LAMBDA_SOFT_ECE` and `LAMBDA_VOL` are unchanged. The adoption entry is D-057;
+the default edit is NT-117. The study stays open until QA passes the report. No other owner question was closed in this note.
 
 ## Where things stand
 
