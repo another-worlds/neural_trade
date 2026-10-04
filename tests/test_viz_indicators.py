@@ -1,5 +1,5 @@
-"""Learned indicators: the period figures (evolution, table, applied periods, period_init.json) and the
-discovered indicators drawn on price against the textbook defaults (NT-043), whose lines are the layer's maths."""
+"""Learned indicators: the period figures (evolution, every family, table, applied periods, period_init.json)
+and the discovered indicators drawn on price against the textbook defaults (NT-043), whose lines are the layer's maths."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,8 @@ from neural_trade.visualization import discovered_indicators as DI
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.indicator_evolution import (
-    applied_periods, configured_periods, indicator_applied_periods, indicator_evolution, indicator_summary, label,
+    COPY_COLORS, applied_periods, configured_periods, indicator_applied_periods, indicator_evolution,
+    indicator_family_periods, indicator_summary, label,
 )
 
 
@@ -361,6 +362,82 @@ def test_legacy_params_csv(tmp_path):
     s = indicator_summary(tmp_path / "indicator_params_history.csv", Config())
     assert len(s) == 18 and s["corr with val loss"].notna().all()
     assert T.empty_panels(indicator_evolution(tmp_path / "indicator_params_history.csv", Config())) == []
+
+
+def _legend_id(fig, title_part):
+    hits = []
+    for name in fig.layout:
+        if not str(name).startswith("legend") or name == "legend":
+            continue
+        text = fig.layout[name].title.text or ""
+        if title_part in text:
+            hits.append(name)
+    assert len(hits) == 1, hits
+    return hits[0]
+
+
+def test_family_periods_draw_atr_copies_and_a_keltner_role_dash():
+    """Every logged family gets a panel. ATR's three copies keep copy colours; Keltner's two roles
+    use different dashes and one legend entry. The 3x2 figure is a different function."""
+    from neural_trade.registries.visualizations import Visualizations
+
+    rows = []
+    for e in range(3):
+        rows.append({
+            "epoch": e, "val_loss": 2.0 - 0.1 * e,
+            "period/atr_period_0": 14.0 + e, "period/atr_period_1": 21.0 + e, "period/atr_period_2": 28.0 + e,
+            "period/keltner_0_period": 20.0 + e, "period/keltner_0_atr_period": 10.0 + e,
+            "period/ma_period_0": 5.0 + 0.1 * e, "period/macd_1_slow": 35.0 - e,
+        })
+    start = {"atr_period_0": 14.0, "atr_period_1": 21.0, "atr_period_2": 28.0,
+             "keltner_0_period": 20.0, "keltner_0_atr_period": 10.0,
+             "ma_period_0": 5.0, "macd_1_slow": 35.0}
+    fig = indicator_family_periods(rows, Config(), start=start, applied={"ignored": True})
+    assert Visualizations.get("indicator_family_periods") is indicator_family_periods
+    built = Visualizations.build("indicator_family_periods", rows, Config(), start=start)
+    assert built.layout.title.text == fig.layout.title.text
+    assert T.empty_panels(fig) == []
+    assert sum(str(name).startswith("yaxis") for name in fig.layout) == 4
+    assert "Not in this log: rsi, bb" in fig.layout.title.text
+    ma, macd, atr, kel = (_legend_id(fig, s) for s in
+                          ("Moving-average", "MACD periods", "ATR periods", "Keltner"))
+    assert fig.layout[ma].y > fig.layout[macd].y > fig.layout[atr].y > fig.layout[kel].y
+
+    def learned(leg):
+        return [t for t in fig.data if t.legend == leg and t.mode == "lines+markers"]
+
+    atr_lines = learned(atr)
+    assert [t.name for t in atr_lines if t.showlegend is not False] == ["#0", "#1", "#2"]
+    assert [t.line.color for t in atr_lines] == list(COPY_COLORS)
+    assert {t.line.dash for t in atr_lines} == {"solid"}
+    books = [t for t in fig.data if t.legend == atr and t.mode == "lines"]
+    assert len(books) == 3 and {t.line.dash for t in books} == {"6px,4px"}
+    assert all(t.showlegend is False and t.y[0] == t.y[-1] for t in books)
+
+    kel_lines = learned(kel)
+    assert len(kel_lines) == 2 and {t.line.dash for t in kel_lines} == {"solid", "dash"}
+    assert {t.line.color for t in kel_lines} == {COPY_COLORS[0]}
+    assert [t.showlegend for t in kel_lines].count(True) == 1
+    slow = learned(macd)
+    assert len(slow) == 1 and slow[0].name == "#1" and slow[0].line.dash == "dash"
+    assert slow[0].line.color == COPY_COLORS[1]
+
+    colours = set()
+    for t in fig.data:
+        for c in (getattr(t.line, "color", None) if hasattr(t, "line") else None, getattr(t.marker, "color", None)):
+            colours.update(c if isinstance(c, (list, tuple)) else [c])
+        if hasattr(t, "line") and t.line.dash is not None:
+            assert t.line.dash != "dot", t.name
+    assert not colours & {T.HORIZON_COLORS[h] for h in H}
+    assert "RSI" not in fig.layout.title.text and "Bollinger" not in "".join(
+        (fig.layout[n].title.text or "") for n in fig.layout if str(n).startswith("legend"))
+
+
+def test_family_periods_with_no_columns_names_the_empty_log():
+    fig = indicator_family_periods([{"epoch": 0, "val_loss": 1.0}], Config())
+    assert "no learned periods in this log" in fig.layout.title.text
+    assert any("no learned periods in this log" in (a.text or "") for a in fig.layout.annotations)
+    assert sum(str(name).startswith("yaxis") for name in fig.layout) == 1
 
 
 # ------------------------------------------------------------------ finding 12: the applied periods

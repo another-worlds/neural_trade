@@ -221,11 +221,13 @@ display(AT.styled(AT.trailing_move_table(
 The lines are the base periods per epoch; the model applies a per-window shifted period, whose medians on the
 test windows (served weights) are the diamonds right of the last epoch. Change % is measured from the configured
 start. The correlation bars are epoch-to-epoch changes against a noise band.
+A second figure draws every registered family, one panel per family.
 """),
     ("code", """
 metrics_path = ctx.path("metrics.jsonl")
 applied = applied_periods(result, blocks["test"]["X_model"], block="test")   # the model-input windows
 Visualizations.build("indicator_evolution", metrics_path, ctx.config, applied=applied).show()
+Visualizations.build("indicator_family_periods", metrics_path, ctx.config, applied=applied).show()
 indicator_applied_periods(applied, ctx.config, metrics=metrics_path).show()
 display(AT.styled(indicator_summary(metrics_path, ctx.config, applied=applied)))
 """),
@@ -429,10 +431,13 @@ display(AT.styled(AT.magnitude_ordering_table(test, raw_delta=raw)))
 display(AT.styled(AT.alignment_table(test, cfg, raw_delta=raw)))
 display(AT.styled(AT.trailing_move_table({"cal": blocks["cal_raw"], "test": blocks["test_raw"]}, cfg)))
 """),
-    ("md", "## Learned indicator periods\n\nBase periods per epoch; the diamonds are the median applied (per-window shifted) periods of the served weights on the test windows."),
+    ("md", "## Learned indicator periods\n\n"
+           "Base periods per epoch; the diamonds are the median applied (per-window shifted) periods of the "
+           "served weights on the test windows. A second figure draws every registered family, one panel per family."),
     ("code", """
 applied = applied_periods(blocks["predictor"], blocks["blocks"]["test"]["X_model"], block="test")
 Visualizations.build("indicator_evolution", metrics, cfg, applied=applied).show()
+Visualizations.build("indicator_family_periods", metrics, cfg, applied=applied).show()
 indicator_applied_periods(applied, cfg, metrics=metrics).show()
 AT.styled(indicator_summary(metrics, cfg, applied=applied))
 """),

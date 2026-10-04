@@ -39,6 +39,8 @@ Visualizations.register(name="matplotlib_splits", tags=["matplotlib", "data"],
                         dependencies=["matplotlib"])(_ms.matplotlib_splits)
 Visualizations.register(name="indicator_evolution", tags=["plotly", "indicators"],
                         dependencies=["plotly"])(_ie.indicator_evolution)
+Visualizations.register(name="indicator_family_periods", tags=["plotly", "indicators"],
+                        dependencies=["plotly"])(_ie.indicator_family_periods)
 from neural_trade.visualization import eval_report as _ev  # noqa: E402
 
 Visualizations.register(name="eval_report", tags=["plotly", "evaluation", "calibration"],
