@@ -147,13 +147,36 @@ def _concat(parts):
 def _run_batched(model, values, batch: int):
     import tensorflow as tf
 
-    n = int(values.shape[0])
+    arrays = list(values) if isinstance(values, (list, tuple)) else [values]
+    arrays = [np.asarray(arr, dtype=np.float32) for arr in arrays]
+    n = int(arrays[0].shape[0])
     step = max(1, int(batch))
     parts = []
     for start in range(0, n, step):
-        out = model(tf.constant(values[start:start + step]), training=False)
+        feeds = [tf.constant(arr[start:start + step]) for arr in arrays]
+        out = model(feeds[0] if len(feeds) == 1 else feeds, training=False)
         parts.append(_as_numpy(out))
     return _concat(parts)
+
+
+def _probe_and_tail(model, layer):
+    """The indicator features, and the rest of the model from those features.
+
+    Returns ``(probe, tail, tail_takes_windows)``. ``probe`` reads the features from the model
+    inputs. ``tail`` maps those features to the model outputs. When a later layer still reads the
+    raw window (the energy gate, the direction skip), the features alone cannot rebuild the
+    outputs, and ``tail`` takes the original inputs plus the features. The windows stay in their
+    own order: a shuffle replaces indicator channels, not the price path those skips read.
+    """
+    import tensorflow as tf
+
+    probe = tf.keras.Model(model.inputs, layer.output)
+    try:
+        tail = tf.keras.Model(layer.output, model.output)
+        return probe, tail, False
+    except ValueError:
+        tail = tf.keras.Model([*model.inputs, layer.output], model.output)
+        return probe, tail, True
 
 
 def importance_from_model(model, windows, score_fn, *, groups: Sequence[Tuple[str, slice]] | None = None,
@@ -162,25 +185,25 @@ def importance_from_model(model, windows, score_fn, *, groups: Sequence[Tuple[st
 
     ``windows`` is the model input ``[N, LOOKBACK]`` or ``[N, LOOKBACK, C]``. The indicator
     features are read from that layer, and ``score_fn`` is called with the remainder of the
-    model (a functional tail from the layer output to the model outputs), in batches.
-    Predictions are numpy arrays, or a list of them when the model has several outputs.
+    model, in batches. Predictions are numpy arrays, or a list of them when the model has
+    several outputs. A later layer that still reads the raw window keeps those windows in
+    their original order; only the indicator features are shuffled.
     """
-    import tensorflow as tf
-
     layer = model.get_layer("learnable_indicators")
     if groups is None:
         groups = indicator_channel_groups(layer.config)
     try:
-        probe = tf.keras.Model(model.inputs, layer.output)
-        tail = tf.keras.Model(layer.output, model.output)
+        probe, tail, takes_windows = _probe_and_tail(model, layer)
     except (AttributeError, TypeError, ValueError) as exc:
         raise RuntimeError(
             "cannot cut the graph after learnable_indicators; the model has to be functional"
         ) from exc
-    features = _run_batched(probe, np.asarray(windows, dtype=np.float32), batch)
+    windows_np = np.asarray(windows, dtype=np.float32)
+    features = _run_batched(probe, windows_np, batch)
 
     def score_features(feats):
-        return score_fn(_run_batched(tail, np.asarray(feats, dtype=np.float32), batch))
+        feed = [windows_np, np.asarray(feats, dtype=np.float32)] if takes_windows else feats
+        return score_fn(_run_batched(tail, feed, batch))
 
     return grouped_importance(features, score_features(features), score_features, groups,
                               block=block, n_boot=n_boot, seed=seed)

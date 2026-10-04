@@ -204,10 +204,12 @@ into the frozen set.
   the spec), `overrides`, `variants` (named Config overrides), `sweep: {mode: grid, axes: {FIELD:
   [values]}}`, `folds` (FOLD_INDEX values), `seeds`, `strategy: {name, params}` (Strategies registry,
   default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 0, D-044),
-  `run: {calibrate, save_artifacts}`. Unknown keys, unknown or invalid Config values, unregistered
-  components, folds the data does not have and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH,
-  SCALER_PATH, ARTIFACTS_DIR, bar_minutes) are refused before anything trains. Run from the
-  repository root: a relative `CSV_PATH` resolves against the working directory.
+  `run: {calibrate, save_artifacts, indicator_report}`. `indicator_report` writes
+  `indicator_report.html` from `artifacts/` and requires `save_artifacts`. Unknown keys,
+  unknown or invalid Config values, unregistered components, folds the data does not have
+  and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH, SCALER_PATH, ARTIFACTS_DIR,
+  bar_minutes) are refused before anything trains. Run from the repository root: a relative
+  `CSV_PATH` resolves against the working directory.
 - **Cells and run store.** Each (variant x grid point, fold, seed) cell trains into its own
   directory `runs/scenarios/<name>/<run id>-<configuration>__f<fold>__s<seed>/` with the usual run
   files plus `meta.json` sections `engine`, `dataset` (file sha256, first and last timestamp, bar

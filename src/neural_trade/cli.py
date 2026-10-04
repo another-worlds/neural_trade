@@ -112,6 +112,21 @@ def cmd_train(args) -> int:
                 h1["direction"]["mcc"], h1["delta"]["ev"], h1["variance"].get("crpss"),
                 h1["variance"].get("coverage90"))
     print(ctx.run_dir)  # noqa: T201 - the command's result, for scripting
+    try:
+        from neural_trade.serving.indicator_report import write_indicator_report
+
+        written = write_indicator_report(ctx.run_dir)
+    except Exception:
+        logger.exception("indicator report failed; weights are already saved in %s", ctx.run_dir)
+        return 1
+    logger.info("indicator report %s", written)
+    return 0
+
+
+def cmd_indicators(args) -> int:
+    from neural_trade.serving.indicator_report import write_indicator_report
+
+    print(write_indicator_report(args.run_dir))  # noqa: T201 - the command's result, for scripting
     return 0
 
 
@@ -339,6 +354,10 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--no-calibrate", action="store_true", help="skip the loss-weight calibration pass")
     t.add_argument("--no-baselines", action="store_true")
     t.set_defaults(func=cmd_train)
+
+    ind = sub.add_parser("indicators", help="write indicator_report.html for an existing run directory")
+    ind.add_argument("run_dir")
+    ind.set_defaults(func=cmd_indicators)
 
     p = sub.add_parser("predict", help="forecast every window of a CSV with a saved bundle")
     p.add_argument("--artifacts", required=True)

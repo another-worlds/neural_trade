@@ -174,6 +174,40 @@ def test_importance_from_model_accepts_several_outputs_and_the_layer_config():
     assert np.isfinite(rows[0].loss)
 
 
+def test_a_skip_around_the_indicator_layer_stays_on_the_original_window():
+    """The production graph reads the raw window after the indicator layer (energy gate, direction
+    skip). The tail keeps that window in its own order and still matches the full model."""
+    import tensorflow as tf
+
+    from neural_trade.evaluation.permutation_importance import _probe_and_tail
+
+    inp = tf.keras.Input(shape=(6, 3), name="input_window")
+    ind = tf.keras.layers.Dense(2, name="learnable_indicators")(inp)
+    skip = tf.keras.layers.GlobalAveragePooling1D()(inp)
+    pooled = tf.keras.layers.GlobalAveragePooling1D()(ind)
+    out = tf.keras.layers.Dense(1)(tf.keras.layers.Concatenate()([pooled, skip]))
+    model = tf.keras.Model(inp, out)
+    layer = model.get_layer("learnable_indicators")
+    with pytest.raises(ValueError):
+        tf.keras.Model(layer.output, model.output)
+
+    x = np.random.default_rng(0).normal(size=(5, 6, 3)).astype(np.float32)
+    probe, tail, takes_windows = _probe_and_tail(model, layer)
+    assert takes_windows is True
+    feat = probe(tf.constant(x), training=False)
+    np.testing.assert_allclose(tail([tf.constant(x), feat], training=False).numpy(),
+                               model(tf.constant(x), training=False).numpy(), atol=1e-6)
+
+    def score_fn(pred):
+        value = np.asarray(pred, dtype=float).reshape(-1)
+        err = value ** 2
+        hit = (value > 0).astype(float)
+        return {"loss": float(err.mean()), "auc": {"h0": float(hit.mean())}, "loss_i": err, "hit_i": {"h0": hit}}
+
+    rows = importance_from_model(model, x, score_fn, groups=[("mix", slice(0, 2))], n_boot=8, block=2, batch=4)
+    assert [row.name for row in rows] == ["mix"] and np.isfinite(rows[0].loss)
+
+
 def test_a_model_whose_graph_cannot_be_cut_is_refused():
     import tensorflow as tf
 
