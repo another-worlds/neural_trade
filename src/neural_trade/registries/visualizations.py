@@ -78,6 +78,10 @@ from neural_trade.visualization import discovered_indicators as _di  # noqa: E40
 
 Visualizations.register(name="discovered_indicators", tags=["plotly", "indicators", "price"],
                         dependencies=["plotly"])(_di.discovered_indicators)
+from neural_trade.visualization import permutation_importance as _perm  # noqa: E402
+
+Visualizations.register(name="permutation_importance", tags=["plotly", "indicators", "evaluation"],
+                        dependencies=["plotly"])(_perm.permutation_importance)
 for _name, _fn, _tags in (("direction_analytics", _ma.direction_analytics, ["direction"]),
                           ("delta_analytics", _ma.delta_analytics, ["delta"]),
                           ("variance_analytics", _ma.variance_analytics, ["variance", "calibration"]),
