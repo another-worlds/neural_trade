@@ -80,7 +80,7 @@ changes).
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
-| [NT-048](#nt-048) | P1 | feature | implementer | todo | Discovered-indicators report: a self-contained interactive HTML report per run |
+| [NT-048](#nt-048) | P1 | feature | implementer | in-progress | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
 | [NT-051](#nt-051) | P1 | research | experimenter | todo | First stability-harness run on the reference setup against its pre-registered thresholds |
@@ -92,7 +92,7 @@ changes).
 | [NT-057](#nt-057) | P3 | polish | implementer | todo | Random-null follow-ups: one mean-size definition, labels with the size, the CLI prints the matched null |
 | [NT-058](#nt-058) | P2 | polish | implementer | todo | Indicator views: which period is 'learned', RSI smoothing named, no private cross-module helpers |
 | [NT-059](#nt-059) | P1 | infra | implementer | done | Window-free benchmark kit in scripts/bench/ (kernel V1, assembly D6b, the A2 and today's layers, op census, TF32 check) |
-| [NT-060](#nt-060) | P1 | infra | experimenter | todo | GPU run of the window-free benchmark kit (G-A2) |
+| [NT-060](#nt-060) | P1 | infra | experimenter | in-progress | GPU run of the window-free benchmark kit (G-A2) |
 | [NT-061](#nt-061) | P1 | decision | lead | todo | TF32 decision for the indicator layer (plan stage 1b) |
 | [NT-062](#nt-062) | P2 | feature | implementer | todo | VAL_BATCH_SIZE key (validation grouping independent of the training batch) |
 | [NT-063](#nt-063) | P1 | feature | implementer | todo | Engine options for pre-registered studies: lambdas once per study, per-arm EPOCHS, cap-extension re-runs, contention records |
@@ -717,7 +717,7 @@ changes).
 
 **Discovered-indicators report: a self-contained interactive HTML report per run**
 
-- **status:** todo
+- **status:** in-progress (2026-10-04): the report writer is `654a34a`, the fourteen-family figures are `e88b015` and `5663c8b`, and grouped permutation importance is `d46243e`. Notebook 01 trained `20261004T073704Z-d1f6fa9-11993eec` (served epoch 10, stopped at epoch 16; served val loss 3.9679) and wrote `runs/20261004T073704Z-d1f6fa9-11993eec/indicator_report.html` (plotly embedded, three figures, no external script). Notebooks 01, 04 and 07 were executed; `scripts/notebooks/check.py` printed `all clean` (notebook 07 is 0.8 MB). The ATR row, the Keltner period and atr_period panels, and the importance panel (42 instances, bootstrap whiskers) were looked at. QA has not passed this item, so it is not done.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/visualization/ (the report figures, reusing NT-043's figure module), src/neural_trade/evaluation/ (grouped permutation importance), src/neural_trade/registries/visualizations.py, src/neural_trade/cli.py, scripts/notebooks/build.py, notebooks/07_discovered_indicators.ipynb, tests/
 - **depends on:** NT-043 (learned indicators on price, notebook 07), NT-046 (indicators registry)
@@ -859,7 +859,7 @@ changes).
 
 **GPU run of the window-free benchmark kit (G-A2)**
 
-- **status:** todo
+- **status:** in-progress (2026-10-04): the kit records `fwd_sha256` and calls `enable_op_determinism` on `--device gpu` (`d1f6fa9`). The two GPU runs are `runs/experiments/window_free_kit_v1/run_a.json` and `run_b.json`; the write-up is `runs/experiments/window_free_kit_v1/REPORT.md`. Precision passes, and the ten window-free forwards match. Today's layer hash does not: its meta Dense is a new draw in each process. The A2 layer at 30,720 bars is 1.128 times today's layer on run B, above the 1.10 gate. That failure is recorded in the report and the kit was not changed. QA has not passed this item, so it is not done.
 - **priority / type / role:** P1 / infra / experimenter
 - **area:** runs/experiments/window_free_kit_v1/
 - **depends on:** NT-059
