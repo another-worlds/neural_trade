@@ -506,11 +506,12 @@ discovered = [
 
 The indicators the network learned, drawn on the price of one window next to the same indicators at their
 textbook periods: the discovered indicators are what a run delivers (VISION), and the prediction and trading
-quality in 01-04 are the evidence that they are good. Each copy of each family (moving average, Bollinger bands,
-RSI, MACD; the copies start from `MA_SPANS`, `BB_PERIODS`, `RSI_PERIODS` and `MACD_SETTINGS`) is drawn twice on the
+quality in 01-04 are the evidence that they are good. Each copy of every registered family is drawn twice on the
 same window: solid at the period the served model applied to that window, dashed at its configured textbook
-period. The lines use the model's own formulas (an EWMA with alpha = 2 / (period + 1), started at the window's first
-bar), so they are the channels the network reads, in price units.
+period. The families are moving average, MACD, RSI, Bollinger, ATR, stochastic, Williams %R, Keltner, OBV,
+VWAP, MFI, ADX, CCI and Donchian. The original four use the numpy formulas on the raw close; the other ten are
+drawn from each family's outputs on the model window. Lines that smooth use an EWMA with alpha = 2 / (period + 1),
+started at the window's first bar.
 
 Set `WINDOW` to a window index, or to "typical" (closest to the block's median periods), "longest" / "shortest"
 (where the per-window adjustment stretches or shrinks the periods most) or "last"; `BLOCK` to another block of
@@ -557,7 +558,7 @@ window has not warmed up by the window's end (the EWMA starts at the window's fi
 """),
     ("code", """
 Visualizations.build("discovered_indicators", block["X"], cfg, applied=applied, metrics=metrics, window=WINDOW,
-                     times=times).show()
+                     times=times, ohlcv=block["X_model"]).show()
 """),
     ("md", """
 ## Learned against textbook periods

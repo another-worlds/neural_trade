@@ -871,6 +871,58 @@ def test_learned_base_draws_the_base_periods_and_bad_arguments_are_refused():
         DI.discovered_indicators(X[:10], Config(), applied=app)
 
 
+def test_registered_families_are_drawn_and_atr_matches_the_layer(tf):
+    """Every registered family is named, and the ATR panel is that family's own channel (meta_adjust = 0).
+
+    Drawing does not touch a layer's weights: textbook lines are a second eager call, not a logit swap.
+    """
+    from neural_trade.core.config import Config as Full
+    from neural_trade.indicators import Indicators, indicator_instances
+    from neural_trade.models.layers.learnable_indicators import LearnableIndicators
+
+    cfg = Full()
+    L = int(cfg.LOOKBACK)
+    rng = np.random.default_rng(2)
+    close = 100 + np.cumsum(rng.normal(0, 0.4, L))
+    high = close + rng.uniform(0.05, 0.8, L)
+    low = close - rng.uniform(0.05, 0.8, L)
+    open_ = close + rng.normal(0, 0.05, L)
+    volume = rng.uniform(0.2, 2.0, L)
+    window = np.stack([open_, high, low, close, volume], axis=-1).astype(np.float32)
+    layer = LearnableIndicators(cfg)
+    n_logits = sum(len(Indicators.get(name).params) * len(raw) for name, raw in indicator_instances(cfg).items())
+    out = layer([tf.constant(window[None]), tf.zeros((1, n_logits))]).numpy()[0]
+    before = layer.get_learned_parameters()
+    periods = configured_periods(cfg)
+    lines = DI.family_lines(window, periods, cfg)
+    col = 0
+    for name, raw in indicator_instances(cfg).items():
+        if name == "atr":
+            break
+        col += len(Indicators.get(name).channels) * len(raw)
+    np.testing.assert_allclose(lines["atr_0"]["atr"], out[:, col], rtol=1e-5, atol=1e-4)
+    app = pd.DataFrame([periods])
+    app.attrs["base"] = dict(periods)
+    app.attrs["block"] = "test"
+    fig = DI.discovered_indicators(close[None, :], cfg, applied=app, ohlcv=window[None], window=0)
+    assert layer.get_learned_parameters() == before
+    headings = {_heading(fig.layout[k]) for k in fig.layout if str(k).startswith("legend")}
+    blob = " ".join(headings).casefold()
+    for name in Indicators.registry:
+        assert name in blob or DI.FAMILY_NAME.get(name, "").casefold() in blob, name
+    learned = [t for t in fig.data if t.legend == _legend_of(fig, "ATR #0") and str(t.name).startswith("learned")]
+    assert learned
+    np.testing.assert_allclose(np.asarray(learned[0].y, float), lines["atr_0"]["atr"], rtol=1e-5, atol=1e-4)
+    assert T.empty_panels(fig) == []
+    colours = set()
+    for t in fig.data:
+        for c in (getattr(getattr(t, "line", None), "color", None), getattr(getattr(t, "marker", None), "color", None)):
+            colours.update(c if isinstance(c, (list, tuple)) else [c])
+        if getattr(getattr(t, "line", None), "dash", None) == "dot":
+            raise AssertionError(t.name)
+    assert not colours & {T.HORIZON_COLORS[h] for h in H}
+
+
 def test_headings_subtitle_and_table_fit_an_1100_px_output():
     """At 1100 px a panel of the 3-column grid is ~300 px wide. Each panel heading (its title, then its keys on the
     line below; widths as calibrated on Edge renders in _heading_px) fits one panel; each subtitle line fits the
