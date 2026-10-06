@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "hc_baseline",
+  "description": "",
+  "base_config": "../default.yaml",
+  "overrides": {
+    "CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 2,
+    "VAL_FRACTION": 0.1,
+    "CAL_FRACTION": 0.1,
+    "MAX_SEQUENCE_COUNT": 4500,
+    "FOLD_INDEX": -2,
+    "BATCH_SIZE": 64,
+    "TRAIN_METRICS_EVERY": 1
+  },
+  "grid": {
+    "axes": {}
+  },
+  "sample": null,
+  "slices": [
+    "2019-06-10T00:00:00",
+    "2020-03-12T23:00:00",
+    "2021-05-19T23:00:00",
+    "2022-09-01T00:00:00",
+    "2023-07-15T00:00:00"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19
+  ],
+  "run": {
+    "calibrate": false,
+    "epochs": 8
+  },
+  "rules": {
+    "finite": true,
+    "max_nonfinite_grad_steps": 0,
+    "max_clipped_share": 1.0,
+    "clip_skip_epochs": 1,
+    "min_train_loss_drop": -10.0,
+    "max_term_share": 1.0
+  }
+}
