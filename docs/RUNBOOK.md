@@ -639,6 +639,36 @@ $PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n
   the sweep logs a warning when its recorded setup differs from the swept one (whenever it uses the record, N > 1).
 - `CUDA_VISIBLE_DEVICES=-1` skips the GPU check (a CPU run).
 
+### Stability harness and config guard (NT-038, D-026)
+
+`neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]`
+(`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
+(index rows, `stability/*` scores) and writes `<store>/stability/<id>/REPORT.md` (pass or fail per case, the loss
+term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit 1 when a case fails.
+
+- **Cases**: price level and volatility x0.1 / x10; extreme inputs (a constant block, spikes and a level jump,
+  prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`); fault injection (a NaN in the input,
+  in `crps_loss`, in one gradient), each of which must stop the run; the wide-span horizons 5/60/240; slow
+  periods with INDICATOR_LR_MULT 5 and 1. The 1,440 / 10,080-bar long-memory cases and the per-channel-scale
+  variant are defined and marked "GPU, NT-051" (never run on CPU). 3 seeds each, strict mode (STRICT_LOSS_MASKS).
+- **Thresholds**: `configs/stability_thresholds.yaml`, pre-registered (rationale in its comments); its hash is in
+  every report. Never edit it after the first real run: write `_v2` and a new study.
+- **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off: on CPU the probe's trace took
+  200 s); `reference` is the screen layout with the probe on. The GPU run on the reference setup is NT-051.
+- **Strict mode fails loudly**: with `STRICT_LOSS_MASKS` the engine's trainer adds `StabilityGuard`
+  (`training/stability_guard.py`): the first epoch with a non-finite loss term or step ends the run with
+  `UnstableTrainingError` naming the term. A sweep records such a cell as failed with that message; the default
+  config (strict off) is unchanged.
+- **Failing regions**: `configs/stability_failing_regions.json` (empty today). A harness failure of a configuration
+  case writes its region to `<id>/failing_regions.json`; copy it into the configs file (a reviewed change) and
+  `Config.validate` refuses a config inside it, naming the region and the report (`core/guard.py`;
+  `NT_FAILING_REGIONS=<path>|off` overrides), and sweep search spaces drop it (a range end is trimmed, any other
+  region is rejected by sampling).
+- **Memory warning**: `Config.validate` logs a warning when BATCH_SIZE x LOOKBACK^2 exceeds 15M
+  (`core/guard.SCORE_ELEMENTS_WARN`): LOOKBACK 240 with batch 256 (14.7M) fit the 12 GB card, batch 512 (29.5M) and
+  2048 ran out of memory (`runs/scenarios/micro_lookback`). A warning, not a refusal: two measured points do not
+  bound the card; the experimenter's memory profile (NT-038 amendment 2026-09-30) may move the level.
+
 ### Frozen sweep scripts
 
 What exists today (one GPU job at a time; `ablate.py` and `direction_experiments.py` resume,

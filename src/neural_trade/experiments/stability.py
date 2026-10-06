@@ -36,7 +36,6 @@ with no region (the data are not a Config field).
 from __future__ import annotations
 
 import contextlib
-import copy
 import hashlib
 import json
 import logging
@@ -45,7 +44,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence
 
 import numpy as np
 

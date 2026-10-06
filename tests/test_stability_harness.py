@@ -18,7 +18,6 @@ from neural_trade.core.exceptions import InvalidConfigurationError
 from neural_trade.core.guard import (REGIONS_ENV, SCORE_ELEMENTS_WARN, Region, check_config, find_region, load_regions,
                                      memory_warning, regions_disabled, write_regions)
 from neural_trade.experiments import stability as st
-from neural_trade.experiments.runner import Runner
 from neural_trade.experiments.scenario import Scenario
 from neural_trade.experiments.store import RunStore
 from neural_trade.experiments.sweep import FailingRegionHit, SearchSpace, SweepError, dev_net_sharpe, run_health
@@ -268,6 +267,16 @@ def test_a_nan_loss_fails_loss_finite(tmp_path):
     (d / "metrics.jsonl").write_text(json.dumps({"epoch": 0, "loss": None, "val_loss": 0.9, "n_steps": 5}))
     v = st.evaluate_run(d, st.default_cases()[0], st.load_thresholds())
     assert "loss_finite" in [c.name for c in v.failed_checks]
+
+
+def test_the_stability_subcommand_refuses_an_unknown_case_and_describes_itself(capsys):
+    from neural_trade.cli import main
+
+    assert main(["stability", "--cases", "no_such_case"]) == 2
+    with pytest.raises(SystemExit):
+        main(["stability", "--help"])
+    out = capsys.readouterr().out
+    assert "--profile" in out and "stability_thresholds.yaml" in out
 
 
 # ------------------------------------------------------------------ (4) an unstable run stops, naming the term
