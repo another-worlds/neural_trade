@@ -26,6 +26,7 @@ import html
 import logging
 import math
 import re
+import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -263,8 +264,13 @@ def comparison_figures(configs: Sequence[ConfigScores], *, horizon_steps: Option
                     f"below = sd across a fold's seeds; dashed = the metric's no-skill reference where it has one; cells per "
                     f"configuration: {', '.join(str(n) for n in n_cells)}"
                     + ("; the test fold is shown, never used to rank (D-020)" if role == "test" else ""))
-        T.apply(fig, title=f"{title}: {len(configs)} configurations", height=height, subtitle=subtitle)
-        fig.update_layout(margin=dict(l=left, r=24, t=110, b=40), width=max(900, left + 230 * NCOLS))
+        width = max(900, left + 230 * NCOLS)
+        subtitle = "<br>".join(textwrap.wrap(subtitle, max(60, int(width / 6.4))))
+        top = 90 + 16 * (subtitle.count("<br>") + 1)
+        T.apply(fig, title=f"{title}: {len(configs)} configurations", height=height + top - 110, subtitle=subtitle)
+        fig.update_layout(margin=dict(l=left, r=24, t=top + 40, b=40), width=width,
+                          legend=dict(orientation="h", yref="container", y=1 - (top - 6) / (height + top - 110),
+                                      yanchor="top", x=0.0, xanchor="left"))
         figs[group] = fig
     return figs
 

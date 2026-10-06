@@ -41,7 +41,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from neural_trade.core.exceptions import InvalidConfigurationError
 from neural_trade.experiments.scenario import Scenario
 from neural_trade.experiments.store import RunStore
-from neural_trade.experiments.sweep import DEFAULT_PARALLEL_RECORD, MODES, OPTUNA, QUICK, Sweep, SweepOptions
+from neural_trade.experiments.sweep import DEFAULT_PARALLEL_RECORD, MODES, QUICK, Sweep, SweepOptions
 from neural_trade.notebook import panel_compare as PC
 from neural_trade.notebook import panel_data as PD
 from neural_trade.notebook._display import show
@@ -550,7 +550,7 @@ class ControlPanel:
             import ipywidgets as ipw
 
             outs = []
-            for group, fig in figs.items():
+            for fig in figs.values():
                 out = ipw.Output(layout=ipw.Layout(min_height="200px"))
                 show(out, fig)
                 outs.append(out)

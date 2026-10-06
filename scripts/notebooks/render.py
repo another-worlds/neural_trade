@@ -5,7 +5,7 @@
 
 WINDOWS + MICROSOFT EDGE ONLY. Each figure is written to a standalone HTML file, and headless Edge
 (msedge.exe --screenshot) takes the screenshot. Covered: every plotly figure in a cell output, plus the
-training-health tiles (an HTML output) of 01 and 04. An HTML output has no known height, so it is
+training-health tiles (an HTML output) of 01 and 04, plus every plotly figure held in a widget's saved state (an `Output` widget that a button callback or a background thread drew into, notebook 06; PNGs `<nb>_w<model id>_<k>.png`, cell column `widget <model id>`). An HTML output has no known height, so it is
 screenshotted in a 4000 px window and cropped to its content (Pillow). PNGs are named <nb>_c<cell>_<k>.png
 (k counts the figures in the notebook) and <nb>_c<cell>_health.png. The script
 prints a manifest (PNG, notebook, cell, title), and manifest.json next to the PNGs adds each cell's source.
@@ -35,10 +35,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 NB_DIR = REPO / "notebooks"
 PLOTLY = "application/vnd.plotly.v1+json"
+WIDGET_STATE = "application/vnd.jupyter.widget-state+json"
 EDGE_CANDIDATES = (r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
                    r"C:\Program Files\Microsoft\Edge\Application\msedge.exe")
 PAPER = "#121211"   # neural_trade.visualization.theme.PAPER: the page behind an HTML output
-TAG = re.compile(r"^\d\d_c\d+_(\d+|health)\.png$")
+TAG = re.compile(r"^\d\d_(c\d+|w[0-9a-f]+)_(\d+|health)\.png$")
 
 
 def resolve(names, nb_dir: Path = NB_DIR) -> list[Path]:
@@ -171,6 +172,21 @@ def main(argv=None) -> int:
                     continue
                 (manifest if ok else failed).append({"png": str(png), "notebook": path.stem, "cell": i,
                                                      "title": title[:200], "source": source})
+        # figures a button callback or a background thread drew into an Output widget (notebook 06): they are
+        # in the saved widget state, not in any cell's outputs
+        state = ((nb.get("metadata") or {}).get("widgets") or {}).get(WIDGET_STATE) or {}
+        for model_id, model in (state.get("state") or {}).items():
+            for output in (model.get("state") or {}).get("outputs") or ():
+                data = output.get("data", {})
+                if PLOTLY not in data:
+                    continue
+                fig = go.Figure(data[PLOTLY])
+                title = re.sub(r"<[^>]+>", " ", fig.layout.title.text or "").split("  ")[0].strip()
+                png = out_dir / f"{prefix}_w{model_id[:8]}_{k}.png"
+                k += 1
+                ok = shot(edge, fig, png, width=int(fig.layout.width or args.width))
+                (manifest if ok else failed).append({"png": str(png), "notebook": path.stem, "cell": f"widget {model_id[:8]}",
+                                                     "title": title[:200], "source": ""})
     (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")
     for m in manifest:
         print(f"{m['png']}  | {m['notebook']} cell {m['cell']} | {m['title'][:90]}")

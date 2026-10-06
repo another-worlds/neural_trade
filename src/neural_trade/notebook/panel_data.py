@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from neural_trade.core.config import Config
 from neural_trade.core.exceptions import InvalidConfigurationError
 from neural_trade.experiments.scenario import RESERVED_FIELDS, Scenario
-from neural_trade.experiments.store import ENGINE_SUBTREE, RunStore
+from neural_trade.experiments.store import RunStore
 from neural_trade.experiments.sweep import MODES, REFUSED_FIELDS, STRATEGY_PREFIX, SweepError, SearchSpace
 
 logger = logging.getLogger(__name__)
