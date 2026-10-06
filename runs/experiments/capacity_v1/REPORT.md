@@ -26,7 +26,7 @@ Code pinned at 590829b `src/`; no `src/` change.
 
 | arm vs control | h1 direction AUC, arm minus control | verdict |
 |---|---|---|
-| gru_small | -0.0121, 95% CI [-0.0241, -0.0001], negative on 5/5 folds | **Inconclusive** (rule 4): the CI upper bound is not below -0.01 (so not "capacity helps") and its lower bound is below -0.01 (so not "not worse"). |
+| gru_small | -0.0121, 95% CI [-0.0241, -0.0001] (excludes 0: t = -2.807 against the critical 2.776), negative on 5/5 folds | **Inconclusive** (rule 4): the CI upper bound is not below -0.01 (so not "capacity helps") and its lower bound is below -0.01 (so not "not worse"). |
 | linear_indicators | -0.0262, 95% CI [-0.0551, +0.0027], negative on 5/5 folds | **Inconclusive** (rule 4). |
 
 Nothing supports changing `MODEL_NAME`. The SPEC allows an inconclusive study one re-run before the owner decides.
@@ -65,8 +65,8 @@ With 5 folds every interval is wider than its margin, so "undecided" is expected
   its h0 BCE gap is over-confident h0 probabilities.
 - **Absolute guard-rails:** coverage90 passes in all 45 cell-horizons (0.892 to 0.935, band [0.85, 0.95]);
   `nonfinite_grad_steps` is 0 in all 15 cells.
-- **Pre-clip gradient norm** (mean over epochs, descriptive, `GRAD_CLIP_NORM` 20): control 22.7, gru_small 9.8,
-  linear 3.6. Clipped main steps per cell: control 17-98, gru_small 7-18, linear 4-5.
+- **Pre-clip gradient norm** (mean over epochs, descriptive, `GRAD_CLIP_NORM` 20): control 22.7, gru_small 10.2
+  (9.8 without the retried cell), linear 3.6. Clipped main steps per cell: control 17-98, gru_small 7-18, linear 4-5.
 
 ### Skip and tower share of the direction-logit variance (NT-110 covariance shares; skip + tower = 1; mean over 5 folds)
 
@@ -76,7 +76,8 @@ With 5 folds every interval is wider than its margin, so "undecided" is expected
 | gru_small | 0.514 / 0.486 | 0.644 / 0.356 | 0.641 / 0.359 |
 | linear_indicators | 0.912 / 0.088 | 0.631 / 0.369 | 0.660 / 0.340 |
 
-Per-cell values are in `summary.json`; `corr_skip_tower` runs from -0.01 to -0.49, all negative.
+Per-cell values are in `summary.json`; `corr_skip_tower` runs from -0.017 to -0.678 at h1 (-0.845 over all horizons; the extreme is the retried
+gru_small f-93 cell), all negative.
 
 ## How to read the verdict
 
@@ -115,3 +116,20 @@ Per-cell values are in `summary.json`; `corr_skip_tower` runs from -0.01 to -0.4
   tower (86%), the small arms mostly from the linear skip.
 - Future SPEC budgets should again use a timing cell and a measured `sec_per_step` per arm; this SPEC overestimated
   by about 20%.
+
+## Added after QA (2026-10-06)
+
+- **The gru_small interval excludes 0** (|t| = 2.807 against the critical 2.776): control is ahead on h1 AUC at the
+  nominal 5% level, but an effect of at least the 0.01 minimum is not established, so the SPEC's rule gives
+  inconclusive, not 'capacity helps'. QA recomputed every number from `predictions_oos.npz`.
+- **The paired-t interval is probably too narrow.** The five folds' training blocks are nested (every fold's
+  training data starts on 2022-11-22, and fold -92's contains all the others) and all cells use seed 0, so the
+  per-fold differences are correlated. D-046's simulation did not model shared training data. A wider, more honest
+  interval would also give inconclusive, so no verdict depends on it.
+- **Every arm does worse out of sample than a constant 0.5.** Calibrated h1 Brier is above 0.25 and BCE above
+  ln 2 = 0.693 on every fold and horizon (control's lowest: 0.2502 and 0.6968). The direction signal is not
+  there, and calibration does not transfer out of sample either (NT-176).
+- The header comment of `configs/scenarios/capacity_v1.yaml` says the blocks run to 2023-03-15; the data end on
+  2023-03-05 (the blocks and the SPEC are right).
+- The three timing cells (590829b, 2 epochs, fold -92) trained on judgement fold -92 before registration and
+  their scores were discarded; the epoch cap came from timing alone (SPEC).
