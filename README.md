@@ -95,6 +95,10 @@ neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv --out b
 neural-trade scenario plan configs/scenarios/reference.yaml   # validate, list the cells (no training)
 neural-trade scenario run  configs/scenarios/reference.yaml   # runs/scenarios/<name>/, index runs/index.sqlite
 
+# sweeps (NT-030): search Config fields on the dev folds; needs `pip install -e ".[sweep]"` for optuna mode
+neural-trade sweep configs/scenarios/reference.yaml --mode quick --dry-run     # size it to <= 5 min, print the estimate
+neural-trade sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30   # prints and records the GPU budget first
+
 neural-trade registry list            # every registered component
 neural-trade registry info Optimizers adamw
 neural-trade env                      # versions, CUDA build, devices, git state

@@ -120,11 +120,13 @@ class Runner:
     """
 
     def __init__(self, scenario: Scenario, store="runs", *, index_path=None,
-                 trainer: Optional[Callable[..., Any]] = None, check_components: bool = True):
+                 trainer: Optional[Callable[..., Any]] = None, check_components: bool = True,
+                 claim_cells: bool = False):
         self.scenario = scenario
         self.store = store if isinstance(store, RunStore) else RunStore(store, index_path)
         self.trainer = trainer if trainer is not None else train_cell
         self.check_components = check_components
+        self.claim_cells = claim_cells       # NT-030: a lock file per cell (experiments.claims), for parallel runners
         self._layouts = LayoutCache()
 
     @classmethod
@@ -208,9 +210,31 @@ class Runner:
                 break
             logger.info("[scenario %s] cell %d/%d %s (%s fold %s, seed %s)", sc.name, i + 1, len(todo), pc.key,
                         pc.role, pc.cell.fold, pc.cell.seed)
-            run_dir, status = self.run_cell(pc)
+            if self.claim_cells:
+                claimed = self._claims().claim(pc.key)
+                if not claimed or self._finished_elsewhere(pc):
+                    if claimed:
+                        self._claims().release(pc.key)
+                    logger.info("[scenario %s] %s is claimed or finished by another process: skipped", sc.name, pc.key)
+                    report.skipped.append(pc.key)
+                    continue
+            try:
+                run_dir, status = self.run_cell(pc)
+            finally:
+                if self.claim_cells:
+                    self._claims().release(pc.key)
             report.ran.append({"cell": pc.key, "status": status, "run_dir": str(run_dir)})
         return report
+
+    def _claims(self):
+        from neural_trade.experiments.claims import CLAIMS_DIR, CellClaims
+
+        return CellClaims(self.store.scenario_dir(self.scenario.name) / CLAIMS_DIR)
+
+    def _finished_elsewhere(self, pc: PlannedCell) -> bool:
+        """After claiming: another process may have finished this cell since the plan was made."""
+        self._mark_states([pc])
+        return pc.state == "done"
 
     def _save_spec(self) -> None:
         """The normalised spec as the runs used it: specs/<spec hash>.json in the scenario directory."""

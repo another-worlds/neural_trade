@@ -571,7 +571,48 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
     throwaway-model cost stays roughly fixed; this is an estimate to confirm on a real GPU run, not a
     measured number.
 
-### Sweeps
+### Sweeps (NT-030)
+
+`neural-trade sweep SCENARIO --mode quick|optuna` (code: `experiments/sweep.py`, `experiments/claims.py`).
+A sweep searches the scenario's **`search:` block** (`FIELD: {low, high, log, step}` or `choices:`; `FIELD:`
+alone takes the Config metadata's range) on the **dev folds** with one seed, and ranks trials by the dev-fold
+mean net Sharpe after costs. Only fields marked `tunable` can be searched (`docs/guide/config-reference.md`);
+`RESAMPLE_MINUTES` is refused until NT-040; `PATIENCE` is tunable (capped at `EARLY`), `EARLY` is not (it sets
+how long a trial trains, like `EPOCHS`). Without a `search:` block the space is LR, BATCH_SIZE, LAMBDA_DIR and
+LAMBDA_CRPS. The test fold is never run for a trial and never ranks. A trial with a failed cell is recorded
+as failed, never dropped. Everything lands in `<store>/scenarios/<scenario>-<mode>/` (engine cells, indexed,
+variant `t0007` = trial 7) and `<store>/sweeps/<scenario>-<mode>/sweep.json` (budget, trials, ranking, winner;
+`study.db` for optuna).
+
+```bash
+PY=C:/Users/Step/miniforge3/envs/nt/python
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode quick --dry-run        # estimate only
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode quick                  # GPU: about 5 minutes
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30 --dry-run   # the GPU budget
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30 [--parallel 3]
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30 --resume    # continue
+```
+
+- **Quick** sizes trials, epochs (at most 3) and dev folds so that the estimate is at most `--quick-minutes`
+  (5), prints it first, and labels every result `quick` (reduced epochs, one seed: a leader, not a winner).
+  `sec_per_step` is the latest finished run of the same setup in the index (`--sec-per-step` overrides);
+  with neither it refuses. `--overhead-s` (30) is the estimated fixed cost per cell.
+- **Optuna** keeps a TPE study in sqlite; `--resume` finishes an interrupted trial and never repeats a finished
+  one (an existing sweep without `--resume` is refused). `--stop-after K` runs K new trials and stops.
+  The **GPU budget** (trials x dev folds x steps x `sec_per_step` plus the top-5 x 3-seed re-run, an upper bound)
+  is printed and written to `sweep.json` before the first trial; above `--max-hours` (default 12, one night) it
+  refuses, and a larger budget goes to the owner (OPERATING_MODEL). After the search the top 5 are re-run with 3
+  seeds on every fold; the winner is the best dev-fold seed mean among those that trade (the test columns are
+  shown, never ranking).
+- **`--parallel N`**: batches of N trials as separate `scenario run --claim-cells` processes, only up to
+  `allowed_n` of `runs/experiments/gpu_measurements_v1/parallel_n.json` (N = 3 at most; no file means 1). The
+  GPU-free check (GPU rules above) runs before each batch, never while own trials run; `--when-busy stop|wait`.
+  After each batch the sweep compares the GPU memory and utilisation with the record's level for N and stops
+  launching when someone else is on the GPU. `--claim-cells` (also on `scenario run`) makes the runner take a
+  lock file `claims/<cell>.lock` first, so two processes never train one cell.
+- `CUDA_VISIBLE_DEVICES=-1` skips the GPU check (a CPU run).
+
+### Frozen sweep scripts
 
 What exists today (one GPU job at a time; `ablate.py` and `direction_experiments.py` resume,
 `gate_run.py` overwrites):
@@ -582,7 +623,7 @@ What exists today (one GPU job at a time; `ablate.py` and `direction_experiments
 - `scripts/gate_run.py` with `scripts/check_gates.py` and `scripts/backtest_gate.py`: single named
   runs judged against the M1-M4 gates.
 
-None of them is a search: there is no quick mode, no Optuna study and no leaderboard yet. They
+None of them is a search (use `neural-trade sweep`, above). They
 belong to the frozen set (D-023): they stay runnable as history and are replaced by the experiment
 engine (NT-026: scenario and sweep specs, a resumable runner, one run store with an sqlite index, one
 scorer), the sweeps (NT-030: quick mode, about 5 minutes for the whole sweep, and Optuna mode;

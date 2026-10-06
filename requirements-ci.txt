@@ -25,3 +25,10 @@ jinja2==3.1.6
 nbclient==0.10.0
 ipykernel==6.29.5
 ipywidgets==8.1.5
+# NT-030: sweeps (neural-trade sweep --mode optuna); never optuna[optional] (protobuf conflict with TF 2.10)
+optuna==5.0.0
+sqlalchemy==2.0.54
+alembic==1.20.0
+mako==1.4.3
+colorlog==6.12.0
+greenlet==3.5.6
