@@ -151,7 +151,7 @@ changes).
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
 | [NT-117](#nt-117) | P1 | feature | implementer | done | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
 | [NT-118](#nt-118) | P2 | bug | implementer | todo | Calibration keeps a configured LAMBDA_VOL of 0 at 0 (as for soft ECE); then an A/B of 0 against the 0.1 floor |
-| [NT-119](#nt-119) | P2 | bug | implementer | in-progress | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
+| [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | todo | golden_run verify fails when a value turns NaN or an inf changes |
@@ -191,6 +191,7 @@ changes).
 | [NT-156](#nt-156) | P3 | test-gap | implementer | todo | The layering test misses cycles longer than two packages |
 | [NT-157](#nt-157) | P3 | cleanup | implementer | todo | Stale removal, round 2 (D-029) |
 | [NT-158](#nt-158) | P3 | bug | implementer | todo | Run-record hygiene: dirty flag, run order, strict JSON, recorded CLI flags, same-second ids |
+| [NT-159](#nt-159) | P3 | bug | implementer | todo | NT-119 follow-ups: warn once on a frame without raw heads; drop the redundant second prediction in backtest_ui; INCOH on a real run |
 
 ## Items
 
@@ -1626,7 +1627,7 @@ changes).
 
 **The Predictor path carries the raw heads to SignalFrame; NT-115 (4) on the reference run**
 
-- **status:** in-progress (2026-10-06): implementer on nt-119
+- **status:** done (2026-10-06): nt-119 3872722 (implementer, Sonnet medium), merged into remediation/plan; QA (Sonnet medium) PASS on 3872722: (1) serving/predictor.py:43/:60/:137 raw pre-shrink heads on the frame, tests/test_predictor_raw_heads.py; (2) warning + fallback at strategy/signals.py:203; (3) runs/experiments/nt119_predictor_raw/result.json on 20261003T225052Z-91fa363-11993eec (all betas 0), recomputed identical by QA: magnitude-coherent 43441 -> 27923, direction-aligned 4616 -> 11809, liberal trades 660 -> 1095, calibrated_quantile 885 -> 885, enhanced_multi_horizon 0 -> 0, INCOH 0 -> 0 (vacuous: no trades at beta 0; NT-159); (4) fast 1928 passed, ruff clean; mutation (frame without delta_raw) caught by 2 tests. Slow suite with the merge batch (D-059).
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/prediction/ (Predictor.to_prediction_frame), src/neural_trade/strategy/signals.py, tests/
 - **depends on:** NT-115 (merged)
@@ -2105,6 +2106,18 @@ changes).
 - **why:** utils/env.py:15-23 ignores untracked/staged source files; notebook/runs.py:34 orders by mtime; cli.py:180 and runner.py:112 write NaN into JSON; cli.py:95-98 `--epochs`/`--no-calibrate` are not recorded; run_context.py:56-59 collides within one second outside the engine.
 - **acceptance:** (1) `git_sha` marks dirty for untracked or staged files under src, scripts, configs, plugins (not runs/). (2) `pick_run` orders by `created_utc` or the run-id stamp. (3) backtest.json and result.json write null, allow_nan=False. (4) CLI `--epochs` and `--no-calibrate` recorded in config.yaml and meta.json. (5) A direct RunContext.create gets a same-second suffix. Fast suite, ruff.
 - **source:** PR #15 review sweep (remote session, 2026-09-28; docs/research/2026-09-28-cpu-review-sweep/), re-checked against f9b60eb by the lead's read-only triage (2026-10-06): ITEM_ADDITIONS G (NT-026/NT-035 residuals)
+
+### NT-159
+
+**NT-119 follow-ups: warn once on a frame without raw heads; drop the redundant second prediction in backtest_ui; INCOH on a real run**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/strategy/signals.py, src/neural_trade/notebook/backtest_ui.py, tests/
+- **depends on:** NT-119 (done)
+- **why:** NT-119's implementer and QA (2026-10-06): `SignalFrame.build` warns on every call with a legacy frame (signals.py:203), so a sweep loop over hand-built frames repeats it; notebook/backtest_ui.py:216 sets `meta["delta_raw"]` from a second `calibrated=False` prediction that is now redundant; the INCOH before/after of NT-119 (3) is vacuous because every beta of the reference run is 0, so enhanced_multi_horizon never trades.
+- **acceptance:** (1) The warning is logged once per process (test). (2) backtest_ui uses the served frame's raw heads and makes one prediction pass; its figures unchanged (test on the frame). (3) INCOH exit counts before/after on a stored run with a non-zero beta (or a scenario where enhanced_multi_horizon trades), reported. (4) Fast suite, ruff.
+- **source:** NT-119 implementer and QA reports (2026-10-06)
 
 ## Done log
 
