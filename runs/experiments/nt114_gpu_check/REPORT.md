@@ -39,10 +39,11 @@ subagent could not write `*.md` files. The lead re-read the three runs' `metrics
 - **On:** median sec_per_step 0.3171 (range 0.2966-0.3372).
 - **Off:** 0.2106, one run with no spread.
 - **Ratio:** about 1.5x on sec_per_step (1.41-1.60) and on steady epoch time (about 19.8 s against 13.05 s). The
-  earlier 1.2-1.4x estimate was low. A 3-epoch run's sec_per_step includes the first epoch's graph build, so treat
-  it as an upper bound.
-- **Unexplained:** r2's elapsed time was 153 s against about 101 s, although its epoch times are normal; the extra
-  time is outside the epochs.
+  earlier 1.2-1.4x estimate was low. `status.json` sec_per_step is the last epoch's value only
+  (telemetry/epoch_logger.py:127, :136), so it excludes the first epoch's graph build. Epoch 0's per-step time is
+  about 1.0 s. (Corrected after QA, 2026-10-06; an earlier version called it an upper bound.)
+- **Unexplained:** r2's elapsed time was 153 s against about 101 s. The extra time is inside epoch 0 (112.4 s
+  against 61-66 s for the others); epochs 1-2 are normal. (Corrected after QA.)
 
 ## Meaning
 
