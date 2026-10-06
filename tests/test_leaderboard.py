@@ -23,6 +23,7 @@ def _row(configuration="default", fold=-2, role="dev", seed=0, status="done", **
         "horizon_steps": json.dumps([10, 15, 20]), "strategy": "calibrated_quantile",
         "sharpe_net": 1.0, "total_return": 0.05, "max_drawdown": 0.05, "n_trades": 20.0,
         "buy_and_hold_return": 0.01, "random_percentile_return": 80.0,
+        "fee_bps": 0.0, "half_spread_bps": 0.0, "slippage_bps": 0.0,      # D-044: the board's profile
     }
     row.update(overrides)
     return row
@@ -194,7 +195,7 @@ def test_dev_values_never_include_nan():
 
 # ------------------------------------------------------------------ criterion 7 (CLI + figure)
 def _write_run_dir(root, *, scenario, configuration, fold, role, seed, status="done", sharpe_net=1.0,
-                   n_trades=10.0, error=None):
+                   n_trades=10.0, error=None, cost=(0.0, 0.0, 0.0), meta_backtest=None, report=True):
     from pathlib import Path
 
     run_id = f"{scenario}-{configuration}-f{fold}-s{seed}"
@@ -206,7 +207,7 @@ def _write_run_dir(root, *, scenario, configuration, fold, role, seed, status="d
                   "configuration": configuration, "variant": configuration, "params": {}, "fold": fold,
                   "fold_id": abs(fold), "role": role, "seed": seed, "config_hash": "x", "settings_hash": "y",
                   "spec_hash": "z", "commit": "deadbee", "strategy": {"name": "calibrated_quantile", "params": {}},
-                  "backtest": {}, "run": {"calibrate": True, "save_artifacts": False}},
+                  "backtest": dict(meta_backtest or {}), "run": {"calibrate": True, "save_artifacts": False}},
         "dataset": {"path": "bars.csv", "sha256": "f" * 20, "size_bytes": 1, "n_bars": 100,
                    "first_timestamp": "2026-01-01T00:00:00+00:00", "last_timestamp": "2026-01-02T00:00:00+00:00"},
         "setup": {"bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]},
@@ -218,6 +219,11 @@ def _write_run_dir(root, *, scenario, configuration, fold, role, seed, status="d
         "backtest/random_same_freq/percentile_total_return": 80.0})
     result = {"status": status, "error": {"type": "ValueError", "message": "boom"} if error else None,
              "scores": scores, "finished_utc": "2026-01-01T00:00:00+00:00"}
+    if status == "done" and report:
+        # the scorer's stored report: backtest.config holds the costs the stored net Sharpe used
+        result["report"] = f"eval_report_{role}.json"
+        cfg = {"fill": "next_open", "fee_bps": cost[0], "half_spread_bps": cost[1], "slippage_bps": cost[2]}
+        (d / result["report"]).write_text(json.dumps({"backtest": {"config": cfg}}), encoding="utf-8")
     (d / "result.json").write_text(json.dumps(result), encoding="utf-8")
     return d
 
@@ -355,8 +361,8 @@ def test_every_test_column_is_labelled_in_the_table_and_the_figure():
     assert not any("test" in h for h in TABLE_HEADER if not h.startswith("test "))
     fig = leaderboard_figure(build_leaderboard(_good_configuration("a")))
     table = next(t for t in fig.data if t.type == "table")
-    assert list(table.header.values) == list(TABLE_HEADER)
-    scatter = next(t for t in fig.data if t.type == "scatter")
+    assert [h.replace("<br>", " ") for h in table.header.values] == list(TABLE_HEADER)
+    scatter = next(t for t in fig.data if t.type == "scatter" and t.name.startswith("test "))
     assert "not used for ranking" in scatter.name
     assert any("ranking column" in a.text for a in fig.layout.annotations)
 
@@ -370,9 +376,9 @@ def test_figure_draws_the_dev_spread_and_marks_the_disqualified_row():
             r["sharpe_net"] = 1.0 + 0.5 * (r["fold"] + 3)
     rows += _good_configuration("flat", sharpe=0.0, n_trades=0.0)
     fig = leaderboard_figure(build_leaderboard(rows))
-    bar = next(t for t in fig.data if t.type == "bar")
-    assert any(e > 0 for e in bar.error_x.array)
-    assert any("DISQUALIFIED" in y for y in bar.y)
+    fold_sd = next(t for t in fig.data if t.type == "scatter" and t.name.startswith("fold sd"))
+    assert any(e > 0 for e in fold_sd.error_x.array)
+    assert any("DISQUALIFIED" in y for y in fig.layout.yaxis.ticktext)
 
 
 def test_cli_guard_rail_flags_and_out(tmp_path, capsys):
@@ -485,3 +491,326 @@ def test_cli_header_shows_scenario_thresholds_and_the_override(tmp_path, capsys)
     assert main(["leaderboard", "hdr", "--store", str(tmp_path), "--spec", str(spec), "--max-drawdown", "0.9"]) == 0
     out = capsys.readouterr().out
     assert "max_drawdown=0.9 (command-line override)" in out and "max_drawdown FAIL" not in out
+
+
+# ------------------------------------------------------------------ repair round 2: figure (D-014, theme.py)
+def _passing(rows):
+    for r in rows:
+        r["total_return"], r["buy_and_hold_return"], r["random_percentile_return"] = 0.10, 0.01, 90.0
+    return rows
+
+
+def _three_class_board():
+    rows = _passing(_good_configuration("top", sharpe=2.0))
+    rows += _passing(_good_configuration("second", sharpe=1.0))
+    flat = _good_configuration("flat_zero_trades", sharpe=0.5, n_trades=0.0)
+    for r in flat:
+        if r["role"] == "dev":
+            r["sharpe_net"] = 0.5 + 0.2 * r["seed"] + 0.3 * (r["fold"] + 3)
+    return build_leaderboard(rows + flat)
+
+
+def test_bars_never_use_a_horizon_colour_and_the_legend_names_each_class_truthfully():
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    board = _three_class_board()
+    fig = leaderboard_figure(board)
+    horizon = {c.lower() for c in T.SERIES[:3]} | {T.rgba(c, a) for c in T.SERIES[:3] for a in (0.45, 0.75, 0.9)}
+    bars = [t for t in fig.data if t.type == "bar"]
+    assert len(bars) == 3
+    labels = list(fig.layout.yaxis.ticktext)
+    for b in bars:
+        assert str(b.marker.color).lower() not in horizon and str(b.marker.line.color).lower() not in horizon
+        members = [labels[int(y)] for y in b.y]
+        if "winner" in b.name:
+            assert members and all("winner" in m for m in members)
+        elif "eligible" in b.name:
+            assert members and not any("winner" in m or "DISQUALIFIED" in m for m in members)
+        else:
+            assert "disqualified" in b.name and all("DISQUALIFIED" in m for m in members)
+            assert b.marker.pattern.shape == "/"          # hatched, as the docstring says
+    for t in fig.data:
+        if t.type == "scatter" and t.marker.color is not None:
+            assert str(t.marker.color).lower() not in horizon
+
+
+def test_the_winner_is_marked_by_shape_and_text_in_the_figure_table_and_markdown():
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    board = _three_class_board()
+    assert [r.is_winner for r in board] == [True, False, False] and winner(board) is board[0]
+    fig = leaderboard_figure(board)
+    star = next(t for t in fig.data if t.type == "scatter" and t.marker.symbol == "star")
+    assert len(star.y) == 1 and "winner" in fig.layout.yaxis.ticktext[int(star.y[0])]
+    table = next(t for t in fig.data if t.type == "table")
+    assert table.cells.values[0][0] == "1 (winner)" and "winner" not in table.cells.values[0][1]
+    assert "| 1 (winner) |" in leaderboard_markdown(board)
+
+
+def test_no_table_text_is_cut_off_and_the_table_fits_the_figure():
+    from neural_trade.experiments.leaderboard import table_cells
+    from neural_trade.visualization.leaderboard_fig import CELL_PAD_PX, CHAR_PX, COLUMN_CHARS, leaderboard_figure
+
+    rows = _good_configuration("a_very_long_configuration_name__lr-0.0003__hidden-128", n_trades=0.0)
+    for r in rows:
+        r["strategy"] = "enhanced_multi_horizon_with_a_long_name"
+        r["fee_bps"] = 10.0
+    rows += [_row(configuration="broken", status="failed", error="ResourceExhaustedError: OOM " * 6, sharpe_net=None)]
+    board = build_leaderboard(rows, guard_rails=GuardRailSpec(max_drawdown_max=0.01))
+    fig = leaderboard_figure(board)
+    table = next(t for t in fig.data if t.type == "table")
+    assert list(table.columnwidth) == [w * CHAR_PX + CELL_PAD_PX for w in COLUMN_CHARS]
+    columns = [[h] for h in table.header.values]
+    for c, col in enumerate(table.cells.values):
+        columns[c] += list(col)
+    for c, cells in enumerate(columns):
+        for cell in cells:
+            for line in cell.split("<br>"):
+                text = line.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&")
+                assert len(text) <= COLUMN_CHARS[c], (c, text)
+                assert not text.endswith("...") and not text.endswith("…"), (c, text)
+    # every original character is still there (wrapping only, nothing dropped)
+    for r_i, r in enumerate(board):
+        for c, full in enumerate(table_cells(r)):
+            shown = table.cells.values[c][r_i].replace("<br>", "").replace("&lt;", "<").replace("&gt;", ">")
+            assert shown.replace(" ", "") == full.replace(" ", "")
+    # the table's domain is tall enough for header + rows (no scrolled-away row)
+    plot_h = fig.layout.height - fig.layout.margin.t - fig.layout.margin.b
+    dom = table.domain.y
+    needed = table.header.height + table.cells.height * len(board)
+    assert plot_h * (dom[1] - dom[0]) >= needed
+    assert fig.layout.width >= fig.layout.margin.l + sum(table.columnwidth)
+
+
+def test_both_spreads_are_drawn_distinguished_and_labelled():
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    rows = []
+    for f in (-3, -2):
+        for s, v in enumerate((1.0, 2.0)):
+            rows.append(_row(configuration="spread", fold=f, seed=s, sharpe_net=v + (f + 3)))
+    fig = leaderboard_figure(build_leaderboard(_passing(rows)))
+    fold = next(t for t in fig.data if t.type == "scatter" and t.name.startswith("fold sd"))
+    seed = next(t for t in fig.data if t.type == "scatter" and t.name.startswith("seed sd"))
+    assert fold.error_x.array[0] == pytest.approx(math.sqrt(0.5))           # sd of fold means 1.5, 2.5
+    assert seed.error_x.array[0] == pytest.approx(math.sqrt(0.5))           # sd of (1, 2) and of (2, 3)
+    assert fold.error_x.color != seed.error_x.color and fold.y[0] != seed.y[0]
+
+
+def test_a_disqualified_bar_has_a_visible_whisker_of_another_colour():
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    fig = leaderboard_figure(_three_class_board())
+    dq = next(t for t in fig.data if t.type == "bar" and "disqualified" in t.name)
+    dq_y = {int(y) for y in dq.y}
+    fold = next(t for t in fig.data if t.type == "scatter" and t.name.startswith("fold sd"))
+    assert any(int(y) in dq_y and e > 0 for y, e in zip(fold.y, fold.error_x.array))
+    assert fold.error_x.color not in (dq.marker.color, dq.marker.line.color)
+
+
+def test_a_single_cell_row_says_no_spread_on_the_figure():
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    fig = leaderboard_figure(build_leaderboard(_passing([_row(configuration="one")])))
+    texts = [x for t in fig.data if t.type == "scatter" and t.mode == "text" for x in t.text]
+    assert any("no spread (1 cell)" in x for x in texts)
+    assert not any(t.type == "scatter" and (t.name or "").startswith(("fold sd", "seed sd")) for t in fig.data)
+
+
+# ------------------------------------------------------------------ repair round 2: cost profile (D-044)
+def test_cell_cost_profile_reads_the_report_then_meta_else_unknown(tmp_path):
+    from neural_trade.experiments.leaderboard import CostProfile, cell_cost_profile
+
+    a = _write_run_dir(tmp_path, scenario="c", configuration="a", fold=-2, role="dev", seed=0, cost=(10.0, 1.0, 2.0))
+    assert cell_cost_profile(a) == (CostProfile(10.0, 1.0, 2.0), "report")
+    b = _write_run_dir(tmp_path, scenario="c", configuration="b", fold=-2, role="dev", seed=0, report=False,
+                       meta_backtest={"fee_bps": 5, "half_spread_bps": 0, "slippage_bps": 0, "random_seeds": 20})
+    assert cell_cost_profile(b) == (CostProfile(5.0, 0.0, 0.0), "meta.json engine.backtest")
+    c = _write_run_dir(tmp_path, scenario="c", configuration="c", fold=-2, role="dev", seed=0, report=False,
+                       meta_backtest={"fee_bps": 5})                      # partial: the rest was a commit default
+    assert cell_cost_profile(c) == (None, "unknown")
+    assert CostProfile(10.0, 1.0, 2.0).text() == "13 bps/side (fee 10 + half-spread 1 + slippage 2)"
+
+
+def test_a_row_at_another_cost_profile_is_marked_not_comparable_and_cannot_win():
+    zero = _passing(_good_configuration("zero_cost", sharpe=1.0))
+    old = _passing(_good_configuration("thirteen_bps", sharpe=3.0))
+    for r in old:
+        r["fee_bps"], r["half_spread_bps"], r["slippage_bps"] = 10.0, 1.0, 2.0
+    board = build_leaderboard(zero + old)
+    assert [r.configuration for r in board] == ["thirteen_bps", "zero_cost"]     # the order is still dev Sharpe
+    top = board[0]
+    assert top.disqualified and not top.cost_comparable and not top.is_winner
+    rail = next(g for g in top.guard_rails if g.name == "cost_profile")
+    assert not rail.passed and "not comparable" in rail.detail and "13 bps/side" in rail.detail
+    assert winner(board).configuration == "zero_cost"
+    text = leaderboard_markdown(board)
+    assert "Cost profile: the board ranks at 0 bps/side (D-044)" in text
+    assert "different cost profile: 13 bps/side (fee 10 + half-spread 1 + slippage 2) (1 row)" in text
+    assert "13 bps/side (fee 10 + half-spread 1 + slippage 2) (not comparable)" in text   # the table column
+
+
+def test_mixed_and_unknown_cost_profiles_are_not_comparable():
+    mixed = _passing(_good_configuration("mixed"))
+    mixed[0]["fee_bps"] = 10.0
+    unknown = _passing(_good_configuration("unknown"))
+    for r in unknown:
+        for k in ("fee_bps", "half_spread_bps", "slippage_bps"):
+            r.pop(k)
+    board = build_leaderboard(mixed + unknown)
+    by = {r.configuration: r for r in board}
+    assert by["mixed"].cost_text.startswith("mixed: ") and "10 bps/side on 1 cell" in by["mixed"].cost_text
+    assert by["unknown"].cost_text == "unknown"
+    assert all(r.disqualified and not r.cost_comparable for r in board) and winner(board) is None
+
+
+def test_a_scenario_that_sets_costs_ranks_at_its_own_profile_and_the_header_says_so():
+    from neural_trade.experiments.leaderboard import scenario_cost_profile
+
+    rows = _passing(_good_configuration("costed"))
+    for r in rows:
+        r["fee_bps"], r["half_spread_bps"], r["slippage_bps"] = 10.0, 1.0, 2.0
+    board_cost = scenario_cost_profile({"fee_bps": 10, "half_spread_bps": 1, "slippage_bps": 2, "random_seeds": 5})
+    board = build_leaderboard(rows, board_cost=board_cost)
+    assert board[0].cost_comparable and board[0].is_winner
+    text = leaderboard_markdown(board)
+    assert "not D-044's 0 bps/side" in text and "every scored row's stored net Sharpe was computed at it" in text
+    assert scenario_cost_profile(None).per_side == 0.0      # D-044 default
+
+
+def test_the_figure_shows_the_cost_profile_per_row_and_in_the_header():
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    rows = _passing(_good_configuration("old"))
+    for r in rows:
+        r["fee_bps"], r["half_spread_bps"], r["slippage_bps"] = 10.0, 1.0, 2.0
+    fig = leaderboard_figure(build_leaderboard(rows))
+    assert "13 bps/side" in fig.layout.yaxis.ticktext[0] and "not comparable" in fig.layout.yaxis.ticktext[0]
+    assert "Cost profile" in fig.layout.title.text and "different cost profile" in fig.layout.title.text
+    table = next(t for t in fig.data if t.type == "table")
+    col = [h.replace("<br>", " ") for h in table.header.values].index("cost profile of the stored net Sharpe")
+    assert "13 bps/side" in table.cells.values[col][0].replace("<br>", " ")
+
+
+def test_cli_reads_each_cells_cost_from_its_stored_report(tmp_path, capsys):
+    from neural_trade.cli import main
+
+    _write_run_dir(tmp_path, scenario="cost", configuration="old", fold=-2, role="dev", seed=0, cost=(10.0, 1.0, 2.0))
+    assert main(["leaderboard", "cost", "--store", str(tmp_path), "--specs-dir", str(tmp_path / "none")]) == 0
+    out = capsys.readouterr().out
+    assert "cost_profile FAIL (not comparable: 13 bps/side" in out and "different cost profile" in out
+
+
+def test_the_real_store_reference_board_says_13_bps_per_side():
+    from pathlib import Path
+
+    from neural_trade.experiments.leaderboard import find_scenario_spec, leaderboard_for_scenario
+
+    repo = Path(__file__).resolve().parent.parent
+    if not (repo / "runs" / "scenarios" / "reference_default").is_dir():
+        pytest.skip("runs/scenarios/reference_default not present in this checkout")
+    spec, where = find_scenario_spec("reference_default", repo / "configs" / "scenarios")
+    assert where == "reference.yaml"
+    board = leaderboard_for_scenario(RunStore(root=repo / "runs"), "reference_default", spec=spec)
+    assert board and all(r.cost_text == "13 bps/side (fee 10 + half-spread 1 + slippage 2)" for r in board)
+    assert all(not r.cost_comparable and r.disqualified for r in board)
+
+
+# ------------------------------------------------------------------ repair round 2: spec lookup, fold coverage, status
+def test_find_scenario_spec_by_name_not_file_name_then_the_stored_spec(tmp_path):
+    import yaml
+
+    from neural_trade.experiments.leaderboard import find_scenario_spec
+
+    specs = tmp_path / "specs_dir"
+    specs.mkdir()
+    (specs / "differently_named.yaml").write_text(yaml.safe_dump(_scenario_dict(name="wanted")), encoding="utf-8")
+    (specs / "wanted.yaml").write_text(yaml.safe_dump(_scenario_dict(name="something_else")), encoding="utf-8")
+    spec, where = find_scenario_spec("wanted", specs)
+    assert where == "differently_named.yaml" and spec.name == "wanted"
+    stored = tmp_path / "stored"
+    stored.mkdir()
+    (stored / "abc.json").write_text(json.dumps({"name": "other", "folds": [-3, -2, -1],
+                                                 "backtest": {"fee_bps": 1.0}}), encoding="utf-8")
+    spec, where = find_scenario_spec("other", specs, stored)
+    assert where == "stored spec specs/abc.json" and spec["folds"] == [-3, -2, -1]
+    assert find_scenario_spec("missing", specs, tmp_path / "nope") == (None, "")
+
+
+def test_cli_finds_the_spec_by_its_name_key(tmp_path, capsys):
+    import yaml
+
+    from neural_trade.cli import main
+
+    _write_run_dir(tmp_path, scenario="named_x", configuration="default", fold=-2, role="dev", seed=0)
+    specs = tmp_path / "specs"
+    specs.mkdir()
+    (specs / "file_name.yaml").write_text(
+        yaml.safe_dump(_scenario_dict(name="named_x", leaderboard={"max_drawdown": 0.01})), encoding="utf-8")
+    assert main(["leaderboard", "named_x", "--store", str(tmp_path), "--specs-dir", str(specs)]) == 0
+    out = capsys.readouterr().out
+    assert "file_name.yaml: max_drawdown=0.01 (scenario)" in out and "max_drawdown FAIL" in out
+
+
+def test_a_configuration_missing_a_dev_fold_fails_fold_coverage_naming_each_fold():
+    full = _passing(_good_configuration("full", dev_folds=(-3, -2), sharpe=1.0))
+    partial = _passing(_good_configuration("partial", dev_folds=(-3,), sharpe=5.0))
+    partial.append(_row(configuration="partial", fold=-2, seed=0, status="failed", error="OOM", sharpe_net=None))
+    partial.append(_row(configuration="partial", fold=-2, seed=1, status="incomplete", sharpe_net=None))
+    board = build_leaderboard(full + partial, spec_folds=[-4, -3, -2, -1])
+    by = {r.configuration: r for r in board}
+    p = by["partial"]
+    cov = next(g for g in p.guard_rails if g.name == "fold_coverage")
+    assert not cov.passed and "fold -2 (failed, incomplete)" in cov.detail and "fold -4 (no cell)" in cov.detail
+    assert "fold -1" not in cov.detail                               # -1 is the test fold
+    assert p.disqualified and board[0] is p                          # still ranked first by its number
+    f = next(g for g in by["full"].guard_rails if g.name == "fold_coverage")
+    assert not f.passed and "fold -4 (no cell)" in f.detail          # the spec's fold -4 never ran
+    board2 = build_leaderboard(full + partial)                       # without the spec: observed dev folds
+    assert winner(board2).configuration == "full"
+    assert next(g for g in board2[1].guard_rails if g.name == "fold_coverage").passed
+
+
+def test_status_text_counts_failed_and_incomplete_cells():
+    rows = _passing(_good_configuration("mixed_status"))
+    rows.append(_row(configuration="mixed_status", fold=-3, seed=2, status="failed", error="x", sharpe_net=None))
+    rows.append(_row(configuration="mixed_status", fold=-2, seed=2, status="incomplete", sharpe_net=None))
+    row = build_leaderboard(rows)[0]
+    assert row.n_incomplete == 1 and row.n_failed == 1
+    assert "done (1 of 7 cells failed, 1 of 7 cells incomplete)" in leaderboard_markdown([row])
+
+
+# ------------------------------------------------------------------ repair round 2: aggregation edge cases, PNG
+def test_unequal_seeds_per_fold_use_the_mean_of_fold_means_not_the_flat_mean():
+    rows = [_row(configuration="u", fold=-3, seed=s, sharpe_net=1.0) for s in (0, 1, 2)]
+    rows.append(_row(configuration="u", fold=-2, seed=0, sharpe_net=4.0))
+    row = build_leaderboard(rows)[0]
+    assert row.dev.values["sharpe_net"] == pytest.approx(2.5)       # (1.0 + 4.0) / 2; the flat mean is 1.75
+    assert row.dev.seeds_per_fold == (3, 1)
+
+
+def test_an_all_negative_board_sorts_a_non_finite_rank_value_last():
+    rows = (_good_configuration("minus_two", sharpe=-2.0) + _good_configuration("nan", sharpe=float("nan"))
+            + _good_configuration("minus_one", sharpe=-1.0) + _good_configuration("inf", sharpe=float("-inf")))
+    board = build_leaderboard(rows)
+    assert [r.configuration for r in board][:2] == ["minus_one", "minus_two"]
+    assert {r.configuration for r in board[2:]} == {"nan", "inf"}
+
+
+def test_cli_out_also_writes_the_png(tmp_path, capsys, monkeypatch):
+    import neural_trade.visualization.leaderboard_fig as lf
+    from neural_trade.cli import main
+
+    written = []
+
+    def fake_png(fig, png, **kw):
+        written.append(png)
+        png.write_bytes(b"\x89PNG")
+        return True
+
+    monkeypatch.setattr(lf, "write_png", fake_png)
+    _write_run_dir(tmp_path, scenario="png", configuration="default", fold=-2, role="dev", seed=0)
+    out = tmp_path / "out"
+    assert main(["leaderboard", "png", "--store", str(tmp_path), "--out", str(out)]) == 0
+    assert written == [out / "png" / "leaderboard.png"] and (out / "png" / "leaderboard.png").is_file()

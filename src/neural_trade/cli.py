@@ -261,7 +261,10 @@ def _scenario_rescore(args, store) -> int:
 
 
 def cmd_leaderboard(args) -> int:
-    from neural_trade.experiments.leaderboard import build_leaderboard, leaderboard_markdown, scenario_guard_rails
+    from neural_trade.experiments.leaderboard import (
+        build_leaderboard, find_scenario_spec, leaderboard_markdown, scenario_cost_profile, scenario_guard_rails,
+        spec_parts,
+    )
     from neural_trade.experiments.scenario import Scenario
     from neural_trade.experiments.store import ENGINE_SUBTREE, RunStore
 
@@ -274,28 +277,34 @@ def cmd_leaderboard(args) -> int:
     if not scenarios:
         print(json.dumps({"scenarios": []}))  # noqa: T201 - the command's result
         return 0
+    if args.spec and not Path(args.spec).is_file():
+        raise SystemExit(f"leaderboard: scenario spec {args.spec} does not exist")
     for name in scenarios:
-        spec_path = Path(args.spec) if args.spec else Path("configs/scenarios") / f"{name}.yaml"
-        scenario = Scenario.from_yaml(spec_path) if spec_path.is_file() else None
-        if args.spec and scenario is None:
-            raise SystemExit(f"leaderboard: scenario spec {spec_path} does not exist")
+        # the spec by the scenario's `name:` key (configs/scenarios/*.yaml), else the one the store recorded
+        scenario, where = ((Scenario.from_yaml(args.spec), Path(args.spec).name) if args.spec else
+                           find_scenario_spec(name, args.specs_dir, store.scenario_dir(name) / "specs"))
         spec, source = scenario_guard_rails(
             scenario, max_drawdown=args.max_drawdown, min_trades=args.min_trades,
             random_null_percentile=args.random_null_percentile,
             beat_buy_and_hold=False if args.no_beat_buy_and_hold else None,
             beat_random_null=False if args.no_beat_random_null else None)
         if scenario is not None:
-            source = f"{spec_path.name}: {source}"
-        board = build_leaderboard(store.sync(name), guard_rails=spec)
+            source = f"{where}: {source}"
+        _, backtest, folds = spec_parts(scenario)
+        board = build_leaderboard(store.sync(name), guard_rails=spec, store_root=store.root,
+                                  board_cost=scenario_cost_profile(backtest), spec_folds=folds)
         text = leaderboard_markdown(board, guard_rails=spec, guard_rail_source=source)
         print(text)  # noqa: T201 - the command's result
         if args.out:
-            from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+            from neural_trade.visualization.leaderboard_fig import leaderboard_figure, write_png
 
             out = Path(args.out) / name
             out.mkdir(parents=True, exist_ok=True)
             (out / "leaderboard.md").write_text(text, encoding="utf-8")
-            leaderboard_figure(board).write_html(str(out / "leaderboard.html"), include_plotlyjs="cdn")
+            fig = leaderboard_figure(board)
+            fig.write_html(str(out / "leaderboard.html"), include_plotlyjs="cdn")
+            if not write_png(fig, out / "leaderboard.png"):
+                logger.warning("leaderboard: %s was not written", out / "leaderboard.png")
     return 0
 
 
@@ -482,11 +491,14 @@ def build_parser() -> argparse.ArgumentParser:
     lb.add_argument("scenario", nargs="?", help="scenario name (default: every scenario under --store)")
     lb.add_argument("--store", default="runs", help="run store root")
     lb.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
-    lb.add_argument("--out", default=None, help="also write <out>/<scenario>/leaderboard.md and .html")
+    lb.add_argument("--out", default=None, help="also write <out>/<scenario>/leaderboard.md, .html and .png "
+                                                "(the PNG through kaleido or headless Edge, when available)")
     lb.add_argument("--max-drawdown", type=float, default=None,
                     help="guard-rail: dev max drawdown must be <= this fraction (default: not checked)")
-    lb.add_argument("--spec", default=None, help="scenario spec for the guard-rail thresholds "
-                    "(default configs/scenarios/<scenario>.yaml when it exists)")
+    lb.add_argument("--spec", default=None, help="scenario spec for the guard-rail thresholds, the board's cost "
+                    "profile and the dev folds (default: the --specs-dir YAML whose name: is the scenario, else "
+                    "the newest spec the store recorded under <store>/scenarios/<scenario>/specs/)")
+    lb.add_argument("--specs-dir", default="configs/scenarios", help="where to look for the scenario's spec")
     lb.add_argument("--min-trades", type=float, default=None,
                     help="guard-rail: trades must be >= this on the dev mean and every dev fold (default 1: "
                          "a 0-trade row is disqualified); overrides the scenario's leaderboard block")
