@@ -144,8 +144,8 @@ changes).
 | [NT-109](#nt-109) | P2 | performance | implementer | done | Shrink the six slowest fast-suite tests (28-55 s default-config trainings) |
 | [NT-110](#nt-110) | P2 | bug | implementer | done | One DIRECTION_SKIP share helper, defined as a true decomposition (cov(skip, logit) / var(logit)) |
 | [NT-111](#nt-111) | P2 | bug | implementer | done | Loss-weight calibration fails loudly in gradient mode; a steadier slow-test tolerance |
-| [NT-112](#nt-112) | P2 | bug | implementer | todo | The screen layout surfaces a failed loss-weight calibration |
-| [NT-113](#nt-113) | P2 | bug | implementer | todo | No silent annualisation defaults: minutes_per_year and fit_and_backtest's bar_minutes |
+| [NT-112](#nt-112) | P2 | bug | implementer | done | The screen layout surfaces a failed loss-weight calibration |
+| [NT-113](#nt-113) | P2 | bug | implementer | done | No silent annualisation defaults: minutes_per_year and fit_and_backtest's bar_minutes |
 | [NT-114](#nt-114) | P1 | feature | implementer | in-progress | A deterministic GRU path for comparison studies (DETERMINISTIC_GRU) |
 | [NT-115](#nt-115) | P1 | feature | implementer | done | Strategies: raw heads for coherence, served delta for size |
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
@@ -1484,7 +1484,7 @@ changes).
 
 **The screen layout surfaces a failed loss-weight calibration**
 
-- **status:** todo
+- **status:** done (2026-10-06, lead-verified per D-060, no QA agent): merged 26d8819; fast suite on the merged tree 1924 passed (3:00), ruff clean, config reference current. The nt-112/nt-113 QA worktrees of 2026-10-01 never produced a verdict.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/experiments/screen.py, tests/test_screen.py
 - **depends on:** NT-111 (merged)
@@ -1496,7 +1496,7 @@ changes).
 
 **No silent annualisation defaults: minutes_per_year and fit_and_backtest's bar_minutes**
 
-- **status:** todo
+- **status:** done (2026-10-06, lead-verified per D-060, no QA agent): merged 9ffc1d5; fast suite on the merged tree 1924 passed (3:00), ruff clean, config reference current. The nt-112/nt-113 QA worktrees of 2026-10-01 never produced a verdict.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/strategy/backtest.py, src/neural_trade/strategy/params.py, src/neural_trade/experiments/scorer.py, scripts/presentation/extract.py, scripts/presentation/extract_candidate.py, configs/candidates/save_candidates.py, tests/
 - **depends on:** NT-040 (merged)

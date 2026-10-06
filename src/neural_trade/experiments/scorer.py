@@ -117,6 +117,14 @@ def _num(v, fmt="{:+.2f}") -> str:
     return "n/a" if v is None or not math.isfinite(float(v)) else fmt.format(float(v))
 
 
+def _periods_per_year(bar_minutes) -> Any:
+    """``strategy.performance.periods_per_year`` of a stored config's ``bar_minutes`` (a run with no
+    config, or an older stored ``config`` dict missing the key, reports "n/a" rather than guessing)."""
+    from neural_trade.strategy.performance import periods_per_year
+
+    return periods_per_year(float(bar_minutes)) if bar_minutes is not None else "n/a"
+
+
 def engine_markdown(report, bt: Dict[str, Any]) -> str:
     """The section the engine adds to the report's markdown: role, fold, the fitted knobs and the
     backtest against buy-and-hold, always-flat and the size-matched random null."""
@@ -141,7 +149,8 @@ def engine_markdown(report, bt: Dict[str, Any]) -> str:
          f"{_num(bt.get('var_scale'), '{:.4g}')}" + (f", {knobs}" if knobs else "") + ". Costs per side: fee "
          f"{cfg.get('fee_bps')} bps + half-spread {cfg.get('half_spread_bps')} bps + slippage {cfg.get('slippage_bps')} "
          f"bps; fills at the next bar's open ({cfg.get('fill')}); stops on {cfg.get('tp_sl_on')}; Sharpe annualised "
-         f"over {cfg.get('minutes_per_year')} minutes per year at {cfg.get('bar_minutes')}-minute bars.", "",
+         f"over {_periods_per_year(cfg.get('bar_minutes'))} periods per year at {cfg.get('bar_minutes')}-minute bars "
+         "(calendar '24/7').", "",
          "| | net return | net Sharpe | max drawdown | trades |", "|---|---|---|---|---|",
          f"| strategy | {_pct(s.get('total_return'))} | {_num(s.get('sharpe_net'))} | {_pct(s.get('max_drawdown'))} | "
          f"{s.get('n_trades', 'n/a')} |",
@@ -185,13 +194,17 @@ class BlockSignals:
         return cls(float(var_scale), SignalFrame.build(cal_frame, var_scale), SignalFrame.build(frame, var_scale))
 
 
-def fit_and_backtest(signals: BlockSignals, bars, *, strategy: Optional[str] = None,
+def fit_and_backtest(signals: BlockSignals, bars, *, bar_minutes: float, strategy: Optional[str] = None,
                      strategy_params: Optional[Mapping[str, Any]] = None,
-                     backtest_params: Optional[Mapping[str, Any]] = None, bar_minutes: float = 1.0):
+                     backtest_params: Optional[Mapping[str, Any]] = None):
     """Fit ``strategy`` on the calibration block and backtest the out-of-sample block with the
     baselines (buy-and-hold, always-flat, the size-matched random null); returns (BacktestResult,
     the fitted Strategy). The scorer and the re-scorer (experiments.rescore) both call this, so a
-    stored cell re-scored with the scenario's own settings reproduces its scores exactly."""
+    stored cell re-scored with the scenario's own settings reproduces its scores exactly.
+
+    ``bar_minutes`` has no default (NT-113): a silent 1-minute default was wrong on any other bar
+    size. Every caller names it; a live caller (not a fixed 1-minute record script) reads it from
+    the run's own stored bar size (``load_block``'s ``extra["bar_minutes"]``)."""
     from neural_trade.strategy import Strategies, backtest, build_backtest_config, build_strategy
 
     strat = build_strategy(strategy or Strategies.default, strategy_params, calibration=signals.cal)

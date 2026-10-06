@@ -68,7 +68,8 @@ RESERVED_FIELDS = {"FOLD_INDEX": "set by `folds:`", "SEED": "set by `seeds:`",
                    "ARTIFACTS_DIR": "set to the run directory"}
 # BacktestConfig fields the engine sets: the annualisation follows the run's bar size (NT-040).
 RESERVED_BACKTEST = {"bar_minutes": "set from the run's RESAMPLE_MINUTES",
-                     "minutes_per_year": "fixed at 525,600 (a 24/7 market; NT-040)"}
+                     "minutes_per_year": "removed (NT-113): annualisation is periods_per_year(bar_minutes, "
+                                         "calendar), not a separate minutes-per-year knob; set bar_minutes"}
 # Strategy knobs that from_calibration strategies set from the calibration block.
 DERIVED_STRATEGY_PARAMS = ("long_above", "short_below", "median")
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$")

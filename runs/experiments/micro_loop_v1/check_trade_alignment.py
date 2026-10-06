@@ -62,7 +62,8 @@ def main() -> None:
     # C. fills
     sig = BlockSignals.build(cal, oos)
     bt, _ = fit_and_backtest(sig, bars, strategy="calibrated_quantile", strategy_params={"entry_quantile": 0.9},
-                             backtest_params={"fee_bps": 0, "half_spread_bps": 0, "slippage_bps": 0, "random_seeds": 0})
+                             backtest_params={"fee_bps": 0, "half_spread_bps": 0, "slippage_bps": 0, "random_seeds": 0},
+                             bar_minutes=float(extra["bar_minutes"]))
     tf = bt.trades_frame()
     eb, ep = tf["entry_bar"].to_numpy(int), tf["entry_price"].to_numpy(float)
     res["C_trades"] = int(len(tf))

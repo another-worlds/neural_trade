@@ -34,7 +34,7 @@ from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
 import numpy as np
 
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
-from neural_trade.strategy.performance import MINUTES_PER_YEAR, breakeven_cost_bps, periods_per_year, summarize
+from neural_trade.strategy.performance import breakeven_cost_bps, periods_per_year, summarize
 from neural_trade.strategy.signals import SignalFrame
 from neural_trade.strategy.strategies import ExposureStrategy, RandomSignal, Strategies, Strategy
 from neural_trade.strategy.trades import Order, Trade
@@ -52,7 +52,6 @@ class BacktestConfig:
     mark_to_market_at_end: bool = True
     initial_equity: float = 10_000.0
     bar_minutes: float = 1.0
-    minutes_per_year: int = MINUTES_PER_YEAR
     random_seeds: int = 100
 
     def __post_init__(self):
