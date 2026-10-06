@@ -58,6 +58,13 @@ def run(repo: Path) -> dict:
     layer = res.model._indicator_layer
     for k, v in sorted(layer.get_learned_parameters().items()):
         out[f"period/{k}"] = np.asarray([v], dtype=np.float64)
+    # NT-124: the fitted temperature per horizon and the calibrated P(up) on the test block.
+    pipe = res.calibration_pipeline
+    if pipe is not None:
+        for h, t in sorted(pipe.temperature_scaler.temperatures.items()):
+            out[f"temperature/{h}"] = np.asarray([t], dtype=np.float64)
+    for h, v in sorted(((res.predictions_calibrated or {}).get("direction_prob") or {}).items()):
+        out[f"calibrated/direction_prob/{h}"] = np.asarray(v, dtype=np.float64)
     for h, rep in sorted((res.calibration_report or {}).items()):
         out[f"coverage/{h}"] = np.asarray([rep["coverage90"], rep["width90"]], dtype=np.float64)
     return out
