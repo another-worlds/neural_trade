@@ -5,8 +5,8 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
 ## Where things stand
 
 - **Branch** `remediation/plan` (master untouched at 7002a71; D-054), working copy `D:/nt/neural_trade`. Last code head
-  83a3907 (merge of nt-187). **CI:** green on c24c1ee (run 37527638543, carries every merge up to NT-179); 83a3907
-  is run 37536754652 (check it first; the handoff commit itself is docs-only and not run).
+  83a3907 (merge of nt-187). **CI:** green on 83a3907 (run 37536754652, the last code head; it carries every merge
+  of this session); the handoff commits are docs-only and not run.
 - **Done milestones:** R1, MVP-1. **MVP items 16 of 26 done:** MVP-2 6/7 (NT-050 left), MVP-3 3/5 (NT-039, NT-051),
   MVP-4 1/4 (NT-041, NT-042, NT-052), MVP-5 1/3 (NT-044, NT-045), MVP-6 5/7 (NT-060, NT-061).
 - **Model quality (unchanged):** no direction skill. capacity_v1 (NT-104, 5 judgement folds): h1 AUC gru_attention
@@ -62,5 +62,5 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
    n_eff per case: D-064), then NT-051; NT-050 after NT-182/183/185 (done) and NT-173; then NT-039, NT-060/061.
 2. **Implementer slot:** NT-120 then NT-060's GPU rerun and NT-061; NT-041 then NT-042 (MVP-4); NT-044, NT-045; P2s
    NT-168, NT-171, NT-172, NT-176 (CPU study), NT-180 (served-delta n/a), NT-190; P3 batches NT-181, 184, 186, 188, 189.
-3. **Lead:** first the CI check above, the owner questions, `git fetch` and the tactical journal's "For the MVP
+3. **Lead:** first the owner questions, `git fetch` and the tactical journal's "For the MVP
    lead" (nothing to adopt yet). The notebook routine for 06 repeats when a real sweep exists.
