@@ -33,7 +33,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import math
-import statistics
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -77,6 +76,15 @@ class GuardRail:
     detail: str
 
 
+def _num(v: Optional[float]) -> Tuple[bool, str]:
+    """(usable, reason): a missing or non-finite guard-rail value never passes, and says why."""
+    if v is None:
+        return False, "missing"
+    if not math.isfinite(v):
+        return False, f"non-finite ({v})"
+    return True, ""
+
+
 def _check_guard_rails(dev_values: Mapping[str, Optional[float]], spec: GuardRailSpec, n_dev_rows: int
                         ) -> List[GuardRail]:
     rails: List[GuardRail] = []
@@ -84,56 +92,89 @@ def _check_guard_rails(dev_values: Mapping[str, Optional[float]], spec: GuardRai
         rails.append(GuardRail("dev_data", "has at least one scored dev-fold cell", False,
                                 "no scored dev-fold cell"))
         return rails
+    # the ranking number itself must be a finite number, or the row has no rank to defend
+    ok, why = _num(dev_values.get(RANK_METRIC))
+    rails.append(GuardRail("ranking_value", "dev net Sharpe is a finite number", ok, "ok" if ok else why))
+
+    def rail(name: str, desc: str, keys: Sequence[str], test, show) -> None:
+        vals = [dev_values.get(k) for k in keys]
+        bad = [f"{k} {why}" for k, (okv, why) in zip(keys, map(_num, vals)) if not okv]
+        if bad:
+            rails.append(GuardRail(name, desc, False, "; ".join(bad)))
+        else:
+            rails.append(GuardRail(name, desc, bool(test(*vals)), show(*vals)))
+
     if spec.max_drawdown_max is not None:
-        dd = dev_values.get("max_drawdown")
-        ok = dd is not None and dd <= spec.max_drawdown_max
-        rails.append(GuardRail("max_drawdown", f"dev max drawdown <= {spec.max_drawdown_max:.0%}", ok,
-                                "n/a" if dd is None else f"{dd:.2%}"))
+        rail("max_drawdown", f"dev max drawdown <= {spec.max_drawdown_max:.0%}", ["max_drawdown"],
+             lambda dd: dd <= spec.max_drawdown_max, lambda dd: f"{dd:.2%}")
     if spec.min_trades is not None:
-        nt = dev_values.get("n_trades")
-        ok = nt is not None and nt >= spec.min_trades
-        rails.append(GuardRail("min_trades", f"dev trades >= {spec.min_trades:g}", ok,
-                                "n/a" if nt is None else f"{nt:.1f}"))
+        rail("min_trades", f"dev trades >= {spec.min_trades:g}", ["n_trades"],
+             lambda nt: nt >= spec.min_trades, lambda nt: f"{nt:.1f}")
     if spec.require_beat_buy_and_hold:
-        tr, bh = dev_values.get("total_return"), dev_values.get("buy_and_hold_return")
-        ok = tr is not None and bh is not None and tr > bh
-        rails.append(GuardRail("beat_buy_and_hold", "dev net return > dev buy-and-hold return", ok,
-                                "n/a" if tr is None or bh is None else f"{tr:+.2%} vs {bh:+.2%}"))
+        rail("beat_buy_and_hold", "dev net return > dev buy-and-hold return",
+             ["total_return", "buy_and_hold_return"], lambda tr, bh: tr > bh,
+             lambda tr, bh: f"{tr:+.2%} vs {bh:+.2%}")
     if spec.require_beat_random_null:
-        pr = dev_values.get("random_percentile_return")
-        ok = pr is not None and pr >= spec.random_null_percentile_min
-        rails.append(GuardRail("beat_random_null",
-                                f"dev random-null percentile >= {spec.random_null_percentile_min:g}", ok,
-                                "n/a" if pr is None else f"{pr:.0f}"))
+        rail("beat_random_null", f"dev random-null percentile >= {spec.random_null_percentile_min:g}",
+             ["random_percentile_return"], lambda pr: pr >= spec.random_null_percentile_min,
+             lambda pr: f"{pr:.0f}")
     return rails
 
 
 # ------------------------------------------------------------------ aggregation
+def _mean(v: Sequence[float]) -> float:
+    """Mean that tolerates nan / inf (``statistics.mean`` raises on nan): a non-finite value stays
+    visible in the aggregate so a guard-rail can name it."""
+    return sum(v) / len(v)
+
+
+def _stdev(v: Sequence[float]) -> float:
+    if not all(math.isfinite(x) for x in v):
+        return float("nan")
+    m = _mean(v)
+    return math.sqrt(sum((x - m) ** 2 for x in v) / (len(v) - 1))
+
+
 @dataclass(frozen=True)
 class RoleAggregate:
     """One role's (dev or test) aggregate over a configuration's cells: the mean of each fold's
-    seed-mean (``values``), and the sample standard deviation across fold means (``spread``, None
-    with fewer than two folds with data) -- D-046's unit of inference is the fold."""
+    seed-mean (``values``), the sample standard deviation across fold means (``spread``, None with
+    fewer than two folds with data) -- D-046's unit of inference is the fold -- and, for re-runs,
+    the number of seeds per fold (``seeds_per_fold``) and the mean over folds of the standard
+    deviation across a fold's seeds (``seed_spread``, None when no fold has two seeds)."""
     n_folds: int
     n_rows: int
     folds: Tuple[int, ...]
     values: Dict[str, Optional[float]] = field(default_factory=dict)
     spread: Dict[str, Optional[float]] = field(default_factory=dict)
+    seeds_per_fold: Tuple[int, ...] = ()
+    seed_spread: Dict[str, Optional[float]] = field(default_factory=dict)
+
+    @property
+    def n_seeds(self) -> int:
+        """Seeds per fold (the largest count over folds; a re-run with 3 seeds says 3)."""
+        return max(self.seeds_per_fold, default=0)
 
 
 def _aggregate(rows: Sequence[Mapping[str, Any]]) -> RoleAggregate:
     folds = sorted({int(r["fold"]) for r in rows if r.get("fold") is not None})
     values: Dict[str, Optional[float]] = {}
     spread: Dict[str, Optional[float]] = {}
+    seed_spread: Dict[str, Optional[float]] = {}
     for col, _, _ in METRICS:
-        fold_means = []
+        fold_means, seed_sds = [], []
         for f in folds:
             seed_vals = [r[col] for r in rows if r.get("fold") == f and r.get(col) is not None]
             if seed_vals:
-                fold_means.append(statistics.mean(seed_vals))
-        values[col] = statistics.mean(fold_means) if fold_means else None
-        spread[col] = statistics.stdev(fold_means) if len(fold_means) >= 2 else None
-    return RoleAggregate(n_folds=len(folds), n_rows=len(rows), folds=tuple(folds), values=values, spread=spread)
+                fold_means.append(_mean(seed_vals))
+            if len(seed_vals) >= 2:
+                seed_sds.append(_stdev(seed_vals))
+        values[col] = _mean(fold_means) if fold_means else None
+        spread[col] = _stdev(fold_means) if len(fold_means) >= 2 else None
+        seed_spread[col] = _mean(seed_sds) if seed_sds else None
+    seeds_per_fold = tuple(len({r.get("seed") for r in rows if r.get("fold") == f}) for f in folds)
+    return RoleAggregate(n_folds=len(folds), n_rows=len(rows), folds=tuple(folds), values=values, spread=spread,
+                         seeds_per_fold=seeds_per_fold, seed_spread=seed_spread)
 
 
 # ------------------------------------------------------------------ rows
@@ -187,6 +228,10 @@ def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping
     dev_agg = _aggregate([r for r in done if r.get("role") == "dev"])
     test_agg = _aggregate([r for r in done if r.get("role") == "test"])
     rails = _check_guard_rails(dev_agg.values, guard_rails, dev_agg.n_rows)
+    if status != "done":
+        errs = "; ".join(sorted({r["error"] for r in failed if r.get("error")}))
+        rails.insert(0, GuardRail("status", "the configuration has a scored cell", False,
+                                   status + (f": {errs}" if errs else "")))
     disqualified = status != "done" or any(not g.passed for g in rails)
     errors = tuple(sorted({r["error"] for r in failed if r.get("error")}))
     return LeaderboardRow(
@@ -240,13 +285,59 @@ def winner(rows: Sequence[LeaderboardRow]) -> Optional[LeaderboardRow]:
 
 
 # ------------------------------------------------------------------ text table
-def _fmt_metric(agg: RoleAggregate, col: str, fmt: str) -> str:
+def _fmt_metric(agg: RoleAggregate, col: str, fmt: str, *, counts: bool = True) -> str:
     v = agg.values.get(col)
     if v is None:
         return "n/a"
-    sd = agg.spread.get(col)
     base = fmt.format(v)
-    return base if sd is None else f"{base} (sd {fmt.format(sd)}, n={agg.n_folds}f/{agg.n_rows}c)"
+    if not math.isfinite(v):
+        return base
+    sd, ssd = agg.spread.get(col), agg.seed_spread.get(col)
+    parts = []
+    if sd is not None:
+        parts.append(f"fold sd {fmt.format(sd).lstrip('+')}")
+    if ssd is not None:
+        parts.append(f"seed sd {fmt.format(ssd).lstrip('+')}")
+    if counts:
+        parts.append(f"{agg.n_folds} fold{'s' * (agg.n_folds != 1)} x {agg.n_seeds} seed{'s' * (agg.n_seeds != 1)}, "
+                     f"{agg.n_rows} cell{'s' * (agg.n_rows != 1)}")
+    return base + (f" ({', '.join(parts)})" if parts else "")
+
+
+def _guard_text(r: LeaderboardRow) -> str:
+    gr = "; ".join(f"{g.name} {'OK' if g.passed else 'FAIL'} ({g.detail})" for g in r.guard_rails
+                   if not (g.name == "ranking_value" and g.passed)) or "n/a"
+    return ("DISQUALIFIED: " if r.disqualified else "") + gr
+
+
+def _status_text(r: LeaderboardRow) -> str:
+    return r.status + (f" ({r.n_failed} of {r.n_cells} cells failed)" if r.n_failed and r.status != "failed" else "")
+
+
+TABLE_HEADER = ("rank", "configuration", "status", "ranking: dev net Sharpe (spread, counts)", "dev net return",
+                "dev max drawdown", "dev trades", "dev buy & hold", "dev random-null percentile", "guard-rails",
+                "test net Sharpe (test, not used for ranking)", "test net return (test, not used for ranking)",
+                "test max drawdown (test, not used for ranking)", "test trades (test, not used for ranking)",
+                "dataset fingerprint", "bar (min)", "horizons (bars)", "strategy")
+
+
+def table_cells(r: LeaderboardRow) -> List[str]:
+    """The text of every column of one row, in ``TABLE_HEADER`` order (the Markdown table and the
+    figure's table share it, so they cannot drift apart)."""
+    fp = r.dataset_fingerprint
+    return [str(r.rank), r.configuration, _status_text(r),
+            _fmt_metric(r.dev, "sharpe_net", "{:+.3f}"),
+            _fmt_metric(r.dev, "total_return", "{:+.2%}", counts=False),
+            _fmt_metric(r.dev, "max_drawdown", "{:.2%}", counts=False),
+            _fmt_metric(r.dev, "n_trades", "{:.1f}", counts=False),
+            _fmt_metric(r.dev, "buy_and_hold_return", "{:+.2%}", counts=False),
+            _fmt_metric(r.dev, "random_percentile_return", "{:.0f}", counts=False), _guard_text(r),
+            _fmt_metric(r.test, "sharpe_net", "{:+.3f}"),
+            _fmt_metric(r.test, "total_return", "{:+.2%}", counts=False),
+            _fmt_metric(r.test, "max_drawdown", "{:.2%}", counts=False),
+            _fmt_metric(r.test, "n_trades", "{:.1f}", counts=False),
+            "n/a" if not fp else f"{fp[:12]}...", "n/a" if r.bar_minutes is None else f"{r.bar_minutes:g}",
+            "n/a" if r.horizon_steps is None else ", ".join(str(h) for h in r.horizon_steps), r.strategy or "n/a"]
 
 
 def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
@@ -259,24 +350,11 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
              "the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from "
              "the winner (VISION \"The yardstick\"). The **test-fold columns are test, not used for ranking** "
              "(D-020): shown for every row, never used to rank or choose.", "",
-             "| rank | configuration | status | ranking: dev net Sharpe (sd, n folds/cells) | dev return | "
-             "dev max dd | dev trades | guard-rails | test: net Sharpe (test, not used for ranking) | "
-             "dataset fingerprint | bar (min) | horizons | strategy |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+             "| " + " | ".join(TABLE_HEADER) + " |", "|" + "---|" * len(TABLE_HEADER)]
     for r in rows:
-        gr = "; ".join(f"{g.name} {'OK' if g.passed else 'FAIL'} ({g.detail})" for g in r.guard_rails) or "n/a"
-        if r.disqualified:
-            gr = "**DISQUALIFIED** " + gr
-        fp = r.dataset_fingerprint
-        fp = "n/a" if not fp else f"{fp[:12]}..."
-        lines.append(
-            f"| {r.rank} | `{r.configuration}` | {r.status} | {_fmt_metric(r.dev, 'sharpe_net', '{:+.3f}')} | "
-            f"{_fmt_metric(r.dev, 'total_return', '{:+.2%}')} | {_fmt_metric(r.dev, 'max_drawdown', '{:.2%}')} | "
-            f"{_fmt_metric(r.dev, 'n_trades', '{:.1f}')} | {gr} | "
-            f"{_fmt_metric(r.test, 'sharpe_net', '{:+.3f}')} | {fp} | "
-            f"{'n/a' if r.bar_minutes is None else f'{r.bar_minutes:g}'} | "
-            f"{'n/a' if r.horizon_steps is None else ', '.join(str(h) for h in r.horizon_steps)} | "
-            f"{r.strategy or 'n/a'} |")
+        cells = table_cells(r)
+        cells[1] = f"`{cells[1]}`"
+        lines.append("| " + " | ".join(c.replace("|", "/") for c in cells) + " |")
     w = winner(rows)
     lines += ["", f"**Winner:** `{w.configuration}` (rank {w.rank})" if w is not None
               else "**Winner:** none (every row disqualified or no scored dev data)."]
@@ -284,5 +362,5 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
 
 
 __all__ = ["DEFAULT_GUARD_RAILS", "GuardRail", "GuardRailSpec", "LeaderboardRow", "METRICS", "RANK_METRIC",
-           "ROLES", "RoleAggregate", "build_leaderboard", "leaderboard_for_scenario", "leaderboard_markdown",
+           "ROLES", "RoleAggregate", "TABLE_HEADER", "table_cells", "build_leaderboard", "leaderboard_for_scenario", "leaderboard_markdown",
            "winner"]

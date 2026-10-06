@@ -10,6 +10,8 @@
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
     neural-trade leaderboard [SCENARIO] [--store runs] [--index runs/index.sqlite]
+                                  [--out DIR] [--max-drawdown F] [--min-trades N]
+                                  [--random-null-percentile P] [--no-beat-buy-and-hold] [--no-beat-random-null]
     neural-trade registry list | info REGISTRY NAME | search QUERY
     neural-trade env
 
@@ -259,10 +261,19 @@ def _scenario_rescore(args, store) -> int:
 
 
 def cmd_leaderboard(args) -> int:
-    from neural_trade.experiments.leaderboard import build_leaderboard, leaderboard_markdown
+    from neural_trade.experiments.leaderboard import (
+        DEFAULT_GUARD_RAILS, GuardRailSpec, build_leaderboard, leaderboard_markdown,
+    )
     from neural_trade.experiments.store import ENGINE_SUBTREE, RunStore
 
     store = RunStore(args.store, args.index)
+    d = DEFAULT_GUARD_RAILS
+    spec = GuardRailSpec(
+        max_drawdown_max=args.max_drawdown, min_trades=args.min_trades,
+        require_beat_buy_and_hold=not args.no_beat_buy_and_hold,
+        require_beat_random_null=not args.no_beat_random_null,
+        random_null_percentile_min=(d.random_null_percentile_min if args.random_null_percentile is None
+                                    else args.random_null_percentile))
     if args.scenario:
         scenarios = [args.scenario]
     else:
@@ -272,8 +283,16 @@ def cmd_leaderboard(args) -> int:
         print(json.dumps({"scenarios": []}))  # noqa: T201 - the command's result
         return 0
     for name in scenarios:
-        board = build_leaderboard(store.sync(name))
-        print(leaderboard_markdown(board))  # noqa: T201 - the command's result
+        board = build_leaderboard(store.sync(name), guard_rails=spec)
+        text = leaderboard_markdown(board)
+        print(text)  # noqa: T201 - the command's result
+        if args.out:
+            from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+            out = Path(args.out) / name
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "leaderboard.md").write_text(text, encoding="utf-8")
+            leaderboard_figure(board).write_html(str(out / "leaderboard.html"), include_plotlyjs="cdn")
     return 0
 
 
@@ -460,6 +479,15 @@ def build_parser() -> argparse.ArgumentParser:
     lb.add_argument("scenario", nargs="?", help="scenario name (default: every scenario under --store)")
     lb.add_argument("--store", default="runs", help="run store root")
     lb.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
+    lb.add_argument("--out", default=None, help="also write <out>/<scenario>/leaderboard.md and .html")
+    lb.add_argument("--max-drawdown", type=float, default=None,
+                    help="guard-rail: dev max drawdown must be <= this fraction (default: not checked)")
+    lb.add_argument("--min-trades", type=float, default=1.0,
+                    help="guard-rail: dev mean trades must be >= this (default 1: a 0-trade row is disqualified)")
+    lb.add_argument("--random-null-percentile", type=float, default=None,
+                    help="guard-rail: dev random-null percentile must be >= this (default 50)")
+    lb.add_argument("--no-beat-buy-and-hold", action="store_true", help="drop the buy-and-hold guard-rail")
+    lb.add_argument("--no-beat-random-null", action="store_true", help="drop the random-null guard-rail")
     lb.set_defaults(func=cmd_leaderboard)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")

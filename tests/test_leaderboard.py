@@ -271,3 +271,119 @@ def test_leaderboard_figure_from_a_real_store_scenario_has_no_empty_panel():
     fn = Visualizations.get("leaderboard")
     fig = fn(rows, None)
     assert T.empty_panels(fig) == []
+
+
+# ------------------------------------------------------------------ review additions (NT-031 repair)
+def test_zero_trade_row_tops_the_sort_but_never_wins():
+    # a 0-trade strategy has net Sharpe 0, above every losing row; the activity guard-rail removes it
+    loser = _good_configuration("loser", sharpe=-1.0, n_trades=30.0)
+    for r in loser:
+        r["total_return"], r["buy_and_hold_return"], r["random_percentile_return"] = 0.10, 0.01, 90.0
+    flat = _good_configuration("flat", sharpe=0.0, n_trades=0.0)
+    board = build_leaderboard(loser + flat)
+    assert board[0].configuration == "flat" and board[0].disqualified
+    assert winner(board).configuration == "loser"
+    assert "min_trades FAIL" in leaderboard_markdown(board)
+
+
+@pytest.mark.parametrize("column,bad,rail", [
+    ("max_drawdown", float("nan"), "max_drawdown"), ("n_trades", float("inf"), "min_trades"),
+    ("random_percentile_return", float("nan"), "beat_random_null"),
+    ("buy_and_hold_return", float("nan"), "beat_buy_and_hold"), ("sharpe_net", float("nan"), "ranking_value")])
+def test_non_finite_guard_rail_value_disqualifies_with_a_stated_reason(column, bad, rail):
+    rows = _good_configuration("nan_row")
+    for r in rows:
+        r["total_return"], r["buy_and_hold_return"], r["random_percentile_return"] = 0.10, 0.01, 90.0
+        if r["role"] == "dev":
+            r[column] = bad
+    spec = GuardRailSpec(max_drawdown_max=0.5)
+    board = build_leaderboard(rows, guard_rails=spec)
+    row = board[0]
+    assert row.disqualified and winner(board) is None
+    failed = {g.name: g.detail for g in row.guard_rails if not g.passed}
+    assert rail in failed and "non-finite" in failed[rail]
+    assert "non-finite" in leaderboard_markdown(board)
+
+
+def test_missing_guard_rail_value_disqualifies_as_missing():
+    rows = _good_configuration("gap")
+    for r in rows:
+        r["max_drawdown"] = None
+    board = build_leaderboard(rows, guard_rails=GuardRailSpec(max_drawdown_max=0.5))
+    assert any(g.name == "max_drawdown" and not g.passed and "missing" in g.detail for g in board[0].guard_rails)
+
+
+def test_non_finite_rank_value_sorts_last_and_cannot_win():
+    good = _good_configuration("good")
+    for r in good:
+        r["total_return"], r["buy_and_hold_return"], r["random_percentile_return"] = 0.10, 0.01, 90.0
+    bad = _good_configuration("bad", sharpe=float("nan"))
+    board = build_leaderboard(bad + good)
+    assert [r.configuration for r in board] == ["good", "bad"]
+    assert winner(board).configuration == "good"
+
+
+def test_failed_row_names_status_as_the_failing_guard_rail_with_the_error():
+    rows = [_row(configuration="broken", status="failed", error="ValueError: boom", sharpe_net=None,
+                 total_return=None, max_drawdown=None, n_trades=None, buy_and_hold_return=None,
+                 random_percentile_return=None)]
+    row = build_leaderboard(rows)[0]
+    assert any(g.name == "status" and not g.passed and "boom" in g.detail for g in row.guard_rails)
+    text = leaderboard_markdown([row])
+    assert "failed" in text and "boom" in text
+
+
+def test_seed_reruns_report_counts_and_seed_spread():
+    rows = []
+    for f in (-3, -2):
+        for s, v in enumerate((1.0, 2.0, 3.0)):
+            rows.append(_row(configuration="rerun", fold=f, role="dev", seed=s, sharpe_net=v))
+    row = build_leaderboard(rows)[0]
+    assert row.dev.n_seeds == 3 and row.dev.seeds_per_fold == (3, 3)
+    assert row.dev.values["sharpe_net"] == pytest.approx(2.0)
+    assert row.dev.seed_spread["sharpe_net"] == pytest.approx(1.0)       # sd of (1, 2, 3)
+    assert row.dev.spread["sharpe_net"] == pytest.approx(0.0)            # identical fold means
+    assert "3 seeds" in leaderboard_markdown([row]) and "seed sd" in leaderboard_markdown([row])
+
+
+def test_every_test_column_is_labelled_in_the_table_and_the_figure():
+    from neural_trade.experiments.leaderboard import TABLE_HEADER
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    test_cols = [h for h in TABLE_HEADER if h.startswith("test ")]
+    assert len(test_cols) == 4 and all("test, not used for ranking" in h for h in test_cols)
+    assert not any("test" in h for h in TABLE_HEADER if not h.startswith("test "))
+    fig = leaderboard_figure(build_leaderboard(_good_configuration("a")))
+    table = next(t for t in fig.data if t.type == "table")
+    assert list(table.header.values) == list(TABLE_HEADER)
+    scatter = next(t for t in fig.data if t.type == "scatter")
+    assert "not used for ranking" in scatter.name
+    assert any("ranking column" in a.text for a in fig.layout.annotations)
+
+
+def test_figure_draws_the_dev_spread_and_marks_the_disqualified_row():
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    rows = _good_configuration("ok", dev_folds=(-4, -3, -2), sharpe=1.0)
+    for r in rows:
+        if r["role"] == "dev":
+            r["sharpe_net"] = 1.0 + 0.5 * (r["fold"] + 3)
+    rows += _good_configuration("flat", sharpe=0.0, n_trades=0.0)
+    fig = leaderboard_figure(build_leaderboard(rows))
+    bar = next(t for t in fig.data if t.type == "bar")
+    assert any(e > 0 for e in bar.error_x.array)
+    assert any("DISQUALIFIED" in y for y in bar.y)
+
+
+def test_cli_guard_rail_flags_and_out(tmp_path, capsys):
+    from neural_trade.cli import main
+
+    _write_run_dir(tmp_path, scenario="gr", configuration="default", fold=-2, role="dev", seed=0, n_trades=0)
+    out = tmp_path / "out"
+    assert main(["leaderboard", "gr", "--store", str(tmp_path), "--out", str(out)]) == 0
+    assert "min_trades FAIL" in capsys.readouterr().out
+    assert (out / "gr" / "leaderboard.md").is_file() and (out / "gr" / "leaderboard.html").is_file()
+    assert main(["leaderboard", "gr", "--store", str(tmp_path), "--min-trades", "0", "--max-drawdown", "0.01",
+                 "--no-beat-buy-and-hold", "--no-beat-random-null"]) == 0
+    text = capsys.readouterr().out
+    assert "max_drawdown FAIL" in text and "min_trades" in text

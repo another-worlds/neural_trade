@@ -1,0 +1,9 @@
+# Leaderboard: `reference_default`
+
+One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from the winner (VISION "The yardstick"). The **test-fold columns are test, not used for ranking** (D-020): shown for every row, never used to rank or choose.
+
+| rank | configuration | status | ranking: dev net Sharpe (spread, counts) | dev net return | dev max drawdown | dev trades | dev buy & hold | dev random-null percentile | guard-rails | test net Sharpe (test, not used for ranking) | test net return (test, not used for ranking) | test max drawdown (test, not used for ranking) | test trades (test, not used for ranking) | dataset fingerprint | bar (min) | horizons (bars) | strategy |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `default` | done | -155.975 (fold sd 26.495, seed sd 23.821, 2 folds x 3 seeds, 6 cells) | -62.37% (fold sd 6.52%, seed sd 7.06%) | 62.37% (fold sd 6.51%, seed sd 7.06%) | 392.8 (fold sd 92.6, seed sd 77.5) | -4.58% (fold sd 4.09%, seed sd 0.00%) | 64 (fold sd 29, seed sd 22) | DISQUALIFIED: min_trades OK (392.8); beat_buy_and_hold FAIL (-62.37% vs -4.58%); beat_random_null OK (64) | -115.274 (seed sd 14.794, 1 fold x 3 seeds, 3 cells) | -42.87% (seed sd 5.05%) | 42.93% (seed sd 5.11%) | 224.3 (seed sd 43.7) | a57ee1e43981... | 1 | 10, 15, 20 | calibrated_quantile |
+
+**Winner:** none (every row disqualified or no scored dev data).
