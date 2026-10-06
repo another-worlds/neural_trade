@@ -1,0 +1,10 @@
+A_1aeff1c_r1 20 0.1997 med_epoch_s 12.82 elapsed 307.9
+B_426de4f_r1 20 0.1209 med_epoch_s 16.77 elapsed 359.2
+A_1aeff1c_r2 20 0.1348 med_epoch_s 14.93 elapsed 324.5
+B_426de4f_r2 20 0.1541 med_epoch_s 14.02 elapsed 324.6
+A_1aeff1c_r3 20 0.1026 med_epoch_s 12.85 elapsed 324.7
+B_426de4f_r3 20 0.1418 med_epoch_s 15.44 elapsed 330.1
+A_1aeff1c_r4 20 0.1146 med_epoch_s 14.84 elapsed 322.2
+B_426de4f_r4 20 0.1113 med_epoch_s 13.3 elapsed 295.9
+sec_per_step A med 0.1247 range 0.1026 0.1997 spread 0.778 | B med 0.1313 range 0.1113 0.1541 spread 0.326 | ratio 1.053 disjoint False
+epoch_s A med 13.8457 range 12.8186 14.9307 spread 0.153 | B med 14.7307 range 13.2987 16.7706 spread 0.236 | ratio 1.064 disjoint False

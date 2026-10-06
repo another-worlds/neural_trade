@@ -1,0 +1,10 @@
+A_1aeff1c_r1 slot=0 rc=0 wall_s=338 cpu_mean=41.0 cpu_max=75.5
+B_426de4f_r1 slot=1 rc=0 wall_s=382 cpu_mean=60.9 cpu_max=86.0
+A_1aeff1c_r2 slot=2 rc=0 wall_s=361 cpu_mean=54.4 cpu_max=81.3
+B_426de4f_r2 slot=3 rc=0 wall_s=357 cpu_mean=54.3 cpu_max=85.8
+A_1aeff1c_r3 slot=4 rc=0 wall_s=355 cpu_mean=50.1 cpu_max=83.8
+B_426de4f_r3 slot=5 rc=0 wall_s=367 cpu_mean=55.9 cpu_max=84.0
+--- first 6 runs done; INCONCLUSIVE per SPEC rule; extra pair ---
+A_1aeff1c_r4 slot=0 rc=0 wall_s=347 cpu_mean=51.8 cpu_max=79.3
+B_426de4f_r4 slot=1 rc=0 wall_s=322 cpu_mean=32.4 cpu_max=50.5
+ALLDONE
