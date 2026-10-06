@@ -80,7 +80,7 @@ changes).
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
-| [NT-048](#nt-048) | P1 | feature | implementer | in-progress | Discovered-indicators report: a self-contained interactive HTML report per run |
+| [NT-048](#nt-048) | P1 | feature | implementer | done | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
 | [NT-051](#nt-051) | P1 | research | experimenter | todo | First stability-harness run on the reference setup against its pre-registered thresholds |
@@ -199,7 +199,9 @@ changes).
 | [NT-164](#nt-164) | P3 | bug | implementer | todo | A run directory records the deterministic mode |
 | [NT-165](#nt-165) | P3 | polish | implementer | todo | NT-048 follow-ups: permutation variance in the importance band, a multiple-comparison note, readable MACD/Stoch/Keltner period panels, importance cost on CPU |
 | [NT-166](#nt-166) | P3 | performance | experimenter | todo | Quiet-machine step micro-benchmark: 1aeff1c against 426de4f (only if D-018 needs NT-075's answer) |
-| [NT-167](#nt-167) | P2 | bug | implementer | in-progress | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
+| [NT-167](#nt-167) | P2 | bug | implementer | done | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
+| [NT-168](#nt-168) | P2 | feature | implementer | todo | Leaderboard: superseded cells and duplicate (fold, seed) pairs |
+| [NT-169](#nt-169) | P3 | infra | implementer | todo | A suite lock: no two full pytest suites at once, enforced instead of checked by eye |
 
 ## Items
 
@@ -789,7 +791,7 @@ changes).
 
 **Discovered-indicators report: a self-contained interactive HTML report per run**
 
-- **status:** in-progress (2026-10-04): the report writer is `654a34a`, the fourteen-family figures are `e88b015` and `5663c8b`, and grouped permutation importance is `d46243e`. Notebook 01 trained `20261004T073704Z-d1f6fa9-11993eec` (served epoch 10, stopped at epoch 16; served val loss 3.9679) and wrote `runs/20261004T073704Z-d1f6fa9-11993eec/indicator_report.html` (plotly embedded, three figures, no external script). Notebooks 01, 04 and 07 were executed; `scripts/notebooks/check.py` printed `all clean` (notebook 07 is 0.8 MB). The ATR row, the Keltner period and atr_period panels, and the importance panel (42 instances, bootstrap whiskers) were looked at. QA has not passed this item, so it is not done.
+- **status:** done (2026-10-06): nt-048 2c772de + repair 0a24847 (implementer, Sonnet medium), merged as 4a82919; QA (Opus medium) PASS on 2c772de (AUC drop recomputed with sklearn: 2.2e-16 on the package's scores, 8.9e-5 against an independent forward pass; bands within Monte-Carlo noise of QA's own block bootstrap; mutation caught) and re-QA PASS on 0a24847 (baseline AUC per horizon, hit drop over labelled windows, CSV fallback; AUC values unchanged). Notebook 07 executed on CPU on run 20261003T225052Z-91fa363-11993eec (4ad77cf; check.py all clean; the three figures looked at: 42 instances, baseline AUC 0.493/0.555/0.444). A first execution picked a study run (NT-167) and was discarded. To refresh 07 on a new notebook-01 run once the GPU is free. Follow-ups: NT-165.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Label the RSI parameter as an EMA span (Wilder about (n+1)/2) in the report; Bollinger bands are +-2 sqrt(1-alpha) sigma_EW (families.py:263-272).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/visualization/ (the report figures, reusing NT-043's figure module), src/neural_trade/evaluation/ (grouped permutation importance), src/neural_trade/registries/visualizations.py, src/neural_trade/cli.py, scripts/notebooks/build.py, notebooks/07_discovered_indicators.ipynb, tests/
@@ -2215,13 +2217,37 @@ changes).
 
 **Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations**
 
-- **status:** in-progress (2026-10-06): implementer on nt-167
+- **status:** done (2026-10-06): nt-167 b5e9847 (implementer, Sonnet medium), merged as 602b9f5; lead-verified (D-060, P2 mechanical): diff reviewed (study subtrees experiments/ and ablations/ excluded, include_study_runs flag, explicit RUN_DIR unchanged), 3 new tests in tests/test_notebook_ui.py, fast 1952 passed + the notebook-07 failure that 4ad77cf clears (runs/experiments/nt167/suite.log), ruff clean.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/notebook/runs.py, tests/, scripts/notebooks/README.md
 - **depends on:** none
 - **why:** The lead's notebook routine for NT-048 (2026-10-06): `servable_runs` searches runs/ recursively and excludes only engine runs, so notebook 07 loaded NT-075's speed-check run 20261006T070748Z-426de4f-cf562469 (old code, close-only, 4 families) as 'the newest run'. D-013: notebooks show the shipped defaults. The executed notebook was discarded, not committed.
 - **acceptance:** (1) The default selection takes only runs directly under the runs root; study runs (runs/experiments/**, runs/ablations/**) and engine runs need a flag or an explicit RUN_DIR (tests a-d). (2) When only excluded runs exist, the error lists them and names RUN_DIR (test). (3) Docstring and scripts/notebooks/README.md updated. (4) Fast suite, ruff.
 - **source:** lead, notebook routine of NT-048 (2026-10-06)
+
+### NT-168
+
+**Leaderboard: superseded cells and duplicate (fold, seed) pairs**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/experiments/leaderboard.py, the run index (experiments/store.py), tests/
+- **depends on:** NT-031
+- **why:** QA of NT-031 (2026-10-06): the aggregation cannot supersede a cell; loss_prune_v1 ece0 still uses the suspect f-39 cell D-057 excluded (+5.69 instead of the re-run's +5.17; ece0 mean 1.597 instead of 1.492, rank unchanged), and a duplicate (fold, seed) would be averaged as an extra seed.
+- **acceptance:** (1) A recorded supersede (a small file in the scenario's store, or an index column) replaces a cell by its re-run; the board shows which (test). (2) A duplicate (fold, seed) is refused or flagged, never averaged as a seed (test). (3) loss_prune_v1's board uses the f-39 re-run. (4) Fast suite, ruff.
+- **source:** lead and QA, 2026-10-06
+
+### NT-169
+
+**A suite lock: no two full pytest suites at once, enforced instead of checked by eye**
+
+- **status:** todo
+- **priority / type / role:** P3 / infra / implementer
+- **area:** tests/conftest.py (or a pytest plugin in tests/), docs/RUNBOOK.md, .claude/agents/*.md (the lead edits these)
+- **depends on:** none
+- **why:** D-048 forbids two full suites at once. On 2026-10-06 agents ran overlapping fast suites at least three times (NT-122's implementer, NT-031's QA, NT-048's implementer) because the `wmic ... | grep` check returned empty or was chained past; timings were contaminated (NT-075's noise came partly from the same load).
+- **acceptance:** (1) A full-suite run (`-n` with no file arguments, or `-m "not slow"`/`-m slow`) takes an OS file lock under D:/nt/ (path configurable) and waits, printing who holds it; targeted runs do not take it (test with two subprocesses). (2) RUNBOOK and the agent files point to it. (3) Fast suite, ruff.
+- **source:** lead and QA, 2026-10-06
 
 ## Done log
 
