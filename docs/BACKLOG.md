@@ -156,7 +156,7 @@ changes).
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
-| [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
+| [NT-124](#nt-124) | P1 | bug | implementer | blocked | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | done | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
 | [NT-127](#nt-127) | P1 | bug | implementer | todo | DM cells of the report: a HAC bandwidth that holds up under persistent volatility regimes |
@@ -1722,7 +1722,7 @@ changes).
 
 **Temperature scaling reaches the NLL minimum (bounded scalar search)**
 
-- **status:** todo
+- **status:** blocked (2026-10-07): waits for the owner's decision NT-174 (what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum). Code on branch nt-124 (f47e519; implementer Sonnet; NOT merged, no QA yet): a deterministic bounded scalar search on log T (scipy minimize_scalar, bounds [1e-2, 1e3]) with a fit status ok/lower_bound/upper_bound (logged, recorded in pipeline_meta.json `temperature_at_bound`, never called 'well-calibrated'); criteria (1)-(6) met on synthetic blocks (NLL(fit) <= the best of a 4001-point log-grid + 1e-9; sd 0.1 / T* 0.33 gives 0.337 against the old 0.869; the SHARPEN=3 fixture within 5%); golden: only temperature/* and calibrated/direction_prob/* change (6 of 461 arrays: temperature h0 1.543 -> 1.645, h1 4.139 -> 1000 (upper bound), h2 2.644 -> 4.309; calibrated P(up) h1 max abs diff 0.457, about 0.5 everywhere); fast 1992 passed, stability 11. On the reference run 20261003T225052Z-91fa363-11993eec (2866 cal windows) all three horizons go to the upper bound T = 1000: cal NLL = ln 2 (0.6932) against 0.72 for the old fit (which stopped at a T worse than a constant 0.5): the direction heads carry no usable signal on the cal block, and calibrated_quantile (D-009, the default strategy) and every strategy reading the calibrated P(up) become degenerate: a change of default trading behaviour, so the owner's. Lead's recommendation (NT-174): merge the fix and make 'no direction signal' an explicit, reported state (strategies that need P(up) refuse or stay flat, the report says so). After the decision: QA (Opus, golden re-record in its own commit) and merge.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/calibration/temperature_scaling.py, calibration/pipeline.py, tests/test_calibration.py, scripts/golden_run.py
 - **depends on:** NT-122

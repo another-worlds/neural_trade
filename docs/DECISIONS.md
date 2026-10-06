@@ -77,6 +77,8 @@ that extend or partly replace an entry.
 | D-061 | Models and effort: one pinned standard; lead and plans Opus 5.5 high; research by workflow | owner (the non-lead rows: lead's proposal) | |
 | D-062 | A separate tactical-experiment session: its own worktree, MVP priority on the GPU, exploratory rigour | owner | D-063 |
 | D-063 | Tactical session: GPU in parallel with the MVP, no budget, at most 2 minutes per run on ultra-short blocks | owner | |
+| D-064 | Stability thresholds are pre-registered files: v1 frozen, v2 for NT-051 on the reference profile | lead | |
+| D-065 | Engine concurrency and identity: the run id carries a scenario hash; the index refuses a duplicate id; a claim takeover goes through a sentinel; atomic writes retry | lead | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -796,3 +798,24 @@ that extend or partly replace an entry.
   прорыва в расчете нейрокни. Риск менеджмент - отдельный независимый бранч". The tactical session works on the
   network's direction skill only; risk management (drawdown, sizing, stops) is a separate, independent branch of
   work (lead's reading: not started by this entry; TACTICAL.md "Goal").
+
+## D-064 Stability thresholds are pre-registered files: v1 frozen, v2 for NT-051 on the reference profile (lead, 2026-10-07)
+- **Context:** NT-038 pre-registers the harness thresholds before its first real run (D-026). qa-deep (2026-10-06) showed the first draft (sha256 3ff83b6e...) unsound against 54 stored runs and two synthetic broken
+  runs; it was rewritten ONCE, before any harness run, from stored training runs (not harness runs), and is `configs/stability_thresholds.yaml`, sha256 0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e (v1).
+  NT-187 added `configs/stability_thresholds_v2.yaml`, sha256 34a122b28861c13622165aed81fdb1e9405eea91fe4823d0a754d070cbade2cb (committed alone, first): n_eff gates on the variance checks, a guard for a degenerate
+  constant baseline, the absolute NLL in scale-invariant units.
+- **Decision:** v1 never changes. v2 is the file for NT-051 and is used on the REFERENCE profile only: under v2 the tiny profile judges no variance check (n_eff 11/7/5), so a tiny-only result says nothing about the variance
+  head. The harness default stays v1 until a SPEC names v2 (`--thresholds v2`; the report carries the sha256 of the file used). The n_eff gates 100 and 30 are extrapolations (every stored healthy run has n_eff >= 135) and
+  are labelled so. Any further change is a new frozen file named in a SPEC before GPU time (NT-190: v3 only if the owner wants the tiny profile's variance coverage back).
+- **Consequence:** NT-051's SPEC names v2 by sha256, states the expected outcome of `fuzz_jumps` and the expected n_eff per case before any GPU time; NT-190.
+- **Evidence:** QA reports of NT-038 (FAIL, then PASS on ce35529) and NT-187 (PASS on fbebfd1), BACKLOG status lines.
+
+## D-065 Engine concurrency and identity: scenario hash in the run id, a duplicate id refused, a sentinel for claim takeover, atomic writes with retry (lead, 2026-10-07)
+- **Context:** the control panel, parallel sweeps and TA-rule scenarios put several writers and scenarios on one run store (Windows). Found by QA and CI: two scenarios with one config hash overwrote each other's index row
+  (NT-182); two racers took one stale claim (NT-183, CI red on 8bbf8b7); an open notebook's poll made the sweep's `os.replace` fail (NT-185).
+- **Decision:** (1) the cell run id is `<stamp>-<sha>-<hash8>-<cellkey>-<6 hex of sha256(scenario name)>`; stored ids are never renamed; the index raises `RunIdCollision` naming both cells when one id comes from two
+  different cells (an identical re-sync replaces). (2) A stale claim is taken over only through an exclusive sentinel `<cell>.lock.takeover`, a re-read under it and an `os.replace` (the claim path is never absent). (3) Every
+  atomic write in experiments/ and notebook/ goes through `utils/atomic.py` (20 retries, about 3 s) and the panel's readers read once, close and tolerate missing or half-written files. (4) A relative `CSV_PATH` is resolved
+  against the project root in the data layer when the cwd lacks it (identity text unchanged, so a sweep started in the CLI resumes in the panel and back without retraining).
+- **Consequence:** NT-182, NT-183, NT-185, NT-034; residues in NT-184, NT-188, NT-189 (P3).
+- **Evidence:** QA reports (Opus and qa-deep), the stress runs in them; CI runs 37504490746 (red) and 37527638543 (green).
