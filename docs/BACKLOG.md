@@ -66,7 +66,7 @@ changes).
 | [NT-031](#nt-031) | P1 | feature | implementer | done | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | done | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
-| [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
+| [NT-034](#nt-034) | P1 | feature | implementer | in-progress | Control-panel notebook 06 (ipywidgets + plotly) |
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
 | [NT-036](#nt-036) | P1 | feature | implementer | done | Stability invariants in CI (strict mode, masks off) |
 | [NT-037](#nt-037) | P1 | feature | implementer | done | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
@@ -212,6 +212,7 @@ changes).
 | [NT-177](#nt-177) | P2 | bug | implementer | done | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
 | [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
 | [NT-179](#nt-179) | P2 | feature | implementer | todo | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
+| [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
 
 ## Items
 
@@ -617,7 +618,7 @@ changes).
 
 **Control-panel notebook 06 (ipywidgets + plotly)**
 
-- **status:** todo
+- **status:** in-progress (2026-10-06): nt-034 027be49 (implementer Sonnet): QA (Opus) FAIL on (2): notebook 06 runs with cwd notebooks/, from where Estimate/Launch refuse every committed scenario with a relative CSV_PATH (incl. reference_default) and the GPU parallel record is not found (--parallel above 1 always refused); the other criteria PASS (check.py reads widget state, wait() re-emits warnings, no launch on execution, identity, figures). Repair round 1 running (also: n/a for served-delta statistics at beta 0, no store writes when viewing a verdict, a lock on the board refresh). NT-180 filed (the scorer stores zeros at beta 0).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Correction to (5): scripts/notebooks/check.py:103-135 does not read `metadata.widgets` outputs, and the TrainingSession thread's warnings and `traceback.print_exc()` (trainer.py:520) never reach the cell, so a failed calibration passes the routine. `wait()` re-emits WARNING+ records; check.py reads widget state.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** scripts/notebooks/build.py, scripts/notebooks/README.md, notebooks/06_control_panel.ipynb (new), src/neural_trade/notebook/ (a panel module), tests/test_notebooks_thin.py
@@ -2378,6 +2379,18 @@ changes).
 - **why:** QA of NT-033 (2026-10-06): `neural-trade leaderboard` builds one board per scenario; the multi-scenario branch of `leaderboard_markdown` (leaderboard.py ~678-696, rows named `scenario / configuration`) is reachable only through the Python API. The yardstick (VISION) compares the learned model against the frozen twin and the TA rules on ONE dev-fold net Sharpe column. Also: the nt033 spec headers suggest `--n-trials 30`, which the sweep refuses (15.90 h upper bound at 0.1735 s/step against the 12 h cap); a rule-only sweep's budget line says 'GPU budget 0.79 h' from the default overhead though no GPU is used, and its 3-seed re-run repeats identical deterministic cells; nothing pins that `score_strategy_only` feeds the block's own closes (only the alignment guard at scorer.py:~232); the perturbed frame in `_perturb_after` drops meta['delta_raw'], so every probe logs the D-051 warning; `MACrossStrategy.warmup()` loses one bar.
 - **acceptance:** (1) `--scenario a,b,c` (or several positional scenarios) puts the configurations on one board with the cost-profile and fold-coverage rails applied across scenarios (test). (2) The spec header comments name a trial count that fits 12 h (or say it needs the owner). (3) A rule-only sweep reports a CPU budget and re-runs a deterministic rule once. (4) A test that pins `score_strategy_only`'s closes; the D-051 warning is not logged per probe. (5) Fast suite, ruff.
 - **source:** QA of NT-033 (2026-10-06)
+
+### NT-180
+
+**The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/scorer.py (and the report fields it reads), evaluation/report.py, tests/
+- **depends on:** none
+- **why:** QA of NT-034 (2026-10-06): for a cell with beta 0 the index holds `h0/delta/corr`, `mean_pred` and `share_pred_up` as 0.0 (cell t0005 of the tiny sweep). D-007: with beta 0 the served delta is exactly 0 and every served-delta statistic must be n/a (not a measured 0% / 100%), with the raw heads alongside. Every consumer of the index (the leaderboard, the comparison figures, the control panel) draws these as measured zeros unless it special-cases beta 0.
+- **acceptance:** (1) The scorer stores NaN/None (and a `served_delta_na: true` flag) for the served-delta statistics when beta is 0; the raw-head statistics are stored beside them (test on a beta-0 cell). (2) The leaderboard and the NT-034 panel show n/a for them (tests). (3) Old stored cells are read through the same rule (beta from their report). (4) Fast suite, ruff.
+- **source:** QA of NT-034 (2026-10-06)
 
 ## Done log
 
