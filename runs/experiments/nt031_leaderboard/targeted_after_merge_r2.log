@@ -1,0 +1,7 @@
+# targeted re-run after merging remediation/plan 755e7ac (executed notebook 07)
+d9285adccbadf1e66100efd2bfd0695c4148b5ee
+2026-10-06T08:19:39Z
+$ pytest -q -p no:cacheprovider tests/test_notebook_tooling.py tests/test_leaderboard.py -n 4
+76 passed in 13.26s
+$ ruff check src tests scripts
+All checks passed!
