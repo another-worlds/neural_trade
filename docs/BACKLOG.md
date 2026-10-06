@@ -209,7 +209,7 @@ changes).
 | [NT-174](#nt-174) | P2 | decision | owner | todo | Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124) |
 | [NT-175](#nt-175) | P3 | bug | implementer | todo | Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match |
 | [NT-176](#nt-176) | P2 | research | experimenter | todo | Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1 |
-| [NT-177](#nt-177) | P2 | bug | implementer | todo | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
+| [NT-177](#nt-177) | P2 | bug | implementer | done | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
 | [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
 
 ## Items
@@ -2346,7 +2346,7 @@ changes).
 
 **split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-177 41690ab/6e5865f (implementer, Sonnet medium), merged; lead-verified (D-060: P2, output proven identical): diff reviewed (only the loop start moves, close stays whole so the leading extended-trend features are unchanged), tests/test_split_arrays_cap.py (13) keep the old window-all-then-cut path as the reference and compare X, X_model, y, last_close, extended trends, anchors, split slices, scaler stats with array_equal over cap/fold/series/step cases (they pass on the old source too), peak memory 15 MB against 572 MB on a 500k-bar frame, golden_nt117 455/455, fast 2111 passed. Not asserted: the scorer on the long file (the 5.14 GiB case); the NT-104 gru_small f-93 cell can be re-scored.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/data/processor.py (split_arrays ~86-90), tests/
 - **depends on:** none
