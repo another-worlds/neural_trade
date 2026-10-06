@@ -260,7 +260,8 @@ class Runner:
                   "spec_hash": sc.spec_hash, "commit": git_sha(),
                   "strategy": {"name": sc.strategy.name, "params": sc.strategy.params}, "backtest": sc.backtest,
                   "run": {"calibrate": sc.run.calibrate, "save_artifacts": sc.run.save_artifacts,
-                          "indicator_report": sc.run.indicator_report},
+                          "indicator_report": sc.run.indicator_report,
+                          **({} if sc.run.train else {"train": False})},
                   "spec": str(sc.source) if sc.source is not None else None}
         return {"engine": engine, "dataset": pc.dataset, "setup": pc.setup,
                 "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"]}}
@@ -281,7 +282,7 @@ class Runner:
     def run_cell(self, pc: PlannedCell):
         """Train, score and record one cell; returns (run directory, status). KeyboardInterrupt leaves
         the directory without result.json (``incomplete``) and propagates."""
-        from neural_trade.experiments.scorer import score_result
+        from neural_trade.experiments.scorer import score_result, score_strategy_only
 
         sc = self.scenario
         ctx = self._create_context(pc, self._meta(pc))
@@ -290,13 +291,19 @@ class Runner:
         doc: Dict[str, Any] = {"schema_version": ENGINE_SCHEMA_VERSION, "run_id": ctx.run_id, "scenario": sc.name,
                                "cell_key": pc.key, "role": pc.role}
         try:
-            result = self.trainer(ctx, calibrate=sc.run.calibrate, save_artifacts=sc.run.save_artifacts)
-            t_train = time.perf_counter() - t0
-            scored = score_result(result, role=pc.role, strategy=sc.strategy.name,
-                                  strategy_params=sc.strategy.params, backtest_params=sc.backtest,
-                                  run_id=ctx.run_id, out_dir=ctx.run_dir,
-                                  meta={"scenario": sc.name, "cell_key": pc.key, **self._fold_meta(pc),
-                                        "blocks": pc.fold["blocks"], "dataset_sha256": pc.dataset["sha256"]})
+            score_meta = {"scenario": sc.name, "cell_key": pc.key, **self._fold_meta(pc),
+                          "blocks": pc.fold["blocks"], "dataset_sha256": pc.dataset["sha256"]}
+            if sc.run.train:
+                result = self.trainer(ctx, calibrate=sc.run.calibrate, save_artifacts=sc.run.save_artifacts)
+                t_train = time.perf_counter() - t0
+                scored = score_result(result, role=pc.role, strategy=sc.strategy.name,
+                                      strategy_params=sc.strategy.params, backtest_params=sc.backtest,
+                                      run_id=ctx.run_id, out_dir=ctx.run_dir, meta=score_meta)
+            else:       # NT-033: a price-only rule on the same fold; no network, no GPU
+                result, t_train = None, 0.0
+                scored = score_strategy_only(ctx.config, role=pc.role, strategy=sc.strategy.name,
+                                             strategy_params=sc.strategy.params, backtest_params=sc.backtest,
+                                             out_dir=ctx.run_dir, meta=score_meta)
             if sc.run.indicator_report:
                 from neural_trade.serving.indicator_report import write_indicator_report
 

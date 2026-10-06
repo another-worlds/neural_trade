@@ -17,14 +17,17 @@ from neural_trade.strategy.signals import EWMA_HALFLIFE, EWMA_WARMUP, SignalFram
 from neural_trade.strategy.strategies import (AlwaysFlat, BuyAndHold, EnhancedMultiHorizonStrategy, ExposureStrategy,
                                               FittedOnCalibration, LiberalStrategy, QuantileSignalStrategy,
                                               RandomSignal, Strategies, Strategy, ThresholdSpikeStrategy)
+from neural_trade.strategy.ta_rules import BollingerBreakoutStrategy, MACrossStrategy, RSIThresholdStrategy
 from neural_trade.strategy.trades import Order, Trade
 from neural_trade.strategy.variance_strategies import (EdgeOverCostStrategy, GatedTAStrategy, NetEdgeKellyStrategy,
                                                        VolRegimeLongStrategy, VolTargetStrategy)
 
 __all__ = [
-    "AlwaysFlat", "BacktestConfig", "BacktestResult", "Bars", "BuyAndHold", "EWMA_HALFLIFE", "EWMA_WARMUP",
+    "AlwaysFlat", "BacktestConfig", "BacktestResult", "Bars", "BollingerBreakoutStrategy", "BuyAndHold",
+    "EWMA_HALFLIFE", "EWMA_WARMUP",
     "EdgeOverCostStrategy", "EnhancedMultiHorizonStrategy", "ExposureStrategy", "FittedOnCalibration",
-    "GatedTAStrategy", "LiberalStrategy", "NetEdgeKellyStrategy", "Order", "QuantileSignalStrategy", "RandomSignal",
+    "GatedTAStrategy", "LiberalStrategy", "MACrossStrategy", "NetEdgeKellyStrategy", "Order",
+    "QuantileSignalStrategy", "RSIThresholdStrategy", "RandomSignal",
     "SignalFrame", "Strategies", "Strategy", "ThresholdSpikeStrategy", "Trade", "VolRegimeLongStrategy",
     "VolTargetStrategy", "assert_no_lookahead", "backtest", "backtest_frame", "build_backtest_config",
     "build_strategy", "circular_shift_null", "ewma_sigma", "from_file", "load_params", "max_drawdown",

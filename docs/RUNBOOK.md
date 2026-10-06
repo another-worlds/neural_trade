@@ -218,7 +218,13 @@ into the frozen set.
   [values]}}`, `folds` (FOLD_INDEX values), `seeds`, `strategy: {name, params}` (Strategies registry,
   default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 0, D-044),
   `run: {calibrate, save_artifacts, indicator_report}`. `indicator_report` writes
-  `indicator_report.html` from `artifacts/` and requires `save_artifacts`. Unknown keys,
+  `indicator_report.html` from `artifacts/` and requires `save_artifacts`. `run: {train: false}`
+  (NT-033) trains no network: each cell scores a price-only strategy (`ta_ma_cross`, `ta_rsi`,
+  `ta_bollinger`, the baselines) on the same fold blocks, backtest and costs, no GPU; its sweep
+  search keys are `strategy.<param>` (ranges declared on the strategy). The manual-search baselines
+  of the yardstick are `configs/scenarios/nt033_*.yaml` (learned, frozen twin with
+  `FREEZE_INDICATOR_PERIODS`, three TA rules); the TA RSI is Wilder's, the network's RSI periods
+  are EMA spans (`strategy/ta_rules.py` docstring). Unknown keys,
   unknown or invalid Config values, unregistered components, folds the data does not have
   and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH, SCALER_PATH, ARTIFACTS_DIR,
   bar_minutes) are refused before anything trains. Run from the repository root: a relative
