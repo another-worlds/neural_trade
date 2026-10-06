@@ -23,7 +23,7 @@ import pytest
 import yaml
 
 from neural_trade.core.config import Config
-from neural_trade.experiments.runner import Runner
+from neural_trade.experiments.runner import Runner, cell_run_name
 from neural_trade.experiments.scenario import Scenario, ScenarioError, config_hash, config_hash_of_dir, config_identity
 from neural_trade.experiments.store import RunStore
 
@@ -359,7 +359,7 @@ def test_the_runner_never_writes_into_an_existing_directory_or_changes_a_finishe
     store = RunStore(tmp_path / "runs")
     runner = Runner(sc, store, trainer=FakeTrainer())
     [pc] = runner.plan()
-    taken = store.scenario_dir(sc.name) / f"20260102T030405Z-abc1234-{run_context.config_hash(pc.config)}-{pc.key}"
+    taken = store.scenario_dir(sc.name) / f"20260102T030405Z-abc1234-{run_context.config_hash(pc.config)}-{cell_run_name(sc.name, pc.key)}"
     taken.mkdir(parents=True)
     (taken / "evidence.txt").write_text("an earlier run's file", encoding="utf-8")
     report = runner.run()
