@@ -131,7 +131,7 @@ Every field of `neural_trade.core.config.Config`: 142 fields, 38 tunable, 8 depr
 | `LAMBDA_VAC` | `0.0` | scaled | >= 0 | yes | no | vacuum bandwidth threshold (0 = off) |
 | `LAMBDA_HD` | `0.1` | weight | >= 0 | yes | no | variance ordered like realised volatility |
 | `LAMBDA_IFE` | `0.1` | weight | >= 0 | yes | no | cross-horizon correlation hinge |
-| `RHO_MAX` | `0.95` | dimensionless | [0, 1) | yes | no | max allowed cross-horizon correlation |
+| `RHO_MAX` | `0.95` | dimensionless | [0, 1] | yes | no | max allowed cross-horizon correlation |
 | `VACUUM_E_MAX` | `1.0` | dimensionless | > 0 | yes | no | per-dimension energy ceiling of the vacuum layer |
 | `LAMBDA_VAC_OVERFLOW` | `0.1` | weight | >= 0 | yes | no | overflow tracks residual magnitude |
 

@@ -412,7 +412,7 @@ class Config:
     LAMBDA_HD: float = _f(0.1, "physics", "variance ordered like realised volatility", unit="weight", ge=0.0,
                           tunable=True)
     LAMBDA_IFE: float = _f(0.1, "physics", "cross-horizon correlation hinge", unit="weight", ge=0.0, tunable=True)
-    RHO_MAX: float = _f(0.95, "physics", "max allowed cross-horizon correlation", unit="dimensionless", ge=0.0, lt=1.0,
+    RHO_MAX: float = _f(0.95, "physics", "max allowed cross-horizon correlation", unit="dimensionless", ge=0.0, le=1.0,
                         tunable=True)
     VACUUM_E_MAX: float = _f(1.0, "physics", "per-dimension energy ceiling of the vacuum layer",
                              unit="dimensionless", gt=0.0, tunable=True)
@@ -848,6 +848,8 @@ class Config:
             bad(f"INPUT_SERIES must be a subsequence of {list(canonical)} without repeats, got {series}")
         if not (1 < self.MOMENTUM_CLIP_MIN < self.momentum_clip_max):
             bad("need 1 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX (a period of 1 or less saturates the logit)")
+        if not self.RHO_MAX < 1.0:  # a closed [0, 1] field range keeps the sweep metadata finite; 1 is refused here
+            bad(f"RHO_MAX must be < 1 (the IFE hinge never fires at 1), got {self.RHO_MAX}")
         if self.CALIB_LAMBDA_MIN > self.CALIB_LAMBDA_MAX:
             bad(f"CALIB_LAMBDA_MIN ({self.CALIB_LAMBDA_MIN}) must be <= CALIB_LAMBDA_MAX ({self.CALIB_LAMBDA_MAX})")
         self._validate_indicator_periods(bad)
