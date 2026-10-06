@@ -214,8 +214,9 @@ changes).
 | [NT-179](#nt-179) | P2 | feature | implementer | todo | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
 | [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
 | [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
-| [NT-182](#nt-182) | P1 | bug | implementer | todo | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
+| [NT-182](#nt-182) | P1 | bug | implementer | done | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
 | [NT-183](#nt-183) | P1 | bug | implementer | in-progress | Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan) |
+| [NT-184](#nt-184) | P3 | polish | implementer | todo | Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership |
 
 ## Items
 
@@ -2411,7 +2412,7 @@ changes).
 
 **Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-182 603a327 (implementer Sonnet), merged; QA (Opus medium) PASS on 603a327/ce708ed: the collision reproduced on the base (one of two index rows lost, also on rebuild_index) and both rows kept on the head; run id `<stamp>-<sha>-<hash8>-<cellkey>-<6hex of sha256(scenario)>`; the index raises RunIdCollision naming both cells for one run id from two different cells (an identical re-sync still replaces its row); the real store copy (107 engine run dirs, kept index 88 rows): rebuilt 107, the 88 kept rows identical, no directory renamed, same as the old code; all 17 committed scenarios (105 cells) spec/settings/per-cell config hashes byte-identical; every run-id consumer checked (check_run_evidence, comparison.py, notebook/runs.py, rescore, store); the longest Windows path 176 chars; resume recognises old cells through cell key and config hash, not the run id; 3 mutations caught. Follow-ups: NT-184 (P3).
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/core/run_context.py (run_id, ~line 57), src/neural_trade/experiments/store.py (INSERT OR REPLACE on run_id), src/neural_trade/experiments/runner.py, tests/
 - **depends on:** none (before NT-050)
@@ -2423,13 +2424,25 @@ changes).
 
 **Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan)**
 
-- **status:** in-progress (2026-10-06): implementer on nt-183
+- **status:** in-progress (2026-10-06): nt-183 47afa42/1fd55b9 (implementer Sonnet): a takeover sentinel (`<cell>.lock.takeover`, O_EXCL, one winner), re-read under the sentinel, os.replace over the stale claim, a stale-sentinel reap (dead or reused pid AND older than 30 s); the deterministic barrier reproduction failed on the old code (`assert 2 == 1`), 200 rounds x 2 racers and 100 rounds x 8 racers one winner each, a spawned-process variant, 50 loops of the 6 claim tests green. QA (Opus) running.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/experiments/claims.py, tests/test_sweep.py
 - **depends on:** NT-030 (done)
 - **why:** CI run 37504490746 on 8bbf8b7 (Linux): tests/test_sweep.py::test_a_claim_file_being_written_is_held_not_stolen_and_a_stale_takeover_is_atomic fails with `assert 2 == 1` (two winners of one stale claim); it passed locally and on the previous CI run by timing luck. qa-deep's earlier P3 on NT-030 ('two takers of one stale claim: both claim') was not closed by repair 2. The race: A and B both decide the same claim is stale; A renames it away and creates its fresh claim; B then renames A's FRESH claim away and creates its own.
 - **acceptance:** (1) A deterministic, barrier-driven reproduction of the interleaving fails on today's code. (2) The takeover protocol is correct on Windows and POSIX without timing assumptions (an exclusive takeover sentinel with its own stale rule, and a re-verification of the stale content before replacing it); the docstring states the proof sketch. (3) 8 racers x 100 rounds: exactly one winner each round; a live claim is never taken over; a dead-pid claim always is. (4) The test file loops 50 times without a failure. (5) Fast suite, ruff; CI green on the merge push.
 - **source:** CI run 37504490746 (2026-10-06)
+
+### NT-184
+
+**Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** docs/RUNBOOK.md (~233, ~692), src/neural_trade/experiments/runner.py (docstring ~14, the collision path ~300), experiments/store.py (docstring ~8), scripts/presentation/extract*.py, scripts/check_run_evidence.py (~47-49, ~198), experiments/claims.py (release), tests/
+- **depends on:** NT-182, NT-183
+- **why:** QA of NT-182 and NT-183 (2026-10-06): (1) RUNBOOK, runner.py and store.py still describe the run directory without the scenario suffix; (2) after a RunIdCollision runner.py:~300 leaves the new directory without result.json, so that scenario's plan() and every rebuild_index() raise until it is moved by hand, and the message does not say how to repair it; (3) scripts/presentation/extract.py:229, extract_math.py:42, extract_candidate.py:183 read the seed as `d.name.split('__')[2]` or `[-1]`: for a new-shape directory that gives `s0-xxxxxx`; (4) check_run_evidence.py keys a citation on the `<stamp>-<sha>-<hash8>` prefix only, so a citation of one cell also checks every other cell that shares the prefix (now more likely); (5) CellClaims.release() unlinks without checking that the file is still ours: if a taker replaced a live-but-misjudged claim, the old owner's release deletes the new owner's claim.
+- **acceptance:** (1) Docs updated. (2) The collision path removes (or marks) the directory it created and the error message names the repair; a test that plan() and rebuild_index() work after a collision. (3) The presentation scripts parse the seed with a regex. (4) A citation resolves by the full directory name when it carries a suffix (test). (5) release() verifies ownership (pid and start time) before unlinking (test). (6) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
 
 ## Done log
 
