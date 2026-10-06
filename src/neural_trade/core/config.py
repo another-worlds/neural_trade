@@ -468,6 +468,14 @@ class Config:
     ADAPTIVE_INDICATORS: bool = _f(True, "indicators", "shift each learned period per window through the meta_adjust "
                                    "network; off, every applied period in every window equals the family's learned "
                                    "global value (the frozen-twin switch, NT-033/NT-046)", unit="flag")
+    FREEZE_INDICATOR_PERIODS: bool = _f(False, "indicators", "the frozen-period twin (NT-033, VISION 'The yardstick' "
+                                        "(a)): every period logit stays at its configured (textbook) value, as a "
+                                        "non-trainable weight that gets no gradient, no optimizer update and no "
+                                        "clip, and the per-window meta_adjust shift is off (it implies "
+                                        "ADAPTIVE_INDICATORS = False), so every applied period in every window "
+                                        "equals the configured one; the rest of the network is unchanged "
+                                        "(same layers and parameter count). Off (default): today's behaviour",
+                                        unit="flag")
     INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits", unit="dimensionless", ge=0.0,
                              tunable=True)
     INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this", unit="dimensionless",
