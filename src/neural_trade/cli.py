@@ -257,7 +257,7 @@ def cmd_sweep(args) -> int:
         return 2
     print(json.dumps({"sweep": result.sweep_id, "mode": result.mode, "label": result.label, "state": result.state,  # noqa: T201
                       "stop_reason": result.stop_reason, "directory": result.directory,
-                      "winner": result.winner, "ranking": result.ranking[:10]}, indent=2, default=str))
+                      "budget": result.budget, "winner": result.winner, "ranking": result.ranking[:10]}, indent=2, default=str))
     return 0 if result.state in ("complete", "quick_complete", "dry_run") else 1
 
 

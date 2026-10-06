@@ -9,6 +9,7 @@ import json
 import math
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
@@ -22,15 +23,16 @@ from neural_trade.experiments.runner import Runner
 from neural_trade.experiments.scenario import Scenario
 from neural_trade.experiments.store import RunStore
 from neural_trade.experiments.sweep import (
-    GpuStatus, SearchSpace, Sweep, SweepError, SweepOptions, cell_seconds, dev_net_sharpe, exceeds_watch_level,
-    load_parallel_record, size_quick, held_out_columns)
+    GpuStatus, SearchSpace, Sweep, SweepError, SweepOptions, cell_seconds, code_source_dir, dev_net_sharpe,
+    exceeds_watch_level, gpu_status_from_dmon, held_out_columns, latest_sec_per_step, load_parallel_record,
+    nvidia_smi_gpu_check, parse_dmon, record_setup_warnings, run_health, size_quick)
 
 HORIZONS = ("h0", "h1", "h2")
 SEARCH = {"LR": {"low": 1e-4, "high": 1e-2, "log": True}, "LAMBDA_DIR": {"low": 0.1, "high": 2.0}}
 
 
 # ------------------------------------------------------------------ helpers
-def fake_result(cfg: Config):
+def fake_result(cfg: Config, noise: float = 3.0):
     from sklearn.preprocessing import StandardScaler
 
     from neural_trade.data.processor import split_arrays
@@ -42,7 +44,7 @@ def fake_result(cfg: Config):
 
     def heads(block):
         y = np.asarray(block["y"], float)
-        signal = y / scale + rng.normal(0.0, 3.0, y.shape)
+        signal = y / scale + rng.normal(0.0, noise, y.shape)
         return {"delta": {h: 0.1 * scale * signal[:, i] for i, h in enumerate(HORIZONS)},
                 "direction_prob": {h: 1.0 / (1.0 + np.exp(-0.5 * signal[:, i])) for i, h in enumerate(HORIZONS)},
                 "variance": {h: (1.0 + 0.1 * i) * (1.0 + 0.2 * rng.random(len(y))) for i, h in enumerate(HORIZONS)}}
@@ -75,7 +77,9 @@ def scenario_dict(csv, **changes):
     s = {"schema_version": 1, "name": "sw", "description": "sweep test",
          "overrides": {"CSV_PATH": str(csv), "MAX_SEQUENCE_COUNT": 1500, "EPOCHS": 2, "BATCH_SIZE": 32},
          "folds": [-2, -1], "seeds": [0], "strategy": {"name": "calibrated_quantile", "params": {}},
-         "backtest": {"random_seeds": 5}, "run": {"calibrate": False, "save_artifacts": False}, "search": SEARCH}
+         "backtest": {"random_seeds": 5}, "run": {"calibrate": False, "save_artifacts": False}, "search": SEARCH,
+         # the fake trainer's predictions are not built to beat buy-and-hold; the guard-rails under test set their own
+         "leaderboard": {"beat_buy_and_hold": False, "beat_random_null": False}}
     s.update(copy.deepcopy(changes))
     return s
 
@@ -307,12 +311,18 @@ def test_the_gpu_budget_is_printed_and_recorded_before_the_first_trial(tmp_path,
     sweep = make_sweep(tmp_path, bars_csv, trainer, n_trials=3, top_k=2, announce=said.append)
     res = sweep.run()
     budget = seen["doc"]["launches"][0]["budget"]
-    assert "GPU budget" in seen["said"][0] and budget["gpu_hours"] > 0 and budget["max_hours"] == 12.0
+    assert "GPU budget" in seen["said"][0] and "expected" in seen["said"][0] and "fit" in seen["said"][0]
+    assert budget["gpu_hours"] > 0 and budget["max_hours"] == 12.0 and budget["expected_gpu_hours"] <= budget["gpu_hours"]
     assert budget["gpu_hours"] == pytest.approx(budget["search_gpu_hours"] + budget["rerun_gpu_hours"])
     assert budget["trials_to_run"] == 3 and budget["rerun"]["top_k"] == 2 and budget["rerun"]["seeds"] == 3
-    # trials x dev folds x steps x sec_per_step (+ overhead) by hand
-    steps = sum(budget["steps_per_epoch_per_dev_fold"].values())
+    # trials x dev folds x steps x epochs x sec_per_step (+ overhead) by hand, at the space's lowest batch size
+    steps = sum(budget["steps_per_epoch_upper_per_fold"][str(f)] for f in budget["dev_folds"])
     assert budget["search_gpu_hours"] * 3600 == pytest.approx(3 * (steps * budget["epochs_upper_bound"] * 0.01 + 1.0))
+    # the re-run: the first seed's dev cells already exist, so only the later seeds on the dev fold and all seeds on test
+    e, ov = budget["epochs_upper_bound"], 1.0
+    cell = lambda f: budget["steps_per_epoch_upper_per_fold"][str(f)] * e * 0.01 + ov  # noqa: E731
+    want = 2 * (sum(cell(f) * 2 for f in budget["dev_folds"]) + sum(cell(f) * 3 for f in budget["test_folds"]))
+    assert budget["rerun_gpu_hours"] * 3600 == pytest.approx(want)
     assert res.budget["gpu_hours"] == budget["gpu_hours"]
 
 
@@ -320,10 +330,12 @@ def test_a_budget_over_max_hours_is_refused_before_anything_starts(tmp_path, bar
     pytest.importorskip("optuna")
     trainer = FakeTrainer()
     sw = make_sweep(tmp_path, bars_csv, trainer, n_trials=3, max_hours=1e-6)
-    with pytest.raises(SweepError, match="over --max-hours"):
+    with pytest.raises(SweepError, match="over --max-hours") as exc:
         sw.run()
     assert trainer.calls == [] and not sw.summary_path.exists()
     assert SweepOptions().max_hours == 12.0                                   # the default: one night
+    assert not (sw.directory.parent).exists()                                 # a refused launch leaves nothing under sweeps/
+    assert "trial(s) fit" in str(exc.value)
 
 
 # ------------------------------------------------------------------ (4) parallel batches
@@ -499,7 +511,8 @@ def test_the_top_trials_are_rerun_with_three_seeds_and_ranked_by_the_dev_seed_me
 
 def test_a_winner_must_trade(tmp_path, bars_csv, monkeypatch):
     pytest.importorskip("optuna")
-    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=2, top_k=2, min_trades=10 ** 9)
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=2, top_k=2,
+                    changes={"leaderboard": {"min_trades": 10 ** 9, "beat_buy_and_hold": False, "beat_random_null": False}})
     res = sw.run()
     assert res.state == "complete" and res.winner is None
 
@@ -543,6 +556,337 @@ def test_the_search_block_does_not_change_an_existing_scenarios_hash(tmp_path, b
     plain = Scenario.from_dict(d)
     assert "search" not in plain.to_dict()
     assert math.isfinite(len(Scenario.from_dict(scenario_dict(bars_csv)).to_dict()["search"]))
+
+
+# ------------------------------------------------------------------ repair round 1
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def test_the_dmon_parser_reads_the_real_captured_header_by_name_and_the_memory_rule_fires():
+    text = (FIXTURES / "nvidia_smi_dmon_um.txt").read_text(encoding="utf-8")
+    assert text.splitlines()[0].split()[1:] == ["gpu", "sm", "mem", "enc", "dec", "jpg", "ofa", "fb", "bar1", "ccpm"]
+    rows = parse_dmon(text)
+    assert len(rows) == 4 and all(r["fb"] > 9000 and r["enc"] == 0 and r["mem"] < 5 for r in rows)   # fb, not enc
+    status = gpu_status_from_dmon(text)
+    assert not status.free and status.detail["median_fb_mb"] > 2000 and status.detail["median_sm_pct"] <= 30
+    # the same sample with a quiet desktop (fb ~ 1000 MB, sm low) is free
+    quiet = text.replace("10001", " 1001").replace("10000", " 1000")
+    assert gpu_status_from_dmon(quiet).free
+    # through the public check, with the capture as nvidia-smi's output
+    import os
+
+    old = os.environ.pop("CUDA_VISIBLE_DEVICES", None)
+    try:
+        assert not nvidia_smi_gpu_check(run_dmon=lambda n: text).free
+        assert nvidia_smi_gpu_check(run_dmon=lambda n: quiet).free
+    finally:
+        if old is not None:
+            os.environ["CUDA_VISIBLE_DEVICES"] = old
+    assert not gpu_status_from_dmon("# gpu sm\n").free                      # no samples: not free
+
+
+def test_the_trial_processes_launch_with_the_callers_code_on_pythonpath(tmp_path, bars_csv, monkeypatch):
+    import os
+
+    import neural_trade
+    from neural_trade.experiments import sweep as sweep_mod
+
+    seen = []
+
+    class FakePopen:
+        def __init__(self, cmd, **kw):
+            seen.append((cmd, kw.get("env")))
+
+        def wait(self):
+            return 0
+
+    monkeypatch.setattr(sweep_mod.subprocess, "Popen", FakePopen)
+    monkeypatch.setenv("PYTHONPATH", "/somewhere/else")
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=2, parallel=2)
+    spec = tmp_path / "t.yaml"
+    spec.write_text("x: 1", encoding="utf-8")
+    assert sw._subprocess_launcher([spec], sw.store) == [0]
+    cmd, env = seen[0]
+    src = str(Path(neural_trade.__file__).resolve().parent.parent)
+    assert env["PYTHONPATH"].split(os.pathsep)[0] == src == str(code_source_dir())
+    assert env["PYTHONPATH"].endswith("/somewhere/else") and "--claim-cells" in cmd
+    # the code path and sha are in sweep.json
+    pytest.importorskip("optuna")
+    sw2 = make_sweep(tmp_path / "b", bars_csv, FakeTrainer(), n_trials=1, top_k=1)
+    sw2.run()
+    code = summary(sw2)["launches"][0]["code"]
+    assert code["source_dir"] == src and code["git_sha"]
+
+
+def _write_run_files(run_dir: Path, *, val_losses=(1.0,), nonfinite=0, weights_val_loss=1.0):
+    with open(run_dir / "metrics.jsonl", "w", encoding="utf-8") as fh:
+        for e, v in enumerate(val_losses):
+            fh.write(json.dumps({"epoch": e, "loss": 1.0, "val_loss": v, "nonfinite_grad_steps": float(nonfinite)}) + "\n")
+    (run_dir / "status.json").write_text(json.dumps({"weights_val_loss": weights_val_loss}), encoding="utf-8")
+
+
+def test_run_health_names_non_finite_losses_and_non_finite_gradient_steps(tmp_path):
+    ok = tmp_path / "ok"
+    ok.mkdir()
+    _write_run_files(ok)
+    assert run_health(ok) is None and run_health(tmp_path / "nothing_written") is None
+    for name, kw, text in [("nan_val", {"val_losses": (1.0, float("nan"))}, "non-finite val_loss in epoch 1"),
+                           ("nan_served", {"weights_val_loss": float("nan")}, "weights_val_loss"),
+                           ("grads", {"nonfinite": 2}, "nonfinite_grad_steps 2 > 0")]:
+        d = tmp_path / name
+        d.mkdir()
+        _write_run_files(d, **kw)
+        assert text in run_health(d)
+    assert run_health(tmp_path / "grads", max_nonfinite_grad_steps=5) is None        # the limit is a setting
+
+
+class UnstableTrainer(FakeTrainer):
+    """Writes the files the real trainer writes; the variants in ``bad`` get a NaN served loss."""
+
+    def __init__(self, bad=(), **kw):
+        super().__init__(**kw)
+        self.bad = set(bad)
+
+    def __call__(self, ctx, **kw):
+        res = super().__call__(ctx, **kw)
+        eng = json.loads((ctx.run_dir / "meta.json").read_text(encoding="utf-8"))["engine"]
+        nan = eng["variant"] in self.bad
+        _write_run_files(ctx.run_dir, val_losses=(1.0, float("nan") if nan else 0.9),
+                         weights_val_loss=float("nan") if nan else 0.9)
+        return res
+
+
+def test_a_trial_with_a_non_finite_loss_is_failed_with_the_reason_and_told_to_optuna_as_fail(tmp_path, bars_csv):
+    pytest.importorskip("optuna")
+    import optuna
+
+    sw = make_sweep(tmp_path, bars_csv, UnstableTrainer(bad={"t0001"}), n_trials=3, top_k=5)
+    res = sw.run()
+    by = {t["number"]: t for t in res.trials}
+    assert by[1]["state"] == "FAIL" and by[1]["value"] is None and "non-finite" in by[1]["reason"]
+    assert "unstable training" in by[1]["reason"] and by[0]["state"] == by[2]["state"] == "COMPLETE"
+    study = optuna.load_study(study_name=sw.sweep_id, storage=f"sqlite:///{(sw.directory / 'study.db').as_posix()}")
+    assert [t.state.name for t in study.trials] == ["COMPLETE", "FAIL", "COMPLETE"]
+    # P3: the re-run takes the successful trials only (fewer than top_k is fine)
+    doc = summary(sw)
+    assert sorted(r["number"] for r in doc["rerun"]) == [0, 2] and res.winner["number"] in (0, 2)
+
+
+def _run_with(store_root, csv, *, overrides=None, name="other", sec=0.5):
+    ov = {"CSV_PATH": str(csv), "MAX_SEQUENCE_COUNT": 1500, "EPOCHS": 2, "BATCH_SIZE": 32}
+    ov.update(overrides or {})
+    sc = Scenario.from_dict(scenario_dict(csv, name=name, search={}, folds=[-2], seeds=[0], overrides=ov))
+    Runner(sc, RunStore(store_root), trainer=FakeTrainer()).run()
+    store = RunStore(store_root)
+    for d in store.run_dirs(name):
+        doc = json.loads((d / "result.json").read_text(encoding="utf-8"))
+        doc["sec_per_step"] = sec
+        (d / "result.json").write_text(json.dumps(doc), encoding="utf-8")
+    store.sync(name)
+    return store
+
+
+def test_sec_per_step_only_comes_from_a_run_of_exactly_the_same_setup(tmp_path, bars_csv, synthetic_bars):
+    root = tmp_path / "runs"
+    same = _run_with(root, bars_csv, name="same", sec=0.5)
+    base_cfg = Scenario.from_dict(scenario_dict(bars_csv)).base().copy(FOLD_INDEX=-2)
+    sha = same.index.rows("same")[0]["dataset_sha256"]
+    got, refused = latest_sec_per_step(same, base_cfg, sha, "cpu")
+    assert got["sec_per_step"] == 0.5 and refused == []
+    for name, ov in {"batch": {"BATCH_SIZE": 64}, "lookback": {"LOOKBACK": 30}, "series": {"INPUT_SERIES": ["close"]},
+                     "maxseq": {"MAX_SEQUENCE_COUNT": 1400}}.items():
+        _run_with(root, bars_csv, overrides=ov, name=name, sec=9.99)
+    other_csv = tmp_path / "other.csv"
+    synthetic_bars.iloc[:-50].to_csv(other_csv, index=False)               # another dataset fingerprint
+    _run_with(root, other_csv, name="dataset", sec=9.99)
+    store = RunStore(root)
+    got, refused = latest_sec_per_step(store, base_cfg, sha, "cpu")
+    assert got["sec_per_step"] == 0.5 and len(refused) == 5                # every other setup was refused, with a reason
+    for word in ("BATCH_SIZE", "LOOKBACK", "INPUT_SERIES", "MAX_SEQUENCE_COUNT", "dataset"):
+        assert any(word in r for r in refused), word
+    # the device: a GPU run is not the CPU setup, and the CPU run is not the GPU setup
+    assert latest_sec_per_step(store, base_cfg, sha, "gpu")[0] is None
+    run_dir = store.root / store.index.rows("same")[0]["run_dir"]
+    (run_dir / "env.json").write_text(json.dumps({"gpus": ["/physical_device:GPU:0"]}), encoding="utf-8")
+    assert latest_sec_per_step(store, base_cfg, sha, "gpu")[0]["sec_per_step"] == 0.5
+    assert latest_sec_per_step(store, base_cfg, sha, "cpu")[0] is None
+    # a sweep whose setup has no run of its own refuses instead of falling back to another setup
+    sw = Sweep(Scenario.from_dict(scenario_dict(bars_csv)), store, SweepOptions(mode="optuna", dry_run=True,
+               parallel_record=None, device="gpu" if False else "cpu"), gpu_check=free_gpu, announce=lambda t: None)
+    with pytest.raises(SweepError, match="THIS setup") as exc:
+        sw.run()
+    assert "run(s) of other setups were not used" in str(exc.value)
+
+
+def test_the_budget_uses_each_trials_batch_and_does_not_count_the_first_seeds_dev_cells_twice(tmp_path, bars_csv):
+    pytest.importorskip("optuna")
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=7, top_k=5, dry_run=True,
+                    changes={"search": {"BATCH_SIZE": {"low": 16, "high": 128, "log": True}, "LR": SEARCH["LR"]}})
+    res = sw.run()
+    b = res.budget
+    up, ex = b["steps_per_epoch_upper_per_fold"], b["steps_per_epoch_expected_per_fold"]
+    assert all(ex[f] < up[f] for f in up)                                       # expected < the lowest-batch bound
+    assert b["expected_gpu_hours"] < b["gpu_hours"]
+    # the trials that fit: the largest n whose upper bound stays within max_hours, with the re-run of top_k
+    per = b["search_gpu_hours"] / 7
+    assert b["trials_that_fit"] == int((12 - b["rerun_gpu_hours"]) // per)
+    # no double counting: the re-run is (seeds-1) dev cells + seeds test cells per trial, not seeds on every fold
+    e = b["epochs_upper_bound"]
+
+    def cell(f):
+        return up[str(f)] * e * 0.01 + 1.0
+
+    per_trial = sum(cell(f) * 2 for f in b["dev_folds"]) + sum(cell(f) * 3 for f in b["test_folds"])
+    assert b["rerun_gpu_hours"] * 3600 == pytest.approx(5 * per_trial)
+    from neural_trade.experiments.sweep import DEFAULT_SEARCH
+
+    assert DEFAULT_SEARCH["BATCH_SIZE"]["low"] == 128                         # not 64: the bound is within 2x of the default
+
+
+def test_a_refused_launch_leaves_nothing_under_sweeps(tmp_path, bars_csv):
+    pytest.importorskip("optuna")
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=500, max_hours=1e-4)
+    with pytest.raises(SweepError):
+        sw.run()
+    assert not (tmp_path / "runs" / "sweeps").exists()
+
+
+def test_the_parallel_record_warns_when_its_measured_setup_differs(tmp_path, bars_csv, caplog):
+    cfg = Config()
+    rec = {"setup": "BTC/USDT 1-minute (x.csv), LOOKBACK 60, HORIZON_STEPS [10,15,20], BATCH_SIZE 256, FOLD_INDEX -3"}
+    w = record_setup_warnings(rec, cfg)
+    assert any("input layout" in x and "D-047" in x for x in w)                  # the pre-OHLCV record
+    assert any("BATCH_SIZE 256" in x for x in record_setup_warnings(rec, cfg.copy(BATCH_SIZE=128)))
+    assert any("HORIZON_STEPS" in x for x in record_setup_warnings(rec, cfg.copy(HORIZON_STEPS=[5, 10, 15])))
+    assert record_setup_warnings({"setup": rec["setup"] + " OHLCV"}, cfg) == []
+    assert record_setup_warnings({}, cfg) == ["the parallel record states no measured setup"]
+    pytest.importorskip("optuna")
+    p = _record(tmp_path)
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    doc.update(setup=rec["setup"], measured_utc="2026-09-29T04:00Z")
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=2, parallel=2, dry_run=True)
+    sw.options.parallel_record = str(p)
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        sw.run()
+    assert any("input layout" in x for x in sw.record["warnings"])    # also logged, and in sweep.json
+
+
+# ---- claims on Windows edge cases
+def test_a_claim_file_being_written_is_held_not_stolen_and_a_stale_takeover_is_atomic(tmp_path):
+    import os
+    import threading
+
+    d = tmp_path / "claims"
+    d.mkdir()
+    claims = CellClaims(d)
+    (d / "half.lock").write_text("", encoding="utf-8")                      # the owner has created it, not written yet
+    assert not claims.claim("half") and (d / "half.lock").exists()           # held: not deleted, not taken
+    old = (d / "half.lock").stat().st_mtime - 60
+    os.utime(d / "half.lock", (old, old))                                    # an empty file left long ago is stale
+    assert claims.claim("half")
+    # exactly one of many contenders takes a stale claim
+    (d / "c.lock").write_text(json.dumps({"pid": 2 ** 22 + 12345}), encoding="utf-8")        # no such process
+    won = []
+
+    def take():
+        if CellClaims(d).claim("c"):
+            won.append(1)
+
+    ts = [threading.Thread(target=take) for _ in range(8)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert len(won) == 1 and not list(d.glob("*.stale-*"))
+    # a PermissionError opening the claim (Windows: being deleted by its owner) counts as held, no crash
+    (d / "busy.lock").write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")
+    import builtins
+
+    real_open = builtins.open
+
+    def refuse(path, mode="r", *a, **k):
+        if str(path).endswith("busy.lock") and "x" in mode:
+            raise PermissionError(13, "denied")
+        return real_open(path, mode, *a, **k)
+
+    builtins.open = refuse
+    try:
+        assert not claims.claim("busy")
+    finally:
+        builtins.open = real_open
+
+
+def test_a_reused_pid_is_told_from_the_owner_by_the_process_start_time(tmp_path):
+    import os
+    import time
+
+    from neural_trade.experiments.claims import process_start_time
+
+    me = process_start_time(os.getpid())
+    assert me is not None and abs(me - time.time()) < 3600 * 24 * 365
+    d = tmp_path / "claims"
+    d.mkdir()
+    claims = CellClaims(d)
+    assert claims.claim("k") and claims.holder("k") == os.getpid()           # our claim records our start time
+    doc = json.loads((d / "k.lock").read_text(encoding="utf-8"))
+    assert doc["start"] == pytest.approx(me, abs=1.0)
+    doc["start"] = me - 5000                                                  # the pid is alive, but not the same process
+    (d / "k.lock").write_text(json.dumps(doc), encoding="utf-8")
+    assert claims.holder("k") is None and claims.claim("k")
+
+
+# ---- the winner and the re-run follow the dev seed mean, whatever the test column and one seed say
+class ShapedTrainer(FakeTrainer):
+    """Dev quality of a trial: its FIRST seed is uninformative (a trap for a single-seed ranking), the later seeds
+    (hence the seed mean) favour a high LAMBDA_DIR; the test fold favours a LOW LAMBDA_DIR (anti-correlated)."""
+
+    def __call__(self, ctx, *, calibrate, save_artifacts):
+        eng = json.loads((ctx.run_dir / "meta.json").read_text(encoding="utf-8"))["engine"]
+        self.calls.append(eng["cell_key"])
+        cfg = ctx.config
+        high, seed = float(cfg.LAMBDA_DIR) >= 1.0, int(cfg.SEED)       # LAMBDA_DIR in (0, 2]
+        if int(cfg.FOLD_INDEX) == -1:
+            noise = 20.0 if high else 0.5                              # the test fold prefers a LOW value
+        elif seed == 0:
+            noise = 3.0                                                # the search's own seed cannot tell them apart
+        else:
+            noise = 0.5 if high else 20.0                              # the later seeds (the mean) prefer HIGH
+        return fake_result(cfg, noise=noise)
+
+
+def _dev_mean_and_test(sw, variant):
+    rows = [r for r in sw.store.index.rows(sw.sweep_id) if r["variant"] == variant and r["status"] == "done"]
+    dev_by_fold = {}
+    for r in rows:
+        if r["role"] == "dev":
+            dev_by_fold.setdefault(r["fold"], []).append(r["sharpe_net"])
+    dev = float(np.mean([np.mean(v) for v in dev_by_fold.values()]))
+    test = float(np.mean([r["sharpe_net"] for r in rows if r["role"] == "test"]))
+    seed0 = float(np.mean([r["sharpe_net"] for r in rows if r["role"] == "dev" and r["seed"] == 0]))
+    return dev, test, seed0
+
+
+def test_the_winner_and_the_rerun_order_follow_the_dev_seed_mean_not_the_test_column_nor_one_seed(tmp_path, bars_csv):
+    pytest.importorskip("optuna")
+    sw = make_sweep(tmp_path, bars_csv, ShapedTrainer(), n_trials=6, top_k=3, rerun_seeds=3, sampler_seed=4)
+    res = sw.run()
+    table = summary(sw)["rerun"]
+    assert len(table) == 3 and all(r["n_seeds"] == 3 for r in table)
+    # the re-run takes the BEST trials of the search (by the dev single-seed value), not any others
+    values = {t["number"]: t["value"] for t in res.trials}
+    assert {r["number"] for r in table} == {n for n, _ in sorted(values.items(), key=lambda kv: -kv[1])[:3]}
+    assert [r["number"] for r in res.ranking[:3]] == sorted(values, key=lambda n: -values[n])[:3]
+    stats = {r["variant"]: _dev_mean_and_test(sw, r["variant"]) for r in table}
+    best_dev = max(stats, key=lambda v: stats[v][0])
+    best_test = max(stats, key=lambda v: stats[v][1])
+    best_seed0 = max(stats, key=lambda v: stats[v][2])
+    assert best_test != best_dev and best_seed0 != best_dev, (stats, [(r["variant"], r["params"]) for r in table])        # the data really are a trap for both mutants
+    assert res.winner["variant"] == best_dev and table[0]["variant"] == best_dev
+    assert [r["variant"] for r in table] == sorted(stats, key=lambda v: -stats[v][0])
+    for r in table:
+        assert r["dev_seed_mean_net_sharpe"] == pytest.approx(stats[r["variant"]][0])
+        assert r["test_sharpe_net"] == pytest.approx(stats[r["variant"]][1]) and "never used to rank" in r["test_note"]
 
 
 # ------------------------------------------------------------------ slow: real training, real processes
