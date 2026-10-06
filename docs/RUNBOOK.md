@@ -665,9 +665,17 @@ term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions
   `NT_FAILING_REGIONS=<path>|off` overrides), and sweep search spaces drop it (a range end is trimmed, any other
   region is rejected by sampling).
 - **Memory warning**: `Config.validate` logs a warning when BATCH_SIZE x LOOKBACK^2 exceeds 15M
-  (`core/guard.SCORE_ELEMENTS_WARN`): LOOKBACK 240 with batch 256 (14.7M) fit the 12 GB card, batch 512 (29.5M) and
-  2048 ran out of memory (`runs/scenarios/micro_lookback`). A warning, not a refusal: two measured points do not
-  bound the card; the experimenter's memory profile (NT-038 amendment 2026-09-30) may move the level.
+  (`core/guard.SCORE_ELEMENTS_WARN`). Evidence: `runs/scenarios/micro_lookback` (commit f5aee70, 2026-09-29),
+  measured on the close-only model (4 families, before NT-047): LOOKBACK 240 with batch 256 (14.7M) fit the 12 GB
+  card, batch 512 (29.5M) and 2048 ran out of memory. The level is unvalidated for the OHLCV default (14 families),
+  probably too high there. A warning, not a refusal; the experimenter's memory profile (NT-038 amendment
+  2026-09-30) may move it.
+- **Where the regions file is found**: `NT_FAILING_REGIONS=<path>|off`, else `configs/stability_failing_regions.json`
+  next to the source tree, else the one under the current directory.
+- **Thresholds, repair round 1**: the file was rewritten once before any real run, after QA applied the first
+  draft to 54 stored runs (loss divergence, variance-head NLL and CRPS checks added; coverage only where n_eff >= 30;
+  periods at the bound and term gradient shares report-only; `nonfinite_step_rate` not evaluated without `n_steps`).
+  `neural-trade stability --dry-run` plans every case of a profile through the engine without training.
 
 ### Frozen sweep scripts
 

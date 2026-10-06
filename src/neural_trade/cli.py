@@ -349,9 +349,14 @@ def cmd_screen(args) -> int:
 
 
 def cmd_stability(args) -> int:
-    from neural_trade.experiments.stability import run_harness
+    from neural_trade.experiments.stability import plan_cases, run_harness
 
     try:
+        if args.dry_run:
+            planned = plan_cases(profile=args.profile, csv=args.csv,
+                                 case_ids=[c for c in args.cases.split(",") if c] if args.cases else None)
+            print(json.dumps({"profile": args.profile, "planned_cells": [p.key for p in planned]}, indent=2))  # noqa: T201
+            return 0
         res = run_harness(profile=args.profile, csv=args.csv, store=args.store,
                           case_ids=[c for c in args.cases.split(",") if c] if args.cases else None,
                           seeds=[int(x) for x in args.seeds.split(",") if x] if args.seeds else None,
@@ -575,6 +580,8 @@ def build_parser() -> argparse.ArgumentParser:
     sb.add_argument("--store", default="runs", help="run store root; the report goes to <store>/stability/<id>/")
     sb.add_argument("--cases", default=None, help="comma-separated case ids (default: every case)")
     sb.add_argument("--seeds", default=None, help="comma-separated seeds (default: 3, as the thresholds file says)")
+    sb.add_argument("--dry-run", action="store_true", help="plan every case through the engine (no training, "
+                                                           "nothing written) and print the cells")
     sb.add_argument("--thresholds", default=None, help="a thresholds file (default configs/stability_thresholds.yaml)")
     sb.set_defaults(func=cmd_stability)
 

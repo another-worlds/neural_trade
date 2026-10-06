@@ -38,13 +38,16 @@ def bars_csv(tmp_path_factory, synthetic_bars):
 
 # ------------------------------------------------------------------ helpers
 def write_run_telemetry(run_dir, *, epochs=1, n_steps=20.0, nonfinite=0.0, clip_main=2.0, clip_ind=2.0, masked=None,
-                        probe=None, var_floor=0.0, periods=None):
+                        probe=None, var_floor=0.0, periods=None, losses=None, horizons=("h0",)):
     """metrics.jsonl and status.json as the trainer writes them (the keys the harness reads)."""
     rows = []
-    for e in range(epochs):
-        r = {"epoch": e, "loss": 1.0, "val_loss": 0.9, "n_steps": n_steps, "nonfinite_grad_steps": nonfinite,
+    for e in range(len(losses) if losses else epochs):
+        r = {"epoch": e, "loss": losses[e] if losses else 1.0, "val_loss": 0.9, "n_steps": n_steps,
+             "nonfinite_grad_steps": nonfinite,
              "grad_clip_steps_main": clip_main, "grad_clip_steps_indicator": clip_ind, "grad_norm_max_main": 5.0,
-             "grad_norm_max_indicator": 5.0, "dir_n_h0": 100.0, "var_at_floor_h0": var_floor}
+             "grad_norm_max_indicator": 5.0}
+        for h in horizons:
+            r.update({f"dir_n_{h}": 100.0, f"var_at_floor_{h}": var_floor})
         r.update({f"masked_{k}": v for k, v in (masked or {}).items()})
         r.update({f"probe_grad_share_{k}": v for k, v in (probe or {}).items()})
         r.update(periods or {})
@@ -162,11 +165,13 @@ def test_transform_bars_scales_prices_and_volatility_and_builds_flat_blocks_and_
         v = st.transform_bars(df, {"kind": "vol", "k": k})
         assert v["close"].iloc[0] == pytest.approx(c0[0])
         assert np.std(np.diff(np.log(v["close"]))) == pytest.approx(k * np.std(r0), rel=1e-6)
-    f = st.transform_bars(df, {"kind": "constant", "bars": 400})
-    blk = f.iloc[len(f) // 2:len(f) // 2 + 400]
+    f = st.transform_bars(df, {"kind": "constant", "bars": 100, "start": 700})
+    blk = f.iloc[710:810]
     assert blk[["open", "high", "low", "close"]].nunique().max() == 1
-    j = st.transform_bars(df, {"kind": "jumps"})
+    assert (f.iloc[:710]["close"] == df.iloc[:710]["close"]).all()                 # nothing before the used bars
+    j = st.transform_bars(df, {"kind": "jumps", "start": 700})
     assert np.abs(np.diff(np.log(j["close"]))).max() > 1.0 and len(j) == len(df)
+    assert np.allclose(j["close"].iloc[:700], df["close"].iloc[:700])
 
 
 def test_the_cases_run_as_engine_scenarios_with_runs_and_verdicts_in_the_store_and_its_index(tmp_path, bars_csv):
@@ -239,12 +244,16 @@ def _verdict(tmp_path, case_id="control", **kw):
     ({"nonfinite": 1.0}, "nonfinite_step_rate"),
     ({"clip_main": 20.0}, "clipped_share_main"),
     ({"clip_ind": 20.0}, "clipped_share_indicator"),
-    ({"probe": {"crps_trunk": 0.97, "nll_trunk": 0.03}}, "term_gradient_share"),
-    ({"probe": {"crps_trunk": float("nan")}}, "term_gradient_share"),
     ({"var_floor": 100.0}, "var_at_floor_share"),
-    ({"periods": {"period/ma_0": 2.0}}, "periods_at_bound"),
+    ({"var_floor": 100.0, "horizons": ("h0", "h3")}, "var_at_floor_share"),
     ({"masked": {"nll_loss": 1.0}}, "masked_term_steps"),
-    ({"scores": {"h1/variance/coverage90": 0.2}}, "coverage90"),
+    ({"scores": {"h1/variance/coverage90": 0.2, "h1/n_eff": 100}}, "coverage90"),
+    ({"losses": [1.0, 3.0]}, "loss_over_first"),
+    ({"losses": [5000.0, 4000.0]}, "max_abs_loss"),
+    ({"scores": {"h1/variance/nll": 25.0, "baseline/const_var/h1/variance/nll": 25.0}}, "variance_nll"),
+    ({"scores": {"h1/variance/nll": 9.0, "baseline/const_var/h1/variance/nll": 6.0}}, "variance_nll_over_const"),
+    ({"scores": {"h1/variance/crps": 16.0, "baseline/const_var/h1/variance/crps": 10.0}}, "variance_crps_over_const"),
+    ({"scores": {"h1/variance/nll": float("inf")}}, "variance_nll"),
 ])
 def test_each_pre_registered_threshold_fails_its_check(tmp_path, kw, check):
     v = _verdict(tmp_path, **kw)
@@ -252,9 +261,217 @@ def test_each_pre_registered_threshold_fails_its_check(tmp_path, kw, check):
     assert _verdict(tmp_path).passed                                       # the clean run passes every check
 
 
-def test_the_term_the_probe_blames_is_named_for_a_gradient_share_failure(tmp_path):
-    v = _verdict(tmp_path, probe={"crps_trunk": 0.97, "nll_trunk": 0.03})
+def test_gradient_shares_and_periods_at_the_bound_are_reported_never_failing_and_the_probe_still_blames(tmp_path):
+    """Report-only (thresholds file): NT-098 has not measured shares; D-037: a period at the data bound is reported."""
+    v = _verdict(tmp_path, probe={"crps_trunk": 0.97, "nll_trunk": 0.03}, periods={"period/ma_0": 2.0})
+    by = {c.name: c for c in v.checks}
+    assert v.passed and not v.failed_checks
+    assert by["term_gradient_share"].report_only and not by["term_gradient_share"].passed
+    assert by["periods_at_bound"].report_only and not by["periods_at_bound"].passed
     assert v.blamed == ["crps"]
+    assert _verdict(tmp_path, probe={"crps_trunk": float("nan")}).passed
+
+
+def test_a_run_without_n_steps_is_not_evaluated_for_the_step_rate_and_a_short_run_for_divergence(tmp_path):
+    v = _verdict(tmp_path, n_steps=0.0, nonfinite=0.0)
+    by = {c.name: c for c in v.checks}
+    assert v.passed and not by["nonfinite_step_rate"].evaluated and not by["loss_over_first"].evaluated
+
+
+def test_coverage_is_judged_only_on_horizons_with_enough_effective_samples(tmp_path):
+    low = {"h2/variance/coverage90": 0.037, "h2/n_eff": 2}
+    v = _verdict(tmp_path, scores=low)
+    cov = {c.name: c for c in v.checks}["coverage90"]
+    assert v.passed and not cov.evaluated and "h2" in cov.detail                  # n_eff 2: sampling noise, not a failure
+    ok = {"h2/variance/coverage90": 0.037, "h2/n_eff": 200, "h1/variance/coverage90": 0.9, "h1/n_eff": 5}
+    v = _verdict(tmp_path, scores=ok)
+    assert not v.passed and "coverage90" in [c.name for c in v.failed_checks]
+
+
+HEALTHY = REPO / "tests" / "fixtures" / "nt038_healthy"
+
+
+def _copy_fixture(name, tmp_path):
+    d = tmp_path / name
+    shutil.copytree(HEALTHY / name, d)
+    return d
+
+
+def test_the_final_thresholds_pass_every_stored_healthy_run_including_ones_with_a_period_at_the_bound(tmp_path):
+    """Seven real finished runs (capacity_v1 x4, reference_default, micro_horizons, micro_ohlcv_duel; light files copied
+    from their run directories): every one passes the pre-registered file. Two have periods at the data bound, three
+    predate n_steps."""
+    names = sorted(p.name for p in HEALTHY.iterdir())
+    assert len(names) == 7
+    case = {c.id: c for c in st.default_cases()}["control"]
+    T = st.load_thresholds()
+    bound = 0
+    for n in names:
+        v = st.evaluate_run(_copy_fixture(n, tmp_path), case, T)
+        assert v.passed, (n, [c.to_dict() for c in v.failed_checks])
+        by = {c.name: c for c in v.checks}
+        assert by["variance_nll"].evaluated and by["coverage90"].evaluated
+        bound += int(by["periods_at_bound"].value > 0)
+    assert bound >= 2
+
+
+def _broken(tmp_path, name, scale_loss=1.0, nll=None, crps=None, n_eff=None, nll_const=None):
+    d = _copy_fixture("capacity_control_f95", tmp_path / name)
+    res = json.loads((d / "result.json").read_text(encoding="utf-8"))
+    rows = [json.loads(ln) for ln in (d / "metrics.jsonl").read_text(encoding="utf-8").splitlines()][:1]
+    for r in rows:
+        r["loss"] *= scale_loss
+        r["val_loss"] *= scale_loss
+    (d / "metrics.jsonl").write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    for h in ("h0", "h1", "h2"):
+        if nll is not None:
+            res["scores"][f"{h}/variance/nll"] = nll
+            res["scores"][f"baseline/const_var/{h}/variance/nll"] = nll if nll_const is None else nll_const
+        if crps is not None:
+            res["scores"][f"{h}/variance/crps"] = crps
+            res["scores"][f"baseline/const_var/{h}/variance/crps"] = crps
+        if n_eff is not None:
+            res["scores"][f"{h}/n_eff"] = n_eff
+    (d / "result.json").write_text(json.dumps(res), encoding="utf-8")
+    (d / "status.json").write_text(json.dumps({"val_loss": rows[0]["val_loss"], "weights_val_loss": rows[0]["val_loss"]}))
+    return st.evaluate_run(d, {c.id: c for c in st.default_cases()}["control"], st.load_thresholds())
+
+
+def test_qas_two_synthetic_broken_runs_fail_while_the_losses_stay_finite(tmp_path):
+    """(1) losses x1e30 (finite) with variance NLL and CRPS at 1e12; (2) a variance head pinned at the cap (NLL 1e3,
+    the constant baseline equally bad, nothing at the floor)."""
+    b1 = _broken(tmp_path, "b1", scale_loss=1e30, nll=1e12, crps=1e12, n_eff=10)
+    assert not b1.passed
+    assert {"max_abs_loss", "variance_nll"} <= {c.name for c in b1.failed_checks}
+    assert {c.name: c for c in b1.checks}["loss_finite"].passed                       # still finite
+    b2 = _broken(tmp_path, "b2", nll=1000.0)
+    assert not b2.passed and [c.name for c in b2.failed_checks] == ["variance_nll"]
+    assert {c.name: c for c in b2.checks}["var_at_floor_share"].value == 0.0
+
+
+# ------------------------------------------------------------------ repair round 1: the fuzz cases, the profiles
+def _variant_config(profile, case_id, csv):
+    spec = st.build_scenario([c for c in st.default_cases() if c.id == case_id], name="stab-x", profile=profile,
+                             seeds=[0], case_csv={case_id: str(csv)})
+    return Config(**{**spec["overrides"], **spec["variants"][case_id]}, FOLD_INDEX=-2)
+
+
+@pytest.mark.parametrize("profile", ["tiny", "reference"])
+def test_the_fuzz_transforms_are_inside_the_bars_the_run_sees_and_change_its_training_windows(tmp_path, profile,
+                                                                                            bars_csv):
+    from neural_trade.data.processor import split_arrays
+
+    if profile == "reference":
+        csv = REPO / "binance_btcusdt_1min_ccxt.csv"
+        if not csv.exists():
+            pytest.skip("the bundled CSV is not present")
+    else:
+        csv = bars_csv
+    cases = [c for c in st.default_cases() if c.id in ("control", "fuzz_constant", "fuzz_jumps")]
+    data = st.write_case_data(cases, csv, tmp_path, profile)
+    base = split_arrays(_variant_config(profile, "control", csv))["train"]
+    flat = split_arrays(_variant_config(profile, "fuzz_constant", data["fuzz_constant"]))["train"]
+    jump = split_arrays(_variant_config(profile, "fuzz_jumps", data["fuzz_jumps"]))["train"]
+    rng = lambda X: np.ptp(X, axis=1)                                                    # noqa: E731
+    assert (rng(flat["X"]) == 0).sum() >= 10 and (rng(base["X"]) == 0).sum() == 0     # flat training windows exist
+    assert np.abs(np.diff(np.log(jump["X"]), axis=1)).max() > 1.0                       # a spike or jump in a window
+    assert np.abs(np.diff(np.log(base["X"]), axis=1)).max() < 0.2
+    assert not np.allclose(flat["y"], base["y"]) and not np.allclose(jump["y"], base["y"])   # the targets feel it
+
+
+def test_every_runnable_case_plans_under_both_profiles_without_training(tmp_path, bars_csv):
+    cases = [c for c in st.default_cases() if c.runnable]
+    planned = st.plan_cases(profile="tiny", csv=bars_csv, seeds=[0])
+    assert {p.cell.configuration.name for p in planned} == {c.id for c in cases}
+    csv = REPO / "binance_btcusdt_1min_ccxt.csv"
+    if not csv.exists():
+        pytest.skip("the bundled CSV is not present")
+    planned = st.plan_cases(profile="reference", csv=csv, seeds=[0])
+    assert {p.cell.configuration.name for p in planned} == {c.id for c in cases}
+    assert all(p.role == "dev" for p in planned)
+
+
+def test_the_harness_scenario_runs_the_shipped_path_with_calibration():
+    spec = st.build_scenario([c for c in st.default_cases() if c.runnable], name="stab-x", profile="tiny", seeds=[0],
+                             case_csv={})
+    assert spec["run"]["calibrate"] is True
+
+
+def test_a_configuration_inside_a_known_failing_region_can_be_retested_and_judged(tmp_path, bars_csv, regions_file):
+    regions_file(Region("known", {"HORIZON_STEPS": {"values": [[5, 60, 240]]}}, "horizons_5_60_240", RPT, "r"))
+    res = fake_harness(tmp_path, bars_csv, cases=["horizons_5_60_240"], seeds=[0])
+    assert res.passed and [v.passed for v in res.verdicts] == [True]
+    with pytest.raises(InvalidConfigurationError, match="known"):
+        Config(HORIZON_STEPS=[5, 60, 240], EXTENDED_TREND_PERIODS=[5, 60, 240])           # normal use stays refused
+
+
+def test_slow_periods_at_the_bound_write_no_failing_region(tmp_path, bars_csv):
+    class Bound(HarnessFake):
+        def __call__(self, ctx, *, calibrate, save_artifacts):
+            out = super().__call__(ctx, calibrate=calibrate, save_artifacts=save_artifacts)
+            write_run_telemetry(ctx.run_dir, periods={"period/ma_0": 2.0})
+            return out
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs",
+                         case_ids=["slow_periods_proxy_lr5", "slow_periods_proxy_lr1"], seeds=[0], trainer=Bound())
+    assert res.passed and res.regions == []
+
+
+def test_an_int_range_with_a_step_keeps_its_lattice_when_a_region_trims_it(regions_file):
+    regions_file(Region("small", {"BATCH_SIZE": {"max": 128}}, "c", RPT, "r"),
+                 Region("tiny-dim", {"T_PERP_DIM": {"max": 4}}, "c", RPT, "r"))
+    space = _space(BATCH_SIZE={"low": 64, "high": 512, "step": 64}, T_PERP_DIM={"low": 4, "high": 20, "step": 4})
+    bs, td = space.params
+    assert (bs.low, bs.high) == (192.0, 512.0) and (td.low, td.high) == (8.0, 20.0)
+    rng = np.random.default_rng(0)
+    pts = [space.sample(rng) for _ in range(400)]
+    assert {p["BATCH_SIZE"] for p in pts} == {192, 256, 320, 384, 448, 512}            # the lattice 64k survives
+    assert {p["T_PERP_DIM"] for p in pts} == {8, 12, 16, 20}
+    regions_file(Region("big", {"BATCH_SIZE": {"min": 400}}, "c", RPT, "r"))
+    assert _space(BATCH_SIZE={"low": 64, "high": 512, "step": 64}).params[0].high == 384.0
+
+
+def test_non_finite_inputs_are_mentioned_when_a_head_or_most_terms_are_non_finite_at_once():
+    msg, terms = describe({"head_price_h0": 3.0, "point_loss": 3.0, "total_loss": 3.0}, 3.0, 1)
+    assert "inputs may be non-finite" in msg and "head_price_h0" in terms
+    many = {t: 1.0 for t in ("point_loss", "dir_loss", "nll_loss", "crps_loss", "vol_loss", "total_loss")}
+    assert "inputs may be non-finite" in describe(many, 1.0, 1)[0]
+    assert "inputs may be non-finite" not in describe({"crps_loss": 1.0, "total_loss": 1.0}, 1.0, 1)[0]
+
+
+def test_the_regions_file_is_found_from_the_working_directory_when_the_source_tree_has_none(tmp_path, monkeypatch):
+    import neural_trade.core.guard as guard
+
+    monkeypatch.delenv(REGIONS_ENV, raising=False)
+    monkeypatch.setattr(guard, "DEFAULT_REGIONS_FILE", tmp_path / "nowhere" / "stability_failing_regions.json")
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "configs").mkdir()
+    write_regions(tmp_path / "configs" / "stability_failing_regions.json", [Region("cwd", {"LR": {"min": 0.0}})])
+    assert [r.id for r in guard.load_regions()] == ["cwd"]
+
+
+def test_the_memory_warning_says_where_its_evidence_comes_from_and_that_it_is_unvalidated_for_ohlcv():
+    msg = memory_warning(Config(LOOKBACK=240, BATCH_SIZE=512))
+    assert "close-only" in msg and "unvalidated for the OHLCV default" in msg
+    assert "close-only" in (REPO / "src" / "neural_trade" / "core" / "guard.py").read_text(encoding="utf-8")
+    assert "close-only" in (REPO / "docs" / "RUNBOOK.md").read_text(encoding="utf-8")
+
+
+@pytest.mark.stability
+@pytest.mark.slow
+def test_the_fuzz_cases_change_the_epoch_metrics_against_the_control_in_a_real_tiny_run(tmp_path, bars_csv):
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs",
+                         case_ids=["control", "fuzz_constant", "fuzz_jumps"], seeds=[0])
+    # the control passes; a fuzz case may legitimately FAIL (a flat block breaks the tiny model: a valid outcome),
+    # what it must do is act on the run, so its epoch metrics differ from the control's
+    assert res.case_passed["control"], res.report.read_text(encoding="utf-8")
+    store = RunStore(tmp_path / "runs")
+    loss = {}
+    for r in store.index.rows(res.scenario):
+        m = json.loads((store.root / r["run_dir"] / "metrics.jsonl").read_text(encoding="utf-8").splitlines()[0])
+        loss[r["configuration"]] = (m["loss"], m["val_loss"])
+    assert loss["fuzz_constant"] != loss["control"] and loss["fuzz_jumps"] != loss["control"]
+    assert abs(loss["fuzz_constant"][0] - loss["control"][0]) > 1e-6 and abs(loss["fuzz_jumps"][0] - loss["control"][0]) > 1e-6
+
 
 
 def test_a_nan_loss_fails_loss_finite(tmp_path):

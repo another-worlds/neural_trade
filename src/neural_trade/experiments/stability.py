@@ -83,6 +83,7 @@ class Thresholds:
     checks: Mapping[str, Any]
     fault_detection: Mapping[str, Any]
     seeds: int
+    report_only: Sequence[str] = ()
 
     def check(self, key: str) -> Any:
         return self.checks[key]
@@ -101,7 +102,7 @@ def load_thresholds(path=None) -> Thresholds:
     if doc.get("schema_version") != 1:
         raise ValueError(f"{p}: schema_version must be 1")
     return Thresholds(p, file_sha256(p), str(doc["name"]), dict(doc["checks"]), dict(doc["fault_detection"]),
-                      int(doc.get("seeds", 3)))
+                      int(doc.get("seeds", 3)), tuple(doc.get("report_only") or ()))
 
 
 # ------------------------------------------------------------------ cases
@@ -117,8 +118,8 @@ class Case:
     runnable: bool = True            # False: defined, not run here (reason in `note`)
     note: str = ""
     region: bool = False             # a configuration case: a failure writes a failing region
-    tiny_layout: Mapping[str, Any] = field(default_factory=dict)    # data-layout overrides the tiny profile needs
-                                                                    # (never part of a failing region)
+    layout: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)   # profile -> data-layout overrides the
+                                                                            # case needs (never part of a region)
 
     @property
     def expects_term(self) -> Optional[str]:
@@ -149,7 +150,8 @@ def default_cases() -> List[Case]:
              "wide-span horizons 5/60/240 bars (a pooled scaler gives scaled variances 0.054/0.586/2.359 against "
              "v_ref 1 and VAR_FLOOR 1e-4, NT-141 review 2026-10-06)",
              overrides={"HORIZON_STEPS": [5, 60, 240], "EXTENDED_TREND_PERIODS": [5, 60, 240]}, region=True,
-             tiny_layout={"MAX_SEQUENCE_COUNT": 2700, "N_FOLDS": 4}),     # the purge gap is 480 bars here
+             layout={"tiny": {"MAX_SEQUENCE_COUNT": 2700, "N_FOLDS": 4},      # the purge gap is 480 bars here
+                     "reference": {"MAX_SEQUENCE_COUNT": 9000, "N_FOLDS": 3}}),
     ]
     for lr in (5.0, 1.0):
         cs.append(Case(f"slow_periods_proxy_lr{lr:g}", "configuration",
@@ -185,36 +187,54 @@ def _columns(df) -> Dict[str, str]:
     return cols
 
 
+def used_bar_start(n_bars: int, profile: str, case: Optional["Case"] = None) -> int:
+    """The first bar of the file that the run's windows use. The trainer builds windows only over the newest
+    MAX_SEQUENCE_COUNT sequences (NT-177), so the first used bar is ``n - lookback - max horizon + 1 - MAX``
+    (Config defaults for the lookback and the horizons: no data case changes them)."""
+    from neural_trade.core.config import Config
+
+    cfg = Config()
+    mx = {**PROFILES[profile], **((case.layout.get(profile, {})) if case else {})}.get("MAX_SEQUENCE_COUNT",
+                                                                                   cfg.MAX_SEQUENCE_COUNT)
+    return max(0, int(n_bars) - int(cfg.LOOKBACK) - int(max(cfg.HORIZON_STEPS)) + 1 - int(mx))
+
+
 def transform_bars(df, spec: Mapping[str, Any]):
     """A copy of the OHLCV frame ``df`` with the transform ``spec`` applied to the price columns (the volume and
-    the timestamps stay); ``kind``: scale (``k``), vol (``k``), constant (``bars``), jumps."""
+    the timestamps stay); ``kind``: scale (``k``), vol (``k``), constant (``bars``), jumps. ``start`` (default 0)
+    is the first bar the run's windows use (:func:`used_bar_start`): constant blocks, spikes and level jumps are
+    placed at offsets from it, inside the first ~150 bars, which every profile's TRAINING block covers, so they
+    are seen by the training windows and the loss (a transform elsewhere in a 43,500-bar file is invisible to a
+    run that trains on the newest windows)."""
     out = df.copy()
     cols = _columns(out)
     kind = spec["kind"]
     close = out[cols["close"]].to_numpy(dtype=np.float64)
     n = len(out)
+    t0 = int(spec.get("start", 0))
+    flat = None
     if kind == "scale":
         ratio = np.full(n, float(spec["k"]))
     elif kind == "vol":
         new = close[0] * np.exp(float(spec["k"]) * (np.log(close) - np.log(close[0])))
         ratio = new / close
     elif kind == "constant":
-        start, bars = n // 2, min(int(spec["bars"]), n // 2)
+        a, bars = t0 + 10, min(int(spec.get("bars", 100)), n - t0 - 10)
         ratio = np.ones(n)
-        ratio[start:start + bars] = close[start] / close[start:start + bars]
+        flat = (a, a + bars)
     elif kind == "jumps":
         ratio = np.ones(n)
-        ratio[n // 3:] *= 2.0
-        for i, f in zip(np.linspace(n // 6, n - n // 6, 5).astype(int), (4.0, 0.25, 4.0, 0.25, 4.0)):
-            ratio[i] *= f
+        ratio[t0 + 60:] *= 2.0
+        for off, f in zip((15, 45, 75, 105, 125), (4.0, 0.25, 4.0, 0.25, 4.0)):
+            if t0 + off < n:
+                ratio[t0 + off] *= f
     else:
         raise ValueError(f"unknown data transform {kind!r}")
     for col in cols.values():
         out[col] = out[col].to_numpy(dtype=np.float64) * ratio
-    if kind == "constant":                      # a constant block: open = high = low = close
-        start, bars = n // 2, min(int(spec["bars"]), n // 2)
+    if flat is not None:                        # a constant block: open = high = low = close
         for col in cols.values():
-            out.loc[out.index[start:start + bars], col] = float(close[start])
+            out.loc[out.index[flat[0]:flat[1]], col] = float(close[flat[0]])
     return out
 
 
@@ -296,8 +316,7 @@ def build_scenario(cases: Sequence[Case], *, name: str, profile: str, seeds: Seq
         if not c.runnable:
             continue
         v = dict(c.overrides)
-        if profile == "tiny":
-            v.update(c.tiny_layout)
+        v.update(c.layout.get(profile, {}))
         if c.id in case_csv:
             v["CSV_PATH"] = case_csv[c.id]
         variants[c.id] = v
@@ -306,10 +325,10 @@ def build_scenario(cases: Sequence[Case], *, name: str, profile: str, seeds: Seq
                            f"{len(variants)} cases x {len(seeds)} seeds",
             "overrides": {**COMMON_OVERRIDES, **PROFILES[profile]}, "variants": variants, "folds": list(folds),
             "seeds": [int(s) for s in seeds], "strategy": {"name": "calibrated_quantile", "params": {}},
-            "backtest": {"random_seeds": 5}, "run": {"calibrate": False, "save_artifacts": False}}
+            "backtest": {"random_seeds": 5}, "run": {"calibrate": True, "save_artifacts": False}}
 
 
-def write_case_data(cases: Sequence[Case], csv, out_dir) -> Dict[str, str]:
+def write_case_data(cases: Sequence[Case], csv, out_dir, profile: str = "tiny") -> Dict[str, str]:
     """``<out_dir>/data/<case>.csv`` for every runnable case with a data transform; {case id: path}."""
     import pandas as pd
 
@@ -322,7 +341,8 @@ def write_case_data(cases: Sequence[Case], csv, out_dir) -> Dict[str, str]:
     out = {}
     for c in todo:
         path = d / f"{c.id}.csv"
-        transform_bars(base, c.data).to_csv(path, index=False)
+        spec = {**c.data, "start": used_bar_start(len(base), profile, c)}
+        transform_bars(base, spec).to_csv(path, index=False)
         out[c.id] = str(path)
     return out
 
@@ -336,10 +356,11 @@ class Check:
     passed: bool
     detail: str = ""
     evaluated: bool = True
+    report_only: bool = False        # computed and shown, never fails the cell (thresholds file `report_only`)
 
     def to_dict(self) -> Dict[str, Any]:
         return {"name": self.name, "value": self.value, "limit": self.limit, "passed": self.passed,
-                "detail": self.detail, "evaluated": self.evaluated}
+                "detail": self.detail, "evaluated": self.evaluated, "report_only": self.report_only}
 
 
 @dataclass
@@ -362,7 +383,7 @@ class Verdict:
 
     @property
     def failed_checks(self) -> List[Check]:
-        return [c for c in self.checks if not c.passed]
+        return [c for c in self.checks if not c.passed and not c.report_only]
 
 
 def _finite(v) -> bool:
@@ -388,9 +409,14 @@ def _probe_shares(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Optional[float
             for k, vs in series.items()}
 
 
+def _verdict_passed(checks: Sequence[Check]) -> bool:
+    return all(c.passed or c.report_only for c in checks)
+
+
 def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
     """Judge one finished cell against the pre-registered thresholds (nothing is read but the run directory)."""
     from neural_trade.core.config import Config
+    from neural_trade.core.guard import regions_disabled
     from neural_trade.evaluation.report import health_block
     from neural_trade.experiments.sweep import run_health
     from neural_trade.telemetry.epoch_logger import read_metrics
@@ -405,86 +431,150 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
     blamed = _blamed_from_message(err.get("message", ""))
     checks: List[Check] = []
     T = thresholds
+    only = set(T.report_only)
+
+    def add(name, value, limit, passed, detail="", evaluated=True):
+        checks.append(Check(name, value, limit, bool(passed), detail, evaluated, name in only))
+
+    def verdict():
+        return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)),
+                       _verdict_passed(checks), checks, blamed, status, message, T.sha256)
 
     if case.expect == "detect":
         fd = T.fault_detection
         stopped = status == "failed" and err.get("type") == fd.get("error_type")
-        checks.append(Check("fault_stopped_run", 1.0 if stopped else 0.0, fd.get("error_type"), stopped,
-                            "" if stopped else f"the run ended {status}" + (f" with {message}" if message else "")))
+        add("fault_stopped_run", 1.0 if stopped else 0.0, fd.get("error_type"), stopped,
+            "" if stopped else f"the run ended {status}" + (f" with {message}" if message else ""))
         if fd.get("names_the_term") and case.expects_term:
             named = case.expects_term in (err.get("message") or "")
-            checks.append(Check("fault_names_term", 1.0 if named else 0.0, case.expects_term, named,
-                                "" if named else f"the error does not name {case.expects_term}: {message}"))
-        return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)),
-                       all(c.passed for c in checks), checks, blamed, status, message, T.sha256)
+            add("fault_names_term", 1.0 if named else 0.0, case.expects_term, named,
+                "" if named else f"the error does not name {case.expects_term}: {message}")
+        return verdict()
 
     completed = status == "done"
-    checks.append(Check("run_completed", 1.0 if completed else 0.0, "done", completed,
-                        "" if completed else f"{status}: {message}"))
+    add("run_completed", 1.0 if completed else 0.0, "done", completed, "" if completed else f"{status}: {message}")
     rows = read_metrics(d / "metrics.jsonl") if (d / "metrics.jsonl").is_file() else []
     if rows:
-        cfg = Config.from_yaml(d / "config.yaml")
+        with regions_disabled():     # a re-test of a configuration inside a known failing region
+            cfg = Config.from_yaml(d / "config.yaml")
         why = run_health(d, max_nonfinite_grad_steps=10 ** 9)
-        checks.append(Check("loss_finite", 0.0 if why else 1.0, True, not why, why or ""))
+        add("loss_finite", 0.0 if why else 1.0, True, not why, why or "")
+        losses = [float(r[k]) for r in rows for k in ("loss", "val_loss") if _finite(r.get(k))]
+        lim = float(T.check("max_abs_loss"))
+        top = max((abs(v) for v in losses), default=None)
+        add("max_abs_loss", top, lim, top is None or top <= lim, "" if top is not None else "no finite loss logged",
+            top is not None)
+        train = [float(r["loss"]) for r in rows if _finite(r.get("loss"))]
+        lim = float(T.check("max_loss_over_first"))
+        if len(train) >= 2 and train[0] != 0:
+            ratio = max(train) / abs(train[0])
+            add("loss_over_first", ratio, lim, ratio <= lim)
+        else:
+            add("loss_over_first", None, lim, True, "fewer than 2 epochs (or a zero first loss)", False)
         n_steps = sum(float(r.get("n_steps") or 0) for r in rows)
         nonfinite = sum(float(r.get("nonfinite_grad_steps") or 0) for r in rows)
-        rate = nonfinite / n_steps if n_steps else None
         lim = float(T.check("max_nonfinite_step_rate"))
-        checks.append(Check("nonfinite_step_rate", rate, lim, rate is not None and rate <= lim,
-                            "" if rate is not None else "no steps counted"))
+        if n_steps:
+            rate = nonfinite / n_steps
+            add("nonfinite_step_rate", rate, lim, rate <= lim)
+        else:
+            add("nonfinite_step_rate", None, lim, True, "n_steps was not logged (a run before NT-037)", False)
         h = health_block(rows, cfg)
         lim = float(T.check("max_clipped_share"))
         for grp in ("main", "indicator"):
             clipped = h.get(f"grad_clip_steps_{grp}_total")
             share = (float(clipped) / n_steps) if clipped is not None and n_steps else None
-            checks.append(Check(f"clipped_share_{grp}", share, lim, share is None or share <= lim,
-                                "" if share is not None else "not logged", share is not None))
+            add(f"clipped_share_{grp}", share, lim, share is None or share <= lim,
+                "" if share is not None else "not logged", share is not None)
         shares = _probe_shares(rows)
         lim = float(T.check("max_term_gradient_share"))
         if shares:
             bad = sorted(k for k, v in shares.items() if v is None)
-            top = max((k for k, v in shares.items() if v is not None), key=lambda k: shares[k], default=None)
-            top_v = shares[top] if top else None
+            top_k = max((k for k, v in shares.items() if v is not None), key=lambda k: shares[k], default=None)
+            top_v = shares[top_k] if top_k else None
             ok = not bad and (top_v is None or top_v <= lim)
             detail = (f"non-finite probe share(s): {bad[:4]}" if bad else
-                      (f"largest: {top} = {top_v:.3f}" if top else ""))
-            checks.append(Check("term_gradient_share", top_v, lim, ok, detail))
-            if not ok and top and not blamed:
-                blamed = [top.rsplit("_", 1)[0]]
+                      (f"largest: {top_k} = {top_v:.3f}" if top_k else ""))
+            add("term_gradient_share", top_v, lim, ok, detail)
+            if not ok and top_k and not blamed:
+                blamed = [top_k.rsplit("_", 1)[0]]
         else:
-            checks.append(Check("term_gradient_share", None, lim, True, "the probe was off", False))
+            add("term_gradient_share", None, lim, True, "the probe was off", False)
         lim = float(T.check("max_var_at_floor_share"))
         worst = None
         for r in rows:
-            for hz in ("h0", "h1", "h2"):
-                n_dir, at_floor = r.get(f"dir_n_{hz}"), r.get(f"var_at_floor_{hz}")
+            for k, at_floor in r.items():
+                m = re.fullmatch(r"var_at_floor_(h\d+)", k)
+                n_dir = r.get(f"dir_n_{m.group(1)}") if m else None
                 if n_dir and at_floor is not None:
                     worst = max(worst or 0.0, float(at_floor) / float(n_dir))
-        checks.append(Check("var_at_floor_share", worst, lim, worst is None or worst <= lim,
-                            "" if worst is not None else "not logged", worst is not None))
+        add("var_at_floor_share", worst, lim, worst is None or worst <= lim,
+            "" if worst is not None else "not logged", worst is not None)
         at_bound = h.get("periods_at_bound") or {}
         lim = int(T.check("max_periods_at_bound"))
-        checks.append(Check("periods_at_bound", float(len(at_bound)), lim, len(at_bound) <= lim,
-                            ", ".join(sorted(at_bound)[:4])))
+        add("periods_at_bound", float(len(at_bound)), lim, len(at_bound) <= lim, ", ".join(sorted(at_bound)[:4]))
         masked = h.get("masked_terms_total") or {}
         total_masked = float(sum(masked.values()))
         lim = float(T.check("max_masked_term_steps"))
-        checks.append(Check("masked_term_steps", total_masked, lim, total_masked <= lim,
-                            ", ".join(f"{k[len('masked_'):]}={v:g}" for k, v in sorted(masked.items())[:4])))
+        add("masked_term_steps", total_masked, lim, total_masked <= lim,
+            ", ".join(f"{k[len('masked_'):]}={v:g}" for k, v in sorted(masked.items())[:4]))
         if masked and not blamed:
             from neural_trade.training.stability_guard import blame
 
             blamed = blame({k[len("masked_"):]: v for k, v in masked.items()})
-    scores = result.get("scores") or {}
-    cov = {k: v for k, v in scores.items() if re.fullmatch(r"h\d+/variance/coverage90", k) and _finite(v)}
+    _score_checks(result.get("scores") or {}, T, add)
+    return verdict()
+
+
+def _score_checks(scores: Mapping[str, Any], T: Thresholds, add) -> None:
+    """The variance-head and coverage checks, from the scored block's numbers (result.json ``scores``)."""
+    hs = sorted({m.group(1) for k in scores if (m := re.match(r"(h\d+)/variance/", k))})
+    limits = {"nll": float(T.check("max_variance_nll")), "nll_c": float(T.check("max_variance_nll_over_const")),
+              "crps_c": float(T.check("max_variance_crps_over_const"))}
+
+    def val(k):
+        v = scores.get(k)
+        return float(v) if _finite(v) else None
+
+    worst: Dict[str, Optional[float]] = {"nll": None, "nll_c": None, "crps_c": None}
+    where = {"nll": "", "nll_c": "", "crps_c": ""}
+    for h in hs:
+        nll, crps = val(f"{h}/variance/nll"), val(f"{h}/variance/crps")
+        nll0, crps0 = val(f"baseline/const_var/{h}/variance/nll"), val(f"baseline/const_var/{h}/variance/crps")
+        cand = {"nll": nll, "nll_c": None if nll is None or nll0 is None else nll - nll0,
+                "crps_c": None if not crps or not crps0 else crps / crps0}
+        for k, raw in (("nll", scores.get(f"{h}/variance/nll")), ("crps_c", scores.get(f"{h}/variance/crps"))):
+            if raw is not None and not _finite(raw):          # a non-finite head number is a broken head
+                cand[k] = math.inf
+        for k, v in cand.items():
+            if v is not None and (worst[k] is None or v > worst[k]):
+                worst[k], where[k] = v, h
+    for name, key in (("variance_nll", "nll"), ("variance_nll_over_const", "nll_c"),
+                      ("variance_crps_over_const", "crps_c")):
+        v = worst[key]
+        add(name, v, limits[key], v is None or v <= limits[key],
+            f"worst horizon: {where[key]}" if v is not None else "the run was not scored", v is not None)
+    # coverage: only on a horizon with enough effective samples (D-012)
+    min_n = float(T.check("min_n_eff"))
     lim = float(T.check("min_coverage90"))
+    cov: Dict[str, float] = {}
+    skipped: List[str] = []
+    for k, v in scores.items():
+        m = re.fullmatch(r"(h\d+)/variance/coverage90", k)
+        if not m or not _finite(v):
+            continue
+        n_eff = val(f"{m.group(1)}/n_eff")
+        if n_eff is None or n_eff < min_n:
+            skipped.append(f"{m.group(1)} (n_eff {n_eff:g})" if n_eff is not None else m.group(1))
+            continue
+        cov[k] = float(v)
     if cov:
         lo = min(cov, key=lambda k: cov[k])
-        checks.append(Check("coverage90", float(cov[lo]), lim, float(cov[lo]) >= lim, f"lowest: {lo}"))
+        add("coverage90", cov[lo], lim, cov[lo] >= lim,
+            f"lowest: {lo}" + (f"; not evaluated: {skipped}" if skipped else ""))
     else:
-        checks.append(Check("coverage90", None, lim, True, "the run was not scored", False))
-    return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)),
-                   all(c.passed for c in checks), checks, blamed, status, message, T.sha256)
+        add("coverage90", None, lim, True,
+            f"not evaluated: n_eff below {min_n:g} on {skipped}" if skipped else "the run was not scored", False)
 
 
 def write_verdict(run_dir, verdict: Verdict) -> Path:
@@ -525,6 +615,30 @@ class HarnessResult:
         return all(self.case_passed.values())
 
 
+def plan_cases(*, profile: str = "tiny", csv=None, case_ids: Optional[Sequence[str]] = None,
+               seeds: Sequence[int] = (0,), work_dir=None):
+    """A dry plan: every runnable case's cells through the engine's planner (the spec, every Config, the components
+    and the data layout of the profile), nothing trained and no run directory written. ``work_dir`` receives the
+    case data files. Returns the planned cells; an unplannable case raises ScenarioError naming its cell."""
+    import tempfile
+
+    from neural_trade.core.config import Config
+    from neural_trade.core.guard import regions_disabled
+    from neural_trade.experiments.runner import Runner
+    from neural_trade.experiments.scenario import Scenario
+    from neural_trade.experiments.store import RunStore
+
+    cases = [c for c in default_cases() if c.runnable and (not case_ids or c.id in set(case_ids))]
+    csv = csv if csv is not None else Config().CSV_PATH
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(work_dir) if work_dir is not None else Path(tmp)
+        case_csv = write_case_data(cases, csv, out, profile)
+        spec = build_scenario(cases, name="stab-plan", profile=profile, seeds=list(seeds),
+                              case_csv={**{c.id: str(csv) for c in cases}, **case_csv})
+        with regions_disabled():
+            return Runner(Scenario.from_dict(spec), RunStore(Path(tmp) / "store")).plan()
+
+
 def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Optional[Sequence[str]] = None,
                 seeds: Optional[Sequence[int]] = None, thresholds_path=None, harness_id: Optional[str] = None,
                 trainer=None, out_root=None) -> HarnessResult:
@@ -553,7 +667,7 @@ def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Opti
     csv = csv if csv is not None else Config().CSV_PATH
     runnable = [c for c in all_cases if c.runnable]
     not_run = [c for c in all_cases if not c.runnable]
-    case_csv = write_case_data(runnable, csv, out_dir)
+    case_csv = write_case_data(runnable, csv, out_dir, profile)
     base_csv = {c.id: str(csv) for c in runnable if c.id not in case_csv}
     spec = build_scenario(runnable, name=f"stab-{hid}"[:48], profile=profile, seeds=seed_list,
                           case_csv={**base_csv, **case_csv})

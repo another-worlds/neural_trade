@@ -25,6 +25,8 @@ import tensorflow as tf
 
 #: ``total_loss`` is derived from the other terms; it is blamed only when it is the only one that fired.
 DERIVED_TERMS = ("total_loss",)
+#: this many loss-term counters firing together (or any head_* counter) points at the inputs, not at one term
+INPUT_SUSPECT_TERMS = 5
 
 
 class UnstableTrainingError(RuntimeError):
@@ -48,11 +50,16 @@ def blame(masked: Mapping[str, float]) -> List[str]:
 
 def describe(masked: Mapping[str, float], nonfinite_steps: float, epoch: Optional[int]) -> Tuple[str, List[str]]:
     terms = blame(masked)
+    fired = {t for t, v in masked.items() if v and float(v) > 0}
+    # every term non-finite on the first bad step, or a head output non-finite: the cause is upstream of the losses
+    upstream = any(t.startswith("head_") for t in fired) or len(fired - set(DERIVED_TERMS)) >= INPUT_SUSPECT_TERMS
     where = f"epoch {epoch}" if epoch is not None else "training"
     if terms:
         fired = ", ".join(f"{t} ({float(masked[t]):g} step(s))" for t in terms)
         return (f"unstable training in {where}: non-finite loss term(s), blamed: {fired}; "
-                f"{nonfinite_steps:g} non-finite step(s)", terms)
+                f"{nonfinite_steps:g} non-finite step(s)"
+                + ("; inputs may be non-finite (a head output or most loss terms are non-finite at once)"
+                   if upstream else ""), terms)
     return (f"unstable training in {where}: {nonfinite_steps:g} non-finite step(s) with every loss term finite "
             "(a non-finite gradient or input; no loss term can be blamed from the counters)", [])
 

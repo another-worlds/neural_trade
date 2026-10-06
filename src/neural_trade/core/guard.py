@@ -33,12 +33,13 @@ REGIONS_SCHEMA_VERSION = 1
 DEFAULT_REGIONS_FILE = Path(__file__).resolve().parents[3] / "configs" / "stability_failing_regions.json"
 
 #: BATCH_SIZE x LOOKBACK^2 (the element count of one [B, L, L] score tensor per head or indicator
-#: channel) above which GPU memory is a risk on the 12 GB RTX 4070 Ti. Evidence, both from the same model
-#: (14 indicator families, 4-8 attention heads): runs/scenarios/micro_lookback finished at LOOKBACK 240 with
-#: BATCH_SIZE 256 (256 x 240^2 = 14.7M) and ran out of memory at BATCH_SIZE 512 (29.5M) and 2048 (118M);
-#: BATCH_SIZE 2048 at LOOKBACK 60 (7.4M, the micro layout of D-041) is fine. The warning level is the
-#: largest measured-good product plus 2%: any larger one is unmeasured. Two L^2 tensors count (NT-038
-#: amendment 2026-09-30): the batched EWMA weights [B, K, L, L] and the attention scores [B, heads, L, L];
+#: channel) above which GPU memory is a risk on the 12 GB RTX 4070 Ti. Evidence: runs/scenarios/micro_lookback
+#: (commit f5aee70, 2026-09-29), measured on the CLOSE-ONLY model (4 indicator families, before NT-047 made OHLCV
+#: with 14 families the default): LOOKBACK 240 with BATCH_SIZE 256 finished (256 x 240^2 = 14.7M) and ran out of
+#: memory at BATCH_SIZE 512 (29.5M) and 2048 (118M); BATCH_SIZE 2048 at LOOKBACK 60 (7.4M, the micro layout of
+#: D-041) is fine. The level is UNVALIDATED for the OHLCV default (more channels, so more memory per element: it is
+#: probably too high there). The warning level is the largest measured-good product plus 2%. Two L^2 tensors count
+#: (NT-038 amendment 2026-09-30): the batched EWMA weights [B, K, L, L] and the attention scores [B, heads, L, L];
 #: their sizes follow the model, so the level may move once the experimenter records a memory profile.
 SCORE_ELEMENTS_WARN = 15_000_000
 SCORE_ELEMENTS_OOM_MEASURED = 29_491_200       # 512 x 240^2: the smallest measured out-of-memory case
@@ -116,10 +117,14 @@ def regions_disabled() -> Iterator[None]:
 
 
 def regions_path() -> Optional[Path]:
+    """``NT_FAILING_REGIONS`` (a path, or ``off``); else ``configs/stability_failing_regions.json`` next to the
+    source tree (a checkout or an editable install), else the one under the current directory."""
     env = os.environ.get(REGIONS_ENV)
     if env is not None:
         return None if env.strip().lower() in ("", "off") else Path(env)
-    return DEFAULT_REGIONS_FILE
+    if DEFAULT_REGIONS_FILE.is_file():
+        return DEFAULT_REGIONS_FILE
+    return Path.cwd() / "configs" / DEFAULT_REGIONS_FILE.name
 
 
 def load_regions(path=None) -> List[Region]:
@@ -163,8 +168,8 @@ def memory_warning(config: Any) -> Optional[str]:
     if elements <= SCORE_ELEMENTS_WARN:
         return None
     return (f"BATCH_SIZE {b} x LOOKBACK {lb}^2 = {elements / 1e6:.1f}M exceeds {SCORE_ELEMENTS_WARN / 1e6:.0f}M, the "
-            f"largest product measured to fit the 12 GB card (BATCH_SIZE 256, LOOKBACK 240); "
-            f"{SCORE_ELEMENTS_OOM_MEASURED / 1e6:.1f}M (512 x 240^2) ran out of memory. The attention scores and the "
+            f"largest product measured to fit the 12 GB card (BATCH_SIZE 256, LOOKBACK 240, measured on the "
+            f"close-only model; unvalidated for the OHLCV default); {SCORE_ELEMENTS_OOM_MEASURED / 1e6:.1f}M (512 x 240^2) ran out of memory. The attention scores and the "
             "EWMA weights are quadratic in the window: lower BATCH_SIZE or LOOKBACK (core/guard.py)")
 
 

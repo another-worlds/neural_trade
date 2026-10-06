@@ -185,10 +185,22 @@ def _trim_to_exclude(p: SearchParam, cond: Mapping[str, Any], region_id: str) ->
         raise SweepError(f"failing region {region_id!r} covers the whole range of search.{p.name} "
                          f"({p.low} .. {p.high})")
     if lo <= p.low <= hi < p.high:                    # the low end fails: raise the lower bound just above it
-        new_low = (math.floor(hi) + 1) if p.kind == "int" else float(np.nextafter(hi, math.inf))
+        if p.kind == "int":                           # the next point of the range's own lattice above the region
+            step = int(p.step or 1)
+            new_low = p.low + (math.floor((hi - p.low) / step) + 1) * step
+            if new_low > p.high:
+                raise SweepError(f"failing region {region_id!r} leaves no value of search.{p.name} on its lattice")
+        else:
+            new_low = float(np.nextafter(hi, math.inf))
         return dataclasses.replace(p, low=float(new_low))
     if p.low < lo <= p.high <= hi:                    # the high end fails: lower the upper bound just below it
-        new_high = (math.ceil(lo) - 1) if p.kind == "int" else float(np.nextafter(lo, -math.inf))
+        if p.kind == "int":
+            step = int(p.step or 1)
+            new_high = p.low + (math.ceil((lo - p.low) / step) - 1) * step
+            if new_high < p.low:
+                raise SweepError(f"failing region {region_id!r} leaves no value of search.{p.name} on its lattice")
+        else:
+            new_high = float(np.nextafter(lo, -math.inf))
         return dataclasses.replace(p, high=float(new_high))
     return p
 
