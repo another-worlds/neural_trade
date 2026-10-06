@@ -158,6 +158,11 @@ path, in the commit that first cites the run (for notebook 01, with the executed
 $PY scripts/check_run_evidence.py --list-untracked | git add --pathspec-from-file=-
 ```
 
+A run made on another machine (for example the remote review session's, D-033) has no directory here:
+list its id in `runs/EXTERNAL_RUNS.md` (id, where it ran, why it is not here, the citing record). The
+check then passes it without a directory and counts it as external; a listed id that does have a
+directory is checked normally, and the file itself is not a citing file.
+
 For a run nothing cites yet, `git ls-files --others --exclude-standard -- runs/<run dir>` lists the
 same files. Never `git add runs` (CLAUDE.md start step 2).
 

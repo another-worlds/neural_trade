@@ -1,0 +1,47 @@
+{
+  "run": "20261003T225052Z-91fa363-11993eec",
+  "n_windows": 43441,
+  "betas": {
+    "h0": 0.0,
+    "h1": 0.0,
+    "h2": 0.0
+  },
+  "before": {
+    "coherence_on_raw": false,
+    "bars_magnitude_coherent": 43441,
+    "bars_direction_aligned": 4616,
+    "strategies": {
+      "enhanced_multi_horizon": {
+        "n_trades": 0,
+        "incoh": 0
+      },
+      "liberal": {
+        "n_trades": 660,
+        "incoh": 0
+      },
+      "calibrated_quantile": {
+        "n_trades": 885,
+        "incoh": 0
+      }
+    }
+  },
+  "after": {
+    "coherence_on_raw": true,
+    "bars_magnitude_coherent": 27923,
+    "bars_direction_aligned": 11809,
+    "strategies": {
+      "enhanced_multi_horizon": {
+        "n_trades": 0,
+        "incoh": 0
+      },
+      "liberal": {
+        "n_trades": 1095,
+        "incoh": 0
+      },
+      "calibrated_quantile": {
+        "n_trades": 885,
+        "incoh": 0
+      }
+    }
+  }
+}

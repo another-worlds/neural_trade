@@ -29,12 +29,15 @@ README.md sections 2.0 and 5.2), all causal:
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple
 
 import numpy as np
 
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_LAMBDAS = {"h0": 1.0, "h1": 1.0, "h2": 1.0}
 
@@ -195,6 +198,10 @@ class SignalFrame:
             raw_mat = _horizon_matrix((getattr(frame, "meta", None) or {}).get("delta_raw"))
         if raw_mat is not None and len(raw_mat) != len(d):
             raw_mat = None
+        if raw_mat is None:
+            # legacy frames (hand-built, old stored npz) stay loadable, but never silently (NT-119)
+            logger.warning("SignalFrame.build: the frame carries no raw price heads (meta['delta_raw']); the "
+                           "coherence flags fall back to the served delta, contrary to D-051")
         flag_d = d if raw_mat is None else raw_mat
         mag = _magnitude_ordered(flag_d)
         aligned = _direction_aligned(p, flag_d)
