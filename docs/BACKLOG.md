@@ -217,10 +217,11 @@ changes).
 | [NT-182](#nt-182) | P1 | bug | implementer | done | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
 | [NT-183](#nt-183) | P1 | bug | implementer | done | Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan) |
 | [NT-184](#nt-184) | P3 | polish | implementer | todo | Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership |
-| [NT-185](#nt-185) | P1 | bug | implementer | todo | A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows) |
+| [NT-185](#nt-185) | P1 | bug | implementer | done | A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows) |
 | [NT-186](#nt-186) | P3 | polish | implementer | todo | Control-panel and data-path follow-ups from the NT-034 qa-deep |
 | [NT-187](#nt-187) | P2 | bug | implementer | todo | Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file |
 | [NT-188](#nt-188) | P3 | polish | implementer | todo | Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring |
+| [NT-189](#nt-189) | P3 | polish | implementer | todo | Atomic-write follow-ups: the cross-process tests import the installed package; rebuild_index retry untested; _read_summary drops the recorded budget on a transient read error |
 
 ## Items
 
@@ -2452,7 +2453,7 @@ changes).
 
 **A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows)**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-185 cd70196/1dd8a05 (implementer Sonnet), merged as e1fd914; QA (Opus medium) PASS: with the REAL panel reader (list_sweeps) and the REAL sweep writer in two processes the base fails 857/826/850 of 1000 writes with a tight reader, 233/213/203 with a 50 ms poll and 2/2/1 with a 10 s poll (4 reads); the head 0 in every setup, also 2 and 3 tight readers; new utils/atomic.py (replace_with_retry: 20 attempts, 10 ms to 200 ms, about 3.1 s, AtomicReplaceError naming the path, a unique temp file removed on failure), used by sweep._write_json (sweep.json and winner.json) and store.rebuild_index; the panel's readers read once, close, tolerate missing/half-written files; output byte-identical; sqlite polling cannot kill the engine's writes (0 of 1000 sync failures); AtomicReplaceError is a fatal but resumable sweep error and sweep.json stays the previous good version; 4 mutations caught. Follow-ups: NT-189 (P3).
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/experiments/sweep.py (`_write_json`, ~115-120, and any other atomic writer: store index, claims, run context), src/neural_trade/notebook/panel_data.py (list_sweeps), tests/
 - **depends on:** none (before NT-050)
@@ -2495,6 +2496,18 @@ changes).
 - **why:** QA of NT-183 (2026-10-07), P3: (1) tests: add a seam between the stale verdict and the sentinel and one between the sentinel and the replace, so that the mutants 'remove the sentinel before the replace' (12 of 300 chaos rounds bad) and 'unlink and create instead of replace' (12 of 300 rounds with no winner) and 're-verify before taking the sentinel' (77 of 300) fail a TEST, not only the chaos stress; (2) `_sentinel_dead`: an empty, old sentinel of a LIVE taker (json.dump buffered, the file stays empty until close) is reaped as dead after 30 s: write the sentinel atomically (temp file plus os.link) or judge an unreadable sentinel by its pid; (3) release() checks no ownership and on Windows swallows PermissionError, so a live claim lingers until the process exits: retry briefly and unlink only when the content is still the caller's own pid and start time; (4) `.lock.new-*` and `.lock.takeover.dead-*` leftovers of a crash are never reaped (harmless: they do not match `<key>.lock`); (5) the module docstring says the run store rejects a duplicate run id (NT-182): wrong for a same-scenario duplicate, which the runner stores as `<name>-2`.
 - **acceptance:** (1) The two seams and tests that fail on the three mutants. (2) The sentinel is written atomically or judged by pid (test). (3) release() verifies ownership and retries on PermissionError (tests). (4) Leftovers older than a stated age are cleaned on the next claim. (5) The docstring is corrected. (6) Fast suite, ruff, the claim tests looped 50 times.
 - **source:** QA of NT-183 (2026-10-07)
+
+### NT-189
+
+**Atomic-write follow-ups: the cross-process tests import the installed package; rebuild_index retry untested; _read_summary drops the recorded budget on a transient read error**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** tests/test_atomic_write.py (~30-57), src/neural_trade/experiments/store.py (rebuild_index ~259), src/neural_trade/experiments/sweep.py (_read_summary ~1301-1305), tests/
+- **depends on:** NT-185 (done)
+- **why:** QA of NT-185 (2026-10-07), P3: (1) the writer subprocess of the cross-process tests imports `neural_trade` from the INSTALLED package (the main checkout's src/), not the tree under test: in a worktree without PYTHONPATH both tests fail with ModuleNotFoundError, and after the merge they would silently test the main checkout's code: pass `env` with PYTHONPATH like `sweep._launch_env`; (2) store.rebuild_index's retry (store.py:~259) has no test (the mutation survives) and with 3 tight readers it still failed 4 of 20 times (CLI-only, never during a sweep); (3) existing before the item: `sweep._read_summary` turns any OSError/ValueError into `{}`, and `_save_progress`/`_write_summary` then rewrite sweep.json WITHOUT `launches` (the recorded pre-launch budget), `space`, `mode`: a transient read failure would silently drop the budget record: keep the last good document in memory or raise.
+- **acceptance:** (1) The cross-process tests set PYTHONPATH to the tree under test (a test that fails in a worktree without PYTHONPATH on the old code). (2) A test for rebuild_index's retry. (3) _read_summary keeps the last good document (or raises) and never rewrites sweep.json without launches/space/mode (a test with an injected read failure). (4) Fast suite, ruff.
+- **source:** QA of NT-185 (2026-10-07)
 
 ## Done log
 
