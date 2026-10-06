@@ -1,0 +1,17 @@
+a49af1d5c646e3a7e82c2d61f358310bb223c768
+tests/test_served_epoch.py: 49 warnings
+tests/test_train_smoke.py: 96 warnings
+tests/test_calib_gradient_mode.py: 245 warnings
+tests/test_calib_zero_weights.py: 288 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_bench_window_free.py: 2 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_122\src\neural_trade\core\config.py:736: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1963 passed, 5161 warnings in 370.76s (0:06:10)
+All checks passed!
