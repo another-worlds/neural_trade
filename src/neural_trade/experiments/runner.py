@@ -55,14 +55,18 @@ FINISHED = ("done", "failed")
 def train_cell(ctx, *, calibrate: bool = True, save_artifacts: bool = False):
     """The default trainer: ``train_and_evaluate`` on the cell's run context, from a cleared Keras
     session (unseeded op seeds come from per-process counters, see tests/test_reproducibility.py).
-    It fits the calibration block (the scorer fits the strategy there) and never warm-starts."""
+    It fits the calibration block (the scorer fits the strategy there) and never warm-starts. In strict mode
+    (``STRICT_LOSS_MASKS``, NT-036) the run fails loudly, naming the loss term, at the end of the first epoch
+    with a non-finite term or step (training.stability_guard, NT-038); with the default config nothing is added."""
     import tensorflow as tf
 
+    from neural_trade.training.stability_guard import StabilityGuard
     from neural_trade.training.trainer import train_and_evaluate
 
     tf.keras.backend.clear_session()
+    guard = [StabilityGuard()] if bool(ctx.config.STRICT_LOSS_MASKS) else None
     return train_and_evaluate(config=ctx.config, run_context=ctx, force=True, calibrate=calibrate,
-                              fit_calibration=True, save_artifacts=save_artifacts)
+                              fit_calibration=True, save_artifacts=save_artifacts, extra_callbacks=guard)
 
 
 def cell_run_name(scenario: str, cell_key: str) -> str:

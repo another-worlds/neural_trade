@@ -164,9 +164,78 @@ class SearchParam:
         return trial.suggest_float(self.name, float(self.low), float(self.high), log=self.log)
 
 
+class FailingRegionHit(Exception):
+    """A suggested point lies inside a failing region (core.guard); the Optuna loop tells the trial pruned and asks again."""
+
+
+def _trim_to_exclude(p: SearchParam, cond: Mapping[str, Any], region_id: str) -> SearchParam:
+    """``p`` without the part a single-field failing region covers, when the region reaches an end of the range
+    (a categorical drops the choices); ``None``-like interior regions are left to rejection (returned as is)."""
+    if p.kind == "cat":
+        if "values" not in cond:
+            return p
+        keep = tuple(c for c in (p.choices or ()) if not any(c == v for v in cond["values"]))
+        if not keep:
+            raise SweepError(f"failing region {region_id!r} covers every choice of search.{p.name}")
+        return dataclasses.replace(p, choices=keep)
+    if "values" in cond:
+        return p
+    lo, hi = cond.get("min", -math.inf), cond.get("max", math.inf)
+    if lo <= p.low and hi >= p.high:
+        raise SweepError(f"failing region {region_id!r} covers the whole range of search.{p.name} "
+                         f"({p.low} .. {p.high})")
+    if lo <= p.low <= hi < p.high:                    # the low end fails: raise the lower bound just above it
+        if p.kind == "int":                           # the next point of the range's own lattice above the region
+            step = int(p.step or 1)
+            new_low = p.low + (math.floor((hi - p.low) / step) + 1) * step
+            if new_low > p.high:
+                raise SweepError(f"failing region {region_id!r} leaves no value of search.{p.name} on its lattice")
+        else:
+            new_low = float(np.nextafter(hi, math.inf))
+        return dataclasses.replace(p, low=float(new_low))
+    if p.low < lo <= p.high <= hi:                    # the high end fails: lower the upper bound just below it
+        if p.kind == "int":
+            step = int(p.step or 1)
+            new_high = p.low + (math.ceil((lo - p.low) / step) - 1) * step
+            if new_high < p.low:
+                raise SweepError(f"failing region {region_id!r} leaves no value of search.{p.name} on its lattice")
+        else:
+            new_high = float(np.nextafter(lo, -math.inf))
+        return dataclasses.replace(p, high=float(new_high))
+    return p
+
+
 @dataclass(frozen=True)
 class SearchSpace:
     params: Tuple[SearchParam, ...]
+    regions: Tuple[Any, ...] = ()          # NT-038: failing regions (core.guard.Region) inside the space, by rejection
+
+    def in_failing_region(self, point: Mapping[str, Any]) -> Optional[Any]:
+        return next((r for r in self.regions if r.contains(point)), None)
+
+    def excluding(self, regions: Sequence[Any], fixed: Config) -> "SearchSpace":
+        """The space without the failing ``regions`` (NT-038, D-026: the search never proposes a configuration
+        ``Config.validate`` would refuse). A region whose fixed (not searched) conditions do not hold for
+        ``fixed`` cannot be reached and is ignored; one condition on one searched field that reaches an end of
+        its range trims the range exactly; any other region stays and :meth:`sample` / :meth:`suggest` reject
+        a point inside it."""
+        by_name = {p.name: p for p in self.params}
+        keep = []
+        params = dict(by_name)
+        for r in regions:
+            fixed_conds = [n for n in r.conditions if n not in by_name]
+            if any(not hasattr(fixed, n) or not r.condition_holds(n, getattr(fixed, n)) for n in fixed_conds):
+                continue
+            free = [n for n in r.conditions if n in by_name]
+            if not free:
+                continue                                  # inside already: Config.validate refuses the base itself
+            if len(free) == 1:
+                trimmed = _trim_to_exclude(params[free[0]], r.conditions[free[0]], r.id)
+                if trimmed is not params[free[0]]:
+                    params[free[0]] = trimmed
+                    continue
+            keep.append(dataclasses.replace(r, conditions={n: r.conditions[n] for n in free}))
+        return SearchSpace(tuple(params[p.name] for p in self.params), tuple(keep))
 
     @property
     def names(self) -> List[str]:
@@ -176,10 +245,19 @@ class SearchSpace:
         return [p.to_dict() for p in self.params]
 
     def sample(self, rng: np.random.Generator) -> Dict[str, Any]:
-        return {p.name: p.sample(rng) for p in self.params}
+        for _ in range(200):
+            point = {p.name: p.sample(rng) for p in self.params}
+            if self.in_failing_region(point) is None:
+                return point
+        raise SweepError("200 random points in a row fell inside failing regions "
+                         f"({[r.id for r in self.regions]}): the search space is mostly failing")
 
     def suggest(self, trial) -> Dict[str, Any]:
-        return {p.name: p.suggest(trial) for p in self.params}
+        point = {p.name: p.suggest(trial) for p in self.params}
+        region = self.in_failing_region(point)
+        if region is not None:
+            raise FailingRegionHit(f"{point} is inside failing region {region.id!r} ({region.describe()})")
+        return point
 
     @classmethod
     def from_scenario(cls, scenario: Scenario) -> "SearchSpace":
@@ -207,7 +285,9 @@ class SearchSpace:
             if unknown:
                 raise SweepError(f"{where}: search.{name}: unknown key(s) {unknown}")
             params.append(cls._param(spec, rule, base, where))
-        return cls(tuple(params))
+        from neural_trade.core.guard import load_regions
+
+        return cls(tuple(params)).excluding(load_regions(), base)
 
     @staticmethod
     def _strategy_param(scenario: Scenario, name: str, rule: Mapping[str, Any], where: str) -> SearchParam:
@@ -361,6 +441,7 @@ def run_health(run_dir, *, max_nonfinite_grad_steps: int = HEALTH_MAX_NONFINITE_
     d = Path(run_dir)
     reasons = []
     nonfinite_steps = 0.0
+    masked_terms: set = set()
     try:
         lines = [ln for ln in (d / "metrics.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
     except OSError:
@@ -383,6 +464,9 @@ def run_health(run_dir, *, max_nonfinite_grad_steps: int = HEALTH_MAX_NONFINITE_
             nonfinite_steps += float(m.get("nonfinite_grad_steps") or 0.0)
         except (TypeError, ValueError):
             reasons.append(f"unreadable nonfinite_grad_steps in epoch {m.get('epoch')}")
+        for k, v in m.items():                      # NT-038: name the loss term whose value was non-finite
+            if k.startswith("masked_") and k != "masked_total_loss" and isinstance(v, (int, float)) and v > 0:
+                masked_terms.add(k[len("masked_"):])
     try:
         status = json.loads((d / "status.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -394,6 +478,8 @@ def run_health(run_dir, *, max_nonfinite_grad_steps: int = HEALTH_MAX_NONFINITE_
                 reasons.append(f"{why} {key} in status.json ({what})")
     if nonfinite_steps > max_nonfinite_grad_steps:
         reasons.append(f"nonfinite_grad_steps {nonfinite_steps:g} > {max_nonfinite_grad_steps}")
+    if masked_terms and reasons:                  # attribution only: a masked (non-finite) term alone fails nothing
+        reasons.append(f"non-finite loss term(s): {', '.join(sorted(masked_terms))}")
     return "; ".join(dict.fromkeys(reasons)) or None
 
 
@@ -1020,7 +1106,13 @@ class Sweep:
             todo = todo[o.parallel:]
             while len(batch) < o.parallel and pending_ask > 0:
                 trial = study.ask()
-                params = self.space.suggest(trial)
+                try:
+                    params = self.space.suggest(trial)
+                except FailingRegionHit as exc:           # NT-038: never run a configuration inside a failing region
+                    logger.info("trial %d not run: %s", trial.number, exc)
+                    study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+                    pending_ask -= 1                      # it used one of the n_trials
+                    continue
                 batch.append((trial.number, params))
                 pending_ask -= 1
             if not batch:
