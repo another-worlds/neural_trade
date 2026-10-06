@@ -215,11 +215,12 @@ changes).
 | [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
 | [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
 | [NT-182](#nt-182) | P1 | bug | implementer | done | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
-| [NT-183](#nt-183) | P1 | bug | implementer | in-progress | Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan) |
+| [NT-183](#nt-183) | P1 | bug | implementer | done | Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan) |
 | [NT-184](#nt-184) | P3 | polish | implementer | todo | Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership |
 | [NT-185](#nt-185) | P1 | bug | implementer | todo | A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows) |
 | [NT-186](#nt-186) | P3 | polish | implementer | todo | Control-panel and data-path follow-ups from the NT-034 qa-deep |
 | [NT-187](#nt-187) | P2 | bug | implementer | todo | Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file |
+| [NT-188](#nt-188) | P3 | polish | implementer | todo | Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring |
 
 ## Items
 
@@ -2427,7 +2428,7 @@ changes).
 
 **Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan)**
 
-- **status:** in-progress (2026-10-06): nt-183 47afa42/1fd55b9 (implementer Sonnet): a takeover sentinel (`<cell>.lock.takeover`, O_EXCL, one winner), re-read under the sentinel, os.replace over the stale claim, a stale-sentinel reap (dead or reused pid AND older than 30 s); the deterministic barrier reproduction failed on the old code (`assert 2 == 1`), 200 rounds x 2 racers and 100 rounds x 8 racers one winner each, a spawned-process variant, 50 loops of the 6 claim tests green. QA (Opus) running.
+- **status:** done (2026-10-07): nt-183 47afa42/1fd55b9 (implementer Sonnet), merged as 6837b06; QA (Opus medium) PASS: the deterministic barrier reproduction fails on the old claims.py (3 of 7 claim tests, `assert 2 == 1`) and passes on the head; 8 real processes x 200 rounds on a stale claim: one winner every round; chaos stress (random pauses at every step) 8 threads x 2000 rounds: one winner every round; mixed stress 8 processes x 90 s on 3 keys (11,016 claims, 3,248 takeovers of dead owners, 7,768 releases): double=0, stolen=0; the 7 claim tests green 50 of 50; the sweep and engine tests pass (97 + the slow real two-process sweep); Windows semantics tested here (a reader holding the stale claim); POSIX reasoned by reading (CI on the merge push is the check); mutations: no sentinel, no re-read, no sentinel age caught by tests; two ordering mutants (re-verify before the sentinel, sentinel removed before the replace) are caught only by the chaos stress. Follow-up: NT-188 (P3).
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/experiments/claims.py, tests/test_sweep.py
 - **depends on:** NT-030 (done)
@@ -2482,6 +2483,18 @@ changes).
 - **why:** qa-deep on NT-038 (2026-10-07): (1) fuzz_constant's 400-bar constant block covers 126 of 136 tiny and 321 of 360 reference training windows completely, labels included: a constant TRAINING SET, not constant windows (dir_loss 0, var_at_floor 'not evaluated', the constant-variance baseline NLL about 1e28 so nll_over_const is -9.7e27); NT-051 would record a FAIL the case design guarantees. (2) The variance checks have no n_eff gate (coverage has): a healthy tiny control at h2 (n_eff 5) shows a CRPS ratio 1.145 against the limit 1.5, and round 0's healthy tiny control had an h2 NLL excess +3.79 against the limit 2.0. (3) A non-finite or absurd constant baseline must be 'not evaluated'. (4) max_variance_nll is in dollar units and shifts by ln k per price factor k (at x1e4 the healthy maximum is about 17.5 against the limit 20); the over-baseline checks are scale-invariant. The thresholds v1 are frozen (pre-registration, sha256 0b706aa2...): changes go into a v2 file named in NT-051's SPEC before any GPU time.
 - **acceptance:** (1) fuzz_constant's block is about 60-120 bars (a minority of the training windows are flat); a test that fewer than half of the training windows are fully constant and that the case's metrics differ from control. (2) The variance checks are 'not evaluated' below an n_eff threshold (stated in v2) and when the baseline is non-finite or absurd (tests). (3) max_variance_nll is dropped or expressed in scaled units. (4) configs/stability_thresholds_v2.yaml with every change's rationale and the stored-run evidence, committed in its own commit BEFORE any real harness run; the harness takes the file by name; v1 stays unchanged and still loadable (a test that v1's sha256 is still 0b706aa2...). (5) The expected n_eff per case and profile is listed in the file or the REPORT. (6) Fast suite, ruff.
 - **source:** qa-deep on NT-038 (2026-10-07)
+
+### NT-188
+
+**Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/experiments/claims.py, tests/test_sweep.py
+- **depends on:** NT-183 (done)
+- **why:** QA of NT-183 (2026-10-07), P3: (1) tests: add a seam between the stale verdict and the sentinel and one between the sentinel and the replace, so that the mutants 'remove the sentinel before the replace' (12 of 300 chaos rounds bad) and 'unlink and create instead of replace' (12 of 300 rounds with no winner) and 're-verify before taking the sentinel' (77 of 300) fail a TEST, not only the chaos stress; (2) `_sentinel_dead`: an empty, old sentinel of a LIVE taker (json.dump buffered, the file stays empty until close) is reaped as dead after 30 s: write the sentinel atomically (temp file plus os.link) or judge an unreadable sentinel by its pid; (3) release() checks no ownership and on Windows swallows PermissionError, so a live claim lingers until the process exits: retry briefly and unlink only when the content is still the caller's own pid and start time; (4) `.lock.new-*` and `.lock.takeover.dead-*` leftovers of a crash are never reaped (harmless: they do not match `<key>.lock`); (5) the module docstring says the run store rejects a duplicate run id (NT-182): wrong for a same-scenario duplicate, which the runner stores as `<name>-2`.
+- **acceptance:** (1) The two seams and tests that fail on the three mutants. (2) The sentinel is written atomically or judged by pid (test). (3) release() verifies ownership and retries on PermissionError (tests). (4) Leftovers older than a stated age are cleaned on the next claim. (5) The docstring is corrected. (6) Fast suite, ruff, the claim tests looped 50 times.
+- **source:** QA of NT-183 (2026-10-07)
 
 ## Done log
 
