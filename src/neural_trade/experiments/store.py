@@ -85,6 +85,25 @@ def _number(v: Any) -> Optional[float]:
     return None
 
 
+STABILITY_VERDICT_FILE = "stability_verdict.json"
+
+
+def _stability_scores(run_dir: Path) -> Dict[str, Optional[float]]:
+    """NT-038: a stability-harness run directory holds ``stability_verdict.json`` (written after the run, by
+    experiments.stability); its verdict and each check's value are indexed as ``stability/passed`` (1 or 0)
+    and ``stability/<check>`` so the harness's verdicts live in the run store and its index."""
+    try:
+        doc = _read_json(run_dir / STABILITY_VERDICT_FILE)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(doc, dict):
+        return {}
+    out: Dict[str, Optional[float]] = {"stability/passed": 1.0 if doc.get("passed") else 0.0}
+    for c in doc.get("checks") or []:
+        out[f"stability/{c.get('name')}"] = _number(c.get("value"))
+    return out
+
+
 def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]:
     """(runs row, scores) of one engine run directory, from its files only."""
     run_dir, root = Path(run_dir), Path(root)
@@ -94,6 +113,7 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
     ds = meta.get("dataset") or {}
     setup = meta.get("setup") or {}
     scores = {str(k): _number(v) for k, v in ((result or {}).get("scores") or {}).items()}
+    scores.update(_stability_scores(run_dir))
     try:
         rel = run_dir.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:

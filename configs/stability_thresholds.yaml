@@ -1,0 +1,75 @@
+# Pre-registered thresholds of the stability harness (NT-038, D-026).
+#
+# Committed BEFORE the harness's first real run (NT-051) and never changed afterwards: every harness
+# report carries this file's sha256, so a changed file is a different pre-registration. A threshold that
+# turns out wrong is replaced by a NEW file name (stability_thresholds_v2.yaml) and a new study, not edited.
+#
+# A cell (one case x one seed, strict mode: STRICT_LOSS_MASKS true, masks off) PASSES when every check
+# below holds. A case passes when all of its seeds pass. A fault-injection case (expect: detect) passes
+# when the run STOPS with UnstableTrainingError and the error names the injected loss term (a masked
+# term counter), see `fault_detection`.
+#
+# The numbers are failure thresholds, deliberately lax: each marks a run that is plainly broken, not one
+# that is merely poor. Where the repository has a measurement, it is cited; where it has none, the
+# rationale says so (those are the ones QA should look at first).
+schema_version: 1
+name: stability_thresholds_v1
+
+checks:
+  # 1. Loss finite. Every `loss` and `val_loss` of every epoch, and the served epoch's val loss, is a finite
+  #    number (sweep.run_health, the check NT-030 prunes on). Not a number to tune: a NaN or inf loss is a
+  #    failed run (D-026).
+  loss_finite: true
+
+  # 2. Non-finite step rate: steps whose total loss or any gradient was non-finite (the step guard zeroes the
+  #    update and counts it, NT-036), divided by the steps trained. Zero: a clean case has none (the NT-036
+  #    test `test_short_run_on_the_default_config_has_zero_nonfinite_steps...` holds this on the default
+  #    config, and sweep.HEALTH_MAX_NONFINITE_GRAD_STEPS is 0). Fault cases are judged by `fault_detection`.
+  max_nonfinite_step_rate: 0.0
+
+  # 3. Clipped share: steps whose pre-clip gradient norm exceeded GRAD_CLIP_NORM, per optimizer group (main,
+  #    indicator), divided by the steps trained. NT-036's test only demands "not clipped on EVERY step of the
+  #    whole run"; the default model measured pre-clip norms up to 171 (main) and 235 (indicator) against the
+  #    clip of 20, so early epochs legitimately clip nearly every step (that test's docstring). 0.995 keeps that
+  #    invariant with room for a short run's rounding; a screen's 0.5 (configs/screens/example_6h.yaml) would
+  #    fail the shipped default and is not used.
+  max_clipped_share: 0.995
+
+  # 4. Gradient share of any one loss term: the largest mean probe_grad_share_<term>_<group> over terms and
+  #    groups (NT-037 per-term probe, which the harness switches on). One term carrying more than 95% of a
+  #    group's gradient norm means the others do not train. 0.95 is the screen's max_term_share
+  #    (experiments/screen.py rules, loss VALUE share); there is no measurement of gradient shares on a real
+  #    run behind it yet (NT-098 reports them): treat it as unmeasured.
+  max_term_gradient_share: 0.95
+
+  # 5. Variance head at VAR_FLOOR: per epoch and horizon, var_at_floor / dir_n (the share of samples whose
+  #    variance sat at the floor). 1.0 is the "head dead" state NT-036 asserts never happens on the default
+  #    config; the check is "below 0.999" (every sample at the floor in some epoch fails).
+  max_var_at_floor_share: 0.999
+
+  # 6. Learned periods at their bound (health_block periods_at_bound) in the last epoch: none allowed, as in
+  #    the NT-036 default-config test.
+  max_periods_at_bound: 0
+
+  # 7. Non-finite loss terms: the NT-036 masked_* counters (a term whose value was NaN or inf before the mask,
+  #    counted in strict mode too) summed over the run. Zero on a clean case (the same test asserts it for the
+  #    head outputs).
+  max_masked_term_steps: 0
+
+  # 8. Coverage: the 90% interval's empirical coverage on the scored block, per horizon (scores
+  #    `<h>/variance/coverage90`), checked only when the run was scored. 0.25 is far below the 0.90 target
+  #    (conformal coverage 0.90-0.91 on test, D-008): it catches a collapsed or exploded variance head, not a
+  #    calibration defect. Evidence is thin and says why it is not higher: the harness's own tiny CPU control
+  #    (1 epoch, 700 sequences, one close-only instance per family) measured 0.483 on its lowest horizon with
+  #    the variance head still at its start, and the wide-span-horizon case 0.823; a first draft of 0.5 failed
+  #    that healthy control, so it was lowered BEFORE any harness run on the reference setup. Unmeasured at
+  #    reference size.
+  min_coverage90: 0.25
+
+fault_detection:
+  # An injected fault must STOP the run with this error type, and for a fault in one loss term the message
+  # must contain that term's name (the masked counter name of losses.functions.MASK_TERM_NAMES).
+  error_type: UnstableTrainingError
+  names_the_term: true
+
+seeds: 3          # every case runs with 3 seeds (D-026; owner Q&A 2026-09-28 round 1)

@@ -8,6 +8,7 @@
     neural-trade scenario rescore configs/scenarios/<name>.yaml --study configs/strategy_studies/<study>.yaml
                                   [--store runs] [--random-seeds N]
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
+    neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
     neural-trade leaderboard [SCENARIO] [--store runs] [--index runs/index.sqlite]
                                   [--spec FILE] [--out DIR] [--max-drawdown F] [--min-trades N]
@@ -347,6 +348,23 @@ def cmd_screen(args) -> int:
     return 0
 
 
+def cmd_stability(args) -> int:
+    from neural_trade.experiments.stability import run_harness
+
+    try:
+        res = run_harness(profile=args.profile, csv=args.csv, store=args.store,
+                          case_ids=[c for c in args.cases.split(",") if c] if args.cases else None,
+                          seeds=[int(x) for x in args.seeds.split(",") if x] if args.seeds else None,
+                          thresholds_path=args.thresholds)
+    except ValueError as exc:
+        logger.error("stability harness refused, nothing was run: %s", exc)
+        return 2
+    print(json.dumps({"harness_id": res.harness_id, "report": str(res.report), "passed": res.passed,  # noqa: T201
+                      "thresholds_sha256": res.thresholds_sha256, "case_passed": res.case_passed,
+                      "not_run": [c.id for c in res.not_run]}, indent=2))
+    return 0 if res.passed else 1
+
+
 def cmd_compare(args) -> int:
     from neural_trade.experiments.comparator import (CompareError, CompareSpec, compare, observed_design,
                                                      simulate_error_rates)
@@ -542,6 +560,23 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--max-trials", type=int, default=None,
                     help="run at most N pending trials, then stop (the same command resumes)")
     sc.set_defaults(func=cmd_screen)
+
+    sb = sub.add_parser("stability", help="the on-demand stability harness (NT-038, D-026): scale / volatility / "
+                                          "extreme-input / fault-injection cases, 3 seeds, strict mode, judged "
+                                          "against configs/stability_thresholds.yaml",
+                        description="runs the cases as an engine scenario into the run store and writes "
+                                    "<store>/stability/<id>/REPORT.md (pass or fail per case, the loss term "
+                                    "blamed for a failure, the thresholds file's sha256) and "
+                                    "failing_regions.json. Exit 1 when a case fails. Not a CI job: a GPU "
+                                    "profile is NT-051's.")
+    sb.add_argument("--profile", default="tiny", choices=["tiny", "reference"],
+                    help="tiny: CPU test size; reference: the screen-size layout (default tiny)")
+    sb.add_argument("--csv", default=None, help="the bars the cases are made from (default: Config's CSV_PATH)")
+    sb.add_argument("--store", default="runs", help="run store root; the report goes to <store>/stability/<id>/")
+    sb.add_argument("--cases", default=None, help="comma-separated case ids (default: every case)")
+    sb.add_argument("--seeds", default=None, help="comma-separated seeds (default: 3, as the thresholds file says)")
+    sb.add_argument("--thresholds", default=None, help="a thresholds file (default configs/stability_thresholds.yaml)")
+    sb.set_defaults(func=cmd_stability)
 
     cp = sub.add_parser("compare", help="a pre-registered paired \"A beats B\" verdict over two scenarios "
                                         "(D-025, NT-032): pairs by (seed, fold), refuses fewer than 5 pairs, "

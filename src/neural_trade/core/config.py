@@ -860,6 +860,8 @@ class Config:
                 warnings.warn(
                     f"Config.{spec.name} is deprecated and has no effect (default {spec.default!r})",
                     DeprecationWarning, stacklevel=2)
+        from neural_trade.core.guard import check_config
+        check_config(self)   # NT-038: failing regions (refused) and the GPU-memory warning
 
     # --------------------------------------------------------------- derived
     @property
