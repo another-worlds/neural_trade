@@ -109,17 +109,27 @@ def _total_term_tensors(custom_model, loss_components):
 
 
 def rescale_weight(orig: float, measured: float, damping: float, ref: float, lam_min: float,
-                    lam_max: float, eps: float = 1e-8) -> float:
+                    lam_max: float, eps: float = 1e-8, *, name: str = '', quiet: bool = False) -> float:
     """The calibration pass's damped rescale-and-clamp, shared by every term and both
     ``CALIB_MODE`` values (NT-101): ``measured`` is a median value in 'value' mode or a mean
     gradient norm in 'gradient' mode; either way, ``damping=1`` makes ``orig * measured`` (the
     weighted quantity, or its gradient) equal to ``ref`` for every term with ``measured > eps``.
     A component with ``measured <= eps`` (inactive, or disconnected from the measured graph) keeps
-    its original weight.
+    its original weight. NT-118: a component with ``damping == 0`` is not rescaled and keeps its
+    configured weight too, unclamped (a configured 0 stays 0, a value outside the clamp stays
+    as configured); only a rescaled weight (``damping > 0``) is clipped to
+    ``[lam_min, lam_max]``, and a clip that binds logs a WARNING (``quiet`` lowers it to INFO for
+    the one documented lift, ``CALIB_VOL_ZERO_TO_FLOOR``).
     """
-    if measured > eps:
-        return float(np.clip(orig * (ref / (measured + eps)) ** damping, lam_min, lam_max))
-    return orig
+    if damping == 0.0 or measured <= eps:
+        return orig
+    raw = orig * (ref / (measured + eps)) ** damping
+    out = float(np.clip(raw, lam_min, lam_max))
+    if out != raw:
+        logger.log(logging.INFO if quiet else logging.WARNING,
+                   "[calib] %s weight %.6g clipped to %.6g (clamp [%g, %g])",
+                   name or 'a loss', raw, out, lam_min, lam_max)
+    return out
 
 
 def _trunk_variables(custom_model):
@@ -250,6 +260,11 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             casimir_active = float(getattr(cfg, 'LAMBDA_CASIMIR', 0.0)) > 0.0
             hd_active      = float(getattr(cfg, 'LAMBDA_HD',      0.0)) > 0.0
             ife_active     = float(getattr(cfg, 'LAMBDA_IFE',     0.0)) > 0.0
+            # NT-118: a configured LAMBDA_VOL of 0 is lifted to CALIB_LAMBDA_MIN only while
+            # CALIB_VOL_ZERO_TO_FLOOR is on (the default: the arm NT-099 tested, D-058); with it
+            # off, 0 means off, as for soft ECE.
+            vol_zero_to_floor = bool(getattr(cfg, 'CALIB_VOL_ZERO_TO_FLOOR', True))
+            vol_active = (float(getattr(cfg, 'LAMBDA_VOL', 0.0)) > 0.0) or vol_zero_to_floor
 
             # ----------------------------------------------------------------
             # Phase 1 — warm-up forward passes (no sampling, no gradient). There is no BatchNorm in the graph; this builds the graph and model.losses before sampling.
@@ -286,7 +301,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                     't_perp': d_physics, 'casimir': d_physics, 'hd': d_physics, 'ife': d_physics,
                 }
                 _active_of_term = {
-                    'crps': crps_active, 'ece': ece_active, 't_perp': t_perp_active,
+                    'vol': vol_active, 'crps': crps_active, 'ece': ece_active, 't_perp': t_perp_active,
                     'casimir': casimir_active, 'hd': hd_active, 'ife': ife_active,
                 }
                 to_measure = [name for name, d in _damping_of_term.items()
@@ -405,7 +420,9 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # mean gradient norms (CALIB_MODE=gradient).
             # CRPS and ECE are included only when their config lambda is active (crps_active etc.
             # were computed earlier, before Phase 2, so gradient mode can also use them there).
-            candidate_meds = [med_short, med_point, med_long, med_ext, med_dir, med_var, med_vol]
+            candidate_meds = [med_short, med_point, med_long, med_ext, med_dir, med_var]
+            if vol_active:
+                candidate_meds.append(med_vol)
             if crps_active:
                 candidate_meds.append(med_crps)
             if ece_active:
@@ -432,22 +449,25 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # ----------------------------------------------------------------
             eps = 1e-8
 
-            def _rescale(orig, med, damping):
-                return rescale_weight(orig, med, damping, ref_loss, lam_min, lam_max, eps)
+            def _rescale(orig, med, damping, name='', quiet=False):
+                return rescale_weight(orig, med, damping, ref_loss, lam_min, lam_max, eps,
+                                      name=name, quiet=quiet)
 
-            new_short = _rescale(orig_short, med_short, d_point)
-            new_point = _rescale(orig_point, med_point, d_point)
-            new_long  = _rescale(orig_long,  med_long,  d_point)
-            new_ext   = _rescale(orig_ext,   med_ext,   d_trend)
-            new_dir   = _rescale(orig_dir,   med_dir,   d_dir)
-            new_var   = _rescale(orig_var,   med_var,   d_var)
-            new_vol   = _rescale(orig_vol,   med_vol,   d_vol)
-            new_crps  = _rescale(orig_crps,  med_crps,  d_crps) if crps_active else orig_crps
-            new_ece   = _rescale(orig_ece,   med_ece,   d_ece)  if ece_active  else orig_ece
-            new_t_perp  = _rescale(orig_t_perp,  med_t_perp,  d_physics) if t_perp_active  else orig_t_perp
-            new_casimir = _rescale(orig_casimir, med_casimir, d_physics) if casimir_active else orig_casimir
-            new_hd      = _rescale(orig_hd,      med_hd,      d_physics) if hd_active      else orig_hd
-            new_ife     = _rescale(orig_ife,     med_ife,     d_physics) if ife_active     else orig_ife
+            new_short = _rescale(orig_short, med_short, d_point, 'lambda_short')
+            new_point = _rescale(orig_point, med_point, d_point, 'lambda_point')
+            new_long  = _rescale(orig_long,  med_long,  d_point, 'lambda_long')
+            new_ext   = _rescale(orig_ext,   med_ext,   d_trend, 'lambda_extended_trend')
+            new_dir   = _rescale(orig_dir,   med_dir,   d_dir, 'lambda_dir')
+            new_var   = _rescale(orig_var,   med_var,   d_var, 'lambda_var')
+            new_vol   = (_rescale(orig_vol, med_vol, d_vol, 'lambda_vol',
+                                  quiet=(orig_vol == 0.0 and vol_zero_to_floor))
+                         if vol_active else orig_vol)
+            new_crps  = _rescale(orig_crps,  med_crps,  d_crps, 'lambda_crps') if crps_active else orig_crps
+            new_ece   = _rescale(orig_ece,   med_ece,   d_ece, 'lambda_soft_ece')  if ece_active  else orig_ece
+            new_t_perp  = _rescale(orig_t_perp,  med_t_perp,  d_physics, 'lambda_t_perp') if t_perp_active  else orig_t_perp
+            new_casimir = _rescale(orig_casimir, med_casimir, d_physics, 'lambda_casimir') if casimir_active else orig_casimir
+            new_hd      = _rescale(orig_hd,      med_hd,      d_physics, 'lambda_hd') if hd_active      else orig_hd
+            new_ife     = _rescale(orig_ife,     med_ife,     d_physics, 'lambda_ife') if ife_active     else orig_ife
 
             custom_model.lambda_short          = new_short
             custom_model.lambda_point          = new_point
@@ -529,7 +549,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             logger.info('%s', _fmt_row("λ_trend",  orig_ext,   med_ext,   new_ext))
             logger.info('%s', _fmt_row("λ_dir",    orig_dir,   med_dir,   new_dir))
             logger.info('%s', _fmt_row("λ_var",    orig_var,   med_var,   new_var))
-            logger.info('%s', _fmt_row("λ_vol",    orig_vol,   med_vol,   new_vol))
+            logger.info('%s', _fmt_row("λ_vol",    orig_vol,   med_vol,   new_vol, active=vol_active))
             logger.info('%s', _fmt_row("λ_crps",   orig_crps,  med_crps,  new_crps,  active=crps_active))
             logger.info('%s', _fmt_row("λ_ece",    orig_ece,   med_ece,   new_ece,   active=ece_active))
             logger.info('%s', _fmt_row("λ_t_perp", orig_t_perp,  med_t_perp,  new_t_perp,  active=t_perp_active))
