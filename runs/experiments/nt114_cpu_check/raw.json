@@ -1,0 +1,18 @@
+{
+  "gru_attention": {
+    "off_mean_s": 0.17704668000482748,
+    "off_median_s": 0.16680944999097846,
+    "on_mean_s": 0.21397805666654474,
+    "on_median_s": 0.2031266000121832,
+    "ratio_on_over_off_mean": 1.2085968325455765,
+    "n_steps": 90
+  },
+  "gru_small": {
+    "off_mean_s": 0.07625729667035759,
+    "off_median_s": 0.07846955000422895,
+    "on_mean_s": 0.0851191533328448,
+    "on_median_s": 0.08813610000652261,
+    "ratio_on_over_off_mean": 1.1162099503840917,
+    "n_steps": 90
+  }
+}

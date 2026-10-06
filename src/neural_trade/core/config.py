@@ -548,6 +548,19 @@ class Config:
         "trial's stochastic layers restart from its own seed instead of continuing whatever trial "
         "ran through the same persistent model before it - the only way phase 2 can match a fresh "
         "run bit-for-bit (docs/RUNBOOK.md 'Screen mode').", unit="flag")
+    DETERMINISTIC_GRU: bool = _f(
+        False, "stability",
+        "build every recurrent layer (models/gru_attention.py, models/gru_small.py) with "
+        "unroll=True instead of Keras's cuDNN-eligible defaults, same maths and same weights "
+        "layout (NT-074 GPU check, NT-114): on this GPU Keras picks the cuDNN-fused GRU kernel, "
+        "and TF 2.10's enable_op_determinism() does not cover it, so same-seed deterministic GPU "
+        "runs still diverge at epoch 0 (measured 9.5906/9.7052/9.6122) through the fused kernel's "
+        "backward-pass reduction order. unroll=True runs the identical GRU cell as a Python-level "
+        "loop, which only uses ops enable_op_determinism() already covers, and gave bit-for-bit "
+        "identical val_loss (9.57204818725586) across three processes. False (default) is today's "
+        "cuDNN path, unchanged speed and numbers (golden run). True costs extra step time (see the "
+        "measurement in runs/experiments/nt114_cpu_check/) and is for pre-registered comparison "
+        "studies (D-025) that need genuine GPU reproducibility, not ordinary training.", unit="flag")
     STRICT_LOSS_MASKS: bool = _f(
         False, "stability",
         "turn off every non-finite mask in losses/functions.py (about 46 sites, including the "
