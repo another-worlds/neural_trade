@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "run_id": "20261006T085757Z-61014d0-78fa44ab-gru_small__f-93__s0",
+  "scenario": "capacity_v1",
+  "cell_key": "gru_small__f-93__s0",
+  "role": "dev",
+  "status": "failed",
+  "scores": {},
+  "error": {
+    "type": "MemoryError",
+    "message": "Unable to allocate 5.14 GiB for an array with shape (4598119, 60, 5) and data type float32",
+    "traceback": "Traceback (most recent call last):\n  File \"D:\\nt\\nt_wt_104ab\\src\\neural_trade\\experiments\\runner.py\", line 271, in run_cell\n    scored = score_result(result, role=pc.role, strategy=sc.strategy.name,\n  File \"D:\\nt\\nt_wt_104ab\\src\\neural_trade\\experiments\\scorer.py\", line 291, in score_result\n    arrays = arrays if arrays is not None else split_arrays(cfg)\n  File \"D:\\nt\\nt_wt_104ab\\src\\neural_trade\\data\\processor.py\", line 86, in split_arrays\n    Xm = X if series_names == [\"close\"] else make_multichannel_windows(\n  File \"D:\\nt\\nt_wt_104ab\\src\\neural_trade\\data\\windowing.py\", line 134, in make_multichannel_windows\n    return np.array(X, dtype=\"float32\")\nnumpy.core._exceptions._ArrayMemoryError: Unable to allocate 5.14 GiB for an array with shape (4598119, 60, 5) and data type float32\n"
+  },
+  "finished_utc": "20261006T090500Z",
+  "wall_s": 422.56155240000226,
+  "sec_per_step": 0.35877306296907624
+}
