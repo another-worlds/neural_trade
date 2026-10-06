@@ -11,6 +11,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -89,10 +90,18 @@ class SweepInfo:
 
 
 def _read_json(path: Path) -> Optional[Dict[str, Any]]:
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
+    # Read the text once and close at once (the writer's replace waits on an open handle, NT-185); a missing,
+    # busy or half-written file is "no summary this poll", never an error.
+    doc = None
+    for attempt in range(3):
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+            break
+        except ValueError:
+            return None
+        except OSError:
+            if attempt < 2 and path.exists():
+                time.sleep(0.01)
     return doc if isinstance(doc, dict) else None
 
 
@@ -109,13 +118,17 @@ def list_sweeps(store_root) -> List[SweepInfo]:
         launches = doc.get("launches") or []
         budget = (launches[-1].get("budget") if launches else None) or {}
         n_trials = int(budget.get("n_trials") or budget.get("trials_to_run") or len(trials) or 0)
+        try:
+            modified = path.stat().st_mtime
+        except OSError:                                    # replaced or removed between the read and now
+            continue
         out.append(SweepInfo(
             sweep_id=str(doc.get("sweep_id") or d.name), scenario=str(doc.get("scenario") or d.name),
             mode=str(doc.get("mode") or ""), label=str(doc.get("label") or doc.get("mode") or ""),
             state=str(doc.get("state") or "unknown"), stop_reason=doc.get("stop_reason"),
             n_trials=max(n_trials, len(trials)),
             n_done=sum(t.get("state") == "COMPLETE" for t in trials), n_failed=sum(t.get("state") == "FAIL" for t in trials),
-            modified=path.stat().st_mtime, directory=d, space=tuple(doc.get("space") or ()), budget=dict(budget)))
+            modified=modified, directory=d, space=tuple(doc.get("space") or ()), budget=dict(budget)))
     return sorted(out, key=lambda s: (-s.modified, s.sweep_id))
 
 
