@@ -10,7 +10,7 @@
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
     neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
-    neural-trade leaderboard [SCENARIO] [--store runs] [--index runs/index.sqlite]
+    neural-trade leaderboard [SCENARIO ...] [--scenario a,b,c] [--store runs] [--index runs/index.sqlite]
                                   [--spec FILE] [--out DIR] [--max-drawdown F] [--min-trades N]
                                   [--random-null-percentile P] [--no-beat-buy-and-hold] [--no-beat-random-null]
     neural-trade registry list | info REGISTRY NAME | search QUERY
@@ -53,7 +53,11 @@ and their seeds, D-046, with the spread and the counts); guard-rails (maximum dr
 beating buy-and-hold, beating the random null) sit beside it and can disqualify a row from the
 winner; the test-fold columns are shown on every row, labelled "test, not used for ranking"
 (D-020), and never affect the order. A configuration with every cell failed appears as a failed,
-disqualified row.
+disqualified row. Several scenarios (positional, or ``--scenario a,b,c``) go on ONE board (NT-179): rows
+read ``scenario / configuration``, each is judged by its own scenario's guard-rail thresholds (the
+table header says where each came from), the dev folds are the scenarios' union and the cost profile
+the first scenario's, so a scenario that ran other folds or costs fails fold_coverage / cost_profile,
+and the winner is chosen across scenarios by the same rules; ``--out`` writes ``<out>/combined/``.
 """
 from __future__ import annotations
 
@@ -294,8 +298,11 @@ def cmd_leaderboard(args) -> int:
     from neural_trade.experiments.store import ENGINE_SUBTREE, RunStore
 
     store = RunStore(args.store, args.index)
-    if args.scenario:
-        scenarios = [args.scenario]
+    # scenario names: positional ones and --scenario a,b,c (repeatable), in order, without repeats (NT-179)
+    named = list(dict.fromkeys([*(args.scenarios or []), *(n.strip() for v in (args.scenario or []) for n in v.split(",")
+                                                           if n.strip())]))
+    if named:
+        scenarios = named
     else:
         base = store.root / ENGINE_SUBTREE
         scenarios = sorted(p.name for p in base.iterdir() if p.is_dir()) if base.is_dir() else []
@@ -304,11 +311,16 @@ def cmd_leaderboard(args) -> int:
         return 0
     if args.spec and not Path(args.spec).is_file():
         raise SystemExit(f"leaderboard: scenario spec {args.spec} does not exist")
-    for name in scenarios:
+    if args.spec and len(named) > 1:
+        raise SystemExit("leaderboard: --spec names one scenario's spec; several scenarios on one board each use "
+                         "their own spec (--specs-dir)")
+
+    def inputs(name):
+        """(guard-rail spec, its source line, the scenario's backtest block, its folds) of one scenario."""
         # the spec by the scenario's `name:` key (configs/scenarios/*.yaml), else the one the store recorded
         scenario, where = ((Scenario.from_yaml(args.spec), Path(args.spec).name) if args.spec else
                            find_scenario_spec(name, args.specs_dir, store.scenario_dir(name) / "specs"))
-        spec, source = scenario_guard_rails(
+        rails, source = scenario_guard_rails(
             scenario, max_drawdown=args.max_drawdown, min_trades=args.min_trades,
             random_null_percentile=args.random_null_percentile,
             beat_buy_and_hold=False if args.no_beat_buy_and_hold else None,
@@ -316,20 +328,44 @@ def cmd_leaderboard(args) -> int:
         if scenario is not None:
             source = f"{where}: {source}"
         _, backtest, folds = spec_parts(scenario)
-        board = build_leaderboard(store.sync(name), guard_rails=spec, store_root=store.root,
-                                  board_cost=scenario_cost_profile(backtest), spec_folds=folds)
-        text = leaderboard_markdown(board, guard_rails=spec, guard_rail_source=source)
+        return rails, source, backtest, folds
+
+    def emit(board, text, out_name):
         print(text)  # noqa: T201 - the command's result
         if args.out:
             from neural_trade.visualization.leaderboard_fig import leaderboard_figure, write_png
 
-            out = Path(args.out) / name
+            out = Path(args.out) / out_name
             out.mkdir(parents=True, exist_ok=True)
             (out / "leaderboard.md").write_text(text, encoding="utf-8")
             fig = leaderboard_figure(board)
             fig.write_html(str(out / "leaderboard.html"), include_plotlyjs="cdn")
             if not write_png(fig, out / "leaderboard.png"):
                 logger.warning("leaderboard: %s was not written", out / "leaderboard.png")
+
+    if len(named) > 1:
+        # one board for several scenarios (the learned model, its frozen twin, the TA rules: NT-033, NT-050): rows are
+        # `scenario / configuration`, each judged by its own scenario's guard-rail thresholds; the dev folds are the
+        # union of the scenarios' (a scenario that ran others fails fold_coverage) and the cost profile is the first
+        # scenario's (a row scored at another one is not comparable)
+        per = {name: inputs(name) for name in named}
+        rows = [r for name in named for r in store.sync(name)]
+        for name in named:
+            if not any(r.get("scenario") == name for r in rows):
+                logger.warning("leaderboard: scenario %s has no stored cell; it is not on the board", name)
+        first_cost = scenario_cost_profile(per[named[0]][2])
+        board = build_leaderboard(rows, guard_rails={n: v[0] for n, v in per.items()}, store_root=store.root,
+                                  board_cost=first_cost,
+                                  spec_folds=sorted({f for v in per.values() for f in v[3]}))
+        text = leaderboard_markdown(board, guard_rails={n: v[0] for n, v in per.items()},
+                                    guard_rail_source={n: v[1] for n, v in per.items()})
+        emit(board, text, "combined")
+        return 0
+    for name in scenarios:
+        spec, source, backtest, folds = inputs(name)
+        board = build_leaderboard(store.sync(name), guard_rails=spec, store_root=store.root,
+                                  board_cost=scenario_cost_profile(backtest), spec_folds=folds)
+        emit(board, leaderboard_markdown(board, guard_rails=spec, guard_rail_source=source), name)
     return 0
 
 
@@ -597,10 +633,14 @@ def build_parser() -> argparse.ArgumentParser:
     lb = sub.add_parser("leaderboard", help="print the leaderboard (NT-031, D-020): one row per "
                                             "configuration, ranked by the dev-fold net Sharpe after costs, "
                                             "guard-rails beside it, test-fold columns shown but never ranked")
-    lb.add_argument("scenario", nargs="?", help="scenario name (default: every scenario under --store)")
+    lb.add_argument("scenarios", nargs="*", metavar="scenario",
+                    help="scenario name; several put their configurations on ONE board, rows `scenario / "
+                         "configuration` (NT-179). Default: every scenario under --store, one board each")
+    lb.add_argument("--scenario", action="append", default=None, metavar="a,b,c",
+                    help="scenario names, comma-separated (repeatable): the same as positional names")
     lb.add_argument("--store", default="runs", help="run store root")
     lb.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
-    lb.add_argument("--out", default=None, help="also write <out>/<scenario>/leaderboard.md, .html and .png "
+    lb.add_argument("--out", default=None, help="also write <out>/<scenario>/leaderboard.md, .html and .png (<out>/combined/ for several scenarios on one board) "
                                                 "(the PNG through kaleido or headless Edge, when available)")
     lb.add_argument("--max-drawdown", type=float, default=None,
                     help="guard-rail: dev max drawdown must be <= this fraction (default: not checked)")

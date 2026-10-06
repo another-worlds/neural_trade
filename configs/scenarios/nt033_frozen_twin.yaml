@@ -10,7 +10,9 @@
 # Same folds, seeds, strategy, costs and search space (the training hyperparameters) as nt033_learned.yaml.
 #
 #   neural-trade scenario plan configs/scenarios/nt033_frozen_twin.yaml
-#   neural-trade sweep configs/scenarios/nt033_frozen_twin.yaml --mode optuna --n-trials 30   # GPU, NT-050
+# --n-trials 17 is the most that fits the 12 h cap: 11.89 h upper bound at sec_per_step 0.1735 with the reference
+# batch bounds (30 trials = 15.90 h, which the sweep refuses). The learned model and its twin are two launches.
+#   neural-trade sweep configs/scenarios/nt033_frozen_twin.yaml --mode optuna --n-trials 17   # GPU, NT-050
 schema_version: 1
 name: nt033_frozen_twin
 description: The frozen-period twin of the learned network (periods held at the textbook values), reference setup.

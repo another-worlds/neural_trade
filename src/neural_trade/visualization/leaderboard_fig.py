@@ -35,7 +35,7 @@ from typing import List, Optional, Sequence
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.theme import apply
 
-from neural_trade.experiments.leaderboard import TABLE_HEADER, LeaderboardRow, cost_header, table_cells
+from neural_trade.experiments.leaderboard import TABLE_HEADER, LeaderboardRow, cost_header, row_name, table_cells
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,7 @@ def _cell_html(lines: Sequence[str]) -> str:
     return "<br>".join(_escape(x) for x in lines)
 
 
-def _label(r: LeaderboardRow) -> str:
+def _label(r: LeaderboardRow, multi: bool = False) -> str:
     tags = []
     if r.is_winner:
         tags.append("winner")
@@ -85,23 +85,26 @@ def _label(r: LeaderboardRow) -> str:
     if r.status != "failed" and not r.cost_comparable:
         tags.append("not comparable")
     cost = r.cost_profile.short() if r.cost_profile is not None else r.cost_text.split(":")[0]
-    return f"#{r.rank} {r.configuration} · {cost}" + (f" [{', '.join(tags)}]" if tags else "")
+    return f"#{r.rank} {row_name(r, multi)} · {cost}" + (f" [{', '.join(tags)}]" if tags else "")
 
 
 def leaderboard_figure(rows: Sequence[LeaderboardRow], *, title: Optional[str] = None, height: Optional[int] = None):
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
 
-    scenario = rows[0].scenario if rows else "(no runs)"
+    scenarios = list(dict.fromkeys(r.scenario for r in rows))
+    multi = len(scenarios) > 1          # several scenarios on one board (NT-179): rows read "scenario / configuration"
+    scenario = ", ".join(scenarios) if scenarios else "(no runs)"
     n = max(1, len(rows))
     # ---- table geometry from the character budgets
-    header_lines = [wrap_cell(h, w) for h, w in zip(TABLE_HEADER, COLUMN_CHARS)]
-    body = [[wrap_cell(v, w) for v, w in zip(table_cells(r), COLUMN_CHARS)] for r in rows]
-    col_px = [w * CHAR_PX + CELL_PAD_PX for w in COLUMN_CHARS]
+    chars = tuple(max(w, 40) if (i == 1 and multi) else w for i, w in enumerate(COLUMN_CHARS))
+    header_lines = [wrap_cell(h, w) for h, w in zip(TABLE_HEADER, chars)]
+    body = [[wrap_cell(v, w) for v, w in zip(table_cells(r, with_scenario=multi), chars)] for r in rows]
+    col_px = [w * CHAR_PX + CELL_PAD_PX for w in chars]
     header_h = max(len(x) for x in header_lines) * LINE_PX + 12
     cell_h = max([len(c) for row in body for c in row] or [1]) * LINE_PX + 12
     table_px = header_h + cell_h * len(rows) + 10
-    labels_by_rank = [_label(r) for r in rows]
+    labels_by_rank = [_label(r, multi) for r in rows]
     margin_l = int(max([len(x) for x in labels_by_rank] or [10]) * CHAR_PX) + 24
     width = int(margin_l + sum(col_px) + MARGIN_R)
     bars_px = 70 + LANE_PX * n
@@ -122,7 +125,7 @@ def leaderboard_figure(rows: Sequence[LeaderboardRow], *, title: Optional[str] =
 
     ordered = list(reversed(rows))          # rank 1 drawn at the top
     ys = list(range(len(ordered)))
-    labels = [_label(r) for r in ordered]
+    labels = [_label(r, multi) for r in ordered]
 
     def dev_v(r):
         v = r.dev.values.get("sharpe_net")
@@ -130,7 +133,7 @@ def leaderboard_figure(rows: Sequence[LeaderboardRow], *, title: Optional[str] =
 
     def hover(r):
         gr = "; ".join(f"{g.name} {'OK' if g.passed else 'FAIL'} ({g.detail})" for g in r.guard_rails) or "n/a"
-        return (f"{r.configuration} (rank {r.rank}, {r.status})<br>dev net Sharpe {_fmt(r.dev.values.get('sharpe_net'))} "
+        return (f"{row_name(r, multi)} (rank {r.rank}, {r.status})<br>dev net Sharpe {_fmt(r.dev.values.get('sharpe_net'))} "
                 f"(fold sd {_fmt(r.dev.spread.get('sharpe_net'), '{:.3f}')}, seed sd "
                 f"{_fmt(r.dev.seed_spread.get('sharpe_net'), '{:.3f}')}, {r.dev.n_folds} folds x {r.dev.n_seeds} seeds, "
                 f"{r.dev.n_rows} cells)<br>cost profile: {_escape(r.cost_text)}<br>guard-rails: {_escape(gr)}")
@@ -159,7 +162,7 @@ def leaderboard_figure(rows: Sequence[LeaderboardRow], *, title: Optional[str] =
             marker=dict(symbol=symbol, size=12, color=color, line=dict(color=color, width=2)),
             error_x=dict(type="data", array=[getattr(ordered[i].dev, key)["sharpe_net"] for i in idx],
                          color=color, thickness=2, width=6, visible=True),
-            customdata=[f"{ordered[i].configuration}: {name} {getattr(ordered[i].dev, key)['sharpe_net']:.3f}"
+            customdata=[f"{row_name(ordered[i], multi)}: {name} {getattr(ordered[i].dev, key)['sharpe_net']:.3f}"
                         for i in idx], hovertemplate="%{customdata}<extra></extra>"), 1, 1)
 
     whisker("fold sd (between dev-fold means, D-046)", "spread", 0.0, FOLD_SD, "line-ns")
@@ -192,7 +195,7 @@ def leaderboard_figure(rows: Sequence[LeaderboardRow], *, title: Optional[str] =
             y=[ys[i] - 0.3 for i in test_idx], x=[ordered[i].test.values["sharpe_net"] for i in test_idx],
             mode="markers", name="test net Sharpe (test, not used for ranking)",
             marker=dict(symbol="diamond-open", size=11, color=TEST_MARK, line=dict(width=2)),
-            customdata=[f"{ordered[i].configuration}: test net Sharpe {_fmt(ordered[i].test.values['sharpe_net'])} "
+            customdata=[f"{row_name(ordered[i], multi)}: test net Sharpe {_fmt(ordered[i].test.values['sharpe_net'])} "
                         f"({ordered[i].test.n_folds} folds / {ordered[i].test.n_rows} cells) -- test, not used for "
                         "ranking" for i in test_idx], hovertemplate="%{customdata}<extra></extra>"), 1, 1)
     fig.add_vline(x=0, line=dict(color=T.NEUTRAL, width=1, dash="6px,3px"), row=1, col=1)   # dotted = training (D-014)

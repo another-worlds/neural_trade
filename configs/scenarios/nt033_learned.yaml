@@ -8,7 +8,9 @@
 # Real GPU runs are NT-050's; this file is a spec only.
 #
 #   neural-trade scenario plan configs/scenarios/nt033_learned.yaml
-#   neural-trade sweep configs/scenarios/nt033_learned.yaml --mode optuna --n-trials 30      # GPU, NT-050
+# --n-trials 17 is the most that fits the 12 h cap: 11.89 h upper bound at sec_per_step 0.1735 with the reference
+# batch bounds (30 trials = 15.90 h, which the sweep refuses). The learned model and its twin are two launches.
+#   neural-trade sweep configs/scenarios/nt033_learned.yaml --mode optuna --n-trials 17      # GPU, NT-050
 schema_version: 1
 name: nt033_learned
 description: The learned network (periods trained), reference setup, dev folds -3 and -2, test fold -1.

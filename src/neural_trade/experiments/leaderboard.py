@@ -55,7 +55,7 @@ import logging
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
 from neural_trade.experiments.store import RESULT_FILE, RunStore
 
@@ -297,21 +297,34 @@ def expected_dev_folds(rows: Iterable[Mapping[str, Any]], spec_folds: Optional[I
     return tuple(sorted(folds))
 
 
-def _fold_coverage(rows: Sequence[Mapping[str, Any]], expected: Sequence[int]) -> Optional[GuardRail]:
+def _fold_coverage(rows: Sequence[Mapping[str, Any]], expected: Sequence[int], *, board_wide: bool = False
+                   ) -> Optional[GuardRail]:
+    """A scored cell on every expected dev fold. ``board_wide``: the expected set is the whole board's (several
+    scenarios share one board, NT-179); the detail then names the folds this configuration's scenario ran, and
+    a dev fold outside the set fails too (its mean would be taken over other folds than its rivals')."""
     if not expected:
         return None
     scored = {int(r["fold"]) for r in rows if r.get("status") == "done" and r.get("role") == "dev"
               and r.get("fold") is not None}
     missing = [f for f in expected if f not in scored]
-    desc = f"a scored cell on every dev fold of the scenario ({len(expected)})"
-    if not missing:
+    extra = sorted({int(r["fold"]) for r in rows if r.get("role") == "dev" and r.get("fold") is not None}
+                   - set(expected)) if board_wide else []
+    desc = (f"a scored cell on every dev fold of the board ({len(expected)}), the same folds for every scenario"
+            if board_wide else f"a scored cell on every dev fold of the scenario ({len(expected)})")
+    if not missing and not extra:
         return GuardRail("fold_coverage", desc, True, f"{len(expected)} of {len(expected)} dev folds")
     why = []
     for f in missing:
         st = sorted({str(r.get("status") or "incomplete") for r in rows if r.get("fold") == f})
         why.append(f"fold {f} ({', '.join(st) if st else 'no cell'})")
-    return GuardRail("fold_coverage", desc, False,
-                     f"{len(expected) - len(missing)} of {len(expected)} dev folds; missing " + ", ".join(why))
+    detail = f"{len(expected) - len(missing)} of {len(expected)} dev folds"
+    if why:
+        detail += "; missing " + ", ".join(why)
+    if extra:
+        detail += f"; ran dev folds outside the board's set: {extra}"
+    if board_wide:
+        detail += f" (the board's dev folds are {list(expected)})"
+    return GuardRail("fold_coverage", desc, False, detail)
 
 
 # ------------------------------------------------------------------ aggregation
@@ -421,7 +434,7 @@ def _horizon_steps(rows: Sequence[Mapping[str, Any]]) -> Optional[Tuple[int, ...
 
 def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping[str, Any]],
                         guard_rails: GuardRailSpec, *, board_cost: CostProfile, dev_folds: Sequence[int],
-                        store_root: Optional[Path]) -> LeaderboardRow:
+                        store_root: Optional[Path], board_wide_folds: bool = False) -> LeaderboardRow:
     done = [r for r in rows if r.get("status") == "done"]
     failed = [r for r in rows if r.get("status") == "failed"]
     n_incomplete = len(rows) - len(done) - len(failed)
@@ -435,7 +448,7 @@ def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping
     test_agg = _aggregate([r for r in done if r.get("role") == "test"])
     rails = _check_guard_rails(dev_agg.values, guard_rails, dev_agg.n_rows,
                           dev_agg.fold_values.get("n_trades"))
-    coverage = _fold_coverage(rows, dev_folds)
+    coverage = _fold_coverage(rows, dev_folds, board_wide=board_wide_folds)
     if coverage is not None:
         rails.append(coverage)
     cost, cost_text = _configuration_cost([_row_cost(r, store_root) for r in done])
@@ -460,7 +473,8 @@ def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping
         cost_profile=cost, cost_text=cost_text, board_cost=board_cost, cost_comparable=comparable or not done)
 
 
-def build_leaderboard(rows: Sequence[Mapping[str, Any]], *, guard_rails: Optional[GuardRailSpec] = None,
+def build_leaderboard(rows: Sequence[Mapping[str, Any]], *,
+                      guard_rails: Union[GuardRailSpec, Mapping[str, GuardRailSpec], None] = None,
                       store_root=None, board_cost: Optional[CostProfile] = None,
                       spec_folds: Optional[Iterable[int]] = None) -> List[LeaderboardRow]:
     """One :class:`LeaderboardRow` per (scenario, configuration) in ``rows`` (the run index's rows,
@@ -471,8 +485,16 @@ def build_leaderboard(rows: Sequence[Mapping[str, Any]], *, guard_rails: Optiona
     (rows carrying ``fee_bps`` / ``half_spread_bps`` / ``slippage_bps`` use those instead);
     ``board_cost`` is the profile the board ranks at (default: :func:`default_cost_profile`, D-044);
     ``spec_folds`` are the scenario spec's folds, for the fold-coverage guard-rail.
+
+    **Several scenarios on one board (NT-179).** ``guard_rails`` may be a mapping scenario name -> spec (a
+    scenario missing from it gets the defaults): each row is judged by its own scenario's thresholds. The
+    expected dev folds are then the board's: the union of every scenario's dev folds (``spec_folds`` the union
+    of their specs'), and a configuration whose scenario ran other folds fails ``fold_coverage`` naming them.
+    A row whose cells were scored at another cost profile than ``board_cost`` is not comparable (as for one
+    scenario). The winner is the top row of the one ranking that is not disqualified.
     """
-    spec = guard_rails if guard_rails is not None else DEFAULT_GUARD_RAILS
+    per_scenario_rails = guard_rails if isinstance(guard_rails, Mapping) else None
+    default_spec = guard_rails if guard_rails is not None and per_scenario_rails is None else DEFAULT_GUARD_RAILS
     board = board_cost if board_cost is not None else default_cost_profile()
     root = Path(store_root) if store_root is not None else None
     order: List[Tuple[str, str]] = []
@@ -486,9 +508,17 @@ def build_leaderboard(rows: Sequence[Mapping[str, Any]], *, guard_rails: Optiona
     by_scenario: Dict[str, List[Mapping[str, Any]]] = {}
     for r in rows:
         by_scenario.setdefault(str(r.get("scenario")), []).append(r)
-    folds = {s: expected_dev_folds(rs, spec_folds) for s, rs in by_scenario.items()}
-    built = [_configuration_row(scenario, configuration, groups[(scenario, configuration)], spec,
-                                board_cost=board, dev_folds=folds[scenario], store_root=root)
+    multi = len(by_scenario) > 1
+    if multi:
+        board_folds = expected_dev_folds(rows, spec_folds)
+        folds = {s: board_folds for s in by_scenario}
+    else:
+        folds = {s: expected_dev_folds(rs, spec_folds) for s, rs in by_scenario.items()}
+    built = [_configuration_row(scenario, configuration, groups[(scenario, configuration)],
+                                per_scenario_rails.get(scenario, DEFAULT_GUARD_RAILS) if per_scenario_rails is not None
+                                else default_spec,
+                                board_cost=board, dev_folds=folds[scenario], store_root=root,
+                                board_wide_folds=multi)
              for scenario, configuration in order]
 
     def sort_key(i: int):
@@ -650,11 +680,17 @@ TABLE_HEADER = ("rank", "configuration", "status", "ranking: dev net Sharpe (spr
                 "dataset fingerprint (sha256, first 12)", "bar (min)", "horizons (bars)", "strategy")
 
 
-def table_cells(r: LeaderboardRow) -> List[str]:
+def row_name(r: LeaderboardRow, with_scenario: bool = False) -> str:
+    """``scenario / configuration`` on a board that mixes scenarios (NT-179), else the configuration."""
+    return f"{r.scenario} / {r.configuration}" if with_scenario else r.configuration
+
+
+def table_cells(r: LeaderboardRow, *, with_scenario: bool = False) -> List[str]:
     """The text of every column of one row, in ``TABLE_HEADER`` order (the Markdown table and the
-    figure's table share it, so they cannot drift apart)."""
+    figure's table share it, so they cannot drift apart). ``with_scenario``: the configuration column
+    reads ``scenario / configuration`` (a board of several scenarios)."""
     fp = r.dataset_fingerprint
-    return [_rank_text(r), r.configuration, _status_text(r),
+    return [_rank_text(r), row_name(r, with_scenario), _status_text(r),
             _fmt_metric(r.dev, "sharpe_net", "{:+.3f}"), _cost_cell(r),
             _fmt_metric(r.dev, "total_return", "{:+.2%}", counts=False),
             _fmt_metric(r.dev, "max_drawdown", "{:.2%}", counts=False),
@@ -669,12 +705,15 @@ def table_cells(r: LeaderboardRow) -> List[str]:
             "n/a" if r.horizon_steps is None else ", ".join(str(h) for h in r.horizon_steps), r.strategy or "n/a"]
 
 
-def leaderboard_markdown(rows: Sequence[LeaderboardRow], *, guard_rails: Optional[GuardRailSpec] = None,
-                         guard_rail_source: str = "defaults") -> str:
+def leaderboard_markdown(rows: Sequence[LeaderboardRow], *,
+                         guard_rails: Union[GuardRailSpec, Mapping[str, GuardRailSpec], None] = None,
+                         guard_rail_source: Union[str, Mapping[str, str]] = "defaults") -> str:
     """A Markdown table: the ranking column labelled as such, the test-fold columns labelled
     'test, not used for ranking' (criterion 5), guard-rails and disqualification, the cost profile of
     every row's stored net Sharpe (and a header line on the board's), the dataset fingerprint, bar
-    size, horizons and strategy on every row (criterion 4)."""
+    size, horizons and strategy on every row (criterion 4). A board of several scenarios (NT-179) names each
+    row ``scenario / configuration`` and, when ``guard_rails`` / ``guard_rail_source`` are mappings by scenario,
+    states each scenario's thresholds and where they came from."""
     scenarios = list(dict.fromkeys(r.scenario for r in rows))
     scenario = "`, `".join(scenarios) if scenarios else "(empty)"
     lines = [f"# Leaderboard: `{scenario}`", "",
@@ -682,14 +721,27 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow], *, guard_rails: Optiona
              "the dev folds of each fold's seed mean, D-020, D-046). Guard-rails beside it can disqualify a row "
              "from the winner (VISION \"The yardstick\"). The **test-fold columns are test, not used for ranking** "
              "(D-020): shown for every row, never used to rank or choose.", "",
-             cost_header(rows), "",
-             "Guard-rails: " + describe_guard_rails(guard_rails or DEFAULT_GUARD_RAILS, guard_rail_source)
-             + "; a scored cell on every dev fold of the scenario; the board's cost profile.", "",
-             "| " + " | ".join(TABLE_HEADER) + " |", "|" + "---|" * len(TABLE_HEADER)]
+             cost_header(rows), ""]
+    multi = len(scenarios) > 1
+    if multi or isinstance(guard_rails, Mapping):
+        # per scenario: each row is judged by its own scenario's thresholds, and the header says where they came from
+        rails = guard_rails if isinstance(guard_rails, Mapping) else {}
+        srcs = guard_rail_source if isinstance(guard_rail_source, Mapping) else {}
+        lines += ["Guard-rails per scenario (each row uses its own scenario's thresholds; the dev folds and the "
+                  "cost profile are the board's):", ""]
+        lines += [f"- `{sc}`: " + describe_guard_rails(rails.get(sc, DEFAULT_GUARD_RAILS), srcs.get(sc, "defaults"))
+                  for sc in scenarios]
+        lines.append("")
+        lines += ["A row whose scenario ran other dev folds than the board's, or whose cells were scored at another "
+                  "cost profile, fails the guard-rail (fold_coverage, cost_profile) and cannot be the winner.", ""]
+    else:
+        lines += ["Guard-rails: " + describe_guard_rails(guard_rails or DEFAULT_GUARD_RAILS, str(guard_rail_source))
+                  + "; a scored cell on every dev fold of the scenario; the board's cost profile.", ""]
+    lines += ["| " + " | ".join(TABLE_HEADER) + " |", "|" + "---|" * len(TABLE_HEADER)]
     for r in rows:
-        cells = table_cells(r)
+        cells = table_cells(r, with_scenario=multi)
         # a board that mixes scenarios (the learned model, its frozen twin and the TA rules, NT-033) names each row's
-        cells[1] = f"`{r.scenario}` / `{cells[1]}`" if len(scenarios) > 1 else f"`{cells[1]}`"
+        cells[1] = f"`{r.scenario}` / `{r.configuration}`" if multi else f"`{cells[1]}`"
         lines.append("| " + " | ".join(c.replace("|", "/") for c in cells) + " |")
     w = winner(rows)
     lines += ["", f"**Winner:** `{w.scenario}` / `{w.configuration}` (rank {w.rank})" if w is not None and len(scenarios) > 1
@@ -702,4 +754,4 @@ __all__ = ["COST_FIELDS", "DEFAULT_GUARD_RAILS", "CostProfile", "GuardRail", "Gu
            "METRICS", "RANK_METRIC", "ROLES", "RoleAggregate", "TABLE_HEADER", "build_leaderboard",
            "cell_cost_profile", "cost_header", "default_cost_profile", "describe_guard_rails",
            "expected_dev_folds", "find_scenario_spec", "guard_rails_from_block", "leaderboard_for_scenario", "leaderboard_markdown",
-           "scenario_cost_profile", "scenario_guard_rails", "spec_parts", "table_cells", "winner"]
+           "row_name", "scenario_cost_profile", "scenario_guard_rails", "spec_parts", "table_cells", "winner"]
