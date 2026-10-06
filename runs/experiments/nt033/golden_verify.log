@@ -1,0 +1,144 @@
+af6d5d1b782478cc8e2648a499693af0aa16552f
+2026-10-06 16:07:52.628288: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+Starting enhanced model training with extended trend features...
+Dataset length after cleaning: 43500
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-11-10 07:29:00+00:00
+Sequences with extended trends: (43421, 60), (43421, 3), Extended: (43421, 3)
+[OK] Limited sequence set from 43421 to 3000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 3000
+   Train sequences: 1864 (batches/epoch: 30)
+   Val sequences:   198   Cal sequences: 198   (purge gap: 80 sequences, fold 5)
+   Test sequences:  500 (batches: 8)
+[calib] Warm-up forward passes over 2/30 batches (5% of epoch) to build the graph and layer losses before sampling...
+[calib] Sampling loss magnitudes over 3/30 batches (10% of epoch)...
+[calib] lambda_vol weight 0 clipped to 0.1 (clamp [0.1, 20])
+[calib] Sampled medians and updated lambdas (CALIB_MODE=value):
+  λ_short        med=0.347733  1.0000 → 2.1893
+  λ_point        med=0.774076  1.0000 → 0.9835
+  λ_long         med=1.132824  1.0000 → 0.6720
+  λ_trend        med=0.740611  0.1000 → 0.1000
+  λ_dir          med=0.988573  1.0000 → 0.7701
+  λ_var          med=1.794932  1.0000 → 0.4241
+  λ_vol          med=0.189524  0.0000 → 0.1000
+  λ_crps         med=0.859253  1.0000 → 0.8860
+  λ_ece          med=0.361332  0.0000 → 0.0000 [skipped — inactive]
+  λ_t_perp       med=0.565295  0.1000 → 0.1000
+  λ_casimir      med=0.000000  0.1000 → 0.1000
+  λ_hd           med=0.900405  0.1000 → 0.1000
+  λ_ife          med=0.000000  0.1000 → 0.1000
+  Λ_vac(thr)     med=0.000000  0.0000 → 0.0000  (threshold, not rescaled)  # P0-2: default now 0 (opt-in)
+[calib] ref_loss=0.761300  d_global=1.0  warmup=2/30  sample=3/30  clamp=[0.1, 20.0]
+Training for 2 epochs...
+Training Progress:   0%|          | 0/2 [00:00<?, ?epoch/s]
+Epoch 1:   0%|          | 0/30 [00:00<?, ?batch/s][A
+Epoch 1:   3%|▎         | 1/30 [01:19<38:37, 79.92s/batch][A
+Epoch 1:   7%|▋         | 2/30 [01:20<15:28, 33.18s/batch][A
+Epoch 1:  10%|█         | 3/30 [01:20<08:13, 18.27s/batch][A
+Epoch 1:  13%|█▎        | 4/30 [01:21<04:52, 11.26s/batch][A
+Epoch 1:  17%|█▋        | 5/30 [01:21<03:04,  7.38s/batch][A
+Epoch 1:  20%|██        | 6/30 [01:22<02:01,  5.05s/batch][A
+Epoch 1:  23%|██▎       | 7/30 [01:22<01:21,  3.56s/batch][A
+Epoch 1:  27%|██▋       | 8/30 [01:23<00:56,  2.58s/batch][A
+Epoch 1:  30%|███       | 9/30 [01:23<00:40,  1.94s/batch][A
+Epoch 1:  33%|███▎      | 10/30 [01:24<00:30,  1.52s/batch][A
+Epoch 1:  37%|███▋      | 11/30 [01:25<00:22,  1.21s/batch][A
+Epoch 1:  40%|████      | 12/30 [01:25<00:17,  1.01batch/s][A
+Epoch 1:  43%|████▎     | 13/30 [01:26<00:14,  1.19batch/s][A
+Epoch 1:  47%|████▋     | 14/30 [01:26<00:11,  1.35batch/s][A
+Epoch 1:  50%|█████     | 15/30 [01:27<00:09,  1.52batch/s][A
+Epoch 1:  53%|█████▎    | 16/30 [01:27<00:08,  1.65batch/s][A
+Epoch 1:  57%|█████▋    | 17/30 [01:28<00:07,  1.71batch/s][A
+Epoch 1:  60%|██████    | 18/30 [01:28<00:06,  1.81batch/s][A
+Epoch 1:  63%|██████▎   | 19/30 [01:28<00:05,  1.88batch/s][A
+Epoch 1:  67%|██████▋   | 20/30 [01:29<00:05,  1.88batch/s][A
+Epoch 1:  70%|███████   | 21/30 [01:30<00:04,  1.93batch/s][A
+Epoch 1:  73%|███████▎  | 22/30 [01:30<00:04,  1.97batch/s][A
+Epoch 1:  77%|███████▋  | 23/30 [01:30<00:03,  1.98batch/s][A
+Epoch 1:  80%|████████  | 24/30 [01:31<00:02,  2.01batch/s][A
+Epoch 1:  83%|████████▎ | 25/30 [01:31<00:02,  2.00batch/s][A
+Epoch 1:  87%|████████▋ | 26/30 [01:32<00:01,  2.04batch/s][A
+Epoch 1:  90%|█████████ | 27/30 [01:32<00:01,  1.98batch/s][A
+Epoch 1:  93%|█████████▎| 28/30 [01:33<00:01,  1.99batch/s][A
+Epoch 1:  97%|█████████▋| 29/30 [01:33<00:00,  1.98batch/s][A
+Epoch 1: 100%|██████████| 30/30 [01:35<00:00,  1.26batch/s][A
+                                                           [ATraining Progress:   0%|          | 0/2 [01:41<?, ?epoch/s, Time: 102.0s | loss=7.4170 val_loss=13.5026]Training Progress:  50%|█████     | 1/2 [01:41<01:41, 101.96s/epoch, Time: 102.0s | loss=7.4170 val_loss=13.5026]
+Epoch 2:   0%|          | 0/30 [00:00<?, ?batch/s][A
+Epoch 2:   3%|▎         | 1/30 [00:00<00:10,  2.76batch/s][A
+Epoch 2:   7%|▋         | 2/30 [00:00<00:10,  2.75batch/s][A
+Epoch 2:  10%|█         | 3/30 [00:01<00:10,  2.69batch/s][A
+Epoch 2:  13%|█▎        | 4/30 [00:01<00:09,  2.67batch/s][A
+Epoch 2:  17%|█▋        | 5/30 [00:01<00:09,  2.67batch/s][A
+Epoch 2:  20%|██        | 6/30 [00:02<00:09,  2.66batch/s][A
+Epoch 2:  23%|██▎       | 7/30 [00:02<00:08,  2.58batch/s][A
+Epoch 2:  27%|██▋       | 8/30 [00:03<00:08,  2.59batch/s][A
+Epoch 2:  30%|███       | 9/30 [00:03<00:08,  2.58batch/s][A
+Epoch 2:  33%|███▎      | 10/30 [00:03<00:07,  2.53batch/s][A
+Epoch 2:  37%|███▋      | 11/30 [00:04<00:07,  2.51batch/s][A
+Epoch 2:  40%|████      | 12/30 [00:04<00:07,  2.53batch/s][A
+Epoch 2:  43%|████▎     | 13/30 [00:05<00:06,  2.53batch/s][A
+Epoch 2:  47%|████▋     | 14/30 [00:05<00:06,  2.52batch/s][A
+Epoch 2:  50%|█████     | 15/30 [00:05<00:05,  2.54batch/s][A
+Epoch 2:  53%|█████▎    | 16/30 [00:06<00:05,  2.61batch/s][A
+Epoch 2:  57%|█████▋    | 17/30 [00:06<00:04,  2.64batch/s][A
+Epoch 2:  60%|██████    | 18/30 [00:06<00:04,  2.64batch/s][A
+Epoch 2:  63%|██████▎   | 19/30 [00:07<00:04,  2.65batch/s][A
+Epoch 2:  67%|██████▋   | 20/30 [00:07<00:03,  2.66batch/s][A
+Epoch 2:  70%|███████   | 21/30 [00:08<00:03,  2.68batch/s][A
+Epoch 2:  73%|███████▎  | 22/30 [00:08<00:02,  2.68batch/s][A
+Epoch 2:  77%|███████▋  | 23/30 [00:08<00:02,  2.66batch/s][A
+Epoch 2:  80%|████████  | 24/30 [00:09<00:02,  2.68batch/s][A
+Epoch 2:  83%|████████▎ | 25/30 [00:09<00:01,  2.67batch/s][A
+Epoch 2:  87%|████████▋ | 26/30 [00:09<00:01,  2.69batch/s][A
+Epoch 2:  90%|█████████ | 27/30 [00:10<00:01,  2.54batch/s][A
+Epoch 2:  93%|█████████▎| 28/30 [00:10<00:00,  2.60batch/s][A
+Epoch 2:  97%|█████████▋| 29/30 [00:11<00:00,  2.65batch/s][A
+                                                           [ATraining Progress:  50%|█████     | 1/2 [01:53<01:41, 101.96s/epoch, Time: 113.7s | loss=6.3778 val_loss=13.4390]Training Progress: 100%|██████████| 2/2 [01:53<00:00, 48.90s/epoch, Time: 113.7s | loss=6.3778 val_loss=13.4390] Training Progress: 100%|██████████| 2/2 [01:53<00:00, 48.90s/epoch, Completed in 113.7s]                        Training Progress: 100%|██████████| 2/2 [01:53<00:00, 56.86s/epoch, Completed in 113.7s]
+Serving the weights of epoch 2 of 2 (val_loss 13.4390): best validation epoch, restored after training (EarlyStopping did not stop the run: 2 epochs ran)
+model_checkpoint wrote the best-on-validation weights to C:\Users\Step\AppData\Local\Temp\golden_19bikunp\w.h5
+Evaluating enhanced model...
+
+[Diagnostic: Prediction Statistics]
+  h0(10min): pred_mean=19.075201, true_mean=35.032578 | pred_std=40.853592, true_std=200.637650
+         pred_range=[-81.975670, 130.054688], true_range=[-450.296875, 743.109375]
+  h1(15min): pred_mean=37.825554, true_mean=46.547939 | pred_std=62.753441, true_std=242.909912
+         pred_range=[-102.294220, 177.294785], true_range=[-536.187500, 1133.867188]
+  h2(20min): pred_mean=23.839220, true_mean=59.383171 | pred_std=71.064789, true_std=290.122772
+         pred_range=[-108.515312, 197.274109], true_range=[-600.976562, 1293.578125]
+
+Fitting CalibrationPipeline on the calibration split...
+CalibrationPipeline: fitting on 198 samples
+
+[1/2] Temperature scaling (direction heads)...
+  TemperatureScaler [h0]: T = 1.5434
+  TemperatureScaler [h1]: T = 4.1394
+  TemperatureScaler [h2]: T = 2.6438
+Delta shrinkage (least-squares scale of the price heads on this block): h0 0.302, h1 0.495, h2 0.197
+
+[2/2] Conformal regressors (price delta intervals, scale=realized_vol)...
+ConformalRegressor: fitted on 198 samples, median score = 0.4600
+  [h0] coverage @ alpha=0.10: 0.909 (target >= 0.90),  mean half-width 347.74 raw units
+ConformalRegressor: fitted on 198 samples, median score = 0.4889
+  [h1] coverage @ alpha=0.10: 0.909 (target >= 0.90),  mean half-width 442.24 raw units
+ConformalRegressor: fitted on 198 samples, median score = 0.5244
+  [h2] coverage @ alpha=0.10: 0.909 (target >= 0.90),  mean half-width 781.20 raw units
+
+CalibrationPipeline: fitting complete.
+  [test] h0: conformal coverage@90 = 0.924 (target >= 0.90), mean width = 756.80 raw units, T = 1.543
+  [test] h1: conformal coverage@90 = 0.944 (target >= 0.90), mean width = 962.48 raw units, T = 4.139
+  [test] h2: conformal coverage@90 = 0.976 (target >= 0.90), mean width = 1700.18 raw units, T = 2.644
+[golden] compared 455 arrays; missing=[] extra=[]
+   ok   calib_lambda/lambda_soft_ece                  max|diff|=0
+   ok   hist/contrib_dir_align                        max|diff|=0
+   ok   hist/contrib_ife                              max|diff|=0
+   ok   hist/contrib_pnl                              max|diff|=0
+   ok   hist/contrib_reg                              max|diff|=0
+   ok   hist/contrib_soft_ece                         max|diff|=0
+   ok   hist/contrib_vac                              max|diff|=0
+   ok   hist/global_h0                                max|diff|=0
+   ok   hist/global_h1                                max|diff|=0
+   ok   hist/global_h2                                max|diff|=0
+   ok   hist/ife_loss                                 max|diff|=0
+   ok   hist/local_h0                                 max|diff|=0
+   by prefix (ok, fail): calib_lambda=14/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}
