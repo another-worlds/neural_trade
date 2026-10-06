@@ -211,7 +211,7 @@ changes).
 | [NT-176](#nt-176) | P2 | research | experimenter | todo | Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1 |
 | [NT-177](#nt-177) | P2 | bug | implementer | done | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
 | [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
-| [NT-179](#nt-179) | P2 | feature | implementer | todo | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
+| [NT-179](#nt-179) | P2 | feature | implementer | done | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
 | [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
 | [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
 | [NT-182](#nt-182) | P1 | bug | implementer | done | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
@@ -2381,7 +2381,7 @@ changes).
 
 **Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs)**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-179 0fe560c (implementer Sonnet), merged as 507b597; lead-verified (D-060: P2, no numbers change; the board logic rests on NT-031's QA'd rails): `neural-trade leaderboard --scenario a,b,c` (repeatable, comma-separated, or several positional names) puts the configurations of several scenarios on one board, rows `scenario / configuration`, per-scenario thresholds with the header naming each source, the dev folds as the union (a scenario that ran other folds fails fold_coverage naming them), the first scenario's cost profile (another one is not comparable and cannot win), the winner across scenarios, `--out` writes `<out>/combined/leaderboard.{md,html,png}`; tested on copies of the real stored scenarios (light files only): the table is as expected, every row disqualified, no winner (13 bps scenarios, folds differ), the PNG looked at; the winner marker looked at on a synthetic store; the nt033 spec headers name `--n-trials 17` (11.89 h upper bound against the 12 h cap; 30 trials = 15.90 h is refused); a rule-only sweep reports a CPU budget (gpu_hours 0) and re-runs a deterministic rule once; `score_strategy_only` pinned to the block's own closes by a mutation test; fast 2301 passed (runs/experiments/nt179/fast_suite.log). Lead fix in the same batch: `_perturb_after` (strategy/backtest.py) now carries `meta['delta_raw']` perturbed after t, so assert_no_lookahead compares raw-head coherence in both runs and no longer logs the D-051 warning on every probe (test fails without the fix, passes with it; the 53 backtest tests pass). Open: MACrossStrategy.warmup() loses one bar (P3, harmless); the *_gpu_hours keys keep their names for a CPU budget.
 - **priority / type / role:** P2 / feature / implementer
 - **area:** src/neural_trade/cli.py (cmd_leaderboard), tests/
 - **depends on:** NT-033

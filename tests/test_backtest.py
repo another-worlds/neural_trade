@@ -499,3 +499,32 @@ def test_fit_and_backtest_has_no_bar_minutes_default():
     assert sig.parameters["bar_minutes"].default is inspect.Parameter.empty
     with pytest.raises(TypeError, match="bar_minutes"):
         fit_and_backtest(None, None)
+
+
+def test_the_perturbed_frame_carries_the_raw_heads_perturbed_after_t_and_the_guard_does_not_warn(caplog):
+    """NT-179 (QA of NT-033): `_perturb_after` used to drop meta['delta_raw'], so every probe compared coherence
+    flags on the raw heads (base run) against the served delta (perturbed run) and logged the D-051 warning."""
+    import logging
+
+    import importlib
+
+    bt = importlib.import_module("neural_trade.strategy.backtest")   # `strategy.backtest` is also a function
+
+    frame, bars = _frame(300, seed=5)
+    rng = np.random.default_rng(0)
+    frame.meta["delta_raw"] = {h: frame.delta[h] * 3.0 for h in HORIZONS}
+    t = 100
+    f2, _ = bt._perturb_after(frame, bars, t, rng)
+    for h in HORIZONS:
+        raw2 = f2.meta["delta_raw"][h]
+        assert np.array_equal(raw2[: t + 1], frame.meta["delta_raw"][h][: t + 1])   # up to t: untouched
+        assert not np.allclose(raw2[t + 1:], frame.meta["delta_raw"][h][t + 1:])    # after t: perturbed
+    assert "delta_raw" in frame.meta and frame.meta["delta_raw"] is not f2.meta["delta_raw"]  # the base is not mutated
+
+    with caplog.at_level(logging.WARNING, logger="neural_trade"):
+        caplog.clear()
+        vs = var_scale_from(frame)
+        cal = SignalFrame.build(_frame(300, seed=11)[0], vs)
+        bt.assert_no_lookahead(frame, bars, lambda: build_strategy("calibrated_quantile", calibration=cal),
+                               var_scale=vs, n_probes=4)
+    assert not [r for r in caplog.records if "contrary to D-051" in r.getMessage()]

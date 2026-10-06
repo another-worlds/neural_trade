@@ -597,8 +597,13 @@ def _perturb_after(frame: PredictionFrame, bars: Bars, t: int, rng) -> tuple:
     if frame.direction_prob_calibrated is not None:
         cal = {h: np.clip(jitter(frame.direction_prob_calibrated[h], 0.3), 0, 1) for h in HORIZONS}
     lc = jitter(frame.last_close, 300.0)
+    # the raw heads (D-051 coherence flags) are predictions too: carry them, perturbed after t (NT-179)
+    meta = dict(frame.meta or {})
+    raw = meta.get("delta_raw")
+    if isinstance(raw, dict) and all(h in raw for h in HORIZONS):
+        meta["delta_raw"] = {h: jitter(raw[h], 500.0) for h in HORIZONS}
     f2 = PredictionFrame(frame.y, lc, delta, prob, var, frame.pred_scale, frame.pred_mean, frame.horizon_steps,
-                         frame.split, cal)
+                         frame.split, cal, meta=meta)
     b2 = Bars(jitter(bars.open, 300.0), jitter(bars.high, 300.0), jitter(bars.low, 300.0), jitter(bars.close, 300.0))
     return f2, b2
 
