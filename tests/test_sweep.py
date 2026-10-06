@@ -57,7 +57,28 @@ def fake_result(cfg: Config, noise: float = 3.0):
         weights_val_loss=0.5)
 
 
+def write_real_telemetry(run_dir, *, epochs=((1.0, 0.9),), nonfinite=0, served=0.9):
+    """metrics.jsonl and status.json written by the trainer's OWN writers, as a real cell writes them: the
+    JsonlEpochLogger callback (``loss`` / ``val_loss`` / ``nonfinite_grad_steps`` from the Keras logs; NaN and inf
+    stored as null) and the served-epoch record (``_finite_or_none``: a non-finite served loss stored as null)."""
+    from neural_trade.telemetry.epoch_logger import JsonlEpochLogger
+    from neural_trade.training.trainer import _finite_or_none, _record_served_epoch_in_status
+
+    run_dir = Path(run_dir)
+    logger_cb = JsonlEpochLogger(run_dir, None, run_dir.name)
+    logger_cb.on_train_begin()
+    for e, (loss, val) in enumerate(epochs):
+        logger_cb.on_epoch_begin(e)
+        logger_cb.on_train_batch_end(0)
+        logger_cb.on_epoch_end(e, {"loss": np.float32(loss), "val_loss": np.float32(val),
+                                   "nonfinite_grad_steps": np.float32(nonfinite)})
+    logger_cb.on_train_end()
+    _record_served_epoch_in_status(SimpleNamespace(run_dir=run_dir), len(epochs), _finite_or_none(served), "test")
+
+
 class FakeTrainer:
+    """Fake predictions; the cell's telemetry is written by the real writers (a finite, healthy run)."""
+
     def __init__(self, fail_variants=(), on_call=None):
         self.calls = []
         self.fail_variants = set(fail_variants)
@@ -70,7 +91,11 @@ class FakeTrainer:
             self.on_call(eng)
         if eng["variant"] in self.fail_variants:
             raise ValueError(f"injected failure in {eng['cell_key']}")
+        self.telemetry(ctx.run_dir, eng)
         return fake_result(ctx.config)
+
+    def telemetry(self, run_dir, eng):
+        write_real_telemetry(run_dir)
 
 
 def scenario_dict(csv, **changes):
@@ -231,11 +256,12 @@ def test_quick_without_a_measured_sec_per_step_refuses(tmp_path, bars_csv):
 
 
 def test_sec_per_step_comes_from_the_latest_run_of_the_same_setup_in_the_index(tmp_path, bars_csv):
+    pytest.importorskip("optuna")
     trainer = FakeTrainer()
     first = make_sweep(tmp_path, bars_csv, trainer, mode="quick", overhead_s=70.0, sec_per_step=0.001)
     first.run()
-    # the fake runs record no status.json, so inject a value the way a real run's result.json carries it
-    for d in first.store.run_dirs(first.sweep_id)[:1]:
+    # the fake runs' telemetry times a 1-step epoch, so inject the value the way a real run's result.json carries it
+    for d in first.store.run_dirs(first.sweep_id):
         doc = json.loads((d / "result.json").read_text(encoding="utf-8"))
         doc["sec_per_step"] = 0.123
         (d / "result.json").write_text(json.dumps(doc), encoding="utf-8")
@@ -618,42 +644,69 @@ def test_the_trial_processes_launch_with_the_callers_code_on_pythonpath(tmp_path
     assert code["source_dir"] == src and code["git_sha"]
 
 
-def _write_run_files(run_dir: Path, *, val_losses=(1.0,), nonfinite=0, weights_val_loss=1.0):
-    with open(run_dir / "metrics.jsonl", "w", encoding="utf-8") as fh:
-        for e, v in enumerate(val_losses):
-            fh.write(json.dumps({"epoch": e, "loss": 1.0, "val_loss": v, "nonfinite_grad_steps": float(nonfinite)}) + "\n")
-    (run_dir / "status.json").write_text(json.dumps({"weights_val_loss": weights_val_loss}), encoding="utf-8")
-
-
 def test_run_health_names_non_finite_losses_and_non_finite_gradient_steps(tmp_path):
     ok = tmp_path / "ok"
     ok.mkdir()
-    _write_run_files(ok)
-    assert run_health(ok) is None and run_health(tmp_path / "nothing_written") is None
-    for name, kw, text in [("nan_val", {"val_losses": (1.0, float("nan"))}, "non-finite val_loss in epoch 1"),
-                           ("nan_served", {"weights_val_loss": float("nan")}, "weights_val_loss"),
+    write_real_telemetry(ok, epochs=((1.0, 0.9), (0.8, 0.7)))
+    assert run_health(ok) is None
+    for name, kw, text in [("nan_val", {"epochs": ((1.0, 0.9), (1.0, float("nan")))}, "non-finite val_loss in epoch 1"),
+                           ("inf_loss", {"epochs": ((float("inf"), 0.9),)}, "non-finite loss in epoch 0"),
+                           ("nan_served", {"served": float("nan")}, "non-finite weights_val_loss"),
                            ("grads", {"nonfinite": 2}, "nonfinite_grad_steps 2 > 0")]:
         d = tmp_path / name
         d.mkdir()
-        _write_run_files(d, **kw)
-        assert text in run_health(d)
+        write_real_telemetry(d, **kw)
+        assert text in (run_health(d) or ""), (name, run_health(d))
     assert run_health(tmp_path / "grads", max_nonfinite_grad_steps=5) is None        # the limit is a setting
 
 
-class UnstableTrainer(FakeTrainer):
-    """Writes the files the real trainer writes; the variants in ``bad`` get a NaN served loss."""
+def test_run_health_fails_the_null_that_the_real_writers_store_for_nan_and_a_missing_key(tmp_path):
+    """P1-c (repair round 2): the writers never store NaN, they store null; a null loss is non-finite."""
+    d = tmp_path / "nan"
+    d.mkdir()
+    write_real_telemetry(d, epochs=((1.0, 0.9), (1.0, float("nan"))), served=float("nan"))
+    rows = [json.loads(x) for x in (d / "metrics.jsonl").read_text(encoding="utf-8").splitlines()]
+    status = json.loads((d / "status.json").read_text(encoding="utf-8"))
+    assert rows[1]["val_loss"] is None and "val_loss" in rows[1]                # on disk: null, not NaN
+    assert status["weights_val_loss"] is None and "weights_val_loss" in status
+    why = run_health(d)
+    assert why and "non-finite val_loss in epoch 1" in why and "non-finite weights_val_loss" in why
+    # a key missing from an epoch row or from status.json is a failure with its own reason
+    m = tmp_path / "missing"
+    m.mkdir()
+    write_real_telemetry(m)
+    row = json.loads((m / "metrics.jsonl").read_text(encoding="utf-8"))
+    del row["val_loss"]
+    (m / "metrics.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    st = json.loads((m / "status.json").read_text(encoding="utf-8"))
+    del st["weights_val_loss"]
+    (m / "status.json").write_text(json.dumps(st), encoding="utf-8")
+    why = run_health(m) or ""
+    assert "missing val_loss in epoch 0" in why and "missing weights_val_loss" in why
+    # a cell that never finished an epoch: no metrics.jsonl, the served record says null
+    never = tmp_path / "never"
+    never.mkdir()
+    from neural_trade.training.trainer import _record_served_epoch_in_status
 
-    def __init__(self, bad=(), **kw):
+    _record_served_epoch_in_status(SimpleNamespace(run_dir=never), None, None, "unknown (no validation history)")
+    why = run_health(never) or ""
+    assert "metrics.jsonl missing" in why and "non-finite weights_val_loss" in why
+    assert "metrics.jsonl missing" in (run_health(tmp_path / "nothing_written") or "")   # no telemetry: unverifiable
+
+
+class UnstableTrainer(FakeTrainer):
+    """Telemetry by the real writers; the variants in ``bad`` (on the seeds in ``bad_seeds``, default all) get a
+    NaN validation loss in epoch 1 and a NaN served loss, which the writers store as null."""
+
+    def __init__(self, bad=(), bad_seeds=None, **kw):
         super().__init__(**kw)
         self.bad = set(bad)
+        self.bad_seeds = None if bad_seeds is None else set(bad_seeds)
 
-    def __call__(self, ctx, **kw):
-        res = super().__call__(ctx, **kw)
-        eng = json.loads((ctx.run_dir / "meta.json").read_text(encoding="utf-8"))["engine"]
-        nan = eng["variant"] in self.bad
-        _write_run_files(ctx.run_dir, val_losses=(1.0, float("nan") if nan else 0.9),
-                         weights_val_loss=float("nan") if nan else 0.9)
-        return res
+    def telemetry(self, run_dir, eng):
+        nan = eng["variant"] in self.bad and (self.bad_seeds is None or int(eng["seed"]) in self.bad_seeds)
+        write_real_telemetry(run_dir, epochs=((1.0, 0.95), (1.0, float("nan") if nan else 0.9)),
+                             served=float("nan") if nan else 0.9)
 
 
 def test_a_trial_with_a_non_finite_loss_is_failed_with_the_reason_and_told_to_optuna_as_fail(tmp_path, bars_csv):
@@ -852,6 +905,7 @@ class ShapedTrainer(FakeTrainer):
             noise = 3.0                                                # the search's own seed cannot tell them apart
         else:
             noise = 0.5 if high else 20.0                              # the later seeds (the mean) prefer HIGH
+        write_real_telemetry(ctx.run_dir)
         return fake_result(cfg, noise=noise)
 
 
@@ -887,6 +941,251 @@ def test_the_winner_and_the_rerun_order_follow_the_dev_seed_mean_not_the_test_co
     for r in table:
         assert r["dev_seed_mean_net_sharpe"] == pytest.approx(stats[r["variant"]][0])
         assert r["test_sharpe_net"] == pytest.approx(stats[r["variant"]][1]) and "never used to rank" in r["test_note"]
+
+
+# ------------------------------------------------------------------ repair round 2
+OLD_REFERENCE = FIXTURES / "nt030_reference_default_82a848f"
+
+
+def test_a_pre_d047_reference_run_is_not_the_same_setup_as_todays_default(tmp_path, bars_csv):
+    """P1-d: the 9 reference_default runs of 82a848f are close-only (before D-047); their config.yaml has no
+    INPUT_SERIES. Read through Config.from_yaml they get today's defaults and look 'same' (0.10 s/step instead of
+    D-047's ~0.17); compared by their raw stored keys, the missing field is unknown and refuses them."""
+    from neural_trade.experiments.sweep import SETUP_FIELDS, setup_mismatch
+
+    assert {"MODEL_NAME", "ATTENTION_MODE", "DETERMINISTIC_GRU", "PROBE_GRADIENTS"} <= set(SETUP_FIELDS)
+    today = Config()
+    for cfg_file in sorted(OLD_REFERENCE.glob("config_*.yaml")):
+        raw = yaml.safe_load(cfg_file.read_text(encoding="utf-8"))
+        assert "INPUT_SERIES" not in raw and "INDICATOR_FAMILIES" not in raw          # the stored file, unchanged
+        # the trap: Config.from_yaml fills today's defaults, so every setup field looks equal
+        filled = Config.from_yaml(cfg_file)
+        assert all(getattr(filled, n) == getattr(today, n) for n in ("INPUT_SERIES", "BATCH_SIZE", "LOOKBACK"))
+        run_dir = tmp_path / cfg_file.stem
+        run_dir.mkdir()
+        (run_dir / "config.yaml").write_text(cfg_file.read_text(encoding="utf-8"), encoding="utf-8")
+        (run_dir / "env.json").write_text((OLD_REFERENCE / "env.json").read_text(encoding="utf-8"), encoding="utf-8")
+        why = setup_mismatch({"dataset_sha256": "x"}, run_dir, today, "x", "gpu")
+        assert why is not None and "INPUT_SERIES missing" in why, why
+    # through the index: the old run is refused, and a sweep of today's setup refuses rather than use it
+    store = _run_with(tmp_path / "runs", bars_csv, name="oldref", sec=0.1092)
+    row = store.index.rows("oldref")[0]
+    run_dir = store.root / row["run_dir"]
+    (run_dir / "config.yaml").write_text((OLD_REFERENCE / "config_f-3__s0.yaml").read_text(encoding="utf-8"),
+                                         encoding="utf-8")
+    (run_dir / "env.json").write_text((OLD_REFERENCE / "env.json").read_text(encoding="utf-8"), encoding="utf-8")
+    got, refused = latest_sec_per_step(store, today, row["dataset_sha256"], "gpu")
+    assert got is None and len(refused) == 1 and "INPUT_SERIES missing" in refused[0]
+    sw = Sweep(Scenario.from_dict(scenario_dict(bars_csv)), store, SweepOptions(mode="optuna", device="gpu",
+               parallel_record=None), gpu_check=free_gpu, announce=lambda t: None)
+    sw.base_config, sw.dataset_sha = today, row["dataset_sha256"]
+    with pytest.raises(SweepError, match="no measured sec_per_step for THIS setup") as exc:
+        sw._sec_per_step()
+    assert "INPUT_SERIES missing" in str(exc.value)
+    sw.options.sec_per_step = 0.1735                                              # or the caller states it
+    assert sw._sec_per_step() == (0.1735, {"source": "given (--sec-per-step)"})
+
+
+def test_each_new_setup_field_refuses_a_run_that_differs_or_lacks_it(tmp_path, bars_csv):
+    from neural_trade.experiments.sweep import setup_mismatch
+
+    store = _run_with(tmp_path / "runs", bars_csv, name="same", sec=0.5)
+    row = store.index.rows("same")[0]
+    run_dir = store.root / row["run_dir"]
+    cfg = Config.from_yaml(run_dir / "config.yaml")
+    assert setup_mismatch(row, run_dir, cfg, row["dataset_sha256"], "cpu") is None
+    text = (run_dir / "config.yaml").read_text(encoding="utf-8")
+    for name, other in [("DETERMINISTIC_GRU", not cfg.DETERMINISTIC_GRU), ("PROBE_GRADIENTS", not cfg.PROBE_GRADIENTS),
+                        ("ATTENTION_MODE", "none" if cfg.ATTENTION_MODE != "none" else "time")]:
+        assert name in setup_mismatch(row, run_dir, cfg.copy(**{name: other}), row["dataset_sha256"], "cpu")
+        lines = [ln for ln in text.splitlines() if not ln.startswith(f"{name}:")]
+        (run_dir / "config.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        assert f"{name} missing" in setup_mismatch(row, run_dir, cfg, row["dataset_sha256"], "cpu")
+        (run_dir / "config.yaml").write_text(text, encoding="utf-8")
+
+
+def test_a_rerun_stopped_by_a_busy_gpu_is_stopped_with_a_reason_not_complete(tmp_path, bars_csv):
+    """P2 (1): the re-run's GPU-free check fails: state 'stopped', a stop_reason, no winner; resume finishes it."""
+    pytest.importorskip("optuna")
+    checks = []
+
+    def busy_from_third():
+        checks.append(1)
+        return GpuStatus(len(checks) <= 2, {"stub": len(checks)})
+
+    trainer = FakeTrainer()
+    sw = make_sweep(tmp_path, bars_csv, trainer, n_trials=2, top_k=1)
+    sw.gpu_check = busy_from_third
+    res = sw.run()
+    assert res.state == "stopped" and res.winner is None and res.stop_reason and "re-run stopped" in res.stop_reason
+    doc = summary(sw)
+    assert doc["state"] == "stopped" and "re-run stopped" in doc["stop_reason"] and not (sw.directory / "winner.json").exists()
+    n = len(trainer.calls)
+    again = make_sweep(tmp_path, bars_csv, trainer, n_trials=2, top_k=1, resume=True).run()
+    assert again.state == "complete" and again.winner is not None and len(trainer.calls) > n
+
+
+def test_the_cli_exits_non_zero_when_the_rerun_is_stopped(tmp_path, bars_csv, monkeypatch, capsys):
+    pytest.importorskip("optuna")
+    from neural_trade.experiments import runner as runner_mod
+    from neural_trade.experiments import sweep as sweep_mod
+
+    checks = []
+
+    def busy_from_third(*a, **k):
+        checks.append(1)
+        return GpuStatus(len(checks) <= 2, {"stub": len(checks)})
+
+    monkeypatch.setattr(sweep_mod, "nvidia_smi_gpu_check", busy_from_third)
+    monkeypatch.setattr(runner_mod, "train_cell", FakeTrainer())
+    spec = tmp_path / "sw.yaml"
+    spec.write_text(yaml.safe_dump(scenario_dict(bars_csv)), encoding="utf-8")
+    code = main(["sweep", str(spec), "--mode", "optuna", "--store", str(tmp_path / "runs"), "--n-trials", "2",
+                 "--top-k", "1", "--sec-per-step", "0.01", "--parallel-record", str(tmp_path / "none.json")])
+    out = capsys.readouterr().out
+    assert code == 1 and '"state": "stopped"' in out and "re-run stopped" in out
+
+
+def test_a_rerun_batch_above_the_watch_level_stops_launching_the_next(tmp_path, bars_csv):
+    """The re-run's batches are watched like the search's (N > 1)."""
+    pytest.importorskip("optuna")
+    sw, trainer, _ = _parallel_sweep(tmp_path, bars_csv, n_trials=4, parallel=2)
+    sw.options.top_k = 4
+    quiet = {"mean_sm_pct": 10.0, "mean_fb_mb": 1000.0, "peak_fb_mb": 1200.0}
+    high = {"mean_sm_pct": 95.0, "mean_fb_mb": 9000.0, "peak_fb_mb": 11000.0}
+
+    class Seq(Monitor):
+        def stop(self):
+            return dict(high if self.batches == 3 else quiet)       # the first re-run batch reads high
+
+    sw.monitor_factory = Seq()
+    res = sw.run()
+    assert res.state == "stopped" and "re-run stopped launching" in res.stop_reason and res.winner is None
+    assert sw.monitor_factory.batches == 3
+
+
+class PatchingRunner(Runner):
+    """Rewrites a finished cell's stored scores the way the scorer would have stored them (QA's probe): ``plan``
+    maps a variant to (net Sharpe, trades, fee bps)."""
+
+    patch = {}
+
+    def run(self, **kw):
+        rep = super().run(**kw)
+        for item in rep.ran:
+            d = Path(item["run_dir"])
+            res = json.loads((d / "result.json").read_text(encoding="utf-8"))
+            eng = json.loads((d / "meta.json").read_text(encoding="utf-8"))["engine"]
+            if eng["variant"] not in self.patch or res.get("status") != "done":
+                continue
+            sharpe, trades, fee = self.patch[eng["variant"]]
+            res["scores"].update({"backtest/sharpe_net": sharpe, "backtest/n_trades": trades})
+            (d / "result.json").write_text(json.dumps(res), encoding="utf-8")
+            if fee is not None:
+                rp = d / res["report"]
+                rep_doc = json.loads(rp.read_text(encoding="utf-8"))
+                rep_doc["backtest"]["config"]["fee_bps"] = fee
+                rp.write_text(json.dumps(rep_doc), encoding="utf-8")
+        return rep
+
+
+def test_the_rerun_takes_only_trials_that_pass_the_search_time_guard_rails(tmp_path, bars_csv):
+    """P2 (2), QA's probe: t0000 never trades (Sharpe 5000), t0001 was scored at 13 bps (Sharpe 4000), t0002 is
+    eligible. Neither ineligible trial enters the re-run, t0002 wins, and Optuna is told INELIGIBLE_VALUE for both."""
+    pytest.importorskip("optuna")
+    import optuna
+
+    from neural_trade.experiments.sweep import INELIGIBLE_VALUE
+
+    trainer = FakeTrainer()
+
+    class Probe(PatchingRunner):
+        patch = {"t0000": (5000.0, 0, None), "t0001": (4000.0, 50, 13.0)}
+
+    sw = make_sweep(tmp_path, bars_csv, trainer, n_trials=3, top_k=2)
+    sw._runner_factory = lambda sc: Probe(sc, sw.store, trainer=trainer, claim_cells=True)
+    res = sw.run()
+    by = {t["number"]: t for t in res.trials}
+    assert by[0]["value"] == 5000.0 and not by[0]["eligible"] and "min_trades" in by[0]["ineligible"]
+    assert by[1]["value"] == 4000.0 and not by[1]["eligible"] and "cost_profile" in by[1]["ineligible"]
+    assert by[2]["eligible"] and all(t["state"] == "COMPLETE" for t in res.trials)
+    assert [r["number"] for r in summary(sw)["rerun"]] == [2] and res.winner["number"] == 2
+    assert [r["number"] for r in res.ranking if r["rank"] is not None] == [2]
+    study = optuna.load_study(study_name=sw.sweep_id, storage=f"sqlite:///{(sw.directory / 'study.db').as_posix()}")
+    told = {t.number: t.value for t in study.trials}
+    assert told[0] == told[1] == INELIGIBLE_VALUE and told[2] == by[2]["value"]
+    # quick mode: the leader is an eligible trial too
+    q = make_sweep(tmp_path / "q", bars_csv, trainer, mode="quick", overhead_s=70.0, sec_per_step=0.001)
+    q._runner_factory = lambda sc: Probe(sc, q.store, trainer=trainer, claim_cells=True)
+    q.run()
+    leader = summary(q)["leader"]
+    assert leader is None or leader["number"] not in (0, 1)
+
+
+def test_at_n1_the_parallel_records_watch_level_is_not_applied(tmp_path, bars_csv):
+    """P2 (3): a single D-047 process may peak above the pre-D-047 record's N=1 level; at N=1 the record is not
+    used (no level, no warning), the GPU-free check before each batch still runs."""
+    pytest.importorskip("optuna")
+    p = _record(tmp_path)
+    doc = json.loads(p.read_text(encoding="utf-8"))
+    doc["setup"] = "LOOKBACK 60, HORIZON_STEPS [10,15,20], BATCH_SIZE 256"
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    checks = []
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=3, top_k=1)
+    sw.options.parallel_record = str(p)
+    sw.monitor_factory = Monitor({"mean_sm_pct": 20.0, "mean_fb_mb": 4000.0, "peak_fb_mb": 5000.0})
+    sw.gpu_check = lambda: checks.append(1) or GpuStatus(True, {})
+    assert exceeds_watch_level({"mean_sm_pct": 20.0, "peak_fb_mb": 5000.0}, doc["utilization"]["1"])   # would stop
+    res = sw.run()
+    assert res.state == "complete" and len(res.trials) == 3 and res.winner is not None
+    assert len(checks) >= 4 and "warnings" not in sw.record                       # 3 search batches + the re-run
+
+
+def test_a_cell_finished_by_another_process_after_the_plan_is_not_trained_again(tmp_path, bars_csv):
+    """M5: after claiming a cell, the runner re-checks whether another process finished it since the plan."""
+    store = RunStore(tmp_path / "runs")
+    sc = Scenario.from_dict(scenario_dict(bars_csv, search={}, folds=[-2, -1], seeds=[0, 1]))
+    other = FakeTrainer()
+
+    def run_the_other_process_once(eng):
+        if not other.calls:
+            Runner(sc, store, trainer=other, claim_cells=True).run()     # finishes every cell this one does not hold
+
+    first = FakeTrainer(on_call=run_the_other_process_once)
+    rep = Runner(sc, store, trainer=first, claim_cells=True).run()
+    assert len(first.calls) == 1 and len(other.calls) == 3
+    assert sorted(first.calls + other.calls) == sorted(c.key for c in sc.cells())
+    assert len(rep.skipped) == 3
+
+
+def test_a_trial_unstable_only_in_its_rerun_seeds_cannot_win(tmp_path, bars_csv):
+    """M7: the re-run's later seeds of every top trial have a non-finite loss: no winner, the table says why."""
+    pytest.importorskip("optuna")
+    sw = make_sweep(tmp_path, bars_csv, UnstableTrainer(bad={"t0000", "t0001"}, bad_seeds={1, 2}), n_trials=2,
+                    top_k=2, rerun_seeds=3)
+    res = sw.run()
+    assert all(t["state"] == "COMPLETE" for t in res.trials)                     # the search's seed 0 was fine
+    table = summary(sw)["rerun"]
+    assert len(table) == 2 and all(r["unstable"] and "non-finite" in r["unstable"] for r in table)
+    assert res.state == "complete" and res.winner is None
+    # one stable trial among them wins
+    sw2 = make_sweep(tmp_path / "b", bars_csv, UnstableTrainer(bad={"t0000"}, bad_seeds={1, 2}), n_trials=2,
+                     top_k=2, rerun_seeds=3)
+    assert sw2.run().winner["number"] == 1
+
+
+def test_the_budget_upper_bound_uses_the_spaces_lowest_batch_not_the_base_batch(tmp_path, bars_csv):
+    """M14: base BATCH_SIZE 32, the space's lowest 16: the upper bound counts the steps of batch 16."""
+    pytest.importorskip("optuna")
+    from neural_trade.experiments.sweep import steps_per_epoch
+
+    sw = make_sweep(tmp_path, bars_csv, FakeTrainer(), n_trials=3, dry_run=True,
+                    changes={"search": {"BATCH_SIZE": {"low": 16, "high": 128, "log": True}}})
+    res = sw.run()
+    up = res.budget["steps_per_epoch_upper_per_fold"]
+    assert int(sw.base_config.BATCH_SIZE) == 32
+    for f, n in sw.train_n.items():
+        assert up[str(f)] == steps_per_epoch(n, 16) > steps_per_epoch(n, 32)
 
 
 # ------------------------------------------------------------------ slow: real training, real processes

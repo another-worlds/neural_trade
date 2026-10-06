@@ -32,9 +32,14 @@ leaderboard on the dev folds; the winner is its top row that no guard-rail disqu
 **Parallel** (``--parallel N``): trials launch in batches of N processes (``scenario run
 --claim-cells``, so no two processes train a cell). N above 1 needs NT-035's record
 (``runs/experiments/gpu_measurements_v1/parallel_n.json``: ``allowed_n``). The GPU-free check of
-RUNBOOK "GPU rules" runs before each batch (no own trial is running then); after each batch the
-GPU's memory and utilisation are compared with the level the record gives for N own processes, and a
-higher reading (someone else is on the GPU) stops the launching.
+RUNBOOK "GPU rules" runs before each batch (no own trial is running then), at every N; with N above 1,
+after each batch (search and re-run) the GPU's memory and utilisation are compared with the level the
+record gives for N own processes, and a higher reading (someone else is on the GPU) stops the launching.
+At N = 1 the record is not used at all (its levels were measured on another setup).
+
+**Stops.** A stop (busy GPU, a reading above the level) during the search or the re-run leaves the sweep
+``stopped`` with its reason and the CLI exits 1; ``--resume`` finishes it (finished cells are never trained
+again). Only trials that pass the search-time guard-rails (:data:`SEARCH_TIME_RAILS`) enter the re-run.
 
 **Tunability decision (NT-029 QA note).** ``PATIENCE`` (ReduceLROnPlateau) is tunable, and the space caps
 it at the scenario's ``EARLY``. ``EARLY`` (EarlyStopping patience) is NOT tunable: like ``EPOCHS`` it sets
@@ -239,18 +244,35 @@ class TrialScore:
     spread: Optional[float] = None              # std of the per-fold values (folds are the unit, D-046)
     mean_trades: Optional[float] = None
     reason: Optional[str] = None                # why value is None
+    ineligible: Optional[str] = None            # the search-time guard-rails it fails (see SEARCH_TIME_RAILS)
+
+    @property
+    def eligible(self) -> bool:
+        """A finite value and every search-time guard-rail passed: may enter the re-run, may lead."""
+        return self.value is not None and self.ineligible is None
 
     def to_dict(self) -> Dict[str, Any]:
         return {"value": self.value, "per_fold": {str(k): v for k, v in sorted(self.per_fold.items())},
                 "n_cells": self.n_cells, "spread": self.spread, "mean_trades": self.mean_trades,
-                "reason": self.reason}
+                "reason": self.reason, "eligible": self.eligible, "ineligible": self.ineligible}
 
 
-def dev_net_sharpe(rows: Sequence[Mapping[str, Any]], dev_folds: Sequence[int], *, store_root=None) -> TrialScore:
+# The leaderboard's guard-rails a trial's single-seed dev cells can already settle at search time: the rank value
+# is finite, the trial trades on every dev fold, its net Sharpe was computed at the board's cost profile, and it
+# has a scored cell on every dev fold. The return-based rails (drawdown, buy-and-hold, random null) are judged on
+# the re-run's seed mean only. A trial failing one of these never enters the re-run, and Optuna is told
+# INELIGIBLE_VALUE for it instead of its (idle or cost-mismatched) Sharpe.
+SEARCH_TIME_RAILS = ("status", "dev_data", "ranking_value", "min_trades", "cost_profile", "fold_coverage")
+INELIGIBLE_VALUE = -1.0e6                       # below any real annualised net Sharpe
+
+
+def dev_net_sharpe(rows: Sequence[Mapping[str, Any]], dev_folds: Sequence[int], *, store_root=None,
+                   guard_rails=None, board_cost=None) -> TrialScore:
     """Dev-fold net Sharpe after costs of one configuration's index rows: NT-031's aggregation
     (:func:`~neural_trade.experiments.leaderboard.build_leaderboard`: the mean of each dev fold's seed-mean,
     the spread between fold means). A dev fold without a finished cell, or with a non-finite value, makes
-    the trial failed. Test-fold rows are never read here."""
+    the trial failed. ``guard_rails`` / ``board_cost`` (the scenario's; default the leaderboard's defaults) set
+    ``ineligible`` from the :data:`SEARCH_TIME_RAILS` that fail. Test-fold rows are never read here."""
     from neural_trade.experiments.leaderboard import RANK_METRIC, build_leaderboard
 
     problems = []
@@ -269,41 +291,70 @@ def dev_net_sharpe(rows: Sequence[Mapping[str, Any]], dev_folds: Sequence[int], 
     n_cells = len(done_rows)
     if problems:
         return TrialScore(None, {}, n_cells, reason="; ".join(problems))
-    row = build_leaderboard(done_rows, spec_folds=list(dev_folds), store_root=store_root)[0]
+    row = build_leaderboard(done_rows, spec_folds=list(dev_folds), store_root=store_root, guard_rails=guard_rails,
+                            board_cost=board_cost)[0]
+    failed = [f"{g.name}: {g.detail}" for g in row.guard_rails if g.name in SEARCH_TIME_RAILS and not g.passed]
     return TrialScore(row.dev.values.get(RANK_METRIC), {int(k): v for k, v in row.dev.fold_values[RANK_METRIC].items()},
-                      n_cells, row.dev.spread.get(RANK_METRIC), row.dev.values.get("n_trades"))
+                      n_cells, row.dev.spread.get(RANK_METRIC), row.dev.values.get("n_trades"),
+                      ineligible="; ".join(failed) or None)
 
 
 HEALTH_MAX_NONFINITE_GRAD_STEPS = 0
 
 
+def _loss_problem(doc: Mapping[str, Any], key: str) -> Optional[str]:
+    """'missing' when ``key`` is absent, 'non-finite' when it is null (the trainer's writers turn NaN and inf
+    into null: ``telemetry.epoch_logger._plain``, ``trainer._finite_or_none``) or not a finite number."""
+    if key not in doc:
+        return "missing"
+    v = doc[key]
+    try:
+        return None if v is not None and math.isfinite(float(v)) else "non-finite"
+    except (TypeError, ValueError):
+        return "non-finite"
+
+
 def run_health(run_dir, *, max_nonfinite_grad_steps: int = HEALTH_MAX_NONFINITE_GRAD_STEPS) -> Optional[str]:
-    """Why a finished cell's training is unstable, or None: a non-finite training or validation loss in any
-    epoch of ``metrics.jsonl``, a non-finite served-epoch validation loss in ``status.json``, or more
-    non-finite-gradient steps than the limit (the numbers the trainer already writes; a missing file says
-    nothing). A trial with such a cell is FAILED however good its Sharpe looks."""
+    """Why a finished cell's training is unstable or unverifiable, or None. Read from what the trainer writes
+    (``JsonlEpochLogger`` and the served-epoch record): a ``loss`` or ``val_loss`` in any epoch of
+    ``metrics.jsonl``, or ``weights_val_loss`` / ``val_loss`` in ``status.json``, that is null (the writers store
+    NaN and inf as null) or non-finite; any of these keys missing; ``metrics.jsonl`` or ``status.json``
+    missing or without an epoch (the engine's trainer always writes both); more non-finite-gradient steps than
+    the limit. A trial with such a cell is FAILED however good its Sharpe looks."""
     d = Path(run_dir)
     reasons = []
     nonfinite_steps = 0.0
     try:
-        for line in (d / "metrics.jsonl").read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
+        lines = [ln for ln in (d / "metrics.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    except OSError:
+        lines = []
+        reasons.append("metrics.jsonl missing (no epoch logged)")
+    else:
+        if not lines:
+            reasons.append("metrics.jsonl has no epoch")
+    for line in lines:
+        try:
             m = json.loads(line)
-            for key in ("loss", "val_loss"):
-                v = m.get(key)
-                if v is not None and not math.isfinite(float(v)):
-                    reasons.append(f"non-finite {key} in epoch {m.get('epoch')}")
+        except ValueError:
+            reasons.append("metrics.jsonl has an unreadable line")
+            continue
+        for key in ("loss", "val_loss"):
+            why = _loss_problem(m, key)
+            if why:
+                reasons.append(f"{why} {key} in epoch {m.get('epoch')}")
+        try:
             nonfinite_steps += float(m.get("nonfinite_grad_steps") or 0.0)
-    except (OSError, ValueError):
-        pass
+        except (TypeError, ValueError):
+            reasons.append(f"unreadable nonfinite_grad_steps in epoch {m.get('epoch')}")
     try:
         status = json.loads((d / "status.json").read_text(encoding="utf-8"))
-        v = status.get("weights_val_loss")
-        if v is not None and not math.isfinite(float(v)):
-            reasons.append("non-finite weights_val_loss (the served epoch)")
     except (OSError, ValueError):
-        pass
+        reasons.append("status.json missing or unreadable")
+    else:
+        for key, what in (("weights_val_loss", "the served epoch"), ("val_loss", "the last epoch")):
+            why = _loss_problem(status, key)
+            if why:
+                reasons.append(f"{why} {key} in status.json ({what})")
     if nonfinite_steps > max_nonfinite_grad_steps:
         reasons.append(f"nonfinite_grad_steps {nonfinite_steps:g} > {max_nonfinite_grad_steps}")
     return "; ".join(dict.fromkeys(reasons)) or None
@@ -512,8 +563,19 @@ def size_quick(*, dev_steps: Mapping[int, int], epochs_cap: int, sec_per_step: f
     return QuickPlan(n, epochs, [int(f) for f in folds], per_trial, n * per_trial, float(budget_s))
 
 
+# The Config fields that change a training step's cost: a stored run's sec_per_step stands for this setup only
+# when every one of them is in its config.yaml with the same value.
 SETUP_FIELDS = ("BATCH_SIZE", "INPUT_SERIES", "INDICATOR_FAMILIES", "LOOKBACK", "HORIZON_STEPS", "RESAMPLE_MINUTES",
-                "MAX_SEQUENCE_COUNT")
+                "MAX_SEQUENCE_COUNT", "MODEL_NAME", "ATTENTION_MODE", "DETERMINISTIC_GRU", "PROBE_GRADIENTS")
+
+
+def _plain_value(v: Any) -> Any:
+    """Tuples as lists, recursively: a YAML-loaded value and a Config value compare equal when they hold the same."""
+    if isinstance(v, (list, tuple)):
+        return [_plain_value(x) for x in v]
+    if isinstance(v, dict):
+        return {k: _plain_value(x) for k, x in v.items()}
+    return v
 
 
 def current_device() -> str:
@@ -541,17 +603,26 @@ def run_device(run_dir) -> Optional[str]:
 def setup_mismatch(row: Mapping[str, Any], run_dir, config: Config, dataset_sha: Optional[str],
                    device: str) -> Optional[str]:
     """Why a stored run is NOT the same setup as ``config`` (dataset fingerprint, the Config fields of
-    :data:`SETUP_FIELDS`, the device), or None when it is. Fields the index lacks come from the run's own
-    config.yaml and env.json."""
+    :data:`SETUP_FIELDS`, the device), or None when it is. The fields are compared with the RAW keys of the run's
+    own config.yaml, never through ``Config.from_yaml`` (which would fill today's defaults into a file written
+    before a field existed, e.g. a pre-D-047 close-only run without INPUT_SERIES): a field missing from the
+    stored file is unknown, and unknown is a mismatch. The device comes from the run's env.json."""
+    import yaml
+
     if not dataset_sha or row.get("dataset_sha256") != dataset_sha:
         return "dataset fingerprint differs or is unknown"
     try:
-        theirs = Config.from_yaml(Path(run_dir) / "config.yaml")
+        theirs = yaml.safe_load((Path(run_dir) / "config.yaml").read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001 - an unreadable config.yaml is an unknown setup
         return "config.yaml unreadable"
+    if not isinstance(theirs, dict):
+        return "config.yaml unreadable"
     for name in SETUP_FIELDS:
-        if getattr(theirs, name) != getattr(config, name):
-            return f"{name} differs ({getattr(theirs, name)!r} against {getattr(config, name)!r})"
+        if name not in theirs:
+            return f"{name} missing from the stored config.yaml (unknown: written before the field existed)"
+        mine = _plain_value(getattr(config, name))
+        if _plain_value(theirs[name]) != mine:
+            return f"{name} differs ({theirs[name]!r} against {mine!r})"
     dev = run_device(run_dir)
     if dev != device:
         return f"device differs ({dev} against {device})"
@@ -561,8 +632,8 @@ def setup_mismatch(row: Mapping[str, Any], run_dir, config: Config, dataset_sha:
 def latest_sec_per_step(store: RunStore, config: Config, dataset_sha: Optional[str], device: str
                         ) -> Tuple[Optional[Dict[str, Any]], List[str]]:
     """(sec_per_step of the newest finished run of exactly the same setup, the reasons other runs were
-    refused). Same setup: dataset fingerprint, BATCH_SIZE, input layout (INPUT_SERIES, INDICATOR_FAMILIES),
-    LOOKBACK, HORIZON_STEPS, bar size, MAX_SEQUENCE_COUNT and device. Never falls back to another setup."""
+    refused). Same setup: the dataset fingerprint, every field of :data:`SETUP_FIELDS` present in the run's
+    config.yaml with the same value, and the device. Never falls back to another setup."""
     best, refused = None, []
     for r in store.index.rows(status="done"):
         if r.get("sec_per_step") is None:
@@ -752,8 +823,9 @@ class Sweep:
         if found is None:
             raise SweepError("no measured sec_per_step for THIS setup: no finished run with the same dataset, "
                              f"BATCH_SIZE {self.base_config.BATCH_SIZE}, input layout, LOOKBACK {self.base_config.LOOKBACK}, "
-                             f"HORIZON_STEPS {list(self.base_config.HORIZON_STEPS)}, bar size, MAX_SEQUENCE_COUNT and "
-                             f"device {device} is in the run index {self.store.index_path} "
+                             f"HORIZON_STEPS {list(self.base_config.HORIZON_STEPS)}, bar size, MAX_SEQUENCE_COUNT, "
+                             f"model ({self.base_config.MODEL_NAME}, ATTENTION_MODE, DETERMINISTIC_GRU, "
+                             f"PROBE_GRADIENTS), all stored in its config.yaml, and device {device} is in the run index {self.store.index_path} "
                              f"({len(refused)} run(s) of other setups were not used"
                              + (f", for example {refused[0]}" if refused else "")
                              + "); pass --sec-per-step, or run one cell of the setup first")
@@ -809,7 +881,7 @@ class Sweep:
         self._check_scenario()
         self.space = SearchSpace.from_scenario(self.scenario)
         self._probe()
-        if self.record.get("found") and o.parallel > 1:
+        if self.record.get("found") and o.parallel > 1:      # the record is used only for N > 1 (allowed N, levels)
             self.record["warnings"] = record_setup_warnings(self.record, self.base_config)
             for w in self.record["warnings"]:
                 logger.warning("parallel record %s (measured %s) may not fit this sweep: %s", self.record["path"],
@@ -850,7 +922,7 @@ class Sweep:
         res = SweepResult(self.sweep_id, QUICK, QUICK, str(self.directory), budget, self._trials(), state, stop,
                           ranking, None)
         self._write_summary(res, extra={"quick_plan": plan.to_dict(), "points": points,
-                                        "leader": ranking[0] if ranking else None,
+                                        "leader": next((r for r in ranking if r["rank"] is not None), None),
                                         "note": "quick results: reduced epochs, one seed, dev folds "
                                                 f"{plan.folds}; a leader, not a winner"})
         return res
@@ -919,9 +991,11 @@ class Sweep:
         ranking = self._ranking()
         winner = None
         rerun_table: List[Dict[str, Any]] = []
-        ok = [r for r in ranking if r["rank"] is not None]          # failed trials are never re-run
+        ok = [r for r in ranking if r["rank"] is not None]          # failed and ineligible trials are never re-run
         if complete and ok:
-            rerun_table, winner = self._rerun(ok[: o.top_k])
+            rerun_table, winner, rerun_stop = self._rerun(ok[: o.top_k])
+            if rerun_stop:
+                complete, stop = False, rerun_stop + " (the search is finished; resume to finish the re-run)"
         res = SweepResult(self.sweep_id, OPTUNA, OPTUNA, str(self.directory), budget, self._trials(),
                           "complete" if complete else "stopped", stop or (None if complete else "stopped after "
                           f"{n_finished} of {o.n_trials} trials (resume to continue)"), ranking, winner)
@@ -930,10 +1004,14 @@ class Sweep:
 
     @staticmethod
     def _tell(study, number: int, score: TrialScore) -> None:
+        """FAIL for a failed trial; INELIGIBLE_VALUE (never its idle or cost-mismatched Sharpe) for a trial that
+        fails a search-time guard-rail; else its dev value."""
         import optuna
 
         if score.value is None:
             study.tell(number, state=optuna.trial.TrialState.FAIL)
+        elif not score.eligible:
+            study.tell(number, INELIGIBLE_VALUE)
         else:
             study.tell(number, score.value)
 
@@ -952,7 +1030,7 @@ class Sweep:
     def _execute(self, batch: List[Tuple[int, Dict[str, Any]]], *, on_scored=None) -> Optional[str]:
         """Run the trials in batches of ``parallel``; returns a stop reason, or None when all ran."""
         o = self.options
-        level = (self.record.get("utilization") or {}).get(str(o.parallel))
+        level = self._watch_level()
         for start in range(0, len(batch), o.parallel):
             chunk = batch[start:start + o.parallel]
             reason = self._wait_for_gpu()
@@ -983,7 +1061,11 @@ class Sweep:
                     on_scored(number, score)
                 if score.value is None:
                     logger.warning("trial %d FAILED (recorded, not dropped): %s", number, score.reason)
+                elif not score.eligible:
+                    logger.warning("trial %d is not eligible for the re-run (a search-time guard-rail): %s", number,
+                                   score.ineligible)
                 self.trial_log[number].update(score=score.to_dict(), value=score.value, reason=score.reason,
+                                              eligible=score.eligible, ineligible=score.ineligible,
                                               state="COMPLETE" if score.value is not None else "FAIL")
             self.trial_log[chunk[0][0]]["gpu_reading"] = reading
             self._save_progress()
@@ -991,6 +1073,14 @@ class Sweep:
             if why:
                 return f"stopped launching: GPU {why} (someone else may be on the GPU)"
         return None
+
+    def _watch_level(self) -> Optional[Mapping[str, float]]:
+        """The record's GPU level for N own processes, watched after each batch, only when N > 1: the record is
+        then the one that allowed N. At N = 1 no record level applies (it was measured on another setup, and a
+        single process of today's setup may well use more memory); the GPU-free check before each batch does."""
+        if self.options.parallel <= 1:
+            return None
+        return (self.record.get("utilization") or {}).get(str(self.options.parallel))
 
     def _unstable(self, rows: Sequence[Mapping[str, Any]]) -> Optional[str]:
         """The first stability problem among a trial's finished cells (see :func:`run_health`), else None."""
@@ -1005,7 +1095,11 @@ class Sweep:
     def _score_trial(self, rows: Sequence[Mapping[str, Any]]) -> TrialScore:
         """The trial's dev score through the leaderboard's aggregation; a failed fold or an unstable cell
         (non-finite loss, non-finite-gradient steps above the limit) makes it FAILED with the reason."""
-        score = dev_net_sharpe(rows, self.dev_folds, store_root=self.store.root)
+        from neural_trade.experiments.leaderboard import scenario_cost_profile, scenario_guard_rails
+
+        score = dev_net_sharpe(rows, self.dev_folds, store_root=self.store.root,
+                               guard_rails=scenario_guard_rails(self.scenario)[0],
+                               board_cost=scenario_cost_profile(self.scenario.backtest))
         bad = self._unstable(rows)
         if bad and score.value is not None:
             return dataclasses.replace(score, value=None, reason=bad)
@@ -1073,19 +1167,30 @@ class Sweep:
     def _trials(self) -> List[Dict[str, Any]]:
         return [self.trial_log[k] for k in sorted(self.trial_log)]
 
-    def _ranking(self) -> List[Dict[str, Any]]:
-        """Completed trials, best dev value first; failed trials follow, flagged."""
-        ok = sorted((t for t in self.trial_log.values() if t.get("value") is not None), key=lambda t: -t["value"])
-        bad = [t for t in self.trial_log.values() if t.get("value") is None]
-        return [{"rank": i + 1, **{k: t.get(k) for k in ("number", "variant", "params", "value", "state", "label")}}
-                for i, t in enumerate(ok)] + [{"rank": None, **{k: t.get(k) for k in ("number", "variant", "params",
-                                                                                      "value", "state", "reason")}}
-                                              for t in bad]
+    @staticmethod
+    def _eligible(t: Mapping[str, Any]) -> bool:
+        return t.get("value") is not None and not t.get("ineligible")
 
-    def _rerun(self, top: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
-        """The successful top trials again with ``rerun_seeds`` seeds on every fold, ranked by NT-031's leaderboard
+    def _ranking(self) -> List[Dict[str, Any]]:
+        """Eligible trials (a value and every search-time guard-rail passed), best dev value first, ranked; then
+        the completed trials a search-time guard-rail rules out, then the failed ones, both unranked and flagged.
+        Only ranked trials enter the re-run or lead a quick sweep."""
+        trials = list(self.trial_log.values())
+        ok = sorted((t for t in trials if self._eligible(t)), key=lambda t: -t["value"])
+        out_ = sorted((t for t in trials if t.get("value") is not None and not self._eligible(t)),
+                      key=lambda t: -t["value"])
+        bad = [t for t in trials if t.get("value") is None]
+        keys = ("number", "variant", "params", "value", "state", "label")
+        return ([{"rank": i + 1, **{k: t.get(k) for k in keys}} for i, t in enumerate(ok)]
+                + [{"rank": None, **{k: t.get(k) for k in keys}, "ineligible": t.get("ineligible")} for t in out_]
+                + [{"rank": None, **{k: t.get(k) for k in keys}, "reason": t.get("reason")} for t in bad])
+
+    def _rerun(self, top: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]], Optional[str]]:
+        """The eligible top trials again with ``rerun_seeds`` seeds on every fold, ranked by NT-031's leaderboard
         on the dev folds (the mean of each fold's seed-mean; the test fold is shown, never ranks). The winner is
-        the top row that is not disqualified by the scenario's guard-rails and trained stably."""
+        the top row that is not disqualified by the scenario's guard-rails and trained stably. Returns (table,
+        winner, stop reason): a busy GPU before a batch, or a reading above the watch level after one, stops the
+        re-run with no table and no winner (resume finishes it; finished cells are not trained again)."""
         from neural_trade.experiments.leaderboard import (
             RANK_METRIC, build_leaderboard, scenario_cost_profile, scenario_guard_rails)
         from neural_trade.experiments.leaderboard import winner as leaderboard_winner
@@ -1094,16 +1199,26 @@ class Sweep:
         base_seed = int(self.scenario.seeds[0])
         seeds = [base_seed + i for i in range(o.rerun_seeds)]
         folds = self.dev_folds + [f for f in self.test_folds if f not in self.dev_folds]
+        level = self._watch_level()
         for start in range(0, len(top), o.parallel):
-            if self._wait_for_gpu():
-                return [], None
+            busy = self._wait_for_gpu()
+            if busy:
+                return [], None, f"re-run stopped: {busy}"
             scs = [self._trial_scenario(t["number"], t["params"], folds=folds, seeds=seeds)
                    for t in top[start:start + o.parallel]]
-            if o.parallel > 1:
-                self._launch(scs)
-            else:
-                for sc in scs:
-                    self._factory(sc).run()
+            monitor = self.monitor_factory()
+            monitor.start()
+            try:
+                if o.parallel > 1:
+                    self._launch(scs)
+                else:
+                    for sc in scs:
+                        self._factory(sc).run()
+            finally:
+                reading = monitor.stop()
+            why = exceeds_watch_level(reading, level)
+            if why and start + o.parallel < len(top):
+                return [], None, f"re-run stopped launching: GPU {why} (someone else may be on the GPU; resume later)"
         self.store.sync(self.sweep_id)
         variants = {t["variant"]: t for t in top}
         rows = [r for r in self.store.index.rows(self.sweep_id) if r["variant"] in variants]
@@ -1128,7 +1243,7 @@ class Sweep:
                           "test_note": "test fold: shown, never used to rank"})
         top_row = leaderboard_winner([lb for lb in board if not unstable[lb.configuration]])
         winner = next((r for r in table if top_row is not None and r["variant"] == top_row.configuration), None)
-        return table, winner
+        return table, winner, None
 
     # ---- the summary file
     def _read_summary(self) -> Dict[str, Any]:
@@ -1169,7 +1284,7 @@ class Sweep:
                                                          "config_overrides": res.winner["params"]})
 
 
-__all__ = ["DEFAULT_SEARCH", "parse_dmon", "gpu_status_from_dmon", "run_health", "code_info", "code_source_dir",
+__all__ = ["DEFAULT_SEARCH", "INELIGIBLE_VALUE", "SEARCH_TIME_RAILS", "SETUP_FIELDS", "parse_dmon", "gpu_status_from_dmon", "run_health", "code_info", "code_source_dir",
            "record_setup_warnings", "setup_mismatch", "current_device", "GpuStatus", "MODES", "QuickPlan", "SearchParam", "SearchSpace", "Sweep",
            "SweepError", "SweepOptions", "SweepResult", "TrialScore", "cell_seconds", "dev_net_sharpe",
            "exceeds_watch_level", "latest_sec_per_step", "load_parallel_record", "nvidia_smi_gpu_check",
