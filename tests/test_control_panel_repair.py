@@ -8,7 +8,6 @@ import threading
 import time
 from pathlib import Path
 
-import pytest
 import yaml
 
 from neural_trade.notebook import control_panel as CP
