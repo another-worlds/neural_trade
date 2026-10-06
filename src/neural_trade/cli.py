@@ -222,7 +222,7 @@ def cmd_scenario(args) -> int:
     if args.action == "rescore":
         return _scenario_rescore(args, store)
     try:
-        runner = Runner.from_spec(args.spec, store=store)
+        runner = Runner.from_spec(args.spec, store=store, claim_cells=bool(args.claim_cells))
         if args.action == "plan":
             cells = plan_table(runner.plan())
             counts = {s: sum(c["state"] == s for c in cells) for s in ("done", "failed", "pending")}
@@ -235,6 +235,30 @@ def cmd_scenario(args) -> int:
         return 2
     print(json.dumps(report.to_dict(), indent=2))  # noqa: T201 - the command's result, for scripting
     return 1 if report.failed else 0
+
+
+def cmd_sweep(args) -> int:
+    from neural_trade.core.exceptions import InvalidConfigurationError
+    from neural_trade.experiments.scenario import Scenario
+    from neural_trade.experiments.sweep import Sweep, SweepOptions
+    from neural_trade.experiments.store import RunStore
+
+    opts = SweepOptions(mode=args.mode, n_trials=args.n_trials, stop_after=args.stop_after, max_hours=args.max_hours,
+                        parallel=args.parallel, parallel_record=args.parallel_record, sec_per_step=args.sec_per_step,
+                        quick_minutes=args.quick_minutes, overhead_s=args.overhead_s, top_k=args.top_k,
+                        rerun_seeds=args.rerun_seeds, sampler_seed=args.sampler_seed, resume=args.resume,
+                        when_busy=args.when_busy, dry_run=args.dry_run)
+    try:
+        sweep = Sweep(Scenario.from_yaml(args.spec), RunStore(args.store, args.index), opts,
+                      announce=lambda text: print(text, flush=True))  # noqa: T201 - the budget / estimate, before any trial
+        result = sweep.run()
+    except InvalidConfigurationError as exc:
+        logger.error("sweep refused, nothing was started: %s", exc)
+        return 2
+    print(json.dumps({"sweep": result.sweep_id, "mode": result.mode, "label": result.label, "state": result.state,  # noqa: T201
+                      "stop_reason": result.stop_reason, "directory": result.directory,
+                      "budget": result.budget, "winner": result.winner, "ranking": result.ranking[:10]}, indent=2, default=str))
+    return 0 if result.state in ("complete", "quick_complete", "dry_run") else 1
 
 
 def _scenario_rescore(args, store) -> int:
@@ -456,11 +480,54 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--max-cells", type=int, default=None,
                    help="train at most N pending cells, then stop (the same command resumes)")
     s.add_argument("--retry-failed", action="store_true", help="train failed cells again (into new directories)")
+    s.add_argument("--claim-cells", action="store_true",
+                   help="take a lock file per cell before training it, so two processes on one scenario never train "
+                        "the same cell (a sweep's parallel trials use it)")
     s.add_argument("--study", default=None,
                    help="rescore: a strategy study YAML (configs/strategy_studies/*.yaml)")
     s.add_argument("--random-seeds", type=int, default=None,
                    help="rescore: random-null seeds per backtest (default: the scenario's backtest setting)")
     s.set_defaults(func=cmd_scenario)
+
+    sw = sub.add_parser("sweep", help="search Config fields on the dev folds (NT-030): quick mode (about 5 minutes, "
+                                      "sized from a measured sec_per_step) or optuna mode (a resumable study with a "
+                                      "stated GPU budget)",
+                        description="The search space is the scenario's `search:` block (FIELD: {low, high, log, step} "
+                                    "or choices; only Config fields marked tunable; RESAMPLE_MINUTES is refused until "
+                                    "NT-040). quick: trials, epochs and dev folds are sized so that the estimate "
+                                    "(printed first) is at most --quick-minutes; results are labelled quick, one seed, "
+                                    "no winner. optuna: a TPE study in <store>/sweeps/<id>/study.db; the GPU budget "
+                                    "(trials x dev folds x steps x sec_per_step + the top-K x seeds re-run) is "
+                                    "printed and recorded before the first trial and refused above --max-hours; "
+                                    "after the search the top K are re-run with several seeds and the winner is the "
+                                    "best dev-fold seed mean (test columns shown, never ranking). --parallel N "
+                                    "launches N trials at once, only up to NT-035's recorded allowed N, after the "
+                                    "GPU-free check.")
+    sw.add_argument("spec", help="scenario YAML (configs/scenarios/*.yaml) with an optional `search:` block")
+    sw.add_argument("--mode", choices=["quick", "optuna"], required=True)
+    sw.add_argument("--store", default="runs", help="run store root; trials go to <store>/scenarios/<name>-<mode>/")
+    sw.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
+    sw.add_argument("--resume", action="store_true", help="continue an earlier sweep of this scenario and mode "
+                                                          "(without it an existing sweep is refused)")
+    sw.add_argument("--n-trials", type=int, default=30, help="optuna: the study's total number of trials")
+    sw.add_argument("--stop-after", type=int, default=None,
+                    help="run at most N new trials in this call, then stop without the re-run (--resume continues)")
+    sw.add_argument("--max-hours", type=float, default=12.0,
+                    help="optuna: refuse to start when the estimated GPU budget is above this (default 12: one night)")
+    sw.add_argument("--parallel", type=int, default=1, help="trials launched at once (needs NT-035's record)")
+    sw.add_argument("--parallel-record", default="runs/experiments/gpu_measurements_v1/parallel_n.json",
+                    help="NT-035's result file (allowed_n, utilization); no file means --parallel 1")
+    sw.add_argument("--sec-per-step", type=float, default=None,
+                    help="measured seconds per training step (default: the latest run of the same setup in the index)")
+    sw.add_argument("--quick-minutes", type=float, default=5.0, help="quick: the estimate's ceiling")
+    sw.add_argument("--overhead-s", type=float, default=30.0, help="estimated fixed seconds per cell (data, calibration, scoring)")
+    sw.add_argument("--top-k", type=int, default=5, help="optuna: trials re-run with several seeds")
+    sw.add_argument("--rerun-seeds", type=int, default=3, help="optuna: seeds of the re-run")
+    sw.add_argument("--sampler-seed", type=int, default=0)
+    sw.add_argument("--when-busy", choices=["stop", "wait"], default="stop",
+                    help="when the GPU-free check fails: stop (resume later) or wait and check again")
+    sw.add_argument("--dry-run", action="store_true", help="print the estimate / GPU budget and stop")
+    sw.set_defaults(func=cmd_sweep)
 
     sc = sub.add_parser("screen", help="mass, sub-30-second CPU/GPU trials over a grid/sample of Config fields "
                                        "(NT-088): finds broken math and unstable hyperparameter regions, ranks "

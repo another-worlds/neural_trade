@@ -37,8 +37,8 @@ trusts that recorded value: :func:`config_hash_of_dir` recomputes it from the ce
 did not exist back then at its current default), so it is directly comparable with a freshly
 computed identity from the current spec.
 
-Extension points (the schema version rises when a key changes meaning): NT-030 adds sweep modes
-(quick, optuna) and a search space, NT-031 guard-rail thresholds, NT-033 rule-based scenarios
+Extension points (the schema version rises when a key changes meaning): NT-030 adds the optional
+``search:`` block (the space `neural-trade sweep` searches; experiments/sweep.py), NT-031 guard-rail thresholds, NT-033 rule-based scenarios
 that train no network, NT-038 harness cases.
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ from neural_trade.core.exceptions import InvalidConfigurationError
 
 SCHEMA_VERSION = 1
 TOP_KEYS = ("schema_version", "name", "description", "base_config", "overrides", "variants", "sweep", "folds",
-            "seeds", "strategy", "backtest", "run", "leaderboard")
+            "seeds", "strategy", "backtest", "run", "search", "leaderboard")
 SWEEP_KEYS = ("mode", "axes")
 SWEEP_MODES = ("grid",)                     # NT-030 adds "quick" and "optuna"
 STRATEGY_KEYS = ("name", "params")
@@ -212,6 +212,7 @@ class Scenario:
     axes: Dict[str, List[Any]] = field(default_factory=dict)
     backtest: Dict[str, Any] = field(default_factory=dict)
     run: RunOptions = field(default_factory=RunOptions)
+    search: Dict[str, Any] = field(default_factory=dict)   # NT-030: the search space of `neural-trade sweep`
     leaderboard: Dict[str, Any] = field(default_factory=dict)     # guard-rail thresholds (LEADERBOARD_KEYS)
     source: Optional[Path] = None           # the spec file (error messages, base_config resolution)
     base_dir: Optional[Path] = None         # where a relative base_config is resolved
@@ -290,6 +291,10 @@ class Scenario:
             bad(f"strategy.name must be a string, got {sname!r}")
         strategy = StrategySpec(sname, _mapping(raw_strategy.get("params"), "strategy.params", bad))
         backtest = _mapping(data.get("backtest"), "backtest", bad)
+        search = _mapping(data.get("search"), "search", bad)
+        for fname, rule in search.items():
+            if rule is not None and not isinstance(rule, Mapping):
+                bad(f"search.{fname} must be empty or a mapping of low / high / log / step / choices")
         raw_run = _mapping(data.get("run"), "run", bad)
         _refuse_unknown(raw_run, RUN_KEYS, "run.", bad)
         for key, value in raw_run.items():
@@ -306,7 +311,8 @@ class Scenario:
                 bad(f"leaderboard.{key} must be a number >= 0 (or null to disable), got {value!r}")
         return cls(name=name, folds=folds, seeds=seeds, strategy=strategy, schema_version=version,
                    description=description, base_config=base, overrides=overrides, variants=variants,
-                   sweep_mode=mode, axes=axes, backtest=backtest, run=RunOptions(**raw_run), leaderboard=dict(board),
+                   sweep_mode=mode, axes=axes, backtest=backtest, run=RunOptions(**raw_run), search=search,
+                   leaderboard=dict(board),
                    source=Path(source) if source is not None else None,
                    base_dir=Path(base_dir) if base_dir is not None else None)
 
@@ -316,11 +322,14 @@ class Scenario:
 
     def to_dict(self) -> Dict[str, Any]:
         """The normalised spec (defaults filled in), as YAML would hold it."""
-        return {"schema_version": self.schema_version, "name": self.name, "description": self.description,
-                "base_config": self.base_config, "overrides": self.overrides, "variants": self.variants,
-                "sweep": {"mode": self.sweep_mode, "axes": self.axes}, "folds": list(self.folds),
-                "seeds": list(self.seeds), "strategy": dataclasses.asdict(self.strategy),
-                "backtest": dict(self.backtest), "run": dataclasses.asdict(self.run)}
+        out = {"schema_version": self.schema_version, "name": self.name, "description": self.description,
+               "base_config": self.base_config, "overrides": self.overrides, "variants": self.variants,
+               "sweep": {"mode": self.sweep_mode, "axes": self.axes}, "folds": list(self.folds),
+               "seeds": list(self.seeds), "strategy": dataclasses.asdict(self.strategy),
+               "backtest": dict(self.backtest), "run": dataclasses.asdict(self.run)}
+        if self.search:              # only when set: the spec hash of every earlier scenario is unchanged
+            out["search"] = self.search
+        return out
 
     @property
     def spec_hash(self) -> str:
