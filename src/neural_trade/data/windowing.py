@@ -62,7 +62,21 @@ def compute_extended_trend_features(close_values, index, periods):
     return np.array(features, dtype='float32')
 
 
-def make_sequences_with_extended_trends(config, close_array, lookback):
+def sequence_counts(config, n_bars):
+    """``(n_total, dropped)``: the sequences ``n_bars`` bars give, and how many of the OLDEST
+    ``Config.MAX_SEQUENCE_COUNT`` drops (0 without a cap). Pass ``dropped`` as ``first_seq`` to the
+    window builders to build only the kept (newest) sequences (NT-177)."""
+    start = int(max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS))))
+    step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
+    end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
+    total = len(range(start, end, step))
+    cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
+    return total, (max(0, total - int(cap)) if cap else 0)
+
+
+def make_sequences_with_extended_trends(config, close_array, lookback, *, first_seq=0):
+    """``first_seq``: skip that many leading sequences (their anchors are never built); the rest
+    are identical to the same rows of the full result."""
     X, y, last_close, extended_trends = [], [], [], []
     # Ensure start index is an integer even if periods are provided as floats
     max_extended_period = int(max(config.EXTENDED_TREND_PERIODS))
@@ -79,7 +93,7 @@ def make_sequences_with_extended_trends(config, close_array, lookback):
     # Ensure targets are within bounds for all horizons
     end_idx = int(len(close_array) - (max_h - 1))
 
-    for i in range(start_idx, end_idx, step):
+    for i in range(start_idx + int(first_seq) * step, end_idx, step):
         window = close_array[i-lookback:i]
         # Targets (Option A): predict DELTAS relative to last_close at time t.
         #   delta_h = close[t+h] - last_close[t]
@@ -113,7 +127,7 @@ def frame_series(config, df) -> dict:
             for name in (getattr(config, "INPUT_SERIES", None) or ["close"])}
 
 
-def make_multichannel_windows(config, series: dict, lookback):
+def make_multichannel_windows(config, series: dict, lookback, *, first_seq=0):
     """Input windows ``[N, lookback, C]`` over the ``Config.INPUT_SERIES`` channels (NT-047).
 
     ``series`` maps each configured series name to its bar array (:func:`frame_series`); the
@@ -130,7 +144,7 @@ def make_multichannel_windows(config, series: dict, lookback):
     step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
     end_idx = int(n - (int(max(config.HORIZON_STEPS)) - 1))
     X = [np.stack([a[i - lookback:i] for a in arrays], axis=-1)
-         for i in range(start_idx, end_idx, step)]
+         for i in range(start_idx + int(first_seq) * step, end_idx, step)]
     return np.array(X, dtype="float32")
 
 

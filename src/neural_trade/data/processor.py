@@ -21,7 +21,7 @@ from neural_trade.data.splits import make_purged_splits
 from neural_trade.data.windowing import (compute_extended_trend_features, frame_series,
                                          make_multichannel_windows,
                                          make_sequences_with_extended_trends,
-                                         sequence_anchor_bars)
+                                         sequence_anchor_bars, sequence_counts)
 
 logger = logging.getLogger(__name__)
 
@@ -80,15 +80,13 @@ def split_arrays(config, read_csv_kwargs=None):
     """
     dp = DataProcessor(config)
     df, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
-    X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK)
+    # NT-177: build only the newest MAX_SEQUENCE_COUNT sequences (same rows as window-all-then-cut)
+    n_total, dropped = sequence_counts(config, len(close))
+    X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK, first_seq=dropped)
     # model-input windows (NT-047): identical to X in close-only mode, [N, L, C] otherwise
     series_names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
     Xm = X if series_names == ["close"] else make_multichannel_windows(
-        config, frame_series(config, df), config.LOOKBACK)
-    n_total = X.shape[0]
-    cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
-    if cap and X.shape[0] > cap:
-        X, y, lc, ext, Xm = X[-cap:], y[-cap:], lc[-cap:], ext[-cap:], Xm[-cap:]
+        config, frame_series(config, df), config.LOOKBACK, first_seq=dropped)
     folds = make_purged_splits(X.shape[0], lookback=config.LOOKBACK, horizon_steps=config.HORIZON_STEPS,
                                window_step=int(max(1, getattr(config, "WINDOW_STEP", 1))),
                                n_folds=int(getattr(config, "N_FOLDS", 5)),
@@ -162,8 +160,10 @@ class DataProcessor:
         input (NT-047), ``X_seq`` itself in close-only mode, otherwise the [N, LOOKBACK, C] windows over
         ``Config.INPUT_SERIES`` built from ``df`` (required then; INPUT_SERIES is part of the data key).
         """
+        # NT-177: only the newest MAX_SEQUENCE_COUNT sequences are built (the oldest are never windowed)
+        n_total, dropped = sequence_counts(self.config, len(close_values))
         X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
-            self.config, close_values, self.config.LOOKBACK
+            self.config, close_values, self.config.LOOKBACK, first_seq=dropped
         )
         logger.info(f"Sequences with extended trends: {X_seq.shape}, {y_seq.shape}, Extended: {extended_trends.shape}")
 
@@ -179,21 +179,13 @@ class DataProcessor:
             if df is None:
                 raise ValueError(f"INPUT_SERIES={series_names} needs the bar frame: call build_windows(close, df)")
             X_model = make_multichannel_windows(self.config, frame_series(self.config, df),
-                                                self.config.LOOKBACK)
+                                                self.config.LOOKBACK, first_seq=dropped)
             if X_model.shape[0] != X_seq.shape[0]:
                 raise RuntimeError(f"model windows ({X_model.shape[0]}) and close windows "
                                    f"({X_seq.shape[0]}) disagree - a windowing bug")
 
-        max_sequences = getattr(self.config, 'MAX_SEQUENCE_COUNT', None)
-        if max_sequences and X_seq.shape[0] > max_sequences:
-            original_count = X_seq.shape[0]
-            take_from = original_count - max_sequences
-            X_seq = X_seq[take_from:]
-            X_model = X_model[take_from:]
-            y_seq = y_seq[take_from:]
-            last_close_seq = last_close_seq[take_from:]
-            extended_trends = extended_trends[take_from:]
-            logger.info(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
+        if dropped:
+            logger.info(f"[OK] Limited sequence set from {n_total} to {n_total - dropped} (most recent window)")
         return X_seq, y_seq, last_close_seq, extended_trends, X_model
 
     def prepare_datasets(self, df, close_values):
