@@ -53,6 +53,7 @@ runs/ablations/*/logs/
 runs/experiments/*/logs/
 # the experiment engine's index: a cache rebuilt from the run directories (neural-trade scenario reindex)
 runs/index.sqlite*
+runs/*/index.sqlite*
 !runs/**/*.csv
 
 # Claude Code: agent worktrees and machine-local settings (agents/, skills/ and settings.json are tracked)

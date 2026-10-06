@@ -1,0 +1,10 @@
+{
+  "name": "loss_prune_v1_ece0_vol0_vs_control",
+  "spec_hash": "eb47e789da74",
+  "registration": {
+    "declared": "2026-10-01T00:00:00Z",
+    "effective": "2026-10-01T03:55:40+05:00",
+    "source": "git_commit_time"
+  },
+  "recorded_utc": "2026-10-01T01:59:48Z"
+}

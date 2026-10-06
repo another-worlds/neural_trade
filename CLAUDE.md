@@ -28,7 +28,7 @@ horizons) is the reference setup, the only one tested in the MVP (D-022). Packag
    path. Any other untracked or modified file may belong to another session: do not discard or
    commit it; record it in STATUS and ask the owner. If behind origin: fast-forward only when the tree is clean
    (no modified or staged tracked files); otherwise ask. If this checkout is
-   C:/Users/Step/Documents/neural_trade and D:/neural_trade exists, do not work here: the working
+   C:/Users/Step/Documents/neural_trade and D:/nt/neural_trade exists, do not work here: the working
    copy is D: (D-030); tell the owner.
 3. Check CI on the pushed head and list the open pull requests (docs/RUNBOOK.md "CI"). A PR from
    a remote session into `remediation/plan` is QA'd and merged like an implementer branch (D-033).
@@ -91,8 +91,8 @@ Pointers only; the rule lives where the pointer says.
 - `ptxas.exe ... CreateProcess failed` log lines are harmless.
 - One GPU job at a time (sweeps: OPERATING_MODEL); the owner's other project also uses this GPU
   (Docker/WSL): never touch it. Is the GPU free: RUNBOOK "GPU rules".
-- Disk C: is nearly full (the other project's Docker image): scratch, renders and worktrees go to D:.
-- The working copy is `D:/neural_trade` (moved 2026-09-28, D-030). The old C: copy is ignored (D-038):
+- Disk C: is nearly full (the other project's Docker image): scratch, renders and worktrees go to D:/nt/.
+- The working copy is `D:/nt/neural_trade` (moved 2026-09-28, D-030; into D:/nt/ by 2026-10-06, D-058). The old C: copy is ignored (D-038):
   never delete it, never ask about it. (Formerly: deleted only on
   the owner's go-ahead (OPERATING_MODEL "Escalate to the owner"); never work in it.
 - Bash heredocs with nested quotes break easily here: write scripts with the Write tool.

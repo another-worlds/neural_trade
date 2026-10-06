@@ -105,7 +105,7 @@ Every field of `neural_trade.core.config.Config`: 139 fields, 39 tunable, 8 depr
 | `LAMBDA_LONG` | `1.0` | weight | >= 0 | yes | no | point loss weight, h2 |
 | `LAMBDA_DIR` | `1.0` | weight | >= 0 | yes | no | direction loss (DIRECTION_LOSS), summed over the horizons |
 | `LAMBDA_INTER` | `1.0` | weight | >= 0 | yes | no | weight of model.losses (layer regularisers) |
-| `LAMBDA_VOL` | `1.0` | weight | >= 0 | yes | no | prediction-spread vs target-spread penalty |
+| `LAMBDA_VOL` | `0.0` | weight | >= 0 | yes | no | prediction-spread vs target-spread penalty (0: the calibration pass lifts it to CALIB_LAMBDA_MIN 0.1, the arm NT-099 tested; without calibration a true 0, untested; D-057, D-058) |
 | `LAMBDA_VAR` | `1.0` | weight | >= 0 | yes | no | Gaussian NLL of the variance heads |
 | `LAMBDA_TREND_OUTER` | `1.0` | weight | >= 0 | yes | no | outer multiplier of the summed extended-trend terms; rescaled by the calibration pass only with CALIB_OUTER |
 | `LAMBDA_DIR_OUTER` | `1.0` | weight | >= 0 | yes | no | outer multiplier of the direction loss (LAMBDA_DIR term); rescaled by the calibration pass only with CALIB_OUTER |
@@ -113,7 +113,7 @@ Every field of `neural_trade.core.config.Config`: 139 fields, 39 tunable, 8 depr
 | `LAMBDA_COHERENCE` | `1.0` | weight | >= 0 | yes | no | weight of the cross-horizon coherence penalty (sign disagreement and magnitude ordering of the price heads) |
 | `LAMBDA_NLL_OUTER` | `1.0` | weight | >= 0 | yes | no | outer multiplier of the variance-head NLL (LAMBDA_VAR term); rescaled by the calibration pass only with CALIB_OUTER |
 | `LAMBDA_CRPS` | `1.0` | weight | >= 0 | yes | no | weight of the Gaussian CRPS of the price and variance heads, summed over the horizons (0 = off) |
-| `LAMBDA_SOFT_ECE` | `1.0` | weight | >= 0 | yes | no | weight of the differentiable ECE of the direction heads, summed over the horizons (0 = off) |
+| `LAMBDA_SOFT_ECE` | `0.0` | weight | >= 0 | yes | no | weight of the differentiable ECE of the direction heads, summed over the horizons (0 = off) |
 | `LAMBDA_DIR_ALIGN` | `0.7` | weight | >= 0 | yes | no | inner weight of the alignment term |
 | `LAMBDA_PNL` | `0.0` | weight | >= 0 | yes | no | weight of the mean-variance P&L utility on the direction heads' implied positions (0 = off; NT-087) |
 | `PNL_GAMMA` | `1.0` | dimensionless | > 0 | yes | no | risk-aversion coefficient of the pnl_utility objective's quadratic penalty |

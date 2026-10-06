@@ -10,6 +10,7 @@ import sys
 import time
 from pathlib import Path
 
+import pytest
 import tensorflow as tf  # noqa: F401  (so conftest skips/marks this file correctly without TF)
 
 REPO = Path(__file__).resolve().parent.parent
@@ -47,6 +48,7 @@ def test_smoke_kit_runs_and_gates_pass(tmp_path):
         for name, entry in out[group].items():
             assert entry["cpu_fwdbwd"]["reps"] >= 2, name
             assert "median_s" in entry["cpu_fwdbwd"]
+            assert len(entry["fwd_sha256"]) == 64 and all(c in "0123456789abcdef" for c in entry["fwd_sha256"])
 
     assert out["g_a1"]["census"]["PASS"] is True, out["g_a1"]["census"]["offending_ops"]
     assert out["g_a1"]["precision"]["PASS"] is True
@@ -75,6 +77,25 @@ def test_check_census_flags_a_banned_op():
     clean = {"x": {"raise_on_gpu": [], "host_round_trip_on_gpu": [], "matmul_like_ops": []},
              "y": {"raise_on_gpu": [], "host_round_trip_on_gpu": [], "matmul_like_ops": []}}
     assert window_free.check_census(clean) == {"PASS": True, "offending_ops": []}
+
+
+def test_only_the_gpu_device_enables_op_determinism(monkeypatch):
+    """CPU, including the smoke kit, must not call enable_op_determinism. GPU calls it once, before any bench."""
+    window_free = _load("window_free")
+    calls = []
+
+    def stop(*_args, **_kwargs):
+        raise RuntimeError("stop")
+
+    monkeypatch.setattr(window_free.tf.config.experimental, "enable_op_determinism", lambda: calls.append(1))
+    monkeypatch.setattr(window_free.common, "target_scale", stop)
+
+    with pytest.raises(RuntimeError, match="stop"):
+        window_free.main(["--device", "cpu", "--smoke", "--out", "unused.json"])
+    assert calls == []
+    with pytest.raises(RuntimeError, match="stop"):
+        window_free.main(["--device", "gpu", "--smoke", "--out", "unused.json"])
+    assert calls == [1]
 
 
 def test_main_exits_nonzero_and_reports_the_failed_check(tmp_path, monkeypatch):

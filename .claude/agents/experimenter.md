@@ -54,9 +54,9 @@ write and when.
      GPU time is spent. It does not change after results exist.
    - An Optuna sweep: commit its scenario / sweep spec with the stated budget, as above. A quick
      sweep: nothing to commit before it runs.
-2. **Pin the code.** `git worktree add --detach D:/nt_exp_<name> <spec-commit-sha>`, record the sha in
+2. **Pin the code.** `git worktree add --detach D:/nt/nt_exp_<name> <spec-commit-sha>`, record the sha in
    the SPEC (or the sweep spec), and launch every job from that worktree with
-   `PYTHONPATH=D:/nt_exp_<name>/src` (child processes inherit it). Without it, runs import the main
+   `PYTHONPATH=D:/nt/nt_exp_<name>/src` (child processes inherit it). Without it, runs import the main
    checkout's `src/`, which other items may change mid-experiment. Write outputs with an absolute
    `--out` under the main checkout's `runs/experiments/<name>/` (or D: if C: is short of space).
 3. **Check the machine** (RUNBOOK "GPU rules"): the GPU is free by the RUNBOOK definition, and disk

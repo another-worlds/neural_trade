@@ -62,6 +62,15 @@ that extend or partly replace an entry.
 | D-046 | Verdicts are inferred over folds, at least 5 judgement folds; one fold x seeds is not enough | lead | |
 | D-047 | NT-047's default: OHLCV input with all 14 indicator families; the 1.6x slower step is accepted | owner | |
 | D-048 | Tiny first: maths and stability checks on the 6-hour screen layout; test-run discipline; pytest-xdist | owner | |
+| D-049 | NT-099 may finish its two open cells past the 3-hour cap | owner | |
+| D-050 | No new data source; the micro loop does not go looking for taker-buy volume | owner | |
+| D-051 | Strategies: raw heads for coherence, served delta for size | owner | |
+| D-052 | NT-006 may spend about 7-10 GPU-hours on the physics re-run | owner | |
+| D-053 | Epoch selection may grow a switch; validation loss stays the default | owner | |
+| D-054 | remediation/plan is not merged into master yet | owner | |
+| D-055 | File a P3 item for Predictor.predict GPU latency | owner | |
+| D-056 | The repository licence is MIT | owner | |
+| D-057 | NT-099 adopts both loss-prune variants; the default edit is a follow-up | lead | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -595,3 +604,108 @@ that extend or partly replace an entry.
 - **Consequence:** OPERATING_MODEL "Tiny first", CLAUDE.md commands, RUNBOOK, the agent files; NT-098 runs on the
   screen and micro layouts; NT-109 (shrink the slowest tests); requirements-ci.txt and CI use xdist.
 
+## D-049 NT-099 may finish its two open cells past the 3-hour cap (owner, 2026-10-03)
+- **Owner (verbatim):** "Q-9 - okay." ([qa/2026-10-03-nt099-gpu.md](qa/2026-10-03-nt099-gpu.md)).
+- **Context:** `loss_prune_v1` stopped over its stated 3 GPU-hour cap (about 3.2 hours used). Verdict 1 (soft ECE
+  off) is provisional because `ece0` fold −39 trained during a 27-second code-tree mix-up. Verdict 2 (soft ECE and
+  vol off) has 4 of 5 folds; `ece0_vol0` fold −35 never logged a step. Both gaps were estimated at 30–35 GPU minutes.
+- **Decision:** run both. The original suspect cell stays. Its replacement is a new run on the same spec and code,
+  scored in place of it for verdict 1. No loss-weight default changes from the provisional verdict.
+- **Consequence:** NT-099 (the two cells ran the same day; the verdicts are in `runs/experiments/loss_prune_v1/REPORT.md`).
+
+## D-050 No new data source; the micro loop does not go looking for taker-buy volume (owner, 2026-10-03)
+- **Owner (verbatim):** "No new source" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** question 8, asked 2026-09-30. The micro loop had not reached the owner's hit-rate and drawdown
+  goal, and the research note said that goal needs a different information source. The recommendation with the
+  question was a CPU logistic check of Binance taker-buy volume on 2024-2025, then basis and funding. A new
+  source is outside the MVP.
+- **Decision:** do not add taker-buy volume, basis, or funding. Close the micro loop on its journal and return
+  to the MVP backlog.
+- **Consequence:** NT-085.
+
+## D-051 Strategies: raw heads for coherence, served delta for size (owner, 2026-10-03)
+- **Owner (verbatim):** "Split raw and served (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** NT-007. Served delta is beta times the raw head. On served deltas, magnitude agreement is true on
+  7.2% of test bars against 56.2% on the raw heads, and it drove most of the enhanced_multi_horizon exits. With
+  beta 0 the same strategy cannot enter, because entry still requires served d1 > 0.
+- **Decision:** `magnitude_coherent` and `direction_aligned` use the raw heads. Take-profit sizing stays on the
+  served delta. The enhanced_multi_horizon d1 > 0 entry rule was not in the option, so it stays on the served
+  delta. A zero beta still blocks that entry.
+- **Consequence:** NT-007 (the decision), NT-115 (the code).
+
+## D-052 NT-006 may spend about 7-10 GPU-hours on the physics re-run (owner, 2026-10-03)
+- **Owner (verbatim):** "Approve the re-run (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** the v1 physics grid was scored on the last epoch, before D-011, and its family verdict is
+  inconclusive. A re-run under D-025 was estimated at 7-10 GPU-hours on 2026-09-25, over the 3-hour cap that
+  pre-registered studies keep unless the owner approves (D-024). That estimate has not been remeasured.
+- **Decision:** the re-run is approved. It still needs its own SPEC before any GPU time. This answer does not
+  start it.
+- **Consequence:** NT-006.
+
+## D-053 Epoch selection may grow a switch; validation loss stays the default (owner, 2026-10-03)
+- **Owner (verbatim):** "Add the switch (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** D-011 serves the best validation-loss epoch. NT-103 was not to be picked until the owner
+  answered, because that rule is D-011's. Validation loss moves 0.1-0.3 per epoch, far more than the direction
+  signal.
+- **Decision:** an implementer may add `EPOCH_SELECT_METRIC`. The default stays validation loss, and the golden
+  run stays put, until a paired test chooses otherwise. The other registered choice is direction BCE plus CRPS,
+  each divided by its epoch-1 value.
+- **Consequence:** NT-103.
+
+## D-054 remediation/plan is not merged into master yet (owner, 2026-10-03)
+- **Owner (verbatim):** "Not yet (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** NT-008. D-004 leaves the merge into `master` to the owner. `master` still holds the
+  pre-remediation code, so the nightly workflow has never run. `nt-099` is not on `remediation/plan`.
+- **Decision:** do not merge. `master` stays untouched. NT-008 stays open until a later yes.
+- **Consequence:** NT-008.
+
+## D-055 File a P3 item for Predictor.predict GPU latency (owner, 2026-10-03)
+- **Owner (verbatim):** "File the P3 item (Recommended)" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** asked 2026-09-29. One single window and one batch, a few GPU-minutes. Inference speed is not a
+  yardstick (D-018).
+- **Decision:** file the item at P3. Do not run it ahead of P1 work, and do not start it with this entry.
+- **Consequence:** NT-116.
+
+## D-056 The repository licence is MIT (owner, 2026-10-03)
+- **Owner (verbatim):** "MIT" ([qa/2026-10-03-owner-quiz.md](qa/2026-10-03-owner-quiz.md)).
+- **Context:** NT-017. The repository is public and had no LICENSE file. The owner had left the choice open
+  (2026-09-28, round 9); D-019 lowered it to P3.
+- **Decision:** MIT, copyright 2026 another-world. `LICENSE` is that text. The README points at it.
+- **Consequence:** NT-017. QA has not passed the file.
+
+## D-057 NT-099 adopts both loss-prune variants; the default edit is a follow-up (lead, 2026-10-03)
+- **Context:** `runs/experiments/loss_prune_v1/SPEC.md`, "What adopting a variant means". Both non-inferiority
+  checks passed (margin 0.005) and both h0 and h2 CRPSS guard-rails passed. Ordinary "beats" is inconclusive
+  on both, which the SPEC does not treat as a failure. This entry is the lead's reading of that pre-registered
+  rule, not a new owner choice.
+- **Verdict 1, ece0 vs control.** `runs/loss_prune_v1_ece0_f39_rerun/compares/loss_prune_v1_ece0/result.json`.
+  Fold −39 is the re-run `20261003T093120Z-2573116-d0074ed7-ece0__f-39__s0`. Mean h1 CRPSS diff +0.002556,
+  95% CI [−0.000997, +0.006109]. The suspect cell `20261001T000824Z-fb840fd-d0074ed7-ece0__f-39__s0` is kept
+  and is not in this verdict.
+- **Verdict 2, ece0_vol0 vs control.** `runs/compares/loss_prune_v1_ece0_vol0/result.json`. Fold −35 is
+  `20261003T091952Z-2573116-063f015e-ece0_vol0__f-35__s0`. Mean h1 CRPSS diff +0.002661, 95% CI
+  [−0.002927, +0.008249].
+- **Decision:** both variants are adopted. The shipped defaults become `LAMBDA_SOFT_ECE: 0` and
+  `LAMBDA_VOL: 0`. This entry does not edit `core/config.py` or `configs/default.yaml`. Both are still 1.0.
+- **Consequence:** NT-099 stays in progress until QA passes. NT-117 is the implementer edit of the two defaults.
+
+## D-058 Reconciling the 2026-10-03/04 takeover: vol is the 0.1 floor, the working copy is D:/nt, NT-096 not batched (owner plan approval and lead, 2026-10-06)
+- **Context:** the lead's session stalled on 2026-10-01 (spend limit, no handoff). Another session worked on
+  `nt-099` from `f7d4a41` on 2026-10-03/04 and did not merge; `remediation/plan` had 59 commits it did not
+  see. The project folders were moved from `D:/` into `D:/nt/` (the editable install and the worktree links
+  broke). An independent QA audit (Opus, 2026-10-06) checked that session's claims. The owner approved the
+  reconciliation plan on 2026-10-06.
+- **Vol (refines D-057):** the `ece0_vol0` arm of `loss_prune_v1` trained at an effective `LAMBDA_VOL` of
+  0.1: the calibration pass has no gate for vol and its clamp lifts 0 to `CALIB_LAMBDA_MIN` (all five cells'
+  `metrics.jsonl`: 0.1; control 1.44-1.60). Verdict 2 stands for 0.1 against about 1.5. The shipped default
+  `LAMBDA_VOL: 0` stays: with calibration on (the default path) it reproduces the tested arm. Setting 0.1
+  explicitly would not, because calibration rescales a non-zero weight. Without calibration the default is
+  a true 0, which is untested. The config text says so; NT-118 adds the gate and the A/B of 0 against 0.1.
+  REPORT erratum 2026-10-06.
+- **NT-096's switches are not batched with NT-117:** `LOSS_SAFE_STD` and `COHERENCE_MAGNITUDE_ONLY` stay off;
+  adopting either needs its own paired test.
+- **QA of the takeover items:** NT-099, NT-115 and NT-117 return to in-progress until QA passes on the merged
+  head with recorded evidence (the earlier "QA PASS on 91fa363" has no record and ran without the 59 commits).
+- **Working copy (amends D-030):** `D:/nt/neural_trade`; worktrees and scratch live under `D:/nt/`. The
+  editable install's `.pth` points to `D:\nt\neural_trade\src` (owner-approved env change, 2026-10-06), and
+  `git worktree repair` re-linked the 28 worktrees.

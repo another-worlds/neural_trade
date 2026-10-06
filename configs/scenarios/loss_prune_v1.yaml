@@ -1,0 +1,62 @@
+# NT-099: pre-registered A/B/C on the training loss (D-045, A_losses.md sections 7-8; D-046; D-048
+# tiny-first). Hypothesis and full design: runs/experiments/loss_prune_v1/SPEC.md.
+#
+#   control     - today's defaults (LAMBDA_SOFT_ECE 1.0, LAMBDA_VOL 1.0)
+#   ece0        - LAMBDA_SOFT_ECE 0 (A_losses.md section 7: soft ECE is improper, an L1 kink on a
+#                 noisy batch statistic that does not vanish at calibration and, per NT-037's CPU
+#                 probe, was ~97% of the gradient's direction and near the clip norm on its own)
+#   ece0_vol0   - LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (A_losses.md section 8: the volatility penalty
+#                 is minimised at std(mu) = std(y), which opposes every proper score at R^2 ~ 0)
+#
+# Layout ("the micro layout on the long file", D-041/D-048, but with judgement folds that predate
+# every choice this project has made so far, D-034/D-046): the newest 1,000,000 sequences of
+# Bitcoin_BTCUSDT.csv (the file ends 2025-09-29; this window starts 2023-11-04) cut into 40
+# TimeSeriesSplit folds (39 usable) with VAL_FRACTION = CAL_FRACTION = 0.02, so early folds have
+# small (6-100 day) training blocks and 16.9-day out-of-sample blocks. FOLD_INDEX -1 is always test
+# (D-020, untouched); -2 and -3 (and the whole newest ~485 days) were used by long_360d_stab's
+# stability check (docs/DECISIONS.md, configs/scenarios/long_360d_stab.yaml) and by every micro-loop
+# hypothesis (D-041, runs/experiments/micro_loop_v1/LOG.md), whose own layouts all draw from the
+# newest ~90-490 days of this file (2024-05-28 onward at the latest). The five folds below
+# (-39..-35) score 2023-12-08 .. 2024-03-19, entirely before that -- verified with
+# neural_trade.experiments.dataset.data_layout on this exact override set (see SPEC.md "Fold dates").
+#
+#   neural-trade scenario plan configs/scenarios/loss_prune_v1.yaml     # check the cells, no training
+#   neural-trade scenario run  configs/scenarios/loss_prune_v1.yaml     # GPU (RUNBOOK "GPU rules")
+#
+# Amendment 2026-10-01 (pre-registered in SPEC.md before any successful cell; the only prior attempt,
+# control__f-39__s0 at BATCH_SIZE 2048, failed with a clean RESOURCE_EXHAUSTED OOM in multi-head
+# attention on its very first training step -- no data from it enters any result): BATCH_SIZE 2048
+# OOMs on the new OHLCV+14-family default's attention (matches the known confound in
+# runs/experiments/micro_loop_v1/LOG.md "I2-duel": OOM at 2048, ran at 1024). BATCH_SIZE lowered to
+# 1024 and seeds cut from [0, 1] to [0] so the GPU estimate stays under the 3-hour cap (SPEC.md "GPU
+# time estimate"); D-046's own simulation found 5 folds x 1 seed the *safest* documented design
+# (false-"beats" rate 0.000, better than any seeded-pair design), so this is not a statistical
+# weakening.
+#
+# Runs from the repository root (CSV_PATH is relative to the working directory); base_config is
+# relative to this file. Keys: src/neural_trade/experiments/scenario.py.
+schema_version: 1
+name: loss_prune_v1
+description: "NT-099: soft ECE off, and soft ECE + vol penalty off, vs today's defaults; 5 pre-2024-06 judgement folds, seed 0."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: Bitcoin_BTCUSDT.csv
+  N_FOLDS: 40
+  MAX_SEQUENCE_COUNT: 1000000
+  VAL_FRACTION: 0.02
+  CAL_FRACTION: 0.02
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 1024
+variants:
+  control: {}
+  ece0: {LAMBDA_SOFT_ECE: 0.0}
+  ece0_vol0: {LAMBDA_SOFT_ECE: 0.0, LAMBDA_VOL: 0.0}
+folds: [-39, -38, -37, -36, -35]
+seeds: [0]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}                  # default cost profile: 0 (D-044)
+run:
+  calibrate: true             # the loss-weight calibration pass (LAMBDA_SOFT_ECE/LAMBDA_VOL start
+                               # at the overridden value; calibration may still rescale it, D-045's
+                               # lambda_calibration.py:207-210 -- reported, not re-fixed, in REPORT.md)
+  save_artifacts: false

@@ -235,7 +235,8 @@ class Runner:
                   "seed": pc.cell.seed, "config_hash": pc.config_hash, "settings_hash": sc.settings_hash,
                   "spec_hash": sc.spec_hash, "commit": git_sha(),
                   "strategy": {"name": sc.strategy.name, "params": sc.strategy.params}, "backtest": sc.backtest,
-                  "run": {"calibrate": sc.run.calibrate, "save_artifacts": sc.run.save_artifacts},
+                  "run": {"calibrate": sc.run.calibrate, "save_artifacts": sc.run.save_artifacts,
+                          "indicator_report": sc.run.indicator_report},
                   "spec": str(sc.source) if sc.source is not None else None}
         return {"engine": engine, "dataset": pc.dataset, "setup": pc.setup,
                 "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"]}}
@@ -272,6 +273,10 @@ class Runner:
                                   run_id=ctx.run_id, out_dir=ctx.run_dir,
                                   meta={"scenario": sc.name, "cell_key": pc.key, **self._fold_meta(pc),
                                         "blocks": pc.fold["blocks"], "dataset_sha256": pc.dataset["sha256"]})
+            if sc.run.indicator_report:
+                from neural_trade.serving.indicator_report import write_indicator_report
+
+                write_indicator_report(ctx.run_dir)
             doc.update(status="done", report=scored.paths["json"].name, train_s=t_train,
                        score_s=time.perf_counter() - t0 - t_train, scores=scored.scores,
                        predictions={k: scored.paths[f"predictions_{k}"].name for k in ("oos", "cal")

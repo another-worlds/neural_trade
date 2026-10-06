@@ -1,7 +1,7 @@
 # Runbook
 
 How to run everything, and the traps of this machine. Commands were verified on 2026-09-25 unless
-marked otherwise. Run them from the repository root. The repository is at `D:/neural_trade` since
+marked otherwise. Run them from the repository root. The repository is at `D:/nt/neural_trade` since
 2026-09-28 (D-030, see the last section); commands here use relative paths.
 
 ```bash
@@ -125,7 +125,7 @@ numbers are in-sample.** Out-of-sample backtests: notebook `02_backtest` (the te
 
 Pre-registered studies follow `.claude/agents/experimenter.md` and OPERATING_MODEL "Sweeps and
 pre-registered studies" (which also covers sweeps): a SPEC.md (QA-checked before GPU time), a
-pinned worktree (`git worktree add --detach D:/nt_exp_<name> <sha>`, `PYTHONPATH` set to its
+pinned worktree (`git worktree add --detach D:/nt/nt_exp_<name> <sha>`, `PYTHONPATH` set to its
 `src`), a verdict judged once, a REPORT with run ids. A verdict's pairs are (seed, fold) over judgement folds that no
 choice used; the SPEC names them before any GPU time (fold -1 x at least 5 seeds today; more
 held-out folds from the long history once NT-041 exists); at least 5 pairs. Never reuse a
@@ -207,10 +207,12 @@ into the frozen set.
   the spec), `overrides`, `variants` (named Config overrides), `sweep: {mode: grid, axes: {FIELD:
   [values]}}`, `folds` (FOLD_INDEX values), `seeds`, `strategy: {name, params}` (Strategies registry,
   default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 0, D-044),
-  `run: {calibrate, save_artifacts}`. Unknown keys, unknown or invalid Config values, unregistered
-  components, folds the data does not have and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH,
-  SCALER_PATH, ARTIFACTS_DIR, bar_minutes) are refused before anything trains. Run from the
-  repository root: a relative `CSV_PATH` resolves against the working directory.
+  `run: {calibrate, save_artifacts, indicator_report}`. `indicator_report` writes
+  `indicator_report.html` from `artifacts/` and requires `save_artifacts`. Unknown keys,
+  unknown or invalid Config values, unregistered components, folds the data does not have
+  and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH, SCALER_PATH, ARTIFACTS_DIR,
+  bar_minutes) are refused before anything trains. Run from the repository root: a relative
+  `CSV_PATH` resolves against the working directory.
 - **Cells and run store.** Each (variant x grid point, fold, seed) cell trains into its own
   directory `runs/scenarios/<name>/<run id>-<configuration>__f<fold>__s<seed>/` with the usual run
   files plus `meta.json` sections `engine`, `dataset` (file sha256, first and last timestamp, bar
@@ -589,7 +591,7 @@ and the run index live in the repo (on D: after the move, D-030).
   cell; "Experiment engine" in this file) for new work; the frozen `scripts/ablate.py` and
   `scripts/direction_experiments.py` only to reproduce history (D-023).
 - Launch detached so the job survives the session, with its log next to its outputs, e.g. from the
-  pinned worktree: `nohup env PYTHONPATH=D:/nt_exp_<name>/src $PY scripts/ablate.py ... > <out>/logs/run.log 2>&1 &`
+  pinned worktree: `nohup env PYTHONPATH=D:/nt/nt_exp_<name>/src $PY scripts/ablate.py ... > <out>/logs/run.log 2>&1 &`
   (Git Bash), and record in STATUS: what runs, where its log is, how to check it (`ablate.py --dry-run`
   lists pending cells), and how to resume.
 - The next session checks the job first (STATUS), resumes it if it died, and never starts another
@@ -740,5 +742,5 @@ env stays where it is (`$PY` does not change). The steps, for the record and for
 
 After the move, the header of this file and the machine-local memory name `D:/neural_trade`; the
 relative worktree paths (`../neural_trade_gates`) and `$PY` keep working unchanged. Scratch, QA and
-experiment worktrees stay where they are (`D:/nt_qa/`, `D:/nt_exp_<name>`). The C: disk trap stays:
+experiment worktrees stay where they are (`D:/nt_qa/`, `D:/nt/nt_exp_<name>`). The C: disk trap stays:
 the Docker image is still there.
