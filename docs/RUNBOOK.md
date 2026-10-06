@@ -653,6 +653,12 @@ term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions
   variant are defined and marked "GPU, NT-051" (never run on CPU). 3 seeds each, strict mode (STRICT_LOSS_MASKS).
 - **Thresholds**: `configs/stability_thresholds.yaml`, pre-registered (rationale in its comments); its hash is in
   every report. Never edit it after the first real run: write `_v2` and a new study.
+  **v2** (`configs/stability_thresholds_v2.yaml`, NT-187; select it with `--thresholds v2` or a path; v1 stays the
+  default until NT-051's SPEC names v2, and the report prints the sha256 of the file actually used): the variance-head
+  checks are "not evaluated" below an n_eff gate (excess over the baseline 100, CRPS ratio and NLL 30) and when the
+  constant baseline is non-finite or absurd; the absolute NLL is in scaled units (NLL - ln of the RMS price change,
+  limit 8); `fuzz_constant` is a 100-bar flat block (a minority of the training windows). The tiny profile's n_eff is
+  11/7/5, so it judges no variance check; the expected n_eff per case and profile is in the v2 file and the report.
 - **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off: on CPU the probe's trace took
   200 s); `reference` is the screen layout with the probe on. The GPU run on the reference setup is NT-051.
 - **Strict mode fails loudly**: with `STRICT_LOSS_MASKS` the engine's trainer adds `StabilityGuard`

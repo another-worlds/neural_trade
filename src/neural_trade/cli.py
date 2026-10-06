@@ -618,7 +618,8 @@ def build_parser() -> argparse.ArgumentParser:
     sb.add_argument("--seeds", default=None, help="comma-separated seeds (default: 3, as the thresholds file says)")
     sb.add_argument("--dry-run", action="store_true", help="plan every case through the engine (no training, "
                                                            "nothing written) and print the cells")
-    sb.add_argument("--thresholds", default=None, help="a thresholds file (default configs/stability_thresholds.yaml)")
+    sb.add_argument("--thresholds", default=None, help="a thresholds file or a name in configs/ such as v2 (default "
+                    "configs/stability_thresholds.yaml, v1; the report carries the sha256 of the file used)")
     sb.set_defaults(func=cmd_stability)
 
     cp = sub.add_parser("compare", help="a pre-registered paired \"A beats B\" verdict over two scenarios "

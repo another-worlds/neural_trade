@@ -23,7 +23,8 @@ per-term gradient probe (the ``tiny`` CPU profile does not: see :data:`COMMON_OV
 **Cases are engine scenarios.** :func:`build_scenario` makes one variant per case; :class:`~neural_trade
 .experiments.runner.Runner` trains every (case, seed) cell into the run store and its index (the harness
 trainer applies the case's fault). After the runs, :func:`evaluate_run` judges each cell against the thresholds
-file (``configs/stability_thresholds.yaml``, pre-registered; its sha256 is in every report), writes
+file (``configs/stability_thresholds.yaml`` = v1, the default; ``--thresholds v2`` names the v2 file of NT-187: n_eff
+gates, scaled NLL, a degenerate-baseline guard; pre-registered; the sha256 of the file used is in every report), writes
 ``stability_verdict.json`` into the cell's run directory (the store indexes it as ``stability/*`` scores) and
 :func:`write_report` writes ``runs/stability/<id>/REPORT.md`` (pass or fail per case, the loss term blamed for
 a failure), ``verdicts.json`` and ``failing_regions.json`` (machine-readable: ``core.guard`` refuses a
@@ -50,7 +51,13 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-THRESHOLDS_FILE = Path(__file__).resolve().parents[3] / "configs" / "stability_thresholds.yaml"
+CONFIGS_DIR = Path(__file__).resolve().parents[3] / "configs"
+THRESHOLDS_FILE = CONFIGS_DIR / "stability_thresholds.yaml"            # v1: frozen, the default until a SPEC names v2
+THRESHOLDS_V2_FILE = CONFIGS_DIR / "stability_thresholds_v2.yaml"      # NT-187
+# The thresholds file a profile uses when none is named (None: THRESHOLDS_FILE, v1). NT-051's SPEC names v2 here or on
+# the command line (`--thresholds v2`); the report carries the sha256 of the file actually used.
+PROFILE_THRESHOLDS: Dict[str, Optional[Path]] = {"tiny": None, "reference": None}
+FUZZ_CONSTANT_BARS = 100     # NT-187: 60-120 bars; flat TRAINING windows stay a minority (thresholds v2 `case_design`)
 VERDICT_FILE = "stability_verdict.json"
 STABILITY_DIR = "stability"
 GPU_NOTE = "GPU, NT-051"
@@ -84,9 +91,15 @@ class Thresholds:
     fault_detection: Mapping[str, Any]
     seeds: int
     report_only: Sequence[str] = ()
+    schema_version: int = 1
+    case_design: Mapping[str, Any] = field(default_factory=dict)       # v2: pre-registered case designs
+    expected_n_eff: Mapping[str, Any] = field(default_factory=dict)    # v2: expected n_eff per profile and case
 
     def check(self, key: str) -> Any:
         return self.checks[key]
+
+    def has(self, key: str) -> bool:
+        return key in self.checks
 
 
 def file_sha256(path) -> str:
@@ -97,12 +110,28 @@ def load_thresholds(path=None) -> Thresholds:
     """The pre-registered thresholds with the file's sha256 (any edit, a comment included, changes it)."""
     import yaml
 
-    p = Path(path) if path is not None else THRESHOLDS_FILE
+    p = resolve_thresholds_path(path)
     doc = yaml.safe_load(p.read_text(encoding="utf-8"))
-    if doc.get("schema_version") != 1:
-        raise ValueError(f"{p}: schema_version must be 1")
+    if doc.get("schema_version") not in (1, 2):
+        raise ValueError(f"{p}: schema_version must be 1 or 2")
     return Thresholds(p, file_sha256(p), str(doc["name"]), dict(doc["checks"]), dict(doc["fault_detection"]),
-                      int(doc.get("seeds", 3)), tuple(doc.get("report_only") or ()))
+                      int(doc.get("seeds", 3)), tuple(doc.get("report_only") or ()), int(doc["schema_version"]),
+                      dict(doc.get("case_design") or {}), dict(doc.get("expected_n_eff") or {}))
+
+
+def resolve_thresholds_path(spec=None, profile: Optional[str] = None) -> Path:
+    """The thresholds file: a path, or a name of a file in configs/ (``v2``, ``stability_thresholds_v2``, with or
+    without ``.yaml``); None means the profile's default (:data:`PROFILE_THRESHOLDS`), else v1."""
+    if spec is None:
+        return Path(PROFILE_THRESHOLDS.get(profile or "") or THRESHOLDS_FILE)
+    p = Path(spec)
+    if p.is_file():
+        return p
+    name = str(spec)
+    for cand in (name, f"{name}.yaml", f"stability_thresholds_{name}.yaml", f"stability_thresholds_{name}"):
+        if (CONFIGS_DIR / cand).is_file() and not Path(cand).is_absolute():
+            return CONFIGS_DIR / cand
+    raise FileNotFoundError(f"no thresholds file {spec!r} (a path, or a name in {CONFIGS_DIR})")
 
 
 # ------------------------------------------------------------------ cases
@@ -135,8 +164,9 @@ def default_cases() -> List[Case]:
         cs.append(Case(f"vol_x{k:g}", "volatility", f"log-return volatility x{k:g} (price path rescaled)",
                        data={"kind": "vol", "k": float(k)}))
     cs += [
-        Case("fuzz_constant", "extreme_input", "a 400-bar block of one constant price (flat windows)",
-             data={"kind": "constant", "bars": 400}),
+        Case("fuzz_constant", "extreme_input", f"a {FUZZ_CONSTANT_BARS}-bar block of one constant price (flat windows; a minority of "
+                                                  "the training windows)",
+             data={"kind": "constant", "bars": FUZZ_CONSTANT_BARS}),
         Case("fuzz_jumps", "extreme_input", "five one-bar spikes (x4, x0.25) and a permanent x2 level jump",
              data={"kind": "jumps"}),
         Case("fuzz_large_price", "extreme_input", "prices x1e4 (about 1e9)", data={"kind": "scale", "k": 1e4}),
@@ -528,6 +558,10 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
 
 def _score_checks(scores: Mapping[str, Any], T: Thresholds, add) -> None:
     """The variance-head and coverage checks, from the scored block's numbers (result.json ``scores``)."""
+    if T.schema_version >= 2:
+        _variance_checks_v2(scores, T, add)
+        _coverage_check(scores, T, add)
+        return
     hs = sorted({m.group(1) for k in scores if (m := re.match(r"(h\d+)/variance/", k))})
     limits = {"nll": float(T.check("max_variance_nll")), "nll_c": float(T.check("max_variance_nll_over_const")),
               "crps_c": float(T.check("max_variance_crps_over_const"))}
@@ -554,7 +588,15 @@ def _score_checks(scores: Mapping[str, Any], T: Thresholds, add) -> None:
         v = worst[key]
         add(name, v, limits[key], v is None or v <= limits[key],
             f"worst horizon: {where[key]}" if v is not None else "the run was not scored", v is not None)
+    _coverage_check(scores, T, add)
+
+
+def _coverage_check(scores: Mapping[str, Any], T: Thresholds, add) -> None:
     # coverage: only on a horizon with enough effective samples (D-012)
+    def val(k):
+        v = scores.get(k)
+        return float(v) if _finite(v) else None
+
     min_n = float(T.check("min_n_eff"))
     lim = float(T.check("min_coverage90"))
     cov: Dict[str, float] = {}
@@ -575,6 +617,65 @@ def _score_checks(scores: Mapping[str, Any], T: Thresholds, add) -> None:
     else:
         add("coverage90", None, lim, True,
             f"not evaluated: n_eff below {min_n:g} on {skipped}" if skipped else "the run was not scored", False)
+
+
+def _variance_checks_v2(scores: Mapping[str, Any], T: Thresholds, add) -> None:
+    """Thresholds v2 (NT-187): the variance-head checks with n_eff gates, a degenerate-baseline guard and the NLL in
+    scaled units. A horizon contributes to a check only when its n_eff reaches the check's threshold; a check no
+    horizon contributes to is "not evaluated" and says why."""
+    hs = sorted({m.group(1) for k in scores if (m := re.match(r"(h\d+)/variance/", k))})
+    lim_nll_s, lim_nll_c, lim_crps_c = (float(T.check(k)) for k in
+                                         ("max_variance_nll_scaled", "max_variance_nll_over_const",
+                                          "max_variance_crps_over_const"))
+    min_excess, min_scale = float(T.check("min_n_eff_variance_excess")), float(T.check("min_n_eff_variance"))
+    max_base = float(T.check("max_const_baseline_nll_scaled"))
+
+    def val(k):
+        v = scores.get(k)
+        return float(v) if _finite(v) else None
+
+    worst: Dict[str, Optional[float]] = {"nll_s": None, "nll_c": None, "crps_c": None}
+    where = {k: "" for k in worst}
+    skipped: Dict[str, List[str]] = {k: [] for k in worst}
+    for h in hs:
+        n_eff = val(f"{h}/n_eff")
+        nll, crps = scores.get(f"{h}/variance/nll"), scores.get(f"{h}/variance/crps")
+        nll0, crps0 = val(f"baseline/const_var/{h}/variance/nll"), val(f"baseline/const_var/{h}/variance/crps")
+        rms = val(f"{h}/delta/rmse_zero")
+        scale = math.log(rms) if rms is not None and rms > 0 else None
+        base_ok = nll0 is not None and crps0 is not None and crps0 > 0
+        base_why = "" if base_ok else f"{h}: the constant baseline is not finite"
+        if base_ok and scale is not None and nll0 - scale > max_base:
+            base_ok, base_why = False, f"{h}: the constant baseline NLL is absurd ({nll0 - scale:.4g} scaled, bound {max_base:g})"
+        gates = {"nll_s": min_scale, "nll_c": min_excess, "crps_c": min_scale}
+        why_not = {"nll_s": f"{h}: no price-change scale (rmse_zero)", "nll_c": base_why, "crps_c": base_why}
+        cand: Dict[str, Optional[float]] = {}
+        if scale is not None and nll is not None:
+            cand["nll_s"] = (float(nll) - scale) if _finite(nll) else math.inf   # a non-finite head is a broken head
+        if base_ok:
+            if nll is not None:
+                cand["nll_c"] = (float(nll) - nll0) if _finite(nll) else math.inf
+            if crps is not None:
+                cand["crps_c"] = (float(crps) / crps0) if _finite(crps) else math.inf
+        for k, min_n in gates.items():
+            if k not in cand:
+                if nll is not None or crps is not None:
+                    skipped[k].append(why_not[k] or f"{h}: not scored")
+                continue
+            if n_eff is None or n_eff < min_n:
+                skipped[k].append(f"{h} (n_eff {'missing' if n_eff is None else f'{n_eff:g}'} < {min_n:g})")
+                continue
+            if worst[k] is None or cand[k] > worst[k]:
+                worst[k], where[k] = cand[k], h
+    for name, key, lim in (("variance_nll", "nll_s", lim_nll_s), ("variance_nll_over_const", "nll_c", lim_nll_c),
+                           ("variance_crps_over_const", "crps_c", lim_crps_c)):
+        v = worst[key]
+        note = ("; not evaluated: " + ", ".join(skipped[key])) if skipped[key] else ""
+        if v is not None:
+            add(name, v, lim, v <= lim, f"worst horizon: {where[key]}" + note)
+        else:
+            add(name, None, lim, True, ("not evaluated: " + ", ".join(skipped[key])) if skipped[key]
+                else "the run was not scored", False)
 
 
 def write_verdict(run_dir, verdict: Verdict) -> Path:
@@ -609,6 +710,7 @@ class HarnessResult:
     case_passed: Dict[str, bool]
     regions: List[Any]
     report: Path
+    n_eff: Dict[str, Dict[str, float]] = field(default_factory=dict)    # case -> {horizon: n_eff} of its scored block
 
     @property
     def passed(self) -> bool:
@@ -652,7 +754,7 @@ def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Opti
 
     if profile not in PROFILES:
         raise ValueError(f"profile must be one of {sorted(PROFILES)}, got {profile!r}")
-    T = load_thresholds(thresholds_path)
+    T = load_thresholds(resolve_thresholds_path(thresholds_path, profile))
     all_cases = default_cases()
     if case_ids:
         unknown = sorted(set(case_ids) - {c.id for c in all_cases})
@@ -679,11 +781,17 @@ def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Opti
         runner.run()
     rows = st.sync(scenario.name)
     verdicts: List[Verdict] = []
+    n_eff: Dict[str, Dict[str, float]] = {}
     for r in rows:
         case = by_id.get(r["configuration"])
         if case is None or r["status"] == "incomplete":
             continue
         run_dir = st.root / r["run_dir"]
+        if (run_dir / "result.json").is_file() and case.id not in n_eff:
+            sc = (json.loads((run_dir / "result.json").read_text(encoding="utf-8")).get("scores") or {})
+            found = {k.split("/")[0]: float(v) for k, v in sc.items() if re.fullmatch(r"h\d+/n_eff", k) and _finite(v)}
+            if found:
+                n_eff[case.id] = dict(sorted(found.items()))
         v = evaluate_run(run_dir, case, T)
         write_verdict(run_dir, v)
         verdicts.append(v)
@@ -706,7 +814,8 @@ def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Opti
     (out_dir / "verdicts.json").write_text(json.dumps(
         {"harness_id": hid, "thresholds_sha256": T.sha256, "verdicts": [v.to_dict() for v in verdicts],
          "case_passed": case_passed}, indent=2, default=str), encoding="utf-8", newline="\n")
-    result = HarnessResult(hid, out_dir, scenario.name, T.sha256, verdicts, not_run, case_passed, regions, report_path)
+    result = HarnessResult(hid, out_dir, scenario.name, T.sha256, verdicts, not_run, case_passed, regions, report_path,
+                           n_eff)
     report_path.write_text(render_report(result, T, runnable, profile, seed_list, st), encoding="utf-8", newline="\n")
     return result
 
@@ -732,6 +841,16 @@ def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], prof
         L.append(f"| {c.id} | {c.group} | {c.expect} | {'PASS' if res.case_passed.get(c.id) else 'FAIL'} | "
                  f"{ok}/{len(seeds)} | {', '.join(blamed) or '-'} | {', '.join(failed) or '-'} |")
     L.append("")
+    if res.n_eff:
+        mins = [float(T.checks[k]) for k in ("min_n_eff_variance_excess", "min_n_eff_variance") if k in T.checks]
+        L += ["## n_eff of the scored block per case", "",
+              "n_eff = bars scored // horizon (D-012). A variance-head check is judged on a horizon only when its n_eff "
+              "reaches the thresholds file's gate" + (f" (here {', '.join(f'{m:g}' for m in sorted(mins))})" if mins
+                                                       else " (this file has none)") + "; otherwise it is reported "
+              "\"not evaluated\" in the cell's checks.", "", "| case | n_eff by horizon |", "|---|---|"]
+        L += [f"| {c.id} | {', '.join(f'{h} {v:g}' for h, v in res.n_eff[c.id].items())} |"
+              for c in cases if c.id in res.n_eff]
+        L.append("")
     failing = [v for v in res.verdicts if not v.passed]
     if failing:
         L += ["## Failures", ""]
@@ -762,6 +881,7 @@ def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], prof
 
 
 __all__ = ["COMMON_OVERRIDES", "Case", "Check", "HarnessResult", "HarnessTrainer", "PROFILES", "THRESHOLDS_FILE",
-           "Thresholds", "Verdict", "VERDICT_FILE", "build_scenario", "default_cases", "evaluate_run",
+           "THRESHOLDS_V2_FILE", "Thresholds", "Verdict", "VERDICT_FILE", "FUZZ_CONSTANT_BARS", "PROFILE_THRESHOLDS",
+           "resolve_thresholds_path", "build_scenario", "default_cases", "evaluate_run",
            "fault_context", "file_sha256", "load_thresholds", "region_for_case", "render_report", "run_harness",
            "transform_bars", "write_case_data", "write_verdict"]
