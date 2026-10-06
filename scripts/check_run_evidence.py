@@ -19,6 +19,12 @@ they never count as missing (docs/RUNBOOK.md "Run directories in git"). Only git
 is used (``git ls-files``), so the check works in a CI checkout that has only the tracked files and in
 any worktree.
 
+A run made on another machine has no directory here. Its id is declared in runs/EXTERNAL_RUNS.md (a
+table: id, where it ran, why it is not here, the citing record): a listed id without a run directory
+passes and is counted as external in the summary line; a listed id that has a directory is checked
+like any other, and an unlisted id without a directory fails. The file declares ids, it is not a
+citing file.
+
 Exit 0 with one summary line; exit 1 naming each failing run id, one file that cites it and the
 missing paths; exit 2 when the path is not in a git work tree. ``--list-untracked`` prints the
 untracked light files of the cited runs (repo-relative, forward slashes) and exits 0: stage them by
@@ -42,6 +48,7 @@ RUN_ID = r"\d{8}T\d{6}Z-[0-9a-f]{7,40}(?:-dirty)?-[0-9a-f]{8}"
 CITATION = re.compile(rf"(?<![0-9A-Za-z])({RUN_ID})(?![0-9A-Za-z])")
 RUN_DIR = re.compile(rf"({RUN_ID})(?:-.*)?")            # fullmatch against a directory name
 REPORT_NAMES = frozenset({"REPORT.md", "report.md", "summary.md"})
+EXTERNAL = "runs/EXTERNAL_RUNS.md"                      # ids of runs made elsewhere (declarations, not citations)
 REQUIRED = ("config.yaml", "meta.json")                # what every cited run must have in git
 
 
@@ -55,10 +62,16 @@ class CitedRun:
     cited_in: list                                  # repo-relative files that cite it, sorted
     dirs: list = field(default_factory=list)        # its run directories, repo-relative
     missing: list = field(default_factory=list)     # (path, why): why is untracked, ignored or absent
+    external: bool = False                          # listed in runs/EXTERNAL_RUNS.md
+
+    @property
+    def is_external(self) -> bool:
+        """Listed as made elsewhere and without a run directory here."""
+        return self.external and not self.dirs
 
     @property
     def ok(self) -> bool:
-        return bool(self.dirs) and not self.missing
+        return self.is_external or (bool(self.dirs) and not self.missing)
 
 
 @dataclass
@@ -74,12 +87,14 @@ class Evidence:
         files = len({f for r in self.runs for f in r.cited_in})
         head = f"check_run_evidence: {_count(len(self.runs), 'cited run id')} in {_count(files, 'file')}"
         bad = self.failing
+        n_ext = sum(r.is_external for r in self.runs)
+        ext = f", {n_ext} external" if n_ext else ""
         if not bad:
-            return f"{head}, all tracked"
+            return f"{head}, all tracked{ext}"
         no_dir = sum(not r.dirs for r in bad)
         paths = sum(len(r.missing) for r in bad)
         return (f"{head}: {len(bad)} fail ({no_dir} without a run directory, {len(bad) - no_dir} with "
-                f"{_count(paths, 'missing path')}); stage a run's light files with --list-untracked")
+                f"{_count(paths, 'missing path')}{ext}); stage a run's light files with --list-untracked")
 
     def report(self) -> list:
         """The failing runs, each with one citing file and its missing paths, then the summary line."""
@@ -175,6 +190,7 @@ def collect(top: Path) -> Evidence:
     for rel in citing_files(top, reports):
         for run_id in cited_ids(top / rel):
             cited.setdefault(run_id, []).append(rel)
+    external = cited_ids(top / EXTERNAL) if (top / EXTERNAL).is_file() else set()
     tracked = _git_paths(top, "ls-files")
     untracked = _git_paths(top, "ls-files", "--others", "--exclude-standard")   # not ignored, not tracked
     dirs_by_id: dict = {}
@@ -182,7 +198,8 @@ def collect(top: Path) -> Evidence:
         dirs_by_id.setdefault(RUN_DIR.fullmatch(d.rsplit("/", 1)[-1]).group(1), set()).add(d)
     runs, to_stage = [], set()
     for run_id in sorted(cited):
-        run = CitedRun(run_id, cited[run_id], sorted(dirs_by_id.get(run_id, ())))
+        run = CitedRun(run_id, cited[run_id], sorted(dirs_by_id.get(run_id, ())),
+                       external=run_id in external)
         for d in run.dirs:
             missing = {p: "untracked" for p in untracked if p.startswith(d + "/")}
             to_stage.update(missing)

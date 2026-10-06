@@ -219,6 +219,44 @@ def test_a_directory_outside_any_git_work_tree_exits_2(cre, git_env, capsys):
     assert "not in a git work tree" in capsys.readouterr().err
 
 
+def _external(root: Path, *ids: str) -> str:
+    return _write(root, "runs/EXTERNAL_RUNS.md", "| run id | where |\n|---|---|\n"
+                  + "".join(f"| {i} | cloud |\n" for i in ids))
+
+
+def test_a_listed_external_id_without_a_directory_passes_and_is_counted(cre, repo, capsys):
+    _write(repo, "docs/STATUS.md", f"Remote run {GONE}.\n")
+    _external(repo, GONE)          # the file's own ids are declarations: it is not a citing file
+    assert cre.main(["--repo", str(repo)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "check_run_evidence: 1 cited run id in 1 file, all tracked, 1 external"]
+
+
+def test_an_unlisted_id_still_fails_next_to_a_listed_one(cre, repo, capsys):
+    other = "20250101T040506Z-abc1234-0a0b0c0d"
+    _write(repo, "docs/STATUS.md", f"Remote run {GONE}, and {other}.\n")
+    _external(repo, GONE)
+    assert cre.main(["--repo", str(repo)]) == 1
+    out = capsys.readouterr().out
+    assert f"FAIL {other} (cited in docs/STATUS.md)" in out
+    assert f"FAIL {GONE}" not in out
+    assert out.splitlines()[-1].startswith("check_run_evidence: 2 cited run ids in 1 file: 1 fail (1 without")
+    assert out.splitlines()[-1].count("1 external") == 1
+
+
+def test_a_listed_id_with_a_directory_is_checked_normally(cre, repo, capsys):
+    _write(repo, "docs/STATUS.md", f"Run {RUN}.\n")
+    _external(repo, RUN)
+    _run(repo, f"runs/{RUN}", ("status.json",))
+    _git(repo, "add", f"runs/{RUN}/status.json")
+    _write(repo, f"runs/{RUN}/config.yaml")          # on disk, untracked: still fails
+    assert cre.main(["--repo", str(repo)]) == 1
+    out = capsys.readouterr().out
+    assert f"FAIL {RUN}" in out
+    assert f"  untracked runs/{RUN}/config.yaml\n" in out
+    assert "external" not in out
+
+
 def test_every_run_cited_in_this_repository_is_tracked(cre):
     """The policy on this checkout (CI runs it): every run id cited in docs/, README.md, the run reports
     and the saved notebooks resolves to a run directory whose light files are tracked. A failure lists
