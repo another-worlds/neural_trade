@@ -1,0 +1,8 @@
+280dcf3942635b50ee29e7c6623180c793d96375
+FAILED tests/test_deterministic_gru.py::test_on_keeps_weights_layout_and_names[gru_attention]
+FAILED tests/test_nt033_baselines.py::test_a_rule_cell_scores_the_same_block_and_costs_as_a_trained_cell
+FAILED tests/test_stability.py::test_probe_on_or_off_reaches_the_same_weights_after_n_steps
+FAILED tests/test_sweep.py::test_a_trial_with_a_non_finite_loss_is_failed_with_the_reason_and_told_to_optuna_as_fail
+4 failed, 2172 passed, 5545 warnings in 444.91s (0:07:24)
+All checks passed!
+rerun of the 4 failures (-n 2): 3 pass; test_deterministic_gru gru_attention fails on remediation/plan too (not claims-related)
