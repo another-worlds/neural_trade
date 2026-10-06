@@ -1,0 +1,118 @@
+# Pre-registered thresholds of the stability harness, version 2 (NT-187, successor of stability_thresholds.yaml = v1).
+#
+# v1 is FROZEN (sha256 0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e) and stays loadable and the
+# harness default until NT-051's SPEC names this file. Like v1, this file is committed BEFORE any real harness run
+# and never edited afterwards: every report carries the sha256 of the file it used, and a change is a v3 file.
+#
+# Why v2 exists (qa-deep on NT-038, 2026-10-07; QA's logs nt038r1_*; every number below was recomputed on the 288
+# horizon-scores of the finished stored runs under runs/scenarios/ (loss_prune_v1, capacity_v1, reference_default,
+# micro_ohlcv_duel, micro_horizons) and on the seven light-file copies in tests/fixtures/nt038_healthy/):
+#   1. fuzz_constant's 400-bar constant block made a constant TRAINING SET (126 of 136 tiny, 321 of 360 reference
+#      training windows flat): dir_loss 0, the constant-variance baseline NLL about 1e28 -> a guaranteed FAIL. The
+#      block is now 100 bars (see `case_design`).
+#   2. The variance-head checks had no n_eff gate: a healthy tiny control showed a CRPS ratio 1.145 and an NLL excess
+#      +3.79 at n_eff 5 (limits 1.5 and 2.0). They are now "not evaluated" below an n_eff threshold (checks 9a, 9b).
+#   3. A non-finite or absurd constant baseline made nll_over_const meaningless (-9.7e27): "not evaluated" (9c).
+#   4. max_variance_nll was in quote units and shifts by ln k for a price factor k (at x1e4 the healthy maximum
+#      8.32 + 9.21 = 17.5 against the limit 20): it is now in SCALED units (9d), invariant to the price level.
+#
+# A cell, a case, the "not evaluated" rule and fault detection are judged exactly as in v1 (see stability_thresholds.yaml).
+# Everything not listed in "what changes" below is v1's value with v1's rationale.
+schema_version: 2
+name: stability_thresholds_v2
+
+checks:
+  # Unchanged from v1 (rationale and observed ranges: stability_thresholds.yaml checks 1-8).
+  loss_finite: true
+  max_abs_loss: 1000.0
+  max_loss_over_first: 2.0
+  max_nonfinite_step_rate: 0.0
+  max_clipped_share: 0.995
+  max_term_gradient_share: 0.95
+  max_var_at_floor_share: 0.999
+  max_periods_at_bound: 0
+  max_masked_term_steps: 0
+
+  # 9. The variance head, from the scored block (result.json `scores`). Unchanged limits and observed ranges (288
+  #    horizon-scores of 96 finished runs): CRPS over the baseline's 0.919-1.006; NLL minus the baseline's NLL
+  #    -1.91 to +0.49. Fails when, on a horizon where the check is evaluated:
+  #      - max_variance_nll_over_const: NLL more than 2.0 above the constant baseline's (unchanged, 4x the observed
+  #        excess);
+  #      - max_variance_crps_over_const: CRPS above 1.5 x the baseline's (unchanged, 1.5x the observed maximum).
+  max_variance_nll_over_const: 2.0
+  max_variance_crps_over_const: 1.5
+
+  # 9d. CHANGED: v1's max_variance_nll (20, quote units) is replaced by this limit in SCALED units. The scale of a
+  #     horizon is the root mean square of the true price change on the scored block (`<h>/delta/rmse_zero`, quote
+  #     units), so the number is NLL - ln(rmse_zero): invariant to the price level and to the volatility factor (a
+  #     Gaussian head that knows the scale scores about ln(sigma/rmse_zero) + 1.42, i.e. 1.4-2). Observed on the 288
+  #     horizon-scores: 1.14-2.88 (the constant baseline: 1.42-3.45). 8.0 is 2.8x the largest observed value (v1's
+  #     20 was 2.4x its observed maximum 8.32). A head pinned at VAR_CAP (QA's synthetic NLL 1e3) is 995 in these units
+  #     and fails even when the baseline is equally bad (the over-baseline checks would not see that). Not evaluated
+  #     when `<h>/delta/rmse_zero` is missing, not finite or not positive.
+  max_variance_nll_scaled: 8.0
+
+  # 9a. NEW: n_eff below which `variance_nll_over_const` is not evaluated (the difference of two NLLs of ONE short block
+  #     is noise: +3.79 at n_eff 5 on a healthy tiny control). n_eff = bars scored // horizon (D-012, `<h>/n_eff`).
+  #     Stored runs hold n_eff 135-4,654 only: at n_eff 135-193 (38 scores) the excess is -0.09..+0.01, from 200 on
+  #     -1.91..+0.49. A noise that scales as 1/sqrt(n_eff) from 3.79 at n_eff 5 is about 0.85 at 100 and 0.98 at 75
+  #     against the limit 2.0: 100 keeps the limit above 2.3 sigma. 100 is BELOW the stored minimum 135, an
+  #     extrapolation (labelled), chosen so that the reference profile's h0 (150) and h1 (100) are judged and its h2
+  #     (75) is not. Missing n_eff: not evaluated.
+  min_n_eff_variance_excess: 100
+
+  # 9b. NEW: n_eff below which `variance_crps_over_const` and `variance_nll` (scaled) are not evaluated. These are
+  #     means of one block, not differences of two: the tiny control's CRPS ratio at n_eff 5 was 1.145 (limit 1.5),
+  #     a 1/sqrt(n_eff) scaling of that 0.145 excess gives 0.06 at 30 against a margin of 0.5.
+  #     Also below the stored minimum 135 (an extrapolation, labelled); at 30 the same limits stay about 8 sigma away.
+  #     Missing n_eff: not evaluated. (The tiny profile's n_eff is 11/7/5, so no variance check is evaluated there.)
+  min_n_eff_variance: 30
+
+  # 9c. NEW: a degenerate constant baseline. The over-baseline checks (nll_over_const, crps_over_const) are not
+  #     evaluated, and the reason is reported, when the baseline NLL or CRPS is not finite, the baseline CRPS is not
+  #     positive, or the baseline NLL in scaled units exceeds this bound. Observed baseline NLL scaled: 1.42-3.45 on
+  #     stored runs; the failure this guards (fuzz_constant before NT-187) had a baseline NLL of about 1e28. 8.0 is
+  #     2.3x the observed maximum. The scaled absolute NLL (9d) is still judged.
+  max_const_baseline_nll_scaled: 8.0
+
+  # 10. Coverage: unchanged from v1 (min_coverage90 0.25, judged where n_eff >= min_n_eff 30; observed 0.850-0.932).
+  min_coverage90: 0.25
+  min_n_eff: 30
+
+report_only: [term_gradient_share, periods_at_bound]
+
+fault_detection:
+  error_type: UnstableTrainingError
+  names_the_term: true
+
+seeds: 3
+
+# What a case's design is, as pre-registered here. Pinned by tests/test_stability_harness.py (the code and this file agree).
+case_design:
+  # fuzz_constant: ONE constant block of 100 bars (open = high = low = close) placed 10 bars after the first bar the run
+  # uses. A training window is 60 input bars; its labels reach 20 bars further. Windows lying entirely inside the block
+  # (inputs and labels): 100 - 60 - 20 + 1 = 21 of 136 tiny (15%) and of 360 reference (6%) training windows; windows
+  # whose INPUTS are flat: 41 (30% tiny, 11% reference). Below half under both counts and under both profiles; the range
+  # 60-120 bars is the item's (120 would give 45% of the tiny windows with flat inputs). Training still sees many
+  # non-flat windows, so the loss, the direction metrics and the variance head stay defined.
+  fuzz_constant_bars: 100
+
+# Expected n_eff per case and profile (NT-187 acceptance 5): training windows, scored windows (the test block of the
+# dev fold -2) and n_eff = scored // horizon, per horizon h0, h1, h2. From the engine planner on the bundled file
+# (`plan_cases`, 2026-10-07); a test pins this table to the planner. Under 9a (100) and 9b (30), the variance checks of
+# a profile's case are therefore evaluated on:
+#   tiny, every case but one:      none (n_eff 11/7/5)
+#   tiny horizons_5_60_240:        h0 only for 9b (108), h0 for 9a (108)
+#   reference, every case but one: h0 and h1 for 9a (150, 100); h0, h1 and h2 for 9b (150, 100, 75)
+#   reference horizons_5_60_240:   h0 for 9a and 9b (450); h1 (37) for 9b only; h2 (9) none
+expected_n_eff:
+  tiny:
+    train_windows_default: 136
+    scored_windows_default: 116
+    default_cases: [11, 7, 5]
+    horizons_5_60_240: {train_windows: 364, scored_windows: 540, n_eff: [108, 9, 2]}
+  reference:
+    train_windows_default: 360
+    scored_windows_default: 1500
+    default_cases: [150, 100, 75]
+    horizons_5_60_240: {train_windows: 1800, scored_windows: 2250, n_eff: [450, 37, 9]}
