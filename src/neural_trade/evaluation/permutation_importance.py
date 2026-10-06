@@ -11,7 +11,7 @@ D-012; the block has to cover the horizon in bars, so a resample keeps the overl
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Mapping, Sequence, Tuple
 
 import numpy as np
@@ -33,6 +33,7 @@ class GroupImportance:
     hit_drop: Mapping[str, float]
     hit_lo: Mapping[str, float]
     hit_hi: Mapping[str, float]
+    auc_base: Mapping[str, float] = field(default_factory=dict)   # the unshuffled AUC per horizon
 
 
 def indicator_channel_groups(config) -> List[Tuple[str, slice]]:
@@ -169,14 +170,20 @@ def grouped_importance(features, baseline_scores, score_fn, groups, *, block: in
         auc, auc_lo, auc_hi = {}, {}, {}
         hit_drop, hit_lo, hit_hi = {}, {}, {}
         for h in horizons:
-            gap = base_hits[h] - hits[h]
-            hit_drop[h] = float(gap.mean())
-            hit_lo[h], hit_hi[h] = _band(counts, weight, gap)
+            # the hit rate is over the labelled windows only (an unlabelled window has no hit to lose)
+            lab = np.isfinite(base_labels[h])
+            gap = (base_hits[h] - hits[h])[lab]
+            if lab.any():
+                hit_drop[h] = float(gap.mean())
+                sub = counts[:, lab]
+                hit_lo[h], hit_hi[h] = _band(sub, sub.sum(axis=1), gap)
+            else:
+                hit_drop[h] = hit_lo[h] = hit_hi[h] = float("nan")
             perm_auc = _weighted_auc(labels[h], scores[h], np.ones((1, n)))[0]
             auc[h] = float(base_auc[h] - perm_auc)
             auc_lo[h], auc_hi[h] = _percentiles(base_auc_boot[h] - _weighted_auc(labels[h], scores[h], counts))
         out.append(GroupImportance(str(name), float(diff.mean()), loss_lo, loss_hi, auc, auc_lo, auc_hi,
-                                   hit_drop, hit_lo, hit_hi))
+                                   hit_drop, hit_lo, hit_hi, base_auc))
     return out
 
 

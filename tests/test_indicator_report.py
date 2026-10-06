@@ -277,3 +277,45 @@ def test_the_report_figures_hold_every_default_family_and_instance():
             for name, _sl in indicator_channel_groups(cfg)]
     fig = permutation_importance(rows, cfg)
     assert len(rows) == 42 and len(fig.data[0].y) == 42 and T.empty_panels(fig) == []
+
+
+def test_a_relative_csv_path_is_resolved_from_another_working_directory(tmp_path, monkeypatch):
+    """A notebook-made run records CSV_PATH relative to notebooks/; `neural-trade indicators` runs elsewhere."""
+    from neural_trade.cli import main
+    from neural_trade.core.config import Config
+    from neural_trade.serving.indicator_report import resolve_csv_path
+
+    here = tmp_path / "elsewhere"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    cfg = Config(CSV_PATH="../binance_btcusdt_1min_ccxt.csv")
+    got = resolve_csv_path(cfg)
+    assert Path(got.CSV_PATH).is_file() and Path(got.CSV_PATH).name == "binance_btcusdt_1min_ccxt.csv"
+    assert resolve_csv_path(Config(CSV_PATH=got.CSV_PATH)).CSV_PATH == got.CSV_PATH      # absolute: as given
+    with pytest.raises(FileNotFoundError) as exc:
+        resolve_csv_path(Config(CSV_PATH="../no_such_file.csv"))
+    msg = str(exc.value)
+    assert "../no_such_file.csv" in msg.replace("\\", "/") and msg.count("no_such_file.csv") >= 4   # all three tries named
+
+    run = tmp_path / "run"
+    (run / "artifacts").mkdir(parents=True)
+    (run / "metrics.jsonl").write_text("{}\n", encoding="utf-8")
+    (run / "config.yaml").write_text(cfg.to_yaml(), encoding="utf-8")
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    def fake_split(c):
+        seen["csv"] = c.CSV_PATH
+        raise Stop
+
+    class FakePredictor:
+        config = cfg
+
+    monkeypatch.setattr("neural_trade.serving.predictor.Predictor.from_artifacts",
+                        classmethod(lambda cls, path: FakePredictor()))
+    monkeypatch.setattr("neural_trade.data.processor.split_arrays", fake_split)
+    with pytest.raises(Stop):
+        main(["indicators", str(run)])
+    assert Path(seen["csv"]).is_file()

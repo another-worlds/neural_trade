@@ -89,6 +89,21 @@ def indicator_importance(predictor, block):
                                  horizon_bars=max(steps))
 
 
+def resolve_csv_path(cfg):
+    """``cfg`` with a CSV_PATH that exists. A relative path is tried as given (the working directory),
+    then from the project root, then by its file name in the project root; every try is named on failure.
+
+    A run made in a notebook records the path relative to ``notebooks/``, so it only resolves from there.
+    """
+    given = Path(str(cfg.CSV_PATH))
+    root = Path(__file__).resolve().parents[3]
+    tries = [given] if given.is_absolute() else [given, root / given, root / given.name]
+    for cand in tries:
+        if cand.is_file():
+            return cfg if cand == given else cfg.copy(CSV_PATH=str(cand.resolve()))
+    raise FileNotFoundError("CSV_PATH %r not found; tried: %s" % (str(cfg.CSV_PATH), ", ".join(str(t) for t in tries)))
+
+
 def indicator_figures(run_dir):
     """The three report figures, in write order. Raises when a run file is missing."""
     run_dir = Path(run_dir)
@@ -105,7 +120,7 @@ def indicator_figures(run_dir):
 
     cfg_path = run_dir / "config.yaml"
     predictor = Predictor.from_artifacts(artifacts)
-    cfg = Config.from_yaml(cfg_path) if cfg_path.is_file() else predictor.config
+    cfg = resolve_csv_path(Config.from_yaml(cfg_path) if cfg_path.is_file() else predictor.config)
     val = split_arrays(cfg)["val"]
     applied = applied_periods(predictor, val["X_model"], block="val")
     discovered = Visualizations.build(

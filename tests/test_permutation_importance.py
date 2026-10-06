@@ -144,8 +144,8 @@ def test_the_importance_figure_has_a_loss_panel_and_one_auc_panel_per_horizon():
     fig = PI.permutation_importance({"groups": rows}, None)
     assert T.empty_panels(fig) == []
     assert sorted([name for name in fig.layout if str(name).startswith("yaxis")]) == ["yaxis", "yaxis2"]
-    assert len(fig.data) == 2                                   # loss, then h0 AUC drop
-    bar, auc_bar = fig.data
+    assert len(fig.data) == 3                                   # loss, h0 AUC drop, h0 hit-rate drop
+    bar, auc_bar, _hit = fig.data
     assert list(bar.y) == list(auc_bar.y) == ["signal", "noise", "other"]
     hover = "".join(bar.hovertext)
     assert "h0" in hover and "AUC drop" in hover and "hit-rate drop" in hover
@@ -156,7 +156,7 @@ def test_the_importance_figure_has_a_loss_panel_and_one_auc_panel_per_horizon():
         assert lo[noise_at] <= trace.x[noise_at] <= hi[noise_at]
     assert bar.marker.color == T.NEUTRAL                       # an indicator never takes a horizon colour
     assert auc_bar.marker.color == T.HORIZON_COLORS["h0"]      # the AUC panel is a horizon's, in its colour
-    for trace in fig.data:
+    for trace in fig.data[:2]:
         assert getattr(getattr(trace, "line", None), "dash", None) != "dot"
         assert getattr(trace.marker, "color", None) not in set(T.OTHER_SERIES[:3])
     from neural_trade.registries.visualizations import Visualizations
@@ -293,3 +293,35 @@ def test_training_does_not_mention_permutation_importance():
     offenders = [str(path.relative_to(root)) for path in sorted(root.rglob("*.py"))
                  if "permutation_importance" in path.read_text(encoding="utf-8")]
     assert offenders == []
+
+
+def test_the_panel_titles_give_each_horizons_baseline_auc_and_the_hit_drop_is_drawn():
+    _features, rows = _synthetic()
+    assert rows[0].auc_base["h0"] > 0.99 and all(r.auc_base == rows[0].auc_base for r in rows)
+    fig = PI.permutation_importance(rows, None)
+    titles = [a.text for a in fig.layout.annotations]
+    assert any("baseline AUC %.3f" % rows[0].auc_base["h0"] in t for t in titles), titles
+    diamonds = [t for t in fig.data if t.type == "scatter"]
+    assert len(diamonds) == 1 and list(diamonds[0].x) == [r.hit_drop["h0"] for r in rows]
+    assert T.empty_panels(fig) == []
+
+
+def test_hit_drop_is_over_the_labelled_windows_only():
+    rng = np.random.default_rng(5)
+    n = 200
+    y = rng.normal(size=n)
+    features = np.stack([y, y], axis=1)[:, None, :].repeat(3, axis=1)
+    labelled = np.arange(n) % 2 == 0
+
+    def score_fn(feats):
+        pred = feats[:, 0, 0]
+        hit = (np.sign(pred) == np.sign(y)).astype(float)
+        hit[~labelled] = 0.0                                   # unlabelled windows carry a 0, as the report does
+        lab = np.where(labelled, (y > 0).astype(float), np.nan)
+        return {"loss": 0.0, "loss_i": (pred - y) ** 2, "hit_i": {"h0": hit}, "labels": {"h0": lab},
+                "scores": {"h0": pred}}
+
+    row = grouped_importance(features, score_fn(features), score_fn, [("g", slice(0, 2))], n_boot=20, block=5)[0]
+    hits_before = score_fn(features)["hit_i"]["h0"][labelled]
+    assert hits_before.mean() == 1.0
+    assert 0.3 < row.hit_drop["h0"] < 0.7                        # about 0.5 on the labelled windows, not halved

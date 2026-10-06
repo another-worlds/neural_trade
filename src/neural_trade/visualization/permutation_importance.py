@@ -19,6 +19,12 @@ def _field(row, key):
     return getattr(row, key)
 
 
+def _fields(row):
+    if isinstance(row, Mapping):
+        return row
+    return getattr(row, "__dataclass_fields__", {})
+
+
 def _rows(data):
     if isinstance(data, Mapping):
         data = data["groups"]
@@ -67,7 +73,12 @@ def permutation_importance(data, config=None, **_):
                 lines.append(f"{hlabel(h)} hit-rate drop {float(_field(row, 'hit_drop')[h]):.4g} "
                              f"[{float(_field(row, 'hit_lo')[h]):.4g}, {float(_field(row, 'hit_hi')[h]):.4g}]")
         hover.append("<br>".join(lines))
-    titles = ["loss importance"] + [f"{hlabel(h)} AUC drop" for h in horizons]
+    def base_text(h):
+        vals = {float(_field(row, "auc_base")[h]) for row in rows
+                if h in (_field(row, "auc_base") if "auc_base" in _fields(row) else {})}
+        return f"baseline AUC {vals.pop():.3f}" if len(vals) == 1 else "baseline AUC n/a"
+
+    titles = ["loss importance"] + [f"{hlabel(h)}: {base_text(h)}, AUC drop" for h in horizons]
     fig = make_subplots(rows=1, cols=len(titles), subplot_titles=titles, shared_yaxes=True,
                         horizontal_spacing=0.03)
     fig.add_trace(_bars(go, names, loss, lo, hi,
@@ -78,13 +89,25 @@ def permutation_importance(data, config=None, **_):
         his = [float(_field(row, "auc_hi")[h]) for row in rows]
         fig.add_trace(_bars(go, names, vals, los, his, name=f"{hlabel(h)} AUC drop",
                             color=T.HORIZON_COLORS.get(h, T.NEUTRAL), hover=hover), row=1, col=c)
+        if all("hit_drop" in _fields(row) for row in rows):
+            hv = [float(_field(row, "hit_drop")[h]) for row in rows]
+            hl = [float(_field(row, "hit_lo")[h]) for row in rows]
+            hh = [float(_field(row, "hit_hi")[h]) for row in rows]
+            fig.add_trace(go.Scatter(
+                y=names, x=hv, mode="markers", name=f"{hlabel(h)} hit-rate drop", showlegend=False,
+                marker=dict(symbol="diamond", size=7, color=T.INK_2, line=dict(width=0)),
+                error_x=dict(type="data", array=[max(b - v, 0.0) for v, b in zip(hv, hh)],
+                             arrayminus=[max(v - a, 0.0) for v, a in zip(hv, hl)],
+                             color=T.rgba(T.INK_2, 0.45), thickness=1, width=2),
+                hovertext=hover, hoverinfo="text"), row=1, col=c)
     fig.update_yaxes(categoryorder="array", categoryarray=list(reversed(names)), automargin=True)
     fig.update_xaxes(zeroline=True)
     T.apply(
         fig,
         title="Indicator permutation importance",
         subtitle="One bar per family instance. Positive means shuffling it raised the per-window loss "
-                 "or lowered the direction AUC. Whiskers are the block-bootstrap 2.5 and 97.5 percentiles.",
+                 "or lowered the direction AUC (bars); diamonds are the drop of the hit rate on labelled windows. "
+                 "Whiskers are the block-bootstrap 2.5 and 97.5 percentiles.",
         height=max(320, 26 * len(rows) + 150),
         legend_top=False,
     )
