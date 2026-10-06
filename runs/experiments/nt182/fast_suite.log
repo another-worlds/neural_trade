@@ -1,0 +1,135 @@
+603a327b23f67a2a4def037d714921dd89b57adc
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  3%]
+........................................................................ [  6%]
+........................................................................ [  9%]
+........................................................................ [ 13%]
+........................................................................ [ 16%]
+........................................................................ [ 19%]
+........................................................................ [ 23%]
+........................................................................ [ 26%]
+........................................................................ [ 29%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+.................................F...................................... [ 43%]
+........................................................................ [ 46%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+................                                                         [100%]
+================================== FAILURES ===================================
+____________ test_on_keeps_weights_layout_and_names[gru_attention] ____________
+[gw6] win32 -- Python 3.10.21 C:\Users\Step\miniforge3\envs\nt\python.exe
+
+name = 'gru_attention'
+
+    @pytest.mark.parametrize("name", ["gru_attention", "gru_small"])
+    def test_on_keeps_weights_layout_and_names(name):
+        """Same weights layout: identical variable names (up to counters) and shapes, so set_weights and every saved
+        bundle fit both settings (acceptance 1/3)."""
+        off = _build(name)
+        on = _build(name, DETERMINISTIC_GRU=True)
+        def layout(model):  # Keras auto-name counters differ between two builds: compare names without digits
+            return [(re.sub(r"\d+", "", w.name), tuple(w.shape)) for w in model.weights]
+    
+>       assert layout(off) == layout(on)
+E       AssertionError: assert [('meta_adjus...t:', ()), ...] == [('meta_adjus...t:', ()), ...]
+E         
+E         At index 56 diff: [0m([33m'[39;49;00m[33mbidirectional/forward_gru/gru_cell_/kernel:[39;49;00m[33m'[39;49;00m, ([94m82[39;49;00m, [94m192[39;49;00m))[90m[39;49;00m != [0m([33m'[39;49;00m[33mbidirectional_/forward_gru_/gru_cell_/kernel:[39;49;00m[33m'[39;49;00m, ([94m82[39;49;00m, [94m192[39;49;00m))[90m[39;49;00m
+E         Use -v to get more diff
+
+tests\test_deterministic_gru.py:71: AssertionError
+---------------------------- Captured stdout call -----------------------------
+Config: MA_SPANS: period 30 lies above the period ceiling 24.0; the clip will move it
+Config: MACD_SETTINGS: period slow=26 lies above the period ceiling 24.0; the clip will move it
+Config: MACD_SETTINGS: period slow=35 lies above the period ceiling 24.0; the clip will move it
+Config: BB_PERIODS: period 25 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['atr']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['willr']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['keltner']: period period=40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['obv']: period 40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['vwap']: period 40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['mfi']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['adx']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['cci']: period 40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['donchian']: period 55 lies above the period ceiling 24.0; the clip will move it
+Config: MA_SPANS: period 30 lies above the period ceiling 24.0; the clip will move it
+Config: MACD_SETTINGS: period slow=26 lies above the period ceiling 24.0; the clip will move it
+Config: MACD_SETTINGS: period slow=35 lies above the period ceiling 24.0; the clip will move it
+Config: BB_PERIODS: period 25 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['atr']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['willr']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['keltner']: period period=40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['obv']: period 40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['vwap']: period 40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['mfi']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['adx']: period 28 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['cci']: period 40 lies above the period ceiling 24.0; the clip will move it
+Config: INDICATOR_FAMILIES['donchian']: period 55 lies above the period ceiling 24.0; the clip will move it
+============================== warnings summary ===============================
+tests/registries/test_callbacks.py: 30 warnings
+tests/test_custom_loss.py: 320 warnings
+tests/test_losses_reference.py: 20 warnings
+tests/test_deterministic_gru.py: 500 warnings
+tests/test_macd_ratio.py: 144 warnings
+tests/registries/test_contracts.py: 48 warnings
+tests/test_bench_window_free.py: 2 warnings
+tests/registries/test_layers.py: 1 warning
+tests/registries/test_metrics.py: 10 warnings
+tests/test_calib_gradient_mode.py: 245 warnings
+tests/registries/test_models.py: 142 warnings
+tests/test_frozen_twin.py: 240 warnings
+tests/test_model_variants.py: 408 warnings
+tests/test_applied_periods.py: 336 warnings
+tests/test_calib_fail_loud.py: 144 warnings
+tests/test_nt033_baselines.py: 96 warnings
+tests/test_direction_readout.py: 10 warnings
+tests/test_permutation_importance.py: 8 warnings
+tests/test_physics_terms_bounded.py: 90 warnings
+tests/test_epoch_metrics.py: 40 warnings
+tests/test_indicator_families.py: 96 warnings
+tests/test_attention_head_pool.py: 1015 warnings
+tests/test_ohlcv_input.py: 192 warnings
+tests/test_calib_zero_weights.py: 288 warnings
+tests/test_reset.py: 16 warnings
+tests/test_pnl_utility.py: 280 warnings
+tests/test_stability.py: 284 warnings
+tests/test_served_epoch.py: 49 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_eval_metrics.py: 141 warnings
+tests/test_legacy_bundle.py: 48 warnings
+tests/test_telemetry.py: 20 warnings
+tests/test_train_smoke.py: 192 warnings
+tests/test_training_wiring.py: 40 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_config.py::test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type
+  D:\nt\nt_wt_182\src\neural_trade\core\config.py:970: DeprecationWarning: Config.USE_HUBER is deprecated and has no effect (default True)
+    self.validate()
+
+tests/test_frozen_twin.py::test_one_epoch_cpu_run_leaves_every_applied_period_at_its_configured_value
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\tensorflow\python\data\ops\structured_function.py:264: UserWarning: Even though the `tf.config.experimental_run_functions_eagerly` option is set, this option does not apply to tf.data functions. To force eager execution of tf.data functions, please use `tf.data.experimental.enable_debug_mode()`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_deterministic_gru.py::test_on_keeps_weights_layout_and_names[gru_attention]
+1 failed, 2175 passed, 5593 warnings in 455.56s (0:07:35)
+All checks passed!
