@@ -47,7 +47,8 @@ strategy/ta_rules.py, the manual-search baseline of the yardstick) is searched t
 ``strategy.strategy_search_space``): a trial's ``strategy.*`` values become the strategy's params, the cells score
 on the same dev folds by the same net Sharpe, no network is trained, so no ``sec_per_step`` is needed (0), the
 GPU-free check is skipped and the training-health check does not apply. The per-cell ``overhead_s`` is then a
-CPU estimate (pass ``--overhead-s`` accordingly); the re-run's extra seeds change nothing for a rule.
+CPU estimate (pass ``--overhead-s`` accordingly). The budget is reported as CPU hours (``cpu_hours``; ``gpu_hours``
+is 0) and the re-run runs a deterministic rule once, not ``rerun_seeds`` identical copies.
 
 **Tunability decision (NT-029 QA note).** ``PATIENCE`` (ReduceLROnPlateau) is tunable, and the space caps
 it at the scenario's ``EARLY``. ``EARLY`` (EarlyStopping patience) is NOT tunable: like ``EPOCHS`` it sets
@@ -967,12 +968,18 @@ class Sweep:
         (the first seed's dev cells are the search's own and are not trained again)."""
         o = self.options
         e = self.epochs
+        n_seeds = self.rerun_seed_count()
 
         def cell(f):
             return cell_seconds(steps[f], e, sec_per_step, o.overhead_s)
 
-        return k * (sum(cell(f) * (o.rerun_seeds - 1) for f in self.dev_folds)
-                    + sum(cell(f) * o.rerun_seeds for f in self.test_folds))
+        return k * (sum(cell(f) * (n_seeds - 1) for f in self.dev_folds)
+                    + sum(cell(f) * n_seeds for f in self.test_folds))
+
+    def rerun_seed_count(self) -> int:
+        """Seeds of the top-k re-run: ``rerun_seeds``, but 1 for a rule-only scenario (no network, so a seed
+        changes nothing and the extra cells would be identical copies)."""
+        return self.options.rerun_seeds if self.scenario.run.train else 1
 
     def estimate_optuna(self, sec_per_step: float, n_new_trials: int, n_total_trials: Optional[int] = None) -> Dict[str, Any]:
         """The GPU budget. ``gpu_hours`` is the upper bound used for the refusal (every trial at the space's
@@ -990,16 +997,22 @@ class Sweep:
         ex_rerun = self._rerun_seconds(k, self.expected_steps, sec_per_step)
         full_rerun = self._rerun_seconds(o.top_k, self.upper_steps, sec_per_step)
         fit = int(max((o.max_hours * 3600.0 - full_rerun) // up_trial, 0)) if up_trial > 0 else 0
+        gpu = self.scenario.run.train
+        total_h, expected_h = (n_new_trials * up_trial + up_rerun) / 3600.0, (n_new_trials * ex_trial + ex_rerun) / 3600.0
         return {"trials_to_run": n_new_trials, "dev_folds": self.dev_folds, "test_folds": self.test_folds,
                 "epochs_upper_bound": e, "sec_per_step": sec_per_step, "overhead_s_per_cell": o.overhead_s,
                 "steps_per_epoch_upper_per_fold": {str(f): v for f, v in self.upper_steps.items()},
                 "steps_per_epoch_expected_per_fold": {str(f): v for f, v in self.expected_steps.items()},
                 "search_gpu_hours": n_new_trials * up_trial / 3600.0,
-                "rerun": {"top_k": k, "seeds": o.rerun_seeds, "dev_folds_after_first_seed": o.rerun_seeds - 1,
-                          "test_folds": self.test_folds},
+                "rerun": {"top_k": k, "seeds": self.rerun_seed_count(),
+                          "dev_folds_after_first_seed": self.rerun_seed_count() - 1, "test_folds": self.test_folds},
                 "rerun_gpu_hours": up_rerun / 3600.0,
-                "gpu_hours": (n_new_trials * up_trial + up_rerun) / 3600.0,
-                "expected_gpu_hours": (n_new_trials * ex_trial + ex_rerun) / 3600.0, "max_hours": o.max_hours,
+                "budget_kind": "gpu" if gpu else "cpu",
+                # a rule-only sweep uses no GPU: its estimate (from --overhead-s) is CPU time, gpu_hours is 0
+                "gpu_hours": total_h if gpu else 0.0,
+                "expected_gpu_hours": expected_h if gpu else 0.0,
+                "cpu_hours": 0.0 if gpu else total_h, "expected_cpu_hours": 0.0 if gpu else expected_h,
+                "max_hours": o.max_hours,
                 "trials_that_fit": fit,
                 "note": "gpu_hours is an upper bound (the space's lowest batch size, all EPOCHS, no early stopping); "
                         "expected_gpu_hours uses each trial's expected batch size, still without early stopping"}
@@ -1075,14 +1088,18 @@ class Sweep:
         n_new = max(o.n_trials - n_done, 0)
         budget = {"mode": OPTUNA, "label": OPTUNA, "n_trials": o.n_trials, "finished_before": n_done,
                   **self.estimate_optuna(sps, n_new), "sec_per_step_source": sps_info}
-        self.announce(f"optuna sweep {self.sweep_id}: GPU budget upper bound {budget['gpu_hours']:.2f} h, expected "
-                      f"{budget['expected_gpu_hours']:.2f} h (search {budget['search_gpu_hours']:.2f} h for {n_new} "
+        kind = budget["budget_kind"].upper()
+        used, used_expected = ((budget["gpu_hours"], budget["expected_gpu_hours"]) if kind == "GPU"
+                               else (budget["cpu_hours"], budget["expected_cpu_hours"]))
+        self.announce(f"optuna sweep {self.sweep_id}: {kind} budget upper bound {used:.2f} h, expected "
+                      f"{used_expected:.2f} h (search {budget['search_gpu_hours']:.2f} h for {n_new} "
                       f"trial(s) x {len(self.dev_folds)} dev fold(s), re-run {budget['rerun_gpu_hours']:.2f} h; "
-                      f"sec_per_step {sps:.4g}, {sps_info['source']}); limit {o.max_hours:g} h; "
-                      f"{budget['trials_that_fit']} trial(s) fit")
-        if budget["gpu_hours"] > o.max_hours:
-            raise SweepError(f"the GPU budget {budget['gpu_hours']:.2f} h (upper bound; expected "
-                             f"{budget['expected_gpu_hours']:.2f} h) is over --max-hours {o.max_hours:g} "
+                      + (f"sec_per_step {sps:.4g}, {sps_info['source']}" if kind == "GPU"
+                         else f"no GPU used; {o.overhead_s:g} s CPU per cell (--overhead-s), the rule re-runs once")
+                      + f"); limit {o.max_hours:g} h; {budget['trials_that_fit']} trial(s) fit")
+        if used > o.max_hours:
+            raise SweepError(f"the {kind} budget {used:.2f} h (upper bound; expected "
+                             f"{used_expected:.2f} h) is over --max-hours {o.max_hours:g} "
                              f"(one night; a larger budget goes to the owner): nothing was started; "
                              f"{budget['trials_that_fit']} new trial(s) fit within the limit")
         if o.dry_run:
@@ -1341,7 +1358,7 @@ class Sweep:
 
         o = self.options
         base_seed = int(self.scenario.seeds[0])
-        seeds = [base_seed + i for i in range(o.rerun_seeds)]
+        seeds = [base_seed + i for i in range(self.rerun_seed_count())]
         folds = self.dev_folds + [f for f in self.test_folds if f not in self.dev_folds]
         level = self._watch_level()
         for start in range(0, len(top), o.parallel):
