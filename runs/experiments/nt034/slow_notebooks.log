@@ -1,0 +1,7 @@
+fa37c80d5f103ec3c1241105b11acf5672c3a891
+tests/test_notebooks_thin.py::test_all_notebooks_execute
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\zmq\_future.py:718: RuntimeWarning: Proactor event loop does not implement add_reader family of methods required for zmq. Registering an additional selector thread for add_reader support via tornado. Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` to avoid this warning.
+    self._get_loop()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 23 deselected, 1 warning in 161.77s (0:02:41)
