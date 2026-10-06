@@ -35,12 +35,16 @@ def main():
     climb = [s for i, s in enumerate(allv) if i % 5 != 4]
     over = {"CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv", "N_FOLDS": 2, "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1,
             "MAX_SEQUENCE_COUNT": 4500, "FOLD_INDEX": -2, "BATCH_SIZE": 64, "TRAIN_METRICS_EVERY": 1}
+    epochs = 8
     for k, v in kv.items():
-        over[k] = yaml.safe_load(v)
+        if k == "EPOCHS":
+            epochs = int(v)  # the spec's run.epochs overrides EPOCHS, so set it there
+        else:
+            over[k] = yaml.safe_load(v)
     groups = {"final": fin} if final else {f"c{c}": climb[c::5] for c in range(5)}
     for g, sl in groups.items():
         spec = {"schema_version": 1, "name": f"hc2_{variant}_{g}", "base_config": "../default.yaml", "overrides": over,
-                "slices": sl, "seeds": [0, 1, 2], "run": {"calibrate": False, "epochs": 8},
+                "slices": sl, "seeds": [0, 1, 2], "run": {"calibrate": False, "epochs": epochs},
                 "rules": {"finite": True, "max_nonfinite_grad_steps": 0, "max_clipped_share": 1.0, "clip_skip_epochs": 1,
                           "min_train_loss_drop": -10.0, "max_term_share": 1.0}}
         path = f"configs/tactical/hc2_{variant}_{g}.yaml"
