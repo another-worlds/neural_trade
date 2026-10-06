@@ -75,7 +75,8 @@ that extend or partly replace an entry.
 | D-059 | The slow suite runs once per merge batch, not per item | owner | |
 | D-060 | QA by risk; test tiers; CI only on the integration branch | owner | |
 | D-061 | Models and effort: one pinned standard; lead and plans Opus 5.5 high; research by workflow | owner (the non-lead rows: lead's proposal) | |
-| D-062 | A separate tactical-experiment session: its own worktree, MVP priority on the GPU, exploratory rigour | owner | |
+| D-062 | A separate tactical-experiment session: its own worktree, MVP priority on the GPU, exploratory rigour | owner | D-063 |
+| D-063 | Tactical session: GPU in parallel with the MVP, no budget, at most 2 minutes per run on ultra-short blocks | owner | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -775,3 +776,19 @@ that extend or partly replace an entry.
 - **Consequence:** CLAUDE.md (start step 2, project rules), OPERATING_MODEL "Roles", RUNBOOK "GPU rules" (the
   lock applies to the MVP session too), the `/handoff` skill (not used by the tactical session).
 
+
+## D-063 Tactical session: GPU in parallel with the MVP, no budget, at most 2 minutes per run (owner, 2026-10-06)
+- **Owner (verbatim):** "переписываю прошлое правило: используем GPU параллельно с другой сессией. Бюджет -
+  некотролируем. правило: обучение на сверхкоротких массивах. Даю 2 минуты максимум на каждый прогон" [I am
+  rewriting the previous rule: we use the GPU in parallel with the other session. Budget: uncontrolled. Rule:
+  training on ultra-short arrays; 2 minutes at most per run.] ([qa/2026-10-06-tactical-session.md](qa/2026-10-06-tactical-session.md),
+  the hill-climb round).
+- **Decision:** supersedes D-062's GPU part (MVP priority, the lock file, 30-minute launches) and its budget
+  (about 3 GPU-hours a day). The tactical session runs on the GPU in parallel with the MVP session, with no GPU
+  budget; every run trains on an ultra-short block (the screen layout) and takes at most 2 minutes wall-clock.
+  The rest of D-062 stands.
+- **Lead's reading:** the owner's other project on the GPU is still never touched (OPERATING_MODEL "Escalate to
+  the owner"). An MVP speed measurement (D-018) taken while tactical trials run is not evidence.
+- **Hill-climb set in the same round:** target direction AUC (mean of h0-h2) on 5 climb folds; the winner is
+  checked once on 5 other dev folds the loop never saw; never the test fold; levers: anything except the owner's
+  fixed decisions (D-001, D-003, D-050).

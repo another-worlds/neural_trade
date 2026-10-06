@@ -75,9 +75,9 @@ Pointers only; the rule lives where the pointer says.
 - **Remote sessions** (owner, D-033): a remote (cloud) session runs review sweeps and takes no
   backlog items; its PRs into `remediation/plan` are QA'd and merged by the lead.
 - **Tactical session** (owner, D-062): a separate local session for exploratory experiments on branch
-  `nt-tactical` ([docs/TACTICAL.md](docs/TACTICAL.md)). The MVP has GPU priority; every GPU job writes
-  `D:/nt/gpu.lock` (RUNBOOK "GPU rules"). The MVP lead reads its journal's "For the MVP lead" section
-  between items and handles its PRs like a remote session's.
+  `nt-tactical` ([docs/TACTICAL.md](docs/TACTICAL.md)). It shares the GPU in parallel with the MVP,
+  runs of at most 2 minutes on ultra-short blocks, no GPU budget (D-063). The MVP lead reads its
+  journal's "For the MVP lead" section between items and handles its PRs like a remote session's.
 - **Speed** (owner, D-018): the per-step training path must not get slower (definition of done).
 - **Evidence** (D-012, D-020, VISION "Principles"): no choice uses test-block numbers, the notebooks'
   and the leaderboard's test columns included.
