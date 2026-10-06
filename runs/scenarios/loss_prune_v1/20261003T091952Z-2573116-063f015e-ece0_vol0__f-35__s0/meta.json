@@ -1,0 +1,93 @@
+{
+  "run_id": "20261003T091952Z-2573116-063f015e-ece0_vol0__f-35__s0",
+  "seed": 0,
+  "tags": [
+    "scenario",
+    "loss_prune_v1",
+    "dev"
+  ],
+  "created_utc": "20261003T091952Z",
+  "engine": {
+    "schema_version": 1,
+    "scenario": "loss_prune_v1",
+    "cell_key": "ece0_vol0__f-35__s0",
+    "configuration": "ece0_vol0",
+    "variant": "ece0_vol0",
+    "params": {
+      "LAMBDA_SOFT_ECE": 0.0,
+      "LAMBDA_VOL": 0.0
+    },
+    "fold": -35,
+    "fold_id": 6,
+    "n_usable_folds": 39,
+    "role": "dev",
+    "seed": 0,
+    "config_hash": "a64a76a8d2ad",
+    "settings_hash": "ff514fca1d28",
+    "spec_hash": "435f4ee87c13",
+    "commit": "2573116",
+    "strategy": {
+      "name": "calibrated_quantile",
+      "params": {}
+    },
+    "backtest": {},
+    "run": {
+      "calibrate": true,
+      "save_artifacts": false
+    },
+    "spec": "configs\\scenarios\\loss_prune_v1.yaml"
+  },
+  "dataset": {
+    "path": "Bitcoin_BTCUSDT.csv",
+    "sha256": "67966a49634fa0a591f6fa188ec330797297d9b399b68c96b36bef06f1f50008",
+    "size_bytes": 290962077,
+    "loader": "csv",
+    "n_rows": 4598198,
+    "n_bars": 4598198,
+    "first_timestamp": "2017-01-01T00:00:00",
+    "last_timestamp": "2025-09-29T23:57:00"
+  },
+  "setup": {
+    "bar_minutes": 1,
+    "LOOKBACK": 60,
+    "HORIZON_STEPS": [
+      10,
+      15,
+      20
+    ]
+  },
+  "blocks": {
+    "fold": -35,
+    "fold_id": 6,
+    "n_usable_folds": 39,
+    "gap": 80,
+    "train": {
+      "start": 0,
+      "stop": 106110,
+      "n": 106110,
+      "first_timestamp": "2023-11-04T17:38:00",
+      "last_timestamp": "2024-01-17T10:07:00"
+    },
+    "val": {
+      "start": 106190,
+      "stop": 126190,
+      "n": 20000,
+      "first_timestamp": "2024-01-17T11:28:00",
+      "last_timestamp": "2024-01-31T08:47:00"
+    },
+    "cal": {
+      "start": 126270,
+      "stop": 146270,
+      "n": 20000,
+      "first_timestamp": "2024-01-31T10:08:00",
+      "last_timestamp": "2024-02-14T07:27:00"
+    },
+    "test": {
+      "start": 146350,
+      "stop": 170740,
+      "n": 24390,
+      "first_timestamp": "2024-02-14T08:48:00",
+      "last_timestamp": "2024-03-02T07:17:00"
+    }
+  }
+}

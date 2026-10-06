@@ -27,7 +27,10 @@ def build_gru_small(config) -> tf.keras.Model:
     ``gru_attention``, one unidirectional ``GRU(32)`` backbone, the same heads."""
     inp, close_seq, ind_seq = build_input_and_indicators(config)
 
-    memory = layers.GRU(GRU_UNITS, return_sequences=True, name='gru_small_backbone')(ind_seq)
+    # DETERMINISTIC_GRU (NT-114): see the identical comment in models/gru_attention.py.
+    _deterministic_gru = bool(getattr(config, 'DETERMINISTIC_GRU', False))
+    memory = layers.GRU(GRU_UNITS, return_sequences=True, name='gru_small_backbone',
+                        unroll=_deterministic_gru)(ind_seq)
     memory = layers.Dropout(0.1)(memory)
 
     context = layers.GlobalAveragePooling1D()(memory)

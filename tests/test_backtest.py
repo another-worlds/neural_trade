@@ -387,3 +387,66 @@ def test_zero_predicted_move_does_not_put_the_stop_at_the_entry(name):
         assert abs(o.tp) >= 0.5 * s.sigma[t, 1] * 0.99
         if name == "liberal":
             assert abs(o.sl) >= 0.25 * s.sigma[t, 1] * 0.99
+
+
+# ------------------------------------------------------------------ NT-113: no silent annualisation defaults
+def test_backtest_config_has_no_minutes_per_year_field():
+    """minutes_per_year is removed (NT-113 (1)): BacktestConfig.periods_per_year is the one function of
+    bar_minutes and a named calendar (performance.periods_per_year); there is no second, unused knob."""
+    import dataclasses
+
+    assert "minutes_per_year" not in {f.name for f in dataclasses.fields(BacktestConfig)}
+
+
+def test_build_backtest_config_refuses_minutes_per_year_naming_periods_per_year_and_the_calendar():
+    """A caller that still sets backtest.minutes_per_year (CLI --params, the notebook explorer's costs,
+    a strategy-study entry) gets a clear error naming periods_per_year and the calendar, not a silent
+    no-op and not a generic 'unknown parameter' message (NT-113 (1))."""
+    from neural_trade.strategy import build_backtest_config
+
+    with pytest.raises(InvalidConfigurationError, match="periods_per_year") as exc:
+        build_backtest_config({"minutes_per_year": 525_600})
+    assert "calendar" in str(exc.value)
+
+
+def test_scenario_backtest_refuses_minutes_per_year_naming_periods_per_year_and_the_calendar():
+    """The scenario spec's own engine-owned-field check (RESERVED_BACKTEST) gives the same clear
+    reason before build_backtest_config is even reached (NT-113 (1))."""
+    from neural_trade.experiments.scenario import RESERVED_BACKTEST
+
+    assert "periods_per_year" in RESERVED_BACKTEST["minutes_per_year"]
+    assert "calendar" in RESERVED_BACKTEST["minutes_per_year"]
+
+
+def test_stored_backtest_json_with_minutes_per_year_stays_readable(tmp_path):
+    """A backtest.json written before NT-113 carries "config": {..., "minutes_per_year": 525600, ...}.
+    Nothing reconstructs a BacktestConfig from a stored file (it is read as a plain dict), so the
+    extra key must not break a reader (NT-113 (1))."""
+    import json
+
+    from neural_trade.experiments.scorer import engine_markdown
+
+    old = {"strategy": "always_flat", "summary": {"sharpe_net": 0.0}, "baselines": {},
+          "config": {"fill": "next_open", "fee_bps": 0.0, "half_spread_bps": 0.0, "slippage_bps": 0.0,
+                     "tp_sl_on": "high_low", "same_bar_tiebreak": "sl_first", "max_hold": 30,
+                     "mark_to_market_at_end": True, "initial_equity": 10_000.0, "bar_minutes": 1.0,
+                     "minutes_per_year": 525_600, "random_seeds": 100}}
+    path = tmp_path / "backtest.json"
+    path.write_text(json.dumps(old), encoding="utf-8")
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    assert loaded["config"]["minutes_per_year"] == 525_600          # the stored key is still there, still readable
+    md = engine_markdown(type("R", (), {"meta": {}, "split": "test"})(), loaded)
+    assert "periods per year" in md and "525600" in md.replace(",", "")
+
+
+def test_fit_and_backtest_has_no_bar_minutes_default():
+    """fit_and_backtest(bar_minutes=...) has no default (NT-113 (2)): a caller that forgets it gets a
+    TypeError, not a silent 1-minute assumption."""
+    import inspect
+
+    from neural_trade.experiments.scorer import fit_and_backtest
+
+    sig = inspect.signature(fit_and_backtest)
+    assert sig.parameters["bar_minutes"].default is inspect.Parameter.empty
+    with pytest.raises(TypeError, match="bar_minutes"):
+        fit_and_backtest(None, None)

@@ -89,9 +89,10 @@ def evaluate() -> dict:
         if cand["mode"] == "per_model":
             for c in cells:
                 cal, _, _ = load_block(c / "predictions_cal.npz")
-                oos, bars, _ = load_block(c / "predictions_oos.npz")
+                oos, bars, extra = load_block(c / "predictions_oos.npz")
                 bt, _ = fit_and_backtest(BlockSignals.build(cal, oos), bars, strategy="calibrated_quantile",
-                                         strategy_params=cand["params"], backtest_params=ZERO)
+                                         strategy_params=cand["params"], backtest_params=ZERO,
+                                         bar_minutes=float(extra["bar_minutes"]))
                 rows.append({"cell": c.name, **summarise(bt)})
         else:
             for fold in ("f-3", "f-2"):
@@ -99,9 +100,10 @@ def evaluate() -> dict:
                 cals = [load_block(c / "predictions_cal.npz")[0] for c in group]
                 oos_bars = [load_block(c / "predictions_oos.npz") for c in group]
                 bars = oos_bars[0][1]
+                bar_minutes = float(oos_bars[0][2]["bar_minutes"])
                 sig = BlockSignals.build(mean_frame(cals), mean_frame([o[0] for o in oos_bars]))
                 bt, _ = fit_and_backtest(sig, bars, strategy="calibrated_quantile", strategy_params=cand["params"],
-                                         backtest_params=ZERO)
+                                         backtest_params=ZERO, bar_minutes=bar_minutes)
                 rows.append({"cell": f"ensemble_{fold}_seeds0-2", **summarise(bt)})
         ret = [r["return"] for r in rows]
         out[name] = {**cand, "cells": rows,

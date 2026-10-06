@@ -68,13 +68,17 @@ def test_train_predict_backtest_round_trip(tmp_path, synthetic_bars, monkeypatch
     assert (out / "backtest.json").exists() and (out / "trades.csv").exists() and (out / "backtest.html").exists()
 
 
-def test_cli_backtest_sets_bar_minutes_from_the_artifacts_config(tmp_path, monkeypatch):
-    """NT-040 (1): the CLI backtest is a live path, so it must set BacktestConfig.bar_minutes from
-    the artifacts' own RESAMPLE_MINUTES, not leave it at the 1.0 default. No training needed: the
-    Predictor is faked (PredictionBatch built by hand), so this stays fast."""
+def test_cli_backtest_sets_bar_minutes_from_the_artifacts_config(tmp_path, monkeypatch, capsys):
+    """NT-040 (1), strengthened by NT-113 (3): the CLI backtest is a live path, so it must set
+    BacktestConfig.bar_minutes from the artifacts' own RESAMPLE_MINUTES, not leave it at the 1.0
+    default -- checked by the Sharpe identity itself (annualised == per-bar x sqrt(periods_per_year(5))
+    / sqrt(periods_per_year(1))), not only by reading back the ``bar_minutes`` the CLI passed to
+    ``build_backtest_config``. No training needed: the Predictor is faked (PredictionBatch built by
+    hand), so this stays fast."""
     import neural_trade.serving.predictor as predictor_mod
     from neural_trade.core.config import Config
     from neural_trade.serving.predictor import PredictionBatch
+    from neural_trade.strategy.performance import periods_per_year
 
     rng = np.random.default_rng(0)
     n = 300
@@ -96,19 +100,20 @@ def test_cli_backtest_sets_bar_minutes_from_the_artifacts_config(tmp_path, monke
         last_close=close, horizon_steps=(10, 15, 20))
     anchors = np.arange(n)
 
-    class FakePredictor:
-        def __init__(self):
-            self.config = Config(RESAMPLE_MINUTES=5)
+    def make_predictor(resample_minutes):
+        class FakePredictor:
+            def __init__(self):
+                self.config = Config(RESAMPLE_MINUTES=resample_minutes)
 
-            class _Bundle:
-                pred_scale, pred_mean = 100.0, 0.0
-                meta = {"var_scale": 1.0, "weighted_direction_quantiles": None}
-            self.bundle = _Bundle()
+                class _Bundle:
+                    pred_scale, pred_mean = 100.0, 0.0
+                    meta = {"var_scale": 1.0, "weighted_direction_quantiles": None}
+                self.bundle = _Bundle()
 
-        def predict_windows_frame(self, raw_df, batch_size=None):
-            return batch, df, anchors
+            def predict_windows_frame(self, raw_df, batch_size=None):
+                return batch, df, anchors
+        return FakePredictor()
 
-    monkeypatch.setattr(predictor_mod.Predictor, "from_artifacts", classmethod(lambda cls, d: FakePredictor()))
     captured = {}
     real_build = __import__("neural_trade.strategy.params", fromlist=["build_backtest_config"]).build_backtest_config
 
@@ -118,10 +123,21 @@ def test_cli_backtest_sets_bar_minutes_from_the_artifacts_config(tmp_path, monke
 
     monkeypatch.setattr("neural_trade.strategy.build_backtest_config", spy)
 
-    rc = main(["backtest", "--artifacts", str(tmp_path / "artifacts"), "--csv", str(csv),
-               "--strategy", "always_flat", "--random-seeds", "0"])
-    assert rc == 0
+    def run(resample_minutes):
+        monkeypatch.setattr(predictor_mod.Predictor, "from_artifacts",
+                            classmethod(lambda cls, d, rm=resample_minutes: make_predictor(rm)))
+        rc = main(["backtest", "--artifacts", str(tmp_path / "artifacts"), "--csv", str(csv),
+                   "--strategy", "liberal", "--random-seeds", "0"])
+        assert rc == 0
+        return json.loads(capsys.readouterr().out)
+
+    five = run(5)
     assert captured["params"]["bar_minutes"] == 5.0
+    one = run(1)
+    assert captured["params"]["bar_minutes"] == 1.0
+    assert one["n_trades"] > 0, "the Sharpe identity needs a strategy that actually trades"
+    assert five["sharpe_net"] == pytest.approx(
+        one["sharpe_net"] * (periods_per_year(5.0) / periods_per_year(1.0)) ** 0.5, rel=1e-9)
 
 
 def test_registry_listing_includes_the_repository_plugins(capsys, monkeypatch):

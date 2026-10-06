@@ -1,0 +1,83 @@
+2026-10-01 11:12:50.482209: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-01 11:12:50.980753: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-01 11:12:50.980832: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 9404 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+{"neural_trade_file": "D:\\nt_exp_nt074_gpu\\src\\neural_trade\\__init__.py"}
+TF_DETERMINISTIC_OPS env at import time recorded by fingerprint below
+{"env_fingerprint": {"python": "3.10.21", "platform": "Windows-10-10.0.19045-SP0", "numpy": "1.23.0", "pandas": "2.3.3", "sklearn": "1.7.2", "git": "d71e3b4", "host_sha1": "287b3e95955e", "tensorflow": "2.10.0", "cuda_build": "64_112", "cudnn_build": "64_8", "gpus": ["/physical_device:GPU:0"]}}
+{"extra_overrides": {"SEEDED_STOCHASTIC_LAYERS": true}}
+Training Progress:   0%|          | 0/1 [00:00<?, ?epoch/s]
+Epoch 1:   0%|          | 0/62 [00:00<?, ?batch/s][A2026-10-01 11:13:16.132916: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2026-10-01 11:13:16.956615: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+2026-10-01 11:13:17.745714: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-01 11:13:17.746067: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-01 11:13:17.746076: W tensorflow/stream_executor/gpu/asm_compiler.cc:80] Couldn't get ptxas version string: INTERNAL: Couldn't invoke ptxas.exe --version
+2026-10-01 11:13:17.748050: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-30a0-27284-65cc14fd01ba8" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-30a0-27284-65cc14fd021bb" "-arch=sm_89" "--warn-on-spills"'
+2026-10-01 11:13:17.748176: W tensorflow/stream_executor/gpu/redzone_allocator.cc:314] INTERNAL: Failed to launch ptxas
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+
+Epoch 1:   2%|1         | 1/62 [00:22<22:23, 22.02s/batch][A
+Epoch 1:   3%|3         | 2/62 [00:22<09:09,  9.16s/batch][A
+Epoch 1:   5%|4         | 3/62 [00:22<04:58,  5.06s/batch][A
+Epoch 1:   6%|6         | 4/62 [00:22<03:01,  3.13s/batch][A
+Epoch 1:   8%|8         | 5/62 [00:22<01:57,  2.06s/batch][A
+Epoch 1:  10%|9         | 6/62 [00:22<01:19,  1.42s/batch][A
+Epoch 1:  11%|#1        | 7/62 [00:23<00:55,  1.01s/batch][A
+Epoch 1:  13%|#2        | 8/62 [00:23<00:40,  1.35batch/s][A
+Epoch 1:  15%|#4        | 9/62 [00:23<00:30,  1.76batch/s][A
+Epoch 1:  16%|#6        | 10/62 [00:23<00:23,  2.24batch/s][A
+Epoch 1:  18%|#7        | 11/62 [00:23<00:19,  2.64batch/s][A
+Epoch 1:  19%|#9        | 12/62 [00:24<00:17,  2.86batch/s][A
+Epoch 1:  21%|##        | 13/62 [00:24<00:14,  3.30batch/s][A
+Epoch 1:  23%|##2       | 14/62 [00:24<00:13,  3.58batch/s][A
+Epoch 1:  24%|##4       | 15/62 [00:24<00:12,  3.81batch/s][A
+Epoch 1:  26%|##5       | 16/62 [00:24<00:11,  4.09batch/s][A
+Epoch 1:  27%|##7       | 17/62 [00:25<00:12,  3.62batch/s][A
+Epoch 1:  29%|##9       | 18/62 [00:25<00:12,  3.54batch/s][A
+Epoch 1:  31%|###       | 19/62 [00:25<00:11,  3.78batch/s][A
+Epoch 1:  32%|###2      | 20/62 [00:26<00:10,  3.92batch/s][A
+Epoch 1:  34%|###3      | 21/62 [00:26<00:10,  3.88batch/s][A
+Epoch 1:  35%|###5      | 22/62 [00:26<00:10,  3.71batch/s][A
+Epoch 1:  37%|###7      | 23/62 [00:26<00:10,  3.78batch/s][A
+Epoch 1:  39%|###8      | 24/62 [00:27<00:10,  3.71batch/s][A
+Epoch 1:  40%|####      | 25/62 [00:27<00:10,  3.50batch/s][A
+Epoch 1:  42%|####1     | 26/62 [00:27<00:10,  3.58batch/s][A
+Epoch 1:  44%|####3     | 27/62 [00:27<00:09,  3.71batch/s][A
+Epoch 1:  45%|####5     | 28/62 [00:28<00:09,  3.77batch/s][A
+Epoch 1:  47%|####6     | 29/62 [00:28<00:08,  3.73batch/s][A
+Epoch 1:  48%|####8     | 30/62 [00:28<00:10,  3.20batch/s][A
+Epoch 1:  50%|#####     | 31/62 [00:29<00:09,  3.11batch/s][A
+Epoch 1:  52%|#####1    | 32/62 [00:29<00:10,  2.86batch/s][A
+Epoch 1:  53%|#####3    | 33/62 [00:30<00:10,  2.81batch/s][A
+Epoch 1:  55%|#####4    | 34/62 [00:30<00:09,  3.05batch/s][A
+Epoch 1:  56%|#####6    | 35/62 [00:30<00:08,  3.08batch/s][A
+Epoch 1:  58%|#####8    | 36/62 [00:30<00:08,  3.17batch/s][A
+Epoch 1:  60%|#####9    | 37/62 [00:31<00:07,  3.13batch/s][A
+Epoch 1:  61%|######1   | 38/62 [00:31<00:06,  3.63batch/s][A
+Epoch 1:  63%|######2   | 39/62 [00:31<00:05,  4.12batch/s][A
+Epoch 1:  65%|######4   | 40/62 [00:31<00:04,  4.50batch/s][A
+Epoch 1:  66%|######6   | 41/62 [00:31<00:04,  4.74batch/s][A
+Epoch 1:  68%|######7   | 42/62 [00:32<00:03,  5.08batch/s][A
+Epoch 1:  69%|######9   | 43/62 [00:32<00:03,  5.31batch/s][A
+Epoch 1:  71%|#######   | 44/62 [00:32<00:03,  5.46batch/s][A
+Epoch 1:  73%|#######2  | 45/62 [00:32<00:03,  5.62batch/s][A
+Epoch 1:  74%|#######4  | 46/62 [00:32<00:02,  5.76batch/s][A
+Epoch 1:  76%|#######5  | 47/62 [00:32<00:02,  5.84batch/s][A
+Epoch 1:  77%|#######7  | 48/62 [00:33<00:02,  5.89batch/s][A
+Epoch 1:  79%|#######9  | 49/62 [00:33<00:02,  5.96batch/s][A
+Epoch 1:  81%|########  | 50/62 [00:33<00:02,  5.94batch/s][A
+Epoch 1:  82%|########2 | 51/62 [00:33<00:01,  5.86batch/s][A
+Epoch 1:  84%|########3 | 52/62 [00:33<00:01,  5.94batch/s][A
+Epoch 1:  85%|########5 | 53/62 [00:33<00:01,  6.05batch/s][A
+Epoch 1:  87%|########7 | 54/62 [00:34<00:01,  6.00batch/s][A
+Epoch 1:  89%|########8 | 55/62 [00:34<00:01,  5.98batch/s][A
+Epoch 1:  90%|######### | 56/62 [00:34<00:01,  5.98batch/s][A
+Epoch 1:  92%|#########1| 57/62 [00:34<00:00,  5.93batch/s][A
+Epoch 1:  94%|#########3| 58/62 [00:34<00:00,  5.94batch/s][A
+Epoch 1:  95%|#########5| 59/62 [00:34<00:00,  6.00batch/s][A
+Epoch 1:  97%|#########6| 60/62 [00:35<00:00,  6.00batch/s][A
+Epoch 1:  98%|#########8| 61/62 [00:35<00:00,  5.88batch/s][A
+Epoch 1: 100%|##########| 62/62 [00:37<00:00,  1.54batch/s][A
+                                                           [ATraining Progress:   0%|          | 0/1 [00:44<?, ?epoch/s, Time: 44.9s | loss=10.6608 val_loss=9.6352]Training Progress: 100%|##########| 1/1 [00:44<00:00, 44.90s/epoch, Time: 44.9s | loss=10.6608 val_loss=9.6352]Training Progress: 100%|##########| 1/1 [00:44<00:00, 44.90s/epoch, Completed in 44.9s]                        Training Progress: 100%|##########| 1/1 [00:44<00:00, 44.94s/epoch, Completed in 44.9s]

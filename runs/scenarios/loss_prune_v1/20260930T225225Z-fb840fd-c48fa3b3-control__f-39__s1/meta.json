@@ -1,0 +1,90 @@
+{
+  "run_id": "20260930T225225Z-fb840fd-c48fa3b3-control__f-39__s1",
+  "seed": 1,
+  "tags": [
+    "scenario",
+    "loss_prune_v1",
+    "dev"
+  ],
+  "created_utc": "20260930T225225Z",
+  "engine": {
+    "schema_version": 1,
+    "scenario": "loss_prune_v1",
+    "cell_key": "control__f-39__s1",
+    "configuration": "control",
+    "variant": "control",
+    "params": {},
+    "fold": -39,
+    "fold_id": 2,
+    "n_usable_folds": 39,
+    "role": "dev",
+    "seed": 1,
+    "config_hash": "ab43ff923c84",
+    "settings_hash": "ff514fca1d28",
+    "spec_hash": "7422453f1838",
+    "commit": "fb840fd",
+    "strategy": {
+      "name": "calibrated_quantile",
+      "params": {}
+    },
+    "backtest": {},
+    "run": {
+      "calibrate": true,
+      "save_artifacts": false
+    },
+    "spec": "configs\\scenarios\\loss_prune_v1.yaml"
+  },
+  "dataset": {
+    "path": "Bitcoin_BTCUSDT.csv",
+    "sha256": "67966a49634fa0a591f6fa188ec330797297d9b399b68c96b36bef06f1f50008",
+    "size_bytes": 290962077,
+    "loader": "csv",
+    "n_rows": 4598198,
+    "n_bars": 4598198,
+    "first_timestamp": "2017-01-01T00:00:00",
+    "last_timestamp": "2025-09-29T23:57:00"
+  },
+  "setup": {
+    "bar_minutes": 1,
+    "LOOKBACK": 60,
+    "HORIZON_STEPS": [
+      10,
+      15,
+      20
+    ]
+  },
+  "blocks": {
+    "fold": -39,
+    "fold_id": 2,
+    "n_usable_folds": 39,
+    "gap": 80,
+    "train": {
+      "start": 0,
+      "stop": 8550,
+      "n": 8550,
+      "first_timestamp": "2023-11-04T17:38:00",
+      "last_timestamp": "2023-11-10T16:07:00"
+    },
+    "val": {
+      "start": 8630,
+      "stop": 28630,
+      "n": 20000,
+      "first_timestamp": "2023-11-10T17:28:00",
+      "last_timestamp": "2023-11-24T14:47:00"
+    },
+    "cal": {
+      "start": 28710,
+      "stop": 48710,
+      "n": 20000,
+      "first_timestamp": "2023-11-24T16:08:00",
+      "last_timestamp": "2023-12-08T13:27:00"
+    },
+    "test": {
+      "start": 48790,
+      "stop": 73180,
+      "n": 24390,
+      "first_timestamp": "2023-12-08T14:48:00",
+      "last_timestamp": "2023-12-25T13:17:00"
+    }
+  }
+}

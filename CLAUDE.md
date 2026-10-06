@@ -28,7 +28,7 @@ horizons) is the reference setup, the only one tested in the MVP (D-022). Packag
    path. Any other untracked or modified file may belong to another session: do not discard or
    commit it; record it in STATUS and ask the owner. If behind origin: fast-forward only when the tree is clean
    (no modified or staged tracked files); otherwise ask. If this checkout is
-   C:/Users/Step/Documents/neural_trade and D:/neural_trade exists, do not work here: the working
+   C:/Users/Step/Documents/neural_trade and D:/nt/neural_trade exists, do not work here: the working
    copy is D: (D-030); tell the owner.
 3. Check CI on the pushed head and list the open pull requests (docs/RUNBOOK.md "CI"). A PR from
    a remote session into `remediation/plan` is QA'd and merged like an implementer branch (D-033).
@@ -62,8 +62,11 @@ Pointers only; the rule lives where the pointer says.
   history rewrite) and D-019 onward (the vision, the yardstick, the MVP plan).
 - **Autonomy and pushing** (D-017): push `remediation/plan` and `nt-*` without asking; never
   `master`, never `--force`. This overrides the global "ask before pushing".
-- **Models and task tracking** (owner, D-036): OPERATING_MODEL "Models and task tracking" (a Haiku
-  `tracker` agent waits, polls and makes mechanical fixes; the other roles keep the strong model).
+- **Models and effort** (owner, D-061): OPERATING_MODEL "Models and task tracking". Lead and plans Opus 5.5
+  high (`.claude/settings.json`); research through `/research` workflows; roles pinned in `.claude/agents/`
+  (implementer and experimenter Sonnet 5.5 medium, qa Opus 5.5 medium, qa-deep Opus 5.5 high, tracker Haiku);
+  delegate only to these roles (a hook denies generic agents). Open this folder, not `D:/nt`, as the workspace:
+  `.claude/` loads only from the session's working directory.
 - **No pinging** (owner, 2026-09-29, D-042): the lead never polls or checks running agents, runs or suites
   itself and never answers an interim "still running" notification; it waits for the completion notice.
   Any waiting that needs active polling goes to the Haiku 4.5 `tracker`.
@@ -91,8 +94,8 @@ Pointers only; the rule lives where the pointer says.
 - `ptxas.exe ... CreateProcess failed` log lines are harmless.
 - One GPU job at a time (sweeps: OPERATING_MODEL); the owner's other project also uses this GPU
   (Docker/WSL): never touch it. Is the GPU free: RUNBOOK "GPU rules".
-- Disk C: is nearly full (the other project's Docker image): scratch, renders and worktrees go to D:.
-- The working copy is `D:/neural_trade` (moved 2026-09-28, D-030). The old C: copy is ignored (D-038):
+- Disk C: is nearly full (the other project's Docker image): scratch, renders and worktrees go to D:/nt/.
+- The working copy is `D:/nt/neural_trade` (moved 2026-09-28, D-030; into D:/nt/ by 2026-10-06, D-058). The old C: copy is ignored (D-038):
   never delete it, never ask about it. (Formerly: deleted only on
   the owner's go-ahead (OPERATING_MODEL "Escalate to the owner"); never work in it.
 - Bash heredocs with nested quotes break easily here: write scripts with the Write tool.
@@ -103,6 +106,7 @@ Pointers only; the rule lives where the pointer says.
 
 ```bash
 PY=C:/Users/Step/miniforge3/envs/nt/python
+$PY scripts/test_changed.py --run                                              # tier 1: tests of the changed modules (D-060)
 CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8   # fast suite, ~3.5 min (pytest-xdist, D-048)
 CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow -n 8   # slow suite; never two full suites at once (D-048)
 $PY -m ruff check src tests scripts

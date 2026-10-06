@@ -39,6 +39,8 @@ class PredictionBatch:
     interval: Dict[str, tuple]
     last_close: np.ndarray
     horizon_steps: tuple
+    # the raw price heads before the calibration's delta shrink (D-051, NT-119); None on legacy batches
+    delta_raw: Optional[Dict[str, np.ndarray]] = None
 
     def as_predictions_dict(self) -> dict:
         """The TrainResult.predictions layout (raw heads), for evaluation and calibration code."""
@@ -50,9 +52,14 @@ class PredictionBatch:
 
         n = len(self.last_close)
         y = np.full((n, 3), np.nan) if y is None else np.asarray(y, float)
-        return PredictionFrame(y, self.last_close, self.delta, self.direction_prob, self.variance_scaled,
-                               pred_scale, pred_mean, tuple(self.horizon_steps), split,
-                               self.direction_prob_calibrated, self.interval)
+        frame = PredictionFrame(y, self.last_close, self.delta, self.direction_prob, self.variance_scaled,
+                                pred_scale, pred_mean, tuple(self.horizon_steps), split,
+                                self.direction_prob_calibrated, self.interval)
+        # D-051: strategies read the coherence flags from the raw heads, the same meta key
+        # PredictionFrame.from_result sets on the training/evaluation path
+        if self.delta_raw is not None:
+            frame.meta["delta_raw"] = {h: np.asarray(self.delta_raw[h], float).reshape(-1)[:n] for h in self.delta_raw}
+        return frame
 
     def to_frame(self, index=None) -> pd.DataFrame:
         cols = {"last_close": self.last_close}
@@ -78,7 +85,8 @@ def _tail_batch(b: PredictionBatch) -> PredictionBatch:
     return PredictionBatch(take(b.delta), take(b.direction_prob),
                            take(b.direction_prob_calibrated), take(b.sigma),
                            take(b.variance_scaled), take(b.gauss_up_prob), iv,
-                           b.last_close[-1:], b.horizon_steps)
+                           b.last_close[-1:], b.horizon_steps,
+                           None if b.delta_raw is None else take(b.delta_raw))
 
 
 class Predictor:
@@ -126,6 +134,7 @@ class Predictor:
         heads = self.model.predict(tf.data.Dataset.from_tensor_slices(Xn).batch(bs), verbose=0)
         preds = heads_to_predictions(heads, len(Xn), self.bundle.pred_scale, self.bundle.pred_mean, self.config)
 
+        raw_delta = {h: preds["delta"][h] for h in HORIZONS}
         prob_cal = {h: preds["direction_prob"][h] for h in HORIZONS}
         intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
         if calibrated and self.bundle.calibration_pipeline is not None:
@@ -138,7 +147,7 @@ class Predictor:
                                                    self.config.DIR_DEADBAND_BPS, self.bundle.pred_scale)
                  for h in HORIZONS}
         return PredictionBatch(preds["delta"], preds["direction_prob"], prob_cal, sigma, preds["variance"],
-                               gauss, intervals, lc, tuple(self.config.HORIZON_STEPS))
+                               gauss, intervals, lc, tuple(self.config.HORIZON_STEPS), raw_delta)
 
     def predict_last(self, close, alpha: float = 0.1) -> Dict[str, dict]:
         """Forecast from the newest complete window; one dict per horizon.

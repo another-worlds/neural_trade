@@ -138,6 +138,7 @@ def test_gradient_mode_end_to_end_records_weights_and_gradient_shares(tiny_confi
     cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
     cfg.MODEL_PATH = str(tmp_path / "weights.h5")
     cfg.CALIB_MODE = "gradient"
+    cfg.LAMBDA_SOFT_ECE = 1.0  # NT-117 ships 0 (inactive, not rescaled); keep ece among the measured terms
     cfg.validate()
 
     result = train_and_evaluate(config=cfg, epochs=0, force=True, calibrate=True, fit_calibration=False)
@@ -317,6 +318,8 @@ def test_default_model_gradient_mode_equalises_terms_as_they_enter_total(tmp_pat
     cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
     cfg.MODEL_PATH = str(tmp_path / "weights.h5")
     cfg.CALIB_MODE = "gradient"
+    cfg.LAMBDA_SOFT_ECE = 1.0  # NT-117 ships 0 (inactive, not rescaled); keep ece among the measured terms
+    cfg.LAMBDA_VOL = 1.0  # NT-117 ships 0, which the clamp lifts to 0.1 unequalised (D-058, NT-118)
     cfg.MAX_SEQUENCE_COUNT = 1200  # bound the real default model's calibration pass for a test
     cfg.DIR_DEADBAND_BPS = 0.0     # every example gets a direction label: 'dir'/'ece' can't mask to 0
     # NT-111 (QA of NT-101: 0.5 relative-spread tolerance measured at 0.58 on 12 fresh real

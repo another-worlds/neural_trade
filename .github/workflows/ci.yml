@@ -1,7 +1,11 @@
 name: ci
 
 on:
+  # D-060: a push to a working branch (nt-*) is checked by the author's fast suite and once more on the
+  # integration branch; planning docs and run records alone do not change the code under test.
   push:
+    branches: [remediation/plan, master]
+    paths-ignore: ["docs/*.md", "docs/qa/**", "docs/research/**", "docs/archive/**", "runs/**", "presentations/**", "*.md", "LICENSE"]
   pull_request:
 
 concurrency:

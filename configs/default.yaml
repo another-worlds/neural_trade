@@ -50,7 +50,7 @@ LAMBDA_POINT: 1.0  # point loss weight, h1
 LAMBDA_LONG: 1.0  # point loss weight, h2
 LAMBDA_DIR: 1.0  # direction loss (focal + dice)
 LAMBDA_INTER: 1.0  # weight of model.losses (layer regularisers)
-LAMBDA_VOL: 1.0  # prediction-spread vs target-spread penalty
+LAMBDA_VOL: 0.0  # prediction-spread vs target-spread penalty (0: calibration lifts it to CALIB_LAMBDA_MIN 0.1, the arm NT-099 tested; without calibration a true 0, untested; D-057, D-058)
 LAMBDA_VAR: 1.0  # Gaussian NLL of the variance heads
 LAMBDA_TREND_OUTER: 1.0
 LAMBDA_DIR_OUTER: 1.0
@@ -58,7 +58,7 @@ LAMBDA_DIR_ALIGN_OUTER: 0.0  # direction head vs Gaussian readout alignment
 LAMBDA_COHERENCE: 1.0
 LAMBDA_NLL_OUTER: 1.0
 LAMBDA_CRPS: 1.0
-LAMBDA_SOFT_ECE: 1.0
+LAMBDA_SOFT_ECE: 0.0  # differentiable ECE of the direction heads (0 = off; D-057)
 LAMBDA_DIR_ALIGN: 0.7  # inner weight of the alignment term
 
 # ---- physics

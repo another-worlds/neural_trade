@@ -34,9 +34,10 @@ r = X.r
 THIN = X.THIN
 
 
-def bt_run(sig, bars, strategy, params, cost_rt=0.0, seeds=0):
+def bt_run(sig, bars, bar_minutes, strategy, params, cost_rt=0.0, seeds=0):
     return fit_and_backtest(sig, bars, strategy=strategy, strategy_params=params,
-                            backtest_params={**X.costs(cost_rt), "random_seeds": seeds})
+                            backtest_params={**X.costs(cost_rt), "random_seeds": seeds},
+                            bar_minutes=bar_minutes)
 
 
 def summ(bt) -> dict:
@@ -119,28 +120,29 @@ def ensemble() -> dict:
             oos.append(o)
             sigs.append(BlockSignals.build(c, o))
         esig = BlockSignals.build(mean_frame(cals), mean_frame(oos))
-        c3, _ = bt_run(esig, bars, cq, {"entry_quantile": 0.9, "size": 0.7}, seeds=100)
-        full, _ = bt_run(esig, bars, cq, {"entry_quantile": 0.9, "size": 1.0})
-        seeds = [summ(bt_run(s, bars, cq, {"entry_quantile": 0.9, "size": 1.0})[0]) for s in sigs]
-        seeds07 = [summ(bt_run(s, bars, cq, {"entry_quantile": 0.9, "size": 0.7})[0]) for s in sigs]
+        bar_minutes = float(extra["bar_minutes"])
+        c3, _ = bt_run(esig, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": 0.7}, seeds=100)
+        full, _ = bt_run(esig, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": 1.0})
+        seeds = [summ(bt_run(s, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": 1.0})[0]) for s in sigs]
+        seeds07 = [summ(bt_run(s, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": 0.7})[0]) for s in sigs]
         wds = [np.asarray(s.oos.weighted_direction, dtype=float) for s in sigs] + [np.asarray(esig.oos.weighted_direction, dtype=float)]
         corr = np.corrcoef(np.vstack(wds)).round(3).tolist()
         aucs = {"seeds": [[r(up_auc(o, s, i)) for i in range(3)] for o, s in zip(oos, sigs)],
                 "ensemble": [r(up_auc(oos[0], esig, i)) for i in range(3)]}
         hist = {k: np.histogram(w, bins=50, range=(0.44, 0.56))[0].tolist() for k, w in zip(["s0", "s1", "s2", "ens"], wds)}
         sizes = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-        size_curve = [{"size": z, **summ(bt_run(esig, bars, cq, {"entry_quantile": 0.9, "size": z})[0])} for z in sizes]
+        size_curve = [{"size": z, **summ(bt_run(esig, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": z})[0])} for z in sizes]
         qs = [0.8, 0.85, 0.9, 0.95, 0.97, 0.99]
-        q_curve = [{"q": q, "ens": summ(bt_run(esig, bars, cq, {"entry_quantile": q, "size": 0.7})[0]),
-                    "seeds": [summ(bt_run(s, bars, cq, {"entry_quantile": q, "size": 0.7})[0]) for s in sigs]} for q in qs]
+        q_curve = [{"q": q, "ens": summ(bt_run(esig, bars, bar_minutes, cq, {"entry_quantile": q, "size": 0.7})[0]),
+                    "seeds": [summ(bt_run(s, bars, bar_minutes, cq, {"entry_quantile": q, "size": 0.7})[0]) for s in sigs]} for q in qs]
         # entries in common: share of the ensemble's entry bars within 2 bars of a seed's entry
         ent_e = set(t.entry_bar for t in c3.trades)
         overlap = []
         for s in sigs:
-            es = set(t.entry_bar for t in bt_run(s, bars, cq, {"entry_quantile": 0.9, "size": 1.0})[0].trades)
+            es = set(t.entry_bar for t in bt_run(s, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": 1.0})[0].trades)
             near = sum(1 for b in ent_e if any(b + k in es for k in (-2, -1, 0, 1, 2)))
             overlap.append(r(near / max(len(ent_e), 1)))
-        cost_curve = {c: summ(bt_run(esig, bars, cq, {"entry_quantile": 0.9, "size": 0.7}, c)[0])["ret"] for c in (0, 0.5, 1, 1.5, 2, 3)}
+        cost_curve = {c: summ(bt_run(esig, bars, bar_minutes, cq, {"entry_quantile": 0.9, "size": 0.7}, c)[0])["ret"] for c in (0, 0.5, 1, 1.5, 2, 3)}
         rnd = c3.baselines.get("random_same_freq", {})
         data["folds"][fold] = {
             "cells": [d.name for d in dirs], "c3": summ(c3), "full_size": summ(full), "seeds": seeds, "seeds07": seeds07,
@@ -164,24 +166,26 @@ def ta() -> dict:
         cal, _, _ = load_block(d / "predictions_cal.npz")
         o, bars, extra = load_block(d / "predictions_oos.npz")
         sig = BlockSignals.build(cal, o)
-        bt, strat = bt_run(sig, bars, gt, base, seeds=100)
+        bar_minutes = float(extra["bar_minutes"])
+        bt, strat = bt_run(sig, bars, bar_minutes, gt, base, seeds=100)
         close = np.asarray(bars.close, dtype=float)
         sh_model = np.asarray(sig.oos.sigma_for("model", -1), dtype=float) / close
         sh_ewma = np.asarray(sig.oos.sigma_for("ewma", -1), dtype=float) / close
         variants = {}
         for q in (0.5, 0.6, 0.7, 0.8, 0.9, 0.95):
-            variants[f"model|{q}"] = summ(bt_run(sig, bars, gt, {"primary": "ma_cross", "q": q})[0])
-            variants[f"ewma|{q}"] = summ(bt_run(sig, bars, gt, {"primary": "ma_cross", "q": q, "sigma_source": "ewma"})[0])
-        variants["none|0.001"] = summ(bt_run(sig, bars, gt, {"primary": "ma_cross", "q": 0.001})[0])
-        variants["bollinger|0.8"] = summ(bt_run(sig, bars, gt, {"primary": "bollinger", "q": 0.8})[0])
-        cq = summ(bt_run(sig, bars, "calibrated_quantile", {"entry_quantile": 0.9, "size": 1.0})[0])
+            variants[f"model|{q}"] = summ(bt_run(sig, bars, bar_minutes, gt, {"primary": "ma_cross", "q": q})[0])
+            variants[f"ewma|{q}"] = summ(bt_run(sig, bars, bar_minutes, gt,
+                                                {"primary": "ma_cross", "q": q, "sigma_source": "ewma"})[0])
+        variants["none|0.001"] = summ(bt_run(sig, bars, bar_minutes, gt, {"primary": "ma_cross", "q": 0.001})[0])
+        variants["bollinger|0.8"] = summ(bt_run(sig, bars, bar_minutes, gt, {"primary": "bollinger", "q": 0.8})[0])
+        cq = summ(bt_run(sig, bars, bar_minutes, "calibrated_quantile", {"entry_quantile": 0.9, "size": 1.0})[0])
         rnd = bt.baselines.get("random_same_freq", {})
         cell = {"name": d.name, "seed": d.name.split("__")[-1], "gate": r(strat.gate, 7), "summary": summ(bt),
                 "variants": variants, "cq09": cq, "fit": report_metrics(d),
                 "random_null": {kk: r(v) for kk, v in rnd.items() if isinstance(v, (int, float))},
                 "training": {kk: v for kk, v in X.training(d).items() if kk in ("epoch", "loss", "val_loss", "served_epoch", "val_dir_mcc", "grad_norm")},
                 "view": view(bars, extra, bt, feature=sh_model * 1e4),
-                "cost_curve": {c: summ(bt_run(sig, bars, gt, base, c)[0])["ret"] for c in (0, 1, 2, 4, 6, 10, 16, 26)}}
+                "cost_curve": {c: summ(bt_run(sig, bars, bar_minutes, gt, base, c)[0])["ret"] for c in (0, 1, 2, 4, 6, 10, 16, 26)}}
         if k == 0:
             s = pd.Series(close)
             pick = np.arange(0, len(close), 1)

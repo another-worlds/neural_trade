@@ -40,7 +40,13 @@ The indicator maths is the model's own (``models/layers/learnable_indicators.py`
 * Bollinger: ``mid = ema(close, p)``, ``var = ema((close - mid) ** 2, p)``, ``std = sqrt(var + 1e-8)``,
   ``upper / lower = mid +- 2 std``, ``%B = (close - lower) / (4 std + 1e-8)``.
 
-The lines are drawn on the raw close. The layer computes the same formulas on the window-relative input
+The lines of those four are drawn on the raw close. Further registered families (ATR, stochastic, Williams %R,
+Keltner, OBV, VWAP, MFI, ADX, CCI, Donchian, and any family added later) are drawn by
+:func:`family_lines`, which calls each family's ``outputs`` on one window. Pass ``ohlcv`` (the block's
+model window, ``[N, LOOKBACK, C]`` in ``Config.INPUT_SERIES`` order) or those rows are named in the
+subtitle instead of being left empty. The original four keep their legend names and their numpy path.
+
+The layer computes the same formulas on the window-relative input
 ``(close - last close) / scale`` (``data/scaling.WindowNormalizer``); the weights of an EWMA sum to 1, so the
 moving average and the Bollinger lines map back exactly (``value * scale + last close``), MACD by ``* scale``,
 and RSI and %B are unchanged, apart from the 1e-8 guards. :func:`layer_channels` gives the layer's 31
@@ -62,17 +68,20 @@ import pandas as pd
 from neural_trade.core.indicator_periods import MACD_ROLES, configured_periods
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.indicator_evolution import (
-    COPY_COLORS, SERVED_LINE, STRIP_FILL, _applied_frame, _config_for, _epoch_ticks, _epochs, _find_start, _frame,
-    _log_range, _log_ticks, _num, _order_key, _parse, _path_of, _period_cols, _served_epoch, clip_bounds, label,
+    COPY_COLORS, SERVED_LINE, STRIP_FILL, _applied_frame, _config_for, _epoch_ticks, _epochs, _family_cols,
+    _find_start, _frame, _log_range, _log_ticks, _num, _order_key, _parse, _parse_family, _path_of,
+    _served_epoch, clip_bounds, label,
 )
 
-__all__ = ["discovered_indicators", "discovered_table", "ewma", "indicator_lines", "layer_channels", "pick_window"]
+__all__ = ["discovered_indicators", "discovered_table", "ewma", "family_lines", "indicator_lines",
+           "layer_channels", "pick_window"]
 
 LEARNED_DASH = T.VAL_DASH          # solid: the learned indicator
 # The same indicator at its textbook period is a reference: dashed, with an explicit pattern (plotly's "dash"
 # draws as one block in a 30 px legend key, analytics_confidence.REF_DASH). Dotted means training everywhere.
 TEXTBOOK_DASH = "6px,4px"
-FAMILIES = ("ma", "bb", "rsi", "macd")          # the rows of the price grid, top to bottom
+FAMILIES = ("ma", "bb", "rsi", "macd")          # the original rows, in their legend order; further
+                                                # families are appended in registry order
 PREFIX = {"ma": "ma_period_", "macd": "macd_", "rsi": "rsi_period_", "bb": "bb_period_"}
 FAMILY_OF = {v: k for k, v in PREFIX.items()}
 FAMILY_NAME = {"ma": "Moving average", "bb": "Bollinger", "rsi": "RSI", "macd": "MACD"}
@@ -131,7 +140,21 @@ def _instances(names) -> Dict[str, List[int]]:
 
 
 def _names_of(fam: str, idx: int) -> List[str]:
-    return [f"macd_{idx}_{r}" for r in MACD_ROLES] if fam == "macd" else [f"{PREFIX[fam]}{idx}"]
+    if fam == "macd":
+        return [f"macd_{idx}_{r}" for r in MACD_ROLES]
+    if fam in PREFIX:
+        return [f"{PREFIX[fam]}{idx}"]
+    family = _family_obj(fam)
+    return [family.learned_name(idx, p.name) for p in family.params]
+
+
+def _period_name(fam: str, idx: int, role: Optional[str]) -> str:
+    names = _names_of(fam, idx)
+    if role is None:
+        return names[0]
+    if fam == "macd":
+        return names[MACD_ROLES.index(role)]
+    return next(n for n in names if n.endswith(f"_{role}"))
 
 
 def indicator_lines(close, periods) -> Dict[str, Dict[str, np.ndarray]]:
@@ -188,6 +211,105 @@ def layer_channels(close, periods) -> np.ndarray:
         b = lines[f"bb_{i}"]
         chans += [b["mid"], b["upper"], b["lower"], b["pct_b"]]
     return np.stack(chans + [x], axis=-1)
+
+
+def _family_obj(name: str):
+    """One registered family. Imported here so the numpy path of this module stays free of TensorFlow."""
+    import neural_trade.indicators  # noqa: F401  (registers the families)
+    from neural_trade.indicators.registry import Indicators
+
+    return Indicators.get(name)
+
+
+def _registry_names() -> List[str]:
+    import neural_trade.indicators  # noqa: F401
+    from neural_trade.indicators.registry import Indicators
+
+    return list(Indicators.registry)
+
+
+def _display_name(fam: str) -> str:
+    if fam in FAMILY_NAME:
+        return FAMILY_NAME[fam]
+    return fam.upper() if len(fam) <= 4 else fam.replace("_", " ").title()
+
+
+def _draws_on_price(fam: str) -> bool:
+    family = _family_obj(fam)
+    return family.draw == "price" or any(ch.draw == "price" for ch in family.channels)
+
+
+def _extra_families(names) -> List[str]:
+    """Registered families beyond the original four that ``names`` actually logs, registry order."""
+    found = []
+    for name in names:
+        fam, _, _ = _parse_family(str(name))
+        if fam and fam not in FAMILIES and fam not in found:
+            found.append(fam)
+    if not found:
+        return []
+    order = _registry_names()
+    return [fam for fam in order if fam in found] + [fam for fam in found if fam not in order]
+
+
+def _name_key(col: str):
+    """Sort key that keeps the original four in ``_order_key`` order and appends the rest."""
+    fam, idx, role = _parse_family(str(col))
+    if _parse(str(col))[0] is not None:
+        return _order_key(col)
+    reg = _registry_names()
+    return (10 + (reg.index(fam) if fam in reg else 100), idx, role or "")
+
+
+def family_lines(window_ohlcv, periods, config) -> Dict[str, Dict[str, np.ndarray]]:
+    """Channels of every configured family on one window, from that family's ``outputs``.
+
+    ``window_ohlcv`` is ``[L]`` (close only) or ``[L, C]`` in ``config.INPUT_SERIES`` order.
+    Each period becomes an alpha through ``logit_from_period`` and ``alpha_from_logit``, the
+    same pair ``LearnableIndicators`` uses when meta_adjust is 0. One eager window, no live
+    weights: textbook lines are this function at the textbook periods, not a swap of a model's
+    logits. The original four families stay on :func:`indicator_lines` (numpy, no TensorFlow).
+    A family whose inputs the window does not carry is left out.
+    """
+    import tensorflow as tf
+
+    import neural_trade.utils.math as mh
+    from neural_trade.indicators import DERIVED_SERIES, FamilyContext, indicator_instances
+
+    window = np.asarray(window_ohlcv, dtype=np.float32)
+    series_names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
+    if window.ndim == 1:
+        cols = {"close": window}
+    elif window.ndim == 2 and window.shape[-1] == len(series_names):
+        cols = {name: window[:, i] for i, name in enumerate(series_names)}
+    else:
+        raise ValueError(f"window must be [L] or [L, {len(series_names)}] in INPUT_SERIES order, got {window.shape}")
+
+    def prep(arr):
+        return tf.constant(np.asarray(arr, dtype=np.float32)[None, :])
+
+    ctx = FamilyContext(prep(cols["close"]), **{k: prep(v) for k, v in cols.items() if k != "close"})
+    available = set(ctx.available())
+    per = {str(k): float(v) for k, v in dict(periods or {}).items() if v is not None and np.isfinite(v)}
+    out: Dict[str, Dict[str, np.ndarray]] = {}
+    for name, raw in indicator_instances(config).items():
+        family = _family_obj(name)
+        missing = (set(family.inputs) - available
+                   - {d for d, req in DERIVED_SERIES.items() if set(req) <= available})
+        if missing:
+            continue
+        for i, inst in enumerate(family.parse_instance(v) for v in raw):
+            alphas = {}
+            for p in family.params:
+                period = per.get(family.learned_name(i, p.name), inst[p.name])
+                alphas[p.name] = mh.alpha_from_logit(mh.logit_from_period(tf.constant(period, tf.float32), 1e-8))
+            cache: dict = {}
+            s1 = {k: mh.ewma_sequence(seq, a) for k, (seq, a) in family.stage1(ctx, alphas, cache).items()}
+            s2 = {k: mh.ewma_sequence(seq, a) for k, (seq, a) in family.stage2(ctx, alphas, s1, cache).items()}
+            chans = family.outputs(ctx, alphas, s1, s2, cache)
+            out[f"{name}_{i}"] = {spec.name: np.asarray(t.numpy()[0], dtype=float) for spec, t in
+                                  zip(family.channels, chans)}
+    return out
 
 
 # ---------------------------------------------------------------------------------- which window
@@ -263,7 +385,7 @@ def _gather(applied, config, metrics, window, start, learned, n_windows, block) 
     textbook = configured_periods(config)
     app = _applied_frame(applied)
     df = _frame(metrics) if metrics is not None else None
-    cols = sorted(_period_cols(df), key=_order_key) if df is not None else []
+    cols = sorted(_family_cols(df), key=_name_key) if df is not None else []
     x = _epochs(df) if df is not None else np.zeros(0)
     init, source = _find_start(_path_of(metrics), config, start)
     notes: List[str] = []
@@ -284,7 +406,7 @@ def _gather(applied, config, metrics, window, start, learned, n_windows, block) 
         base = {c: float(_num(df[c])[row]) for c in cols}
         base_source = f"epoch {int(x[row])} of metrics.jsonl" + ("" if len(hit) else " (the last)")
     names = sorted({str(k) for k in (*textbook, *base, *(app.columns if app is not None else ()))
-                    if _parse(str(k))[0] in FAMILY_OF}, key=_order_key)
+                    if _parse_family(str(k))[0]}, key=_name_key)
     n = len(app) if app is not None else int(n_windows or 0)
     w = pick_window(window, n, app) if n else None
     if learned == "applied" and app is not None and w is not None:
@@ -311,7 +433,8 @@ def _table(v: _View) -> pd.DataFrame:
     rows = {}
     for c in v.names:
         t, b = float(v.textbook.get(c, np.nan)), float(v.base.get(c, np.nan))
-        row = {"indicator": label(c), "textbook": t, "learned (served base)": b, "base vs textbook %": _pct(b, t)}
+        row = {"indicator": _row_label(c), "textbook": t, "learned (served base)": b,
+               "base vs textbook %": _pct(b, t)}
         if v.app is not None and c in v.app.columns:
             a = v.app[c].to_numpy(float)
             a = a[np.isfinite(a)]
@@ -376,6 +499,78 @@ def _periods_text(per: Dict[str, float], fam: str, idx: int) -> str:
     return "/".join(_p(per.get(n, np.nan)) for n in _names_of(fam, idx))
 
 
+def _row_label(name: str) -> str:
+    """Table label. The original four keep :func:`label`; a later family reads ``ATR #0``."""
+    text = label(name)
+    if text != str(name):
+        return text
+    fam, idx, role = _parse_family(name)
+    if not fam:
+        return str(name)
+    return f"{_display_name(fam)} #{idx}" + (f" {role}" if role else "")
+
+
+def _price_row_px(fam: str) -> int:
+    if fam in _ROW_PX:
+        return _ROW_PX[fam]
+    return 190 if _draws_on_price(fam) else 150
+
+
+def _y_title(fam: str) -> str:
+    known = {"ma": "close", "bb": "close", "rsi": "RSI", "macd": "MACD (price units)"}
+    if fam in known:
+        return known[fam]
+    return "close" if _draws_on_price(fam) else _display_name(fam)
+
+
+def _groups_for(fams: List[str]) -> List[Tuple[str, Optional[str]]]:
+    """Period panels: the original six, then one panel per later parameter."""
+    groups = [g for g in PERIOD_GROUPS if g[0] in fams]
+    for fam in fams:
+        if fam in FAMILIES:
+            continue
+        params = _family_obj(fam).params
+        if len(params) == 1:
+            groups.append((fam, None))
+        else:
+            groups.extend((fam, p.name) for p in params)
+    return groups
+
+
+def _one_ohlcv(ohlcv, w: int, n: int) -> np.ndarray:
+    ow = np.asarray(ohlcv, dtype=np.float32)
+    if ow.ndim == 2:
+        ow = ow[None, ...]
+    if ow.ndim != 3 or ow.shape[0] != n:
+        raise ValueError(f"ohlcv must be [N, L, C] for the same {n} windows, got {tuple(ow.shape)}")
+    return ow[int(w)]
+
+
+def _draw_registered_copy(fig, go, fam, idx, r, c, lid, learned, textbook, series_close, xs, color,
+                          learned_name, textbook_name, l_hover, t_hover):
+    """One copy of a family beyond the original four: price channels on the close, panel channels alone."""
+    key = f"{fam}_{idx}"
+    packs = ((learned.get(key), learned_name, LEARNED_DASH, l_hover, f"{key}-l"),
+             (textbook.get(key), textbook_name, TEXTBOOK_DASH, t_hover, f"{key}-t"))
+    family = _family_obj(fam)
+    channels = list(family.channels)
+    if family.draw == "price" or any(ch.draw == "price" for ch in channels):
+        fig.add_trace(go.Scatter(y=_f32(series_close), **xs, mode="lines", name="close", showlegend=False,
+                                 legend=lid, line=CLOSE_LINE,
+                                 hovertemplate="close<br>bar %{x}: %{y:,.2f}<extra></extra>"), r, c)
+    first = True
+    for spec in channels:
+        for lines, name, dash, hover, grp in packs:
+            if not lines or spec.name not in lines:
+                continue
+            fig.add_trace(go.Scatter(
+                y=_f32(lines[spec.name]), **xs, mode="lines", legend=lid, legendgroup=grp,
+                name=name if first else f"{name} {spec.name}", showlegend=bool(first),
+                line=dict(color=color, width=2.0 if dash == LEARNED_DASH else 1.6, dash=dash),
+                hovertemplate=f"{hover}<br>bar %{{x}}: {spec.name} %{{y:,.4g}}<extra></extra>"), r, c)
+        first = False
+
+
 def _copy_color(idx: int) -> str:
     """Copy #0 / #1 / #2 take the period figures' colours; more copies take the next non-horizon slots."""
     return COPY_COLORS[idx] if idx < len(COPY_COLORS) else T.OTHER_SERIES[idx % len(T.OTHER_SERIES)]
@@ -399,11 +594,13 @@ def _time_text(t) -> str:
 # ---------------------------------------------------------------------------------- the figure
 def discovered_indicators(data, config=None, *, applied=None, metrics=None, window="last", learned="applied",
                           times=None, block: Optional[str] = None, start=None, height: Optional[int] = None,
-                          title: Optional[str] = None, **_):
+                          title: Optional[str] = None, ohlcv=None, **_):
     """The learned indicators on the price of one window, each next to its textbook default (module docstring).
 
     ``data``: the block's raw close windows ``[N, LOOKBACK]`` as the model reads them (e.g.
-    ``split_arrays(cfg)["test"]["X"]``), or one window. ``config``: the run's config (textbook periods,
+    ``split_arrays(cfg)["test"]["X"]``), or one window. ``ohlcv``: the same windows as the model reads
+    them, ``[N, LOOKBACK, C]`` in ``Config.INPUT_SERIES`` order (``X_model``); families beyond the
+    original four are drawn from it. ``config``: the run's config (textbook periods,
     lookback, clip bounds; without it, the run's config.yaml next to ``metrics``). ``applied``:
     :func:`applied_periods` of the served model on the same windows (its ``attrs["base"]`` holds the served base
     periods). ``metrics``: the run's metrics.jsonl (the periods over training; its period_init.json and
@@ -427,8 +624,15 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
     w = int(v.w if v.w is not None else n - 1)
     table = _table(v)
     inst = _instances(v.names)
-    fams = [f for f in FAMILIES if inst[f]]
-    groups = [g for g in PERIOD_GROUPS if inst[g[0]]]
+    extras = _extra_families(v.names)
+    for fam in extras:
+        inst[fam] = sorted({_parse_family(n)[1] for n in v.names if _parse_family(n)[0] == fam})
+    drawable = [fam for fam in extras if inst[fam] and ohlcv is not None]
+    skipped = [fam for fam in extras if inst[fam] and ohlcv is None]
+    if skipped:
+        v.notes.append("no OHLCV window, so not drawn: " + ", ".join(skipped))
+    fams = [f for f in FAMILIES if inst[f]] + drawable
+    groups = _groups_for([f for f in FAMILIES if inst[f]] + [f for f in extras if inst[f]])
     ncols = max([3] + [len(inst[f]) for f in fams])
     n_period_rows = math.ceil(len(groups) / ncols) if groups else 0
 
@@ -436,7 +640,7 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
     rows.append(("table", None))
     table_px = _TABLE_HEADER_PX + _TABLE_ROW_PX * max(len(table), 1) + 24    # slack: a table taller than its
     # domain scrolls, which hides its last rows in a saved figure
-    px = [(_ROW_PX["overview"] if kind == "overview" else _ROW_PX[arg] if kind == "price"
+    px = [(_ROW_PX["overview"] if kind == "overview" else _price_row_px(arg) if kind == "price"
            else _ROW_PX["period"] if kind == "period" else table_px) for kind, arg in rows]
     plot_px = float(sum(px) + _GAP_PX * (len(rows) - 1))
     specs = []
@@ -488,16 +692,25 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
     xs = dict(x0=float(-(L - 1)), dx=1.0)
     learned_lines = indicator_lines(win, v.drawn)
     textbook_lines = indicator_lines(win, v.textbook)
+    extra_learned: Dict[str, Dict[str, np.ndarray]] = {}
+    extra_textbook: Dict[str, Dict[str, np.ndarray]] = {}
+    series_close = win
+    if drawable:
+        one = _one_ohlcv(ohlcv, w, n)
+        series_names = list(getattr(v.config, "INPUT_SERIES", None) or ["close"])
+        series_close = one[:, series_names.index("close")] if "close" in series_names else one[:, 0]
+        extra_learned = family_lines(one, v.drawn, v.config)
+        extra_textbook = family_lines(one, v.textbook, v.config)
     base_txt = "base" if v.drawn_kind == "base" else "applied to this window"
     for r_off, fam in enumerate(fams):
         r = 2 + r_off
         for c_off, idx in enumerate(inst[fam]):
             c = 1 + c_off
             key, color = f"{fam}_{idx}", _copy_color(idx)
-            lid = new_legend(r, c, f"{FAMILY_NAME[fam]} #{idx}")
+            lid = new_legend(r, c, f"{_display_name(fam)} #{idx}")
             lp, tp = _periods_text(v.drawn, fam, idx), _periods_text(v.textbook, fam, idx)
             bp = _periods_text(v.base, fam, idx)
-            what = f"{FAMILY_NAME[fam]} #{idx}" + (" (fast/slow/signal)" if fam == "macd" else "")
+            what = f"{_display_name(fam)} #{idx}" + (" (fast/slow/signal)" if fam == "macd" else "")
             l_hover = f"{what} learned: {lp} bars {base_txt} (served base {bp}; textbook {tp})"
             t_hover = f"{what} textbook: {tp} bars (the configured start)"
             L_ = learned_lines.get(key)
@@ -552,7 +765,7 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
                                              line=dict(color=color, width=width, dash=dash),
                                              hovertemplate=f"{hover}<br>bar %{{x}}: RSI %{{y:.1f}}<extra></extra>"), r, c)
                 fig.update_yaxes(range=[-3, 103], tickvals=[0, 30, 50, 70, 100], row=r, col=c)
-            else:
+            elif fam == "macd":
                 fig.add_hline(y=0, line=dict(color=T.NEUTRAL, width=1), row=r, col=c, exclude_empty_subplots=False)
                 for lines, grp, hollow in ((L_, f"{key}-l", False), (T_, f"{key}-t", True)):
                     if lines is None:
@@ -577,12 +790,14 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
                                              line=dict(color=SIGNAL_COLOR, width=1.2, dash=dash),
                                              hovertemplate=f"{hover}<br>bar %{{x}}: signal %{{y:,.2f}}<extra></extra>"),
                                   r, c)
+            else:
+                _draw_registered_copy(fig, go, fam, idx, r, c, lid, extra_learned, extra_textbook,
+                                      series_close, xs, color, f"learned {lp}", f"textbook {tp}", l_hover, t_hover)
             fig.update_xaxes(range=[-(L - 1) - 0.8, 0.8], row=r, col=c,
                              title_text=("bars before the decision bar (0 = the window's last bar)"
                                          if fam == fams[-1] else None), title_standoff=4)
             if c == 1:
-                fig.update_yaxes(title_text={"ma": "close", "bb": "close", "rsi": "RSI",
-                                             "macd": "MACD (price units)"}[fam], row=r, col=c)
+                fig.update_yaxes(title_text=_y_title(fam), row=r, col=c)
 
     # ---- the periods over training, and per window (the strip right of the last epoch)
     epochs = v.epochs
@@ -599,11 +814,16 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
     used_bound = False
     for gi, (fam, role) in enumerate(groups):
         r, c = period_row0 + gi // ncols, 1 + gi % ncols
-        heading = (f"MACD {role} periods" if fam == "macd" else f"{FAMILY_NAME[fam]} periods") + " over training"
+        if fam == "macd":
+            heading = f"MACD {role} periods over training"
+        elif role is None:
+            heading = f"{_display_name(fam)} periods over training"
+        else:
+            heading = f"{_display_name(fam)} {role} periods over training"
         lid = new_legend(r, c, heading)
         span = []
         for idx in inst[fam]:
-            name = _names_of(fam, idx)[MACD_ROLES.index(role)] if fam == "macd" else _names_of(fam, idx)[0]
+            name = _period_name(fam, idx, role)
             color = _copy_color(idx)
             tb = v.textbook.get(name)
             has_traj = v.df is not None and name in v.df.columns and len(epochs) > 0
@@ -620,7 +840,7 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
                     legendgroup=f"{name}-traj", line=dict(color=color, width=2, dash=LEARNED_DASH),
                     marker=dict(symbol=(["circle-open"] if ok0 else []) + ["circle"] * len(epochs),
                                 size=([9] if ok0 else []) + [4 if len(epochs) <= 40 else 0] * len(epochs), color=color),
-                    text=text, hovertemplate=f"{label(name)} base period<br>%{{text}}: %{{y:.2f}} bars<extra></extra>"),
+                    text=text, hovertemplate=f"{_row_label(name)} base period<br>%{{text}}: %{{y:.2f}} bars<extra></extra>"),
                     r, c)
             if tb is not None and np.isfinite(tb):
                 span.append(float(tb))
@@ -629,7 +849,7 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
                 fig.add_trace(go.Scatter(x=[x_lo, x_hi], y=[tb, tb], mode="lines", name=f"#{idx} textbook {tb:g}",
                                          showlegend=not has_traj, legend=lid, legendgroup=f"{name}-traj",
                                          line=dict(color=color, width=1.2, dash=TEXTBOOK_DASH),
-                                         hovertemplate=f"{label(name)} textbook period {tb:g} bars<extra></extra>"),
+                                         hovertemplate=f"{_row_label(name)} textbook period {tb:g} bars<extra></extra>"),
                               r, c)
             if v.app is not None and name in v.app.columns:
                 a = v.app[name].to_numpy(float)
@@ -645,7 +865,7 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
                     this = float(v.app[name].iloc[w])
                     b = v.base.get(name, np.nan)
                     span += [this] + ([b] if np.isfinite(b) and b > 0 else [])
-                    txt = (f"{label(name)} over {len(a):,} {v.block} windows: median {q50:.2f} bars, middle 50% "
+                    txt = (f"{_row_label(name)} over {len(a):,} {v.block} windows: median {q50:.2f} bars, middle 50% "
                            f"{q25:.1f}-{q75:.1f}, 5-95% {q5:.1f}-{q95:.1f}<br>this window (#{w:,}) {this:.2f} · "
                            f"served base {b:.2f} · textbook {_p(tb)}")
                     fig.add_trace(go.Scatter(x=[xk], y=_f32([q50]), mode="markers", showlegend=False, legend=lid,
@@ -665,8 +885,8 @@ def discovered_indicators(data, config=None, *, applied=None, metrics=None, wind
             fig.add_vline(x=v.served, line=SERVED_LINE, row=r, col=c)
         # the clip bounds of the BASE periods (applied periods are not clipped): drawn when a base period nears one
         room = {"ceiling": [], "floor": []}
-        base_vals = [v.base.get(nm) for nm in v.names if _parse(nm)[0] == PREFIX[fam]
-                     and (role is None or _parse(nm)[2] == role)]
+        base_vals = [v.base.get(nm) for nm in v.names if _parse_family(nm)[0] == fam
+                     and (role is None or _parse_family(nm)[2] == role)]
         base_vals = [b for b in base_vals if b is not None and np.isfinite(b) and b > 0]
         for bound, near, word in ((hi_b, bool(hi_b) and bool(base_vals) and max(base_vals) >= 0.8 * hi_b, "ceiling"),
                                   (lo_b, bool(lo_b) and bool(base_vals) and min(base_vals) <= 1.5 * lo_b, "floor")):

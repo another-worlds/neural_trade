@@ -23,6 +23,7 @@ failed if either fails.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -176,11 +177,14 @@ def bench(name, fwd_fn, fb_fn, reps, out):
     ``fb_fn`` is traced once (as a ``tf.function``) and that same concrete function is reused for both
     its census and its timing, so each variant costs two tracings (fwd, fb), not three."""
     cf = common.graph_census(fwd_fn)
+    # one forward, after the census: the bytes NT-060 compares across two GPU runs
+    fwd_sha256 = hashlib.sha256(np.ascontiguousarray(fwd_fn().numpy()).tobytes()).hexdigest()
     fb_tf = tf.function(fb_fn)
     cb = common.graph_census(fb_tf)
     timing = common.interleaved_timing({name: fb_tf}, reps=reps, warm=1)[name]
     out[name] = {
         "fwd_total_ops": cf["total_ops"], "fwd_compute_ops": cf["compute_ops"],
+        "fwd_sha256": fwd_sha256,
         "fwdbwd_total_ops": cb["total_ops"], "fwdbwd_compute_ops": cb["compute_ops"],
         "raise_on_gpu": cb["raise_on_gpu"], "host_round_trip_on_gpu": cb["host_round_trip_on_gpu"],
         "matmul_like_ops": cb["matmul_like_ops"],
@@ -326,6 +330,10 @@ def main(argv=None):
     ap.add_argument("--reps", type=int, default=5, help="interleaved timing repeats (>= 5)")
     ap.add_argument("--smoke", action="store_true", help="tiny sizes, few repeats (a few seconds)")
     args = ap.parse_args(argv)
+    # NT-060: op determinism on for the GPU kit only. TF32 stays at its default. The CPU path,
+    # including --smoke, does not call this.
+    if args.device == "gpu":
+        tf.config.experimental.enable_op_determinism()
 
     t0 = time.perf_counter()
     scale = common.target_scale(CSV)

@@ -39,6 +39,12 @@ def build_strategy(name: str, params: Optional[Mapping[str, Any]] = None, *, cal
 
 def build_backtest_config(params: Optional[Mapping[str, Any]] = None) -> BacktestConfig:
     params = dict(params or {})
+    if "minutes_per_year" in params:
+        raise InvalidConfigurationError(
+            "backtest.minutes_per_year was removed (NT-113): annualisation is bar_minutes through "
+            "strategy.performance.periods_per_year(bar_minutes, calendar) (a named calendar; '24/7' is "
+            "the MVP default, 525,600 minutes/year), not a separate minutes-per-year knob. Set bar_minutes "
+            "instead (a live caller reads it from the run's own stored bar size).")
     _check_keys(BacktestConfig, params, "backtest")
     return BacktestConfig(**params)
 

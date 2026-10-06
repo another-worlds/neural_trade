@@ -71,19 +71,52 @@ the PR's own claims plus the definition of done's general clauses when it is not
 integrated as in step 6 (D-033). A PR that would change a recorded decision, default trading
 behaviour or `master` goes to the owner.
 
-## Models and task tracking (owner, D-036)
+## Models and task tracking (owner, D-036, D-061)
 
-- **Models.** Implementer, QA and experimenter run on the session's strong model (their agent files
-  set none). The **tracker** (`.claude/agents/tracker.md`, Haiku) does the task tracking: waiting for
-  CI runs, background processes, test suites and agents' worktrees, and minor mechanical fixes the
-  lead names (regenerating TESTING_DOCUMENTATION.md, `ruff --fix`, a dictated line). The lead hands
-  such chores to the tracker instead of polling itself, and keeps every judgement (diagnosis,
-  merges, criteria, verdicts).
-- **Model split (owner, D-043).** Lead, QA of P0/P1 items and research: Opus 5.5, medium effort. Implementer,
-  experimenter and QA of P2/P3 items: Sonnet 5, medium effort (passed per call). Tracker: Haiku 4.5.
+- **Models and effort (owner, D-061; supersedes the model parts of D-035, D-036, D-043).** One standard,
+  pinned where the tooling enforces it, so it applies to every session without anyone passing it:
+
+  | role or task | model | effort | where it is pinned |
+  |---|---|---|---|
+  | lead: decisions, criteria, verdicts, merges; plan-making | Opus 5.5 | high | `.claude/settings.json` (`model`, `effortLevel`) |
+  | research | a workflow (`/research`, or the owner's "ultracode") | agents inherit the lead; the verify stage `xhigh` | `.claude/skills/research` |
+  | QA of P0/P1 and of any number, loss, metric, indicator, default or definition change (D-060) | Opus 5.5 | medium | `.claude/agents/qa.md` |
+  | QA on an escalation trigger (below) | Opus 5.5 | high | `.claude/agents/qa-deep.md` |
+  | QA of non-mechanical P2/P3 | Sonnet 5.5 | medium | `qa` with the per-call model `sonnet` |
+  | QA of mechanical P2/P3 | none: lead-verified (D-060) | - | - |
+  | implementer | Sonnet 5.5 | medium | `.claude/agents/implementer.md` |
+  | experimenter | Sonnet 5.5 | medium | `.claude/agents/experimenter.md` |
+  | tracker: waiting with an action on failure, dictated mechanical fixes | Haiku 4.5 | not supported | `.claude/agents/tracker.md` |
+  | waiting with no action (CI, a suite, a GPU run) | no agent: a background command | - | - |
+  | read-only lookups | `Explore` / `claude-code-guide`, or the lead itself in 1-2 calls | - | built-ins |
+
+  - **Enforced by a hook:** `.claude/hooks/agent_guard.py` (PreToolUse on Agent) denies a generic agent
+    (`general-purpose`, `claude`), which would inherit Opus high and bypass the table, and logs every agent
+    call to `.claude/agent_ledger.jsonl` (local). Workflow agents do not pass through it; a workflow names a
+    role with `agentType` or sets `model` / `effort` per stage.
+  - **Escalation:** a second repair round, a FAIL on a wrong number, or an edit to loss, gradient, training or
+    statistics code moves the role one step up for that item only (Sonnet medium, then Opus medium via the
+    per-call model `opus`, then `qa-deep`). Two failures at the same step: blocked, back to the lead.
+    De-escalation only between items, after 5 clean items of one class.
+  - **Effort is pinned in frontmatter only** (the Agent tool takes a model, not an effort). Lowering the lead's
+    effort with `/effort` for a run of routine turns keeps the prompt cache on Opus 5.5; switching the lead's
+    model mid-session does not, so model switches wait for a task boundary.
+  - **Control point:** the owner talks to the lead; the lead delegates, waits for completion notices and
+    records each agent's role, model, effort, tokens, minutes and outcome in the item's BACKLOG status line
+    and the session's STATUS "Agent ledger". The tracker (Haiku) is the cheap watcher; the lead keeps every
+    judgement (diagnosis, merges, criteria, verdicts).
 - **No pinging (owner, D-042).** The lead does not poll or inspect running agents, runs or suites itself,
   and does not reply to interim "still running" notifications: the harness notifies on completion. When
   something must be actively watched (CI, an external process), the Haiku 4.5 `tracker` watches it.
+- **QA by risk (owner, D-060).** An item gets a QA agent only when it changes a number, a loss or metric, an
+  indicator, a default, a definition, or an owner-visible figure, and for every P0 and P1 item. A P2/P3 item
+  that is mechanical, docs-only, a generated-file refresh or a test repair is integrated by the lead on a green
+  fast suite, ruff and CI, with no QA agent; the backlog entry says "lead-verified". QA does not repeat what CI
+  runs (fast suite, ruff, coverage): it checks what a suite cannot show, namely recomputed numbers against the
+  report, each acceptance criterion by its own evidence, golden-run equality, and mutation or edge cases where
+  the item calls for them. The implementer commits its logs (suite output, timings) to a path named in its
+  report and QA verifies them, rerunning only what it doubts. Related items are verified in one QA call per
+  merge batch. The lead runs the fast suite on the merged tree before every push to `remediation/plan`.
 - **Effort.** QA of a P2 or P3 item checks the criteria plus one suite run, with no mutation or
   exploratory checks. The lead skips its own integration suite run when the merged code equals the
   commit QA verified (`git diff --stat <qa sha> HEAD -- src tests scripts` empty); CI covers the
@@ -124,9 +157,26 @@ behaviour or `master` goes to the owner.
   minutes or hours is for questions a 6-hour block cannot answer.
 - **Quality verdicts** (direction, CRPS, trading) use the micro layout with at least 5 judgement folds (D-046);
   360-day runs only confirm what the micro layout adopted.
-- **Tests:** the suites run with `-n 8` (pytest-xdist). QA runs the tests an item touches plus one full suite;
+- **Tests:** the suites run with `-n 8` (pytest-xdist). QA runs the tests an item touches plus one fast suite (the slow suite only per D-059);
   the lead does not re-run a suite QA ran on the same code. No two full suites run at the same time in different
   checkouts: an agent that needs one while another runs waits for it, or runs only its targeted tests.
+
+## Test tiers (owner, D-060)
+
+The development loop must not wait on the whole suite. Use the cheapest tier that answers the question.
+
+| tier | when | what | cost |
+|---|---|---|---|
+| 0 | while editing | the test file(s) of the code you touch: `pytest -x <file> -n 2` | seconds |
+| 1 | before a commit | `python scripts/test_changed.py --run`: tests that mention the changed modules (a wide change, such as core/config.py or conftest.py, says "run the whole fast suite") | under a minute |
+| 2 | before a push to `remediation/plan`, and QA's one suite | `pytest -m "not slow" -n 8` plus ruff, `-m stability` for loss/model/indicator code | about 3.5 minutes |
+| 3 | once per merge batch that touches training, serving or notebooks (D-059) | `pytest -m slow -n 8` | about 16 minutes |
+| CI | every push to `remediation/plan` or `master`, every pull request | lint, fast suite with coverage and gates, CLI smoke; not for docs-only, `runs/` or `*.md` pushes | about 18 minutes, off the machine |
+| nightly | daily | slow, data and notebook tests | off the machine |
+
+Working branches (`nt-*`) are not run by CI on push; the author's tier 2 covers them, and the merge push is
+checked. `test_changed.py` is a heuristic (names, imports, registry keys); when it selects nothing for a code
+change, run tier 2. Never two full suites at the same time (D-048).
 
 ## Sweeps and pre-registered studies
 
@@ -197,8 +247,8 @@ and the decisions they settle into DECISIONS.
 An item is `done` when all of these hold, with the evidence in the backlog entry:
 
 - its acceptance criteria are met, and QA says PASS with evidence;
-- the fast suite passes, ruff is clean, and the slow suite passes if training, serving or notebooks
-  were touched; if tests were added, `TESTING_DOCUMENTATION.md` is regenerated;
+- the fast suite passes, ruff is clean, and (D-059) the slow suite passes before a merge that touches
+  training, serving or notebooks, run once per merge batch, not once per item or per repair round; if tests were added, `TESTING_DOCUMENTATION.md` is regenerated;
 - if loss, model, indicator or train-step code changed, and once NT-036 has added the `stability`
   pytest marker: `-m stability` passes (strict mode, masks off);
 - if it touches code that runs every training step: `sec_per_step` in a real run's `status.json` is
