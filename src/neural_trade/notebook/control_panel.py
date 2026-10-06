@@ -34,6 +34,7 @@ import html
 import json
 import logging
 import threading
+from pathlib import Path
 import time
 import traceback
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -84,9 +85,14 @@ class ControlPanel:
     def __init__(self, store="runs", specs_dir="configs/scenarios", *, compares_dir="configs/compares",
                  index_path=None, scenario: Optional[str] = None, mode: str = QUICK, poll_seconds: float = 10.0,
                  confirm_gpu_hours: float = 1.0, sweep_factory: Optional[Callable[..., Any]] = None,
-                 sweep_kwargs: Optional[Dict[str, Any]] = None, parallel_record: Optional[str] = DEFAULT_PARALLEL_RECORD):
+                 sweep_kwargs: Optional[Dict[str, Any]] = None, parallel_record: Optional[str] = DEFAULT_PARALLEL_RECORD,
+                 root=None):
         self.store = store if isinstance(store, RunStore) else RunStore(store, index_path)
         self.specs_dir, self.compares_dir = specs_dir, compares_dir
+        # the repository root: the notebook runs with notebooks/ as its working directory, while the scenarios' relative
+        # CSV_PATH and the GPU record's default path are relative to the root, where the CLI is run from
+        self.root = Path(root) if root is not None else Path(__file__).resolve().parents[3]
+        self._lock = threading.RLock()
         self.poll_seconds = float(poll_seconds)
         self.confirm_gpu_hours = float(confirm_gpu_hours)
         self._factory = sweep_factory
@@ -127,8 +133,18 @@ class ControlPanel:
         self._poller: Optional[threading.Thread] = None
         self._stop_poll = threading.Event()
         self._w: Dict[str, Any] = {}
-        self._syncing = False
+        self._tl = threading.local()
         self.select_scenario(scenario or self._default_scenario())
+
+    @property
+    def _syncing(self) -> bool:
+        """True while THIS thread sets widget values from the model: a widget observer runs in the thread that set the
+        value, so the flag is per thread (a refresh in the poller must not mute a click handled in the UI thread)."""
+        return bool(getattr(self._tl, "syncing", False))
+
+    @_syncing.setter
+    def _syncing(self, value: bool) -> None:
+        self._tl.syncing = bool(value)
 
     # ------------------------------------------------------------------ the model (headless API)
     def _default_scenario(self) -> Optional[str]:
@@ -152,6 +168,7 @@ class ControlPanel:
             self.rules = PD.rules_from_scenario(self.base)
         else:
             self.name, self.folds, self.rules = "", [], {}
+        self.explicit = bool(self.base is not None and self.base.search)
         self.resume = False
         self._invalidate("scenario", rebuild=True)
 
@@ -169,6 +186,7 @@ class ControlPanel:
                                       {k: p[k] for k in ("low", "high", "log", "step") if p.get(k) is not None})
                           for p in info.space}
         self.resume = True
+        self.explicit = True
         self._invalidate("sweep", rebuild=True)
 
     def set_mode(self, mode: str) -> None:
@@ -200,10 +218,12 @@ class ControlPanel:
         if opt is None:
             raise KeyError(f"{field_name} is not a field a sweep may search")
         self.rules[field_name] = opt.default_rule()
+        self.explicit = True
         self._invalidate("space", rebuild=True)
 
     def remove_field(self, field_name: str) -> None:
         self.rules.pop(field_name, None)
+        self.explicit = True
         self._invalidate("space", rebuild=True)
 
     def set_rule(self, field_name: str, **rule: Any) -> None:
@@ -214,10 +234,13 @@ class ControlPanel:
             else:
                 cur[k] = v
         self.rules[field_name] = cur
+        self.explicit = True
         self._invalidate("space")
 
     def search(self) -> Dict[str, Any]:
-        return PD.search_block(self.rules)
+        """The ``search:`` block of the scenario a launch builds: empty while the scenario has none and the form was not
+        edited (the sweep then applies its own default space, so the scenario keeps the spec file's hash)."""
+        return PD.search_block(self.rules) if self.explicit else {}
 
     def search_text(self) -> str:
         """The ``search:`` block the form builds, as YAML."""
@@ -226,15 +249,30 @@ class ControlPanel:
     def build_scenario(self) -> Scenario:
         if self.base is None:
             raise InvalidConfigurationError("no scenario is selected")
+        overrides = dict(self.base.overrides)
+        csv = str(self.base.base().CSV_PATH)
+        resolved = self.resolve_path(csv)
+        if resolved != csv:      # relative to the repo root, not to this process's working directory
+            overrides["CSV_PATH"] = resolved
         return dataclasses.replace(self.base, name=self.name or self.base.name, folds=list(self.folds or self.base.folds),
-                                   search=self.search())
+                                   search=self.search(), overrides=overrides)
+
+    def resolve_path(self, path: Optional[str]) -> Optional[str]:
+        """``path`` as the CLI would find it from the repo root: unchanged when absolute or when it exists from the
+        working directory, else against the root when it exists there (else unchanged, and the sweep says it is missing)."""
+        if not path:
+            return path
+        p = Path(path)
+        if p.is_absolute() or p.exists() or not (self.root / p).exists():
+            return path
+        return str(self.root / p)
 
     def build_options(self, *, dry_run: bool = False) -> SweepOptions:
         o = self.opts
         sps = o["sec_per_step"]
         return SweepOptions(mode=self.mode, n_trials=int(o["n_trials"]), stop_after=o["stop_after"] or None,
                             max_hours=float(o["max_hours"]), parallel=int(o["parallel"]),
-                            parallel_record=o["parallel_record"] or None, sec_per_step=float(sps) if sps else None,
+                            parallel_record=self.resolve_path(o["parallel_record"]) or None, sec_per_step=float(sps) if sps else None,
                             quick_minutes=float(o["quick_minutes"]), overhead_s=float(o["overhead_s"]),
                             top_k=int(o["top_k"]), rerun_seeds=int(o["rerun_seeds"]), sampler_seed=int(o["sampler_seed"]),
                             resume=bool(self.resume), when_busy=o["when_busy"], dry_run=dry_run)
@@ -393,6 +431,10 @@ class ControlPanel:
     def refresh_board(self, *, force: bool = False) -> bool:
         """Re-read the store and redraw the board when it changed (or ``force``); returns True when it redrew.
         Read-only: no index sync, no write; safe to call from the polling thread while a sweep writes."""
+        with self._lock:
+            return self._refresh_board(force)
+
+    def _refresh_board(self, force: bool) -> bool:
         self.sweeps = PD.list_sweeps(self.store.root)
         ids = self.board_ids if self.board_ids is not None else PD.default_board_sweeps(self.sweeps)
         known = {s.sweep_id for s in self.sweeps}
@@ -679,6 +721,10 @@ class ControlPanel:
 
     def _sync_widgets(self, rebuild_rules: bool = True) -> None:
         """Make the launcher's widgets show the model (after any change of it); a no-op before the launcher exists."""
+        with self._lock:
+            self._sync_widgets_locked(rebuild_rules)
+
+    def _sync_widgets_locked(self, rebuild_rules: bool) -> None:
         w = self._w
         if "launcher_box" not in w:
             return
@@ -698,6 +744,8 @@ class ControlPanel:
             problem = PD.validate_search(self.base, self.search()) if self.base is not None else None
             yaml_text = html.escape(self.search_text())
             w["yaml"].value = (f"<pre style='margin:2px 0'>{yaml_text}</pre>"
+                               + ("" if self.explicit else "<i>the scenario file has no <code>search:</code> block: the sweep's default "
+                                  "space (shown) applies; edit a field to write it into the scenario</i><br>")
                                + (f"<b style='color:#b91c1c'>the sweep would refuse this space: {html.escape(problem)}</b>"
                                   if problem else ""))
             w["confirm_b"].disabled = not self.needs_confirmation

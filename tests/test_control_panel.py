@@ -368,8 +368,8 @@ def test_a_pre_registered_comparison_gives_nt032s_verdict_otherwise_the_pair_is_
     assert found is not None and found.name == "panel_pair" and not flipped
     assert PC.find_compare_spec(configs[1], configs[0], cmp_dir)[1] is True
     verdict = PC.verdict_html(configs[0], configs[1], panel.store, compares_dir=cmp_dir)
-    assert "Paired verdict (NT-032" in verdict and "Refused" in verdict       # the spec needs 5 judgement folds: refused, said so
-    assert "not a verdict" not in verdict
+    assert "Paired verdict (NT-032" in verdict and "no verdict yet" in verdict   # viewing never runs compare()
+    assert not (panel.store.root / "compares").exists()
 
 
 # ------------------------------------------------------------------ the notebook launches nothing

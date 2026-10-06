@@ -60,6 +60,7 @@ class MetricAgg:
     n_folds: int
     n_seeds: int
     fold_values: Tuple[Tuple[int, float], ...] = ()
+    n_na: int = 0                    # cells whose value is undefined (served delta 0, D-007) and left out
 
 
 @dataclass
@@ -71,6 +72,7 @@ class ConfigScores:
     n_cells: int
     folds: Tuple[int, ...]
     aggs: Dict[str, MetricAgg] = field(default_factory=dict)
+    na: Dict[str, int] = field(default_factory=dict)   # score key -> cells where it is n/a (beta = 0), none has a value
 
 
 def _finite(v: Any) -> Optional[float]:
@@ -102,6 +104,33 @@ def key_parts(key: str) -> Optional[Tuple[str, Optional[int], str]]:
     return None
 
 
+# Statistics of the served delta (and of the Gaussian readout built on it) that a constant 0 does not have: with a
+# shrink beta of 0 (D-007) they are stored as 0.0 by the scorer, which is not a measurement. They are left out here
+# (drawn as n/a); the raw heads' own panels carry the information. Same rule as evaluation.report's ZERO_BETA_NA.
+SERVED_NA_METRICS = {"delta": ("corr", "corr_spearman", "mean_pred", "share_pred_up"),
+                     "gauss_direction": ("auc", "mcc")}
+NA_TEXT = "n/a (beta = 0)"
+
+
+def zero_beta_horizons(run_dir, role: str) -> set:
+    """Horizon names whose served delta is the constant 0 in this cell: a recorded shrink beta of 0, or a served delta
+    found 0 on every sample (``meta.served_delta_zero``), read from the cell's own ``eval_report_<role>.json``."""
+    import json
+
+    try:
+        meta = json.loads((Path(run_dir) / f"eval_report_{role}.json").read_text(encoding="utf-8")).get("meta") or {}
+    except (OSError, ValueError):
+        return set()
+    zero = {h for h, b in (meta.get("delta_scale") or {}).items() if b is not None and b <= 0}
+    return zero | set(meta.get("served_delta_zero") or ())
+
+
+def _is_served_na(key: str, zero: set) -> bool:
+    parts = key_parts(key)
+    return bool(parts and parts[1] is not None and f"h{parts[1]}" in zero
+                and parts[2] in SERVED_NA_METRICS.get(parts[0], ()))
+
+
 def aggregate_configuration(store: RunStore, rows: Sequence[Mapping[str, Any]], *, role: str = "dev") -> ConfigScores:
     """:class:`ConfigScores` of one configuration from its index ``rows`` (all one scenario and configuration):
     the cells of ``role`` that finished, every score key read from the index's ``scores`` table."""
@@ -109,7 +138,16 @@ def aggregate_configuration(store: RunStore, rows: Sequence[Mapping[str, Any]], 
     scenario = str(rows[0]["scenario"]) if rows else ""
     configuration = str(rows[0]["configuration"]) if rows else ""
     folds = sorted({int(r["fold"]) for r in rows if r.get("fold") is not None})
-    per_cell = [(r, store.index.scores(r["run_id"])) for r in rows]
+    per_cell = []
+    zero_cells: Dict[str, int] = {}
+    for r in rows:
+        scores = store.index.scores(r["run_id"])
+        zero = zero_beta_horizons(store.root / str(r["run_dir"]), role)
+        for k in list(scores):
+            if _is_served_na(k, zero):
+                scores[k] = None
+                zero_cells[k] = zero_cells.get(k, 0) + 1
+        per_cell.append((r, scores))
     keys = sorted({k for _, s in per_cell for k, v in s.items() if _finite(v) is not None})
     out = ConfigScores(f"{scenario} / {configuration}", scenario, configuration, role, len(rows), tuple(folds))
     for key in keys:
@@ -128,7 +166,8 @@ def aggregate_configuration(store: RunStore, rows: Sequence[Mapping[str, Any]], 
             means = [m for _, m in fold_means]
             out.aggs[key] = MetricAgg(sum(means) / len(means), _sd(means),
                                       sum(seed_sds) / len(seed_sds) if seed_sds else None, len(fold_means), seeds,
-                                      tuple(fold_means))
+                                      tuple(fold_means), n_na=zero_cells.get(key, 0))
+    out.na = {k: n for k, n in zero_cells.items() if k not in out.aggs}
     return out
 
 
@@ -204,6 +243,15 @@ def comparison_figures(configs: Sequence[ConfigScores], *, horizon_steps: Option
                 continue
             group, h, metric = parts
             tree.setdefault(group, {}).setdefault(metric, {}).setdefault(h, {})[ci] = agg
+    na_marks: Dict[str, Dict[str, Dict[Optional[int], List[int]]]] = {}
+    for ci, c in enumerate(configs):
+        for key in c.na:
+            parts = key_parts(key)
+            if parts is None:
+                continue
+            group, h, metric = parts
+            tree.setdefault(group, {}).setdefault(metric, {}).setdefault(h, {})
+            na_marks.setdefault(group, {}).setdefault(metric, {}).setdefault(h, []).append(ci)
     figs: Dict[str, Any] = {}
     n_cells = [c.n_cells for c in configs]
     for group, title in GROUPS:
@@ -220,9 +268,15 @@ def comparison_figures(configs: Sequence[ConfigScores], *, horizon_steps: Option
             by_h = tree[group][metric]
             horizons = sorted(h for h in by_h if h is not None)
             slots = horizons if horizons else [None]
+            fig.add_trace(go.Scatter(x=[], y=[], showlegend=False, hoverinfo="skip"), row=row, col=col)   # the panel exists
+            ax = "" if pi == 0 else str(pi + 1)
             spread = 0.62 / max(len(slots), 1)
             for si, h in enumerate(slots):
                 members = by_h[h] if h is not None else by_h.get(None, {})
+                for ci in na_marks.get(group, {}).get(metric, {}).get(h, []):
+                    fig.add_annotation(x=0.5, xref=f"x{ax} domain", y=ci + (si - (len(slots) - 1) / 2) * spread, yref=f"y{ax}",
+                                       text=NA_TEXT, showarrow=False, font=dict(size=10, color=_horizon_color(h) if h is not None
+                                                                                else T.MUTED))
                 offset = (si - (len(slots) - 1) / 2) * spread
                 xs, ys, fold_sd, seed_sd, hover, colors = [], [], [], [], [], []
                 for ci in sorted(members):
@@ -233,6 +287,7 @@ def comparison_figures(configs: Sequence[ConfigScores], *, horizon_steps: Option
                     seed_sd.append(a.seed_sd or 0.0)
                     colors.append(_horizon_color(h) if h is not None else _config_color(ci))
                     hover.append(f"{labels[ci]}<br>{metric}" + (f" h{h}" if h is not None else "")
+                                 + (f"<br>n/a on {a.n_na} cell(s) (beta = 0: served delta is 0), left out" if a.n_na else "")
                                  + f"<br>value {_fmt(a.value)}<br>fold sd {_fmt(a.fold_sd)} ({a.n_folds} fold(s))"
                                    f"<br>seed sd {_fmt(a.seed_sd)} ({a.n_seeds} seed(s))")
                 if not xs:
@@ -263,7 +318,9 @@ def comparison_figures(configs: Sequence[ConfigScores], *, horizon_steps: Option
         subtitle = (f"{role} cells; dot = mean over folds of each fold's seed-mean, whisker = sd between folds, thin grey line "
                     f"below = sd across a fold's seeds; dashed = the metric's no-skill reference where it has one; cells per "
                     f"configuration: {', '.join(str(n) for n in n_cells)}"
-                    + ("; the test fold is shown, never used to rank (D-020)" if role == "test" else ""))
+                    + ("; the test fold is shown, never used to rank (D-020)" if role == "test" else "")
+                    + ("; 'n/a (beta = 0)' = the served delta is the constant 0 there (D-007), not a measured 0: see the raw-head "
+                       "figure" if any(c.na or any(a.n_na for a in c.aggs.values()) for c in configs) else ""))
         width = max(900, left + 230 * NCOLS)
         subtitle = "<br>".join(textwrap.wrap(subtitle, max(60, int(width / 6.4))))
         top = 90 + 16 * (subtitle.count("<br>") + 1)
@@ -321,28 +378,48 @@ def find_compare_spec(a: ConfigScores, b: ConfigScores, compares_dir="configs/co
     return None, False
 
 
+def stored_verdict(spec, store: RunStore) -> Optional[Dict[str, Any]]:
+    """The result ``neural-trade compare <spec> --out <store>/compares/<name>`` stored for this spec (None: none yet).
+    Read-only: the panel never calls ``compare()``, which registers the spec (writes a sidecar into the store)."""
+    import json
+
+    path = Path(store.root) / "compares" / spec.name / "result.json"
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
 def verdict_html(a: ConfigScores, b: ConfigScores, store: RunStore, *, metric: str = "backtest/sharpe_net",
                  compares_dir="configs/compares") -> str:
-    """The panel's verdict block for the selected pair: NT-032's result when a pre-registered spec names it,
-    else the explicit statement plus the exploratory table."""
+    """The panel's verdict block for the selected pair, read-only on the store: NT-032's stored result when a
+    pre-registered spec names the pair and the store holds its result (a result of an edited spec is refused as stale);
+    "no verdict yet" with the command to run when it does not; the explicit statement plus the exploratory table when
+    no spec names the pair."""
     spec, flipped = find_compare_spec(a, b, compares_dir)
     if spec is None:
         return exploratory_html(a, b, metric)
-    from neural_trade.experiments.comparator import compare
-
-    result = compare(dataclasses.replace(spec, root=str(store.root)))
-    est = result.estimate
-    lines = [f"<b>Paired verdict (NT-032, pre-registered spec <code>{html.escape(spec.name)}</code>)</b>: "
-             f"A = {html.escape(spec.scenario_a)}, B = {html.escape(spec.scenario_b)}"
-             + (" (the selection's rows are in the reverse order)" if flipped else "")]
-    if result.refusal_reason:
-        lines.append(f"<b>Refused</b>: {html.escape(result.refusal_reason)}")
+    head = (f"<b>Paired verdict (NT-032, pre-registered spec <code>{html.escape(spec.name)}</code>)</b>: "
+            f"A = {html.escape(spec.scenario_a)}, B = {html.escape(spec.scenario_b)}"
+            + (" (the selection's rows are in the reverse order)" if flipped else ""))
+    doc = stored_verdict(spec, store)
+    cmd = f"neural-trade compare configs/compares/{html.escape(spec.name)}.yaml --out {html.escape(str(Path(store.root) / 'compares' / spec.name))}"
+    if doc is None:
+        return (f"{head}<br><b>no verdict yet</b>: the store holds no result for this spec (viewing never runs or registers a "
+                f"comparison). Run <code>{cmd}</code> after the runs it names exist.<br>" + exploratory_html(a, b, metric))
+    if doc.get("spec_hash") != spec.spec_hash:
+        return (f"{head}<br><b>stored result is stale</b>: it was written for another content of this spec "
+                f"(hash {html.escape(str(doc.get('spec_hash')))}, now {spec.spec_hash}). Run <code>{cmd}</code> under a new name.")
+    est = doc.get("estimate") or {}
+    if doc.get("refusal_reason"):
+        body = f"<b>Refused</b>: {html.escape(str(doc['refusal_reason']))}"
     else:
-        lines.append(f"<b>{html.escape(result.verdict)}</b>: {html.escape(spec.metric)} {html.escape(spec.estimator)} "
-                     f"{est['estimate']:.4g}, 95% CI [{est['ci_lo']:.4g}, {est['ci_hi']:.4g}] over {len(result.fold_rows)} "
-                     f"judgement folds ({len(result.pairs)} pairs), minimum effect {spec.min_effect:g}")
-    lines.append(f"<pre style='white-space:pre-wrap;max-height:260px;overflow:auto'>{html.escape(result.to_markdown())}</pre>")
-    return "<br>".join(lines)
+        body = (f"<b>{html.escape(str(doc.get('verdict')))}</b>: {html.escape(spec.metric)} {html.escape(spec.estimator)} "
+                f"{est.get('estimate', float('nan')):.4g}, 95% CI [{est.get('ci_lo', float('nan')):.4g}, "
+                f"{est.get('ci_hi', float('nan')):.4g}] over {doc.get('n_folds')} judgement folds ({doc.get('n_pairs')} pairs), "
+                f"minimum effect {spec.min_effect:g}; stored {html.escape(str(doc.get('generated_utc')))}")
+    return f"{head}<br>{body}"
 
 
 def table_html(configs: Sequence[ConfigScores]) -> str:
