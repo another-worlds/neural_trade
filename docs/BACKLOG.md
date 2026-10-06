@@ -199,6 +199,7 @@ changes).
 | [NT-164](#nt-164) | P3 | bug | implementer | todo | A run directory records the deterministic mode |
 | [NT-165](#nt-165) | P3 | polish | implementer | todo | NT-048 follow-ups: permutation variance in the importance band, a multiple-comparison note, readable MACD/Stoch/Keltner period panels, importance cost on CPU |
 | [NT-166](#nt-166) | P3 | performance | experimenter | todo | Quiet-machine step micro-benchmark: 1aeff1c against 426de4f (only if D-018 needs NT-075's answer) |
+| [NT-167](#nt-167) | P2 | bug | implementer | in-progress | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
 
 ## Items
 
@@ -2195,8 +2196,8 @@ changes).
 - **area:** src/neural_trade/evaluation/permutation_importance.py, src/neural_trade/visualization/ (importance and family-periods figures), tests/
 - **depends on:** NT-048
 - **why:** QA of NT-048 (2026-10-06): the band covers window resampling for one fixed permutation (no permutation variance) and the figure has 126 bars with no multiple-comparison note (stoch #2 h1's band lies entirely below 0); MACD, Stoch and Keltner panels draw three periods per instance in one colour on a squashed log axis; importance costs about 314 s on CPU for a 2,866-window validation block (43 forward passes), which affects the CPU-only `neural-trade indicators` path.
-- **acceptance:** (1) The band includes permutation variance (several permutations per group) or the figure states it does not (test). (2) A visible note on the number of comparisons. (3) Fast/slow/signal legs distinguishable in the period panels (dash or marker), D-014. (4) CPU cost reported and, if > 2 min, batched. (5) Fast suite, ruff.
-- **source:** QA reports of 2026-10-06
+- **acceptance:** (1) The band includes permutation variance (several permutations per group) or the figure states it does not (test). (2) A visible note on the number of comparisons. (3) Fast/slow/signal legs distinguishable in the period panels (dash or marker), D-014. (4) CPU cost reported and, if > 2 min, batched. (5) `resolve_csv_path` compares a run's recorded `dataset.sha256` with the resolved file and raises on a mismatch; without a fingerprint the report names the file it drew from (test). (6) The hit-drop diamond whiskers and the bar whiskers are told apart (style or offset); a subtitle note when a baseline AUC is under 0.5 (a positive drop then does not mean the group helps). (7) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06 (NT-048 QA on 2c772de and re-QA on 0a24847: the CSV fallback picks a file by name with no fingerprint check; overlapping grey whiskers; baselines under 0.5)
 
 ### NT-166
 
@@ -2209,6 +2210,18 @@ changes).
 - **why:** NT-075 was inconclusive (+5-6%, run-to-run noise up to 2x, host CPU 32-61% busy from other agents). Whole-run sec_per_step cannot resolve 5%.
 - **acceptance:** (1) A SPEC first: a fixed-step micro-benchmark of the training step (median of >= 200 steps after warm-up), on a quiet machine (no other agents), GPU-side timing. (2) A verdict at 5%. (3) Under 0.5 GPU-hours. (4) If a regression shows, an implementer bisect item.
 - **source:** QA reports of 2026-10-06
+
+### NT-167
+
+**Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations**
+
+- **status:** in-progress (2026-10-06): implementer on nt-167
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/notebook/runs.py, tests/, scripts/notebooks/README.md
+- **depends on:** none
+- **why:** The lead's notebook routine for NT-048 (2026-10-06): `servable_runs` searches runs/ recursively and excludes only engine runs, so notebook 07 loaded NT-075's speed-check run 20261006T070748Z-426de4f-cf562469 (old code, close-only, 4 families) as 'the newest run'. D-013: notebooks show the shipped defaults. The executed notebook was discarded, not committed.
+- **acceptance:** (1) The default selection takes only runs directly under the runs root; study runs (runs/experiments/**, runs/ablations/**) and engine runs need a flag or an explicit RUN_DIR (tests a-d). (2) When only excluded runs exist, the error lists them and names RUN_DIR (test). (3) Docstring and scripts/notebooks/README.md updated. (4) Fast suite, ruff.
+- **source:** lead, notebook routine of NT-048 (2026-10-06)
 
 ## Done log
 
