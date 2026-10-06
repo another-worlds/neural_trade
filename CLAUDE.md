@@ -29,7 +29,9 @@ horizons) is the reference setup, the only one tested in the MVP (D-022). Packag
    commit it; record it in STATUS and ask the owner. If behind origin: fast-forward only when the tree is clean
    (no modified or staged tracked files); otherwise ask. If this checkout is
    C:/Users/Step/Documents/neural_trade and D:/nt/neural_trade exists, do not work here: the working
-   copy is D: (D-030); tell the owner.
+   copy is D: (D-030); tell the owner. **If this checkout is `D:/nt/nt_tactical` (branch
+   `nt-tactical`), this is the tactical session (D-062): [docs/TACTICAL.md](docs/TACTICAL.md) replaces
+   steps 1, 3 and 4 and STATUS "Next".**
 3. Check CI on the pushed head and list the open pull requests (docs/RUNBOOK.md "CI"). A PR from
    a remote session into `remediation/plan` is QA'd and merged like an implementer branch (D-033).
 4. Then work: the item the owner names, otherwise the `/next` skill. **Keep going** through the
@@ -72,6 +74,10 @@ Pointers only; the rule lives where the pointer says.
   Any waiting that needs active polling goes to the Haiku 4.5 `tracker`.
 - **Remote sessions** (owner, D-033): a remote (cloud) session runs review sweeps and takes no
   backlog items; its PRs into `remediation/plan` are QA'd and merged by the lead.
+- **Tactical session** (owner, D-062): a separate local session for exploratory experiments on branch
+  `nt-tactical` ([docs/TACTICAL.md](docs/TACTICAL.md)). The MVP has GPU priority; every GPU job writes
+  `D:/nt/gpu.lock` (RUNBOOK "GPU rules"). The MVP lead reads its journal's "For the MVP lead" section
+  between items and handles its PRs like a remote session's.
 - **Speed** (owner, D-018): the per-step training path must not get slower (definition of done).
 - **Evidence** (D-012, D-020, VISION "Principles"): no choice uses test-block numbers, the notebooks'
   and the leaderboard's test columns included.

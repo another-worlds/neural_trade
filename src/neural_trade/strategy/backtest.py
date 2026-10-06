@@ -151,6 +151,9 @@ class BacktestResult:
     mode: str = "discrete"
     target_path: Optional[np.ndarray] = None
     targets: List[Dict[str, Any]] = field(default_factory=list)
+    # Private: what the strategy was asked and answered at each bar (exit requests, each order's
+    # tp/sl/max_hold); only ``assert_no_lookahead`` reads it. Not part of equality or repr.
+    _trace: List[Dict[str, Any]] = field(default_factory=list, repr=False, compare=False)
 
     def trades_frame(self):
         import pandas as pd
@@ -193,6 +196,7 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
     position = np.zeros(n)
     trades: List[Trade] = []
     decisions: List[Dict[str, Any]] = []
+    trace: List[Dict[str, Any]] = []
     pos: Optional[_Position] = None
     pending_entry: Optional[Order] = None
     pending_exit: Optional[str] = None
@@ -263,11 +267,15 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
             else:
                 pending_exit = strategy.exit_signal(signals, t, "LONG" if pos.sign > 0 else "SHORT", held,
                                                     pos.entry_mid, pos.order)
+                trace.append({"bar": t, "kind": "exit", "request": pending_exit})
         elif t >= warmup and t < n - 1:
             pending_entry = strategy.decide(signals, t)
             if pending_entry is not None:
                 decisions.append({"bar": t, "side": pending_entry.side, "size": pending_entry.size_frac,
                                   "reason": pending_entry.reason})
+                o_ = pending_entry
+                trace.append({"bar": t, "kind": "order", "tp": o_.tp, "sl": o_.sl, "tp_is_offset": o_.tp_is_offset,
+                              "max_hold": o_.max_hold})
         if t == n - 1 and pos is not None and cfg.mark_to_market_at_end:
             close_position(t, c, "EOW")
         unreal = pos.sign * pos.qty * (c - pos.entry_mid) if pos is not None else 0.0
@@ -282,7 +290,7 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
     summary["gross_pnl"] = float(sum(t.gross_pnl for t in trades))
     summary["net_pnl"] = float(sum(t.net_pnl for t in trades))
     return BacktestResult(getattr(strategy, "name", type(strategy).__name__), equity, equity_gross, trades,
-                          decisions, position, summary, cfg)
+                          decisions, position, summary, cfg, _trace=trace)
 
 
 # ------------------------------------------------------------------ exposure mode
@@ -595,20 +603,41 @@ def _perturb_after(frame: PredictionFrame, bars: Bars, t: int, rng) -> tuple:
     return f2, b2
 
 
+def _default_probes(base: BacktestResult, n: int, count: int) -> List[int]:
+    """Probe bars for the self-test. A one-bar peek at bar t' reads a bar that differs only when the
+    probe is t' itself, so the probes are spread over the bars where the strategy was actually asked
+    something (decisions, exit requests, evaluated targets) plus a uniform grid."""
+    asked = sorted({int(d["bar"]) for d in base.decisions} | {int(r["bar"]) for r in base._trace}
+                   | {int(d["bar"]) for d in base.targets})
+    asked = [t for t in asked if t < n - 1]
+    picks = [asked[int(i)] for i in np.linspace(0, len(asked) - 1, min(count, len(asked)))] if asked else []
+    grid = [int(i) for i in np.linspace(n // 8, n - 2, 4)] if n > 8 else []
+    return sorted(set(picks) | set(grid))
+
+
 def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Callable[[], Strategy], *,
                         var_scale: float, probes: Sequence[int] = (), config: Optional[BacktestConfig] = None,
-                        seed: int = 0) -> None:
-    """Perturb every prediction and bar AFTER t; the equity curve and every decision up to t
-    must be unchanged. Raises AssertionError naming the first differing bar.
+                        seed: int = 0, n_probes: int = 24) -> None:
+    """Perturb every prediction and bar AFTER t; everything the strategy was asked and answered up to
+    t must be unchanged. Raises AssertionError naming the first differing bar. Compared, per probe t:
 
-    Exposure strategies too: their fills up to bar t (``decisions`` with ``fill_bar`` <= t) and every
+    * the ``decisions`` (bar, side, size, reason) with bar <= t;
+    * the trace of the engine's questions to the strategy at bars <= t: every ``exit_signal`` answer,
+      and each order's ``tp``, ``sl``, ``tp_is_offset`` and ``max_hold`` (the ``decisions`` dicts carry
+      none of these);
+    * the equity up to the mark at bar t's close.
+
+    Exposure strategies: their fills up to bar t (``decisions`` with ``fill_bar`` <= t) and every
     target evaluated at a decision bar <= t (``targets``) must be unchanged; ``SignalFrame.build``
-    rebuilds the EWMA sigma from the perturbed closes."""
+    rebuilds the EWMA sigma from the perturbed closes.
+
+    Without ``probes``, up to ``n_probes`` bars are taken from those the base run asked the strategy
+    about, plus a grid of 4 (see ``_default_probes``); a one-bar peek is caught only at its own bar."""
     cfg = config or BacktestConfig()
     rng = np.random.default_rng(seed)
     n = len(frame)
-    probes = list(probes) or [n // 4, n // 2, (3 * n) // 4]
     base = run_backtest(SignalFrame.build(frame, var_scale), bars, make_strategy(), cfg)
+    probes = list(probes) or _default_probes(base, n, n_probes)
     for t in probes:
         f2, b2 = _perturb_after(frame, bars, t, rng)
         other = run_backtest(SignalFrame.build(f2, var_scale), b2, make_strategy(), cfg)
@@ -617,6 +646,9 @@ def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Calla
         after = [d for d in other.decisions if d[at] <= t]
         if before != after:
             raise AssertionError(f"look-ahead: decisions up to bar {t} changed when data after {t} changed")
+        if [r for r in base._trace if r["bar"] <= t] != [r for r in other._trace if r["bar"] <= t]:
+            raise AssertionError(f"look-ahead: exit requests or order levels up to bar {t} changed when data "
+                                 f"after {t} changed")
         if [d for d in base.targets if d["bar"] <= t] != [d for d in other.targets if d["bar"] <= t]:
             raise AssertionError(f"look-ahead: targets up to bar {t} changed when data after {t} changed")
         # equity[t + 1] is the mark at bar t's close

@@ -139,7 +139,7 @@ def test_no_lookahead_all_strategies(name):
     f, bars = _frame(500, seed=3)
     vs = var_scale_from(f)
     cal = SignalFrame.build(_frame(500, seed=11)[0], vs)   # calibration-block signals (another sample)
-    assert_no_lookahead(f, bars, lambda: build_strategy(name, calibration=cal), var_scale=vs, probes=(120, 250, 380))
+    assert_no_lookahead(f, bars, lambda: build_strategy(name, calibration=cal), var_scale=vs)   # the default probes
 
 
 def test_lookahead_probe_catches_a_peeking_strategy():
@@ -153,6 +153,55 @@ def test_lookahead_probe_catches_a_peeking_strategy():
     f, bars = _frame(300, seed=4)
     with pytest.raises(AssertionError, match="look-ahead"):
         assert_no_lookahead(f, bars, Peek, var_scale=1.0, probes=(100,))
+
+
+def _one_bar_peek(where):
+    """A strategy that reads bar t + 1 (and nothing further) in ``decide``, ``exit_signal`` or its TP level."""
+    @dataclass
+    class Peek(Strategy):
+        name: ClassVar[str] = f"peek_{where}"
+
+        def decide(self, s, t):
+            if t + 1 >= len(s):
+                return None
+            if where == "decide":
+                return Order("LONG", max_hold=5) if s.close[t + 1] > s.close[t] else None
+            if t % 7:
+                return None
+            # the TP level sits one bar's move above the NEXT close; the order itself is unconditional
+            return Order("LONG", tp=float(s.close[t + 1]) + 1000.0, max_hold=5) if where == "tp" else Order("LONG", max_hold=5)
+
+        def exit_signal(self, s, t, side, held, entry_price, order):
+            return "PEEK" if where == "exit" and t + 1 < len(s) and s.close[t + 1] < s.close[t] else None
+
+    return Peek
+
+
+@pytest.mark.parametrize("where", ["decide", "exit", "tp"])
+def test_default_probes_catch_a_one_bar_peek(where):
+    f, bars = _frame(500, seed=4)
+    with pytest.raises(AssertionError, match="look-ahead"):
+        assert_no_lookahead(f, bars, _one_bar_peek(where), var_scale=1.0)
+
+
+def test_a_causal_strategy_with_levels_passes_the_default_probes():
+    @dataclass
+    class Causal(_one_bar_peek("tp")):
+        def decide(self, s, t):
+            return Order("LONG", tp=float(s.close[t]) + 50.0, sl=float(s.close[t]) - 50.0, max_hold=5) if t % 7 == 0 else None
+
+        def exit_signal(self, s, t, side, held, entry_price, order):
+            return "X" if s.close[t] < s.close[t - 1] else None
+
+    f, bars = _frame(500, seed=4)
+    assert_no_lookahead(f, bars, Causal, var_scale=1.0)
+
+
+def test_trace_leaves_public_results_alone():
+    f, bars = _frame(300, seed=6)
+    res = run_backtest(SignalFrame.build(f, 1.0), bars, build_strategy("liberal"))
+    assert res._trace and all(set(d) == {"bar", "side", "size", "reason"} for d in res.decisions)
+    assert "_trace" not in repr(res) and "_trace" not in res.to_dict()
 
 
 def test_trailing_features_are_causal():
