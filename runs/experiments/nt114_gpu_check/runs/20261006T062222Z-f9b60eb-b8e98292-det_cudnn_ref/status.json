@@ -1,0 +1,12 @@
+{
+  "run_id": "20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref",
+  "epochs_completed": 3,
+  "done": true,
+  "sec_per_step": 0.21056682832779422,
+  "n_errors": 0,
+  "elapsed_seconds": 92.41667413711548,
+  "val_loss": 8.688572883605957,
+  "weights_epoch": 3,
+  "weights_val_loss": 8.688572883605957,
+  "weights_source": "best validation epoch, restored after training (EarlyStopping did not stop the run: 3 epochs ran)"
+}
