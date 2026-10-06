@@ -124,7 +124,7 @@ behaviour or `master` goes to the owner.
   minutes or hours is for questions a 6-hour block cannot answer.
 - **Quality verdicts** (direction, CRPS, trading) use the micro layout with at least 5 judgement folds (D-046);
   360-day runs only confirm what the micro layout adopted.
-- **Tests:** the suites run with `-n 8` (pytest-xdist). QA runs the tests an item touches plus one full suite;
+- **Tests:** the suites run with `-n 8` (pytest-xdist). QA runs the tests an item touches plus one fast suite (the slow suite only per D-059);
   the lead does not re-run a suite QA ran on the same code. No two full suites run at the same time in different
   checkouts: an agent that needs one while another runs waits for it, or runs only its targeted tests.
 
@@ -197,8 +197,8 @@ and the decisions they settle into DECISIONS.
 An item is `done` when all of these hold, with the evidence in the backlog entry:
 
 - its acceptance criteria are met, and QA says PASS with evidence;
-- the fast suite passes, ruff is clean, and the slow suite passes if training, serving or notebooks
-  were touched; if tests were added, `TESTING_DOCUMENTATION.md` is regenerated;
+- the fast suite passes, ruff is clean, and (D-059) the slow suite passes before a merge that touches
+  training, serving or notebooks, run once per merge batch, not once per item or per repair round; if tests were added, `TESTING_DOCUMENTATION.md` is regenerated;
 - if loss, model, indicator or train-step code changed, and once NT-036 has added the `stability`
   pytest marker: `-m stability` passes (strict mode, masks off);
 - if it touches code that runs every training step: `sec_per_step` in a real run's `status.json` is

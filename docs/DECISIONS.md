@@ -709,3 +709,13 @@ that extend or partly replace an entry.
 - **Working copy (amends D-030):** `D:/nt/neural_trade`; worktrees and scratch live under `D:/nt/`. The
   editable install's `.pth` points to `D:\nt\neural_trade\src` (owner-approved env change, 2026-10-06), and
   `git worktree repair` re-linked the 28 worktrees.
+
+## D-059 The slow suite runs once per merge batch, not per item (owner, 2026-10-06)
+- **Context:** the owner asked why waiting and token cost grew; full fast + slow suites were run by QA on every
+  item and every repair round (about 3.5 + 16 minutes each). Offered options: keep CI to lint plus the fast
+  suite, drop nightly, or run the slow suite only before merging large changes. The owner chose the last ("3").
+- **Decision:** QA of an item runs its targeted tests plus one fast suite, ruff and, for loss/model/indicator
+  changes, `-m stability`. The slow suite runs once before a merge batch that touches training, serving or
+  notebooks (the lead integrates several items, then one slow run on the merged head). CI and nightly are
+  unchanged; the owner did not choose to drop them.
+- **Not changed:** the definition of done's other clauses, the golden-run and notebook rules.
