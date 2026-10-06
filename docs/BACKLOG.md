@@ -136,7 +136,7 @@ changes).
 | [NT-101](#nt-101) | P1 | feature | implementer | done | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
 | [NT-102](#nt-102) | P1 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
 | [NT-103](#nt-103) | P1 | feature | implementer | todo | Epoch selection on proper scores (EPOCH_SELECT_METRIC); owner allowed the switch (D-053) |
-| [NT-104](#nt-104) | P1 | feature | implementer | in-progress | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
+| [NT-104](#nt-104) | P1 | feature | implementer | done | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
 | [NT-105](#nt-105) | P2 | feature | implementer | in-progress | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
 | [NT-106](#nt-106) | P3 | feature | implementer | in-progress | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
@@ -208,6 +208,9 @@ changes).
 | [NT-173](#nt-173) | P1 | research | experimenter | todo | Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1 |
 | [NT-174](#nt-174) | P2 | decision | owner | todo | Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124) |
 | [NT-175](#nt-175) | P3 | bug | implementer | todo | Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match |
+| [NT-176](#nt-176) | P2 | research | experimenter | todo | Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1 |
+| [NT-177](#nt-177) | P2 | bug | implementer | todo | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
+| [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
 
 ## Items
 
@@ -1462,7 +1465,7 @@ changes).
 
 **Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B**
 
-- **status:** in-progress (2026-10-01): (1) and (2) done, QA (Opus) FAIL on a68d72b (linear_indicators unnormalised: loss 542,944, 50% saturated P(up); share not reported) -> repair 1 e15e4f6 -> PASS; merged. gru_small 77,138 params and linear_indicators 7,610 (default LOOKBACK 60) vs gru_attention 316,751; DIRECTION_DEEP_ZERO_INIT; one covariance-share helper (NT-110). Open: (3) the capacity A/B. SPEC notes from QA: linear_indicators applies a per-sample LayerNormalization over its 246 pooled+last-bar features (a nonlinear readout; per-feature standardisation fit on the training block is the strictly linear alternative); the report should print tower_share beside skip_share (a covariance share can leave [0, 1]: gru_small h0 skip 1.074, tower -0.074).
+- **status:** done (2026-10-06): (3) the capacity A/B `capacity_v1`, experimenter (Sonnet medium) on nt-104-ab, merged: SPEC 0557e20 before any scored cell, 15 cells on the micro layout (N_FOLDS 100, judgement folds -96..-92, 5 pairs, seed 0), 2.35 GPU-hours of 3, runs/experiments/capacity_v1/REPORT.md. Verdicts by the pre-registered rule: gru_small h1 AUC -0.0121 CI [-0.0241, -0.0001], linear_indicators -0.0262 CI [-0.0551, +0.0027]: INCONCLUSIVE for both; nothing supports changing MODEL_NAME (default stays gru_attention). QA (Opus medium) PASS: every number recomputed from predictions_oos.npz to 4 decimals, pre-registration order proven, retried cell checked (bit-identical training), code identity 61014d0 without dirty; REPORT corrected for two stale numbers. Read with: epoch cap 14 probably under-trains the small arms (control stopped early in 3 of 5 cells, the small arms ran to the cap); the paired-t interval is probably too narrow (nested training blocks, one seed); every arm's calibrated h1 Brier is above 0.25 (worse than a constant). One re-run is allowed by the SPEC (more folds, EPOCHS 20, within 3 GPU-hours, a new SPEC) if the owner wants a decision. Follow-ups: NT-176, NT-177, NT-178. Earlier history: in-progress (2026-10-01): (1) and (2) done, QA (Opus) FAIL on a68d72b (linear_indicators unnormalised: loss 542,944, 50% saturated P(up); share not reported) -> repair 1 e15e4f6 -> PASS; merged. gru_small 77,138 params and linear_indicators 7,610 (default LOOKBACK 60) vs gru_attention 316,751; DIRECTION_DEEP_ZERO_INIT; one covariance-share helper (NT-110). Open: (3) the capacity A/B. SPEC notes from QA: linear_indicators applies a per-sample LayerNormalization over its 246 pooled+last-bar features (a nonlinear readout; per-feature standardisation fit on the training block is the strictly linear alternative); the report should print tower_share beside skip_share (a covariance share can leave [0, 1]: gru_small h0 skip 1.074, tower -0.074).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/models/ (new registered variants), src/neural_trade/core/config.py, tests/; runs/experiments/capacity_v1/
 - **depends on:** NT-099 or NT-101 (the objective), NT-032
@@ -2326,6 +2329,42 @@ changes).
 - **why:** qa-deep on NT-030 (2026-10-06): (a) when every trial is failed or ineligible, an Optuna sweep ends `complete` with winner null, no stop_reason or note, and the CLI exits 0; quick mode gives a null leader the same way; (b) surviving mutants N5 (a missing status.json alone is not a failure), N13 (an empty metrics.jsonl is not a failure), N14 (status.json val_loss unchecked), N10 (the quick-leader assertion `leader is None or ...` cannot fail); (c) `seed_everything(deterministic=True)` is not a Config field, so a deterministic run of an otherwise identical setup counts as the same setup for sec_per_step (the NT-114 cuDNN reference ran 0.2106 s/step in that mode against 0.1735 for the default).
 - **acceptance:** (1) sweep.json carries an explicit 'no eligible trial: no re-run, no winner' with the per-trial reasons, the CLI prints it and exits non-zero (tests, optuna and quick). (2) Tests kill N5, N10, N13, N14. (3) A run whose record says deterministic mode is not matched to a non-deterministic setup (needs NT-164 to record the mode). (4) Fast suite, ruff.
 - **source:** qa-deep on NT-030 (2026-10-06)
+
+### NT-176
+
+**Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **area:** runs/experiments/ (SPEC, REPORT); src/neural_trade/calibration/ only through a follow-up implementer item
+- **depends on:** NT-124, NT-174
+- **why:** QA of NT-104 (2026-10-06): in all 45 cell-horizons of capacity_v1 the calibrated h1 Brier is above 0.25 and BCE above ln 2 (control's lowest 0.2502 and 0.6968): the calibrated P(up) is worse out of sample than a constant 0.5 for every arm. Together with NT-124 (the fixed temperature fit goes to the upper bound on the reference run) the calibration of the direction head, and every strategy that reads it (D-009), has no demonstrated value.
+- **acceptance:** (1) A SPEC (CPU on stored predictions, no GPU): for stored runs with predictions (capacity_v1, loss_prune_v1, the reference runs) compare, per fold and horizon, the out-of-sample Brier/BCE of raw P(up), temperature-scaled P(up) (old and NT-124's fit) and a constant (train base rate), with block-bootstrap intervals (D-012). (2) The verdict in a REPORT: does any calibration variant beat the constant out of sample. (3) A recommendation for NT-174 (the owner's decision) from the numbers.
+- **source:** QA of NT-104 (2026-10-06)
+
+### NT-177
+
+**split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/data/processor.py (split_arrays ~86-90), tests/
+- **depends on:** none
+- **why:** QA of NT-104 (2026-10-06): `split_arrays` builds model windows for the whole long file (4,598,119 x 60 x 5 float32, 5.14 GiB) before applying MAX_SEQUENCE_COUNT; this caused the gru_small f-93 MemoryError in capacity_v1's scorer, and low-memory moments make fast-suite tests flaky (test_peak_memory_stays_small_on_a_month_of_bars failed once with an ArrayMemoryError today).
+- **acceptance:** (1) Cut to the newest MAX_SEQUENCE_COUNT sequences, then window, with identical outputs: a test on a synthetic frame comparing old and new (same arrays) and a peak-memory test on a long frame. (2) Golden run unchanged (455/455 on the current record). (3) Fast suite, ruff.
+- **source:** QA of NT-104 (2026-10-06)
+
+### NT-178
+
+**D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it**
+
+- **status:** todo
+- **priority / type / role:** P3 / docs / lead
+- **area:** docs/DECISIONS.md (a new entry), OPERATING_MODEL if needed
+- **depends on:** none
+- **why:** QA of NT-104 (2026-10-06): the five judgement folds share nested training data and all cells use seed 0, so the paired-t interval over folds is probably anti-conservative; D-046's simulation did not model shared training data. No verdict of capacity_v1 depends on it (a wider interval is also inconclusive).
+- **acceptance:** (1) A DECISIONS entry (the lead's reading, citing the QA report) says so and what a SPEC must state (training-block overlap, a sensitivity analysis with a wider interval). (2) NT-032's comparator docs mention it.
+- **source:** QA of NT-104 (2026-10-06)
 
 ## Done log
 
