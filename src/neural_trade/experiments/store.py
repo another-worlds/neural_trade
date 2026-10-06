@@ -30,6 +30,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from neural_trade.utils.atomic import replace_with_retry
+
 ENGINE_SUBTREE = "scenarios"
 INDEX_NAME = "index.sqlite"
 INDEX_SCHEMA_VERSION = 1
@@ -254,7 +256,7 @@ class RunStore:
         for scenario, dirs in by_scenario.items():
             fresh.replace_scenario(scenario, dirs, self.root)
         target.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(tmp, target)
+        replace_with_retry(tmp, target)
         return RunIndex(target)
 
 

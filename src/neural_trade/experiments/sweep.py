@@ -77,6 +77,7 @@ from neural_trade.experiments.dataset import setup_of
 from neural_trade.experiments.runner import Runner
 from neural_trade.experiments.scenario import NAME_RE, RESERVED_FIELDS, Scenario, short_hash
 from neural_trade.experiments.store import RunStore
+from neural_trade.utils.atomic import atomic_write_json
 
 logger = logging.getLogger(__name__)
 
