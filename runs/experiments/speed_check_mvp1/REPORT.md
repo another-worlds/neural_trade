@@ -53,6 +53,11 @@ subagent could not write `*.md` files.
   as the notebooks' +8%. Run-to-run noise is far larger: A alone ranges over 2x.
 - **No call either way.** A regression can be neither claimed nor excluded at the 5% level, and the SPEC allows no
   further runs.
+- **The primary metric is one epoch.** `status.json` sec_per_step, the SPEC's primary metric, is the LAST epoch's
+  step time only (telemetry/epoch_logger.py:127, :136): one noisy epoch out of 20. A r1's last epoch is 0.1997,
+  against a median of 0.1075 over its epochs >= 1. QA's sensitivity check used each run's median over epochs >= 1
+  instead: A 0.1160, B 0.1235, r 1.065, ranges overlap. The verdict is still inconclusive. (Added after QA,
+  2026-10-06; NT-163.)
 - **Likely source of the noise.** The host's CPU was 32-61% busy during every run, from other agents' CPU work and
   the training process itself. The input pipeline and launch overhead are CPU-side.
 - **One borderline run.** B r1 (60.9%) sits at the SPEC's 60% repeat threshold. It was not repeated, because the
