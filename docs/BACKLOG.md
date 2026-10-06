@@ -215,6 +215,7 @@ changes).
 | [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
 | [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
 | [NT-182](#nt-182) | P1 | bug | implementer | todo | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
+| [NT-183](#nt-183) | P1 | bug | implementer | in-progress | Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan) |
 
 ## Items
 
@@ -2417,6 +2418,18 @@ changes).
 - **why:** NT-034's implementer (2026-10-06): run_id = stamp (second) + sha + config hash + cell name, and the index's run_id is the PRIMARY KEY with INSERT OR REPLACE. Two scenarios whose cells share a config hash and finish a cell in the same second overwrite each other's index row. Reproduced deterministically by the old tests/test_nt033_baselines.py::test_a_rule_cell_scores_the_same_block_and_costs_as_a_trained_cell (a rule cell and a trained cell of one fold got the same run_id; the rule row was lost). Plausible in NT-050: the three TA-rule scenarios (nt033_ta_ma_cross, nt033_ta_rsi, nt033_ta_bollinger) have cells of about 0.1 s that differ only in their strategy, and the learned and frozen-twin scenarios run beside them. The engine already retries on a run-id collision for DIRECTORIES (runner.py ~248-254) but the index row is silently replaced.
 - **acceptance:** (1) A test with two minimal scenarios in one store whose cells have the same config hash and start in the same second: both rows are in the index and both run directories exist. (2) The run_id includes the scenario name and/or a uniqueness suffix; existing run ids and stored cells keep resolving (the index rebuilt from the stored dirs equals the kept one; old ids unchanged). (3) INSERT OR REPLACE becomes a refusal that names both cells when the SAME run_id is inserted twice with different content (test). (4) Scenario identity (spec_hash/settings_hash/config hashes) unchanged. (5) Fast suite, ruff.
 - **source:** NT-034 implementer (2026-10-06)
+
+### NT-183
+
+**Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan)**
+
+- **status:** in-progress (2026-10-06): implementer on nt-183
+- **priority / type / role:** P1 / bug / implementer
+- **area:** src/neural_trade/experiments/claims.py, tests/test_sweep.py
+- **depends on:** NT-030 (done)
+- **why:** CI run 37504490746 on 8bbf8b7 (Linux): tests/test_sweep.py::test_a_claim_file_being_written_is_held_not_stolen_and_a_stale_takeover_is_atomic fails with `assert 2 == 1` (two winners of one stale claim); it passed locally and on the previous CI run by timing luck. qa-deep's earlier P3 on NT-030 ('two takers of one stale claim: both claim') was not closed by repair 2. The race: A and B both decide the same claim is stale; A renames it away and creates its fresh claim; B then renames A's FRESH claim away and creates its own.
+- **acceptance:** (1) A deterministic, barrier-driven reproduction of the interleaving fails on today's code. (2) The takeover protocol is correct on Windows and POSIX without timing assumptions (an exclusive takeover sentinel with its own stale rule, and a re-verification of the stale content before replacing it); the docstring states the proof sketch. (3) 8 racers x 100 rounds: exactly one winner each round; a live claim is never taken over; a dead-pid claim always is. (4) The test file loops 50 times without a failure. (5) Fast suite, ruff; CI green on the merge push.
+- **source:** CI run 37504490746 (2026-10-06)
 
 ## Done log
 
