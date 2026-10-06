@@ -3,68 +3,99 @@
 # Committed BEFORE the harness's first real run (NT-051) and never changed afterwards: every harness
 # report carries this file's sha256, so a changed file is a different pre-registration. A threshold that
 # turns out wrong is replaced by a NEW file name (stability_thresholds_v2.yaml) and a new study, not edited.
+# (Repair round 1 of NT-038 rewrote this file once, before any real run, after QA applied the first draft to 54
+# stored real runs and found it failing healthy ones. The evidence below is that measurement, QA's
+# nt038_real_thresholds.log, and a survey of the same stored runs' metrics.jsonl and result.json:
+# capacity_v1, loss_prune_v1, reference_default, micro_ohlcv_duel, micro_horizons; 48 finished runs.)
 #
-# A cell (one case x one seed, strict mode: STRICT_LOSS_MASKS true, masks off) PASSES when every check
-# below holds. A case passes when all of its seeds pass. A fault-injection case (expect: detect) passes
-# when the run STOPS with UnstableTrainingError and the error names the injected loss term (a masked
-# term counter), see `fault_detection`.
+# A cell (one case x one seed, strict mode: STRICT_LOSS_MASKS true, masks off) PASSES when every ENFORCED check
+# below holds. A check listed under `report_only` is computed, shown in the report and indexed, and never fails
+# a cell. A check that cannot be computed (the number was not logged) is "not evaluated": reported, never a
+# failure. A case passes when all of its seeds pass. A fault-injection case (expect: detect) passes when the run
+# STOPS with UnstableTrainingError and the error names the injected loss term, see `fault_detection`.
 #
-# The numbers are failure thresholds, deliberately lax: each marks a run that is plainly broken, not one
-# that is merely poor. Where the repository has a measurement, it is cited; where it has none, the
-# rationale says so (those are the ones QA should look at first).
+# The numbers are failure thresholds, deliberately lax: each marks a run that is plainly broken, not one that
+# is merely poor. The "observed" ranges are those of the stored healthy runs above.
 schema_version: 1
 name: stability_thresholds_v1
 
 checks:
   # 1. Loss finite. Every `loss` and `val_loss` of every epoch, and the served epoch's val loss, is a finite
-  #    number (sweep.run_health, the check NT-030 prunes on). Not a number to tune: a NaN or inf loss is a
-  #    failed run (D-026).
+  #    number (sweep.run_health, the check NT-030 prunes on). A NaN or inf loss is a failed run (D-026).
   loss_finite: true
 
-  # 2. Non-finite step rate: steps whose total loss or any gradient was non-finite (the step guard zeroes the
-  #    update and counts it, NT-036), divided by the steps trained. Zero: a clean case has none (the NT-036
-  #    test `test_short_run_on_the_default_config_has_zero_nonfinite_steps...` holds this on the default
-  #    config, and sweep.HEALTH_MAX_NONFINITE_GRAD_STEPS is 0). Fault cases are judged by `fault_detection`.
+  # 2. Loss magnitude and divergence. Observed (49 runs): training loss 3.15-10.55, val loss 3.74-15.47, the
+  #    largest training loss of a run over its epoch-1 value exactly 1.0 (it falls in every stored run), the fall
+  #    from the first to the last epoch 0.19-0.52. A finite loss that exploded (QA's synthetic run: 1.2e31) passes
+  #    "finite" and must still fail:
+  #      - max_abs_loss: no `loss` or `val_loss` above 1000 (65x the largest observed value);
+  #      - max_loss_over_first: no epoch's training loss above 2.0 x the first epoch's (twice the observed
+  #        maximum of 1.0), checked from 2 epochs on (one epoch has nothing to compare: not evaluated).
+  max_abs_loss: 1000.0
+  max_loss_over_first: 2.0
+
+  # 3. Non-finite step rate: steps whose total loss or any gradient was non-finite (the step guard zeroes the
+  #    update and counts it, NT-036), divided by the steps trained. Zero: the NT-036 test
+  #    `test_short_run_on_the_default_config_has_zero_nonfinite_steps...` holds this on the default config and
+  #    sweep.HEALTH_MAX_NONFINITE_GRAD_STEPS is 0. A run whose epochs did not log `n_steps` (runs before NT-037;
+  #    33 of 54 stored runs) is "not evaluated". Fault cases are judged by `fault_detection`.
   max_nonfinite_step_rate: 0.0
 
-  # 3. Clipped share: steps whose pre-clip gradient norm exceeded GRAD_CLIP_NORM, per optimizer group (main,
-  #    indicator), divided by the steps trained. NT-036's test only demands "not clipped on EVERY step of the
-  #    whole run"; the default model measured pre-clip norms up to 171 (main) and 235 (indicator) against the
-  #    clip of 20, so early epochs legitimately clip nearly every step (that test's docstring). 0.995 keeps that
-  #    invariant with room for a short run's rounding; a screen's 0.5 (configs/screens/example_6h.yaml) would
-  #    fail the shipped default and is not used.
+  # 4. Clipped share: steps whose pre-clip gradient norm exceeded GRAD_CLIP_NORM, per optimizer group (main,
+  #    indicator), divided by the steps trained. Observed on the 16 stored runs that logged it: 0.004-0.20 (main),
+  #    0.0-0.19 (indicator). NT-036's own invariant is only "not clipped on EVERY step of the whole run", and its
+  #    test notes the default model legitimately clips nearly every step of early epochs. 0.995 keeps that
+  #    invariant. Not evaluated when the run did not log it.
   max_clipped_share: 0.995
 
-  # 4. Gradient share of any one loss term: the largest mean probe_grad_share_<term>_<group> over terms and
-  #    groups (NT-037 per-term probe, which the harness switches on). One term carrying more than 95% of a
-  #    group's gradient norm means the others do not train. 0.95 is the screen's max_term_share
-  #    (experiments/screen.py rules, loss VALUE share); there is no measurement of gradient shares on a real
-  #    run behind it yet (NT-098 reports them): treat it as unmeasured.
+  # 5. Gradient share of any one loss term: the largest mean probe_grad_share_<term>_<group> (NT-037 probe).
+  #    REPORT ONLY: no stored run has probe data (NT-098, the first measurement of gradient shares, is todo), so
+  #    0.95 (the screen's max_term_share, a loss-VALUE share) has no evidence behind it. It becomes enforced in a
+  #    successor file once NT-098 has measured shares on real runs.
   max_term_gradient_share: 0.95
 
-  # 5. Variance head at VAR_FLOOR: per epoch and horizon, var_at_floor / dir_n (the share of samples whose
+  # 6. Variance head at VAR_FLOOR: per epoch and horizon, var_at_floor / dir_n (the share of samples whose
   #    variance sat at the floor). 1.0 is the "head dead" state NT-036 asserts never happens on the default
-  #    config; the check is "below 0.999" (every sample at the floor in some epoch fails).
+  #    config. Observed: 0.0 in every stored run that logged it. Fails above 0.999.
   max_var_at_floor_share: 0.999
 
-  # 6. Learned periods at their bound (health_block periods_at_bound) in the last epoch: none allowed, as in
-  #    the NT-036 default-config test.
+  # 7. Learned periods at their bound (health_block periods_at_bound), last epoch. REPORT ONLY (D-037: a period at
+  #    the data-derived bound is counted and reported, not a failure). 8 of 16 healthy capacity_v1 cells have a
+  #    period at the bound (a donchian period at 60), so a limit of 0 fails healthy runs.
   max_periods_at_bound: 0
 
-  # 7. Non-finite loss terms: the NT-036 masked_* counters (a term whose value was NaN or inf before the mask,
-  #    counted in strict mode too) summed over the run. Zero on a clean case (the same test asserts it for the
-  #    head outputs).
+  # 8. Non-finite loss terms: the NT-036 masked_* counters (a term whose value was NaN or inf before the mask,
+  #    counted in strict mode too) summed over the run. Zero on a clean case. Observed 0 where logged.
   max_masked_term_steps: 0
 
-  # 8. Coverage: the 90% interval's empirical coverage on the scored block, per horizon (scores
-  #    `<h>/variance/coverage90`), checked only when the run was scored. 0.25 is far below the 0.90 target
-  #    (conformal coverage 0.90-0.91 on test, D-008): it catches a collapsed or exploded variance head, not a
-  #    calibration defect. Evidence is thin and says why it is not higher: the harness's own tiny CPU control
-  #    (1 epoch, 700 sequences, one close-only instance per family) measured 0.483 on its lowest horizon with
-  #    the variance head still at its start, and the wide-span-horizon case 0.823; a first draft of 0.5 failed
-  #    that healthy control, so it was lowered BEFORE any harness run on the reference setup. Unmeasured at
-  #    reference size.
+  # 9. The variance head, read from the scored block (result.json scores `<h>/variance/nll` and `/crps`, and the
+  #    constant-variance baseline's `baseline/const_var/<h>/variance/*`). Observed on 48 runs x 3 horizons:
+  #    NLL 5.19-8.32; NLL minus the constant-variance baseline's -1.91 to +0.49; CRPS over the baseline's CRPS
+  #    0.933-1.006 (the head is never meaningfully worse than a constant variance). A broken head shows as NLL in
+  #    the hundreds or beyond (QA's variance pinned at VAR_CAP: 1e3; losses at 1e31: 1e12). Fails when, on any
+  #    horizon:
+  #      - max_variance_nll: NLL above 20 (2.4x the observed maximum);
+  #      - max_variance_nll_over_const: NLL more than 2.0 above the constant baseline's (4x the observed excess);
+  #      - max_variance_crps_over_const: CRPS above 1.5 x the baseline's (1.5x the observed maximum).
+  #    Not evaluated when the run was not scored. The share of variance at VAR_CAP is not logged by any run, so no
+  #    cap-share check exists; the NLL limits catch a head pinned there.
+  max_variance_nll: 20.0
+  max_variance_nll_over_const: 2.0
+  max_variance_crps_over_const: 1.5
+
+  # 10. Coverage: the 90% interval's empirical coverage on the scored block, per horizon (scores
+  #     `<h>/variance/coverage90`). It does NOT read the variance head: with the default CONFORMAL_SCALE
+  #     realized_vol (D-008) the interval is the served delta +- a quantile x the window's realised volatility x
+  #     sqrt(h), so this check catches a broken delta head or a broken scale, not a variance-head defect (check 9
+  #     reads the head). Observed on stored runs: 0.850-0.932 (lowest horizon of each run). Checked only on a
+  #     horizon with n_eff >= min_n_eff effective samples (`<h>/n_eff`, D-012: bars share most of their target
+  #     bars; a run with n_eff 2 measured coverage 0.037 by sampling noise alone), else not evaluated and reported.
+  #     0.25 is far below the 0.90 target and below every observed value: it fails only a collapsed interval.
   min_coverage90: 0.25
+  min_n_eff: 30
+
+# Computed, shown and indexed, never failing a cell (see checks 5 and 7).
+report_only: [term_gradient_share, periods_at_bound]
 
 fault_detection:
   # An injected fault must STOP the run with this error type, and for a fault in one loss term the message
