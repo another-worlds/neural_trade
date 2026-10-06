@@ -80,7 +80,8 @@ def test_the_bare_replace_does_fail_under_the_same_reader(tmp_path):
     assert _hammer(tmp_path, "bare", n=300) > 0
 
 
-def _flaky(monkeypatch, n_failures, exc=PermissionError(13, "busy")):
+def _flaky(monkeypatch, n_failures, exc=None):
+    exc = exc or PermissionError(13, "busy")
     calls = []
     real = os.replace
 
@@ -144,3 +145,12 @@ def test_list_sweeps_tolerates_a_half_written_or_vanishing_summary(tmp_path):
     (empty / "sweep.json").write_text("", encoding="utf-8")
     assert [s.sweep_id for s in PD.list_sweeps(tmp_path)] == ["good"]
     assert PD.list_sweeps(tmp_path / "missing") == []
+
+
+def test_the_sweep_summary_writer_goes_through_the_retry_and_keeps_its_bytes(tmp_path, monkeypatch):
+    from neural_trade.experiments.sweep import _write_json
+    obj = {"sweep_id": "s", "trials": [{"n": 1, "v": 0.5}], "p": tmp_path}
+    calls = _flaky(monkeypatch, 3)
+    _write_json(tmp_path / "sweeps" / "s" / "sweep.json", obj)
+    assert len(calls) == 4
+    assert (tmp_path / "sweeps" / "s" / "sweep.json").read_bytes() == json.dumps(obj, indent=2, default=str).encode("utf-8")

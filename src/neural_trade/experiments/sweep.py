@@ -115,10 +115,7 @@ def _utc() -> str:
 
 def _write_json(path: Path, obj: Any) -> None:
     """Atomic replace (a summary, rewritten after every trial)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    tmp.write_text(json.dumps(obj, indent=2, default=str), encoding="utf-8", newline="\n")
-    os.replace(tmp, path)
+    atomic_write_json(path, obj)
 
 
 # ------------------------------------------------------------------ search space
