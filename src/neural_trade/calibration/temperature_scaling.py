@@ -59,51 +59,50 @@ def _nll(logits: np.ndarray, labels: np.ndarray) -> float:
     return float(-np.mean(labels * np.log(p) + (1.0 - labels) * np.log(1.0 - p)))
 
 
-def _fit_temperature(
-    probs: np.ndarray,
-    labels: np.ndarray,
-    n_steps: int = 500,
-    lr: float = 0.05,
-) -> float:
-    """Fit a temperature scalar T by gradient descent on NLL.
+# Search bounds for T. A fit within _BOUND_TOL (in log T) of either bound did not find an interior
+# minimum: the head is flat (T at the upper bound: no usable signal) or wildly under-confident
+# (lower bound), and the result is flagged rather than reported as calibrated.
+T_MIN = 1e-2
+T_MAX = 1e3
+_BOUND_TOL = 1e-3
 
-    Parameters
-    ----------
-    probs  : predicted probabilities in (0, 1), shape [N]
-    labels : binary ground-truth labels {0, 1}, shape [N]
-    n_steps: number of gradient-descent iterations
-    lr     : step size
+STATUS_OK = "ok"
+STATUS_LOWER = "lower_bound"
+STATUS_UPPER = "upper_bound"
 
-    Returns
-    -------
-    T : fitted temperature scalar (float, > 0)
+
+def _fit_temperature_status(probs: np.ndarray, labels: np.ndarray) -> tuple:
+    """(T, status): T minimises the NLL of sigmoid(logit(p) / T) over [T_MIN, T_MAX].
+
+    The NLL is convex in 1 / T, so it is unimodal in log T and a bounded scalar search on log T
+    reaches the minimum. Deterministic. status is "ok", "lower_bound" or "upper_bound".
     """
+    from scipy.optimize import minimize_scalar
+
     probs = np.asarray(probs, dtype=float).reshape(-1)
     labels = np.asarray(labels, dtype=float).reshape(-1)
     if len(probs) == 0 or len(labels) == 0:
-        return 1.0
+        return 1.0, STATUS_OK
+    z = _logit(probs)
+    lo, hi = float(np.log(T_MIN)), float(np.log(T_MAX))
+    res = minimize_scalar(lambda lt: _nll(z / np.exp(lt), labels), bounds=(lo, hi),
+                          method="bounded", options={"xatol": 1e-10, "maxiter": 500})
+    lt = float(res.x)
+    # Brent's bounded method never evaluates the end points; compare them explicitly.
+    for cand in (lo, hi):
+        if _nll(z / np.exp(cand), labels) < _nll(z / np.exp(lt), labels):
+            lt = cand
+    status = STATUS_OK
+    if lt <= lo + _BOUND_TOL:
+        status = STATUS_LOWER
+    elif lt >= hi - _BOUND_TOL:
+        status = STATUS_UPPER
+    return float(np.exp(lt)), status
 
-    base_logits = _logit(probs)  # z = logit(p)
-    T = 1.0
-    best_T, best_nll = T, float("inf")
 
-    for _ in range(n_steps):
-        scaled_logits = base_logits / T
-        p_cal = _sigmoid(scaled_logits)
-        p_cal = np.clip(p_cal, 1e-7, 1.0 - 1e-7)
-
-        # Gradient of NLL w.r.t. T:
-        # NLL = -mean[y*log(p) + (1-y)*log(1-p)]  with p = sigmoid(z/T)
-        # dNLL/dT = mean[ (p - y) * (-z / T^2) ]
-        grad = np.mean((p_cal - labels) * (-base_logits / (T ** 2)))
-        T = T - lr * grad
-        T = max(T, 1e-3)  # prevent collapse to zero or negative
-
-        nll = _nll(scaled_logits, labels)
-        if nll < best_nll:
-            best_nll, best_T = nll, T
-
-    return float(best_T)
+def _fit_temperature(probs: np.ndarray, labels: np.ndarray, n_steps: int = 0, lr: float = 0.0) -> float:
+    """Fit a temperature scalar T by minimising the NLL (n_steps and lr are ignored, kept for callers)."""
+    return _fit_temperature_status(probs, labels)[0]
 
 
 class TemperatureScaler:
@@ -119,6 +118,12 @@ class TemperatureScaler:
 
     def __init__(self, temperatures: Optional[Dict[str, float]] = None):
         self.temperatures: Dict[str, float] = dict(temperatures or {h: 1.0 for h in self.HORIZONS})
+        # Per horizon: "ok", or "lower_bound" / "upper_bound" when the fit sits at a search bound.
+        self.fit_status: Dict[str, str] = {h: STATUS_OK for h in self.temperatures}
+
+    def at_bound(self) -> Dict[str, str]:
+        """Horizons whose fitted T sits at a search bound, with which bound."""
+        return {h: st for h, st in self.fit_status.items() if st != STATUS_OK}
 
     def fit(
         self,
@@ -128,8 +133,8 @@ class TemperatureScaler:
         labels_h1: np.ndarray,
         probs_h2: np.ndarray,
         labels_h2: np.ndarray,
-        n_steps: int = 500,
-        lr: float = 0.05,
+        n_steps: int = 0,
+        lr: float = 0.0,
     ) -> "TemperatureScaler":
         """Fit one temperature per horizon on a calibration set.
 
@@ -141,6 +146,7 @@ class TemperatureScaler:
         ----------
         probs_h* : predicted direction probabilities in (0,1) from dir_h* head
         labels_h*: binary realized direction labels {0,1}
+        n_steps, lr: ignored (the fit is a bounded scalar search, not gradient descent)
         """
         data = [
             ("h0", probs_h0, labels_h0),
@@ -148,9 +154,13 @@ class TemperatureScaler:
             ("h2", probs_h2, labels_h2),
         ]
         for h, probs, labels in data:
-            T = _fit_temperature(probs, labels, n_steps=n_steps, lr=lr)
+            T, status = _fit_temperature_status(probs, labels)
             self.temperatures[h] = T
+            self.fit_status[h] = status
             logger.info(f"  TemperatureScaler [{h}]: T = {T:.4f}")
+            if status != STATUS_OK:
+                logger.warning(f"  TemperatureScaler [{h}]: T = {T:.4g} is at the {status.replace('_', ' ')} "
+                               f"[{T_MIN:g}, {T_MAX:g}]: the NLL has no interior minimum on this block")
         return self
 
     def calibrate(self, probs: np.ndarray, horizon: str = "h1") -> np.ndarray:
@@ -175,7 +185,7 @@ class TemperatureScaler:
         """Serialise temperatures to a JSON file."""
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path, "w") as f:
-            json.dump({"temperatures": self.temperatures}, f, indent=2)
+            json.dump({"temperatures": self.temperatures, "fit_status": self.fit_status}, f, indent=2)
         logger.info(f"TemperatureScaler saved to {path}")
 
     @classmethod
@@ -183,4 +193,6 @@ class TemperatureScaler:
         """Load temperatures from a JSON file."""
         with open(path) as f:
             data = json.load(f)
-        return cls(temperatures=data["temperatures"])
+        obj = cls(temperatures=data["temperatures"])
+        obj.fit_status.update(data.get("fit_status", {}))
+        return obj
