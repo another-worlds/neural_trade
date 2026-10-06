@@ -192,7 +192,8 @@ changes).
 | [NT-157](#nt-157) | P3 | cleanup | implementer | todo | Stale removal, round 2 (D-029) |
 | [NT-158](#nt-158) | P3 | bug | implementer | todo | Run-record hygiene: dirty flag, run order, strict JSON, recorded CLI flags, same-second ids |
 | [NT-159](#nt-159) | P3 | bug | implementer | todo | NT-119 follow-ups: warn once on a frame without raw heads; drop the redundant second prediction in backtest_ui; INCOH on a real run |
-| [NT-160](#nt-160) | P0 | infra | implementer | in-progress | Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing |
+| [NT-160](#nt-160) | P0 | infra | implementer | done | Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing |
+| [NT-161](#nt-161) | P3 | bug | implementer | todo | check_run_evidence reads only the id column of runs/EXTERNAL_RUNS.md and requires the file tracked |
 
 ## Items
 
@@ -2124,13 +2125,25 @@ changes).
 
 **Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing**
 
-- **status:** in-progress (2026-10-06): implementer on nt-160
+- **status:** done (2026-10-06, CI pending on the merge push): nt-160 0e3dff4 (implementer, Sonnet medium), merged; QA (Opus medium) PASS on 0e3dff4 for (1)-(4): 12 tests in tests/test_run_evidence.py, `check_run_evidence.py` 'all tracked, 8 external', its own tmp-repo edge cases (listed id with a local gap still fails; typo ids never whitelist; the external count always shows), mutation caught; fast 1931 passed (runs/experiments/nt160/fast_suite.log), ruff clean. CI before the fix: red on e822b2d (run 37424780995, only this test). Follow-ups: NT-161.
 - **priority / type / role:** P0 / infra / implementer
 - **area:** scripts/check_run_evidence.py, tests/test_run_evidence.py, runs/EXTERNAL_RUNS.md (new), docs/RUNBOOK.md
 - **depends on:** none
 - **why:** The lead merged PR #15 (7b9e87d) without running the fast suite (docs only), and its findings cite 8 run ids the remote session made on its cloud machine; `test_every_run_cited_in_this_repository_is_tracked` fails since then (found by NT-118's implementer). The record must not be edited to hide them.
 - **acceptance:** (1) runs/EXTERNAL_RUNS.md lists the 8 ids with where they ran and why they are not here. (2) A listed id without a run directory passes and is counted as external; a listed id with a directory is checked normally; an unlisted id without one still fails (tests on tmp repos). (3) The repository-level test passes. (4) Docstring and RUNBOOK updated. (5) Fast suite, ruff, CI green on remediation/plan.
 - **source:** NT-118 implementer report (2026-10-06)
+
+### NT-161
+
+**check_run_evidence reads only the id column of runs/EXTERNAL_RUNS.md and requires the file tracked**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** scripts/check_run_evidence.py, tests/test_run_evidence.py
+- **depends on:** NT-160 (done)
+- **why:** QA of NT-160 (2026-10-06): `external = cited_ids(top / EXTERNAL)` whitelists any id anywhere in the file, prose included, and an untracked local copy whitelists locally but not in CI. Acceptable today because the external count is always printed.
+- **acceptance:** (1) Only ids in the first column of the table are declarations (test: an id in prose is not). (2) An untracked EXTERNAL_RUNS.md is reported and not used (test). (3) Fast suite, ruff.
+- **source:** QA of NT-160 (2026-10-06)
 
 ## Done log
 
