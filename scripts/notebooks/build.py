@@ -571,6 +571,31 @@ longer than the window; and whether the base period sits at a clip bound.
     ("code", """
 AT.styled(discovered_table(applied, cfg, metrics=metrics, window=WINDOW), digits=2)
 """),
+    ("md", """
+## Every learned period over training
+
+One panel per family: each learned period (a MACD's fast, slow and signal, a Keltner's period and ATR period, a
+stochastic's K and D) against the epochs, from its textbook start (dashed). Families whose periods are not in the
+run's log are named in the subtitle. This is the second figure of the run's `indicator_report.html`.
+"""),
+    ("code", """
+Visualizations.build("indicator_family_periods", metrics, cfg, applied=applied).show()
+"""),
+    ("md", """
+## Which indicators the model uses: grouped permutation importance
+
+For each family instance, the channels of that instance are shuffled across the **validation** block's windows and
+the model is scored again: the bar is how much the per-window loss rises, and one panel per horizon gives how much
+the direction AUC falls (the hover also gives the hit-rate drop). Whiskers are the 2.5 and 97.5 percentiles of a
+moving-block bootstrap (block of at least the longest horizon) that recomputes the loss and the AUC on every
+resample (D-012); a bar whose whiskers cross zero is not distinguishable from an unused indicator. This is a
+read-out after training: nothing in training reads it. It is the third figure of `indicator_report.html`.
+"""),
+    ("code", """
+from neural_trade.serving.indicator_report import indicator_importance
+
+Visualizations.build("permutation_importance", indicator_importance(predictor, blocks["val"]), cfg).show()
+"""),
 ]
 
 # ---------------------------------------------------------------------------- 08 long run

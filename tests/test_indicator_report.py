@@ -216,3 +216,64 @@ def test_a_trained_run_writes_an_offline_report_with_three_figures(tmp_path, syn
     assert path == ctx.run_dir / "indicator_report.html"
     assert _SCRIPT_SRC.search(html) is None
     assert html.count("plotly-graph-div") >= 3
+
+
+def _default_family_figures():
+    import numpy as np
+    import pandas as pd
+
+    from neural_trade.core.config import Config
+    from neural_trade.core.indicator_periods import configured_periods
+    from neural_trade.visualization import discovered_indicators as DI
+    from neural_trade.visualization import indicator_evolution as IE
+
+    cfg = Config()
+    length = int(cfg.LOOKBACK)
+    rng = np.random.default_rng(2)
+    close = 100 + np.cumsum(rng.normal(0, 0.4, length))
+    window = np.stack([close + rng.normal(0, 0.05, length), close + rng.uniform(0.05, 0.8, length),
+                       close - rng.uniform(0.05, 0.8, length), close, rng.uniform(0.2, 2.0, length)],
+                      axis=-1).astype(np.float32)
+    periods = configured_periods(cfg)
+    app = pd.DataFrame([periods])
+    app.attrs["base"] = dict(periods)
+    app.attrs["block"] = "test"
+    discovered = DI.discovered_indicators(close[None, :], cfg, applied=app, ohlcv=window[None], window=0)
+    rows = [{"epoch": e + 1, **{f"period/{k}": v + 0.1 * e for k, v in periods.items()}} for e in range(4)]
+    return cfg, periods, discovered, IE.indicator_family_periods(rows, cfg, applied=app)
+
+
+def test_the_report_figures_hold_every_default_family_and_instance():
+    """NT-048 (3): the default 14 families x 3 instances are in the price figure, the 54 learned periods are in
+    the periods figure, and the importance figure has one row per instance."""
+    import re
+
+    from neural_trade.evaluation.permutation_importance import GroupImportance, indicator_channel_groups
+    from neural_trade.indicators import indicator_instances
+    from neural_trade.visualization import discovered_indicators as DI
+    from neural_trade.visualization import indicator_evolution as IE
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.permutation_importance import permutation_importance
+
+    cfg, periods, discovered, family = _default_family_figures()
+    fams = list(indicator_instances(cfg))
+    assert len(fams) == 14 and len(periods) == 54
+
+    def headings(fig):
+        return {re.sub(r"<[^>]+>", "", fig.layout[k].title.text or "").strip()
+                for k in fig.layout if str(k).startswith("legend")}
+
+    heads = headings(discovered)
+    for fam in fams:
+        for i in range(3):
+            assert f"{DI._display_name(fam)} #{i}" in heads, (fam, i)
+    assert T.empty_panels(discovered) == [] and T.empty_panels(family) == []
+    solid = [t for t in family.data if t.mode == "lines+markers"]
+    assert len(solid) == len(periods) == 54                      # every learned period has its trace
+    for fam in fams:
+        assert any(h.startswith(IE._family_title(fam).replace(" periods", "")) for h in headings(family)), fam
+    rows = [GroupImportance(name, 0.1, 0.0, 0.2, {"h0": 0.01}, {"h0": -0.01}, {"h0": 0.02},
+                            {"h0": 0.0}, {"h0": -0.01}, {"h0": 0.01})
+            for name, _sl in indicator_channel_groups(cfg)]
+    fig = permutation_importance(rows, cfg)
+    assert len(rows) == 42 and len(fig.data[0].y) == 42 and T.empty_panels(fig) == []
