@@ -527,3 +527,44 @@ def test_show_puts_figures_and_tables_into_the_widget_itself():
     show(out, pd.DataFrame({"a": [1]}))                      # replaces, never appends
     (o,) = out.outputs
     assert "<table" in o["data"]["text/html"]
+
+
+def _bundle(path, mtime):
+    import os
+
+    (path / "artifacts").mkdir(parents=True)
+    (path / "artifacts" / "weights.h5").write_bytes(b"")
+    os.utime(path, (mtime, mtime))
+    return path
+
+
+def test_pick_run_skips_study_runs_under_experiments(tmp_path):
+    from neural_trade.notebook import pick_run, servable_runs
+
+    top = _bundle(tmp_path / "20260101-a", 1_000)
+    study = _bundle(tmp_path / "experiments" / "x" / "runs" / "20260105-s", 2_000)
+    assert pick_run(None, tmp_path) == top
+    assert servable_runs(tmp_path) == [top]
+    assert pick_run(study, tmp_path) == study                       # explicit run_dir still loads it
+    assert pick_run(None, tmp_path, include_study_runs=True) == study
+    assert servable_runs(tmp_path, include_engine_runs=True)[0] == study
+
+
+def test_pick_run_skips_ablation_cells(tmp_path):
+    from neural_trade.notebook import pick_run
+
+    top = _bundle(tmp_path / "20260101-a", 1_000)
+    cell = _bundle(tmp_path / "ablations" / "a" / "runs" / "20260105-cell", 2_000)
+    assert pick_run(None, tmp_path) == top
+    assert pick_run(cell, tmp_path) == cell
+    assert pick_run(None, tmp_path, include_study_runs=True) == cell
+
+
+def test_pick_run_error_lists_study_runs_when_only_they_exist(tmp_path):
+    from neural_trade.notebook import pick_run
+
+    study = _bundle(tmp_path / "experiments" / "x" / "runs" / "20260105-s", 2_000)
+    with pytest.raises(FileNotFoundError, match="RUN_DIR") as e:
+        pick_run(None, tmp_path)
+    assert "20260105-s" in str(e.value) and "study runs" in str(e.value)
+    assert pick_run(None, tmp_path, include_study_runs=True) == study

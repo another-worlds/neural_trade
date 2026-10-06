@@ -1,0 +1,16 @@
+{
+  "fitted": true,
+  "conformal_scale": "realized_vol",
+  "pred_scale": 257.51813253642973,
+  "horizon_steps": [
+    10,
+    15,
+    20
+  ],
+  "shrink_delta": true,
+  "delta_scale": {
+    "h0": 0.27794248603013055,
+    "h1": 0.0,
+    "h2": 0.23348718652839145
+  }
+}

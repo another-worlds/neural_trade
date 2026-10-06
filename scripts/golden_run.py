@@ -63,6 +63,32 @@ def run(repo: Path) -> dict:
     return out
 
 
+def _compare(a, b, atol: float, rtol: float):
+    """(excess, message) for one array pair; excess > 0 means FAIL, inf for any non-finite or shape mismatch.
+
+    Equal: same shape, and at every position either both NaN, or both the same infinity, or both finite
+    within atol + rtol * |recorded|. A NaN or an infinity on one side only is a failure, never ignored.
+    """
+    import numpy as np
+    a = np.asarray(a, dtype=np.float64)
+    b = np.asarray(b, dtype=np.float64)
+    if a.shape != b.shape:
+        return float("inf"), f"shape {a.shape} vs {b.shape}"
+    same = (np.isnan(a) & np.isnan(b)) | ((np.isinf(a) | np.isinf(b)) & (a == b))
+    fin = np.isfinite(a) & np.isfinite(b)
+    bad_nonfinite = ~(same | fin)
+    diff = np.zeros(a.shape)
+    excess = np.zeros(a.shape)
+    with np.errstate(invalid="ignore", over="ignore"):
+        diff[fin] = np.abs(a[fin] - b[fin])
+        excess[fin] = diff[fin] - (atol + rtol * np.abs(a[fin]))
+    n_nf = int(bad_nonfinite.sum())
+    worst = float(excess.max()) if excess.size else 0.0
+    if n_nf:
+        return float("inf"), f"{n_nf} non-finite mismatch(es), max|diff|(finite)={diff.max() if diff.size else 0:.3g}"
+    return worst, f"max|diff|={diff.max() if diff.size else 0:.3g}"
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("mode", choices=["record", "verify"])
@@ -88,16 +114,9 @@ def main(argv=None) -> int:
     extra = sorted(set(out) - set(ref))
     worst = []
     for k in sorted(set(ref) & set(out)):
-        a, b = ref[k], out[k]
-        if a.shape != b.shape:
-            worst.append((float("inf"), k, f"shape {a.shape} vs {b.shape}"))
-            continue
-        both_nan = np.isnan(a) & np.isnan(b)
-        diff = np.where(both_nan, 0.0, np.abs(a - b))
-        tol = args.atol + args.rtol * np.abs(a)
-        excess = float(np.nanmax(diff - tol)) if diff.size else 0.0
-        worst.append((excess, k, f"max|diff|={np.nanmax(diff) if diff.size else 0:.3g}"))
-    worst.sort(reverse=True)
+        excess, msg = _compare(ref[k], out[k], args.atol, args.rtol)
+        worst.append((excess, k, msg))
+    worst.sort(key=lambda w: (-w[0], w[1]))
     bad = [w for w in worst if w[0] > 0]
     print(f"[golden] compared {len(worst)} arrays; missing={missing} extra={extra}")
     for excess, k, msg in worst[:12]:

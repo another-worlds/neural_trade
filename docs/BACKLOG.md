@@ -106,8 +106,8 @@ changes).
 | [NT-071](#nt-071) | P2 | research | experimenter | todo | GPU probe: epoch- or update-bound on 7-day blocks with the adopted engine |
 | [NT-072](#nt-072) | P2 | feature | implementer | todo | Per-bar causal model as a Models registry entry (option B) |
 | [NT-073](#nt-073) | P2 | research | experimenter | todo | A/B-2: the per-bar model against the default (pre-registered) |
-| [NT-074](#nt-074) | P1 | bug | implementer | in-progress | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
-| [NT-075](#nt-075) | P1 | performance | experimenter | in-progress | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
+| [NT-074](#nt-074) | P1 | bug | implementer | done | Same-seed runs differ at epoch 0 with op determinism on: find and fix the source |
+| [NT-075](#nt-075) | P1 | performance | experimenter | done | Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each) |
 | [NT-076](#nt-076) | P1 | feature | implementer | done | Engine: store each cell's predictions; `scenario rescore` compares strategies on stored cells (CPU) |
 | [NT-077](#nt-077) | P1 | feature | implementer | done | Target-exposure backtest mode and the shortlisted variance-driven strategies with EWMA twins |
 | [NT-078](#nt-078) | P1 | research | implementer | todo | EWMA and HAR-RV variance baselines in the evaluation report, same block, with the DM test |
@@ -146,7 +146,7 @@ changes).
 | [NT-111](#nt-111) | P2 | bug | implementer | done | Loss-weight calibration fails loudly in gradient mode; a steadier slow-test tolerance |
 | [NT-112](#nt-112) | P2 | bug | implementer | done | The screen layout surfaces a failed loss-weight calibration |
 | [NT-113](#nt-113) | P2 | bug | implementer | done | No silent annualisation defaults: minutes_per_year and fit_and_backtest's bar_minutes |
-| [NT-114](#nt-114) | P1 | feature | implementer | in-progress | A deterministic GRU path for comparison studies (DETERMINISTIC_GRU) |
+| [NT-114](#nt-114) | P1 | feature | implementer | done | A deterministic GRU path for comparison studies (DETERMINISTIC_GRU) |
 | [NT-115](#nt-115) | P1 | feature | implementer | done | Strategies: raw heads for coherence, served delta for size |
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
 | [NT-117](#nt-117) | P1 | feature | implementer | done | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
@@ -154,7 +154,7 @@ changes).
 | [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
-| [NT-122](#nt-122) | P1 | bug | implementer | todo | golden_run verify fails when a value turns NaN or an inf changes |
+| [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | todo | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
 | [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | todo | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
@@ -195,6 +195,11 @@ changes).
 | [NT-160](#nt-160) | P0 | infra | implementer | done | Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing |
 | [NT-161](#nt-161) | P3 | bug | implementer | todo | check_run_evidence reads only the id column of runs/EXTERNAL_RUNS.md and requires the file tracked |
 | [NT-162](#nt-162) | P3 | bug | implementer | todo | NT-118 follow-ups: a 0 = off gate for the other calibrated weights, the switch text, a 0.05 test, a stale comment |
+| [NT-163](#nt-163) | P2 | bug | implementer | todo | status.json sec_per_step is the last epoch's step time only; report a median over epochs >= 1 |
+| [NT-164](#nt-164) | P3 | bug | implementer | todo | A run directory records the deterministic mode |
+| [NT-165](#nt-165) | P3 | polish | implementer | todo | NT-048 follow-ups: permutation variance in the importance band, a multiple-comparison note, readable MACD/Stoch/Keltner period panels, importance cost on CPU |
+| [NT-166](#nt-166) | P3 | performance | experimenter | todo | Quiet-machine step micro-benchmark: 1aeff1c against 426de4f (only if D-018 needs NT-075's answer) |
+| [NT-167](#nt-167) | P2 | bug | implementer | in-progress | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
 
 ## Items
 
@@ -1104,7 +1109,7 @@ changes).
 
 **Same-seed runs differ at epoch 0 with op determinism on: find and fix the source**
 
-- **status:** in-progress (2026-10-01): CPU part merged (d71e3b4; screen-mode RNG keyed on Keras auto-names + arithmetic rewrite). GPU check done (runs/experiments/nt074_gpu_check/REPORT.md, 0.26 GPU-hours, merged): with seed 777 and the deterministic mode, 3 separate processes give val_loss 9.5906 / 9.7052 / 9.6122 at epoch 0 (SEEDED_STOCHASTIC_LAYERS on: still different); with the GRU forced off cuDNN (unroll=True, the same maths) 9.57204818725586 x3, bit for bit. Source: TF 2.10's enable_op_determinism does not cover the cuDNN-fused GRU kernel. (3): full GPU reproducibility is possible off cuDNN, at an estimated 1.2-1.4x step cost (rough). The fix is NT-114; this item closes when NT-114 is merged and its GPU check passes.
+- **status:** done (2026-10-06): closed by NT-114's GPU check (runs/experiments/nt114_gpu_check/REPORT.md, QA PASS): with DETERMINISTIC_GRU on, same-seed GPU runs are bit-equal across processes; D-025 deterministic studies cost about 1.5x per step. History: in-progress (2026-10-01): CPU part merged (d71e3b4; screen-mode RNG keyed on Keras auto-names + arithmetic rewrite). GPU check done (runs/experiments/nt074_gpu_check/REPORT.md, 0.26 GPU-hours, merged): with seed 777 and the deterministic mode, 3 separate processes give val_loss 9.5906 / 9.7052 / 9.6122 at epoch 0 (SEEDED_STOCHASTIC_LAYERS on: still different); with the GRU forced off cuDNN (unroll=True, the same maths) 9.57204818725586 x3, bit for bit. Source: TF 2.10's enable_op_determinism does not cover the cuDNN-fused GRU kernel. (3): full GPU reproducibility is possible off cuDNN, at an estimated 1.2-1.4x step cost (rough). The fix is NT-114; this item closes when NT-114 is merged and its GPU check passes.
 - **area:** src/neural_trade/utils/seeding.py, the data pipeline (tf.data shuffle and map), models/layers/vacuum_saturation_noise.py, training/trainer.py, tests/
 - **why:** NT-035 (2026-09-29): three runs with seed 777 and op determinism on (TF_DETERMINISTIC_OPS=1 plus enable_op_determinism) gave val_loss 9.5673 / 9.6394 / 9.6603 at epoch 0 on the GPU; no op raised. D-025 assumes a deterministic mode makes comparison studies reproducible; it does not yet, so paired studies must use several seeds. Candidates: PYTHONHASHSEED unset on this path, the tf.data shuffle or parallel map order, the vacuum-noise layer's random numbers, CPU-pinned ops.
 - **acceptance:** (1) The source is identified with evidence (a CPU test and, by the experimenter, a short GPU check). (2) Two same-seed runs in the deterministic mode give identical val_loss per epoch on the CPU (test) and, if the source is fixable on the GPU, on the GPU (3 runs, recorded). (3) If full GPU reproducibility is impossible in TF 2.10, the item records why and DECISIONS gets a corrected reading of D-025. (4) Speed unchanged (D-018); fast suite and ruff pass.
@@ -1116,7 +1121,7 @@ changes).
 
 **Did sec_per_step regress on the MVP-1 head? (0.1066 vs 0.0984, one run each)**
 
-- **status:** in-progress (2026-10-06): experimenter, sides 426de4f vs 1aeff1c (the item's commits, not today's head: D-047 changed the step), branch nt-075
+- **status:** done (2026-10-06), verdict INCONCLUSIVE per the pre-registered rule: runs/experiments/speed_check_mvp1/ (SPEC aeb7c90 before the runs, REPORT, 8 interleaved runs, 0.79 GPU-hours). sec_per_step 426de4f / 1aeff1c = 1.053 (A 0.1247, B 0.1313, n 4 each, ranges overlap); epoch time 1.064. QA (Opus medium) PASS, numbers recomputed; sensitivity on the median over epochs >= 1: r 1.065, still overlapping. A regression is neither shown nor excluded at 5%: NT-163 (a sounder sec_per_step), NT-166 (a quiet-machine micro-benchmark if D-018 needs the answer). History: in-progress (2026-10-06): experimenter, sides 426de4f vs 1aeff1c (the item's commits, not today's head: D-047 changed the step), branch nt-075
 - **priority / type / role:** P1 / performance / experimenter
 - **area:** runs/experiments/speed_check_mvp1/ (SPEC, REPORT)
 - **why:** The notebook run on the MVP-1 head (runs/20260929T081632Z-426de4f-dirty-aba344d6) logged sec_per_step 0.1066 against 0.0984 for the previous notebook run (runs/20260924T182915Z-1aeff1c-dirty-af67ee43), +8%. The session touched callbacks (NT-028) and moved modules (NT-027) but not the per-step path; golden runs are equal. One run per side is not noise-aware (D-012), and the desktop alone showed about 40% GPU utilisation at times (NT-035). D-018: the per-step path must not get slower.
@@ -1569,7 +1574,7 @@ changes).
 
 **A deterministic GRU path for comparison studies (DETERMINISTIC_GRU)**
 
-- **status:** in-progress (2026-10-06): code merged (nt-114 b37e337); QA (Opus) PASS on 928d6a1 for (1)-(3) and (5): every recurrent layer (gru_attention, gru_small) follows the switch, golden 455/455 equal against a record on 7a20a4d, 9 tests, fast 1916 (+ the one stale test fixed by NT-117), stability 11. CPU part of (4): the reported 1.04-1.12 was load noise; QA's quiet rerun gives 0.94-0.98, claim withdrawn in the REPORT and the config text. Open: the experimenter's GPU check (3 separate-process runs, seed 777, deterministic mode + DETERMINISTIC_GRU, bit-equal val_loss per epoch, GPU sec_per_step); NT-074 closes with it. Earlier: implementer
+- **status:** done (2026-10-06): (4) GPU part by the experimenter (Sonnet medium, 0.2 GPU-hours), runs/experiments/nt114_gpu_check/REPORT.md, merged: 3 separate processes at f9b60eb, seed 777, deterministic mode + DETERMINISTIC_GRU: val_loss bit-equal at every epoch (8.898392677307129, 8.846050262451172, 8.74549388885498); GPU step about 1.5x the cuDNN path (0.3171 median vs 0.2106, one reference run). QA (Opus medium) PASS: float-hex recomputation, configs and shas checked, timings recomputed; two REPORT wording errors corrected. History: in-progress (2026-10-06): code merged (nt-114 b37e337); QA (Opus) PASS on 928d6a1 for (1)-(3) and (5): every recurrent layer (gru_attention, gru_small) follows the switch, golden 455/455 equal against a record on 7a20a4d, 9 tests, fast 1916 (+ the one stale test fixed by NT-117), stability 11. CPU part of (4): the reported 1.04-1.12 was load noise; QA's quiet rerun gives 0.94-0.98, claim withdrawn in the REPORT and the config text. Open: the experimenter's GPU check (3 separate-process runs, seed 777, deterministic mode + DETERMINISTIC_GRU, bit-equal val_loss per epoch, GPU sec_per_step); NT-074 closes with it. Earlier: implementer
 - **priority / type / role:** P1 / feature / implementer, then experimenter
 - **area:** src/neural_trade/core/config.py, src/neural_trade/models/gru_attention.py, src/neural_trade/models/gru_small.py (and any other recurrent builder), src/neural_trade/training/trainer.py (only if a hook is needed), tests/
 - **depends on:** NT-074 (GPU check)
@@ -1670,7 +1675,7 @@ changes).
 
 **golden_run verify fails when a value turns NaN or an inf changes**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-122 a0dfa01 (implementer, Sonnet medium), merged as e2c2b4a; QA (Opus medium) PASS on a0dfa01: 21 tests (tests/test_golden_run.py), QA's own edge cases (0-d, float32 vs 64, -0.0, int/bool, 1.7e308 overflow), the old version reproduced wrongly passing 7 NaN/inf cases, mutation (one-sided NaN equal) caught by 6 tests, real verify vs golden_nt117 455/455 and exit 0. P3 left (complex arrays cast to float64; the TF assertion is weak under xdist): not filed, no recorded dtype reaches them.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** scripts/golden_run.py, tests/test_golden_run.py (new)
 - **depends on:** none
@@ -2157,6 +2162,66 @@ changes).
 - **why:** QA of NT-118 (2026-10-06): (a) LAMBDA_SHORT, POINT, LONG, DIR, VAR or CRPS configured at 0 with damping > 0 is still lifted to CALIB_LAMBDA_MIN (now with a WARNING): only vol and soft ECE have a 0 = off gate, so these terms cannot be switched off while calibration is on. (b) The CALIB_VOL_ZERO_TO_FLOOR text (core/config.py:294) says a vol of 0 'is lifted', which is false with CALIB_DAMPING_VOL 0 or a global CALIB_DAMPING 0 (value mode used to lift it). (c) The widened case 'LAMBDA_EXTENDED_TREND 0.05 unchanged' is tested only at 0. (d) The comment above the post-calibration norms still cites the [0.1, 20] clamp for every weight.
 - **acceptance:** (1) A configured 0 of any calibrated weight stays 0 with calibration on, value and gradient mode, excluded from the shared reference like soft ECE (tests); the shipped defaults unchanged (golden 455/455). (2) The switch text matches the damping-0 case (or the damping-0 case lifts as before; test either way). (3) A 0.05 test for LAMBDA_EXTENDED_TREND. (4) The comment corrected. (5) Fast suite, stability, ruff.
 - **source:** QA of NT-118 (2026-10-06)
+
+### NT-163
+
+**status.json sec_per_step is the last epoch's step time only; report a median over epochs >= 1**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/telemetry/epoch_logger.py, src/neural_trade/experiments/runner.py, docs (RUNBOOK, the field's docs), tests/
+- **depends on:** none
+- **why:** QA of NT-075 (2026-10-06): `status.json` `sec_per_step` is the current (last) epoch's dt/steps (telemetry/epoch_logger.py:127, :136). D-018 speed gates and the runner's `_sec_per_step` (experiments/runner.py:286) compare single-epoch samples; NT-075's A r1 last epoch was 0.1997 against a 0.1075 median over its epochs.
+- **acceptance:** (1) status.json and the runner report `sec_per_step_median` over epochs >= 1 (and keep the last-epoch value under an explicit name, or document it) (test). (2) D-018 comparisons in RUNBOOK and OPERATING_MODEL's definition of done name the median. (3) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-164
+
+**A run directory records the deterministic mode**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/utils/seeding.py, the run record (meta.json / env.json writers), tests/
+- **depends on:** none
+- **why:** QA of NT-114 (2026-10-06): `seed_everything(..., deterministic=True)` is not recorded in config.yaml, meta.json or env.json, only in a harness's stdout, so a deterministic study's run directory cannot prove its mode.
+- **acceptance:** (1) meta.json (or env.json) records the deterministic flag and DETERMINISTIC_GRU (test). (2) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-165
+
+**NT-048 follow-ups: permutation variance in the importance band, a multiple-comparison note, readable MACD/Stoch/Keltner period panels, importance cost on CPU**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/evaluation/permutation_importance.py, src/neural_trade/visualization/ (importance and family-periods figures), tests/
+- **depends on:** NT-048
+- **why:** QA of NT-048 (2026-10-06): the band covers window resampling for one fixed permutation (no permutation variance) and the figure has 126 bars with no multiple-comparison note (stoch #2 h1's band lies entirely below 0); MACD, Stoch and Keltner panels draw three periods per instance in one colour on a squashed log axis; importance costs about 314 s on CPU for a 2,866-window validation block (43 forward passes), which affects the CPU-only `neural-trade indicators` path.
+- **acceptance:** (1) The band includes permutation variance (several permutations per group) or the figure states it does not (test). (2) A visible note on the number of comparisons. (3) Fast/slow/signal legs distinguishable in the period panels (dash or marker), D-014. (4) CPU cost reported and, if > 2 min, batched. (5) `resolve_csv_path` compares a run's recorded `dataset.sha256` with the resolved file and raises on a mismatch; without a fingerprint the report names the file it drew from (test). (6) The hit-drop diamond whiskers and the bar whiskers are told apart (style or offset); a subtitle note when a baseline AUC is under 0.5 (a positive drop then does not mean the group helps). (7) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06 (NT-048 QA on 2c772de and re-QA on 0a24847: the CSV fallback picks a file by name with no fingerprint check; overlapping grey whiskers; baselines under 0.5)
+
+### NT-166
+
+**Quiet-machine step micro-benchmark: 1aeff1c against 426de4f (only if D-018 needs NT-075's answer)**
+
+- **status:** todo
+- **priority / type / role:** P3 / performance / experimenter
+- **area:** runs/experiments/ (SPEC, REPORT)
+- **depends on:** NT-163
+- **why:** NT-075 was inconclusive (+5-6%, run-to-run noise up to 2x, host CPU 32-61% busy from other agents). Whole-run sec_per_step cannot resolve 5%.
+- **acceptance:** (1) A SPEC first: a fixed-step micro-benchmark of the training step (median of >= 200 steps after warm-up), on a quiet machine (no other agents), GPU-side timing. (2) A verdict at 5%. (3) Under 0.5 GPU-hours. (4) If a regression shows, an implementer bisect item.
+- **source:** QA reports of 2026-10-06
+
+### NT-167
+
+**Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations**
+
+- **status:** in-progress (2026-10-06): implementer on nt-167
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/notebook/runs.py, tests/, scripts/notebooks/README.md
+- **depends on:** none
+- **why:** The lead's notebook routine for NT-048 (2026-10-06): `servable_runs` searches runs/ recursively and excludes only engine runs, so notebook 07 loaded NT-075's speed-check run 20261006T070748Z-426de4f-cf562469 (old code, close-only, 4 families) as 'the newest run'. D-013: notebooks show the shipped defaults. The executed notebook was discarded, not committed.
+- **acceptance:** (1) The default selection takes only runs directly under the runs root; study runs (runs/experiments/**, runs/ablations/**) and engine runs need a flag or an explicit RUN_DIR (tests a-d). (2) When only excluded runs exist, the error lists them and names RUN_DIR (test). (3) Docstring and scripts/notebooks/README.md updated. (4) Fast suite, ruff.
+- **source:** lead, notebook routine of NT-048 (2026-10-06)
 
 ## Done log
 

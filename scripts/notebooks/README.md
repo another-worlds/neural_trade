@@ -41,7 +41,8 @@ works on all of them.
    `01_train_and_monitor` trains a **new run** on the GPU (about 5 minutes). 02-05 read the newest
    run under `runs/` (`pick_run`), so execute 01 first when the model, the training or the evaluation
    changed. Engine cells (scenario or sweep runs under `runs/scenarios/`, NT-026) are kept out of that
-   default, so 02-05 always show the newest notebook or CLI run; set `RUN_DIR` to load an engine run.
+   default, and so are study runs (`runs/experiments/**`, `runs/ablations/**`), so 02-07 always show the newest
+   notebook or CLI run (D-013, NT-167); set `RUN_DIR` to load an engine or study run.
    Rules for 01:
    - Do not set `CUDA_VISIBLE_DEVICES=-1`, or it trains on the CPU and takes much longer.
    - Run one training at a time, and not while another training uses the GPU: the GPU is launch-bound,
