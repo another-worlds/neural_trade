@@ -32,3 +32,8 @@ metrics]. The lead asked four questions. Answers:
    Бюджет - некотролируем. правило: обучение на сверхкоротких массивах. Даю 2 минуты максимум на каждый прогон"
    [rewriting the previous rule: the GPU in parallel with the other session; budget uncontrolled; training on
    ultra-short arrays; 2 minutes at most per run]. D-063.
+
+**Goal (verbatim, same round):** "Цель - попытка выйти из стратегической ловушки оптимизацией поиском тактического
+прорыва в расчете нейрокни. Риск менеджмент - отдельный независимый бранч" [The goal: an attempt to escape the
+strategic trap by optimisation, searching for a tactical breakthrough in the network's computation. Risk
+management is a separate, independent branch.]

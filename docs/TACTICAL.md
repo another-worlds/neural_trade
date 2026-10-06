@@ -41,9 +41,12 @@ for the MVP".
   a paired test (D-025, D-046).
 - Standing decisions still hold: no new data source (D-050), trading costs 0 (D-044), TF 2.10 (D-001),
   the physics terms stay (D-003).
-- **Goal** unless the owner names another for the session: D-041's (predictive power and PnL; the
-  owner's target is a stable hit rate above 60% with drawdown below 5%), with `logreg_lags` as the
-  first bar to clear. Start from where `runs/experiments/micro_loop_v1/LOG.md` stopped.
+- **Goal** (owner, D-063): escape the strategic trap (no direction skill: AUC 0.50-0.53, below
+  `logreg_lags`) by optimisation: search for a tactical breakthrough in how the network computes
+  (architecture, losses, training, inputs from the existing data). The measure is direction skill,
+  with `logreg_lags` on the same blocks as the first bar to clear. **Risk management** (drawdown,
+  sizing, stops, the trading side of the owner's >60% / <5% target) is a separate, independent
+  branch of work, not this session's.
 
 ## Roles: as in the MVP
 
