@@ -121,6 +121,10 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
     return row, scores
 
 
+class RunIdCollision(ValueError):
+    """The same run id for two different cells (NT-182): the index never silently replaces a row."""
+
+
 class RunIndex:
     """The sqlite index: a cache of the run directories' light files."""
 
@@ -144,6 +148,11 @@ class RunIndex:
 
     @staticmethod
     def _write(con: sqlite3.Connection, row: Dict[str, Any], scores: Dict[str, Optional[float]]) -> None:
+        old = con.execute("SELECT run_dir, scenario, cell_key FROM runs WHERE run_id = ?", (row["run_id"],)).fetchone()
+        if old is not None and tuple(old) != (row["run_dir"], row["scenario"], row["cell_key"]):
+            raise RunIdCollision(
+                f"run id {row['run_id']} belongs to two cells: {old[1]} / {old[2]} in {old[0]} and "
+                f"{row['scenario']} / {row['cell_key']} in {row['run_dir']}; the index keeps the first")
         con.execute(f"INSERT OR REPLACE INTO runs ({', '.join(RUN_FIELDS)}) VALUES "
                     f"({', '.join('?' for _ in RUN_FIELDS)})", [row.get(c) for c in RUN_FIELDS])
         con.execute("DELETE FROM scores WHERE run_id = ?", (row["run_id"],))
@@ -249,5 +258,6 @@ class RunStore:
         return RunIndex(target)
 
 
-__all__ = ["ENGINE_SUBTREE", "HEADLINE_SCORES", "INDEX_NAME", "RESULT_FILE", "RUN_FIELDS", "RunIndex", "RunStore",
+__all__ = ["ENGINE_SUBTREE", "HEADLINE_SCORES", "INDEX_NAME", "RESULT_FILE", "RUN_FIELDS", "RunIdCollision", "RunIndex",
+           "RunStore",
            "STATUSES", "engine_meta", "is_engine_run_dir", "read_run"]

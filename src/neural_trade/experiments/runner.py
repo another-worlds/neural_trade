@@ -31,6 +31,7 @@ the scores of an uninterrupted one. Run one runner per scenario at a time.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -62,6 +63,13 @@ def train_cell(ctx, *, calibrate: bool = True, save_artifacts: bool = False):
     tf.keras.backend.clear_session()
     return train_and_evaluate(config=ctx.config, run_context=ctx, force=True, calibrate=calibrate,
                               fit_calibration=True, save_artifacts=save_artifacts)
+
+
+def cell_run_name(scenario: str, cell_key: str) -> str:
+    """The name part of a new run id: ``<cell key>-<6 hex of the scenario name's sha256>`` (NT-182). The cell
+    key is unique only inside a scenario, the run id is the index's key across scenarios; older ids
+    (no suffix) stay as they are."""
+    return f"{cell_key}-{hashlib.sha256(scenario.encode('utf-8')).hexdigest()[:6]}"
 
 
 @dataclass
@@ -271,8 +279,11 @@ class Runner:
 
         root = self.store.scenario_dir(self.scenario.name)
         tags = ["scenario", self.scenario.name, pc.role]
+        # NT-182: the run id is global in the index, the cell key only per scenario: a short hash of the
+        # scenario name keeps two scenarios' same-second cells with one config hash apart
+        base = cell_run_name(self.scenario.name, pc.key)
         for attempt in range(1, 1000):
-            name = pc.key if attempt == 1 else f"{pc.key}-{attempt}"
+            name = base if attempt == 1 else f"{base}-{attempt}"
             try:
                 return RunContext.create(pc.config, root=root, seed=pc.cell.seed, tags=tags, name=name, meta=meta)
             except FileExistsError:
