@@ -625,3 +625,23 @@ def test_a_real_scenario_trains_scores_and_resumes_through_the_cli(tmp_path, bar
     # an uninterrupted run of the same scenario reproduces every indexed number
     assert main(["scenario", "run", str(path), "--store", str(tmp_path / "runs_b")]) == 0
     assert comparable(RunStore(tmp_path / "runs_b")) == comparable(store)
+
+
+def test_config_identity_treats_a_stored_ceiling_equal_to_lookback_as_unset(tmp_path):
+    """NT-125: old runs stored MOMENTUM_CLIP_MAX: 60.0 beside LOOKBACK 60; today's default is None
+    (resolved at use), so that stored value is the same config and must hash like the spec cell. An
+    explicit 20 differs. LOOKBACK 240 with a stored 60.0 (the H4 micro_lookback cells) is NOT the
+    same config: it really ran a ceiling of 60, while a spec cell now resolves to 240."""
+    spec_cell = Config()
+    old_dir = tmp_path / "old"
+    old_dir.mkdir()
+    (old_dir / "config.yaml").write_text("LOOKBACK: 60\nMOMENTUM_CLIP_MAX: 60.0\n", encoding="utf-8")
+    assert config_hash_of_dir(old_dir) == config_hash(spec_cell)
+    assert "MOMENTUM_CLIP_MAX" not in config_identity(Config(MOMENTUM_CLIP_MAX=60.0))
+    assert config_hash(Config(MOMENTUM_CLIP_MAX=20)) != config_hash(spec_cell)
+    assert config_identity(Config(MOMENTUM_CLIP_MAX=20))["MOMENTUM_CLIP_MAX"] == 20
+    h4 = tmp_path / "h4"
+    h4.mkdir()
+    (h4 / "config.yaml").write_text("LOOKBACK: 240\nMOMENTUM_CLIP_MAX: 60.0\n", encoding="utf-8")
+    assert config_hash_of_dir(h4) != config_hash(Config(LOOKBACK=240))
+    assert config_hash(Config(LOOKBACK=240)) == config_hash(Config(LOOKBACK=240, MOMENTUM_CLIP_MAX=240))

@@ -63,7 +63,7 @@ changes).
 | [NT-028](#nt-028) | P1 | infra | implementer | done | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
 | [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
-| [NT-031](#nt-031) | P1 | feature | implementer | in-progress | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
+| [NT-031](#nt-031) | P1 | feature | implementer | done | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
@@ -157,7 +157,7 @@ changes).
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
 | [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
-| [NT-125](#nt-125) | P1 | bug | implementer | todo | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
+| [NT-125](#nt-125) | P1 | bug | implementer | done | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
 | [NT-127](#nt-127) | P1 | bug | implementer | todo | DM cells of the report: a HAC bandwidth that holds up under persistent volatility regimes |
 | [NT-128](#nt-128) | P2 | infra | implementer | todo | A training-free scoring golden tier (report, backtest, null, temperatures, betas) in CI |
@@ -203,6 +203,8 @@ changes).
 | [NT-168](#nt-168) | P2 | feature | implementer | todo | Leaderboard: superseded cells and duplicate (fold, seed) pairs |
 | [NT-169](#nt-169) | P3 | infra | implementer | todo | A suite lock: no two full pytest suites at once, enforced instead of checked by eye |
 | [NT-170](#nt-170) | P3 | test-gap | implementer | todo | Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info |
+| [NT-171](#nt-171) | P2 | feature | implementer | todo | Leaderboard: read a recorded zero-cost rescore; stored-spec fallback independent of file mtime |
+| [NT-172](#nt-172) | P2 | bug | implementer | todo | Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain) |
 
 ## Items
 
@@ -568,7 +570,7 @@ changes).
 
 **Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank**
 
-- **status:** in-progress (2026-10-06): an implementer's uncommitted work of 2026-10-01 was rescued as nt-031 7ef905d (experiments/leaderboard.py, visualization/leaderboard_fig.py, tests/test_leaderboard.py, cli.py, registries/visualizations.py; about 630 lines, never reviewed). Next: an implementer merges remediation/plan into nt-031, reads the WIP critically against the acceptance criteria, then QA.
+- **status:** done (2026-10-06): nt-031 (WIP 7ef905d rescued, then 3a490c3, repair 9cfae84, lead fix e80e0f7), merged as 5da4549. Round 1 QA (Opus): logic and every number right, figure FAIL; round 2 (implementer on Opus, qa-deep): PASS on everything except one dotted zero line (D-014: dotted = training), fixed by the lead (dashed, test, boards re-rendered). Verified: dev means, fold and seed spreads recomputed from result.json for loss_prune_v1 (ece0 +1.5967, control +0.5846, ece0_vol0 -1.1241) and reference_default (-155.9749); test columns cannot rank (mutations); 23 mutations killed; cost profile per row (13 bps rows are not comparable and cannot win); fold-coverage rail; scenario spec found by name; scenario identity unchanged for all 10 committed scenarios. Real boards: no winner anywhere today (13 of 14 boards are pre-NT-094 13 bps/side; loss_prune_v1 fails buy-and-hold). Follow-ups: NT-168 (supersede), a zero-cost rescore reader for the boards (NT-171), stored-spec fallback by mtime (P3 in NT-171).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** At QA check that the WIP's min_trades default (nt-031 experiments/leaderboard.py:63) disqualifies zero-trade rows (enhanced_multi_horizon yields one that tops net Sharpe) and that a non-finite guard-rail value disqualifies with a stated reason. After NT-042 each row names its traded (primary) horizon.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (leaderboard), src/neural_trade/visualization/ (a leaderboard table and figure, registered in Visualizations), src/neural_trade/cli.py, tests/
@@ -1714,7 +1716,7 @@ changes).
 
 **The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-125 46ff086/aae39f3 (implementer, Sonnet medium) + repair de4e8f0, merged as 9557745. QA (Opus medium) PASS on all 6 criteria (every override path, golden 455/455 at LOOKBACK 60, 6 mutations caught) and found a P2 regression, fixed in the repair: config_identity treats a stored ceiling equal to LOOKBACK as unset (loss_prune_v1 matches 6 of 18 stored dirs again; spec_hash/settings_hash of all 10 scenarios equal; lead reviewed the diff). Caveat for NT-085: the micro_lookback H4 cells (LOOKBACK 240) ran with a ceiling of 60; re-running them now gives 240. Other scenarios already matched 0 stored cells before NT-125 (reference_default, micro_l2, micro_horizons, long_360d_stab, ...): cause not investigated, see NT-172.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/core/config.py, configs/default.yaml, training/custom_model.py, models/layers/learnable_indicators.py, tests/test_config.py
 - **depends on:** none
@@ -2261,6 +2263,30 @@ changes).
 - **why:** QA of NT-123 (2026-10-06): the 24 default probes are spread over every asked bar (mostly exit requests), so a peek confined to a few orders is missed deterministically (a sparse TP peek: 0/100); the trace is compared with dict `==`, so a NaN tp/sl would be a false positive; `Order.info` is not traced (metadata only).
 - **acceptance:** (1) The default probes include every bar where an order was placed (cheap: the 12-strategy test takes 0.74 s); QA's sparse TP peek is caught (test). (2) NaN-equal trace comparison (test). (3) `test_no_lookahead_all_strategies` stays <= 30 s; public results unchanged. (4) Fast suite, ruff.
 - **source:** QA of NT-123 (2026-10-06)
+
+### NT-171
+
+**Leaderboard: read a recorded zero-cost rescore; stored-spec fallback independent of file mtime**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/experiments/leaderboard.py, tests/
+- **depends on:** NT-031, NT-168
+- **why:** qa-deep on NT-031 (2026-10-06): zero-cost rescores exist under runs/scenarios/<s>/rescore/zero_cost_status-* for most scenarios, but the board ignores them, so 13 of 14 real boards (13 bps/side, pre-NT-094) can never crown a winner. Also experiments/leaderboard.py:~550 picks the newest stored spec by file mtime, which git checkout does not preserve (three scenarios have several stored specs; their folds and costs agree today).
+- **acceptance:** (1) A recorded rescore can supply a cell's cost-profile numbers (shown as such in the row and the header) (test). (2) The stored-spec fallback is chosen by the spec's own stamp or hash order, not mtime (test). (3) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-172
+
+**Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/scenario.py, rescore.py, runner.py, tests/
+- **depends on:** none
+- **why:** QA of NT-125 (2026-10-06) measured: reference_default, micro_l2, micro_horizons, long_360d_stab, h4h_360d, long_360d, micro_pnl_e1 match 0 stored run dirs to a spec cell, loss_prune_v1 only 6 of 18; this predates NT-125 (probably NT-117's default changes and the NT-047 input layout). `config_hash_of_dir` promises that an old cell is recognised exactly when it should be; the micro loop's CPU rescores on stored predictions get nothing.
+- **acceptance:** (1) A report per scenario: which fields differ between a stored dir's config.yaml and the spec cell (by field, counts). (2) Decide per field: a default that changed since the run (the old cell really is a different configuration, keep) or an identity artefact (normalise, as NT-125 did for the ceiling), with tests. (3) No change to the identity of cells that match today. (4) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
 
 ## Done log
 

@@ -731,8 +731,6 @@ class Config:
         for name in ("EXTENDED_TREND_PERIODS", "HORIZON_STEPS"):
             if isinstance(getattr(self, name), tuple):
                 setattr(self, name, list(getattr(self, name)))
-        if self.MOMENTUM_CLIP_MAX is None:
-            self.MOMENTUM_CLIP_MAX = self.LOOKBACK
         self.validate()
 
     # --------------------------------------------------------------- metadata
@@ -832,7 +830,7 @@ class Config:
             bad(f"INPUT_SERIES must include 'close', got {series}")
         if [s for s in canonical if s in series] != series or len(set(series)) != len(series):
             bad(f"INPUT_SERIES must be a subsequence of {list(canonical)} without repeats, got {series}")
-        if not (0 < self.MOMENTUM_CLIP_MIN < (self.MOMENTUM_CLIP_MAX or self.LOOKBACK)):
+        if not (0 < self.MOMENTUM_CLIP_MIN < self.momentum_clip_max):
             bad("need 0 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX")
         negative = [k for k, v in self.lambda_weights().items() if v < 0]
         if negative:
@@ -858,6 +856,8 @@ class Config:
     # --------------------------------------------------------------- derived
     @property
     def momentum_clip_max(self) -> float:
+        """The learned-period ceiling, resolved at use: MOMENTUM_CLIP_MAX, or LOOKBACK when it is
+        None, so it follows LOOKBACK on every override / copy / yaml path (NT-125; no extra key, D-032)."""
         return float(self.MOMENTUM_CLIP_MAX if self.MOMENTUM_CLIP_MAX is not None else self.LOOKBACK)
 
     @property

@@ -119,7 +119,14 @@ def config_identity(config: Config) -> Dict[str, Any]:
     default changes the identity like any other field does."""
     defaults = _default_config_dict()
     missing = object()
-    return {k: v for k, v in config.to_dict().items()
+    values = config.to_dict()
+    # NT-125: the period ceiling is resolved at use (None -> LOOKBACK). A stored value equal to this
+    # config's own LOOKBACK is the resolved default (old runs wrote it), so it counts as unset; an
+    # explicit value different from LOOKBACK stays in the identity.
+    ceiling = values.get("MOMENTUM_CLIP_MAX")
+    if ceiling is not None and ceiling == values.get("LOOKBACK"):
+        values["MOMENTUM_CLIP_MAX"] = None
+    return {k: v for k, v in values.items()
             if k not in _IDENTITY_EXCLUDED and v != defaults.get(k, missing)}
 
 

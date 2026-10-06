@@ -183,6 +183,10 @@ adds:
 
 - **Default: one GPU job at a time.** The lead's notebook routine (01 trains about 5 minutes) is one
   GPU job like any other.
+- **The tactical session (D-063):** runs its ultra-short screen trials (at most 2 minutes each) in
+  parallel with the MVP session's GPU job; neither waits for the other. A slower MVP `sec_per_step`
+  measured while tactical trials ran is not evidence for D-018: re-measure with the GPU otherwise idle.
+  [TACTICAL.md](TACTICAL.md) "GPU".
 - **The budget's `sec_per_step`** comes from the `status.json` of the latest real run of the same
   setup (NT-030 (3)).
 - **Parallel sweep trials** (`--parallel N` above 1, NT-030 (4)). The check above cannot see which

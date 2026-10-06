@@ -2,6 +2,8 @@
 YAML round trip, per-instance mutable defaults."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from neural_trade.core.config import Config
@@ -22,7 +24,7 @@ LEGACY_DEFAULTS = {
     "CALIB_DAMPING_VOL": None, "CALIB_DAMPING_PHYSICS": 0.0, "CALIB_OUTER": False,
     "LAMBDA_LOCAL_TREND": 1.0, "LAMBDA_GLOBAL_TREND": 1.0, "LAMBDA_EXTENDED_TREND": 0.1,
     "LAMBDA_QUANTILE": 1.0, "REG_MOMENTUM_L2": 0, "INDICATOR_L2": 0, "INDICATOR_LR_MULT": 5.0,
-    "MOMENTUM_CLIP_MIN": 2.0, "EWMA_IMPL": "matrix", "MOMENTUM_CLIP_MAX": 60, "USE_HUBER": True,
+    "MOMENTUM_CLIP_MIN": 2.0, "EWMA_IMPL": "matrix", "MOMENTUM_CLIP_MAX": None, "USE_HUBER": True,
     "LAMBDA_SHORT": 1.0, "LAMBDA_POINT": 1.0, "LAMBDA_LONG": 1.0, "LAMBDA_DIR": 1.0, "LAMBDA_INTER": 1.0,
     "LAMBDA_VOL": 0.0, "LAMBDA_VAR": 1.0, "LAMBDA_TREND_OUTER": 1.0, "LAMBDA_DIR_OUTER": 1.0,
     "LAMBDA_DIR_ALIGN_OUTER": 0.0, "LAMBDA_COHERENCE": 1.0, "LAMBDA_NLL_OUTER": 1.0, "LAMBDA_CRPS": 1.0,
@@ -97,8 +99,47 @@ def test_override_rejects_unknown_names_with_suggestions():
 
 
 def test_momentum_clip_max_derives_from_lookback():
-    assert Config(LOOKBACK=32).MOMENTUM_CLIP_MAX == 32
-    assert Config(LOOKBACK=32, MOMENTUM_CLIP_MAX=20).MOMENTUM_CLIP_MAX == 20
+    assert Config(LOOKBACK=32).momentum_clip_max == 32
+    assert Config(LOOKBACK=32, MOMENTUM_CLIP_MAX=20).momentum_clip_max == 20
+    assert Config(LOOKBACK=32).MOMENTUM_CLIP_MAX is None  # resolved at use, not stored (NT-125)
+
+
+def test_momentum_clip_max_follows_lookback_on_every_override_path():
+    """NT-125: the ceiling is resolved at use, so every path that changes LOOKBACK moves it; an
+    explicit value survives each path."""
+    from neural_trade.cli import _load_config
+
+    default_yaml = Path(__file__).resolve().parents[1] / "configs" / "default.yaml"
+    paths = {
+        "override": lambda **kw: Config().override(**kw),
+        "copy": lambda **kw: Config().copy(**kw),
+        "yaml+override": lambda **kw: Config.from_yaml(default_yaml).override(**kw),
+        "cli": lambda **kw: _load_config(str(default_yaml), kw),
+        "cli-nofile": lambda **kw: _load_config(None, kw),
+    }
+    for name, make in paths.items():
+        assert make(LOOKBACK=120).momentum_clip_max == 120, name
+        assert make(LOOKBACK=120, MOMENTUM_CLIP_MAX=20).momentum_clip_max == 20, name
+    explicit = Config(MOMENTUM_CLIP_MAX=20)
+    assert explicit.copy(LOOKBACK=120).momentum_clip_max == 20
+    assert Config().override(LOOKBACK=120).override(LOOKBACK=90).momentum_clip_max == 90
+
+
+
+
+def test_default_yaml_has_no_drift_from_config_defaults():
+    """NT-125: every default.yaml value equals Config()'s, key by key, and no key is missing or
+    unknown; MOMENTUM_CLIP_MAX is null so the ceiling follows LOOKBACK."""
+    import yaml
+
+    repo = Path(__file__).resolve().parents[1]
+    data = yaml.safe_load((repo / "configs" / "default.yaml").read_text(encoding="utf-8"))
+    defaults = Config().to_dict()
+    assert data["MOMENTUM_CLIP_MAX"] is None
+    assert set(data) <= set(defaults), set(data) - set(defaults)  # a missing key means the default
+    drift = {k: (data[k], defaults[k]) for k in data if data[k] != defaults[k]}
+    assert not drift, drift
+    assert Config.from_yaml(repo / "configs" / "default.yaml").override(LOOKBACK=120).momentum_clip_max == 120
 
 
 def test_yaml_round_trip_including_scientific_notation_strings(tmp_path):

@@ -130,7 +130,7 @@ class LearnableIndicators(layers.Layer):
 
         if self.bound_applied:
             min_p = float(self.config.MOMENTUM_CLIP_MIN)
-            max_p = float(getattr(self.config, "MOMENTUM_CLIP_MAX", None) or self.config.LOOKBACK)
+            max_p = float(self.config.momentum_clip_max)
             # logit is decreasing in period: the period floor is the logit ceiling and vice versa
             # (the same convention as clip_learned_periods below).
             self._applied_logit_hi = float(self._logit_from_period(min_p).numpy())
