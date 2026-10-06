@@ -1,0 +1,59 @@
+Training on /physical_device:GPU:0
+Starting enhanced model training with extended trend features...
+Dataset length after cleaning: 43500
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-11-10 07:29:00+00:00
+Sequences with extended trends: (43421, 60), (43421, 3), Extended: (43421, 3)
+[INFO] Dataset Statistics:
+   Total sequences: 43421
+   Train sequences: 15741 (batches/epoch: 62)
+   Val sequences:   2866   Cal sequences: 2866   (purge gap: 80 sequences, fold 3)
+   Test sequences:  7236 (batches: 29)
+Training for 3 epochs...
+Epoch 0: Indicator params logged to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\indicator_params_history.csv
+Epoch 1: Indicator params logged to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\indicator_params_history.csv
+Epoch 2: Indicator params logged to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\indicator_params_history.csv
+
+=== Indicator Learning Summary ===
+Total epochs tracked: 3
+Parameters logged per epoch: ~430
+CSV saved to: runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\indicator_params_history.csv
+Serving the weights of epoch 3 of 3 (val_loss 8.6886): best validation epoch, restored after training (EarlyStopping did not stop the run: 3 epochs ran)
+model_checkpoint wrote the best-on-validation weights to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\weights.h5
+Evaluating enhanced model...
+
+[Diagnostic: Prediction Statistics]
+  h0(10min): pred_mean=13.129297, true_mean=-2.280297 | pred_std=31.869627, true_std=211.386185
+         pred_range=[-96.312576, 124.939789], true_range=[-2006.226562, 1990.078125]
+  h1(15min): pred_mean=4.522871, true_mean=-3.604799 | pred_std=33.946793, true_std=250.176544
+         pred_range=[-112.804726, 156.836746], true_range=[-1983.726562, 1894.085938]
+  h2(20min): pred_mean=-12.059361, true_mean=-4.940985 | pred_std=58.654457, true_std=285.844147
+         pred_range=[-206.443848, 305.812195], true_range=[-2265.968750, 2019.500000]
+
+Fitting CalibrationPipeline on the calibration split...
+CalibrationPipeline: fitting on 2866 samples
+
+[1/2] Temperature scaling (direction heads)...
+  TemperatureScaler [h0]: T = 1.8550
+  TemperatureScaler [h1]: T = 1.5438
+  TemperatureScaler [h2]: T = 1.5187
+Delta shrinkage (least-squares scale of the price heads on this block): h0 0.018, h1 0.000, h2 0.000
+
+[2/2] Conformal regressors (price delta intervals, scale=realized_vol)...
+ConformalRegressor: fitted on 2866 samples, median score = 0.5860
+  [h0] coverage @ alpha=0.10: 0.901 (target >= 0.90),  mean half-width 190.81 raw units
+ConformalRegressor: fitted on 2866 samples, median score = 0.5690
+  [h1] coverage @ alpha=0.10: 0.901 (target >= 0.90),  mean half-width 224.31 raw units
+ConformalRegressor: fitted on 2866 samples, median score = 0.5708
+  [h2] coverage @ alpha=0.10: 0.901 (target >= 0.90),  mean half-width 250.39 raw units
+
+CalibrationPipeline: fitting complete.
+  [test] h0: conformal coverage@90 = 0.879 (target >= 0.90), mean width = 584.56 raw units, T = 1.855
+  [test] h1: conformal coverage@90 = 0.870 (target >= 0.90), mean width = 687.16 raw units, T = 1.544
+  [test] h2: conformal coverage@90 = 0.852 (target >= 0.90), mean width = 767.06 raw units, T = 1.519
+TemperatureScaler saved to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\artifacts\calibration\temperature_params.json
+ConformalRegressor saved to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\artifacts\calibration\conformal_h0.joblib
+ConformalRegressor saved to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\artifacts\calibration\conformal_h1.joblib
+ConformalRegressor saved to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\artifacts\calibration\conformal_h2.joblib
+CalibrationPipeline saved to 'runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\artifacts\calibration/'
+Artifact bundle written to runs\experiments\nt114_gpu_check\runs\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref\artifacts
+{"run_dir": "runs\\experiments\\nt114_gpu_check\\runs\\20261006T062222Z-f9b60eb-b8e98292-det_cudnn_ref", "wall_s": 106.65512080001645, "deterministic": true}

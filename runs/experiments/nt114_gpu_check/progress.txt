@@ -1,0 +1,5 @@
+det_gru_r1 exit 0
+det_gru_r2 exit 0
+det_gru_r3 exit 0
+det_cudnn_ref exit 0
+ALLDONE
