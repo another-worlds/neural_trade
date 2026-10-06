@@ -1,0 +1,97 @@
+{
+  "lambda_values_final": {
+    "lambda_point": 1.0,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 1.0,
+    "lambda_vol": 1.0,
+    "lambda_short": 1.0,
+    "lambda_long": 1.0,
+    "lambda_var": 1.0,
+    "lambda_trend_outer": 1.0,
+    "lambda_dir_outer": 1.0,
+    "lambda_coherence_outer": 1.0,
+    "lambda_nll_outer": 1.0,
+    "lambda_crps": 1.0,
+    "lambda_soft_ece": 1.0,
+    "lambda_t_perp": 0.10000000149011612,
+    "lambda_casimir": 0.10000000149011612,
+    "lambda_hd": 0.10000000149011612,
+    "lambda_ife": 0.10000000149011612,
+    "lambda_vac_overflow": 0.10000000149011612,
+    "lambda_pnl": 0.0
+  },
+  "calibration_lambdas": null,
+  "calibration_report": {
+    "h0": {
+      "coverage90": 0.8801824212271974,
+      "width90": 584.9595781227324,
+      "temperature": 2.0049180256685504,
+      "target": 0.9,
+      "n": 7236
+    },
+    "h1": {
+      "coverage90": 0.8702321724709784,
+      "width90": 690.6554638089284,
+      "temperature": 1.493034033295673,
+      "target": 0.9,
+      "n": 7236
+    },
+    "h2": {
+      "coverage90": 0.8522664455500276,
+      "width90": 767.0621338940898,
+      "temperature": 1.3796112662068774,
+      "target": 0.9,
+      "n": 7236
+    }
+  },
+  "fold": {
+    "train": 15741,
+    "val": 2866,
+    "cal": 2866,
+    "test": 7236,
+    "gap": 80
+  },
+  "epochs_run": 1,
+  "weights_epoch": 1,
+  "weights_val_loss": 9.53463077545166,
+  "weights_source": "best validation epoch, restored after training (EarlyStopping did not stop the run: 1 epochs ran)",
+  "var_scale": 1.0020611882209778,
+  "weighted_direction_quantiles": {
+    "0.05": 0.45275554105906446,
+    "0.1": 0.4711160374600848,
+    "0.2": 0.4883391327133396,
+    "0.5": 0.5199569056332216,
+    "0.8": 0.5543798783791051,
+    "0.9": 0.5708718976983703,
+    "0.95": 0.5901399881814271
+  },
+  "format_version": 1,
+  "neural_trade_version": "0.3.0",
+  "pred_scale": 281.60857025355415,
+  "pred_mean": -3.4379425478580354,
+  "normalizer": {
+    "kind": "window_relative",
+    "scale": 281.60857025355415,
+    "input_series": [
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "vol_scale": 18.34648323059082
+  },
+  "has_calibration": true,
+  "env": {
+    "python": "3.10.21",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "numpy": "1.23.0",
+    "pandas": "2.3.3",
+    "sklearn": "1.7.2",
+    "git": "d71e3b4",
+    "host_sha1": "287b3e95955e",
+    "tensorflow": "2.10.0",
+    "cuda_build": "64_112",
+    "cudnn_build": "64_8"
+  }
+}

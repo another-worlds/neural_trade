@@ -221,11 +221,13 @@ display(AT.styled(AT.trailing_move_table(
 The lines are the base periods per epoch; the model applies a per-window shifted period, whose medians on the
 test windows (served weights) are the diamonds right of the last epoch. Change % is measured from the configured
 start. The correlation bars are epoch-to-epoch changes against a noise band.
+A second figure draws every registered family, one panel per family.
 """),
     ("code", """
 metrics_path = ctx.path("metrics.jsonl")
 applied = applied_periods(result, blocks["test"]["X_model"], block="test")   # the model-input windows
 Visualizations.build("indicator_evolution", metrics_path, ctx.config, applied=applied).show()
+Visualizations.build("indicator_family_periods", metrics_path, ctx.config, applied=applied).show()
 indicator_applied_periods(applied, ctx.config, metrics=metrics_path).show()
 display(AT.styled(indicator_summary(metrics_path, ctx.config, applied=applied)))
 """),
@@ -429,10 +431,13 @@ display(AT.styled(AT.magnitude_ordering_table(test, raw_delta=raw)))
 display(AT.styled(AT.alignment_table(test, cfg, raw_delta=raw)))
 display(AT.styled(AT.trailing_move_table({"cal": blocks["cal_raw"], "test": blocks["test_raw"]}, cfg)))
 """),
-    ("md", "## Learned indicator periods\n\nBase periods per epoch; the diamonds are the median applied (per-window shifted) periods of the served weights on the test windows."),
+    ("md", "## Learned indicator periods\n\n"
+           "Base periods per epoch; the diamonds are the median applied (per-window shifted) periods of the "
+           "served weights on the test windows. A second figure draws every registered family, one panel per family."),
     ("code", """
 applied = applied_periods(blocks["predictor"], blocks["blocks"]["test"]["X_model"], block="test")
 Visualizations.build("indicator_evolution", metrics, cfg, applied=applied).show()
+Visualizations.build("indicator_family_periods", metrics, cfg, applied=applied).show()
 indicator_applied_periods(applied, cfg, metrics=metrics).show()
 AT.styled(indicator_summary(metrics, cfg, applied=applied))
 """),
@@ -501,11 +506,12 @@ discovered = [
 
 The indicators the network learned, drawn on the price of one window next to the same indicators at their
 textbook periods: the discovered indicators are what a run delivers (VISION), and the prediction and trading
-quality in 01-04 are the evidence that they are good. Each copy of each family (moving average, Bollinger bands,
-RSI, MACD; the copies start from `MA_SPANS`, `BB_PERIODS`, `RSI_PERIODS` and `MACD_SETTINGS`) is drawn twice on the
+quality in 01-04 are the evidence that they are good. Each copy of every registered family is drawn twice on the
 same window: solid at the period the served model applied to that window, dashed at its configured textbook
-period. The lines use the model's own formulas (an EWMA with alpha = 2 / (period + 1), started at the window's first
-bar), so they are the channels the network reads, in price units.
+period. The families are moving average, MACD, RSI, Bollinger, ATR, stochastic, Williams %R, Keltner, OBV,
+VWAP, MFI, ADX, CCI and Donchian. The original four use the numpy formulas on the raw close; the other ten are
+drawn from each family's outputs on the model window. Lines that smooth use an EWMA with alpha = 2 / (period + 1),
+started at the window's first bar.
 
 Set `WINDOW` to a window index, or to "typical" (closest to the block's median periods), "longest" / "shortest"
 (where the per-window adjustment stretches or shrinks the periods most) or "last"; `BLOCK` to another block of
@@ -552,7 +558,7 @@ window has not warmed up by the window's end (the EWMA starts at the window's fi
 """),
     ("code", """
 Visualizations.build("discovered_indicators", block["X"], cfg, applied=applied, metrics=metrics, window=WINDOW,
-                     times=times).show()
+                     times=times, ohlcv=block["X_model"]).show()
 """),
     ("md", """
 ## Learned against textbook periods

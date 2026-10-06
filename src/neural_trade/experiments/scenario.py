@@ -17,7 +17,7 @@ A scenario says what to train and how to score it, in one YAML file (``configs/s
     seeds: [0, 1, 2]
     strategy: {name: calibrated_quantile, params: {}}   # Strategies registry; knobs fit on cal
     backtest: {random_seeds: 100}    # BacktestConfig fields; the costs default to 0 per side (D-044)
-    run: {calibrate: true, save_artifacts: false}
+    run: {calibrate: true, save_artifacts: false, indicator_report: false}
 
 A **configuration** is one variant at one grid point; a **cell** is one (configuration, fold,
 seed), trained into its own run directory. Everything is checked before anything runs:
@@ -61,7 +61,7 @@ TOP_KEYS = ("schema_version", "name", "description", "base_config", "overrides",
 SWEEP_KEYS = ("mode", "axes")
 SWEEP_MODES = ("grid",)                     # NT-030 adds "quick" and "optuna"
 STRATEGY_KEYS = ("name", "params")
-RUN_KEYS = ("calibrate", "save_artifacts")
+RUN_KEYS = ("calibrate", "save_artifacts", "indicator_report")
 # Config fields the engine sets per cell or per run directory.
 RESERVED_FIELDS = {"FOLD_INDEX": "set by `folds:`", "SEED": "set by `seeds:`",
                    "MODEL_PATH": "set to the run directory", "SCALER_PATH": "set to the run directory",
@@ -152,6 +152,7 @@ class StrategySpec:
 class RunOptions:
     calibrate: bool = True          # the pre-training loss-weight calibration pass (train_and_evaluate)
     save_artifacts: bool = False    # the serving bundle (artifacts/); the checkpoint weights are always kept
+    indicator_report: bool = False  # write indicator_report.html; needs save_artifacts (the bundle)
 
 
 @dataclass(frozen=True)
@@ -386,6 +387,9 @@ class Scenario:
         from neural_trade.strategy.strategies import Strategies
 
         where = self.where()
+        if self.run.indicator_report and not self.run.save_artifacts:
+            raise ScenarioError(f"{where}: run.indicator_report requires run.save_artifacts, "
+                                "because the report is read from artifacts/")
         if not Strategies.has(self.strategy.name):
             raise ScenarioError(f"{where}: strategy.name {self.strategy.name!r} is not registered; "
                                 f"known: {Strategies.list_names()}")

@@ -137,6 +137,10 @@ class TrainingSession:
                 config=cfg, run_context=self.run_context, epochs=self.epochs, force=True,
                 calibrate=self.calibrate, fit_calibration=self.fit_calibration,
                 save_artifacts=self.save_artifacts, extra_callbacks=[self._callback()] + self.extra_callbacks)
+            if self.run_context is not None:
+                from neural_trade.serving.indicator_report import write_indicator_report
+
+                write_indicator_report(self.run_context.run_dir)
             self._set_status("stopped early - evaluated" if self._stop.is_set() else "finished")
         except BaseException as exc:  # surfaced by wait()
             self.error = exc

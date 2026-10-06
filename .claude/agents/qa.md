@@ -14,7 +14,7 @@ reason the lead can trust "done". A criterion is met only if you checked it.
 
 1. **Your own worktree.** Never run `checkout`, `switch`, `reset`, `stash`, `merge` or `commit` in an
    existing checkout (the lead's main checkout or an implementer's worktree). Create yours:
-   `git worktree add --detach D:/nt_qa/<item>-<sha7> <sha>` (on D:, C: is nearly full), `cd` there,
+   `git worktree add --detach D:/nt/nt_qa/<item>-<sha7> <sha>` (on D:, C: is nearly full), `cd` there,
    confirm with `git log -1`. Set `PYTHONPATH=<your worktree>/src` for ad-hoc scripts (pytest and
    `scripts/notebooks/*` do it themselves). The reference dataset (`binance_btcusdt_1min_ccxt.csv`)
    is tracked, so your worktree has it. Read run directories (`runs/<id>/`) and gitignored data (the
@@ -65,7 +65,7 @@ reason the lead can trust "done". A criterion is met only if you checked it.
 
 ## Limits
 
-- Write only outside the repository (scratch scripts in `D:/nt_qa/`). Never edit source, tests or docs.
+- Write only outside the repository (scratch scripts in `D:/nt/nt_qa/`). Never edit source, tests or docs.
 - Do not fix what you find. Report it.
 - No GPU jobs unless the lead explicitly asks, and never while the GPU is busy (RUNBOOK).
 - Report what matters for the criteria plus P0 problems. Other issues go to "for the backlog", one

@@ -46,10 +46,13 @@ def trade_stats(result) -> Dict[str, float]:
     return out
 
 
-def _zero_delta_flag_notes(delta) -> Dict[str, str]:
-    """Notes for the flags table when a served delta is 0 on every bar (the calibration's beta = 0): the
-    strategies still see ``magnitude_coherent`` and ``direction_aligned``, but they are then decided by the 0
-    (ties, P(up) alone), not measured on a prediction. {} when every served delta varies."""
+def _zero_delta_flag_notes(delta, *, coherence_on_raw: bool = False) -> Dict[str, str]:
+    """Notes for the flags table when a served delta is 0 on a horizon (the calibration's beta = 0).
+
+    Without raw heads the strategies still see ``magnitude_coherent`` and ``direction_aligned``, but they
+    are then decided by the 0 (ties, P(up) alone). With raw heads (D-051) those flags are measured on the
+    raw heads, and the note says the 0 does not decide them. {} when every served delta varies.
+    """
     from neural_trade.evaluation.frame import HORIZONS
 
     d = np.asarray(delta, float)
@@ -59,6 +62,9 @@ def _zero_delta_flag_notes(delta) -> Dict[str, str]:
     if not zero:
         return {}
     lead = f"served delta is 0 on {', '.join(zero)} (beta = 0)"
+    if coherence_on_raw:
+        measured = f"{lead}: measured on the raw heads, not decided by the 0"
+        return {"magnitude_coherent": measured, "direction_aligned": measured}
     if len(zero) == len(HORIZONS):
         return {"magnitude_coherent": f"{lead}: true on every bar by ties (|0| <= |0|), not a measured ordering",
                 "direction_aligned": f"{lead}: the share of bars where all three P(up) <= 0.5, not a sign "
@@ -371,8 +377,9 @@ class BacktestExplorer:
         """What the strategies see on the test block: numeric features (count / mean / quantiles),
         the share of bars where each boolean flag is true, consensus and horizon-vote shares, and
         the confidence scale. (``DataFrame.describe`` silently drops boolean columns.) Where a served
-        delta is 0 on every bar (beta = 0), the flags table gets a ``note`` column: magnitude_coherent
-        and direction_aligned are then fixed by the 0, not measured."""
+        delta is 0 on a horizon (beta = 0), the flags table gets a ``note`` column. Without raw heads,
+        magnitude_coherent and direction_aligned are then fixed by the 0. With raw heads they are measured
+        on those heads, and the note says the 0 does not decide them."""
         s = self.signals
         feats = pd.DataFrame({"weighted_direction": s.weighted_direction, "weighted_move_$": s.weighted_move,
                               "strength": s.strength, "avg_confidence": s.avg_confidence, "agreement": s.agreement,
@@ -380,7 +387,7 @@ class BacktestExplorer:
         flags = pd.DataFrame({"magnitude_coherent": s.magnitude_coherent, "direction_aligned": s.direction_aligned,
                               "var_spike": s.var_spike}).astype(float)
         shares = flags.mean().to_frame("share true").assign(bars=len(flags))
-        notes = _zero_delta_flag_notes(s.delta)
+        notes = _zero_delta_flag_notes(s.delta, coherence_on_raw=bool(s.coherence_on_raw))
         if notes:
             shares["note"] = [notes.get(k, "") for k in shares.index]
         p = np.asarray(s.p, float)

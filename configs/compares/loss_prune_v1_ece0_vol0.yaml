@@ -1,0 +1,36 @@
+# NT-099 verdict 2 of 2: ece0_vol0 (LAMBDA_SOFT_ECE 0, LAMBDA_VOL 0) vs control. See
+# runs/experiments/loss_prune_v1/SPEC.md and docs/RUNBOOK.md "Paired comparator".
+#
+#   neural-trade compare configs/compares/loss_prune_v1_ece0_vol0.yaml --out runs/compares/loss_prune_v1_ece0_vol0
+name: loss_prune_v1_ece0_vol0_vs_control
+description: >
+  Non-inferiority: does also turning off the volatility penalty (A_losses.md section 8: minimised at
+  std(mu) = std(y), which opposes every proper score at R^2 ~ 0 and pushes the price head toward
+  noise-level spread) on top of soft ECE off cost more than 0.005 of h1 variance CRPSS against
+  today's defaults, on the same 5 judgement folds?
+scenario_a: loss_prune_v1
+scenario_b: loss_prune_v1
+configuration_a: ece0_vol0
+configuration_b: control
+metric: h1/variance/crpss
+direction: higher_better
+metric_kind: diff
+min_effect: 0.005
+non_inferiority_margin: 0.005
+judgment_folds: [-39, -38, -37, -36, -35]
+min_folds: 5
+min_pairs: 5
+pairs_planned: 5                        # 5 folds x 1 seed, both configurations (amended 2026-10-01: batch OOM fix)
+alpha: 0.05
+registered_utc: "2026-10-01T00:00:00Z"  # overridden by this file's git commit time once committed
+                                         # and unedited (RUNBOOK "Paired comparator")
+estimator: mean
+guard_rails:
+  - metric: h0/variance/crpss
+    direction: higher_better
+    max_degradation: 0.005
+  - metric: h2/variance/crpss
+    direction: higher_better
+    max_degradation: 0.005
+# Same absolute (non-paired) guard-rails as loss_prune_v1_ece0.yaml, checked in REPORT.md: coverage90
+# in [0.85, 0.95], 0 non-finite steps, clipped_share / gradient-norm reported for both configurations.

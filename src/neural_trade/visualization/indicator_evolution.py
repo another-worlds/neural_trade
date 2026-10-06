@@ -12,6 +12,8 @@ the period applied to a window differs from the base (about x0.6 to x1.6 on long
   scale, starting at the recorded or configured start; the change of every period from its start;
   and each period's correlation with the validation loss (epoch-to-epoch changes against a noise
   band, with the level correlation the old notebook printed kept as a hollow marker).
+* :func:`indicator_family_periods` - one panel per family whose periods are in the log, including the
+  families beyond the original four. The 3x2 figure above is unchanged.
 * :func:`indicator_summary` - the table behind it: start, after epoch 1, last, min, max, change %,
   recent slope, distance to the clip bounds, CV and the three correlations (plus the applied
   percentiles when ``applied`` is given).
@@ -34,7 +36,7 @@ import json
 import math
 import re
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -44,7 +46,7 @@ from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 
 __all__ = ["applied_periods", "clip_bounds", "configured_periods", "indicator_applied_periods",
-           "indicator_evolution", "indicator_summary", "label"]
+           "indicator_evolution", "indicator_family_periods", "indicator_summary", "label"]
 
 PREFIXES = ("ma_period_", "macd_", "rsi_period_", "bb_period_")
 FAMILY = {"ma_period_": "MA", "macd_": "MACD", "rsi_period_": "RSI", "bb_period_": "BB"}
@@ -68,6 +70,15 @@ NEAR_BOUND = 0.05                               # "near a clip bound": within 5%
 MIN_PANEL_PX = 430                              # a panel's width in a 1100 px wide output: text must fit it
 
 _NAME = re.compile(r"^(ma_period_|macd_|rsi_period_|bb_period_)(\d+)(?:_(fast|slow|signal))?$")
+# Logged names from IndicatorFamily.learned_name that the four-prefix pattern does not cover:
+# ``atr_period_0`` and ``keltner_0_atr_period``. The four historical names stay on ``_NAME`` so the
+# 3x2 figure's parse (prefix ``ma_period_`` / ``macd_`` / ...) is unchanged.
+_PERIOD_NAME = re.compile(r"^([a-z][a-z0-9]*)_period_(\d+)$")
+_ROLE_NAME = re.compile(r"^([a-z][a-z0-9]*)_(\d+)_([a-z][a-z0-9_]*)$")
+_PREFIX_FAMILY = {"ma_period_": "ma", "macd_": "macd", "rsi_period_": "rsi", "bb_period_": "bb"}
+_FAMILY_TITLE = {"ma": "Moving-average periods", "macd": "MACD periods",
+                 "rsi": "RSI periods", "bb": "Bollinger-band periods"}
+_ROLE_DASH = ("solid", "dash", "dashdot", "6px,4px")
 _START_TEXT = {"config": "configured start",
                "logged": "start (recorded when training began)",
                "warm": "start (recorded: warm start, not the config)",
@@ -108,8 +119,43 @@ def _parse(col: str) -> Tuple[Optional[str], int, Optional[str]]:
     return (m.group(1), int(m.group(2)), m.group(3)) if m else (None, 0, None)
 
 
+def _parse_family(col: str) -> Tuple[Optional[str], int, Optional[str]]:
+    """(family, copy index, role) for any logged period name. The four historical names resolve
+    through ``_NAME`` first, so ``macd_1_slow`` stays the MACD role and not a new family."""
+    m = _NAME.match(str(col))
+    if m:
+        return _PREFIX_FAMILY[m.group(1)], int(m.group(2)), m.group(3)
+    m = _PERIOD_NAME.match(str(col))
+    if m:
+        return m.group(1), int(m.group(2)), None
+    m = _ROLE_NAME.match(str(col))
+    if m:
+        return m.group(1), int(m.group(2)), m.group(3)
+    return None, 0, None
+
+
 def _period_cols(df):
     return [c for c in df.columns if _NAME.match(str(c))]
+
+
+def _family_cols(df):
+    return [c for c in df.columns if _parse_family(str(c))[0] is not None]
+
+
+def _family_title(family: str) -> str:
+    if family in _FAMILY_TITLE:
+        return _FAMILY_TITLE[family]
+    return f"{family.upper() if len(family) <= 4 else family.replace('_', ' ').title()} periods"
+
+
+def _registry_family_order() -> List[str]:
+    """Indicators registry order, or [] when the registry cannot be imported."""
+    try:
+        import neural_trade.indicators  # noqa: F401  (registers the families)
+        from neural_trade.indicators.registry import Indicators
+        return list(Indicators.registry)
+    except Exception:  # noqa: BLE001 - a figure still draws from the column names
+        return []
 
 
 def _order_key(col):
@@ -647,6 +693,90 @@ def indicator_evolution(data, config=None, *, height: Optional[int] = None, star
     fig.update_layout(margin=dict(t=margin_t, b=margin_b, r=24), barmode="overlay",
                       legend=dict(y=1 + 34 / plot_px, yanchor="bottom", x=0, xanchor="left", itemsizing="trace",
                                   itemwidth=44))
+    return fig
+
+
+def indicator_family_periods(data, config=None, *, applied=None, start=None, title: Optional[str] = None):
+    """One panel per family whose periods are in the log, including families beyond the original four.
+
+    The 3x2 ``indicator_evolution`` figure is unchanged. This figure is the rest of the acceptance:
+    every logged ``period/<learned_name>`` is drawn. Copies use ``COPY_COLORS``. A second parameter
+    of the same copy (MACD fast/slow/signal, Keltner period and atr_period) is a second dash and
+    one legend entry per copy. A registered family with no column is named in the subtitle, not
+    given an empty panel.
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    df = _frame(data)
+    config = _config_for(data, config)
+    cols = _family_cols(df)
+    init, _source = _find_start(_path_of(data), config, start)
+    x = _epochs(df)
+    grouped: Dict[str, List[str]] = {}
+    for c in cols:
+        fam, _idx, _role = _parse_family(c)
+        grouped.setdefault(fam, []).append(c)
+    if not grouped:
+        fig = make_subplots(rows=1, cols=1, subplot_titles=("Learned periods",))
+        T.apply(fig, title=title or "Learned indicator periods, every family", height=280,
+                subtitle="no learned periods in this log")
+        T.note_on_empty(fig, "no learned periods in this log")
+        return fig
+    order = [f for f in _registry_family_order() if f in grouped]
+    order += [f for f in sorted(grouped) if f not in order]
+
+    n = len(order)
+    margin_t, margin_b = 96, 36
+    row_px = 188
+    height = margin_t + margin_b + n * row_px
+    # make_subplots rejects vertical_spacing on a single row.
+    spacing = {} if n == 1 else {"vertical_spacing": min(0.04, 0.6 / (n - 1))}
+    fig = make_subplots(rows=n, cols=1, subplot_titles=[_family_title(f) for f in order], **spacing)
+    for r, fam in enumerate(order, start=1):
+        fcols = sorted(grouped[fam], key=lambda c: (_parse_family(c)[1], _parse_family(c)[2] or ""))
+        roles = []
+        for c in fcols:
+            role = _parse_family(c)[2]
+            if role not in roles:
+                roles.append(role)
+        shown = set()
+        for c in fcols:
+            _fam, idx, role = _parse_family(c)
+            color = COPY_COLORS[idx % 3]
+            role_i = roles.index(role)
+            dash = "solid" if role is None else (MACD_DASH.get(role) or _ROLE_DASH[role_i % len(_ROLE_DASH)])
+            y = T.positive(_num(df[c]))
+            show = idx not in shown
+            shown.add(idx)
+            hover = (f"{fam} #{idx}" + (f" {role}" if role else "")
+                     + "<br>epoch %{x}: %{y:.2f} bars<extra></extra>")
+            fig.add_trace(go.Scatter(
+                x=x, y=y, mode="lines+markers", name=f"#{idx}", legend=f"legend{r + 1}",
+                legendgroup=f"{fam}-{idx}", showlegend=show,
+                line=dict(color=color, width=2, dash=dash),
+                marker=dict(size=5, color=color),
+                hovertemplate=hover,
+            ), row=r, col=1)
+            s0 = init.get(c)
+            if s0 is not None and np.isfinite(s0) and s0 > 0 and len(x):
+                fig.add_trace(go.Scatter(
+                    x=[float(x[0]), float(x[-1])], y=[s0, s0], mode="lines", showlegend=False,
+                    legend=f"legend{r + 1}", line=dict(color=color, width=1, dash="6px,4px"),
+                    hovertemplate=f"textbook {s0:.2f} bars<extra></extra>",
+                ), row=r, col=1)
+        T.panel_legend(fig, f"legend{r + 1}", r, 1, _family_title(fam))
+        fig.update_yaxes(type="log", row=r, col=1)
+    configured = configured_periods(config) if config is not None else {}
+    missing = []
+    for name in configured:
+        fam, _, _ = _parse_family(name)
+        if fam and fam not in grouped and fam not in missing:
+            missing.append(fam)
+    subtitle = f"{len(x)} epochs"
+    if missing:
+        subtitle += ". Not in this log: " + ", ".join(missing)
+    T.apply(fig, title=title or "Learned indicator periods, every family", height=height, subtitle=subtitle)
     return fig
 
 

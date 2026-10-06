@@ -266,4 +266,4 @@ decisions ([docs/DECISIONS.md](docs/DECISIONS.md)), how work is done
 
 ## Licence
 
-No licence file has been chosen yet. That decision is the repository owner's.
+MIT. See [LICENSE](LICENSE).
