@@ -291,6 +291,9 @@ class Config:
                                  unit="weight", ge=0.0)
     CALIB_LAMBDA_MAX: float = _f(20.0, "calibration", "upper clamp of every loss weight the calibration pass rescales",
                                  unit="weight", gt=0.0)
+    CALIB_VOL_ZERO_TO_FLOOR: bool = _f(True, "calibration", "a configured LAMBDA_VOL of 0 is lifted by the calibration "
+                                       "pass to CALIB_LAMBDA_MIN (True: the arm NT-099 tested, D-058); False: 0 stays 0 "
+                                       "(vol off, untested; NT-118)", unit="flag")
     CALIB_DAMPING: float = _f(1.0, "calibration", "0 = no change, 1 = full magnitude equalisation",
                               unit="dimensionless", ge=0.0, le=1.0)
     CALIB_DAMPING_POINT: Optional[float] = _f(None, "calibration", "damping of the point-loss weights LAMBDA_SHORT, "
@@ -351,8 +354,8 @@ class Config:
     LAMBDA_INTER: float = _f(1.0, "loss_weights", "weight of model.losses (layer regularisers)", unit="weight", ge=0.0,
                              tunable=True)
     LAMBDA_VOL: float = _f(0.0, "loss_weights", "prediction-spread vs target-spread penalty (0: the calibration "
-                           "pass lifts it to CALIB_LAMBDA_MIN 0.1, the arm NT-099 tested; without calibration a "
-                           "true 0, untested; D-057, D-058)",
+                           "pass lifts it to CALIB_LAMBDA_MIN 0.1 while CALIB_VOL_ZERO_TO_FLOOR is on, the arm NT-099 "
+                           "tested; without calibration, or with that switch off, a true 0, untested; D-057, D-058)",
                            unit="weight", ge=0.0, tunable=True)
     LAMBDA_VAR: float = _f(1.0, "loss_weights", "Gaussian NLL of the variance heads", unit="weight", ge=0.0,
                            tunable=True)
