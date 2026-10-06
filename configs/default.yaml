@@ -82,7 +82,7 @@ INDICATOR_L2: 0.0  # L2 on the indicator logits
 INDICATOR_LR_MULT: 5.0  # indicator optimizer LR = LR * this
 INDICATOR_GRAD_MULT: 5.0  # straight-through gradient scale
 MOMENTUM_CLIP_MIN: 2.0  # period floor (1.0 saturated the logit)
-MOMENTUM_CLIP_MAX: 60  # period ceiling; None -> LOOKBACK
+MOMENTUM_CLIP_MAX: null  # period ceiling; None -> LOOKBACK
 EWMA_IMPL: matrix  # 'matrix' (batched einsum) or 'scan' (reference)
 
 # ---- architecture

@@ -452,7 +452,7 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
     periods_at_bound: Dict[str, float] = {}
     if config is not None and rows:
         lo = float(getattr(config, "MOMENTUM_CLIP_MIN", 0.0))
-        hi = float(getattr(config, "MOMENTUM_CLIP_MAX", 1e9))
+        hi = float(getattr(config, "momentum_clip_max", None) or getattr(config, "MOMENTUM_CLIP_MAX", None) or 1e9)
         tol = 1e-3
         for k, v in rows[-1].items():
             if k.startswith("period/") and v is not None:

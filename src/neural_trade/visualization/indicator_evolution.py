@@ -250,7 +250,8 @@ def clip_bounds(config) -> Tuple[Optional[float], Optional[float]]:
     if config is None:
         return None, None
     lo = getattr(config, "MOMENTUM_CLIP_MIN", None)
-    hi = getattr(config, "MOMENTUM_CLIP_MAX", None) or getattr(config, "LOOKBACK", None)
+    hi = (getattr(config, "momentum_clip_max", None) or getattr(config, "MOMENTUM_CLIP_MAX", None)
+          or getattr(config, "LOOKBACK", None))
     return (float(lo) if lo else None), (float(hi) if hi else None)
 
 

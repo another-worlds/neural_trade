@@ -153,7 +153,7 @@ def test_clip_learned_periods_and_bound_applied_clip_ratio_as_a_fraction_not_a_p
     for var in ratio_vars:
         var.assign(extreme_logit)
 
-    layer.clip_learned_periods(cfg.MOMENTUM_CLIP_MIN, cfg.MOMENTUM_CLIP_MAX)
+    layer.clip_learned_periods(cfg.MOMENTUM_CLIP_MIN, cfg.momentum_clip_max)
 
     # (c) every PERIOD-kind logit is still clipped into [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX],
     # exactly as before this repair (the ratio vars were never touched by this assertion before
