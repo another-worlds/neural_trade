@@ -1,0 +1,17 @@
+41690abeb09c4250880bd5eb8dd0ab64d4b9f7cf
+tests/test_train_smoke.py: 192 warnings
+tests/test_training_wiring.py: 40 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_config.py::test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type
+  D:\nt\nt_wt_177\src\neural_trade\core\config.py:897: DeprecationWarning: Config.USE_HUBER is deprecated and has no effect (default True)
+    self.validate()
+
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_177\src\neural_trade\core\config.py:734: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2111 passed, 5257 warnings in 446.13s (0:07:26)
+All checks passed!
