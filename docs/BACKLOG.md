@@ -70,7 +70,7 @@ changes).
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
 | [NT-036](#nt-036) | P1 | feature | implementer | done | Stability invariants in CI (strict mode, masks off) |
 | [NT-037](#nt-037) | P1 | feature | implementer | done | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
-| [NT-038](#nt-038) | P1 | feature | implementer | todo | Stability harness and config guard (refuse hyperparameter regions known to fail) |
+| [NT-038](#nt-038) | P1 | feature | implementer | done | Stability harness and config guard (refuse hyperparameter regions known to fail) |
 | [NT-039](#nt-039) | P1 | research | experimenter | todo | Pre-registered A/B: gradient-based loss weighting against today's value calibration |
 | [NT-040](#nt-040) | P1 | bug | implementer | done | Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars) |
 | [NT-041](#nt-041) | P1 | feature | implementer | todo | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
@@ -219,6 +219,7 @@ changes).
 | [NT-184](#nt-184) | P3 | polish | implementer | todo | Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership |
 | [NT-185](#nt-185) | P1 | bug | implementer | todo | A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows) |
 | [NT-186](#nt-186) | P3 | polish | implementer | todo | Control-panel and data-path follow-ups from the NT-034 qa-deep |
+| [NT-187](#nt-187) | P2 | bug | implementer | todo | Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file |
 
 ## Items
 
@@ -674,7 +675,7 @@ changes).
 
 **Stability harness and config guard (refuse hyperparameter regions known to fail)**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-038 (implementer Sonnet), merged as e766d57. Harness (experiments/stability.py: scale and volatility x0.1/x10, extreme-input fuzzing, fault injection in input/loss term/gradient, wide-span horizons 5/60/240, a slow-periods CPU proxy; 3 seeds; strict mode; cases as engine scenarios, verdicts indexed as stability/*, REPORT with the thresholds hash), config guard (core/guard.py: Config.validate refuses a config inside a failing region naming region/case/reason/report; the sweep spaces trim or prune regions), StabilityGuard (training/stability_guard.py: strict mode stops on a non-finite term and names it; a NaN gradient with finite losses stops unattributed, the documented limit), `neural-trade stability [--dry-run]`, the BATCH_SIZE x LOOKBACK^2 memory warning (close-only evidence, unvalidated for OHLCV). Thresholds `configs/stability_thresholds.yaml` sha256 0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e: written once before any real harness run (committed alone in 8448523, after qa-deep's evidence from 54 stored runs showed the first draft (sha 3ff83b6e...) unsound: coverage did not read the variance head and ignored n_eff, periods-at-bound 0 failed 8 of 16 healthy cells, two synthetic broken runs passed), from stored training runs and not from harness runs; FROZEN from here: any change is a new file stability_thresholds_v2.yaml named in NT-051's SPEC before GPU time. QA history: qa-deep FAIL on 9514bd9 (fuzz transforms outside the used bars so fuzz_constant/jumps tested nothing; the reference profile could not plan its cases; calibration off; thresholds unsound), repair 1, qa-deep PASS on ce35529: fuzz cases now change the metrics, 15 cases plan under both profiles, 48 of 54 stored runs pass (the 6 failures are runs that never completed), both synthetic broken runs fail, 10 of 10 mutations caught, golden 455/455, scenario identity unchanged for 17 scenarios. Fast 2199 passed + 2 memory-only failures that pass alone; stability marker 16 passed. Follow-up before NT-051: NT-187.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Builds on NT-141 (the static validate gaps). Add a wide-span horizon case (5/60/240) to the harness: with a pooled scaler the scaled variances are 0.054/0.586/2.359 against v_ref 1 and VAR_FLOOR 1e-4.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a harness module in src/neural_trade/experiments/ whose cases run through the engine (NT-026), a pre-registered thresholds file under configs/, src/neural_trade/core/config.py (validate), the sweep search spaces (NT-030), tests/
@@ -2469,6 +2470,18 @@ changes).
 - **why:** qa-deep on NT-034 (2026-10-06), P3: (1) `resolve_data_path` breaks inputs `pd.read_csv` accepted: a StringIO now raises TypeError and a URL is mangled to `https:\example.com\...` (loaders.py:~28; no caller uses either); the missing-file error text uses Windows separators; (2) the suggested `neural-trade compare` command for a missing verdict (panel_compare.py:~503) works from neither cwd (`root: runs` resolves from the cwd); (3) the panel shows the provisional ece0 verdict (runs/compares/loss_prune_v1_ece0/result.json, estimate 0.002453, includes the suspect f-39 cell) although D-057 adopted the re-run (runs/loss_prune_v1_ece0_f39_rerun/compares/..., 0.002556): a stored-record issue (a supersede marker, with NT-168); (4) a configuration that is n/a on only some cells is averaged over the remaining folds and only the hover says so (the static PNG and the table do not); (5) without PYTHONPATH a worktree's notebooks/ opens the main checkout's data (the editable install's PROJECT_ROOT); the sha is still recorded.
 - **acceptance:** (1) resolve_data_path leaves non-path inputs (file objects, URLs) and the error text separators alone (tests). (2) The suggested command runs from both cwds. (3) The panel prefers a recorded supersede/re-run verdict (with NT-168) or labels the provisional one. (4) The partial-n/a count is shown in the table and as a note on the figure. (5) PROJECT_ROOT is derived from the package location and documented. (6) Fast suite, ruff.
 - **source:** qa-deep on NT-034 (2026-10-06)
+
+### NT-187
+
+**Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/stability.py (default_cases, _score_checks), configs/stability_thresholds_v2.yaml (new; v1 stays), tests/
+- **depends on:** NT-038 (done)
+- **why:** qa-deep on NT-038 (2026-10-07): (1) fuzz_constant's 400-bar constant block covers 126 of 136 tiny and 321 of 360 reference training windows completely, labels included: a constant TRAINING SET, not constant windows (dir_loss 0, var_at_floor 'not evaluated', the constant-variance baseline NLL about 1e28 so nll_over_const is -9.7e27); NT-051 would record a FAIL the case design guarantees. (2) The variance checks have no n_eff gate (coverage has): a healthy tiny control at h2 (n_eff 5) shows a CRPS ratio 1.145 against the limit 1.5, and round 0's healthy tiny control had an h2 NLL excess +3.79 against the limit 2.0. (3) A non-finite or absurd constant baseline must be 'not evaluated'. (4) max_variance_nll is in dollar units and shifts by ln k per price factor k (at x1e4 the healthy maximum is about 17.5 against the limit 20); the over-baseline checks are scale-invariant. The thresholds v1 are frozen (pre-registration, sha256 0b706aa2...): changes go into a v2 file named in NT-051's SPEC before any GPU time.
+- **acceptance:** (1) fuzz_constant's block is about 60-120 bars (a minority of the training windows are flat); a test that fewer than half of the training windows are fully constant and that the case's metrics differ from control. (2) The variance checks are 'not evaluated' below an n_eff threshold (stated in v2) and when the baseline is non-finite or absurd (tests). (3) max_variance_nll is dropped or expressed in scaled units. (4) configs/stability_thresholds_v2.yaml with every change's rationale and the stored-run evidence, committed in its own commit BEFORE any real harness run; the harness takes the file by name; v1 stays unchanged and still loadable (a test that v1's sha256 is still 0b706aa2...). (5) The expected n_eff per case and profile is listed in the file or the REPORT. (6) Fast suite, ruff.
+- **source:** qa-deep on NT-038 (2026-10-07)
 
 ## Done log
 
