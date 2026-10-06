@@ -1,0 +1,11 @@
+bc97b13a9d8177bb731d4e0164453f6658af0cd6
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_bench_window_free.py::test_smoke_kit_runs_and_gates_pass - ...
+FAILED tests/test_calib_gradient_mode.py::test_gradient_mode_cost_is_reported
+FAILED tests/test_model_variants.py::test_gru_attention_gru_small_linear_indicators_all_registered_with_ten_heads
+3 failed, 2293 passed, 5556 warnings in 393.95s (0:06:33)
+All checks passed!
+rerun alone on bc97b13a9d8177bb731d4e0164453f6658af0cd6: the 3 failures (test_bench_window_free smoke, test_calib_gradient_mode cost, test_model_variants ten_heads) pass: 3 passed in 52.93s
