@@ -161,7 +161,7 @@ def test_clip_learned_periods_never_saturates_the_logit():
     layer.build([(None, cfg.LOOKBACK), (None, 18)])
     for v in layer.get_indicator_trainable_variables():
         v.assign(30.0)  # far past the period floor; the old round trip wrote logit ~ +18.4 here
-    layer.clip_learned_periods(cfg.MOMENTUM_CLIP_MIN, cfg.MOMENTUM_CLIP_MAX)
+    layer.clip_learned_periods(cfg.MOMENTUM_CLIP_MIN, cfg.momentum_clip_max)
     for v in layer.get_indicator_trainable_variables():
         logit = float(v)
         s = 1.0 / (1.0 + np.exp(-logit))
