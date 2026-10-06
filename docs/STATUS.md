@@ -44,7 +44,8 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
 
 ## Waiting for the owner
 
-1. **Apply the settings part of D-061** (asked 2026-10-06; the permission classifier did not let the lead write
+1. **Commit the settings part of D-061?** It is in the working copy since 09:49 (the owner's edit; exactly the
+   asked JSON) and not committed: the lead commits it on the owner's yes. Original request (asked 2026-10-06; the permission classifier did not let the lead write
    `.claude/settings.json`): add `"model": "claude-opus-5-5"`, `"effortLevel": "high"` and a `PreToolUse` hook,
    matcher `Agent`, command `C:/Users/Step/miniforge3/envs/nt/python "$CLAUDE_PROJECT_DIR/.claude/hooks/agent_guard.py"`,
    timeout 15. Then start sessions with `D:/nt/neural_trade` as the working folder (a session in `D:/nt` loads
