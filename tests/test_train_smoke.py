@@ -81,14 +81,15 @@ def test_three_steps_keep_weights_finite_and_val_loss_moves(tf, tiny_config, tmp
     assert after != before, "validation loss did not change after an update (frozen evaluation path)"
 
 
+@pytest.mark.parametrize("explicit, lookback", [(20.0, 60), (None, 48)])
 def test_clip_learned_periods_receives_the_resolved_ceiling(tf, tiny_config, tmp_path, synthetic_bars,
-                                                            monkeypatch):
+                                                            monkeypatch, explicit, lookback):
     """NT-125 (2): the ceiling train_step passes to clip_learned_periods is the resolved
     ``momentum_clip_max`` (LOOKBACK when MOMENTUM_CLIP_MAX is None, else the explicit value)."""
     monkeypatch.chdir(tmp_path)
     tf.keras.utils.set_random_seed(0)
-    explicit = 20.0  # != LOOKBACK (60): a stale or pinned ceiling would show; None is the property test's
-    tiny_config.override(MOMENTUM_CLIP_MAX=explicit)
+    # explicit 20 != LOOKBACK shows a pinned ceiling; None at LOOKBACK 48 shows a stale 60
+    tiny_config.override(LOOKBACK=lookback, MOMENTUM_CLIP_MAX=explicit)
     model, train_ds, _ = _build(tiny_config, tmp_path, synthetic_bars)
     seen = []
     layer = model._indicator_layer
@@ -100,7 +101,7 @@ def test_clip_learned_periods_receives_the_resolved_ceiling(tf, tiny_config, tmp
 
     monkeypatch.setattr(layer, "clip_learned_periods", spy)
     model.fit(train_ds, epochs=1, steps_per_epoch=1, verbose=0)
-    assert seen and all(hi == tiny_config.momentum_clip_max == explicit for _lo, hi in seen), seen
+    assert seen and all(hi == tiny_config.momentum_clip_max == (explicit or lookback) for _lo, hi in seen), seen
 
 
 class _FreezeLearning(tf.keras.callbacks.Callback):
