@@ -202,3 +202,140 @@ def test_copy_is_independent():
     b = a.copy().override(EPOCHS=3)
     b.MA_SPANS.append(1)
     assert a.EPOCHS == 20 and a.MA_SPANS == [5, 10, 30]
+
+
+# ----------------------------------------------------------------------------- NT-141: validate gaps
+class _Cap:
+    """The package logger does not propagate (core/logging.py), so pytest's caplog never sees it."""
+
+    def __init__(self):
+        import logging
+
+        self.handler = logging.Handler()
+        self.records = []
+        self.handler.emit = self.records.append
+        self.log = logging.getLogger("neural_trade.core.config")
+
+    def __enter__(self):
+        import logging
+
+        self.old = self.log.level
+        self.log.addHandler(self.handler)
+        self.log.setLevel(logging.DEBUG)
+        return self
+
+    def __exit__(self, *exc):
+        self.log.removeHandler(self.handler)
+        self.log.setLevel(self.old)
+
+
+@pytest.fixture
+def caplog():
+    with _Cap() as cap:
+        yield cap
+
+
+@pytest.mark.parametrize("overrides, match", [
+    # period bounds: [MOMENTUM_CLIP_MIN, the resolved ceiling]
+    ({"MA_SPANS": [1, 10, 30]}, "below MOMENTUM_CLIP_MIN"),
+    ({"BB_PERIODS": [0.5, 20, 25]}, "below MOMENTUM_CLIP_MIN"),
+    ({"INDICATOR_FAMILIES": {"stoch": [{"k_period": 14, "d_period": 1}]}}, "below MOMENTUM_CLIP_MIN"),
+    # MACD fast >= slow
+    ({"MACD_SETTINGS": [{"fast": 26, "slow": 12, "signal": 9}]}, "fast"),
+    ({"MACD_SETTINGS": [{"fast": 12, "slow": 12, "signal": 9}]}, "fast"),
+    # MOMENTUM_CLIP_MIN must exceed 1
+    ({"MOMENTUM_CLIP_MIN": 1.0}, "MOMENTUM_CLIP_MIN"),
+    ({"MOMENTUM_CLIP_MIN": 0.5}, "MOMENTUM_CLIP_MIN"),
+    # schedules
+    ({"LOSS_WEIGHT_SCHEDULE": {"lambda_nope": {0: 0.1}}}, "unknown loss weight"),
+    ({"LOSS_WEIGHT_SCHEDULE": {"hd": {0: 0.1}}}, "unknown loss weight"),
+    ({"LOSS_WEIGHT_SCHEDULE": {"lambda_hd": {1.5: 0.1}}}, "integer"),
+    ({"LOSS_WEIGHT_SCHEDULE": {"lambda_hd": {"soon": 0.1}}}, "integer"),
+    ({"LOSS_WEIGHT_SCHEDULE": {"lambda_hd": {0: "x"}}}, "number"),
+    # ties, thresholds, clamps
+    ({"HORIZON_STEPS": [10, 10, 20], "EXTENDED_TREND_PERIODS": [10, 15, 20]}, "strictly ascending"),
+    ({"RHO_MAX": 1.0}, "RHO_MAX"),
+    ({"CALIB_LAMBDA_MIN": 5.0, "CALIB_LAMBDA_MAX": 2.0}, "CALIB_LAMBDA_MIN"),
+    # a partial LAYERS dict names the missing roles
+    ({"LAYERS": {"indicators": "learnable_indicators"}}, "missing .*energy_gate"),
+])
+def test_validate_refuses_the_nt141_gaps(overrides, match):
+    with pytest.raises(InvalidConfigurationError, match=match):
+        Config(**overrides)
+
+
+def test_valid_edge_values_of_the_nt141_rules_still_validate():
+    Config(MA_SPANS=[2, 30, 60], MACD_SETTINGS=[{"fast": 12, "slow": 26, "signal": 9}],
+           MOMENTUM_CLIP_MIN=1.5, CALIB_LAMBDA_MIN=1.0, CALIB_LAMBDA_MAX=1.0, RHO_MAX=0.999,
+           LOSS_WEIGHT_SCHEDULE={"lambda_hd": {0: 0.0, "3": 0.1}})
+    # the ceiling is resolved at use (NT-125): periods up to a larger LOOKBACK are fine
+    Config(LOOKBACK=120, MA_SPANS=[5, 100, 120])
+
+
+def test_a_period_above_the_ceiling_warns_but_loads(caplog):
+    """Small-LOOKBACK configs keep the default periods and tests set small explicit ceilings; the clip moves
+    the period, so the config is warned, not refused (NT-141 report)."""
+    if True:
+        Config(LOOKBACK=20)
+        Config(LOOKBACK=32, MOMENTUM_CLIP_MAX=20)
+    assert sum("period ceiling" in r.getMessage() for r in caplog.records) >= 2
+
+
+def test_schedulable_keys_match_the_training_lambdas():
+    from neural_trade.core.config import _LAYER_ROLES, _SCHEDULABLE_LAMBDA_KEYS
+    from neural_trade.training.lambdas import _LAMBDA_VARIABLE_KEYS
+
+    assert tuple(_SCHEDULABLE_LAMBDA_KEYS) == tuple(_LAMBDA_VARIABLE_KEYS)
+    assert set(_LAYER_ROLES) == set(Config().LAYERS)
+
+
+def test_lambda_schedule_callback_refuses_unknown_names():
+    from neural_trade.training.callbacks import LambdaScheduleCallback
+
+    assert LambdaScheduleCallback({"lambda_hd": {0: 0.1}}).schedule == {"lambda_hd": {0: 0.1}}
+    with pytest.raises(KeyError, match="lambda_typo"):
+        LambdaScheduleCallback({"lambda_typo": {0: 0.1}})
+
+
+def test_coercion_refuses_a_fraction_for_an_int_and_none_for_a_str():
+    assert Config().override(EPOCHS="12", SEED="1e1").SEED == 10
+    with pytest.raises(InvalidConfigurationError, match="cannot interpret"):
+        Config().override(EPOCHS="1.5")
+    with pytest.raises(InvalidConfigurationError, match="cannot interpret"):
+        Config().override(DATA_LOADER=None)
+    assert Config().override(CALIB_DAMPING_DIR=None).CALIB_DAMPING_DIR is None  # Optional stays None
+
+
+def test_var_floor_warns_through_logging_not_a_hidden_deprecation_warning(caplog):
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # a DeprecationWarning would raise here
+        Config(VAR_FLOOR=1e-5)
+    assert any("VAR_FLOOR" in r.getMessage() for r in caplog.records)
+
+
+def test_indicator_l2_is_not_tunable():
+    assert Config.field_specs()["INDICATOR_L2"].tunable is False
+
+
+def test_every_committed_config_and_scenario_still_validates():
+    """default.yaml, every scenario and every screen spec: the base config of each cell goes through validate."""
+    root = Path(__file__).resolve().parents[1] / "configs"
+    from neural_trade.experiments.scenario import Scenario
+    from neural_trade.experiments.screen import ScreenSpec
+
+    checked = 0
+    for path in sorted(root.rglob("*.yaml")):
+        text = path.read_text(encoding="utf-8")
+        if path.name == "default.yaml":
+            Config.from_yaml(path)
+        elif "screens" in path.parts:
+            spec = ScreenSpec.from_yaml(path)
+            assert isinstance(spec.base(), Config)  # builds (and validates) the base Config
+        elif path.parent.name == "scenarios" and "schema_version" in text:
+            Scenario.from_yaml(path).validate()
+        else:
+            continue  # an ablation spec, a compare, a strategy file: not a Config carrier
+        checked += 1
+    assert checked >= 20
