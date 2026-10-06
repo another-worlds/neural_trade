@@ -62,7 +62,7 @@ changes).
 | [NT-027](#nt-027) | P1 | refactor | implementer | done | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | done | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
-| [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
+| [NT-030](#nt-030) | P1 | feature | implementer | in-progress | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | done | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
@@ -205,6 +205,8 @@ changes).
 | [NT-170](#nt-170) | P3 | test-gap | implementer | todo | Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info |
 | [NT-171](#nt-171) | P2 | feature | implementer | todo | Leaderboard: read a recorded zero-cost rescore; stored-spec fallback independent of file mtime |
 | [NT-172](#nt-172) | P2 | bug | implementer | todo | Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain) |
+| [NT-173](#nt-173) | P1 | research | experimenter | todo | Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1 |
+| [NT-174](#nt-174) | P2 | decision | owner | todo | Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124) |
 
 ## Items
 
@@ -555,7 +557,7 @@ changes).
 
 **Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep`**
 
-- **status:** todo
+- **status:** in-progress (2026-10-06): nt-030 (implementer, Sonnet): 62cd446 QA (Opus) FAIL (GPU-free check never read memory; parallel trials imported the main checkout's code; non-finite loss counted COMPLETE; sec_per_step from a different setup); repair 1 e8b985d, re-QA (qa-deep) FAIL: dmon and launch env fixed, but a null loss (what the real logger writes) still COMPLETE and old close-only runs accepted as the same setup (missing config keys filled with today's defaults). Repair 2 (implementer on Opus, the last allowed round) running on nt-030; then blocked if it fails. Verified OK: budget arithmetic (hand-computed), resume, claim lock, leaderboard integration, scenario identity. New items: NT-173 (re-measure the parallel record before any --parallel above 1).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Correction to (7): environment.yml installs pip deps via `-r requirements.txt` (:25-26): pin optuna in pyproject (extra), requirements.txt and requirements-ci.txt only; never `optuna[optional]` (protobuf conflict with TF 2.10). The sweep's tested pin set: optuna 5.0.0, sqlalchemy 2.0.54, alembic 1.20.0, mako 1.4.3, colorlog 6.12.0, greenlet 3.5.6.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (sweep module), src/neural_trade/cli.py, pyproject.toml, requirements.txt, requirements-ci.txt, environment.yml, scenario specs, tests/
@@ -2286,6 +2288,30 @@ changes).
 - **depends on:** none
 - **why:** QA of NT-125 (2026-10-06) measured: reference_default, micro_l2, micro_horizons, long_360d_stab, h4h_360d, long_360d, micro_pnl_e1 match 0 stored run dirs to a spec cell, loss_prune_v1 only 6 of 18; this predates NT-125 (probably NT-117's default changes and the NT-047 input layout). `config_hash_of_dir` promises that an old cell is recognised exactly when it should be; the micro loop's CPU rescores on stored predictions get nothing.
 - **acceptance:** (1) A report per scenario: which fields differ between a stored dir's config.yaml and the spec cell (by field, counts). (2) Decide per field: a default that changed since the run (the old cell really is a different configuration, keep) or an identity artefact (normalise, as NT-125 did for the ceiling), with tests. (3) No change to the identity of cells that match today. (4) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-173
+
+**Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1**
+
+- **status:** todo
+- **priority / type / role:** P1 / research / experimenter
+- **area:** runs/experiments/gpu_measurements_v1/ (a new parallel_n.json), docs/RUNBOOK.md "GPU rules"
+- **depends on:** NT-030
+- **why:** qa-deep on NT-030 (2026-10-06): runs/experiments/gpu_measurements_v1/parallel_n.json (N = 3 allowed, N = 4 crashed; peak 7821 MB at N = 3, watch level peak_fb + 1024 MB) was measured on 2026-09-29 on the pre-D-047 close-only model (0.1066 s/step). The default is now OHLCV with 14 families (0.1735 s/step, 1.63x), memory unmeasured on the 12 GB card. A plausible D-047 single-process peak of 5000 MB exceeds 3731 + 1024 and stopped an N = 1 sweep in a probe. Also NT-035 saw the desktop alone at a median sm of about 40%, so the RUNBOOK rule 'sm > 30% = busy' can stop sweeps spuriously: judge by fb (memory).
+- **acceptance:** (1) A SPEC first (few GPU-minutes, under 0.5 GPU-hours): peak fb and sm of one process, then N = 2 and 3 concurrently, on the D-047 default and batch 256, with the GPU-free check before each launch. (2) A new parallel_n.json whose `setup` names the input layout, and the watch level from the measured peaks. (3) RUNBOOK 'GPU rules': the busy rule keys on fb (memory), with the desktop's sm baseline stated. (4) NT-030's sweep reads the new record.
+- **source:** QA reports of 2026-10-06
+
+### NT-174
+
+**Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124)**
+
+- **status:** todo
+- **priority / type / role:** P2 / decision / owner
+- **area:** docs/DECISIONS.md, then an implementer item
+- **depends on:** NT-124
+- **why:** NT-124's fix finds the true NLL minimum. On the reference run (20261003T225052Z-91fa363-11993eec, 2866 cal windows) every horizon's temperature goes to the upper bound (T = 1000): the heads carry no usable direction signal on the calibration block and the calibrated P(up) is about 0.5 for every window (cal NLL = ln 2, against 0.72 for the old fit, which stopped at a T worse than a constant 0.5). calibrated_quantile (D-009, the default strategy) and every strategy reading the calibrated P(up) become degenerate: a change of default trading behaviour, the owner's.
+- **acceptance:** The owner chooses and a DECISIONS entry records one of: (a) merge NT-124 as is and make 'no direction signal' an explicit, reported state (strategies that need P(up) refuse or stay flat, the report says so); (b) clamp T to a configured maximum (e.g. 10); (c) fall back to a constant P(up) from the training base rate; (d) skip the direction heads in that case. Lead's recommendation: (a). Then an implementer item for the chosen option.
 - **source:** QA reports of 2026-10-06
 
 ## Done log
