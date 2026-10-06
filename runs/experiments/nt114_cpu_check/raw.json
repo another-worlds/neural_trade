@@ -1,0 +1,29 @@
+{
+  "batch": 256,
+  "lookback": 60,
+  "warmup": 5,
+  "timed_per_seed": 30,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "gru_attention": {
+    "off_mean_s": 1.7630863388870945,
+    "off_median_s": 1.7269988000043668,
+    "on_mean_s": 1.976088708892025,
+    "on_median_s": 1.7888011500472203,
+    "ratio_on_over_off_mean": 1.1208122173638886,
+    "ratio_on_over_off_median": 1.0357859831996972,
+    "n_steps": 90
+  },
+  "gru_small": {
+    "off_mean_s": 0.8007398966648098,
+    "off_median_s": 0.783177750010509,
+    "on_mean_s": 0.8864969033346926,
+    "on_median_s": 0.8568398999923375,
+    "ratio_on_over_off_mean": 1.107097207254281,
+    "ratio_on_over_off_median": 1.094055468226517,
+    "n_steps": 90
+  }
+}

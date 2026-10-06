@@ -143,7 +143,10 @@ def build_gru_attention(config) -> tf.keras.Model:
         raise ValueError(f"ATTENTION_MODE={attention_mode!r} is not one of time, channels, none")
 
     # Memory-Supplemented Layers: Capture temporal interconnections
-    memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
+    # DETERMINISTIC_GRU (NT-114): unroll=True bypasses the cuDNN-fused GRU kernel (same maths,
+    # same weights layout) that TF 2.10's enable_op_determinism() does not cover (NT-074 GPU check).
+    _deterministic_gru = bool(getattr(config, 'DETERMINISTIC_GRU', False))
+    memory = layers.Bidirectional(layers.GRU(64, return_sequences=True, unroll=_deterministic_gru))(ind_seq)
     memory = layers.Dropout(0.1)(memory)
 
     # Interconnection Attention: Model relations between indicators
