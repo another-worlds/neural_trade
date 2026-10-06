@@ -499,6 +499,79 @@ else:
 """),
 ]
 
+# ---------------------------------------------------------------------------- 06 control panel
+control_panel = [
+    ("md", """
+# 06 - Control panel
+
+Choose a **scenario**, a **search space** and a **mode** (quick: about 5 minutes; Optuna: a resumable study with a stated
+GPU budget), launch or resume a sweep, watch its **leaderboard** while it runs, and **compare** configurations. The
+buttons call the same code as the command line (`neural-trade sweep SPEC --mode quick|optuna ...`; D-023), so everything
+here can also run unattended from a terminal, and every refusal of the CLI (a budget above `max hours`, a bar size other
+than 1 minute, `parallel` above the GPU record's allowed N, an existing sweep without *resume*) shows up here as a
+refusal with nothing started.
+
+**Executing this notebook top to bottom starts nothing.** The cells only read the run store and show the newest sweep's
+leaderboard and comparison (or an explicit *no sweep yet*). A sweep starts only when you press **Launch**, after the
+estimate / GPU budget of a dry run was shown; a budget above `CONFIRM_GPU_HOURS` also needs **Confirm budget**. The buttons
+work while no cell is running (the sweep runs in a background thread, as in notebook 01).
+
+The ranking column is the **dev-fold net Sharpe after costs** (D-020); test-fold numbers are shown and labelled "not used
+for ranking". Horizons keep their colours (h0 blue, h1 orange, h2 green).
+"""),
+    ("code", """
+# Parameters
+STORE = "../runs"                        # the run store: index.sqlite, scenarios/, sweeps/
+SPECS_DIR = "../configs/scenarios"       # the scenario specs the launcher offers
+COMPARES_DIR = "../configs/compares"     # pre-registered comparisons (NT-032): a paired verdict needs one
+SCENARIO = None                          # None -> reference_default (or the first usable spec)
+POLL_SECONDS = 10                        # the board's refresh interval while a sweep runs
+CONFIRM_GPU_HOURS = 1.0                  # a budget above this needs the Confirm budget button
+""", "parameters"),
+    ("code", """
+from IPython.display import display
+
+from neural_trade.notebook.control_panel import ControlPanel
+
+panel = ControlPanel(store=STORE, specs_dir=SPECS_DIR, compares_dir=COMPARES_DIR, scenario=SCENARIO,
+                     poll_seconds=POLL_SECONDS, confirm_gpu_hours=CONFIRM_GPU_HOURS)
+print(panel.summary_text())
+"""),
+    ("md", """
+## Launch or resume a sweep
+
+Scenario, mode, folds (any fold from `-N_FOLDS` to `N_FOLDS - 1`; the latest, -1, is the test fold and never ranks), the
+search space (every field the Config metadata marks tunable, with its range; the YAML below is the `search:` block the
+form builds) and the CLI's options. **Estimate** prints what the CLI prints before a sweep starts, **Launch** (or **Resume**
+for an existing sweep) starts it in the background.
+"""),
+    ("code", """
+display(panel.launcher())
+"""),
+    ("md", """
+## Leaderboard
+
+Rows are configurations ranked on the dev folds; guard-rails (drawdown, trades, buy-and-hold, random null, fold coverage,
+cost profile) can disqualify a row; the cost profile is stated. Several sweeps of the yardstick (learned, frozen twin, TA
+rules) share one board when the store holds them. While a sweep runs the board re-reads the run index every
+`POLL_SECONDS` and redraws when it changed (the *auto-refresh* box); it never blocks the notebook.
+"""),
+    ("code", """
+display(panel.board())
+panel.start_polling()
+"""),
+    ("md", """
+## Compare configurations
+
+Two or more rows of the board: every logged metric per horizon with its spread over folds (whisker on the dot) and over
+seeds (thin grey line), the table of every score key, and the paired verdict: NT-032's when a pre-registered comparison
+(`configs/compares/`) names the pair, otherwise an explicitly **exploratory** per-fold table, not a verdict (D-025).
+"""),
+    ("code", """
+display(panel.comparison())
+"""),
+]
+
 # ---------------------------------------------------------------------------- 07 discovered indicators
 discovered = [
     ("md", """
@@ -779,6 +852,7 @@ NOTEBOOKS = {
     "03_signals_and_trades": signals_nb,
     "04_diagnostics": diag,
     "05_compare_runs": compare,
+    "06_control_panel": control_panel,
     "07_discovered_indicators": discovered,
     "08_long_run": long_run,
     "09_candidate_run": candidate_run,
