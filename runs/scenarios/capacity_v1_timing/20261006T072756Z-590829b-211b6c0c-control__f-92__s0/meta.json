@@ -1,0 +1,91 @@
+{
+  "run_id": "20261006T072756Z-590829b-211b6c0c-control__f-92__s0",
+  "seed": 0,
+  "tags": [
+    "scenario",
+    "capacity_v1_timing",
+    "dev"
+  ],
+  "created_utc": "20261006T072756Z",
+  "engine": {
+    "schema_version": 1,
+    "scenario": "capacity_v1_timing",
+    "cell_key": "control__f-92__s0",
+    "configuration": "control",
+    "variant": "control",
+    "params": {},
+    "fold": -92,
+    "fold_id": 9,
+    "n_usable_folds": 96,
+    "role": "dev",
+    "seed": 0,
+    "config_hash": "a8f8c5bb4ef0",
+    "settings_hash": "ff514fca1d28",
+    "spec_hash": "14ccec04fed1",
+    "commit": "590829b",
+    "strategy": {
+      "name": "calibrated_quantile",
+      "params": {}
+    },
+    "backtest": {},
+    "run": {
+      "calibrate": true,
+      "save_artifacts": false,
+      "indicator_report": false
+    },
+    "spec": "configs\\scenarios\\capacity_v1_timing.yaml"
+  },
+  "dataset": {
+    "path": "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv",
+    "sha256": "67966a49634fa0a591f6fa188ec330797297d9b399b68c96b36bef06f1f50008",
+    "size_bytes": 290962077,
+    "loader": "csv",
+    "n_rows": 4598198,
+    "n_bars": 4598198,
+    "first_timestamp": "2017-01-01T00:00:00",
+    "last_timestamp": "2025-09-29T23:57:00"
+  },
+  "setup": {
+    "bar_minutes": 1,
+    "LOOKBACK": 60,
+    "HORIZON_STEPS": [
+      10,
+      15,
+      20
+    ]
+  },
+  "blocks": {
+    "fold": -92,
+    "fold_id": 9,
+    "n_usable_folds": 96,
+    "gap": 80,
+    "train": {
+      "start": 0,
+      "stop": 73468,
+      "n": 73468,
+      "first_timestamp": "2022-11-22T12:18:00",
+      "last_timestamp": "2023-01-12T12:45:00"
+    },
+    "val": {
+      "start": 73548,
+      "stop": 103548,
+      "n": 30000,
+      "first_timestamp": "2023-01-12T14:06:00",
+      "last_timestamp": "2023-02-02T10:05:00"
+    },
+    "cal": {
+      "start": 103628,
+      "stop": 133628,
+      "n": 30000,
+      "first_timestamp": "2023-02-02T11:26:00",
+      "last_timestamp": "2023-02-23T07:25:00"
+    },
+    "test": {
+      "start": 133708,
+      "stop": 148559,
+      "n": 14851,
+      "first_timestamp": "2023-02-23T08:46:00",
+      "last_timestamp": "2023-03-05T16:16:00"
+    }
+  }
+}
