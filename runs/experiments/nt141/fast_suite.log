@@ -1,0 +1,18 @@
+commit 711d5ca474be2cf1f9bb2d5ac547d6bfea6967de (code; the log is committed on top)
+
+run 1 (-n 8, fast, on the first NT-141 commit; machine shared with a tactical session):
+  4 failed, 2168 passed in 393s
+  - tests/test_sweep.py::test_the_space_comes_from_the_config_metadata_and_only_tunable_fields: REAL
+    (RHO_MAX lt=1.0 made the sweep metadata range non-inclusive); fixed in 711d5ca (RHO_MAX < 1 is a validate rule, the field stays le=1.0)
+  - test_calib_fail_loud, test_calib_gradient_mode, test_nt033_baselines: ResourceExhaustedError OOM
+    ([256,57,60,60] float on CPU) / device mix-ups under memory pressure; test_calib_fail_loud and test_nt033_baselines pass
+    when rerun at -n 2; test_calib_gradient_mode::test_default_model_gradient_mode_equalises_terms_as_they_enter_total still
+    OOMs alone on this loaded machine (3 runs, same MemoryError; not config related)
+
+targeted reruns on 711d5ca:
+  tests/test_config.py: 52 passed (test_config_metadata.py, test_sweep.py incl. the parallel optuna test: passed)
+ruff check src tests scripts: All checks passed!
+scripts/golden_run.py verify tests/fixtures/golden_nt117.npz: {"golden_equal": true, "n_fail": 0, "n_missing": 0}
+
+run 2 (-n 8 on 711d5ca, started afterwards): HUNG with idle workers (about 100 MB each, no CPU) for over an hour on
+the loaded machine; the agent could not stop it (permission classifier). Needs the lead's full fast suite on the merged head.
