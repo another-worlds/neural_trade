@@ -81,6 +81,28 @@ def test_three_steps_keep_weights_finite_and_val_loss_moves(tf, tiny_config, tmp
     assert after != before, "validation loss did not change after an update (frozen evaluation path)"
 
 
+def test_clip_learned_periods_receives_the_resolved_ceiling(tf, tiny_config, tmp_path, synthetic_bars,
+                                                            monkeypatch):
+    """NT-125 (2): the ceiling train_step passes to clip_learned_periods is the resolved
+    ``momentum_clip_max`` (LOOKBACK when MOMENTUM_CLIP_MAX is None, else the explicit value)."""
+    monkeypatch.chdir(tmp_path)
+    tf.keras.utils.set_random_seed(0)
+    explicit = 20.0  # != LOOKBACK (60): a stale or pinned ceiling would show; None is the property test's
+    tiny_config.override(MOMENTUM_CLIP_MAX=explicit)
+    model, train_ds, _ = _build(tiny_config, tmp_path, synthetic_bars)
+    seen = []
+    layer = model._indicator_layer
+    original = layer.clip_learned_periods
+
+    def spy(lo, hi):
+        seen.append((lo, hi))
+        return original(lo, hi)
+
+    monkeypatch.setattr(layer, "clip_learned_periods", spy)
+    model.fit(train_ds, epochs=1, steps_per_epoch=1, verbose=0)
+    assert seen and all(hi == tiny_config.momentum_clip_max == explicit for _lo, hi in seen), seen
+
+
 class _FreezeLearning(tf.keras.callbacks.Callback):
     """Set both optimizers' learning rates to 0 so validation loss is exactly flat."""
 
