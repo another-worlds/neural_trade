@@ -150,7 +150,7 @@ changes).
 | [NT-115](#nt-115) | P1 | feature | implementer | done | Strategies: raw heads for coherence, served delta for size |
 | [NT-116](#nt-116) | P3 | research | experimenter | todo | Measure Predictor.predict latency on the GPU |
 | [NT-117](#nt-117) | P1 | feature | implementer | done | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
-| [NT-118](#nt-118) | P2 | bug | implementer | todo | Calibration keeps a configured LAMBDA_VOL of 0 at 0 (as for soft ECE); then an A/B of 0 against the 0.1 floor |
+| [NT-118](#nt-118) | P2 | bug | implementer | in-progress | Calibration keeps a configured LAMBDA_VOL of 0 at 0 (as for soft ECE); then an A/B of 0 against the 0.1 floor |
 | [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
@@ -192,6 +192,7 @@ changes).
 | [NT-157](#nt-157) | P3 | cleanup | implementer | todo | Stale removal, round 2 (D-029) |
 | [NT-158](#nt-158) | P3 | bug | implementer | todo | Run-record hygiene: dirty flag, run order, strict JSON, recorded CLI flags, same-second ids |
 | [NT-159](#nt-159) | P3 | bug | implementer | todo | NT-119 follow-ups: warn once on a frame without raw heads; drop the redundant second prediction in backtest_ui; INCOH on a real run |
+| [NT-160](#nt-160) | P0 | infra | implementer | in-progress | Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing |
 
 ## Items
 
@@ -1614,7 +1615,7 @@ changes).
 
 **Calibration keeps a configured LAMBDA_VOL of 0 at 0; then an A/B of 0 against the 0.1 floor**
 
-- **status:** todo
+- **status:** in-progress (2026-10-06): (1), (2), (4) on nt-118 2bb9f8d (implementer, Sonnet medium): `rescale_weight` leaves damping-0 weights unclamped; switch CALIB_VOL_ZERO_TO_FLOOR (default true reproduces the 0.1 floor, golden 455/455 equal). QA running. The A/B of (3) flips CALIB_VOL_ZERO_TO_FLOOR=false (vol 0) against the default (0.1 floor).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Widened by the sweep's CPU-05: `rescale_weight` (training/lambda_calibration.py:111-122) clips every measured weight, also those with damping 0 that config.py:299, :311 document as 'not rescaled'. Add to (1): with calibrate on, LAMBDA_HD 0.03, LAMBDA_T_PERP 0.02, LAMBDA_CASIMIR 25 and LAMBDA_EXTENDED_TREND 0.05 come out unchanged; LAMBDA_EXTENDED_TREND 0 stays 0; damping > 0 weights still respect [CALIB_LAMBDA_MIN, CALIB_LAMBDA_MAX] and a binding clip logs a WARNING; the golden diff is confined to the affected weights.
 - **priority / type / role:** P2 / bug / implementer, then experimenter
 - **area:** src/neural_trade/training/lambda_calibration.py, src/neural_trade/core/config.py, configs/default.yaml, tests/
@@ -2118,6 +2119,18 @@ changes).
 - **why:** NT-119's implementer and QA (2026-10-06): `SignalFrame.build` warns on every call with a legacy frame (signals.py:203), so a sweep loop over hand-built frames repeats it; notebook/backtest_ui.py:216 sets `meta["delta_raw"]` from a second `calibrated=False` prediction that is now redundant; the INCOH before/after of NT-119 (3) is vacuous because every beta of the reference run is 0, so enhanced_multi_horizon never trades.
 - **acceptance:** (1) The warning is logged once per process (test). (2) backtest_ui uses the served frame's raw heads and makes one prediction pass; its figures unchanged (test on the frame). (3) INCOH exit counts before/after on a stored run with a non-zero beta (or a scenario where enhanced_multi_horizon trades), reported. (4) Fast suite, ruff.
 - **source:** NT-119 implementer and QA reports (2026-10-06)
+
+### NT-160
+
+**Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing**
+
+- **status:** in-progress (2026-10-06): implementer on nt-160
+- **priority / type / role:** P0 / infra / implementer
+- **area:** scripts/check_run_evidence.py, tests/test_run_evidence.py, runs/EXTERNAL_RUNS.md (new), docs/RUNBOOK.md
+- **depends on:** none
+- **why:** The lead merged PR #15 (7b9e87d) without running the fast suite (docs only), and its findings cite 8 run ids the remote session made on its cloud machine; `test_every_run_cited_in_this_repository_is_tracked` fails since then (found by NT-118's implementer). The record must not be edited to hide them.
+- **acceptance:** (1) runs/EXTERNAL_RUNS.md lists the 8 ids with where they ran and why they are not here. (2) A listed id without a run directory passes and is counted as external; a listed id with a directory is checked normally; an unlisted id without one still fails (tests on tmp repos). (3) The repository-level test passes. (4) Docstring and RUNBOOK updated. (5) Fast suite, ruff, CI green on remediation/plan.
+- **source:** NT-118 implementer report (2026-10-06)
 
 ## Done log
 
