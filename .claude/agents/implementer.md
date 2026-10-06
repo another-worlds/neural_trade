@@ -76,6 +76,7 @@ files you may change. Nothing else.
 - files changed;
 - per acceptance criterion: met / not met, with the evidence (test names, numbers, PNG paths);
 - the exact test and ruff result lines (and the golden-run and `stability` lines where they apply);
+  every committed suite log starts with the `git rev-parse HEAD` it ran on, so QA can tie it to the sha;
 - deletions: each deleted path with its D-029 evidence (stale, no effect), or "none";
 - notebooks: whether `scripts/notebooks/build.py` changed, and which notebooks the lead must execute;
 - found, not done: a list for the backlog;

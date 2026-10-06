@@ -192,7 +192,9 @@ changes).
 | [NT-157](#nt-157) | P3 | cleanup | implementer | todo | Stale removal, round 2 (D-029) |
 | [NT-158](#nt-158) | P3 | bug | implementer | todo | Run-record hygiene: dirty flag, run order, strict JSON, recorded CLI flags, same-second ids |
 | [NT-159](#nt-159) | P3 | bug | implementer | todo | NT-119 follow-ups: warn once on a frame without raw heads; drop the redundant second prediction in backtest_ui; INCOH on a real run |
-| [NT-160](#nt-160) | P0 | infra | implementer | in-progress | Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing |
+| [NT-160](#nt-160) | P0 | infra | implementer | done | Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing |
+| [NT-161](#nt-161) | P3 | bug | implementer | todo | check_run_evidence reads only the id column of runs/EXTERNAL_RUNS.md and requires the file tracked |
+| [NT-162](#nt-162) | P3 | bug | implementer | todo | NT-118 follow-ups: a 0 = off gate for the other calibrated weights, the switch text, a 0.05 test, a stale comment |
 
 ## Items
 
@@ -1615,7 +1617,7 @@ changes).
 
 **Calibration keeps a configured LAMBDA_VOL of 0 at 0; then an A/B of 0 against the 0.1 floor**
 
-- **status:** in-progress (2026-10-06): (1), (2), (4) on nt-118 2bb9f8d (implementer, Sonnet medium): `rescale_weight` leaves damping-0 weights unclamped; switch CALIB_VOL_ZERO_TO_FLOOR (default true reproduces the 0.1 floor, golden 455/455 equal). QA running. The A/B of (3) flips CALIB_VOL_ZERO_TO_FLOOR=false (vol 0) against the default (0.1 floor).
+- **status:** in-progress (2026-10-06): (1), (2), (4) done: nt-118 2bb9f8d (implementer, Sonnet medium), merged as ba3f2dd; QA (Opus medium) PASS on 2bb9f8d: golden_nt117 455/455 equal (QA's own run); the 13 calibrated lambdas identical to the last digit against the base 96e761a in value AND gradient mode; switch off gives lambda_vol 0.0 in metrics.jsonl and vol unmeasured in gradient mode; damping-0 defaults all 0.1 (= the floor), so no default moves; tests/test_calib_zero_weights.py (11), stability 11, ruff clean; mutations (clamp back for damping 0; switch default flipped) caught. Open: (3), the experimenter A/B of CALIB_VOL_ZERO_TO_FLOOR=false (vol 0) against the default (0.1 floor). Follow-ups: NT-162.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Widened by the sweep's CPU-05: `rescale_weight` (training/lambda_calibration.py:111-122) clips every measured weight, also those with damping 0 that config.py:299, :311 document as 'not rescaled'. Add to (1): with calibrate on, LAMBDA_HD 0.03, LAMBDA_T_PERP 0.02, LAMBDA_CASIMIR 25 and LAMBDA_EXTENDED_TREND 0.05 come out unchanged; LAMBDA_EXTENDED_TREND 0 stays 0; damping > 0 weights still respect [CALIB_LAMBDA_MIN, CALIB_LAMBDA_MAX] and a binding clip logs a WARNING; the golden diff is confined to the affected weights.
 - **priority / type / role:** P2 / bug / implementer, then experimenter
 - **area:** src/neural_trade/training/lambda_calibration.py, src/neural_trade/core/config.py, configs/default.yaml, tests/
@@ -2124,13 +2126,37 @@ changes).
 
 **Run-evidence check: external runs (the remote sweep's cloud runs) are declared, not missing**
 
-- **status:** in-progress (2026-10-06): implementer on nt-160
+- **status:** done (2026-10-06, CI pending on the merge push): nt-160 0e3dff4 (implementer, Sonnet medium), merged; QA (Opus medium) PASS on 0e3dff4 for (1)-(4): 12 tests in tests/test_run_evidence.py, `check_run_evidence.py` 'all tracked, 8 external', its own tmp-repo edge cases (listed id with a local gap still fails; typo ids never whitelist; the external count always shows), mutation caught; fast 1931 passed (runs/experiments/nt160/fast_suite.log), ruff clean. CI before the fix: red on e822b2d (run 37424780995, only this test). Follow-ups: NT-161.
 - **priority / type / role:** P0 / infra / implementer
 - **area:** scripts/check_run_evidence.py, tests/test_run_evidence.py, runs/EXTERNAL_RUNS.md (new), docs/RUNBOOK.md
 - **depends on:** none
 - **why:** The lead merged PR #15 (7b9e87d) without running the fast suite (docs only), and its findings cite 8 run ids the remote session made on its cloud machine; `test_every_run_cited_in_this_repository_is_tracked` fails since then (found by NT-118's implementer). The record must not be edited to hide them.
 - **acceptance:** (1) runs/EXTERNAL_RUNS.md lists the 8 ids with where they ran and why they are not here. (2) A listed id without a run directory passes and is counted as external; a listed id with a directory is checked normally; an unlisted id without one still fails (tests on tmp repos). (3) The repository-level test passes. (4) Docstring and RUNBOOK updated. (5) Fast suite, ruff, CI green on remediation/plan.
 - **source:** NT-118 implementer report (2026-10-06)
+
+### NT-161
+
+**check_run_evidence reads only the id column of runs/EXTERNAL_RUNS.md and requires the file tracked**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** scripts/check_run_evidence.py, tests/test_run_evidence.py
+- **depends on:** NT-160 (done)
+- **why:** QA of NT-160 (2026-10-06): `external = cited_ids(top / EXTERNAL)` whitelists any id anywhere in the file, prose included, and an untracked local copy whitelists locally but not in CI. Acceptable today because the external count is always printed.
+- **acceptance:** (1) Only ids in the first column of the table are declarations (test: an id in prose is not). (2) An untracked EXTERNAL_RUNS.md is reported and not used (test). (3) Fast suite, ruff.
+- **source:** QA of NT-160 (2026-10-06)
+
+### NT-162
+
+**NT-118 follow-ups: a 0 = off gate for the other calibrated weights, the switch text, a 0.05 test, a stale comment**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/training/lambda_calibration.py, src/neural_trade/core/config.py, tests/test_calib_zero_weights.py
+- **depends on:** NT-118 (code merged)
+- **why:** QA of NT-118 (2026-10-06): (a) LAMBDA_SHORT, POINT, LONG, DIR, VAR or CRPS configured at 0 with damping > 0 is still lifted to CALIB_LAMBDA_MIN (now with a WARNING): only vol and soft ECE have a 0 = off gate, so these terms cannot be switched off while calibration is on. (b) The CALIB_VOL_ZERO_TO_FLOOR text (core/config.py:294) says a vol of 0 'is lifted', which is false with CALIB_DAMPING_VOL 0 or a global CALIB_DAMPING 0 (value mode used to lift it). (c) The widened case 'LAMBDA_EXTENDED_TREND 0.05 unchanged' is tested only at 0. (d) The comment above the post-calibration norms still cites the [0.1, 20] clamp for every weight.
+- **acceptance:** (1) A configured 0 of any calibrated weight stays 0 with calibration on, value and gradient mode, excluded from the shared reference like soft ECE (tests); the shipped defaults unchanged (golden 455/455). (2) The switch text matches the damping-0 case (or the damping-0 case lifts as before; test either way). (3) A 0.05 test for LAMBDA_EXTENDED_TREND. (4) The comment corrected. (5) Fast suite, stability, ruff.
+- **source:** QA of NT-118 (2026-10-06)
 
 ## Done log
 
