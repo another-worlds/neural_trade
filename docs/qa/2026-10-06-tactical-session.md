@@ -19,3 +19,16 @@ The lead asked four questions (one round, with recommendations). The answers:
    (implementer for code, experimenter for the GPU). Owner: **as in the MVP** (not the recommended option).
 
 Recorded as D-062; the rules are in [../TACTICAL.md](../TACTICAL.md).
+
+## Round 2: the hill-climb on output accuracy
+
+Owner: "я могу тебе дать hillclmb по метрикам точности выхода" [I can give you a hill-climb on output accuracy
+metrics]. The lead asked four questions. Answers:
+
+1. **Metric:** direction AUC, mean of h0-h2 (recommended); CRPSS and conformal coverage are guard-rails.
+2. **Levers:** everything except the fixed decisions (not the recommended Config-only option).
+3. **Folds:** climb on 5 dev folds, check the winner once on 5 other dev folds (recommended).
+4. **Budget (free text, verbatim):** "переписываю прошлое правило: используем GPU параллельно с другой сессией.
+   Бюджет - некотролируем. правило: обучение на сверхкоротких массивах. Даю 2 минуты максимум на каждый прогон"
+   [rewriting the previous rule: the GPU in parallel with the other session; budget uncontrolled; training on
+   ultra-short arrays; 2 minutes at most per run]. D-063.

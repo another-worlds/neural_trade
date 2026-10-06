@@ -19,27 +19,22 @@ for the MVP".
   At session start, when its tree is clean, it merges `origin/remediation/plan` into `nt-tactical`
   (a merge, never a rebase: D-004).
 
-## GPU: the MVP has priority
+## GPU: shared, in parallel (owner, D-063; supersedes D-062's MVP priority)
 
-- **Lock file** `D:/nt/gpu.lock` (outside the repo). Every GPU job of either session (experimenter
-  runs, the notebook routine) writes one line before it starts: `<session> <job> <start UTC>
-  <expected end UTC>`, and deletes the file when the job ends. The RUNBOOK free check still applies.
-- **The tactical session starts a GPU job only when** there is no lock, the RUNBOOK check says the GPU
-  is free, and `D:/nt/gpu.mvp_waiting` does not exist.
-- **One tactical launch takes at most 30 minutes** wall-clock. Longer work is split into launches,
-  so an MVP job waits at most one launch.
-- **The MVP side:** when it wants the GPU while a tactical lock holds it, it creates
-  `D:/nt/gpu.mvp_waiting` (one line: what it waits to run), waits for the lock to go (a background
-  wait or the tracker: D-042, no pinging), and deletes the waiting file when its own job starts.
-- **Stale lock:** a lock whose expected end passed more than 30 minutes ago, with the GPU idle by the
-  RUNBOOK check, may be removed; the remover records it in its journal or STATUS.
+- The tactical session uses the GPU **in parallel** with the MVP session: it does not wait for MVP
+  jobs and the MVP does not wait for it. The owner's other project (Docker/WSL) is still never touched:
+  if the RUNBOOK check shows that project on the GPU, wait.
+- **Every tactical run trains on an ultra-short block and takes at most 2 minutes wall-clock**
+  (screen layout, NT-088; the micro layout's ~4-minute cells are too long). A run that hits 2 minutes
+  is stopped and recorded as over-limit, not extended.
+- No lock file and no waiting flag (D-062's are withdrawn).
 
 ## Rigour and budget (exploratory)
 
-- Screen layout (NT-088) and micro layout (D-041), one seed, no SPEC and no pre-registration. Every
-  journal row says "tactical, exploratory", the seeds and folds it used, and its noise level (D-012).
-- **Budget:** up to about 3 GPU-hours per day without asking; more goes to the owner. The journal
-  keeps the day's running total.
+- Screen layout (NT-088), one seed, no SPEC and no pre-registration. Every journal row says
+  "tactical, exploratory", the seeds and folds it used, and its noise level (D-012).
+- **Budget: none** (owner, D-063): GPU time is not capped or counted against a limit; the journal still
+  records the GPU minutes each round used.
 - **Choices never use test data** (D-020): select on dev folds only; the long file's protected span
   (`DATA_END_PROTECTED_DAYS`) stays protected.
 - **No default changes from here.** A finding becomes a default only through an MVP backlog item and
