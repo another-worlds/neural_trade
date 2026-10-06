@@ -374,6 +374,11 @@ def test_the_fuzz_transforms_are_inside_the_bars_the_run_sees_and_change_its_tra
     jump = split_arrays(_variant_config(profile, "fuzz_jumps", data["fuzz_jumps"]))["train"]
     rng = lambda X: np.ptp(X, axis=1)                                                    # noqa: E731
     assert (rng(flat["X"]) == 0).sum() >= 10 and (rng(base["X"]) == 0).sum() == 0     # flat training windows exist
+    # NT-187: a minority of them, counted both ways (flat inputs; flat inputs AND every label bar flat)
+    n_train = len(flat["X"])
+    flat_inputs = rng(flat["X"]) == 0
+    flat_all = flat_inputs & np.all(np.asarray(flat["y"]).reshape(n_train, -1) == 0, axis=1)
+    assert 0 < flat_all.sum() <= flat_inputs.sum() < n_train / 2, (flat_all.sum(), flat_inputs.sum(), n_train)
     assert np.abs(np.diff(np.log(jump["X"]), axis=1)).max() > 1.0                       # a spike or jump in a window
     assert np.abs(np.diff(np.log(base["X"]), axis=1)).max() < 0.2
     assert not np.allclose(flat["y"], base["y"]) and not np.allclose(jump["y"], base["y"])   # the targets feel it
@@ -751,3 +756,226 @@ def test_a_tiny_cpu_run_with_a_nan_in_the_input_and_one_with_a_nan_gradient_are_
     res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs",
                          case_ids=["fault_nan_input", "fault_nan_gradient"], seeds=[0])
     assert res.case_passed == {"fault_nan_input": True, "fault_nan_gradient": True}, res.report.read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------------ NT-187: thresholds v2 and the harness fixes
+V1_SHA256 = "0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e"
+V2_SHA256 = "34a122b28861c13622165aed81fdb1e9405eea91fe4823d0a754d070cbade2cb"
+V2_FILE = REPO / "configs" / "stability_thresholds_v2.yaml"
+
+
+def _v2_with(tmp_path, **changes):
+    """A copy of the v2 file with some check values replaced (a gate 'removed' by setting it to 0 or to a huge bound)."""
+    import re
+
+    text = V2_FILE.read_text(encoding="utf-8")
+    for key, value in changes.items():
+        text, n = re.subn(rf"(?m)^  {key}: .*$", f"  {key}: {value}", text)
+        assert n == 1, key
+    out = tmp_path / f"v2_{len(list(tmp_path.iterdir()))}.yaml"
+    out.write_text(text, encoding="utf-8")
+    return st.load_thresholds(out)
+
+
+def _scored(tmp_path, scores, thresholds, base="capacity_control_f95"):
+    """evaluate_run on a copy of a stored healthy run whose `scores` are updated with ``scores``."""
+    d = _copy_fixture(base, tmp_path / f"s{len(list(tmp_path.iterdir()))}")
+    res = json.loads((d / "result.json").read_text(encoding="utf-8"))
+    res["scores"].update(scores)
+    (d / "result.json").write_text(json.dumps(res), encoding="utf-8")
+    return st.evaluate_run(d, {c.id: c for c in st.default_cases()}["control"], thresholds)
+
+
+def _check(v, name):
+    return {c.name: c for c in v.checks}[name]
+
+
+def test_thresholds_v1_is_frozen_still_loads_the_default_and_gives_todays_verdicts(tmp_path):
+    t = st.load_thresholds()
+    assert t.sha256 == V1_SHA256 == st.file_sha256(REPO / "configs" / "stability_thresholds.yaml")
+    assert t.schema_version == 1 and t.path == st.THRESHOLDS_FILE and t.name == "stability_thresholds_v1"
+    assert st.resolve_thresholds_path(None, "reference") == st.THRESHOLDS_FILE            # the default stays v1
+    # v1 judges as before: no n_eff gate (an n_eff 5 NLL excess of 3.8 fails), the absolute NLL in quote units
+    low = {f"h{i}/n_eff": 5.0 for i in range(3)}
+    v = _scored(tmp_path, {**low, "h2/variance/nll": 9.0, "baseline/const_var/h2/variance/nll": 5.2}, t)
+    assert "variance_nll_over_const" in [c.name for c in v.failed_checks]
+    assert not _scored(tmp_path, {"h2/variance/nll": 25.0}, t).passed
+
+
+def test_thresholds_v2_is_pre_registered_named_by_hash_and_every_check_has_a_rationale():
+    t = st.load_thresholds(V2_FILE)
+    assert t.sha256 == V2_SHA256 and t.schema_version == 2 and t.name == "stability_thresholds_v2"
+    assert "max_variance_nll" not in t.checks and t.check("max_variance_nll_scaled") == 8.0
+    text = V2_FILE.read_text(encoding="utf-8")
+    for key in t.checks:
+        i = text.index(f"  {key}:")
+        assert "#" in text[max(0, i - 900):i], f"{key} has no rationale comment above it"
+    assert st.load_thresholds().sha256 == V1_SHA256                    # v1 untouched
+
+
+def test_the_thresholds_file_is_chosen_by_name_by_path_or_by_the_profile_default(tmp_path, bars_csv, monkeypatch):
+    assert st.resolve_thresholds_path("v2") == V2_FILE == st.resolve_thresholds_path("stability_thresholds_v2.yaml")
+    assert st.resolve_thresholds_path(str(V2_FILE)) == V2_FILE
+    with pytest.raises(FileNotFoundError):
+        st.resolve_thresholds_path("v9")
+    monkeypatch.setitem(st.PROFILE_THRESHOLDS, "tiny", V2_FILE)
+    res = fake_harness(tmp_path, bars_csv, cases=["control"], seeds=[0])               # the profile default (v2 here)
+    assert res.thresholds_sha256 == V2_SHA256 and V2_SHA256 in res.report.read_text(encoding="utf-8")
+    monkeypatch.setitem(st.PROFILE_THRESHOLDS, "tiny", None)
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "r2", case_ids=["control"], seeds=[0],
+                         thresholds_path="v2", trainer=HarnessFake())                   # by name
+    assert res.thresholds_sha256 == V2_SHA256
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "r3", case_ids=["control"], seeds=[0],
+                         trainer=HarnessFake())                                         # no name: v1
+    assert res.thresholds_sha256 == V1_SHA256
+    text = res.report.read_text(encoding="utf-8")
+    assert "n_eff of the scored block per case" in text and "| control | h0 " in text
+
+
+def test_v2_passes_every_stored_healthy_run_and_still_fails_qas_broken_runs(tmp_path, monkeypatch):
+    T = st.load_thresholds(V2_FILE)
+    case = {c.id: c for c in st.default_cases()}["control"]
+    for n in sorted(p.name for p in HEALTHY.iterdir()):
+        v = st.evaluate_run(_copy_fixture(n, tmp_path), case, T)
+        assert v.passed, (n, [c.to_dict() for c in v.failed_checks])
+        by = {c.name: c for c in v.checks}
+        assert by["variance_nll"].evaluated and by["variance_nll_over_const"].evaluated and by["coverage90"].evaluated
+        assert 1.0 < by["variance_nll"].value < 3.0                       # scaled units: observed 1.14-2.88
+    # QA's two synthetic broken runs and the variance-head cap run (_broken judges with st.load_thresholds())
+    monkeypatch.setattr(st, "load_thresholds", lambda *a, **k: T)
+    b1 = _broken(tmp_path, "b1", scale_loss=1e30, nll=1e12, crps=1e12, n_eff=200)
+    b2 = _broken(tmp_path, "b2", nll=1000.0)
+    b3 = _broken(tmp_path, "b3", scale_loss=1e30, nll=1e12, crps=1e12, n_eff=10)
+    assert not b1.passed and {"max_abs_loss", "variance_nll"} <= {c.name for c in b1.failed_checks}
+    assert not b2.passed and [c.name for c in b2.failed_checks] == ["variance_nll"]
+    assert not b3.passed and "max_abs_loss" in [c.name for c in b3.failed_checks]      # caught without the head
+
+
+def test_the_variance_checks_are_not_evaluated_below_their_n_eff_gates_and_each_gate_matters(tmp_path):
+    T = st.load_thresholds(V2_FILE)
+    bad = {"h2/variance/nll": 9.0, "baseline/const_var/h2/variance/nll": 5.2,        # +3.8 over the baseline
+           "h2/variance/crps": 40.0, "baseline/const_var/h2/variance/crps": 20.0}    # ratio 2.0
+    low = _scored(tmp_path, {**bad, "h2/n_eff": 5.0}, T)
+    assert low.passed
+    for name in ("variance_nll_over_const", "variance_crps_over_const"):
+        c = _check(low, name)
+        assert "h2 (n_eff 5 <" in c.detail                                  # h0 and h1 are still judged
+    # n_eff between the two gates: the excess is still not evaluated, the CRPS ratio is
+    mid = _scored(tmp_path, {**bad, "h2/n_eff": 50.0}, T)
+    assert "h2 (n_eff 50 <" in _check(mid, "variance_nll_over_const").detail
+    assert [c.name for c in mid.failed_checks] == ["variance_crps_over_const"]
+    high = _scored(tmp_path, {**bad, "h2/n_eff": 200.0}, T)
+    assert {"variance_nll_over_const", "variance_crps_over_const"} == {c.name for c in high.failed_checks}
+    # removing a gate (threshold 0) makes the same n_eff 5 run fail: the gate is what keeps it quiet
+    no_excess = _scored(tmp_path, {**bad, "h2/n_eff": 5.0}, _v2_with(tmp_path, min_n_eff_variance_excess=0))
+    assert [c.name for c in no_excess.failed_checks] == ["variance_nll_over_const"]
+    no_scale = _scored(tmp_path, {**bad, "h2/n_eff": 5.0}, _v2_with(tmp_path, min_n_eff_variance=0))
+    assert "variance_crps_over_const" in [c.name for c in no_scale.failed_checks]
+    # nothing evaluated at all (every horizon below the gates): not evaluated, reported, no failure
+    tiny = _scored(tmp_path, {f"h{i}/n_eff": 5.0 for i in range(3)} | bad, T)
+    c = _check(tiny, "variance_nll_over_const")
+    assert tiny.passed and not c.evaluated and c.value is None and "h0 (n_eff 5 <" in c.detail
+    # a missing n_eff is not evaluated either
+    missing = _scored(tmp_path, {**bad, "h2/n_eff": None}, T)
+    assert missing.passed and "h2 (n_eff missing <" in _check(missing, "variance_nll_over_const").detail
+
+
+def test_a_degenerate_constant_baseline_is_not_evaluated_and_reported(tmp_path):
+    T = st.load_thresholds(V2_FILE)
+    absurd = {"baseline/const_var/h1/variance/nll": 1e28, "baseline/const_var/h1/variance/crps": 1e28}
+    v = _scored(tmp_path, absurd, T)
+    assert v.passed
+    for name in ("variance_nll_over_const", "variance_crps_over_const"):
+        c = _check(v, name)
+        assert "h1: the constant baseline NLL is absurd" in c.detail and c.value is not None   # h0 and h2 still judged
+    # the guard is what makes it so: with the bound lifted the absurd baseline is judged (as an excess of -1e28)
+    lifted = _scored(tmp_path, absurd, _v2_with(tmp_path, max_const_baseline_nll_scaled='1.0e+300'))
+    assert "absurd" not in _check(lifted, "variance_nll_over_const").detail
+    # non-finite or non-positive baselines
+    for k, bad_value in (("baseline/const_var/h0/variance/nll", float("nan")),
+                         ("baseline/const_var/h0/variance/crps", 0.0),
+                         ("baseline/const_var/h0/variance/crps", float("inf"))):
+        w = _scored(tmp_path, {k: bad_value}, T)
+        assert w.passed and "h0: the constant baseline is not finite" in _check(w, "variance_nll_over_const").detail
+    # every horizon degenerate: not evaluated, no failure, the scaled absolute NLL still judged
+    allbad = {f"baseline/const_var/h{i}/variance/nll": float("nan") for i in range(3)}
+    w = _scored(tmp_path, allbad, T)
+    c = _check(w, "variance_nll_over_const")
+    assert w.passed and not c.evaluated and c.value is None and _check(w, "variance_nll").evaluated
+
+
+def test_the_absolute_nll_is_in_scaled_units_and_does_not_move_with_the_price_level(tmp_path):
+    T1, T2 = st.load_thresholds(), st.load_thresholds(V2_FILE)
+    k = 1e6                                          # prices x1e6: every quote-unit number moves by ln k = 13.8
+    shift = float(np.log(k))
+    base = "micro_horizons_h4h"
+    res = json.loads((HEALTHY / base / "result.json").read_text(encoding="utf-8"))["scores"]
+    moved = {}
+    for h in ("h0", "h1", "h2"):
+        moved[f"{h}/variance/nll"] = res[f"{h}/variance/nll"] + shift
+        moved[f"baseline/const_var/{h}/variance/nll"] = res[f"baseline/const_var/{h}/variance/nll"] + shift
+        moved[f"{h}/delta/rmse_zero"] = res[f"{h}/delta/rmse_zero"] * k
+        moved[f"{h}/variance/crps"] = res[f"{h}/variance/crps"] * k
+        moved[f"baseline/const_var/{h}/variance/crps"] = res[f"baseline/const_var/{h}/variance/crps"] * k
+    v2_orig = _scored(tmp_path, {}, T2, base)
+    v2_moved = _scored(tmp_path, moved, T2, base)
+    assert v2_moved.passed
+    assert _check(v2_moved, "variance_nll").value == pytest.approx(_check(v2_orig, "variance_nll").value)
+    v1_moved = _scored(tmp_path, moved, T1, base)
+    assert not v1_moved.passed and "variance_nll" in [c.name for c in v1_moved.failed_checks]    # the v1 artefact
+    # the cap run: NLL 1e3 with an equally bad baseline fails the scaled limit; without it, nothing catches it
+    cap = {f"h{i}/variance/nll": 1000.0 for i in range(3)}
+    cap.update({f"baseline/const_var/h{i}/variance/nll": 1000.0 for i in range(3)})
+    assert [c.name for c in _scored(tmp_path, cap, T2, base).failed_checks] == ["variance_nll"]
+    assert _scored(tmp_path, cap, _v2_with(tmp_path, max_variance_nll_scaled='1.0e+9'), base).passed
+    # a horizon without a price-change scale cannot be scaled: not evaluated
+    noscale = _scored(tmp_path, {f"h{i}/delta/rmse_zero": 0.0 for i in range(3)}, T2, base)
+    assert not _check(noscale, "variance_nll").evaluated and noscale.passed
+
+
+def test_fuzz_constant_is_a_block_of_60_to_120_bars_and_the_case_design_is_pre_registered():
+    case = {c.id: c for c in st.default_cases()}["fuzz_constant"]
+    t = st.load_thresholds(V2_FILE)
+    assert case.data["bars"] == st.FUZZ_CONSTANT_BARS == t.case_design["fuzz_constant_bars"] == 100
+    assert 60 <= st.FUZZ_CONSTANT_BARS <= 120 and "100-bar" in case.description
+
+
+def test_the_expected_n_eff_table_of_thresholds_v2_matches_the_engine_planner():
+    csv = REPO / "binance_btcusdt_1min_ccxt.csv"
+    if not csv.exists():
+        pytest.skip("the bundled CSV is not present")
+    t = st.load_thresholds(V2_FILE)
+    for profile in ("tiny", "reference"):
+        exp = t.expected_n_eff[profile]
+        planned = {p.cell.configuration.name: p for p in st.plan_cases(
+            profile=profile, csv=csv, case_ids=["control", "fuzz_constant", "horizons_5_60_240"], seeds=[0])}
+        for case in ("control", "fuzz_constant"):
+            p = planned[case]
+            n = p.fold["blocks"]["test"]["n"]
+            assert n == exp["scored_windows_default"] and p.fold["blocks"]["train"]["n"] == exp["train_windows_default"]
+            assert [n // h for h in p.config.HORIZON_STEPS] == exp["default_cases"]
+        p = planned["horizons_5_60_240"]
+        wide = exp["horizons_5_60_240"]
+        assert p.fold["blocks"]["train"]["n"] == wide["train_windows"]
+        assert p.fold["blocks"]["test"]["n"] == wide["scored_windows"]
+        assert [wide["scored_windows"] // h for h in p.config.HORIZON_STEPS] == wide["n_eff"]
+
+
+@pytest.mark.stability
+@pytest.mark.slow
+def test_fuzz_constant_in_a_real_tiny_run_has_no_constant_baseline_artefact_and_still_shows_its_metrics(tmp_path, bars_csv):
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", case_ids=["control", "fuzz_constant"],
+                         seeds=[0], thresholds_path="v2")
+    assert res.thresholds_sha256 == V2_SHA256
+    store = RunStore(tmp_path / "runs")
+    first = {}
+    for r in store.index.rows(res.scenario):
+        first[r["configuration"]] = json.loads(
+            (store.root / r["run_dir"] / "metrics.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    assert first["fuzz_constant"]["loss"] != first["control"]["loss"]                    # the case acts on the run
+    assert first["fuzz_constant"]["val_loss"] != first["control"]["val_loss"]
+    assert first["fuzz_constant"].get("dir_loss", 1.0) > 0.0                             # not a constant training set
+    (v,) = [v for v in res.verdicts if v.case == "fuzz_constant"]
+    assert not {c.name for c in v.failed_checks} & {"variance_nll_over_const", "variance_crps_over_const"}, \
+        [c.to_dict() for c in v.checks]
+    assert not _check(v, "variance_nll_over_const").evaluated                            # tiny n_eff 11/7/5 < 100
