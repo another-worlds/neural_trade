@@ -814,3 +814,14 @@ def test_cli_out_also_writes_the_png(tmp_path, capsys, monkeypatch):
     out = tmp_path / "out"
     assert main(["leaderboard", "png", "--store", str(tmp_path), "--out", str(out)]) == 0
     assert written == [out / "png" / "leaderboard.png"] and (out / "png" / "leaderboard.png").is_file()
+
+
+def test_no_leaderboard_line_is_dotted():
+    """D-014: dotted lines mean training; a leaderboard has none (QA of NT-031, 2026-10-06)."""
+    from neural_trade.visualization.leaderboard_fig import leaderboard_figure
+
+    fig = leaderboard_figure(_three_class_board())
+    dashes = [getattr(getattr(t, "line", None), "dash", None) for t in fig.data]
+    dashes += [s.line.dash for s in fig.layout.shapes or ()]
+    dashes += [getattr(getattr(t, "error_x", None), "dash", None) for t in fig.data]
+    assert "dot" not in dashes

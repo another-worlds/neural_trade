@@ -195,7 +195,7 @@ def leaderboard_figure(rows: Sequence[LeaderboardRow], *, title: Optional[str] =
             customdata=[f"{ordered[i].configuration}: test net Sharpe {_fmt(ordered[i].test.values['sharpe_net'])} "
                         f"({ordered[i].test.n_folds} folds / {ordered[i].test.n_rows} cells) -- test, not used for "
                         "ranking" for i in test_idx], hovertemplate="%{customdata}<extra></extra>"), 1, 1)
-    fig.add_vline(x=0, line=dict(color=T.NEUTRAL, width=1, dash="dot"), row=1, col=1)
+    fig.add_vline(x=0, line=dict(color=T.NEUTRAL, width=1, dash="6px,3px"), row=1, col=1)   # dotted = training (D-014)
     fig.update_yaxes(tickvals=ys, ticktext=labels, range=[-0.6, len(ordered) - 0.4], automargin=False, row=1, col=1)
     fig.update_xaxes(title_text="dev net Sharpe after costs (annualised)", row=1, col=1)
     fig.update_layout(barmode="overlay")
