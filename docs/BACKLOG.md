@@ -62,7 +62,7 @@ changes).
 | [NT-027](#nt-027) | P1 | refactor | implementer | done | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | done | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
-| [NT-030](#nt-030) | P1 | feature | implementer | in-progress | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
+| [NT-030](#nt-030) | P1 | feature | implementer | done | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | done | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
@@ -207,6 +207,7 @@ changes).
 | [NT-172](#nt-172) | P2 | bug | implementer | todo | Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain) |
 | [NT-173](#nt-173) | P1 | research | experimenter | todo | Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1 |
 | [NT-174](#nt-174) | P2 | decision | owner | todo | Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124) |
+| [NT-175](#nt-175) | P3 | bug | implementer | todo | Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match |
 
 ## Items
 
@@ -557,7 +558,7 @@ changes).
 
 **Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep`**
 
-- **status:** in-progress (2026-10-06): nt-030 (implementer, Sonnet): 62cd446 QA (Opus) FAIL (GPU-free check never read memory; parallel trials imported the main checkout's code; non-finite loss counted COMPLETE; sec_per_step from a different setup); repair 1 e8b985d, re-QA (qa-deep) FAIL: dmon and launch env fixed, but a null loss (what the real logger writes) still COMPLETE and old close-only runs accepted as the same setup (missing config keys filled with today's defaults). Repair 2 (implementer on Opus, the last allowed round) running on nt-030; then blocked if it fails. Verified OK: budget arithmetic (hand-computed), resume, claim lock, leaderboard integration, scenario identity. New items: NT-173 (re-measure the parallel record before any --parallel above 1).
+- **status:** done (2026-10-06): nt-030 (implementer Sonnet, repair 2 on Opus), merged as the nt-030 merge commit on remediation/plan. Quick mode (<= 5 min estimate, labelled quick), resumable Optuna studies in sqlite, GPU budget printed and recorded before the first trial and refused above --max-hours (default 12), parallel trials in batches with a cell-claim lock and the GPU-free check, one seed per trial on the dev folds, top-5 re-run with 3 seeds ranked by the dev seed mean through the leaderboard (winner must pass the guard-rails), test columns never rank, RESAMPLE_MINUTES refused. QA history: Opus FAIL on 62cd446 (4 P1: GPU-free check read the wrong dmon column; parallel trials imported the main checkout's code; non-finite loss counted COMPLETE; sec_per_step from a different setup); repair 1 e8b985d, qa-deep FAIL (a null loss, which is what the real writers store for NaN, stayed COMPLETE; old close-only runs accepted as the same setup); repair 2 7ea5a06 (Opus), qa-deep PASS on all 9 criteria with real artefacts (budget by hand: reference.yaml, 7 trials, sps 0.1735: upper bound 8.80 h, 17 trials fit; 78 real runs pass run_health; scenario identity of all 10 committed scenarios unchanged). Fast 2098 passed (lead, merged head), ruff clean. CI on the merge push is the evidence for the pins. Follow-ups: NT-175 (P3), and NT-173 BEFORE any --parallel above 1 (the parallel record is pre-D-047).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Correction to (7): environment.yml installs pip deps via `-r requirements.txt` (:25-26): pin optuna in pyproject (extra), requirements.txt and requirements-ci.txt only; never `optuna[optional]` (protobuf conflict with TF 2.10). The sweep's tested pin set: optuna 5.0.0, sqlalchemy 2.0.54, alembic 1.20.0, mako 1.4.3, colorlog 6.12.0, greenlet 3.5.6.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (sweep module), src/neural_trade/cli.py, pyproject.toml, requirements.txt, requirements-ci.txt, environment.yml, scenario specs, tests/
@@ -2313,6 +2314,18 @@ changes).
 - **why:** NT-124's fix finds the true NLL minimum. On the reference run (20261003T225052Z-91fa363-11993eec, 2866 cal windows) every horizon's temperature goes to the upper bound (T = 1000): the heads carry no usable direction signal on the calibration block and the calibrated P(up) is about 0.5 for every window (cal NLL = ln 2, against 0.72 for the old fit, which stopped at a T worse than a constant 0.5). calibrated_quantile (D-009, the default strategy) and every strategy reading the calibrated P(up) become degenerate: a change of default trading behaviour, the owner's.
 - **acceptance:** The owner chooses and a DECISIONS entry records one of: (a) merge NT-124 as is and make 'no direction signal' an explicit, reported state (strategies that need P(up) refuse or stay flat, the report says so); (b) clamp T to a configured maximum (e.g. 10); (c) fall back to a constant P(up) from the training base rate; (d) skip the direction heads in that case. Lead's recommendation: (a). Then an implementer item for the chosen option.
 - **source:** QA reports of 2026-10-06
+
+### NT-175
+
+**Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/experiments/sweep.py, tests/test_sweep.py
+- **depends on:** NT-030 (done)
+- **why:** qa-deep on NT-030 (2026-10-06): (a) when every trial is failed or ineligible, an Optuna sweep ends `complete` with winner null, no stop_reason or note, and the CLI exits 0; quick mode gives a null leader the same way; (b) surviving mutants N5 (a missing status.json alone is not a failure), N13 (an empty metrics.jsonl is not a failure), N14 (status.json val_loss unchecked), N10 (the quick-leader assertion `leader is None or ...` cannot fail); (c) `seed_everything(deterministic=True)` is not a Config field, so a deterministic run of an otherwise identical setup counts as the same setup for sec_per_step (the NT-114 cuDNN reference ran 0.2106 s/step in that mode against 0.1735 for the default).
+- **acceptance:** (1) sweep.json carries an explicit 'no eligible trial: no re-run, no winner' with the per-trial reasons, the CLI prints it and exits non-zero (tests, optuna and quick). (2) Tests kill N5, N10, N13, N14. (3) A run whose record says deterministic mode is not matched to a non-deterministic setup (needs NT-164 to record the mode). (4) Fast suite, ruff.
+- **source:** qa-deep on NT-030 (2026-10-06)
 
 ## Done log
 
