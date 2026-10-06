@@ -155,7 +155,7 @@ changes).
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
-| [NT-123](#nt-123) | P1 | test-gap | implementer | todo | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
+| [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
 | [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | todo | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
@@ -202,6 +202,7 @@ changes).
 | [NT-167](#nt-167) | P2 | bug | implementer | done | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
 | [NT-168](#nt-168) | P2 | feature | implementer | todo | Leaderboard: superseded cells and duplicate (fold, seed) pairs |
 | [NT-169](#nt-169) | P3 | infra | implementer | todo | A suite lock: no two full pytest suites at once, enforced instead of checked by eye |
+| [NT-170](#nt-170) | P3 | test-gap | implementer | todo | Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info |
 
 ## Items
 
@@ -1689,7 +1690,7 @@ changes).
 
 **assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-123 f1f100a/4517ac6 (implementer, Sonnet medium), merged; QA (Opus medium) PASS on 4517ac6: the three one-bar peeks caught under default probes (97-100/100 over 100 seeds), both parts of the change needed (mutations), 72 before/after results over 12 strategies x 3 blocks x 2 cost configs with 0 differing fields, no false positives, test 0.74 s, README matches the code; fast 1979 passed, ruff clean. Follow-up: NT-170 (a sparse peek among many orders is missed).
 - **priority / type / role:** P1 / test-gap / implementer
 - **area:** src/neural_trade/strategy/backtest.py, tests/test_backtest.py, README.md
 - **depends on:** none
@@ -2248,6 +2249,18 @@ changes).
 - **why:** D-048 forbids two full suites at once. On 2026-10-06 agents ran overlapping fast suites at least three times (NT-122's implementer, NT-031's QA, NT-048's implementer) because the `wmic ... | grep` check returned empty or was chained past; timings were contaminated (NT-075's noise came partly from the same load).
 - **acceptance:** (1) A full-suite run (`-n` with no file arguments, or `-m "not slow"`/`-m slow`) takes an OS file lock under D:/nt/ (path configurable) and waits, printing who holds it; targeted runs do not take it (test with two subprocesses). (2) RUNBOOK and the agent files point to it. (3) Fast suite, ruff.
 - **source:** lead and QA, 2026-10-06
+
+### NT-170
+
+**Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info**
+
+- **status:** todo
+- **priority / type / role:** P3 / test-gap / implementer
+- **area:** src/neural_trade/strategy/backtest.py (`_default_probes`, the trace comparison), tests/test_backtest.py
+- **depends on:** NT-123 (done)
+- **why:** QA of NT-123 (2026-10-06): the 24 default probes are spread over every asked bar (mostly exit requests), so a peek confined to a few orders is missed deterministically (a sparse TP peek: 0/100); the trace is compared with dict `==`, so a NaN tp/sl would be a false positive; `Order.info` is not traced (metadata only).
+- **acceptance:** (1) The default probes include every bar where an order was placed (cheap: the 12-strategy test takes 0.74 s); QA's sparse TP peek is caught (test). (2) NaN-equal trace comparison (test). (3) `test_no_lookahead_all_strategies` stays <= 30 s; public results unchanged. (4) Fast suite, ruff.
+- **source:** QA of NT-123 (2026-10-06)
 
 ## Done log
 
