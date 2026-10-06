@@ -1,0 +1,17 @@
+f1f100afa702fd9782f443f54e0df846300a1970
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_123\src\neural_trade\core\config.py:736: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 5 durations =============================
+101.92s call     tests/test_stability.py::test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_state
+87.86s call     tests/test_stability.py::test_probe_on_or_off_reaches_the_same_weights_after_n_steps
+78.55s call     tests/test_model_variants.py::test_variant_trains_one_cpu_epoch_and_serves_through_predictor[linear_indicators]
+53.85s call     tests/test_calib_fail_loud.py::test_calib_failure_is_recorded_in_meta_json_and_status_json
+51.53s call     tests/test_model_variants.py::test_variant_trains_one_cpu_epoch_and_serves_through_predictor[gru_small]
+1979 passed, 5161 warnings in 273.65s (0:04:33)
+All checks passed!
