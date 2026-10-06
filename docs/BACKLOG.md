@@ -80,7 +80,7 @@ changes).
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
-| [NT-048](#nt-048) | P1 | feature | implementer | in-progress | Discovered-indicators report: a self-contained interactive HTML report per run |
+| [NT-048](#nt-048) | P1 | feature | implementer | done | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
 | [NT-051](#nt-051) | P1 | research | experimenter | todo | First stability-harness run on the reference setup against its pre-registered thresholds |
@@ -154,8 +154,8 @@ changes).
 | [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
-| [NT-122](#nt-122) | P1 | bug | implementer | todo | golden_run verify fails when a value turns NaN or an inf changes |
-| [NT-123](#nt-123) | P1 | test-gap | implementer | todo | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
+| [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
+| [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
 | [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | todo | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
@@ -199,6 +199,10 @@ changes).
 | [NT-164](#nt-164) | P3 | bug | implementer | todo | A run directory records the deterministic mode |
 | [NT-165](#nt-165) | P3 | polish | implementer | todo | NT-048 follow-ups: permutation variance in the importance band, a multiple-comparison note, readable MACD/Stoch/Keltner period panels, importance cost on CPU |
 | [NT-166](#nt-166) | P3 | performance | experimenter | todo | Quiet-machine step micro-benchmark: 1aeff1c against 426de4f (only if D-018 needs NT-075's answer) |
+| [NT-167](#nt-167) | P2 | bug | implementer | done | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
+| [NT-168](#nt-168) | P2 | feature | implementer | todo | Leaderboard: superseded cells and duplicate (fold, seed) pairs |
+| [NT-169](#nt-169) | P3 | infra | implementer | todo | A suite lock: no two full pytest suites at once, enforced instead of checked by eye |
+| [NT-170](#nt-170) | P3 | test-gap | implementer | todo | Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info |
 
 ## Items
 
@@ -788,7 +792,7 @@ changes).
 
 **Discovered-indicators report: a self-contained interactive HTML report per run**
 
-- **status:** in-progress (2026-10-04): the report writer is `654a34a`, the fourteen-family figures are `e88b015` and `5663c8b`, and grouped permutation importance is `d46243e`. Notebook 01 trained `20261004T073704Z-d1f6fa9-11993eec` (served epoch 10, stopped at epoch 16; served val loss 3.9679) and wrote `runs/20261004T073704Z-d1f6fa9-11993eec/indicator_report.html` (plotly embedded, three figures, no external script). Notebooks 01, 04 and 07 were executed; `scripts/notebooks/check.py` printed `all clean` (notebook 07 is 0.8 MB). The ATR row, the Keltner period and atr_period panels, and the importance panel (42 instances, bootstrap whiskers) were looked at. QA has not passed this item, so it is not done.
+- **status:** done (2026-10-06): nt-048 2c772de + repair 0a24847 (implementer, Sonnet medium), merged as 4a82919; QA (Opus medium) PASS on 2c772de (AUC drop recomputed with sklearn: 2.2e-16 on the package's scores, 8.9e-5 against an independent forward pass; bands within Monte-Carlo noise of QA's own block bootstrap; mutation caught) and re-QA PASS on 0a24847 (baseline AUC per horizon, hit drop over labelled windows, CSV fallback; AUC values unchanged). Notebook 07 executed on CPU on run 20261003T225052Z-91fa363-11993eec (4ad77cf; check.py all clean; the three figures looked at: 42 instances, baseline AUC 0.493/0.555/0.444). A first execution picked a study run (NT-167) and was discarded. To refresh 07 on a new notebook-01 run once the GPU is free. Follow-ups: NT-165.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Label the RSI parameter as an EMA span (Wilder about (n+1)/2) in the report; Bollinger bands are +-2 sqrt(1-alpha) sigma_EW (families.py:263-272).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/visualization/ (the report figures, reusing NT-043's figure module), src/neural_trade/evaluation/ (grouped permutation importance), src/neural_trade/registries/visualizations.py, src/neural_trade/cli.py, scripts/notebooks/build.py, notebooks/07_discovered_indicators.ipynb, tests/
@@ -1674,7 +1678,7 @@ changes).
 
 **golden_run verify fails when a value turns NaN or an inf changes**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-122 a0dfa01 (implementer, Sonnet medium), merged as e2c2b4a; QA (Opus medium) PASS on a0dfa01: 21 tests (tests/test_golden_run.py), QA's own edge cases (0-d, float32 vs 64, -0.0, int/bool, 1.7e308 overflow), the old version reproduced wrongly passing 7 NaN/inf cases, mutation (one-sided NaN equal) caught by 6 tests, real verify vs golden_nt117 455/455 and exit 0. P3 left (complex arrays cast to float64; the TF assertion is weak under xdist): not filed, no recorded dtype reaches them.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** scripts/golden_run.py, tests/test_golden_run.py (new)
 - **depends on:** none
@@ -1686,7 +1690,7 @@ changes).
 
 **assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-123 f1f100a/4517ac6 (implementer, Sonnet medium), merged; QA (Opus medium) PASS on 4517ac6: the three one-bar peeks caught under default probes (97-100/100 over 100 seeds), both parts of the change needed (mutations), 72 before/after results over 12 strategies x 3 blocks x 2 cost configs with 0 differing fields, no false positives, test 0.74 s, README matches the code; fast 1979 passed, ruff clean. Follow-up: NT-170 (a sparse peek among many orders is missed).
 - **priority / type / role:** P1 / test-gap / implementer
 - **area:** src/neural_trade/strategy/backtest.py, tests/test_backtest.py, README.md
 - **depends on:** none
@@ -2195,8 +2199,8 @@ changes).
 - **area:** src/neural_trade/evaluation/permutation_importance.py, src/neural_trade/visualization/ (importance and family-periods figures), tests/
 - **depends on:** NT-048
 - **why:** QA of NT-048 (2026-10-06): the band covers window resampling for one fixed permutation (no permutation variance) and the figure has 126 bars with no multiple-comparison note (stoch #2 h1's band lies entirely below 0); MACD, Stoch and Keltner panels draw three periods per instance in one colour on a squashed log axis; importance costs about 314 s on CPU for a 2,866-window validation block (43 forward passes), which affects the CPU-only `neural-trade indicators` path.
-- **acceptance:** (1) The band includes permutation variance (several permutations per group) or the figure states it does not (test). (2) A visible note on the number of comparisons. (3) Fast/slow/signal legs distinguishable in the period panels (dash or marker), D-014. (4) CPU cost reported and, if > 2 min, batched. (5) Fast suite, ruff.
-- **source:** QA reports of 2026-10-06
+- **acceptance:** (1) The band includes permutation variance (several permutations per group) or the figure states it does not (test). (2) A visible note on the number of comparisons. (3) Fast/slow/signal legs distinguishable in the period panels (dash or marker), D-014. (4) CPU cost reported and, if > 2 min, batched. (5) `resolve_csv_path` compares a run's recorded `dataset.sha256` with the resolved file and raises on a mismatch; without a fingerprint the report names the file it drew from (test). (6) The hit-drop diamond whiskers and the bar whiskers are told apart (style or offset); a subtitle note when a baseline AUC is under 0.5 (a positive drop then does not mean the group helps). (7) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06 (NT-048 QA on 2c772de and re-QA on 0a24847: the CSV fallback picks a file by name with no fingerprint check; overlapping grey whiskers; baselines under 0.5)
 
 ### NT-166
 
@@ -2209,6 +2213,54 @@ changes).
 - **why:** NT-075 was inconclusive (+5-6%, run-to-run noise up to 2x, host CPU 32-61% busy from other agents). Whole-run sec_per_step cannot resolve 5%.
 - **acceptance:** (1) A SPEC first: a fixed-step micro-benchmark of the training step (median of >= 200 steps after warm-up), on a quiet machine (no other agents), GPU-side timing. (2) A verdict at 5%. (3) Under 0.5 GPU-hours. (4) If a regression shows, an implementer bisect item.
 - **source:** QA reports of 2026-10-06
+
+### NT-167
+
+**Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations**
+
+- **status:** done (2026-10-06): nt-167 b5e9847 (implementer, Sonnet medium), merged as 602b9f5; lead-verified (D-060, P2 mechanical): diff reviewed (study subtrees experiments/ and ablations/ excluded, include_study_runs flag, explicit RUN_DIR unchanged), 3 new tests in tests/test_notebook_ui.py, fast 1952 passed + the notebook-07 failure that 4ad77cf clears (runs/experiments/nt167/suite.log), ruff clean.
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/notebook/runs.py, tests/, scripts/notebooks/README.md
+- **depends on:** none
+- **why:** The lead's notebook routine for NT-048 (2026-10-06): `servable_runs` searches runs/ recursively and excludes only engine runs, so notebook 07 loaded NT-075's speed-check run 20261006T070748Z-426de4f-cf562469 (old code, close-only, 4 families) as 'the newest run'. D-013: notebooks show the shipped defaults. The executed notebook was discarded, not committed.
+- **acceptance:** (1) The default selection takes only runs directly under the runs root; study runs (runs/experiments/**, runs/ablations/**) and engine runs need a flag or an explicit RUN_DIR (tests a-d). (2) When only excluded runs exist, the error lists them and names RUN_DIR (test). (3) Docstring and scripts/notebooks/README.md updated. (4) Fast suite, ruff.
+- **source:** lead, notebook routine of NT-048 (2026-10-06)
+
+### NT-168
+
+**Leaderboard: superseded cells and duplicate (fold, seed) pairs**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/experiments/leaderboard.py, the run index (experiments/store.py), tests/
+- **depends on:** NT-031
+- **why:** QA of NT-031 (2026-10-06): the aggregation cannot supersede a cell; loss_prune_v1 ece0 still uses the suspect f-39 cell D-057 excluded (+5.69 instead of the re-run's +5.17; ece0 mean 1.597 instead of 1.492, rank unchanged), and a duplicate (fold, seed) would be averaged as an extra seed.
+- **acceptance:** (1) A recorded supersede (a small file in the scenario's store, or an index column) replaces a cell by its re-run; the board shows which (test). (2) A duplicate (fold, seed) is refused or flagged, never averaged as a seed (test). (3) loss_prune_v1's board uses the f-39 re-run. (4) Fast suite, ruff.
+- **source:** lead and QA, 2026-10-06
+
+### NT-169
+
+**A suite lock: no two full pytest suites at once, enforced instead of checked by eye**
+
+- **status:** todo
+- **priority / type / role:** P3 / infra / implementer
+- **area:** tests/conftest.py (or a pytest plugin in tests/), docs/RUNBOOK.md, .claude/agents/*.md (the lead edits these)
+- **depends on:** none
+- **why:** D-048 forbids two full suites at once. On 2026-10-06 agents ran overlapping fast suites at least three times (NT-122's implementer, NT-031's QA, NT-048's implementer) because the `wmic ... | grep` check returned empty or was chained past; timings were contaminated (NT-075's noise came partly from the same load).
+- **acceptance:** (1) A full-suite run (`-n` with no file arguments, or `-m "not slow"`/`-m slow`) takes an OS file lock under D:/nt/ (path configurable) and waits, printing who holds it; targeted runs do not take it (test with two subprocesses). (2) RUNBOOK and the agent files point to it. (3) Fast suite, ruff.
+- **source:** lead and QA, 2026-10-06
+
+### NT-170
+
+**Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info**
+
+- **status:** todo
+- **priority / type / role:** P3 / test-gap / implementer
+- **area:** src/neural_trade/strategy/backtest.py (`_default_probes`, the trace comparison), tests/test_backtest.py
+- **depends on:** NT-123 (done)
+- **why:** QA of NT-123 (2026-10-06): the 24 default probes are spread over every asked bar (mostly exit requests), so a peek confined to a few orders is missed deterministically (a sparse TP peek: 0/100); the trace is compared with dict `==`, so a NaN tp/sl would be a false positive; `Order.info` is not traced (metadata only).
+- **acceptance:** (1) The default probes include every bar where an order was placed (cheap: the 12-strategy test takes 0.74 s); QA's sparse TP peek is caught (test). (2) NaN-equal trace comparison (test). (3) `test_no_lookahead_all_strategies` stays <= 30 s; public results unchanged. (4) Fast suite, ruff.
+- **source:** QA of NT-123 (2026-10-06)
 
 ## Done log
 

@@ -1,0 +1,168 @@
+4a82919c1fc10a6e9e10b5efe7521a5024f04027
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+...............F........................................................ [ 47%]
+........................................................................ [ 51%]
+........................................................................ [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 70%]
+........................................................................ [ 73%]
+........................................................................ [ 77%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 92%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+.........                                                                [100%]
+================================== FAILURES ===================================
+_____________________ test_committed_notebooks_pass_check _____________________
+[gw4] win32 -- Python 3.10.21 C:\Users\Step\miniforge3\envs\nt\python.exe
+
+check = <module 'notebook_tooling_check' from 'D:\\nt\\nt_wt_167\\scripts\\notebooks\\check.py'>
+capsys = <_pytest.capture.CaptureFixture object at 0x0000020C6C27A020>
+
+    def test_committed_notebooks_pass_check(check, capsys):
+        """The committed notebooks were saved clean: no error, no stderr, no empty panel, no unexecuted cell,
+        none over the 5 MB limit."""
+>       assert check.main([]) == 0, capsys.readouterr().out
+E       AssertionError: ==== 00_data_and_splits.ipynb  0.3 MB
+E           [2] fig 'Purged walk-forward split' traces=1 empty=[]
+E           figures=1 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 01_train_and_monitor.ipynb  1.6 MB
+E           [7] fig 'Training dashboard' traces=72 empty=[]
+E           [7] fig 'Direction head per horizon' traces=61 empty=[]
+E           [7] fig 'Loss terms per horizon (as logged)' traces=38 empty=[]
+E           [7] fig 'Loss, batch by batch' traces=5 empty=[]
+E           [13] fig 'Direction heads' traces=39 empty=[]
+E           [15] fig 'Price heads (delta)' traces=45 empty=[]
+E           [17] fig 'Variance heads' traces=59 empty=[]
+E           [19] fig 'Direction confidence: is a more decided call a more accurate one?' traces=36 empty=[]
+E           [21] fig 'Cross-horizon coherence' traces=14 empty=[]
+E           [25] fig 'Learned indicator periods (base values)' traces=50 empty=[]
+E           [25] fig 'Learned indicator periods, every family' traces=108 empty=[]
+E           [25] fig 'Applied indicator periods (served model)' traces=14 empty=[]
+E           figures=12 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 02_backtest.ipynb  2.1 MB
+E           [4] fig 'calibrated_quantile' traces=22 empty=[]
+E           [4] fig 'calibrated_quantile' traces=26 empty=[]
+E           [4] fig 'calibrated_quantile: 144 trades' traces=34 empty=[]
+E           [6] fig 'Strategies on the same block' traces=15 empty=[]
+E           figures=4 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 03_signals_and_trades.ipynb  0.2 MB
+E           [2] fig 'calibrated_quantile' traces=25 empty=[]
+E           [6] fig 'calibrated_quantile: 144 trades' traces=34 empty=[]
+E           figures=2 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 04_diagnostics.ipynb  1.6 MB
+E           [4] fig 'Training dashboard' traces=72 empty=[]
+E           [4] fig 'Direction head per horizon' traces=61 empty=[]
+E           [4] fig 'Loss terms per horizon (as logged)' traces=38 empty=[]
+E           [8] fig 'Direction heads' traces=39 empty=[]
+E           [8] fig 'Price heads (delta)' traces=45 empty=[]
+E           [8] fig 'Variance heads' traces=59 empty=[]
+E           [8] fig 'Direction confidence: is a more decided call a more accurate one?' traces=36 empty=[]
+E           [8] fig 'Cross-horizon coherence' traces=14 empty=[]
+E           [11] fig 'Learned indicator periods (base values)' traces=50 empty=[]
+E           [11] fig 'Learned indicator periods, every family' traces=108 empty=[]
+E           [11] fig 'Applied indicator periods (served model)' traces=14 empty=[]
+E           [15] fig 'Direction reliability, h1 (15 bars)' traces=7 empty=[]
+E           [15] fig 'Interval coverage, h1 (15 bars), test block (refit alpha 0.10)' traces=7 empty=[]
+E           figures=13 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 05_compare_runs.ipynb  0.1 MB
+E           [3] fig 'Run comparison: 7 runs' traces=24 empty=[]
+E           [5] fig "Ablation: paired deltas against each metric's decision threshold (posi" traces=5 empty=[]
+E           figures=2 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 07_discovered_indicators.ipynb  0.0 MB
+E           [1] NOT EXECUTED (no execution count)
+E           [2] NOT EXECUTED (no execution count)
+E           [4] NOT EXECUTED (no execution count)
+E           [6] NOT EXECUTED (no execution count)
+E           [8] NOT EXECUTED (no execution count)
+E           [10] NOT EXECUTED (no execution count)
+E           figures=0 errors=0 stderr=0 empty_panels=0 unexecuted=6 too_large=0  FAIL
+E         ==== 08_long_run.ipynb  0.2 MB
+E           [4] fig 'Long run progress - long_360d' traces=15 empty=[]
+E           [4] fig 'Training dashboard' traces=73 empty=[]
+E           [4] fig 'Loss terms per horizon (as logged)' traces=38 empty=[]
+E           figures=3 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 09_candidate_run.ipynb  3.9 MB
+E           [9] fig 'Training dashboard' traces=70 empty=[]
+E           [9] fig 'Loss terms per horizon (as logged)' traces=38 empty=[]
+E           [10] fig 'Learned indicator periods (base values)' traces=45 empty=[]
+E           [13] fig 'Direction heads' traces=39 empty=[]
+E           [13] fig 'Price heads (delta)' traces=54 empty=[]
+E           [13] fig 'Variance heads' traces=55 empty=[]
+E           [15] fig 'calibrated_quantile' traces=22 empty=[]
+E           [15] fig 'calibrated_quantile: 1968 trades' traces=36 empty=[]
+E           figures=8 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         9 notebook(s), 45 figures: FAIL in 07_discovered_indicators.ipynb
+E         
+E       assert 1 == 0
+E        +  where 1 = <function main at 0x0000020C6E941510>([])
+E        +    where <function main at 0x0000020C6E941510> = <module 'notebook_tooling_check' from 'D:\\nt\\nt_wt_167\\scripts\\notebooks\\check.py'>.main
+
+tests\test_notebook_tooling.py:176: AssertionError
+============================== warnings summary ===============================
+tests/test_config.py::test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type
+  D:\nt\nt_wt_167\src\neural_trade\core\config.py:897: DeprecationWarning: Config.USE_HUBER is deprecated and has no effect (default True)
+    self.validate()
+
+tests/registries/test_callbacks.py: 30 warnings
+tests/test_custom_loss.py: 320 warnings
+tests/test_eval_metrics.py: 141 warnings
+tests/test_attention_head_pool.py: 1015 warnings
+tests/test_deterministic_gru.py: 500 warnings
+tests/registries/test_contracts.py: 48 warnings
+tests/test_calib_fail_loud.py: 144 warnings
+tests/registries/test_layers.py: 1 warning
+tests/registries/test_metrics.py: 10 warnings
+tests/test_legacy_bundle.py: 48 warnings
+tests/registries/test_models.py: 142 warnings
+tests/test_losses_reference.py: 20 warnings
+tests/test_macd_ratio.py: 144 warnings
+tests/test_indicator_families.py: 96 warnings
+tests/test_applied_periods.py: 336 warnings
+tests/test_ohlcv_input.py: 192 warnings
+tests/test_direction_readout.py: 10 warnings
+tests/test_model_variants.py: 408 warnings
+tests/test_physics_terms_bounded.py: 90 warnings
+tests/test_epoch_metrics.py: 40 warnings
+tests/test_permutation_importance.py: 8 warnings
+tests/test_reset.py: 16 warnings
+tests/test_pnl_utility.py: 280 warnings
+tests/test_served_epoch.py: 49 warnings
+tests/test_stability.py: 284 warnings
+tests/test_train_smoke.py: 96 warnings
+tests/test_training_wiring.py: 40 warnings
+tests/test_calib_gradient_mode.py: 245 warnings
+tests/test_calib_zero_weights.py: 288 warnings
+tests/test_telemetry.py: 20 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_bench_window_free.py: 2 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_167\src\neural_trade\core\config.py:736: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_notebook_tooling.py::test_committed_notebooks_pass_check - ...
+1 failed, 1952 passed, 5161 warnings in 461.58s (0:07:41)
+All checks passed!

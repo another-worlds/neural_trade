@@ -23,7 +23,7 @@ editable install at the D: copy (D-030, step 4 of the last section). Implementer
 experimenter never change the nt env. `requirements-ci.txt` and the CI workflow pins are test
 infrastructure: a backlog item may change them (TF stays 2.10.x).
 
-**Installing optuna** (the lead, once, as part of NT-030's integration; not yet run):
+**Installing optuna** (the lead, once; done 2026-10-06 before NT-030: dry run showed only new packages; installed optuna 5.0.0, sqlalchemy 2.0.54, alembic 1.20.0, mako 1.4.3, colorlog 6.12.0, greenlet 3.5.6; check line `5.0.0 1.23.0 2.10.0`):
 
 1. `$PY -m pip install --dry-run optuna==<version>`, with the version NT-030 pins in
    `requirements*.txt` (pip 26.2 in the env supports `--dry-run`).

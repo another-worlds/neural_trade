@@ -12,8 +12,9 @@ engine writes it only when the scenario sets ``run.indicator_report`` (and
 
 The importance score is per window: the mean squared error of the three scaled price heads,
 plus the direction log loss on moves outside the deadband. The band is the block bootstrap
-of that per-window loss. Direction importance uses the per-window hit, which is what a
-block bootstrap of a direction score can see.
+of that per-window loss. Direction importance is the per-horizon drop of the ROC AUC on the
+labelled windows; its band recomputes the AUC on every block-bootstrap resample (block at least
+the longest horizon in bars). The drop of the per-window hit rate is kept beside it as ``hit_drop``.
 """
 from __future__ import annotations
 
@@ -24,7 +25,7 @@ import numpy as np
 from neural_trade.core.outputs import PredictiveOutputs
 from neural_trade.core.postprocess import HORIZONS
 from neural_trade.metrics.direction_labels import direction_labels_np
-from neural_trade.metrics.statistics import auc_score
+from neural_trade.metrics.statistics import BLOCK
 
 
 def _metrics_path(run_dir: Path) -> Path:
@@ -44,7 +45,8 @@ def _price_and_direction(heads, y_scaled, y_raw, last_close, deadband):
     sq = np.mean([(prices[i] - y_scaled[:, i]) ** 2 for i in range(3)], axis=0)
     labels = direction_labels_np(y_raw, last_close, deadband)
     bce = np.zeros(n, dtype=float)
-    auc = {}
+    labels_out = {}
+    scores_out = {}
     hit = {}
     for i, h in enumerate(HORIZONS):
         lab, mask = labels[h]
@@ -54,13 +56,16 @@ def _price_and_direction(heads, y_scaled, y_raw, last_close, deadband):
         correct = np.zeros(n, dtype=float)
         correct[mask] = (p[mask] >= 0.5) == (lab[mask] >= 0.5)
         hit[h] = correct
-        auc[h] = auc_score(lab[mask], p[mask]) if int(mask.sum()) >= 2 else float("nan")
+        labels_out[h] = np.where(mask, lab, np.nan)
+        scores_out[h] = np.asarray(p, dtype=float)
     bce /= len(HORIZONS)
     loss_i = sq + bce
-    return {"loss": float(np.mean(loss_i)), "auc": auc, "loss_i": loss_i, "hit_i": hit}
+    return {"loss": float(np.mean(loss_i)), "loss_i": loss_i, "hit_i": hit,
+            "labels": labels_out, "scores": scores_out}
 
 
-def _importance(predictor, block):
+def indicator_importance(predictor, block):
+    """Grouped permutation importance of every family instance on a data block (the report uses ``val``)."""
     from neural_trade.evaluation.permutation_importance import importance_from_model
     from neural_trade.utils.seeding import set_arithmetic_rewrite
 
@@ -79,7 +84,24 @@ def _importance(predictor, block):
     def score_fn(heads):
         return _price_and_direction(heads, y_scaled, y, last_close, deadband)
 
-    return importance_from_model(predictor.model, windows, score_fn)
+    steps = [int(h) for h in getattr(cfg, "HORIZON_STEPS", [1])]
+    return importance_from_model(predictor.model, windows, score_fn, block=max(BLOCK, max(steps)),
+                                 horizon_bars=max(steps))
+
+
+def resolve_csv_path(cfg):
+    """``cfg`` with a CSV_PATH that exists. A relative path is tried as given (the working directory),
+    then from the project root, then by its file name in the project root; every try is named on failure.
+
+    A run made in a notebook records the path relative to ``notebooks/``, so it only resolves from there.
+    """
+    given = Path(str(cfg.CSV_PATH))
+    root = Path(__file__).resolve().parents[3]
+    tries = [given] if given.is_absolute() else [given, root / given, root / given.name]
+    for cand in tries:
+        if cand.is_file():
+            return cfg if cand == given else cfg.copy(CSV_PATH=str(cand.resolve()))
+    raise FileNotFoundError("CSV_PATH %r not found; tried: %s" % (str(cfg.CSV_PATH), ", ".join(str(t) for t in tries)))
 
 
 def indicator_figures(run_dir):
@@ -98,13 +120,13 @@ def indicator_figures(run_dir):
 
     cfg_path = run_dir / "config.yaml"
     predictor = Predictor.from_artifacts(artifacts)
-    cfg = Config.from_yaml(cfg_path) if cfg_path.is_file() else predictor.config
+    cfg = resolve_csv_path(Config.from_yaml(cfg_path) if cfg_path.is_file() else predictor.config)
     val = split_arrays(cfg)["val"]
     applied = applied_periods(predictor, val["X_model"], block="val")
     discovered = Visualizations.build(
         "discovered_indicators", val["X"], cfg, applied=applied, metrics=metrics, ohlcv=val["X_model"])
     periods = Visualizations.build("indicator_family_periods", metrics, cfg, applied=applied)
-    importance = Visualizations.build("permutation_importance", _importance(predictor, val), cfg)
+    importance = Visualizations.build("permutation_importance", indicator_importance(predictor, val), cfg)
     return discovered, periods, importance
 
 
