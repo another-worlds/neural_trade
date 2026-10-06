@@ -95,7 +95,10 @@ def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     nb = _run(NB_DIR / "07_discovered_indicators.ipynb", common, tmp_path)
     titles = [o["data"]["application/vnd.plotly.v1+json"]["layout"]["title"]["text"] for c in nb.cells
               if c.cell_type == "code" for o in c.get("outputs", []) if "application/vnd.plotly.v1+json" in o.get("data", {})]
-    assert len(titles) == 1 and titles[0].startswith("<b>Discovered indicators")
+    # NT-048: the price view, the learned periods of every family and the permutation importance
+    assert len(titles) == 3 and titles[0].startswith("<b>Discovered indicators")
+    assert any("Learned indicator periods" in t for t in titles[1:])
+    assert any("Indicator permutation importance" in t for t in titles[1:])
     # 08 with LAUNCH False starts nothing and shows the state of a scenario that has no run in this store
     nb = _run(NB_DIR / "08_long_run.ipynb", {"ROOT": str(REPO), "STORE": str(runs), "LAUNCH": False}, tmp_path)
     text = "".join(o.get("text", "") + o.get("data", {}).get("text/plain", "") for c in nb.cells
