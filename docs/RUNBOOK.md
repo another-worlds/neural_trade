@@ -183,6 +183,11 @@ adds:
 
 - **Default: one GPU job at a time.** The lead's notebook routine (01 trains about 5 minutes) is one
   GPU job like any other.
+- **The GPU lock (D-062):** two local sessions share the GPU (MVP and tactical). Every GPU job writes
+  `D:/nt/gpu.lock` (`<session> <job> <start UTC> <expected end UTC>`) before it starts and deletes it
+  when it ends; a job does not start while another session's lock exists. The MVP has priority: when
+  a tactical lock blocks it, the MVP side creates `D:/nt/gpu.mvp_waiting` and the tactical session
+  starts nothing new until it is gone. Details and the stale-lock rule: [TACTICAL.md](TACTICAL.md) "GPU".
 - **The budget's `sec_per_step`** comes from the `status.json` of the latest real run of the same
   setup (NT-030 (3)).
 - **Parallel sweep trials** (`--parallel N` above 1, NT-030 (4)). The check above cannot see which
