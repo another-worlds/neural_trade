@@ -792,3 +792,7 @@ that extend or partly replace an entry.
 - **Hill-climb set in the same round:** target direction AUC (mean of h0-h2) on 5 climb folds; the winner is
   checked once on 5 other dev folds the loop never saw; never the test fold; levers: anything except the owner's
   fixed decisions (D-001, D-003, D-050).
+- **Goal (owner, same round):** "Цель - попытка выйти из стратегической ловушки оптимизацией поиском тактического
+  прорыва в расчете нейрокни. Риск менеджмент - отдельный независимый бранч". The tactical session works on the
+  network's direction skill only; risk management (drawdown, sizing, stops) is a separate, independent branch of
+  work (lead's reading: not started by this entry; TACTICAL.md "Goal").
