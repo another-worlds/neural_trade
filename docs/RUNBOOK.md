@@ -58,6 +58,7 @@ NT-030 exists).
 
 | Task | Command | Time |
 |---|---|---|
+| Tests for what changed (tier 1, D-060) | `$PY scripts/test_changed.py --run` (list only without `--run`; `--base <ref>`) | under a minute |
 | Fast suite | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8` | 3 min 26 s at 8 workers (2026-10-01; 7 min 20 s serial; 16 workers are not faster: six ~30-55 s training tests bound it, NT-109). Never two full suites at once (D-048) |
 | Slow suite (training, CLI and predictor round trips, reproducibility, notebook execution on synthetic bars) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow -n 8` | ~4 min serial on an idle machine; 38 min seen when three suites ran at once (2026-10-01) |
 | Stability invariants (NT-036) | `CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m stability` | not measured |

@@ -84,6 +84,15 @@ behaviour or `master` goes to the owner.
 - **No pinging (owner, D-042).** The lead does not poll or inspect running agents, runs or suites itself,
   and does not reply to interim "still running" notifications: the harness notifies on completion. When
   something must be actively watched (CI, an external process), the Haiku 4.5 `tracker` watches it.
+- **QA by risk (owner, D-060).** An item gets a QA agent only when it changes a number, a loss or metric, an
+  indicator, a default, a definition, or an owner-visible figure, and for every P0 and P1 item. A P2/P3 item
+  that is mechanical, docs-only, a generated-file refresh or a test repair is integrated by the lead on a green
+  fast suite, ruff and CI, with no QA agent; the backlog entry says "lead-verified". QA does not repeat what CI
+  runs (fast suite, ruff, coverage): it checks what a suite cannot show, namely recomputed numbers against the
+  report, each acceptance criterion by its own evidence, golden-run equality, and mutation or edge cases where
+  the item calls for them. The implementer commits its logs (suite output, timings) to a path named in its
+  report and QA verifies them, rerunning only what it doubts. Related items are verified in one QA call per
+  merge batch. The lead runs the fast suite on the merged tree before every push to `remediation/plan`.
 - **Effort.** QA of a P2 or P3 item checks the criteria plus one suite run, with no mutation or
   exploratory checks. The lead skips its own integration suite run when the merged code equals the
   commit QA verified (`git diff --stat <qa sha> HEAD -- src tests scripts` empty); CI covers the
@@ -127,6 +136,23 @@ behaviour or `master` goes to the owner.
 - **Tests:** the suites run with `-n 8` (pytest-xdist). QA runs the tests an item touches plus one fast suite (the slow suite only per D-059);
   the lead does not re-run a suite QA ran on the same code. No two full suites run at the same time in different
   checkouts: an agent that needs one while another runs waits for it, or runs only its targeted tests.
+
+## Test tiers (owner, D-060)
+
+The development loop must not wait on the whole suite. Use the cheapest tier that answers the question.
+
+| tier | when | what | cost |
+|---|---|---|---|
+| 0 | while editing | the test file(s) of the code you touch: `pytest -x <file> -n 2` | seconds |
+| 1 | before a commit | `python scripts/test_changed.py --run`: tests that mention the changed modules (a wide change, such as core/config.py or conftest.py, says "run the whole fast suite") | under a minute |
+| 2 | before a push to `remediation/plan`, and QA's one suite | `pytest -m "not slow" -n 8` plus ruff, `-m stability` for loss/model/indicator code | about 3.5 minutes |
+| 3 | once per merge batch that touches training, serving or notebooks (D-059) | `pytest -m slow -n 8` | about 16 minutes |
+| CI | every push to `remediation/plan` or `master`, every pull request | lint, fast suite with coverage and gates, CLI smoke; not for docs-only, `runs/` or `*.md` pushes | about 18 minutes, off the machine |
+| nightly | daily | slow, data and notebook tests | off the machine |
+
+Working branches (`nt-*`) are not run by CI on push; the author's tier 2 covers them, and the merge push is
+checked. `test_changed.py` is a heuristic (names, imports, registry keys); when it selects nothing for a code
+change, run tier 2. Never two full suites at the same time (D-048).
 
 ## Sweeps and pre-registered studies
 

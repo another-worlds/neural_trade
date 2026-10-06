@@ -103,6 +103,7 @@ Pointers only; the rule lives where the pointer says.
 
 ```bash
 PY=C:/Users/Step/miniforge3/envs/nt/python
+$PY scripts/test_changed.py --run                                              # tier 1: tests of the changed modules (D-060)
 CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m "not slow" -n 8   # fast suite, ~3.5 min (pytest-xdist, D-048)
 CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider -m slow -n 8   # slow suite; never two full suites at once (D-048)
 $PY -m ruff check src tests scripts

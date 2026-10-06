@@ -719,3 +719,17 @@ that extend or partly replace an entry.
   notebooks (the lead integrates several items, then one slow run on the merged head). CI and nightly are
   unchanged; the owner did not choose to drop them.
 - **Not changed:** the definition of done's other clauses, the golden-run and notebook rules.
+
+## D-060 QA by risk; test tiers; CI only on the integration branch (owner, 2026-10-06)
+- **Context:** the owner asked how effective QA is and noted that equal time for implementer and QA looks
+  absurd, and asked for test-run conditions that do not slow development. Evidence: QA caught real defects
+  on P1 numbers (NT-104 loss 542,944; NT-037 gradient norm; NT-047 bundles; NT-099 vol arm at 0.1) and spent
+  30 minutes on 2026-10-06 finding two stale tests that CI and the lead's own fast run show for free.
+- **Decision:** (1) QA by risk, QA does not repeat CI, implementer logs verified instead of rerun, one QA call
+  per merge batch, the lead runs the fast suite before each push to `remediation/plan`
+  (OPERATING_MODEL "Models and task tracking"). (2) Test tiers 0-3 (OPERATING_MODEL "Test tiers"), with
+  `scripts/test_changed.py` for tier 1. (3) CI triggers on pushes to `remediation/plan` and `master` and on
+  pull requests, and skips pushes that only change planning docs, `runs/` or `*.md`; nightly is unchanged.
+- **Not changed:** the slow-suite rule (D-059), the definition of done's other clauses, the PASS requirement
+  for P0/P1 items, pre-registered studies' QA.
+
