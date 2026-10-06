@@ -214,6 +214,7 @@ changes).
 | [NT-179](#nt-179) | P2 | feature | implementer | todo | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
 | [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
 | [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
+| [NT-182](#nt-182) | P1 | bug | implementer | todo | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
 
 ## Items
 
@@ -2404,6 +2405,18 @@ changes).
 - **why:** QA of NT-141 and NT-034 (2026-10-06): `_validate_indicator_periods` logs the above-ceiling warning on every validate (15 lines per validate and 30 per `copy()` at LOOKBACK 20; a default train logs 0); `_SCHEDULABLE_LAMBDA_KEYS` in core/config.py duplicates training/lambdas._LAMBDA_VARIABLE_KEYS (layering forbids the import; a test pins them equal). Memory-pressure flakiness of heavy tests while a second session trains: tests/test_calib_gradient_mode.py::test_default_model_gradient_mode_equalises_terms_as_they_enter_total OOMs on CPU at -n 8 ([256,57,60,60] float); tests/test_nt033_baselines.py:133-134 uses `next()` without a default and hides the failing cell's error.
 - **acceptance:** (1) The warning is deduplicated per distinct message per process (test). (2) The tuple lives in core and training imports it (the equality test becomes an identity check). (3) The heavy tests' memory use is bounded (smaller batch/sequence for the default-model gradient-mode test, keeping its assertion) and the nt033 test shows the underlying error. (4) Fast suite, ruff.
 - **source:** QA reports of 2026-10-06
+
+### NT-182
+
+**Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row**
+
+- **status:** todo
+- **priority / type / role:** P1 / bug / implementer
+- **area:** src/neural_trade/core/run_context.py (run_id, ~line 57), src/neural_trade/experiments/store.py (INSERT OR REPLACE on run_id), src/neural_trade/experiments/runner.py, tests/
+- **depends on:** none (before NT-050)
+- **why:** NT-034's implementer (2026-10-06): run_id = stamp (second) + sha + config hash + cell name, and the index's run_id is the PRIMARY KEY with INSERT OR REPLACE. Two scenarios whose cells share a config hash and finish a cell in the same second overwrite each other's index row. Reproduced deterministically by the old tests/test_nt033_baselines.py::test_a_rule_cell_scores_the_same_block_and_costs_as_a_trained_cell (a rule cell and a trained cell of one fold got the same run_id; the rule row was lost). Plausible in NT-050: the three TA-rule scenarios (nt033_ta_ma_cross, nt033_ta_rsi, nt033_ta_bollinger) have cells of about 0.1 s that differ only in their strategy, and the learned and frozen-twin scenarios run beside them. The engine already retries on a run-id collision for DIRECTORIES (runner.py ~248-254) but the index row is silently replaced.
+- **acceptance:** (1) A test with two minimal scenarios in one store whose cells have the same config hash and start in the same second: both rows are in the index and both run directories exist. (2) The run_id includes the scenario name and/or a uniqueness suffix; existing run ids and stored cells keep resolving (the index rebuilt from the stored dirs equals the kept one; old ids unchanged). (3) INSERT OR REPLACE becomes a refusal that names both cells when the SAME run_id is inserted twice with different content (test). (4) Scenario identity (spec_hash/settings_hash/config hashes) unchanged. (5) Fast suite, ruff.
+- **source:** NT-034 implementer (2026-10-06)
 
 ## Done log
 
