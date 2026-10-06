@@ -4,13 +4,13 @@ The notebooks in `notebooks/` are **generated** by `build.py`, **executed in pla
 defaults, and **committed with their outputs** (the outputs of the last real run), so they can be read
 without a kernel. The scripts here are the only way to change them.
 
-Notebooks: `00_data_and_splits`, `01_train_and_monitor` (trains a run), `02_backtest`, `03_signals_and_trades`, `04_diagnostics`, `05_compare_runs`, `07_discovered_indicators` (the learned indicators on price against their textbook periods; like 02-05 it reads the newest run), `08_long_run` (launches and tracks the 360-day run of `configs/scenarios/long_360d.yaml`, D-040; with `LAUNCH = False`, the default, executing it starts nothing and only shows the run's state, so the routine may execute it at any time; re-run its monitor cell to refresh), `09_candidate_run` (one saved run's summary, training record, fit evaluation and backtest, read from its own saved files - config, metrics, evaluation report, saved prediction blocks - so it needs neither the training CSV nor a fresh inference pass; the default `RUN_DIR` is candidate C1, `configs/candidates/README.md`).
+Notebooks: `00_data_and_splits`, `01_train_and_monitor` (trains a run), `02_backtest`, `03_signals_and_trades`, `04_diagnostics`, `05_compare_runs`, `06_control_panel` (the control panel, NT-034, D-023: widgets choose a scenario, a search space and a mode, launch or resume a sweep through the same `Sweep` code as `neural-trade sweep`, show a leaderboard that refreshes while the sweep runs and compare rows; executing it top to bottom reads the run store and **starts nothing**, only the Launch button does, after a printed estimate and, above `CONFIRM_GPU_HOURS`, a Confirm button; with no sweep in the store it says *no sweep yet*; reads no run directory, so it can be executed at any time), `07_discovered_indicators` (the learned indicators on price against their textbook periods; like 02-05 it reads the newest run), `08_long_run` (launches and tracks the 360-day run of `configs/scenarios/long_360d.yaml`, D-040; with `LAUNCH = False`, the default, executing it starts nothing and only shows the run's state, so the routine may execute it at any time; re-run its monitor cell to refresh), `09_candidate_run` (one saved run's summary, training record, fit evaluation and backtest, read from its own saved files - config, metrics, evaluation report, saved prediction blocks - so it needs neither the training CSV nor a fresh inference pass; the default `RUN_DIR` is candidate C1, `configs/candidates/README.md`).
 
 | Script | What it does |
 | --- | --- |
 | `build.py` | Generates the notebooks from the cell lists in it. **Edit notebooks here, never by hand.** `--out DIR` writes elsewhere; `--check` exits 1 when `notebooks/` differs from it. |
 | `execute.py` | Executes notebooks in place: kernel `python3`, cwd `notebooks/`, this checkout's `src/` first on `PYTHONPATH`, 7200 s per cell. Prints `[nb] name: OK/ERROR (secs)` and exits 1 on an error. `--no-store-widget-state` leaves the widget state out (the default stores it). |
-| `check.py` | Reads the saved notebooks and lists, per notebook: size, figures, errors, stderr, empty panels and unexecuted cells. It exits 1 if any of these is found, or if a notebook is larger than 5 MB (`MAX_BYTES` = 5,000,000 bytes, the per-notebook limit of D-013). |
+| `check.py` | Reads the saved notebooks and lists, per notebook: size, figures, errors, stderr, empty panels and unexecuted cells, in the code cells' outputs **and in the widgets' saved state** (`metadata.widgets`: what a button callback or a background thread wrote into an `Output` widget; a failure there never reaches a cell). It exits 1 if any of these is found, or if a notebook is larger than 5 MB (`MAX_BYTES` = 5,000,000 bytes, the per-notebook limit of D-013). |
 | `render.py` | Renders every saved figure, plus the training-health HTML, to PNG with headless Edge, and prints a manifest. **Windows + Microsoft Edge only.** |
 
 Run everything from the repository root with the `nt` environment's Python:
@@ -26,7 +26,7 @@ works on all of them.
 ## The workflow
 
 1. **Edit `scripts/notebooks/build.py`**, in the cell lists (`data`, `train`, `backtest`, `signals_nb`,
-   `diag`, `compare`, `discovered`, `long_run`, `candidate_run`). Keep the cells thin: put logic in `neural_trade` (tested there) and call it from
+   `diag`, `compare`, `control_panel`, `discovered`, `long_run`, `candidate_run`). Keep the cells thin: put logic in `neural_trade` (tested there) and call it from
    a cell. No `def`, `class` or `lambda` in a cell (`tests/test_notebooks_thin.py`). The first code cell
    of each notebook has the tag `parameters`.
 2. **Build** only the notebooks you changed. A build writes the notebook without outputs.

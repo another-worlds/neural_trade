@@ -22,7 +22,7 @@ def test_the_notebooks_exist_and_the_old_ones_are_gone():
     assert [p.name for p in NOTEBOOKS] == ["00_data_and_splits.ipynb", "01_train_and_monitor.ipynb",
                                            "02_backtest.ipynb", "03_signals_and_trades.ipynb",
                                            "04_diagnostics.ipynb", "05_compare_runs.ipynb",
-                                           "07_discovered_indicators.ipynb", "08_long_run.ipynb",
+                                           "06_control_panel.ipynb", "07_discovered_indicators.ipynb", "08_long_run.ipynb",
                                            "09_candidate_run.ipynb"]
     for old in ("inference.ipynb", "trade.ipynb", "diagnostics.ipynb", "cfg.ipynb"):
         assert not (REPO / old).exists(), old
@@ -92,6 +92,12 @@ def test_all_notebooks_execute(tmp_path, synthetic_bars, monkeypatch):
     _run(NB_DIR / "04_diagnostics.ipynb", common, tmp_path)
     _run(NB_DIR / "05_compare_runs.ipynb", {"RUNS_GLOB": str(runs / "*"), "ABLATION_DIR": str(tmp_path / "none")},
          tmp_path)
+    # 06 on a store with no sweep: executing it starts nothing, says so, and leaves no sweep or scenario behind
+    nb = _run(NB_DIR / "06_control_panel.ipynb", {"STORE": str(tmp_path / "panel_store"), "SPECS_DIR": str(REPO / "configs" / "scenarios"),
+                                                  "COMPARES_DIR": str(REPO / "configs" / "compares")}, tmp_path)
+    text = "".join(o.get("text", "") for c in nb.cells if c.cell_type == "code" for o in c.get("outputs", []))
+    assert "executing this notebook starts nothing" in text
+    assert not (tmp_path / "panel_store" / "sweeps").exists() and not (tmp_path / "panel_store" / "scenarios").exists()
     nb = _run(NB_DIR / "07_discovered_indicators.ipynb", common, tmp_path)
     titles = [o["data"]["application/vnd.plotly.v1+json"]["layout"]["title"]["text"] for c in nb.cells
               if c.cell_type == "code" for o in c.get("outputs", []) if "application/vnd.plotly.v1+json" in o.get("data", {})]

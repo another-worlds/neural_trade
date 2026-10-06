@@ -5,7 +5,9 @@
 
 Per notebook it prints the file size, then every saved plotly figure (cell, title, trace count, empty
 panels, and any 'not logged' / 'no trades' notes the figure writes on itself), every error output,
-every stderr stream, and every code cell without an execution count (built but never executed).
+every stderr stream, and every code cell without an execution count (built but never executed). The
+outputs held in the widgets' saved state (``metadata.widgets``, which `execute.py` stores) are read
+like cell outputs: a widget's error, stderr or empty panel fails the check too.
 Exit 1 if any notebook has an error, a stderr stream, an empty panel or an unexecuted code cell, or
 is larger than MAX_BYTES (5 MB, the per-notebook limit of D-013); exit 0 when all are clean. It only
 reads the files: nothing is executed.
@@ -56,7 +58,7 @@ def _text(value) -> str:
 
 @dataclass
 class Figure:
-    cell: int
+    cell: object        # a code cell's index, or "widget <model id>" for a figure held in a widget's state
     title: str
     traces: int
     empty: list
@@ -68,7 +70,7 @@ class Report:
     path: Path
     size: int
     figures: list = field(default_factory=list)
-    errors: list = field(default_factory=list)      # (cell, "Ename: evalue")
+    errors: list = field(default_factory=list)      # (cell or widget, "Ename: evalue")
     stderr: list = field(default_factory=list)      # (cell, text)
     unexecuted: list = field(default_factory=list)  # cell indices
 
@@ -100,12 +102,53 @@ class Report:
         return out
 
 
-def check_notebook(path) -> Report:
-    """Read one saved notebook and collect what check.py reports."""
+WIDGET_STATE = "application/vnd.jupyter.widget-state+json"
+
+
+def _scan_outputs(rep: Report, where, outputs) -> None:
+    """Add the errors, stderr streams and plotly figures of one list of saved outputs to ``rep``;
+    ``where`` is the code cell's index or, for an output held in a widget's state, ``widget <model id>``."""
     import plotly.graph_objects as go
 
     from neural_trade.visualization.theme import empty_panels
 
+    for out in outputs:
+        kind = out.get("output_type")
+        if kind == "error":
+            rep.errors.append((where, f"{out.get('ename')}: {out.get('evalue', '')}"))
+        elif kind == "stream" and out.get("name") == "stderr":
+            rep.stderr.append((where, _text(out.get("text", ""))))
+        spec = out.get("data", {}).get(PLOTLY)
+        if spec is None:
+            continue
+        try:
+            fig = go.Figure(spec)
+        except Exception as exc:  # a figure plotly cannot load is as broken as an error output
+            rep.errors.append((where, f"saved figure does not load: {type(exc).__name__}: {exc}"))
+            continue
+        title = re.sub(r"<[^>]+>", " ", fig.layout.title.text or "").split("  ")[0].strip()
+        notes = [a.text for a in fig.layout.annotations
+                 if a.text and (any(m in a.text for m in NOTE_MARKERS) or a.text == "no trades")]
+        rep.figures.append(Figure(where, title, len(fig.data), empty_panels(fig), notes))
+
+
+def widget_outputs(nb: dict) -> list:
+    """(model id, saved outputs) of every widget in the notebook's saved widget state that holds outputs
+    (an ``Output`` widget: what a button callback or a background thread wrote into it, which is NOT in
+    any cell's ``outputs``). Empty when the notebook was saved without its widget state."""
+    state = ((nb.get("metadata") or {}).get("widgets") or {}).get(WIDGET_STATE) or {}
+    found = []
+    for model_id, model in (state.get("state") or {}).items():
+        outs = (model.get("state") or {}).get("outputs")
+        if outs:
+            found.append((model_id, outs))
+    return found
+
+
+def check_notebook(path) -> Report:
+    """Read one saved notebook and collect what check.py reports: the outputs of its code cells and the
+    outputs held in its widgets' saved state (NT-034: a failure inside a button callback or a background
+    thread only ever reaches an Output widget, never a cell)."""
     path = Path(path)
     nb = json.loads(path.read_text(encoding="utf-8"))
     rep = Report(path=path, size=path.stat().st_size)
@@ -114,24 +157,9 @@ def check_notebook(path) -> Report:
             continue
         if cell.get("execution_count") is None and _text(cell.get("source", "")).strip():
             rep.unexecuted.append(i)
-        for out in cell.get("outputs", []):
-            kind = out.get("output_type")
-            if kind == "error":
-                rep.errors.append((i, f"{out.get('ename')}: {out.get('evalue', '')}"))
-            elif kind == "stream" and out.get("name") == "stderr":
-                rep.stderr.append((i, _text(out.get("text", ""))))
-            spec = out.get("data", {}).get(PLOTLY)
-            if spec is None:
-                continue
-            try:
-                fig = go.Figure(spec)
-            except Exception as exc:  # a figure plotly cannot load is as broken as an error output
-                rep.errors.append((i, f"saved figure does not load: {type(exc).__name__}: {exc}"))
-                continue
-            title = re.sub(r"<[^>]+>", " ", fig.layout.title.text or "").split("  ")[0].strip()
-            notes = [a.text for a in fig.layout.annotations
-                     if a.text and (any(m in a.text for m in NOTE_MARKERS) or a.text == "no trades")]
-            rep.figures.append(Figure(i, title, len(fig.data), empty_panels(fig), notes))
+        _scan_outputs(rep, i, cell.get("outputs", []))
+    for model_id, outs in widget_outputs(nb):
+        _scan_outputs(rep, f"widget {model_id[:8]}", outs)
     return rep
 
 

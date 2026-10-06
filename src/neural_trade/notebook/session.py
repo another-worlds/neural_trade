@@ -44,6 +44,30 @@ class _ThreadLogHandler(logging.Handler):
                 self.handleError(record)
 
 
+class ThreadWarnings(logging.Handler):
+    """Collects the WARNING+ records one thread logs, so the cell that waits for the thread can re-emit them.
+
+    A background thread's log records go to the log widget only; its warnings (for example "CalibrationPipeline
+    fit FAILED") never reached the cell that waited on it, so a degraded run looked clean (PR #15 note on
+    NT-034). :meth:`replay` hands the records to their loggers from the calling thread, once."""
+
+    def __init__(self, thread_ident_getter):
+        super().__init__(level=logging.WARNING)
+        self._ident = thread_ident_getter
+        self.records: List[logging.LogRecord] = []
+
+    def emit(self, record):
+        if record.thread == self._ident():
+            self.records.append(record)
+
+    def replay(self) -> int:
+        """Re-emit the collected records through their own loggers; returns how many (and forgets them)."""
+        records, self.records = self.records, []
+        for rec in records:
+            logging.getLogger(rec.name).handle(rec)
+        return len(records)
+
+
 class _NotThreadFilter(logging.Filter):
     def __init__(self, thread_ident_getter):
         super().__init__()
@@ -76,6 +100,7 @@ class TrainingSession:
         self._stop = threading.Event()
         self._done = threading.Event()
         self._thread: Optional[threading.Thread] = None
+        self._warnings = ThreadWarnings(lambda: self._thread.ident if self._thread else None)
         self._w = None
 
     # ------------------------------------------------------------------ controls (safe to call from anywhere)
@@ -108,8 +133,10 @@ class TrainingSession:
         return self
 
     def wait(self, timeout: Optional[float] = None):
-        """Block until the run finished; returns the TrainResult (re-raises a training error)."""
-        self._done.wait(timeout)
+        """Block until the run finished; returns the TrainResult (re-raises a training error). The thread's
+        WARNING+ log records are re-emitted here, in the waiting cell, once the run finished."""
+        if self._done.wait(timeout):
+            self._warnings.replay()
         if self.error is not None:
             raise self.error
         return self.result
@@ -122,8 +149,9 @@ class TrainingSession:
         handler = _ThreadLogHandler(self._log, ident)
         quiet = _NotThreadFilter(ident)
         pkg_logger.addHandler(handler)
+        pkg_logger.addHandler(self._warnings)
         for h in pkg_logger.handlers:
-            if h is not handler:
+            if h is not handler and h is not self._warnings:
                 h.addFilter(quiet)
         cfg = self.config
         names = [c for c in (getattr(cfg, "CALLBACKS", None) or []) if c not in _QUIET_CALLBACKS]
@@ -148,6 +176,7 @@ class TrainingSession:
             logger.exception("training failed")
         finally:
             pkg_logger.removeHandler(handler)
+            pkg_logger.removeHandler(self._warnings)
             for h in pkg_logger.handlers:
                 h.removeFilter(quiet)
             self._done.set()

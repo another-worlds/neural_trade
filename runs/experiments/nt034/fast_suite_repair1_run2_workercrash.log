@@ -1,0 +1,10 @@
+44b4f39d718d7ef97dec9e74ea7bbb7b8cfa9886
+INTERNALERROR>   File "C:\Users\Step\miniforge3\envs\nt\lib\site-packages\xdist\dsession.py", line 163, in loop_once
+INTERNALERROR>     call(**kwargs)
+INTERNALERROR>   File "C:\Users\Step\miniforge3\envs\nt\lib\site-packages\xdist\dsession.py", line 217, in worker_workerfinished
+INTERNALERROR>     assert not crashitem, (crashitem, node)
+INTERNALERROR> AssertionError: ('tests/test_viz_training.py::test_loss_terms_figure_puts_each_term_on_its_own_axis', <WorkerController gw8>)
+INTERNALERROR> assert not 'tests/test_viz_training.py::test_loss_terms_figure_puts_each_term_on_its_own_axis'
+
+10 failed, 2034 passed, 4499 warnings, 1 error in 376.35s (0:06:16)
+All checks passed!

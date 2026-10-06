@@ -103,7 +103,9 @@ def data_layout(config: Config) -> DataLayout:
     if loader not in FILE_LOADERS:
         raise InvalidConfigurationError(f"the experiment engine needs a file loader {FILE_LOADERS} to fingerprint "
                                         f"the data; DATA_LOADER is {loader!r}")
-    path = Path(config.CSV_PATH)
+    from neural_trade.data.loaders import resolve_data_path
+
+    path = resolve_data_path(config.CSV_PATH)   # the file; the fingerprint keeps the configured text
     if not path.is_file():
         raise InvalidConfigurationError(f"CSV_PATH {config.CSV_PATH!r} does not exist (resolved: {path.resolve()})")
     if int(max(1, config.WINDOW_STEP)) != 1:

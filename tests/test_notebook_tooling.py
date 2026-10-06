@@ -170,6 +170,56 @@ def test_check_fails_a_notebook_over_the_size_limit_and_names_it(check, tmp_path
     assert out.splitlines()[-1] == "2 notebook(s), 2 figures: FAIL in over_limit.ipynb"   # only the big one
 
 
+def _with_widget_state(tmp_path, outputs, name="widgets"):
+    """The clean synthetic notebook plus a saved widget state holding one Output widget with ``outputs`` (what a
+    button callback or a background thread writes: it is in no cell's outputs)."""
+    book = nbformat.read(str(_synthetic(tmp_path)), as_version=4)
+    book.metadata["widgets"] = {"application/vnd.jupyter.widget-state+json": {
+        "version_major": 2, "version_minor": 0,
+        "state": {"0123456789abcdef": {"model_name": "OutputModel", "model_module": "@jupyter-widgets/output",
+                                       "state": {"outputs": outputs}},
+                  "fedcba9876543210": {"model_name": "HTMLModel", "state": {"value": "<b>no outputs here</b>"}}}}}
+    path = tmp_path / f"{name}.ipynb"
+    nbformat.write(book, str(path))
+    return path
+
+
+def _plotly_output(empty=False):
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(rows=1, cols=2) if empty else go.Figure()
+    fig.add_scatter(x=[1, 2], y=[1, 2], row=1, col=1) if empty else fig.add_scatter(x=[1, 2], y=[1, 2])
+    fig.update_layout(title_text="Widget figure")
+    return {"output_type": "display_data", "metadata": {}, "data": {"application/vnd.plotly.v1+json": json.loads(fig.to_json())}}
+
+
+def test_check_reads_the_outputs_held_in_widget_state_and_passes_a_clean_one(check, tmp_path, capsys):
+    path = _with_widget_state(tmp_path, [{"output_type": "stream", "name": "stdout", "text": "fine" + chr(10)}, _plotly_output()])
+    report = check.check_notebook(path)
+    assert report.ok and [f.title for f in report.figures] == ["Synthetic", "Widget figure"]
+    assert str(report.figures[1].cell).startswith("widget 01234567")
+    assert check.main([str(path)]) == 0 and "widget 01234567" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("bad", ["error", "stderr", "empty"])
+def test_check_fails_on_an_error_stderr_or_empty_panel_inside_a_widget(check, tmp_path, capsys, bad):
+    outs = {"error": [{"output_type": "error", "ename": "RuntimeError", "evalue": "sweep exploded", "traceback": []}],
+            "stderr": [{"output_type": "stream", "name": "stderr", "text": "Traceback (most recent call last)" + chr(10)}],
+            "empty": [_plotly_output(empty=True)]}[bad]
+    path = _with_widget_state(tmp_path, outs, name=f"bad_{bad}")
+    report = check.check_notebook(path)
+    assert not report.ok
+    assert (report.errors or report.stderr or report.empty)
+    assert check.main([str(path)]) == 1
+    out = capsys.readouterr().out
+    assert "widget 01234567" in out and "FAIL in" in out
+
+
+def test_check_without_saved_widget_state_reads_cells_only(check, tmp_path):
+    assert check.widget_outputs(json.loads(_synthetic(tmp_path).read_text(encoding="utf-8"))) == []
+
+
 def test_committed_notebooks_pass_check(check, capsys):
     """The committed notebooks were saved clean: no error, no stderr, no empty panel, no unexecuted cell,
     none over the 5 MB limit."""
