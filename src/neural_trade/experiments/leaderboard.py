@@ -1,0 +1,288 @@
+"""The leaderboard (NT-031): one row per configuration, ranked by the dev-fold net Sharpe after
+costs (D-020), with guard-rails beside it that can disqualify a row from the winner, and the
+test-fold numbers shown on every row but never used to rank or choose (D-020, D-044: the cost
+profile defaults to 0 per side).
+
+Reads the run store's index (:mod:`neural_trade.experiments.store`): every row is one trained cell
+(configuration, fold, seed), scored by :mod:`neural_trade.experiments.scorer` onto its fold's role,
+``dev`` (an earlier fold the ranking uses) or ``test`` (the latest fold). This module groups a
+scenario's rows by ``configuration`` and aggregates fold x seed with D-046's unit of inference: the
+mean of each dev fold's seed-mean is the number ranked on (``RoleAggregate.values``), and its spread
+is the sample standard deviation BETWEEN fold means (``RoleAggregate.spread``) -- never pretending
+seeds that share one fold's sampling noise are independent draws. The same aggregation is applied to
+the test-role rows, shown but excluded from the sort.
+
+Guard-rails (VISION "The yardstick": maximum drawdown, the number of trades, beating buy-and-hold,
+beating the random null at the same frequency) are evaluated on the dev aggregate. A scenario spec
+does not yet carry guard-rail thresholds of its own (``experiments/scenario.py``'s module docstring
+flags this as a NT-031 extension point for a later schema version); until that exists,
+:func:`build_leaderboard` takes a :class:`GuardRailSpec` explicitly and falls back to
+``DEFAULT_GUARD_RAILS`` (minimum trades 1, so a 0-trade row is disqualified per the NT-076 QA note;
+must beat buy-and-hold; must beat the random null's median) when the caller passes none.
+
+The dataset fingerprint shown per row is the run's recorded ``dataset_sha256`` (meta.json's
+``dataset.sha256``, carried into the index by :mod:`neural_trade.experiments.store`); a run written
+before that field existed reports "n/a" (NT-041 is the follow-up that back-fills it everywhere).
+
+A row's ``status`` is "done" when at least one of its cells scored, "failed" when every cell of the
+configuration failed, and "incomplete" otherwise (still running, or interrupted, with no failures
+yet). A failed or data-less row is never the winner: it sorts to the bottom of the dev ranking.
+"""
+from __future__ import annotations
+
+import dataclasses
+import json
+import math
+import statistics
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+
+from neural_trade.experiments.store import RunStore
+
+# the headline metrics every row aggregates, in display order; (store column, label, format)
+METRICS: Tuple[Tuple[str, str, str], ...] = (
+    ("sharpe_net", "net Sharpe", "{:+.3f}"),
+    ("total_return", "net return", "{:+.2%}"),
+    ("max_drawdown", "max drawdown", "{:.2%}"),
+    ("n_trades", "trades", "{:.1f}"),
+    ("buy_and_hold_return", "buy & hold return", "{:+.2%}"),
+    ("random_percentile_return", "random-null percentile", "{:.0f}"),
+)
+RANK_METRIC = "sharpe_net"              # the ranking column: dev-fold net Sharpe after costs (D-020)
+ROLES = ("dev", "test")
+
+
+# ------------------------------------------------------------------ guard-rails
+@dataclass(frozen=True)
+class GuardRailSpec:
+    """Thresholds a row's DEV aggregate must clear to be eligible as the winner (VISION "The
+    yardstick"). ``None`` disables a threshold check. Passed explicitly by the caller (a scenario
+    does not carry these yet, see the module docstring); ``DEFAULT_GUARD_RAILS`` applies otherwise.
+    """
+    max_drawdown_max: Optional[float] = None        # e.g. 0.25: dev mean max_drawdown must be <=
+    min_trades: Optional[float] = 1.0                # dev mean n_trades must be >= (0-trade rows fail)
+    require_beat_buy_and_hold: bool = True           # dev mean total_return > dev mean buy_and_hold_return
+    require_beat_random_null: bool = True            # dev mean random-null percentile >= the line below
+    random_null_percentile_min: float = 50.0
+
+
+DEFAULT_GUARD_RAILS = GuardRailSpec()
+
+
+@dataclass(frozen=True)
+class GuardRail:
+    name: str
+    description: str
+    passed: bool
+    detail: str
+
+
+def _check_guard_rails(dev_values: Mapping[str, Optional[float]], spec: GuardRailSpec, n_dev_rows: int
+                        ) -> List[GuardRail]:
+    rails: List[GuardRail] = []
+    if n_dev_rows == 0:
+        rails.append(GuardRail("dev_data", "has at least one scored dev-fold cell", False,
+                                "no scored dev-fold cell"))
+        return rails
+    if spec.max_drawdown_max is not None:
+        dd = dev_values.get("max_drawdown")
+        ok = dd is not None and dd <= spec.max_drawdown_max
+        rails.append(GuardRail("max_drawdown", f"dev max drawdown <= {spec.max_drawdown_max:.0%}", ok,
+                                "n/a" if dd is None else f"{dd:.2%}"))
+    if spec.min_trades is not None:
+        nt = dev_values.get("n_trades")
+        ok = nt is not None and nt >= spec.min_trades
+        rails.append(GuardRail("min_trades", f"dev trades >= {spec.min_trades:g}", ok,
+                                "n/a" if nt is None else f"{nt:.1f}"))
+    if spec.require_beat_buy_and_hold:
+        tr, bh = dev_values.get("total_return"), dev_values.get("buy_and_hold_return")
+        ok = tr is not None and bh is not None and tr > bh
+        rails.append(GuardRail("beat_buy_and_hold", "dev net return > dev buy-and-hold return", ok,
+                                "n/a" if tr is None or bh is None else f"{tr:+.2%} vs {bh:+.2%}"))
+    if spec.require_beat_random_null:
+        pr = dev_values.get("random_percentile_return")
+        ok = pr is not None and pr >= spec.random_null_percentile_min
+        rails.append(GuardRail("beat_random_null",
+                                f"dev random-null percentile >= {spec.random_null_percentile_min:g}", ok,
+                                "n/a" if pr is None else f"{pr:.0f}"))
+    return rails
+
+
+# ------------------------------------------------------------------ aggregation
+@dataclass(frozen=True)
+class RoleAggregate:
+    """One role's (dev or test) aggregate over a configuration's cells: the mean of each fold's
+    seed-mean (``values``), and the sample standard deviation across fold means (``spread``, None
+    with fewer than two folds with data) -- D-046's unit of inference is the fold."""
+    n_folds: int
+    n_rows: int
+    folds: Tuple[int, ...]
+    values: Dict[str, Optional[float]] = field(default_factory=dict)
+    spread: Dict[str, Optional[float]] = field(default_factory=dict)
+
+
+def _aggregate(rows: Sequence[Mapping[str, Any]]) -> RoleAggregate:
+    folds = sorted({int(r["fold"]) for r in rows if r.get("fold") is not None})
+    values: Dict[str, Optional[float]] = {}
+    spread: Dict[str, Optional[float]] = {}
+    for col, _, _ in METRICS:
+        fold_means = []
+        for f in folds:
+            seed_vals = [r[col] for r in rows if r.get("fold") == f and r.get(col) is not None]
+            if seed_vals:
+                fold_means.append(statistics.mean(seed_vals))
+        values[col] = statistics.mean(fold_means) if fold_means else None
+        spread[col] = statistics.stdev(fold_means) if len(fold_means) >= 2 else None
+    return RoleAggregate(n_folds=len(folds), n_rows=len(rows), folds=tuple(folds), values=values, spread=spread)
+
+
+# ------------------------------------------------------------------ rows
+@dataclass(frozen=True)
+class LeaderboardRow:
+    scenario: str
+    configuration: str
+    status: str                              # "done" | "failed" | "incomplete"
+    dev: RoleAggregate
+    test: RoleAggregate
+    guard_rails: Tuple[GuardRail, ...]
+    disqualified: bool
+    dataset_fingerprint: Optional[str]       # meta.json dataset.sha256, or None ("n/a"; NT-041)
+    bar_minutes: Optional[float]
+    horizon_steps: Optional[Tuple[int, ...]]
+    strategy: Optional[str]
+    n_cells: int
+    n_failed: int
+    errors: Tuple[str, ...] = ()
+    rank: Optional[int] = None               # filled in by build_leaderboard / set_ranks
+
+
+def _first(rows: Sequence[Mapping[str, Any]], key: str):
+    for r in rows:
+        v = r.get(key)
+        if v is not None:
+            return v
+    return None
+
+
+def _horizon_steps(rows: Sequence[Mapping[str, Any]]) -> Optional[Tuple[int, ...]]:
+    raw = _first(rows, "horizon_steps")
+    if raw is None:
+        return None
+    try:
+        return tuple(int(x) for x in json.loads(raw))
+    except (ValueError, TypeError):
+        return None
+
+
+def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping[str, Any]],
+                        guard_rails: GuardRailSpec) -> LeaderboardRow:
+    done = [r for r in rows if r.get("status") == "done"]
+    failed = [r for r in rows if r.get("status") == "failed"]
+    if rows and len(failed) == len(rows):
+        status = "failed"
+    elif done:
+        status = "done"
+    else:
+        status = "incomplete"
+    dev_agg = _aggregate([r for r in done if r.get("role") == "dev"])
+    test_agg = _aggregate([r for r in done if r.get("role") == "test"])
+    rails = _check_guard_rails(dev_agg.values, guard_rails, dev_agg.n_rows)
+    disqualified = status != "done" or any(not g.passed for g in rails)
+    errors = tuple(sorted({r["error"] for r in failed if r.get("error")}))
+    return LeaderboardRow(
+        scenario=scenario, configuration=configuration, status=status, dev=dev_agg, test=test_agg,
+        guard_rails=tuple(rails), disqualified=disqualified,
+        dataset_fingerprint=_first(rows, "dataset_sha256"), bar_minutes=_first(rows, "bar_minutes"),
+        horizon_steps=_horizon_steps(rows), strategy=_first(rows, "strategy"),
+        n_cells=len(rows), n_failed=len(failed), errors=errors)
+
+
+def build_leaderboard(rows: Sequence[Mapping[str, Any]], *, guard_rails: Optional[GuardRailSpec] = None
+                       ) -> List[LeaderboardRow]:
+    """One :class:`LeaderboardRow` per (scenario, configuration) in ``rows`` (the run index's rows,
+    e.g. ``RunIndex.rows()`` / ``RunStore.index.rows()``), sorted by the dev aggregate's net Sharpe
+    only (descending; a configuration with no dev value sorts last; ties keep first-seen order).
+    ``guard_rails`` defaults to :data:`DEFAULT_GUARD_RAILS`.
+    """
+    spec = guard_rails if guard_rails is not None else DEFAULT_GUARD_RAILS
+    order: List[Tuple[str, str]] = []
+    groups: Dict[Tuple[str, str], List[Mapping[str, Any]]] = {}
+    for r in rows:
+        key = (str(r.get("scenario")), str(r.get("configuration")))
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(r)
+    built = [_configuration_row(scenario, configuration, groups[(scenario, configuration)], spec)
+             for scenario, configuration in order]
+
+    def sort_key(i: int):
+        v = built[i].dev.values.get(RANK_METRIC)
+        finite = v is not None and math.isfinite(v)
+        return (not finite, -(v if finite else 0.0), i)
+
+    ranked = [built[i] for i in sorted(range(len(built)), key=sort_key)]
+    return [dataclasses.replace(row, rank=rank) for rank, row in enumerate(ranked, 1)]
+
+
+def leaderboard_for_scenario(store: RunStore, scenario: str, *, guard_rails: Optional[GuardRailSpec] = None,
+                              sync: bool = True) -> List[LeaderboardRow]:
+    """``build_leaderboard`` of one scenario's rows, read from ``store``'s index. ``sync=True``
+    (default) re-reads the scenario's run directories first (``RunStore.sync``); pass ``False`` to
+    use the index as it stands (for example, after a caller already synced several scenarios)."""
+    rows = store.sync(scenario) if sync else store.index.rows(scenario)
+    return build_leaderboard(rows, guard_rails=guard_rails)
+
+
+def winner(rows: Sequence[LeaderboardRow]) -> Optional[LeaderboardRow]:
+    """The top row that is not disqualified (None if every row is disqualified or there are none)."""
+    return next((r for r in rows if not r.disqualified), None)
+
+
+# ------------------------------------------------------------------ text table
+def _fmt_metric(agg: RoleAggregate, col: str, fmt: str) -> str:
+    v = agg.values.get(col)
+    if v is None:
+        return "n/a"
+    sd = agg.spread.get(col)
+    base = fmt.format(v)
+    return base if sd is None else f"{base} (sd {fmt.format(sd)}, n={agg.n_folds}f/{agg.n_rows}c)"
+
+
+def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
+    """A Markdown table: the ranking column labelled as such, the test-fold columns labelled
+    'test, not used for ranking' (criterion 5), guard-rails and disqualification, the dataset
+    fingerprint, bar size, horizons and strategy on every row (criterion 4)."""
+    scenario = rows[0].scenario if rows else "(empty)"
+    lines = [f"# Leaderboard: `{scenario}`", "",
+             "One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over "
+             "the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from "
+             "the winner (VISION \"The yardstick\"). The **test-fold columns are test, not used for ranking** "
+             "(D-020): shown for every row, never used to rank or choose.", "",
+             "| rank | configuration | status | ranking: dev net Sharpe (sd, n folds/cells) | dev return | "
+             "dev max dd | dev trades | guard-rails | test: net Sharpe (test, not used for ranking) | "
+             "dataset fingerprint | bar (min) | horizons | strategy |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    for r in rows:
+        gr = "; ".join(f"{g.name} {'OK' if g.passed else 'FAIL'} ({g.detail})" for g in r.guard_rails) or "n/a"
+        if r.disqualified:
+            gr = "**DISQUALIFIED** " + gr
+        fp = r.dataset_fingerprint
+        fp = "n/a" if not fp else f"{fp[:12]}..."
+        lines.append(
+            f"| {r.rank} | `{r.configuration}` | {r.status} | {_fmt_metric(r.dev, 'sharpe_net', '{:+.3f}')} | "
+            f"{_fmt_metric(r.dev, 'total_return', '{:+.2%}')} | {_fmt_metric(r.dev, 'max_drawdown', '{:.2%}')} | "
+            f"{_fmt_metric(r.dev, 'n_trades', '{:.1f}')} | {gr} | "
+            f"{_fmt_metric(r.test, 'sharpe_net', '{:+.3f}')} | {fp} | "
+            f"{'n/a' if r.bar_minutes is None else f'{r.bar_minutes:g}'} | "
+            f"{'n/a' if r.horizon_steps is None else ', '.join(str(h) for h in r.horizon_steps)} | "
+            f"{r.strategy or 'n/a'} |")
+    w = winner(rows)
+    lines += ["", f"**Winner:** `{w.configuration}` (rank {w.rank})" if w is not None
+              else "**Winner:** none (every row disqualified or no scored dev data)."]
+    return "\n".join(lines) + "\n"
+
+
+__all__ = ["DEFAULT_GUARD_RAILS", "GuardRail", "GuardRailSpec", "LeaderboardRow", "METRICS", "RANK_METRIC",
+           "ROLES", "RoleAggregate", "build_leaderboard", "leaderboard_for_scenario", "leaderboard_markdown",
+           "winner"]

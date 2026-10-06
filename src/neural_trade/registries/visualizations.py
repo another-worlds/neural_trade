@@ -85,4 +85,8 @@ for _name, _fn, _tags in (("direction_analytics", _ma.direction_analytics, ["dir
 for _name, _fn in (("trading_dashboard", _td.trading_dashboard), ("trade_analytics", _td.trade_analytics),
                    ("strategy_comparison", _td.strategy_comparison)):
     Visualizations.register(name=_name, tags=["plotly", "backtest", "trading"], dependencies=["plotly"])(_fn)
+from neural_trade.visualization import leaderboard_fig as _lb  # noqa: E402
+
+Visualizations.register(name="leaderboard", tags=["plotly", "experiments", "leaderboard"],
+                        dependencies=["plotly"])(_lb.leaderboard)
 Visualizations._initialized = True

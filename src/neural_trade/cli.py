@@ -9,6 +9,7 @@
                                   [--store runs] [--random-seeds N]
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
+    neural-trade leaderboard [SCENARIO] [--store runs] [--index runs/index.sqlite]
     neural-trade registry list | info REGISTRY NAME | search QUERY
     neural-trade env
 
@@ -41,6 +42,15 @@ the comparator pairs their runs by (seed, fold), refuses a mismatched pair or to
 prints the paired estimate, its interval and the verdict (JSON to stdout, plus <out>/result.json and
 <out>/report.md when --out is given). ``--simulate`` adds the calibrated null/power check (spec
 needs noise_sd, or seed_sd and block_sd).
+
+``leaderboard`` (neural_trade.experiments.leaderboard, NT-031, D-020) prints, per scenario (one
+named, or every scenario under --store when none is given), one Markdown table row per
+configuration: the ranking column is the dev-fold net Sharpe after costs (mean over the dev folds
+and their seeds, D-046, with the spread and the counts); guard-rails (maximum drawdown, trades,
+beating buy-and-hold, beating the random null) sit beside it and can disqualify a row from the
+winner; the test-fold columns are shown on every row, labelled "test, not used for ranking"
+(D-020), and never affect the order. A configuration with every cell failed appears as a failed,
+disqualified row.
 """
 from __future__ import annotations
 
@@ -233,6 +243,25 @@ def _scenario_rescore(args, store) -> int:
     return 0
 
 
+def cmd_leaderboard(args) -> int:
+    from neural_trade.experiments.leaderboard import build_leaderboard, leaderboard_markdown
+    from neural_trade.experiments.store import ENGINE_SUBTREE, RunStore
+
+    store = RunStore(args.store, args.index)
+    if args.scenario:
+        scenarios = [args.scenario]
+    else:
+        base = store.root / ENGINE_SUBTREE
+        scenarios = sorted(p.name for p in base.iterdir() if p.is_dir()) if base.is_dir() else []
+    if not scenarios:
+        print(json.dumps({"scenarios": []}))  # noqa: T201 - the command's result
+        return 0
+    for name in scenarios:
+        board = build_leaderboard(store.sync(name))
+        print(leaderboard_markdown(board))  # noqa: T201 - the command's result
+    return 0
+
+
 def cmd_screen(args) -> int:
     from neural_trade.core.exceptions import InvalidConfigurationError
     from neural_trade.experiments.screen import ScreenSpec, parse_shard, run_screen
@@ -405,6 +434,14 @@ def build_parser() -> argparse.ArgumentParser:
     cp.add_argument("--simulate", action="store_true", help="add the calibrated null/power simulation")
     cp.add_argument("--n-sim", type=int, default=1000)
     cp.set_defaults(func=cmd_compare)
+
+    lb = sub.add_parser("leaderboard", help="print the leaderboard (NT-031, D-020): one row per "
+                                            "configuration, ranked by the dev-fold net Sharpe after costs, "
+                                            "guard-rails beside it, test-fold columns shown but never ranked")
+    lb.add_argument("scenario", nargs="?", help="scenario name (default: every scenario under --store)")
+    lb.add_argument("--store", default="runs", help="run store root")
+    lb.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
+    lb.set_defaults(func=cmd_leaderboard)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")
     r.add_argument("action", choices=["list", "info", "search"])
