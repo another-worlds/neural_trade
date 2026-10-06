@@ -200,6 +200,8 @@ changes).
 | [NT-165](#nt-165) | P3 | polish | implementer | todo | NT-048 follow-ups: permutation variance in the importance band, a multiple-comparison note, readable MACD/Stoch/Keltner period panels, importance cost on CPU |
 | [NT-166](#nt-166) | P3 | performance | experimenter | todo | Quiet-machine step micro-benchmark: 1aeff1c against 426de4f (only if D-018 needs NT-075's answer) |
 | [NT-167](#nt-167) | P2 | bug | implementer | done | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
+| [NT-168](#nt-168) | P2 | feature | implementer | todo | Leaderboard: superseded cells and duplicate (fold, seed) pairs |
+| [NT-169](#nt-169) | P3 | infra | implementer | todo | A suite lock: no two full pytest suites at once, enforced instead of checked by eye |
 
 ## Items
 
@@ -2222,6 +2224,30 @@ changes).
 - **why:** The lead's notebook routine for NT-048 (2026-10-06): `servable_runs` searches runs/ recursively and excludes only engine runs, so notebook 07 loaded NT-075's speed-check run 20261006T070748Z-426de4f-cf562469 (old code, close-only, 4 families) as 'the newest run'. D-013: notebooks show the shipped defaults. The executed notebook was discarded, not committed.
 - **acceptance:** (1) The default selection takes only runs directly under the runs root; study runs (runs/experiments/**, runs/ablations/**) and engine runs need a flag or an explicit RUN_DIR (tests a-d). (2) When only excluded runs exist, the error lists them and names RUN_DIR (test). (3) Docstring and scripts/notebooks/README.md updated. (4) Fast suite, ruff.
 - **source:** lead, notebook routine of NT-048 (2026-10-06)
+
+### NT-168
+
+**Leaderboard: superseded cells and duplicate (fold, seed) pairs**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/experiments/leaderboard.py, the run index (experiments/store.py), tests/
+- **depends on:** NT-031
+- **why:** QA of NT-031 (2026-10-06): the aggregation cannot supersede a cell; loss_prune_v1 ece0 still uses the suspect f-39 cell D-057 excluded (+5.69 instead of the re-run's +5.17; ece0 mean 1.597 instead of 1.492, rank unchanged), and a duplicate (fold, seed) would be averaged as an extra seed.
+- **acceptance:** (1) A recorded supersede (a small file in the scenario's store, or an index column) replaces a cell by its re-run; the board shows which (test). (2) A duplicate (fold, seed) is refused or flagged, never averaged as a seed (test). (3) loss_prune_v1's board uses the f-39 re-run. (4) Fast suite, ruff.
+- **source:** lead and QA, 2026-10-06
+
+### NT-169
+
+**A suite lock: no two full pytest suites at once, enforced instead of checked by eye**
+
+- **status:** todo
+- **priority / type / role:** P3 / infra / implementer
+- **area:** tests/conftest.py (or a pytest plugin in tests/), docs/RUNBOOK.md, .claude/agents/*.md (the lead edits these)
+- **depends on:** none
+- **why:** D-048 forbids two full suites at once. On 2026-10-06 agents ran overlapping fast suites at least three times (NT-122's implementer, NT-031's QA, NT-048's implementer) because the `wmic ... | grep` check returned empty or was chained past; timings were contaminated (NT-075's noise came partly from the same load).
+- **acceptance:** (1) A full-suite run (`-n` with no file arguments, or `-m "not slow"`/`-m slow`) takes an OS file lock under D:/nt/ (path configurable) and waits, printing who holds it; targeted runs do not take it (test with two subprocesses). (2) RUNBOOK and the agent files point to it. (3) Fast suite, ruff.
+- **source:** lead and QA, 2026-10-06
 
 ## Done log
 
