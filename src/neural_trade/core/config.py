@@ -560,8 +560,8 @@ class Config:
         "backward-pass reduction order. unroll=True runs the identical GRU cell as a Python-level "
         "loop, which only uses ops enable_op_determinism() already covers, and gave bit-for-bit "
         "identical val_loss (9.57204818725586) across three processes. False (default) is today's "
-        "cuDNN path, unchanged speed and numbers (golden run). True costs extra step time (see the "
-        "measurement in runs/experiments/nt114_cpu_check/) and is for pre-registered comparison "
+        "cuDNN path, unchanged speed and numbers (golden run). The CPU step cost of True is within noise (see "
+        "runs/experiments/nt114_cpu_check/); the GPU cost is the experimenter's measurement. It is for pre-registered comparison "
         "studies (D-025) that need genuine GPU reproducibility, not ordinary training.", unit="flag")
     STRICT_LOSS_MASKS: bool = _f(
         False, "stability",
