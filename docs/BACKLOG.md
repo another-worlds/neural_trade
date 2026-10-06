@@ -63,7 +63,7 @@ changes).
 | [NT-028](#nt-028) | P1 | infra | implementer | done | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
 | [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
-| [NT-031](#nt-031) | P1 | feature | implementer | todo | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
+| [NT-031](#nt-031) | P1 | feature | implementer | in-progress | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
 | [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
@@ -153,6 +153,7 @@ changes).
 | [NT-118](#nt-118) | P2 | bug | implementer | todo | Calibration keeps a configured LAMBDA_VOL of 0 at 0 (as for soft ECE); then an A/B of 0 against the 0.1 floor |
 | [NT-119](#nt-119) | P2 | bug | implementer | todo | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
+| [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 
 ## Items
 
@@ -509,7 +510,7 @@ changes).
 
 **Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank**
 
-- **status:** todo
+- **status:** in-progress (2026-10-06): an implementer's uncommitted work of 2026-10-01 was rescued as nt-031 7ef905d (experiments/leaderboard.py, visualization/leaderboard_fig.py, tests/test_leaderboard.py, cli.py, registries/visualizations.py; about 630 lines, never reviewed). Next: an implementer merges remediation/plan into nt-031, reads the WIP critically against the acceptance criteria, then QA.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (leaderboard), src/neural_trade/visualization/ (a leaderboard table and figure, registered in Visualizations), src/neural_trade/cli.py, tests/
 - **depends on:** NT-026 (experiment engine)
@@ -1587,6 +1588,22 @@ changes).
 - **why:** QA audit of nt-099 (2026-10-06): the kit's bitwise check on today's layer fails because its Dense layer is not seeded (a kit defect, not a determinism result); the 1.10x gate is FAIL on run B (1.128) and PASS on run A (1.072) with a denominator spread of 3.4-30.8 ms, so the gate call is noise-dominated. The kit code (d1f6fa9) was written by the session that ran the experiment, outside the implementer role.
 - **acceptance:** (1) Today's layer seeded; the bitwise check passes on CPU (test). (2) The gate uses a stable statistic (median of >= 20 repeats, warm-up excluded) and is repeated on the GPU; both runs agree on PASS or FAIL. (3) Fast suite, ruff.
 - **source:** QA audit of nt-099 (2026-10-06)
+
+### NT-121
+
+**Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s**
+
+- **status:** todo
+- **priority / type / role:** P3 / performance / implementer
+- **area:** tests/ (the slowest files), pyproject.toml markers only if needed
+- **depends on:** none
+- **why:** D-060 (2026-10-06): the owner asked that tests not slow development. The fast suite takes about 3 min
+  at `-n 8` (1924 tests on 9b9999d); NT-109 shrank six tests on 2026-10-01 but no `--durations` profile exists
+  since 14 indicator families became the default.
+- **acceptance:** (1) `--durations=30` of the fast suite on an idle machine, reported. (2) Each test over 15 s
+  keeps its assertions on a smaller config, or is marked slow with a fast twin (report before/after). (3) Fast
+  suite wall-clock at `-n 8` reported before and after. (4) Fast suite, ruff, TESTING_DOCUMENTATION.
+- **source:** D-060; owner 2026-10-06
 
 ## Done log
 
