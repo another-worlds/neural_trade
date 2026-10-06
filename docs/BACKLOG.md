@@ -154,7 +154,7 @@ changes).
 | [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
 | [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
-| [NT-122](#nt-122) | P1 | bug | implementer | todo | golden_run verify fails when a value turns NaN or an inf changes |
+| [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | todo | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
 | [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | todo | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
@@ -1675,7 +1675,7 @@ changes).
 
 **golden_run verify fails when a value turns NaN or an inf changes**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-122 a0dfa01 (implementer, Sonnet medium), merged as e2c2b4a; QA (Opus medium) PASS on a0dfa01: 21 tests (tests/test_golden_run.py), QA's own edge cases (0-d, float32 vs 64, -0.0, int/bool, 1.7e308 overflow), the old version reproduced wrongly passing 7 NaN/inf cases, mutation (one-sided NaN equal) caught by 6 tests, real verify vs golden_nt117 455/455 and exit 0. P3 left (complex arrays cast to float64; the TF assertion is weak under xdist): not filed, no recorded dtype reaches them.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** scripts/golden_run.py, tests/test_golden_run.py (new)
 - **depends on:** none
