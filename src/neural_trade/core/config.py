@@ -35,6 +35,14 @@ from .exceptions import InvalidConfigurationError
 
 _log = logging.getLogger(__name__)
 
+#: the roles of Config.LAYERS (the keys Layers.for_role is asked for)
+_LAYER_ROLES = ("indicators", "positional_encoding", "vacuum_noise", "energy_gate")
+#: the loss weights a schedule may set: training.lambdas._LAMBDA_VARIABLE_KEYS, copied because the config
+#: layer must not import training (pinned equal by tests/test_config.py)
+_SCHEDULABLE_LAMBDA_KEYS = ('short', 'point', 'long', 'extended_trend', 'dir', 'var', 'vol',
+                            'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'pnl',
+                            'trend_outer', 'dir_outer', 'nll_outer', 'coherence_outer')
+
 GROUPS = (
     "data", "horizons", "training", "calibration", "loss_weights", "physics",
     "indicators", "architecture", "stability", "direction", "variance", "paths",
@@ -476,8 +484,9 @@ class Config:
                                         "equals the configured one; the rest of the network is unchanged "
                                         "(same layers and parameter count). Off (default): today's behaviour",
                                         unit="flag")
-    INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits", unit="dimensionless", ge=0.0,
-                             tunable=True)
+    INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits (pulls every period toward 3 bars, "
+                             "not toward its configured start, so a search must not tune it; NT-141)",
+                             unit="dimensionless", ge=0.0)
     INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this", unit="dimensionless",
                                   gt=0.0, log=True, tunable=True)
     INDICATOR_GRAD_MULT: float = _f(5.0, "indicators", "straight-through gradient scale on the indicator logits' "
@@ -793,13 +802,12 @@ class Config:
                 "for semantic consistency (DataProcessor CRITICAL + extended_trend_loss).")
         if len(self.HORIZON_STEPS) != 3:
             bad("the architecture has exactly three horizon towers: HORIZON_STEPS needs 3 entries")
-        if self.HORIZON_STEPS != sorted(self.HORIZON_STEPS):
-            bad("HORIZON_STEPS should be ascending")
+        if any(a >= b for a, b in zip(self.HORIZON_STEPS, self.HORIZON_STEPS[1:])):
+            bad("HORIZON_STEPS should be strictly ascending (a tie makes a pairwise physics term degenerate)")
         if self.EXTENDED_TREND_PERIODS != sorted(self.EXTENDED_TREND_PERIODS):
             bad("EXTENDED_TREND_PERIODS should be ascending")
         if self.VAR_FLOOR != 1e-4:
-            warnings.warn(f"Config.VAR_FLOOR={self.VAR_FLOOR} (expected 1e-4). Using provided value.",
-                          DeprecationWarning, stacklevel=2)
+            _log.warning("Config.VAR_FLOOR=%s (expected 1e-4). Using the provided value.", self.VAR_FLOOR)
         if self.VAR_CAP <= self.VAR_FLOOR:
             bad("VAR_CAP must be > VAR_FLOOR")
         if self.LAMBDA_VAC > 0:
@@ -838,8 +846,18 @@ class Config:
             bad(f"INPUT_SERIES must include 'close', got {series}")
         if [s for s in canonical if s in series] != series or len(set(series)) != len(series):
             bad(f"INPUT_SERIES must be a subsequence of {list(canonical)} without repeats, got {series}")
-        if not (0 < self.MOMENTUM_CLIP_MIN < self.momentum_clip_max):
-            bad("need 0 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX")
+        if not (1 < self.MOMENTUM_CLIP_MIN < self.momentum_clip_max):
+            bad("need 1 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX (a period of 1 or less saturates the logit)")
+        if not self.RHO_MAX < 1.0:  # a closed [0, 1] field range keeps the sweep metadata finite; 1 is refused here
+            bad(f"RHO_MAX must be < 1 (the IFE hinge never fires at 1), got {self.RHO_MAX}")
+        if self.CALIB_LAMBDA_MIN > self.CALIB_LAMBDA_MAX:
+            bad(f"CALIB_LAMBDA_MIN ({self.CALIB_LAMBDA_MIN}) must be <= CALIB_LAMBDA_MAX ({self.CALIB_LAMBDA_MAX})")
+        self._validate_indicator_periods(bad)
+        self._validate_loss_weight_schedule(bad)
+        missing_roles = [r for r in _LAYER_ROLES if r not in (self.LAYERS or {})]
+        if missing_roles:
+            bad(f"LAYERS must name every architecture role; missing {missing_roles} "
+                f"(roles: {list(_LAYER_ROLES)})")
         negative = [k for k, v in self.lambda_weights().items() if v < 0]
         if negative:
             bad(f"loss weights must be >= 0: {negative}")
@@ -860,6 +878,53 @@ class Config:
                 warnings.warn(
                     f"Config.{spec.name} is deprecated and has no effect (default {spec.default!r})",
                     DeprecationWarning, stacklevel=2)
+
+    def _validate_indicator_periods(self, bad) -> None:
+        """Every configured starting period must be at least MOMENTUM_CLIP_MIN (refused) and at most the
+        resolved ceiling (warned: the clip would move it on the first step) and a MACD's fast period is below its slow
+        one. Plain Python on the raw fields: the config layer does not import the indicators package."""
+        lo, hi = self.MOMENTUM_CLIP_MIN, self.momentum_clip_max
+        groups = {"MA_SPANS": self.MA_SPANS, "MACD_SETTINGS": self.MACD_SETTINGS,
+                  "RSI_PERIODS": self.RSI_PERIODS, "BB_PERIODS": self.BB_PERIODS}
+        for fam, insts in (self.INDICATOR_FAMILIES or {}).items():
+            groups[f"INDICATOR_FAMILIES[{fam!r}]"] = insts
+        for where, insts in groups.items():
+            for inst in insts or []:
+                items = inst.items() if isinstance(inst, dict) else [("", inst)]
+                for param, value in items:
+                    if param == "ratio" or isinstance(value, bool) or not isinstance(value, numbers.Real):
+                        continue  # a MACD 'ratio' is a fraction, not a period
+                    label = f"{where}: period {param + '=' if param else ''}{value}"
+                    if value < lo:
+                        bad(f"{label} lies below MOMENTUM_CLIP_MIN={lo}")
+                    if value > hi:
+                        # Not refused: small-LOOKBACK test and screen configs keep the default periods and
+                        # explicit small ceilings are built on purpose (tests); the clip moves the period
+                        # (NT-141, reported to the lead).
+                        _log.warning("Config: %s lies above the period ceiling %s; the clip will move it",
+                                     label, hi)
+                if isinstance(inst, dict) and "fast" in inst and "slow" in inst and inst["fast"] >= inst["slow"]:
+                    bad(f"{where}: MACD fast ({inst['fast']}) must be below slow ({inst['slow']})")
+
+    def _validate_loss_weight_schedule(self, bad) -> None:
+        """LOSS_WEIGHT_SCHEDULE: ``{'lambda_<k>': {epoch: value}}`` with k a schedulable loss weight and
+        integer epochs; the callback assigns by name, so an unknown name must never get through."""
+        for name, steps in (self.LOSS_WEIGHT_SCHEDULE or {}).items():
+            if not (isinstance(name, str) and name.startswith("lambda_")
+                    and name[len("lambda_"):] in _SCHEDULABLE_LAMBDA_KEYS):
+                bad(f"LOSS_WEIGHT_SCHEDULE: unknown loss weight {name!r}; known: "
+                    f"{['lambda_' + k for k in _SCHEDULABLE_LAMBDA_KEYS]}")
+            if not isinstance(steps, dict) or not steps:
+                bad(f"LOSS_WEIGHT_SCHEDULE[{name!r}] must be a non-empty {{epoch: value}} mapping")
+            for epoch, value in steps.items():
+                try:
+                    ok = float(epoch).is_integer() and float(epoch) >= 0 and not isinstance(epoch, bool)
+                    float(value)
+                except (TypeError, ValueError):
+                    ok = False
+                if not ok:
+                    bad(f"LOSS_WEIGHT_SCHEDULE[{name!r}]: epoch {epoch!r} must be a non-negative integer "
+                        f"and the value {value!r} a number")
 
     # --------------------------------------------------------------- derived
     @property
@@ -1003,10 +1068,17 @@ def _coerce(value, hint, name):
         if hint is int:
             if isinstance(value, float) and not value.is_integer():
                 raise ValueError(value)
-            return int(float(value)) if isinstance(value, str) else int(value)
+            if isinstance(value, str):
+                f = float(value)
+                if not f.is_integer():
+                    raise ValueError(value)
+                return int(f)
+            return int(value)
         if hint is float:
             return float(value)
         if hint is str:
+            if value is None:
+                raise ValueError(value)  # not Optional: None must not become the string 'None'
             return str(value)
         if origin in (list, List):
             if isinstance(value, str):

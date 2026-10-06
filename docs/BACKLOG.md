@@ -173,7 +173,7 @@ changes).
 | [NT-138](#nt-138) | P2 | bug | implementer | todo | Notebook tooling: check.py misses a vanished figure; a TrainingSession can train twice into one run; the slow test passes unknown parameters |
 | [NT-139](#nt-139) | P2 | bug | implementer | todo | The variance figure crashes when a conformal interval covers every sample |
 | [NT-140](#nt-140) | P2 | bug | implementer | todo | A CalibrationPipeline failure is swallowed and the engine still scores the run |
-| [NT-141](#nt-141) | P2 | bug | implementer | todo | Config.validate gaps: period bounds, schedules, LAYERS, coercion |
+| [NT-141](#nt-141) | P2 | bug | implementer | done | Config.validate gaps: period bounds, schedules, LAYERS, coercion |
 | [NT-142](#nt-142) | P2 | bug | implementer | todo | A non-finite step still moves the weights, and a norm overflow passes the guard |
 | [NT-143](#nt-143) | P2 | infra | owner | todo | A deny list in .claude/settings.json for the git commands CLAUDE.md forbids |
 | [NT-144](#nt-144) | P3 | owner-decision | owner | todo | Local env security updates (tensorflow 2.10.1 and 12 non-TF packages) |
@@ -213,6 +213,7 @@ changes).
 | [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
 | [NT-179](#nt-179) | P2 | feature | implementer | todo | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
 | [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
+| [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
 
 ## Items
 
@@ -1916,7 +1917,7 @@ changes).
 
 **Config.validate gaps: period bounds, schedules, LAYERS, coercion**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-141 711d5ca (implementer, Sonnet medium), merged; QA (Sonnet medium) PASS on 711d5ca/cd3cec1: every new refusal checked with valid edges and invalid values (period floor, MACD fast >= slow, MOMENTUM_CLIP_MIN > 1, LOSS_WEIGHT_SCHEDULE names and epochs, strictly increasing HORIZON_STEPS, RHO_MAX < 1, CALIB_LAMBDA_MIN <= MAX, partial LAYERS, int coercion of '1.5' and None for a str field; VAR_FLOOR warning through logging; INDICATOR_L2 tunable=False; LambdaScheduleCallback KeyError); NO valid config newly refused: 390 configs (stored runs, bundles, configs/, scenarios, screen specs, legacy bundle) load at the base and at the head, 0 newly refused; `--set` parsing unchanged except CSV_PATH=null (was silently 'None'); golden_nt117 455/455; 10 of 10 mutations caught. Deviation accepted by the lead: a configured period ABOVE the ceiling logs a warning instead of being refused (the ceiling is resolved at use and the clip moves the period; refusing broke ~16 small-LOOKBACK configs and tests; 0 of 364 stored configs trigger it). Follow-up: NT-181 (P3: dedupe that warning, 15 lines per validate and 30 per copy() at a small LOOKBACK; move the schedulable-keys tuple into core).
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/core/config.py, indicators/base.py, training/callbacks.py, models/layers_registry.py, tests/test_config.py
 - **depends on:** none (NT-038 builds on it)
@@ -2391,6 +2392,18 @@ changes).
 - **why:** QA of NT-034 (2026-10-06): for a cell with beta 0 the index holds `h0/delta/corr`, `mean_pred` and `share_pred_up` as 0.0 (cell t0005 of the tiny sweep). D-007: with beta 0 the served delta is exactly 0 and every served-delta statistic must be n/a (not a measured 0% / 100%), with the raw heads alongside. Every consumer of the index (the leaderboard, the comparison figures, the control panel) draws these as measured zeros unless it special-cases beta 0.
 - **acceptance:** (1) The scorer stores NaN/None (and a `served_delta_na: true` flag) for the served-delta statistics when beta is 0; the raw-head statistics are stored beside them (test on a beta-0 cell). (2) The leaderboard and the NT-034 panel show n/a for them (tests). (3) Old stored cells are read through the same rule (beta from their report). (4) Fast suite, ruff.
 - **source:** QA of NT-034 (2026-10-06)
+
+### NT-181
+
+**Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/core/config.py, training/lambdas.py, tests/test_nt033_baselines.py, tests/test_control_panel_repair.py
+- **depends on:** NT-141
+- **why:** QA of NT-141 and NT-034 (2026-10-06): `_validate_indicator_periods` logs the above-ceiling warning on every validate (15 lines per validate and 30 per `copy()` at LOOKBACK 20; a default train logs 0); `_SCHEDULABLE_LAMBDA_KEYS` in core/config.py duplicates training/lambdas._LAMBDA_VARIABLE_KEYS (layering forbids the import; a test pins them equal). Memory-pressure flakiness of heavy tests while a second session trains: tests/test_calib_gradient_mode.py::test_default_model_gradient_mode_equalises_terms_as_they_enter_total OOMs on CPU at -n 8 ([256,57,60,60] float); tests/test_nt033_baselines.py:133-134 uses `next()` without a default and hides the failing cell's error.
+- **acceptance:** (1) The warning is deduplicated per distinct message per process (test). (2) The tuple lives in core and training imports it (the equality test becomes an identity check). (3) The heavy tests' memory use is bounded (smaller batch/sequence for the default-model gradient-mode test, keeping its assertion) and the nt033 test shows the underlying error. (4) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
 
 ## Done log
 
