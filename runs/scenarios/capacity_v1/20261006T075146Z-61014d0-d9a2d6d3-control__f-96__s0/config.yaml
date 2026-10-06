@@ -1,0 +1,172 @@
+# neural_trade Config - flat keys; see neural_trade/core/config.py for every field
+
+# ---- data
+CSV_PATH: 'D:/nt/neural_trade/Bitcoin_BTCUSDT.csv'  # OHLCV CSV (timestamp/datetime, open..volume)
+LOOKBACK: 60  # input window length in bars
+INPUT_SERIES: [open, high, low, close, volume]  # which bar series each input window carries, in this fixed order (a subsequence of open, high, low, close, volume that includes 'close'; ['close'] is the pre-NT-047 close-only input, and the model input is then [B, LOOKBACK] instead of [B, LOOKBACK, len(INPUT_SERIES)]); OHLC channels are window-relative, volume has its own train-fit scale (neural_trade.data.scaling)
+WINDOW_STEP: 1  # stride between consecutive training windows
+RESAMPLE_MINUTES: 1  # aggregate to coarser bars (1 = native minute bars); every live backtest path annualises Sharpe/Sortino from this bar size (NT-040)
+MAX_SEQUENCE_COUNT: 1500000  # keep only the most recent N sequences (0 = keep all)
+VAL_FRACTION: 0.02  # validation block size (fraction of sequences)
+CAL_FRACTION: 0.02  # calibration block size (fraction of sequences)
+N_FOLDS: 100  # TimeSeriesSplit folds; the last fold's test block is reported
+FOLD_INDEX: -96  # which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)
+DATA_END: null  # end the prepared data at this timestamp instead of the file's newest bar (None = today's behaviour); refused when the slice would reach into the protected dev/test span (DATA_END_PROTECTED_DAYS) of the full file (D-020)
+DATA_END_PROTECTED_DAYS: 64.0  # DATA_END is refused when it falls within this many days of the full file's last bar, so a screen trial cannot slice into the long file's dev/test period (D-020)
+
+# ---- horizons
+EXTENDED_TREND_PERIODS: [10, 15, 20]  # lags (bars) of the past-delta momentum features, one per horizon
+HORIZON_STEPS: [10, 15, 20]  # forecast horizons in bars (h0, h1, h2)
+
+# ---- training
+BATCH_SIZE: 1024  # 256: a step costs about the same at 64 or 256 on the GPU (launch-bound), so ~3.7x faster epochs
+EPOCHS: 14  # maximum training epochs; EarlyStopping (EARLY) may stop sooner, and the best-validation epoch is served (D-011)
+LR: 0.001  # main optimizer learning rate
+PATIENCE: 3  # ReduceLROnPlateau patience (was EPOCHS: disabled)
+EARLY: 6  # EarlyStopping patience on val_loss (was EPOCHS: disabled)
+SHUFFLE_BUFFER: 0  # shuffle buffer of the training dataset, in windows (0 = the whole training block: a full reshuffle every epoch); validation is never shuffled
+TRAIN_METRICS_EVERY: 10  # update the training-set diagnostics every N steps (1 = every step); the training loss and all validation metrics are always exact
+
+# ---- calibration
+DAMPING: 0.5  # legacy alias; use CALIB_DAMPING
+CALIB_WARMUP_FRACTION: 0.05  # warm-up forward passes (fraction of an epoch)
+CALIB_SAMPLE_FRACTION: 0.1  # loss-magnitude sampling (fraction of an epoch)
+CALIB_LAMBDA_MIN: 0.1  # lower clamp of every loss weight the calibration pass rescales
+CALIB_LAMBDA_MAX: 20.0  # upper clamp of every loss weight the calibration pass rescales
+CALIB_VOL_ZERO_TO_FLOOR: true  # a configured LAMBDA_VOL of 0 is lifted by the calibration pass to CALIB_LAMBDA_MIN (True: the arm NT-099 tested, D-058); False: 0 stays 0 (vol off, untested; NT-118)
+CALIB_DAMPING: 1.0  # 0 = no change, 1 = full magnitude equalisation
+CALIB_DAMPING_POINT: null  # damping of the point-loss weights LAMBDA_SHORT, LAMBDA_POINT and LAMBDA_LONG (None = CALIB_DAMPING)
+CALIB_DAMPING_TREND: 0.0  # 0: the trend prior is a regulariser, not rescaled
+CALIB_DAMPING_DIR: null  # damping of LAMBDA_DIR (None = CALIB_DAMPING)
+CALIB_DAMPING_VAR: null  # damping of LAMBDA_VAR (None = CALIB_DAMPING)
+CALIB_DAMPING_CRPS: null  # damping of LAMBDA_CRPS, rescaled only when it is > 0 (None = CALIB_DAMPING)
+CALIB_DAMPING_ECE: null  # damping of LAMBDA_SOFT_ECE, rescaled only when it is > 0 (None = CALIB_DAMPING)
+CALIB_DAMPING_VOL: null  # damping of LAMBDA_VOL (None = CALIB_DAMPING)
+CALIB_DAMPING_PHYSICS: 0.0  # 0: bounded physics regularisers are never rescaled
+CALIB_OUTER: false  # also calibrate the outer group multipliers
+CALIB_FAIL_LOUD: false  # CALIB_MODE='value': when the calibration pass fails, record calib_failed: true (with the error) in calibration_lambdas instead of silently restoring the configured lambdas and only warning (NT-111); False keeps the pre-NT-111 behaviour byte-for-byte (golden-run default). CALIB_MODE='gradient' always records the failure this way, regardless of this switch: a run with an uncalibrated trunk must not be scored as if it were a normal one.
+CALIB_MODE: value  # 'value': rescale weights so each term's median value matches the reference (today's behaviour, lambda_calibration.py:207-210); 'gradient': rescale so each term's gradient norm on the shared trunk (main-group variables minus the price/direction/variance head Dense layers) matches the reference (GradNorm-style, NT-101), clipped to [CALIB_LAMBDA_MIN, CALIB_LAMBDA_MAX]
+DELTA_SHRINKAGE: true  # serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block
+CONFORMAL_SCALE: realized_vol  # conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'
+
+# ---- loss_weights
+LAMBDA_LOCAL_TREND: 1.0  # retired term (always 0 in the objective)
+LAMBDA_GLOBAL_TREND: 1.0  # retired term (always 0 in the objective)
+LAMBDA_EXTENDED_TREND: 0.1  # momentum prior; a regulariser, kept small
+LAMBDA_QUANTILE: 1.0  # unused (no quantile term in the objective)
+LAMBDA_SHORT: 1.0  # point loss weight, h0
+LAMBDA_POINT: 1.0  # point loss weight, h1
+LAMBDA_LONG: 1.0  # point loss weight, h2
+LAMBDA_DIR: 1.0  # direction loss (DIRECTION_LOSS), summed over the horizons
+LAMBDA_INTER: 1.0  # weight of model.losses (layer regularisers)
+LAMBDA_VOL: 0.0  # prediction-spread vs target-spread penalty (0: the calibration pass lifts it to CALIB_LAMBDA_MIN 0.1 while CALIB_VOL_ZERO_TO_FLOOR is on, the arm NT-099 tested; without calibration, or with that switch off, a true 0, untested; D-057, D-058)
+LAMBDA_VAR: 1.0  # Gaussian NLL of the variance heads
+LAMBDA_TREND_OUTER: 1.0  # outer multiplier of the summed extended-trend terms; rescaled by the calibration pass only with CALIB_OUTER
+LAMBDA_DIR_OUTER: 1.0  # outer multiplier of the direction loss (LAMBDA_DIR term); rescaled by the calibration pass only with CALIB_OUTER
+LAMBDA_DIR_ALIGN_OUTER: 0.0  # direction head vs Gaussian readout alignment
+LAMBDA_COHERENCE: 1.0  # weight of the cross-horizon coherence penalty (sign disagreement and magnitude ordering of the price heads)
+LAMBDA_NLL_OUTER: 1.0  # outer multiplier of the variance-head NLL (LAMBDA_VAR term); rescaled by the calibration pass only with CALIB_OUTER
+LAMBDA_CRPS: 1.0  # weight of the Gaussian CRPS of the price and variance heads, summed over the horizons (0 = off)
+LAMBDA_SOFT_ECE: 0.0  # weight of the differentiable ECE of the direction heads, summed over the horizons (0 = off)
+LAMBDA_DIR_ALIGN: 0.7  # inner weight of the alignment term
+LAMBDA_PNL: 0.0  # weight of the mean-variance P&L utility on the direction heads' implied positions (0 = off; NT-087)
+PNL_GAMMA: 1.0  # risk-aversion coefficient of the pnl_utility objective's quadratic penalty
+PNL_COST_BPS: 0.0  # round-trip trading cost assumed by the pnl_utility objective (matches strategy/variance_strategies.py's DEFAULT_COST; 0 by default, D-044)
+PNL_SIGMA_SOURCE: realized_vol  # volatility scale for the pnl_utility objective's r~ = r_H / sigma_H: 'realized_vol' (causal, equal-weighted std of the input window's bar-to-bar RAW-price returns, reconstructed from the normalised window via last_close and pred_scale) or 'model' (the variance head, stop-gradient). Not an EWMA despite the name once used here (NT-087 repair round 1): every bar in the window is weighted equally.
+
+# ---- physics
+T_PERP_DIM: 16  # width of the perpendicular projection
+LAMBDA_T_PERP: 0.1  # batch variance tracks batch residual energy
+LAMBDA_CASIMIR: 0.1  # disagreeing horizons need variance
+LAMBDA_VAC: 0.0  # vacuum bandwidth threshold (0 = off)
+LAMBDA_HD: 0.1  # variance ordered like realised volatility
+LAMBDA_IFE: 0.1  # cross-horizon correlation hinge
+RHO_MAX: 0.95  # max allowed cross-horizon correlation
+VACUUM_E_MAX: 1.0  # per-dimension energy ceiling of the vacuum layer
+LAMBDA_VAC_OVERFLOW: 0.1  # overflow tracks residual magnitude
+
+# ---- indicators
+MA_SPANS: [5, 10, 30]  # initial EWMA periods (bars) of the learnable moving averages, one learned period each
+MACD_SETTINGS: [{fast: 12, slow: 26, signal: 9}, {fast: 5, slow: 35, signal: 5}, {fast: 8, slow: 17, signal: 9}]  # initial fast / slow / signal EWMA periods (bars) of each learnable MACD, three learned periods each
+MACD_PARAM: independent  # MACD fast/slow parametrisation (NT-106, B_model_indicators.md 4.1 and 7 item 8: macd_1_fast sat at the floor of 2 in 5/6 runs, a mirror symmetry since fast < slow is not enforced); 'independent' (default, today's behaviour) learns fast and slow as two separate periods, each floored like every other period by MOMENTUM_CLIP_MIN (2 bars) through clip_learned_periods, so a fast leg can never reach the raw price (period 1); 'ratio' keeps slow as its own learned period (still bounded by MOMENTUM_CLIP_MIN/MAX exactly as 'independent') and replaces the fast period by fast = 1 + r * (slow_eff - 1), r in (0, 1) its own learned logit (ParamSpec.kind = 'ratio'; sigmoid, not the period transform), slow_eff = max(slow, ~2). This construction guarantees fast < slow for any logit or meta_adjust shift and, as r -> 0, lets the fast leg reach p = 1 (the raw price) explicitly, instead of 'independent's hard floor at MOMENTUM_CLIP_MIN. The 'ratio' logit is clipped as the fraction it is, not re-floored through the period transform: clip_learned_periods and INDICATOR_BOUND_APPLIED's per-window clip (NT-097) keep r inside its OWN bound ([1e-3, 1 - 2e-4], learnable_indicators.py's _RATIO_CLIP_MIN / _RATIO_CLIP_MAX, independent of MOMENTUM_CLIP_MIN/MAX) instead of the period-implied alpha interval - repair round 1 of NT-106: clipping it as a period re-floored r into about [0.033, 0.667] at the MOMENTUM_CLIP_MIN/MAX defaults (2, 60) and never let the fast leg below about 1.82, defeating the switch's purpose. A pre-registered A/B on the identified periods and direction AUC (NT-106 point 3) decides whether 'ratio' becomes the default
+RSI_PERIODS: [9, 14, 21]  # initial smoothing periods (bars) of the learnable RSIs
+BB_PERIODS: [10, 20, 25]  # initial periods (bars) of the learnable Bollinger bands
+INDICATOR_FAMILIES: {atr: [7, 14, 28], stoch: [{k_period: 14, d_period: 3}, {k_period: 9, d_period: 3}, {k_period: 21, d_period: 5}], willr: [7, 14, 28], keltner: [{period: 20, atr_period: 10}, {period: 10, atr_period: 10}, {period: 40, atr_period: 20}], obv: [10, 20, 40], vwap: [10, 20, 40], mfi: [7, 14, 28], adx: [7, 14, 28], cci: [10, 20, 40], donchian: [10, 20, 55]}  # instances of further Indicators-registry families (family name -> list of instances, each a starting period in bars or a dict of parameter periods); naming ma / macd / rsi / bb here overrides the four fields above (neural_trade.indicators.indicator_instances); the default lists the ten OHLCV families of D-031 with 3 instances each ({} = the four close-only families alone); families that read high / low / volume need those series in INPUT_SERIES
+ADAPTIVE_INDICATORS: true  # shift each learned period per window through the meta_adjust network; off, every applied period in every window equals the family's learned global value (the frozen-twin switch, NT-033/NT-046)
+INDICATOR_L2: 0.0  # L2 on the indicator logits
+INDICATOR_LR_MULT: 5.0  # indicator optimizer LR = LR * this
+INDICATOR_GRAD_MULT: 5.0  # straight-through gradient scale on the indicator logits' backward pass; Adam normalises gradient magnitude, so this is a no-op under Adam except for how often the indicator group hits GRAD_CLIP_NORM (NT-097, B_model_indicators.md 2.2/7.9: derivation and training/optim.py's module docstring); the math report recommends 1 (remove the multiplier) with INDICATOR_LR_MULT as the one control, decided together with NT-097's other fixes by its pre-registered A/B (point 7) rather than changed here
+MOMENTUM_CLIP_MIN: 2.0  # period floor (1.0 saturated the logit)
+MOMENTUM_CLIP_MAX: 60.0  # period ceiling; None -> LOOKBACK
+INDICATOR_BOUND_APPLIED: false  # clip the per-window applied logit (base logit + the meta_adjust shift) into [logit(MOMENTUM_CLIP_MAX), logit(MOMENTUM_CLIP_MIN)] before the sigmoid, so the APPLIED period can never leave [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX] even though the shift itself is unbounded; off (default, today's behaviour) lets it through unclipped (measured on real runs: 1.6-1.8 bars below the floor of 2, up to 74.7 above a ceiling of 60, NT-097 / B_model_indicators.md 2.2, 4.2, 7.5)
+META_ADJUST_BIAS: true  # bias term of the meta_adjust Dense layer that produces the per-window shift (alpha = sigmoid(logit + 0.5*tanh(Wz + c))); the base logit and this bias are one unidentifiable direction trained by two different optimizers (the indicator and main LR); True (default, today's behaviour) keeps it; the new default is decided by NT-097's A/B (point 7), not changed here (B_model_indicators.md 2.2, 7.6)
+LR_SCHEDULE_BOTH_OPTIMIZERS: false  # ReduceLROnPlateau's factor also scales the indicator optimizer's learning rate (training.callbacks.ReduceLRBothOptimizers), instead of the main optimizer alone; off (default, today's behaviour) leaves the indicator LR at LR * INDICATOR_LR_MULT for the whole run while the main LR decays, so the ratio between them grows 5x-40x (NT-097 / B_model_indicators.md 2.2, 7.10)
+EWMA_IMPL: matrix  # 'matrix' (batched einsum) or 'scan' (reference)
+
+# ---- architecture
+REG_MOMENTUM_L2: 0.0  # L2 on the dense towers
+ATTENTION_MODE: time  # the cross-unit attention block after the Bi-GRU (gru_attention.py, NT-105, B_model_indicators.md 1.4): 'time' (today) attends over the 128 GRU units with the LOOKBACK time positions as each unit's features (513*L + 384 parameters: ties the model to the window length); 'channels' attends across the indicator channels instead (tokens = channels, run before the GRU on the LearnableIndicators output; every channel is summarised by its own mean and std over the window, so the block's parameter count depends on the channel count, not on LOOKBACK) and gates each channel 0..1 before the GRU; 'none' drops the block
+HEAD_POOL: flatten  # how the final [B, LOOKBACK, 16] sequence is summarised before the shared dense layer (gru_attention.py, NT-105): 'flatten' (today, Flatten -> Dense(32): 512*L + 32 parameters, ties the model to the window length); 'mean' (GlobalAveragePooling1D -> Dense(32), parameter count independent of LOOKBACK); 'attention' (a single learned query attends over the LOOKBACK positions, weighted sum -> Dense(32), also independent of LOOKBACK)
+TANH_SCALE: 1.0  # unused
+SIGMOID_SCALE: 1.0  # unused
+HUBER_DELTA: 1.0  # unused (CustomTrainModel.huber has no caller; the point loss is log(cosh), NT-028)
+USE_HUBER: true  # legacy flag; the point loss is log(cosh)
+
+# ---- stability
+GRAD_CLIP_NORM: 20.0  # global-norm clip, per optimizer group
+SEEDED_STOCHASTIC_LAYERS: false  # dropout (models/gru_attention.py) and VacuumSaturationNoise draw from a resettable tf.random.Generator per layer instead of TF's legacy stateful random ops, whose per-op state cannot be reset from Python. False (default) is today's behaviour everywhere the normal training path runs (scenario run, the golden run): unaffected. Screen mode (NT-092 phase 2) forces this True on every trial it builds, fresh or reused, so a reused trial's stochastic layers restart from its own seed instead of continuing whatever trial ran through the same persistent model before it - the only way phase 2 can match a fresh run bit-for-bit (docs/RUNBOOK.md 'Screen mode').
+DETERMINISTIC_GRU: false  # build every recurrent layer (models/gru_attention.py, models/gru_small.py) with unroll=True instead of Keras's cuDNN-eligible defaults, same maths and same weights layout (NT-074 GPU check, NT-114): on this GPU Keras picks the cuDNN-fused GRU kernel, and TF 2.10's enable_op_determinism() does not cover it, so same-seed deterministic GPU runs still diverge at epoch 0 (measured 9.5906/9.7052/9.6122) through the fused kernel's backward-pass reduction order. unroll=True runs the identical GRU cell as a Python-level loop, which only uses ops enable_op_determinism() already covers, and gave bit-for-bit identical val_loss (9.57204818725586) across three processes. False (default) is today's cuDNN path, unchanged speed and numbers (golden run). The CPU step cost of True is within noise (see runs/experiments/nt114_cpu_check/); the GPU cost is the experimenter's measurement. It is for pre-registered comparison studies (D-025) that need genuine GPU reproducibility, not ordinary training.
+STRICT_LOSS_MASKS: false  # turn off every non-finite mask in losses/functions.py (about 46 sites, including the total itself and pnl_utility's own extra total, not only the ones that feed `total` directly): a non-finite value anywhere then makes the total non-finite, so train_step's finite-gradient guard (custom_model.py) sees it and counts the step, instead of the term being silently zeroed (D-026, NT-036). False (default) is today's behaviour, bit-for-bit (scripts/golden_run.py verify). True is for the CI stability tests and any run that wants a loud failure instead of a silent zero.
+LOSS_SAFE_STD: false  # guard every batch std inside the loss (vacuum_bandwidth_loss, hyper_decoherence_coupling_loss, information_flow_entropy_loss, vol_loss) with sqrt(variance + 1e-12) instead of tf.math.reduce_std's unguarded sqrt(variance) (NT-096, D-045, A_losses.md section 3). tf.math.reduce_std differentiates sqrt at the raw variance: d/dvar sqrt(var) = 1/(2*sqrt(var)) is infinite at var = 0, so a batch-constant head gives an infinite (NaN after the division) gradient. Confirmed by direct probe: only vol_loss (a plain function of std, abs(pred_std - actual_std)) produces an observable NaN gradient at the exact degenerate point; hyper_decoherence_coupling_loss and information_flow_entropy_loss are quotients ((a-mean(a))/std(a)) whose numerator is also exactly 0 there, which cancels the NaN algebraically, and vacuum_bandwidth_loss's relu(cross_std - lambda_vac) has zero local gradient away from its kink - but all three still have an UNBOUNDED (though finite) gradient arbitrarily close to that point, which this guard also bounds. False (default) is today's behaviour, bit-for-bit (scripts/golden_run.py verify): chosen at trace time in Python, not a tf.cond, because wrapping these call sites even in a structurally inert tf.cond was found to measurably change a real run's trajectory (the same CPU floating-point reduction-order sensitivity documented for STRICT_LOSS_MASKS/NT-037's guard sites). True adopts the guard; the golden run then diverges from the False baseline starting at the first affected gradient (confirmed: identical divergence whether the added epsilon is 1e-12 or 0.0, i.e. the cause is the extra graph node, not the guard's value) - a later study (batched with NT-099) may adopt True as the default once judged under D-025.
+COHERENCE_MAGNITUDE_ONLY: false  # coherence_penalty keeps only the magnitude-ordering sub-term (NT-096 repair round 2, D-045), dropping dir_disagree_loss and target_smoothness_loss. Both are zero-gradient everywhere (dir_disagree_loss compares tf.sign(price_h*) with tf.equal, both non-differentiable; target_smoothness_loss reads only the labels' tf.sign), so dropping them changes no gradient - but dir_disagree_loss's VALUE is NOT a per-batch constant: it depends on the price heads' sign agreement and moves as the weights train (QA of repair round 1: its own val_loss contribution moved from 0.2197 to 0.1793 between the golden run's two epochs, against a real 20-epoch run's near-best-epoch val_loss gaps of about 0.06), so it can change the served epoch (D-011), EarlyStopping and ReduceLROnPlateau on a real run. target_smoothness_loss alone IS a true per-batch constant (labels only). False (default) is today's exact three-term graph, bit-for-bit (scripts/golden_run.py verify): chosen at trace time in Python, not a tf.cond (same reasoning as LOSS_SAFE_STD). True computes only magnitude_loss, still divided by 3.0 (the old three-term average's weight on it, so this path's own gradient is also unchanged from the three-term form - tests/test_custom_loss.py::test_coherence_dead_parts_removal_does_not_change_any_gradient compares both settings); the dropped terms' mask counters (MASK_TERM_NAMES is static either way) simply read 0 instead of being removed. A later study (batched with NT-099) may adopt True as the default once judged under D-025.
+PROBE_GRADIENTS: false  # per-loss-term gradient probe (NT-037, D-026 'about 10%'): every PROBE_EVERY training steps, an extra persistent-tape backward pass (training=False, so it never perturbs dropout/noise) measures, per term and per variable group ('trunk', 'head', 'indicator' - CustomTrainModel._probe_groups_of), its share of that group's gradient norm, its cosine with the group's total gradient, and (once per group) the mean and worst pairwise cosine conflict between any two terms; the value share is reported once, ungrouped. Logged into metrics.jsonl as probe_*. Off by default: the probe subgraph is never built when this is False (no probe_* key is written, no per-step cost).
+PROBE_EVERY: 50  # run the per-loss-term gradient probe every N training steps when PROBE_GRADIENTS is on
+
+# ---- direction
+FOCAL_ALPHA: 0.5  # weight of the DOWN class
+FOCAL_GAMMA: 2.0  # focusing exponent of the focal loss (only with DIRECTION_LOSS 'focal_dice')
+DIRECTION_SKIP: true  # add a linear logit from trailing-return features of the window to each direction head
+DIRECTION_SKIP_L2: 0.0001  # L2 on the direction skip weights
+DIRECTION_DEEP_ZERO_INIT: false  # zero-initialise the deep (tower) direction logit's Dense kernel, so each direction head starts exactly at the DIRECTION_SKIP linear logit (has no effect when DIRECTION_SKIP is off: the bias is already 0, and without a skip there is nothing for the deep logit to start from - the head keeps its usual glorot-initialised Dense(1, sigmoid)); default off keeps the golden run bit-for-bit (NT-104)
+DIRECTION_LOSS: bce  # 'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)
+DIR_DEADBAND_BPS: 5.0  # |return| below this is neutral and masked
+
+# ---- variance
+VAR_FLOOR: 0.0001  # variance floor (scaled units^2)
+VAR_CAP: 1000.0  # variance cap for metrics (not applied in the loss)
+DELTA_MAPE_MIN_ABS: 1.0  # min |y| ($) for the delta safe-MAPE
+NLL_KIND: gaussian  # the NLL term's assumed law (A_losses.md section 5): 'gaussian' (default, today's formula, unchanged) or 'student_t' (fixed-dof Student-t, heavier tails, bounded mean- and variance-gradients on large residuals, NT-100). The variance head always predicts Var[Y|x] in both cases: for student_t the implied scale^2 is derived as var * (NLL_STUDENT_DOF - 2) / NLL_STUDENT_DOF so the served variance, conformal intervals and CRPS keep their usual meaning regardless of NLL_KIND. Chosen once at trace time (a Python if, not tf.cond): the gaussian branch's ops are untouched.
+NLL_STUDENT_DOF: 5.0  # fixed degrees of freedom of the student_t NLL (NLL_KIND), unused otherwise; must be > 2 so Var[Y|x] = scale^2 * dof / (dof - 2) exists; larger values approach the gaussian NLL
+
+# ---- paths
+MODEL_PATH: 'D:\nt\nt_wt_104ab\runs\scenarios\capacity_v1\20261006T075146Z-61014d0-d9a2d6d3-control__f-96__s0\weights.h5'  # weights file: model_checkpoint writes the best-validation weights here, and training loads it first when it exists (a warm start, NT-049); a RunContext points it into the run directory
+SCALER_PATH: 'D:\nt\nt_wt_104ab\runs\scenarios\capacity_v1\20261006T075146Z-61014d0-d9a2d6d3-control__f-96__s0\scaler.joblib'  # target-scaler file (joblib) written by the data processor and after training; an input scaler goes next to it as *_input.joblib; a RunContext points it into the run directory
+ARTIFACTS_DIR: 'D:\nt\nt_wt_104ab\runs\scenarios\capacity_v1\20261006T075146Z-61014d0-d9a2d6d3-control__f-96__s0\artifacts'  # where Trainer writes the serving bundle
+PLUGINS_DIR: null  # directory of plugin modules to load at startup
+
+# ---- registries
+MODEL_NAME: gru_attention  # Models registry key
+LOSS_NAME: custom_loss  # Losses objective key
+OPTIMIZER_NAME: adam  # Optimizers key, main network
+INDICATOR_OPTIMIZER_NAME: adam  # Optimizers key, indicator logits
+DATA_LOADER: csv  # DataLoaders key
+PREPROCESSORS: [standardize_ohlcv, sort_dedupe, resample_bars, drop_missing_close]  # Preprocessors keys, applied in order
+WINDOW_NORMALIZER: window_relative  # input normalisation of the windows
+LAYERS: {indicators: learnable_indicators, positional_encoding: positional_encoding, vacuum_noise: vacuum_saturation_noise, energy_gate: energy_gate}  # Layers keys by role in the architecture
+METRICS: [mse, rmse, mae, explained_variance, corr, r2, safe_mape, smape, wape, direction_accuracy, direction_f1, mcc, brier, ece_pos, pit_ks, coverage]  # Metrics keys, numpy tier (evaluation)
+STEP_METRICS: [dir_acc, dir_sensitivity, dir_specificity, dir_bal_acc, dir_f1, dir_mcc, dir_brier, dir_ece, pred_up_rate, true_up_rate, mean_dir_prob]  # Metrics keys, TF tier (train/test step)
+CALLBACKS: [csv_logger, early_stopping, model_checkpoint, tqdm_progress, params_logger, reduce_lr_on_plateau]  # Callbacks keys, in order
+VISUALIZATION: plotly_interactive  # Visualizations key
+
+# ---- optimizers
+ADAM_BETA1: 0.9  # first-moment decay of adam, adamw and nadam
+ADAM_BETA2: 0.999  # second-moment decay of adam, adamw and nadam
+ADAM_EPSILON: 1.0e-07  # Keras default
+WEIGHT_DECAY: 0.004  # adamw only
+SGD_MOMENTUM: 0.9  # momentum of the sgd_momentum optimizer
+SGD_NESTEROV: true  # Nesterov momentum for the sgd_momentum optimizer
+
+# ---- ops
+LOSS_WEIGHT_SCHEDULE: null  # {'lambda_hd': {epoch: value, ...}, ...} for the lambda_schedule callback
+ABLATE_LAMBDAS: []  # LAMBDA_* names forced to 0 after calibration (ablation)
+SEED: 0  # global seed set by train_and_evaluate

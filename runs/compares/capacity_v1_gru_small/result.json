@@ -1,0 +1,260 @@
+{
+  "spec": {
+    "name": "capacity_v1_gru_small_vs_control",
+    "description": "Does the gru_small arm differ from today's gru_attention in h1 direction AUC (primary), on 5 judgement folds no earlier choice used? Non-inferiority margin and minimum effect are both 0.01 AUC.\n",
+    "scenario_a": "capacity_v1",
+    "scenario_b": "capacity_v1",
+    "configuration_a": "gru_small",
+    "configuration_b": "control",
+    "duplicate_policy": "refuse",
+    "metric": "h1/direction/auc",
+    "direction": "higher_better",
+    "min_effect": 0.01,
+    "alpha": 0.05,
+    "registered_utc": "2026-10-06T00:00:00Z",
+    "judgment_folds": [
+      -96,
+      -95,
+      -94,
+      -93,
+      -92
+    ],
+    "min_pairs": 5,
+    "min_folds": 5,
+    "pairs_planned": 5,
+    "looks": 1,
+    "look_index": 1,
+    "metric_kind": "diff",
+    "estimator": "mean",
+    "non_inferiority_margin": 0.01,
+    "guard_rails": [
+      {
+        "metric": "h1/variance/crpss",
+        "direction": "higher_better",
+        "max_degradation": 0.005,
+        "metric_kind": "diff"
+      },
+      {
+        "metric": "h0/variance/crpss",
+        "direction": "higher_better",
+        "max_degradation": 0.005,
+        "metric_kind": "diff"
+      },
+      {
+        "metric": "h2/variance/crpss",
+        "direction": "higher_better",
+        "max_degradation": 0.005,
+        "metric_kind": "diff"
+      },
+      {
+        "metric": "h0/direction/auc",
+        "direction": "higher_better",
+        "max_degradation": 0.01,
+        "metric_kind": "diff"
+      },
+      {
+        "metric": "h2/direction/auc",
+        "direction": "higher_better",
+        "max_degradation": 0.01,
+        "metric_kind": "diff"
+      },
+      {
+        "metric": "h1/direction/brier",
+        "direction": "lower_better",
+        "max_degradation": 0.002,
+        "metric_kind": "diff"
+      }
+    ],
+    "route_owner_metrics": [],
+    "noise_sd": null,
+    "seed_sd": null,
+    "block_sd": null,
+    "root": "runs"
+  },
+  "spec_hash": "a5b33e917fdb",
+  "registration": {
+    "declared": "2026-10-06T00:00:00Z",
+    "effective": "2026-10-06T12:50:57+05:00",
+    "source": "git_commit_time"
+  },
+  "n_pairs": 5,
+  "n_folds": 5,
+  "pairs": [
+    {
+      "seed": 0,
+      "fold": -96,
+      "a_run_id": "20261006T083939Z-61014d0-79ae6ea2-gru_small__f-96__s0",
+      "b_run_id": "20261006T075146Z-61014d0-d9a2d6d3-control__f-96__s0",
+      "a_value": 0.5029500297606263,
+      "b_value": 0.5093955371332847,
+      "a_created_utc": "20261006T083939Z",
+      "b_created_utc": "20261006T075146Z",
+      "diff": -0.006445507372658366
+    },
+    {
+      "seed": 0,
+      "fold": -95,
+      "a_run_id": "20261006T084444Z-61014d0-6a6535c4-gru_small__f-95__s0",
+      "b_run_id": "20261006T080236Z-61014d0-c7bb80c5-control__f-95__s0",
+      "a_value": 0.5377964158324353,
+      "b_value": 0.5588490532497448,
+      "a_created_utc": "20261006T084444Z",
+      "b_created_utc": "20261006T080236Z",
+      "diff": -0.02105263741730945
+    },
+    {
+      "seed": 0,
+      "fold": -94,
+      "a_run_id": "20261006T085108Z-61014d0-fe2b0f2c-gru_small__f-94__s0",
+      "b_run_id": "20261006T081026Z-61014d0-9ec26d2c-control__f-94__s0",
+      "a_value": 0.5486879659128463,
+      "b_value": 0.5572115830489037,
+      "a_created_utc": "20261006T085108Z",
+      "b_created_utc": "20261006T081026Z",
+      "diff": -0.008523617136057426
+    },
+    {
+      "seed": 0,
+      "fold": -93,
+      "a_run_id": "20261006T105223Z-61014d0-78fa44ab-gru_small__f-93__s0",
+      "b_run_id": "20261006T081903Z-61014d0-2ef82d96-control__f-93__s0",
+      "a_value": 0.5152257863097772,
+      "b_value": 0.5164025587314991,
+      "a_created_utc": "20261006T105223Z",
+      "b_created_utc": "20261006T081903Z",
+      "diff": -0.0011767724217218722
+    },
+    {
+      "seed": 0,
+      "fold": -92,
+      "a_run_id": "20261006T093908Z-61014d0-b11ab9ff-gru_small__f-92__s0",
+      "b_run_id": "20261006T082900Z-61014d0-5eb30e65-control__f-92__s0",
+      "a_value": 0.5082834874486044,
+      "b_value": 0.5317779919642313,
+      "a_created_utc": "20261006T093908Z",
+      "b_created_utc": "20261006T082900Z",
+      "diff": -0.023494504515626846
+    }
+  ],
+  "fold_rows": [
+    {
+      "fold": -96,
+      "seeds": [
+        0
+      ],
+      "mean_diff": -0.006445507372658366
+    },
+    {
+      "fold": -95,
+      "seeds": [
+        0
+      ],
+      "mean_diff": -0.02105263741730945
+    },
+    {
+      "fold": -94,
+      "seeds": [
+        0
+      ],
+      "mean_diff": -0.008523617136057426
+    },
+    {
+      "fold": -93,
+      "seeds": [
+        0
+      ],
+      "mean_diff": -0.0011767724217218722
+    },
+    {
+      "fold": -92,
+      "seeds": [
+        0
+      ],
+      "mean_diff": -0.023494504515626846
+    }
+  ],
+  "excluded_pairs": [],
+  "estimator": "mean",
+  "alpha_used": 0.05,
+  "estimate": {
+    "estimate": -0.012138607772674791,
+    "ci_lo": -0.024145853330437804,
+    "ci_hi": -0.00013136221491177706,
+    "statistic": -2.8068200964349805
+  },
+  "verdict": "inconclusive",
+  "refusal_reason": null,
+  "guard_rails": [
+    {
+      "metric": "h1/variance/crpss",
+      "verdict": "undecided",
+      "n_folds": 5,
+      "estimate": {
+        "estimate": 0.001121148081451895,
+        "ci_lo": -0.008808775419502217,
+        "ci_hi": 0.011051071582406006,
+        "statistic": 0.3134773498154265
+      }
+    },
+    {
+      "metric": "h0/variance/crpss",
+      "verdict": "undecided",
+      "n_folds": 5,
+      "estimate": {
+        "estimate": 0.000761659333119269,
+        "ci_lo": -0.016665505184854826,
+        "ci_hi": 0.018188823851093366,
+        "statistic": 0.12134534709224447
+      }
+    },
+    {
+      "metric": "h2/variance/crpss",
+      "verdict": "undecided",
+      "n_folds": 5,
+      "estimate": {
+        "estimate": 7.375471106267906e-05,
+        "ci_lo": -0.013862033403436322,
+        "ci_hi": 0.014009542825561681,
+        "statistic": 0.014694246556619307
+      }
+    },
+    {
+      "metric": "h0/direction/auc",
+      "verdict": "pass",
+      "n_folds": 5,
+      "estimate": {
+        "estimate": 0.01621615550002988,
+        "ci_lo": -0.00783546270106136,
+        "ci_hi": 0.040267773701121126,
+        "statistic": 1.8719433007273325
+      }
+    },
+    {
+      "metric": "h2/direction/auc",
+      "verdict": "pass",
+      "n_folds": 5,
+      "estimate": {
+        "estimate": 0.003374383638740275,
+        "ci_lo": -0.008601644671883409,
+        "ci_hi": 0.01535041194936396,
+        "statistic": 0.7822953231105102
+      }
+    },
+    {
+      "metric": "h1/direction/brier",
+      "verdict": "undecided",
+      "n_folds": 5,
+      "estimate": {
+        "estimate": -0.006062889299276841,
+        "ci_lo": -0.017382340059678234,
+        "ci_hi": 0.005256561461124552,
+        "statistic": -1.487110962770457
+      }
+    }
+  ],
+  "non_inferiority": {
+    "margin": 0.01,
+    "verdict": "undecided"
+  },
+  "generated_utc": "2026-10-06T10:59:54Z"
+}
