@@ -1,0 +1,99 @@
+{
+  "lambda_values_final": {
+    "lambda_point": 0.7166102528572083,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 0.6592360734939575,
+    "lambda_vol": 3.324028968811035,
+    "lambda_short": 1.8597968816757202,
+    "lambda_long": 0.6843984127044678,
+    "lambda_var": 0.3688695430755615,
+    "lambda_crps": 0.7749806046485901,
+    "lambda_soft_ece": 2.2445201873779297,
+    "lambda_t_perp": 0.10000000149011612,
+    "lambda_casimir": 0.10000000149011612,
+    "lambda_hd": 0.10000000149011612,
+    "lambda_ife": 0.10000000149011612,
+    "lambda_vac_overflow": 0.10000000149011612
+  },
+  "calibration_lambdas": {
+    "lambda_short": 1.8597968491534855,
+    "lambda_point": 0.7166102709612993,
+    "lambda_long": 0.6843983868439937,
+    "lambda_extended_trend": 0.10000000149011612,
+    "lambda_dir": 0.6592360892263701,
+    "lambda_var": 0.3688695570986844,
+    "lambda_vol": 3.3240289777871266,
+    "lambda_crps": 0.7749805865577457,
+    "lambda_soft_ece": 2.2445202050464887,
+    "lambda_t_perp": 0.10000000149011612,
+    "lambda_casimir": 0.10000000149011612,
+    "lambda_hd": 0.10000000149011612,
+    "lambda_ife": 0.10000000149011612,
+    "ref_loss": 0.6902130739102946
+  },
+  "calibration_report": {
+    "h0": {
+      "coverage90": 0.9035378662244334,
+      "width90": 646.524770222167,
+      "temperature": 1.673095878990046,
+      "target": 0.9,
+      "n": 7236
+    },
+    "h1": {
+      "coverage90": 0.9058872305140961,
+      "width90": 781.3664467276994,
+      "temperature": 1.9626871236818066,
+      "target": 0.9,
+      "n": 7236
+    },
+    "h2": {
+      "coverage90": 0.9133499170812603,
+      "width90": 918.5302739079923,
+      "temperature": 1.824013053355328,
+      "target": 0.9,
+      "n": 7236
+    }
+  },
+  "fold": {
+    "train": 30213,
+    "val": 2866,
+    "cal": 2866,
+    "test": 7236,
+    "gap": 80
+  },
+  "epochs_run": 20,
+  "weights_epoch": 18,
+  "weights_val_loss": 4.930997371673584,
+  "weights_source": "best validation epoch, restored after training (EarlyStopping did not stop the run: 20 epochs ran)",
+  "var_scale": 0.9806377589702606,
+  "weighted_direction_quantiles": {
+    "0.05": 0.42902570967665976,
+    "0.1": 0.4560407726757145,
+    "0.2": 0.4740441947557441,
+    "0.5": 0.49936934995184357,
+    "0.8": 0.5216310448982261,
+    "0.9": 0.5329911042197557,
+    "0.95": 0.5465797595000124
+  },
+  "format_version": 1,
+  "neural_trade_version": "0.3.0",
+  "pred_scale": 257.51813253642973,
+  "pred_mean": -1.0095569718884807,
+  "normalizer": {
+    "kind": "window_relative",
+    "scale": 257.51813253642973
+  },
+  "has_calibration": true,
+  "env": {
+    "python": "3.10.21",
+    "platform": "Windows-10-10.0.19045-SP0",
+    "numpy": "1.23.0",
+    "pandas": "2.3.3",
+    "sklearn": "1.7.2",
+    "git": "1aeff1c",
+    "host_sha1": "287b3e95955e",
+    "tensorflow": "2.10.0",
+    "cuda_build": "64_112",
+    "cudnn_build": "64_8"
+  }
+}
