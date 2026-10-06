@@ -365,7 +365,7 @@ def test_a_pre_registered_comparison_gives_nt032s_verdict_otherwise_the_pair_is_
             "judgment_folds": [-2], "registered_utc": "2099-01-01T00:00:00Z", "root": str(panel.store.root)}
     (cmp_dir / "panel_pair.yaml").write_text(yaml.safe_dump(spec), encoding="utf-8")
     found, flipped = PC.find_compare_spec(configs[0], configs[1], cmp_dir)
-    assert found is not None and found.name == "panel_pair" and not flipped
+    assert found is not None and found.name == "panel_pair.yaml" and not flipped
     assert PC.find_compare_spec(configs[1], configs[0], cmp_dir)[1] is True
     verdict = PC.verdict_html(configs[0], configs[1], panel.store, compares_dir=cmp_dir)
     assert "Paired verdict (NT-032" in verdict and "no verdict yet" in verdict   # viewing never runs compare()

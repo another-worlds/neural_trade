@@ -565,7 +565,11 @@ panel.start_polling()
 
 Two or more rows of the board: every logged metric per horizon with its spread over folds (whisker on the dot) and over
 seeds (thin grey line), the table of every score key, and the paired verdict: NT-032's when a pre-registered comparison
-(`configs/compares/`) names the pair, otherwise an explicitly **exploratory** per-fold table, not a verdict (D-025).
+(`configs/compares/<name>.yaml`) names the pair, otherwise an explicitly **exploratory** per-fold table, not a verdict
+(D-025). A stored verdict is read where `neural-trade compare configs/compares/<name>.yaml --out runs/compares/<name>`
+wrote it and shown in full: the estimate, non-inferiority, guard-rails, the per-fold and per-pair tables and the stored
+`report.md`; viewing never runs a comparison. A statistic of a served delta whose shrink beta is 0 (and of its constant
+Gaussian readout) is shown as *n/a (beta = 0)*, not as a measured value (D-007).
 """),
     ("code", """
 display(panel.comparison())

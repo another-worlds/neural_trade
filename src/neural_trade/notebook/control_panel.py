@@ -89,8 +89,8 @@ class ControlPanel:
                  root=None):
         self.store = store if isinstance(store, RunStore) else RunStore(store, index_path)
         self.specs_dir, self.compares_dir = specs_dir, compares_dir
-        # the repository root: the notebook runs with notebooks/ as its working directory, while the scenarios' relative
-        # CSV_PATH and the GPU record's default path are relative to the root, where the CLI is run from
+        # the repository root: the notebook runs with notebooks/ as its working directory, while the GPU record's default
+        # path is relative to the root, where the CLI is run from (a scenario's relative CSV_PATH: see build_scenario)
         self.root = Path(root) if root is not None else Path(__file__).resolve().parents[3]
         self._lock = threading.RLock()
         self.poll_seconds = float(poll_seconds)
@@ -249,13 +249,11 @@ class ControlPanel:
     def build_scenario(self) -> Scenario:
         if self.base is None:
             raise InvalidConfigurationError("no scenario is selected")
-        overrides = dict(self.base.overrides)
-        csv = str(self.base.base().CSV_PATH)
-        resolved = self.resolve_path(csv)
-        if resolved != csv:      # relative to the repo root, not to this process's working directory
-            overrides["CSV_PATH"] = resolved
+        # the overrides stay the spec's: a relative CSV_PATH is part of every cell's identity, and the data layer opens it
+        # from the project root when the working directory (notebooks/) lacks it (data.loaders.resolve_data_path), so
+        # a sweep the CLI started resumes here, and back, without retraining a finished cell
         return dataclasses.replace(self.base, name=self.name or self.base.name, folds=list(self.folds or self.base.folds),
-                                   search=self.search(), overrides=overrides)
+                                   search=self.search())
 
     def resolve_path(self, path: Optional[str]) -> Optional[str]:
         """``path`` as the CLI would find it from the repo root: unchanged when absolute or when it exists from the

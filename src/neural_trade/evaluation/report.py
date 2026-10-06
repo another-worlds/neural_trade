@@ -107,6 +107,11 @@ ZERO_BETA_NA = "n/a (beta = 0: served delta is 0)"
 # The Gaussian readout P(up | the move leaves the deadband) of a delta of 0 is 0.5 on every bar: it calls up on no
 # bar and has AUC 0.5, Brier 0.25 and the constant-0.5 ECE by construction.
 GAUSS_CONST_NA = "n/a (beta = 0: readout is the constant 0.5)"
+# The keys those two rules cover (the markdown's n/a cells; the control panel imports them, NT-034): the served
+# delta's statistics a constant 0 does not have, and the Gaussian readout's rows that a constant 0.5 fixes.
+SERVED_DELTA_NA_KEYS = ("skill_vs_zero", "ev", "corr", "corr_spearman", "share_pred_up")
+GAUSS_CONST_ROWS = (("calls up", "pred_up_rate"), ("MCC", "mcc"), ("AUC", "auc"), ("Brier", "brier"), ("ECE", "ece_pos"))
+GAUSS_CONST_NA_KEYS = tuple(key for _, key in GAUSS_CONST_ROWS)
 SERVED_ZERO_NA = ZERO_BETA_NA          # alias: both names are imported
 # the same, for a served delta found 0 on every sample with no beta = 0 recorded
 ZERO_DELTA_NA = "n/a (served delta is 0)"
@@ -647,6 +652,8 @@ class EvalReport:
 
     def _served_cell(self, key, zero_beta):
         """A statistic of the served delta that a constant 0 does not have (a correlation, a sign share)."""
+        if key not in SERVED_DELTA_NA_KEYS:
+            raise KeyError(f"{key} is not in SERVED_DELTA_NA_KEYS")
         return lambda h: self._na([h]) if h in zero_beta else _fmt(self._get(h, "delta", key))
 
     def _md_direction(self, head):
@@ -681,7 +688,7 @@ class EvalReport:
                 ("TP / FP / TN / FN", counts)]
         # a served delta of 0 has the constant readout 0.5: its rates are fixed by construction, not measured
         zero = self._zero_beta()
-        gauss = [("calls up", "pred_up_rate"), ("MCC", "mcc"), ("AUC", "auc"), ("Brier", "brier"), ("ECE", "ece_pos")]
+        gauss = list(GAUSS_CONST_ROWS)
         rows += [(f"Gaussian readout: {name}",
                   lambda h, key=key: self._na([h], gauss=True) if h in zero else _fmt(self._get(h, g, key)))
                  for name, key in gauss]

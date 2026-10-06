@@ -5,21 +5,39 @@ A loader returns the RAW frame; the Preprocessors pipeline standardises it, and
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 
 REQUIRED_COLUMNS = ("timestamp", "Close")
+# The project root: committed scenarios give CSV_PATH relative to it (where the CLI runs), while a notebook runs with
+# notebooks/ as its working directory.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def resolve_data_path(path) -> Path:
+    """Where to open the data file ``path``: as given when it is absolute or exists from the working directory; else
+    the project root's file of that relative path when that exists; else as given (the caller reports it missing).
+
+    Only the file opened changes, never the configured text: CSV_PATH stays relative in the Config, so a cell's
+    identity (``scenario.config_identity``) is the same whether the CLI (from the root) or the control panel (from
+    notebooks/) runs it, and a sweep started in one resumes in the other."""
+    p = Path(path)
+    if p.is_absolute() or p.exists():
+        return p
+    cand = Path(PROJECT_ROOT) / p
+    return cand if cand.exists() else p
 
 
 def load_csv(config, path: Optional[str] = None, read_csv_kwargs: Optional[dict] = None) -> pd.DataFrame:
-    """Read ``path`` (default Config.CSV_PATH) with ``pandas.read_csv``."""
-    return pd.read_csv(path or config.CSV_PATH, **dict(read_csv_kwargs or {}))
+    """Read ``path`` (default Config.CSV_PATH, see :func:`resolve_data_path`) with ``pandas.read_csv``."""
+    return pd.read_csv(resolve_data_path(path or config.CSV_PATH), **dict(read_csv_kwargs or {}))
 
 
 def load_parquet(config, path: Optional[str] = None, **kwargs) -> pd.DataFrame:
-    """Read a Parquet file (needs pyarrow)."""
-    return pd.read_parquet(path or config.CSV_PATH, **kwargs)
+    """Read a Parquet file (needs pyarrow; the path resolves as :func:`resolve_data_path` says)."""
+    return pd.read_parquet(resolve_data_path(path or config.CSV_PATH), **kwargs)
 
 
 def load_dataframe(config, frame: pd.DataFrame, **_) -> pd.DataFrame:

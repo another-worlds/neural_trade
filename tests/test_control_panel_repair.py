@@ -5,8 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-import time
-from pathlib import Path
+import traceback
 
 import yaml
 
@@ -34,7 +33,9 @@ def test_estimate_and_parallel_work_from_the_notebooks_working_directory_on_the_
     panel.wait(120)
     assert panel.refusal is None and panel.error is None, (panel.refusal, panel.error)
     assert panel.estimate is not None and "estimated" in panel.estimate.text and trainer.calls == []
-    assert Path(panel.build_scenario().base().CSV_PATH).is_file()
+    from neural_trade.data.loaders import resolve_data_path
+
+    assert resolve_data_path(panel.build_scenario().base().CSV_PATH).is_file()   # opened from the root, text unchanged
     record = json.loads((REPO / "runs" / "experiments" / "gpu_measurements_v1" / "parallel_n.json").read_text(encoding="utf-8"))
     panel.set_option("parallel", int(record["allowed_n"]))                 # what the recorded measurement allows
     panel.estimate_now()
@@ -94,7 +95,7 @@ def test_served_delta_statistics_of_a_zero_beta_are_na_not_zero_dots(tmp_path, b
 
     assert not empty_panels(fig)
     table = PC.metric_table([ca, cb])
-    assert table.loc["h0/delta/corr", (ca.label, "value")] != table.loc["h0/delta/corr", (ca.label, "value")]   # NaN: n/a
+    assert table.loc["h0/delta/corr", (ca.label, "value")] == PC.NA_TEXT                                       # n/a, said why
 
 
 def test_viewing_a_verdict_and_executing_the_notebook_write_nothing_into_the_store(tmp_path, bars_csv, monkeypatch):  # noqa: F811
@@ -138,35 +139,45 @@ def test_concurrent_refreshes_from_several_threads_do_not_collide_and_the_sync_f
     panel, _ = run_quick(tmp_path, bars_csv)
     panel.board()
     panel.comparison()
-    errors = []
+    n_threads, rounds = 6, 8
+    errors: list = []
+    start = threading.Barrier(n_threads, timeout=60)      # every thread refreshes at once: the collision is forced
 
     def hammer(i):
         try:
-            for _ in range(15):
+            start.wait()
+            for _ in range(rounds):
                 panel.refresh_board(force=True)
                 if i % 2:
                     panel.set_option("n_trials", 30 + i)
                 assert not panel._syncing
-        except Exception as exc:  # noqa: BLE001
-            errors.append(exc)
+        except BaseException:  # noqa: BLE001 - the full trace is the evidence when this fails
+            errors.append(f"thread {i}:\n{traceback.format_exc()}")
 
-    threads = [threading.Thread(target=hammer, args=(i,)) for i in range(6)]
+    threads = [threading.Thread(target=hammer, args=(i,), name=f"hammer-{i}") for i in range(n_threads)]
     for t in threads:
         t.start()
     for t in threads:
-        t.join(120)
-    assert errors == [] and len(panel.board_rows()) == 4
+        t.join(300)
+    alive = [t.name for t in threads if t.is_alive()]
+    assert not alive, f"threads still running after 300 s: {alive}"
+    assert errors == [], "\n".join(errors)
+    assert len(panel.board_rows()) == 4
     # a click handled in this thread while another thread is mid-refresh is not muted by that thread's flag
-    gate = threading.Event()
+    entered, release = threading.Event(), threading.Event()
 
     def other():
         panel._syncing = True
-        gate.set()
-        time.sleep(0.2)
+        entered.set()
+        release.wait(60)
         panel._syncing = False
 
     t = threading.Thread(target=other)
     t.start()
-    gate.wait()
-    assert panel._syncing is False
-    t.join()
+    assert entered.wait(60)
+    try:
+        assert panel._syncing is False
+    finally:
+        release.set()
+        t.join(60)
+    assert not t.is_alive()

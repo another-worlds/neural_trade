@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import html
+import json
 import logging
 import math
 import re
@@ -31,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
+from neural_trade.evaluation.report import GAUSS_CONST_NA_KEYS, SERVED_DELTA_NA_KEYS
 from neural_trade.experiments.store import RunStore
 from neural_trade.visualization import theme as T
 
@@ -105,18 +107,20 @@ def key_parts(key: str) -> Optional[Tuple[str, Optional[int], str]]:
 
 
 # Statistics of the served delta (and of the Gaussian readout built on it) that a constant 0 does not have: with a
-# shrink beta of 0 (D-007) they are stored as 0.0 by the scorer, which is not a measurement. They are left out here
-# (drawn as n/a); the raw heads' own panels carry the information. Same rule as evaluation.report's ZERO_BETA_NA.
-SERVED_NA_METRICS = {"delta": ("corr", "corr_spearman", "mean_pred", "share_pred_up"),
-                     "gauss_direction": ("auc", "mcc")}
+# shrink beta of 0 (D-007) they are stored as fixed values by the scorer (0.0, 0.5, ...), which are not measurements.
+# They are left out here (drawn and tabled as n/a); the raw heads' own panels carry the information. The rule is the
+# report's (evaluation.report SERVED_DELTA_NA_KEYS / GAUSS_CONST_NA_KEYS, the markdown's ZERO_BETA_NA and
+# GAUSS_CONST_NA cells), plus what the index stores besides the markdown rows: the served delta's mean (the
+# constant's own 0, NT-180) and the constant readout's confusion counts and rates (it calls up on no bar).
+CONST_READOUT_KEYS = ("acc", "bal_acc", "precision", "recall", "specificity", "f1", "tp", "fp", "tn", "fn")
+SERVED_NA_METRICS = {"delta": tuple(SERVED_DELTA_NA_KEYS) + ("mean_pred",),
+                     "gauss_direction": tuple(GAUSS_CONST_NA_KEYS) + CONST_READOUT_KEYS}
 NA_TEXT = "n/a (beta = 0)"
 
 
 def zero_beta_horizons(run_dir, role: str) -> set:
     """Horizon names whose served delta is the constant 0 in this cell: a recorded shrink beta of 0, or a served delta
     found 0 on every sample (``meta.served_delta_zero``), read from the cell's own ``eval_report_<role>.json``."""
-    import json
-
     try:
         meta = json.loads((Path(run_dir) / f"eval_report_{role}.json").read_text(encoding="utf-8")).get("meta") or {}
     except (OSError, ValueError):
@@ -187,18 +191,19 @@ def aggregate_selection(store: RunStore, selection: Sequence[Tuple[str, str]], *
 
 def metric_table(configs: Sequence[ConfigScores]):
     """Every score key of the configurations, one row each: value, fold sd and seed sd per configuration
-    (a pandas DataFrame; ``None`` where a configuration has no value)."""
+    (a pandas DataFrame; ``NA_TEXT`` where the value is n/a at beta = 0 on every cell, ``None`` where a configuration
+    has no value)."""
     import pandas as pd
 
-    keys = sorted({k for c in configs for k in c.aggs})
-    cols: Dict[Tuple[str, str], List[Optional[float]]] = {}
+    keys = sorted({k for c in configs for k in list(c.aggs) + list(c.na)})
+    cols: Dict[Tuple[str, str], List[Any]] = {}
     for c in configs:
         for part in ("value", "fold sd", "seed sd"):
             cols[(c.label, part)] = []
     for k in keys:
         for c in configs:
             a = c.aggs.get(k)
-            cols[(c.label, "value")].append(a.value if a else None)
+            cols[(c.label, "value")].append(a.value if a else NA_TEXT if k in c.na else None)
             cols[(c.label, "fold sd")].append(a.fold_sd if a else None)
             cols[(c.label, "seed sd")].append(a.seed_sd if a else None)
     df = pd.DataFrame(cols, index=pd.Index(keys, name="score"))
@@ -339,10 +344,11 @@ def paired_by_fold(a: ConfigScores, b: ConfigScores, metric: str) -> List[Dict[s
     return [{"fold": f, "a": fa[f], "b": fb[f], "diff": fa[f] - fb[f]} for f in sorted(set(fa) & set(fb))]
 
 
-def exploratory_html(a: ConfigScores, b: ConfigScores, metric: str) -> str:
+def exploratory_html(a: ConfigScores, b: ConfigScores, metric: str, *,
+                     why: str = "no pre-registered comparison names this pair") -> str:
     rows = paired_by_fold(a, b, metric)
     head = (f"<b>Exploratory paired differences of <code>{html.escape(metric)}</code> (A - B)</b>, per fold, seeds averaged "
-            f"first (D-046): <b>not a verdict</b> (no pre-registered comparison names this pair; D-025).<br>"
+            f"first (D-046): <b>not a verdict</b> ({html.escape(why)}; D-025).<br>"
             f"A = {html.escape(a.label)}, B = {html.escape(b.label)}")
     if not rows:
         return head + "<br>no fold has a value for both."
@@ -356,9 +362,10 @@ def exploratory_html(a: ConfigScores, b: ConfigScores, metric: str) -> str:
     return (f"{head}<table style='margin:6px 0'><tr><th>fold</th><th>A</th><th>B</th><th>A - B</th></tr>{body}</table>{tail}")
 
 
-def find_compare_spec(a: ConfigScores, b: ConfigScores, compares_dir="configs/compares"):
-    """(CompareSpec, flipped) of the first pre-registered spec in ``compares_dir`` that names the pair
-    (A, B) as (scenario_a, scenario_b) or, flipped, as (B, A); (None, False) when none does."""
+def find_compare_spec(a: ConfigScores, b: ConfigScores, compares_dir="configs/compares") -> Tuple[Optional[Path], bool]:
+    """(path, flipped) of the first pre-registered spec file in ``compares_dir`` that names the pair (A, B) as
+    (scenario_a, scenario_b) or, flipped, as (B, A); (None, False) when none does. The path, not only the spec:
+    ``neural-trade compare <path> --out runs/compares/<file stem>`` stores its result under the file's stem."""
     from neural_trade.experiments.comparator import CompareError, CompareSpec
 
     compares_dir = Path(compares_dir)
@@ -372,62 +379,147 @@ def find_compare_spec(a: ConfigScores, b: ConfigScores, compares_dir="configs/co
             return x.scenario == scenario and (configuration is None or x.configuration == configuration)
 
         if names(a, spec.scenario_a, spec.configuration_a) and names(b, spec.scenario_b, spec.configuration_b):
-            return spec, False
+            return path, False
         if names(b, spec.scenario_a, spec.configuration_a) and names(a, spec.scenario_b, spec.configuration_b):
-            return spec, True
+            return path, True
     return None, False
 
 
-def stored_verdict(spec, store: RunStore) -> Optional[Dict[str, Any]]:
-    """The result ``neural-trade compare <spec> --out <store>/compares/<name>`` stored for this spec (None: none yet).
-    Read-only: the panel never calls ``compare()``, which registers the spec (writes a sidecar into the store)."""
-    import json
+def result_dirs(spec_path, spec, store: RunStore) -> List[Path]:
+    """Where a stored result of this spec may be, first match wins: ``<store>/compares/<file stem>`` (RUNBOOK
+    "Paired comparator": ``--out runs/compares/<name>`` with the file's name, run from the repo root, whose ``runs``
+    is the store), then ``<store>/compares/<spec name>``."""
+    base = Path(store.root) / "compares"
+    out = [base / Path(spec_path).stem]
+    if spec.name != Path(spec_path).stem:
+        out.append(base / spec.name)
+    return out
 
-    path = Path(store.root) / "compares" / spec.name / "result.json"
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return doc if isinstance(doc, dict) else None
+
+def stored_verdict(spec_path, spec, store: RunStore) -> Tuple[Optional[Dict[str, Any]], Optional[Path]]:
+    """(result.json, its directory) that ``neural-trade compare <spec_path> --out <dir>`` stored for this spec, or
+    (None, None). Read-only: the panel never calls ``compare()``, which registers the spec (writes into the store)."""
+    for d in result_dirs(spec_path, spec, store):
+        try:
+            doc = json.loads((d / "result.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(doc, dict):
+            return doc, d
+    return None, None
+
+
+def _num(v: Any, fmt: str = ".4g") -> str:
+    return format(v, fmt) if isinstance(v, (int, float)) and math.isfinite(v) else "n/a"
+
+
+def _ci(est: Mapping[str, Any]) -> str:
+    return f"{_num(est.get('estimate'))}, 95% CI [{_num(est.get('ci_lo'))}, {_num(est.get('ci_hi'))}]"
+
+
+def _html_table(head: Sequence[str], rows: Sequence[Sequence[Any]]) -> str:
+    th = "".join(f"<th>{html.escape(h)}</th>" for h in head)
+    body = "".join("<tr>" + "".join(f"<td>{html.escape(str(c))}</td>" for c in r) + "</tr>" for r in rows)
+    return f"<table style='margin:4px 0'><tr>{th}</tr>{body}</table>"
+
+
+def result_html(doc: Mapping[str, Any], spec, result_dir: Optional[Path] = None) -> str:
+    """Everything NT-032's stored result says (D-014), read-only: the verdict with its interval, the non-inferiority
+    result, the guard-rails, the per-fold and per-pair tables (run ids included), the excluded pairs, the registration,
+    and the stored ``report.md`` itself."""
+    est = doc.get("estimate") or {}
+    parts = []
+    if doc.get("refusal_reason"):
+        parts.append(f"<b>Refused</b>: {html.escape(str(doc['refusal_reason']))}")
+    else:
+        parts.append(f"<b>{html.escape(str(doc.get('verdict')))}</b>: {html.escape(spec.metric)} "
+                     f"{html.escape(str(doc.get('estimator') or spec.estimator))} {_ci(est)} over {doc.get('n_folds')} "
+                     f"judgement folds ({doc.get('n_pairs')} pairs), minimum effect {spec.min_effect:g}, alpha "
+                     f"{_num(doc.get('alpha_used', spec.alpha), 'g')}; stored {html.escape(str(doc.get('generated_utc')))}")
+    ni = doc.get("non_inferiority")
+    if isinstance(ni, Mapping) and ni:
+        parts.append(f"<b>Non-inferiority</b> (margin {_num(ni.get('margin'), 'g')}): "
+                     f"<b>{html.escape(str(ni.get('verdict')))}</b>")
+    guards = doc.get("guard_rails") or []
+    if guards:
+        parts.append("<b>Guard-rails</b> (the same paired test)" + _html_table(
+            ("metric", "verdict", "folds", "estimate, 95% CI"),
+            [(g.get("metric"), g.get("verdict"), g.get("n_folds"), _ci(g.get("estimate") or {})) for g in guards]))
+    folds = doc.get("fold_rows") or []
+    if folds:
+        parts.append("<b>Per judgement fold</b> (seeds averaged first, D-046)" + _html_table(
+            ("fold", "seeds", "mean A - B"), [(r.get("fold"), r.get("seeds"), _num(r.get("mean_diff"))) for r in folds]))
+    pairs = doc.get("pairs") or []
+    if pairs:
+        parts.append("<b>Per (seed, fold) pair</b>" + _html_table(
+            ("seed", "fold", "A", "B", "A - B", "A run", "B run"),
+            [(p.get("seed"), p.get("fold"), _num(p.get("a_value")), _num(p.get("b_value")), _num(p.get("diff")),
+              p.get("a_run_id"), p.get("b_run_id")) for p in pairs]))
+    excluded = doc.get("excluded_pairs") or []
+    parts.append(f"<b>Excluded pairs</b>: {len(excluded)}"
+                 + (_html_table(("pair",), [(json.dumps(e, default=str),) for e in excluded]) if excluded else ""))
+    reg = doc.get("registration") or {}
+    if reg:
+        parts.append(f"registered {html.escape(str(reg.get('declared')))} (effective {html.escape(str(reg.get('effective')))}, "
+                     f"source {html.escape(str(reg.get('source')))}); spec hash {html.escape(str(doc.get('spec_hash')))}")
+    if result_dir is not None:
+        report = Path(result_dir) / "report.md"
+        try:
+            text: Optional[str] = report.read_text(encoding="utf-8")
+        except OSError:
+            text = None
+        where = html.escape(str(report))
+        parts.append(f"<details><summary>The stored <code>report.md</code> ({where})</summary>"
+                     f"<pre style='white-space:pre-wrap'>{html.escape(text)}</pre></details>" if text is not None
+                     else f"no <code>report.md</code> next to the result ({where})")
+    return "<br>".join(parts)
 
 
 def verdict_html(a: ConfigScores, b: ConfigScores, store: RunStore, *, metric: str = "backtest/sharpe_net",
                  compares_dir="configs/compares") -> str:
-    """The panel's verdict block for the selected pair, read-only on the store: NT-032's stored result when a
+    """The panel's verdict block for the selected pair, read-only on the store: NT-032's stored result in full when a
     pre-registered spec names the pair and the store holds its result (a result of an edited spec is refused as stale);
     "no verdict yet" with the command to run when it does not; the explicit statement plus the exploratory table when
     no spec names the pair."""
-    spec, flipped = find_compare_spec(a, b, compares_dir)
-    if spec is None:
+    from neural_trade.experiments.comparator import CompareSpec
+
+    path, flipped = find_compare_spec(a, b, compares_dir)
+    if path is None:
         return exploratory_html(a, b, metric)
-    head = (f"<b>Paired verdict (NT-032, pre-registered spec <code>{html.escape(spec.name)}</code>)</b>: "
-            f"A = {html.escape(spec.scenario_a)}, B = {html.escape(spec.scenario_b)}"
+    spec = CompareSpec.from_yaml(path)
+    head = (f"<b>Paired verdict (NT-032, pre-registered spec <code>{html.escape(str(path))}</code>, "
+            f"name {html.escape(spec.name)})</b>: A = {html.escape(spec.scenario_a)}"
+            + (f" / {html.escape(spec.configuration_a)}" if spec.configuration_a else "")
+            + f", B = {html.escape(spec.scenario_b)}"
+            + (f" / {html.escape(spec.configuration_b)}" if spec.configuration_b else "")
             + (" (the selection's rows are in the reverse order)" if flipped else ""))
-    doc = stored_verdict(spec, store)
-    cmd = f"neural-trade compare configs/compares/{html.escape(spec.name)}.yaml --out {html.escape(str(Path(store.root) / 'compares' / spec.name))}"
+    doc, where = stored_verdict(path, spec, store)
+    dirs = result_dirs(path, spec, store)
+    cmd = html.escape(f"neural-trade compare {path} --out {dirs[0]}")
     if doc is None:
-        return (f"{head}<br><b>no verdict yet</b>: the store holds no result for this spec (viewing never runs or registers a "
-                f"comparison). Run <code>{cmd}</code> after the runs it names exist.<br>" + exploratory_html(a, b, metric))
+        return (f"{head}<br><b>no verdict yet</b>: the store holds no result for this spec (looked in "
+                f"{html.escape(', '.join(str(d) for d in dirs))}; viewing never runs or registers a comparison). "
+                f"Run <code>{cmd}</code> after the runs it names exist.<br>"
+                + exploratory_html(a, b, metric, why="the pre-registered comparison has no stored result yet"))
     if doc.get("spec_hash") != spec.spec_hash:
-        return (f"{head}<br><b>stored result is stale</b>: it was written for another content of this spec "
-                f"(hash {html.escape(str(doc.get('spec_hash')))}, now {spec.spec_hash}). Run <code>{cmd}</code> under a new name.")
-    est = doc.get("estimate") or {}
-    if doc.get("refusal_reason"):
-        body = f"<b>Refused</b>: {html.escape(str(doc['refusal_reason']))}"
-    else:
-        body = (f"<b>{html.escape(str(doc.get('verdict')))}</b>: {html.escape(spec.metric)} {html.escape(spec.estimator)} "
-                f"{est.get('estimate', float('nan')):.4g}, 95% CI [{est.get('ci_lo', float('nan')):.4g}, "
-                f"{est.get('ci_hi', float('nan')):.4g}] over {doc.get('n_folds')} judgement folds ({doc.get('n_pairs')} pairs), "
-                f"minimum effect {spec.min_effect:g}; stored {html.escape(str(doc.get('generated_utc')))}")
-    return f"{head}<br>{body}"
+        return (f"{head}<br><b>stored result is stale</b> ({html.escape(str(where))}): it was written for another content "
+                f"of this spec (hash {html.escape(str(doc.get('spec_hash')))}, now {spec.spec_hash}). Run "
+                f"<code>{cmd}</code> under a new name.")
+    return f"{head}<br>stored in {html.escape(str(where))}<br>{result_html(doc, spec, where)}"
 
 
 def table_html(configs: Sequence[ConfigScores]) -> str:
     """Every score key of the configurations as an HTML table."""
-    df = metric_table(configs)
-    return df.to_html(float_format=lambda v: f"{v:.6g}", na_rep="n/a", max_rows=None, classes="nt-scores")
+    df = metric_table(configs).astype(object)
+
+    def cell(v: Any) -> str:
+        if isinstance(v, str):
+            return v
+        return "n/a" if v is None or (isinstance(v, float) and not math.isfinite(v)) else f"{v:.6g}"
+
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
 
 
 __all__ = ["ConfigScores", "GROUPS", "MetricAgg", "aggregate_configuration", "aggregate_selection",
            "comparison_figures", "exploratory_html", "find_compare_spec", "key_parts", "metric_table",
-           "paired_by_fold", "table_html", "verdict_html"]
+           "paired_by_fold", "result_dirs", "result_html", "stored_verdict", "table_html", "verdict_html"]

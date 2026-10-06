@@ -123,16 +123,28 @@ def test_a_rule_scenario_runs_through_the_engine_without_training(tmp_path, bars
     assert again.ran == [] and len(again.skipped) == 2
 
 
+def _done_cell(store, scenario, fold):
+    """The finished cell of ``scenario`` on ``fold``; when there is none, fail with what the index holds (a failed
+    cell's status and error message), not a bare StopIteration."""
+    rows = store.index.rows(scenario)
+    row = next((r for r in rows if r["fold"] == fold), None)
+    assert row is not None, f"{scenario}: no cell on fold {fold}; cells: {[(r['fold'], r['status']) for r in rows]}"
+    assert row["status"] == "done", f"{scenario} fold {fold}: {row['status']}: {row.get('error')}"
+    return row
+
+
 def test_a_rule_cell_scores_the_same_block_and_costs_as_a_trained_cell(tmp_path, bars_csv):
     """The out-of-sample block, its bars and the backtest settings are the trained cell's: buy-and-hold and
     always-flat on the block are identical numbers in both."""
-    store = RunStore(tmp_path / "runs")
-    Runner(Scenario.from_dict(_rule_spec(bars_csv)), store, trainer=NoTrainer()).run()
-    Runner(Scenario.from_dict(_spec(bars_csv, "trained", seeds=[0])), store, trainer=FakeTrainer()).run()
+    # two stores: the rule and the trained cell of a fold have the same config hash, so when both start within one
+    # second they get the same run id and one store's index keeps only one of them (the order-dependent failure of
+    # this test; reported by NT-034 repair 2 as a store finding, not fixed here)
+    rules, trained = RunStore(tmp_path / "rules"), RunStore(tmp_path / "trained")
+    Runner(Scenario.from_dict(_rule_spec(bars_csv)), rules, trainer=NoTrainer()).run()
+    Runner(Scenario.from_dict(_spec(bars_csv, "trained", seeds=[0])), trained, trainer=FakeTrainer()).run()
     for fold in (-2, -1):
-        rule = next(r for r in store.index.rows("rule") if r["fold"] == fold)
-        net = next(r for r in store.index.rows("trained") if r["fold"] == fold)
-        a, b = store.index.scores(rule["run_id"]), store.index.scores(net["run_id"])
+        rule, net = _done_cell(rules, "rule", fold), _done_cell(trained, "trained", fold)
+        a, b = rules.index.scores(rule["run_id"]), trained.index.scores(net["run_id"])
         checked = 0
         for k in a:
             if k.startswith(("backtest/buy_and_hold/", "backtest/always_flat/")):
