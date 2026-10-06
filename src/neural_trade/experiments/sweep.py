@@ -764,7 +764,7 @@ class Sweep:
             if reason:
                 return reason
             seed = int(self.scenario.seeds[0])
-            for number, _params in chunk:
+            for number, params in chunk:
                 self.trial_log[number] = {"number": number, "variant": self._variant(number), "params": params,
                                           "state": "RUNNING", "label": self.label}
             self._save_progress()
