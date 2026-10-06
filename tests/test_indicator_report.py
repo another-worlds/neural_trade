@@ -216,3 +216,106 @@ def test_a_trained_run_writes_an_offline_report_with_three_figures(tmp_path, syn
     assert path == ctx.run_dir / "indicator_report.html"
     assert _SCRIPT_SRC.search(html) is None
     assert html.count("plotly-graph-div") >= 3
+
+
+def _default_family_figures():
+    import numpy as np
+    import pandas as pd
+
+    from neural_trade.core.config import Config
+    from neural_trade.core.indicator_periods import configured_periods
+    from neural_trade.visualization import discovered_indicators as DI
+    from neural_trade.visualization import indicator_evolution as IE
+
+    cfg = Config()
+    length = int(cfg.LOOKBACK)
+    rng = np.random.default_rng(2)
+    close = 100 + np.cumsum(rng.normal(0, 0.4, length))
+    window = np.stack([close + rng.normal(0, 0.05, length), close + rng.uniform(0.05, 0.8, length),
+                       close - rng.uniform(0.05, 0.8, length), close, rng.uniform(0.2, 2.0, length)],
+                      axis=-1).astype(np.float32)
+    periods = configured_periods(cfg)
+    app = pd.DataFrame([periods])
+    app.attrs["base"] = dict(periods)
+    app.attrs["block"] = "test"
+    discovered = DI.discovered_indicators(close[None, :], cfg, applied=app, ohlcv=window[None], window=0)
+    rows = [{"epoch": e + 1, **{f"period/{k}": v + 0.1 * e for k, v in periods.items()}} for e in range(4)]
+    return cfg, periods, discovered, IE.indicator_family_periods(rows, cfg, applied=app)
+
+
+def test_the_report_figures_hold_every_default_family_and_instance():
+    """NT-048 (3): the default 14 families x 3 instances are in the price figure, the 54 learned periods are in
+    the periods figure, and the importance figure has one row per instance."""
+    import re
+
+    from neural_trade.evaluation.permutation_importance import GroupImportance, indicator_channel_groups
+    from neural_trade.indicators import indicator_instances
+    from neural_trade.visualization import discovered_indicators as DI
+    from neural_trade.visualization import indicator_evolution as IE
+    from neural_trade.visualization import theme as T
+    from neural_trade.visualization.permutation_importance import permutation_importance
+
+    cfg, periods, discovered, family = _default_family_figures()
+    fams = list(indicator_instances(cfg))
+    assert len(fams) == 14 and len(periods) == 54
+
+    def headings(fig):
+        return {re.sub(r"<[^>]+>", "", fig.layout[k].title.text or "").strip()
+                for k in fig.layout if str(k).startswith("legend")}
+
+    heads = headings(discovered)
+    for fam in fams:
+        for i in range(3):
+            assert f"{DI._display_name(fam)} #{i}" in heads, (fam, i)
+    assert T.empty_panels(discovered) == [] and T.empty_panels(family) == []
+    solid = [t for t in family.data if t.mode == "lines+markers"]
+    assert len(solid) == len(periods) == 54                      # every learned period has its trace
+    for fam in fams:
+        assert any(h.startswith(IE._family_title(fam).replace(" periods", "")) for h in headings(family)), fam
+    rows = [GroupImportance(name, 0.1, 0.0, 0.2, {"h0": 0.01}, {"h0": -0.01}, {"h0": 0.02},
+                            {"h0": 0.0}, {"h0": -0.01}, {"h0": 0.01})
+            for name, _sl in indicator_channel_groups(cfg)]
+    fig = permutation_importance(rows, cfg)
+    assert len(rows) == 42 and len(fig.data[0].y) == 42 and T.empty_panels(fig) == []
+
+
+def test_a_relative_csv_path_is_resolved_from_another_working_directory(tmp_path, monkeypatch):
+    """A notebook-made run records CSV_PATH relative to notebooks/; `neural-trade indicators` runs elsewhere."""
+    from neural_trade.cli import main
+    from neural_trade.core.config import Config
+    from neural_trade.serving.indicator_report import resolve_csv_path
+
+    here = tmp_path / "elsewhere"
+    here.mkdir()
+    monkeypatch.chdir(here)
+    cfg = Config(CSV_PATH="../binance_btcusdt_1min_ccxt.csv")
+    got = resolve_csv_path(cfg)
+    assert Path(got.CSV_PATH).is_file() and Path(got.CSV_PATH).name == "binance_btcusdt_1min_ccxt.csv"
+    assert resolve_csv_path(Config(CSV_PATH=got.CSV_PATH)).CSV_PATH == got.CSV_PATH      # absolute: as given
+    with pytest.raises(FileNotFoundError) as exc:
+        resolve_csv_path(Config(CSV_PATH="../no_such_file.csv"))
+    msg = str(exc.value)
+    assert "../no_such_file.csv" in msg.replace("\\", "/") and msg.count("no_such_file.csv") >= 4   # all three tries named
+
+    run = tmp_path / "run"
+    (run / "artifacts").mkdir(parents=True)
+    (run / "metrics.jsonl").write_text("{}\n", encoding="utf-8")
+    (run / "config.yaml").write_text(cfg.to_yaml(), encoding="utf-8")
+    seen = {}
+
+    class Stop(Exception):
+        pass
+
+    def fake_split(c):
+        seen["csv"] = c.CSV_PATH
+        raise Stop
+
+    class FakePredictor:
+        config = cfg
+
+    monkeypatch.setattr("neural_trade.serving.predictor.Predictor.from_artifacts",
+                        classmethod(lambda cls, path: FakePredictor()))
+    monkeypatch.setattr("neural_trade.data.processor.split_arrays", fake_split)
+    with pytest.raises(Stop):
+        main(["indicators", str(run)])
+    assert Path(seen["csv"]).is_file()
