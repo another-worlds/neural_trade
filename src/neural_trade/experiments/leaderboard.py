@@ -67,6 +67,38 @@ class GuardRailSpec:
 
 DEFAULT_GUARD_RAILS = GuardRailSpec()
 
+_BLOCK_FIELDS = {"max_drawdown": "max_drawdown_max", "min_trades": "min_trades",
+                 "random_null_percentile": "random_null_percentile_min",
+                 "beat_buy_and_hold": "require_beat_buy_and_hold", "beat_random_null": "require_beat_random_null"}
+
+
+def guard_rails_from_block(block: Optional[Mapping[str, Any]], **overrides: Any) -> Tuple[GuardRailSpec, str]:
+    """The thresholds of a scenario's ``leaderboard:`` block (``Scenario.leaderboard``; keys missing
+    from it keep today's defaults), then keyword ``overrides`` in the block's own key names (the CLI
+    flags; ``None`` means not given). Returns the spec and a one-line description naming where each
+    non-default value came from, for the table header."""
+    values: Dict[str, Any] = {}
+    note: List[str] = []
+    for key, value in (block or {}).items():
+        values[_BLOCK_FIELDS[key]] = value
+        note.append(f"{key}={value} (scenario)")
+    for key, value in overrides.items():
+        if value is not None:
+            values[_BLOCK_FIELDS[key]] = value
+            note = [n for n in note if not n.startswith(f"{key}=")] + [f"{key}={value} (command-line override)"]
+    return dataclasses.replace(DEFAULT_GUARD_RAILS, **values), ("; ".join(note) or "defaults")
+
+
+def describe_guard_rails(spec: GuardRailSpec, source: str = "defaults") -> str:
+    parts = [f"max drawdown <= {spec.max_drawdown_max:.0%}" if spec.max_drawdown_max is not None
+             else "max drawdown not checked",
+             f"trades >= {spec.min_trades:g} on the mean and on every dev fold" if spec.min_trades is not None
+             else "trades not checked",
+             "beat buy-and-hold" if spec.require_beat_buy_and_hold else "buy-and-hold not checked",
+             f"random-null percentile >= {spec.random_null_percentile_min:g}" if spec.require_beat_random_null
+             else "random null not checked"]
+    return "; ".join(parts) + f" [thresholds: {source}]"
+
 
 @dataclass(frozen=True)
 class GuardRail:
@@ -85,8 +117,8 @@ def _num(v: Optional[float]) -> Tuple[bool, str]:
     return True, ""
 
 
-def _check_guard_rails(dev_values: Mapping[str, Optional[float]], spec: GuardRailSpec, n_dev_rows: int
-                        ) -> List[GuardRail]:
+def _check_guard_rails(dev_values: Mapping[str, Optional[float]], spec: GuardRailSpec, n_dev_rows: int,
+                        fold_trades: Optional[Mapping[int, float]] = None) -> List[GuardRail]:
     rails: List[GuardRail] = []
     if n_dev_rows == 0:
         rails.append(GuardRail("dev_data", "has at least one scored dev-fold cell", False,
@@ -108,8 +140,15 @@ def _check_guard_rails(dev_values: Mapping[str, Optional[float]], spec: GuardRai
         rail("max_drawdown", f"dev max drawdown <= {spec.max_drawdown_max:.0%}", ["max_drawdown"],
              lambda dd: dd <= spec.max_drawdown_max, lambda dd: f"{dd:.2%}")
     if spec.min_trades is not None:
-        rail("min_trades", f"dev trades >= {spec.min_trades:g}", ["n_trades"],
+        rail("min_trades", f"dev trades >= {spec.min_trades:g} on the mean and on every dev fold", ["n_trades"],
              lambda nt: nt >= spec.min_trades, lambda nt: f"{nt:.1f}")
+        # an idle fold is not averaged away: every dev fold must clear the activity threshold
+        idle = [f"fold {f}: {v:.1f}" if math.isfinite(v) else f"fold {f}: non-finite ({v})"
+                for f, v in sorted((fold_trades or {}).items())
+                if not (math.isfinite(v) and v >= spec.min_trades)]
+        if idle:
+            rails[-1] = GuardRail("min_trades", rails[-1].description, False,
+                                  f"{rails[-1].detail}; below {spec.min_trades:g} trades on " + ", ".join(idle))
     if spec.require_beat_buy_and_hold:
         rail("beat_buy_and_hold", "dev net return > dev buy-and-hold return",
              ["total_return", "buy_and_hold_return"], lambda tr, bh: tr > bh,
@@ -149,6 +188,7 @@ class RoleAggregate:
     spread: Dict[str, Optional[float]] = field(default_factory=dict)
     seeds_per_fold: Tuple[int, ...] = ()
     seed_spread: Dict[str, Optional[float]] = field(default_factory=dict)
+    fold_values: Dict[str, Dict[int, float]] = field(default_factory=dict)   # column -> fold -> seed-mean
 
     @property
     def n_seeds(self) -> int:
@@ -161,12 +201,15 @@ def _aggregate(rows: Sequence[Mapping[str, Any]]) -> RoleAggregate:
     values: Dict[str, Optional[float]] = {}
     spread: Dict[str, Optional[float]] = {}
     seed_spread: Dict[str, Optional[float]] = {}
+    fold_values: Dict[str, Dict[int, float]] = {}
     for col, _, _ in METRICS:
         fold_means, seed_sds = [], []
+        fold_values[col] = {}
         for f in folds:
             seed_vals = [r[col] for r in rows if r.get("fold") == f and r.get(col) is not None]
             if seed_vals:
                 fold_means.append(_mean(seed_vals))
+                fold_values[col][f] = fold_means[-1]
             if len(seed_vals) >= 2:
                 seed_sds.append(_stdev(seed_vals))
         values[col] = _mean(fold_means) if fold_means else None
@@ -174,7 +217,8 @@ def _aggregate(rows: Sequence[Mapping[str, Any]]) -> RoleAggregate:
         seed_spread[col] = _mean(seed_sds) if seed_sds else None
     seeds_per_fold = tuple(len({r.get("seed") for r in rows if r.get("fold") == f}) for f in folds)
     return RoleAggregate(n_folds=len(folds), n_rows=len(rows), folds=tuple(folds), values=values, spread=spread,
-                         seeds_per_fold=seeds_per_fold, seed_spread=seed_spread)
+                         seeds_per_fold=seeds_per_fold, seed_spread=seed_spread,
+                         fold_values=fold_values)
 
 
 # ------------------------------------------------------------------ rows
@@ -227,7 +271,8 @@ def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping
         status = "incomplete"
     dev_agg = _aggregate([r for r in done if r.get("role") == "dev"])
     test_agg = _aggregate([r for r in done if r.get("role") == "test"])
-    rails = _check_guard_rails(dev_agg.values, guard_rails, dev_agg.n_rows)
+    rails = _check_guard_rails(dev_agg.values, guard_rails, dev_agg.n_rows,
+                          dev_agg.fold_values.get("n_trades"))
     if status != "done":
         errs = "; ".join(sorted({r["error"] for r in failed if r.get("error")}))
         rails.insert(0, GuardRail("status", "the configuration has a scored cell", False,
@@ -270,12 +315,23 @@ def build_leaderboard(rows: Sequence[Mapping[str, Any]], *, guard_rails: Optiona
     return [dataclasses.replace(row, rank=rank) for rank, row in enumerate(ranked, 1)]
 
 
+def scenario_guard_rails(scenario: Any = None, **overrides: Any) -> Tuple[GuardRailSpec, str]:
+    """Guard-rail thresholds from a :class:`~neural_trade.experiments.scenario.Scenario` (or its
+    ``leaderboard`` block as a mapping; None gives the defaults), with keyword overrides (see
+    :func:`guard_rails_from_block`)."""
+    block = getattr(scenario, "leaderboard", scenario)
+    return guard_rails_from_block(block, **overrides)
+
+
 def leaderboard_for_scenario(store: RunStore, scenario: str, *, guard_rails: Optional[GuardRailSpec] = None,
-                              sync: bool = True) -> List[LeaderboardRow]:
-    """``build_leaderboard`` of one scenario's rows, read from ``store``'s index. ``sync=True``
-    (default) re-reads the scenario's run directories first (``RunStore.sync``); pass ``False`` to
-    use the index as it stands (for example, after a caller already synced several scenarios)."""
+                              spec: Any = None, sync: bool = True) -> List[LeaderboardRow]:
+    """``build_leaderboard`` of one scenario's rows, read from ``store``'s index. The guard-rail
+    thresholds come from ``guard_rails`` if given, else from ``spec`` (the scenario's spec: a
+    ``Scenario``), else the defaults. ``sync=True`` (default) re-reads the scenario's run directories
+    first (``RunStore.sync``); pass ``False`` to use the index as it stands."""
     rows = store.sync(scenario) if sync else store.index.rows(scenario)
+    if guard_rails is None and spec is not None:
+        guard_rails = scenario_guard_rails(spec)[0]
     return build_leaderboard(rows, guard_rails=guard_rails)
 
 
@@ -340,7 +396,8 @@ def table_cells(r: LeaderboardRow) -> List[str]:
             "n/a" if r.horizon_steps is None else ", ".join(str(h) for h in r.horizon_steps), r.strategy or "n/a"]
 
 
-def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
+def leaderboard_markdown(rows: Sequence[LeaderboardRow], *, guard_rails: Optional[GuardRailSpec] = None,
+                         guard_rail_source: str = "defaults") -> str:
     """A Markdown table: the ranking column labelled as such, the test-fold columns labelled
     'test, not used for ranking' (criterion 5), guard-rails and disqualification, the dataset
     fingerprint, bar size, horizons and strategy on every row (criterion 4)."""
@@ -350,6 +407,7 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
              "the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from "
              "the winner (VISION \"The yardstick\"). The **test-fold columns are test, not used for ranking** "
              "(D-020): shown for every row, never used to rank or choose.", "",
+             "Guard-rails: " + describe_guard_rails(guard_rails or DEFAULT_GUARD_RAILS, guard_rail_source) + ".", "",
              "| " + " | ".join(TABLE_HEADER) + " |", "|" + "---|" * len(TABLE_HEADER)]
     for r in rows:
         cells = table_cells(r)
@@ -362,5 +420,6 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow]) -> str:
 
 
 __all__ = ["DEFAULT_GUARD_RAILS", "GuardRail", "GuardRailSpec", "LeaderboardRow", "METRICS", "RANK_METRIC",
-           "ROLES", "RoleAggregate", "TABLE_HEADER", "table_cells", "build_leaderboard", "leaderboard_for_scenario", "leaderboard_markdown",
+           "ROLES", "RoleAggregate", "describe_guard_rails", "guard_rails_from_block",
+           "scenario_guard_rails", "TABLE_HEADER", "table_cells", "build_leaderboard", "leaderboard_for_scenario", "leaderboard_markdown",
            "winner"]

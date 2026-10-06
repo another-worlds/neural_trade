@@ -2,6 +2,8 @@
 
 One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from the winner (VISION "The yardstick"). The **test-fold columns are test, not used for ranking** (D-020): shown for every row, never used to rank or choose.
 
+Guard-rails: max drawdown not checked; trades >= 1 on the mean and on every dev fold; beat buy-and-hold; random-null percentile >= 50 [thresholds: micro_horizons.yaml: defaults].
+
 | rank | configuration | status | ranking: dev net Sharpe (spread, counts) | dev net return | dev max drawdown | dev trades | dev buy & hold | dev random-null percentile | guard-rails | test net Sharpe (test, not used for ranking) | test net return (test, not used for ranking) | test max drawdown (test, not used for ranking) | test trades (test, not used for ranking) | dataset fingerprint | bar (min) | horizons (bars) | strategy |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `h_4h` | done | -127.252 (1 fold x 1 seed, 1 cell) | -96.70% | 96.70% | 1288.0 | -8.03% | 27 | DISQUALIFIED: min_trades OK (1288.0); beat_buy_and_hold FAIL (-96.70% vs -8.03%); beat_random_null FAIL (27) | n/a | n/a | n/a | n/a | 67966a49634f... | 1 | 160, 240, 320 | calibrated_quantile |

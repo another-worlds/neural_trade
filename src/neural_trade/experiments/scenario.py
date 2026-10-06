@@ -57,11 +57,15 @@ from neural_trade.core.exceptions import InvalidConfigurationError
 
 SCHEMA_VERSION = 1
 TOP_KEYS = ("schema_version", "name", "description", "base_config", "overrides", "variants", "sweep", "folds",
-            "seeds", "strategy", "backtest", "run")
+            "seeds", "strategy", "backtest", "run", "leaderboard")
 SWEEP_KEYS = ("mode", "axes")
 SWEEP_MODES = ("grid",)                     # NT-030 adds "quick" and "optuna"
 STRATEGY_KEYS = ("name", "params")
 RUN_KEYS = ("calibrate", "save_artifacts", "indicator_report")
+# NT-031: the leaderboard's guard-rail thresholds. Scoring-side, so they are NOT in to_dict(), spec_hash
+# or settings(): changing them never changes a run's identity, only which rows the leaderboard disqualifies.
+LEADERBOARD_KEYS = ("max_drawdown", "min_trades", "random_null_percentile", "beat_buy_and_hold",
+                    "beat_random_null")
 # Config fields the engine sets per cell or per run directory.
 RESERVED_FIELDS = {"FOLD_INDEX": "set by `folds:`", "SEED": "set by `seeds:`",
                    "MODEL_PATH": "set to the run directory", "SCALER_PATH": "set to the run directory",
@@ -201,6 +205,7 @@ class Scenario:
     axes: Dict[str, List[Any]] = field(default_factory=dict)
     backtest: Dict[str, Any] = field(default_factory=dict)
     run: RunOptions = field(default_factory=RunOptions)
+    leaderboard: Dict[str, Any] = field(default_factory=dict)     # guard-rail thresholds (LEADERBOARD_KEYS)
     source: Optional[Path] = None           # the spec file (error messages, base_config resolution)
     base_dir: Optional[Path] = None         # where a relative base_config is resolved
 
@@ -283,9 +288,18 @@ class Scenario:
         for key, value in raw_run.items():
             if not isinstance(value, bool):
                 bad(f"run.{key} must be true or false, got {value!r}")
+        board = _mapping(data.get("leaderboard"), "leaderboard", bad)
+        _refuse_unknown(board, LEADERBOARD_KEYS, "leaderboard.", bad)
+        for key, value in board.items():
+            if key in ("beat_buy_and_hold", "beat_random_null"):
+                if not isinstance(value, bool):
+                    bad(f"leaderboard.{key} must be true or false, got {value!r}")
+            elif value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                        or value != value or value < 0):
+                bad(f"leaderboard.{key} must be a number >= 0 (or null to disable), got {value!r}")
         return cls(name=name, folds=folds, seeds=seeds, strategy=strategy, schema_version=version,
                    description=description, base_config=base, overrides=overrides, variants=variants,
-                   sweep_mode=mode, axes=axes, backtest=backtest, run=RunOptions(**raw_run),
+                   sweep_mode=mode, axes=axes, backtest=backtest, run=RunOptions(**raw_run), leaderboard=dict(board),
                    source=Path(source) if source is not None else None,
                    base_dir=Path(base_dir) if base_dir is not None else None)
 

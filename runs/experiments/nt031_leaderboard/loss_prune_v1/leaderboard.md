@@ -2,6 +2,8 @@
 
 One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from the winner (VISION "The yardstick"). The **test-fold columns are test, not used for ranking** (D-020): shown for every row, never used to rank or choose.
 
+Guard-rails: max drawdown not checked; trades >= 1 on the mean and on every dev fold; beat buy-and-hold; random-null percentile >= 50 [thresholds: loss_prune_v1.yaml: defaults].
+
 | rank | configuration | status | ranking: dev net Sharpe (spread, counts) | dev net return | dev max drawdown | dev trades | dev buy & hold | dev random-null percentile | guard-rails | test net Sharpe (test, not used for ranking) | test net return (test, not used for ranking) | test max drawdown (test, not used for ranking) | test trades (test, not used for ranking) | dataset fingerprint | bar (min) | horizons (bars) | strategy |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `ece0` | done | +1.597 (fold sd 3.558, 5 folds x 1 seed, 5 cells) | +3.03% (fold sd 5.74%) | 6.83% (fold sd 3.16%) | 1043.4 (fold sd 174.1) | +8.05% (fold sd 12.75%) | 63 (fold sd 29) | DISQUALIFIED: min_trades OK (1043.4); beat_buy_and_hold FAIL (+3.03% vs +8.05%); beat_random_null OK (63) | n/a | n/a | n/a | n/a | 67966a49634f... | 1 | 10, 15, 20 | calibrated_quantile |

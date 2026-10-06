@@ -2,6 +2,8 @@
 
 One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over the dev folds and their seeds, D-020, D-046). Guard-rails beside it can disqualify a row from the winner (VISION "The yardstick"). The **test-fold columns are test, not used for ranking** (D-020): shown for every row, never used to rank or choose.
 
+Guard-rails: max drawdown not checked; trades >= 1 on the mean and on every dev fold; beat buy-and-hold; random-null percentile >= 50 [thresholds: defaults].
+
 | rank | configuration | status | ranking: dev net Sharpe (spread, counts) | dev net return | dev max drawdown | dev trades | dev buy & hold | dev random-null percentile | guard-rails | test net Sharpe (test, not used for ranking) | test net return (test, not used for ranking) | test max drawdown (test, not used for ranking) | test trades (test, not used for ranking) | dataset fingerprint | bar (min) | horizons (bars) | strategy |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | `ohlcv14` | done (1 of 5 cells failed) | -157.537 (seed sd 18.972, 1 fold x 3 seeds, 3 cells) | -98.92% (seed sd 0.83%) | 98.92% (seed sd 0.82%) | 1823.7 (seed sd 271.4) | -6.39% (seed sd 0.00%) | 61 (seed sd 14) | DISQUALIFIED: min_trades OK (1823.7); beat_buy_and_hold FAIL (-98.92% vs -6.39%); beat_random_null OK (61) | n/a | n/a | n/a | n/a | 67966a49634f... | 1 | 10, 15, 20 | calibrated_quantile |

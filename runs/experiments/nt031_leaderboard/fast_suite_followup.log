@@ -1,0 +1,80 @@
+50fc89f4f2c5269f2d2411c8e13ef21cfe549211
+## nt-031...origin/nt-031 [ahead 7]
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 10%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 39%]
+........................................................................ [ 43%]
+........................................................................ [ 47%]
+........................................................................ [ 50%]
+........................................................................ [ 54%]
+........................................................................ [ 58%]
+........................................................................ [ 61%]
+........................................................................ [ 65%]
+........................................................................ [ 68%]
+........................................................................ [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 83%]
+........................................................................ [ 87%]
+........................................................................ [ 90%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+.........................................                                [100%]
+============================== warnings summary ===============================
+tests/registries/test_callbacks.py: 30 warnings
+tests/test_custom_loss.py: 320 warnings
+tests/test_attention_head_pool.py: 1015 warnings
+tests/test_deterministic_gru.py: 500 warnings
+tests/registries/test_contracts.py: 48 warnings
+tests/registries/test_layers.py: 1 warning
+tests/registries/test_metrics.py: 10 warnings
+tests/test_macd_ratio.py: 144 warnings
+tests/registries/test_models.py: 142 warnings
+tests/test_losses_reference.py: 20 warnings
+tests/test_indicator_families.py: 96 warnings
+tests/test_pnl_utility.py: 280 warnings
+tests/test_applied_periods.py: 336 warnings
+tests/test_legacy_bundle.py: 48 warnings
+tests/test_model_variants.py: 408 warnings
+tests/test_ohlcv_input.py: 192 warnings
+tests/test_direction_readout.py: 10 warnings
+tests/test_reset.py: 16 warnings
+tests/test_epoch_metrics.py: 40 warnings
+tests/test_served_epoch.py: 49 warnings
+tests/test_stability.py: 284 warnings
+tests/test_permutation_importance.py: 8 warnings
+tests/test_physics_terms_bounded.py: 90 warnings
+tests/test_calib_fail_loud.py: 144 warnings
+tests/test_calib_gradient_mode.py: 245 warnings
+tests/test_telemetry.py: 20 warnings
+tests/test_eval_metrics.py: 141 warnings
+tests/test_train_smoke.py: 96 warnings
+tests/test_calib_zero_weights.py: 288 warnings
+tests/test_training_wiring.py: 40 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_bench_window_free.py: 2 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_config.py::test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type
+  D:\nt\nt_wt_031\src\neural_trade\core\config.py:897: DeprecationWarning: Config.USE_HUBER is deprecated and has no effect (default True)
+    self.validate()
+
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_031\src\neural_trade\core\config.py:736: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1985 passed, 5161 warnings in 423.50s (0:07:03)
+All checks passed!

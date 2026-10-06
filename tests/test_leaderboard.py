@@ -387,3 +387,101 @@ def test_cli_guard_rail_flags_and_out(tmp_path, capsys):
                  "--no-beat-buy-and-hold", "--no-beat-random-null"]) == 0
     text = capsys.readouterr().out
     assert "max_drawdown FAIL" in text and "min_trades" in text
+
+
+# ------------------------------------------------------------------ criterion 3 from the scenario; per-fold activity
+def _scenario_dict(**extra):
+    d = {"schema_version": 1, "name": "lb_spec", "folds": [-2, -1], "seeds": [0]}
+    d.update(extra)
+    return d
+
+
+def test_scenario_leaderboard_block_parses_and_keeps_identity_unchanged():
+    from neural_trade.experiments.scenario import Scenario
+
+    plain = Scenario.from_dict(_scenario_dict())
+    block = {"max_drawdown": 0.2, "min_trades": 5, "random_null_percentile": 70, "beat_buy_and_hold": False,
+             "beat_random_null": True}
+    with_block = Scenario.from_dict(_scenario_dict(leaderboard=block))
+    assert plain.leaderboard == {} and with_block.leaderboard == block
+    # scoring-side: nothing that identifies or hashes a run changes
+    assert with_block.spec_hash == plain.spec_hash and with_block.settings_hash == plain.settings_hash
+    assert with_block.to_dict() == plain.to_dict() and "leaderboard" not in with_block.to_dict()
+    assert [c.name for c in with_block.configurations()] == [c.name for c in plain.configurations()]
+
+
+def test_every_committed_scenario_still_loads_with_default_guard_rails():
+    from pathlib import Path
+
+    from neural_trade.experiments.scenario import Scenario
+
+    files = sorted((Path(__file__).resolve().parent.parent / "configs" / "scenarios").glob("*.yaml"))
+    assert files
+    for f in files:
+        assert Scenario.from_yaml(f).leaderboard == {}
+
+
+@pytest.mark.parametrize("block", [{"max_dd": 0.2}, {"min_trades": -1}, {"beat_buy_and_hold": 1},
+                                   {"max_drawdown": "high"}, {"min_trades": float("nan")}, "x"])
+def test_scenario_leaderboard_block_refuses_unknown_keys_and_bad_values(block):
+    from neural_trade.experiments.scenario import Scenario, ScenarioError
+
+    with pytest.raises(ScenarioError):
+        Scenario.from_dict(_scenario_dict(leaderboard=block))
+
+
+def test_thresholds_come_from_the_scenario_and_flags_override_with_the_source_shown():
+    from neural_trade.experiments.leaderboard import describe_guard_rails, scenario_guard_rails
+    from neural_trade.experiments.scenario import Scenario
+
+    sc = Scenario.from_dict(_scenario_dict(leaderboard={"max_drawdown": 0.2, "min_trades": 5}))
+    spec, src = scenario_guard_rails(sc)
+    assert spec.max_drawdown_max == 0.2 and spec.min_trades == 5 and spec.require_beat_buy_and_hold
+    assert "max_drawdown=0.2 (scenario)" in src
+    spec2, src2 = scenario_guard_rails(sc, max_drawdown=0.5, beat_random_null=False)
+    assert spec2.max_drawdown_max == 0.5 and spec2.require_beat_random_null is False and spec2.min_trades == 5
+    assert "max_drawdown=0.5 (command-line override)" in src2 and "max_drawdown=0.2" not in src2
+    assert "command-line override" in describe_guard_rails(spec2, src2)
+    assert scenario_guard_rails(None)[0] == DEFAULT_GUARD_RAILS
+
+
+def test_leaderboard_for_scenario_reads_the_thresholds_from_the_scenario_spec(tmp_path):
+    from neural_trade.experiments.leaderboard import leaderboard_for_scenario
+    from neural_trade.experiments.scenario import Scenario
+
+    _write_run_dir(tmp_path, scenario="sp", configuration="c", fold=-2, role="dev", seed=0, n_trades=10)
+    store = RunStore(tmp_path)
+    assert any(g.name == "min_trades" and g.passed for g in leaderboard_for_scenario(store, "sp")[0].guard_rails)
+    sc = Scenario.from_dict(_scenario_dict(name="sp", leaderboard={"min_trades": 50}))
+    row = leaderboard_for_scenario(store, "sp", spec=sc)[0]
+    assert row.disqualified and any(g.name == "min_trades" and not g.passed for g in row.guard_rails)
+
+
+def test_an_idle_dev_fold_disqualifies_even_when_the_mean_passes_and_names_the_fold():
+    rows = [_row(configuration="idle_fold", fold=-3, role="dev", n_trades=0.0),
+            _row(configuration="idle_fold", fold=-2, role="dev", n_trades=40.0),
+            _row(configuration="idle_fold", fold=-1, role="test", n_trades=10.0)]
+    for r in rows:
+        r["total_return"], r["buy_and_hold_return"], r["random_percentile_return"] = 0.10, 0.01, 90.0
+    board = build_leaderboard(rows)
+    row = board[0]
+    assert row.dev.values["n_trades"] == pytest.approx(20.0)         # the mean alone would pass
+    bad = next(g for g in row.guard_rails if g.name == "min_trades")
+    assert not bad.passed and "fold -3: 0.0" in bad.detail and "fold -2" not in bad.detail.split("below")[-1]
+    assert row.disqualified and winner(board) is None
+
+
+def test_cli_header_shows_scenario_thresholds_and_the_override(tmp_path, capsys):
+    import yaml
+
+    from neural_trade.cli import main
+
+    _write_run_dir(tmp_path, scenario="hdr", configuration="default", fold=-2, role="dev", seed=0)
+    spec = tmp_path / "hdr.yaml"
+    spec.write_text(yaml.safe_dump(_scenario_dict(name="hdr", leaderboard={"max_drawdown": 0.01})), encoding="utf-8")
+    assert main(["leaderboard", "hdr", "--store", str(tmp_path), "--spec", str(spec)]) == 0
+    out = capsys.readouterr().out
+    assert "max drawdown <= 1%" in out and "max_drawdown=0.01 (scenario)" in out and "max_drawdown FAIL" in out
+    assert main(["leaderboard", "hdr", "--store", str(tmp_path), "--spec", str(spec), "--max-drawdown", "0.9"]) == 0
+    out = capsys.readouterr().out
+    assert "max_drawdown=0.9 (command-line override)" in out and "max_drawdown FAIL" not in out
