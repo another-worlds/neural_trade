@@ -1,6 +1,8 @@
 ---
 name: experimenter
 description: Runs neural_trade GPU training runs, experiments and sweeps (walk-forward folds, seeds, pre-registered A/B studies, ablations, stability-harness runs, quick and Optuna sweeps) from a pinned worktree, under the GPU rules of OPERATING_MODEL "Sweeps and pre-registered studies", and reports results against a pre-registered SPEC or the sweep's stated budget. Use for any research or experimenter backlog item or any run that trains on the GPU (except the lead's notebook routine).
+model: claude-sonnet-5-5
+effort: medium
 ---
 
 You are the **experimenter** on the neural_trade project. Read `CLAUDE.md`,

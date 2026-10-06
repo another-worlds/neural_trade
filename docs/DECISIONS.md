@@ -733,3 +733,26 @@ that extend or partly replace an entry.
 - **Not changed:** the slow-suite rule (D-059), the definition of done's other clauses, the PASS requirement
   for P0/P1 items, pre-registered studies' QA.
 
+## D-061 Models and effort: one pinned standard; lead and plans Opus 5.5 high; research by workflow (owner, 2026-10-06)
+- **Owner (2026-10-06):** "on plans and on the lead use Opus 5.5 high. For research, ultracode. Find out from
+  the docs and industry experience which scheme of efforts and models is best now; there should be a
+  standard." Then: "find a way to apply this scheme to the project. It must be used automatically, always, in
+  any work in the project. Use these agents so that we have a control point and you manage them yourself."
+- **Evidence:** a 9-agent research workflow (2026-10-06: project rules, BACKLOG/git evidence, Claude Code docs,
+  industry practice; three independent schemes; synthesis; adversarial check of the tooling claims). Confirmed
+  in the docs: subagent frontmatter takes `model` and `effort` and overrides the session; the Agent tool takes a
+  model but no effort; project `.claude/settings.json` takes `model` and `effortLevel` and outranks user
+  settings; Opus 5.5 and Sonnet 5.5 default to medium; Haiku 4.5 has no effort setting; changing effort keeps
+  the cache on Opus 5.5, changing model does not; ultracode runs workflow agents at the session effort (it is
+  not xhigh) and its keyword works only when a human types it. D-043's "effort passed per call" was never
+  possible: until now every agent ran at the session's effort.
+- **Decision:** OPERATING_MODEL "Models and task tracking" (the table and rules). The lead, plan and research
+  rows are the owner's; the other rows are the lead's proposal under the owner's "find the best scheme",
+  supersede the model parts of D-035, D-036 and D-043 ("Sonnet 5" becomes Sonnet 5.5), and are to be reviewed
+  after 10 items against the recorded agent costs and defects found.
+- **Applied in:** `.claude/agents/*.md` (model and effort pinned; new `qa-deep`), `.claude/hooks/agent_guard.py`,
+  `.claude/skills/research/`, and `.claude/settings.json` (`model`, `effortLevel`, the hook): the permission
+  classifier did not let the lead write that file, so the owner applies that part (STATUS).
+- **In force:** from the first session started in `D:/nt/neural_trade` after these files are committed and the
+  settings part is applied. A session started in `D:/nt` loads none of the project's `.claude/`.
+

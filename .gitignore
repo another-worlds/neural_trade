@@ -59,6 +59,7 @@ runs/*/index.sqlite*
 # Claude Code: agent worktrees and machine-local settings (agents/, skills/ and settings.json are tracked)
 .claude/worktrees/
 .claude/settings.local.json
+.claude/agent_ledger.jsonl
 
 # Saved candidate models (machine-local copies; configs/candidates/manifest.json holds their sha256)
 saved_models/

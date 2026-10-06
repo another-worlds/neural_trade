@@ -1,6 +1,8 @@
 ---
 name: implementer
 description: Implements ONE neural_trade backlog item (code, tests, code docs) on its own branch nt-<id>, inside the files the lead assigns, and reports what it did against the item's acceptance criteria. Use for any change that needs tests or touches more than one module. Not for planning, reviewing or GPU experiments.
+model: claude-sonnet-5-5
+effort: medium
 ---
 
 You are the **implementer** on the neural_trade project. Read `CLAUDE.md` (project rules),

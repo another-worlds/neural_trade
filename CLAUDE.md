@@ -62,8 +62,11 @@ Pointers only; the rule lives where the pointer says.
   history rewrite) and D-019 onward (the vision, the yardstick, the MVP plan).
 - **Autonomy and pushing** (D-017): push `remediation/plan` and `nt-*` without asking; never
   `master`, never `--force`. This overrides the global "ask before pushing".
-- **Models and task tracking** (owner, D-036): OPERATING_MODEL "Models and task tracking" (a Haiku
-  `tracker` agent waits, polls and makes mechanical fixes; the other roles keep the strong model).
+- **Models and effort** (owner, D-061): OPERATING_MODEL "Models and task tracking". Lead and plans Opus 5.5
+  high (`.claude/settings.json`); research through `/research` workflows; roles pinned in `.claude/agents/`
+  (implementer and experimenter Sonnet 5.5 medium, qa Opus 5.5 medium, qa-deep Opus 5.5 high, tracker Haiku);
+  delegate only to these roles (a hook denies generic agents). Open this folder, not `D:/nt`, as the workspace:
+  `.claude/` loads only from the session's working directory.
 - **No pinging** (owner, 2026-09-29, D-042): the lead never polls or checks running agents, runs or suites
   itself and never answers an interim "still running" notification; it waits for the completion notice.
   Any waiting that needs active polling goes to the Haiku 4.5 `tracker`.

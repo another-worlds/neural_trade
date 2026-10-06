@@ -47,7 +47,12 @@ the takeover reconciliation; the session's `/handoff` replaces it)._
 
 ## Waiting for the owner
 
-None. Leftovers for the owner, not questions: a stuck `python.exe` (PID 9652, from this session) the permission
+1. **Apply the settings part of D-061** (the permission classifier did not let the lead write
+   `.claude/settings.json`): add `"model": "claude-opus-5-5"`, `"effortLevel": "high"` and the PreToolUse hook on
+   `Agent` that runs `.claude/hooks/agent_guard.py` (exact JSON in the 2026-10-06 session reply), then start the
+   next session with `D:/nt/neural_trade` as the working folder.
+
+Not questions: Leftovers for the owner, not questions: a stuck `python.exe` (PID 9652, from this session) the permission
 classifier did not let the lead stop; untracked `runs/nt_l2_run.log` and `runs/screens_smoke_console.log`
 (from the takeover session, left in place).
 
@@ -59,3 +64,18 @@ classifier did not let the lead stop; untracked `runs/nt_l2_run.log` and `runs/s
 4. ROADMAP order: MVP-6 (NT-048, NT-060 via NT-120, NT-061), MVP-2 (NT-030, NT-033, NT-034, then NT-050, the
    first overnight Optuna sweep), MVP-3, MVP-4, MVP-5. Experimenter slot: NT-075, then the A/Bs of NT-097, 100,
    104, 105, 106 (each <= 3 GPU-hours), NT-006 when the GPU is free (D-052).
+
+## Agent ledger (D-061)
+
+Per agent: role, model, effort, tokens, minutes, outcome. 2026-10-06 (before D-061: roles not pinned, effort
+inherited from the session):
+
+| agent | model | tokens | minutes | outcome |
+|---|---|---|---|---|
+| audit of the takeover (general-purpose) | Opus | 169k | 6 | found the vol arm at 0.1 |
+| QA of the merge 7a20a4d | Opus | 118k | 30 | NT-117 FAIL (2 stale tests), NT-099/115 PASS |
+| implementer NT-114 | Sonnet | 86k | 25 | done; fixed a default-graph layer rename |
+| re-QA NT-117 + QA NT-114 | Opus | 108k | 44 | PASS; withdrew a load-noise CPU claim |
+| tracker: CI (x2) | Haiku | 42k each | 14-19 | reported red 7fbf6c1, green 9aad6c5 |
+| research workflow: model/effort scheme (9 agents) | Opus | 625k | 7 | D-061 |
+

@@ -71,16 +71,40 @@ the PR's own claims plus the definition of done's general clauses when it is not
 integrated as in step 6 (D-033). A PR that would change a recorded decision, default trading
 behaviour or `master` goes to the owner.
 
-## Models and task tracking (owner, D-036)
+## Models and task tracking (owner, D-036, D-061)
 
-- **Models.** Implementer, QA and experimenter run on the session's strong model (their agent files
-  set none). The **tracker** (`.claude/agents/tracker.md`, Haiku) does the task tracking: waiting for
-  CI runs, background processes, test suites and agents' worktrees, and minor mechanical fixes the
-  lead names (regenerating TESTING_DOCUMENTATION.md, `ruff --fix`, a dictated line). The lead hands
-  such chores to the tracker instead of polling itself, and keeps every judgement (diagnosis,
-  merges, criteria, verdicts).
-- **Model split (owner, D-043).** Lead, QA of P0/P1 items and research: Opus 5.5, medium effort. Implementer,
-  experimenter and QA of P2/P3 items: Sonnet 5, medium effort (passed per call). Tracker: Haiku 4.5.
+- **Models and effort (owner, D-061; supersedes the model parts of D-035, D-036, D-043).** One standard,
+  pinned where the tooling enforces it, so it applies to every session without anyone passing it:
+
+  | role or task | model | effort | where it is pinned |
+  |---|---|---|---|
+  | lead: decisions, criteria, verdicts, merges; plan-making | Opus 5.5 | high | `.claude/settings.json` (`model`, `effortLevel`) |
+  | research | a workflow (`/research`, or the owner's "ultracode") | agents inherit the lead; the verify stage `xhigh` | `.claude/skills/research` |
+  | QA of P0/P1 and of any number, loss, metric, indicator, default or definition change (D-060) | Opus 5.5 | medium | `.claude/agents/qa.md` |
+  | QA on an escalation trigger (below) | Opus 5.5 | high | `.claude/agents/qa-deep.md` |
+  | QA of non-mechanical P2/P3 | Sonnet 5.5 | medium | `qa` with the per-call model `sonnet` |
+  | QA of mechanical P2/P3 | none: lead-verified (D-060) | - | - |
+  | implementer | Sonnet 5.5 | medium | `.claude/agents/implementer.md` |
+  | experimenter | Sonnet 5.5 | medium | `.claude/agents/experimenter.md` |
+  | tracker: waiting with an action on failure, dictated mechanical fixes | Haiku 4.5 | not supported | `.claude/agents/tracker.md` |
+  | waiting with no action (CI, a suite, a GPU run) | no agent: a background command | - | - |
+  | read-only lookups | `Explore` / `claude-code-guide`, or the lead itself in 1-2 calls | - | built-ins |
+
+  - **Enforced by a hook:** `.claude/hooks/agent_guard.py` (PreToolUse on Agent) denies a generic agent
+    (`general-purpose`, `claude`), which would inherit Opus high and bypass the table, and logs every agent
+    call to `.claude/agent_ledger.jsonl` (local). Workflow agents do not pass through it; a workflow names a
+    role with `agentType` or sets `model` / `effort` per stage.
+  - **Escalation:** a second repair round, a FAIL on a wrong number, or an edit to loss, gradient, training or
+    statistics code moves the role one step up for that item only (Sonnet medium, then Opus medium via the
+    per-call model `opus`, then `qa-deep`). Two failures at the same step: blocked, back to the lead.
+    De-escalation only between items, after 5 clean items of one class.
+  - **Effort is pinned in frontmatter only** (the Agent tool takes a model, not an effort). Lowering the lead's
+    effort with `/effort` for a run of routine turns keeps the prompt cache on Opus 5.5; switching the lead's
+    model mid-session does not, so model switches wait for a task boundary.
+  - **Control point:** the owner talks to the lead; the lead delegates, waits for completion notices and
+    records each agent's role, model, effort, tokens, minutes and outcome in the item's BACKLOG status line
+    and the session's STATUS "Agent ledger". The tracker (Haiku) is the cheap watcher; the lead keeps every
+    judgement (diagnosis, merges, criteria, verdicts).
 - **No pinging (owner, D-042).** The lead does not poll or inspect running agents, runs or suites itself,
   and does not reply to interim "still running" notifications: the harness notifies on completion. When
   something must be actively watched (CI, an external process), the Haiku 4.5 `tracker` watches it.
