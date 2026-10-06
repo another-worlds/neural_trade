@@ -84,9 +84,22 @@ def _direction_head(config, tower, skip_features, name, bias_init):
     if skip_features is None:
         return layers.Dense(1, activation='sigmoid', name=name, bias_initializer=bias_init)(tower)
     tower_kernel_init = 'zeros' if bool(getattr(config, 'DIRECTION_DEEP_ZERO_INIT', False)) else 'glorot_uniform'
-    tower_logit = layers.Dense(1, name=f'{name}_logit', bias_initializer=bias_init,
-                               kernel_initializer=tower_kernel_init)(tower)
-    skip_logit = layers.Dense(1, name=f'{name}_skip', use_bias=False,
+    mode = str(getattr(config, 'DIRECTION_HEAD_MODE', 'mixed'))
+    deep_l2 = float(getattr(config, 'DIRECTION_DEEP_SHRINK', 0.0))
+    deep_drop = float(getattr(config, 'DIRECTION_DEEP_DROPOUT', 0.0))
+    if mode == 'skip_only':
+        # Tactical hyp1: the deep logit is a frozen all-zero Dense (still named ``*_logit`` so the
+        # diagnostics work: tower share 0); the skip carries the bias, i.e. a jointly trained logreg.
+        tower_logit = layers.Dense(1, name=f'{name}_logit', use_bias=False, kernel_initializer='zeros',
+                                   trainable=False)(tower)
+        skip_bias = True
+    else:
+        deep_in = layers.Dropout(deep_drop, name=f'{name}_deep_dropout')(tower) if deep_drop > 0 else tower
+        extra = {'activity_regularizer': regularizers.L2(deep_l2)} if deep_l2 > 0 else {}
+        tower_logit = layers.Dense(1, name=f'{name}_logit', bias_initializer=bias_init,
+                                   kernel_initializer=tower_kernel_init, **extra)(deep_in)
+        skip_bias = False
+    skip_logit = layers.Dense(1, name=f'{name}_skip', use_bias=skip_bias,
                               kernel_regularizer=regularizers.L2(float(config.DIRECTION_SKIP_L2)))(skip_features)
     return layers.Activation('sigmoid', name=name)(layers.Add()([tower_logit, skip_logit]))
 

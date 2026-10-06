@@ -1,0 +1,4 @@
+49533643ce84789c9d6a9569ea3fca0d767494c6
+8 passed, 466 warnings in 18.02s
+All checks passed!
+earlier run (same code): tests/test_model_variants.py tests/test_config.py + hyp1: 39 passed, 2 failed (weight-name assertion, since fixed)

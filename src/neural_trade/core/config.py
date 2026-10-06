@@ -650,6 +650,18 @@ class Config:
                                         "without a skip there is nothing for the deep logit to start from - the "
                                         "head keeps its usual glorot-initialised Dense(1, sigmoid)); default off "
                                         "keeps the golden run bit-for-bit (NT-104)", unit="flag")
+    DIRECTION_HEAD_MODE: str = _f("mixed", "direction",
+                                  "'mixed' (deep logit + skip logit, today) or 'skip_only' (the deep logit is a "
+                                  "frozen zero; the direction logit is the linear skip with a bias; needs "
+                                  "DIRECTION_SKIP; tactical hyp1)", unit="name", choices=("mixed", "skip_only"))
+    DIRECTION_DEEP_SHRINK: float = _f(0.0, "direction",
+                                      "L2 weight on the deep direction logit's OUTPUT (activity regulariser, "
+                                      "scaled by LAMBDA_INTER), so the net deviates from the skip logit only where "
+                                      "the data insist; 0 = off (tactical hyp1)", unit="weight", ge=0.0)
+    DIRECTION_DEEP_DROPOUT: float = _f(0.0, "direction",
+                                       "dropout rate on the input of the deep direction logit only (training "
+                                       "only; variance reduction); 0 = off (tactical hyp1)", unit="fraction",
+                                       ge=0.0, lt=1.0)
     DIRECTION_LOSS: str = _f("bce", "direction",
                              "'bce' (proper scoring rule) or 'focal_dice' (legacy: its optimum is a constant extreme)",
                              unit="name", choices=("bce", "focal_dice"))
@@ -808,6 +820,8 @@ class Config:
             bad("DIR_DEADBAND_BPS must be >= 0")
         if self.DIRECTION_LOSS not in ("bce", "focal_dice"):
             bad(f"DIRECTION_LOSS must be 'bce' or 'focal_dice', got {self.DIRECTION_LOSS!r}")
+        if self.DIRECTION_HEAD_MODE == "skip_only" and not self.DIRECTION_SKIP:
+            bad("DIRECTION_HEAD_MODE 'skip_only' needs DIRECTION_SKIP")
         if self.NLL_KIND not in ("gaussian", "student_t"):
             bad(f"NLL_KIND must be 'gaussian' or 'student_t', got {self.NLL_KIND!r}")
         if self.NLL_STUDENT_DOF <= 2.0:
