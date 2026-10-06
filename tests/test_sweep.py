@@ -1213,3 +1213,101 @@ def test_a_real_parallel_optuna_sweep_trains_on_cpu_in_two_processes_through_the
     done = [r for r in rows if r["status"] == "done"]
     assert len({r["cell_key"] for r in done}) == len(done) == 3          # 2 dev cells + the winner's test cell
     assert all(r["sharpe_net"] is not None and math.isfinite(r["sharpe_net"]) for r in done)
+
+
+# ---- NT-183: a stale claim has exactly one taker, however the racers interleave
+DEAD_PID = 2 ** 22 + 12345                                                    # no such process
+
+
+def _stale(d, key):
+    (d / f"{key}.lock").write_text(json.dumps({"pid": DEAD_PID}), encoding="utf-8")
+
+
+def _race(d, key, n):
+    """n racers that all hold a stale verdict before any replaces the claim; racer 0 then runs its whole
+    takeover before the others continue (the interleaving that gave two owners). Returns the n results."""
+    import threading
+
+    barrier, first_done = threading.Barrier(n), threading.Event()
+    res = [None] * n
+
+    def run(i):
+        class Raced(CellClaims):
+            def _after_stale_decision(self, k):
+                barrier.wait(timeout=10)
+                if i:
+                    first_done.wait(timeout=10)
+        res[i] = Raced(d).claim(key)
+        if i == 0:
+            first_done.set()
+
+    ts = [threading.Thread(target=run, args=(i,)) for i in range(n)]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    return res
+
+
+def test_two_racers_that_both_judged_a_claim_stale_never_both_take_it(tmp_path):
+    d = tmp_path / "claims"
+    d.mkdir()
+    for i in range(200):
+        _stale(d, "c")
+        won = _race(d, "c", 2)
+        assert sum(won) == 1, f"round {i}: {won}"
+        assert CellClaims(d).holder("c") is not None
+        (d / "c.lock").unlink()
+        assert not list(d.glob("c.lock.*"))                                    # no sentinel or leftovers
+
+
+def test_eight_racers_over_a_stale_claim_have_one_winner_a_live_claim_is_never_taken(tmp_path):
+    import os
+
+    d = tmp_path / "claims"
+    d.mkdir()
+    for i in range(100):
+        _stale(d, "c")
+        won = _race(d, "c", 8)
+        assert sum(won) == 1, f"round {i}: {won}"
+        # the winner's claim is live now: nobody takes it over
+        assert not any(CellClaims(d).claim("c") for _ in range(3))
+        assert CellClaims(d).holder("c") == os.getpid()
+        (d / "c.lock").unlink()
+    assert not list(d.glob("*.takeover")) and not list(d.glob("*.stale-*"))
+
+
+def test_a_dead_takeover_sentinel_is_reaped_a_fresh_one_blocks(tmp_path):
+    import os
+
+    d = tmp_path / "claims"
+    d.mkdir()
+    _stale(d, "c")
+    sentinel = d / "c.lock.takeover"
+    sentinel.write_text(json.dumps({"pid": os.getpid()}), encoding="utf-8")      # a live taker is mid-takeover
+    assert not CellClaims(d).claim("c")
+    sentinel.write_text(json.dumps({"pid": DEAD_PID}), encoding="utf-8")         # dead, but young: still blocks
+    assert not CellClaims(d).claim("c")
+    old = sentinel.stat().st_mtime - 3600
+    os.utime(sentinel, (old, old))                                               # dead and old: reaped
+    assert CellClaims(d).claim("c") and not sentinel.exists()
+
+
+def _proc_racer(d, key, barrier, out):
+    out.put(CellClaims(d).claim(key))
+    barrier.wait(timeout=60)
+
+
+def test_processes_racing_for_a_stale_claim_have_one_winner(tmp_path):
+    import multiprocessing as mp
+
+    ctx = mp.get_context("spawn")
+    d = tmp_path / "claims"
+    d.mkdir()
+    for rnd in range(3):
+        _stale(d, f"k{rnd}")
+        out, barrier = ctx.Queue(), ctx.Barrier(5)
+        ps = [ctx.Process(target=_proc_racer, args=(d, f"k{rnd}", barrier, out)) for _ in range(4)]
+        [p.start() for p in ps]
+        res = [out.get(timeout=120) for _ in ps]
+        barrier.wait(timeout=60)
+        [p.join(60) for p in ps]
+        assert sum(res) == 1, res

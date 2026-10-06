@@ -144,6 +144,7 @@ class CellClaims:
                 if state == "held":
                     return False
                 if state == "stale":
+                    self._after_stale_decision(key)
                     logger.warning("claim on %s is stale (its process is gone): taking it over", key)
                     away = path.with_name(f"{path.name}.stale-{os.getpid()}-{time.time_ns()}")
                     try:
@@ -155,6 +156,9 @@ class CellClaims:
                     except OSError:
                         pass
         return False
+
+    def _after_stale_decision(self, key: str) -> None:
+        """Seam for tests: called after a stale verdict, before the takeover."""
 
     def release(self, key: str) -> None:
         try:
