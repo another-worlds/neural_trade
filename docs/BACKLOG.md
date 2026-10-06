@@ -65,7 +65,7 @@ changes).
 | [NT-030](#nt-030) | P1 | feature | implementer | done | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
 | [NT-031](#nt-031) | P1 | feature | implementer | done | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
-| [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
+| [NT-033](#nt-033) | P1 | feature | implementer | done | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
 | [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
 | [NT-036](#nt-036) | P1 | feature | implementer | done | Stability invariants in CI (strict mode, masks off) |
@@ -211,6 +211,7 @@ changes).
 | [NT-176](#nt-176) | P2 | research | experimenter | todo | Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1 |
 | [NT-177](#nt-177) | P2 | bug | implementer | done | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
 | [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
+| [NT-179](#nt-179) | P2 | feature | implementer | todo | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
 
 ## Items
 
@@ -603,7 +604,7 @@ changes).
 
 **Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-033 2290266/af6d5d1/5a7990c (implementer, Sonnet medium), merged as cf30d7d; QA (Opus medium) PASS on 5a7990c: (1) FREEZE_INDICATOR_PERIODS (reuses NT-046's ADAPTIVE_INDICATORS switch): the frozen twin is the same network, QA built it in separate processes: all 160 initial tensors bit-identical, after 10 steps every non-logit weight and the predictions equal a static-learned twin, the 54 logits non-trainable, no L2, meta_adjust gets no gradient; golden_nt117 455/455 with the switch off (QA's own run); the one-line `if ind_gvs:` guard in custom_model.py (outside the file list, justified: apply_gradients([]) raises) leaves the default graph identical (15,964 ops) and CPU step time unchanged. (2) ta_ma_cross, ta_rsi (Wilder, documented: EMA span = 2n-1), ta_bollinger: 27 independent recomputes of the trade lists equal exactly, RSI seeding checked, assert_no_lookahead passes and one-bar-peek mutants are caught. (3) run: {train: false} scenarios: 9 cells without weights, same fold blocks and costs as a trained cell, numbers equal a direct run_backtest (rtol 1e-9); pre-existing scenario hashes unchanged (37 of 37). (4) learned, twin and rule reach the leaderboard with the same dev net Sharpe column at the same 0 bps cost profile. Fast 2135 passed, stability 11, ruff clean. Warm-up loss on a 7236-bar OOS block: 0.2-0.4% at default parameters, up to 3.3% at the top of the ranges. Follow-ups: NT-179 (one board across scenarios, needed by NT-050).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** The RSI 'textbook' periods 9/14/21 are EMA spans, alpha = 2/(p+1) (indicators/families.py:223-233), equal to Wilder RSI 5/7.5/11. The SPEC says whether the frozen twin and the TA RSI rule use EMA-span or Wilder periods.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/models/layers/learnable_indicators.py, src/neural_trade/models/gru_attention.py, src/neural_trade/training/optim.py, src/neural_trade/core/config.py, src/neural_trade/strategy/strategies.py, scenario specs, tests/
@@ -2365,6 +2366,18 @@ changes).
 - **why:** QA of NT-104 (2026-10-06): the five judgement folds share nested training data and all cells use seed 0, so the paired-t interval over folds is probably anti-conservative; D-046's simulation did not model shared training data. No verdict of capacity_v1 depends on it (a wider interval is also inconclusive).
 - **acceptance:** (1) A DECISIONS entry (the lead's reading, citing the QA report) says so and what a SPEC must state (training-block overlap, a sensitivity analysis with a wider interval). (2) NT-032's comparator docs mention it.
 - **source:** QA of NT-104 (2026-10-06)
+
+### NT-179
+
+**Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/cli.py (cmd_leaderboard), tests/
+- **depends on:** NT-033
+- **why:** QA of NT-033 (2026-10-06): `neural-trade leaderboard` builds one board per scenario; the multi-scenario branch of `leaderboard_markdown` (leaderboard.py ~678-696, rows named `scenario / configuration`) is reachable only through the Python API. The yardstick (VISION) compares the learned model against the frozen twin and the TA rules on ONE dev-fold net Sharpe column. Also: the nt033 spec headers suggest `--n-trials 30`, which the sweep refuses (15.90 h upper bound at 0.1735 s/step against the 12 h cap); a rule-only sweep's budget line says 'GPU budget 0.79 h' from the default overhead though no GPU is used, and its 3-seed re-run repeats identical deterministic cells; nothing pins that `score_strategy_only` feeds the block's own closes (only the alignment guard at scorer.py:~232); the perturbed frame in `_perturb_after` drops meta['delta_raw'], so every probe logs the D-051 warning; `MACrossStrategy.warmup()` loses one bar.
+- **acceptance:** (1) `--scenario a,b,c` (or several positional scenarios) puts the configurations on one board with the cost-profile and fold-coverage rails applied across scenarios (test). (2) The spec header comments name a trial count that fits 12 h (or say it needs the owner). (3) A rule-only sweep reports a CPU budget and re-runs a deterministic rule once. (4) A test that pins `score_strategy_only`'s closes; the D-051 warning is not logged per probe. (5) Fast suite, ruff.
+- **source:** QA of NT-033 (2026-10-06)
 
 ## Done log
 
