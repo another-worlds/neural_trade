@@ -219,9 +219,10 @@ changes).
 | [NT-184](#nt-184) | P3 | polish | implementer | todo | Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership |
 | [NT-185](#nt-185) | P1 | bug | implementer | done | A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows) |
 | [NT-186](#nt-186) | P3 | polish | implementer | todo | Control-panel and data-path follow-ups from the NT-034 qa-deep |
-| [NT-187](#nt-187) | P2 | bug | implementer | todo | Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file |
+| [NT-187](#nt-187) | P2 | bug | implementer | done | Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file |
 | [NT-188](#nt-188) | P3 | polish | implementer | todo | Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring |
 | [NT-189](#nt-189) | P3 | polish | implementer | todo | Atomic-write follow-ups: the cross-process tests import the installed package; rebuild_index retry untested; _read_summary drops the recorded budget on a transient read error |
+| [NT-190](#nt-190) | P2 | polish | implementer | todo | Stability harness v2 follow-ups: fuzz_jumps expected outcome, the tiny profile's variance-head blind spot, two test gaps, the baseline bound, dry-run n_eff |
 
 ## Items
 
@@ -2477,7 +2478,7 @@ changes).
 
 **Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-187 9e3548d (implementer Sonnet), merged as e55ed52; QA (Opus medium) PASS on fbebfd1: `configs/stability_thresholds_v2.yaml` (sha256 34a122b28861c13622165aed81fdb1e9405eea91fe4823d0a754d070cbade2cb) committed ALONE and first (ad3f590), never edited afterwards, no harness run before it; v1 (0b706aa2...) byte-identical and still the default; the harness takes `--thresholds v2` and the report carries the file's sha256; fuzz_constant is a 100-bar block (flat training windows 21 of 136 tiny and 21 of 360 reference, QA counted them itself; its metrics differ from control and the constant-baseline artefact is gone); the variance checks are not evaluated below the n_eff gates (100 for the NLL excess over the baseline, 30 for the CRPS ratio and the scaled NLL) and for a degenerate baseline; `max_variance_nll_scaled` 8.0 (NLL minus ln rmse_zero) is scale-invariant (identical to 6 digits at price x1, x1e4, x1e-4); expected n_eff per case and profile recomputed by QA through plan_cases and equal to the file; 96 of 96 healthy stored runs pass v1 and v2; QA's two synthetic broken runs and the cap run still fail; 14 of 17 mutations caught. Gates 100 and 30 are labelled extrapolations (all stored runs have n_eff >= 135). For NT-051's SPEC: use v2 on the REFERENCE profile (the tiny profile judges no variance check under v2: do not use tiny alone); name v2 by path or sha256; state the expected outcome of fuzz_jumps before GPU time (NT-190). Follow-ups: NT-190.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/experiments/stability.py (default_cases, _score_checks), configs/stability_thresholds_v2.yaml (new; v1 stays), tests/
 - **depends on:** NT-038 (done)
@@ -2508,6 +2509,18 @@ changes).
 - **why:** QA of NT-185 (2026-10-07), P3: (1) the writer subprocess of the cross-process tests imports `neural_trade` from the INSTALLED package (the main checkout's src/), not the tree under test: in a worktree without PYTHONPATH both tests fail with ModuleNotFoundError, and after the merge they would silently test the main checkout's code: pass `env` with PYTHONPATH like `sweep._launch_env`; (2) store.rebuild_index's retry (store.py:~259) has no test (the mutation survives) and with 3 tight readers it still failed 4 of 20 times (CLI-only, never during a sweep); (3) existing before the item: `sweep._read_summary` turns any OSError/ValueError into `{}`, and `_save_progress`/`_write_summary` then rewrite sweep.json WITHOUT `launches` (the recorded pre-launch budget), `space`, `mode`: a transient read failure would silently drop the budget record: keep the last good document in memory or raise.
 - **acceptance:** (1) The cross-process tests set PYTHONPATH to the tree under test (a test that fails in a worktree without PYTHONPATH on the old code). (2) A test for rebuild_index's retry. (3) _read_summary keeps the last good document (or raises) and never rewrites sweep.json without launches/space/mode (a test with an injected read failure). (4) Fast suite, ruff.
 - **source:** QA of NT-185 (2026-10-07)
+
+### NT-190
+
+**Stability harness v2 follow-ups: fuzz_jumps expected outcome, the tiny profile's variance-head blind spot, two test gaps, the baseline bound, dry-run n_eff**
+
+- **status:** todo
+- **priority / type / role:** P2 / polish / implementer
+- **area:** src/neural_trade/experiments/stability.py, src/neural_trade/cli.py (stability --dry-run), configs/stability_thresholds_v3.yaml (only if the owner wants it), tests/test_stability_harness.py
+- **depends on:** NT-187 (done)
+- **why:** QA of NT-187 (2026-10-07): (1) P2, NT-051 risk (a forecast QA could not measure: a reference control + fuzz_jumps cell timed out on CPU in the per-term probe): `fuzz_jumps` on tiny already scores scaled NLL 7.19/6.80/6.27 against the limit 8 (the training spikes x4 and x0.25 inflate every sigma against the test block; its constant baseline is equally inflated, scaled about 6.9, near the 'absurd' bound 8): on reference (n_eff 150/100/75) it will be judged and may FAIL variance_nll by design or switch the over-baseline checks off: the kind of by-design outcome NT-187 removed for fuzz_constant: NT-051's SPEC states the expected outcome before GPU time, or the first GPU cell checks it; (2) under v2 the tiny profile judges NO variance check (the cap run and sigma x0.03-30 heads pass tiny under v2; v1 caught them): a lower scaled-NLL gate (healthy tiny scaled NLL is 1.4-2.0) would keep coverage: a v3 matter, v2 is frozen; on reference an h2-only break (sigma about x0.3, n_eff 75) is not judged; (3) tests: the scaled-NLL half of gate 9b is not pinned (mutation M3 survives), no v2 test with a NaN/inf variance head (M12: a NaN head mapped to -inf would pass); (4) `_variance_checks_v2` reports 'absurd baseline' before the n_eff reason, and a healthy 240-bar baseline reaches 8.33 scaled (tiny wide h2): the bound 8 sits only 2.3x above stored values; (5) `stability --dry-run` prints no n_eff per cell; (6) a flaky slow test (test_the_fuzz_cases_change_the_epoch_metrics_against_the_control_in_a_real_tiny_run) failed once under memory pressure.
+- **acceptance:** (1) The SPEC of NT-051 (not this item) carries the fuzz_jumps expectation; this item adds a reference-profile dry n_eff/expectation table for every case to the REPORT template and the dry run (5). (2) Tests pinning the scaled-NLL n_eff gate and a NaN/inf head under v2. (3) The baseline-guard message order (n_eff first) and a documented bound rationale. (4) A v3 file ONLY if the owner decides the tiny blind spot matters (a new frozen file, named in a SPEC before GPU time). (5) Fast suite, ruff.
+- **source:** QA of NT-187 (2026-10-07)
 
 ## Done log
 
