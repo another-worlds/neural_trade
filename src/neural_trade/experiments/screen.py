@@ -754,6 +754,21 @@ def _term_multiplier(key: str, cfg: Config, model: Any = None) -> float:
     return 1.0
 
 
+def _note_calib_failure(health: Dict[str, Any], calib_result: Optional[Dict[str, Any]]) -> None:
+    """Fold ``calibrate_loss_weights``'s NT-111 failure record (``calib_failed``/``calib_mode``/
+    ``calib_error``, never raised) into a trial's ``health`` dict in place, so :func:`run_trial` can
+    fail the trial the same way :func:`neural_trade.experiments.scorer.score_result` does for an
+    ordinary training run (NT-112: both ``_run_trial_light`` and ``_TrialGroup.run_one`` call
+    ``calibrate_loss_weights`` and, before this, discarded its return value -- a screen trial whose
+    calibration failed trained and scored with restored, uncalibrated lambdas and no record at all,
+    even in gradient mode or with ``CALIB_FAIL_LOUD``). A successful or skipped calibration
+    (``calib_result`` ``None`` or without ``calib_failed``) leaves ``health`` untouched."""
+    if calib_result and calib_result.get("calib_failed"):
+        health["calib_failed"] = True
+        health["calib_mode"] = calib_result.get("calib_mode")
+        health["calib_error"] = calib_result.get("calib_error")
+
+
 def _health_from_history(history, sampler: _GradNormSampler, cfg: Config, model: Any = None) -> Dict[str, Any]:
     """The health numbers of one trial's ``history`` (``CustomTrainModel.fit``'s return). ``model``
     is the trained ``CustomTrainModel``, when available: passed through to :func:`_term_multiplier`
@@ -976,8 +991,9 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool,
     # exact same seed draw the identical dropout stream (acceptance 2), rather than relying on
     # whatever construction-order seed Keras assigned this fresh model's Dropout layers internally.
     reset_stateful_rngs(custom_model, int(cfg.SEED))
+    calib_result = None
     if calibrate:
-        calibrate_loss_weights(custom_model, train_ds, cfg, prepared.n_train)
+        calib_result = calibrate_loss_weights(custom_model, train_ds, cfg, prepared.n_train)
     if cfg.ABLATE_LAMBDAS:
         ablate(custom_model, cfg.ABLATE_LAMBDAS)
     custom_model.compile(optimizer=optimizer_pair.main)
@@ -992,6 +1008,7 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool,
 
     t4 = time.perf_counter()
     health = _health_from_history(history, sampler, cfg, custom_model)
+    _note_calib_failure(health, calib_result)
     auc = _direction_auc(custom_model, val_block, cfg, target_scaler)
     t_score = time.perf_counter() - t4
     tf.keras.backend.clear_session()
@@ -1110,8 +1127,9 @@ class _TrialGroup:
         pred_mean = np.mean(prepared.y_train)
         self.custom_model.pred_scale.assign(float(pred_scale))
         self.custom_model.pred_mean.assign(float(pred_mean))
+        calib_result = None
         if calibrate:
-            calibrate_loss_weights(self.custom_model, prepared.train_ds, cfg, prepared.n_train)
+            calib_result = calibrate_loss_weights(self.custom_model, prepared.train_ds, cfg, prepared.n_train)
         if cfg.ABLATE_LAMBDAS:
             ablate(self.custom_model, cfg.ABLATE_LAMBDAS)
         t_build = time.perf_counter() - t2
@@ -1125,6 +1143,7 @@ class _TrialGroup:
 
         t4 = time.perf_counter()
         health = _health_from_history(history, sampler, cfg, self.custom_model)
+        _note_calib_failure(health, calib_result)
         auc = _direction_auc(self.custom_model, prepared.val_block, cfg, prepared.target_scaler)
         t_score = time.perf_counter() - t4
         return health, auc, {"load_s": prepared.load_s, "prep_s": prepared.prep_s, "build_s": t_build,
@@ -1280,7 +1299,14 @@ def run_trial(trial: Trial, spec: ScreenSpec, cache: Dict[str, Any],
 
     Any non-finite number anywhere in the row (see :func:`_sanitize_nonfinite`) is written as ``null``
     and forces ``passed: false`` with a reason naming the field(s), regardless of the spec's
-    ``rules:`` - a non-finite health number means training itself broke, not a threshold decision."""
+    ``rules:`` - a non-finite health number means training itself broke, not a threshold decision.
+
+    A failed pre-training loss-weight calibration (NT-112, ``health["calib_failed"]``, set by
+    :func:`_note_calib_failure` from ``training.lambda_calibration.calibrate_loss_weights``'s NT-111
+    return value) forces ``passed: false`` the same way, regardless of ``rules:`` - the trial trained
+    with restored, uncalibrated lambdas, never the calibrated ones the screen meant to measure, so it
+    must not rank or pass alongside an ordinary trial (``experiments.scorer.score_result`` refuses the
+    same failure for the engine's own training path)."""
     t0 = time.perf_counter()
     if trainer is not None:
         health, auc, timings = trainer(trial.config, cache, calibrate=spec.run.calibrate)
@@ -1289,6 +1315,12 @@ def run_trial(trial: Trial, spec: ScreenSpec, cache: Dict[str, Any],
         health, auc, timings = _run_trial_light(trial.config, cache, calibrate=spec.run.calibrate,
                                                 clip_skip_epochs=clip_skip_epochs)
     passed, reasons = apply_rules(health, spec.rules)
+    if health.get("calib_failed"):
+        passed = False
+        _err = health.get("calib_error") or {}
+        reasons = list(reasons) + [
+            f"loss-weight calibration failed (CALIB_MODE={health.get('calib_mode', '?')}): "
+            f"{_err.get('type', 'Error')}: {_err.get('message', '?')}"]
     row = {"schema_version": SCHEMA_VERSION, "screen": spec.name, "trial_key": trial.key,
           "trial_index": trial.index, "source": trial.source, "config_diff": trial.params,
           "data_end": trial.data_end, "seed": trial.seed, "health": health, "direction_auc": auc,
