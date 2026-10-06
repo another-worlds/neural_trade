@@ -17,7 +17,7 @@ A scenario says what to train and how to score it, in one YAML file (``configs/s
     seeds: [0, 1, 2]
     strategy: {name: calibrated_quantile, params: {}}   # Strategies registry; knobs fit on cal
     backtest: {random_seeds: 100}    # BacktestConfig fields; the costs default to 0 per side (D-044)
-    run: {calibrate: true, save_artifacts: false, indicator_report: false}
+    run: {calibrate: true, save_artifacts: false, indicator_report: false, train: true}
 
 A **configuration** is one variant at one grid point; a **cell** is one (configuration, fold,
 seed), trained into its own run directory. Everything is checked before anything runs:
@@ -38,8 +38,15 @@ did not exist back then at its current default), so it is directly comparable wi
 computed identity from the current spec.
 
 Extension points (the schema version rises when a key changes meaning): NT-030 adds the optional
-``search:`` block (the space `neural-trade sweep` searches; experiments/sweep.py), NT-031 guard-rail thresholds, NT-033 rule-based scenarios
-that train no network, NT-038 harness cases.
+``search:`` block (the space `neural-trade sweep` searches; experiments/sweep.py), NT-031 guard-rail
+thresholds, NT-038 harness cases.
+
+**Rule-only scenarios (NT-033).** ``run: {train: false}`` trains no network: each cell scores a
+price-only strategy (``Strategy.price_only``: the classic TA rules ``ta_ma_cross``, ``ta_rsi``,
+``ta_bollinger`` and the baselines) on the same fold layout, the same out-of-sample block, the same
+backtest and costs as a trained cell (``experiments.scorer.score_strategy_only``). Such a rule has no
+randomness, so the seeds change nothing and a rule-only spec lists one seed. The frozen-period twin
+is an ordinary training scenario with ``FREEZE_INDICATOR_PERIODS: true`` in a variant.
 """
 from __future__ import annotations
 
@@ -61,7 +68,7 @@ TOP_KEYS = ("schema_version", "name", "description", "base_config", "overrides",
 SWEEP_KEYS = ("mode", "axes")
 SWEEP_MODES = ("grid",)                     # NT-030 adds "quick" and "optuna"
 STRATEGY_KEYS = ("name", "params")
-RUN_KEYS = ("calibrate", "save_artifacts", "indicator_report")
+RUN_KEYS = ("calibrate", "save_artifacts", "indicator_report", "train")
 # NT-031: the leaderboard's guard-rail thresholds. Scoring-side, so they are NOT in to_dict(), spec_hash
 # or settings(): changing them never changes a run's identity, only which rows the leaderboard disqualifies.
 LEADERBOARD_KEYS = ("max_drawdown", "min_trades", "random_null_percentile", "beat_buy_and_hold",
@@ -165,6 +172,8 @@ class RunOptions:
     calibrate: bool = True          # the pre-training loss-weight calibration pass (train_and_evaluate)
     save_artifacts: bool = False    # the serving bundle (artifacts/); the checkpoint weights are always kept
     indicator_report: bool = False  # write indicator_report.html; needs save_artifacts (the bundle)
+    train: bool = True              # False (NT-033): train no network; a price-only strategy is scored on the
+                                    # fold's blocks (scorer.score_strategy_only); calibrate is then unused
 
 
 @dataclass(frozen=True)
@@ -327,6 +336,8 @@ class Scenario:
                "sweep": {"mode": self.sweep_mode, "axes": self.axes}, "folds": list(self.folds),
                "seeds": list(self.seeds), "strategy": dataclasses.asdict(self.strategy),
                "backtest": dict(self.backtest), "run": dataclasses.asdict(self.run)}
+        if self.run.train:           # only when off: the spec hash of every training scenario is unchanged
+            out["run"].pop("train")
         if self.search:              # only when set: the spec hash of every earlier scenario is unchanged
             out["search"] = self.search
         return out
@@ -337,8 +348,11 @@ class Scenario:
 
     def settings(self) -> Dict[str, Any]:
         """What changes a cell's numbers besides its Config: strategy, costs, the calibration pass."""
-        return {"strategy": dataclasses.asdict(self.strategy), "backtest": dict(sorted(self.backtest.items())),
-                "calibrate": bool(self.run.calibrate)}
+        out = {"strategy": dataclasses.asdict(self.strategy), "backtest": dict(sorted(self.backtest.items())),
+               "calibrate": bool(self.run.calibrate)}
+        if not self.run.train:       # a rule-only cell is another computation; every training cell's hash is unchanged
+            out["train"] = False
+        return out
 
     @property
     def settings_hash(self) -> str:
@@ -430,6 +444,14 @@ class Scenario:
         if unknown:
             raise ScenarioError(f"{where}: strategy.params: unknown {self.strategy.name!r} parameter(s) {unknown}; "
                                 f"known: {sorted(known)}")
+        if not self.run.train:
+            if not getattr(cls, "price_only", False):
+                prices = sorted(n for n in Strategies.list_names() if getattr(Strategies.get(n), "price_only", False))
+                raise ScenarioError(f"{where}: run.train is false, so the strategy must read prices only; "
+                                    f"{self.strategy.name!r} reads model heads (price-only strategies: {prices})")
+            if self.run.save_artifacts or self.run.indicator_report:
+                raise ScenarioError(f"{where}: run.train is false: there is no model to save or report on "
+                                    "(run.save_artifacts and run.indicator_report must be false)")
         derived = sorted(set(self.strategy.params) & set(DERIVED_STRATEGY_PARAMS)) \
             if hasattr(cls, "from_calibration") else []
         if derived:

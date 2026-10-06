@@ -367,10 +367,64 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
     return scored
 
 
+def strategy_only_scores(backtest_result) -> Dict[str, Optional[float]]:
+    """The flat scores of a rule-only cell: the backtest's summary (``backtest/<key>``, the keys the
+    store's headline columns and the leaderboard read) and its baselines (``backtest/<baseline>/<key>``)."""
+    out = _numbers(backtest_result.summary or {}, "backtest/")
+    for name, summary in (backtest_result.baselines or {}).items():
+        out.update(_numbers(summary or {}, f"backtest/{name}/"))
+    return dict(sorted(out.items()))
+
+
+def score_strategy_only(config, *, role: str, strategy: str, strategy_params: Optional[Mapping[str, Any]] = None,
+                        backtest_params: Optional[Mapping[str, Any]] = None, out_dir=None,
+                        meta: Optional[Mapping[str, Any]] = None, arrays=None) -> Scored:
+    """Score a price-only strategy on a fold with no network (NT-033: the classic TA rules).
+
+    The same fold layout, out-of-sample block, bars, backtest settings, costs and baselines as
+    :func:`score_result` (:func:`fit_and_backtest`); the model heads are neutral placeholders
+    (``ta_rules.price_only_frame``), so a strategy that reads a head is refused (the scenario check
+    refuses it earlier). A rule needs nothing from the calibration block: it is built from the
+    placeholder frame only to keep the one scoring path. The score is ``strategy_only_scores``; the
+    report written to ``out_dir`` is ``strategy_report_<role>.json`` with the backtest's ``config``
+    (so the leaderboard reads the cost profile as for a trained cell)."""
+    from neural_trade.data.processor import split_arrays
+    from neural_trade.strategy import Bars, Strategies
+    from neural_trade.strategy.ta_rules import price_only_frame
+
+    if role not in ROLES:
+        raise ValueError(f"role must be one of {ROLES}, got {role!r}")
+    cls = Strategies.get(strategy)
+    if not getattr(cls, "price_only", False):
+        raise ScoringError(f"strategy {strategy!r} reads model heads; only a price-only strategy can be scored "
+                           "without a trained network")
+    arrays = arrays if arrays is not None else split_arrays(config)
+    test_block, cal_block = arrays["test"], arrays["cal"]
+    steps = tuple(config.HORIZON_STEPS)
+    frame = price_only_frame(test_block["last_close"], test_block["y"], steps, role)
+    cal = price_only_frame(cal_block["last_close"], cal_block["y"], steps, "cal")
+    signals = BlockSignals.build(cal, frame)
+    bars = Bars.from_frame(arrays["df"], test_block["anchor_bar"])
+    if len(bars) != len(frame) or not np.allclose(bars.close, frame.last_close, rtol=1e-6):
+        raise ScoringError(f"the out-of-sample bars ({len(bars)}) do not line up with its prices ({len(frame)})")
+    res, strat = fit_and_backtest(signals, bars, strategy=strategy, strategy_params=strategy_params,
+                                  backtest_params=backtest_params, bar_minutes=float(config.RESAMPLE_MINUTES))
+    bt = res.to_dict()
+    bt.update(params=_strategy_params(strat), fitted_on="none (price-only rule)", n_bars=len(bars))
+    scores = strategy_only_scores(res)
+    scored = Scored(role, None, res, strat, scores)
+    if out_dir is not None:
+        doc = {"role": role, "ranks": role == "dev", "block": "out-of-sample (the fold's test block)",
+               "trained_network": False, **dict(meta or {}), "backtest": bt}
+        scored.paths["json"] = _write_new(Path(out_dir) / f"strategy_report_{role}.json",
+                                          json.dumps(doc, indent=2, default=str))
+    return scored
+
+
 def scores_json(scores: Mapping[str, Optional[float]]) -> str:
     return json.dumps(dict(scores), indent=2, sort_keys=True)
 
 
 __all__ = ["BlockSignals", "PREDICTION_FILES", "ROLES", "Scored", "ScoringError", "engine_markdown",
            "fit_and_backtest", "leaderboard_scores", "load_block", "save_predictions", "score_result",
-           "training_facts"]
+           "score_strategy_only", "strategy_only_scores", "training_facts"]

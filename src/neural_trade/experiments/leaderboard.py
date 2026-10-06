@@ -675,7 +675,8 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow], *, guard_rails: Optiona
     'test, not used for ranking' (criterion 5), guard-rails and disqualification, the cost profile of
     every row's stored net Sharpe (and a header line on the board's), the dataset fingerprint, bar
     size, horizons and strategy on every row (criterion 4)."""
-    scenario = rows[0].scenario if rows else "(empty)"
+    scenarios = list(dict.fromkeys(r.scenario for r in rows))
+    scenario = "`, `".join(scenarios) if scenarios else "(empty)"
     lines = [f"# Leaderboard: `{scenario}`", "",
              "One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over "
              "the dev folds of each fold's seed mean, D-020, D-046). Guard-rails beside it can disqualify a row "
@@ -687,10 +688,12 @@ def leaderboard_markdown(rows: Sequence[LeaderboardRow], *, guard_rails: Optiona
              "| " + " | ".join(TABLE_HEADER) + " |", "|" + "---|" * len(TABLE_HEADER)]
     for r in rows:
         cells = table_cells(r)
-        cells[1] = f"`{cells[1]}`"
+        # a board that mixes scenarios (the learned model, its frozen twin and the TA rules, NT-033) names each row's
+        cells[1] = f"`{r.scenario}` / `{cells[1]}`" if len(scenarios) > 1 else f"`{cells[1]}`"
         lines.append("| " + " | ".join(c.replace("|", "/") for c in cells) + " |")
     w = winner(rows)
-    lines += ["", f"**Winner:** `{w.configuration}` (rank {w.rank})" if w is not None
+    lines += ["", f"**Winner:** `{w.scenario}` / `{w.configuration}` (rank {w.rank})" if w is not None and len(scenarios) > 1
+              else f"**Winner:** `{w.configuration}` (rank {w.rank})" if w is not None
               else "**Winner:** none (every row disqualified or not comparable, or no scored dev data)."]
     return "\n".join(lines) + "\n"
 

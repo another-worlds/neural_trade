@@ -41,6 +41,14 @@ At N = 1 the record is not used at all (its levels were measured on another setu
 ``stopped`` with its reason and the CLI exits 1; ``--resume`` finishes it (finished cells are never trained
 again). Only trials that pass the search-time guard-rails (:data:`SEARCH_TIME_RAILS`) enter the re-run.
 
+**Rule-only scenarios (NT-033).** A scenario with ``run: {train: false}`` (the classic TA rules of
+strategy/ta_rules.py, the manual-search baseline of the yardstick) is searched the same way, with the space
+``strategy.<param>: {low, high, log, step}`` (or ``strategy.<param>:`` alone for the range the strategy declares,
+``strategy.strategy_search_space``): a trial's ``strategy.*`` values become the strategy's params, the cells score
+on the same dev folds by the same net Sharpe, no network is trained, so no ``sec_per_step`` is needed (0), the
+GPU-free check is skipped and the training-health check does not apply. The per-cell ``overhead_s`` is then a
+CPU estimate (pass ``--overhead-s`` accordingly); the re-run's extra seeds change nothing for a rule.
+
 **Tunability decision (NT-029 QA note).** ``PATIENCE`` (ReduceLROnPlateau) is tunable, and the space caps
 it at the scenario's ``EARLY``. ``EARLY`` (EarlyStopping patience) is NOT tunable: like ``EPOCHS`` it sets
 how long a trial trains, so searching it would make trials cost different amounts and change what the
@@ -77,6 +85,7 @@ QUICK, OPTUNA = "quick", "optuna"
 MODES = (QUICK, OPTUNA)
 SWEEP_SCHEMA_VERSION = 1
 DEFAULT_PARALLEL_RECORD = "runs/experiments/gpu_measurements_v1/parallel_n.json"
+STRATEGY_PREFIX = "strategy."    # a search key that names a parameter of the scenario's strategy (NT-033)
 REFUSED_FIELDS = {"RESAMPLE_MINUTES": "a sweep stays at 1-minute bars until NT-040 is done"}
 # Used when the scenario has no ``search:`` block: the optimiser, the batch and the two heads' loss weights.
 DEFAULT_SEARCH: Dict[str, Optional[Dict[str, Any]]] = {
@@ -181,6 +190,9 @@ class SearchSpace:
         params = []
         for name, rule in search.items():
             rule = dict(rule or {})
+            if name.startswith(STRATEGY_PREFIX):
+                params.append(cls._strategy_param(scenario, name, rule, where))
+                continue
             spec = specs.get(name)
             if spec is None:
                 raise SweepError(f"{where}: search.{name}: unknown Config field")
@@ -196,6 +208,31 @@ class SearchSpace:
                 raise SweepError(f"{where}: search.{name}: unknown key(s) {unknown}")
             params.append(cls._param(spec, rule, base, where))
         return cls(tuple(params))
+
+    @staticmethod
+    def _strategy_param(scenario: Scenario, name: str, rule: Mapping[str, Any], where: str) -> SearchParam:
+        """``strategy.<param>``: a parameter the scenario's strategy declares searchable (NT-033); the rule's
+        keys override the declared range."""
+        from neural_trade.strategy.strategies import Strategies, strategy_search_space
+
+        sname, param = scenario.strategy.name, name[len(STRATEGY_PREFIX):]
+        declared = strategy_search_space(sname)
+        if param not in declared:
+            raise SweepError(f"{where}: search.{name}: strategy {sname!r} declares no searchable parameter "
+                             f"{param!r}; it declares {sorted(declared)}")
+        unknown = sorted(set(rule) - {"low", "high", "log", "step"})
+        if unknown:
+            raise SweepError(f"{where}: search.{name}: unknown key(s) {unknown}")
+        merged = {**declared[param], **rule}
+        default = next(f.default for f in dataclasses.fields(Strategies.get(sname)) if f.name == param)
+        kind = "int" if isinstance(default, int) and not isinstance(default, bool) else "float"
+        low, high = merged["low"], merged["high"]
+        if not low < high:
+            raise SweepError(f"{where}: search.{name}: low must be below high, got {low} .. {high}")
+        log = bool(merged.get("log", False))
+        if log and low <= 0:
+            raise SweepError(f"{where}: search.{name}: log sampling needs low > 0, got {low}")
+        return SearchParam(name, kind, float(low), float(high), log, merged.get("step") if kind == "int" else None)
 
     @staticmethod
     def _param(spec, rule: Mapping[str, Any], base: Config, where: str) -> SearchParam:
@@ -758,6 +795,12 @@ class Sweep:
                              "(put fixed settings in `overrides:`)")
         if sc.axes:
             raise SweepError(f"{where}: `sweep.axes` belong to `scenario run`; a sweep takes `search:` instead")
+        if not sc.run.train:
+            config_keys = sorted(k for k in sc.search if not k.startswith(STRATEGY_PREFIX))
+            if not sc.search or config_keys:
+                raise SweepError(f"{where}: run.train is false (a rule-only scenario): its `search:` block must name "
+                                 f"the strategy's parameters as `strategy.<param>` (a Config field changes nothing "
+                                 f"here), got {config_keys or 'no search block'}")
         for fname in REFUSED_FIELDS:
             if fname in sc.overrides and sc.overrides[fname] != Config.field_specs()[fname].default:
                 raise SweepError(f"{where}: {fname} is refused in a sweep: {REFUSED_FIELDS[fname]}")
@@ -816,6 +859,8 @@ class Sweep:
         return r
 
     def _sec_per_step(self) -> Tuple[float, Dict[str, Any]]:
+        if not self.scenario.run.train:
+            return 0.0, {"source": "none: the scenario trains no network (run.train false, NT-033)"}
         if self.options.sec_per_step is not None:
             return float(self.options.sec_per_step), {"source": "given (--sec-per-step)"}
         device = self.options.device or current_device()
@@ -1023,7 +1068,12 @@ class Sweep:
         sc = self.scenario
         desc = (f"{self.label} sweep of {sc.name}: trial {number}" +
                 (" (quick: reduced epochs, one seed)" if self.label == QUICK else ""))
-        return dataclasses.replace(sc, name=self.sweep_id, description=desc, variants={self._variant(number): params},
+        config_params = {k: v for k, v in params.items() if not k.startswith(STRATEGY_PREFIX)}
+        strategy = dataclasses.replace(sc.strategy, params={
+            **sc.strategy.params, **{k[len(STRATEGY_PREFIX):]: v for k, v in params.items()
+                                     if k.startswith(STRATEGY_PREFIX)}})
+        return dataclasses.replace(sc, name=self.sweep_id, description=desc,
+                                   variants={self._variant(number): config_params}, strategy=strategy,
                                    axes={}, search={}, folds=[int(f) for f in folds], seeds=[int(s) for s in seeds],
                                    overrides={**sc.overrides, **self._extra_overrides})
 
@@ -1084,6 +1134,8 @@ class Sweep:
 
     def _unstable(self, rows: Sequence[Mapping[str, Any]]) -> Optional[str]:
         """The first stability problem among a trial's finished cells (see :func:`run_health`), else None."""
+        if not self.scenario.run.train:
+            return None                          # no training, nothing to be unstable
         for r in rows:
             if r.get("status") == "done":
                 why = run_health(self.store.root / r["run_dir"],
@@ -1108,6 +1160,8 @@ class Sweep:
     def _wait_for_gpu(self) -> Optional[str]:
         """The GPU-free check (no own trial runs now); waits or stops as configured."""
         o = self.options
+        if not self.scenario.run.train:
+            return None                          # a rule-only trial uses no GPU
         waited = 0.0
         while True:
             status = self.gpu_check()
