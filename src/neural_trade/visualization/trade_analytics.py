@@ -176,11 +176,13 @@ def _hline(fig, row, col, x0, x1, y, *, name, legend, dash=_REF_DASH, color=T.NE
 
 
 # ------------------------------------------------------------------ per-trade analytics
-_PANELS = (("Return per trade (% of notional)", "legend"), ("Gross vs net return (cost drag, %)", "legend2"),
-           ("Net return by exit reason (%)", "legend3"), (f"Cumulative P&L ({L.quote()})", "legend4"),
-           ("Holding time vs net return", "legend5"), ("Best vs worst move while open (%)", "legend6"),
-           ("Gross return by entry conviction", "legend7"), (f"Long vs short: total P&L ({L.quote()})", "legend8"),
-           (f"Predicted vs realised h1 move ({L.quote()})", "legend9"))
+def _panels():
+    """The nine panel titles and legend ids, built per call so the quote currency is the setup's in force."""
+    return (("Return per trade (% of notional)", "legend"), ("Gross vs net return (cost drag, %)", "legend2"),
+            ("Net return by exit reason (%)", "legend3"), (f"Cumulative P&L ({L.quote()})", "legend4"),
+            ("Holding time vs net return", "legend5"), ("Best vs worst move while open (%)", "legend6"),
+            ("Gross return by entry conviction", "legend7"), (f"Long vs short: total P&L ({L.quote()})", "legend8"),
+            (f"Predicted vs realised h1 move ({L.quote()})", "legend9"))
 
 
 def _h1_steps(horizon_steps, signals) -> Optional[int]:
@@ -294,16 +296,16 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
     readouts[4] = (f"{n_lim} of {n} trades ({100 * n_lim / n:.0f}%) hit the {t_lim}-bar time limit" if t_lim
                    else "no trade hit a time limit")
 
-    fig = make_subplots(rows=3, cols=3, subplot_titles=[_title(p, r) for (p, _), r in zip(_PANELS, readouts)],
+    fig = make_subplots(rows=3, cols=3, subplot_titles=[_title(p, r) for (p, _), r in zip(_panels(), readouts)],
                         vertical_spacing=0.15, horizontal_spacing=0.075)
     for a in fig.layout.annotations:              # the title and readout sit above the panel's key row
         a.update(yshift=24)
-    for i, (_, lid) in enumerate(_PANELS):
+    for i, (_, lid) in enumerate(_panels()):
         _panel_key(fig, lid, i // 3 + 1, i % 3 + 1)
     s = result.summary
 
     f32 = lambda a: np.asarray(a, dtype=np.float32)  # noqa: E731
-    lg = dict(zip(range(1, 10), [lid for _, lid in _PANELS]))
+    lg = dict(zip(range(1, 10), [lid for _, lid in _panels()]))
 
     # (1,1) return per trade: won / lost after costs, with the gross distribution over it --------
     lo_x, hi_x = min(net_pct.min(), gross_pct.min()), max(net_pct.max(), gross_pct.max())
@@ -405,7 +407,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
                                                    "%{customdata[1]:>+.3f}% gross, %{customdata[0]:>+.3f}% net"
                                                    "<extra></extra>"), 2, 3)
         _hline(fig, 2, 3, float(min(mae.min(), -0.01)), 0.0, be, name=f"break-even {be:.2f}%", legend=lg[6])
-        fig.layout.annotations[5].text = _title(_PANELS[5][0], f"{reached} of {int((~win).sum())} losers were once "
+        fig.layout.annotations[5].text = _title(_panels()[5][0], f"{reached} of {int((~win).sum())} losers were once "
                                                                 f"past break-even")
     else:
         _note(fig, 2, 3, "needs the bars")
@@ -440,7 +442,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
         _hline(fig, 3, 1, labels[0], labels[-1], be, name=f"break-even {be:.2f}%", legend=lg[7])
         fig.add_hline(y=0, line=dict(color=T.NEUTRAL, width=1), row=3, col=1)
         rho, band = _spearman(conv, gross_pct), S.corr_null_r(n)
-        fig.layout.annotations[6].text = _title(_PANELS[6][0], f"Spearman ρ {_signed(rho)} (chance ±{band:.2f}), "
+        fig.layout.annotations[6].text = _title(_panels()[6][0], f"Spearman ρ {_signed(rho)} (chance ±{band:.2f}), "
                                                                 f"{k} bins")
         # (3,3): the h1 forecast at the decision bar, in the trade's direction, against what followed.
         # A served delta shrunk to 0 (beta = 0) is a constant, not a forecast: score the raw head then.
@@ -484,7 +486,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
         if served_zero and not use_raw:
             # nothing to score: a constant 0 has no rank correlation, and sign(0) is never "right"
             _note(fig, 3, 3, f"{why_zero}:<br>nothing to score (raw_delta= scores the raw h1 head)")
-            fig.layout.annotations[8].text = _title(_PANELS[8][0] if steps else f"Predicted h1 vs move over the hold ({L.quote()})",
+            fig.layout.annotations[8].text = _title(_panels()[8][0] if steps else f"Predicted h1 vs move over the hold ({L.quote()})",
                                                     "no prediction: the served delta is a constant 0")
         else:
             cd9 = np.stack([sig_h1, hold_move, held], 1).astype(np.float32)
@@ -514,7 +516,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
             if use_raw:
                 head = f"Raw h1 head vs realised move ({L.quote()})" if steps else f"Raw h1 head vs move over the hold ({L.quote()})"
             else:
-                head = _PANELS[8][0] if steps else f"Predicted h1 vs move over the hold ({L.quote()})"
+                head = _panels()[8][0] if steps else f"Predicted h1 vs move over the hold ({L.quote()})"
             med = ""
             if ok.any():
                 mp = float(np.nanmedian(np.abs(pred[ok])))
@@ -562,7 +564,7 @@ def trade_analytics_figure(result, bars=None, *, signals=None, horizon_steps: Op
     pad = 0.18 * (top - bot or 1.0)
     fig.update_yaxes(range=[bot - pad, top + pad], row=3, col=2)
     hit_l = [100 * np.mean(gross[side == sd] > 0) for sd in ("LONG", "SHORT") if (side == sd).any()]
-    fig.layout.annotations[7].text = _title(_PANELS[7][0], "up before costs: " + ", ".join(
+    fig.layout.annotations[7].text = _title(_panels()[7][0], "up before costs: " + ", ".join(
         f"{c.split(' · ')[0][2:]} {h:.0f}%" for c, h in zip(cats, hit_l)))
 
     # axes -----------------------------------------------------------------------------------------

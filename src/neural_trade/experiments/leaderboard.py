@@ -575,7 +575,27 @@ def spec_parts(spec: Any) -> Tuple[Dict[str, Any], Dict[str, Any], Tuple[int, ..
         return {}, {}, ()
     get = (lambda k: spec.get(k)) if isinstance(spec, Mapping) else (lambda k: getattr(spec, k, None))
     folds = tuple(int(f) for f in (get("folds") or ()))
-    return dict(get("leaderboard") or {}), dict(get("backtest") or {}), folds
+    # the board's cost block is the scenario's EFFECTIVE costs: the base Config's profile (NT-041: FEE_BPS,
+    # HALF_SPREAD_BPS, SLIPPAGE_BPS), with the spec's explicit ``backtest:`` entries on top; 0 by default (D-044)
+    backtest = {**_spec_config_profile(spec), **dict(get("backtest") or {})}
+    return dict(get("leaderboard") or {}), backtest, folds
+
+
+def _spec_config_profile(spec: Any) -> Dict[str, float]:
+    """The cost profile of a scenario spec's base Config (only the non-default entries), whether the spec is a
+    ``Scenario`` or its stored mapping; the ``overrides:`` of a mapping whose base_config cannot be resolved."""
+    from neural_trade.core.config import Config
+    from neural_trade.core.costs import cost_profile_of
+    from neural_trade.experiments.scenario import Scenario, ScenarioError
+
+    try:
+        sc = spec if isinstance(spec, Scenario) else Scenario.from_dict(spec)
+        prof = cost_profile_of(sc.base())
+    except (ScenarioError, ValueError, OSError, KeyError, TypeError, AttributeError):
+        ov = (spec.get("overrides") if isinstance(spec, Mapping) else getattr(spec, "overrides", None)) or {}
+        prof = cost_profile_of(Config().copy(**{k: v for k, v in ov.items()
+                                                 if k in ("FEE_BPS", "HALF_SPREAD_BPS", "SLIPPAGE_BPS")}))
+    return {k: v for k, v in prof.items() if v}
 
 
 def find_scenario_spec(name: str, specs_dir="configs/scenarios", stored_dir=None) -> Tuple[Any, str]:

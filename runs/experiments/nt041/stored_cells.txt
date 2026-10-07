@@ -1,0 +1,16 @@
+scenario | stored done cells | now not done (a hole in the fold's blocks, no gap record) | still matched
+capacity_v1 | 15 | 0 | 15
+capacity_v1_timing | 3 | 0 | 3
+h4h_360d | 1 | 1 | 0
+long_360d | 1 | 1 | 0
+long_360d_stab | 6 | 6 | 0
+loss_prune_v1 | 30 | 0 | 30
+micro_horizons | 3 | 0 | 3
+micro_l2 | 15 | 0 | 15
+micro_lookback | 3 | 0 | 3
+micro_lookback_h4b | 1 | 0 | 1
+micro_ohlcv_duel | 6 | 0 | 6
+micro_ohlcv_duel_r1 | 3 | 0 | 3
+micro_pnl_e1 | 6 | 0 | 6
+micro_pnl_e2 | 9 | 0 | 9
+reference_default | 9 | 0 | 9

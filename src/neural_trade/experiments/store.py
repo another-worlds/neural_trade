@@ -159,17 +159,42 @@ class RunIndex:
 
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        return sqlite3.connect(str(self.path), timeout=30)
+        con = sqlite3.connect(str(self.path), timeout=30)
+        self._add_missing_columns(con)
+        return con
+
+    @staticmethod
+    def _present(con: sqlite3.Connection) -> set:
+        try:
+            return {r[1] for r in con.execute("PRAGMA table_info(runs)")}
+        except sqlite3.DatabaseError:
+            return set()
+
+    def _add_missing_columns(self, con: sqlite3.Connection) -> None:
+        """An index made before a column of RUN_COLUMNS existed gets it on every open (``ALTER TABLE ADD COLUMN``,
+        idempotent; NULL in old rows until they are re-read). A file that cannot be written is left as it is:
+        readers then select NULL for the missing columns (:meth:`_select`)."""
+        have = self._present(con)
+        if not have:
+            return
+        for c, t in RUN_COLUMNS:
+            if c not in have:
+                try:
+                    con.execute(f"ALTER TABLE runs ADD COLUMN {c} {t.replace(' PRIMARY KEY', '').replace(' NOT NULL', '')}")
+                    con.commit()
+                except sqlite3.OperationalError:
+                    pass
+
+    def _select(self, con: sqlite3.Connection) -> str:
+        """The column list of a SELECT over ``runs``: NULL for a column the file (read-only, old) lacks."""
+        have = self._present(con)
+        return ", ".join(c if c in have else f"NULL AS {c}" for c in RUN_FIELDS)
 
     def ensure_schema(self) -> "RunIndex":
         cols = ", ".join(f"{c} {t}" for c, t in RUN_COLUMNS)
         with closing(self._connect()) as con, con:
             con.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
             con.execute(f"CREATE TABLE IF NOT EXISTS runs ({cols})")
-            have = {r[1] for r in con.execute("PRAGMA table_info(runs)")}
-            for c, t in RUN_COLUMNS:          # an index made before a column existed: add it (NULL until re-read)
-                if c not in have:
-                    con.execute(f"ALTER TABLE runs ADD COLUMN {c} {t.replace(' PRIMARY KEY', '').replace(' NOT NULL', '')}")
             con.execute("CREATE INDEX IF NOT EXISTS runs_by_cell ON runs (scenario, cell_key)")
             con.execute("CREATE TABLE IF NOT EXISTS scores (run_id TEXT NOT NULL, name TEXT NOT NULL, value REAL, "
                         "PRIMARY KEY (run_id, name))")
@@ -220,9 +245,8 @@ class RunIndex:
         if status is not None:
             where.append("status = ?")
             args.append(status)
-        sql = f"SELECT {', '.join(RUN_FIELDS)} FROM runs" + (f" WHERE {' AND '.join(where)}" if where else "") \
-            + " ORDER BY scenario, cell_key, run_id"
         with closing(self._connect()) as con:
+            sql = f"SELECT {self._select(con)} FROM runs" + (f" WHERE {' AND '.join(where)}" if where else "")                 + " ORDER BY scenario, cell_key, run_id"
             return [dict(zip(RUN_FIELDS, r)) for r in con.execute(sql, args)]
 
     def scores(self, run_id: str) -> Dict[str, Optional[float]]:
@@ -236,7 +260,7 @@ class RunIndex:
         if not self.path.exists():
             return {"runs": [], "scores": []}
         with closing(self._connect()) as con:
-            runs = sorted(con.execute(f"SELECT {', '.join(RUN_FIELDS)} FROM runs"), key=repr)
+            runs = sorted(con.execute(f"SELECT {self._select(con)} FROM runs"), key=repr)
             scores = sorted(con.execute("SELECT run_id, name, value FROM scores"), key=repr)
         return {"runs": runs, "scores": scores}
 

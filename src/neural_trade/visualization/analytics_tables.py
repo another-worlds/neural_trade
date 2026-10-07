@@ -462,7 +462,7 @@ def baseline_table(report, *, compact: bool = True, digits: Optional[int] = 4) -
         df.attrs["caption"] = ("noise = |z| < 1.96; significantly worse = the model loses with z <= -1.96. "
                                "DM: Diebold-Mariano z of the per-sample loss difference, "
                                f"Bartlett long-run variance with lag {DM_LAG_PER_STEP} x bars ahead. boot: margin / "
-                               f"its paired moving-block bootstrap standard error ({BLOCK}-bar blocks, {BOOT_N} "
+                               f"its paired moving-block bootstrap standard error ({(rep.get('meta') or {}).get('boot_block', BLOCK)}-bar blocks, {BOOT_N} "
                                "resamples).")
     elif margins:
         df.attrs["caption"] = ("This report predates the current noise tests: its DM z uses sd / sqrt(n // bars "

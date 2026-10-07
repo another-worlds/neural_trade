@@ -246,6 +246,8 @@ def save_predictions(out_dir, frame, cal, arrays, *, bar_minutes: float) -> Dict
                  "anchor_timestamp": _timestamps(arrays["df"], anchors), "anchor_bar": anchors,
                  "sequence_index": np.asarray(block["index"], dtype=np.int64), "bar_minutes": float(bar_minutes),
                  "block": block_name}
+        if bars.breaks is not None:                  # a hole inside the block (NT-041): rescoring must see it too
+            extra["bar_break"] = bars.breaks
         out[f"predictions_{key}"] = block_frame.save_npz(Path(out_dir) / PREDICTION_FILES[key], extra=extra)
     return out
 
@@ -257,7 +259,7 @@ def load_block(path):
 
     frame = PredictionFrame.load_npz(path)
     extra = frame.meta["extra"]
-    bars = Bars(extra["bar_open"], extra["bar_high"], extra["bar_low"], extra["bar_close"])
+    bars = Bars(extra["bar_open"], extra["bar_high"], extra["bar_low"], extra["bar_close"], extra.get("bar_break"))
     return frame, bars, extra
 
 

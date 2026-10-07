@@ -234,8 +234,10 @@ class DataProcessor:
         # Previously the last TimeSeriesSplit fold was BOTH validation and test with no gap:
         # 79 "validation" windows contained bars that were training labels, model selection
         # happened on the test set, and calibration was fit on the test set too.
-        if getattr(self.config, 'FOLD_LAYOUT', 'tscv') == 'timed':
-            plan = getattr(self, '_plan', None)
+        plan = getattr(self, '_plan', None)
+        if plan is not None and getattr(self.config, 'FOLD_LAYOUT', 'tscv') == 'tscv' and                 X_seq.shape[0] != plan.n_sequences:
+            plan = None                 # windows from elsewhere than this plan: cut them by count, as before
+        if plan is not None or getattr(self.config, 'FOLD_LAYOUT', 'tscv') == 'timed':
             if plan is None:
                 raise ValueError("FOLD_LAYOUT 'timed' places the folds by timestamps: build the windows with "
                                  "this DataProcessor's build_windows(close, df) (or prepare_datasets), not a "

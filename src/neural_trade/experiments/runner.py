@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from neural_trade.core.config import Config
+from neural_trade.core.costs import COST_FIELDS
 from neural_trade.experiments.dataset import LayoutCache, setup_of
 from neural_trade.experiments.scenario import Cell, Scenario, ScenarioError, config_hash, config_hash_of_dir
 from neural_trade.experiments.store import RESULT_FILE, RunStore
@@ -74,6 +75,15 @@ def cell_run_name(scenario: str, cell_key: str) -> str:
     key is unique only inside a scenario, the run id is the index's key across scenarios; older ids
     (no suffix) stay as they are."""
     return f"{cell_key}-{hashlib.sha256(scenario.encode('utf-8')).hexdigest()[:6]}"
+
+
+def _recorded_gap_policy(run_dir) -> bool:
+    """True when the run's meta.json carries the hole record (``dataset.gaps``) the gap policy writes."""
+    try:
+        meta = json.loads((Path(run_dir) / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(((meta.get("dataset") or {}).get("gaps")))
 
 
 @dataclass
@@ -167,7 +177,11 @@ class Runner:
             if same in seen:
                 raise ScenarioError(f"{sc.where()}: folds {seen[same]} and {cell.fold} are the same fold of the data")
             seen[same] = str(cell.fold)
-            planned.append(PlannedCell(cell, cfg, config_hash(cfg), fold, dict(layout.fingerprint), setup_of(cfg)))
+            setup = setup_of(cfg)
+            # the costs the cell is scored at: the config's profile with the spec's backtest: entries on top
+            setup["cost_profile"] = {**setup["cost_profile"], **{k: float(sc.backtest[k]) for k in COST_FIELDS
+                                                                 if sc.backtest.get(k) is not None}}
+            planned.append(PlannedCell(cell, cfg, config_hash(cfg), fold, dict(layout.fingerprint), setup))
         self._mark_states(planned)
         return planned
 
@@ -195,6 +209,18 @@ class Runner:
             attempts = [r for r in by_cell.get(pc.key, [])
                         if r["settings_hash"] == settings
                         and config_hash_of_dir(self.store.root / r["run_dir"]) == pc.config_hash]
+            if sum((pc.fold.get("windows_dropped") or {}).values()):
+                # NT-041: a hole lies inside this fold's blocks. A run made before the gap policy recorded no
+                # dataset.gaps and trained on windows that span the hole: it is not this cell's result.
+                kept = []
+                for r in attempts:
+                    if _recorded_gap_policy(self.store.root / r["run_dir"]):
+                        kept.append(r)
+                    else:
+                        logger.info("[scenario %s] %s: run %s predates the gap policy and its fold's blocks span a "
+                                    "hole (%s windows now dropped): not counted as this cell's result",
+                                    self.scenario.name, pc.key, r["run_id"], pc.fold["windows_dropped"])
+                attempts = kept
             pc.runs = [r["run_id"] for r in attempts]
             states = {r["status"] for r in attempts}
             pc.state = "done" if "done" in states else ("failed" if "failed" in states else "pending")
@@ -279,7 +305,7 @@ class Runner:
                 "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"],
                    # NT-041: the bars the fold reads (first training window to last test target) and, for the
                    # timed layout, where it was planned to start
-                   **{k: pc.fold[k] for k in ("read_range", "planned_start") if k in pc.fold}}}
+                   **{k: pc.fold[k] for k in ("read_range", "planned_start", "windows_dropped") if k in pc.fold}}}
 
     def _create_context(self, pc: PlannedCell, meta: Dict[str, Any]):
         from neural_trade.experiments.run_context import RunContext

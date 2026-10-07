@@ -639,7 +639,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             height=height or (1500 if has_sig else 950), legend_top=False)
     bar_min = getattr(result.config, "bar_minutes", 1.0)
     fig.update_layout(hovermode="x unified", hoversubplots="axis", margin=dict(t=76 + 16 * len(lines_sub),
-                                                                              r=_RIGHT_MARGIN),
+                                                                              r=_RIGHT_MARGIN + 8 * (len(L.quote()) + 1)),    # the end labels carry the quote code
                       xaxis=dict(title_text=f"bar of the test block ({bar_min:g}-minute bars)", showspikes=True,
                                  spikemode="across", range=[lo - 0.5, hi - 0.5], autorange=False))
     return fig

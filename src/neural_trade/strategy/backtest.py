@@ -85,12 +85,22 @@ class Bars:
     high: np.ndarray
     low: np.ndarray
     close: np.ndarray
+    # breaks[t] is True when bar t is not followed by the next bar in time (a hole in the data lies between the
+    # decision bars t and t + 1, NT-041): the discrete engine closes a position at bar t's close and enters
+    # nothing there instead of filling across the hole. None = no break.
+    breaks: Optional[np.ndarray] = None
 
     def __post_init__(self):
         for k in ("open", "high", "low", "close"):
             setattr(self, k, np.asarray(getattr(self, k), dtype=float).reshape(-1))
         if not (len(self.open) == len(self.high) == len(self.low) == len(self.close)):
             raise ValueError("open/high/low/close must have equal lengths")
+        if self.breaks is not None:
+            self.breaks = np.asarray(self.breaks, dtype=bool).reshape(-1)
+            if len(self.breaks) != len(self.close):
+                raise ValueError("breaks must have one entry per bar")
+            if not self.breaks.any():
+                self.breaks = None
 
     def __len__(self):
         return len(self.close)
@@ -106,18 +116,23 @@ class Bars:
     def from_frame(cls, df, anchor_bars) -> "Bars":
         """Bars of a standardised OHLCV frame (Open/High/Low/Close columns) at the anchor rows.
 
-        Anchors must be consecutive bars (WINDOW_STEP = 1): the engine fills at bar t+1's open.
+        Anchors move forward one bar at a time (WINDOW_STEP = 1): the engine fills at bar t+1's open. Where an
+        anchor jumps forward (the windows a hole spans were dropped, GAP_POLICY "drop") the bars before and
+        after the jump are not neighbours: ``breaks`` marks it and the engine does not trade across it.
         """
         idx = np.asarray(anchor_bars, dtype=int)
-        if len(idx) > 1 and not np.all(np.diff(idx) == 1):
-            raise ValueError("anchor bars must be consecutive (WINDOW_STEP=1) for next-open fills")
+        steps = np.diff(idx) if len(idx) > 1 else np.zeros(0, dtype=int)
+        if len(steps) and np.any(steps < 1):
+            raise ValueError("anchor bars must increase (WINDOW_STEP=1) for next-open fills")
+        breaks = np.r_[steps != 1, False] if len(steps) else None
         cols = {c.lower(): c for c in df.columns}
         close = df[cols["close"]].to_numpy(float)[idx]
         get = lambda name: df[cols[name]].to_numpy(float)[idx] if name in cols else close  # noqa: E731
-        return cls(get("open"), get("high"), get("low"), close)
+        return cls(get("open"), get("high"), get("low"), close, breaks)
 
     def slice(self, stop: int) -> "Bars":
-        return Bars(self.open[:stop], self.high[:stop], self.low[:stop], self.close[:stop])
+        return Bars(self.open[:stop], self.high[:stop], self.low[:stop], self.close[:stop],
+                    None if self.breaks is None else self.breaks[:stop])
 
 
 @dataclass
@@ -259,16 +274,20 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
                 px = max(pos.tp, o) if pos.sign > 0 else min(pos.tp, o)
                 close_position(t, px, "TP")
         # 3. at the close
+        broken = bars.breaks is not None and bool(bars.breaks[t])      # a hole follows this bar: no fill across it
         if pos is not None:
             position[t] = pos.sign * pos.qty * pos.entry_mid / max(equity_cash, 1e-12)
             held = t - pos.entry_bar + 1
-            if held >= pos.max_hold:
+            if broken:
+                pending_exit = None
+                close_position(t, c, "EOW")
+            elif held >= pos.max_hold:
                 pending_exit = "TIME"
             else:
                 pending_exit = strategy.exit_signal(signals, t, "LONG" if pos.sign > 0 else "SHORT", held,
                                                     pos.entry_mid, pos.order)
                 trace.append({"bar": t, "kind": "exit", "request": pending_exit})
-        elif t >= warmup and t < n - 1:
+        elif t >= warmup and t < n - 1 and not broken:
             pending_entry = strategy.decide(signals, t)
             if pending_entry is not None:
                 decisions.append({"bar": t, "side": pending_entry.side, "size": pending_entry.size_frac,
@@ -325,6 +344,9 @@ def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureSt
     so it equals ``breakeven_cost_bps``). ``avg_hold_bars`` is the mean number of bars from a fill to
     the next fill or the block's end; ``exposure`` the share of bars with a nonzero position.
     """
+    if bars.breaks is not None:
+        raise ValueError("exposure mode does not trade across a hole in the data (the block's bars have a break): "
+                         "use a discrete strategy, or GAP_POLICY 'refuse' / a block without a hole")
     cfg = config or BacktestConfig()
     n = len(bars)
     if len(signals) != n:
@@ -604,7 +626,7 @@ def _perturb_after(frame: PredictionFrame, bars: Bars, t: int, rng) -> tuple:
         meta["delta_raw"] = {h: jitter(raw[h], 500.0) for h in HORIZONS}
     f2 = PredictionFrame(frame.y, lc, delta, prob, var, frame.pred_scale, frame.pred_mean, frame.horizon_steps,
                          frame.split, cal, meta=meta)
-    b2 = Bars(jitter(bars.open, 300.0), jitter(bars.high, 300.0), jitter(bars.low, 300.0), jitter(bars.close, 300.0))
+    b2 = Bars(jitter(bars.open, 300.0), jitter(bars.high, 300.0), jitter(bars.low, 300.0), jitter(bars.close, 300.0), bars.breaks)
     return f2, b2
 
 

@@ -1254,11 +1254,11 @@ class Sweep:
     def _score_trial(self, rows: Sequence[Mapping[str, Any]]) -> TrialScore:
         """The trial's dev score through the leaderboard's aggregation; a failed fold or an unstable cell
         (non-finite loss, non-finite-gradient steps above the limit) makes it FAILED with the reason."""
-        from neural_trade.experiments.leaderboard import scenario_cost_profile, scenario_guard_rails
+        from neural_trade.experiments.leaderboard import scenario_cost_profile, scenario_guard_rails, spec_parts
 
         score = dev_net_sharpe(rows, self.dev_folds, store_root=self.store.root,
                                guard_rails=scenario_guard_rails(self.scenario)[0],
-                               board_cost=scenario_cost_profile(self.scenario.backtest))
+                               board_cost=scenario_cost_profile(spec_parts(self.scenario)[1]))
         bad = self._unstable(rows)
         if bad and score.value is not None:
             return dataclasses.replace(score, value=None, reason=bad)
@@ -1353,7 +1353,7 @@ class Sweep:
         winner, stop reason): a busy GPU before a batch, or a reading above the watch level after one, stops the
         re-run with no table and no winner (resume finishes it; finished cells are not trained again)."""
         from neural_trade.experiments.leaderboard import (
-            RANK_METRIC, build_leaderboard, scenario_cost_profile, scenario_guard_rails)
+            RANK_METRIC, build_leaderboard, scenario_cost_profile, scenario_guard_rails, spec_parts)
         from neural_trade.experiments.leaderboard import winner as leaderboard_winner
 
         o = self.options
@@ -1385,7 +1385,7 @@ class Sweep:
         rows = [r for r in self.store.index.rows(self.sweep_id) if r["variant"] in variants]
         unstable = {v: self._unstable([r for r in rows if r["variant"] == v]) for v in variants}
         board = build_leaderboard(rows, guard_rails=scenario_guard_rails(self.scenario)[0], store_root=self.store.root,
-                                  board_cost=scenario_cost_profile(self.scenario.backtest),
+                                  board_cost=scenario_cost_profile(spec_parts(self.scenario)[1]),
                                   spec_folds=self.scenario.folds)
         table = []
         for lb in board:

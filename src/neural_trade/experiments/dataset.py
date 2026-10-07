@@ -221,14 +221,18 @@ def data_layout(config: Config) -> DataLayout:
     times = df["timestamp"]
     fingerprint = _fingerprint(config, df, n_rows, path, plan.gaps)
     out: List[Dict[str, Any]] = []
-    for f in plan.folds:
+    for f, nom in zip(plan.folds, plan.nominal):
         blocks = {}
         for name in ("train", "val", "cal", "test"):
-            idx = getattr(f, name)
-            a0, a1 = int(plan.anchors[int(idx[0])]) - 1, int(plan.anchors[int(idx[-1])]) - 1
-            blocks[name] = {"start": int(idx[0]), "stop": int(idx[-1]) + 1, "n": int(len(idx)),
+            n = nom[name]
+            # the block's boundaries are the undropped grid's (as before the hole policy); n counts the windows
+            # that exist, n_dropped the ones a hole removed inside it
+            a0, a1 = int(plan.grid_anchors[n["first"]]) - 1, int(plan.grid_anchors[n["last"]]) - 1
+            blocks[name] = {"start": n["first"], "stop": n["last"] + 1, "n": int(len(getattr(f, name))),
+                            "n_dropped": n["dropped"],
                             "first_timestamp": _iso(times.iloc[a0]), "last_timestamp": _iso(times.iloc[a1])}
         out.append({"fold_id": int(f.fold), "gap": int(f.gap), "blocks": blocks,
+                    "windows_dropped": {k: v["n_dropped"] for k, v in blocks.items()},
                     # NT-041: the range of bars a fold reads, from its first training sequence's window start
                     # to its last test sequence; the timed layout also records its planned start
                     "read_range": {"first_timestamp": blocks["train"]["first_timestamp"],
