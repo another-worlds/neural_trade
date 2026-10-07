@@ -62,11 +62,21 @@ def compute_extended_trend_features(close_values, index, periods):
     return np.array(features, dtype='float32')
 
 
+def first_anchor(lookback, periods) -> int:
+    """The first anchor bar (the first bar after the window) a sequence can have: the window needs
+    ``lookback`` bars before it, and the longest past-delta lag ``p`` reads ``close[i - 1 - p]``, so
+    ``i >= p + 1``. (Before NT-041 it was ``max(lookback, p)``: with ``p >= lookback`` the first
+    anchor's longest lag fell before the data and was filled with 0.0; the reference setup, p = 20 <
+    lookback = 60, is unchanged.)"""
+    longest = int(max(periods)) if len(periods) else 0
+    return int(max(int(lookback), longest + 1))
+
+
 def sequence_counts(config, n_bars):
     """``(n_total, dropped)``: the sequences ``n_bars`` bars give, and how many of the OLDEST
     ``Config.MAX_SEQUENCE_COUNT`` drops (0 without a cap). Pass ``dropped`` as ``first_seq`` to the
     window builders to build only the kept (newest) sequences (NT-177)."""
-    start = int(max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS))))
+    start = first_anchor(config.LOOKBACK, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
     end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
     total = len(range(start, end, step))
@@ -79,8 +89,7 @@ def make_sequences_with_extended_trends(config, close_array, lookback, *, first_
     are identical to the same rows of the full result."""
     X, y, last_close, extended_trends = [], [], [], []
     # Ensure start index is an integer even if periods are provided as floats
-    max_extended_period = int(max(config.EXTENDED_TREND_PERIODS))
-    start_idx = int(max(lookback, max_extended_period))
+    start_idx = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, 'WINDOW_STEP', 1)))
 
     horizon_steps = [int(h) for h in getattr(config, 'HORIZON_STEPS', [1, 5, 15])]
@@ -140,7 +149,7 @@ def make_multichannel_windows(config, series: dict, lookback, *, first_seq=0):
     n = arrays[0].shape[0]
     if any(a.shape[0] != n for a in arrays):
         raise ValueError("all INPUT_SERIES arrays must have the same length")
-    start_idx = int(max(lookback, int(max(config.EXTENDED_TREND_PERIODS))))
+    start_idx = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
     end_idx = int(n - (int(max(config.HORIZON_STEPS)) - 1))
     X = [np.stack([a[i - lookback:i] for a in arrays], axis=-1)
@@ -155,7 +164,7 @@ def sequence_anchor_bars(config, n_bars, n_total_seq=None, seq_index=None):
     ``start + (k + dropped) * step - 1``. ``n_total_seq`` is the uncapped sequence count
     (derived from ``n_bars`` when omitted); ``seq_index`` selects sequences (default all kept).
     """
-    start = int(max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS))))
+    start = first_anchor(config.LOOKBACK, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
     end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
     total = len(range(start, end, step)) if n_total_seq is None else int(n_total_seq)
@@ -176,7 +185,7 @@ def make_inference_windows(close_array, lookback, *, extended_trend_periods=None
     """
     close = np.asarray(close_array, dtype="float32").reshape(-1)
     periods = [int(p) for p in (extended_trend_periods or [])]
-    start = int(max([lookback] + periods))
+    start = first_anchor(lookback, periods)
     if len(close) < start:
         raise ValueError(f"need at least {start} bars, got {len(close)}")
     X, lc, ext = [], [], []
@@ -201,7 +210,7 @@ def make_inference_input_windows(config, df):
     if names == ["close"]:
         return Xc, lc, ext
     arrays = [df[SERIES_COLUMNS[name]].to_numpy(dtype="float32") for name in names]
-    start = int(max([config.LOOKBACK] + [int(p) for p in config.EXTENDED_TREND_PERIODS]))
+    start = first_anchor(config.LOOKBACK, [int(p) for p in config.EXTENDED_TREND_PERIODS])
     X = np.stack([np.stack([a[i - config.LOOKBACK:i] for a in arrays], axis=-1)
                   for i in range(start, len(close) + 1)]).astype("float32")
     return X, lc, ext

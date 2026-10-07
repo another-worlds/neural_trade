@@ -46,9 +46,16 @@ def file_sha256(path) -> str:
 
 
 def setup_of(config: Config) -> Dict[str, Any]:
-    """The setup as configured today: bar minutes, the window and the horizons in bars."""
-    return {"bar_minutes": int(config.RESAMPLE_MINUTES), "LOOKBACK": int(config.LOOKBACK),
-            "HORIZON_STEPS": [int(h) for h in config.HORIZON_STEPS]}
+    """The setup of a run: bar minutes, the window and the horizons in bars (``LOOKBACK``, ``HORIZON_STEPS``,
+    the keys the index reads) and, from the dataset spec (NT-041), the instrument, the quote currency, the
+    window, horizons and trend lags in wall-clock minutes, and the cost profile (fee, half-spread, slippage
+    per side, bps)."""
+    from neural_trade.core.dataset_spec import DatasetSpec
+
+    out = {"bar_minutes": int(config.RESAMPLE_MINUTES), "LOOKBACK": int(config.LOOKBACK),
+           "HORIZON_STEPS": [int(h) for h in config.HORIZON_STEPS]}
+    out.update({k: v for k, v in DatasetSpec.from_config(config).to_dict().items() if k != "bar_minutes"})
+    return out
 
 
 def data_key(config: Config) -> str:
@@ -97,7 +104,7 @@ def data_layout(config: Config) -> DataLayout:
     """Load and prepare the configured data once and lay out its purged folds (no windows built)."""
     from neural_trade.data.processor import DataProcessor
     from neural_trade.data.splits import make_purged_splits
-    from neural_trade.data.windowing import sequence_anchor_bars
+    from neural_trade.data.windowing import first_anchor, sequence_anchor_bars
 
     loader = str(config.DATA_LOADER)
     if loader not in FILE_LOADERS:
@@ -117,7 +124,7 @@ def data_layout(config: Config) -> DataLayout:
     df = dp.preprocess(raw)
     close = df["Close"].to_numpy()
     lookback = int(config.LOOKBACK)
-    start = int(max(lookback, int(max(config.EXTENDED_TREND_PERIODS))))
+    start = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
     end = int(len(close) - (int(max(config.HORIZON_STEPS)) - 1))
     n_total = len(range(start, end, 1))
     cap = int(config.MAX_SEQUENCE_COUNT or 0)

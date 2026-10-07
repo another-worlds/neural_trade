@@ -231,7 +231,16 @@ class Config:
     # ------------------------------------------------------------------ data
     CSV_PATH: str = _f("binance_btcusdt_1min_ccxt.csv", "data", "OHLCV CSV (timestamp/datetime, open..volume)",
                        unit="path")
-    LOOKBACK: int = _f(60, "data", "input window length in bars", unit="bars", ge=1, le=1440, step=1)
+    SYMBOL: str = _f("BTC/USDT", "data", "the instrument (base/quote); figure titles and the dataset spec name it "
+                     "(NT-041)", unit="name")
+    QUOTE_CURRENCY: str = _f("USDT", "data", "quote currency the prices and the price-delta target are in; "
+                             "currency labels of the figures come from here (NT-041)", unit="name")
+    LOOKBACK: int = _f(60, "data", "input window length in bars (WINDOW_MINUTES, when set, decides it)",
+                       unit="bars", ge=1, le=1440, step=1)
+    WINDOW_MINUTES: Optional[float] = _f(None, "data", "input window length in wall-clock minutes; None = use "
+                                         "LOOKBACK bars. When set, LOOKBACK = WINDOW_MINUTES / bar size, and a "
+                                         "length that is not a whole number of bars is refused (NT-041)",
+                                         unit="minutes", gt=0.0)
     INPUT_SERIES: List[str] = _f(["open", "high", "low", "close", "volume"], "data",
                                  "which bar series each input window carries, in this fixed order (a "
                                  "subsequence of open, high, low, close, volume that includes 'close'; "
@@ -239,6 +248,14 @@ class Config:
                                  "[B, LOOKBACK] instead of [B, LOOKBACK, len(INPUT_SERIES)]); OHLC channels "
                                  "are window-relative, volume has its own train-fit scale "
                                  "(neural_trade.data.scaling)", unit="name")
+    FEE_BPS: float = _f(0.0, "data", "the instrument's cost profile: exchange fee per side, basis points of the "
+                        "notional (0: no trading costs assumed, D-044). Backtests that build their BacktestConfig "
+                        "from a run read it here; a backtest: spec entry overrides it (NT-041)", unit="bps",
+                        ge=0.0)
+    HALF_SPREAD_BPS: float = _f(0.0, "data", "the instrument's cost profile: half the bid-ask spread per side, "
+                                "basis points (0, D-044); see FEE_BPS", unit="bps", ge=0.0)
+    SLIPPAGE_BPS: float = _f(0.0, "data", "the instrument's cost profile: slippage per side, basis points "
+                             "(0, D-044); see FEE_BPS", unit="bps", ge=0.0)
     WINDOW_STEP: int = _f(1, "data", "stride between consecutive training windows", unit="bars", ge=1, step=1)
     RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars); every live "
                                "backtest path annualises Sharpe/Sortino from this bar size (NT-040)",
@@ -270,8 +287,16 @@ class Config:
     EXTENDED_TREND_PERIODS: List[int] = _f([10, 15, 20], "horizons",
                                            "lags (bars) of the past-delta momentum features, one per horizon",
                                            unit="bars", ge=1, step=1)
-    HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2)",
-                                  unit="bars", ge=1, step=1)
+    HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2); "
+                                  "HORIZON_MINUTES, when set, decides them", unit="bars", ge=1, step=1)
+    HORIZON_MINUTES: Optional[List[float]] = _f(None, "horizons", "forecast horizons in wall-clock minutes; None = "
+                                                "use HORIZON_STEPS bars. When set, HORIZON_STEPS = each / bar "
+                                                "size, and a horizon that is not a whole number of bars is "
+                                                "refused (NT-041)", unit="minutes", gt=0.0)
+    EXTENDED_TREND_MINUTES: Optional[List[float]] = _f(None, "horizons", "past-delta lags in wall-clock minutes; "
+                                                       "None = use EXTENDED_TREND_PERIODS bars. When set, "
+                                                       "EXTENDED_TREND_PERIODS = each / bar size (NT-041)",
+                                                       unit="minutes", gt=0.0)
 
     # ------------------------------------------------------------------ training
     BATCH_SIZE: int = _f(256, "training", "256: a step costs about the same at 64 or 256 on the GPU (launch-bound), so ~3.7x faster epochs",
@@ -775,6 +800,27 @@ class Config:
             _SPECS[cls] = cached
         return dict(cached)
 
+    # --------------------------------------------------------------- wall-clock lengths (NT-041)
+    def _resolve_wall_clock(self) -> None:
+        """Set LOOKBACK, HORIZON_STEPS and EXTENDED_TREND_PERIODS (bars) from WINDOW_MINUTES,
+        HORIZON_MINUTES and EXTENDED_TREND_MINUTES (wall-clock minutes) over the bar size
+        RESAMPLE_MINUTES, for each one that is set. Run by every validate(), so a constructor, an
+        override, a copy and a YAML load all resolve alike; a length that is not a whole number of
+        bars is refused. With none set nothing changes (the bar-count fields are the setting)."""
+        pairs = (("WINDOW_MINUTES", "LOOKBACK", False), ("HORIZON_MINUTES", "HORIZON_STEPS", True),
+                 ("EXTENDED_TREND_MINUTES", "EXTENDED_TREND_PERIODS", True))
+        from .dataset_spec import minutes_to_bars
+
+        for minutes_name, bars_name, is_list in pairs:
+            minutes = getattr(self, minutes_name)
+            if minutes is None:
+                continue
+            bar = self.RESAMPLE_MINUTES
+            if is_list:
+                setattr(self, bars_name, [minutes_to_bars(m, bar, minutes_name) for m in minutes])
+            else:
+                setattr(self, bars_name, minutes_to_bars(minutes, bar, minutes_name))
+
     # --------------------------------------------------------------- validation
     def validate(self) -> None:
         """Raise :class:`InvalidConfigurationError` (a ``ValueError``) on invalid settings: the
@@ -782,6 +828,7 @@ class Config:
         def bad(msg):
             raise InvalidConfigurationError(msg)
 
+        self._resolve_wall_clock()
         if self.LOOKBACK <= 0:
             bad("LOOKBACK must be positive")
         if self.LOOKBACK > 1440:

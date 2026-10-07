@@ -124,7 +124,8 @@ class DataProcessor:
         """Apply Config.PREPROCESSORS in order, then validate the standardised frame."""
         from neural_trade.data.preprocessors_registry import run_preprocessors
 
-        return validate_ohlcv_frame(run_preprocessors(df, self.config))
+        return validate_ohlcv_frame(run_preprocessors(df, self.config),
+                                    bar_minutes=getattr(self.config, 'RESAMPLE_MINUTES', None))
 
     def load_and_prepare_data(self, read_csv_kwargs: Optional[dict] = None, **loader_kwargs):
         """Load and prepare minute-level data; returns ``(df, close_values float32)``.

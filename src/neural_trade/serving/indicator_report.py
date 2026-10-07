@@ -25,7 +25,7 @@ import numpy as np
 from neural_trade.core.outputs import PredictiveOutputs
 from neural_trade.core.postprocess import HORIZONS
 from neural_trade.metrics.direction_labels import direction_labels_np
-from neural_trade.metrics.statistics import BLOCK
+from neural_trade.metrics.statistics import bootstrap_block
 
 
 def _metrics_path(run_dir: Path) -> Path:
@@ -85,7 +85,7 @@ def indicator_importance(predictor, block):
         return _price_and_direction(heads, y_scaled, y, last_close, deadband)
 
     steps = [int(h) for h in getattr(cfg, "HORIZON_STEPS", [1])]
-    return importance_from_model(predictor.model, windows, score_fn, block=max(BLOCK, max(steps)),
+    return importance_from_model(predictor.model, windows, score_fn, block=bootstrap_block(steps),
                                  horizon_bars=max(steps))
 
 

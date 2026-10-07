@@ -174,12 +174,13 @@ class Predictor:
         """``(PredictionBatch, preprocessed df, anchor rows)`` for every complete window of a raw frame;
         anchor row i of the df is the last bar of window i (for Bars.from_frame)."""
         from neural_trade.data.loaders import validate_ohlcv_frame
-        from neural_trade.data.windowing import make_inference_input_windows
+        from neural_trade.data.windowing import first_anchor, make_inference_input_windows
         from neural_trade.registries.preprocessors import run_preprocessors
 
-        df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config))
+        df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config),
+                                  bar_minutes=self.config.RESAMPLE_MINUTES)
         X, lc, _ = make_inference_input_windows(self.config, df)
-        start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
+        start = first_anchor(self.config.LOOKBACK, self.config.EXTENDED_TREND_PERIODS)
         return self.predict(X, lc, alpha=alpha, batch_size=batch_size), df, np.arange(start - 1, len(df))
 
     def predict_frame(self, frame: pd.DataFrame, alpha: float = 0.1, batch_size: Optional[int] = None) -> pd.DataFrame:
@@ -187,11 +188,12 @@ class Predictor:
         is much faster on a GPU for bulk scoring and differs only at float32 round-off."""
         """Preprocess a raw OHLCV frame (Config.PREPROCESSORS) and forecast every complete window."""
         from neural_trade.data.loaders import validate_ohlcv_frame
-        from neural_trade.data.windowing import make_inference_input_windows
+        from neural_trade.data.windowing import first_anchor, make_inference_input_windows
         from neural_trade.registries.preprocessors import run_preprocessors
 
-        df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config))
+        df = validate_ohlcv_frame(run_preprocessors(frame.copy(), self.config),
+                                  bar_minutes=self.config.RESAMPLE_MINUTES)
         X, lc, _ = make_inference_input_windows(self.config, df)
-        start = int(max([self.config.LOOKBACK] + list(self.config.EXTENDED_TREND_PERIODS)))
+        start = first_anchor(self.config.LOOKBACK, self.config.EXTENDED_TREND_PERIODS)
         index = pd.DatetimeIndex(df["timestamp"].iloc[start - 1:].to_numpy(), name="timestamp")
         return self.predict(X, lc, alpha=alpha, batch_size=batch_size).to_frame(index=index)

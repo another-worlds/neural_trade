@@ -228,7 +228,17 @@ def dm_z(loss_model: np.ndarray, loss_base: np.ndarray, steps: int, *, lag: Opti
 
 # --------------------------------------------------------------------- paired block bootstrap (ranked metrics)
 BLOCK = 80
+BLOCK_PER_HORIZON = 4    # the block covers at least this many of the longest horizon's overlap lengths (80 at h = 20)
 BOOT_N = 500             # resamples of the paired block bootstrap of the ranked baseline metrics
+
+
+def bootstrap_block(horizon_steps, *, base: int = BLOCK) -> int:
+    """The moving-block length for targets ``horizon_steps`` bars ahead (NT-041): consecutive targets share
+    h - 1 bars, so a block shorter than a few horizons understates the noise (80 bars at h = 240 gave
+    intervals 44% too narrow). ``max(base, BLOCK_PER_HORIZON x the longest horizon)``: 80 for the
+    reference horizons (up to 20 bars), so today's numbers do not move."""
+    steps = [int(h) for h in np.atleast_1d(horizon_steps)] or [1]
+    return int(max(int(base), BLOCK_PER_HORIZON * max(steps)))
 
 
 def block_bootstrap_counts(n: int, *, block: int = BLOCK, n_boot: int = BOOT_N, seed: int = 0) -> np.ndarray:
