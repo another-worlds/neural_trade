@@ -38,11 +38,12 @@ for the MVP".
 - **Hill-climb metric (owner, 2026-10-07):** the aggregate of `runs/tactical/hc4_metric.py`: price, direction and
   confidence groups at 1/3 each, every paired difference in seed-noise units, verdict by the 95% interval over slices
   with no group below -0.5. Block: 1 day if the epochs check (runs/tactical/epochs_1d/SPEC.md) passes, else 7 days.
-- **CPU and RAM guard (owner, 2026-10-07):** our runs must not load the machine critically. Runs start through
-  `runs/tactical/hc4/run_guarded.sh`, checked in real time every 10 s (owner: "контролируй риал тайм"): our processes at
-  below-normal priority; at most 3; a new one only with >= 12 GB RAM free and CPU < 80%; the newest of ours is stopped and
-  re-queued (resume keeps finished trials) below 6 GB free or at CPU >= 95% for a minute; load in resources.csv and on
-  the dashboard, decisions in guard.log. Never edit a guard script while it runs (bash reads it as it goes): stop, edit, relaunch.
+- **Load guard (owner, 2026-10-07: no critical CPU/RAM load, real time; then "everything lags" -> "more carefully"):**
+  runs start only through `runs/tactical/hc4/run_guarded_v3.sh`: ONE training process, idle priority, TensorFlow grows
+  GPU memory as needed (TF_FORCE_GPU_ALLOW_GROWTH); start only with >= 16 GB RAM and >= 5 GB GPU memory free, GPU use <
+  40%, CPU < 95%; stop and re-queue below 8 GB RAM or 1.5 GB GPU memory free, or at CPU/GPU >= 98% for a minute; checks
+  every 10 s into resources.csv and the dashboard. The GPU also draws the owner's desktop: three processes (v2) filled it
+  (100%, 11.9 of 12.3 GB) and the machine lagged. Never edit a guard script while it runs (bash reads it as it goes).
 - **One dashboard tab per run (owner, 2026-10-07):** every new experiment gets an entry in `EXPERIMENTS` of
   `runs/tactical/dashboard.py` when it is launched (progress, its rules from the SPEC, all 9 outputs, verdict), so the
   owner follows progress in `runs/tactical/dashboard.html` without asking; the running experiment's tab opens by default.
