@@ -1,0 +1,7 @@
+553e179e5466c5d0f43e0f8a9e652ea104051bd1
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_notebook_tooling.py::test_committed_notebooks_pass_check - ...
+1 failed, 2383 passed, 5639 warnings in 607.64s (0:10:07)
