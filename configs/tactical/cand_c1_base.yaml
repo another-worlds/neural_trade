@@ -1,0 +1,36 @@
+schema_version: 1
+name: cand_c1_base
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: D:/nt/neural_trade/Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  VAL_FRACTION: 0.1
+  CAL_FRACTION: 0.1
+  MAX_SEQUENCE_COUNT: 4500
+  FOLD_INDEX: -2
+  BATCH_SIZE: 64
+  TRAIN_METRICS_EVERY: 1
+slices:
+- '2022-04-19T07:00:00'
+seeds:
+- 3
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+- 11
+- 12
+run:
+  calibrate: false
+  epochs: 8
+  save_predictions: true
+rules:
+  finite: true
+  max_nonfinite_grad_steps: 0
+  max_clipped_share: 1.0
+  clip_skip_epochs: 1
+  min_train_loss_drop: -10.0
+  max_term_share: 1.0

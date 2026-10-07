@@ -31,6 +31,12 @@ for the MVP".
 
 ## Rigour and budget (exploratory)
 
+- **Standard screening design (owner, 2026-10-07):** 6 slices x 2 seeds = 12 trials per variant, paired with the
+  base on the same (slice, seed); accepted tolerances: error of the effect up to 0.05, false wins up to 10%
+  (measured: mean error 0.014, worst 5% 0.043, false 'significant' 7%). It sees only large jumps (about +0.05 AUC);
+  a survivor is confirmed on the 40 climb slices, then once on the 10 final slices (runs/tactical/make_hc2.py).
+- **All 9 outputs, always (owner, 2026-10-07):** every run measures the delta, direction and variance heads of every
+  horizon and saves its predictions (screen `run.save_predictions`), never the direction AUC alone.
 - Screen layout (NT-088), one seed, no SPEC and no pre-registration. Every journal row says
   "tactical, exploratory", the seeds and folds it used, and its noise level (D-012).
 - **Budget: none** (owner, D-063): GPU time is not capped or counted against a limit; the journal still

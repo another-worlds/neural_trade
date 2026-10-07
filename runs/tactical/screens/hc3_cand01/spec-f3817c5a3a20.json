@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "name": "hc3_cand01",
+  "description": "",
+  "base_config": "../default.yaml",
+  "overrides": {
+    "CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 2,
+    "VAL_FRACTION": 0.1,
+    "CAL_FRACTION": 0.1,
+    "MAX_SEQUENCE_COUNT": 126000,
+    "FOLD_INDEX": -2,
+    "BATCH_SIZE": 256,
+    "TRAIN_METRICS_EVERY": 10,
+    "LAMBDA_COHERENCE": 1.0707676822991163,
+    "LAMBDA_CRPS": 0.64118130221813,
+    "LAMBDA_DIR": 1.1436002062374124,
+    "LAMBDA_DIR_OUTER": 2.4915238726517375,
+    "LAMBDA_EXTENDED_TREND": 0.8146026844119438,
+    "LAMBDA_LONG": 6.2897857563323045,
+    "LAMBDA_NLL_OUTER": 0.2646121514318308,
+    "LAMBDA_POINT": 0.1382646908821193,
+    "LAMBDA_SHORT": 0.2892885889636201,
+    "LAMBDA_SOFT_ECE": 0.1622340223962945,
+    "LAMBDA_TREND_OUTER": 0.6304502622423451,
+    "LAMBDA_VAR": 0.5087517806080851,
+    "LAMBDA_VOL": 0.9112874039082043
+  },
+  "grid": {
+    "axes": {}
+  },
+  "sample": null,
+  "slices": [
+    "2020-03-12T23:00:00",
+    "2021-05-19T23:00:00",
+    "2023-07-15T00:00:00",
+    "2024-12-05T00:00:00"
+  ],
+  "seeds": [
+    0
+  ],
+  "run": {
+    "calibrate": false,
+    "epochs": 8
+  },
+  "rules": {
+    "finite": true,
+    "max_nonfinite_grad_steps": 0,
+    "max_clipped_share": 1.0,
+    "clip_skip_epochs": 1,
+    "min_train_loss_drop": -10.0,
+    "max_term_share": 1.0
+  }
+}

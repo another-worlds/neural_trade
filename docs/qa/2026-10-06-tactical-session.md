@@ -37,3 +37,20 @@ metrics]. The lead asked four questions. Answers:
 прорыва в расчете нейрокни. Риск менеджмент - отдельный независимый бранч" [The goal: an attempt to escape the
 strategic trap by optimisation, searching for a tactical breakthrough in the network's computation. Risk
 management is a separate, independent branch.]
+
+## Round 3 (2026-10-07): design, candidate, heads
+
+The lead measured the error of smaller designs on the 975 tactical runs and reported the 0.8 AUC values (one block,
+the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner answers, verbatim:
+
+- Screening tolerances: "для нас удовлетворительна лшибка 0.05, а ложные победы - 10%" [an error of 0.05 and 10%
+  false wins are acceptable for us]; then "П.2 6х2 берем" [point 2: we take 6x2].
+- The 7-day scale-up: "Пункт 1. я разрешаю" [I allow it]; then "Возьми пока 1 кандидата и его проверь, у которого
+  наивысший скор 0.8 или больше" [for now take 1 candidate, the one with the highest score, 0.8 or more, and check it].
+  The 10-candidate run was stopped (default, candidates 1-2 complete: no gain; 3-5 one slice each).
+- Heads: "Добавь в измерение остальные 8 голов" [add the other 8 heads to the measurement]; then "Головы - отлично.
+  на будущее используй их всегда" [the heads: great; use them always from now on].
+- "Да, проверь срез. Разметь его рамки и если можешь распарси новости" [check the slice, mark its bounds, parse the
+  news if you can]: runs/tactical/slice_2022_04_19.py / .json; journal H7.
+- "Формализуй требования, дай фидбек после" [formalise the requirements, give feedback afterwards]:
+  runs/tactical/cand_0805/SPEC.md.
