@@ -6,6 +6,7 @@ guard's attribution is tested on the real loss model by fault injection (as test
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -85,6 +86,13 @@ class HarnessFake:
             raise OSError(28, "No space left on device")
         if how == "filenotfound":        # a deterministic setup error: a verdict-side failure
             raise FileNotFoundError("the bars file went away")
+        if how == "winlock":             # a Windows sharing violation (another process holds the file): the machine
+            raise PermissionError("[WinError 32] The process cannot access the file: 'x.json'")
+        if how == "permission":          # a plain permission error: the setup
+            raise PermissionError("[Errno 13] Permission denied: 'x.json'")
+        if how == "probe_fixes" and not ctx.config.PROBE_GRADIENTS:   # fails probe-off, passes in the probe re-run
+            write_run_telemetry(ctx.run_dir, losses=[1.0, 1e12])
+            return fake_result(ctx.config)
         if how in ("tf_oom", "tf_other"):   # TensorFlow's InternalError, named as the runner records it
             InternalError = type("InternalError", (RuntimeError,), {})
             raise InternalError("Failed copying input tensor: out of memory" if how == "tf_oom"
@@ -1114,6 +1122,32 @@ def test_deterministic_setup_errors_are_verdicts_and_tf_internal_errors_need_a_r
             assert not st.is_non_verdict_error(name, msg), (name, msg)
 
 
+def test_a_windows_lock_permission_error_is_not_a_verdict_and_other_setup_errors_are():
+    # WinError 5 / 32 / 33 (access denied, sharing and lock violations: another process holds the file; NT-185, D-065)
+    for code in (5, 32, 33):
+        exc = PermissionError(13, "The process cannot access the file", "x.json", code)
+        if os.name == "nt":
+            assert f"[WinError {code}]" in str(exc)                     # what the runner records as the message
+        msg = f"[WinError {code}] The process cannot access the file: 'x.json'"
+        assert st.is_non_verdict_error("PermissionError", msg), code
+        assert st.is_non_verdict_error("PermissionError", "x", winerror=code), code
+        assert st.is_non_verdict_error("OSError", msg), code
+    # a PermissionError without those codes, and the other setup errors even with them, stay verdicts
+    for msg, code in (("[Errno 13] Permission denied: 'x'", None), ("[WinError 2] x", None), ("x", 1224)):
+        assert not st.is_non_verdict_error("PermissionError", msg, winerror=code), (msg, code)
+    for name in ("FileNotFoundError", "FileExistsError", "NotADirectoryError", "IsADirectoryError"):
+        for code in (5, 32, 33):
+            assert not st.is_non_verdict_error(name, f"[WinError {code}] x"), (name, code)
+            assert not st.is_non_verdict_error(name, "x", winerror=code), (name, code)
+
+
+def test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is(tmp_path, bars_csv):
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
+                         case_ids=["control", "scale_x10"],
+                         trainer=HarnessFake({"control": "winlock", "scale_x10": "permission"}))
+    assert res.case_status == {"control": "NOT A VERDICT", "scale_x10": "FAIL"} and res.exit_code == 1
+
+
 def test_a_tf_internal_error_is_not_a_verdict_only_with_a_resource_message_and_a_missing_file_is(tmp_path, bars_csv):
     res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
                          case_ids=["control", "scale_x10", "horizons_5_60_240"],
@@ -1284,6 +1318,53 @@ def test_a_failed_cells_rerun_never_replaces_its_verdict_and_a_crashed_rerun_say
     assert "re-run crashed" in crashed.report.read_text(encoding="utf-8")
 
 
+def test_a_passing_probe_rerun_never_turns_the_first_runs_fail_into_a_pass(tmp_path, bars_csv):
+    # the probe-off first run fails, its probe-on re-run passes: the verdict stays the first run's (mutation M6)
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0], case_ids=["control"],
+                         trainer=HarnessFake({"control": "probe_fixes"}), probe="failed")
+    (v,), (rr,) = res.verdicts, res.reruns
+    assert rr.passed and not rr.non_verdict and rr.rerun_of == v.run_id
+    assert not v.passed and v.kind == "primary"
+    assert res.case_status == {"control": "FAIL"} and res.case_passed == {"control": False}
+    assert res.verdict_failed and res.exit_code == 1
+    doc = json.loads((res.out_dir / "verdicts.json").read_text(encoding="utf-8"))
+    assert doc["case_status"] == {"control": "FAIL"} and [x["passed"] for x in doc["verdicts"]] == [False]
+    assert [x["passed"] for x in doc["reruns"]] == [True]
+    text = res.report.read_text(encoding="utf-8")
+    assert "| FAIL | PASS |" in text, text
+
+
+def test_a_retry_carries_the_not_rerun_cells_of_its_launch_into_verdicts_and_the_report(tmp_path, bars_csv):
+    # mutation M8c: a --retry-non-verdict launch must keep the launch's "not re-run (cap)" list
+    first = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
+                           case_ids=["control", "scale_x10", "horizons_5_60_240"], probe="failed", max_probe_reruns=1,
+                           trainer=HarnessFake({"control": "bigloss", "scale_x10": "bigloss", "horizons_5_60_240": "oom"}))
+    assert len(first.reruns) == 1 and len(first.not_rerun) == 1 and first.non_verdict_cells == 1
+    (capped,) = first.not_rerun
+    second = st.run_harness(profile=None, store=tmp_path / "runs", trainer=HarnessFake(),
+                            retry_non_verdict_of=first.harness_id)
+    assert second.retry_of == first.harness_id
+    assert [v.run_id for v in second.not_rerun] == [capped.run_id]
+    assert st.NOT_RERUN_CAP in second.not_rerun[0].blame_reason
+    doc = json.loads((second.out_dir / "verdicts.json").read_text(encoding="utf-8"))
+    assert [d["run_id"] for d in doc["not_rerun"]] == [capped.run_id]
+    text = second.report.read_text(encoding="utf-8")
+    assert "Failed cells not re-run" in text and capped.run_id in text and st.NOT_RERUN_CAP in text
+    assert second.case_status["horizons_5_60_240"] == "PASS" and second.exit_code == 1     # the FAILs are carried
+
+
+def test_a_missing_bars_file_is_refused_with_64_and_leaves_no_run_directory(tmp_path, capsys):
+    from neural_trade.cli import main
+
+    store = tmp_path / "s"
+    with pytest.raises(ValueError, match="does not exist"):
+        st.run_harness(profile="tiny", csv=tmp_path / "nope.csv", store=store, seeds=[0], case_ids=["control"],
+                       trainer=HarnessFake())
+    assert main(["stability", "--csv", str(tmp_path / "nope.csv"), "--store", str(store), "--cases", "control",
+                 "--seeds", "0"]) == st.EXIT_REFUSED
+    assert not (store / "stability").exists() or not any((store / "stability").iterdir())
+
+
 def test_a_retry_keeps_the_probe_mode_of_its_launch_and_refuses_another(tmp_path, bars_csv):
     first = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0], case_ids=["control"],
                            trainer=HarnessFake({"control": "oom"}), probe="off")
@@ -1349,11 +1430,14 @@ def test_the_data_csvs_are_untracked_but_their_sha256_stays_in_each_cells_meta(t
 @pytest.mark.slow
 def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_verdicts_equal(tmp_path, bars_csv,
                                                                                                  monkeypatch):
-    """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on. `loss` and every `val_*` key are
-    bitwise equal; the per-term training sums agree within 2 float32 ULP (the probe graph adds nll_h0+nll_h1+nll_h2 in
-    another order: nll_loss 5.028296947 against 5.028297424). Two runs of ONE setup differ
+    """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on. The keys a verdict reads are
+    exact: `loss`, every `val_*` key and every integer-valued counter (non-finite steps, masked-term counts) are
+    bitwise equal. Every other numeric key (period/*, lambda_*, lr, grad_norm_*, contrib_*, the per-term training sums
+    such as nll_loss) may differ by at most 2 float32 ULP. One comparison saw nll_loss differ by 1 ULP (5.028296947 off
+    against 5.028297424 on) while a later probe-on run was bitwise equal to probe-off, so the cause of that gap
+    (the probe graph or run-to-run noise) is not established. Two runs of ONE setup differ
     in the 7th digit unless DETERMINISTIC_GRU is on (NT-114: 5.028296947 against 5.028297901 in nll_loss, probe off in
-    both), so the comparison runs with it, which makes two probe-off runs bitwise equal."""
+    both), so the comparison runs with it."""
     monkeypatch.setitem(st.PROFILES["tiny"], "DETERMINISTIC_GRU", True)
     off = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "off", case_ids=["control"], seeds=[0],
                          probe="off")
@@ -1373,15 +1457,16 @@ def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_
         # the probe's own keys, wall-clock keys and run identifiers (strings) are not training numbers
         return k.startswith("probe_") or "time" in k or "sec" in k or "seconds" in k or isinstance(a[0].get(k), str)
 
-    ulp = np.float32(1.1920929e-07)         # one float32 ULP at 1.0: the probe graph sums nll_h0+nll_h1+nll_h2 in
-    # another order (nll_loss differs by 1 ULP, 5.028296947 against 5.028297424; loss and every val_* key do not)
+    ulp = np.float32(1.1920929e-07)         # one float32 ULP at 1.0. A 1-ULP nll_loss gap was seen once and not
+    # reproduced (its cause is not established); loss, every val_* key and the integer counters stay exact
     for ra, rb in zip(a, b):
         ka = {k for k in ra if not skip(k)}
         assert ka == {k for k in rb if not skip(k)}
         for k in sorted(ka):
-            if k == "loss" or k.startswith("val_"):
-                assert ra[k] == rb[k], f"{k}: {ra[k]!r} != {rb[k]!r}"             # bitwise: the total and every validation key
-            else:                                                                  # per-term training sums: within 2 ULP
+            counter = float(ra[k]).is_integer() and float(rb[k]).is_integer()
+            if k == "loss" or k.startswith("val_") or counter:
+                assert ra[k] == rb[k], f"{k}: {ra[k]!r} != {rb[k]!r}"     # bitwise: what a verdict reads
+            else:                    # period/*, lambda_*, lr, grad_norm_*, contrib_*, per-term sums: within 2 ULP
                 assert abs(ra[k] - rb[k]) <= 2 * float(ulp) * max(abs(ra[k]), abs(rb[k]), 1.0), f"{k}: {ra[k]!r} != {rb[k]!r}"
     va, vb = off.verdicts[0], on.verdicts[0]
     assert va.passed == vb.passed

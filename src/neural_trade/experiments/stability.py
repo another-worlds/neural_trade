@@ -83,7 +83,10 @@ PROBE_SOURCE = "probe sample, one batch"      # what the REPORT calls a blame ta
 NON_VERDICT_ERRORS = ("ResourceExhaustedError", "MemoryError", "OSError", "BrokenProcessPool", "WorkerCrash")
 NOT_A_VERDICT = "NOT A VERDICT"
 # `failed` mode: at most this many probe re-runs per launch. 777 s per reference cell on CPU with the probe (measured at
-# PROBE_EVERY 5) against the 3 h cap of OPERATING_MODEL: floor((10800 - sum of the probe-off times) / 777) = 10.
+# PROBE_EVERY 5, the reference profile's cadence) against the 3 h cap of OPERATING_MODEL:
+# floor((10800 - sum of the probe-off times) / 777) = 10. A re-run probes at PROBE_EVERY 1, which on the tiny profile
+# cost about 1.25x the PROBE_EVERY-5 run (236.7 against 189.9 s, CPU), so the cap may be about 8 at the re-run's real
+# cost: NT-051's SPEC states its measured per-re-run cost and the cap it uses.
 MAX_PROBE_RERUNS = 10
 EXIT_REFUSED = 64            # the harness refused its arguments and ran nothing (1 and 2 are results)
 NOT_RERUN_CAP = "not re-run (cap)"
@@ -115,21 +118,40 @@ def probe_overrides(profile: str, mode: str) -> Dict[str, Any]:
 
 # OSError subclasses that say the setup is wrong (a missing file, a bad path, no permission), not the machine.
 SETUP_OS_ERRORS = ("FileNotFoundError", "FileExistsError", "NotADirectoryError", "IsADirectoryError", "PermissionError")
+# Windows' transient lock failures (access denied, sharing and lock violations: another process holds the file; NT-185,
+# D-065): a PermissionError (or other OSError) with one of these winerror codes is the machine, not the setup.
+TRANSIENT_WINERRORS = (5, 32, 33)
+_WINERROR = re.compile(r"\[WinError (\d+)\]")
+
+
+def _winerror(message: str, winerror=None) -> Optional[int]:
+    """The Windows error code: ``winerror`` when given, else the ``[WinError N]`` that ``str(OSError)`` starts with."""
+    if winerror is not None:
+        try:
+            return int(winerror)
+        except (TypeError, ValueError):
+            return None
+    m = _WINERROR.search(message or "")
+    return int(m.group(1)) if m else None
 # TensorFlow's InternalError and UnknownError are a verdict-free machine failure only with one of these in the message.
 RESOURCE_MESSAGE = re.compile(r"out of memory|oom|alloc|cudnn|cuda_error|cublas|cusolver|resource exhausted|"
                               r"paging file|no space left", re.IGNORECASE)
 RESOURCE_TF_ERRORS = ("InternalError", "UnknownError")
 
 
-def is_non_verdict_error(name, message: str = "") -> bool:
+def is_non_verdict_error(name, message: str = "", *, winerror=None) -> bool:
     """True for an error type that is a resource or machine failure, not a result of the setup. A deterministic setup
-    error (FileNotFoundError and the other path errors) is a verdict-side error; TensorFlow's InternalError and
-    UnknownError count only when ``message`` names memory, an allocation or cuDNN/CUDA."""
+    error (FileNotFoundError and the other path errors) is a verdict-side error, except a PermissionError whose Windows
+    code (``winerror``, or ``[WinError N]`` in ``message``) is a transient lock (:data:`TRANSIENT_WINERRORS`);
+    TensorFlow's InternalError and UnknownError count only when ``message`` names memory, an allocation or
+    cuDNN/CUDA."""
     import builtins
 
     if not name:
         return False
     name = str(name)
+    if name == "PermissionError" and _winerror(message, winerror) in TRANSIENT_WINERRORS:
+        return True
     if name in SETUP_OS_ERRORS:
         return False
     if name in RESOURCE_TF_ERRORS:
@@ -574,7 +596,8 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
         return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)),
                        _verdict_passed(checks), checks, blamed, status, message, T.sha256, blame_source=source["v"])
 
-    if status == "incomplete" or (status == "failed" and is_non_verdict_error(err.get("type"), err.get("message", ""))):
+    if status == "incomplete" or (status == "failed" and is_non_verdict_error(err.get("type"), err.get("message", ""),
+                                                                            winerror=err.get("winerror"))):
         crash = "worker crash: the run directory has no result.json" if status == "incomplete" else message
         return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)), False,
                        [], [], status, crash, T.sha256, non_verdict=True,
@@ -1064,6 +1087,12 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
             hid = f"{_stamp()}-{profile}-{n}"
     if origin and not any(d.get("non_verdict") for d in origin["verdicts"]):
         raise ValueError(f"launch {origin['id']} has nothing to retry: no cell is 'not a verdict'")
+    if origin is None:
+        from neural_trade.data.loaders import resolve_data_path
+
+        csv = csv if csv is not None else Config().CSV_PATH
+        if not resolve_data_path(csv).is_file():             # refused before any run directory exists
+            raise ValueError(f"the bars file {csv} does not exist")
     out_dir = base_out / hid
     out_dir.mkdir(parents=True, exist_ok=False)
     runnable = [c for c in all_cases if c.runnable]
@@ -1078,7 +1107,6 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
     superseded: List[Verdict] = [Verdict.from_dict(d) for d in (origin or {}).get("superseded", [])]
     runner_trainer = trainer if trainer is not None else HarnessTrainer(runnable)
     if origin is None:
-        csv = csv if csv is not None else Config().CSV_PATH
         case_csv = write_case_data(runnable, csv, out_dir, profile)
         base_csv = {c.id: str(csv) for c in runnable if c.id not in case_csv}
         spec = build_scenario(runnable, name=name, profile=profile, seeds=seed_list,
