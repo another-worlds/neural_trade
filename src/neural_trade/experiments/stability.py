@@ -17,8 +17,15 @@ Every setup must pass this before it is trusted (VISION MVP 3). The harness stre
   never run here;
 
 each with 3 seeds (the thresholds file's ``seeds``), in **strict mode** (``STRICT_LOSS_MASKS``: the loss masks
-off, so a non-finite term reaches the total instead of being hidden); the ``reference`` profile also runs the
-per-term gradient probe (the ``tiny`` CPU profile does not: see :data:`COMMON_OVERRIDES`).
+off, so a non-finite term reaches the total instead of being hidden).
+
+**The per-term gradient probe** (``--probe off|on|failed``, NT-191) costs about 12x a reference cell on CPU (777 s
+against 58 s, identical numbers: the probe never changes training). ``failed`` (the reference profile's default):
+every cell runs with the probe OFF; a cell that fails a verdict check is re-run ONCE with the probe on
+(PROBE_EVERY 1) and the REPORT blames the loss term of that re-run's probe sample. ``on``: every cell probed
+(the earlier behaviour). ``off``: never (the tiny profile's default). A cell whose run ended in a resource error
+(``ResourceExhaustedError``, ``MemoryError``, ``OSError``, a worker crash) is **not a verdict**: it is reported as
+such, left out of the pass and fail counts and re-run by ``--retry-non-verdict <harness id>`` as a new launch.
 
 **Cases are engine scenarios.** :func:`build_scenario` makes one variant per case; :class:`~neural_trade
 .experiments.runner.Runner` trains every (case, seed) cell into the run store and its index (the harness
@@ -65,8 +72,24 @@ GPU_NOTE = "GPU, NT-051"
 # Config overrides every case shares: strict mode (masks off). The per-term gradient probe is a profile's choice:
 # it costs about 10% of a GPU step but, on CPU, a tiny run's trace of 17 terms x 3 groups x 136 pairs took 200 s
 # against 30 s without it (measured 2026-10-06), so the tiny profile leaves it off (that check is then
-# reported "not evaluated") and the reference profile turns it on.
+# reported "not evaluated"). PROFILES holds the probe's `on` setting; PROFILE_PROBE says when it is used.
 COMMON_OVERRIDES: Dict[str, Any] = {"STRICT_LOSS_MASKS": True}
+# The probe (NT-191): `off` never, `on` every cell (the profile's PROBE_EVERY), `failed` off first and a probe-on re-run
+# (PROBE_EVERY 1) of each cell that fails a verdict check. A profile's default when none is named:
+PROBE_MODES = ("off", "on", "failed")
+PROFILE_PROBE: Dict[str, str] = {"tiny": "off", "reference": "failed"}
+PROBE_SOURCE = "probe sample, one batch"      # what the REPORT calls a blame taken from the probe
+# Error types that say the machine, not the setup, failed: not a verdict (NT-191). OSError's subclasses count too.
+NON_VERDICT_ERRORS = ("ResourceExhaustedError", "MemoryError", "OSError", "BrokenProcessPool", "WorkerCrash")
+NOT_A_VERDICT = "NOT A VERDICT"
+# `failed` mode: at most this many probe re-runs per launch. 777 s per reference cell on CPU with the probe (measured at
+# PROBE_EVERY 5, the reference profile's cadence) against the 3 h cap of OPERATING_MODEL:
+# floor((10800 - sum of the probe-off times) / 777) = 10. A re-run probes at PROBE_EVERY 1, which on the tiny profile
+# cost about 1.25x the PROBE_EVERY-5 run (236.7 against 189.9 s, CPU), so the cap may be about 8 at the re-run's real
+# cost: NT-051's SPEC states its measured per-re-run cost and the cap it uses.
+MAX_PROBE_RERUNS = 10
+EXIT_REFUSED = 64            # the harness refused its arguments and ran nothing (1 and 2 are results)
+NOT_RERUN_CAP = "not re-run (cap)"
 # Profiles: the data layout and training length of a harness run. `tiny` is the CPU test size.
 PROFILES: Dict[str, Dict[str, Any]] = {
     # tiny: one close-only instance per family (the tests' NT-109 size: the OHLCV catalogue costs wall time)
@@ -79,6 +102,64 @@ PROFILES: Dict[str, Dict[str, Any]] = {
 }
 PROFILE_FOLDS = [-2]
 FAULT_TERMS = {"crps_loss": "crps_gaussian_loss"}      # masked counter name -> the losses.functions function
+
+
+def probe_overrides(profile: str, mode: str) -> Dict[str, Any]:
+    """The Config overrides of a probe mode: off (and failed's first run) no probe; on the profile's cadence; rerun
+    the probe on every step (the blame re-run of a failed cell)."""
+    if mode == "rerun":
+        return {"PROBE_GRADIENTS": True, "PROBE_EVERY": 1}
+    if mode == "on":
+        return {"PROBE_GRADIENTS": True, "PROBE_EVERY": int(PROFILES[profile].get("PROBE_EVERY", 5))}
+    if mode in ("off", "failed"):
+        return {"PROBE_GRADIENTS": False}
+    raise ValueError(f"probe must be one of {list(PROBE_MODES)}, got {mode!r}")
+
+
+# OSError subclasses that say the setup is wrong (a missing file, a bad path, no permission), not the machine.
+SETUP_OS_ERRORS = ("FileNotFoundError", "FileExistsError", "NotADirectoryError", "IsADirectoryError", "PermissionError")
+# Windows' transient lock failures (access denied, sharing and lock violations: another process holds the file; NT-185,
+# D-065): a PermissionError (or other OSError) with one of these winerror codes is the machine, not the setup.
+TRANSIENT_WINERRORS = (5, 32, 33)
+_WINERROR = re.compile(r"\[WinError (\d+)\]")
+
+
+def _winerror(message: str, winerror=None) -> Optional[int]:
+    """The Windows error code: ``winerror`` when given, else the ``[WinError N]`` that ``str(OSError)`` starts with."""
+    if winerror is not None:
+        try:
+            return int(winerror)
+        except (TypeError, ValueError):
+            return None
+    m = _WINERROR.search(message or "")
+    return int(m.group(1)) if m else None
+# TensorFlow's InternalError and UnknownError are a verdict-free machine failure only with one of these in the message.
+RESOURCE_MESSAGE = re.compile(r"out of memory|oom|alloc|cudnn|cuda_error|cublas|cusolver|resource exhausted|"
+                              r"paging file|no space left", re.IGNORECASE)
+RESOURCE_TF_ERRORS = ("InternalError", "UnknownError")
+
+
+def is_non_verdict_error(name, message: str = "", *, winerror=None) -> bool:
+    """True for an error type that is a resource or machine failure, not a result of the setup. A deterministic setup
+    error (FileNotFoundError and the other path errors) is a verdict-side error, except a PermissionError whose Windows
+    code (``winerror``, or ``[WinError N]`` in ``message``) is a transient lock (:data:`TRANSIENT_WINERRORS`);
+    TensorFlow's InternalError and UnknownError count only when ``message`` names memory, an allocation or
+    cuDNN/CUDA."""
+    import builtins
+
+    if not name:
+        return False
+    name = str(name)
+    if name == "PermissionError" and _winerror(message, winerror) in TRANSIENT_WINERRORS:
+        return True
+    if name in SETUP_OS_ERRORS:
+        return False
+    if name in RESOURCE_TF_ERRORS:
+        return bool(RESOURCE_MESSAGE.search(message or ""))
+    if name in NON_VERDICT_ERRORS:
+        return True
+    cls = getattr(builtins, name, None)
+    return isinstance(cls, type) and issubclass(cls, OSError)
 
 
 # ------------------------------------------------------------------ thresholds
@@ -339,8 +420,11 @@ def _stamp() -> str:
 
 
 def build_scenario(cases: Sequence[Case], *, name: str, profile: str, seeds: Sequence[int],
-                   case_csv: Mapping[str, str], folds: Sequence[int] = tuple(PROFILE_FOLDS)) -> Dict[str, Any]:
-    """The engine scenario spec (a dict for ``Scenario.from_dict``): one variant per runnable case."""
+                   case_csv: Mapping[str, str], folds: Sequence[int] = tuple(PROFILE_FOLDS),
+                   probe: Optional[str] = None) -> Dict[str, Any]:
+    """The engine scenario spec (a dict for ``Scenario.from_dict``): one variant per runnable case. ``probe`` is
+    a probe mode (:data:`PROBE_MODES`; None: the profile's default)."""
+    mode = probe or PROFILE_PROBE[profile]
     variants = {}
     for c in cases:
         if not c.runnable:
@@ -351,9 +435,9 @@ def build_scenario(cases: Sequence[Case], *, name: str, profile: str, seeds: Seq
             v["CSV_PATH"] = case_csv[c.id]
         variants[c.id] = v
     return {"schema_version": 1, "name": name,
-            "description": f"stability harness ({profile} profile, NT-038): strict mode, per-term probe, "
+            "description": f"stability harness ({profile} profile, NT-038): strict mode, probe {mode}, "
                            f"{len(variants)} cases x {len(seeds)} seeds",
-            "overrides": {**COMMON_OVERRIDES, **PROFILES[profile]}, "variants": variants, "folds": list(folds),
+            "overrides": {**COMMON_OVERRIDES, **PROFILES[profile], **probe_overrides(profile, mode)}, "variants": variants, "folds": list(folds),
             "seeds": [int(s) for s in seeds], "strategy": {"name": "calibrated_quantile", "params": {}},
             "backtest": {"random_seeds": 5}, "run": {"calibrate": True, "save_artifacts": False}}
 
@@ -405,11 +489,31 @@ class Verdict:
     status: str = "done"
     error: str = ""
     thresholds_sha256: str = ""
+    non_verdict: bool = False        # a resource error or a crash: no verdict, excluded from the counts (NT-191)
+    kind: str = "primary"            # primary | probe_rerun | retry
+    probe: bool = False              # the per-term probe was on in this run
+    rerun_of: str = ""               # probe_rerun: the run id of the failed first run
+    retry_of: str = ""               # retry: the run id of the non-verdict run it replaces
+    blame_source: str = ""           # where `blamed` came from: the error text, masked-term counters, the probe sample
+    blame_reason: str = ""           # when nothing is blamed: why
 
     def to_dict(self) -> Dict[str, Any]:
         return {"case": self.case, "run_id": self.run_id, "cell_key": self.cell_key, "seed": self.seed,
                 "passed": self.passed, "blamed": self.blamed, "status": self.status, "error": self.error,
-                "thresholds_sha256": self.thresholds_sha256, "checks": [c.to_dict() for c in self.checks]}
+                "thresholds_sha256": self.thresholds_sha256, "non_verdict": self.non_verdict, "kind": self.kind,
+                "probe": self.probe, "rerun_of": self.rerun_of, "retry_of": self.retry_of,
+                "blame_source": self.blame_source, "blame_reason": self.blame_reason,
+                "checks": [c.to_dict() for c in self.checks]}
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> "Verdict":
+        checks = [Check(c["name"], c.get("value"), c.get("limit"), bool(c["passed"]), c.get("detail", ""),
+                        bool(c.get("evaluated", True)), bool(c.get("report_only", False))) for c in d.get("checks", [])]
+        return cls(d["case"], d["run_id"], d.get("cell_key", ""), int(d.get("seed", -1)), bool(d["passed"]), checks,
+                   list(d.get("blamed") or []), d.get("status", "done"), d.get("error", ""),
+                   d.get("thresholds_sha256", ""), bool(d.get("non_verdict", False)), d.get("kind", "primary"),
+                   bool(d.get("probe", False)), d.get("rerun_of", ""), d.get("retry_of", ""),
+                   d.get("blame_source", ""), d.get("blame_reason", ""))
 
     @property
     def failed_checks(self) -> List[Check]:
@@ -439,6 +543,26 @@ def _probe_shares(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Optional[float
             for k, vs in series.items()}
 
 
+def probe_blame(rows: Sequence[Mapping[str, Any]]):
+    """(term, group, share, epoch) of the largest probe share in the FIRST epoch whose finite shares sum to 1 in a
+    variable group (an epoch the probe did not sample logs 0 everywhere); None when no epoch qualifies. One batch's
+    gradient split, not an epoch average: the REPORT labels it :data:`PROBE_SOURCE`."""
+    for r in rows:
+        groups: Dict[str, Dict[str, float]] = {}
+        broken = set()                      # a group with a non-finite share has no usable sample
+        for k, v in r.items():
+            m = re.fullmatch(r"probe_grad_share_(.+)_(trunk|head|indicator)", k)
+            if m and _finite(v):
+                groups.setdefault(m.group(2), {})[m.group(1)] = float(v)
+            elif m:
+                broken.add(m.group(2))
+        valid = {g: sh for g, sh in groups.items() if g not in broken and abs(sum(sh.values()) - 1.0) < 1e-3}
+        if valid:
+            share, group, term = max((v, g, t) for g, sh in valid.items() for t, v in sh.items())
+            return term, group, share, r.get("epoch")
+    return None
+
+
 def _verdict_passed(checks: Sequence[Check]) -> bool:
     return all(c.passed or c.report_only for c in checks)
 
@@ -466,9 +590,18 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
     def add(name, value, limit, passed, detail="", evaluated=True):
         checks.append(Check(name, value, limit, bool(passed), detail, evaluated, name in only))
 
+    source = {"v": "the error text" if blamed else ""}
+
     def verdict():
         return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)),
-                       _verdict_passed(checks), checks, blamed, status, message, T.sha256)
+                       _verdict_passed(checks), checks, blamed, status, message, T.sha256, blame_source=source["v"])
+
+    if status == "incomplete" or (status == "failed" and is_non_verdict_error(err.get("type"), err.get("message", ""),
+                                                                            winerror=err.get("winerror"))):
+        crash = "worker crash: the run directory has no result.json" if status == "incomplete" else message
+        return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)), False,
+                       [], [], status, crash, T.sha256, non_verdict=True,
+                       blame_reason="not a verdict: the run did not finish for a resource reason")
 
     if case.expect == "detect":
         fd = T.fault_detection
@@ -527,7 +660,7 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
                       (f"largest: {top_k} = {top_v:.3f}" if top_k else ""))
             add("term_gradient_share", top_v, lim, ok, detail)
             if not ok and top_k and not blamed:
-                blamed = [top_k.rsplit("_", 1)[0]]
+                blamed, source["v"] = [top_k.rsplit("_", 1)[0]], PROBE_SOURCE
         else:
             add("term_gradient_share", None, lim, True, "the probe was off", False)
         lim = float(T.check("max_var_at_floor_share"))
@@ -551,7 +684,7 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
         if masked and not blamed:
             from neural_trade.training.stability_guard import blame
 
-            blamed = blame({k[len("masked_"):]: v for k, v in masked.items()})
+            blamed, source["v"] = blame({k[len("masked_"):]: v for k, v in masked.items()}), "masked-term counters"
     _score_checks(result.get("scores") or {}, T, add)
     return verdict()
 
@@ -705,20 +838,39 @@ class HarnessResult:
     out_dir: Path
     scenario: str
     thresholds_sha256: str
-    verdicts: List[Verdict]
+    verdicts: List[Verdict]                  # the verdict of every (case, seed): the first run, or the retry of a crash
     not_run: List[Case]
-    case_passed: Dict[str, bool]
+    case_passed: Dict[str, bool]             # True only for PASS (a FAIL and a NOT A VERDICT are both False)
     regions: List[Any]
     report: Path
     n_eff: Dict[str, Dict[str, float]] = field(default_factory=dict)    # case -> {horizon: n_eff} of its scored block
+    case_status: Dict[str, str] = field(default_factory=dict)           # case -> PASS | FAIL | NOT A VERDICT
+    reruns: List[Verdict] = field(default_factory=list)                 # the probe re-runs of failed cells (NT-191)
+    superseded: List[Verdict] = field(default_factory=list)             # non-verdict runs a retry replaced
+    not_rerun: List[Verdict] = field(default_factory=list)              # failed cells left without a probe re-run (cap)
+    probe_mode: str = "off"
+    retry_of: str = ""                       # the launch whose non-verdict cells this launch re-ran
 
     @property
     def passed(self) -> bool:
         return all(self.case_passed.values())
 
+    @property
+    def verdict_failed(self) -> bool:
+        return any(s == "FAIL" for s in self.case_status.values())
+
+    @property
+    def non_verdict_cells(self) -> int:
+        return sum(v.non_verdict for v in self.verdicts)
+
+    @property
+    def exit_code(self) -> int:
+        """1 for a verdict failure, 2 when cells that are not a verdict are left, else 0 (NT-191)."""
+        return 1 if self.verdict_failed else (2 if self.non_verdict_cells else 0)
+
 
 def plan_cases(*, profile: str = "tiny", csv=None, case_ids: Optional[Sequence[str]] = None,
-               seeds: Sequence[int] = (0,), work_dir=None):
+               seeds: Sequence[int] = (0,), work_dir=None, probe: Optional[str] = None):
     """A dry plan: every runnable case's cells through the engine's planner (the spec, every Config, the components
     and the data layout of the profile), nothing trained and no run directory written. ``work_dir`` receives the
     case data files. Returns the planned cells; an unplannable case raises ScenarioError naming its cell."""
@@ -736,55 +888,86 @@ def plan_cases(*, profile: str = "tiny", csv=None, case_ids: Optional[Sequence[s
         out = Path(work_dir) if work_dir is not None else Path(tmp)
         case_csv = write_case_data(cases, csv, out, profile)
         spec = build_scenario(cases, name="stab-plan", profile=profile, seeds=list(seeds),
-                              case_csv={**{c.id: str(csv) for c in cases}, **case_csv})
+                              case_csv={**{c.id: str(csv) for c in cases}, **case_csv}, probe=probe)
         with regions_disabled():
             return Runner(Scenario.from_dict(spec), RunStore(Path(tmp) / "store")).plan()
 
 
-def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Optional[Sequence[str]] = None,
-                seeds: Optional[Sequence[int]] = None, thresholds_path=None, harness_id: Optional[str] = None,
-                trainer=None, out_root=None) -> HarnessResult:
-    """Run the harness: write the data, run the cases as an engine scenario into ``store``, judge every cell,
-    write the report. ``trainer`` replaces the engine trainer (tests)."""
-    from neural_trade.core.config import Config
+def expected_n_eff_for(T: Thresholds, profile: str, case_id: str) -> Optional[List[int]]:
+    """The thresholds file's expected n_eff per horizon for a case (v2's table); None when the file has none."""
+    table = (T.expected_n_eff or {}).get(profile)
+    if not table:
+        return None
+    if isinstance(table.get(case_id), Mapping):
+        return list(table[case_id]["n_eff"])
+    return list(table["default_cases"]) if "default_cases" in table else None
+
+
+def dry_run(*, profile: Optional[str] = None, csv=None, case_ids: Optional[Sequence[str]] = None,
+            seeds: Optional[Sequence[int]] = None, thresholds_path=None, probe: Optional[str] = None) -> Dict[str, Any]:
+    """What a real run would do, per cell, without training (NT-191): the case, the seed, n_eff per horizon (the
+    planner's, beside the thresholds file's expected table), the probe mode, the steps per epoch and the epochs."""
+    profile = profile or "tiny"
+    if profile not in PROFILES:
+        raise ValueError(f"profile must be one of {sorted(PROFILES)}, got {profile!r}")
+    mode = probe or PROFILE_PROBE[profile]
+    probe_overrides(profile, mode)                      # validates the mode
+    T = load_thresholds(resolve_thresholds_path(thresholds_path, profile))
+    unknown = sorted(set(case_ids or ()) - {c.id for c in default_cases()})
+    if unknown:
+        raise ValueError(f"unknown case(s) {unknown}; known: {[c.id for c in default_cases()]}")
+    seed_list = [int(s) for s in seeds] if seeds else list(range(T.seeds))
+    planned = plan_cases(profile=profile, csv=csv, case_ids=case_ids, seeds=seed_list, probe=mode)
+    cells = []
+    for pc in planned:
+        cfg, case = pc.config, pc.cell.configuration.name
+        horizons = [int(h) for h in cfg.HORIZON_STEPS]
+        n_test, n_train = int(pc.fold["blocks"]["test"]["n"]), int(pc.fold["blocks"]["train"]["n"])
+        n_eff = {f"h{i}": n_test // h for i, h in enumerate(horizons)}
+        expected = expected_n_eff_for(T, profile, case)
+        steps = -(-n_train // int(cfg.BATCH_SIZE))
+        cells.append({"case": case, "seed": int(pc.cell.seed), "cell": pc.key, "fold": pc.cell.fold,
+                      "n_eff": n_eff, "expected_n_eff": expected,
+                      "n_eff_matches_expected": None if expected is None else list(n_eff.values()) == expected,
+                      "probe": mode, "probe_rerun": "on a failing cell, PROBE_EVERY 1" if mode == "failed" else None,
+                      "train_windows": n_train, "batch_size": int(cfg.BATCH_SIZE), "epochs": int(cfg.EPOCHS),
+                      "steps_per_epoch": steps, "steps": steps * int(cfg.EPOCHS)})
+    return {"profile": profile, "probe": mode, "thresholds": T.path.name, "thresholds_sha256": T.sha256,
+            "seeds": seed_list, "n_cells": len(cells), "cells": cells}
+
+
+# ------------------------------------------------------------------ the run: helpers
+def _run_spec(spec: Mapping[str, Any], st, trainer, names: List[str]):
+    """Run one scenario spec into the store; returns its index rows."""
     from neural_trade.core.guard import regions_disabled
     from neural_trade.experiments.runner import Runner
     from neural_trade.experiments.scenario import Scenario
-    from neural_trade.experiments.store import RunStore
 
-    if profile not in PROFILES:
-        raise ValueError(f"profile must be one of {sorted(PROFILES)}, got {profile!r}")
-    T = load_thresholds(resolve_thresholds_path(thresholds_path, profile))
-    all_cases = default_cases()
-    if case_ids:
-        unknown = sorted(set(case_ids) - {c.id for c in all_cases})
-        if unknown:
-            raise ValueError(f"unknown case(s) {unknown}; known: {[c.id for c in all_cases]}")
-        all_cases = [c for c in all_cases if c.id in set(case_ids)]
-    seed_list = [int(s) for s in seeds] if seeds else list(range(T.seeds))
-    hid = harness_id or f"{_stamp()}-{profile}"
-    st = store if isinstance(store, RunStore) else RunStore(store)
-    out_dir = Path(out_root if out_root is not None else st.root) / STABILITY_DIR / hid
-    out_dir.mkdir(parents=True, exist_ok=False)
-    csv = csv if csv is not None else Config().CSV_PATH
-    runnable = [c for c in all_cases if c.runnable]
-    not_run = [c for c in all_cases if not c.runnable]
-    case_csv = write_case_data(runnable, csv, out_dir, profile)
-    base_csv = {c.id: str(csv) for c in runnable if c.id not in case_csv}
-    spec = build_scenario(runnable, name=f"stab-{hid}"[:48], profile=profile, seeds=seed_list,
-                          case_csv={**base_csv, **case_csv})
-    (out_dir / "scenario.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8", newline="\n")
-    scenario = Scenario.from_dict(spec)
-    by_id = case_by_id(runnable)
+    scenario = Scenario.from_dict(dict(spec))
+    names.append(scenario.name)
     with regions_disabled():     # the harness re-tests configurations inside known failing regions
-        runner = Runner(scenario, st, trainer=trainer if trainer is not None else HarnessTrainer(runnable))
-        runner.run()
-    rows = st.sync(scenario.name)
-    verdicts: List[Verdict] = []
-    n_eff: Dict[str, Dict[str, float]] = {}
+        Runner(scenario, st, trainer=trainer).run()
+    return st.sync(scenario.name)
+
+
+def _cell_spec(base: Mapping[str, Any], case_id: str, seed: int, name: str, extra: Mapping[str, Any]) -> Dict[str, Any]:
+    """The base scenario narrowed to one (case, seed) cell, with extra overrides (a probe re-run, a retry)."""
+    spec = json.loads(json.dumps(base))
+    spec["name"] = name
+    spec["variants"] = {case_id: spec["variants"][case_id]}
+    spec["seeds"] = [int(seed)]
+    spec["overrides"] = {**spec["overrides"], **extra}
+    return spec
+
+
+def _judge(rows, by_id: Mapping[str, Case], st, T: Thresholds, *, kind: str, probe: bool,
+           n_eff: Dict[str, Dict[str, float]], dirs: Dict[str, Path]) -> List[Verdict]:
+    """Judge every row of a launch (a run directory without a result is a worker crash: not a verdict) and write
+    each verdict into its run directory."""
+    out: List[Verdict] = []
     for r in rows:
         case = by_id.get(r["configuration"])
-        if case is None or r["status"] == "incomplete":
+        if case is None:
             continue
         run_dir = st.root / r["run_dir"]
         if (run_dir / "result.json").is_file() and case.id not in n_eff:
@@ -793,18 +976,198 @@ def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Opti
             if found:
                 n_eff[case.id] = dict(sorted(found.items()))
         v = evaluate_run(run_dir, case, T)
+        v.kind, v.probe = kind, probe
         write_verdict(run_dir, v)
-        verdicts.append(v)
-    st.sync(scenario.name)       # the index now carries the verdicts (stability/* scores)
+        dirs[v.run_id] = run_dir
+        out.append(v)
+    return out
+
+
+def _attribute(v: Verdict, run_dir: Optional[Path], *, mode: str, reran: bool, rerun_error: str = "") -> None:
+    """Fill the blame of a failed cell that the run itself did not name: from the probe sample of ``run_dir`` (the
+    probe re-run, or the run itself in mode ``on``); else the reason there is none."""
+    from neural_trade.telemetry.epoch_logger import read_metrics
+
+    if v.blamed:
+        return
+    sample = None
+    if run_dir is not None and (Path(run_dir) / "metrics.jsonl").is_file():
+        sample = probe_blame(read_metrics(Path(run_dir) / "metrics.jsonl"))
+    if sample:
+        term, group, share, epoch = sample
+        v.blamed, v.blame_source = [term], PROBE_SOURCE
+        v.blame_reason = f"{group} group, {share:.2f} of its gradient norm, epoch {epoch}"
+    elif mode == "capped":
+        v.blame_reason = v.blame_reason or NOT_RERUN_CAP
+    elif reran and rerun_error:
+        v.blame_reason = f"the probe re-run crashed ({rerun_error}), so there is no probe sample"
+    elif mode == "off":
+        v.blame_reason = "probe off in this run (use --probe failed or on for a probe sample)"
+    elif reran:
+        v.blame_reason = "the probe re-run logged no epoch whose probe shares sum to 1"
+    else:
+        v.blame_reason = "the probe logged no epoch whose probe shares sum to 1"
+
+
+def _case_status(vs: Sequence[Verdict], n_seeds: int) -> str:
+    if any(not v.passed and not v.non_verdict for v in vs) or len(vs) != n_seeds:
+        return "FAIL"
+    return NOT_A_VERDICT if any(v.non_verdict for v in vs) else "PASS"
+
+
+def _load_origin(base: Path, ident: str) -> Dict[str, Any]:
+    """The verdicts.json and scenario.json of an earlier launch (``latest``: the newest one)."""
+    if ident == "latest":
+        found = sorted(d.name for d in base.iterdir() if (d / "verdicts.json").is_file()) if base.is_dir() else []
+        ident = found[-1] if found else ident
+    d = base / ident
+    if not (d / "verdicts.json").is_file() or not (d / "scenario.json").is_file():
+        raise ValueError(f"no such harness launch {ident!r} under {base}")
+    doc = json.loads((d / "verdicts.json").read_text(encoding="utf-8"))
+    if "profile" not in doc or "probe_mode" not in doc:
+        raise ValueError(f"{d}: written before NT-191 (no profile or probe mode); run the harness again")
+    doc["spec"] = json.loads((d / "scenario.json").read_text(encoding="utf-8"))
+    doc["id"] = ident
+    return doc
+
+
+def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case_ids: Optional[Sequence[str]] = None,
+                seeds: Optional[Sequence[int]] = None, thresholds_path=None, harness_id: Optional[str] = None,
+                trainer=None, out_root=None, probe: Optional[str] = None,
+                retry_non_verdict_of: Optional[str] = None, max_probe_reruns: int = MAX_PROBE_RERUNS) -> HarnessResult:
+    """Run the harness: write the data, run the cases as an engine scenario into ``store``, judge every cell,
+    write the report. ``trainer`` replaces the engine trainer (tests). ``probe``: off | on | failed (None: the
+    profile's default, :data:`PROFILE_PROBE`). ``retry_non_verdict_of``: the id of an earlier launch (or ``latest``)
+    whose not-a-verdict cells are re-run as a new launch; its other verdicts are carried over unchanged.
+    ``max_probe_reruns``: in mode ``failed`` at most this many failed cells are re-run with the probe in one launch;
+    the others are listed in the report as not re-run (cap)."""
+    if max_probe_reruns < 0:
+        raise ValueError(f"max_probe_reruns must be >= 0, got {max_probe_reruns}")
+    from neural_trade.core.config import Config
+    from neural_trade.experiments.store import RunStore
+
+    st = store if isinstance(store, RunStore) else RunStore(store)
+    base_out = Path(out_root if out_root is not None else st.root) / STABILITY_DIR
+    origin = _load_origin(base_out, retry_non_verdict_of) if retry_non_verdict_of else None
+    if origin:
+        if profile not in (None, origin["profile"]):
+            raise ValueError(f"launch {origin['id']} ran the {origin['profile']!r} profile, not {profile!r}")
+        if case_ids or seeds:
+            raise ValueError("a retry takes the cases and the seeds of the launch it retries")
+        if probe not in (None, origin["probe_mode"]):
+            raise ValueError(f"launch {origin['id']} used --probe {origin['probe_mode']}; a retry keeps it")
+        profile, mode = origin["profile"], origin["probe_mode"]
+        if thresholds_path is None:
+            thresholds_path = origin.get("thresholds_file")
+    else:
+        profile = profile or "tiny"
+        mode = probe or PROFILE_PROBE.get(profile, "off")
+    if profile not in PROFILES:
+        raise ValueError(f"profile must be one of {sorted(PROFILES)}, got {profile!r}")
+    probe_overrides(profile, mode)                           # validates the mode
+    T = load_thresholds(resolve_thresholds_path(thresholds_path, profile))
+    if origin and T.sha256 != origin["thresholds_sha256"]:
+        raise ValueError(f"launch {origin['id']} was judged against thresholds sha256 {origin['thresholds_sha256']}; "
+                         f"{T.path.name} is {T.sha256}: a retry keeps the pre-registered thresholds")
+    all_cases = default_cases()
+    if origin:
+        case_ids = list(origin["case_ids"]) + list(origin.get("not_run_ids") or [])
+    if case_ids:
+        unknown = sorted(set(case_ids) - {c.id for c in all_cases})
+        if unknown:
+            raise ValueError(f"unknown case(s) {unknown}; known: {[c.id for c in all_cases]}")
+        all_cases = [c for c in all_cases if c.id in set(case_ids)]
+    seed_list = [int(s) for s in origin["seeds"]] if origin else (
+        [int(s) for s in seeds] if seeds else list(range(T.seeds)))
+    hid = harness_id or f"{_stamp()}-{profile}"
+    if harness_id is None:       # two launches in one second (a retry right after a run) get distinct ids
+        n = 1
+        while (base_out / hid).exists():
+            n += 1
+            hid = f"{_stamp()}-{profile}-{n}"
+    if origin and not any(d.get("non_verdict") for d in origin["verdicts"]):
+        raise ValueError(f"launch {origin['id']} has nothing to retry: no cell is 'not a verdict'")
+    if origin is None:
+        from neural_trade.data.loaders import resolve_data_path
+
+        csv = csv if csv is not None else Config().CSV_PATH
+        if not resolve_data_path(csv).is_file():             # refused before any run directory exists
+            raise ValueError(f"the bars file {csv} does not exist")
+    out_dir = base_out / hid
+    out_dir.mkdir(parents=True, exist_ok=False)
+    runnable = [c for c in all_cases if c.runnable]
+    not_run = [c for c in all_cases if not c.runnable]
+    by_id = case_by_id(runnable)
+    name = f"stab-{hid}"[:48]
+    short = name[:40]
+    n_eff: Dict[str, Dict[str, float]] = {c: dict(h) for c, h in (origin or {}).get("n_eff", {}).items()}
+    dirs: Dict[str, Path] = {}
+    ran_names: List[str] = []
+    reruns: List[Verdict] = [Verdict.from_dict(d) for d in (origin or {}).get("reruns", [])]
+    superseded: List[Verdict] = [Verdict.from_dict(d) for d in (origin or {}).get("superseded", [])]
+    runner_trainer = trainer if trainer is not None else HarnessTrainer(runnable)
+    if origin is None:
+        case_csv = write_case_data(runnable, csv, out_dir, profile)
+        base_csv = {c.id: str(csv) for c in runnable if c.id not in case_csv}
+        spec = build_scenario(runnable, name=name, profile=profile, seeds=seed_list,
+                              case_csv={**base_csv, **case_csv}, probe=mode)
+        (out_dir / "scenario.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8", newline="\n")
+        scenario_name = spec["name"]
+        new = _judge(_run_spec(spec, st, runner_trainer, ran_names), by_id, st, T, kind="primary", probe=(mode == "on"),
+                     n_eff=n_eff, dirs=dirs)
+        verdicts = list(new)
+    else:
+        spec = origin["spec"]
+        (out_dir / "scenario.json").write_text(json.dumps(spec, indent=2, default=str), encoding="utf-8", newline="\n")
+        scenario_name = name
+        carried = [Verdict.from_dict(d) for d in origin["verdicts"]]
+        todo = [v for v in carried if v.non_verdict]
+        if not todo:
+            raise ValueError(f"launch {origin['id']} has nothing to retry: no cell is 'not a verdict'")
+        verdicts, new = [v for v in carried if not v.non_verdict], []
+        for i, old in enumerate(todo):
+            sub = _cell_spec(spec, old.case, old.seed, f"{short}-r{i}", {})
+            got = _judge(_run_spec(sub, st, runner_trainer, ran_names), by_id, st, T, kind="retry", probe=(mode == "on"),
+                         n_eff=n_eff, dirs=dirs)
+            for g in got:
+                g.retry_of = old.run_id
+                write_verdict(dirs[g.run_id], g)
+            superseded.append(old)
+            new += got
+        verdicts += new
+    failing = [v for v in new if not v.passed and not v.non_verdict]
+    not_rerun: List[Verdict] = [Verdict.from_dict(d) for d in (origin or {}).get("not_rerun", [])]
+    n_rerun = 0
+    for v in failing:
+        if mode == "failed" and n_rerun >= max_probe_reruns:
+            v.blame_reason = f"{NOT_RERUN_CAP}: {max_probe_reruns} probe re-runs already in this launch"
+            not_rerun.append(v)
+            _attribute(v, None, mode="capped", reran=False)
+        elif mode == "failed":                    # once, with the probe on every step, for the blame
+            n_rerun += 1
+            sub = _cell_spec(spec, v.case, v.seed, f"{short}-p{len(reruns)}", probe_overrides(profile, "rerun"))
+            got = _judge(_run_spec(sub, st, runner_trainer, ran_names), by_id, st, T, kind="probe_rerun", probe=True, n_eff={},
+                         dirs=dirs)
+            for g in got:
+                g.rerun_of = v.run_id
+                write_verdict(dirs[g.run_id], g)
+            reruns += got
+            crash = got[0].error if got and got[0].non_verdict else ("" if got else "no run was produced")
+            _attribute(v, dirs[got[0].run_id] if got and not got[0].non_verdict else None, mode=mode, reran=True,
+                       rerun_error=crash)
+        else:
+            _attribute(v, dirs.get(v.run_id) if mode == "on" else None, mode=mode, reran=False)
+        write_verdict(dirs[v.run_id], v)
+    for sub_name in sorted(set(ran_names) | {scenario_name}):
+        st.sync(sub_name)        # the index now carries the verdicts (stability/* scores)
     verdicts.sort(key=lambda v: (v.case, v.seed))
-    case_passed = {c.id: bool([v for v in verdicts if v.case == c.id]) and
-                   all(v.passed for v in verdicts if v.case == c.id) and
-                   len([v for v in verdicts if v.case == c.id]) == len(seed_list) for c in runnable}
+    case_status = {c.id: _case_status([v for v in verdicts if v.case == c.id], len(seed_list)) for c in runnable}
+    case_passed = {c: s == "PASS" for c, s in case_status.items()}
     report_path = out_dir / "REPORT.md"
     regions = []
     for c in runnable:
-        if c.region and not case_passed[c.id]:
-            fails = [v for v in verdicts if v.case == c.id and not v.passed]
+        if c.region and case_status[c.id] == "FAIL":
+            fails = [v for v in verdicts if v.case == c.id and not v.passed and not v.non_verdict]
             why = "; ".join(sorted({f"{k.name}" for v in fails for k in v.failed_checks})) or "no verdict"
             regions.append(region_for_case(c, str(report_path).replace("\\", "/"),
                                            f"the stability harness's case {c.id} failed: {why}"))
@@ -812,35 +1175,68 @@ def run_harness(*, profile: str = "tiny", csv=None, store="runs", case_ids: Opti
 
     write_regions(out_dir / "failing_regions.json", regions)
     (out_dir / "verdicts.json").write_text(json.dumps(
-        {"harness_id": hid, "thresholds_sha256": T.sha256, "verdicts": [v.to_dict() for v in verdicts],
-         "case_passed": case_passed}, indent=2, default=str), encoding="utf-8", newline="\n")
-    result = HarnessResult(hid, out_dir, scenario.name, T.sha256, verdicts, not_run, case_passed, regions, report_path,
-                           n_eff)
+        {"harness_id": hid, "profile": profile, "probe_mode": mode, "seeds": seed_list, "retry_of": origin["id"] if origin else "",
+         "thresholds_sha256": T.sha256, "thresholds_file": str(T.path),
+         "case_ids": [c.id for c in runnable], "not_run_ids": [c.id for c in not_run], "n_eff": n_eff,
+         "verdicts": [v.to_dict() for v in verdicts], "reruns": [v.to_dict() for v in reruns],
+         "superseded": [v.to_dict() for v in superseded], "not_rerun": [v.to_dict() for v in not_rerun],
+         "max_probe_reruns": max_probe_reruns, "case_passed": case_passed, "case_status": case_status},
+        indent=2, default=str), encoding="utf-8", newline="\n")
+    result = HarnessResult(hid, out_dir, scenario_name, T.sha256, verdicts, not_run, case_passed, regions, report_path,
+                           n_eff, case_status, reruns, superseded, not_rerun, mode, origin["id"] if origin else "")
     report_path.write_text(render_report(result, T, runnable, profile, seed_list, st), encoding="utf-8", newline="\n")
     return result
+
+
+def _blame_text(v: Verdict) -> str:
+    if v.blamed:
+        return f"{', '.join(v.blamed)} ({v.blame_source})"
+    return f"- ({v.blame_reason})" if v.blame_reason else "-"
 
 
 def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], profile: str, seeds: Sequence[int],
                   st) -> str:
     from neural_trade.utils.env import git_sha
 
+    n_pass = sum(s == "PASS" for s in res.case_status.values())
+    n_fail = sum(s == "FAIL" for s in res.case_status.values())
+    n_nv = sum(s == NOT_A_VERDICT for s in res.case_status.values())
+    if res.verdict_failed:
+        overall = "FAIL"
+    elif res.non_verdict_cells:
+        overall = (f"INCOMPLETE ({res.non_verdict_cells} cell(s) are not a verdict: "
+                   f"`neural-trade stability --retry-non-verdict {res.harness_id}`)")
+    else:
+        overall = "PASS" if not res.not_run else "PASS (cases run)"
+    probe_text = {"off": "off", "on": "on in every cell",
+                  "failed": "off, then on (PROBE_EVERY 1) in one re-run of each failed cell"}[res.probe_mode]
     L: List[str] = [f"# Stability harness report {res.harness_id}", ""]
     L += [f"- thresholds: `{T.path.name}` ({T.name}), sha256 `{T.sha256}`",
-          f"- profile: {profile}; seeds: {list(seeds)}; strict mode (STRICT_LOSS_MASKS); per-term probe {'on' if PROFILES[profile].get('PROBE_GRADIENTS') else 'off'}",
-          f"- commit: `{git_sha()}`; scenario `{res.scenario}`; run store `{st.root}`, index `{st.index_path}`",
-          f"- overall: **{'PASS' if res.passed and not res.not_run else 'PASS (cases run)' if res.passed else 'FAIL'}**"
-          f" ({sum(res.case_passed.values())} of {len(res.case_passed)} cases passed; "
+          f"- profile: {profile}; seeds: {list(seeds)}; strict mode (STRICT_LOSS_MASKS); per-term probe: {probe_text}",
+          f"- commit: `{git_sha()}`; scenario `{res.scenario}`; run store `{st.root}`, index `{st.index_path}`"]
+    if res.retry_of:
+        L.append(f"- a retry launch: re-ran the not-a-verdict cells of `{res.retry_of}`; every other verdict is carried "
+                 "over from it unchanged")
+    L += [f"- overall: **{overall}**"
+          f" ({n_pass} of {len(res.case_passed)} cases passed; {n_fail} failed; {n_nv} case(s) not a verdict; "
           f"{len(res.not_run)} case(s) defined, not run)", ""]
     L += ["## Cases", "", "| case | group | expect | verdict | seeds passed | blamed loss term | failed checks |",
           "|---|---|---|---|---|---|---|"]
     for c in cases:
         vs = [v for v in res.verdicts if v.case == c.id]
         ok = sum(v.passed for v in vs)
-        blamed = sorted({t for v in vs if not v.passed for t in v.blamed})
+        nv = sum(v.non_verdict for v in vs)
+        blamed = sorted({_blame_text(v) for v in vs if not v.passed and not v.non_verdict})
         failed = sorted({k.name for v in vs for k in v.failed_checks})
-        L.append(f"| {c.id} | {c.group} | {c.expect} | {'PASS' if res.case_passed.get(c.id) else 'FAIL'} | "
-                 f"{ok}/{len(seeds)} | {', '.join(blamed) or '-'} | {', '.join(failed) or '-'} |")
-    L.append("")
+        L.append(f"| {c.id} | {c.group} | {c.expect} | {res.case_status.get(c.id, 'FAIL')} | "
+                 f"{ok}/{len(seeds)}{f' ({nv} not a verdict)' if nv else ''} | {'; '.join(blamed) or '-'} | "
+                 f"{', '.join(failed) or '-'} |")
+    L += ["", f"Blame comes from the run's own error text (a guarded run), the masked-term counters, or the probe "
+              f"sample of the cell's probe run ({PROBE_SOURCE}: the largest share of the first epoch whose shares sum "
+              "to 1, not an epoch average); a '-' says why. A failure with a probe sample names the term, the "
+              "variable group and the share in the failure list below. Data and fault cases get no failing region "
+              "by design (the data are not a Config field); a cell that is not a verdict gets neither a blame nor "
+              "a region.", ""]
     if res.n_eff:
         mins = [float(T.checks[k]) for k in ("min_n_eff_variance_excess", "min_n_eff_variance") if k in T.checks]
         L += ["## n_eff of the scored block per case", "",
@@ -851,19 +1247,53 @@ def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], prof
         L += [f"| {c.id} | {', '.join(f'{h} {v:g}' for h, v in res.n_eff[c.id].items())} |"
               for c in cases if c.id in res.n_eff]
         L.append("")
-    failing = [v for v in res.verdicts if not v.passed]
+    failing = [v for v in res.verdicts if not v.passed and not v.non_verdict]
     if failing:
         L += ["## Failures", ""]
         for v in failing:
             L.append(f"- `{v.cell_key}` (run `{v.run_id}`): " + "; ".join(
                 f"{c.name} = {c.value} (limit {c.limit}){': ' + c.detail if c.detail else ''}"
-                for c in v.failed_checks))
+                for c in v.failed_checks) + f". Blamed: {_blame_text(v)}"
+                + (f" [{v.blame_reason}]" if v.blamed and v.blame_reason else "") + ".")
+        L.append("")
+    if res.not_rerun:
+        L += ["## Failed cells not re-run (cap)", "",
+              f"`--max-probe-reruns` was reached: these failed cells have no probe re-run and no blame "
+              f"({NOT_RERUN_CAP}). Raise the cap or run them alone (`--cases`, `--probe on`).", "",
+              "| case | seed | run |", "|---|---|---|"]
+        L += [f"| {v.case} | {v.seed} | `{v.run_id}` |" for v in res.not_rerun]
+        L.append("")
+    if res.reruns:
+        first = {v.run_id: v for v in res.verdicts}
+        L += ["## Probe re-runs", "",
+              "Each failed cell ran once with the probe off and once with it on (PROBE_EVERY 1). The probe never "
+              "changes training: the re-run's verdict is shown beside the first run's, and the first run's verdict "
+              "is the one that counts.", "",
+              "| case | seed | first run | probe re-run | first verdict | re-run verdict | blamed |", "|---|---|---|---|---|---|---|"]
+        for r in res.reruns:
+            f = first.get(r.rerun_of)
+            L.append(f"| {r.case} | {r.seed} | `{r.rerun_of}` | `{r.run_id}` | {'PASS' if f and f.passed else 'FAIL'} | "
+                     f"{NOT_A_VERDICT if r.non_verdict else 'PASS' if r.passed else 'FAIL'} | "
+                     f"{_blame_text(f) if f else '-'} |")
+        L.append("")
+    nv_now = [v for v in res.verdicts if v.non_verdict]
+    if res.superseded or nv_now:
+        L += ["## Cells that were not a verdict", "",
+              "A resource error (ResourceExhaustedError, MemoryError, OSError) or a crashed worker is not a verdict: "
+              "the cell is left out of the pass and fail counts until a retry gives it one. Both runs are listed.", "",
+              "| case | seed | run | error | replaced by |", "|---|---|---|---|---|"]
+        later = {v.retry_of: v for v in res.verdicts if v.retry_of}
+        for v in [*res.superseded, *nv_now]:
+            by = later.get(v.run_id)
+            L.append(f"| {v.case} | {v.seed} | `{v.run_id}` | {v.error or '-'} | {f'`{by.run_id}`' if by else 'still open'} |")
         L.append("")
     L += ["## Every cell", "", "| run | case | seed | verdict | checks (value / limit) |", "|---|---|---|---|---|"]
     for v in res.verdicts:
         cs = "; ".join(f"{c.name} {'n/a' if c.value is None else f'{c.value:.4g}'}/{c.limit}"
                        f"{'' if c.evaluated else ' (not evaluated)'}" for c in v.checks)
-        L.append(f"| `{v.run_id}` | {v.case} | {v.seed} | {'PASS' if v.passed else 'FAIL'} | {cs} |")
+        word = NOT_A_VERDICT if v.non_verdict else ("PASS" if v.passed else "FAIL")
+        note = f" (retry of `{v.retry_of}`)" if v.retry_of else ""
+        L.append(f"| `{v.run_id}` | {v.case} | {v.seed} | {word}{note} | {cs or v.error or '-'} |")
     L.append("")
     if res.not_run:
         L += ["## Defined, not run here", ""]
@@ -880,7 +1310,8 @@ def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], prof
     return "\n".join(L)
 
 
-__all__ = ["COMMON_OVERRIDES", "Case", "Check", "HarnessResult", "HarnessTrainer", "PROFILES", "THRESHOLDS_FILE",
+__all__ = ["COMMON_OVERRIDES", "NOT_A_VERDICT", "PROBE_MODES", "PROBE_SOURCE", "PROFILE_PROBE", "dry_run",
+           "EXIT_REFUSED", "MAX_PROBE_RERUNS", "NOT_RERUN_CAP", "expected_n_eff_for", "is_non_verdict_error", "plan_cases", "probe_blame", "probe_overrides", "Case", "Check", "HarnessResult", "HarnessTrainer", "PROFILES", "THRESHOLDS_FILE",
            "THRESHOLDS_V2_FILE", "Thresholds", "Verdict", "VERDICT_FILE", "FUZZ_CONSTANT_BARS", "PROFILE_THRESHOLDS",
            "resolve_thresholds_path", "build_scenario", "default_cases", "evaluate_run",
            "fault_context", "file_sha256", "load_thresholds", "region_for_case", "render_report", "run_harness",
