@@ -182,7 +182,7 @@ def main():
             if x["extra"] and x["extra"].get("final"):
                 x["verdict"] = x["extra"]["verdict"]
         exps.append(x)
-    active = next((x["id"] for x in exps if x["status"] == "идёт"), None) or next((x["id"] for x in exps if x["status"] in ("в очереди", "частично")), None) or exps[-1]["id"]
+    active = next((x["id"] for x in reversed(exps) if x["status"] == "идёт"), None) or next((x["id"] for x in exps if x["status"] in ("в очереди", "частично")), None) or exps[-1]["id"]
     state = {"now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
              "procs": len(procs), "exps": exps, "active": active, "hm": [[g + "." + k, lab] for g, k, lab in HM],
@@ -297,7 +297,7 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
  if(e.kind==='hc'&&e.extra){const VV={'BETTER':'<span class="ok">лучше</span>','WORSE':'<span class="bad">хуже</span>','NO DIFFERENCE':'<span class="mut">разницы нет</span>'};
    h+='<div class="c full"><h2>Общая оценка против базы (в единицах шума)</h2><table><tr><th>Вариант</th><th>срезов</th><th>общая оценка</th><th>95% интервал</th><th>цена</th><th>направление</th><th>уверенность</th><th>AUC / ранжирование риска</th><th>вердикт</th></tr>'+
    e.extra.hc.map(z=>{const r=z.r,g=r.groups||{},q=r.resolution||{};return `<tr><td><b>${z.label}</b></td><td>${r.slices??0}</td><td>${f3(r.mean)}</td><td>${r.lo==null?'—':'['+f3(r.lo)+'; '+f3(r.hi)+']'}</td><td>${f3(g.price)}</td><td>${f3(g.direction)}</td><td>${f3(g.confidence)}</td><td>${f3(q['direction.auc'])} / ${f3(q['variance.corr_var_err2_spearman'])}</td><td>${r.verdict?VV[r.verdict]:'<span class="mut">ждёт данных</span>'}</td></tr>`}).join('')+
-   '</table><div class="sub">Значения — средний эффект в единицах seed-шума (±1 ≈ разница двух seed'ов одной сети). Пока срезов меньше 6, вердикт предварительный.</div></div>';
+   '</table><div class="sub">Значения — средний эффект в единицах seed-шума (±1 ≈ разница двух сидов одной сети). Пока срезов меньше 6, вердикт предварительный.</div></div>';
    const ok=e.extra.hc.filter(z=>z.r.mean!=null);if(ok.length)h+='<div class="c full"><h2>Лес общей оценки</h2><div id="hcforest" style="height:'+(90+40*ok.length)+'px"></div></div>';}
  if(e.comps.length)h+='<div class="c full"><h2>Парные сравнения по направлению (Δ AUC, 95% интервал по срезам)</h2><div id="forest" style="height:'+(80+36*e.comps.length)+'px"></div></div>';
  if(e.specs.some(s=>s.heads))h+='<div class="c full"><h2>Все 9 выходов (среднее h0–h2)</h2><table><tr><th>Метрика</th>'+e.specs.filter(s=>s.heads).map(s=>`<th>${s.label}</th>`).join('')+'</tr>'+S.hm.map(([k,l])=>'<tr><td>'+l+'</td>'+e.specs.filter(s=>s.heads).map(s=>`<td>${p3(s.heads[k])}</td>`).join('')+'</tr>').join('')+'</table></div>';
