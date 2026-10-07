@@ -62,3 +62,7 @@ the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner
   "1 день, если догонит (Recommended)": price, direction and confidence weigh 1/3 each, every paired difference scaled by
   its seed noise (runs/tactical/hc4_metric.py); the hill-climb runs on the 1-day block if the epochs check shows it
   reaches 7-day quality, otherwise on 7 days.
+- After "стоп по всем задачам останови трейнинг и инференс" [stop all tasks, stop training and inference] (done): "Продолжи.
+  Не контролируй чтобы твои процессы конкретно по процессрору и ОЗУ не приводили к критической загрузке" [continue; (do)
+  control that your processes do not lead to a critical CPU and RAM load] - read as "control" (the lead said so and asked
+  to be corrected otherwise). TACTICAL.md "CPU and RAM guard".
