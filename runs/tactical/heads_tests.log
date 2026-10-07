@@ -1,0 +1,13 @@
+4553ce6c02e31eedb598c91d3fc6eb9095269541
+============================== warnings summary ===============================
+tests/test_screen_heads.py: 236 warnings
+tests/test_screen.py: 2360 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+63 passed, 2596 warnings in 592.75s (0:09:52)
+
+Found 32 errors.
+[*] 6 fixable with the `--fix` option.
+ruff src tests scripts: All checks passed (runs/tactical has 32 pre-existing findings, none in this change)

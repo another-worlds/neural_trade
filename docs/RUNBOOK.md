@@ -486,6 +486,17 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
   TWO SEPARATE groups (network weights, indicator logit variables), each against its own group
   norm, but the sampler reads the PRE-CLIP norm of the COMBINED gradients (computed once, before the
   split) — see `_GradNormSampler`'s docstring for exactly what this over/under-counts.
+- **All nine heads (`head_metrics`, additive; `direction_auc` is unchanged).** Every row also has
+  `head_metrics[h0|h1|h2]` on the same validation block, raw heads (a screen has no calibration), each group
+  with `n` and `n_eff = n // horizon bars`: `delta` {`corr`, `skill_vs_zero` = 1 - MSE/MSE of zero}, `direction`
+  {`auc`, `brier`, `log_loss`, `hit_rate`, `mean_abs_p_dev`} (non-deadband bars, the AUC mask), `variance` {`crps`
+  of N(predicted delta, predicted variance), `crpss` against a constant variance fitted on the training block,
+  `nll`, `coverage90`, `width90`, `corr_var_err2_spearman`} (delta and variance on every bar). Non-finite is
+  `null`. **`run: {save_predictions: true}`** (default false) also writes
+  `<store>/screens/<name>/preds/<trial_key>.npz` (float32, compressed): `y` [n, H] realised raw deltas,
+  `last_close`, and per horizon `delta_hX`, `p_up_hX`, `var_hX` (raw head outputs; `var` in scaled units, sigma =
+  sqrt(var) x `pred_scale`), plus `pred_scale`, `pred_mean`, `deadband_bps`, `horizon_steps`. No anchor timestamps
+  (the validation block carries none). Code: `screen._direction_auc` / `_head_metrics_one`.
 - **Timing breakdown.** `load_s` (the data load, cached-or-not), `prep_s` (windowing, cached-or-not,
   plus the per-trial split/scale/normalise), `build_s` (`Models.build` + optimizers + compile only),
   `train_s` (`fit`), `score_s` (health + direction AUC) and `epoch_s` (a list of per-epoch

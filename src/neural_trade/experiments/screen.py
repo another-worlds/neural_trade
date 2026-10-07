@@ -71,6 +71,7 @@ import itertools
 import json
 import logging
 import math
+import os
 import re
 import time
 from dataclasses import dataclass, field
@@ -97,7 +98,7 @@ GRID_KEYS = ("axes",)
 SAMPLE_KEYS = ("n", "method", "seed", "space")
 SAMPLE_SPACE_KEYS = ("low", "high", "log")
 SAMPLE_METHODS = ("random", "lhs")
-RUN_KEYS = ("calibrate", "epochs", "reuse_graph")
+RUN_KEYS = ("calibrate", "epochs", "reuse_graph", "save_predictions")
 RULE_KEYS = ("finite", "max_nonfinite_grad_steps", "max_clipped_share", "min_train_loss_drop", "max_term_share",
             "clip_skip_epochs")
 DEFAULT_CLIP_SKIP_EPOCHS = 1
@@ -182,6 +183,9 @@ class RunOptions:
     # every trial through the original fresh-model-per-trial path (kept as the reference: a spec can
     # ask for it to reproduce phase-1 numbers exactly, or for a direct fresh-vs-reused comparison).
     reuse_graph: bool = True
+    # Write the validation block's realised deltas and every trial's raw head outputs to
+    # <store>/screens/<name>/preds/<trial_key>.npz, so a new metric never needs a retrain.
+    save_predictions: bool = False
 
 
 @dataclass
@@ -280,6 +284,8 @@ class ScreenSpec:
             bad(f"run.epochs must be a positive integer or null, got {raw_run['epochs']!r}")
         if "reuse_graph" in raw_run and not isinstance(raw_run["reuse_graph"], bool):
             bad(f"run.reuse_graph must be true or false, got {raw_run['reuse_graph']!r}")
+        if "save_predictions" in raw_run and not isinstance(raw_run["save_predictions"], bool):
+            bad(f"run.save_predictions must be true or false, got {raw_run['save_predictions']!r}")
         rules = _mapping(data.get("rules"), "rules", bad)
         _refuse_unknown(rules, RULE_KEYS, "rules.", bad)
         if "clip_skip_epochs" in rules and (isinstance(rules["clip_skip_epochs"], bool)
@@ -300,7 +306,10 @@ class ScreenSpec:
         return {"schema_version": self.schema_version, "name": self.name, "description": self.description,
                 "base_config": self.base_config, "overrides": self.overrides, "grid": {"axes": self.axes},
                 "sample": self.sample, "slices": list(self.slices), "seeds": list(self.seeds),
-                "run": {"calibrate": self.run.calibrate, "epochs": self.run.epochs}, "rules": dict(self.rules)}
+                "run": {"calibrate": self.run.calibrate, "epochs": self.run.epochs,
+                        # only when on: keeps the spec hash of every existing screen unchanged
+                        **({"save_predictions": True} if self.run.save_predictions else {})},
+                "rules": dict(self.rules)}
 
     @property
     def spec_hash(self) -> str:
@@ -809,10 +818,85 @@ def _health_from_history(history, sampler: _GradNormSampler, cfg: Config, model:
     }
 
 
-def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scaler) -> Dict[str, Any]:
+class _Scored(dict):
+    """The per-horizon direction-AUC dict (the row's ``direction_auc``, unchanged) that also carries,
+    as attributes, ``head_metrics`` (all nine heads, the row's ``head_metrics``) and ``predictions``
+    (the raw arrays :func:`_write_predictions` saves). A dict subclass so the
+    ``(health, auc, timings)`` return shape of the trial functions stays as it was."""
+    head_metrics: Optional[Dict[str, Any]] = None
+    predictions: Optional[Dict[str, np.ndarray]] = None
+
+
+def _finite_or_none(v: Any) -> Optional[float]:
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _head_metrics_one(y, last_close, delta, prob, sigma, y_train_i, deadband: float, horizon: int) -> Dict[str, Any]:
+    """All three heads of one horizon on the validation block. The delta and variance heads are scored
+    on every bar with a finite target, the direction head on the non-deadband bars (the AUC mask).
+    ``sigma`` is in the target units; the constant-variance reference of the CRPSS is the training
+    block mean and std (the ``const_var`` baseline of ``evaluation.report``). Every number is a
+    finite float or None."""
+    from neural_trade.evaluation.report import delta_block, direction_block, gaussian_crps, variance_block
+    from neural_trade.metrics.statistics import auc_score
+
+    z90 = 1.6448536269514722
+    horizon = max(1, int(horizon))
+    ok = np.isfinite(y) & np.isfinite(delta) & np.isfinite(sigma)
+    n_all = int(ok.sum())
+    n_eff_all = max(1, n_all // horizon) if n_all else None
+    out: Dict[str, Any] = {}
+
+    dl: Dict[str, Any] = {"corr": None, "skill_vs_zero": None, "n": n_all, "n_eff": n_eff_all}
+    if n_all >= 2:
+        d = delta_block(y[ok], delta[ok])
+        dl.update(corr=_finite_or_none(d["corr"]), skill_vs_zero=_finite_or_none(d["skill_vs_zero"]))
+    out["delta"] = dl
+
+    ret = y / np.where(np.abs(last_close) > 1e-9, last_close, np.nan)
+    mask = np.isfinite(ret) & (np.abs(ret) > deadband) & np.isfinite(prob)
+    n_m = int(mask.sum())
+    dr: Dict[str, Any] = {"auc": None, "brier": None, "log_loss": None, "hit_rate": None,
+                          "mean_abs_p_dev": None, "n": n_m, "n_eff": max(1, n_m // horizon) if n_m else None}
+    if n_m >= 2:
+        labels = (ret > 0).astype(float)
+        p, t = prob[mask], labels[mask]
+        blk = direction_block(labels, mask, prob)
+        pc = np.clip(p, 1e-7, 1 - 1e-7)
+        dr.update(auc=_finite_or_none(auc_score(t.astype(int), p)) if len(np.unique(t)) >= 2 else None,
+                  brier=_finite_or_none(blk["brier"]), hit_rate=_finite_or_none(blk["acc"]),
+                  log_loss=_finite_or_none(-np.mean(t * np.log(pc) + (1 - t) * np.log(1 - pc))),
+                  mean_abs_p_dev=_finite_or_none(np.mean(np.abs(p - 0.5))))
+    out["direction"] = dr
+
+    var: Dict[str, Any] = {"crps": None, "crpss": None, "nll": None, "coverage90": None, "width90": None,
+                           "corr_var_err2_spearman": None, "n": n_all, "n_eff": n_eff_all}
+    if n_all >= 2:
+        yy, mu, sg = y[ok], delta[ok], sigma[ok]
+        vb = variance_block(yy, mu, sg, (mu - z90 * sg, mu + z90 * sg))
+        var.update(crps=_finite_or_none(vb["crps"]), nll=_finite_or_none(vb["nll"]),
+                   coverage90=_finite_or_none(vb["coverage90"]), width90=_finite_or_none(vb["width90"]),
+                   corr_var_err2_spearman=_finite_or_none(vb["corr_var_err2_spearman"]))
+        if y_train_i is not None and len(y_train_i) >= 2 and var["crps"] is not None:
+            c_sigma = float(np.std(y_train_i))
+            if c_sigma > 0:
+                c_crps = float(np.mean(gaussian_crps(yy, float(np.mean(y_train_i)), c_sigma)))
+                if c_crps > 0:
+                    var["crpss"] = _finite_or_none(1.0 - var["crps"] / c_crps)
+    out["variance"] = var
+    return out
+
+
+def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scaler, *, y_train=None) -> _Scored:
     """Per-horizon direction AUC on the validation block (labelled with its noise level, D-012:
     ``n`` non-deadband rows and ``n_eff = n // horizon bars``, the block being one contiguous
-    stretch)."""
+    stretch). The result also carries ``head_metrics`` (all nine heads, :func:`_head_metrics_one`;
+    the CRPSS needs ``y_train``, the training block raw deltas) and ``predictions`` (raw head
+    outputs) as attributes; one ``predict`` serves all of it."""
     from neural_trade.core.postprocess import heads_to_predictions
     from neural_trade.metrics.statistics import auc_score
 
@@ -820,12 +904,20 @@ def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scal
     n = int(len(val_block["y_raw"]))
     ds = tf.data.Dataset.from_tensor_slices(X).batch(int(cfg.BATCH_SIZE))
     heads = model.predict(ds, verbose=0)
-    preds = heads_to_predictions(heads, n, float(target_scaler.scale_[0]), float(target_scaler.mean_[0]), cfg)
+    pred_scale, pred_mean = float(target_scaler.scale_[0]), float(target_scaler.mean_[0])
+    preds = heads_to_predictions(heads, n, pred_scale, pred_mean, cfg)
     y_raw = np.asarray(val_block["y_raw"], dtype=float)
     last_close = np.asarray(val_block["last_close"], dtype=float).reshape(-1)
     deadband = float(cfg.DIR_DEADBAND_BPS) / 10000.0
     horizons = list(cfg.HORIZON_STEPS)
-    out: Dict[str, Any] = {}
+    y_tr = None if y_train is None else np.asarray(y_train, dtype=float)
+    out = _Scored()
+    heads_out: Dict[str, Any] = {}
+    saved: Dict[str, np.ndarray] = {
+        "y": y_raw.astype("float32"), "last_close": last_close.astype("float32"),
+        "pred_scale": np.float32(pred_scale), "pred_mean": np.float32(pred_mean),
+        "deadband_bps": np.float32(float(cfg.DIR_DEADBAND_BPS)),
+        "horizon_steps": np.asarray(horizons, dtype="int32")}
     for i, h in enumerate(HORIZONS):
         if i >= y_raw.shape[1]:
             continue
@@ -835,12 +927,32 @@ def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scal
         n_eff = max(1, n_masked // int(horizons[i])) if i < len(horizons) and n_masked else None
         row: Dict[str, Any] = {"auc": None, "n": n_masked, "n_eff": n_eff}
         y_true = (ret[mask] > 0).astype(int)
+        prob_all = np.asarray(preds["direction_prob"][h], dtype=float)
         if n_masked >= 2 and len(np.unique(y_true)) >= 2:
-            prob = np.asarray(preds["direction_prob"][h], dtype=float)[mask]
-            auc = auc_score(y_true, prob)
+            auc = auc_score(y_true, prob_all[mask])
             row["auc"] = auc if math.isfinite(auc) else None
         out[h] = row
+        delta = np.asarray(preds["delta"][h], dtype=float)
+        var_head = np.asarray(preds["variance"][h], dtype=float)
+        sigma = np.sqrt(np.maximum(var_head, 0.0)) * pred_scale   # the variance head is in scaled units
+        y_tr_i = y_tr[:, i] if y_tr is not None and y_tr.ndim == 2 and i < y_tr.shape[1] else None
+        heads_out[h] = _head_metrics_one(y_raw[:, i], last_close, delta, prob_all, sigma, y_tr_i, deadband,
+                                         int(horizons[i]) if i < len(horizons) else 1)
+        saved[f"delta_{h}"] = delta.astype("float32")
+        saved[f"p_up_{h}"] = prob_all.astype("float32")
+        saved[f"var_{h}"] = var_head.astype("float32")
+    out.head_metrics = heads_out
+    out.predictions = saved
     return out
+
+
+def _write_predictions(path: Path, predictions: Mapping[str, np.ndarray]) -> None:
+    """``<store>/screens/<name>/preds/<trial_key>.npz``: compressed float32 arrays, written under a
+    temporary name first so a killed run never leaves a half file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp.npz")
+    np.savez_compressed(tmp, **predictions)
+    os.replace(tmp, path)
 
 
 def _load_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any]:
@@ -1009,7 +1121,7 @@ def _run_trial_light(cfg: Config, cache: Dict[str, Any], *, calibrate: bool,
     t4 = time.perf_counter()
     health = _health_from_history(history, sampler, cfg, custom_model)
     _note_calib_failure(health, calib_result)
-    auc = _direction_auc(custom_model, val_block, cfg, target_scaler)
+    auc = _direction_auc(custom_model, val_block, cfg, target_scaler, y_train=y_train)
     t_score = time.perf_counter() - t4
     tf.keras.backend.clear_session()
     return health, auc, {"load_s": prepared.load_s, "prep_s": prepared.prep_s, "build_s": t_build,
@@ -1144,7 +1256,8 @@ class _TrialGroup:
         t4 = time.perf_counter()
         health = _health_from_history(history, sampler, cfg, self.custom_model)
         _note_calib_failure(health, calib_result)
-        auc = _direction_auc(self.custom_model, prepared.val_block, cfg, prepared.target_scaler)
+        auc = _direction_auc(self.custom_model, prepared.val_block, cfg, prepared.target_scaler,
+                             y_train=prepared.y_train)
         t_score = time.perf_counter() - t4
         return health, auc, {"load_s": prepared.load_s, "prep_s": prepared.prep_s, "build_s": t_build,
                              "train_s": t_train, "score_s": t_score, "epoch_s": list(epoch_timer.epoch_s)}
@@ -1292,7 +1405,7 @@ def _sanitize_nonfinite(obj: Any, path: str = "") -> Tuple[Any, List[str]]:
 
 
 def run_trial(trial: Trial, spec: ScreenSpec, cache: Dict[str, Any],
-             trainer: Optional[Callable[..., Any]] = None) -> Dict[str, Any]:
+             trainer: Optional[Callable[..., Any]] = None, *, store=None) -> Dict[str, Any]:
     """Train and score one trial; returns the JSONL row (schema_version, trial identity, config
     diff, health, direction AUC, timings, pass/fail with reasons). ``trainer`` (tests only) replaces
     the real light path: ``trainer(cfg, cache, calibrate=...) -> (health, auc, timings)``.
@@ -1306,7 +1419,10 @@ def run_trial(trial: Trial, spec: ScreenSpec, cache: Dict[str, Any],
     return value) forces ``passed: false`` the same way, regardless of ``rules:`` - the trial trained
     with restored, uncalibrated lambdas, never the calibrated ones the screen meant to measure, so it
     must not rank or pass alongside an ordinary trial (``experiments.scorer.score_result`` refuses the
-    same failure for the engine's own training path)."""
+    same failure for the engine's own training path).
+
+    A trial scored by :func:`_direction_auc` also gets ``head_metrics`` (all nine heads; additive) and,
+    with ``run.save_predictions`` and a ``store``, its ``preds/<trial_key>.npz``."""
     t0 = time.perf_counter()
     if trainer is not None:
         health, auc, timings = trainer(trial.config, cache, calibrate=spec.run.calibrate)
@@ -1325,6 +1441,12 @@ def run_trial(trial: Trial, spec: ScreenSpec, cache: Dict[str, Any],
           "trial_index": trial.index, "source": trial.source, "config_diff": trial.params,
           "data_end": trial.data_end, "seed": trial.seed, "health": health, "direction_auc": auc,
           "timings": timings, "passed": passed, "reasons": reasons, "wall_s": time.perf_counter() - t0}
+    head_metrics = getattr(auc, "head_metrics", None)
+    if head_metrics is not None:
+        row["head_metrics"] = head_metrics
+    predictions = getattr(auc, "predictions", None)
+    if spec.run.save_predictions and store is not None and predictions is not None:
+        _write_predictions(Path(store) / "screens" / spec.name / "preds" / f"{trial.key}.npz", predictions)
     row, nonfinite_paths = _sanitize_nonfinite(row)
     if nonfinite_paths:
         row["passed"] = False
@@ -1391,11 +1513,11 @@ def run_screen(spec: ScreenSpec, *, store="runs", shard: Optional[Tuple[int, int
                 group = _TrialGroup(trial.config)
             row = run_trial(trial, spec, cache,
                             trainer=lambda cfg, c, *, calibrate, _g=group, _e=trial_clip_skip_epochs: _g.run_one(
-                                cfg, c, calibrate=calibrate, clip_skip_epochs=_e))
+                                cfg, c, calibrate=calibrate, clip_skip_epochs=_e), store=store)
         else:
             # trainer=None here (use_groups is False and it can still be an explicit fake): run_trial's
             # own default branch computes clip_skip_epochs from spec, identically to the group branch.
-            row = run_trial(trial, spec, cache, trainer=trainer)
+            row = run_trial(trial, spec, cache, trainer=trainer, store=store)
         _append_jsonl(results_path, row)
         done_keys.add(trial.key)
         report.ran += 1
