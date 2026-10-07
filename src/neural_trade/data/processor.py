@@ -96,7 +96,7 @@ def split_arrays(config, read_csv_kwargs=None):
         idx = getattr(fold, name)
         out[name] = {"X": X[idx], "X_model": Xm[idx], "y": y[idx], "last_close": lc[idx],
                      "extended_trends": ext[idx], "index": idx,
-                     "anchor_bar": (anchors[idx] - 1).astype(np.int32)}   # bar positions: int32 as before
+                     "anchor_bar": (anchors[idx] - 1).astype(int)}   # bar positions, the platform int as before (int32 on Windows)
     return out
 
 
