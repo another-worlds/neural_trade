@@ -1,6 +1,6 @@
-"""Live dashboard of the tactical session (design v2: 40 climb slices x 3 seeds per variant).
-Reads runs/tactical/screens/hc2_<variant>_c*/results*.jsonl (and round 1: hc_*), watchdog.out, git, GPU;
-writes runs/tactical/dashboard.html (data inlined, plotly from CDN, reloads every 20 s).
+"""Live dashboard of the tactical session (v3: the current task first, then the finished rounds).
+Reads runs/tactical (screen results incl. head_metrics, the candidate SPEC's runs, round archives, watchdog, git, GPU)
+and writes runs/tactical/dashboard.html (data inlined, plotly from CDN, reloads every 20 s).
     python runs/tactical/dashboard.py            # write once
     python runs/tactical/dashboard.py --loop 20  # rewrite every 20 s
 """
@@ -10,22 +10,18 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(ROOT))
 OUT = os.path.join(ROOT, "dashboard.html")
 sys.path.insert(0, ROOT)
-from hc2_compare import T  # t-quantiles, the same rule as the verdict script
+from hc2_compare import T
 
-PLANNED = 120  # trials per variant: 40 climb slices x 3 seeds
-# name -> (label, Config change, round)
-VARIANTS = collections.OrderedDict([
-    ("base", ("Базовая v2", "дефолты, без изменений", "база")),
-    ("skiponly", ("skip_only", "DIRECTION_HEAD_MODE=skip_only: направление только из линейного пропуска", "раунд 2")),
-    ("ep3", ("3 эпохи", "EPOCHS=3 вместо 8", "раунд 2")),
-    ("lr3e4", ("LR 3e-4", "LR=0.0003 вместо 1e-3", "раунд 2")),
-    ("dir5", ("вес direction ×5", "LAMBDA_DIR=5.0", "раунд 2")),
-    ("look20", ("окно 20", "LOOKBACK=20 вместо 60", "раунд 2")),
-    ("nophys", ("без физики", "все физические члены = 0", "раунд 2")),
-    ("calval", ("калибровка: value", "run.calibrate + CALIB_MODE=value", "раунд 3: балансировка лоссов")),
-    ("calgrad", ("калибровка: gradient", "run.calibrate + CALIB_MODE=gradient (GradNorm-стиль, NT-101)", "раунд 3: балансировка лоссов")),
-])
-R1 = [("skip_only", -0.012, -0.101, 0.076), ("shrink 1.0 (83/100)", -0.010, -0.037, 0.017), ("dropout 0.5", -0.015, -0.029, -0.0001)]
+H = ("h0", "h1", "h2")
+CAND = collections.OrderedDict([("cand_c1_skip", ("C1 skip_only", 10)), ("cand_c1_base", ("C1 база", 10)),
+                                ("cand_c2_skip", ("C2 skip_only, 7 дней", 12)), ("cand_c2_base", ("C2 дефолт, 7 дней", 12))])
+V2 = collections.OrderedDict([("skiponly", "skip_only"), ("ep3", "3 эпохи"), ("lr3e4", "LR 3e-4"), ("dir5", "direction ×5"),
+                              ("look20", "окно 20"), ("nophys", "без физики"), ("calval", "калибровка value"),
+                              ("calgrad", "калибровка gradient")])
+HM = [("delta", "corr", "Цена: корреляция"), ("delta", "skill_vs_zero", "Цена: skill vs 0"),
+      ("direction", "auc", "Направление: AUC"), ("direction", "hit_rate", "Направление: hit rate"),
+      ("direction", "brier", "Направление: Brier ↓"), ("variance", "crpss", "Уверенность: CRPSS"),
+      ("variance", "coverage90", "Уверенность: покрытие 90%"), ("variance", "corr_var_err2_spearman", "Уверенность: Spearman var~err²")]
 
 
 def sh(cmd):
@@ -35,67 +31,107 @@ def sh(cmd):
         return ""
 
 
-def load(v):
-    rows = []
-    for f in sorted(glob.glob(os.path.join(ROOT, "screens", f"hc2_{v}_c*", "results*.jsonl"))):
+def rows_of(pattern):
+    out = []
+    for f in sorted(glob.glob(os.path.join(ROOT, "screens", pattern, "results*.jsonl"))):
         for l in open(f, encoding="utf-8"):
             try:
                 r = json.loads(l)
             except Exception:
                 continue
             a = r.get("direction_auc") or {}
-            ok = all(a.get(h) and a[h].get("auc") is not None for h in ("h0", "h1", "h2"))
-            rows.append({"slice": r["data_end"][:10], "seed": r["seed"],
-                         "auc": st.mean(a[h]["auc"] for h in ("h0", "h1", "h2")) if ok else None,
-                         "h": [a[h]["auc"] if a.get(h) else None for h in ("h0", "h1", "h2")],
-                         "wall": r.get("wall_s"), "train": (r.get("timings") or {}).get("train_s")})
-    return rows
+            ok = all(a.get(h) and a[h].get("auc") is not None for h in H)
+            out.append({"slice": r["data_end"][:16], "seed": r["seed"], "wall": r.get("wall_s"),
+                        "auc": st.mean(a[h]["auc"] for h in H) if ok else None,
+                        "h": [a[h]["auc"] if a.get(h) else None for h in H], "hm": r.get("head_metrics")})
+    return out
+
+
+def tci(xs):
+    if len(xs) < 2:
+        return None
+    m = st.mean(xs); se = st.stdev(xs) / math.sqrt(len(xs)); t = T.get(len(xs) - 1, 2.0)
+    return {"mean": m, "lo": m - t * se, "hi": m + t * se, "n": len(xs)}
+
+
+def hm_mean(rows, grp, key):
+    v = [r["hm"][h][grp].get(key) for r in rows if r.get("hm") for h in H
+         if r["hm"].get(h) and r["hm"][h].get(grp) and r["hm"][h][grp].get(key) is not None]
+    return st.mean(v) if v else None
 
 
 def main():
-    data = {v: load(v) for v in VARIANTS}
-    base = collections.defaultdict(dict)
-    for r in data["base"]:
-        if r["auc"] is not None:
-            base[r["slice"]][r["seed"]] = r["auc"]
-    comp = {}
-    for v, rows in data.items():
-        if v == "base":
-            continue
-        per = collections.defaultdict(list)
-        for r in rows:
-            b = base.get(r["slice"], {}).get(r["seed"])
-            if r["auc"] is not None and b is not None:
-                per[r["slice"]].append(r["auc"] - b)
-        sl = {s: st.mean(x) for s, x in per.items()}
-        c = {"slices": sl, "pairs": sum(len(x) for x in per.values())}
-        if len(sl) >= 3:
-            ms = list(sl.values()); m = st.mean(ms); se = st.stdev(ms) / math.sqrt(len(ms)); t = T.get(len(ms) - 1, 2.0)
-            lo, hi = m - t * se, m + t * se
-            c.update(mean=m, lo=lo, hi=hi, n=len(ms), up=sum(x > 0 for x in ms), down=sum(x < 0 for x in ms),
-                     verdict=("принять к подтверждению" if lo > 0 and m >= 0.01 else ("хуже базы" if hi < 0 else "эффекта не видно")),
-                     final=len(ms) >= 40)
-        comp[v] = c
+    cand = {n: rows_of(n) for n in CAND}
+    # ---- C1
+    s1 = {r["seed"]: r for r in cand["cand_c1_skip"]}; b1 = {r["seed"]: r for r in cand["cand_c1_base"]}
+    h1 = [r["h"][1] for r in s1.values() if r["h"][1] is not None]
+    d1 = [s1[k]["auc"] - b1[k]["auc"] for k in s1 if k in b1 and s1[k]["auc"] is not None and b1[k]["auc"] is not None]
+    m1 = [r["auc"] for r in s1.values() if r["auc"] is not None]
+    c1 = {"a": {"val": st.mean(h1) if h1 else None, "thr": 0.75, "pass": (st.mean(h1) >= 0.75) if h1 else None},
+          "b": {"ci": tci(d1), "pass": (tci(d1)["lo"] > 0) if tci(d1) else None},
+          "c": {"val": st.mean(m1) if m1 else None, "thr": 0.756, "pass": (st.mean(m1) >= 0.756) if m1 else None},
+          "done": len(d1) >= 10}
+    # ---- C2
+    s2 = {(r["slice"], r["seed"]): r for r in cand["cand_c2_skip"]}; b2 = {(r["slice"], r["seed"]): r for r in cand["cand_c2_base"]}
+    per = collections.defaultdict(list)
+    for k in s2:
+        if k in b2 and s2[k]["auc"] is not None and b2[k]["auc"] is not None:
+            per[k[0]].append(s2[k]["auc"] - b2[k]["auc"])
+    d2 = {s: st.mean(v) for s, v in per.items()}
+    g_crpss = (hm_mean(cand["cand_c2_skip"], "variance", "crpss") or 0) - (hm_mean(cand["cand_c2_base"], "variance", "crpss") or 0) \
+        if cand["cand_c2_skip"] and cand["cand_c2_base"] else None
+    g_cov = (hm_mean(cand["cand_c2_skip"], "variance", "coverage90") or 0) - (hm_mean(cand["cand_c2_base"], "variance", "coverage90") or 0) \
+        if cand["cand_c2_skip"] and cand["cand_c2_base"] else None
+    ci2 = tci(list(d2.values()))
+    c2 = {"a": {"ci": ci2, "pass": (ci2["lo"] > 0) if ci2 else None, "slices": d2},
+          "g": {"crpss": g_crpss, "cov": g_cov, "pass": (g_crpss >= -0.05 and g_cov >= -0.05) if g_crpss is not None else None},
+          "done": sum(len(v) for v in per.values()) >= 12}
+    # ---- 9-head table for the candidate runs
+    heads = {n: {f"{g}.{k}": hm_mean(cand[n], g, k) for g, k, _ in HM} for n in CAND}
+    perh = {n: {h: {f"{g}.{k}": (st.mean([r["hm"][h][g][k] for r in cand[n] if r.get("hm") and r["hm"].get(h) and r["hm"][h].get(g)
+                                            and r["hm"][h][g].get(k) is not None]) if any(r.get("hm") for r in cand[n]) else None)
+                    for g, k, _ in HM} for h in H} for n in CAND}
+    # ---- round 2/3 archive (40 slices x 3 seeds)
+    def load2(v):
+        d = {}
+        for r in rows_of(f"hc2_{v}_c*"):
+            if r["auc"] is not None:
+                d[(r["slice"], r["seed"])] = r["auc"]
+        return d
+    base2 = load2("base"); v2 = {}
+    for v in V2:
+        d = load2(v); g = collections.defaultdict(list)
+        for k in d:
+            if k in base2:
+                g[k[0]].append(d[k] - base2[k])
+        c = tci([st.mean(x) for x in g.values()])
+        if c:
+            c["verdict"] = "принять" if c["lo"] > 0 and c["mean"] >= 0.01 else ("хуже базы" if c["hi"] < 0 else "эффекта нет")
+            c["slices"] = {s: st.mean(x) for s, x in g.items()}
+        v2[v] = c
+    hc3 = {}
+    for n in ["default"] + [f"cand{i:02d}" for i in range(1, 11)]:
+        rr = [r["auc"] for r in rows_of(f"hc3_{n}") if r["auc"] is not None]
+        if rr:
+            hc3[n] = {"mean": st.mean(rr), "n": len(rr)}
     procs = [l for l in sh('wmic process where "name=\'python.exe\'" get CommandLine').splitlines() if "cli screen" in l]
     running = collections.Counter()
     for l in procs:
-        for v in VARIANTS:
-            if f"hc2_{v}_c" in l:
-                running[v] += 1
-    walls = [r["wall"] for v in data for r in data[v] if r["wall"]]
-    kills = [l.strip() for l in (open(os.path.join(ROOT, "watchdog.out"), encoding="utf-8", errors="ignore").read().splitlines()
-                                 if os.path.exists(os.path.join(ROOT, "watchdog.out")) else []) if "kill" in l]
-    done_total = sum(len(r) for r in data.values())
-    rate = st.mean(walls[-60:]) / 3 if walls else None  # seconds per trial with 3 shards
-    eta_min = round((len(VARIANTS) * PLANNED - done_total) * rate / 60) if rate else None
+        for n in CAND:
+            if f"{n}.yaml" in l:
+                running[n] += 1
+    walls = [r["wall"] for n in CAND for r in cand[n] if r["wall"]]
     state = {
-        "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "planned": PLANNED,
-        "variants": {v: {"label": VARIANTS[v][0], "desc": VARIANTS[v][1], "round": VARIANTS[v][2], "rows": data[v],
-                         "running": running.get(v, 0)} for v in VARIANTS},
-        "comp": comp, "r1": R1, "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
-        "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%H:%M -10").splitlines(),
-        "shards": len(procs), "over_limit": sum(w > 120 for w in walls), "n_walls": len(walls), "kills": kills[-5:],
-        "n_kills": len(kills), "eta_min": eta_min, "done_total": done_total, "logreg_r1": 0.554,
+        "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
+        "shards": len(procs), "cand": {n: {"label": CAND[n][0], "planned": CAND[n][1], "done": len(cand[n]), "running": running.get(n, 0),
+                                           "walls": [r["wall"] for r in cand[n] if r["wall"]]} for n in CAND},
+        "c1": c1, "c2": c2, "heads": heads, "perh": perh, "hm": [[g + "." + k, lab] for g, k, lab in HM],
+        "c1rows": {"skip": [[r["seed"], r["h"]] for r in sorted(s1.values(), key=lambda r: r["seed"])],
+                   "base": [[r["seed"], r["h"]] for r in sorted(b1.values(), key=lambda r: r["seed"])]},
+        "v2": v2, "v2lab": V2, "base2": st.mean(base2.values()) if base2 else None, "hc3": hc3,
+        "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%m-%d %H:%M -10").splitlines(),
+        "over": sum(w > 120 for w in walls), "nw": len(walls),
     }
     tmp = OUT + ".tmp"
     open(tmp, "w", encoding="utf-8").write(TEMPLATE.replace("__STATE__", json.dumps(state)))
@@ -106,94 +142,99 @@ TEMPLATE = r"""<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta 
 <meta http-equiv="refresh" content="20"><title>Tactical session</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js"></script>
 <style>
-:root{--bg:#f6f7f9;--card:#fff;--ink:#16202a;--mut:#667;--line:#e1e5ea;--ok:#199e70;--bad:#c0392b;--warn:#b7791f}
+:root{--bg:#f6f7f9;--card:#fff;--ink:#16202a;--mut:#667;--line:#e1e5ea;--ok:#199e70;--bad:#c0392b;--warn:#b7791f;--acc:#3987e5}
 @media(prefers-color-scheme:dark){:root{--bg:#10151b;--card:#18202a;--ink:#e6ebf0;--mut:#93a0ad;--line:#2a3541}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,Segoe UI,sans-serif}
-.w{max-width:1280px;margin:0 auto;padding:16px}h1{font-size:20px;margin:0 0 2px}h2{font-size:15px;margin:0 0 8px}
-.sub{color:var(--mut);font-size:12px}.g{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));margin-top:12px}
+.w{max-width:1280px;margin:0 auto;padding:16px}h1{font-size:20px;margin:0 0 2px}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:10px 0 4px}
+.sec{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mut);margin:22px 0 4px}
+.sub{color:var(--mut);font-size:12px}.g{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));margin-top:8px}
 .c{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px}.full{grid-column:1/-1}
-.kpi{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.k{flex:1;min-width:150px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-.k b{font-size:22px;display:block}.k span{color:var(--mut);font-size:12px}
-.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%}
-.row{display:grid;grid-template-columns:170px 1fr 150px;gap:8px;align-items:center;margin:5px 0}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+.row{display:grid;grid-template-columns:190px 1fr 160px;gap:8px;align-items:center;margin:5px 0}
 table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-.tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:11px;border:1px solid var(--line)}
-.pos{color:var(--ok);font-weight:600}.neg{color:var(--bad);font-weight:600}.warn{color:var(--warn)}code{background:var(--line);padding:0 4px;border-radius:3px}
-.goal{border-left:4px solid #3987e5;padding:6px 10px;background:var(--card);border-radius:6px;margin-top:10px;font-size:13px}
+.tag{display:inline-block;padding:1px 8px;border-radius:9px;font-size:11px;border:1px solid var(--line)}
+.ok{color:var(--ok);font-weight:600}.bad{color:var(--bad);font-weight:600}.wait{color:var(--mut)}code{background:var(--line);padding:0 4px;border-radius:3px}
+.goal{border-left:4px solid var(--acc);padding:6px 10px;background:var(--card);border-radius:6px;margin-top:10px;font-size:13px}
+.done li{margin:3px 0}
 </style></head><body><div class="w">
 <h1>Тактическая сессия: прорыв в расчёте сети <span class="tag" id="live"></span></h1>
 <div class="sub" id="sub"></div>
-<div class="goal"><b>Цель:</b> выйти из «стратегической ловушки» (нет направленного навыка, AUC≈0,5) оптимизацией, поиском тактического прорыва в расчёте сети. Риск-менеджмент вынесен в отдельную независимую ветку. <b>Метрика:</b> среднее direction AUC по h0–h2 на валидационном блоке (screen, ≤2 мин на прогон). <b>Дизайн (зафиксирован до прогонов):</b> 40 срезов × 3 seed'а = 120 прогонов на вариант, единица вывода — срез, 10 финальных срезов не трогаются. <b>Правило:</b> 95% интервал по срезам целиком выше 0 и средняя разность ≥ +0,01, затем одна проверка на финальных срезах.</div>
-<div class="kpi" id="kpi"></div>
+<div class="goal"><b>Цель:</b> выйти из «ловушки» (нет навыка направления, AUC≈0,5) поиском тактического прорыва в расчёте сети; риск-менеджмент — отдельная ветка. <b>Правила владельца:</b> всегда все 9 выходов (цена, направление, уверенность × 3 горизонта); стандарт отсева 6 срезов × 2 seed'а (ошибка ≤0,05, ложные победы ≤10%); screen-прогон ≤2 мин, 7-дневные — по разрешению.</div>
+
+<div class="sec">Сейчас: проверка кандидата 0,805</div>
 <div class="g">
-<div class="c full"><h2>Очередь вариантов</h2><div id="prog"></div></div>
-<div class="c full"><h2>Эффект каждого варианта против базы (лес): разность AUC и 95% интервал по срезам</h2><div id="forest" style="height:360px"></div>
-<div class="sub">Зелёная зона правее +0,01 — порог «принять к подтверждению». Интервал, пересекающий 0, значит «эффекта не видно». Показаны варианты, набравшие ≥3 срезов.</div></div>
-<div class="c full"><h2>Карта срезов: разность AUC вариант − база по датам</h2><div id="heat" style="height:340px"></div>
-<div class="sub">Строки — варианты, столбцы — срезы истории (слева старые). Красное — хуже базы, синее — лучше. Закономерность по эпохам говорит о режимной зависимости, а не о навыке.</div></div>
-<div class="c full"><h2>База: AUC по срезам истории (точки — seed'ы, линия — среднее)</h2><div id="basets" style="height:300px"></div>
-<div class="sub">Красная линия — 0,5 (монетка). Разброс среднего по эпохам и есть тот шум, который не позволял сравнивать на 5 срезах.</div></div>
-<div class="c"><h2>Распределение AUC по прогонам</h2><div id="viol" style="height:340px"></div></div>
-<div class="c"><h2>AUC по горизонтам h0 / h1 / h2</h2><div id="hor" style="height:340px"></div></div>
-<div class="c"><h2>Время прогона, с</h2><div id="wall" style="height:300px"></div><div class="sub">Лимит владельца 120 с. Превысили: <span id="ovl"></span>.</div></div>
-<div class="c"><h2>Сводка по гипотезам</h2><table id="hyp"></table></div>
-<div class="c"><h2>Раунд 1 (5 срезов, закрыт): без эффекта</h2><table id="r1"></table><div class="sub">Метрика та же, но 5 срезов дают ошибку ±0,03: потому дизайн v2 использует 40.</div></div>
-<div class="c"><h2>Здоровье прогона</h2><div id="health"></div></div>
-<div class="c full"><h2>Последние коммиты nt-tactical</h2><table id="git"></table></div>
+<div class="c full"><h2>Кандидат: <code>skip_only</code>, срез 2022-04-19, seed 2, голова h1 = 0,805</h2>
+<div class="sub">Блок проверки — суббота 16.04.2022 (Пасха, штиль). Простое правило «против последних 10 минут» даёт там 0,756. На 40 срезах skip_only в среднем +0,008 (эффекта нет). Требования зафиксированы до прогона: <code>runs/tactical/cand_0805/SPEC.md</code>.</div>
+<div id="prog" style="margin-top:8px"></div></div>
+<div class="c"><h2>C1: повторяется ли на том же блоке (10 новых seed'ов)</h2><table id="c1"></table><div id="c1plot" style="height:240px"></div></div>
+<div class="c"><h2>C2: переносится ли на новые блоки, 7 дней (6 срезов × 2 seed'а)</h2><table id="c2"></table><div id="c2plot" style="height:240px"></div></div>
+<div class="c full"><h2>Все 9 выходов: средние по прогонам кандидата</h2><table id="heads"></table>
+<div class="sub">Цена: корреляция прогноза с фактом и выигрыш против «цена не изменится». Направление: AUC, доля угаданных, Brier (меньше — лучше). Уверенность: CRPSS против постоянной дисперсии (&gt;0 — лучше), покрытие 90%-интервала (идеал 0,90), связь предсказанной дисперсии с ошибкой.</div>
+<h3>По горизонтам</h3><div id="perh" style="height:330px"></div></div>
+</div>
+
+<div class="sec">Завершено</div>
+<div class="g">
+<div class="c full"><h2>Раунды 2–3: 8 вариантов против базы, 40 срезов × 3 seed'а (только направление)</h2><div id="forest" style="height:330px"></div>
+<div class="sub">Ни один вариант не прошёл правило (интервал выше 0 и эффект ≥ +0,01). Хуже базы: LR 3e-4, окно 20. Измерялось только направление: головы цены и уверенности тогда не логировались.</div></div>
+<div class="c"><h2>Итоги по задачам</h2><ul class="done" id="done"></ul></div>
+<div class="c"><h2>7 дней, топ кандидатов старой кампании (остановлено)</h2><table id="hc3"></table><div class="sub">Остановлено по решению владельца после 3 полных конфигураций: прироста против дефолта нет.</div></div>
+<div class="c"><h2>Здоровье и лимиты</h2><table id="health"></table></div>
+<div class="c"><h2>Коммиты nt-tactical</h2><table id="git"></table></div>
 </div></div>
 <script>
-const S=__STATE__,V=Object.keys(S.variants);
-const PAL=['#8a97a6','#3987e5','#d95926','#199e70','#8a5cc2','#c9a227','#e0457b','#2aa3b8','#6d8b2f'];
-const COL=Object.fromEntries(V.map((v,i)=>[v,PAL[i%PAL.length]]));
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n);
-const mean=a=>a.reduce((x,y)=>x+y,0)/a.length,ink=getComputedStyle(document.body).color,grid=css('--line');
-const lay=o=>Object.assign({margin:{l:52,r:12,t:8,b:44},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:ink,size:12},xaxis:{gridcolor:grid},yaxis:{gridcolor:grid},legend:{orientation:'h',y:-0.22}},o||{});
-const cfg={displayModeBar:false,responsive:true},R=v=>S.variants[v].rows,A=v=>R(v).filter(r=>r.auc!=null).map(r=>r.auc),L=v=>S.variants[v].label;
-const f3=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(3);
-document.getElementById('live').textContent=S.shards?('идёт: '+S.shards+' шард'):'простой';document.getElementById('live').style.color=S.shards?'var(--ok)':'var(--mut)';
+const S=__STATE__,ink=getComputedStyle(document.body).color,grid=getComputedStyle(document.documentElement).getPropertyValue('--line');
+const lay=o=>Object.assign({margin:{l:52,r:12,t:8,b:40},paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',font:{color:ink,size:12},xaxis:{gridcolor:grid},yaxis:{gridcolor:grid},legend:{orientation:'h',y:-0.25}},o||{});
+const cfg={displayModeBar:false,responsive:true},f3=v=>v==null?'—':(v>=0?'+':'')+v.toFixed(3),p3=v=>v==null?'—':v.toFixed(3);
+const mark=p=>p==null?'<span class="wait">ждёт данных</span>':(p?'<span class="ok">✔ пройдено</span>':'<span class="bad">✘ не пройдено</span>');
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+document.getElementById('live').textContent=S.shards?('идёт: '+S.shards+' процесса'):'простой';document.getElementById('live').style.color=S.shards?'var(--ok)':'var(--mut)';
 document.getElementById('sub').textContent='Обновлено '+S.now+' · перезагрузка каждые 20 с · GPU: '+(S.gpu||'н/д');
-// KPI
-const b=A('base'),cs=Object.entries(S.comp).filter(([v,c])=>c.mean!=null),best=cs.sort((x,y)=>y[1].mean-x[1].mean)[0];
-const k=(v,l)=>`<div class="k"><b>${v}</b><span>${l}</span></div>`;
-document.getElementById('kpi').innerHTML=
- k(b.length?mean(b).toFixed(3):'—','база v2, средний AUC ('+b.length+' прогонов)')+
- k(S.done_total+' / '+(V.length*S.planned),'прогонов всего'+(S.eta_min!=null?' · ещё ~'+Math.floor(S.eta_min/60)+' ч '+(S.eta_min%60)+' мин (оценка)':''))+
- k(best?f3(best[1].mean):'—',best?('лучший: '+L(best[0])+' — '+best[1].verdict):'лучший вариант: данных ещё нет')+
- k(S.over_limit+' / '+S.n_walls,'прогонов дольше 120 с')+k(S.n_kills,'зависших шардов перезапущено');
 // progress
-document.getElementById('prog').innerHTML=V.map(v=>{const n=R(v).length,p=Math.min(100,100*n/S.planned),run=S.variants[v].running;
- const st=n>=S.planned?'готово':(run?'идёт ('+run+' шард)':(n?'частично':'в очереди'));
- return `<div class="row"><div><b>${L(v)}</b><div class="sub">${S.variants[v].round}</div></div><div><div class="bar"><i style="width:${p}%;background:${COL[v]}"></i></div><div class="sub">${S.variants[v].desc}</div></div><div class="sub">${n}/${S.planned} · ${st}</div></div>`}).join('');
-// forest
-const fv=cs.map(x=>x[0]).sort((x,y)=>S.comp[y].mean-S.comp[x].mean);
-if(fv.length)Plotly.newPlot('forest',[{type:'scatter',mode:'markers',y:fv.map(L),x:fv.map(v=>S.comp[v].mean),marker:{size:11,color:fv.map(v=>COL[v])},
- error_x:{type:'data',symmetric:false,array:fv.map(v=>S.comp[v].hi-S.comp[v].mean),arrayminus:fv.map(v=>S.comp[v].mean-S.comp[v].lo),thickness:2,width:6},
- text:fv.map(v=>S.comp[v].n+' срезов, '+S.comp[v].verdict),hovertemplate:'%{y}: %{x:>+.3f}<br>%{text}<extra></extra>'}],
- lay({xaxis:{title:'Δ AUC (вариант − база)',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},yaxis:{autorange:'reversed'},showlegend:false,
- shapes:[{type:'rect',xref:'x',yref:'paper',x0:0.01,x1:0.2,y0:0,y1:1,fillcolor:'rgba(25,158,112,.10)',line:{width:0}}]}),cfg);
-else document.getElementById('forest').innerHTML='<div class="sub" style="padding:90px 0;text-align:center">Варианты ещё не набрали данных (нужна база и ≥3 среза у варианта)</div>';
-// heatmap
-const sl=[...new Set(R('base').map(r=>r.slice))].sort(),hv=Object.keys(S.comp).filter(v=>Object.keys(S.comp[v].slices).length);
-if(hv.length&&sl.length)Plotly.newPlot('heat',[{type:'heatmap',x:sl,y:hv.map(L),z:hv.map(v=>sl.map(s=>S.comp[v].slices[s]??null)),zmid:0,colorscale:'RdBu',reversescale:false,
- colorbar:{title:'Δ AUC'},hovertemplate:'%{y}<br>%{x}: %{z:>+.3f}<extra></extra>'}],lay({yaxis:{autorange:'reversed'},margin:{l:150,r:12,t:8,b:70},xaxis:{tickangle:-45}}),cfg);
-else document.getElementById('heat').innerHTML='<div class="sub" style="padding:90px 0;text-align:center">Появится, когда у вариантов будут срезы</div>';
-// baseline over time
-const bm={};R('base').filter(r=>r.auc!=null).forEach(r=>(bm[r.slice]=bm[r.slice]||[]).push(r.auc));const bs=Object.keys(bm).sort();
-Plotly.newPlot('basets',[{type:'scatter',mode:'markers',name:'seed',x:R('base').filter(r=>r.auc!=null).map(r=>r.slice),y:A('base'),marker:{color:'#8a97a6',size:5,opacity:.5}},
- {type:'scatter',mode:'lines+markers',name:'среднее по срезу',x:bs,y:bs.map(s=>mean(bm[s])),line:{color:'#3987e5'}}],
- lay({yaxis:{title:'AUC',gridcolor:grid},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:.5,y1:.5,line:{color:'#c0392b',dash:'dash',width:1}}]}),cfg);
-// violin, horizons, wall
-const vv=V.filter(v=>A(v).length);
-Plotly.newPlot('viol',vv.map(v=>({type:'violin',name:L(v),y:A(v),box:{visible:true},meanline:{visible:true},line:{color:COL[v]},fillcolor:COL[v]+'44',points:false})),lay({yaxis:{title:'AUC',gridcolor:grid},showlegend:false}),cfg);
-Plotly.newPlot('hor',vv.map(v=>{const Rr=R(v).filter(r=>r.h.every(x=>x!=null));return {type:'bar',name:L(v),x:['h0','h1','h2'],y:[0,1,2].map(i=>Rr.length?mean(Rr.map(r=>r.h[i])):null),marker:{color:COL[v]}}}),lay({barmode:'group',yaxis:{title:'средний AUC',range:[.44,.58],gridcolor:grid}}),cfg);
-Plotly.newPlot('wall',vv.map(v=>({type:'box',name:L(v),y:R(v).map(r=>r.wall).filter(x=>x),marker:{color:COL[v]},boxpoints:false})).concat([{type:'scatter',mode:'lines',name:'лимит 120 с',x:vv.map(L),y:vv.map(()=>120),line:{color:'#c0392b',dash:'dash'}}]),lay({yaxis:{title:'с',gridcolor:grid,rangemode:'tozero'},showlegend:false}),cfg);
-document.getElementById('ovl').textContent=S.over_limit+' из '+S.n_walls+' прогонов';
-// summary table
-document.getElementById('hyp').innerHTML='<tr><th>Вариант</th><th>Что меняет</th><th>срезов</th><th>Δ AUC</th><th>95% CI</th><th>вердикт</th></tr>'+V.filter(v=>v!=='base').map(v=>{const c=S.comp[v]||{};
- const cls=c.verdict==='принять к подтверждению'?'pos':(c.verdict==='хуже базы'?'neg':'');
- return `<tr><td><b>${L(v)}</b></td><td>${S.variants[v].desc}</td><td>${c.n||Object.keys((c.slices)||{}).length||0}${c.n&&!c.final?'<span class="warn"> (неполно)</span>':''}</td><td class="${cls}">${f3(c.mean)}</td><td>${c.lo==null?'—':'['+f3(c.lo)+'; '+f3(c.hi)+']'}</td><td class="${cls}">${c.verdict||'ждёт данных'}</td></tr>`}).join('');
-document.getElementById('r1').innerHTML='<tr><th>Вариант</th><th>Δ AUC</th><th>95% CI</th></tr>'+S.r1.map(r=>`<tr><td>${r[0]}</td><td>${f3(r[1])}</td><td>[${f3(r[2])}; ${f3(r[3])}]</td></tr>`).join('')+`<tr><td class="sub">logreg_lags (5 срезов)</td><td colspan="2" class="sub">${S.logreg_r1} — в пределах шума базы 0,522</td></tr>`;
-document.getElementById('health').innerHTML=`<table><tr><td>Прогонов дольше лимита 2 мин</td><td><b>${S.over_limit}</b> из ${S.n_walls}</td></tr><tr><td>Зависших шардов убито watchdog'ом</td><td><b>${S.n_kills}</b></td></tr></table>`+(S.kills.length?'<div class="sub" style="margin-top:6px">'+S.kills.map(x=>'<div>'+x+'</div>').join('')+'</div>':'<div class="sub" style="margin-top:6px">Зависаний пока нет.</div>');
+document.getElementById('prog').innerHTML=Object.entries(S.cand).map(([n,c])=>{const p=Math.min(100,100*c.done/c.planned);
+ const w=c.walls.length?Math.round(mean(c.walls))+' с/прогон':'';const st=c.done>=c.planned?'готово':(c.running?'идёт':(c.done?'частично':'в очереди'));
+ return `<div class="row"><div><b>${c.label}</b></div><div class="bar"><i style="width:${p}%"></i></div><div class="sub">${c.done}/${c.planned} · ${st} ${w}</div></div>`}).join('');
+// C1
+const c1=S.c1;document.getElementById('c1').innerHTML=
+ `<tr><th>Требование</th><th>Факт</th><th></th></tr>
+ <tr><td>(a) h1 AUC в среднем ≥ 0,75</td><td>${p3(c1.a.val)}</td><td>${mark(c1.a.pass)}</td></tr>
+ <tr><td>(b) лучше базы, интервал по seed'ам &gt; 0</td><td>${c1.b.ci?f3(c1.b.ci.mean)+' ['+f3(c1.b.ci.lo)+'; '+f3(c1.b.ci.hi)+']':'—'}</td><td>${mark(c1.b.pass)}</td></tr>
+ <tr><td>(c) среднее h0–h2 ≥ 0,756 (правило «против 10 мин»)</td><td>${p3(c1.c.val)}</td><td>${mark(c1.c.pass)}</td></tr>
+ <tr><td colspan="3" class="sub">${c1.done?'Все 10 seed\'ов готовы: вердикт окончательный.':'Неполные данные: вердикт предварительный.'}</td></tr>`;
+const tr1=[];[['skip','skip_only','#3987e5'],['base','база','#8a97a6']].forEach(([k,l,c])=>{const R=S.c1rows[k];if(R.length)tr1.push({type:'scatter',mode:'markers',name:l+' h1',x:R.map(r=>r[0]),y:R.map(r=>r[1][1]),marker:{color:c,size:9}})});
+Plotly.newPlot('c1plot',tr1,lay({xaxis:{title:'seed',gridcolor:grid,dtick:1},yaxis:{title:'h1 AUC',gridcolor:grid},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:.75,y1:.75,line:{color:'#199e70',dash:'dot'}},{type:'line',xref:'paper',x0:0,x1:1,y0:.5,y1:.5,line:{color:'#c0392b',dash:'dash',width:1}}]}),cfg);
+// C2
+const c2=S.c2;document.getElementById('c2').innerHTML=
+ `<tr><th>Требование</th><th>Факт</th><th></th></tr>
+ <tr><td>(a) разность AUC, интервал по срезам &gt; 0</td><td>${c2.a.ci?f3(c2.a.ci.mean)+' ['+f3(c2.a.ci.lo)+'; '+f3(c2.a.ci.hi)+'], срезов '+c2.a.ci.n:'—'}</td><td>${mark(c2.a.pass)}</td></tr>
+ <tr><td>(b) уверенность: CRPSS и покрытие не хуже −0,05</td><td>CRPSS ${f3(c2.g.crpss)} · покрытие ${f3(c2.g.cov)}</td><td>${mark(c2.g.pass)}</td></tr>
+ <tr><td colspan="3" class="sub">${c2.done?'Все 12 пар готовы: вердикт окончательный.':'Неполные данные: вердикт предварительный.'}</td></tr>`;
+const ss=Object.keys(c2.a.slices||{}).sort();
+if(ss.length)Plotly.newPlot('c2plot',[{type:'bar',x:ss,y:ss.map(s=>c2.a.slices[s]),marker:{color:ss.map(s=>c2.a.slices[s]>=0?'#3987e5':'#d95926')}}],lay({yaxis:{title:'Δ AUC',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},showlegend:false}),cfg);
+else document.getElementById('c2plot').innerHTML='<div class="sub" style="padding:80px 0;text-align:center">7-дневные прогоны идут (~8 мин каждый)</div>';
+// heads table
+const names=Object.keys(S.cand);
+document.getElementById('heads').innerHTML='<tr><th>Метрика (среднее h0–h2)</th>'+names.map(n=>`<th>${S.cand[n].label}</th>`).join('')+'</tr>'+
+ S.hm.map(([k,l])=>'<tr><td>'+l+'</td>'+names.map(n=>`<td>${p3(S.heads[n][k])}</td>`).join('')+'</tr>').join('');
+const hk=['delta.corr','direction.auc','variance.crpss','variance.coverage90'],hl={'delta.corr':'Цена corr','direction.auc':'Напр. AUC','variance.crpss':'Уверенность CRPSS','variance.coverage90':'Покрытие 90%'};
+const col={cand_c1_skip:'#3987e5',cand_c1_base:'#8a97a6',cand_c2_skip:'#199e70',cand_c2_base:'#c9a227'};
+const tp=[];names.forEach(n=>['h0','h1','h2'].forEach((h,i)=>{}));
+names.forEach(n=>{if(!S.cand[n].done)return;tp.push({type:'bar',name:S.cand[n].label,x:hk.flatMap(k=>['h0','h1','h2'].map(h=>hl[k]+' '+h)),y:hk.flatMap(k=>['h0','h1','h2'].map(h=>S.perh[n][h][k])),marker:{color:col[n]}})});
+if(tp.length)Plotly.newPlot('perh',tp,lay({barmode:'group',xaxis:{tickangle:-35},margin:{l:52,r:12,t:8,b:110}}),cfg);
+// forest v2
+const fv=Object.keys(S.v2).filter(v=>S.v2[v]).sort((a,b)=>S.v2[b].mean-S.v2[a].mean);
+Plotly.newPlot('forest',[{type:'scatter',mode:'markers',y:fv.map(v=>S.v2lab[v]+' ('+S.v2[v].verdict+')'),x:fv.map(v=>S.v2[v].mean),marker:{size:11,color:fv.map(v=>S.v2[v].verdict==='хуже базы'?'#c0392b':(S.v2[v].verdict==='принять'?'#199e70':'#3987e5'))},
+ error_x:{type:'data',symmetric:false,array:fv.map(v=>S.v2[v].hi-S.v2[v].mean),arrayminus:fv.map(v=>S.v2[v].mean-S.v2[v].lo),thickness:2,width:6}}],
+ lay({xaxis:{title:'Δ AUC против базы ('+(S.base2?S.base2.toFixed(3):'—')+')',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},yaxis:{autorange:'reversed'},showlegend:false,margin:{l:230,r:12,t:8,b:40},
+ shapes:[{type:'rect',xref:'x',yref:'paper',x0:0.01,x1:0.1,y0:0,y1:1,fillcolor:'rgba(25,158,112,.10)',line:{width:0}}]}),cfg);
+document.getElementById('done').innerHTML=[
+ '<b>Раунд 1</b> (5 срезов): ограничения нелинейного пути направления — без эффекта.',
+ '<b>Раунды 2–3</b> (40 срезов): 7 Config-вариантов и балансировка лоссов — без эффекта, 2 хуже.',
+ '<b>Шум измерения:</b> одна голова на 6-часовом блоке ±0,10; стандарт отсева 6×2 принят владельцем.',
+ '<b>Срез 2022-04-19:</b> Пасха 16.04.2022, штиль; тривиальное правило «против 10 мин» 0,756 — режим, не навык.',
+ '<b>9 голов:</b> измерение добавлено (b2e9884), ответы сети сохраняются в preds/*.npz.'].map(x=>'<li>'+x+'</li>').join('');
+document.getElementById('hc3').innerHTML='<tr><th>Конфиг</th><th>срезов</th><th>AUC</th></tr>'+Object.entries(S.hc3).map(([n,v])=>`<tr><td>${n}</td><td>${v.n}</td><td>${p3(v.mean)}</td></tr>`).join('');
+document.getElementById('health').innerHTML=`<tr><td>Screen-прогоны кандидата дольше 120 с</td><td>${S.over} из ${S.nw}</td></tr><tr><td>7-дневные прогоны</td><td>разрешены владельцем (≈8 мин)</td></tr>`;
 document.getElementById('git').innerHTML=S.log.map(l=>{const[h,t,...m]=l.split('|');return `<tr><td><code>${h}</code></td><td class="sub">${t}</td><td>${m.join('|')}</td></tr>`}).join('');
 </script></body></html>"""
 
