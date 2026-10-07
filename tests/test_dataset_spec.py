@@ -284,3 +284,67 @@ def test_an_index_made_before_the_setup_columns_is_migrated(tmp_path):
     con.close()
     assert {"symbol", "window_minutes", "horizon_minutes"} <= have
     assert RunIndex(path).rows() == []
+
+
+# ================================================================ S3: labels come from the spec
+VIZ = __import__("pathlib").Path(__file__).resolve().parents[1] / "src" / "neural_trade" / "visualization"
+
+
+def _label_strings(path):
+    """(line, text) of every string constant of a module that is not a docstring."""
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docs = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            body = node.body
+            if body and isinstance(body[0], ast.Expr) and isinstance(getattr(body[0], "value", None), ast.Constant):
+                docs.add(id(body[0].value))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docs:
+            yield node.lineno, node.value
+
+
+def test_no_figure_module_hard_codes_a_btc_label_or_a_dollar_currency_sign():
+    bad = []
+    for path in sorted(VIZ.glob("*.py")):
+        for line, text in _label_strings(path):
+            if "BTC" in text:
+                bad.append(f"{path.name}:{line}: hard-coded BTC in {text[:60]!r}")
+            # '$' is allowed only as a regular expression's end anchor
+            stripped = text[:-1] if text.endswith("$") else text
+            if "$" in stripped:
+                bad.append(f"{path.name}:{line}: hard-coded $ in {text[:60]!r}")
+    assert not bad, "\n".join(bad)
+
+
+def test_labels_follow_the_config_symbol_quote_and_bar_size():
+    from neural_trade.visualization import labels as L
+
+    assert (L.quote(), L.symbol(), L.base(), L.tag()) == ("USDT", "BTC/USDT", "BTC", "BTC/USDT 1-minute")
+    cfg = Config(SYMBOL="ETH/EUR", QUOTE_CURRENCY="EUR", RESAMPLE_MINUTES=5)
+    with L.using(cfg):
+        assert (L.quote(), L.base(), L.tag()) == ("EUR", "ETH", "ETH/EUR 5-minute")
+        assert L.money(-1234.5) == "-1,234 EUR" or L.money(-1234.5) == "-1,235 EUR"
+        assert L.axis_money()["ticksuffix"] == " EUR"
+    assert L.quote() == "USDT"                                       # restored
+
+
+def test_a_figure_names_the_configured_quote_currency_and_never_a_dollar_sign():
+    from neural_trade.visualization.data_overview import split_overview_figure
+
+    rng = np.random.default_rng(0)
+    n = 200
+    close = 50 + np.cumsum(rng.normal(size=n)).clip(-30, 30)
+    cfg = Config(SYMBOL="ETH/EUR", QUOTE_CURRENCY="EUR", LOOKBACK=20, HORIZON_STEPS=[2, 3, 4],
+                 EXTENDED_TREND_PERIODS=[2, 3, 4])
+    X = np.stack([close[i:i + 20] for i in range(100)])
+    blk = {"X": X, "y": rng.normal(size=(100, 3)), "last_close": X[:, -1], "anchor_bar": np.arange(100) + 19,
+           "index": np.arange(100)}
+    blocks = {"train": blk, "val": blk, "cal": blk, "test": blk,
+              "df": pd.DataFrame({"timestamp": pd.date_range("2025-01-01", periods=n, freq="min"), "Close": close}),
+              "close": close}
+    fig = split_overview_figure(blocks, cfg)
+    text = fig.to_json()
+    assert "EUR" in text and "USDT" not in text and "$" not in text.replace("$,", "")

@@ -8,13 +8,15 @@ the reference setup (BTC/USDT, one-minute bars) until a caller names another wit
     with labels.using(config): ...      # for the duration of a block
     labels.quote()                      # 'USDT'
     labels.money(1234.5)                # '1,235 USDT'
-    labels.price_axis(fig_axis_kwargs)  # tickformat / ticksuffix for a quote-currency axis
+    labels.axis_money(tickformat=',.0f')   # tickformat / ticksuffix keywords of a quote-currency axis
 
 A currency amount is written ``1,234 USDT`` (number, space, quote code), also in a Plotly hover template and a
 tick format, where the d3 ``$`` prefix is a US-dollar sign by definition and so cannot be used.
 """
 from __future__ import annotations
 
+import functools
+import inspect
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict
@@ -24,9 +26,9 @@ from neural_trade.core.dataset_spec import DatasetSpec, bar_label
 
 @dataclass(frozen=True)
 class Labels:
-    symbol: str = "BTC/USDT"
-    quote_currency: str = "USDT"
-    bar_minutes: float = 1.0
+    symbol: str
+    quote_currency: str
+    bar_minutes: float
 
     @property
     def base(self) -> str:
@@ -43,7 +45,16 @@ class Labels:
         return f"{self.symbol} {self.bar}"
 
 
-_CURRENT = Labels()
+def _reference() -> Labels:
+    """The reference setup's labels: the Config defaults (the instrument is configuration, D-022)."""
+    from neural_trade.core.config import Config
+
+    specs = Config.field_specs()
+    return Labels(str(specs["SYMBOL"].default), str(specs["QUOTE_CURRENCY"].default),
+                  float(specs["RESAMPLE_MINUTES"].default))
+
+
+_CURRENT = _reference()
 
 
 def _labels_of(obj) -> Labels:
@@ -74,6 +85,24 @@ def using(obj):
         yield _CURRENT
     finally:
         _CURRENT = old
+
+
+def labelled(fn):
+    """Decorator for a figure or table function with a ``config`` parameter: the labels of that Config (symbol,
+    quote currency, bar size) are in force while the function builds its output, then the previous ones return.
+    A call without a Config (or with an object that is not one) keeps the labels in force."""
+    names = list(inspect.signature(fn).parameters)
+    pos = names.index("config") if "config" in names else None
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        cfg = kwargs.get("config", args[pos] if pos is not None and len(args) > pos else None)
+        if cfg is None or not hasattr(cfg, "SYMBOL"):
+            return fn(*args, **kwargs)
+        with using(cfg):
+            return fn(*args, **kwargs)
+
+    return wrapper
 
 
 def quote() -> str:
@@ -113,5 +142,5 @@ def axis_money(**kw: Any) -> Dict[str, Any]:
     return kw
 
 
-__all__ = ["Labels", "amount_suffix", "axis_money", "base", "current", "money", "quote", "symbol", "tag", "use",
-           "using"]
+__all__ = ["Labels", "amount_suffix", "axis_money", "base", "current", "labelled", "money", "quote", "symbol", "tag",
+           "use", "using"]

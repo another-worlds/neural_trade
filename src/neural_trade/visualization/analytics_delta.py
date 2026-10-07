@@ -47,6 +47,7 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
+from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.analytics_common import _rolling_corr, _rolling_mean
@@ -304,6 +305,7 @@ def magnitude_ordering(delta: Dict[str, np.ndarray]) -> Tuple[float, float, floa
 
 
 # ------------------------------------------------------------------ figure
+@L.labelled
 def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndarray]] = None,
                            window: int = 500, height: int = 1820, n_bins: int = N_BINS):
     """Price heads on one block: raw head vs outcome, the served (shrunk) delta, and their noise.
@@ -383,7 +385,7 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
 
     _add_table(fig, st, config, served_known, 4.0 / plot_px)
     first = T.legend_once()
-    x_titles = {2: f"predicted move ($), {ctx['head']}", 3: "predicted move ($), decile mean",
+    x_titles = {2: f"predicted move ({L.quote()}), {ctx['head']}", 3: f"predicted move ({L.quote()}), decile mean",
                 4: ctx["x_unit"], 5: ctx["x_unit"]}
     for j, h in enumerate(T.HORIZONS, start=1):
         _scatter_panel(fig, j, h, st[h], ctx, first)
@@ -392,7 +394,7 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
         for row, key in FLAT_KEY.items():
             if not st[h][key]:
                 fig.update_xaxes(title_text=x_titles[row], row=row, col=j)
-    for row, title in ((2, "realised move ($)"), (3, "mean realised ($)"), (4, "Pearson r"), (5, "skill vs 0")):
+    for row, title in ((2, f"realised move ({L.quote()})"), (3, f"mean realised ({L.quote()})"), (4, "Pearson r"), (5, "skill vs 0")):
         # a panel with nothing to measure hides its axes: the y title goes to the first drawn column
         col = next((j for j, h in enumerate(T.HORIZONS, start=1) if not st[h][FLAT_KEY[row]]), None)
         if col is not None:
@@ -542,7 +544,7 @@ def _scatter_panel(fig, j, h, q, ctx, first):
     fig.add_trace(go.Scattergl(
         x=_f32(d[~out]), y=_f32(y[~out]), mode="markers", name="sample", legend="legend2", legendgroup="samples",
         showlegend=False, marker=dict(size=3, color=T.rgba(c, 0.3)),
-        hovertemplate="predicted %{x:$,.1f}<br>realised %{y:$,.1f}<extra>" + h + "</extra>"), 2, j)
+        hovertemplate="predicted %{x:,.1f}" + L.amount_suffix() + "<br>realised %{y:,.1f}" + L.amount_suffix() + "<extra>" + h + "</extra>"), 2, j)
     if out.any():
         def to_margin(v, lo, hi, m):             # inside: unchanged; beyond: the middle of that side's margin
             return np.where(v < lo, lo - m / 2, np.where(v > hi, hi + m / 2, v))
@@ -552,8 +554,8 @@ def _scatter_panel(fig, j, h, q, ctx, first):
             mode="markers", name=OUT_NAME, legend="legend2", legendgroup="beyond",
             showlegend=False, customdata=np.c_[d[out], y[out], np.where(out)[0]].astype(np.float32),
             marker=dict(size=7, symbol="diamond-open", color=c, line=dict(width=1.5)),
-            hovertemplate="sample %{customdata[2]:.0f}<br>predicted %{customdata[0]:$,.1f}"
-                          "<br>realised %{customdata[1]:$,.1f}<extra>beyond the plotted range</extra>"), 2, j)
+            hovertemplate="sample %{customdata[2]:.0f}<br>predicted %{customdata[0]:,.1f}" + L.amount_suffix() + ""
+                          "<br>realised %{customdata[1]:,.1f}" + L.amount_suffix() + "<extra>beyond the plotted range</extra>"), 2, j)
     # the margins: four strips around the plotted range (the note's headroom above stays clear)
     xref, yref = _axref(fig, 2, j)
     for x0, x1, y0, y1 in ((ax_x[0], xr[0], ax_y[0], ax_y[1]), (xr[1], ax_x[1], ax_y[0], ax_y[1]),
@@ -566,10 +568,10 @@ def _scatter_panel(fig, j, h, q, ctx, first):
     fig.update_yaxes(range=[ax_y[0], ax_y[1] + NOTE_HEADROOM * (yr[1] - yr[0])], row=2, col=j)
     eps, big = q["episodes"], q["biggest"]
     lines = [f"{int(out.sum())} points beyond the plotted range (◇ in the shaded margin)",
-             f"top 0.5% |pred| (> ${q['thr']:,.0f}): {int(q['top'].sum())} in {len(eps)} "
+             f"top 0.5% |pred| (> {q['thr']:,.0f} {L.quote()}): {int(q['top'].sum())} in {len(eps)} "
              f"episode{'s' if len(eps) != 1 else ''}"]
     if big is not None:
-        lines.append(f"largest {big[2]:+,.0f} $, samples {big[0]}-{big[1]}")
+        lines.append(f"largest {big[2]:+,.0f} {L.quote()}, samples {big[0]}-{big[1]}")
     lines.append(f"without them: corr {_f(q['corr_trim'], '+.3f')}, fit {_f(q['slope_trim'], '+.2f')}")
     fig.add_annotation(x=0.01, y=0.99, xref=f"{xref} domain", yref=f"{yref} domain", text="<br>".join(lines),
                        showarrow=False, xanchor="left", yanchor="top", align="left",
@@ -596,8 +598,8 @@ def _binned_panel(fig, j, h, q, ctx, first):
         error_y=dict(type="data", symmetric=False, array=_f32(t[:, 3] - t[:, 1]), arrayminus=_f32(t[:, 1] - t[:, 2]),
                      thickness=1.2, width=4, color=c),
         customdata=np.c_[t[:, 4], t[:, 5], t[:, 2], t[:, 3]].astype(np.float32),
-        hovertemplate="predicted (decile mean) %{x:$,.1f}<br>realised mean %{y:$,.1f}"
-                      "<br>95% CI %{customdata[2]:$,.1f} to %{customdata[3]:$,.1f} (overlap-adjusted)"
+        hovertemplate="predicted (decile mean) %{x:,.1f}" + L.amount_suffix() + "<br>realised mean %{y:,.1f}" + L.amount_suffix() + ""
+                      "<br>95% CI %{customdata[2]:,.1f}" + L.amount_suffix() + " to %{customdata[3]:,.1f}" + L.amount_suffix() + " (overlap-adjusted)"
                       "<br>n %{customdata[0]:,.0f} (n_eff %{customdata[1]:,.0f})<extra>" + h + "</extra>"), 3, j)
     xs = np.array([t[:, 0].min(), t[:, 0].max()])
     lines = [("fit", "fit through 0", "least-squares slope through 0 on this block", q["slope"],
@@ -620,7 +622,7 @@ def _binned_panel(fig, j, h, q, ctx, first):
     fig.add_trace(go.Scatter(x=_f32(xs), y=_f32([ym, ym]), mode="lines", name=MEAN_NAME,
                              legend="legend3", legendgroup="mean", showlegend=first("mean"),
                              line=dict(color=T.NEUTRAL, width=1),
-                             hovertemplate=f"block mean realised {ym:+,.1f} $ (no skill)<extra>{h}</extra>"), 3, j)
+                             hovertemplate=f"block mean realised {ym:+,.1f} {L.quote()} (no skill)<extra>{h}</extra>"), 3, j)
     # the y range follows the CIs: y = x leaves the panel rather than squashing the decile means
     ylo, yhi = min(float(t[:, 2].min()), ym, 0.0), max(float(t[:, 3].max()), ym, 0.0)
     ypad = 0.08 * (yhi - ylo) if yhi > ylo else 1.0
@@ -779,7 +781,7 @@ def _add_table(fig, st, config, served_known: bool, px: float):
         return "≡ 0" if fin[0] == 0 else f"≡ {float(fin[0]):+,.1f}"
 
     add("served β (served = β × raw, β fit on cal)", [(beta_cell(st[h]), T.INK) for h in T.HORIZONS])
-    for label, key in (("RMSE $: raw / served / predict 0", "rmse"), ("MAE $: raw / served / predict 0", "mae")):
+    for label, key in ((f"RMSE {L.quote()}: raw / served / predict 0", "rmse"), (f"MAE {L.quote()}: raw / served / predict 0", "mae")):
         add(label, [(f"{_f(st[h][key][0], ',.1f') if served_known else na} / {st[h][key][1]:,.1f} / "
                      f"{st[h][key][2]:,.1f}", T.INK_2) for h in T.HORIZONS])
     add("skill vs predicting 0: raw head ± 95%",
@@ -794,8 +796,8 @@ def _add_table(fig, st, config, served_known: bool, px: float):
         m, mlo, mhi = st[h]["mean_ci"]
         pred = const(st[h]) if st[h]["flat_d"] else f"{np.mean(st[h]['d']):+,.1f}"
         mean_cells.append((f"{pred} / {m:+,.1f} ± {(mhi - mlo) / 2:,.1f}", T.INK_2))
-    add("mean $: prediction / realised ± 95%", mean_cells)
-    add("sd $: prediction / realised",
+    add(f"mean {L.quote()}: prediction / realised ± 95%", mean_cells)
+    add(f"sd {L.quote()}: prediction / realised",
         [(f"{const(st[h]) if st[h]['flat_d'] else format(np.std(st[h]['d']), ',.1f')} / {np.std(st[h]['y']):,.1f}",
           T.INK_2) for h in T.HORIZONS])
     add("share above 0: prediction / realised",

@@ -266,7 +266,7 @@ def test_overall_coverage_and_width_are_stated_and_width_is_drawn(market, plain_
         y = market["y"][:, j - 1]
         cov = np.mean((y >= lo) & (y <= hi))
         assert f"conformal {cov:.3f}" in _title(fig, 4, j)
-        assert f"conformal ${np.mean(hi - lo):,.0f}" in _title(fig, 5, j)
+        assert f"conformal {np.mean(hi - lo):,.0f} · Gaussian" in _title(fig, 5, j)
         wtr = _traces(fig, 5, j, "conformal width")[0]
         roll = np.convolve(hi - lo, np.ones(500) / 500, mode="valid")
         step = wtr.dx
