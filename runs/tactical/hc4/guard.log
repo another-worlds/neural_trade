@@ -1,0 +1,91 @@
+19:01:27 start hc4_calval 0/3 (free 45 GB, cpu 71%)
+19:01:38 exit 0 hc4_calval 0/3
+19:02:14 start hc4_calval 1/3 (free 46 GB, cpu 68%)
+19:02:25 exit 0 hc4_calval 1/3
+19:03:02 start hc4_calval 2/3 (free 46 GB, cpu 34%)
+19:03:49 start hc4_calgrad 0/3 (free 44 GB, cpu 35%)
+19:04:37 start hc4_calgrad 1/3 (free 37 GB, cpu 38%)
+--- restart with guard v2 19:05:59
+19:06:13 start hc4_calval 0/3
+19:06:23 exit 0 hc4_calval 0/3
+19:06:54 start hc4_calval 1/3
+19:07:04 exit 0 hc4_calval 1/3
+19:07:47 start hc4_calval 2/3
+19:08:29 start hc4_calgrad 0/3
+19:09:11 start hc4_calgrad 1/3
+19:14:45 stop 31696 (free 3.3 GB, cpu 100%)
+19:15:31 exit 0 hc4_calgrad 1/3
+19:15:33 start hc4_calgrad 2/3
+19:17:44 stop 39340 (free 19.7 GB, cpu 100%)
+19:17:50 exit 0 hc4_calgrad 2/3
+19:18:51 start hc4_ep12 0/3
+--- guard v3 19:39:39
+19:39:41 start hc4_calval 0/3
+19:39:57 exit 0 hc4_calval 0/3
+19:40:23 start hc4_calval 1/3
+19:40:32 exit 0 hc4_calval 1/3
+19:41:04 start hc4_calval 2/3
+20:02:28 stop (free 20.7 GB, VRAM free 8608 MB, cpu 100%, gpu 13%)
+20:02:52 exit 0 hc4_calval 2/3
+20:04:11 start hc4_calgrad 0/3
+--- guard v3 restarted with priority order (calval, calgrad, ep12 first) 20:10:40
+20:22:48 start hc4_calval 2/3
+20:28:43 exit 0 hc4_calval 2/3
+20:28:47 start hc4_calgrad 0/3
+20:28:56 exit 0 hc4_calgrad 0/3
+20:29:28 start hc4_calgrad 1/3
+20:56:49 exit 0 hc4_calgrad 1/3
+20:56:57 start hc4_calgrad 2/3
+21:09:08 stop (free 6.0 GB, VRAM free 2440 MB, cpu 100%, gpu 6%)
+21:09:18 exit 0 hc4_calgrad 2/3
+21:10:25 start hc4_ep12 0/3
+--- guard v4 (2 processes, 4.5 GB GPU cap each) 21:20:57
+21:20:59 start hc4_calgrad 2/3
+--- 21:2x duplicate calgrad 2/3 stopped; v4 waits for the v3 orphan to finish 21:21:16
+--- guard v4 start 21:40:44
+21:40:46 start hc4_calgrad 2/3
+21:41:27 start hc4_ep12 0/3
+21:41:37 exit 0 hc4_ep12 0/3
+21:42:09 start hc4_ep12 1/3
+22:00:38 exit 0 hc4_calgrad 2/3
+22:00:39 start hc4_ep12 2/3
+22:25:20 stop (free 7.9 GB, VRAM free 5423 MB, cpu 100%, gpu 46%)
+22:27:52 exit 0 hc4_ep12 2/3
+22:27:57 exit 0 hc4_ep12 1/3
+22:28:04 start hc4_look120 0/3
+22:28:46 start hc4_look120 1/3
+22:29:18 exit 0 hc4_look120 0/3
+22:29:28 start hc4_look120 2/3
+22:29:42 exit 0 hc4_look120 1/3
+22:30:10 start hc4_nophys 0/3
+22:32:33 exit 0 hc4_look120 2/3
+22:32:55 start hc4_nophys 1/3
+23:08:14 exit 0 hc4_nophys 0/3
+23:08:24 start hc4_nophys 2/3
+23:09:57 exit 0 hc4_nophys 1/3
+23:10:05 start hc4_bs1024 0/3
+23:11:01 exit 0 hc4_bs1024 0/3
+23:11:10 start hc4_bs1024 1/3
+23:12:07 exit 0 hc4_bs1024 1/3
+23:12:16 start hc4_bs1024 2/3
+23:13:29 exit 0 hc4_bs1024 2/3
+23:31:01 exit 0 hc4_nophys 2/3
+--- guard v5 (1 process, 9 GB cap) for the OOM leftovers 23:32:00
+23:32:02 start hc4_look120 0/3
+23:59:02 exit 0 hc4_look120 0/3
+23:59:12 start hc4_look120 1/3
+00:28:13 exit 0 hc4_look120 1/3
+00:29:07 start hc4_look120 2/3
+01:02:01 exit 0 hc4_look120 2/3
+01:02:11 start hc4_bs1024 0/3
+01:13:32 exit 0 hc4_bs1024 0/3
+01:13:32 start hc4_bs1024 1/3
+01:16:17 stop (free 33.3 GB, VRAM free 2324 MB, cpu 100%, gpu 17%)
+01:16:21 exit 0 hc4_bs1024 1/3
+01:16:22 requeue hc4_bs1024 1/3
+01:17:34 start hc4_bs1024 2/3
+01:47:00 exit 0 hc4_bs1024 2/3
+01:47:04 start hc4_ep12 2/3
+02:11:22 exit 0 hc4_ep12 2/3
+02:11:30 start hc4_bs1024 1/3
+02:22:56 exit 0 hc4_bs1024 1/3
