@@ -152,7 +152,7 @@ changes).
 | [NT-117](#nt-117) | P1 | feature | implementer | done | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
 | [NT-118](#nt-118) | P2 | bug | implementer | in-progress | Calibration keeps a configured LAMBDA_VOL of 0 at 0 (as for soft ECE); then an A/B of 0 against the 0.1 floor |
 | [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
-| [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
+| [NT-120](#nt-120) | P3 | bug | implementer | done | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
@@ -1670,7 +1670,7 @@ changes).
 
 **NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-120 a04cbe7 (implementer Sonnet), merged as 76e6563; lead-verified (D-060: P3, scripts and tests only, no numbers of the product change): scripts/bench/window_free.py seeds today's Dense layer (GlorotUniform(seed)) so `check_bitwise` passes on CPU (fails with the seed reverted: assert False is True); `common.stable_ratio_gate` (warm-up dropped, A/B interleaved, >= 20 repeats else ValueError, median and IQR of both arms, a statistic definition string) gates the A2 layer's forward+backward at 1.10x today's layer's; synthetic timings with the recorded 3.4-30.8 ms denominator noise: ratio 1.05 PASS in 20 of 20 seeds, 1.20 FAIL in 20 of 20; fast 2316 passed (-n 4), ruff clean. Caveat: the 20-of-20 result assumes outlier-type noise; the GPU IQR (13-19 ms in the old record) may exceed the model: NT-060's GPU rerun (experimenter, `--device gpu`, reps >= 20, quote g_a2.ratio.*.statistic, both IQRs and g_a2.bitwise; two runs must agree on PASS/FAIL) decides.
 - **priority / type / role:** P3 / bug / implementer, then experimenter
 - **area:** scripts/ (the window-free benchmark kit), runs/experiments/ (the NT-060 record)
 - **depends on:** NT-060
