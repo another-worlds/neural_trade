@@ -12,6 +12,7 @@ REPO = os.path.dirname(os.path.dirname(ROOT))
 OUT = os.path.join(ROOT, "dashboard.html")
 sys.path.insert(0, ROOT)
 from hc2_compare import T
+import hc4_metric
 
 H = ("h0", "h1", "h2")
 HM = [("delta", "corr", "Цена: корреляция"), ("delta", "skill_vs_zero", "Цена: выигрыш vs «не изменится»"),
@@ -60,6 +61,12 @@ EXPERIMENTS = [
      "specs": [("ep1d_bs256_e40", "256 × 40 эпох (240 шагов)", 12), ("ep1d_bs64_e14", "64 × 14 эпох (322 шага)", 12),
                ("bench_bs256_x1", "справка: 1 день, 48 шагов", 12), ("cand_c2_base", "справка: 7 дней, 320 шагов", 12)],
      "compare": [("bench_bs256_x1", "ep1d_bs256_e40"), ("bench_bs256_x1", "ep1d_bs64_e14")], "verdict": None},
+    {"id": "hc4r1", "title": "Хиллклаймб, раунд 1", "when": "07.10", "kind": "hc",
+     "goal": "Неделя, 6 срезов × 2 seed'а, общая оценка по 3 группам (цена, направление, уверенность) в единицах шума + защита от «ничего не предсказывать». Вариант лучше, если интервал > 0, ни одна группа не ниже −0,5 и не упали AUC и связь разброса с ошибкой. SPEC: runs/tactical/hc4/SPEC.md",
+     "base": "cand_c2_base",
+     "specs": [("cand_c2_base", "база (дефолт)", 12), ("hc4_calval", "калибровка value", 12), ("hc4_calgrad", "калибровка gradient", 12),
+               ("hc4_ep12", "12 эпох", 12), ("hc4_look120", "окно 120", 12), ("hc4_nophys", "без физики", 12), ("hc4_bs1024", "пачка 1024", 12)],
+     "compare": [], "verdict": None},
 ]
 
 
@@ -156,6 +163,20 @@ def main():
         if e["kind"] == "bench":
             x["extra"] = bench_extra()
             x["verdict"] = x["verdict"] or (x["extra"].get("verdict") if x["extra"] else None)
+        if e["kind"] == "hc":
+            rows = []
+            for pat, lab, planned in e["specs"]:
+                if pat == e["base"]:
+                    continue
+                try:
+                    r = hc4_metric.compare(e["base"], pat)
+                except Exception as ex:
+                    r = {"error": str(ex)}
+                rows.append({"label": lab, "r": {k: v for k, v in r.items() if k != "noise_sd"}})
+            x["extra"] = {"hc": rows}
+            win = [z for z in rows if z["r"].get("verdict") == "BETTER"]
+            if all(sp["done"] >= sp["planned"] for sp in specs):
+                x["verdict"] = ("Победитель раунда: " + max(win, key=lambda z: z["r"]["mean"])["label"]) if win else "В раунде нет варианта лучше базы."
         if e["kind"] == "epochs":
             x["extra"] = epochs_extra(specs)
             if x["extra"] and x["extra"].get("final"):
@@ -273,10 +294,17 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
  if(e.extra&&e.extra.rules)h+='<div class="c full"><h2>Требования (SPEC)</h2><table><tr><th>Требование</th><th>Факт</th><th></th></tr>'+e.extra.rules.map(r=>`<tr><td>${r.name}</td><td>${r.val}</td><td>${mark(r.ok)}</td></tr>`).join('')+'</table></div>';
  if(e.kind==='bench'&&e.extra)h+='<div class="c full"><h2>Скорость</h2><table><tr><th>Вариант</th><th>прогонов</th><th>минут</th><th>прогонов/час</th><th>эпоха, с</th><th>с/шаг</th></tr>'+e.extra.arms.map(a=>`<tr><td>${a.arm}${a.finished?'':' <span class="mut">(идёт)</span>'}</td><td>${a.done}</td><td>${a.minutes??'—'}</td><td><b>${a.per_hour??'—'}</b></td><td>${a.epoch_s??'—'}</td><td>${a.s_per_step??'—'}</td></tr>`).join('')+'</table><div class="sub">Минуты — по часам от начала до конца варианта; включают загрузку данных 6 срезов.</div></div>';
  if(e.kind==='epochs'&&e.extra)h+='<div class="c full"><h2>Правило гипотезы</h2><div class="sub">Подтверждена: покрытие ≥ 0,80 и CRPSS ≥ 0 хотя бы у одного варианта. Опровергнута: у обоих покрытие &lt; 0,75 или CRPSS &lt; −0,10. Справка: 1 день/48 шагов — 0,67 и −0,22; 7 дней — 0,87 и +0,01.</div><table><tr><th>Вариант</th><th>прогонов</th><th>покрытие 90%</th><th>CRPSS</th><th></th></tr>'+e.extra.arms.map(a=>`<tr><td>${a.label}</td><td>${a.done}</td><td>${p3(a.cov)}</td><td>${f3(a.crpss)}</td><td>${mark(a.ok)}</td></tr>`).join('')+'</table></div>';
+ if(e.kind==='hc'&&e.extra){const VV={'BETTER':'<span class="ok">лучше</span>','WORSE':'<span class="bad">хуже</span>','NO DIFFERENCE':'<span class="mut">разницы нет</span>'};
+   h+='<div class="c full"><h2>Общая оценка против базы (в единицах шума)</h2><table><tr><th>Вариант</th><th>срезов</th><th>общая оценка</th><th>95% интервал</th><th>цена</th><th>направление</th><th>уверенность</th><th>AUC / ранжирование риска</th><th>вердикт</th></tr>'+
+   e.extra.hc.map(z=>{const r=z.r,g=r.groups||{},q=r.resolution||{};return `<tr><td><b>${z.label}</b></td><td>${r.slices??0}</td><td>${f3(r.mean)}</td><td>${r.lo==null?'—':'['+f3(r.lo)+'; '+f3(r.hi)+']'}</td><td>${f3(g.price)}</td><td>${f3(g.direction)}</td><td>${f3(g.confidence)}</td><td>${f3(q['direction.auc'])} / ${f3(q['variance.corr_var_err2_spearman'])}</td><td>${r.verdict?VV[r.verdict]:'<span class="mut">ждёт данных</span>'}</td></tr>`}).join('')+
+   '</table><div class="sub">Значения — средний эффект в единицах seed-шума (±1 ≈ разница двух seed'ов одной сети). Пока срезов меньше 6, вердикт предварительный.</div></div>';
+   const ok=e.extra.hc.filter(z=>z.r.mean!=null);if(ok.length)h+='<div class="c full"><h2>Лес общей оценки</h2><div id="hcforest" style="height:'+(90+40*ok.length)+'px"></div></div>';}
  if(e.comps.length)h+='<div class="c full"><h2>Парные сравнения по направлению (Δ AUC, 95% интервал по срезам)</h2><div id="forest" style="height:'+(80+36*e.comps.length)+'px"></div></div>';
  if(e.specs.some(s=>s.heads))h+='<div class="c full"><h2>Все 9 выходов (среднее h0–h2)</h2><table><tr><th>Метрика</th>'+e.specs.filter(s=>s.heads).map(s=>`<th>${s.label}</th>`).join('')+'</tr>'+S.hm.map(([k,l])=>'<tr><td>'+l+'</td>'+e.specs.filter(s=>s.heads).map(s=>`<td>${p3(s.heads[k])}</td>`).join('')+'</tr>').join('')+'</table></div>';
  if(e.specs.some(s=>s.auc!=null))h+='<div class="c"><h2>Средний AUC направления</h2><div id="aucbar" style="height:300px"></div></div><div class="c"><h2>Время прогона</h2><div id="wallbar" style="height:300px"></div></div>';
  h+='</div>';document.getElementById('pane').innerHTML=h;
+ if(document.getElementById('hcforest')){const ok=e.extra.hc.filter(z=>z.r.mean!=null);Plotly.newPlot('hcforest',[{type:'scatter',mode:'markers',y:ok.map(z=>z.label),x:ok.map(z=>z.r.mean),marker:{size:12,color:ok.map(z=>z.r.verdict==='BETTER'?'#199e70':(z.r.verdict==='WORSE'?'#c0392b':'#3987e5'))},
+  error_x:{type:'data',symmetric:false,array:ok.map(z=>z.r.hi-z.r.mean),arrayminus:ok.map(z=>z.r.mean-z.r.lo),thickness:2,width:6}}],lay({xaxis:{title:'общая оценка (единицы шума)',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},yaxis:{autorange:'reversed'},margin:{l:170,r:12,t:8,b:40},showlegend:false}),cfg)}
  if(document.getElementById('forest')){const cs=e.comps.filter(x=>x.c);Plotly.newPlot('forest',[{type:'scatter',mode:'markers',y:cs.map(x=>x.b+' vs '+x.a),x:cs.map(x=>x.c.mean),marker:{size:11,color:cs.map(x=>x.c.verdict==='хуже'?'#c0392b':(x.c.verdict==='лучше'?'#199e70':'#3987e5'))},
   error_x:{type:'data',symmetric:false,array:cs.map(x=>x.c.hi-x.c.mean),arrayminus:cs.map(x=>x.c.mean-x.c.lo),thickness:2,width:6},text:cs.map(x=>x.c.n+' срезов, '+x.c.pairs+' пар: '+x.c.verdict),hovertemplate:'%{y}: %{x:>+.3f}<br>%{text}<extra></extra>'}],
   lay({xaxis:{title:'Δ AUC',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},yaxis:{autorange:'reversed'},margin:{l:330,r:12,t:8,b:40},showlegend:false}),cfg)}
