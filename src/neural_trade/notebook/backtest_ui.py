@@ -201,6 +201,10 @@ def load_run_blocks(run_dir, csv_path: Optional[str] = None) -> Dict[str, Any]:
     cfg = predictor.config.copy()
     if csv_path:
         cfg.override(CSV_PATH=str(csv_path))
+    # NT-041: notebooks 02-04 rebuild the blocks from a CSV path of their own; it must be the run's dataset
+    from neural_trade.experiments.dataset import verify_run_dataset
+
+    verify_run_dataset(run_dir, cfg)
     blocks = split_arrays(cfg)
     out = {"run_dir": run_dir, "predictor": predictor, "config": cfg, "blocks": blocks}
     for name in ("test", "cal"):

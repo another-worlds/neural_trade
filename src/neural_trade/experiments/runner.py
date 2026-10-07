@@ -276,7 +276,10 @@ class Runner:
                           **({} if sc.run.train else {"train": False})},
                   "spec": str(sc.source) if sc.source is not None else None}
         return {"engine": engine, "dataset": pc.dataset, "setup": pc.setup,
-                "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"]}}
+                "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"],
+                   # NT-041: the bars the fold reads (first training window to last test target) and, for the
+                   # timed layout, where it was planned to start
+                   **{k: pc.fold[k] for k in ("read_range", "planned_start") if k in pc.fold}}}
 
     def _create_context(self, pc: PlannedCell, meta: Dict[str, Any]):
         from neural_trade.experiments.run_context import RunContext

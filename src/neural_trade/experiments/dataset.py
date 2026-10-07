@@ -21,12 +21,16 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field, fields
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from neural_trade.core.config import Config
 from neural_trade.core.exceptions import InvalidConfigurationError
 
+logger = logging.getLogger(__name__)
 FILE_LOADERS = ("csv", "parquet")
 _SHA_CACHE: Dict[tuple, str] = {}
 
@@ -119,14 +123,30 @@ def _prepared(config: Config):
     return df, int(len(raw)), path
 
 
-def _fingerprint(config: Config, df, n_rows: int, path) -> Dict[str, Any]:
+def _fingerprint(config: Config, df, n_rows: int, path, gaps: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     times = df["timestamp"]
-    return {"path": str(config.CSV_PATH), "sha256": file_sha256(path), "size_bytes": int(path.stat().st_size),
-            "loader": str(config.DATA_LOADER), "n_rows": n_rows, "n_bars": int(len(df)),
-            "first_timestamp": _iso(times.iloc[0]), "last_timestamp": _iso(times.iloc[-1])}
+    out = {"path": str(config.CSV_PATH), "sha256": file_sha256(path), "size_bytes": int(path.stat().st_size),
+           "loader": str(config.DATA_LOADER), "n_rows": n_rows, "n_bars": int(len(df)),
+           "first_timestamp": _iso(times.iloc[0]), "last_timestamp": _iso(times.iloc[-1])}
+    if gaps is not None:
+        out["gaps"] = gaps          # what the holes cost under GAP_POLICY (data.gaps.gap_report), NT-041
+    return out
 
 
 _FP_CACHE: Dict[tuple, Dict[str, Any]] = {}
+
+
+def _gaps_only(config: Config, df) -> Dict[str, Any]:
+    """The hole record without placing folds (a timed layout may not fit the data yet: that is the run's error,
+    not the fingerprint's)."""
+    from neural_trade.data.gaps import gap_flags, gap_report
+    from neural_trade.data.windowing import anchor_positions
+
+    flags = None if config.GAP_POLICY == "ignore" else gap_flags(df, float(config.RESAMPLE_MINUTES))
+    every = anchor_positions(config, len(df))
+    kept = every if flags is None else anchor_positions(config, len(df), flags)
+    return gap_report(config, df, len(every), len(kept), flags=flags if flags is not None else
+                      np.zeros(len(df), dtype=bool))
 
 
 def dataset_fingerprint(config: Config) -> Dict[str, Any]:
@@ -140,57 +160,82 @@ def dataset_fingerprint(config: Config) -> Dict[str, Any]:
         path = resolve_data_path(config.CSV_PATH)
         st = path.stat()
         key = (str(path.resolve()), st.st_size, st.st_mtime_ns, str(config.DATA_LOADER), int(config.RESAMPLE_MINUTES),
-               tuple(config.PREPROCESSORS), config.DATA_END, float(config.DATA_END_PROTECTED_DAYS))
+               tuple(config.PREPROCESSORS), config.DATA_END, float(config.DATA_END_PROTECTED_DAYS),
+               int(config.LOOKBACK), tuple(config.HORIZON_STEPS), tuple(config.EXTENDED_TREND_PERIODS),
+               str(config.GAP_POLICY))
     except OSError as exc:
         return {"path": str(config.CSV_PATH), "loader": str(config.DATA_LOADER), "error": f"{type(exc).__name__}: {exc}"}
     if key not in _FP_CACHE:
         try:
             df, n_rows, path = _prepared(config)
-            _FP_CACHE[key] = _fingerprint(config, df, n_rows, path)
-        except (ValueError, OSError, KeyError) as exc:
+            _FP_CACHE[key] = _fingerprint(config, df, n_rows, path, _gaps_only(config, df))
+        except (ValueError, OSError, KeyError, InvalidConfigurationError) as exc:
             return {"path": str(config.CSV_PATH), "loader": str(config.DATA_LOADER),
                     "error": f"{type(exc).__name__}: {exc}"}
     return dict(_FP_CACHE[key])
 
 
+class DatasetMismatch(InvalidConfigurationError):
+    """The data a figure or notebook rebuilds its blocks from is not the data the run used (NT-041)."""
+
+
+def verify_run_dataset(run_dir, config: Config) -> Dict[str, Any]:
+    """Check that ``config``'s data is the dataset the run in ``run_dir`` recorded in its meta.json (the file's
+    sha256 and the bars the model saw: count, first and last timestamp). Returns the current fingerprint;
+    raises :class:`DatasetMismatch` naming what differs. A run with no recorded fingerprint (made before
+    NT-041, or whose data could not be fingerprinted) is not checked: a warning is logged."""
+    import json
+
+    meta_path = Path(run_dir) / "meta.json"
+    try:
+        recorded = (json.loads(meta_path.read_text(encoding="utf-8")) or {}).get("dataset") or {}
+    except (OSError, ValueError):
+        recorded = {}
+    if not recorded.get("sha256"):
+        logger.warning("%s records no dataset fingerprint: the data it is rebuilt from is not checked", run_dir)
+        return {}
+    current = dataset_fingerprint(config)
+    diff = [f"{k}: run {recorded.get(k)!r}, now {current.get(k)!r}"
+            for k in ("sha256", "n_bars", "first_timestamp", "last_timestamp")
+            if recorded.get(k) is not None and recorded.get(k) != current.get(k)]
+    if diff:
+        raise DatasetMismatch(f"{config.CSV_PATH!r} is not the dataset run {Path(run_dir).name} used ("
+                              + "; ".join(diff) + "): rebuilding its blocks from it would show other bars than "
+                              "the run saw")
+    return current
+
+
 def data_layout(config: Config) -> DataLayout:
-    """Load and prepare the configured data once and lay out its purged folds (no windows built)."""
-    from neural_trade.data.splits import make_purged_splits
-    from neural_trade.data.windowing import first_anchor, sequence_anchor_bars
+    """Load and prepare the configured data once and lay out its folds (no windows built): the same
+    :func:`neural_trade.data.plan.make_plan` the trainer reads, so the layout is the trainer's split."""
+    from neural_trade.data.plan import make_plan
 
     if int(max(1, config.WINDOW_STEP)) != 1:
         raise InvalidConfigurationError(f"WINDOW_STEP={config.WINDOW_STEP}: the engine's backtest fills at the "
                                         "next bar's open, which needs consecutive decision bars (WINDOW_STEP = 1)")
     df, n_rows, path = _prepared(config)
-    close = df["Close"].to_numpy()
-    lookback = int(config.LOOKBACK)
-    start = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
-    end = int(len(close) - (int(max(config.HORIZON_STEPS)) - 1))
-    n_total = len(range(start, end, 1))
-    cap = int(config.MAX_SEQUENCE_COUNT or 0)
-    n_seq = min(n_total, cap) if cap else n_total
-    if n_seq <= 0:
-        raise InvalidConfigurationError(f"{config.CSV_PATH}: {len(close)} bars give no sequence for LOOKBACK "
-                                        f"{lookback} and HORIZON_STEPS {list(config.HORIZON_STEPS)}")
     try:
-        folds = make_purged_splits(n_seq, lookback=lookback, horizon_steps=config.HORIZON_STEPS, window_step=1,
-                                   n_folds=int(config.N_FOLDS), val_fraction=float(config.VAL_FRACTION),
-                                   cal_fraction=float(config.CAL_FRACTION))
+        plan = make_plan(config, df)
     except ValueError as exc:
-        raise InvalidConfigurationError(str(exc)) from exc
+        raise InvalidConfigurationError(f"{config.CSV_PATH}: {exc}") from exc
     times = df["timestamp"]
-    fingerprint = _fingerprint(config, df, n_rows, path)
+    fingerprint = _fingerprint(config, df, n_rows, path, plan.gaps)
     out: List[Dict[str, Any]] = []
-    for f in folds:
+    for f in plan.folds:
         blocks = {}
         for name in ("train", "val", "cal", "test"):
             idx = getattr(f, name)
-            anchors = sequence_anchor_bars(config, len(close), n_total, [int(idx[0]), int(idx[-1])])
+            a0, a1 = int(plan.anchors[int(idx[0])]) - 1, int(plan.anchors[int(idx[-1])]) - 1
             blocks[name] = {"start": int(idx[0]), "stop": int(idx[-1]) + 1, "n": int(len(idx)),
-                            "first_timestamp": _iso(times.iloc[int(anchors[0])]),
-                            "last_timestamp": _iso(times.iloc[int(anchors[1])])}
-        out.append({"fold_id": int(f.fold), "gap": int(f.gap), "blocks": blocks})
-    return DataLayout(fingerprint, int(n_seq), out)
+                            "first_timestamp": _iso(times.iloc[a0]), "last_timestamp": _iso(times.iloc[a1])}
+        out.append({"fold_id": int(f.fold), "gap": int(f.gap), "blocks": blocks,
+                    # NT-041: the range of bars a fold reads, from its first training sequence's window start
+                    # to its last test sequence; the timed layout also records its planned start
+                    "read_range": {"first_timestamp": blocks["train"]["first_timestamp"],
+                                   "last_timestamp": blocks["test"]["last_timestamp"]}})
+    for f, span in zip(out, plan.spans):
+        f["planned_start"] = span["start"]
+    return DataLayout(fingerprint, plan.n_sequences, out)
 
 
 class LayoutCache:
@@ -213,4 +258,4 @@ def describe_block(block: Optional[Dict[str, Any]]) -> str:
 
 
 __all__ = ["DataLayout", "LayoutCache", "data_key", "data_layout", "dataset_fingerprint", "describe_block",
-           "file_sha256", "setup_of"]
+           "file_sha256", "setup_of", "verify_run_dataset", "DatasetMismatch"]

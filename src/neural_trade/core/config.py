@@ -268,6 +268,32 @@ class Config:
                              unit="fraction", gt=0.0, lt=0.5)
     N_FOLDS: int = _f(5, "data", "TimeSeriesSplit folds; the last fold's test block is reported", unit="count",
                       ge=2, step=1)
+    GAP_POLICY: str = _f("drop", "data", "holes in the bar timestamps (more than one bar apart): 'drop' builds no "
+                         "input window, past-delta lag or target that spans a hole and records how many windows "
+                         "that removed; 'refuse' makes any hole an error; 'ignore' does not look (the behaviour "
+                         "before NT-041). The bundled file has no hole, so the default changes nothing there "
+                         "(NT-041)", unit="name", choices=("drop", "refuse", "ignore"))
+    FOLD_LAYOUT: str = _f("tscv", "data", "how the folds are placed: 'tscv' = scikit-learn TimeSeriesSplit over the "
+                          "(MAX_SEQUENCE_COUNT-capped) sequences with VAL_FRACTION / CAL_FRACTION blocks (today); "
+                          "'timed' = blocks of TRAIN_MINUTES / VAL_MINUTES / CAL_MINUTES / TEST_MINUTES placed at "
+                          "FOLD_STARTS or FOLD_SPACING_DAYS apart, over the whole file (MAX_SEQUENCE_COUNT is "
+                          "ignored; only the chosen fold's span is windowed). The purge gap between blocks stays "
+                          "(D-005, D-034) (NT-041)", unit="name", choices=("tscv", "timed"))
+    TRAIN_MINUTES: float = _f(7 * 1440.0, "data", "timed layout: length of the training block in wall-clock "
+                              "minutes (7 days, the owner's reference block)", unit="minutes", gt=0.0)
+    VAL_MINUTES: float = _f(2 * 1440.0, "data", "timed layout: length of the validation block in wall-clock minutes",
+                            unit="minutes", gt=0.0)
+    CAL_MINUTES: float = _f(2 * 1440.0, "data", "timed layout: length of the calibration block in wall-clock "
+                            "minutes", unit="minutes", gt=0.0)
+    TEST_MINUTES: float = _f(5 * 1440.0, "data", "timed layout: length of the out-of-sample block in wall-clock "
+                             "minutes (5 days)", unit="minutes", gt=0.0)
+    FOLD_STARTS: Optional[List[str]] = _f(None, "data", "timed layout: the first bar of each fold's training block, "
+                                          "oldest first (ISO-8601, naive = UTC); None = folds FOLD_SPACING_DAYS "
+                                          "apart, the newest ending at the file's last bar, N_FOLDS of them",
+                                          unit="timestamp")
+    FOLD_SPACING_DAYS: float = _f(30.0, "data", "timed layout: days between consecutive folds when FOLD_STARTS is "
+                                  "None (a spacing below a fold's length makes the folds overlap)", unit="days",
+                                  gt=0.0)
     FOLD_INDEX: int = _f(-1, "data", "which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)",
                          unit="index")
 
@@ -859,6 +885,24 @@ class Config:
             bad("VAR_CAP must be > VAR_FLOOR")
         if self.LAMBDA_VAC > 0:
             _log.warning("Config.LAMBDA_VAC > 0: vacuum_bandwidth_loss is active (default is off).")
+        if self.FOLD_LAYOUT == "timed":
+            from .dataset_spec import minutes_to_bars
+
+            for name in ("TRAIN_MINUTES", "VAL_MINUTES", "CAL_MINUTES", "TEST_MINUTES"):
+                minutes_to_bars(getattr(self, name), self.RESAMPLE_MINUTES, name)
+            if self.FOLD_STARTS is not None:
+                import pandas as _pd
+
+                if not self.FOLD_STARTS:
+                    bad("FOLD_STARTS must list at least one timestamp (or be None)")
+                try:
+                    starts = [_pd.Timestamp(t) for t in self.FOLD_STARTS]
+                except (ValueError, TypeError) as exc:
+                    bad(f"FOLD_STARTS has an unreadable timestamp: {exc}")
+                if any((a.tzinfo is None) != (starts[0].tzinfo is None) for a in starts):
+                    bad("FOLD_STARTS mixes timestamps with and without a timezone")
+                if any(b <= a for a, b in zip(starts, starts[1:])):
+                    bad("FOLD_STARTS must be strictly ascending")
         if not 0.0 < self.VAL_FRACTION < 0.5 or not 0.0 < self.CAL_FRACTION < 0.5:
             bad("VAL_FRACTION and CAL_FRACTION must be in (0, 0.5)")
         if self.N_FOLDS < 2:
