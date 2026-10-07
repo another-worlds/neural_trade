@@ -73,7 +73,7 @@ changes).
 | [NT-038](#nt-038) | P1 | feature | implementer | done | Stability harness and config guard (refuse hyperparameter regions known to fail) |
 | [NT-039](#nt-039) | P1 | research | experimenter | todo | Pre-registered A/B: gradient-based loss weighting against today's value calibration |
 | [NT-040](#nt-040) | P1 | bug | implementer | done | Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars) |
-| [NT-041](#nt-041) | P1 | feature | implementer | todo | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
+| [NT-041](#nt-041) | P1 | feature | implementer | in-progress | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
 | [NT-042](#nt-042) | P1 | feature | implementer | todo | Variable number of horizons |
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
@@ -225,6 +225,9 @@ changes).
 | [NT-190](#nt-190) | P2 | polish | implementer | todo | Stability harness v2 follow-ups: fuzz_jumps expected outcome, the tiny profile's variance-head blind spot, two test gaps, the baseline bound, dry-run n_eff |
 | [NT-191](#nt-191) | P1 | feature | implementer | todo | Stability harness before NT-051: a probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run and CSV fixes |
 | [NT-192](#nt-192) | P2 | bug | implementer | todo | The per-term probe fires once per 6-step cell and its epoch mean divides the shares by the number of epochs |
+| [NT-193](#nt-193) | P2 | bug | implementer | todo | The purge gap ignores past-delta lags that reach beyond LOOKBACK (D-034's W must be the longest lag, not LOOKBACK) |
+| [NT-194](#nt-194) | P3 | polish | implementer | todo | Remaining '$' and 'dollars' labels outside the visualization package |
+| [NT-195](#nt-195) | P2 | decision | owner | todo | Make the `timed` layout (7/2/2/5 days, folds at dates or spacing) the default? |
 
 ## Items
 
@@ -723,7 +726,7 @@ changes).
 
 **Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps)**
 
-- **status:** todo
+- **status:** in-progress (2026-10-07): nt-041 d99ab26 (implementer Sonnet, 4 stages S1-S4: dataset spec with window/horizons in minutes, fingerprint and setup in every run's meta and leaderboard row, cost profile, labels from the spec in 11 figure modules, the `timed` layout (7/2/2/5 days) with folds at dates or spacing, a gap policy, and the PR #15 sub-points (a)-(g)). qa-deep FAIL on d99ab26: at the reference nothing moves (golden 455/455, every window array bit-equal for 5 configurations; the (g) case drops one zero-filled first sequence: the intended correction), but P1-A (a cost profile set in the config disqualifies every leaderboard row), P1-B (an index made before this commit raises `no such column: symbol` on read-only paths; the main checkout's runs/index.sqlite is one), P1-C (the hole drop plus the cap re-lays every fold of 6 long-file scenarios by 79 bars under an unchanged identity) and P2s (trade_analytics panel titles built at import time, cut-off labels in the trading dashboard). Repair round 1 running. Criterion (6) is met for `timed` only: making `timed` the default moves every run's blocks (golden re-record, test churn): an owner/lead decision, not part of this item. The D-044 default (0 bps) supersedes the '13 bps' in criterion (4)'s text.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** (a) bar_minutes comes from RESAMPLE_MINUTES (experiments/dataset.py:50, scorer.py:306): compare the declared bar size with the measured median spacing and refuse a mismatch. (b) Notebooks 02-04 rebuild blocks from a hard-coded CSV (build.py:255/271, 325/340; backtest_ui.py:192-203): loaders check the fingerprint. (c) A zero/negative close passes `validate_ohlcv_frame` (data/loaders.py:32-41). (d) `sort_dedupe` uses an unstable sort (preprocessors.py:38). (e) epoch-ms timestamps parse as ns (:27). (f) Bootstrap BLOCK fixed at 80 (statistics.py:230): CIs 44% too narrow at h 240. (g) The window-start off-by-one (windowing.py:69, 129, 144, 165, 190) is live in micro scenarios with EXTENDED_TREND_PERIODS >= LOOKBACK. (h) max_hold fixed at 30 bars (strategies.py:50, 140, 189, 255).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/core/config.py, src/neural_trade/data/ (loaders, splits, windowing, processor), src/neural_trade/strategy/backtest.py (cost profile), src/neural_trade/evaluation/, src/neural_trade/visualization/ (labels), src/neural_trade/experiments/ (run meta), configs/, tests/
@@ -2547,6 +2550,42 @@ changes).
 - **why:** QA review of the NT-051 SPEC (2026-10-07): `optimizer.iterations` is incremented before the `tf.cond` (custom_model.py:776 vs :808), so with PROBE_EVERY 5 and 6 steps the probe fires once, at iteration 5, in epoch 3; epochs 1-2 log 0 (`_Accum` mean 0/max(0,1)) and `_probe_shares` averages over the epochs, so every share is divided by 3 and `term_gradient_share` can never exceed 1/3 on 14 of the 15 reference cases (horizons_5_60_240 has 24 steps and probes 4 times). It is report-only in v2, but NT-098 (gradient shares of the loss terms) and the harness's blame depend on it. Touches the per-step training path (D-018).
 - **acceptance:** (1) The probe cadence counts steps of the CURRENT epoch (or fires at the first step of every epoch plus every PROBE_EVERY): every epoch with at least one step logs a probe sample; (2) `_probe_shares` averages over the epochs that probed, and a test with a 2-steps-per-epoch cell shows the shares sum to 1 in every epoch; (3) with PROBE_GRADIENTS off nothing changes: golden_nt117 455/455 and the same epoch metrics bitwise; with it on, the training is unchanged (probe is read-only: a bitwise test); (4) sec_per_step with the probe OFF is not worse (D-018: report a short CPU micro-timing before/after); (5) fast suite, `-m stability`, ruff.
 - **source:** QA review of the NT-051 SPEC (2026-10-07)
+
+### NT-193
+
+**The purge gap ignores past-delta lags that reach beyond LOOKBACK (D-034's W must be the longest lag, not LOOKBACK)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/data/splits.py, data/plan.py (the gap), core/config.py (validate), tests/test_purge_rule.py or tests/test_data_processor.py
+- **depends on:** NT-041
+- **why:** qa-deep on NT-041 (2026-10-07): the purge gap is `LOOKBACK + max(H)` bars (80 at the reference), but a past-delta feature with a lag >= LOOKBACK (SKIP_LAGS, EXTENDED_TREND periods >= LOOKBACK) reads bars before the window, so an input of a later block can read a training-label bar. D-034 defines the gap as max(2 max(H), W + max(H)) with W 'the longest finite window any consumer reads': W must be max(LOOKBACK, longest lag + 1). It predates NT-041 and is repeated in the `timed` layout. At the reference (lags below the window) nothing changes.
+- **acceptance:** (1) W = the longest window or lag any consumer reads (a function used by both the `tscv` and the `timed` layouts); (2) the gap grows only when a lag exceeds LOOKBACK, so every reference scenario is unchanged (golden 455/455; spec/settings/config hashes of all committed scenarios and their block timestamps unchanged: a test); (3) a test with EXTENDED_TREND_PERIODS 120 and LOOKBACK 60: no later-block input bar reads a training-label bar (the purge-rule test pattern of NT-066/D-034), failing before the change; (4) `Config.validate` refuses a gap smaller than W + max(H). (5) Fast suite, ruff.
+- **source:** qa-deep on NT-041 (2026-10-07)
+
+### NT-194
+
+**Remaining '$' and 'dollars' labels outside the visualization package**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/evaluation/report.py (~721-772), src/neural_trade/notebook/backtest_ui.py (~103-119, 391, 393), notebook/calibration_ui.py (~98), scripts/notebooks/build.py (~165), core/config.py (~730 help text), tests/
+- **depends on:** NT-041
+- **why:** qa-deep on NT-041 (2026-10-07): the markdown report's rows `RMSE ($)`, `MAE ($)`, `mean predicted/realised ($)`, `CRPS ($)`, `width ... ($)` and `## Price heads (dollars)`, the backtest explorer's `avg win ($)` labels, calibration_ui and notebook 01's markdown still say dollars while the figures now name the quote currency (USDT). The report has no Config in scope.
+- **acceptance:** (1) The report takes the quote currency from the frame/meta (setup.quote_currency; default USDT) and prints it; golden/markdown tests updated; stored reports unchanged; (2) the explorers and the generator text name the quote currency; (3) a test finds no '$' currency label in these files (an AST scan like the visualization one); (4) notebooks regenerated through build.py and executed in the lead's routine. (5) Fast suite, ruff.
+- **source:** qa-deep on NT-041 (2026-10-07)
+
+### NT-195
+
+**Make the `timed` layout (7/2/2/5 days, folds at dates or spacing) the default?**
+
+- **status:** todo
+- **priority / type / role:** P2 / decision / owner
+- **area:** docs/DECISIONS.md, then an implementer item
+- **depends on:** NT-041
+- **why:** NT-041 criterion (6) asks for a 7-day training block by default; today's default layout `tscv` cuts a capped sequence set into fractions (the train block is about 25 days on the bundled file). Making `timed` the default moves every run's blocks: a golden re-record, test churn in the data and engine tests, every stored scenario's identity changes (new defaults), and on the 30-day bundled file 30-day spacing gives ONE fold (7+2+2+5 days plus gaps = about 16 days), so CI loses its multi-fold layout unless N_FOLDS or the spacing changes.
+- **acceptance:** The owner decides: (a) keep `tscv` the default and `timed` opt-in (recommended until NT-050 and NT-051 are through: no stored number moves); (b) switch the default after NT-050 with a golden re-record and a new identity epoch; (c) never. A DECISIONS entry records it; close NT-041 (6) as 'met for timed' with an amended text.
+- **source:** qa-deep on NT-041 (2026-10-07)
 
 ## Done log
 
