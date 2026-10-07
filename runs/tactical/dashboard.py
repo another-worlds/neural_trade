@@ -219,13 +219,13 @@ def estimates(exps):
         walls = [sp["wall"] for sp in hc["specs"] if sp["wall"]]
         per = st.median(walls) if walls else 420.0
         left = sum(max(sp["planned"] - sp["done"], 0) for sp in hc["specs"])
-        mins = left * per / 3 / 60
+        mins = left * per / 1 / 60  # one process at a time (guard v3)
         live = {"left": left, "per_run_s": round(per), "minutes": round(mins), "at": (now + datetime.timedelta(minutes=mins)).strftime("%H:%M")}
     t = lambda m: (now + datetime.timedelta(minutes=m)).strftime("%d.%m %H:%M")
     base = live["minutes"] if live else 0
     stages = [
         {"stage": "Хиллклаймб, раунд 1 (6 вариантов, неделя)", "status": "идёт" if live and live["left"] else "готово",
-         "time": (f"осталось ~{live['minutes']} мин ({live['left']} прогонов × ~{live['per_run_s']} с / 3 процесса), конец ≈ {live['at']}" if live else "—"),
+         "time": (f"осталось ~{live['minutes']} мин ({live['left']} прогонов × ~{live['per_run_s']} с, 1 процесс), конец ≈ {live['at']}" if live else "—"),
          "acc": "Вероятность, что хоть один вариант «лучше»: ~25–35%. Самый вероятный кандидат — калибровка value (так работает основной конвейер): ждём выигрыш в группе «уверенность» (+0,3…+1 шума), направление без изменений (AUC 0,53–0,56).",
          "conf": "низкая–средняя"},
         {"stage": "Раунд 2 (если в раунде 1 есть победитель): 4–6 вариантов поверх победителя", "status": "план",
