@@ -183,13 +183,52 @@ def main():
                 x["verdict"] = x["extra"]["verdict"]
         exps.append(x)
     active = next((x["id"] for x in reversed(exps) if x["status"] == "идёт"), None) or next((x["id"] for x in exps if x["status"] in ("в очереди", "частично")), None) or exps[-1]["id"]
-    state = {"now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    state_est = estimates(exps)
+    state = {"est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
              "procs": len(procs), "exps": exps, "active": active, "hm": [[g + "." + k, lab] for g, k, lab in HM],
              "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%m-%d %H:%M -12").splitlines()}
     tmp = OUT + ".tmp"
     open(tmp, "w", encoding="utf-8").write(TEMPLATE.replace("__STATE__", json.dumps(state)))
     os.replace(tmp, OUT)
+
+
+def estimates(exps):
+    """Guesstimates per stage (owner, 2026-10-07). Time of the running round is computed live from the measured run
+    times; everything else, and every accuracy figure, is the lead's judgement from the evidence so far, labelled so."""
+    now = datetime.datetime.now()
+    hc = next((x for x in exps if x["id"] == "hc4r1"), None)
+    live = None
+    if hc:
+        walls = [sp["wall"] for sp in hc["specs"] if sp["wall"]]
+        per = st.median(walls) if walls else 420.0
+        left = sum(max(sp["planned"] - sp["done"], 0) for sp in hc["specs"])
+        mins = left * per / 3 / 60
+        live = {"left": left, "per_run_s": round(per), "minutes": round(mins), "at": (now + datetime.timedelta(minutes=mins)).strftime("%H:%M")}
+    t = lambda m: (now + datetime.timedelta(minutes=m)).strftime("%d.%m %H:%M")
+    base = live["minutes"] if live else 0
+    stages = [
+        {"stage": "Хиллклаймб, раунд 1 (6 вариантов, неделя)", "status": "идёт" if live and live["left"] else "готово",
+         "time": (f"осталось ~{live['minutes']} мин ({live['left']} прогонов × ~{live['per_run_s']} с / 3 процесса), конец ≈ {live['at']}" if live else "—"),
+         "acc": "Вероятность, что хоть один вариант «лучше»: ~25–35%. Самый вероятный кандидат — калибровка value (так работает основной конвейер): ждём выигрыш в группе «уверенность» (+0,3…+1 шума), направление без изменений (AUC 0,53–0,56).",
+         "conf": "низкая–средняя"},
+        {"stage": "Раунд 2 (если в раунде 1 есть победитель): 4–6 вариантов поверх победителя", "status": "план",
+         "time": f"~2–2,5 ч, конец ≈ {t(base + 150)}",
+         "acc": "Если раунд 1 дал победителя, шанс ещё одного шага вверх ~20–30%: эффекты от Config-настроек обычно убывают.",
+         "conf": "низкая"},
+        {"stage": "Проверка победителя на 6 отложенных срезах", "status": "план",
+         "time": "~30 мин (12 прогонов)",
+         "acc": "Шанс, что выигрыш подтвердится: ~50% (на прошлых раундах «лучшие» откатывались на свежих данных на 50–80% отрыва).",
+         "conf": "средняя"},
+        {"stage": "Если Config исчерпан: новый код — сеть, распознающая режим рынка (штиль ↔ тренд)", "status": "идея",
+         "time": "implementer ~1–2 ч + раунд ~30–60 мин на неделе",
+         "acc": "Цель — AUC направления 0,56–0,60 там, где сейчас 0,52–0,55. Шанс ~10–20%: разбор среза 2022-04-16 показал, что режим объясняет успехи и провалы, но сеть пока его не ловит.",
+         "conf": "низкая"},
+        {"stage": "Итог сессии по точности (ориентир)", "status": "—", "time": "—",
+         "acc": "Реалистично: уверенность (риск) — покрытие 0,88–0,90, CRPSS +0,01…+0,05; цена — около «не изменится»; направление — 0,53–0,57. Прорыв направления выше 0,60 стабильно — маловероятен (<10%).",
+         "conf": "средняя"},
+    ]
+    return {"live": live, "stages": stages}
 
 
 def cand_extra():
@@ -272,6 +311,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;b
 <h1>Тактическая сессия: прорыв в расчёте сети</h1>
 <div class="sub" id="sub"></div>
 <div class="goal"><b>Цель:</b> выйти из «ловушки» (нет навыка направления) поиском тактического прорыва в расчёте сети; риск-менеджмент — отдельная ветка. <b>Правила владельца:</b> всегда все 9 выходов; отсев 6 срезов × 2 seed'а; screen ≤ 2 мин на прогон (7-дневные — по разрешению); у каждого прогона своя вкладка.</div>
+<div class="c" style="margin-top:12px"><h2>Оценки по этапам: время и точность <span class="mut">(guesstimates — мои оценки, не результаты)</span></h2><table id="est"></table>
+<div class="sub">Время текущего раунда считается вживую по реальным прогонам; остальное — оценки по уже полученным данным, будут пересматриваться после каждого раунда.</div></div>
 <div class="tabs" id="tabs"></div>
 <div id="pane"></div>
 <div class="g"><div class="c full"><h2>Коммиты nt-tactical</h2><table id="git"></table></div></div>
@@ -310,6 +351,7 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
   lay({xaxis:{title:'Δ AUC',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},yaxis:{autorange:'reversed'},margin:{l:330,r:12,t:8,b:40},showlegend:false}),cfg)}
  if(document.getElementById('aucbar')){const ss=e.specs.filter(s=>s.auc!=null);Plotly.newPlot('aucbar',[{type:'bar',x:ss.map(s=>s.label),y:ss.map(s=>s.auc),error_y:{type:'data',array:ss.map(s=>s.auc_se?1.96*s.auc_se:0)},marker:{color:'#3987e5'}}],lay({yaxis:{range:[.4,.75],gridcolor:grid},xaxis:{tickangle:-25},margin:{l:52,r:12,t:8,b:110},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:.5,y1:.5,line:{color:'#c0392b',dash:'dash',width:1}}]}),cfg);
   const ww=e.specs.filter(s=>s.wall);Plotly.newPlot('wallbar',[{type:'bar',x:ww.map(s=>s.label),y:ww.map(s=>s.wall),marker:{color:'#8a97a6'}}],lay({yaxis:{title:'с (медиана)',gridcolor:grid},xaxis:{tickangle:-25},margin:{l:52,r:12,t:8,b:110},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:120,y1:120,line:{color:'#c0392b',dash:'dash'}}]}),cfg)}}
+document.getElementById('est').innerHTML='<tr><th>Этап</th><th>Статус</th><th>Время (оценка)</th><th>Точность (оценка)</th><th>Уверенность в оценке</th></tr>'+S.est.stages.map(x=>`<tr><td><b>${x.stage}</b></td><td>${x.status}</td><td>${x.time}</td><td>${x.acc}</td><td>${x.conf}</td></tr>`).join('');
 tabs();render();
 document.getElementById('git').innerHTML=S.log.map(l=>{const[h,t,...m]=l.split('|');return `<tr><td><code>${h}</code></td><td class="sub">${t}</td><td>${m.join('|')}</td></tr>`}).join('');
 </script></body></html>"""
