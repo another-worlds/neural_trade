@@ -201,7 +201,12 @@ def main():
              "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%m-%d %H:%M -12").splitlines()}
     tmp = OUT + ".tmp"
     open(tmp, "w", encoding="utf-8").write(TEMPLATE.replace("__STATE__", json.dumps(state)))
-    os.replace(tmp, OUT)
+    for _ in range(10):  # the browser may hold the file for a moment while it reloads (WinError 5): retry
+        try:
+            os.replace(tmp, OUT)
+            break
+        except PermissionError:
+            time.sleep(0.5)
 
 
 def estimates(exps):
