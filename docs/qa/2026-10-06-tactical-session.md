@@ -54,3 +54,7 @@ the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner
   news if you can]: runs/tactical/slice_2022_04_19.py / .json; journal H7.
 - "Формализуй требования, дай фидбек после" [formalise the requirements, give feedback afterwards]:
   runs/tactical/cand_0805/SPEC.md.
+- Dashboard: "обнови также наш HTML. и при каждом новом прогоне добавляй активную вкладку в HTML, чтобы я всегда мог
+  отследить наш прогресс и статус без дергания тебя" [update our HTML too, and with every new run add an active tab, so I
+  can always follow our progress and status without pinging you]. TACTICAL.md "One dashboard tab per run".
+- "Проверь гипотезу с эпохами" [check the epochs hypothesis]: runs/tactical/epochs_1d/SPEC.md.
