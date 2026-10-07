@@ -1,0 +1,13 @@
+hc4_calgrad 2/3
+hc4_ep12 0/3
+hc4_ep12 1/3
+hc4_ep12 2/3
+hc4_look120 0/3
+hc4_look120 1/3
+hc4_look120 2/3
+hc4_nophys 0/3
+hc4_nophys 1/3
+hc4_nophys 2/3
+hc4_bs1024 0/3
+hc4_bs1024 1/3
+hc4_bs1024 2/3
