@@ -58,3 +58,7 @@ the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner
   отследить наш прогресс и статус без дергания тебя" [update our HTML too, and with every new run add an active tab, so I
   can always follow our progress and status without pinging you]. TACTICAL.md "One dashboard tab per run".
 - "Проверь гипотезу с эпохами" [check the epochs hypothesis]: runs/tactical/epochs_1d/SPEC.md.
+- Aggregated hill-climb metric (asked 2026-10-07, two options each): "3 группы поровну, по шуму (Recommended)" and
+  "1 день, если догонит (Recommended)": price, direction and confidence weigh 1/3 each, every paired difference scaled by
+  its seed noise (runs/tactical/hc4_metric.py); the hill-climb runs on the 1-day block if the epochs check shows it
+  reaches 7-day quality, otherwise on 7 days.
