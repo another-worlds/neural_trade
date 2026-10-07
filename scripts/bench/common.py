@@ -112,6 +112,50 @@ def interleaved_timing(variants, reps=5, warm=1):
     return res
 
 
+GATE_STATISTIC = ("median of >= 20 interleaved A/B repeats per arm (warm-up repeats excluded), ratio = "
+                  "median(A) / median(B); spread = IQR (p75 - p25) of each arm")
+
+
+def stable_ratio_gate(sample_a, sample_b, reps=20, warm=2, threshold=1.10):
+    """NT-120: the G-A2 gate (A's time at most ``threshold`` x B's) on a stable statistic.
+
+    ``sample_a`` / ``sample_b``: zero-arg callables that run one repeat and return its duration in
+    seconds (a stub in the tests, a ``perf_counter`` wrapper on real work). ``warm`` repeats of each are
+    run first and dropped; then ``reps`` (>= 20) repeats are taken interleaved A, B, A, B, ... so
+    background load hits both arms alike. The statistic is the median of each arm and the ratio of the
+    medians, so a few outlier repeats (the recorded 3.4-30.8 ms denominator) cannot flip the call; the
+    IQR of each arm is reported beside it."""
+    if reps < 20:
+        raise ValueError(f"the G-A2 gate needs at least 20 repeats, got {reps}")
+    for _ in range(warm):
+        sample_a()
+        sample_b()
+    a, b = [], []
+    for _ in range(reps):
+        a.append(float(sample_a()))
+        b.append(float(sample_b()))
+
+    def stats(v):
+        v = np.asarray(v)
+        return {"median_s": float(np.median(v)), "iqr_s": float(np.percentile(v, 75) - np.percentile(v, 25)),
+                "min_s": float(v.min()), "max_s": float(v.max()), "reps": int(len(v))}
+
+    sa, sb = stats(a), stats(b)
+    ratio = sa["median_s"] / sb["median_s"]
+    return {"ratio": float(ratio), "threshold": float(threshold), "PASS": bool(ratio <= threshold),
+            "numerator": sa, "denominator": sb, "warm_excluded": int(warm),
+            "statistic": GATE_STATISTIC}
+
+
+def timed(fn):
+    """A ``sample`` callable for ``stable_ratio_gate``: one call of ``fn``, its wall time in seconds."""
+    def sample():
+        t0 = time.perf_counter()
+        fn()
+        return time.perf_counter() - t0
+    return sample
+
+
 def load_close(csv_path):
     return pd.read_csv(csv_path, usecols=["close"])["close"].to_numpy(np.float64)
 
