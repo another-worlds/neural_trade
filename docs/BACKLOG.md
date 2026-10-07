@@ -223,6 +223,8 @@ changes).
 | [NT-188](#nt-188) | P3 | polish | implementer | todo | Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring |
 | [NT-189](#nt-189) | P3 | polish | implementer | todo | Atomic-write follow-ups: the cross-process tests import the installed package; rebuild_index retry untested; _read_summary drops the recorded budget on a transient read error |
 | [NT-190](#nt-190) | P2 | polish | implementer | todo | Stability harness v2 follow-ups: fuzz_jumps expected outcome, the tiny profile's variance-head blind spot, two test gaps, the baseline bound, dry-run n_eff |
+| [NT-191](#nt-191) | P1 | feature | implementer | todo | Stability harness before NT-051: a probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run and CSV fixes |
+| [NT-192](#nt-192) | P2 | bug | implementer | todo | The per-term probe fires once per 6-step cell and its epoch mean divides the shares by the number of epochs |
 
 ## Items
 
@@ -850,7 +852,7 @@ changes).
 
 **First stability-harness run on the reference setup against its pre-registered thresholds**
 
-- **status:** todo
+- **status:** todo (2026-10-07): the SPEC draft (branch nt-051-spec 87ab07d) FAILED the QA review (Opus): the per-term probe makes a reference cell 12x dearer (CPU 777 s vs 58 s), 45 cells would be 3.8/7.5/10 GPU-hours; no --retry-failed exists; blame from the probe is one sample divided by the epoch count; wrong facts. Prerequisites: NT-191 (probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run fixes); the SPEC is then amended with the QA's 11 edits (kept in the QA report D:/nt/nt_qa and summarised in the nt-051-spec branch) and re-reviewed; the GPU must be free (STATUS question 7).
 - **priority / type / role:** P1 / research / experimenter
 - **area:** the stability harness of NT-038 (run as engine scenarios), its reports (for example runs/stability/<id>/), a SPEC (for example runs/experiments/stability_ref_v1/SPEC.md)
 - **depends on:** NT-038 (stability harness and config guard)
@@ -2521,6 +2523,30 @@ changes).
 - **why:** QA of NT-187 (2026-10-07): (1) P2, NT-051 risk (a forecast QA could not measure: a reference control + fuzz_jumps cell timed out on CPU in the per-term probe): `fuzz_jumps` on tiny already scores scaled NLL 7.19/6.80/6.27 against the limit 8 (the training spikes x4 and x0.25 inflate every sigma against the test block; its constant baseline is equally inflated, scaled about 6.9, near the 'absurd' bound 8): on reference (n_eff 150/100/75) it will be judged and may FAIL variance_nll by design or switch the over-baseline checks off: the kind of by-design outcome NT-187 removed for fuzz_constant: NT-051's SPEC states the expected outcome before GPU time, or the first GPU cell checks it; (2) under v2 the tiny profile judges NO variance check (the cap run and sigma x0.03-30 heads pass tiny under v2; v1 caught them): a lower scaled-NLL gate (healthy tiny scaled NLL is 1.4-2.0) would keep coverage: a v3 matter, v2 is frozen; on reference an h2-only break (sigma about x0.3, n_eff 75) is not judged; (3) tests: the scaled-NLL half of gate 9b is not pinned (mutation M3 survives), no v2 test with a NaN/inf variance head (M12: a NaN head mapped to -inf would pass); (4) `_variance_checks_v2` reports 'absurd baseline' before the n_eff reason, and a healthy 240-bar baseline reaches 8.33 scaled (tiny wide h2): the bound 8 sits only 2.3x above stored values; (5) `stability --dry-run` prints no n_eff per cell; (6) a flaky slow test (test_the_fuzz_cases_change_the_epoch_metrics_against_the_control_in_a_real_tiny_run) failed once under memory pressure.
 - **acceptance:** (1) The SPEC of NT-051 (not this item) carries the fuzz_jumps expectation; this item adds a reference-profile dry n_eff/expectation table for every case to the REPORT template and the dry run (5). (2) Tests pinning the scaled-NLL n_eff gate and a NaN/inf head under v2. (3) The baseline-guard message order (n_eff first) and a documented bound rationale. (4) A v3 file ONLY if the owner decides the tiny blind spot matters (a new frozen file, named in a SPEC before GPU time). (5) Fast suite, ruff.
 - **source:** QA of NT-187 (2026-10-07)
+
+### NT-191
+
+**Stability harness before NT-051: a probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run and CSV fixes**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/experiments/stability.py, src/neural_trade/cli.py (`stability` only), .gitignore (one line), tests/test_stability_harness.py, docs/RUNBOOK.md
+- **depends on:** NT-187 (done)
+- **why:** QA review of the NT-051 SPEC (2026-10-07): (1) the per-term gradient probe costs about 12x a reference-profile cell (CPU: 777 s with it, 58 s without, identical numbers; about 650 s is host-side graph tracing that a GPU run also pays), so 45 cells would be 3.8 / 7.5 / 10 GPU-hours (the SPEC said 2.7-5.1), over the 3 h cap at every point; (2) the harness fills `blamed` only from the UnstableTrainingError message, masked-term counters (0 in strict mode) or a failing `term_gradient_share` (which cannot fail: report-only in v2), so every score or variance failure shows '-'; (3) `neural-trade stability` has no `--retry-failed`, a crash (OOM, MemoryError) is recorded as an ordinary verdict FAIL (`run_completed`) and the command exits 1 when any case fails; (4) `--dry-run` silently ignores `--seeds` and `--thresholds`; (5) each data case writes a 3.2 MB transformed CSV under runs/stability/<id>/data/ that `.gitignore:57` (`!runs/**/*.csv`) tracks (8 data cases, about 26 MB).
+- **acceptance:** (1) A harness option `--probe off|on|failed` (default `failed` for the reference profile): every cell runs with the per-term probe OFF; a cell that FAILS a verdict check is re-run once with the probe ON (PROBE_EVERY 1 on its first epochs) to attribute the blame; the REPORT lists both runs per such cell; the thresholds and every verdict check are unchanged and identical with the probe on or off (test: the same cell's verdict fields equal on both, the probe never changes training: assert bitwise-equal epoch metrics on the tiny profile). `on` = today's behaviour. (2) The REPORT's `blamed` for a failed cell comes from the probe re-run (the largest probe share of the epoch whose shares sum to 1, labelled 'probe sample') or the error text, else '-' with the reason; data and fault cases have no failing region by design: state it in the REPORT. (3) A non-verdict class: a cell whose error type is ResourceExhaustedError, MemoryError, OSError or a worker crash is `NOT A VERDICT` (reported as such, excluded from pass/fail counts), `--retry-non-verdict` re-runs only those cells as a new launch and the case verdict uses the re-run (both listed); UnstableTrainingError and any check failure stay verdicts; the exit code is 1 only for a verdict failure, 2 for non-verdict cells left, 0 otherwise. (4) `--dry-run` honours `--seeds`, `--thresholds` and prints the planned cells with n_eff per horizon and the probe mode and the profile's step count. (5) The transformed data CSVs are written under an ignored path (or `.gitignore` excludes `runs/stability/*/data/`), their sha256 stays in each cell's meta.json (test). (6) Measured numbers in the RUNBOOK section for the harness (CPU per-cell time with and without the probe: 58 s / 777 s). (7) Tests for each point; fast suite (`-n 4`), `-m stability` serial, ruff.
+- **source:** QA review of the NT-051 SPEC (2026-10-07)
+
+### NT-192
+
+**The per-term probe fires once per 6-step cell and its epoch mean divides the shares by the number of epochs**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/training/custom_model.py (~776 vs ~808), src/neural_trade/experiments/stability.py (~431-439), tests/
+- **depends on:** NT-191
+- **why:** QA review of the NT-051 SPEC (2026-10-07): `optimizer.iterations` is incremented before the `tf.cond` (custom_model.py:776 vs :808), so with PROBE_EVERY 5 and 6 steps the probe fires once, at iteration 5, in epoch 3; epochs 1-2 log 0 (`_Accum` mean 0/max(0,1)) and `_probe_shares` averages over the epochs, so every share is divided by 3 and `term_gradient_share` can never exceed 1/3 on 14 of the 15 reference cases (horizons_5_60_240 has 24 steps and probes 4 times). It is report-only in v2, but NT-098 (gradient shares of the loss terms) and the harness's blame depend on it. Touches the per-step training path (D-018).
+- **acceptance:** (1) The probe cadence counts steps of the CURRENT epoch (or fires at the first step of every epoch plus every PROBE_EVERY): every epoch with at least one step logs a probe sample; (2) `_probe_shares` averages over the epochs that probed, and a test with a 2-steps-per-epoch cell shows the shares sum to 1 in every epoch; (3) with PROBE_GRADIENTS off nothing changes: golden_nt117 455/455 and the same epoch metrics bitwise; with it on, the training is unchanged (probe is read-only: a bitwise test); (4) sec_per_step with the probe OFF is not worse (D-018: report a short CPU micro-timing before/after); (5) fast suite, `-m stability`, ruff.
+- **source:** QA review of the NT-051 SPEC (2026-10-07)
 
 ## Done log
 
