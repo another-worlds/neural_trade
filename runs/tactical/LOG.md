@@ -5,8 +5,13 @@ only, with its noise level. Earlier work this continues from: `runs/experiments/
 
 ## Handoff
 
-_Rewritten at the end of every tactical session._ 2026-10-06: round 1 (3 direction-head switches) is closed with no effect. GPU hours used today: 0. Next: the owner names the goal, or the session starts from where the micro loop
-stopped (H4b: re-run the LOOKBACK 240 cell with more patience; direction is the bottleneck at every horizon).
+_Rewritten at the end of every tactical session._ 2026-10-07: **all runs stopped by the owner** ("стоп по всем задачам
+останови трейнинг и инференс") during hill-climb round 1 on 7-day blocks (runs/tactical/hc4/SPEC.md). Done before the stop:
+calval 9 of 12, calgrad 1 of 12, the other four variants 0; no round-1 verdict. The base re-run (`cand_c2_base --shard 0/1`)
+re-did trials instead of only the missing one (a different shard count ignores the 0-of-2 files): 17 rows, duplicates of
+(slice, seed) - the comparison keeps one per key. Nothing is running: no screen process, no queue, no dashboard loop
+(dashboard.html shows the state at the stop). To resume: `bash runs/tactical/hc4/run_r1.sh` (resumable; it skips done
+trials per shard file) and `python runs/tactical/dashboard.py --loop 20`.
 
 ## Hypotheses
 
