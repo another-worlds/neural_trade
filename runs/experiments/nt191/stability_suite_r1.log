@@ -1,0 +1,3 @@
+7629231fd91b140f3ae34eabbc4a1f703041e2d0
+pytest -m 'stability and slow' -k probe_does_not_change (serial, CUDA_VISIBLE_DEVICES=-1): 1 passed, 89 deselected in 905.46s (0:15:05)
+ruff check src tests scripts: All checks passed!
