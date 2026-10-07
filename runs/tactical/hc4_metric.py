@@ -43,6 +43,8 @@ def load(name):
     for f in glob.glob(os.path.join(ROOT, "screens", name, "results*.jsonl")):
         for l in open(f, encoding="utf-8"):
             r = json.loads(l)
+            if (r.get("health") or {}).get("calib_failed"):
+                continue  # the calibration pass failed (e.g. GPU out of memory): the trial trained uncalibrated, not as the variant
             if r.get("head_metrics"):
                 d[(r["data_end"][:16], r["seed"])] = {f"{g}.{k}": metric(r, g, k, s) for grp in GROUPS.values() for g, k, s in grp}
     return d
