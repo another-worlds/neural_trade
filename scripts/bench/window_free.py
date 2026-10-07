@@ -154,7 +154,9 @@ def today_layer_pass(close, scale, B, seed=0):
     X = np.stack([(close[i - 60:i] - close[i - 1]) / scale for i in idx]).astype(np.float32)
     x = tf.constant(X)
     layer = LearnableIndicators(cfg)
-    dense = tf.keras.layers.Dense(18, activation="tanh")
+    # NT-120: seeded, so two builds hold the same weights (an unseeded Glorot draw differs per build)
+    dense = tf.keras.layers.Dense(18, activation="tanh",
+                                  kernel_initializer=tf.keras.initializers.GlorotUniform(seed=seed))
     meta_in = tf.concat([tf.reduce_mean(x, 1, keepdims=True), tf.reduce_max(x, 1, keepdims=True)], 1)
     layer([x, dense(meta_in)])                     # build
     W = tf.constant(rng.normal(size=(B, 60, 31)).astype(np.float32))
@@ -204,6 +206,28 @@ def check_census(a2_results):
     for entry in a2_results.values():
         bad |= set(entry["raise_on_gpu"]) | set(entry["host_round_trip_on_gpu"]) | set(entry["matmul_like_ops"])
     return {"PASS": not bad, "offending_ops": sorted(bad)}
+
+
+def _fwd_sha256(fwd_fn):
+    return hashlib.sha256(np.ascontiguousarray(fwd_fn().numpy()).tobytes()).hexdigest()
+
+
+def check_bitwise(make_pass):
+    """Bitwise check of one layer: build it twice (``make_pass()`` returns ``(fwd, fb)``, fresh
+    variables each time) and compare the SHA-256 of one forward. Equal only if the build is seeded
+    end to end (NT-120: today's Dense layer was not)."""
+    h1, h2 = _fwd_sha256(make_pass()[0]), _fwd_sha256(make_pass()[0])
+    return {"PASS": h1 == h2, "sha256_first": h1, "sha256_second": h2}
+
+
+def check_g_a2(N, close, scale, B, min_history, reps=20, warm=2, threshold=1.10):
+    """G-A2's timing half at one span: the A2 layer's forward+backward at most ``threshold`` x today's
+    layer's, on ``common.stable_ratio_gate`` (median of >= 20 interleaved repeats, warm-up excluded)."""
+    _, fb_a2 = a2_layer_pass(N, close, scale, B, min_history=min_history)
+    _, fb_today = today_layer_pass(close, scale, B)
+    fa, ft = tf.function(fb_a2), tf.function(fb_today)
+    return common.stable_ratio_gate(common.timed(fa), common.timed(ft), reps=reps, warm=warm,
+                                    threshold=threshold)
 
 
 MACD_TRIPLES = [(12, 26, 9), (1440, 10080, 1440)]     # (fast, slow, signal); a short and a long cascade
@@ -368,6 +392,19 @@ def main(argv=None):
     fwd, fb = today_layer_pass(close, scale, B)
     bench("today_LearnableIndicators", fwd, fb, reps, out["today_layer"])
 
+    g_a2_reps = max(20, args.reps)
+    bitwise = {"today_layer": check_bitwise(lambda: today_layer_pass(close, scale, B)),
+               "a2_layer": check_bitwise(lambda: a2_layer_pass(
+                   Ns[0], close, scale, B, min_history=M240 if not args.smoke else 0))}
+    ratio = {f"N{N}": check_g_a2(N, close, scale, B, M240 if not args.smoke else 0, reps=g_a2_reps)
+             for N in Ns}
+    out["g_a2"] = {"bitwise": bitwise, "ratio": ratio,
+                   "PASS": bool(all(v["PASS"] for v in bitwise.values()) and all(v["PASS"] for v in ratio.values()))}
+    for k, v in ratio.items():
+        print(f"G-A2 {k}: ratio {v['ratio']:.3f} PASS={v['PASS']} "
+              f"(A2 IQR {v['numerator']['iqr_s'] * 1e3:.2f} ms, today IQR {v['denominator']['iqr_s'] * 1e3:.2f} ms)")
+    print(f"G-A2 bitwise: today={bitwise['today_layer']['PASS']} a2={bitwise['a2_layer']['PASS']}")
+
     census = check_census(out["a2_layer"])
     precision = check_precision(close, scale, T=prec_T, periods=periods)
     out["g_a1"] = {"census": census, "precision": precision, "PASS": bool(census["PASS"] and precision["PASS"])}
@@ -381,6 +418,13 @@ def main(argv=None):
     print(f"G-A1 census PASS={census['PASS']} offending_ops={census['offending_ops']}")
     print(f"G-A1 precision PASS={precision['PASS']}")
 
+    # G-A2 is enforced on the GPU run only (NT-060); on CPU it is reported (the ratio of tiny smoke
+    # sizes means nothing), except the bitwise check, which is a kit-correctness check on any device.
+    g_a2_fail = [k for k, v in bitwise.items() if not v["PASS"]]
+    if args.device == "gpu" and not all(v["PASS"] for v in ratio.values()):
+        g_a2_fail.append("ratio (see 'g_a2.ratio')")
+    if g_a2_fail:
+        print("G-A2 FAILED: " + "; ".join(g_a2_fail), file=sys.stderr)
     if not out["g_a1"]["PASS"]:
         failed = []
         if not census["PASS"]:
@@ -389,7 +433,7 @@ def main(argv=None):
             failed.append("precision (see the 'precision' block of the output JSON)")
         print("G-A1 FAILED: " + "; ".join(failed), file=sys.stderr)
         return 1
-    return 0
+    return 1 if g_a2_fail else 0
 
 
 if __name__ == "__main__":
