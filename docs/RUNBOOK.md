@@ -641,13 +641,15 @@ $PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n
 
 ### Stability harness and config guard (NT-038, D-026)
 
-`neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]`
-(`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
+`neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
+[--probe off|on|failed] [--retry-non-verdict [ID]] [--thresholds v2] [--dry-run]` (`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
 (index rows, `stability/*` scores) and writes `<store>/stability/<id>/REPORT.md` (pass or fail per case, the loss
-term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit 1 when a case fails.
+term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit codes (NT-191): 1 when a
+case fails its verdict, 2 when no case failed but cells that are not a verdict are left (below), else 0.
 
 - **Cases**: price level and volatility x0.1 / x10; extreme inputs (a constant block, spikes and a level jump,
-  prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`); fault injection (a NaN in the input,
+  prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`, 3 MB each, ignored by git
+  (`runs/stability/*/data/`); the sha256 of each file is the cell's `meta.json` `dataset.sha256`); fault injection (a NaN in the input,
   in `crps_loss`, in one gradient), each of which must stop the run; the wide-span horizons 5/60/240; slow
   periods with INDICATOR_LR_MULT 5 and 1. The 1,440 / 10,080-bar long-memory cases and the per-channel-scale
   variant are defined and marked "GPU, NT-051" (never run on CPU). 3 seeds each, strict mode (STRICT_LOSS_MASKS).
@@ -659,8 +661,27 @@ term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions
   constant baseline is non-finite or absurd; the absolute NLL is in scaled units (NLL - ln of the RMS price change,
   limit 8); `fuzz_constant` is a 100-bar flat block (a minority of the training windows). The tiny profile's n_eff is
   11/7/5, so it judges no variance check; the expected n_eff per case and profile is in the v2 file and the report.
-- **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off: on CPU the probe's trace took
-  200 s); `reference` is the screen layout with the probe on. The GPU run on the reference setup is NT-051.
+- **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off); `reference` is the screen layout
+  (probe `failed`, below). The GPU run on the reference setup is NT-051.
+- **The probe and its cost (NT-191)**: the per-term gradient probe never changes training (the same cell's epoch
+  metrics are bitwise equal with it on and off, and so are its verdict fields; `term_gradient_share` is report-only).
+  It costs about 12x a reference cell on CPU, because about 650 s of it is the host-side tracing of 17 terms x 3
+  variable groups, which a GPU run pays too. **Measured, CPU (the QA review of the NT-051 SPEC, 2026-10-07; logs
+  `D:/nt/nt_qa/nt051spec_ref_off.log`, `nt051spec_ref_on.log`): 58 s per reference cell with the probe off, 777 s
+  with it on.** GPU per cell: not measured (NT-051 measures it). `--probe failed` (the default on `reference`): every
+  cell runs probe-off; a cell that fails any verdict check is re-run ONCE with the probe on at PROBE_EVERY 1; the
+  REPORT lists both runs of that cell (run ids) and takes the blame from the re-run: the largest probe share of the
+  first epoch whose shares sum to 1 per variable group, labelled "probe sample, one batch" (one batch's gradient
+  split, not an epoch average), else the run's own error text or the masked-term counters, else `-` with the reason.
+  Data and fault cases get no failing region by design. `--probe on` probes every cell (the earlier behaviour);
+  `--probe off` never (the `tiny` default). Verdicts and thresholds are identical in every mode.
+- **Not a verdict (NT-191)**: a cell whose run ended in `ResourceExhaustedError`, `MemoryError`, `OSError` (or a
+  subclass), `BrokenProcessPool`, or left no `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of
+  the pass and fail counts, never probed and never written as a failing region. `--retry-non-verdict [ID]` (default:
+  the newest launch under `<store>/stability/`) re-runs only those cells as a new launch with the same thresholds
+  (refused if the thresholds file differs), carries every other verdict over, and the case verdict uses the re-run
+  (the REPORT lists both runs). `UnstableTrainingError` and any failed check stay verdicts; the fault cases still pass
+  exactly when the run stops with `UnstableTrainingError` (and, for `fault_nan_term`, names `crps_loss`).
 - **Strict mode fails loudly**: with `STRICT_LOSS_MASKS` the engine's trainer adds `StabilityGuard`
   (`training/stability_guard.py`): the first epoch with a non-finite loss term or step ends the run with
   `UnstableTrainingError` naming the term. A sweep records such a cell as failed with that message; the default
@@ -681,7 +702,9 @@ term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions
 - **Thresholds, repair round 1**: the file was rewritten once before any real run, after QA applied the first
   draft to 54 stored runs (loss divergence, variance-head NLL and CRPS checks added; coverage only where n_eff >= 30;
   periods at the bound and term gradient shares report-only; `nonfinite_step_rate` not evaluated without `n_steps`).
-  `neural-trade stability --dry-run` plans every case of a profile through the engine without training.
+  `neural-trade stability --dry-run [--seeds ..] [--thresholds v2] [--probe ..]` plans every case of a profile
+  through the engine without training and prints, per cell: case, seed, n_eff per horizon (the planner's, beside the
+  thresholds file's expected table), the probe mode, the steps per epoch and the epochs.
 
 ### Frozen sweep scripts
 
