@@ -205,7 +205,7 @@ changes).
 | [NT-170](#nt-170) | P3 | test-gap | implementer | todo | Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info |
 | [NT-171](#nt-171) | P2 | feature | implementer | todo | Leaderboard: read a recorded zero-cost rescore; stored-spec fallback independent of file mtime |
 | [NT-172](#nt-172) | P2 | bug | implementer | todo | Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain) |
-| [NT-173](#nt-173) | P1 | research | experimenter | todo | Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1 |
+| [NT-173](#nt-173) | P1 | research | experimenter | in-progress | Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1 |
 | [NT-174](#nt-174) | P2 | decision | owner | todo | Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124) |
 | [NT-175](#nt-175) | P3 | bug | implementer | todo | Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match |
 | [NT-176](#nt-176) | P2 | research | experimenter | todo | Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1 |
@@ -2310,7 +2310,7 @@ changes).
 
 **Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1**
 
-- **status:** todo
+- **status:** in-progress (2026-10-07): the SPEC and the scripts are written on branch nt-173 (worktree D:/nt/nt_wt_173; SPEC commit 42ebd64: D-047 default, batch 256, N = 1, 2, 3 with 3 repeats each, N = 4 only if N = 3 leaves 2 GB; decision rule: allowed_n = the largest N with aggregate throughput >= 1.15x N = 1, peak fb <= 10746 MB and no crash; the record stores the raw measured peak because the sweep adds WATCH_FB_MARGIN_MB 1024 itself; about 0.35 GPU-hours), but the MEASUREMENT HAS NOT RUN: every GPU-free check failed on memory (fb 10,280-10,520 MB steady, sm 16-63%) because three concurrent `screen` shards of the tactical session (D-063: GPU in parallel, no budget) hold about 10 GB of the 12 GB card. A throughput measurement beside another trainer is not evidence. Needs the owner's decision on GPU sharing (STATUS question 7). To run: `bash D:/nt/nt_wt_173/runs/experiments/gpu_measurements_v2/run_v2.sh` (it waits up to 50 minutes for fb < 2000 MB and exits 3 otherwise); then build parallel_n.json and the REPORT; the sweep reads v2 after a one-line change (DEFAULT_PARALLEL_RECORD in experiments/sweep.py:89 and the --parallel-record default in cli.py:577).
 - **priority / type / role:** P1 / research / experimenter
 - **area:** runs/experiments/gpu_measurements_v1/ (a new parallel_n.json), docs/RUNBOOK.md "GPU rules"
 - **depends on:** NT-030
