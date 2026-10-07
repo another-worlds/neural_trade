@@ -13,9 +13,11 @@ COST_FIELDS = ("fee_bps", "half_spread_bps", "slippage_bps")
 
 
 def cost_profile_of(config) -> Dict[str, float]:
-    """``{"fee_bps", "half_spread_bps", "slippage_bps"}`` of a Config (0.0 each by default)."""
-    return {"fee_bps": float(config.FEE_BPS), "half_spread_bps": float(config.HALF_SPREAD_BPS),
-            "slippage_bps": float(config.SLIPPAGE_BPS)}
+    """``{"fee_bps", "half_spread_bps", "slippage_bps"}`` of a Config (0.0 each by default, and for a config object
+    without the fields)."""
+    return {"fee_bps": float(getattr(config, "FEE_BPS", 0.0)),
+            "half_spread_bps": float(getattr(config, "HALF_SPREAD_BPS", 0.0)),
+            "slippage_bps": float(getattr(config, "SLIPPAGE_BPS", 0.0))}
 
 
 __all__ = ["COST_FIELDS", "cost_profile_of"]

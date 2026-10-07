@@ -46,7 +46,8 @@ RUN_COLUMNS: Tuple[Tuple[str, str], ...] = (
     ("status", "TEXT NOT NULL"), ("commit_sha", "TEXT"), ("config_hash", "TEXT"), ("settings_hash", "TEXT"),
     ("spec_hash", "TEXT"), ("dataset_sha256", "TEXT"), ("dataset_path", "TEXT"), ("dataset_first", "TEXT"),
     ("dataset_last", "TEXT"), ("dataset_n_bars", "INTEGER"), ("bar_minutes", "REAL"), ("lookback", "INTEGER"),
-    ("horizon_steps", "TEXT"), ("strategy", "TEXT"), ("created_utc", "TEXT"), ("finished_utc", "TEXT"),
+    ("horizon_steps", "TEXT"), ("symbol", "TEXT"), ("window_minutes", "REAL"), ("horizon_minutes", "TEXT"),
+    ("strategy", "TEXT"), ("created_utc", "TEXT"), ("finished_utc", "TEXT"),
     ("wall_s", "REAL"), ("sec_per_step", "REAL"), ("error", "TEXT"),
     ("sharpe_net", "REAL"), ("total_return", "REAL"), ("max_drawdown", "REAL"), ("n_trades", "INTEGER"),
     ("buy_and_hold_return", "REAL"), ("random_percentile_return", "REAL"),
@@ -133,6 +134,9 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
         "dataset_n_bars": ds.get("n_bars"), "bar_minutes": setup.get("bar_minutes"),
         "lookback": setup.get("LOOKBACK"),
         "horizon_steps": json.dumps(setup.get("HORIZON_STEPS")) if setup.get("HORIZON_STEPS") is not None else None,
+        "symbol": setup.get("symbol"), "window_minutes": _number(setup.get("window_minutes")),
+        "horizon_minutes": (json.dumps(setup.get("horizon_minutes"))
+                            if setup.get("horizon_minutes") is not None else None),
         "strategy": (eng.get("strategy") or {}).get("name"), "created_utc": meta.get("created_utc"),
         "finished_utc": (result or {}).get("finished_utc"), "wall_s": _number((result or {}).get("wall_s")),
         "sec_per_step": _number((result or {}).get("sec_per_step")),
@@ -162,6 +166,10 @@ class RunIndex:
         with closing(self._connect()) as con, con:
             con.execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
             con.execute(f"CREATE TABLE IF NOT EXISTS runs ({cols})")
+            have = {r[1] for r in con.execute("PRAGMA table_info(runs)")}
+            for c, t in RUN_COLUMNS:          # an index made before a column existed: add it (NULL until re-read)
+                if c not in have:
+                    con.execute(f"ALTER TABLE runs ADD COLUMN {c} {t.replace(' PRIMARY KEY', '').replace(' NOT NULL', '')}")
             con.execute("CREATE INDEX IF NOT EXISTS runs_by_cell ON runs (scenario, cell_key)")
             con.execute("CREATE TABLE IF NOT EXISTS scores (run_id TEXT NOT NULL, name TEXT NOT NULL, value REAL, "
                         "PRIMARY KEY (run_id, name))")

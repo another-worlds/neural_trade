@@ -19,6 +19,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import pandas as pd
 
+from neural_trade.core.costs import cost_profile_of
 from neural_trade.notebook._display import show
 
 COST_FIELDS = ("fee_bps", "half_spread_bps", "slippage_bps", "max_hold", "tp_sl_on", "same_bar_tiebreak",
@@ -282,7 +283,8 @@ class BacktestExplorer:
         from neural_trade.strategy import backtest, build_backtest_config, build_strategy
 
         strat = build_strategy(strategy, params, calibration=self.cal_signals)
-        bcfg = build_backtest_config({**dict(costs or {}), "bar_minutes": float(self.config.RESAMPLE_MINUTES)})
+        bcfg = build_backtest_config({**dict(costs or {}), "bar_minutes": float(self.config.RESAMPLE_MINUTES)},
+                                   cost_profile=cost_profile_of(self.config))
         res = backtest(self.signals, self.bars, strat, bcfg, baselines=baselines)
         return res, strat
 
@@ -337,7 +339,8 @@ class BacktestExplorer:
         if names is None:
             names = [n for n in Strategies.list_names() if n not in baseline] + \
                     [n for n in _BENCHMARKS if Strategies.has(n)]
-        k = (build_backtest_config({**dict(costs or {}), "bar_minutes": float(self.config.RESAMPLE_MINUTES)}).random_seeds
+        k = (build_backtest_config({**dict(costs or {}), "bar_minutes": float(self.config.RESAMPLE_MINUTES)},
+                                   cost_profile=cost_profile_of(self.config)).random_seeds
              if null_seeds is None else int(null_seeds))
         runs, labels = {}, {}
         for n in names:
@@ -454,7 +457,7 @@ class BacktestExplorer:
             return self._w["box"]
         strategy = w.Dropdown(options=Strategies.list_names(), value=Strategies.default, description="strategy")
         knobs = w.VBox()
-        defaults = BacktestConfig()
+        defaults = dataclasses.replace(BacktestConfig(), **cost_profile_of(self.config))   # the setup's costs (NT-041)
         cost_w = {
             "fee_bps": w.FloatText(value=defaults.fee_bps, description="fee bps / side"),
             "half_spread_bps": w.FloatText(value=defaults.half_spread_bps, description="half-spread bps"),

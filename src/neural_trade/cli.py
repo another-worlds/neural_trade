@@ -173,6 +173,7 @@ def cmd_predict(args) -> int:
 def cmd_backtest(args) -> int:
     import pandas as pd
 
+    from neural_trade.core.costs import cost_profile_of
     from neural_trade.serving.predictor import Predictor
     from neural_trade.strategy import (Bars, SignalFrame, Strategies, backtest, build_backtest_config, build_strategy,
                                        load_params, var_scale_from)
@@ -184,7 +185,8 @@ def cmd_backtest(args) -> int:
     strategy = build_strategy(args.strategy or params.get("strategy", Strategies.default), params.get("params"),
                               calibration=predictor.bundle.meta.get("weighted_direction_quantiles"))
     bcfg = build_backtest_config({**(params.get("backtest") or {}), "random_seeds": args.random_seeds,
-                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)})
+                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)},
+                                 cost_profile=cost_profile_of(predictor.config))
     var_scale = predictor.bundle.meta.get("var_scale")
     if var_scale is None:
         logger.warning("the artifacts carry no calibration-split var_scale; using this data's own (look-ahead)")

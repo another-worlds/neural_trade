@@ -100,28 +100,68 @@ class DataLayout:
         return info
 
 
-def data_layout(config: Config) -> DataLayout:
-    """Load and prepare the configured data once and lay out its purged folds (no windows built)."""
-    from neural_trade.data.processor import DataProcessor
-    from neural_trade.data.splits import make_purged_splits
-    from neural_trade.data.windowing import first_anchor, sequence_anchor_bars
+def _prepared(config: Config):
+    """``(df, n_rows, path)``: the configured data loaded, preprocessed, validated and cut at DATA_END (the bars
+    the model sees; no windows built). InvalidConfigurationError for a loader without a file or a missing file."""
+    from neural_trade.data.loaders import resolve_data_path
+    from neural_trade.data.processor import DataProcessor, apply_data_end
 
     loader = str(config.DATA_LOADER)
     if loader not in FILE_LOADERS:
         raise InvalidConfigurationError(f"the experiment engine needs a file loader {FILE_LOADERS} to fingerprint "
                                         f"the data; DATA_LOADER is {loader!r}")
-    from neural_trade.data.loaders import resolve_data_path
-
     path = resolve_data_path(config.CSV_PATH)   # the file; the fingerprint keeps the configured text
     if not path.is_file():
         raise InvalidConfigurationError(f"CSV_PATH {config.CSV_PATH!r} does not exist (resolved: {path.resolve()})")
+    dp = DataProcessor(config)
+    raw = dp.load_raw()
+    df = apply_data_end(dp.preprocess(raw), config)
+    return df, int(len(raw)), path
+
+
+def _fingerprint(config: Config, df, n_rows: int, path) -> Dict[str, Any]:
+    times = df["timestamp"]
+    return {"path": str(config.CSV_PATH), "sha256": file_sha256(path), "size_bytes": int(path.stat().st_size),
+            "loader": str(config.DATA_LOADER), "n_rows": n_rows, "n_bars": int(len(df)),
+            "first_timestamp": _iso(times.iloc[0]), "last_timestamp": _iso(times.iloc[-1])}
+
+
+_FP_CACHE: Dict[tuple, Dict[str, Any]] = {}
+
+
+def dataset_fingerprint(config: Config) -> Dict[str, Any]:
+    """What data a run used (NT-041): the file's sha256, the bars the model saw (count, first and last
+    timestamp, after the Preprocessors and DATA_END) and the loader. Cached per file state and the Config fields
+    that decide the bars, so recording it in every run's meta.json costs one load per dataset. A dataset that
+    cannot be fingerprinted (an in-memory loader, a missing file) gives ``{"path", "loader", "error"}``."""
+    try:
+        from neural_trade.data.loaders import resolve_data_path
+
+        path = resolve_data_path(config.CSV_PATH)
+        st = path.stat()
+        key = (str(path.resolve()), st.st_size, st.st_mtime_ns, str(config.DATA_LOADER), int(config.RESAMPLE_MINUTES),
+               tuple(config.PREPROCESSORS), config.DATA_END, float(config.DATA_END_PROTECTED_DAYS))
+    except OSError as exc:
+        return {"path": str(config.CSV_PATH), "loader": str(config.DATA_LOADER), "error": f"{type(exc).__name__}: {exc}"}
+    if key not in _FP_CACHE:
+        try:
+            df, n_rows, path = _prepared(config)
+            _FP_CACHE[key] = _fingerprint(config, df, n_rows, path)
+        except (ValueError, OSError, KeyError) as exc:
+            return {"path": str(config.CSV_PATH), "loader": str(config.DATA_LOADER),
+                    "error": f"{type(exc).__name__}: {exc}"}
+    return dict(_FP_CACHE[key])
+
+
+def data_layout(config: Config) -> DataLayout:
+    """Load and prepare the configured data once and lay out its purged folds (no windows built)."""
+    from neural_trade.data.splits import make_purged_splits
+    from neural_trade.data.windowing import first_anchor, sequence_anchor_bars
+
     if int(max(1, config.WINDOW_STEP)) != 1:
         raise InvalidConfigurationError(f"WINDOW_STEP={config.WINDOW_STEP}: the engine's backtest fills at the "
                                         "next bar's open, which needs consecutive decision bars (WINDOW_STEP = 1)")
-    dp = DataProcessor(config)
-    raw = dp.load_raw()
-    n_rows = int(len(raw))
-    df = dp.preprocess(raw)
+    df, n_rows, path = _prepared(config)
     close = df["Close"].to_numpy()
     lookback = int(config.LOOKBACK)
     start = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
@@ -139,9 +179,7 @@ def data_layout(config: Config) -> DataLayout:
     except ValueError as exc:
         raise InvalidConfigurationError(str(exc)) from exc
     times = df["timestamp"]
-    fingerprint = {"path": str(config.CSV_PATH), "sha256": file_sha256(path), "size_bytes": int(path.stat().st_size),
-                   "loader": loader, "n_rows": n_rows, "n_bars": int(len(df)),
-                   "first_timestamp": _iso(times.iloc[0]), "last_timestamp": _iso(times.iloc[-1])}
+    fingerprint = _fingerprint(config, df, n_rows, path)
     out: List[Dict[str, Any]] = []
     for f in folds:
         blocks = {}
@@ -174,4 +212,5 @@ def describe_block(block: Optional[Dict[str, Any]]) -> str:
     return f"{block['n']} sequences, {block['first_timestamp']} .. {block['last_timestamp']}"
 
 
-__all__ = ["DataLayout", "LayoutCache", "data_key", "data_layout", "describe_block", "file_sha256", "setup_of"]
+__all__ = ["DataLayout", "LayoutCache", "data_key", "data_layout", "dataset_fingerprint", "describe_block",
+           "file_sha256", "setup_of"]

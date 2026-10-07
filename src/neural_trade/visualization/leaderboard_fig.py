@@ -40,7 +40,7 @@ from neural_trade.experiments.leaderboard import TABLE_HEADER, LeaderboardRow, c
 logger = logging.getLogger(__name__)
 
 # characters per line of each table column, in TABLE_HEADER order
-COLUMN_CHARS = (10, 22, 24, 28, 30, 14, 14, 14, 14, 12, 44, 18, 14, 14, 14, 14, 8, 10, 20)
+COLUMN_CHARS = (10, 22, 24, 28, 30, 14, 14, 14, 14, 12, 44, 18, 14, 14, 14, 14, 30, 8, 12, 8, 10, 12, 20)
 CHAR_PX, CELL_PAD_PX, LINE_PX = 7.0, 16, 15     # generous for 11 px system-ui text
 LANE_PX = 64                                   # one configuration's lane in the bar panel
 MARGIN_B, MARGIN_R, GAP_PX = 30, 24, 95
