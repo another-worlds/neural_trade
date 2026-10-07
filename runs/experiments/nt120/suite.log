@@ -1,0 +1,10 @@
+a04a0a60d179ee26504dcab0385cc60d7b8aa241
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
+
+tests/test_frozen_twin.py::test_one_epoch_cpu_run_leaves_every_applied_period_at_its_configured_value
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\tensorflow\python\data\ops\structured_function.py:264: UserWarning: Even though the `tf.config.experimental_run_functions_eagerly` option is set, this option does not apply to tf.data functions. To force eager execution of tf.data functions, please use `tf.data.experimental.enable_debug_mode()`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2316 passed, 5639 warnings in 711.36s (0:11:51)
+All checks passed!
