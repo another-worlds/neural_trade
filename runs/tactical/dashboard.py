@@ -184,7 +184,18 @@ def main():
         exps.append(x)
     active = next((x["id"] for x in reversed(exps) if x["status"] == "идёт"), None) or next((x["id"] for x in exps if x["status"] in ("в очереди", "частично")), None) or exps[-1]["id"]
     state_est = estimates(exps)
-    state = {"est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    res = []
+    rp = os.path.join(ROOT, "hc4", "resources.csv")
+    if os.path.exists(rp):
+        for l in open(rp, encoding="utf-8").read().splitlines()[1:][-360:]:
+            p = l.split(",")
+            try:
+                res.append([p[0], float(p[1]), float(p[2]), float(p[3]), float(p[4]), ",".join(p[5:]).strip(",")])
+            except Exception:
+                pass
+    gl = os.path.join(ROOT, "hc4", "guard.log")
+    stops = [l for l in open(gl, encoding="utf-8").read().splitlines() if " stop " in l][-5:] if os.path.exists(gl) else []
+    state = {"res": res, "stops": stops, "est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
              "procs": len(procs), "exps": exps, "active": active, "hm": [[g + "." + k, lab] for g, k, lab in HM],
              "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%m-%d %H:%M -12").splitlines()}
@@ -313,6 +324,9 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;b
 <div class="goal"><b>Цель:</b> выйти из «ловушки» (нет навыка направления) поиском тактического прорыва в расчёте сети; риск-менеджмент — отдельная ветка. <b>Правила владельца:</b> всегда все 9 выходов; отсев 6 срезов × 2 seed'а; screen ≤ 2 мин на прогон (7-дневные — по разрешению); у каждого прогона своя вкладка.</div>
 <div class="c" style="margin-top:12px"><h2>Оценки по этапам: время и точность <span class="mut">(guesstimates — мои оценки, не результаты)</span></h2><table id="est"></table>
 <div class="sub">Время текущего раунда считается вживую по реальным прогонам; остальное — оценки по уже полученным данным, будут пересматриваться после каждого раунда.</div></div>
+<div class="c" style="margin-top:12px"><h2>Нагрузка машины в реальном времени <span class="mut">(проверка каждые 10 с; правило владельца)</span></h2>
+<div id="resnow" class="sub"></div><div id="resplot" style="height:220px"></div>
+<div class="sub">Ограничитель: мои процессы с пониженным приоритетом; не больше 3; новый — только при ≥ 12 ГБ свободной памяти и CPU &lt; 80%; самый новый мой процесс останавливается при &lt; 6 ГБ свободной памяти или CPU ≥ 95% дольше минуты.</div><div id="stops" class="sub"></div></div>
 <div class="tabs" id="tabs"></div>
 <div id="pane"></div>
 <div class="g"><div class="c full"><h2>Коммиты nt-tactical</h2><table id="git"></table></div></div>
@@ -352,6 +366,12 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
  if(document.getElementById('aucbar')){const ss=e.specs.filter(s=>s.auc!=null);Plotly.newPlot('aucbar',[{type:'bar',x:ss.map(s=>s.label),y:ss.map(s=>s.auc),error_y:{type:'data',array:ss.map(s=>s.auc_se?1.96*s.auc_se:0)},marker:{color:'#3987e5'}}],lay({yaxis:{range:[.4,.75],gridcolor:grid},xaxis:{tickangle:-25},margin:{l:52,r:12,t:8,b:110},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:.5,y1:.5,line:{color:'#c0392b',dash:'dash',width:1}}]}),cfg);
   const ww=e.specs.filter(s=>s.wall);Plotly.newPlot('wallbar',[{type:'bar',x:ww.map(s=>s.label),y:ww.map(s=>s.wall),marker:{color:'#8a97a6'}}],lay({yaxis:{title:'с (медиана)',gridcolor:grid},xaxis:{tickangle:-25},margin:{l:52,r:12,t:8,b:110},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:120,y1:120,line:{color:'#c0392b',dash:'dash'}}]}),cfg)}}
 document.getElementById('est').innerHTML='<tr><th>Этап</th><th>Статус</th><th>Время (оценка)</th><th>Точность (оценка)</th><th>Уверенность в оценке</th></tr>'+S.est.stages.map(x=>`<tr><td><b>${x.stage}</b></td><td>${x.status}</td><td>${x.time}</td><td>${x.acc}</td><td>${x.conf}</td></tr>`).join('');
+if(S.res.length){const L=S.res[S.res.length-1];document.getElementById('resnow').innerHTML=`Сейчас (${L[0]}): свободно памяти <b>${L[1]} ГБ</b> из 64 · CPU <b>${L[2]}%</b> · GPU <b>${L[3]}%</b>, ${L[4]} МБ · моих процессов обучения: <b>${S.procs}</b>`;
+ Plotly.newPlot('resplot',[{type:'scatter',mode:'lines',name:'CPU, %',x:S.res.map(r=>r[0]),y:S.res.map(r=>r[2]),line:{color:'#d95926'}},{type:'scatter',mode:'lines',name:'GPU, %',x:S.res.map(r=>r[0]),y:S.res.map(r=>r[3]),line:{color:'#199e70'}},
+ {type:'scatter',mode:'lines',name:'свободно RAM, ГБ',x:S.res.map(r=>r[0]),y:S.res.map(r=>r[1]),yaxis:'y2',line:{color:'#3987e5'}}],
+ lay({yaxis:{title:'%',range:[0,100],gridcolor:grid},yaxis2:{title:'ГБ',overlaying:'y',side:'right',range:[0,64]},margin:{l:45,r:45,t:8,b:30},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:95,y1:95,line:{color:'#c0392b',dash:'dot'}}]}),cfg);}
+else document.getElementById('resnow').textContent='Данных о нагрузке пока нет.';
+document.getElementById('stops').innerHTML=S.stops.length?('Остановки из-за перегрузки: '+S.stops.join(' · ')):'Остановок из-за перегрузки не было.';
 tabs();render();
 document.getElementById('git').innerHTML=S.log.map(l=>{const[h,t,...m]=l.split('|');return `<tr><td><code>${h}</code></td><td class="sub">${t}</td><td>${m.join('|')}</td></tr>`}).join('');
 </script></body></html>"""
