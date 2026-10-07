@@ -253,5 +253,7 @@ def test_bars_mark_a_jump_of_the_anchors_as_a_break_and_the_engine_closes_before
     assert bars.breaks is not None and bars.breaks.sum() == 1 and bool(bars.breaks[19])
     assert Bars.from_frame(df, np.arange(10)).breaks is None
     assert bars.slice(10).breaks is None and bars.slice(30).breaks.sum() == 1
-    with pytest.raises(ValueError, match="increase"):
+    with pytest.raises(ValueError, match="consecutive"):
         Bars.from_frame(df, np.array([3, 2, 1]))
+    with pytest.raises(ValueError, match="consecutive"):
+        Bars.from_frame(df, np.arange(0, 40, 2))                        # a stride, not holes

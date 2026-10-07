@@ -122,8 +122,9 @@ class Bars:
         """
         idx = np.asarray(anchor_bars, dtype=int)
         steps = np.diff(idx) if len(idx) > 1 else np.zeros(0, dtype=int)
-        if len(steps) and np.any(steps < 1):
-            raise ValueError("anchor bars must increase (WINDOW_STEP=1) for next-open fills")
+        if len(steps) and (np.any(steps < 1) or np.median(steps) != 1):
+            raise ValueError("anchor bars must be consecutive (WINDOW_STEP=1) for next-open fills; only isolated "
+                             "jumps (a hole's dropped windows) are allowed")
         breaks = np.r_[steps != 1, False] if len(steps) else None
         cols = {c.lower(): c for c in df.columns}
         close = df[cols["close"]].to_numpy(float)[idx]
