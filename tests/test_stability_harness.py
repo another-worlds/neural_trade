@@ -1245,8 +1245,12 @@ def test_the_data_csvs_are_untracked_but_their_sha256_stays_in_each_cells_meta(t
 
 @pytest.mark.stability
 @pytest.mark.slow
-def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_verdicts_equal(tmp_path, bars_csv):
-    """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on."""
+def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_verdicts_equal(tmp_path, bars_csv,
+                                                                                                 monkeypatch):
+    """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on. Two runs of ONE setup differ
+    in the 7th digit unless DETERMINISTIC_GRU is on (NT-114: 5.028296947 against 5.028297901 in nll_loss, probe off in
+    both), so the comparison runs with it, which makes two probe-off runs bitwise equal."""
+    monkeypatch.setitem(st.PROFILES["tiny"], "DETERMINISTIC_GRU", True)
     off = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "off", case_ids=["control"], seeds=[0],
                          probe="off")
     on = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "on", case_ids=["control"], seeds=[0],
@@ -1262,7 +1266,8 @@ def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_
     assert any(k.startswith("probe_") for k in b[0]) and not any(k.startswith("probe_") for k in a[0])
 
     def skip(k):
-        return k.startswith("probe_") or "time" in k or "sec" in k
+        # the probe's own keys, wall-clock keys and run identifiers (strings) are not training numbers
+        return k.startswith("probe_") or "time" in k or "sec" in k or "seconds" in k or isinstance(a[0].get(k), str)
 
     for ra, rb in zip(a, b):
         ka = {k for k in ra if not skip(k)}

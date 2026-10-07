@@ -664,7 +664,9 @@ case fails its verdict, 2 when no case failed but cells that are not a verdict a
 - **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off); `reference` is the screen layout
   (probe `failed`, below). The GPU run on the reference setup is NT-051.
 - **The probe and its cost (NT-191)**: the per-term gradient probe never changes training (the same cell's epoch
-  metrics are bitwise equal with it on and off, and so are its verdict fields; `term_gradient_share` is report-only).
+  metrics are bitwise equal with it on and off with `DETERMINISTIC_GRU` on, and so are its verdict fields;
+  `term_gradient_share` is report-only; without `DETERMINISTIC_GRU` two runs of one setup differ in the 7th digit,
+  probe or not: `nll_loss` 5.028296947 against 5.028297901, both probe off).
   It costs about 12x a reference cell on CPU, because about 650 s of it is the host-side tracing of 17 terms x 3
   variable groups, which a GPU run pays too. **Measured, CPU (the QA review of the NT-051 SPEC, 2026-10-07; logs
   `D:/nt/nt_qa/nt051spec_ref_off.log`, `nt051spec_ref_on.log`): 58 s per reference cell with the probe off, 777 s
