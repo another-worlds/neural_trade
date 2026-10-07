@@ -38,6 +38,8 @@ from typing import Any, Dict, Mapping, Optional
 
 import numpy as np
 
+from neural_trade.core.costs import cost_profile_of
+
 logger = logging.getLogger(__name__)
 
 ROLES = ("dev", "test")
@@ -196,7 +198,8 @@ class BlockSignals:
 
 def fit_and_backtest(signals: BlockSignals, bars, *, bar_minutes: float, strategy: Optional[str] = None,
                      strategy_params: Optional[Mapping[str, Any]] = None,
-                     backtest_params: Optional[Mapping[str, Any]] = None):
+                     backtest_params: Optional[Mapping[str, Any]] = None,
+                     cost_profile: Optional[Mapping[str, float]] = None):
     """Fit ``strategy`` on the calibration block and backtest the out-of-sample block with the
     baselines (buy-and-hold, always-flat, the size-matched random null); returns (BacktestResult,
     the fitted Strategy). The scorer and the re-scorer (experiments.rescore) both call this, so a
@@ -204,11 +207,13 @@ def fit_and_backtest(signals: BlockSignals, bars, *, bar_minutes: float, strateg
 
     ``bar_minutes`` has no default (NT-113): a silent 1-minute default was wrong on any other bar
     size. Every caller names it; a live caller (not a fixed 1-minute record script) reads it from
-    the run's own stored bar size (``load_block``'s ``extra["bar_minutes"]``)."""
+    the run's own stored bar size (``load_block``'s ``extra["bar_minutes"]``). ``cost_profile`` is the setup's
+    per-side costs (NT-041: ``cost_profile_of(config)``); the scenario's ``backtest:`` entries override it."""
     from neural_trade.strategy import Strategies, backtest, build_backtest_config, build_strategy
 
     strat = build_strategy(strategy or Strategies.default, strategy_params, calibration=signals.cal)
-    bcfg = build_backtest_config({**dict(backtest_params or {}), "bar_minutes": float(bar_minutes)})
+    bcfg = build_backtest_config({**dict(backtest_params or {}), "bar_minutes": float(bar_minutes)},
+                                 cost_profile=cost_profile)
     return backtest(signals.oos, bars, strat, bcfg), strat
 
 
@@ -241,6 +246,8 @@ def save_predictions(out_dir, frame, cal, arrays, *, bar_minutes: float) -> Dict
                  "anchor_timestamp": _timestamps(arrays["df"], anchors), "anchor_bar": anchors,
                  "sequence_index": np.asarray(block["index"], dtype=np.int64), "bar_minutes": float(bar_minutes),
                  "block": block_name}
+        if bars.breaks is not None:                  # a hole inside the block (NT-041): rescoring must see it too
+            extra["bar_break"] = bars.breaks
         out[f"predictions_{key}"] = block_frame.save_npz(Path(out_dir) / PREDICTION_FILES[key], extra=extra)
     return out
 
@@ -252,7 +259,7 @@ def load_block(path):
 
     frame = PredictionFrame.load_npz(path)
     extra = frame.meta["extra"]
-    bars = Bars(extra["bar_open"], extra["bar_high"], extra["bar_low"], extra["bar_close"])
+    bars = Bars(extra["bar_open"], extra["bar_high"], extra["bar_low"], extra["bar_close"], extra.get("bar_break"))
     return frame, bars, extra
 
 
@@ -307,7 +314,7 @@ def score_result(result, *, role: str, strategy: Optional[str] = None,
     bar_minutes = float(cfg.RESAMPLE_MINUTES)
     res, strat = fit_and_backtest(signals, bars, strategy=strategy or Strategies.default,
                                   strategy_params=strategy_params, backtest_params=backtest_params,
-                                  bar_minutes=bar_minutes)
+                                  bar_minutes=bar_minutes, cost_profile=cost_profile_of(cfg))
     bt = res.to_dict()
     bt.update(params=_strategy_params(strat), fitted_on="cal", var_scale=float(signals.var_scale), n_bars=len(bars),
               calibrated_probabilities=frame.direction_prob_calibrated is not None)
@@ -408,7 +415,8 @@ def score_strategy_only(config, *, role: str, strategy: str, strategy_params: Op
     if len(bars) != len(frame) or not np.allclose(bars.close, frame.last_close, rtol=1e-6):
         raise ScoringError(f"the out-of-sample bars ({len(bars)}) do not line up with its prices ({len(frame)})")
     res, strat = fit_and_backtest(signals, bars, strategy=strategy, strategy_params=strategy_params,
-                                  backtest_params=backtest_params, bar_minutes=float(config.RESAMPLE_MINUTES))
+                                  backtest_params=backtest_params, bar_minutes=float(config.RESAMPLE_MINUTES),
+                                  cost_profile=cost_profile_of(config))
     bt = res.to_dict()
     bt.update(params=_strategy_params(strat), fitted_on="none (price-only rule)", n_bars=len(bars))
     scores = strategy_only_scores(res)

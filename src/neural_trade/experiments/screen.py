@@ -873,8 +873,10 @@ def _windowed_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any, Any,
     cached = cache.get(key)
     if cached is None:
         df, close = _load_cached(cfg, cache)
-        cached = DataProcessor(cfg).build_windows(close, df)
+        builder = DataProcessor(cfg)
+        cached = builder.build_windows(close, df)
         cache[key] = cached
+        cache["plan:" + key] = (builder._plan, builder._lo)       # the folds were cut with the holes in view (NT-041)
     return cached
 
 
@@ -924,6 +926,7 @@ def _prepare_trial_data(cfg: Config, cache: Dict[str, Any]) -> _PreparedTrial:
     t1 = time.perf_counter()
     X_seq, y_seq, last_close_seq, extended_trends, X_model = _windowed_cached(cfg, cache)
     dp = DataProcessor(cfg)
+    dp._plan, dp._lo = cache.get("plan:win:" + data_key(cfg), (None, None))
     (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
      X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
      y_train, y_test, target_scaler) = dp.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq,

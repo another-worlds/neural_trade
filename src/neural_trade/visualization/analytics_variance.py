@@ -49,6 +49,7 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.analytics_common import _grid, _rolling_mean
@@ -312,6 +313,7 @@ def _log_ticks(lo: float, hi: float, panel_px: float, min_px: float = 14.0) -> l
 
 
 # ------------------------------------------------------------------ figure
+@L.labelled
 def variance_analytics_figure(frame, config=None, *, window: int = 500, height: Optional[int] = None,
                               raw_delta: Optional[Dict[str, np.ndarray]] = None, windows=None,
                               rv_bars: Optional[int] = None, n_bins: int = 12, seed: int = 0):
@@ -380,12 +382,12 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
         g0, g1 = r["width_gauss_halves"]
         if "width_conf" in r:
             c0, c1 = r["width_conf_halves"]
-            titles.append(head(h, f"mean width: conformal ${r['width_conf']:,.0f} · Gaussian "
-                                  f"${r['width_gauss']:,.0f}",
+            titles.append(head(h, f"mean width: conformal {r['width_conf']:,.0f} · Gaussian "
+                                  f"{r['width_gauss']:,.0f} {L.quote()}",
                                f"2nd half vs 1st: conformal {_signed(c1 / c0 - 1, '+.0%')} · Gaussian "
                                f"{_signed(g1 / g0 - 1, '+.0%')}"))
         else:
-            titles.append(head(h, f"mean width: Gaussian ${r['width_gauss']:,.0f}",
+            titles.append(head(h, f"mean width: Gaussian {r['width_gauss']:,.0f} {L.quote()}",
                                f"2nd half vs 1st: {_signed(g1 / g0 - 1, '+.0%')}"))
 
     # ---- figure subtitle: short lines (each fits a 1000 px output area)
@@ -435,9 +437,9 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
             error_y=dict(type="data", symmetric=False, array=t[:, 5] - t[:, 3], arrayminus=t[:, 3] - t[:, 4],
                          thickness=1, width=3, color=c),
             customdata=np.column_stack([t[:, 1], t[:, 2], t[:, 4], t[:, 5], t[:, 6]]),
-            hovertemplate="predicted σ bin %{customdata[0]:$,.0f} to %{customdata[1]:$,.0f} "
-                          "(mean %{x:$,.0f})<br>RMS error %{y:$,.1f} (95% CI %{customdata[2]:$,.0f} to "
-                          "%{customdata[3]:$,.0f}, block bootstrap)<br>n %{customdata[4]:,.0f}<extra></extra>"),
+            hovertemplate="predicted σ bin %{customdata[0]:,.0f}" + L.amount_suffix() + " to %{customdata[1]:,.0f}" + L.amount_suffix() + " "
+                          "(mean %{x:,.0f}" + L.amount_suffix() + ")<br>RMS error %{y:,.1f}" + L.amount_suffix() + " (95% CI %{customdata[2]:,.0f}" + L.amount_suffix() + " to "
+                          "%{customdata[3]:,.0f}" + L.amount_suffix() + ", block bootstrap)<br>n %{customdata[4]:,.0f}<extra></extra>"),
             1, j)
         if raw_delta is not None:
             tr = binned_rms(sig, y - np.asarray(raw_delta[h], float), n_bins, reps=0)
@@ -445,7 +447,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
                 x=tr[:, 0], y=tr[:, 3], mode="lines+markers", name="RMS error around the raw price head",
                 legendgroup="raw", showlegend=False, line=dict(color=c, width=1.5, dash=T.ALT_DASH),
                 marker=dict(size=7, symbol="diamond-open", color=c),
-                hovertemplate="predicted σ %{x:$,.0f}<br>RMS of y − raw head %{y:$,.1f}<br>"
+                hovertemplate="predicted σ %{x:,.0f}" + L.amount_suffix() + "<br>RMS of y − raw head %{y:,.1f}" + L.amount_suffix() + "<br>"
                               f"rank corr(σ, err²) around the raw head {_signed(r['spearman_raw'])}"
                               "<extra></extra>"), 1, j)
         if u is not None:
@@ -456,8 +458,8 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
                 line=dict(color=T.NEUTRAL, width=1.25), marker=dict(size=5, symbol="square", color=T.NEUTRAL),
                 customdata=np.column_stack([tb[:, 1], tb[:, 2]]),
                 hovertemplate=f"trailing {rv_len}-bar realised vol × √{steps} bars<br>"
-                              "forecast bin %{customdata[0]:$,.0f} to %{customdata[1]:$,.0f} "
-                              "(mean %{x:$,.0f})<br>RMS error %{y:$,.1f}<extra></extra>"), 1, j)
+                              "forecast bin %{customdata[0]:,.0f}" + L.amount_suffix() + " to %{customdata[1]:,.0f}" + L.amount_suffix() + " "
+                              "(mean %{x:,.0f}" + L.amount_suffix() + ")<br>RMS error %{y:,.1f}" + L.amount_suffix() + "<extra></extra>"), 1, j)
         lo_x = float(min(a.min() for a in xs))
         hi_x = float(max(a.max() for a in xs))
         fig.add_trace(go.Scatter(x=[lo_x, hi_x], y=[lo_x, hi_x], mode="lines", name="calibrated: RMS error = σ",
@@ -551,27 +553,27 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
             x, wc = _rolling_mean(hi - lo, w)
             fig.add_trace(go.Scatter(**_thin_line(x, wc), mode="lines", name="conformal width", legendgroup="conf-cov",
                                      showlegend=False, line=dict(color=c, width=1.5),
-                                     hovertemplate="sample %{x}<br>conformal width %{y:$,.0f}<extra></extra>"), 5, j)
+                                     hovertemplate="sample %{x}<br>conformal width %{y:,.0f}" + L.amount_suffix() + "<extra></extra>"), 5, j)
         x, wg = _rolling_mean(2 * Z90 * sig, w)
         fig.add_trace(go.Scatter(**_thin_line(x, wg), mode="lines", name="Gaussian width", legendgroup="gauss-cov",
                                  showlegend=False, line=dict(color=c, width=1.5, dash=T.ALT_DASH),
-                                 hovertemplate="sample %{x}<br>Gaussian width 2×1.645σ %{y:$,.0f}"
+                                 hovertemplate="sample %{x}<br>Gaussian width 2×1.645σ %{y:,.0f}" + L.amount_suffix() + ""
                                                "<extra></extra>"), 5, j)
         fig.update_xaxes(matches=f"x{12 + j}", row=4, col=j)
 
-        fig.update_xaxes(title_text="predicted σ or baseline forecast ($), bin mean" if u is not None
-                         else "predicted σ ($), bin mean", row=1, col=j)
+        fig.update_xaxes(title_text=f"predicted σ or baseline forecast ({L.quote()}), bin mean" if u is not None
+                         else f"predicted σ ({L.quote()}), bin mean", row=1, col=j)
         fig.update_xaxes(title_text="PIT = Φ((y − served delta) / σ)", range=[0, 1], row=2, col=j)
         fig.update_xaxes(title_text="k (multiples of σ)", row=3, col=j)
         fig.update_xaxes(title_text="sample (time order)", row=4, col=j)
         fig.update_xaxes(title_text="sample (time order)", row=5, col=j)
 
     # ---- axes: y titles in column 1, one shared scale per row where horizons are comparable
-    fig.update_yaxes(title_text="RMS of y − served delta ($)", row=1, col=1)
+    fig.update_yaxes(title_text=f"RMS of y − served delta ({L.quote()})", row=1, col=1)
     fig.update_yaxes(title_text="density", row=2, col=1)
     fig.update_yaxes(title_text="observed ÷ Gaussian", row=3, col=1)
     fig.update_yaxes(title_text="share inside interval", row=4, col=1)
-    fig.update_yaxes(title_text="mean width ($)", row=5, col=1)
+    fig.update_yaxes(title_text=f"mean width ({L.quote()})", row=5, col=1)
     for row in (2, 4):
         for col in (2, 3):
             fig.update_yaxes(matches=f"y{(row - 1) * 3 + 1}", row=row, col=col)

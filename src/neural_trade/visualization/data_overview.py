@@ -6,6 +6,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.theme import apply
@@ -22,6 +23,7 @@ def _timestamps(df) -> pd.Series:
     return pd.to_datetime(df["timestamp"] if "timestamp" in df else df.iloc[:, 0])
 
 
+@L.labelled
 def split_table(blocks, config) -> pd.DataFrame:
     """One row per block (``blocks`` from data.processor.split_arrays): size, time span, share of
     labels inside the deadband, up-rate outside it per horizon, realised 1-bar volatility."""
@@ -35,7 +37,7 @@ def split_table(blocks, config) -> pd.DataFrame:
         labels = direction_labels_np(b["y"], b["last_close"], float(config.DIR_DEADBAND_BPS))
         anchors = b["anchor_bar"]
         row = {"sequences": len(anchors), "from": ts.iloc[int(anchors[0])], "to": ts.iloc[int(anchors[-1])],
-               "1-bar vol $": float(np.mean(np.std(np.diff(b["X"], axis=1), axis=1)))}
+               f"1-bar vol {L.quote()}": float(np.mean(np.std(np.diff(b["X"], axis=1), axis=1)))}
         for h, (lab, mask) in labels.items():
             row[f"in deadband {h}"] = float(1 - mask.mean())
             row[f"up-rate {h}"] = float(lab[mask].mean()) if mask.any() else float("nan")
@@ -43,6 +45,7 @@ def split_table(blocks, config) -> pd.DataFrame:
     return pd.DataFrame(rows).T
 
 
+@L.labelled
 def split_overview_figure(blocks, config, *, title: Optional[str] = None, max_points: int = 6000):
     """Close price with the train / val / cal / test blocks shaded and named (the thin unshaded
     strips between them are the purge gaps)."""
@@ -54,7 +57,7 @@ def split_overview_figure(blocks, config, *, title: Optional[str] = None, max_po
     idx = S.thin(len(close), max_points)
     fig = go.Figure(go.Scatter(x=ts.iloc[idx], y=close[idx].astype(np.float32), name="close", mode="lines",
                                line=dict(width=1.2, color=T.INK_2),
-                               hovertemplate="%{x|%Y-%m-%d %H:%M}<br>close $%{y:,.0f}<extra></extra>"))
+                               hovertemplate="%{x|%Y-%m-%d %H:%M}<br>close %{y:,.0f}" + L.amount_suffix() + "<extra></extra>"))
     for k, name in enumerate(BLOCKS):
         a = blocks[name]["anchor_bar"]
         t0, t1 = ts.iloc[int(a[0])], ts.iloc[int(a[-1])]
@@ -70,16 +73,17 @@ def split_overview_figure(blocks, config, *, title: Optional[str] = None, max_po
     sub = "<br>".join((
         f"fold {getattr(fold, 'fold', '?')}: train | val | cal | test in time order, {gap} sequences purged between blocks",
         "(no bar is both a training label and an evaluation input)",
-        f"{len(df):,} one-minute bars, {ts.iloc[0]:%Y-%m-%d %H:%M} to {ts.iloc[-1]:%Y-%m-%d %H:%M} UTC",
+        f"{len(df):,} {L.current().bar} bars, {ts.iloc[0]:%Y-%m-%d %H:%M} to {ts.iloc[-1]:%Y-%m-%d %H:%M} UTC",
         "shading spans each block's anchor bars; the number after each block is its count of sequences"))
     apply(fig, title=title or "Purged walk-forward split", subtitle=sub, height=500)
     fig.update_layout(showlegend=False, margin=dict(t=172))
-    fig.update_yaxes(title_text="close ($)", tickprefix="$", tickformat=",.0f")
+    fig.update_yaxes(title_text=f"close ({L.quote()})", tickformat=",.0f")
     fig.update_xaxes(title_text="time (UTC)")
     return fig
 
 
 # ------------------------------------------------------------------ registry entry (data, config)
+@L.labelled
 def split_overview(data, config=None, **kw):
     """``data``: the dict returned by data.processor.split_arrays."""
     return split_overview_figure(data, config, **kw)

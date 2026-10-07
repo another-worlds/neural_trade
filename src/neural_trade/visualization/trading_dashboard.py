@@ -9,12 +9,12 @@ cursor, every panel's value at that bar in one tooltip):
 2. P(up) per horizon (faint) and the weighted P(up), with the strategy's entry / exit lines, the
    entry zones shaded and a triangle on each decision bar;
 3. confidence and signal strength; 4. predicted sigma h1 with the variance spikes;
-5. net P&L after costs, $ since the start of the view, with each exit marked on the curve;
-6. before costs (the same trades with the costs added back) vs buy & hold, $ since the start of
+5. net P&L after costs, in the quote currency, since the start of the view, with each exit marked on the curve;
+6. before costs (the same trades with the costs added back) vs buy & hold, in the quote currency, since the start of
    the view; 7. drawdown from the running peak since the start of the view.
 
 Every number is for the bars shown. A window (``start`` / ``end``) is sliced, not zoomed: all y
-axes fit the window, P&L restarts at $0 at the window start and the subtitle gives the window's
+axes fit the window, P&L restarts at 0 at the window start and the subtitle gives the window's
 own result, then the whole block's on a separate line.
 
 Timing (the engine's): a strategy decides at bar t's close and fills at bar t+1's open, so the
@@ -28,6 +28,7 @@ from typing import Optional, Sequence
 
 import numpy as np
 
+from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.trade_analytics import (  # noqa: F401  (re-exported)
@@ -56,7 +57,7 @@ _RIGHT_MARGIN = 104     # room for the labels at the right end of the lines
 # does not squeeze the band; the horizon points left outside are counted in the subtitle.
 _PUP_REACH = 0.05
 _PUP_PAD = 0.02
-# A $ panel whose data span less than this spans at least this (whole-dollar ticks, a flat line mid-panel).
+# A quote-currency panel whose data span less than this spans at least this (whole-unit ticks, a flat line mid-panel).
 _MIN_USD_SPAN = 20.0
 # The shallowest drawdown axis: a flat or tiny drawdown is drawn on 0 to -1%, not stretched to fill the panel.
 _MIN_DD_SPAN = 0.01
@@ -68,10 +69,11 @@ def _f32(a):
 
 
 def _usd(v, *, signed: bool = False, decimals: int = 0) -> str:
-    """'$1,234' / '-$1,234' / '+$1,234' (formatted here: plotly.js rejects d3 formats like '+$,.2f')."""
+    """'1,234 USDT' / '-1,234 USDT' / '+1,234 USDT' (formatted here: plotly.js rejects d3 formats like '+,.2f';
+    the quote currency is the current setup's, visualization.labels)."""
     if v is None or not np.isfinite(v):
         return "n/a"
-    body = f"${abs(v):,.{decimals}f}"
+    body = f"{abs(v):,.{decimals}f} {L.quote()}"
     if round(abs(v), decimals) == 0:
         return body
     return ("-" if v < 0 else "+" if signed else "") + body
@@ -96,9 +98,9 @@ def _finite(v) -> bool:
 
 
 def _usd_range(values, min_span: float = _MIN_USD_SPAN):
-    """[lo, hi] a $ panel's autorange must include when its data (and $0) span less than ``min_span``:
-    centred on the data, ``min_span`` wide, so the '$,.0f' ticks are whole, distinct dollars (a flat
-    series would get plotly's +/-$1 and print '$1, $1, $0, -$1, -$1'). None when the data span more."""
+    """[lo, hi] a quote-currency panel's autorange must include when its data (and 0) span less than
+    ``min_span``: centred on the data, ``min_span`` wide, so the ',.0f' ticks are whole, distinct units (a flat
+    series would get plotly's +/-1 and print '1, 1, 0, -1, -1'). None when the data span more."""
     v = np.asarray(values, float)
     v = v[np.isfinite(v)]
     lo_v, hi_v = min(float(v.min()) if len(v) else 0.0, 0.0), max(float(v.max()) if len(v) else 0.0, 0.0)
@@ -323,9 +325,9 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         "price": f"Price and trades{levels}" if trades else "Price (no trades in this view)",
         "signal": sig_title,
         "conf": "Confidence and signal strength (0 to 1)",
-        "sigma": f"Predicted sigma {hl('h1')}, $",
-        "equity": f"Net P&L after costs, $ {since} (equity {_usd(E[lo])} at the start)",
-        "pre": f"Before costs (same trades, costs added back){' vs buy & hold' if has_bars else ''}, $ {since}",
+        "sigma": f"Predicted sigma {hl('h1')}, {L.quote()}",
+        "equity": f"Net P&L after costs, {L.quote()} {since} (equity {_usd(E[lo])} at the start)",
+        "pre": f"Before costs (same trades, costs added back){' vs buy & hold' if has_bars else ''}, {L.quote()} {since}",
         "dd": ("Drawdown from the running peak" if whole else
                f"Drawdown from the running peak since bar {lo} (whole-block drawdown at bar {lo}: "
                f"{100 * whole_dd_at_lo:.1f}%)"),
@@ -398,13 +400,13 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         add(go.Scatter(**_line(np.asarray(bars.close, float)[lo:hi], lo, max_line_points,
                               text=text if any(text) else None),
                        mode="lines", name="close", line=dict(color=T.INK_2, width=1.2),
-                       hovertemplate="close %{y:$,.2f}" + ("%{text}" if any(text) else "") + "<extra></extra>"),
+                       hovertemplate="close %{y:,.2f}" + L.amount_suffix() + "" + ("%{text}" if any(text) else "") + "<extra></extra>"),
             "price")
         hi_px, lo_px = np.nanmax(bars.high[lo:hi]), np.nanmin(bars.low[lo:hi])
         pad = 0.05 * max(hi_px - lo_px, 1e-9)
         # stops far from price would stretch the axis: the axis fits the bars (levels stay in the hover)
         yaxis("price", autorangeoptions=dict(clipmin=float(lo_px - pad), clipmax=float(hi_px + pad)))
-    yaxis("price", tickformat="$,.0f")
+    yaxis("price", **L.axis_money())
     if detail:
         for t in trades:   # holding periods: the position is exposed from the entry open to the exit
             fig.add_shape(type="rect", xref="x", yref=f"{ax['price']} domain", x0=t.entry_bar - 0.5,
@@ -448,7 +450,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     for side, color, symbol in (("LONG", T.LONG_COLOR, "triangle-up"), ("SHORT", T.SHORT_COLOR, "triangle-down")):
         sel = [t for t in entered if t.side == side]
         if sel:
-            hv = marker_hover or dict(hovertemplate=f"<b>{side} entry</b> at bar %{{x}}: %{{y:$,.2f}}<extra></extra>")
+            hv = marker_hover or dict(hovertemplate=f"<b>{side} entry</b> at bar %{{x}}: %{{y:,.2f}}{L.amount_suffix()}<extra></extra>")
             add(go.Scatter(x=[t.entry_bar for t in sel], y=_f32([t.entry_price for t in sel]), mode="markers",
                            name=f"{side.lower()} entry", legendgroup=f"entry-{side}",
                            marker=dict(symbol=symbol, size=size_in, color=color, line=dict(color=T.PAPER, width=1)),
@@ -456,7 +458,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     for outcome, name, color, symbol in outcomes:
         sel = [t for t in exited if (t.net_pnl > 0) == (outcome == "win")]
         if sel:
-            hv = marker_hover or dict(hovertemplate="<b>exit</b> at bar %{x}: %{y:$,.2f}<extra></extra>")
+            hv = marker_hover or dict(hovertemplate="<b>exit</b> at bar %{x}: %{y:,.2f}" + L.amount_suffix() + "<extra></extra>")
             add(go.Scatter(x=[t.exit_bar for t in sel], y=_f32([t.exit_price for t in sel]), mode="markers", name=name,
                            legendgroup=f"trade-{outcome}", opacity=1.0 if detail else 0.85,
                            marker=dict(symbol=symbol, size=size_out, color=color, line=dict(color=T.PAPER, width=1)),
@@ -527,12 +529,12 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         add(go.Scatter(**_line(sig1, lo, max_line_points,
                               text=np.where(spike, " · variance spike", "").tolist() if len(spikes) else None),
                        mode="lines", name="sigma h1", line=dict(color=T.HORIZON_COLORS["h1"], width=1),
-                       hovertemplate=f"sigma {hl('h1')} %{{y:$,.1f}}" + ("%{text}" if len(spikes) else "")
+                       hovertemplate=f"sigma {hl('h1')} %{{y:,.1f}}{L.amount_suffix()}" + ("%{text}" if len(spikes) else "")
                                      + "<extra></extra>"), "sigma")
         if len(spikes):   # the flag is in the sigma hover of that exact bar, not on a nearby marker
             add(go.Scatter(x=x[spikes], y=_f32(sig1[spikes]), mode="markers", name="variance spike",
                            marker=dict(symbol="diamond", size=6, color=T.WARNING), hoverinfo="skip"), "sigma")
-        yaxis("sigma", tickformat="$,.0f")
+        yaxis("sigma", **L.axis_money())
 
     # ---------------------------------------------------------------- 5. net P&L since the start of the view
     e_w, g_w = E[lo + 1:hi + 1], G[lo + 1:hi + 1]
@@ -540,7 +542,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     pre = g_w - G[lo]
     _hline(fig, ax["equity"], 0.0, T.NEUTRAL, "4px,3px", 1.0, layer="below")
     add(go.Scatter(**_line(net, lo, max_line_points), mode="lines", name="net P&L", line=dict(color=T.INK, width=2),
-                   hovertemplate=f"net P&L {since} %{{y:$,.0f}}<extra></extra>"), "equity")
+                   hovertemplate=f"net P&L {since} %{{y:,.0f}}{L.amount_suffix()}<extra></extra>"), "equity")
     for outcome, _, color, symbol in outcomes:
         sel = [t for t in exited if (t.net_pnl > 0) == (outcome == "win")]
         if sel:
@@ -548,9 +550,9 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
                            mode="markers", name=f"exit, {outcome}", legendgroup=f"trade-{outcome}", showlegend=False,
                            marker=dict(symbol=symbol, size=8 if detail else 5, color=color,
                                        line=dict(color=T.PAPER, width=1)), hoverinfo="skip"), "equity")
-    yaxis("equity", tickformat="$,.0f")
+    yaxis("equity", **L.axis_money())
     r_eq = _usd_range(net)
-    if r_eq is not None:        # e.g. no trades: a flat $0 line mid-panel, whole-dollar ticks
+    if r_eq is not None:        # e.g. no trades: a flat 0 line mid-panel, whole-unit ticks
         yaxis("equity", autorangeoptions=dict(include=r_eq))
     span_eq = r_eq[1] - r_eq[0] if r_eq is not None else float(np.nanmax(net) - np.nanmin(net))
     _end_labels(fig, ax["equity"], [(net[-1], f"net {_usd(net[-1], signed=True)}")], span_eq)
@@ -559,7 +561,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     _hline(fig, ax["pre"], 0.0, T.NEUTRAL, "4px,3px", 1.0, layer="below")
     add(go.Scatter(**_line(pre, lo, max_line_points), mode="lines", name="strategy before costs",
                    line=dict(color=T.INK_2, width=1.5),
-                   hovertemplate=f"before costs {since} %{{y:$,.0f}}<extra></extra>"), "pre")
+                   hovertemplate=f"before costs {since} %{{y:,.0f}}{L.amount_suffix()}<extra></extra>"), "pre")
     ends = [(pre[-1], f"before costs {_usd(pre[-1], signed=True)}")]
     bh_ret = np.nan
     if has_bars:
@@ -569,10 +571,10 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         bh_ret = c[hi - 1] / p0 - 1.0
         add(go.Scatter(**_line(bh, lo, max_line_points), mode="lines", name="buy & hold (no costs)",
                        line=dict(color=T.NEUTRAL, width=1.5, dash="6px,3px"),
-                       hovertemplate=f"buy & hold {since} %{{y:$,.0f}} ({_usd(E[lo])} held, no costs)<extra></extra>"),
+                       hovertemplate=f"buy & hold {since} %{{y:,.0f}}{L.amount_suffix()} ({_usd(E[lo])} held, no costs)<extra></extra>"),
             "pre")
         ends.append((bh[-1], f"buy & hold {_usd(bh[-1], signed=True)}"))
-    yaxis("pre", tickformat="$,.0f")
+    yaxis("pre", **L.axis_money())
     allpre = np.concatenate([pre] + ([bh] if has_bars else []))
     r_pre = _usd_range(allpre)
     if r_pre is not None:
@@ -637,22 +639,25 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             height=height or (1500 if has_sig else 950), legend_top=False)
     bar_min = getattr(result.config, "bar_minutes", 1.0)
     fig.update_layout(hovermode="x unified", hoversubplots="axis", margin=dict(t=76 + 16 * len(lines_sub),
-                                                                              r=_RIGHT_MARGIN),
+                                                                              r=_RIGHT_MARGIN + 8 * (len(L.quote()) + 1)),    # the end labels carry the quote code
                       xaxis=dict(title_text=f"bar of the test block ({bar_min:g}-minute bars)", showspikes=True,
                                  spikemode="across", range=[lo - 0.5, hi - 0.5], autorange=False))
     return fig
 
 
 # ------------------------------------------------------------------ registry entries (data, config)
+@L.labelled
 def trading_dashboard(data, config=None, *, bars=None, signals=None, strategy=None, **kw):
     kw.setdefault("config", config)
     return trading_dashboard_figure(data, bars, signals, strategy, **kw)
 
 
+@L.labelled
 def trade_analytics(data, config=None, *, bars=None, **kw):
     kw.setdefault("horizon_steps", getattr(config, "HORIZON_STEPS", None))   # like-for-like h1 panel
     return trade_analytics_figure(data, bars, **kw)
 
 
+@L.labelled
 def strategy_comparison(data, config=None, *, bars=None, **kw):
     return strategy_comparison_figure(data, bars, **kw)

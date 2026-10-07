@@ -21,12 +21,16 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field, fields
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+import numpy as np
 
 from neural_trade.core.config import Config
 from neural_trade.core.exceptions import InvalidConfigurationError
 
+logger = logging.getLogger(__name__)
 FILE_LOADERS = ("csv", "parquet")
 _SHA_CACHE: Dict[tuple, str] = {}
 
@@ -46,9 +50,16 @@ def file_sha256(path) -> str:
 
 
 def setup_of(config: Config) -> Dict[str, Any]:
-    """The setup as configured today: bar minutes, the window and the horizons in bars."""
-    return {"bar_minutes": int(config.RESAMPLE_MINUTES), "LOOKBACK": int(config.LOOKBACK),
-            "HORIZON_STEPS": [int(h) for h in config.HORIZON_STEPS]}
+    """The setup of a run: bar minutes, the window and the horizons in bars (``LOOKBACK``, ``HORIZON_STEPS``,
+    the keys the index reads) and, from the dataset spec (NT-041), the instrument, the quote currency, the
+    window, horizons and trend lags in wall-clock minutes, and the cost profile (fee, half-spread, slippage
+    per side, bps)."""
+    from neural_trade.core.dataset_spec import DatasetSpec
+
+    out = {"bar_minutes": int(config.RESAMPLE_MINUTES), "LOOKBACK": int(config.LOOKBACK),
+           "HORIZON_STEPS": [int(h) for h in config.HORIZON_STEPS]}
+    out.update({k: v for k, v in DatasetSpec.from_config(config).to_dict().items() if k != "bar_minutes"})
+    return out
 
 
 def data_key(config: Config) -> str:
@@ -93,59 +104,142 @@ class DataLayout:
         return info
 
 
-def data_layout(config: Config) -> DataLayout:
-    """Load and prepare the configured data once and lay out its purged folds (no windows built)."""
-    from neural_trade.data.processor import DataProcessor
-    from neural_trade.data.splits import make_purged_splits
-    from neural_trade.data.windowing import sequence_anchor_bars
+def _prepared(config: Config):
+    """``(df, n_rows, path)``: the configured data loaded, preprocessed, validated and cut at DATA_END (the bars
+    the model sees; no windows built). InvalidConfigurationError for a loader without a file or a missing file."""
+    from neural_trade.data.loaders import resolve_data_path
+    from neural_trade.data.processor import DataProcessor, apply_data_end
 
     loader = str(config.DATA_LOADER)
     if loader not in FILE_LOADERS:
         raise InvalidConfigurationError(f"the experiment engine needs a file loader {FILE_LOADERS} to fingerprint "
                                         f"the data; DATA_LOADER is {loader!r}")
-    from neural_trade.data.loaders import resolve_data_path
-
     path = resolve_data_path(config.CSV_PATH)   # the file; the fingerprint keeps the configured text
     if not path.is_file():
         raise InvalidConfigurationError(f"CSV_PATH {config.CSV_PATH!r} does not exist (resolved: {path.resolve()})")
+    dp = DataProcessor(config)
+    raw = dp.load_raw()
+    df = apply_data_end(dp.preprocess(raw), config)
+    return df, int(len(raw)), path
+
+
+def _fingerprint(config: Config, df, n_rows: int, path, gaps: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    times = df["timestamp"]
+    out = {"path": str(config.CSV_PATH), "sha256": file_sha256(path), "size_bytes": int(path.stat().st_size),
+           "loader": str(config.DATA_LOADER), "n_rows": n_rows, "n_bars": int(len(df)),
+           "first_timestamp": _iso(times.iloc[0]), "last_timestamp": _iso(times.iloc[-1])}
+    if gaps is not None:
+        out["gaps"] = gaps          # what the holes cost under GAP_POLICY (data.gaps.gap_report), NT-041
+    return out
+
+
+_FP_CACHE: Dict[tuple, Dict[str, Any]] = {}
+
+
+def _gaps_only(config: Config, df) -> Dict[str, Any]:
+    """The hole record without placing folds (a timed layout may not fit the data yet: that is the run's error,
+    not the fingerprint's)."""
+    from neural_trade.data.gaps import gap_flags, gap_report
+    from neural_trade.data.windowing import anchor_positions
+
+    flags = None if config.GAP_POLICY == "ignore" else gap_flags(df, float(config.RESAMPLE_MINUTES))
+    every = anchor_positions(config, len(df))
+    kept = every if flags is None else anchor_positions(config, len(df), flags)
+    return gap_report(config, df, len(every), len(kept), flags=flags if flags is not None else
+                      np.zeros(len(df), dtype=bool))
+
+
+def dataset_fingerprint(config: Config) -> Dict[str, Any]:
+    """What data a run used (NT-041): the file's sha256, the bars the model saw (count, first and last
+    timestamp, after the Preprocessors and DATA_END) and the loader. Cached per file state and the Config fields
+    that decide the bars, so recording it in every run's meta.json costs one load per dataset. A dataset that
+    cannot be fingerprinted (an in-memory loader, a missing file) gives ``{"path", "loader", "error"}``."""
+    try:
+        from neural_trade.data.loaders import resolve_data_path
+
+        path = resolve_data_path(config.CSV_PATH)
+        st = path.stat()
+        key = (str(path.resolve()), st.st_size, st.st_mtime_ns, str(config.DATA_LOADER), int(config.RESAMPLE_MINUTES),
+               tuple(config.PREPROCESSORS), config.DATA_END, float(config.DATA_END_PROTECTED_DAYS),
+               int(config.LOOKBACK), tuple(config.HORIZON_STEPS), tuple(config.EXTENDED_TREND_PERIODS),
+               str(config.GAP_POLICY))
+    except OSError as exc:
+        return {"path": str(config.CSV_PATH), "loader": str(config.DATA_LOADER), "error": f"{type(exc).__name__}: {exc}"}
+    if key not in _FP_CACHE:
+        try:
+            df, n_rows, path = _prepared(config)
+            _FP_CACHE[key] = _fingerprint(config, df, n_rows, path, _gaps_only(config, df))
+        except (ValueError, OSError, KeyError, InvalidConfigurationError) as exc:
+            return {"path": str(config.CSV_PATH), "loader": str(config.DATA_LOADER),
+                    "error": f"{type(exc).__name__}: {exc}"}
+    return dict(_FP_CACHE[key])
+
+
+class DatasetMismatch(InvalidConfigurationError):
+    """The data a figure or notebook rebuilds its blocks from is not the data the run used (NT-041)."""
+
+
+def verify_run_dataset(run_dir, config: Config) -> Dict[str, Any]:
+    """Check that ``config``'s data is the dataset the run in ``run_dir`` recorded in its meta.json (the file's
+    sha256 and the bars the model saw: count, first and last timestamp). Returns the current fingerprint;
+    raises :class:`DatasetMismatch` naming what differs. A run with no recorded fingerprint (made before
+    NT-041, or whose data could not be fingerprinted) is not checked: a warning is logged."""
+    import json
+
+    meta_path = Path(run_dir) / "meta.json"
+    try:
+        recorded = (json.loads(meta_path.read_text(encoding="utf-8")) or {}).get("dataset") or {}
+    except (OSError, ValueError):
+        recorded = {}
+    if not recorded.get("sha256"):
+        logger.warning("%s records no dataset fingerprint: the data it is rebuilt from is not checked", run_dir)
+        return {}
+    current = dataset_fingerprint(config)
+    diff = [f"{k}: run {recorded.get(k)!r}, now {current.get(k)!r}"
+            for k in ("sha256", "n_bars", "first_timestamp", "last_timestamp")
+            if recorded.get(k) is not None and recorded.get(k) != current.get(k)]
+    if diff:
+        raise DatasetMismatch(f"{config.CSV_PATH!r} is not the dataset run {Path(run_dir).name} used ("
+                              + "; ".join(diff) + "): rebuilding its blocks from it would show other bars than "
+                              "the run saw")
+    return current
+
+
+def data_layout(config: Config) -> DataLayout:
+    """Load and prepare the configured data once and lay out its folds (no windows built): the same
+    :func:`neural_trade.data.plan.make_plan` the trainer reads, so the layout is the trainer's split."""
+    from neural_trade.data.plan import make_plan
+
     if int(max(1, config.WINDOW_STEP)) != 1:
         raise InvalidConfigurationError(f"WINDOW_STEP={config.WINDOW_STEP}: the engine's backtest fills at the "
                                         "next bar's open, which needs consecutive decision bars (WINDOW_STEP = 1)")
-    dp = DataProcessor(config)
-    raw = dp.load_raw()
-    n_rows = int(len(raw))
-    df = dp.preprocess(raw)
-    close = df["Close"].to_numpy()
-    lookback = int(config.LOOKBACK)
-    start = int(max(lookback, int(max(config.EXTENDED_TREND_PERIODS))))
-    end = int(len(close) - (int(max(config.HORIZON_STEPS)) - 1))
-    n_total = len(range(start, end, 1))
-    cap = int(config.MAX_SEQUENCE_COUNT or 0)
-    n_seq = min(n_total, cap) if cap else n_total
-    if n_seq <= 0:
-        raise InvalidConfigurationError(f"{config.CSV_PATH}: {len(close)} bars give no sequence for LOOKBACK "
-                                        f"{lookback} and HORIZON_STEPS {list(config.HORIZON_STEPS)}")
+    df, n_rows, path = _prepared(config)
     try:
-        folds = make_purged_splits(n_seq, lookback=lookback, horizon_steps=config.HORIZON_STEPS, window_step=1,
-                                   n_folds=int(config.N_FOLDS), val_fraction=float(config.VAL_FRACTION),
-                                   cal_fraction=float(config.CAL_FRACTION))
+        plan = make_plan(config, df)
     except ValueError as exc:
-        raise InvalidConfigurationError(str(exc)) from exc
+        raise InvalidConfigurationError(f"{config.CSV_PATH}: {exc}") from exc
     times = df["timestamp"]
-    fingerprint = {"path": str(config.CSV_PATH), "sha256": file_sha256(path), "size_bytes": int(path.stat().st_size),
-                   "loader": loader, "n_rows": n_rows, "n_bars": int(len(df)),
-                   "first_timestamp": _iso(times.iloc[0]), "last_timestamp": _iso(times.iloc[-1])}
+    fingerprint = _fingerprint(config, df, n_rows, path, plan.gaps)
     out: List[Dict[str, Any]] = []
-    for f in folds:
+    for f, nom in zip(plan.folds, plan.nominal):
         blocks = {}
         for name in ("train", "val", "cal", "test"):
-            idx = getattr(f, name)
-            anchors = sequence_anchor_bars(config, len(close), n_total, [int(idx[0]), int(idx[-1])])
-            blocks[name] = {"start": int(idx[0]), "stop": int(idx[-1]) + 1, "n": int(len(idx)),
-                            "first_timestamp": _iso(times.iloc[int(anchors[0])]),
-                            "last_timestamp": _iso(times.iloc[int(anchors[1])])}
-        out.append({"fold_id": int(f.fold), "gap": int(f.gap), "blocks": blocks})
-    return DataLayout(fingerprint, int(n_seq), out)
+            n = nom[name]
+            # the block's boundaries are the undropped grid's (as before the hole policy); n counts the windows
+            # that exist, n_dropped the ones a hole removed inside it
+            a0, a1 = int(plan.grid_anchors[n["first"]]) - 1, int(plan.grid_anchors[n["last"]]) - 1
+            blocks[name] = {"start": n["first"], "stop": n["last"] + 1, "n": int(len(getattr(f, name))),
+                            "n_dropped": n["dropped"],
+                            "first_timestamp": _iso(times.iloc[a0]), "last_timestamp": _iso(times.iloc[a1])}
+        out.append({"fold_id": int(f.fold), "gap": int(f.gap), "blocks": blocks,
+                    "windows_dropped": {k: v["n_dropped"] for k, v in blocks.items()},
+                    # NT-041: the range of bars a fold reads, from its first training sequence's window start
+                    # to its last test sequence; the timed layout also records its planned start
+                    "read_range": {"first_timestamp": blocks["train"]["first_timestamp"],
+                                   "last_timestamp": blocks["test"]["last_timestamp"]}})
+    for f, span in zip(out, plan.spans):
+        f["planned_start"] = span["start"]
+    return DataLayout(fingerprint, plan.n_sequences, out)
 
 
 class LayoutCache:
@@ -167,4 +261,5 @@ def describe_block(block: Optional[Dict[str, Any]]) -> str:
     return f"{block['n']} sequences, {block['first_timestamp']} .. {block['last_timestamp']}"
 
 
-__all__ = ["DataLayout", "LayoutCache", "data_key", "data_layout", "describe_block", "file_sha256", "setup_of"]
+__all__ = ["DataLayout", "LayoutCache", "data_key", "data_layout", "dataset_fingerprint", "describe_block",
+           "file_sha256", "setup_of", "verify_run_dataset", "DatasetMismatch"]

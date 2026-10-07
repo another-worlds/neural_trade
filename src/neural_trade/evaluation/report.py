@@ -77,8 +77,8 @@ from scipy.stats import spearmanr
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
 from neural_trade.metrics import numpy_metrics as npm
 from neural_trade.metrics.direction_labels import direction_labels_np, gaussian_up_prob_given_move_np
-from neural_trade.metrics.statistics import BLOCK, BOOT_N, DM_LAG_PER_STEP, Z95, auc_score
-from neural_trade.metrics.statistics import block_bootstrap_counts, dm_z
+from neural_trade.metrics.statistics import BLOCK, BLOCK_PER_HORIZON, BOOT_N, DM_LAG_PER_STEP, Z95, auc_score
+from neural_trade.metrics.statistics import block_bootstrap_counts, bootstrap_block, dm_z
 from neural_trade.metrics.statistics import long_run_variance  # noqa: F401  (re-exported: callers used it here)
 from neural_trade.metrics.statistics import ties, w_group_midranks, w_pearson, w_spearman
 
@@ -92,7 +92,7 @@ DOLLAR_METRICS = {"rmse", "mae", "crps", "rmse_zero", "mae_zero", "mean_pred", "
 # default read them under these names.
 NOISE_TESTS = {"dm_z": f"Diebold-Mariano, Bartlett (Newey-West) long-run variance, lag {DM_LAG_PER_STEP} x bars "
                        "ahead",
-               "boot_z": f"paired moving-block bootstrap, block {BLOCK} bars, {BOOT_N} resamples: margin / its "
+               "boot_z": f"paired moving-block bootstrap, block max({BLOCK}, {BLOCK_PER_HORIZON} x the longest horizon) bars, {BOOT_N} resamples: margin / its "
                          "bootstrap standard error"}
 
 # Baseline rows that only restate the RMSE verdict for a constant prediction (its EV and corr are 0 and
@@ -299,7 +299,8 @@ def score_frame(frame: PredictionFrame, deadband_bps: float, conf_threshold=None
         conf = np.abs(prob - 0.5)
         thr = (conf_threshold or {}).get(h, float(np.median(conf[mask]))) if mask.any() else 0.0
         correct = ((prob > 0.5) == (lab > 0.5)).astype(float)
-        row["confidence_gap"] = confidence_gap(correct[mask], conf[mask], thr)
+        row["confidence_gap"] = confidence_gap(correct[mask], conf[mask], thr,
+                                                block=bootstrap_block(frame.horizon_steps[i]))
         row["confidence_gap"]["threshold_source"] = "cal" if conf_threshold else "self"
         out["horizons"][h] = row
     return out
@@ -890,7 +891,7 @@ class EvalReport:
             how = (f"\"DM z\": Diebold-Mariano test of the per-sample loss difference (RMSE and skill, MAE, Brier, "
                    f"accuracy, CRPS, NLL) with a Bartlett (Newey-West) long-run variance, lag {DM_LAG_PER_STEP} x "
                    f"bars ahead. \"boot z\": the margin over its standard error in a paired moving-block bootstrap "
-                   f"({BLOCK}-bar blocks, {BOOT_N} resamples; MCC, AUC, balanced accuracy, ECE, EV, corr, PIT KS, "
+                   f"(blocks of max({BLOCK}, {BLOCK_PER_HORIZON} x the longest horizon) bars, {BOOT_N} resamples; MCC, AUC, balanced accuracy, ECE, EV, corr, PIT KS, "
                    f"var / err^2 Spearman). ")
         elif any(mg.get("dm_z") is not None for per_key in self.baseline_margins.values()
                  for per_h in per_key.values() for mg in per_h.values()):
@@ -1045,9 +1046,11 @@ def evaluate(frame: PredictionFrame, config, *, baselines=None, cal_frame: Optio
     report = EvalReport(run_id, frame.split, deadband, len(frame), model, backtest=backtest, meta=meta)
     if baselines is not None:
         labels = direction_labels_np(frame.y, frame.last_close, deadband)
-        W = block_bootstrap_counts(len(frame))       # the same resampled bars for the model and every baseline
+        boot_block = bootstrap_block(frame.horizon_steps)    # scales with the longest horizon (80 up to h = 20)
+        W = block_bootstrap_counts(len(frame), block=boot_block)   # the same resampled bars for the model and every baseline
         boot_model: Dict[Any, Any] = {}
         meta["noise_tests"] = dict(NOISE_TESTS)
+        meta["boot_block"] = boot_block
         for name, bframe in baselines.predict(frame).items():
             scored = score_frame(bframe, deadband)
             report.baselines[name] = scored

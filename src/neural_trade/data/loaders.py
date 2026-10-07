@@ -47,8 +47,19 @@ def load_dataframe(config, frame: pd.DataFrame, **_) -> pd.DataFrame:
     return frame.copy()
 
 
-def validate_ohlcv_frame(df: pd.DataFrame) -> pd.DataFrame:
-    """Raise unless the standardised frame has timestamp + Close, sorted and non-empty."""
+def median_bar_minutes(timestamps) -> Optional[float]:
+    """The median spacing of a sorted timestamp column in minutes (None below 3 bars: no spacing to measure)."""
+    ts = pd.Series(timestamps)
+    if len(ts) < 3:
+        return None
+    return float(ts.diff().dropna().median() / pd.Timedelta(minutes=1))
+
+
+def validate_ohlcv_frame(df: pd.DataFrame, bar_minutes: Optional[float] = None) -> pd.DataFrame:
+    """Raise unless the standardised frame has timestamp + Close, sorted, non-empty and with a positive
+    close. ``bar_minutes`` (the declared bar size, Config.RESAMPLE_MINUTES), when given, must equal the
+    data's measured median bar spacing (NT-041): a 5-minute file declared as one-minute bars, or the
+    reverse, is refused instead of silently annualising and reading the horizons on the wrong clock."""
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(f"market data is missing columns {missing}; got {list(df.columns)}")
@@ -56,4 +67,14 @@ def validate_ohlcv_frame(df: pd.DataFrame) -> pd.DataFrame:
         raise ValueError("market data is empty after preprocessing")
     if not df["timestamp"].is_monotonic_increasing:
         raise ValueError("market data timestamps are not sorted ascending")
+    close = pd.to_numeric(df["Close"], errors="coerce")
+    n_bad = int((close <= 0).sum())
+    if n_bad:
+        raise ValueError(f"market data has {n_bad} bars with a zero or negative close (first at "
+                         f"{df['timestamp'][close <= 0].iloc[0]}): a price must be positive")
+    if bar_minutes is not None:
+        measured = median_bar_minutes(df["timestamp"])
+        if measured is not None and abs(measured - float(bar_minutes)) > 1e-6 * max(1.0, float(bar_minutes)):
+            raise ValueError(f"the declared bar size is {float(bar_minutes):g} minutes (RESAMPLE_MINUTES) but the "
+                             f"data's median bar spacing is {measured:g} minutes: fix the bar size or the file")
     return df

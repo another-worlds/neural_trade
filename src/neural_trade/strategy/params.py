@@ -37,8 +37,12 @@ def build_strategy(name: str, params: Optional[Mapping[str, Any]] = None, *, cal
     return cls(**params)
 
 
-def build_backtest_config(params: Optional[Mapping[str, Any]] = None) -> BacktestConfig:
-    params = dict(params or {})
+def build_backtest_config(params: Optional[Mapping[str, Any]] = None, *,
+                          cost_profile: Optional[Mapping[str, float]] = None) -> BacktestConfig:
+    """A BacktestConfig from ``params``. ``cost_profile`` (fee_bps, half_spread_bps, slippage_bps: the setup's
+    per-instrument profile, ``core.costs.cost_profile_of(config)``) supplies the cost defaults, so a backtest
+    reads the costs from the run's setup; an explicit ``params`` entry overrides it (NT-041)."""
+    params = {**{k: float(v) for k, v in dict(cost_profile or {}).items()}, **dict(params or {})}
     if "minutes_per_year" in params:
         raise InvalidConfigurationError(
             "backtest.minutes_per_year was removed (NT-113): annualisation is bar_minutes through "

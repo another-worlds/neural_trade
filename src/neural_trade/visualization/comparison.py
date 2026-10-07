@@ -37,6 +37,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.theme import apply
@@ -327,7 +328,7 @@ def _block_lines(ids, keys, letters, reports, split: str, h_show: str) -> List[s
         count = sum(1 for r in ids if keys[r] == k)
         desc = [f"n {rep.get('n'):,}" if isinstance(rep.get("n"), int) else None,
                 f"{h_show} up-rate {up:.3f}" if isinstance(up, (int, float)) else None,
-                f"zero-delta RMSE ${rmse:,.0f}" if isinstance(rmse, (int, float)) else None]
+                f"zero-delta RMSE {rmse:,.0f} {L.quote()}" if isinstance(rmse, (int, float)) else None]
         parts.append(f"[{letter}] " + ", ".join(d for d in desc if d) + f" ({count} run{'s' if count != 1 else ''})")
     return [f"the runs come from {len(letters)} different {split} blocks (letter after each run label){miss_txt}; "
             + "; ".join(parts),
@@ -871,9 +872,11 @@ def ablation_deltas_figure(analysis, *, title: Optional[str] = None, min_agree_f
 
 
 # ------------------------------------------------------------------ registry entries (data, config)
+@L.labelled
 def runs_comparison(data, config=None, **kw):
     return runs_comparison_figure(data, **kw)
 
 
+@L.labelled
 def ablation_deltas(data, config=None, **kw):
     return ablation_deltas_figure(data, **kw)
