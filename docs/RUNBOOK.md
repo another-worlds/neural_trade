@@ -181,6 +181,7 @@ studies" (studies, sweep budgets, and the one-night cap on one sweep launch, whi
 reading of D-024 and NT-030's default `--max-hours`) and "Escalate to the owner". What this machine
 adds:
 
+- **Per-process memory cap (opt-in):** set `NT_GPU_MEMORY_LIMIT_MB=<MB>` (e.g. 5000) before `python -m neural_trade.cli ...` to cap that process's GPU memory so two screen trainings can share the 12 GB card; unset or 0 changes nothing.
 - **Default: one GPU job at a time.** The lead's notebook routine (01 trains about 5 minutes) is one
   GPU job like any other.
 - **The tactical session (D-063):** runs its ultra-short screen trials (at most 2 minutes each) in

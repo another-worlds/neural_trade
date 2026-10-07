@@ -526,6 +526,9 @@ def main(argv=None) -> int:
 
     args = build_parser().parse_args(argv)
     configure_logging(args.log_level, stream="stderr")  # stdout carries each command's result
+    from neural_trade.utils.gpu import apply_gpu_memory_limit
+
+    apply_gpu_memory_limit()  # opt-in NT_GPU_MEMORY_LIMIT_MB; before any command touches the GPU
     try:
         return int(args.func(args) or 0)
     finally:

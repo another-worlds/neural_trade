@@ -1,0 +1,5 @@
+2c9ffe80adc65cd45e21282a102850dd327760b2
+.........                                                                [100%]
+9 passed in 2.14s
+(tests/test_cli.py: 14 passed with this change in the earlier run, 133 s)
+All checks passed!
