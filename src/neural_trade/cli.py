@@ -8,7 +8,7 @@
     neural-trade scenario rescore configs/scenarios/<name>.yaml --study configs/strategy_studies/<study>.yaml
                                   [--store runs] [--random-seeds N]
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
-    neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2] [--probe off|on|failed] [--retry-non-verdict [ID]]
+    neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2] [--probe off|on|failed] [--max-probe-reruns K] [--retry-non-verdict [ID]]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
     neural-trade leaderboard [SCENARIO ...] [--scenario a,b,c] [--store runs] [--index runs/index.sqlite]
                                   [--spec FILE] [--out DIR] [--max-drawdown F] [--min-trades N]
@@ -385,7 +385,7 @@ def cmd_screen(args) -> int:
 
 
 def cmd_stability(args) -> int:
-    from neural_trade.experiments.stability import dry_run, run_harness
+    from neural_trade.experiments.stability import EXIT_REFUSED, dry_run, run_harness
 
     cases = [c for c in args.cases.split(",") if c] if args.cases else None
     seeds = [int(x) for x in args.seeds.split(",") if x] if args.seeds else None
@@ -396,15 +396,16 @@ def cmd_stability(args) -> int:
             return 0
         res = run_harness(profile=args.profile, csv=args.csv, store=args.store, case_ids=cases, seeds=seeds,
                           thresholds_path=args.thresholds, probe=args.probe,
-                          retry_non_verdict_of=args.retry_non_verdict)
+                          retry_non_verdict_of=args.retry_non_verdict, max_probe_reruns=args.max_probe_reruns)
     except ValueError as exc:
         logger.error("stability harness refused, nothing was run: %s", exc)
-        return 2
+        return EXIT_REFUSED
     print(json.dumps({"harness_id": res.harness_id, "report": str(res.report), "passed": res.passed,  # noqa: T201
                       "thresholds_sha256": res.thresholds_sha256, "case_passed": res.case_passed,
                       "case_status": res.case_status, "verdict_failed": res.verdict_failed,
                       "non_verdict_cells": res.non_verdict_cells, "probe": res.probe_mode,
-                      "probe_reruns": [v.run_id for v in res.reruns], "retry_of": res.retry_of,
+                      "probe_reruns": [v.run_id for v in res.reruns],
+                      "not_rerun_cap": [v.run_id for v in res.not_rerun], "retry_of": res.retry_of,
                       "not_run": [c.id for c in res.not_run]}, indent=2))
     return res.exit_code
 
@@ -612,7 +613,8 @@ def build_parser() -> argparse.ArgumentParser:
                                     "<store>/stability/<id>/REPORT.md (pass or fail per case, the loss term "
                                     "blamed for a failure, the thresholds file's sha256) and "
                                     "failing_regions.json. Exit 1 when a case fails its verdict, 2 when only cells "
-                                    "that are not a verdict (a resource error, a crash) are left, else 0. Not a CI "
+                                    "that are not a verdict (a resource error, a crash) are left, 64 when the "
+                                    "arguments were refused and nothing ran, else 0. Not a CI "
                                     "job: a GPU profile is NT-051's.")
     sb.add_argument("--profile", default=None, choices=["tiny", "reference"],
                     help="tiny: CPU test size; reference: the screen-size layout (default tiny; a retry keeps its "
@@ -621,6 +623,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the per-term gradient probe (it never changes training; about 12x a reference cell on CPU): "
                          "failed = every cell probe-off, a failing cell re-run once with the probe for the blame "
                          "(default on the reference profile); on = every cell probed; off = never (default on tiny)")
+    sb.add_argument("--max-probe-reruns", type=int, default=10, metavar="K",
+                    help="with --probe failed: re-run at most K failed cells with the probe (default 10: about "
+                         "floor((3 h - probe-off times) / 777 s) on the reference profile); the rest are listed as "
+                         "'not re-run (cap)'")
     sb.add_argument("--retry-non-verdict", nargs="?", const="latest", default=None, metavar="HARNESS_ID",
                     help="re-run only the cells of an earlier launch (an id under <store>/stability/, default the "
                          "newest) that were not a verdict (ResourceExhaustedError, MemoryError, OSError, a crash), "

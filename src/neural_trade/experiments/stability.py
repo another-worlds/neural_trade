@@ -82,6 +82,11 @@ PROBE_SOURCE = "probe sample, one batch"      # what the REPORT calls a blame ta
 # Error types that say the machine, not the setup, failed: not a verdict (NT-191). OSError's subclasses count too.
 NON_VERDICT_ERRORS = ("ResourceExhaustedError", "MemoryError", "OSError", "BrokenProcessPool", "WorkerCrash")
 NOT_A_VERDICT = "NOT A VERDICT"
+# `failed` mode: at most this many probe re-runs per launch. 777 s per reference cell on CPU with the probe (measured at
+# PROBE_EVERY 5) against the 3 h cap of OPERATING_MODEL: floor((10800 - sum of the probe-off times) / 777) = 10.
+MAX_PROBE_RERUNS = 10
+EXIT_REFUSED = 64            # the harness refused its arguments and ran nothing (1 and 2 are results)
+NOT_RERUN_CAP = "not re-run (cap)"
 # Profiles: the data layout and training length of a harness run. `tiny` is the CPU test size.
 PROFILES: Dict[str, Dict[str, Any]] = {
     # tiny: one close-only instance per family (the tests' NT-109 size: the OHLCV catalogue costs wall time)
@@ -108,15 +113,30 @@ def probe_overrides(profile: str, mode: str) -> Dict[str, Any]:
     raise ValueError(f"probe must be one of {list(PROBE_MODES)}, got {mode!r}")
 
 
-def is_non_verdict_error(name) -> bool:
-    """True for an error type that is a resource or machine failure, not a result of the setup."""
+# OSError subclasses that say the setup is wrong (a missing file, a bad path, no permission), not the machine.
+SETUP_OS_ERRORS = ("FileNotFoundError", "FileExistsError", "NotADirectoryError", "IsADirectoryError", "PermissionError")
+# TensorFlow's InternalError and UnknownError are a verdict-free machine failure only with one of these in the message.
+RESOURCE_MESSAGE = re.compile(r"out of memory|oom|alloc|cudnn|cuda_error|cublas|cusolver|resource exhausted|"
+                              r"paging file|no space left", re.IGNORECASE)
+RESOURCE_TF_ERRORS = ("InternalError", "UnknownError")
+
+
+def is_non_verdict_error(name, message: str = "") -> bool:
+    """True for an error type that is a resource or machine failure, not a result of the setup. A deterministic setup
+    error (FileNotFoundError and the other path errors) is a verdict-side error; TensorFlow's InternalError and
+    UnknownError count only when ``message`` names memory, an allocation or cuDNN/CUDA."""
     import builtins
 
     if not name:
         return False
-    if str(name) in NON_VERDICT_ERRORS:
+    name = str(name)
+    if name in SETUP_OS_ERRORS:
+        return False
+    if name in RESOURCE_TF_ERRORS:
+        return bool(RESOURCE_MESSAGE.search(message or ""))
+    if name in NON_VERDICT_ERRORS:
         return True
-    cls = getattr(builtins, str(name), None)
+    cls = getattr(builtins, name, None)
     return isinstance(cls, type) and issubclass(cls, OSError)
 
 
@@ -554,7 +574,7 @@ def evaluate_run(run_dir, case: Case, thresholds: Thresholds) -> Verdict:
         return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)),
                        _verdict_passed(checks), checks, blamed, status, message, T.sha256, blame_source=source["v"])
 
-    if status == "incomplete" or (status == "failed" and is_non_verdict_error(err.get("type"))):
+    if status == "incomplete" or (status == "failed" and is_non_verdict_error(err.get("type"), err.get("message", ""))):
         crash = "worker crash: the run directory has no result.json" if status == "incomplete" else message
         return Verdict(case.id, meta.get("run_id", d.name), eng.get("cell_key", ""), int(meta.get("seed", -1)), False,
                        [], [], status, crash, T.sha256, non_verdict=True,
@@ -804,6 +824,7 @@ class HarnessResult:
     case_status: Dict[str, str] = field(default_factory=dict)           # case -> PASS | FAIL | NOT A VERDICT
     reruns: List[Verdict] = field(default_factory=list)                 # the probe re-runs of failed cells (NT-191)
     superseded: List[Verdict] = field(default_factory=list)             # non-verdict runs a retry replaced
+    not_rerun: List[Verdict] = field(default_factory=list)              # failed cells left without a probe re-run (cap)
     probe_mode: str = "off"
     retry_of: str = ""                       # the launch whose non-verdict cells this launch re-ran
 
@@ -939,7 +960,7 @@ def _judge(rows, by_id: Mapping[str, Case], st, T: Thresholds, *, kind: str, pro
     return out
 
 
-def _attribute(v: Verdict, run_dir: Optional[Path], *, mode: str, reran: bool) -> None:
+def _attribute(v: Verdict, run_dir: Optional[Path], *, mode: str, reran: bool, rerun_error: str = "") -> None:
     """Fill the blame of a failed cell that the run itself did not name: from the probe sample of ``run_dir`` (the
     probe re-run, or the run itself in mode ``on``); else the reason there is none."""
     from neural_trade.telemetry.epoch_logger import read_metrics
@@ -953,6 +974,10 @@ def _attribute(v: Verdict, run_dir: Optional[Path], *, mode: str, reran: bool) -
         term, group, share, epoch = sample
         v.blamed, v.blame_source = [term], PROBE_SOURCE
         v.blame_reason = f"{group} group, {share:.2f} of its gradient norm, epoch {epoch}"
+    elif mode == "capped":
+        v.blame_reason = v.blame_reason or NOT_RERUN_CAP
+    elif reran and rerun_error:
+        v.blame_reason = f"the probe re-run crashed ({rerun_error}), so there is no probe sample"
     elif mode == "off":
         v.blame_reason = "probe off in this run (use --probe failed or on for a probe sample)"
     elif reran:
@@ -986,11 +1011,15 @@ def _load_origin(base: Path, ident: str) -> Dict[str, Any]:
 def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case_ids: Optional[Sequence[str]] = None,
                 seeds: Optional[Sequence[int]] = None, thresholds_path=None, harness_id: Optional[str] = None,
                 trainer=None, out_root=None, probe: Optional[str] = None,
-                retry_non_verdict_of: Optional[str] = None) -> HarnessResult:
+                retry_non_verdict_of: Optional[str] = None, max_probe_reruns: int = MAX_PROBE_RERUNS) -> HarnessResult:
     """Run the harness: write the data, run the cases as an engine scenario into ``store``, judge every cell,
     write the report. ``trainer`` replaces the engine trainer (tests). ``probe``: off | on | failed (None: the
     profile's default, :data:`PROFILE_PROBE`). ``retry_non_verdict_of``: the id of an earlier launch (or ``latest``)
-    whose not-a-verdict cells are re-run as a new launch; its other verdicts are carried over unchanged."""
+    whose not-a-verdict cells are re-run as a new launch; its other verdicts are carried over unchanged.
+    ``max_probe_reruns``: in mode ``failed`` at most this many failed cells are re-run with the probe in one launch;
+    the others are listed in the report as not re-run (cap)."""
+    if max_probe_reruns < 0:
+        raise ValueError(f"max_probe_reruns must be >= 0, got {max_probe_reruns}")
     from neural_trade.core.config import Config
     from neural_trade.experiments.store import RunStore
 
@@ -1033,6 +1062,8 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
         while (base_out / hid).exists():
             n += 1
             hid = f"{_stamp()}-{profile}-{n}"
+    if origin and not any(d.get("non_verdict") for d in origin["verdicts"]):
+        raise ValueError(f"launch {origin['id']} has nothing to retry: no cell is 'not a verdict'")
     out_dir = base_out / hid
     out_dir.mkdir(parents=True, exist_ok=False)
     runnable = [c for c in all_cases if c.runnable]
@@ -1077,8 +1108,15 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
             new += got
         verdicts += new
     failing = [v for v in new if not v.passed and not v.non_verdict]
+    not_rerun: List[Verdict] = [Verdict.from_dict(d) for d in (origin or {}).get("not_rerun", [])]
+    n_rerun = 0
     for v in failing:
-        if mode == "failed":                      # once, with the probe on every step, for the blame
+        if mode == "failed" and n_rerun >= max_probe_reruns:
+            v.blame_reason = f"{NOT_RERUN_CAP}: {max_probe_reruns} probe re-runs already in this launch"
+            not_rerun.append(v)
+            _attribute(v, None, mode="capped", reran=False)
+        elif mode == "failed":                    # once, with the probe on every step, for the blame
+            n_rerun += 1
             sub = _cell_spec(spec, v.case, v.seed, f"{short}-p{len(reruns)}", probe_overrides(profile, "rerun"))
             got = _judge(_run_spec(sub, st, runner_trainer, ran_names), by_id, st, T, kind="probe_rerun", probe=True, n_eff={},
                          dirs=dirs)
@@ -1086,7 +1124,9 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
                 g.rerun_of = v.run_id
                 write_verdict(dirs[g.run_id], g)
             reruns += got
-            _attribute(v, dirs[got[0].run_id] if got else None, mode=mode, reran=True)
+            crash = got[0].error if got and got[0].non_verdict else ("" if got else "no run was produced")
+            _attribute(v, dirs[got[0].run_id] if got and not got[0].non_verdict else None, mode=mode, reran=True,
+                       rerun_error=crash)
         else:
             _attribute(v, dirs.get(v.run_id) if mode == "on" else None, mode=mode, reran=False)
         write_verdict(dirs[v.run_id], v)
@@ -1111,10 +1151,11 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
          "thresholds_sha256": T.sha256, "thresholds_file": str(T.path),
          "case_ids": [c.id for c in runnable], "not_run_ids": [c.id for c in not_run], "n_eff": n_eff,
          "verdicts": [v.to_dict() for v in verdicts], "reruns": [v.to_dict() for v in reruns],
-         "superseded": [v.to_dict() for v in superseded], "case_passed": case_passed, "case_status": case_status},
+         "superseded": [v.to_dict() for v in superseded], "not_rerun": [v.to_dict() for v in not_rerun],
+         "max_probe_reruns": max_probe_reruns, "case_passed": case_passed, "case_status": case_status},
         indent=2, default=str), encoding="utf-8", newline="\n")
     result = HarnessResult(hid, out_dir, scenario_name, T.sha256, verdicts, not_run, case_passed, regions, report_path,
-                           n_eff, case_status, reruns, superseded, mode, origin["id"] if origin else "")
+                           n_eff, case_status, reruns, superseded, not_rerun, mode, origin["id"] if origin else "")
     report_path.write_text(render_report(result, T, runnable, profile, seed_list, st), encoding="utf-8", newline="\n")
     return result
 
@@ -1187,6 +1228,13 @@ def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], prof
                 for c in v.failed_checks) + f". Blamed: {_blame_text(v)}"
                 + (f" [{v.blame_reason}]" if v.blamed and v.blame_reason else "") + ".")
         L.append("")
+    if res.not_rerun:
+        L += ["## Failed cells not re-run (cap)", "",
+              f"`--max-probe-reruns` was reached: these failed cells have no probe re-run and no blame "
+              f"({NOT_RERUN_CAP}). Raise the cap or run them alone (`--cases`, `--probe on`).", "",
+              "| case | seed | run |", "|---|---|---|"]
+        L += [f"| {v.case} | {v.seed} | `{v.run_id}` |" for v in res.not_rerun]
+        L.append("")
     if res.reruns:
         first = {v.run_id: v for v in res.verdicts}
         L += ["## Probe re-runs", "",
@@ -1235,7 +1283,7 @@ def render_report(res: HarnessResult, T: Thresholds, cases: Sequence[Case], prof
 
 
 __all__ = ["COMMON_OVERRIDES", "NOT_A_VERDICT", "PROBE_MODES", "PROBE_SOURCE", "PROFILE_PROBE", "dry_run",
-           "expected_n_eff_for", "is_non_verdict_error", "plan_cases", "probe_blame", "probe_overrides", "Case", "Check", "HarnessResult", "HarnessTrainer", "PROFILES", "THRESHOLDS_FILE",
+           "EXIT_REFUSED", "MAX_PROBE_RERUNS", "NOT_RERUN_CAP", "expected_n_eff_for", "is_non_verdict_error", "plan_cases", "probe_blame", "probe_overrides", "Case", "Check", "HarnessResult", "HarnessTrainer", "PROFILES", "THRESHOLDS_FILE",
            "THRESHOLDS_V2_FILE", "Thresholds", "Verdict", "VERDICT_FILE", "FUZZ_CONSTANT_BARS", "PROFILE_THRESHOLDS",
            "resolve_thresholds_path", "build_scenario", "default_cases", "evaluate_run",
            "fault_context", "file_sha256", "load_thresholds", "region_for_case", "render_report", "run_harness",

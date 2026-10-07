@@ -81,8 +81,19 @@ class HarnessFake:
         if how == "oom":                 # a crash, not a verdict (NT-191)
             write_run_telemetry(ctx.run_dir)
             raise MemoryError("out of memory")
-        if how == "oserror":
+        if how == "oserror":             # disk full: the machine, not the setup
+            raise OSError(28, "No space left on device")
+        if how == "filenotfound":        # a deterministic setup error: a verdict-side failure
             raise FileNotFoundError("the bars file went away")
+        if how in ("tf_oom", "tf_other"):   # TensorFlow's InternalError, named as the runner records it
+            InternalError = type("InternalError", (RuntimeError,), {})
+            raise InternalError("Failed copying input tensor: out of memory" if how == "tf_oom"
+                                else "Graph execution error: shape mismatch")
+        if how == "probe_crash" and ctx.config.PROBE_GRADIENTS:
+            raise MemoryError("out of memory in the probe re-run")
+        if how == "probe_crash":
+            write_run_telemetry(ctx.run_dir, losses=[1.0, 1e12])
+            return fake_result(ctx.config)
         if how == "bigloss":             # fails max_abs_loss and loss_over_first; no term is named by the run
             write_run_telemetry(ctx.run_dir, losses=[1.0, 1e12], probe=probe)
             return fake_result(ctx.config)
@@ -510,7 +521,7 @@ def test_a_nan_loss_fails_loss_finite(tmp_path):
 def test_the_stability_subcommand_refuses_an_unknown_case_and_describes_itself(capsys):
     from neural_trade.cli import main
 
-    assert main(["stability", "--cases", "no_such_case"]) == 2
+    assert main(["stability", "--cases", "no_such_case"]) == 64
     with pytest.raises(SystemExit):
         main(["stability", "--help"])
     out = capsys.readouterr().out
@@ -1083,13 +1094,31 @@ def test_the_probe_never_changes_a_cells_verdict_fields_in_the_harness_path(tmp_
     assert fields(a) == fields(b)
 
 
-@pytest.mark.parametrize("error", [MemoryError, FileNotFoundError, OSError, "ResourceExhaustedError",
-                                   "BrokenProcessPool"])
+@pytest.mark.parametrize("error", [MemoryError, OSError, "ResourceExhaustedError", "BrokenProcessPool"])
 def test_resource_errors_are_not_a_verdict_and_check_failures_and_unstable_runs_are(error):
     name = error if isinstance(error, str) else error.__name__
     assert st.is_non_verdict_error(name)
     for verdict_error in ("UnstableTrainingError", "ValueError", "InvalidConfigurationError", "", None):
         assert not st.is_non_verdict_error(verdict_error)
+
+
+def test_deterministic_setup_errors_are_verdicts_and_tf_internal_errors_need_a_resource_message():
+    for name in ("FileNotFoundError", "PermissionError", "NotADirectoryError", "IsADirectoryError", "FileExistsError"):
+        assert not st.is_non_verdict_error(name, "x"), name
+    assert st.is_non_verdict_error("ConnectionError") and st.is_non_verdict_error("TimeoutError")   # OSError subclasses
+    for name in ("InternalError", "UnknownError"):
+        for msg in ("Failed to allocate memory", "OOM when allocating tensor", "CUDNN_STATUS_EXECUTION_FAILED",
+                    "cuDNN launch failure", "CUDA_ERROR_OUT_OF_MEMORY"):
+            assert st.is_non_verdict_error(name, msg), (name, msg)
+        for msg in ("", "Graph execution error: shape mismatch", "Incompatible shapes"):
+            assert not st.is_non_verdict_error(name, msg), (name, msg)
+
+
+def test_a_tf_internal_error_is_not_a_verdict_only_with_a_resource_message_and_a_missing_file_is(tmp_path, bars_csv):
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
+                         case_ids=["control", "scale_x10", "horizons_5_60_240"],
+                         trainer=HarnessFake({"control": "tf_oom", "scale_x10": "tf_other", "horizons_5_60_240": "filenotfound"}))
+    assert res.case_status == {"control": "NOT A VERDICT", "scale_x10": "FAIL", "horizons_5_60_240": "FAIL"}
 
 
 def test_a_crashed_cell_is_not_a_verdict_is_excluded_from_the_counts_and_sets_exit_code_2(tmp_path, bars_csv):
@@ -1195,6 +1224,79 @@ def test_the_stability_command_exit_codes_are_0_1_2_and_it_has_the_new_options(t
     assert "--probe" in help_text and "--retry-non-verdict" in help_text
 
 
+def test_a_refused_command_exits_64_not_2_and_a_nothing_to_retry_refusal_creates_no_run_directory(tmp_path, bars_csv,
+                                                                                               capsys, monkeypatch):
+    from neural_trade.cli import main
+
+    assert st.EXIT_REFUSED == 64
+    store = tmp_path / "s"
+    assert main(["stability", "--csv", str(bars_csv), "--store", str(store), "--cases", "no_such_case"]) == 64
+    assert main(["stability", "--store", str(store), "--retry-non-verdict", "nope"]) == 64
+    assert not (store / "stability").exists() or not any((store / "stability").iterdir())     # nothing was created
+    real = st.run_harness
+    monkeypatch.setattr(st, "run_harness", lambda **kw: real(trainer=HarnessFake({"control": "oom"}), **kw))
+    assert main(["stability", "--csv", str(bars_csv), "--store", str(store), "--cases", "control", "--seeds", "0"]) == 2
+    capsys.readouterr()
+    # a clean launch has nothing to retry: refused (64), and no new launch directory appears
+    monkeypatch.setattr(st, "run_harness", lambda **kw: real(trainer=HarnessFake(), **kw))
+    assert main(["stability", "--csv", str(bars_csv), "--store", str(tmp_path / "ok"), "--cases", "control",
+                 "--seeds", "0"]) == 0
+    before = sorted(p.name for p in (tmp_path / "ok" / "stability").iterdir())
+    assert main(["stability", "--store", str(tmp_path / "ok"), "--retry-non-verdict"]) == 64
+    assert sorted(p.name for p in (tmp_path / "ok" / "stability").iterdir()) == before
+
+
+def test_the_probe_reruns_of_a_launch_are_capped_and_the_rest_are_listed_as_not_rerun(tmp_path, bars_csv):
+    fake = HarnessFake({"horizons_5_60_240": "bigloss"})
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0, 1, 2],
+                         case_ids=["control", "horizons_5_60_240"], trainer=fake, probe="failed", max_probe_reruns=1)
+    assert [p for p in fake.probes if p[1] is True] == [("horizons_5_60_240", True, 1)]       # one re-run only
+    assert len(res.reruns) == 1 and len(res.not_rerun) == 2 and res.case_status["horizons_5_60_240"] == "FAIL"
+    text = res.report.read_text(encoding="utf-8")
+    assert st.NOT_RERUN_CAP in text and "Failed cells not re-run" in text
+    for v in res.not_rerun:
+        assert v.run_id in text and v.blamed == [] and st.NOT_RERUN_CAP in v.blame_reason
+    doc = json.loads((res.out_dir / "verdicts.json").read_text(encoding="utf-8"))
+    assert len(doc["not_rerun"]) == 2 and doc["max_probe_reruns"] == 1
+    none = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "r0", seeds=[0], case_ids=["horizons_5_60_240"],
+                          trainer=HarnessFake({"horizons_5_60_240": "bigloss"}), probe="failed", max_probe_reruns=0)
+    assert none.reruns == [] and len(none.not_rerun) == 1
+    with pytest.raises(ValueError, match="max_probe_reruns"):
+        st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "rn", seeds=[0], case_ids=["control"],
+                       trainer=HarnessFake(), max_probe_reruns=-1)
+    from neural_trade.cli import build_parser
+
+    assert build_parser().parse_args(["stability"]).max_probe_reruns == st.MAX_PROBE_RERUNS == 10
+
+
+def test_a_failed_cells_rerun_never_replaces_its_verdict_and_a_crashed_rerun_says_so(tmp_path, bars_csv):
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0], case_ids=["control"],
+                         trainer=HarnessFake({"control": "bigloss"}), probe="failed")
+    (v,) = res.verdicts
+    (rr,) = res.reruns
+    assert v.kind == "primary" and not v.probe and rr.run_id != v.run_id and rr.rerun_of == v.run_id
+    assert rr.run_id not in [x.run_id for x in res.verdicts] and not v.passed        # the first run's verdict counts
+    crashed = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs2", seeds=[0], case_ids=["control"],
+                             trainer=HarnessFake({"control": "probe_crash"}), probe="failed")
+    (v,), (rr,) = crashed.verdicts, crashed.reruns
+    assert rr.non_verdict and not v.passed and v.blamed == [] and crashed.case_status == {"control": "FAIL"}
+    assert "re-run crashed" in v.blame_reason and "out of memory" in v.blame_reason
+    assert "re-run crashed" in crashed.report.read_text(encoding="utf-8")
+
+
+def test_a_retry_keeps_the_probe_mode_of_its_launch_and_refuses_another(tmp_path, bars_csv):
+    first = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0], case_ids=["control"],
+                           trainer=HarnessFake({"control": "oom"}), probe="off")
+    for other in ("on", "failed"):
+        with pytest.raises(ValueError, match="retry keeps it"):
+            st.run_harness(profile=None, store=tmp_path / "runs", trainer=HarnessFake(), probe=other,
+                           retry_non_verdict_of=first.harness_id)
+    assert sorted(p.name for p in (tmp_path / "runs" / "stability").iterdir()) == [first.harness_id]    # no new launch
+    again = st.run_harness(profile=None, store=tmp_path / "runs", trainer=HarnessFake(), probe="off",
+                           retry_non_verdict_of=first.harness_id)
+    assert again.probe_mode == "off" and again.exit_code == 0
+
+
 def test_dry_run_honours_seeds_and_thresholds_and_prints_n_eff_probe_mode_and_steps(tmp_path, bars_csv, capsys):
     from neural_trade.cli import main
 
@@ -1247,7 +1349,9 @@ def test_the_data_csvs_are_untracked_but_their_sha256_stays_in_each_cells_meta(t
 @pytest.mark.slow
 def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_verdicts_equal(tmp_path, bars_csv,
                                                                                                  monkeypatch):
-    """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on. Two runs of ONE setup differ
+    """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on. `loss` and every `val_*` key are
+    bitwise equal; the per-term training sums agree within 2 float32 ULP (the probe graph adds nll_h0+nll_h1+nll_h2 in
+    another order: nll_loss 5.028296947 against 5.028297424). Two runs of ONE setup differ
     in the 7th digit unless DETERMINISTIC_GRU is on (NT-114: 5.028296947 against 5.028297901 in nll_loss, probe off in
     both), so the comparison runs with it, which makes two probe-off runs bitwise equal."""
     monkeypatch.setitem(st.PROFILES["tiny"], "DETERMINISTIC_GRU", True)
@@ -1269,11 +1373,16 @@ def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_
         # the probe's own keys, wall-clock keys and run identifiers (strings) are not training numbers
         return k.startswith("probe_") or "time" in k or "sec" in k or "seconds" in k or isinstance(a[0].get(k), str)
 
+    ulp = np.float32(1.1920929e-07)         # one float32 ULP at 1.0: the probe graph sums nll_h0+nll_h1+nll_h2 in
+    # another order (nll_loss differs by 1 ULP, 5.028296947 against 5.028297424; loss and every val_* key do not)
     for ra, rb in zip(a, b):
         ka = {k for k in ra if not skip(k)}
         assert ka == {k for k in rb if not skip(k)}
         for k in sorted(ka):
-            assert ra[k] == rb[k], f"{k}: {ra[k]!r} != {rb[k]!r}"                 # bitwise-equal epoch metrics
+            if k == "loss" or k.startswith("val_"):
+                assert ra[k] == rb[k], f"{k}: {ra[k]!r} != {rb[k]!r}"             # bitwise: the total and every validation key
+            else:                                                                  # per-term training sums: within 2 ULP
+                assert abs(ra[k] - rb[k]) <= 2 * float(ulp) * max(abs(ra[k]), abs(rb[k]), 1.0), f"{k}: {ra[k]!r} != {rb[k]!r}"
     va, vb = off.verdicts[0], on.verdicts[0]
     assert va.passed == vb.passed
     assert [(c.name, c.value, c.passed) for c in va.checks if c.name != "term_gradient_share"] == \

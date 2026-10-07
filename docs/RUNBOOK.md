@@ -642,10 +642,12 @@ $PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n
 ### Stability harness and config guard (NT-038, D-026)
 
 `neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
-[--probe off|on|failed] [--retry-non-verdict [ID]] [--thresholds v2] [--dry-run]` (`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
+[--probe off|on|failed] [--max-probe-reruns K] [--retry-non-verdict [ID]] [--thresholds v2] [--dry-run]` (`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
 (index rows, `stability/*` scores) and writes `<store>/stability/<id>/REPORT.md` (pass or fail per case, the loss
 term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit codes (NT-191): 1 when a
-case fails its verdict, 2 when no case failed but cells that are not a verdict are left (below), else 0.
+case fails its verdict, 2 when no case failed but cells that are not a verdict are left (below), 64 when the
+arguments were refused and nothing ran (an unknown case, a bad retry, a launch with nothing to retry; no run directory
+is created), else 0.
 
 - **Cases**: price level and volatility x0.1 / x10; extreme inputs (a constant block, spikes and a level jump,
   prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`, 3 MB each, ignored by git
@@ -663,22 +665,31 @@ case fails its verdict, 2 when no case failed but cells that are not a verdict a
   11/7/5, so it judges no variance check; the expected n_eff per case and profile is in the v2 file and the report.
 - **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off); `reference` is the screen layout
   (probe `failed`, below). The GPU run on the reference setup is NT-051.
-- **The probe and its cost (NT-191)**: the per-term gradient probe never changes training (the same cell's epoch
-  metrics are bitwise equal with it on and off with `DETERMINISTIC_GRU` on, and so are its verdict fields;
-  `term_gradient_share` is report-only; without `DETERMINISTIC_GRU` two runs of one setup differ in the 7th digit,
-  probe or not: `nll_loss` 5.028296947 against 5.028297901, both probe off).
+- **The probe and its cost (NT-191)**: the per-term gradient probe never changes training. With `DETERMINISTIC_GRU`
+  on, the same tiny cell's `loss` and every `val_*` epoch metric are bitwise equal with the probe on and off, and so are
+  its verdict fields; the per-term training sums agree within 2 float32 ULP (`nll_loss` is 5.028296947 off and
+  5.028297424 on: the probe graph adds nll_h0 + nll_h1 + nll_h2 in another order). `term_gradient_share` is
+  report-only. Without `DETERMINISTIC_GRU` two runs of one setup differ in the 7th digit, probe or not (`nll_loss`
+  5.028296947 against 5.028297901, both probe off).
   It costs about 12x a reference cell on CPU, because about 650 s of it is the host-side tracing of 17 terms x 3
   variable groups, which a GPU run pays too. **Measured, CPU (the QA review of the NT-051 SPEC, 2026-10-07; logs
   `D:/nt/nt_qa/nt051spec_ref_off.log`, `nt051spec_ref_on.log`): 58 s per reference cell with the probe off, 777 s
-  with it on.** GPU per cell: not measured (NT-051 measures it). `--probe failed` (the default on `reference`): every
+  with it on (at PROBE_EVERY 5, the reference profile; a cell of 6 steps probes once). The re-run of a failed cell uses
+  PROBE_EVERY 1 and costs more per step: on the tiny profile, CPU, one cell took 32.4 s probe off, 189.9 s with the
+  probe at the profile's cadence and 236.7 s at PROBE_EVERY 1.** GPU per cell: not measured (NT-051 measures it). `--probe failed` (the default on `reference`): every
   cell runs probe-off; a cell that fails any verdict check is re-run ONCE with the probe on at PROBE_EVERY 1; the
   REPORT lists both runs of that cell (run ids) and takes the blame from the re-run: the largest probe share of the
   first epoch whose shares sum to 1 per variable group, labelled "probe sample, one batch" (one batch's gradient
   split, not an epoch average), else the run's own error text or the masked-term counters, else `-` with the reason.
-  Data and fault cases get no failing region by design. `--probe on` probes every cell (the earlier behaviour);
+  Data and fault cases get no failing region by design. `--max-probe-reruns K` (default 10, from the 3 h cap: floor((10800 s - the sum of the probe-off times) / 777 s)) caps
+  the re-runs of one launch; failed cells beyond it are listed in the REPORT as "not re-run (cap)" with no blame.
+  A re-run that itself crashes leaves the blame `-` with the reason "the probe re-run crashed". `--probe on` probes
+  every cell (the earlier behaviour);
   `--probe off` never (the `tiny` default). Verdicts and thresholds are identical in every mode.
 - **Not a verdict (NT-191)**: a cell whose run ended in `ResourceExhaustedError`, `MemoryError`, `OSError` (or a
-  subclass), `BrokenProcessPool`, or left no `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of
+  subclass other than the setup errors `FileNotFoundError`, `FileExistsError`, `NotADirectoryError`,
+  `IsADirectoryError`, `PermissionError`, which are verdicts), `BrokenProcessPool`, a TensorFlow `InternalError` or
+  `UnknownError` whose message names memory, an allocation, cuDNN or CUDA, or left no `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of
   the pass and fail counts, never probed and never written as a failing region. `--retry-non-verdict [ID]` (default:
   the newest launch under `<store>/stability/`) re-runs only those cells as a new launch with the same thresholds
   (refused if the thresholds file differs), carries every other verdict over, and the case verdict uses the re-run
