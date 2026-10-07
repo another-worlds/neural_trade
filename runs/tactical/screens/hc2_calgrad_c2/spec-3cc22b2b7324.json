@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "name": "hc2_calgrad_c2",
+  "description": "",
+  "base_config": "../default.yaml",
+  "overrides": {
+    "CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv",
+    "N_FOLDS": 2,
+    "VAL_FRACTION": 0.1,
+    "CAL_FRACTION": 0.1,
+    "MAX_SEQUENCE_COUNT": 4500,
+    "FOLD_INDEX": -2,
+    "BATCH_SIZE": 64,
+    "TRAIN_METRICS_EVERY": 1,
+    "CALIB_MODE": "gradient"
+  },
+  "grid": {
+    "axes": {}
+  },
+  "sample": null,
+  "slices": [
+    "2017-07-04T00:00:00",
+    "2018-07-14T01:00:00",
+    "2019-09-24T15:00:00",
+    "2020-10-03T17:00:00",
+    "2021-10-13T18:00:00",
+    "2022-10-23T20:00:00",
+    "2024-01-04T09:00:00",
+    "2025-01-13T11:00:00"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "run": {
+    "calibrate": true,
+    "epochs": 8
+  },
+  "rules": {
+    "finite": true,
+    "max_nonfinite_grad_steps": 0,
+    "max_clipped_share": 1.0,
+    "clip_skip_epochs": 1,
+    "min_train_loss_drop": -10.0,
+    "max_term_share": 1.0
+  }
+}

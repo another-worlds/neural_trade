@@ -1,0 +1,8 @@
+skiponly: slices 8 mean diff +0.0220 upper95 +0.0650 -> PROMOTE
+ep3: slices 8 mean diff +0.0004 upper95 +0.0271 -> PROMOTE
+lr3e4: slices 8 mean diff -0.0014 upper95 +0.0185 -> PROMOTE
+dir5: slices 8 mean diff -0.0294 upper95 +0.0168 -> PROMOTE
+look20: slices 8 mean diff -0.0247 upper95 +0.0196 -> PROMOTE
+nophys: slices 8 mean diff -0.0169 upper95 +0.0018 -> DROP
+calval: slices 8 mean diff +0.0052 upper95 +0.0185 -> PROMOTE
+calgrad: slices 8 mean diff +0.0005 upper95 +0.0118 -> PROMOTE

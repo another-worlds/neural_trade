@@ -13,6 +13,7 @@ stopped (H4b: re-run the LOOKBACK 240 cell with more patience; direction is the 
 | # | Date | Hypothesis | Method | Cost | Result | Evidence |
 |---|---|---|---|---|---|---|
 | H5 | 2026-10-06 | R1: the direction head is spoiled by the high-capacity path; constrain it | hc_baseline (defaults, 100 trials) vs 3 switches (cc85a5c), same 5 slices x 20 seeds, screen layout, paired by (slice, seed), CI over slices | ~300 trials, ~27 s each | **No effect.** skip_only -0.012 [-0.101, +0.076]; shrink1 -0.010 [-0.037, +0.017] (83 of 100 trials: shard 2 segfaulted 3 times at 16/34; accepted as final by the owner); dropout 0.5 -0.015 [-0.029, -0.0001]. None beats the baseline (0.522); logreg_lags 0.554 is within noise of it. | runs/tactical/screens/hc_*, hc_logreg.json, configs/tactical/ |
+| H6 | 2026-10-07 | R2/R3 (design v2: 40 climb slices x 3 seeds, paired, CI over slices; stage-1 gate on 8 slices) | base 0.5296; skip_only +0.0075 [-0.007,+0.022]; 3 epochs -0.0088 [-0.019,+0.001]; LR 3e-4 -0.0122 [-0.022,-0.002] worse; LAMBDA_DIR x5 -0.0031 [-0.014,+0.008]; LOOKBACK 20 -0.0253 [-0.042,-0.009] worse; no-physics dropped at stage 1 (24 trials, -0.017); calibration value -0.0013 [-0.008,+0.005]; calibration gradient -0.0054 [-0.012,+0.001] | ~1000 trials | **Nothing passes the rule** (CI above 0 and diff >= +0.01). Two variants are worse. No Config switch moves direction AUC. 459 of 975 trials took over 120 s (median 118 s, 3 shards in parallel): the 2-minute rule was not kept. | runs/tactical/screens/hc2_*, runs/tactical/hc2_compare.py |
 
 ## For the MVP lead
 

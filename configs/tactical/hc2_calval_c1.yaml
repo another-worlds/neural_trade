@@ -1,0 +1,36 @@
+schema_version: 1
+name: hc2_calval_c1
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: D:/nt/neural_trade/Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  VAL_FRACTION: 0.1
+  CAL_FRACTION: 0.1
+  MAX_SEQUENCE_COUNT: 4500
+  FOLD_INDEX: -2
+  BATCH_SIZE: 64
+  TRAIN_METRICS_EVERY: 1
+  CALIB_MODE: value
+slices:
+- '2017-05-02T12:00:00'
+- '2018-05-12T13:00:00'
+- '2019-05-22T15:00:00'
+- '2020-08-02T04:00:00'
+- '2021-08-12T06:00:00'
+- '2022-08-22T07:00:00'
+- '2023-09-01T09:00:00'
+- '2024-11-11T23:00:00'
+seeds:
+- 0
+- 1
+- 2
+run:
+  calibrate: true
+  epochs: 8
+rules:
+  finite: true
+  max_nonfinite_grad_steps: 0
+  max_clipped_share: 1.0
+  clip_skip_epochs: 1
+  min_train_loss_drop: -10.0
+  max_term_share: 1.0

@@ -1,0 +1,36 @@
+schema_version: 1
+name: hc2_skiponly_c4
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: D:/nt/neural_trade/Bitcoin_BTCUSDT.csv
+  N_FOLDS: 2
+  VAL_FRACTION: 0.1
+  CAL_FRACTION: 0.1
+  MAX_SEQUENCE_COUNT: 4500
+  FOLD_INDEX: -2
+  BATCH_SIZE: 64
+  TRAIN_METRICS_EVERY: 1
+  DIRECTION_HEAD_MODE: skip_only
+slices:
+- '2018-01-07T13:00:00'
+- '2019-01-17T14:00:00'
+- '2020-01-27T16:00:00'
+- '2021-02-05T17:00:00'
+- '2022-04-19T07:00:00'
+- '2023-04-29T08:00:00'
+- '2024-05-08T10:00:00'
+- '2025-05-18T11:00:00'
+seeds:
+- 0
+- 1
+- 2
+run:
+  calibrate: false
+  epochs: 8
+rules:
+  finite: true
+  max_nonfinite_grad_steps: 0
+  max_clipped_share: 1.0
+  clip_skip_epochs: 1
+  min_train_loss_drop: -10.0
+  max_term_share: 1.0
