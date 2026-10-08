@@ -1,0 +1,5 @@
+cf5f6beeb80252031702f346d119c2ca01c1119f
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+18 passed, 852 warnings in 588.29s (0:09:48)

@@ -567,6 +567,13 @@ def _per_h(d: Optional[Mapping[str, Any]], fmt="{:.3f}") -> str:
     return " / ".join(fmt.format(float(d[h])) if d.get(h) is not None else "n/a" for h in HORIZONS)
 
 
+def _no_signal_note(direction_signal: Optional[Mapping[str, Any]]) -> str:
+    """"; no usable direction signal on h1 (...)" when the temperature fit ended at a bound (D-066)."""
+    none = [h for h in HORIZONS if (direction_signal or {}).get(h) == "none"]
+    return (f"; no usable direction signal on {', '.join(none)} (temperature fit at a bound: P(up) there is "
+            "neutral, strategies stay flat on it)") if none else ""
+
+
 def run_settings_table(run_dir: Union[str, Path, None] = None, config=None, *,
                        metrics: Optional[list] = None) -> pd.DataFrame:
     """A saved run's settings: the config value next to the value the run actually used.
@@ -702,7 +709,8 @@ def run_settings_table(run_dir: Union[str, Path, None] = None, config=None, *,
             "served delta = beta x raw price head")
     if temps:
         add("serving calibration", "temperature h0 / h1 / h2", "", _per_h(temps),
-            "P(up) = sigmoid(logit / T); T > 1 pulls P(up) towards 0.5")
+            "P(up) = sigmoid(logit / T); T > 1 pulls P(up) towards 0.5"
+            + _no_signal_note(pipe.get("direction_signal")))
     if art.get("var_scale") is not None:
         add("serving calibration", "var_scale", "", art["var_scale"], "the strategies' confidence scale")
     return pd.DataFrame(rows, columns=["group", "setting", "config", "effective", "note"]).set_index(["group", "setting"])

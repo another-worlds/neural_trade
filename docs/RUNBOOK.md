@@ -148,6 +148,13 @@ experiment log folders `runs/ablations/*/cells/`, `runs/ablations/*/logs/` and
 `artifacts/calibration/*.json`. An experiment's `result.json` (in `runs/experiments/<name>/<variant>/`,
 outside the run directories) is tracked too.
 
+**No usable direction signal (NT-124, D-066).** The temperature fit searches T in [0.01, 1000]. When it ends at
+a bound there is no interior NLL minimum: `artifacts/calibration/pipeline_meta.json` records
+`direction_signal: {h: "none"}` (and `temperature_at_bound`), the report prints "No usable direction signal on
+h1", and `SignalFrame.build` gives that horizon a neutral P(up) (0.5) with no weight, so strategies reading P(up)
+stay flat on it (a warning names the horizons). A normal fit changes nothing. The same state is stored in
+`predictions_*.npz` (`direction_signal__<h>`) and in `frame.meta["direction_signal"]`.
+
 `scripts/check_run_evidence.py` finds the run ids cited in `docs/**/*.md`, `README.md`,
 `runs/**/REPORT.md`, `report.md`, `summary.md` and the saved notebooks, and exits 1 when a cited run
 has no directory, git does not track its `config.yaml` or its `meta.json`, or a light file in it is

@@ -70,6 +70,9 @@ STATUS_OK = "ok"
 STATUS_LOWER = "lower_bound"
 STATUS_UPPER = "upper_bound"
 
+SIGNAL_OK = "ok"
+SIGNAL_NONE = "none"   # pipeline_meta.json / frame.meta["direction_signal"]: no usable direction signal
+
 
 def _fit_temperature_status(probs: np.ndarray, labels: np.ndarray) -> tuple:
     """(T, status): T minimises the NLL of sigmoid(logit(p) / T) over [T_MIN, T_MAX].
@@ -124,6 +127,12 @@ class TemperatureScaler:
     def at_bound(self) -> Dict[str, str]:
         """Horizons whose fitted T sits at a search bound, with which bound."""
         return {h: st for h, st in self.fit_status.items() if st != STATUS_OK}
+
+    def direction_signal(self) -> Dict[str, str]:
+        """Per horizon "none" when the fit ended at a search bound (no interior NLL minimum: the head
+        carries no usable direction signal on the calibration block, D-066), else "ok"."""
+        return {h: (SIGNAL_OK if self.fit_status.get(h, STATUS_OK) == STATUS_OK else SIGNAL_NONE)
+                for h in self.temperatures}
 
     def fit(
         self,

@@ -41,6 +41,9 @@ class PredictionBatch:
     horizon_steps: tuple
     # the raw price heads before the calibration's delta shrink (D-051, NT-119); None on legacy batches
     delta_raw: Optional[Dict[str, np.ndarray]] = None
+    # {h: "ok" | "none"} from the calibration pipeline (D-066: "none" = the temperature fit ended at a bound);
+    # None when no calibration was applied
+    direction_signal: Optional[Dict[str, str]] = None
 
     def as_predictions_dict(self) -> dict:
         """The TrainResult.predictions layout (raw heads), for evaluation and calibration code."""
@@ -59,6 +62,8 @@ class PredictionBatch:
         # PredictionFrame.from_result sets on the training/evaluation path
         if self.delta_raw is not None:
             frame.meta["delta_raw"] = {h: np.asarray(self.delta_raw[h], float).reshape(-1)[:n] for h in self.delta_raw}
+        if self.direction_signal:
+            frame.meta["direction_signal"] = dict(self.direction_signal)
         return frame
 
     def to_frame(self, index=None) -> pd.DataFrame:
@@ -86,7 +91,7 @@ def _tail_batch(b: PredictionBatch) -> PredictionBatch:
                            take(b.direction_prob_calibrated), take(b.sigma),
                            take(b.variance_scaled), take(b.gauss_up_prob), iv,
                            b.last_close[-1:], b.horizon_steps,
-                           None if b.delta_raw is None else take(b.delta_raw))
+                           None if b.delta_raw is None else take(b.delta_raw), b.direction_signal)
 
 
 class Predictor:
@@ -137,17 +142,19 @@ class Predictor:
         raw_delta = {h: preds["delta"][h] for h in HORIZONS}
         prob_cal = {h: preds["direction_prob"][h] for h in HORIZONS}
         intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
+        signal = None
         if calibrated and self.bundle.calibration_pipeline is not None:
             # conformal realized vol reads raw CLOSE windows in every input mode
             cal = self.bundle.calibration_pipeline.apply(preds, alpha=alpha, windows=X_close)
             prob_cal, intervals = cal["direction_prob"], cal["intervals"]
+            signal = self.bundle.calibration_pipeline.direction_signal()
             preds = dict(preds, delta=cal["delta"])  # delta shrinkage (identity when not fitted)
         sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in HORIZONS}
         gauss = {h: gaussian_up_prob_given_move_np(preds["delta"][h], preds["variance"][h], lc,
                                                    self.config.DIR_DEADBAND_BPS, self.bundle.pred_scale)
                  for h in HORIZONS}
         return PredictionBatch(preds["delta"], preds["direction_prob"], prob_cal, sigma, preds["variance"],
-                               gauss, intervals, lc, tuple(self.config.HORIZON_STEPS), raw_delta)
+                               gauss, intervals, lc, tuple(self.config.HORIZON_STEPS), raw_delta, signal)
 
     def predict_last(self, close, alpha: float = 0.1) -> Dict[str, dict]:
         """Forecast from the newest complete window; one dict per horizon.

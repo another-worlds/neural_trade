@@ -176,11 +176,24 @@ class SignalFrame:
               raw_delta=None) -> "SignalFrame":
         lam = np.array([(lambdas or DEFAULT_LAMBDAS)[h] for h in HORIZONS], dtype=float)
         p = np.stack([frame.prob(h, calibrated) for h in HORIZONS], 1)
+        # D-066: a horizon whose temperature fit ended at a bound has no usable direction signal; its
+        # calibrated P(up) is a constant 0.5, so it casts no vote and carries no weight (strategies that
+        # need P(up) then stay flat on it).
+        dsig = (getattr(frame, "meta", None) or {}).get("direction_signal") or {}
+        no_signal = np.array([bool(calibrated and frame.direction_prob_calibrated is not None
+                                   and dsig.get(h) == "none") for h in HORIZONS])
+        if no_signal.any():
+            logger.warning("SignalFrame.build: no usable direction signal on %s (the temperature fit ended at a "
+                           "bound, D-066): P(up) is neutral and carries no weight there; strategies reading it "
+                           "stay flat on those horizons", [h for h, n in zip(HORIZONS, no_signal) if n])
+            p = np.where(no_signal[None, :], 0.5, p)
         d = np.stack([frame.delta[h] for h in HORIZONS], 1)
         v = np.stack([frame.variance_scaled[h] for h in HORIZONS], 1)
         sig = np.stack([frame.sigma(h) for h in HORIZONS], 1)
         conf = np.exp(-np.clip(v, 0, 1e4) / var_scale) if var_scale > 1e-8 else np.full_like(v, 0.5)
         w = lam[None, :] * conf
+        if no_signal.any():
+            w = np.where(no_signal[None, :], 0.0, w)
         wsum = w.sum(1)
         safe = np.where(wsum < 1e-8, 1.0, wsum)
         wdir = np.where(wsum < 1e-8, 0.5, (w * p).sum(1) / safe)

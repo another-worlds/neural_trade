@@ -393,8 +393,13 @@ class CalibrationPipeline:
             json.dump({"fitted": self._fitted, "conformal_scale": self.conformal_scale,
                        "pred_scale": self.pred_scale, "horizon_steps": list(self.horizon_steps),
                        "shrink_delta": self.shrink_delta, "delta_scale": self.delta_scale,
-                       "temperature_at_bound": self.temperature_scaler.at_bound()}, fh, indent=2)
+                       "temperature_at_bound": self.temperature_scaler.at_bound(),
+                       "direction_signal": self.direction_signal()}, fh, indent=2)
         logger.info(f"CalibrationPipeline saved to '{directory}/'")
+
+    def direction_signal(self) -> Dict[str, str]:
+        """``{h: "ok" | "none"}``: "none" when the temperature fit of h ended at a bound (D-066)."""
+        return self.temperature_scaler.direction_signal()
 
     @classmethod
     def load(cls, directory: str = _DEFAULT_DIR) -> "CalibrationPipeline":
@@ -457,7 +462,8 @@ class CalibrationPipeline:
             T = self.temperature_scaler.temperatures.get(h, 1.0)
             bound = self.temperature_scaler.fit_status.get(h, "ok")
             if bound != "ok":
-                note = f"fit at the {bound.replace('_', ' ')}: no interior NLL minimum, not calibrated"
+                note = (f"fit at the {bound.replace('_', ' ')}: no interior NLL minimum, "
+                        f"no usable direction signal (strategies reading P(up) stay flat on {h})")
             elif T > 1.05:
                 note = "overconfident — softened"
             elif T < 0.95:
