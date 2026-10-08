@@ -67,6 +67,21 @@ EXPERIMENTS = [
      "specs": [("cand_c2_base", "база (дефолт)", 12), ("hc4_calval", "калибровка value", 12), ("hc4_calgrad", "калибровка gradient", 12),
                ("hc4_ep12", "12 эпох", 12), ("hc4_look120", "окно 120", 12), ("hc4_nophys", "без физики", 12), ("hc4_bs1024", "пачка 1024", 12)],
      "compare": [], "verdict": "Победителя нет: калибровка gradient хуже базы, остальные 5 — разницы нет. Config-настройки исчерпаны, следующий раунд требует нового кода."},
+    {"id": "plan", "title": "План (идеи владельца)", "when": "08.10", "kind": "plan",
+     "goal": "Живой план тактической сессии: ваши идеи и мои гипотезы со статусами. Файл runs/tactical/PLAN.md.",
+     "specs": [], "compare": [], "verdict": None},
+    {"id": "heads", "title": "Головы: ансамбль и пороги", "when": "08.10", "kind": "thresh",
+     "goal": "На сохранённых ответах сети (11 прогонов базы, длинный блок, без переобучения): как связаны 9 голов, что дают комбинации горизонтов и как растёт точность направления с порогом уверенности. Журнал H14-H15.",
+     "specs": [], "compare": [],
+     "verdict": "Цена не несёт информации; ансамбль горизонтов лучше одной головы; точность растёт с порогом (до ~60% на верхних 2-5% баров при согласии горизонтов и ожидании большого движения), но заработок на сделку пока неотличим от случайного."},
+    {"id": "probe", "title": "Пробник градиентов", "when": "08.10", "kind": "probe",
+     "goal": "Какое слагаемое лосса сколько тянет ствол, головы и индикаторы, и где лоссы спорят (косинус). Дефолтная сеть, длинный блок, 2 прогона по очереди, PROBE_EVERY=10. Первый запуск упал (ошибка компиляции на GPU), исправлено.",
+     "specs": [], "compare": [], "verdict": None},
+    {"id": "noprice", "title": "Без цены: 3 горизонта vs 1", "when": "08.10", "kind": "hc",
+     "goal": "Ваш эксперимент: голова цены удалена из лоссов и архитектуры (PRICE_HEAD=none). Сеть без цены на 3 горизонтах (ансамбль) против сети без цены на одном горизонте h1 (ACTIVE_HORIZONS=[1]); 6 срезов x 2 seed'а. Статус: implementer пишет переключатели; запуск после проверки.",
+     "base": "hc5_noprice3",
+     "specs": [("hc5_noprice3", "без цены, 3 горизонта", 12), ("hc5_noprice1", "без цены, 1 горизонт (h1)", 12)],
+     "compare": [], "verdict": None},
 ]
 
 
@@ -131,7 +146,8 @@ def paired(a_rows, b_rows):
 
 def main():
     _cache.clear()
-    procs = [l for l in sh('wmic process where "name=\'python.exe\'" get CommandLine').splitlines() if "cli screen" in l]
+    procs_all = sh('wmic process where "name=\'python.exe\'" get CommandLine').splitlines()
+    procs = [l for l in procs_all if "cli screen" in l]
     exps = []
     for e in EXPERIMENTS:
         specs = []
@@ -177,6 +193,29 @@ def main():
             win = [z for z in rows if z["r"].get("verdict") == "BETTER"]
             if all(sp["done"] >= sp["planned"] for sp in specs):
                 x["verdict"] = ("Победитель раунда: " + max(win, key=lambda z: z["r"]["mean"])["label"]) if win else "В раунде нет варианта лучше базы."
+        if e["kind"] == "plan":
+            pp = os.path.join(ROOT, "PLAN.md")
+            x["extra"] = {"md": open(pp, encoding="utf-8").read() if os.path.exists(pp) else ""}
+        if e["kind"] == "thresh":
+            cur = {}
+            for h in (0, 1, 2):
+                fp = os.path.join(ROOT, "probe", f"threshold_curves_cand_c2_base_h{h}.json")
+                if os.path.exists(fp):
+                    cur[f"h{h}"] = json.load(open(fp, encoding="utf-8"))
+            hi = os.path.join(ROOT, "probe", "heads_interplay_cand_c2_base.json")
+            x["extra"] = {"curves": cur, "interplay": json.load(open(hi, encoding="utf-8")) if os.path.exists(hi) else None}
+        if e["kind"] == "probe":
+            res = {}
+            for fp in sorted(glob.glob(os.path.join(ROOT, "probe", "probe_*.json"))):
+                d = json.load(open(fp, encoding="utf-8"))
+                res[os.path.basename(fp)] = {k: (v[-1] if v else None) for k, v in d.get("probe", {}).items()}
+            runo = os.path.join(ROOT, "probe", "run.out")
+            log = open(runo, encoding="utf-8").read()[-400:] if os.path.exists(runo) else ""
+            x["extra"] = {"runs": res, "log": log}
+            if any("probe_run.py" in l for l in procs_all):
+                x["status"] = "идёт"
+            elif res:
+                x["status"] = "готово"
         if e["kind"] == "epochs":
             x["extra"] = epochs_extra(specs)
             if x["extra"] and x["extra"].get("final"):
@@ -354,6 +393,17 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
  if(e.extra&&e.extra.rules)h+='<div class="c full"><h2>Требования (SPEC)</h2><table><tr><th>Требование</th><th>Факт</th><th></th></tr>'+e.extra.rules.map(r=>`<tr><td>${r.name}</td><td>${r.val}</td><td>${mark(r.ok)}</td></tr>`).join('')+'</table></div>';
  if(e.kind==='bench'&&e.extra)h+='<div class="c full"><h2>Скорость</h2><table><tr><th>Вариант</th><th>прогонов</th><th>минут</th><th>прогонов/час</th><th>эпоха, с</th><th>с/шаг</th></tr>'+e.extra.arms.map(a=>`<tr><td>${a.arm}${a.finished?'':' <span class="mut">(идёт)</span>'}</td><td>${a.done}</td><td>${a.minutes??'—'}</td><td><b>${a.per_hour??'—'}</b></td><td>${a.epoch_s??'—'}</td><td>${a.s_per_step??'—'}</td></tr>`).join('')+'</table><div class="sub">Минуты — по часам от начала до конца варианта; включают загрузку данных 6 срезов.</div></div>';
  if(e.kind==='epochs'&&e.extra)h+='<div class="c full"><h2>Правило гипотезы</h2><div class="sub">Подтверждена: покрытие ≥ 0,80 и CRPSS ≥ 0 хотя бы у одного варианта. Опровергнута: у обоих покрытие &lt; 0,75 или CRPSS &lt; −0,10. Справка: 1 день/48 шагов — 0,67 и −0,22; 7 дней — 0,87 и +0,01.</div><table><tr><th>Вариант</th><th>прогонов</th><th>покрытие 90%</th><th>CRPSS</th><th></th></tr>'+e.extra.arms.map(a=>`<tr><td>${a.label}</td><td>${a.done}</td><td>${p3(a.cov)}</td><td>${f3(a.crpss)}</td><td>${mark(a.ok)}</td></tr>`).join('')+'</table></div>';
+ if(e.kind==='plan'&&e.extra){const md=e.extra.md.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+   h+='<div class="c full">'+md.split('\n').map(l=>l.startsWith('## ')?'<h2 style="margin-top:12px">'+l.slice(3)+'</h2>':(l.startsWith('# ')?'<h2>'+l.slice(2)+'</h2>':(l.startsWith('- ')?'<div>&bull; '+l.slice(2)+'</div>':(l.trim()?'<div>'+l+'</div>':'')))).join('')+'</div>';}
+ if(e.kind==='thresh'&&e.extra){const I=e.extra.interplay;
+   if(I)h+='<div class="c full"><h2>Как связаны головы (среднее по 11 прогонам)</h2><table><tr><th></th><th>h0</th><th>h1</th><th>h2</th></tr>'+[['AUC головы направления','auc_direction_head'],['AUC знака головы цены','auc_price_head'],['Корреляция цены с фактом','corr_price_y'],['Выигрыш цены при лучшем масштабе','skill_at_best_beta'],['Разброс прогноза цены / реальный','sd_pred_over_sd_true'],['Самоуверенность направления |p-0,5|','mean_abs_p_minus_half'],['Связь разброса с |движением|','spearman_var_absy']].map(([l,k])=>'<tr><td>'+l+'</td>'+['h0','h1','h2'].map(z=>'<td>'+p3(I[z][k])+'</td>').join('')+'</tr>').join('')+'</table></div>';
+   h+='<div class="c full"><h2>Точность направления против порога уверенности</h2><div class="sub">Доля угаданных на барах с уверенностью выше порога; по оси X - какая доля баров остаётся (меньше = строже). Зелёный пунктир - 60%. Пороги взяты по тем же данным (небольшое подглядывание); следующий шаг - пороги с калибровочного блока. Горизонты h0/h2 включаются в легенде.</div><div id="thplot" style="height:380px"></div><h2>Среднее движение в нашу сторону на сделку и случайный эталон</h2><div id="thbps" style="height:300px"></div></div>';}
+ if(e.kind==='probe'&&e.extra){const R=e.extra.runs,ks=Object.keys(R);
+   if(!ks.length)h+='<div class="c full"><h2>Результатов пока нет</h2><pre class="sub">'+(e.extra.log||'')+'</pre></div>';
+   else{const terms=['point','trend','dir','nll','crps','coherence','ife','vol','t_perp','casimir','hd','vac_overflow','inter_reg'];
+    ['trunk','head','indicator'].forEach(g=>{h+='<div class="c full"><h2>Доля градиента и косинус с общим градиентом: '+({trunk:'ствол',head:'головы',indicator:'индикаторы'})[g]+'</h2><table><tr><th>слагаемое</th>'+ks.map(k=>'<th>'+k.replace('probe_','').replace('.json','')+': доля</th><th>cos</th>').join('')+'</tr>'+
+     terms.map(t=>'<tr><td>'+t+'</td>'+ks.map(k=>'<td>'+p3(R[k]['probe_grad_share_'+t+'_'+g])+'</td><td>'+f3(R[k]['probe_cos_'+t+'_'+g])+'</td>').join('')+'</tr>').join('')+
+     '<tr><td><b>конфликт: средний / худший cos пары</b></td>'+ks.map(k=>'<td>'+f3(R[k]['probe_conflict_mean_'+g])+'</td><td>'+f3(R[k]['probe_conflict_min_'+g])+'</td>').join('')+'</tr></table></div>'});}}
  if(e.kind==='hc'&&e.extra){const VV={'BETTER':'<span class="ok">лучше</span>','WORSE':'<span class="bad">хуже</span>','NO DIFFERENCE':'<span class="mut">разницы нет</span>'};
    h+='<div class="c full"><h2>Общая оценка против базы (в единицах шума)</h2><table><tr><th>Вариант</th><th>срезов</th><th>общая оценка</th><th>95% интервал</th><th>цена</th><th>направление</th><th>уверенность</th><th>AUC / ранжирование риска</th><th>вердикт</th></tr>'+
    e.extra.hc.map(z=>{const r=z.r,g=r.groups||{},q=r.resolution||{};return `<tr><td><b>${z.label}</b></td><td>${r.slices??0}</td><td>${f3(r.mean)}</td><td>${r.lo==null?'—':'['+f3(r.lo)+'; '+f3(r.hi)+']'}</td><td>${f3(g.price)}</td><td>${f3(g.direction)}</td><td>${f3(g.confidence)}</td><td>${f3(q['direction.auc'])} / ${f3(q['variance.corr_var_err2_spearman'])}</td><td>${r.verdict?VV[r.verdict]:'<span class="mut">ждёт данных</span>'}</td></tr>`}).join('')+
@@ -363,6 +413,13 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
  if(e.specs.some(s=>s.heads))h+='<div class="c full"><h2>Все 9 выходов (среднее h0–h2)</h2><table><tr><th>Метрика</th>'+e.specs.filter(s=>s.heads).map(s=>`<th>${s.label}</th>`).join('')+'</tr>'+S.hm.map(([k,l])=>'<tr><td>'+l+'</td>'+e.specs.filter(s=>s.heads).map(s=>`<td>${p3(s.heads[k])}</td>`).join('')+'</tr>').join('')+'</table></div>';
  if(e.specs.some(s=>s.auc!=null))h+='<div class="c"><h2>Средний AUC направления</h2><div id="aucbar" style="height:300px"></div></div><div class="c"><h2>Время прогона</h2><div id="wallbar" style="height:300px"></div></div>';
  h+='</div>';document.getElementById('pane').innerHTML=h;
+ if(document.getElementById('thplot')){const C=e.extra.curves,cols={single_h:'#8a97a6',mean3:'#3987e5',agree3:'#d95926',agree3_hivar:'#199e70'},lab={single_h:'одна голова',mean3:'среднее 3 горизонтов',agree3:'3 горизонта согласны',agree3_hivar:'согласны + ждём большое движение'},dash={h0:'dot',h1:'solid',h2:'dash'};
+   const tr=[],tb=[];Object.keys(C).forEach(hz=>Object.keys(cols).forEach(sg=>{const R=C[hz].filter(r=>r.signal===sg);if(!R.length)return;
+    tr.push({type:'scatter',mode:'lines+markers',name:lab[sg]+' ('+hz+')',x:R.map(r=>r.coverage*100),y:R.map(r=>r.hit*100),line:{color:cols[sg],dash:dash[hz]},visible:hz==='h1'?true:'legendonly'});
+    tb.push({type:'scatter',mode:'lines+markers',name:lab[sg]+' ('+hz+')',x:R.map(r=>r.coverage*100),y:R.map(r=>r.gross_bps),line:{color:cols[sg],dash:dash[hz]},visible:hz==='h1'?true:'legendonly'});
+    if(sg==='agree3_hivar'&&hz==='h1')tb.push({type:'scatter',mode:'lines',name:'случайный эталон (95%)',x:R.map(r=>r.coverage*100),y:R.map(r=>r.null95_bps),line:{color:'#c0392b',dash:'dot'}});}));
+   Plotly.newPlot('thplot',tr,lay({xaxis:{title:'какая доля баров остаётся, %',type:'log',autorange:'reversed',gridcolor:grid},yaxis:{title:'угадано, %',gridcolor:grid},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:60,y1:60,line:{color:'#199e70',dash:'dot'}},{type:'line',xref:'paper',x0:0,x1:1,y0:50,y1:50,line:{color:'#c0392b',dash:'dash',width:1}}]}),cfg);
+   Plotly.newPlot('thbps',tb,lay({xaxis:{title:'какая доля баров остаётся, %',type:'log',autorange:'reversed',gridcolor:grid},yaxis:{title:'б.п. на сделку',gridcolor:grid,zeroline:true}}),cfg);}
  if(document.getElementById('hcforest')){const ok=e.extra.hc.filter(z=>z.r.mean!=null);Plotly.newPlot('hcforest',[{type:'scatter',mode:'markers',y:ok.map(z=>z.label),x:ok.map(z=>z.r.mean),marker:{size:12,color:ok.map(z=>z.r.verdict==='BETTER'?'#199e70':(z.r.verdict==='WORSE'?'#c0392b':'#3987e5'))},
   error_x:{type:'data',symmetric:false,array:ok.map(z=>z.r.hi-z.r.mean),arrayminus:ok.map(z=>z.r.mean-z.r.lo),thickness:2,width:6}}],lay({xaxis:{title:'общая оценка (единицы шума)',gridcolor:grid,zeroline:true,zerolinecolor:'#c0392b'},yaxis:{autorange:'reversed'},margin:{l:170,r:12,t:8,b:40},showlegend:false}),cfg)}
  if(document.getElementById('forest')){const cs=e.comps.filter(x=>x.c);Plotly.newPlot('forest',[{type:'scatter',mode:'markers',y:cs.map(x=>x.b+' vs '+x.a),x:cs.map(x=>x.c.mean),marker:{size:11,color:cs.map(x=>x.c.verdict==='хуже'?'#c0392b':(x.c.verdict==='лучше'?'#199e70':'#3987e5'))},
