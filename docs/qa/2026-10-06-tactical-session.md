@@ -66,3 +66,14 @@ the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner
   Не контролируй чтобы твои процессы конкретно по процессрору и ОЗУ не приводили к критической загрузке" [continue; (do)
   control that your processes do not lead to a critical CPU and RAM load] - read as "control" (the lead said so and asked
   to be corrected otherwise). TACTICAL.md "CPU and RAM guard".
+
+## Round 4 (2026-10-08): architecture, heads, plan
+
+- "Идеально. обязательно пиши в план, я об этом уже забыл" [write it into the plan] - the geometry-over-indicators idea:
+  runs/tactical/PLAN.md section 1 (the tactical plan file, kept from now on).
+- "Запустим тактический эксперимент где полностью удалим эту голову из лоссов и архитектуры ... я хочу сравнить 6 голов
+  ансамбль против 2 голов" [remove the price head from losses and architecture; compare the 6-head ensemble with 2 heads];
+  clarified by question: "3 горизонта vs 1 горизонт" (no-price network on 3 horizons vs on 1). PLAN section 2.
+- "Также еще учти уверенность. Выдай если мы повышаем порог уверенности ... насколько ... прибавляем точность" [show how
+  accuracy grows with the confidence threshold]: journal H15.
+- Proposals 1-3 (combination backtest on CPU, the two-heads round, new code for geometry and gating): "да" to all.
