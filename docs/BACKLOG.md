@@ -83,7 +83,7 @@ changes).
 | [NT-048](#nt-048) | P1 | feature | implementer | done | Discovered-indicators report: a self-contained interactive HTML report per run |
 | [NT-049](#nt-049) | P2 | bug | implementer | todo | Training silently warm-starts from weights in the working directory |
 | [NT-050](#nt-050) | P1 | research | experimenter | todo | First real Optuna sweep on the reference setup (learned, frozen twin, TA rules) and the paired verdicts |
-| [NT-051](#nt-051) | P1 | research | experimenter | todo | First stability-harness run on the reference setup against its pre-registered thresholds |
+| [NT-051](#nt-051) | P1 | research | experimenter | blocked | First stability-harness run on the reference setup against its pre-registered thresholds |
 | [NT-052](#nt-052) | P1 | research | experimenter | todo | Stability-harness runs for N = 2 and N = 4 horizons on the reference data |
 | [NT-053](#nt-053) | P1 | research | lead | done | Window-free plan: a second research round that writes the path, gates and A/B specifications |
 | [NT-054](#nt-054) | P2 | performance | implementer | todo | Per-run fixed costs and GPU launches (independent of the window) |
@@ -231,15 +231,16 @@ changes).
 | [NT-196](#nt-196) | P3 | polish | implementer | todo | NT-041 residues: hole exits get their own reason, rescore skips an exposure configuration over a break, a test for the engine's break, SKIP_LAGS in minutes, fold roles |
 | [NT-197](#nt-197) | P2 | bug | implementer | done | The stability harness reads a relative CSV_PATH from the working directory in `write_case_data` |
 | [NT-198](#nt-198) | P2 | polish | implementer | done | A test for the first run's own verdict file and index row after a passing probe re-run |
-| [NT-199](#nt-199) | P3 | polish | implementer | todo | The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified |
+| [NT-199](#nt-199) | P3 | polish | implementer | done | The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified |
 | [NT-200](#nt-200) | P3 | bug | implementer | todo | Audit of hard-coded or platform-default integer dtypes (int32 on Windows, int64 on Linux) |
 | [NT-201](#nt-201) | P3 | polish | implementer | done | NT-191 doc and test residues |
-| [NT-202](#nt-202) | P2 | bug | implementer | todo | tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4) |
+| [NT-202](#nt-202) | P2 | bug | implementer | done | tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4) |
 | [NT-203](#nt-203) | P2 | decision | owner | todo | Lower-bound temperature fits: flag as 'no usable direction signal' (D-066 literally) or as their own state, not gated? |
 | [NT-204](#nt-204) | P3 | polish | implementer | done | Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start |
 | [NT-205](#nt-205) | P2 | bug | implementer | done | The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124) |
 | [NT-206](#nt-206) | P2 | bug | implementer | todo | A passing probe re-run still blames a loss term for the first run's FAIL |
 | [NT-207](#nt-207) | P3 | polish | implementer | todo | Stability harness residues from the NT-051 SPEC review |
+| [NT-208](#nt-208) | P3 | polish | implementer | todo | Write each stability verdict as its cell finishes (verdicts.json and the REPORT only after all cells today) |
 
 ## Items
 
@@ -867,7 +868,7 @@ changes).
 
 **First stability-harness run on the reference setup against its pre-registered thresholds**
 
-- **status:** todo (2026-10-07): the SPEC draft (branch nt-051-spec 87ab07d) FAILED the QA review (Opus): the per-term probe makes a reference cell 12x dearer (CPU 777 s vs 58 s), 45 cells would be 3.8/7.5/10 GPU-hours; no --retry-failed exists; blame from the probe is one sample divided by the epoch count; wrong facts. Prerequisites: NT-191 (probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run fixes); the SPEC is then amended with the QA's 11 edits (kept in the QA report D:/nt/nt_qa and summarised in the nt-051-spec branch) and re-reviewed; the GPU must be free (STATUS question 7).
+- **status:** blocked (2026-10-08): the SPEC (runs/experiments/stability_ref_v1/SPEC.md on nt-051-spec; commits 87ab07d, 9e640f5, 7a1d241, e29f481) failed three qa-deep reviews; two repair rounds are used. No GPU ran and no result exists. Review 3 (e29f481) found the budget rule sound for ordinary cells (an independent simulation: with actual = estimates the total never exceeds 9,720 s and all 15 cases run up to t_cell about 168 s) and the `timeout` command working in Git Bash, but needs 3 P1 edits (a horizons re-run weighs 5 x t_rerun; the exact GNU `/usr/bin/timeout` spelling; a launch killed after the primary phase keeps its primary verdicts), 5 P2 and 7 P3, listed with exact wording in docs/research/2026-10-08-nt051-spec-review.md. New approach for the next session: the lead applies those mechanical edits itself, then ONE narrow qa-deep review; then merge nt-051-spec into remediation/plan and run the pilot when the GPU is free (owner: coding only until said otherwise, D-066; GPU-free rule fb < 2000 MB). Depends on NT-206/NT-208 only for nicer reports, not for the run.
 - **priority / type / role:** P1 / research / experimenter
 - **area:** the stability harness of NT-038 (run as engine scenarios), its reports (for example runs/stability/<id>/), a SPEC (for example runs/experiments/stability_ref_v1/SPEC.md)
 - **depends on:** NT-038 (stability harness and config guard)
@@ -2639,7 +2640,7 @@ changes).
 
 **The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified**
 
-- **status:** todo
+- **status:** done (2026-10-08): lead-verified, merged with NT-202. The runner stores `winerror`; AtomicReplaceError is a non-verdict; `replace_with_retry` raises ReadOnlyTargetError (a setup error: a verdict) at once for a read-only target; a setup-error cell gets no probe re-run and no blame and does not use the cap; RUNBOOK rewritten. Documented limit: an ACL denial still looks like a lock (AtomicReplaceError, non-verdict). Mutations killed. Follow-up thought: grep other tests for rel=1e-5 on tiny shares (the unseeded init makes them init-dependent).
 - **priority / type / role:** P3 / polish / implementer
 - **area:** src/neural_trade/experiments/runner.py (~338), experiments/stability.py (~145-165), utils/atomic.py, tests/
 - **depends on:** NT-191 (done)
@@ -2675,7 +2676,7 @@ changes).
 
 **tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4)**
 
-- **status:** todo
+- **status:** done (2026-10-08): lead-verified (D-060), merged as the nt-202 merge (head 07594ed). The failure was an unseeded model initialisation: with some draws `tower_share` is tiny and the relative 1e-5 tolerance is below the float32 noise of the logits (seeds 69, 71, 158 fail the old check; 7 of 7 runs on this tree passed). The test now seeds 71 and compares with an absolute tolerance 1e-6; the code (float64 after predict) is right. Fast 2472 passed + 1 skipped on the merged head.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** tests/test_eval_metrics.py (~699)
 - **depends on:** -
@@ -2741,6 +2742,18 @@ changes).
 - **depends on:** NT-191 (done)
 - **why:** qa-deep on the NT-051 SPEC (2026-10-08): (1) a re-run verdict's blame taken from the report-only `term_gradient_share` epoch mean is labelled 'probe sample, one batch'; (2) harness cells write weights.h5 (2.9 MB per cell, git-ignored) although `save_artifacts` is false, on a nearly full D:; (3) any ValueError raised mid-run (for example RunIdCollision at index sync, store.py ~208) exits 64 'nothing ran' after cells trained; (4) the v2 thresholds header names 5 scenarios but its 96 runs and 288 scores come from all 15 stored scenarios (the file is frozen: record the correction in RUNBOOK or the SPEC, not in the file); (5) nothing stops a second `--cases X` launch giving a second primary verdict for a seed (a check or a warning).
 - **acceptance:** (1) the label says what the number is; (2) harness cells write no weights (or a documented switch), golden and stability tests unchanged; (3) 64 only when nothing trained, a mid-run error has its own exit code and message; (4) the correction recorded; (5) a launch that repeats a (case, seed) already holding a primary verdict in the store is refused or warns, with a test; (6) fast suite, `-m stability` serial, ruff.
+- **source:** qa-deep review of the NT-051 SPEC (2026-10-08)
+
+### NT-208
+
+**Write each stability verdict as its cell finishes (verdicts.json and the REPORT only after all cells today)**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/experiments/stability.py (~981, ~1117), docs/RUNBOOK.md, tests/test_stability_harness.py
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on the NT-051 SPEC (2026-10-08): `_judge(_run_spec(...))` judges a launch only after all its cells; a killed or timed-out launch loses `verdicts.json` and REPORT.md although every primary cell already has `stability_verdict.json` (written at ~981 before any probe re-run). Writing each case's verdict as its cell finishes makes the budget kill rule of the NT-051 SPEC cheap and a crash recoverable.
+- **acceptance:** (1) after each primary cell finishes, an append-only `verdicts_partial.json` (or the same file updated atomically) holds the verdicts so far; (2) a launch killed after the primary phase can be reported from it (`--report-only <id>` or the retry reads it); (3) tests with a fake trainer killed mid-launch; (4) fast suite, `-m stability`, ruff.
 - **source:** qa-deep review of the NT-051 SPEC (2026-10-08)
 
 ## Done log
