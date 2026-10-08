@@ -156,7 +156,7 @@ changes).
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
-| [NT-124](#nt-124) | P1 | bug | implementer | in-progress | Temperature scaling reaches the NLL minimum (bounded scalar search) |
+| [NT-124](#nt-124) | P1 | bug | implementer | done | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | done | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
 | [NT-127](#nt-127) | P1 | bug | implementer | todo | DM cells of the report: a HAC bandwidth that holds up under persistent volatility regimes |
@@ -237,6 +237,7 @@ changes).
 | [NT-202](#nt-202) | P2 | bug | implementer | todo | tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4) |
 | [NT-203](#nt-203) | P2 | decision | owner | todo | Lower-bound temperature fits: flag as 'no usable direction signal' (D-066 literally) or as their own state, not gated? |
 | [NT-204](#nt-204) | P3 | polish | implementer | todo | Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start |
+| [NT-205](#nt-205) | P2 | bug | implementer | todo | The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124) |
 
 ## Items
 
@@ -1736,7 +1737,7 @@ changes).
 
 **Temperature scaling reaches the NLL minimum (bounded scalar search)**
 
-- **status:** in-progress (2026-10-08): nt-124 d50505f (implementer Sonnet; merge cf5f6be of remediation/plan; golden re-recorded in 1ebb927, only temperature/* and calibrated/direction_prob/* differ, 6 of 461). Criterion (7) implemented: pipeline_meta.json `direction_signal`, report and settings-table text, PredictionFrame.meta through from_result, the served path and npz (format version unchanged, old npz loads), SignalFrame.build sets a flagged horizon's P(up) to 0.5 and its weight to 0 when calibrated P(up) is used (calibrated_quantile, enhanced_multi_horizon, liberal, threshold_spike stay flat). Reference run 20261003T225052Z-91fa363-11993eec, test block, trades calibrated_quantile / enhanced_multi_horizon / liberal / threshold_spike: old stored T 144/0/145/0; new fit (all three horizons at T = 1000) ungated 143/0/0/0; gated 0/0/0/0 (recomputed by QA). QA (Opus) FAIL on d50505f: criteria (1)-(6) and the gating verified with own evidence (36 blocks, grid NLL gap -3.4e-14; T 0.306-0.368 for sd 0.1/T* 0.33; SHARPEN worst error 1.24%), but the notebook 04 calibration explorer (notebook/calibration_ui.py:197-200 and its table) still shows 'refit temperature 1000' and a falling ECE with no no-signal state, and mutations M3 (flag dropped in from_result), M4 (dropped in the served path) and M5 (upper bound only) survive the item's tests. Repair round 1 running (Sonnet). The lower bound question (T = 0.01 is flagged 'none' too, which can kill a real under-confident signal) is NT-203.
+- **status:** done (2026-10-08): merged as 174b628 (nt-124; implementer Sonnet, repair 1 Sonnet, repair 2 Opus; QA Opus FAIL on d50505f, Opus FAIL on 8ef27b9 (a text column made the calibration table object dtype: a slow test failed and the notebook table lost its rounding), qa-deep PASS on 186839d). Delivered: a bounded scalar search on log T in [0.01, 1000] (NLL(fit) within 3.4e-14 of a 20,001-point log-grid on 36 blocks; sd 0.1 / T* 0.33 gives T 0.306-0.368 against the old 0.888; SHARPEN=3 within 1.24%); a fit at ANY bound is flagged `direction_signal: none` (D-066 literal; NT-203 asks the owner about the lower bound) in pipeline_meta.json, the report, the settings table, PredictionFrame.meta (from_result, the served path, npz; format version unchanged, old npz loads); SignalFrame.build sets a flagged horizon's P(up) to 0.5 and its weight to 0 when calibrated P(up) is used, so calibrated_quantile, enhanced_multi_horizon, liberal and threshold_spike stay flat; the notebook 04 explorer shows the state (n/a calibrated ECE, caption, subtitle). Golden re-recorded (tests/fixtures/golden_nt124.npz, own commit 1ebb927): only temperature/* and calibrated/direction_prob/* differ, 6 of 461 arrays; h0 T 1.543 -> 1.645, h1 4.139 -> 1000 (upper bound), h2 2.644 -> 4.309. Reference run 20261003T225052Z-91fa363-11993eec test block, trades calibrated_quantile / enhanced_multi_horizon / liberal / threshold_spike: old stored T 144/0/145/0; new fit (all three horizons at T = 1000) ungated 143/0/0/0; gated 0/0/0/0 (recomputed by QA). Merged head: fast 2453 passed + 1 skipped (-n 4), slow 41 passed (-n 4, batch with NT-191 and NT-197), ruff clean; notebook 04 executed and looked at (883606c); notebook 01 still shows the old text until the GPU run. Follow-ups: NT-202, NT-203 (owner), NT-204, NT-205.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/calibration/temperature_scaling.py, calibration/pipeline.py, tests/test_calibration.py, scripts/golden_run.py
 - **depends on:** NT-122
@@ -2336,7 +2337,7 @@ changes).
 
 **Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124)**
 
-- **status:** done (2026-10-08): the owner decided (D-066): option (a), merge NT-124 and make 'no usable direction signal' an explicit reported state, strategies refuse or stay flat. Implemented in NT-124 criterion (7).
+- **status:** done (2026-10-08): decided by the owner (D-066) and implemented by NT-124 (merged 174b628).
 - **priority / type / role:** P2 / decision / owner
 - **area:** docs/DECISIONS.md, then an implementer item
 - **depends on:** NT-124
@@ -2703,6 +2704,18 @@ changes).
 - **why:** QA of NT-124 (2026-10-08): (1) `predict_last`, `predict_frame` and the CLI `predict` JSON show the calibrated P(up) (about 0.5) with no no-signal marker; (2) the pipeline warm-starts the OnlineTemperatureCalibrator at T = 1000 while its own clamp is [0.1, 10] (the clamp applies only on update, the first update jumps to 10); nothing in src or scripts calls the online path today.
 - **acceptance:** (1) the three outputs carry `direction_signal` per horizon and the CLI prints it; (2) the warm start is clamped or the status refuses to start at a bound; tests; (3) fast suite, ruff.
 - **source:** QA of NT-124 (2026-10-08)
+
+### NT-205
+
+**The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/notebook/calibration_ui.py (~213, ~228-254), tests/
+- **depends on:** NT-124
+- **why:** qa-deep on NT-124 (2026-10-08): on a run calibrated before NT-124 (the reference run) a refit with the saved settings gives T = 1000 ('none') while the saved T is about 1.9-2.1 ('ok'). The status text still says 'the run's saved settings (reproduces the served pipeline)' and, because the settings match, the saved curve is not drawn in the reliability figure, so the figure hides a saved P(up) that does differ from the refit; the comparison table shows the mismatch, so figure and table contradict each other. Also (P3) the 'saved' branch of `ece_na` in `figures()` has no explorer-level test (mutation X2 survives).
+- **acceptance:** (1) The status text and the figure compare the refit and the saved pipeline by their fitted temperatures and signal states, not by the settings alone: when they differ the saved curve is drawn and the text says they differ; (2) a test with a saved pipeline at T ~ 2 and a refit at the bound; (3) a test for the saved branch of ece_na; (4) notebook 04 is regenerated through build.py and executed by the lead; fast suite, ruff.
+- **source:** qa-deep on NT-124 (2026-10-08)
 
 ## Done log
 
