@@ -212,15 +212,15 @@ def main():
             runo = os.path.join(ROOT, "probe", "run.out")
             log = open(runo, encoding="utf-8").read()[-400:] if os.path.exists(runo) else ""
             prog = []
-            for a in ("2021-10-13T18:00:00_0", "2023-04-29T08:00:00_1"):
-                cand = glob.glob(os.path.join(ROOT, "probe", f"log_{a[:10]}*_{a[-1]}.txt"))  # bash writes ':' as a private char
-                lp = cand[0] if cand else os.path.join(ROOT, "probe", "missing")
+            fast = sorted(glob.glob(os.path.join(ROOT, "probe", "log_fast_*.txt")))
+            for lp in (fast or sorted(glob.glob(os.path.join(ROOT, "probe", "log_20*.txt")))):
+                a = os.path.basename(lp)[4:-4].replace("fast_", "")
                 txt = open(lp, encoding="utf-8", errors="ignore").read() if os.path.exists(lp) else ""
                 ep = re.findall(r"PROBE_EPOCH (\d+)/(\d+) (\S+)", txt)
                 started = time.strftime("%H:%M", time.localtime(os.path.getmtime(lp))) if os.path.exists(lp) else None  # last write of the log
                 prog.append({"run": a, "epochs_done": int(ep[-1][0]) if ep else 0, "epochs": int(ep[-1][1]) if ep else 8,
                              "last": ep[-1][2] if ep else None, "started": started,
-                             "done": os.path.exists(os.path.join(ROOT, "probe", f"probe_{a[:10]}_s{a[-1]}.json"))})
+                             "done": bool(glob.glob(os.path.join(ROOT, "probe", f"probe_{a[:10]}_s{a[-1]}*.json")))})
             x["extra"] = {"runs": res, "log": log, "progress": prog}
             if any("probe_run.py" in l for l in procs_all):
                 x["status"] = "идёт"
