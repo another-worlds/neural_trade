@@ -686,7 +686,11 @@ class CustomTrainModel(models.Model):
 
     def train_step(self, data):
         x_window, y_true, last_close, extended_trends = data
-        with tf.GradientTape() as tape:
+        # INDICATOR_GRAD_SOURCE='direction' (tactical): a Python-level branch, so with the default
+        # 'total' the tape, graph and speed are exactly the previous ones.
+        ind_dir_only = (getattr(self.config, 'INDICATOR_GRAD_SOURCE', 'total') == 'direction'
+                        and bool(self._indicator_var_ids))
+        with tf.GradientTape(persistent=ind_dir_only) as tape:
             y_pred_list = self(x_window, training=True)
             # Named view for the 10 outputs (robust to future aux heads / reordering).
             heads = PredictiveOutputs(*y_pred_list)
@@ -696,6 +700,10 @@ class CustomTrainModel(models.Model):
             loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                                extended_trends,
                                                vacuum_overflow=vac_overflow_pred)
+            if ind_dir_only:
+                # the 'dir' term of _run_gradient_probe, recorded on the tape
+                dir_term = self.lambda_dir_outer * self.lambda_dir * (
+                    loss_components.dir_h0 + loss_components.dir_h1 + loss_components.dir_h2)
 
         # loss_components is now a LossComponents NamedTuple (see registries/losses.py).
         # Positional unpack is preserved for compatibility; attribute access is also available.
@@ -713,6 +721,13 @@ class CustomTrainModel(models.Model):
          vac_overflow_val, pnl_val, dir_align_val, coherence_penalty_val) = loss_components
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
+        if ind_dir_only:
+            _tv = list(self.trainable_variables)
+            _ind_idx = [i for i, v in enumerate(_tv) if id(v) in self._indicator_var_ids]
+            _dir_grads = tape.gradient(dir_term, [_tv[i] for i in _ind_idx])
+            grads = list(grads)
+            for i, dg in zip(_ind_idx, _dir_grads):
+                grads[i] = dg
 
         # ---- Finite-gradient guard --------------------------------------------
         # One non-finite gradient anywhere used to poison EVERY weight in a single

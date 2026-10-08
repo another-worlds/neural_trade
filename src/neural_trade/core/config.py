@@ -625,6 +625,14 @@ class Config:
         "the dropped terms' mask counters (MASK_TERM_NAMES is static either way) simply read 0 "
         "instead of being removed. A later study (batched with NT-099) may adopt True as the "
         "default once judged under D-025.", unit="flag")
+    INDICATOR_GRAD_SOURCE: str = _f(
+        "total", "indicators",
+        "'total' (default): the learned-indicator variables follow the gradient of the total loss, as "
+        "always. 'direction' (tactical, exploratory): their gradient is that of the direction term only "
+        "(LAMBDA_DIR_OUTER * LAMBDA_DIR * the summed per-horizon direction BCE); every other variable "
+        "keeps the total-loss gradient. Grouped clipping, the finite guard, INDICATOR_GRAD_MULT and the "
+        "period clipping are unchanged. Costs a persistent tape and one more backward pass.",
+        unit="name", choices=("total", "direction"))
     PRICE_HEAD: str = _f(
         "on", "stability",
         "'on' (default): today's graph and loss. 'none' (tactical, exploratory): no price Dense layers "
