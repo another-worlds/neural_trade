@@ -1,0 +1,13 @@
+559269ace995edc33721aaf1c76bdcb6f12ef899
+tests/test_control_panel_repair2.py::test_a_real_zero_beta_cell_shows_n_a_for_every_constant_statistic
+  D:\nt\nt_wt_205\src\neural_trade\notebook\panel_compare.py:520: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
+
+tests/test_frozen_twin.py::test_one_epoch_cpu_run_leaves_every_applied_period_at_its_configured_value
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\tensorflow\python\data\ops\structured_function.py:264: UserWarning: Even though the `tf.config.experimental_run_functions_eagerly` option is set, this option does not apply to tf.data functions. To force eager execution of tf.data functions, please use `tf.data.experimental.enable_debug_mode()`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_nt041_repair.py:138: the real index already has the new columns
+2466 passed, 1 skipped, 5639 warnings in 515.82s (0:08:35)

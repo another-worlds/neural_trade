@@ -78,6 +78,9 @@ class PredictionBatch:
             lo, hi = self.interval[h]
             cols[f"{h}_lo90"] = self.last_close + lo
             cols[f"{h}_hi90"] = self.last_close + hi
+            if self.direction_signal:
+                # D-066 / NT-204: "none" = no usable direction signal; the calibrated P(up) above is flat
+                cols[f"{h}_direction_signal"] = self.direction_signal.get(h, "ok")
         return pd.DataFrame(cols, index=index)
 
 
@@ -173,8 +176,13 @@ class Predictor:
             close = np.asarray(close, dtype="float32").reshape(-1)
             batch = self.predict(close[-self.config.LOOKBACK:][None, :], alpha=alpha)
         row = batch.to_frame().iloc[0]
-        return {h: {k.split("_", 1)[1]: float(v) for k, v in row.items() if k.startswith(h)} | {
-            "horizon_bars": int(steps), "last_close": float(batch.last_close[0])}
+        # "direction_signal" (D-066, NT-204): "ok" | "none" (no usable direction signal: the calibrated P(up)
+        # is flat) | "n/a" when no calibration pipeline was applied
+        sig = batch.direction_signal
+        return {h: {k.split("_", 1)[1]: float(v) for k, v in row.items()
+                    if k.startswith(h + "_") and not k.endswith("_direction_signal")} | {
+            "horizon_bars": int(steps), "last_close": float(batch.last_close[0]),
+            "direction_signal": str(sig.get(h, "ok")) if sig else "n/a"}
             for h, steps in zip(HORIZONS, batch.horizon_steps)}
 
     def predict_windows_frame(self, frame: pd.DataFrame, alpha: float = 0.1, batch_size: Optional[int] = None):

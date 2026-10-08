@@ -159,6 +159,13 @@ calibrated-ECE cells of a "none" horizon are NaN in the data and display as "n/a
 with a caption; every other column stays float, so `round` applies), the "saved" rows carry the saved pipeline's
 own state, the reliability subtitle gives that horizon's calibrated ECE as "n/a (no direction signal)", and the
 note says "no usable direction signal on h (temperature fit at a bound: T = ...)".
+When the refit uses the run's saved settings but fits other temperatures or signal states than the saved
+pipeline (a run calibrated before NT-124: saved T about 2, refit at the bound), the status line says the refit
+differs and the saved curve is drawn (`CalibrationExplorer.reproduces_saved()`, NT-205). Serving shows the state
+too (NT-204): `Predictor.predict_last` adds `direction_signal` ("ok" | "none" | "n/a" without a calibration
+pipeline) to every horizon, `predict_frame` and the CLI `predict` output carry `<h>_direction_signal` columns,
+and `predict` logs a warning naming the "none" horizons. The online temperature calibrator clamps its warm start
+to [T_min, T_max].
 
 `scripts/check_run_evidence.py` finds the run ids cited in `docs/**/*.md`, `README.md`,
 `runs/**/REPORT.md`, `report.md`, `summary.md` and the saved notebooks, and exits 1 when a cited run

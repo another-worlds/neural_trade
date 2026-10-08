@@ -76,8 +76,10 @@ class OnlineTemperatureCalibrator:
         self.T_max = T_max
 
         init = temperatures or {h: 1.0 for h in self.HORIZONS}
-        # Maintain two copies: raw (updated each step) and EMA-smoothed (used for inference)
-        self._T: Dict[str, float] = {h: float(init.get(h, 1.0)) for h in self.HORIZONS}
+        # Maintain two copies: raw (updated each step) and EMA-smoothed (used for inference). The warm start
+        # is clamped to [T_min, T_max] like every update: an offline fit at its bound (T = 1000, D-066)
+        # must not start outside the range the first update would jump into (NT-204).
+        self._T: Dict[str, float] = {h: float(np.clip(init.get(h, 1.0), T_min, T_max)) for h in self.HORIZONS}
         self._T_ema: Dict[str, float] = dict(self._T)
         self._n_updates: Dict[str, int] = {h: 0 for h in self.HORIZONS}
 
