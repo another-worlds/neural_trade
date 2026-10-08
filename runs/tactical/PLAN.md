@@ -33,7 +33,13 @@ The variance head knows the size of the coming move (Spearman ~0.24 with |move|)
 high-variance third for h1/h2 (+0.007 AUC). A gate that switches direction behaviour by predicted volatility
 (mean reversion in quiet regimes, as on 2022-04-16; continuation in trends) - needs code.
 
-## 5. Loss architecture - hypotheses from the code and the probe (probe running)
+## 5. Loss architecture - hypotheses from the code and the probe (probe done: journal H16)
+- **Measured (H16):** after 3 epochs the trunk gradient is NLL 31%, t_perp 27%, direction 11%; the indicators' gradient is
+  NLL 30%, t_perp 28%, direction 10%, and the price terms (point, coherence, trend, IFE) and hd point against the total there.
+  So the learned indicator periods are tuned mostly for the variance terms, while the direction - the owner's target for
+  indicator geometry - gives them ~10% of their gradient. Hypotheses: (a) without the price terms (section 2) the indicator
+  gradient stops fighting itself; (b) a larger direction weight or a direction-only gradient for the indicators (a separate
+  indicator optimizer fed by the direction loss) tunes the periods for direction.
 - The price head's six terms (incl. the extended-trend "momentum prior" that pulls the prediction towards the past move)
   feed noise into the shared trunk and the indicator gradients. Covered by section 2.
 - Direction is over-confident: |p - 0.5| averages 0.10-0.12 at AUC 0.54; Brier 0.255-0.27 is worse than the constant
