@@ -156,7 +156,7 @@ changes).
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
 | [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
-| [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
+| [NT-124](#nt-124) | P1 | bug | implementer | in-progress | Temperature scaling reaches the NLL minimum (bounded scalar search) |
 | [NT-125](#nt-125) | P1 | bug | implementer | done | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
 | [NT-127](#nt-127) | P1 | bug | implementer | todo | DM cells of the report: a HAC bandwidth that holds up under persistent volatility regimes |
@@ -234,6 +234,9 @@ changes).
 | [NT-199](#nt-199) | P3 | polish | implementer | todo | The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified |
 | [NT-200](#nt-200) | P3 | bug | implementer | todo | Audit of hard-coded or platform-default integer dtypes (int32 on Windows, int64 on Linux) |
 | [NT-201](#nt-201) | P3 | polish | implementer | done | NT-191 doc and test residues |
+| [NT-202](#nt-202) | P2 | bug | implementer | todo | tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4) |
+| [NT-203](#nt-203) | P2 | decision | owner | todo | Lower-bound temperature fits: flag as 'no usable direction signal' (D-066 literally) or as their own state, not gated? |
+| [NT-204](#nt-204) | P3 | polish | implementer | todo | Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start |
 
 ## Items
 
@@ -1733,7 +1736,7 @@ changes).
 
 **Temperature scaling reaches the NLL minimum (bounded scalar search)**
 
-- **status:** todo (2026-10-08): unblocked by D-066 / NT-174. Code on nt-124 (f47e519; not merged, no QA yet); an implementer rebases it on remediation/plan, adds criterion (7) and the golden re-record, then QA (Opus; P1, changes numbers and a trading default).
+- **status:** in-progress (2026-10-08): nt-124 d50505f (implementer Sonnet; merge cf5f6be of remediation/plan; golden re-recorded in 1ebb927, only temperature/* and calibrated/direction_prob/* differ, 6 of 461). Criterion (7) implemented: pipeline_meta.json `direction_signal`, report and settings-table text, PredictionFrame.meta through from_result, the served path and npz (format version unchanged, old npz loads), SignalFrame.build sets a flagged horizon's P(up) to 0.5 and its weight to 0 when calibrated P(up) is used (calibrated_quantile, enhanced_multi_horizon, liberal, threshold_spike stay flat). Reference run 20261003T225052Z-91fa363-11993eec, test block, trades calibrated_quantile / enhanced_multi_horizon / liberal / threshold_spike: old stored T 144/0/145/0; new fit (all three horizons at T = 1000) ungated 143/0/0/0; gated 0/0/0/0 (recomputed by QA). QA (Opus) FAIL on d50505f: criteria (1)-(6) and the gating verified with own evidence (36 blocks, grid NLL gap -3.4e-14; T 0.306-0.368 for sd 0.1/T* 0.33; SHARPEN worst error 1.24%), but the notebook 04 calibration explorer (notebook/calibration_ui.py:197-200 and its table) still shows 'refit temperature 1000' and a falling ECE with no no-signal state, and mutations M3 (flag dropped in from_result), M4 (dropped in the served path) and M5 (upper bound only) survive the item's tests. Repair round 1 running (Sonnet). The lower bound question (T = 0.01 is flagged 'none' too, which can kill a real under-confident signal) is NT-203.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/calibration/temperature_scaling.py, calibration/pipeline.py, tests/test_calibration.py, scripts/golden_run.py
 - **depends on:** NT-122
@@ -2664,6 +2667,42 @@ changes).
 - **why:** qa-deep on NT-191 (2026-10-08): (1) the RUNBOOK and test text say 'within 2 float32 ULP' but the tolerance 2*eps*max(|x|,1) is 2 to 4 ULP of x; (2) the `_winerror` docstring says the code is what str(OSError) starts with but the regex searches anywhere in the message; (3) the cap's default of 10 rests on the PROBE_EVERY 5 cost.
 - **acceptance:** (1) the wording says what the tolerance is; (2) the docstring matches the regex; (3) when NT-051 has measured the per-re-run cost, the default is recomputed from it (NT-051's REPORT); (4) ruff.
 - **source:** qa-deep on NT-191 / the CI red of 99e5733 (2026-10-08)
+
+### NT-202
+
+**tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** tests/test_eval_metrics.py (~699)
+- **depends on:** -
+- **why:** QA of NT-124 (2026-10-08): deterministic failure on remediation/plan d55f8a8 when run alone, on CPU; the fast suite and CI pass (order or float32 accumulation). The tolerance is relative 1e-5 on a share of 3.6e-4 (cancellation).
+- **acceptance:** (1) Find why it passes in the suite and fails alone (a float32 sum order, a fixture, a default); (2) a tolerance by absolute error scaled to the sum's magnitude, or the numpy reference computed in float64 the same way as the code; (3) the test passes alone, in the suite and in a different order (-p no:randomly if used, then `pytest -n 4`); (4) ruff.
+- **source:** QA of NT-124 (2026-10-08)
+
+### NT-203
+
+**Lower-bound temperature fits: flag as 'no usable direction signal' (D-066 literally) or as their own state, not gated?**
+
+- **status:** todo
+- **priority / type / role:** P2 / decision / owner
+- **area:** docs/DECISIONS.md, calibration/temperature_scaling.py (~117-119), calibration/pipeline.py
+- **depends on:** NT-124
+- **why:** QA of NT-124 (2026-10-08): the NLL is convex in s = 1/T. At the upper bound (T = 1000) the head carries no positive information, so 'none' is right. At the lower bound (T = 0.01) the NLL is still falling: the head is more informative than its tiny logits say. A synthetic under-confident head with real signal (logit sd 0.002 / 0.003, held-out AUC 0.638 / 0.745) fits at the lower bound and would be switched off: the gate depends on the logit scale, not on the signal; the same signal at sd 0.01 fits T = 0.0203 and trades. No stored run is known to reach the lower bound (not surveyed). D-066 says 'a bound is reached', so NT-124 flags both bounds.
+- **acceptance:** The owner decides: (a) keep both bounds 'none' (D-066 as written; simplest; may switch off a real under-confident signal); (b) only the upper bound is 'none', the lower bound is its own reported state ('under-confident, T capped'), not gated, with a possible-leak warning when the cal block is separable (recommended by QA); (c) (b) plus T_MIN lowered to 1e-4. A DECISIONS entry records the answer; an implementer item follows.
+- **source:** QA of NT-124 (2026-10-08)
+
+### NT-204
+
+**Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/serving/predictor.py (~159-179), cli.py (predict), calibration/pipeline.py (~243), calibration/online_calibrator.py
+- **depends on:** NT-124
+- **why:** QA of NT-124 (2026-10-08): (1) `predict_last`, `predict_frame` and the CLI `predict` JSON show the calibrated P(up) (about 0.5) with no no-signal marker; (2) the pipeline warm-starts the OnlineTemperatureCalibrator at T = 1000 while its own clamp is [0.1, 10] (the clamp applies only on update, the first update jumps to 10); nothing in src or scripts calls the online path today.
+- **acceptance:** (1) the three outputs carry `direction_signal` per horizon and the CLI prints it; (2) the warm start is clamped or the status refuses to start at a bound; tests; (3) fast suite, ruff.
+- **source:** QA of NT-124 (2026-10-08)
 
 ## Done log
 
