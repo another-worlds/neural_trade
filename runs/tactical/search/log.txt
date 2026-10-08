@@ -1,0 +1,140 @@
+Dataset length after cleaning: 126087
+Date range after cleaning: 2017-02-03 22:34:00 to 2017-05-02 12:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+loaded 2017-05-02T12:00:00 in 8.9s train 16560 val 12600
+Dataset length after cleaning: 126087
+Date range after cleaning: 2018-08-20 12:34:00 to 2018-11-16 02:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+loaded 2018-11-16T02:00:00 in 10.8s train 16560 val 12600
+Dataset length after cleaning: 126087
+Date range after cleaning: 2020-01-02 14:34:00 to 2020-03-30 04:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+loaded 2020-03-30T04:00:00 in 8.5s train 16560 val 12600
+Dataset length after cleaning: 126087
+Date range after cleaning: 2021-07-18 04:34:00 to 2021-10-13 18:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+loaded 2021-10-13T18:00:00 in 7.5s train 16560 val 12600
+Dataset length after cleaning: 126087
+Date range after cleaning: 2023-01-31 18:34:00 to 2023-04-29 08:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+loaded 2023-04-29T08:00:00 in 7.3s train 16560 val 12600
+Dataset length after cleaning: 126087
+Date range after cleaning: 2024-08-16 09:34:00 to 2024-11-11 23:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+loaded 2024-11-11T23:00:00 in 7.4s train 16560 val 12600
+{
+ "search_slices": [
+  "2017-05-02T12:00:00",
+  "2020-03-30T04:00:00",
+  "2023-04-29T08:00:00"
+ ],
+ "check_slices": [
+  "2018-11-16T02:00:00",
+  "2021-10-13T18:00:00",
+  "2024-11-11T23:00:00"
+ ],
+ "trials": 150,
+ "seconds": 155,
+ "textbook": {
+  "ema": 20,
+  "rsi": 14,
+  "macd_f": 12,
+  "macd_s": 26,
+  "macd_g": 9,
+  "bb": 20,
+  "atr": 14,
+  "stoch": 14,
+  "cci": 20
+ },
+ "searched": {
+  "ema": 16,
+  "rsi": 40,
+  "macd_f": 50,
+  "macd_s": 24,
+  "macd_g": 13,
+  "bb": 14,
+  "atr": 3,
+  "stoch": 48,
+  "cci": 13
+ },
+ "search_auc": {
+  "textbook": [
+   0.5888509021627332,
+   [
+    0.6603969809787898,
+    0.5757310094714325,
+    0.530424716037977
+   ]
+  ],
+  "searched": [
+   0.5976219351329001,
+   [
+    0.6594739653420444,
+    0.6014314710091352,
+    0.5319603690475208
+   ]
+  ]
+ },
+ "check_auc": {
+  "textbook": [
+   0.5704472192012449,
+   [
+    0.6226585417775887,
+    0.551167351952826,
+    0.5375157638733199
+   ]
+  ],
+  "searched": [
+   0.5742343368073096,
+   [
+    0.623789132529443,
+    0.5634740232217958,
+    0.5354398546706899
+   ]
+  ],
+  "network_hc5_noprice3_h1": [
+   0.5206333089406959,
+   [
+    0.5320975441906879,
+    0.5188586291475761,
+    0.5109437534838239
+   ]
+  ]
+ }
+}
