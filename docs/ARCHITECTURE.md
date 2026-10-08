@@ -46,7 +46,7 @@ used for plugin discovery) does not count.
 **Not enforced.** Longer cycles are not forbidden by the test. At the time of writing seven subpackages
 (`registries`, `experiments`, `evaluation`, `serving`, `strategy`, `training`, `visualization`) sit on at
 least one cycle of three or more packages (for example `registries` to `visualization` to `evaluation` to
-`registries`). Treat the layers below as the intended direction and the cycle list as known debt.
+`registries`). Treat the layers below as the author's reading of the intended direction (no DECISIONS entry sets the order) and the cycle list as known debt.
 
 Intended direction, from the bottom (a package may import from the ones above it in this list, never
 from the ones below):
@@ -109,8 +109,9 @@ registers itself with a decorator and the config selects it by name; the pipelin
 | `Strategies` | trading strategies (a separate registry, defined in `strategy/strategies.py`, outside the ten) | `calibrated_quantile` | |
 
 `registries.load_all(config)` imports every registry module, loads plugins from `Config.PLUGINS_DIR` (unset
-by default; `load_all(config, plugins_dir="plugins")` or `registry list --plugins plugins` load the repository's
-`plugins/`, which holds templates and a tested example) and checks that every component the config names
+by default; `load_all(config, plugins_dir="plugins")` loads the repository's `plugins/`, which holds templates
+and a tested example; `neural-trade registry list` already loads `./plugins` by default when it exists, and
+`--plugins DIR` overrides) and checks that every component the config names
 exists; call it once at an entry point. `neural-trade registry list` prints everything registered;
 `registry info <Registry> <name>` shows one entry. To add a component: register it in a module under
 `plugins/` (or in the registry's own module), and name it in the config; for an indicator, one registry entry

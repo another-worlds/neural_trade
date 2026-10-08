@@ -38,12 +38,12 @@ purge gaps or the four-way blocks; use `split_overview` for those.
 
 ## 01 Train and monitor, and 04 Diagnostics: the training record
 
-These read a run's `metrics.jsonl` (about 260 values per epoch).
+These read a run's `metrics.jsonl` (the number of values per epoch depends on the model and the enabled terms).
 
 **`training_dashboard`** (the default training figure; `plotly_interactive` is its registry alias and
 `session.curves_figure` is the notebook's call): 12 panels. Total loss with the best epoch and the
 **served** epoch marked (the served epoch is the one whose weights were evaluated and bundled, D-011);
-what the validation loss is made of, term by term; direction-head and price-head MCC and balanced
+what the validation loss is made of, term by term; direction-head and price-head MCC and the direction head's balanced
 accuracy; Brier skill against the base rate; ECE and PIT-KS of the raw heads; up-rate bias; the physics
 terms; learning rates; the gradient norm with its clip level. *Noise:* the 95% chance band of each metric
 on the validation block, with `n_eff = validation samples // horizon`; withheld below 10 effective
@@ -135,8 +135,8 @@ realised move.
 
 **`strategy_comparison`** (`explorer.compare_strategies`): every strategy's equity curve and return before
 and after costs, each beside random entries with the same trade rate, holding time and size. *Reference:*
-the random null. After costs the return is mostly cost times trade count, so only the rank against the
-null tells skill from chance. **`plotly_trading`** is the registry entry for one `BacktestResult`: price
+the random null. Costs default to 0 (D-044), so net equals gross unless a study sets costs; either way only the
+rank against the null tells skill from chance. **`plotly_trading`** is the registry entry for one `BacktestResult`: price
 with entries and exits, equity (net and gross) and the position held.
 
 ## 04 and 07: the learned indicators

@@ -63,7 +63,7 @@ target 90% coverage), and a shrinkage factor beta for the price change (`beta = 
 - **beta = 0 is a legitimate result.** The served delta is then exactly 0, so any statistic of it is
   not a measurement and the figures print `n/a` instead of 0% or 100%. The raw head is shown beside it.
 - **"No usable direction signal" is an explicit state** (D-066). When the temperature fit has no interior
-  minimum (it hit a bound), that horizon's calibrated P(up) is flat, the run records the state in
+  minimum (it hit a bound), that horizon's calibrated P(up) is flat at the upper bound (at the lower bound the temperature is small and P(up) is sharpened), the run records the state in
   `direction_signal`, figures and tables print `n/a` for the calibrated numbers, and strategies that
   read P(up) stay flat on it instead of trading on a degenerate probability.
 

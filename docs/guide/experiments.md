@@ -63,7 +63,7 @@ A sweep **picks a winner; it is not a verdict that A beats B** (below).
 
 `notebooks/06_control_panel.ipynb` is the same engine behind widgets: choose a scenario, a search space and
 a mode, press **Estimate** to see what `sweep --dry-run` prints, then **Launch** (or **Resume**). A budget
-above `CONFIRM_GPU_HOURS` also needs **Confirm budget**. A refusal of the CLI (budget over the cap, a bar
+above the `ControlPanel(confirm_gpu_hours=1.0)` argument also needs **Confirm budget**. A refusal of the CLI (budget over the cap, a bar
 size the sweep does not support, an existing sweep without resume) appears as the same refusal with nothing
 started. **Executing the notebook top to bottom starts nothing**: only the Launch button does. The board
 refreshes while a sweep runs, and a second table compares the rows you select. The command line does the
@@ -110,8 +110,9 @@ guard_rails: [{metric: h1/variance/crpss, direction: higher_better, max_degradat
 fold's seeds first, and runs the paired test over the judgement folds. It writes `result.json` and
 `report.md`. **A beats B only when the whole confidence interval of the mean paired difference lies at or
 beyond `min_effect`**; anything else, including a significant difference smaller than `min_effect`, is
-*inconclusive*. It **refuses** to compare when: fewer than 5 judgement folds have a usable pair, a fold is
-not named in the spec, the two sides were trained on different data or setups, a compared run started
+*inconclusive*. It **excludes** pairs whose fold is not named in the spec or whose two sides were trained on different data
+or setups, and **refuses** the whole comparison when fewer than 5 judgement folds (`min_folds`) have a
+usable pair, when a compared run started
 before the spec's `registered_utc` (the spec must predate the runs), or the spec's content changed after its
 first comparison. Identical GPU runs differ by 0.01-0.05 AUC, which is why one run, or one fold with many
 seeds, never decides. The panel shows a stored verdict as it was written and never runs one; without a pre-registered

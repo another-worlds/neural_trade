@@ -93,8 +93,9 @@ in one gradient, each of which must stop the run and name the term) and a few na
 runs with 3 seeds in strict mode. The verdict per case and the loss term blamed for a failure are written to
 `runs/stability/<id>/REPORT.md`, together with the sha256 of the pre-registered thresholds file used
 (`configs/stability_thresholds.yaml`, v1, the default; `--thresholds v2` is the file for the reference
-profile). A configuration that failed is added to `configs/stability_failing_regions.json`, and
-`Config.validate` then refuses it, with the report that showed the failure. Exit code 1 means a case
+profile). A failing configuration is written to `runs/stability/<id>/failing_regions.json`; copy it into
+`configs/stability_failing_regions.json` (the report says so) and `Config.validate` then refuses it, with
+the report that showed the failure. Exit code 1 means a case
 failed, 2 that only non-verdict cells (a resource error, a crash) are left, 64 that the arguments were
 refused.
 

@@ -152,10 +152,22 @@ def test_reading_figures_names_every_visualization_and_every_notebook_figure_fun
 ALL_COMMAND_DOCS = [REPO / "README.md", *sorted(GUIDE_DIR.glob("*.md"))]
 
 
+def _no_abbreviations(parser):
+    """argparse accepts `--n-trial` for `--n-trials`; a documented flag must be the full spelling."""
+    import argparse
+
+    parser.allow_abbrev = False
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for sub in action.choices.values():
+                _no_abbreviations(sub)
+
+
 def test_every_documented_neural_trade_command_is_accepted_by_the_cli_parser(capsys):
     from neural_trade.cli import build_parser
 
     parser = build_parser()
+    _no_abbreviations(parser)
     seen = 0
     for doc in ALL_COMMAND_DOCS:
         for argv in _commands(doc):
@@ -343,9 +355,27 @@ def test_own_data_names_the_thresholds_and_exit_codes_the_harness_has():
     assert "NT-051" in harness and "NT-051" in text
 
 
-def test_the_readme_points_to_status_and_the_source_of_its_one_dated_snapshot():
-    # the live state is STATUS; the README quotes one dated snapshot and names its source (NT-044 acceptance 5)
+def test_the_readme_points_to_status_and_the_report_and_carries_no_status_numbers():
+    # the live state is STATUS; the README links the dated numbers and quotes none (NT-044 acceptance 5)
     readme = _text(REPO / "README.md")
     assert "docs/STATUS.md" in readme and "runs/experiments/capacity_v1/REPORT.md" in readme
-    assert "(2026-10-06)" in readme
-    assert not re.search(r"\d+ (?:tests? )?passed", readme)
+    assert not re.search(r"\d+ (?:tests? )?passed", readme)
+    assert not re.search(r"\b(?:AUC|CRPSS|coverage|Brier)\b[^.\n]{0,60}\b\d?\.\d+", readme)
+    assert not re.search(r"\b0\.[5-9]\d{2}\b", readme)
+
+
+def test_every_config_key_the_guides_name_exists_in_config():
+    from neural_trade.core.config import Config
+
+    known = set(Config().to_dict()) if hasattr(Config(), "to_dict") else set(vars(Config()))
+    missing = {}
+    for doc in ALL_COMMAND_DOCS:
+        for key in re.findall(r"`(?:Config.)?([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`", _text(doc)):
+            if key in _NOT_CONFIG_KEYS or key in known:
+                continue
+            missing.setdefault(key, doc.name)
+    assert not missing, f"names written as Config keys but absent from Config: {missing}"
+
+
+# upper-case names the guides use that are not Config fields (environment variables)
+_NOT_CONFIG_KEYS = {"CUDA_VISIBLE_DEVICES", "PYTHONIOENCODING", "PYTHONPATH", "TF_DETERMINISTIC_OPS"}

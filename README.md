@@ -17,17 +17,15 @@ on its heads. The code supports exactly three horizons today.
 
 Read this before the rest. The live state is [docs/STATUS.md](docs/STATUS.md); the evidence is
 [runs/gates/REPORT.md](runs/gates/REPORT.md) and
-[runs/experiments/capacity_v1/REPORT.md](runs/experiments/capacity_v1/REPORT.md). The numbers below are a
-snapshot of the latter (2026-10-06) and may be out of date when you read this.
+[runs/experiments/capacity_v1/REPORT.md](runs/experiments/capacity_v1/REPORT.md). This page carries no
+numbers (they go stale); the dated ones are in those two files and in STATUS.
 
-- **The direction head has no skill worth trading.** On five judgement folds of the long history the
-  default model's direction AUC is about 0.50 to 0.53 per horizon, and a logistic regression on trailing
-  returns scores higher on the same blocks (h1: 0.535 against 0.552). The calibrated P(up) is not better
-  than a constant 0.5 out of sample. When the calibration finds no usable signal for a horizon the run says
+- **The direction head has no skill worth trading.** On the judgement folds of the long history the
+  default model shows no direction skill beyond a simple logistic regression on trailing returns, which
+  scores higher on the same blocks. The calibrated P(up) is not better than a constant 0.5 out of sample. When the calibration finds no usable signal for a horizon the run says
   so explicitly ("no usable direction signal") and the strategies that read P(up) stay flat on it.
 - **The variance heads and the conformal intervals are the edge that exists.** The variance forecast beats a
-  constant-variance forecast by a small margin (CRPSS about 0.01 to 0.02), and the 90% conformal intervals
-  hold their coverage (0.89 to 0.94 in the same runs).
+  constant-variance forecast by a small margin, and the 90% conformal intervals hold their coverage.
 - **The owner's trading goal (hit rate above 60%, drawdown under 5%) is not reached.**
 - **The learned indicators are the product, and they are only partly evidenced.** They can be drawn on price
   next to their textbook defaults (notebook 07). The comparison that would show them beating the same network
@@ -182,18 +180,18 @@ those quantiles.
 
 ## Performance
 
-Training is kernel-launch bound; the default batch is 256 and the per-epoch training diagnostics are
-computed once per epoch (`TRAIN_METRICS_EVERY`). Training speed is a first-class requirement and inference
+Training is kernel-launch bound; the default batch is 256 and the training-set diagnostics are
+updated every `TRAIN_METRICS_EVERY` steps (10); the training loss and the validation metrics are exact. Training speed is a first-class requirement and inference
 speed is not (D-018). Measurements and the trade-offs: [docs/RUNBOOK.md](docs/RUNBOOK.md) and
 [docs/DECISIONS.md](docs/DECISIONS.md) D-010, D-018, D-047.
 
 ## Physics-term ablation (frozen history)
 
 ```bash
-python scripts/ablate.py --scale smoke --dry-run      # pending cells, projected hours
+python scripts/ablate.py --scale smoke --dry-run      # pending cells; projected_hours is null without --sec-per-run
 ```
 
-The v1 grid (`runs/ablations/ablate_physics_v1-full`) found no term that earns its place under its own
+The smoke scale has 84 runs by design (the script's docstring). The v1 grid (`runs/ablations/ablate_physics_v1-full`) found no term that earns its place under its own
 criteria (D-003). The script belongs to the frozen set of D-023: new experiments go through the experiment
 engine.
 
