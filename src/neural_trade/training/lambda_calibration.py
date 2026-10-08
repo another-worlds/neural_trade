@@ -265,6 +265,13 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # off, 0 means off, as for soft ECE.
             vol_zero_to_floor = bool(getattr(cfg, 'CALIB_VOL_ZERO_TO_FLOOR', True))
             vol_active = (float(getattr(cfg, 'LAMBDA_VOL', 0.0)) > 0.0) or vol_zero_to_floor
+            # PRICE_HEAD='none': the point, extended-trend, vol, Casimir and IFE terms are exactly 0
+            # (no price head). They are neither measured nor rescaled, and vol is never lifted to
+            # CALIB_LAMBDA_MIN; their configured weights stay as they are.
+            price_off = str(getattr(cfg, 'PRICE_HEAD', 'on')) == 'none'
+            if price_off:
+                vol_zero_to_floor = False
+                vol_active = casimir_active = ife_active = False
 
             # ----------------------------------------------------------------
             # Phase 1 — warm-up forward passes (no sampling, no gradient). There is no BatchNorm in the graph; this builds the graph and model.losses before sampling.
@@ -304,8 +311,10 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                     'vol': vol_active, 'crps': crps_active, 'ece': ece_active, 't_perp': t_perp_active,
                     'casimir': casimir_active, 'hd': hd_active, 'ife': ife_active,
                 }
+                _price_terms = ('short', 'point', 'long', 'ext', 'vol', 'casimir', 'ife')
                 to_measure = [name for name, d in _damping_of_term.items()
-                             if d != 0.0 and _active_of_term.get(name, True)]
+                             if d != 0.0 and _active_of_term.get(name, True)
+                             and not (price_off and name in _price_terms)]
                 logger.info(f"[calib] Sampling the trunk gradient norm of {sorted(to_measure)} "
                             f"(as each enters `total`) over {n_sample}/{train_batches} batches "
                             f"({sample_frac:.0%} of epoch); skipped (never weighted, or a no-op "
@@ -453,10 +462,13 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 return rescale_weight(orig, med, damping, ref_loss, lam_min, lam_max, eps,
                                       name=name, quiet=quiet)
 
-            new_short = _rescale(orig_short, med_short, d_point, 'lambda_short')
-            new_point = _rescale(orig_point, med_point, d_point, 'lambda_point')
-            new_long  = _rescale(orig_long,  med_long,  d_point, 'lambda_long')
-            new_ext   = _rescale(orig_ext,   med_ext,   d_trend, 'lambda_extended_trend')
+            if price_off:  # zeroed terms keep their configured weights
+                new_short, new_point, new_long, new_ext = orig_short, orig_point, orig_long, orig_ext
+            else:
+                new_short = _rescale(orig_short, med_short, d_point, 'lambda_short')
+                new_point = _rescale(orig_point, med_point, d_point, 'lambda_point')
+                new_long  = _rescale(orig_long,  med_long,  d_point, 'lambda_long')
+                new_ext   = _rescale(orig_ext,   med_ext,   d_trend, 'lambda_extended_trend')
             new_dir   = _rescale(orig_dir,   med_dir,   d_dir, 'lambda_dir')
             new_var   = _rescale(orig_var,   med_var,   d_var, 'lambda_var')
             new_vol   = (_rescale(orig_vol, med_vol, d_vol, 'lambda_vol',
