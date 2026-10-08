@@ -102,6 +102,11 @@ EXPERIMENTS = [
      "base": "hc5_noprice3",
      "specs": [["hc5_noprice3", "база: без цены, все 14 выученные", 12], ["hc7_none", "D без индикаторов", 12], ["hc7_frozen", "D все 14 заморожены", 12], ["hc7_thin_learned", "A тонкое считывание, выученные", 12], ["hc7_thin_frozen", "A тонкое считывание, заморожены", 12], ["hc7_fn_dir", "B сеть направления (RSI+MACD)", 12], ["hc7_fn_conf", "B сеть уверенности (ATR, BB, Keltner, Donchian)", 12], ["hc7_fn_price", "B сеть цены (MA)", 12]],
      "compare": [["hc5_noprice3", "hc7_none"], ["hc5_noprice3", "hc7_frozen"], ["hc5_noprice3", "hc7_thin_learned"], ["hc5_noprice3", "hc7_thin_frozen"], ["hc5_noprice3", "hc7_fn_dir"], ["hc5_noprice3", "hc7_fn_conf"], ["hc5_noprice3", "hc7_fn_price"]], "verdict": None},
+    {"id": "hc9", "title": "E: индикаторы на предсказанном пути", "when": "08.10", "kind": "hc",
+     "goal": "Ваша гипотеза E: сеть предсказывает путь цены на 20 минут; на предсказанном и реальном будущем считаются индикаторы с фиксированными периодами (наклон EMA 5 и 10, RSI 10, эффективность движения), их расхождение - лосс. База без цены, длинный блок, 6x2.",
+     "base": "hc5_noprice3",
+     "specs": [["hc5_noprice3", "база: без цены", 12], ["hc9_e_shape", "E: путь + лосс формы индикаторов", 12], ["hc9_e_path_shape", "E: путь (log-cosh) + лосс формы", 12]],
+     "compare": [["hc5_noprice3", "hc9_e_shape"], ["hc5_noprice3", "hc9_e_path_shape"]], "verdict": None},
 ]
 
 
