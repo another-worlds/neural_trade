@@ -245,7 +245,12 @@ def main():
     gl = os.path.join(ROOT, "hc4", "guard.log")
     stops = [l for l in open(gl, encoding="utf-8").read().splitlines() if " stop " in l][-5:] if os.path.exists(gl) else []
     procs_all_n = sum(1 for l in procs_all if ("configs/tactical/" in l or "probe_run.py" in l))
-    state = {"procs_all_n": procs_all_n, "res": res, "stops": stops, "est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    tp = os.path.join(ROOT, "tasks.json")
+    try:
+        tasks = json.load(open(tp, encoding="utf-8")) if os.path.exists(tp) else []
+    except Exception:
+        tasks = [{"task": "tasks.json не читается", "who": "", "status": "", "since": "", "next": "", "tab": ""}]
+    state = {"tasks": tasks, "procs_all_n": procs_all_n, "res": res, "stops": stops, "est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
              "procs": len(procs), "exps": exps, "active": active, "hm": [[g + "." + k, lab] for g, k, lab in HM],
              "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%m-%d %H:%M -12").splitlines()}
@@ -377,6 +382,7 @@ table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:4px 6px;b
 <h1>Тактическая сессия: прорыв в расчёте сети</h1>
 <div class="sub" id="sub"></div>
 <div class="goal"><b>Цель:</b> выйти из «ловушки» (нет навыка направления) поиском тактического прорыва в расчёте сети; риск-менеджмент — отдельная ветка. <b>Правила владельца:</b> всегда все 9 выходов; отсев 6 срезов × 2 seed'а; screen ≤ 2 мин на прогон (7-дневные — по разрешению); у каждого прогона своя вкладка.</div>
+<div class="c" style="margin-top:12px"><h2>Задачи сейчас</h2><table id="tasks"></table><div class="sub">Список ведёт lead (runs/tactical/tasks.json); у задач с обучением есть своя вкладка.</div></div>
 <div class="c" style="margin-top:12px"><h2>Оценки по этапам: время и точность <span class="mut">(guesstimates — мои оценки, не результаты)</span></h2><table id="est"></table>
 <div class="sub">Время текущего раунда считается вживую по реальным прогонам; остальное — оценки по уже полученным данным, будут пересматриваться после каждого раунда.</div></div>
 <div class="c" style="margin-top:12px"><h2>Нагрузка машины в реальном времени <span class="mut">(проверка каждые 10 с; правило владельца)</span></h2>
@@ -446,6 +452,7 @@ if(S.res.length){const L=S.res[S.res.length-1];document.getElementById('resnow')
  lay({yaxis:{title:'%',range:[0,100],gridcolor:grid},yaxis2:{title:'ГБ',overlaying:'y',side:'right',range:[0,64]},margin:{l:45,r:45,t:8,b:30},shapes:[{type:'line',xref:'paper',x0:0,x1:1,y0:95,y1:95,line:{color:'#c0392b',dash:'dot'}}]}),cfg);}
 else document.getElementById('resnow').textContent='Данных о нагрузке пока нет.';
 document.getElementById('stops').innerHTML=S.stops.length?('Остановки из-за перегрузки: '+S.stops.join(' · ')):'Остановок из-за перегрузки не было.';
+document.getElementById('tasks').innerHTML='<tr><th>Задача</th><th>Кто</th><th>Статус</th><th>С</th><th>Дальше</th></tr>'+S.tasks.map(t=>'<tr><td><b>'+t.task+'</b>'+(t.tab?' <a href="#'+t.tab+'" onclick="show(\''+t.tab+'\');return false">вкладка</a>':'')+'</td><td>'+t.who+'</td><td>'+(t.status==='идёт'?'<span class="ok">идёт</span>':(t.status==='готово'?'<span class="mut">готово</span>':t.status))+'</td><td class="sub">'+(t.since||'')+'</td><td class="sub">'+(t.next||'')+'</td></tr>').join('');
 tabs();render();
 document.getElementById('git').innerHTML=S.log.map(l=>{const[h,t,...m]=l.split('|');return `<tr><td><code>${h}</code></td><td class="sub">${t}</td><td>${m.join('|')}</td></tr>`}).join('');
 </script></body></html>"""
