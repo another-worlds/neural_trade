@@ -1,0 +1,7 @@
+5ceda1c9c7d22dfcdea0bb79b86963b29f7968af
+nt-197 suites (base 5ceda1c9c7d22dfcdea0bb79b86963b29f7968af + working tree), CPU, -n 4
+tests/test_stability_harness.py not slow: 92 passed
+tests/test_stability.py tests/test_viz_training.py: 52 passed
+fast suite: 2413 passed, 1 skipped in 729 s
+ruff: All checks passed
+mutations M18b, writer-without-resolve, M6e: each killed by the new tests, reverted
