@@ -13,7 +13,10 @@ feeding the direction head; combined with the confidence head (expected move siz
 breakout": confidence says *whether* a big move comes, geometry says *which way*. Needs code (implementer), a Config
 switch, default off; judged by the hill-climb metric and by the ensemble strategy curves (section 3).
 
-## 2. Remove the price head: 6 outputs (3 horizons) vs 2 outputs (1 horizon) - running (implementer)
+## 2. Remove the price head: 6 outputs (3 horizons) vs 2 outputs (1 horizon) - done (journal H19)
+**Result:** without price the confidence improves (CRPSS +0.024, borderline) and direction AUC is unchanged; keep 3 horizons: their
+ensemble reaches 60-61% on the most confident 5-10% of bars with the first gross move above the random null (CI still touches 0),
+the 1-horizon net only 57%. Next: no-price 3-horizon as the new base for the indicator and loss rounds; fix the direction over-confidence (log loss).
 Evidence: the price head has no information (corr 0.01-0.03, best-shrink skill ~0.003) yet six loss terms train it
 through the trunk and the shared per-horizon tower; it adds nothing in head combinations (journal H14, H15).
 Switches being built: PRICE_HEAD 'none' (no price layers; point, trend, coherence, IFE, vol, casimir, vac = 0; NLL/CRPS
