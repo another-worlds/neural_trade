@@ -38,16 +38,17 @@ def write(name, extra):
     return f"ind1_{name}"
 
 
-names = [write("all", {})]
-empty_close = {k: [] for k in FAMS_CLOSE}
-for fam in list(FAMS_CLOSE) + list(DEFAULT_OHLCV):
-    fams = dict(empty_close)
-    fams[fam] = FAMS_CLOSE.get(fam) or DEFAULT_OHLCV[fam]
-    names.append(write(f"only_{fam}", {"INDICATOR_FAMILIES": fams}))
-names.append(write("none", {"INDICATOR_FAMILIES": dict(empty_close)}))
-names.append(write("frozen", {"INDICATOR_LR_MULT": 1e-9, "INDICATOR_GRAD_MULT": 1e-9, "ADAPTIVE_INDICATORS": False}))
-with open("runs/tactical/ind/tasks_ind1.txt", "w") as f:
-    for n in names:
-        for i in range(2):
-            f.write(f"{n} {i}/2\n")
-print(len(names), "variants:", " ".join(names))
+if __name__ == "__main__":
+    names = [write("all", {})]
+    empty_close = {k: [] for k in FAMS_CLOSE}
+    for fam in list(FAMS_CLOSE) + list(DEFAULT_OHLCV):
+        fams = dict(empty_close)
+        fams[fam] = FAMS_CLOSE.get(fam) or DEFAULT_OHLCV[fam]
+        names.append(write(f"only_{fam}", {"INDICATOR_FAMILIES": fams}))
+    names.append(write("none", {"INDICATOR_FAMILIES": dict(empty_close)}))
+    names.append(write("frozen", {"INDICATOR_LR_MULT": 1e-9, "INDICATOR_GRAD_MULT": 1e-9, "ADAPTIVE_INDICATORS": False}))
+    with open("runs/tactical/ind/tasks_ind1.txt", "w") as f:
+        for n in names:
+            for i in range(2):
+                f.write(f"{n} {i}/2\n")
+    print(len(names), "variants:", " ".join(names))

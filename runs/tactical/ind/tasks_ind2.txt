@@ -1,0 +1,16 @@
+ind2_textbook 0/2
+ind2_textbook 1/2
+ind2_short 0/2
+ind2_short 1/2
+ind2_long 0/2
+ind2_long 1/2
+ind2_wide 0/2
+ind2_wide 1/2
+ind2_same 0/2
+ind2_same 1/2
+ind2_random 0/2
+ind2_random 1/2
+ind2_short_frozen 0/2
+ind2_short_frozen 1/2
+ind2_long_frozen 0/2
+ind2_long_frozen 1/2
