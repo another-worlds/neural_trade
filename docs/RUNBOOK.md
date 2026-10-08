@@ -701,13 +701,20 @@ retry; no run directory is created), else 0.
   A re-run that itself crashes leaves the blame `-` with the reason "the probe re-run crashed". `--probe on` probes
   every cell (the earlier behaviour);
   `--probe off` never (the `tiny` default). Verdicts and thresholds are identical in every mode.
-- **Not a verdict (NT-191)**: a cell whose run ended in `ResourceExhaustedError`, `MemoryError`, `OSError` (or a
+- **Not a verdict (NT-191, NT-199)**: a cell whose run ended in `ResourceExhaustedError`, `MemoryError`, `OSError` (or a
   subclass other than the setup errors `FileNotFoundError`, `FileExistsError`, `NotADirectoryError`,
-  `IsADirectoryError`, `PermissionError`, which are verdicts), a `PermissionError` with Windows code 5, 32 or 33
-  (`[WinError N]`: access denied, a sharing or lock violation, another process holding the file; NT-185, D-065; a
-  `PermissionError` without those codes stays a verdict), `BrokenProcessPool`, a TensorFlow `InternalError` or
-  `UnknownError` whose message names memory, an allocation, cuDNN or CUDA, or left no `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of
-  the pass and fail counts, never probed and never written as a failing region. `--retry-non-verdict [ID]` (default:
+  `IsADirectoryError`, `PermissionError`, `ReadOnlyTargetError`, which are verdicts), `AtomicReplaceError` (`utils/atomic.py`
+  gave up after its retries on a busy target), a `PermissionError` with Windows code 5, 32 or 33, `BrokenProcessPool`, a
+  TensorFlow `InternalError` or `UnknownError` whose message names memory, an allocation, cuDNN or CUDA, or left no
+  `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of the pass and fail counts, never probed and
+  never written as a failing region. The code comes from the `winerror` field the runner stores in `result.json`'s
+  `error`, else from a `[WinError N]` in the message. **Limits:** codes 5, 32 and 33 are what a lock gives, but WinError 5
+  also means a denial that no retry fixes. `utils/atomic.py` recognises one such case, a replace onto a file with the
+  read-only attribute, and raises `ReadOnlyTargetError` at once (a verdict-side setup error); an ACL denial, or a
+  directory that refuses the temp file, looks like a lock and is judged NOT A VERDICT, so a persistent one makes every
+  `--retry-non-verdict` exit 2 again: check the path's permissions before retrying more than once. A `PermissionError`
+  with none of the codes stays a verdict. A failed cell that is a setup error (the types above) gets no probe re-run and
+  no blame (its `blame_reason` says "setup error"); it does not count against `--max-probe-reruns`. `--retry-non-verdict [ID]` (default:
   the newest launch under `<store>/stability/`) re-runs only those cells as a new launch with the same thresholds
   (refused if the thresholds file differs), carries every other verdict over, and the case verdict uses the re-run
   (the REPORT lists both runs). `UnstableTrainingError` and any failed check stay verdicts; the fault cases still pass

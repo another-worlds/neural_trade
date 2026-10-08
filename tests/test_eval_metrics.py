@@ -664,6 +664,9 @@ def test_health_section_renders_the_per_epoch_table_and_the_numbers():
     assert "h0=0.321" in md and "h1=0.500" in md and "corr skip/tower=-0.800" in md
 
 
+SHARE_ABS_TOL = 1e-6   # float32 logits: about 10x the observed absolute error of a share (1e-7)
+
+
 def test_direction_skip_share_matches_a_direct_numpy_computation():
     """D-045 A4, redefined by NT-110: cov(skip_logit, logit) / var(logit) (skip_share + tower_share
     == 1), on the (already-scaled) validation block - the close-only case."""
@@ -674,6 +677,9 @@ def test_direction_skip_share_matches_a_direct_numpy_computation():
     from neural_trade.registries.models import Models
     from neural_trade.training.custom_model import CustomTrainModel
 
+    # NT-202: unseeded weights made the tower share (1 - skip share) whatever the draw gave; seed 71 gives -1.1e-3, where
+    # the float32 logits (error ~1e-7 on sd ~1) leave a 1.7e-5 RELATIVE error (the old rel=1e-5 failed): cancellation. Shares are compared by absolute error.
+    tf.keras.utils.set_random_seed(71)
     cfg = Config(DIRECTION_SKIP=True, INPUT_SERIES=["close"], INDICATOR_FAMILIES={})
     base = Models.build(cfg.MODEL_NAME, cfg)
     m = CustomTrainModel(base_model=base, pred_scale=250.0, pred_mean=0.0, config=cfg,
@@ -695,8 +701,8 @@ def test_direction_skip_share_matches_a_direct_numpy_computation():
     ref_skip = float(np.cov(s, logit, ddof=0)[0, 1] / var_logit)
     ref_tower = float(np.cov(t, logit, ddof=0)[0, 1] / var_logit)
     ref_corr = float(np.corrcoef(s, t)[0, 1])
-    assert out["h0"]["skip_share"] == pytest.approx(ref_skip, rel=1e-5)
-    assert out["h0"]["tower_share"] == pytest.approx(ref_tower, rel=1e-5)
+    assert out["h0"]["skip_share"] == pytest.approx(ref_skip, abs=SHARE_ABS_TOL)
+    assert out["h0"]["tower_share"] == pytest.approx(ref_tower, abs=SHARE_ABS_TOL)
     assert out["h0"]["corr_skip_tower"] == pytest.approx(ref_corr, rel=1e-5)
     assert out["h0"]["skip_share"] + out["h0"]["tower_share"] == pytest.approx(1.0)
 

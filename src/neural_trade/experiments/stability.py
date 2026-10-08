@@ -80,7 +80,8 @@ PROBE_MODES = ("off", "on", "failed")
 PROFILE_PROBE: Dict[str, str] = {"tiny": "off", "reference": "failed"}
 PROBE_SOURCE = "probe sample, one batch"      # what the REPORT calls a blame taken from the probe
 # Error types that say the machine, not the setup, failed: not a verdict (NT-191). OSError's subclasses count too.
-NON_VERDICT_ERRORS = ("ResourceExhaustedError", "MemoryError", "OSError", "BrokenProcessPool", "WorkerCrash")
+NON_VERDICT_ERRORS = ("ResourceExhaustedError", "MemoryError", "OSError", "BrokenProcessPool", "WorkerCrash",
+                      "AtomicReplaceError")        # NT-199: utils.atomic gave up after its retries (a lock that stayed)
 NOT_A_VERDICT = "NOT A VERDICT"
 # `failed` mode: at most this many probe re-runs per launch. 777 s per reference cell on CPU with the probe (measured at
 # PROBE_EVERY 5, the reference profile's cadence) against the 3 h cap of OPERATING_MODEL:
@@ -117,7 +118,8 @@ def probe_overrides(profile: str, mode: str) -> Dict[str, Any]:
 
 
 # OSError subclasses that say the setup is wrong (a missing file, a bad path, no permission), not the machine.
-SETUP_OS_ERRORS = ("FileNotFoundError", "FileExistsError", "NotADirectoryError", "IsADirectoryError", "PermissionError")
+SETUP_OS_ERRORS = ("FileNotFoundError", "FileExistsError", "NotADirectoryError", "IsADirectoryError", "PermissionError",
+                   "ReadOnlyTargetError")
 # Windows' transient lock failures (access denied, sharing and lock violations: another process holds the file; NT-185,
 # D-065): a PermissionError (or other OSError) with one of these winerror codes is the machine, not the setup.
 TRANSIENT_WINERRORS = (5, 32, 33)
@@ -133,6 +135,15 @@ def _winerror(message: str, winerror=None) -> Optional[int]:
             return None
     m = _WINERROR.search(message or "")
     return int(m.group(1)) if m else None
+
+
+def is_setup_error(error_text: str) -> bool:
+    """True when a failed cell's ``error`` text (``"Type: message"``) names a setup error (:data:`SETUP_OS_ERRORS`).
+    Only verdict-side cells reach it (a transient lock is judged non-verdict before). Such a cell gets no probe
+    re-run and no blame (NT-199)."""
+    return (error_text or "").split(":", 1)[0].strip() in SETUP_OS_ERRORS
+
+
 # TensorFlow's InternalError and UnknownError are a verdict-free machine failure only with one of these in the message.
 RESOURCE_MESSAGE = re.compile(r"out of memory|oom|alloc|cudnn|cuda_error|cublas|cusolver|resource exhausted|"
                               r"paging file|no space left", re.IGNORECASE)
@@ -1140,6 +1151,10 @@ def run_harness(*, profile: Optional[str] = "tiny", csv=None, store="runs", case
     not_rerun: List[Verdict] = [Verdict.from_dict(d) for d in (origin or {}).get("not_rerun", [])]
     n_rerun = 0
     for v in failing:
+        if v.status == "failed" and mode != "on" and is_setup_error(v.error):    # NT-199: nothing for a probe to show
+            v.blame_reason = f"setup error ({v.error.split(':', 1)[0]}): no probe re-run, no loss term to blame"
+            write_verdict(dirs[v.run_id], v)
+            continue
         if mode == "failed" and n_rerun >= max_probe_reruns:
             v.blame_reason = f"{NOT_RERUN_CAP}: {max_probe_reruns} probe re-runs already in this launch"
             not_rerun.append(v)

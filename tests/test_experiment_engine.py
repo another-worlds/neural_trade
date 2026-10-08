@@ -79,6 +79,24 @@ class FakeTrainer:
         return fake_result(ctx.config)
 
 
+def test_a_failed_cell_records_the_winerror_code_when_the_exception_has_one(tmp_path, bars_csv):
+    """NT-199: the error dict carries ``winerror`` (None without one), so the stability harness can read a lock whose
+    message has no ``[WinError N]`` text (a lock hit by open() is a PermissionError [Errno 13])."""
+    class Locked(FakeTrainer):
+        def __call__(self, ctx, *, calibrate, save_artifacts):
+            exc = PermissionError("Permission denied")      # one argument: str() carries no code
+            exc.winerror = 32
+            raise exc
+
+    sc = Scenario.from_dict(spec(bars_csv, folds=[-1], seeds=[0]))
+    store = RunStore(tmp_path / "runs")
+    Runner(sc, store, trainer=Locked()).run()
+    failed = store.index.rows(status="failed")[0]
+    doc = json.loads((store.root / failed["run_dir"] / "result.json").read_text(encoding="utf-8"))
+    assert doc["error"]["type"] == "PermissionError" and doc["error"]["winerror"] == 32
+    assert "WinError" not in doc["error"]["message"]
+
+
 def spec(csv, **changes):
     """A tiny scenario: 2 folds x 2 seeds of one variant on the synthetic bars."""
     s = {"schema_version": 1, "name": "tiny", "description": "engine test",
@@ -338,6 +356,7 @@ def test_a_failed_cell_is_recorded_not_dropped_and_retried_only_when_asked(tmp_p
     assert "ValueError: injected failure" in failed["error"] and failed["sharpe_net"] is None
     doc = json.loads((store.root / failed["run_dir"] / "result.json").read_text(encoding="utf-8"))
     assert doc["status"] == "failed" and doc["error"]["type"] == "ValueError" and "Traceback" in doc["error"]["traceback"]
+    assert doc["error"]["winerror"] is None
 
     assert Runner(sc, store, trainer=trainer).run().ran == [] and len(trainer.calls) == 2
     trainer.fail.clear()
