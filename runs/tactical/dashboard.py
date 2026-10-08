@@ -82,6 +82,11 @@ EXPERIMENTS = [
      "base": "hc5_noprice3",
      "specs": [("hc5_noprice3", "без цены, 3 горизонта", 12), ("hc5_noprice1", "без цены, 1 горизонт (h1)", 12)],
      "compare": [], "verdict": None},
+    {"id": "ind1", "title": "Индикаторы на крошечных прогонах", "when": "08.10", "kind": "hc",
+     "goal": "Ваше задание: разные индикаторы на крошечных прогонах. 1-дневный блок, обрезок, 6 срезов x 2 seed'а, все 9 выходов. Каждое семейство отдельно (14), без индикаторов, и все 14 с периодами, замороженными на учебниковых значениях (проверка главной идеи: выученные лучше учебниковых?). На 1 дне уверенность не учится, AUC шумит +-0,03: отсев только крупных эффектов. SPEC: runs/tactical/ind/make_ind.py",
+     "base": "ind1_all",
+     "specs": [["ind1_all", "все 14 семейств (база)", 12], ["ind1_only_ma", "только ma", 12], ["ind1_only_macd", "только macd", 12], ["ind1_only_rsi", "только rsi", 12], ["ind1_only_bb", "только bb", 12], ["ind1_only_atr", "только atr", 12], ["ind1_only_stoch", "только stoch", 12], ["ind1_only_willr", "только willr", 12], ["ind1_only_keltner", "только keltner", 12], ["ind1_only_obv", "только obv", 12], ["ind1_only_vwap", "только vwap", 12], ["ind1_only_mfi", "только mfi", 12], ["ind1_only_adx", "только adx", 12], ["ind1_only_cci", "только cci", 12], ["ind1_only_donchian", "только donchian", 12], ["ind1_none", "без индикаторов", 12], ["ind1_frozen", "замороженные (учебниковые)", 12]],
+     "compare": [["ind1_all", "ind1_only_ma"], ["ind1_all", "ind1_only_macd"], ["ind1_all", "ind1_only_rsi"], ["ind1_all", "ind1_only_bb"], ["ind1_all", "ind1_only_atr"], ["ind1_all", "ind1_only_stoch"], ["ind1_all", "ind1_only_willr"], ["ind1_all", "ind1_only_keltner"], ["ind1_all", "ind1_only_obv"], ["ind1_all", "ind1_only_vwap"], ["ind1_all", "ind1_only_mfi"], ["ind1_all", "ind1_only_adx"], ["ind1_all", "ind1_only_cci"], ["ind1_all", "ind1_only_donchian"], ["ind1_all", "ind1_none"], ["ind1_all", "ind1_frozen"]], "verdict": None},
 ]
 
 
