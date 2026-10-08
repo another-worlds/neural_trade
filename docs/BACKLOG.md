@@ -229,11 +229,11 @@ changes).
 | [NT-194](#nt-194) | P3 | polish | implementer | todo | Remaining '$' and 'dollars' labels outside the visualization package |
 | [NT-195](#nt-195) | P2 | decision | owner | dropped | Make the `timed` layout (7/2/2/5 days, folds at dates or spacing) the default? |
 | [NT-196](#nt-196) | P3 | polish | implementer | todo | NT-041 residues: hole exits get their own reason, rescore skips an exposure configuration over a break, a test for the engine's break, SKIP_LAGS in minutes, fold roles |
-| [NT-197](#nt-197) | P2 | bug | implementer | todo | The stability harness reads a relative CSV_PATH from the working directory in `write_case_data` |
-| [NT-198](#nt-198) | P2 | polish | implementer | todo | A test for the first run's own verdict file and index row after a passing probe re-run |
+| [NT-197](#nt-197) | P2 | bug | implementer | done | The stability harness reads a relative CSV_PATH from the working directory in `write_case_data` |
+| [NT-198](#nt-198) | P2 | polish | implementer | done | A test for the first run's own verdict file and index row after a passing probe re-run |
 | [NT-199](#nt-199) | P3 | polish | implementer | todo | The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified |
 | [NT-200](#nt-200) | P3 | bug | implementer | todo | Audit of hard-coded or platform-default integer dtypes (int32 on Windows, int64 on Linux) |
-| [NT-201](#nt-201) | P3 | polish | implementer | todo | NT-191 doc and test residues |
+| [NT-201](#nt-201) | P3 | polish | implementer | done | NT-191 doc and test residues |
 
 ## Items
 
@@ -2609,7 +2609,7 @@ changes).
 
 **The stability harness reads a relative CSV_PATH from the working directory in `write_case_data`**
 
-- **status:** todo
+- **status:** done (2026-10-08): lead-verified (D-060), merged as e8a0cca (nt-197 e941bea, implementer Sonnet). write_case_data reads the CSV through resolve_data_path; a test runs a data case from a directory without the bars file; mutants M18b and the old reader both fail the new test. Fast 2413 passed + 1 skipped (-n 4, on the merge base 5ceda1c), ruff clean.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/experiments/stability.py (~452), tests/test_stability_harness.py
 - **depends on:** NT-191 (done)
@@ -2621,7 +2621,7 @@ changes).
 
 **A test for the first run's own verdict file and index row after a passing probe re-run**
 
-- **status:** todo
+- **status:** done (2026-10-08): lead-verified, merged as e8a0cca. A test asserts the first run's own stability_verdict.json (passed false, primary) and index row (stability/passed 0) after a passing probe re-run; mutant M6e fails it.
 - **priority / type / role:** P2 / polish / implementer
 - **area:** tests/test_stability_harness.py
 - **depends on:** NT-191 (done)
@@ -2657,7 +2657,7 @@ changes).
 
 **NT-191 doc and test residues**
 
-- **status:** todo
+- **status:** done (2026-10-08): lead-verified, merged as e8a0cca, except (3): the cap default is recomputed from NT-051's measured per-re-run cost (NT-051's REPORT states it). Items (1) and (2) are the tolerance wording (2 to 4 float32 ULP) and the _winerror docstring.
 - **priority / type / role:** P3 / polish / implementer
 - **area:** src/neural_trade/experiments/stability.py (~1067-1082, `_winerror` docstring), tests/test_stability_harness.py (~1470), docs/RUNBOOK.md
 - **depends on:** NT-191 (done)
