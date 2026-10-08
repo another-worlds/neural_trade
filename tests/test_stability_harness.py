@@ -1334,6 +1334,22 @@ def test_a_passing_probe_rerun_never_turns_the_first_runs_fail_into_a_pass(tmp_p
     assert "| FAIL | PASS |" in text, text
 
 
+def test_after_a_passing_probe_rerun_the_first_runs_own_verdict_file_and_index_row_still_say_failed(tmp_path, bars_csv):
+    # NT-198 (mutation M6e: the re-run's verdict written over the first run's file flips the index row to passed)
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0], case_ids=["control"],
+                         trainer=HarnessFake({"control": "probe_fixes"}), probe="failed")
+    (v,), (rr,) = res.verdicts, res.reruns
+    store = RunStore(tmp_path / "runs")
+    rows = {r["run_id"]: r for r in store.index.rows()}
+    assert {v.run_id, rr.run_id} <= set(rows) and v.run_id != rr.run_id
+    first = json.loads((store.root / rows[v.run_id]["run_dir"] / st.VERDICT_FILE).read_text(encoding="utf-8"))
+    again = json.loads((store.root / rows[rr.run_id]["run_dir"] / st.VERDICT_FILE).read_text(encoding="utf-8"))
+    assert first["passed"] is False and first["kind"] == "primary" and first["run_id"] == v.run_id
+    assert again["passed"] is True and again["kind"] == "probe_rerun" and again["run_id"] == rr.run_id
+    assert store.index.scores(v.run_id)["stability/passed"] == 0.0
+    assert store.index.scores(rr.run_id)["stability/passed"] == 1.0
+
+
 def test_a_retry_carries_the_not_rerun_cells_of_its_launch_into_verdicts_and_the_report(tmp_path, bars_csv):
     # mutation M8c: a --retry-non-verdict launch must keep the launch's "not re-run (cap)" list
     first = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
@@ -1363,6 +1379,25 @@ def test_a_missing_bars_file_is_refused_with_64_and_leaves_no_run_directory(tmp_
     assert main(["stability", "--csv", str(tmp_path / "nope.csv"), "--store", str(store), "--cases", "control",
                  "--seeds", "0"]) == st.EXIT_REFUSED
     assert not (store / "stability").exists() or not any((store / "stability").iterdir())
+
+
+def test_a_data_case_runs_from_a_working_directory_without_the_bars_file_with_the_default_relative_csv_path(
+        tmp_path, monkeypatch):
+    # NT-197 (mutations: the pre-check without the project-root resolution, M18b; the data writer without it)
+    from neural_trade.core.config import Config
+
+    rel = Config().CSV_PATH
+    assert not Path(rel).is_absolute()
+    work = tmp_path / "elsewhere"
+    work.mkdir()
+    monkeypatch.chdir(work)
+    assert not Path(rel).exists() and (REPO / rel).is_file()
+    data = st.write_case_data([c for c in st.default_cases() if c.id == "fuzz_constant"], rel, tmp_path / "out", "tiny")
+    assert Path(data["fuzz_constant"]).is_file()
+    res = st.run_harness(profile="tiny", store=tmp_path / "runs", seeds=[0], case_ids=["fuzz_constant"],
+                         trainer=HarnessFake())
+    assert set(res.case_status) == {"fuzz_constant"} and res.case_status["fuzz_constant"] != "NOT A VERDICT"
+    assert list((tmp_path / "runs" / "stability").iterdir())
 
 
 def test_a_retry_keeps_the_probe_mode_of_its_launch_and_refuses_another(tmp_path, bars_csv):
@@ -1433,7 +1468,7 @@ def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_
     """The acceptance of NT-191 (1): the same real tiny cell with the probe off and on. The keys a verdict reads are
     exact: `loss`, every `val_*` key and every integer-valued counter (non-finite steps, masked-term counts) are
     bitwise equal. Every other numeric key (period/*, lambda_*, lr, grad_norm_*, contrib_*, the per-term training sums
-    such as nll_loss) may differ by at most 2 float32 ULP. One comparison saw nll_loss differ by 1 ULP (5.028296947 off
+    such as nll_loss) may differ by at most 2 * 1.19e-7 * max(|x|, 1) (2 to 4 float32 ULP of x). One comparison saw nll_loss differ by 1 ULP (5.028296947 off
     against 5.028297424 on) while a later probe-on run was bitwise equal to probe-off, so the cause of that gap
     (the probe graph or run-to-run noise) is not established. Two runs of ONE setup differ
     in the 7th digit unless DETERMINISTIC_GRU is on (NT-114: 5.028296947 against 5.028297901 in nll_loss, probe off in
@@ -1466,7 +1501,7 @@ def test_the_probe_does_not_change_training_epoch_metrics_are_bitwise_equal_and_
             counter = float(ra[k]).is_integer() and float(rb[k]).is_integer()
             if k == "loss" or k.startswith("val_") or counter:
                 assert ra[k] == rb[k], f"{k}: {ra[k]!r} != {rb[k]!r}"     # bitwise: what a verdict reads
-            else:                    # period/*, lambda_*, lr, grad_norm_*, contrib_*, per-term sums: within 2 ULP
+            else:                    # period/*, lambda_*, lr, grad_norm_*, contrib_*, per-term sums: within 2e-7 * max(|x|, 1)
                 assert abs(ra[k] - rb[k]) <= 2 * float(ulp) * max(abs(ra[k]), abs(rb[k]), 1.0), f"{k}: {ra[k]!r} != {rb[k]!r}"
     va, vb = off.verdicts[0], on.verdicts[0]
     assert va.passed == vb.passed

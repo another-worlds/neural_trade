@@ -675,7 +675,7 @@ retry; no run directory is created), else 0.
 - **The probe and its cost (NT-191)**: the per-term gradient probe never changes training. With `DETERMINISTIC_GRU`
   on, the same tiny cell's `loss`, every `val_*` epoch metric and every integer counter are bitwise equal with the
   probe on and off, and so are its verdict fields; every other numeric key (period/*, lambda_*, lr, grad_norm_*,
-  contrib_*, the per-term training sums) agrees within 2 float32 ULP. One comparison saw `nll_loss` 1 ULP apart
+  contrib_*, the per-term training sums) agrees within 2 * 1.19e-7 * max(|x|, 1) (2 to 4 float32 ULP of x). One comparison saw `nll_loss` 1 ULP apart
   (5.028296947 off, 5.028297424 on); a later probe-on run was bitwise equal to probe-off, so the cause of that gap
   is not established. `term_gradient_share` is report-only. Without `DETERMINISTIC_GRU` two runs of one setup differ in the 7th digit, probe or not (`nll_loss`
   5.028296947 against 5.028297901, both probe off).
