@@ -700,6 +700,11 @@ class EvalReport:
              "Up is the positive class. Temperature scaling does not move P(up) across 0.5, so the "
              "counts and rates are the same before and after calibration; Brier and ECE are not.", ""] \
             + self._table(head, rows)
+        nosig = [h for h in HORIZONS if h in (self.meta.get("direction_signal_none") or ())]
+        if nosig:
+            L += ["", f"**No usable direction signal on {', '.join(nosig)}**: the temperature fit ended at a search "
+                  "bound (no interior NLL minimum), so the calibrated P(up) there is a constant and the "
+                  "calibrated rows above carry no information; strategies reading P(up) stay flat on it (D-066)."]
         if zero:
             if raw_gauss:
                 how = ("The rows \"Gaussian readout of the raw heads\" score the raw price heads' readout (with the "
@@ -1043,6 +1048,9 @@ def evaluate(frame: PredictionFrame, config, *, baselines=None, cal_frame: Optio
     zero = [h for h in HORIZONS if len(frame) and not np.any(np.asarray(frame.delta[h], float))]
     if zero:
         meta["served_delta_zero"] = zero
+    nosig = [h for h, v in ((getattr(frame, "meta", None) or {}).get("direction_signal") or {}).items() if v == "none"]
+    if nosig:
+        meta["direction_signal_none"] = nosig     # D-066: temperature fit at a bound
     report = EvalReport(run_id, frame.split, deadband, len(frame), model, backtest=backtest, meta=meta)
     if baselines is not None:
         labels = direction_labels_np(frame.y, frame.last_close, deadband)

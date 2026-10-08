@@ -18,7 +18,7 @@ Inputs must be in time order (the deadband mask keeps the order).
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -107,7 +107,8 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
                        horizon: Optional[str] = None, horizon_steps: Optional[int] = None,
                        ref_rate: Optional[float] = None, ref_label: str = "cal-block up-rate",
                        p_saved=None, saved_label: str = "saved", subtitle: Optional[str] = None,
-                       note: Optional[str] = None, block: str = "test", height: Optional[int] = None):
+                       note: Optional[str] = None, block: str = "test", height: Optional[int] = None,
+                       ece_na: Sequence[str] = ()):
     """Reliability diagram (equal-count bins) of the raw and, if given, calibrated P(up), with the
     distribution of the predictions underneath.
 
@@ -117,7 +118,9 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
     of this block (dashed) and, with ``ref_rate``, of the block the calibration was fitted on
     (dash-dot). ``p_saved`` adds a third curve
     (e.g. the run's saved pipeline next to a refit). Axes are zoomed to the bins and their bands;
-    the subtitle says how many predictions lie outside.
+    the subtitle says how many predictions lie outside. ``ece_na`` names curves ("calibrated",
+    "saved") whose ECE the subtitle gives as "n/a (no direction signal)" instead of a number: a
+    temperature fit at a bound flattens P(up) (D-066), and its small ECE is not a calibration result.
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -194,7 +197,8 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
                  band + ("; raw and calibrated P(up) share their bins, so the bars are drawn once" if same_bins else "")]
         short = [nm.split(" P(up)")[0] for nm, _, _, _ in series]
         means = [f"{s} {float(np.mean(p)):.3f}" for s, (_, p, _, _) in zip(short, series)]
-        eces = [f"{s} {ece_pos(labels, p):.3f}" for s, (_, p, _, _) in zip(short, series)]
+        eces = [f"{s} n/a (no direction signal)" if s in ece_na else f"{s} {ece_pos(labels, p):.3f}"
+                for s, (_, p, _, _) in zip(short, series)]
         lines.append(f"mean P(up) {', '.join(means)} vs observed up-rate {base:.3f} · ECE {', '.join(eces)} · "
                      f"AUC {_auc(labels, series[0][1]):.3f} (0.5 = no skill)")
         if any(o[1] > 0 for o in outside):

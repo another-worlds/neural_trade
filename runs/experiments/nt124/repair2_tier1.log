@@ -1,0 +1,87 @@
+186839daf8bd621256d598f9a09bd16029bc636f
+186839daf8bd621256d598f9a09bd16029bc636f
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  8%]
+........................................................................ [ 17%]
+...............................................s........................ [ 26%]
+........................................................................ [ 35%]
+........................................................................ [ 43%]
+........................................................................ [ 52%]
+........................................................................ [ 61%]
+........................................................................ [ 70%]
+........................................................................ [ 79%]
+........................................................................ [ 87%]
+........................................................................ [ 96%]
+............................                                             [100%]
+============================== warnings summary ===============================
+tests/registries/test_contracts.py: 48 warnings
+tests/test_legacy_bundle.py: 48 warnings
+tests/test_model_variants.py: 408 warnings
+tests/test_eval_metrics.py: 141 warnings
+tests/test_stability.py: 284 warnings
+tests/test_ohlcv_input.py: 192 warnings
+tests/test_stability_harness.py: 40 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_control_panel_repair2.py::test_a_real_zero_beta_cell_shows_n_a_for_every_constant_statistic
+  D:\nt\nt_wt_124\src\neural_trade\notebook\panel_compare.py:520: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 8 durations =============================
+68.66s call     tests/test_stability.py::test_short_run_on_the_default_config_has_zero_nonfinite_steps_and_finite_state
+64.62s call     tests/test_stability.py::test_probe_on_or_off_reaches_the_same_weights_after_n_steps
+55.61s call     tests/test_control_panel_repair2.py::test_a_cli_sweep_resumes_in_the_panel_from_notebooks_without_retraining[quick]
+55.14s call     tests/test_control_panel_repair2.py::test_a_panel_sweep_from_notebooks_resumes_in_the_cli_without_retraining[quick]
+39.84s call     tests/test_model_variants.py::test_variant_trains_one_cpu_epoch_and_serves_through_predictor[linear_indicators]
+35.53s call     tests/test_model_variants.py::test_variant_trains_one_cpu_epoch_and_serves_through_predictor[gru_small]
+28.08s call     tests/test_nt041_repair.py::test_cells_made_before_the_gap_policy_are_not_done_when_a_hole_is_in_their_blocks
+20.94s call     tests/test_model_variants.py::test_direction_deep_zero_init_starts_the_head_at_the_skip_logit_and_defaults_off
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_nt041_repair.py:138: the real index already has the new columns
+819 passed, 1 skipped, 1162 warnings in 249.26s (0:04:09)
+changed files: 25 (against origin/remediation/plan)
+note: changes outside src/tests that may matter (scripts, configs): scripts/golden_run.py, scripts/notebooks/build.py
+  tests/registries/test_contracts.py
+  tests/test_ablation_harness.py
+  tests/test_backtest.py
+  tests/test_cli.py
+  tests/test_control_panel_repair2.py
+  tests/test_direction_signal.py
+  tests/test_direction_signal_surfaces.py
+  tests/test_eval_metrics.py
+  tests/test_eval_raw_heads_integration.py
+  tests/test_eval_report_beta0.py
+  tests/test_experiment_engine.py
+  tests/test_exposure_backtest.py
+  tests/test_indicator_report.py
+  tests/test_leaderboard.py
+  tests/test_legacy_bundle.py
+  tests/test_model_variants.py
+  tests/test_notebook_signal_flags.py
+  tests/test_notebook_ui.py
+  tests/test_nt041_repair.py
+  tests/test_ohlcv_input.py
+  tests/test_predictor_raw_heads.py
+  tests/test_predictor_round_trip.py
+  tests/test_random_null.py
+  tests/test_rescore.py
+  tests/test_signal_raw_coherence.py
+  tests/test_stability.py
+  tests/test_stability_harness.py
+  tests/test_statistics_module.py
+  tests/test_sweep.py
+  tests/test_temperature_scaling.py
+  tests/test_variance_strategies.py
+  tests/test_viz_confidence.py
+  tests/test_viz_delta.py
+  tests/test_viz_direction.py
+  tests/test_viz_misc.py
+  tests/test_viz_noise_bands.py
+  tests/test_viz_tables.py
+  tests/test_viz_tables_zero_delta.py
+  tests/test_viz_variance.py
+39 test file(s) selected
