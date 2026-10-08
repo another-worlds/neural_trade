@@ -87,6 +87,7 @@ class CalibrationExplorer:
         ``signal`` is the pipeline's ``direction_signal()``. A horizon whose temperature fit ended at a
         bound ("none", D-066) has a flat calibrated P(up): its row says so in "direction signal" and the
         two calibrated-ECE cells are NaN (n/a), so they never read as an improvement over the raw ECE.
+        "direction signal" is the only text column; every other column is float (``round`` applies).
         """
         from neural_trade.metrics.direction_labels import direction_labels_np
         from neural_trade.metrics.numpy_metrics import ece_pos
@@ -119,7 +120,7 @@ class CalibrationExplorer:
                 "up-rate cal": float(lc[mc].mean()) if mc.any() else float("nan"),
                 "up-rate test": float(lab[mask].mean()) if mask.any() else float("nan"),
             }
-        return pd.DataFrame(rows).T
+        return pd.DataFrame.from_dict(rows, orient="index")   # per-column dtypes (a .T would make all object)
 
     @staticmethod
     def _served(frame) -> Optional[dict]:
@@ -163,16 +164,31 @@ class CalibrationExplorer:
         self._settings = (str(conformal_scale), bool(shrink_delta), float(alpha))
         return self.last_table
 
-    def comparison_table(self) -> pd.DataFrame:
-        """The last refit and the saved pipeline side by side: rows (horizon, 'refit' | 'saved')."""
+    def comparison_table(self, *, styled: bool = False):
+        """The last refit and the saved pipeline side by side: rows (horizon, 'refit' | 'saved').
+
+        Numeric columns stay float ("direction signal" is the only text column), so ``round`` applies.
+        ``styled=True``: the same table as a Styler for display, numbers with four decimals and the
+        missing cells (the calibrated ECE of a horizon with no direction signal, D-066) shown as "n/a";
+        the data are not changed."""
         if self.last_table is None:
             self.refit()
         if self.saved_table is None:
-            return self.last_table
-        rows = [(h, name, t.loc[h]) for h in HORIZONS for name, t in (("refit", self.last_table),
-                                                                      ("saved", self.saved_table))]
-        return pd.DataFrame([r for _, _, r in rows],
-                            index=pd.MultiIndex.from_tuples([(h, n) for h, n, _ in rows], names=["horizon", "pipeline"]))
+            table = self.last_table
+        else:
+            rows = [(h, name, t.loc[h]) for h in HORIZONS for name, t in (("refit", self.last_table),
+                                                                          ("saved", self.saved_table))]
+            table = pd.DataFrame([r for _, _, r in rows],
+                                 index=pd.MultiIndex.from_tuples([(h, n) for h, n, _ in rows],
+                                                                 names=["horizon", "pipeline"])).infer_objects()
+        if not styled:
+            return table
+        num = [c for c in table.columns if pd.api.types.is_numeric_dtype(table[c])]
+        sty = table.style.format({c: "{:.4f}" for c in num}, na_rep="n/a")
+        if "direction signal" in table.columns and (table["direction signal"] != "ok").any():
+            sty = sty.set_caption("n/a: no calibrated ECE for a horizon without a usable direction signal "
+                                  "(its temperature fit ended at a bound, so the calibrated P(up) is flat; D-066)")
+        return sty
 
     # ------------------------------------------------------------------ figures
     def figures(self, horizon: str = "h1", window: int = 500):
@@ -207,10 +223,14 @@ class CalibrationExplorer:
             s_int = None if (np.allclose(s_lo, lo, atol=0.5) and np.allclose(s_hi, hi, atol=0.5)) else (s_lo, s_hi)
         name = horizon_label(horizon, self.config)
         temp = float(self.last_table.loc[horizon, "temperature"])
+        # a horizon without a direction signal (D-066): its calibrated ECE is not a result, the subtitle says n/a
+        saved_sig = getattr(self.saved, "direction_signal", None)
+        ece_na = (["calibrated"] if self.pipeline.direction_signal().get(horizon) == "none" else []) + (
+            ["saved"] if p_saved is not None and callable(saved_sig) and saved_sig().get(horizon) == "none" else [])
         rel = reliability_figure(
             lab[mask], test.direction_prob[horizon][mask], p_cal,
             horizon=horizon, horizon_steps=steps, ref_rate=float(lc[mc].mean()) if mc.any() else None,
-            p_saved=p_saved, title=f"Direction reliability, {name}",
+            p_saved=p_saved, title=f"Direction reliability, {name}", ece_na=ece_na,
             note=((no_signal_note(horizon, temp) if self.pipeline.direction_signal().get(horizon) == "none"
                    else f"refit temperature {temp:.2f}, fit on the calibration block: a temperature stretches "
                         "P(up) around 0.5 and cannot follow a shift in the up-rate")
@@ -254,7 +274,7 @@ class CalibrationExplorer:
         def do_refit(_=None):
             status.value = "<i>fitting...</i>"
             self.refit(scale.value, shrink.value, alpha.value)
-            show(table, self.comparison_table().round(4))
+            show(table, self.comparison_table(styled=True))
             draw()
             status.value = self._status()
 

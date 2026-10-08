@@ -449,7 +449,7 @@ calib.click_refit()   # the run's saved settings first; then change them and pre
 """),
     ("md", "Static copy of that refit (the explorer above stays interactive): the refit next to the run's saved pipeline, per horizon."),
     ("code", """
-display(calib.comparison_table().round(4))
+display(calib.comparison_table(styled=True))   # missing cells (no direction signal) as n/a
 reliability, coverage = calib.figures("h1")
 reliability.show()
 coverage.show()

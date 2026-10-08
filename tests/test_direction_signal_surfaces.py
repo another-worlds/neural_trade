@@ -2,6 +2,7 @@
 TrainResult and the served path; a fit at EITHER search bound is flagged "none"."""
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import numpy as np
@@ -162,3 +163,105 @@ def test_calibration_pipeline_reports_both_bounds_after_a_real_fit():
     p, y = _preds(rng, {"h0": "upper", "h1": "lower", "h2": "ok"})
     pipe = CalibrationPipeline().fit_from_arrays(p, y, np.full(N, 100_000.0), deadband_bps=0.0, conformal_alpha=0.1)
     assert pipe.direction_signal() == {"h0": "none", "h1": "none", "h2": "ok"}
+
+
+# ---------------------------------------------------------------- repair round 2: dtypes, n/a display, saved signal
+NUMERIC = ["temperature", "delta beta", "coverage", "target", "mean width $", "EV raw delta", "EV served delta",
+           "ECE raw", "ECE calibrated", "coverage cal (in-sample)", "ECE calibrated cal (in-sample)",
+           "up-rate cal", "up-rate test"]
+
+
+def _explorer_with_saved(kind):
+    """An explorer whose saved pipeline was fitted on the cal block (no intervals scale, no shrinkage), with the
+    served test / cal frames it produces: the saved table then has the saved pipeline's own signal."""
+    ex = _explorer(kind)
+    cal, test = ex.blocks["cal_raw"], ex.blocks["test_raw"]
+    pipe = CalibrationPipeline(conformal_scale="none", shrink_delta=False).fit_from_arrays(
+        ex._preds(cal), cal.y, cal.last_close, deadband_bps=float(ex.config.DIR_DEADBAND_BPS), conformal_alpha=0.1,
+        pred_scale=ex.pred_scale, horizon_steps=tuple(ex.config.HORIZON_STEPS))
+
+    def frame(raw):
+        out = pipe.apply(ex._preds(raw), alpha=0.1)
+        return SimpleNamespace(delta=out["delta"], direction_prob_calibrated=out["direction_prob"],
+                               intervals=out["intervals"])
+
+    blocks = {**ex.blocks, "test": frame(test), "cal": frame(cal),
+              "predictor": SimpleNamespace(bundle=SimpleNamespace(pred_scale=ex.pred_scale, calibration_pipeline=pipe))}
+    return CalibrationExplorer(blocks)
+
+
+def test_explorer_tables_keep_numeric_columns_float_and_round_works():
+    """Repair 2: the text column must not make every column object dtype (round(4) and np.allclose broke)."""
+    ex = _explorer_with_saved({"h0": "ok", "h1": "upper", "h2": "ok"})
+    t = ex.refit("none", shrink_delta=False)
+    both = ex.comparison_table()
+    for table in (t, ex.saved_table, both):
+        assert table["direction signal"].dtype == object
+        assert all(table[c].dtype == np.float64 for c in NUMERIC), table.dtypes.to_dict()
+        assert set(table.columns) == set(NUMERIC) | {"direction signal"}
+    r4 = both.round(4)
+    np.testing.assert_allclose(r4[NUMERIC].to_numpy(), np.round(both[NUMERIC].to_numpy(), 4), equal_nan=True)
+    assert r4.loc[("h0", "refit"), "coverage"] == round(both.loc[("h0", "refit"), "coverage"], 4)
+    assert np.allclose(t["EV raw delta"], t["EV served delta"])        # no shrinkage: the served delta is the raw one
+
+
+def test_saved_table_carries_the_saved_pipelines_signal():
+    """Kills M9: _saved_scores must pass the saved pipeline's direction_signal() to _score."""
+    ex = _explorer_with_saved({"h0": "ok", "h1": "upper", "h2": "ok"})
+    assert ex.saved.direction_signal()["h1"] == "none"
+    s = ex.saved_table
+    assert s.loc["h1", "direction signal"].startswith("none")
+    assert np.isnan(s.loc["h1", "ECE calibrated"]) and np.isnan(s.loc["h1", "ECE calibrated cal (in-sample)"])
+    assert s.loc["h0", "direction signal"] == "ok" and np.isfinite(s.loc["h0", "ECE calibrated"])
+    ex.refit("none", shrink_delta=False)
+    both = ex.comparison_table()
+    assert both.loc[("h1", "saved"), "direction signal"].startswith("none")
+
+
+def test_styled_comparison_table_shows_na_and_keeps_every_cell():
+    ex = _explorer_with_saved({"h0": "ok", "h1": "upper", "h2": "ok"})
+    ex.refit("none", shrink_delta=False)
+    both = ex.comparison_table()
+    sty = ex.comparison_table(styled=True)
+    html = sty.to_html()
+    assert "n/a" in html and "nan" not in html.lower().replace("n/a", "")
+    assert "no usable direction signal" in (sty.caption or "") or "without a usable direction signal" in sty.caption
+    assert sty.data.equals(both)                                       # display only: the data are unchanged
+    assert f"{both.loc[('h0', 'refit'), 'coverage']:.4f}" in html
+    for c in both.columns:                                             # D-014: nothing removed
+        assert c.replace("$", "&#36;") in html or c in html
+    ok = _explorer({h: "ok" for h in HORIZONS})
+    ok.refit("none", shrink_delta=False)
+    assert ok.comparison_table(styled=True).caption is None            # no n/a cell: no caption
+
+
+def test_widget_table_shows_na_not_nan():
+    ex = _explorer_with_saved({"h0": "ok", "h1": "upper", "h2": "ok"})
+    ex.click_refit()
+    html = ex._w["table"].outputs[0]["data"]["text/html"]
+    assert "n/a" in html and "NaN" not in html
+
+
+def test_reliability_subtitle_gives_no_calibrated_ece_on_a_no_signal_horizon():
+    """P2: the subtitle must not present the flat P(up)'s ECE as a calibration result."""
+    ex = _explorer({"h0": "ok", "h1": "upper", "h2": "ok"})
+    ex.refit("none", shrink_delta=False)
+    sub1 = ex.figures("h1")[0].layout.title.text
+    assert "calibrated n/a (no direction signal)" in sub1
+    assert re.search(r"ECE raw \d\.\d{3}, calibrated n/a", sub1)
+    sub0 = ex.figures("h0")[0].layout.title.text
+    assert re.search(r"ECE raw \d\.\d{3}, calibrated \d\.\d{3}", sub0) and "n/a" not in sub0
+
+
+def test_reliability_figure_ece_na_names_any_curve():
+    from neural_trade.visualization.calibration_plots import reliability_figure
+
+    rng = np.random.default_rng(3)
+    p = _sig(rng.normal(0, 1, 2000))
+    lab = (rng.uniform(size=2000) < p).astype(float)
+    sub = reliability_figure(lab, p, p * 0.9 + 0.05, p_saved=p * 0.8 + 0.1, horizon="h1",
+                             ece_na=("calibrated", "saved")).layout.title.text
+    assert "calibrated n/a (no direction signal), saved n/a (no direction signal)" in sub
+    assert re.search(r"ECE raw \d\.\d{3}", sub)
+    plain = reliability_figure(lab, p, p * 0.9 + 0.05, horizon="h1").layout.title.text
+    assert "n/a" not in plain
