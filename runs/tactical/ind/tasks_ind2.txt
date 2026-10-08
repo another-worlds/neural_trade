@@ -1,3 +1,7 @@
+ind2_cross3a 0/2
+ind2_cross3a 1/2
+ind2_cross3b 0/2
+ind2_cross3b 1/2
 ind2_textbook 0/2
 ind2_textbook 1/2
 ind2_short 0/2

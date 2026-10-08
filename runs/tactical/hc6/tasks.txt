@@ -1,3 +1,15 @@
+hc6_ma 0/3
+hc6_ma 1/3
+hc6_ma 2/3
+hc6_rsi 0/3
+hc6_rsi 1/3
+hc6_rsi 2/3
+hc6_macd 0/3
+hc6_macd 1/3
+hc6_macd 2/3
+hc6_marsi 0/3
+hc6_marsi 1/3
+hc6_marsi 2/3
 hc6_indgrad 0/3
 hc6_indgrad 1/3
 hc6_indgrad 2/3
