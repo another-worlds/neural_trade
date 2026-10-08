@@ -27,6 +27,7 @@ import tensorflow as tf
 from sklearn.preprocessing import StandardScaler
 
 from neural_trade.core.config import Config
+from neural_trade.core.horizons import keys_for, keys_of
 from neural_trade.data.datasets import create_datasets
 from neural_trade.data.processor import DataProcessor
 from neural_trade.utils.seeding import seed_everything, set_arithmetic_rewrite
@@ -122,7 +123,7 @@ def _calibration_coverage_report(calibrated, y_true_raw, pipeline, alpha=0.1):
     """Empirical coverage / mean width of the conformal intervals on a held-out split, per horizon."""
     report = {}
     y = np.asarray(y_true_raw, dtype=float)
-    for i, h in enumerate(("h0", "h1", "h2")):
+    for i, h in enumerate(keys_of(calibrated.get("intervals"))):
         if y.ndim < 2 or i >= y.shape[1] or h not in calibrated.get("intervals", {}):
             continue
         lo, hi = calibrated["intervals"][h]
@@ -436,9 +437,8 @@ def train_and_evaluate(
 
     logger.info("Evaluating enhanced model...")
     predictions = _predict_heads(custom_model, X_test_seq, y_test.shape[0], target_scaler, cfg)
-    y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw = (predictions["delta"][h] for h in ("h0", "h1", "h2"))
-    dir_pred_h0, dir_pred_h1, dir_pred_h2 = (predictions["direction_prob"][h] for h in ("h0", "h1", "h2"))
-    var_pred_h0, var_pred_h1, var_pred_h2 = (predictions["variance"][h] for h in ("h0", "h1", "h2"))
+    run_keys = keys_for(cfg)
+    y_pred_raw_h = [predictions["delta"][h] for h in run_keys]
 
     # === DIAGNOSTIC: Check prediction quality ===
     # Print statistics to help diagnose issues
@@ -454,10 +454,10 @@ def train_and_evaluate(
 
     resample = int(getattr(cfg, 'RESAMPLE_MINUTES', 1))
     horizon_steps = list(getattr(cfg, 'HORIZON_STEPS', [1, 5, 15]))
-    horizon_labels = [f"{k}(" + _format_tf_local(int(k_step * resample)) + ")" for k, k_step in zip(['h0','h1','h2'], horizon_steps)]
+    horizon_labels = [f"{k}(" + _format_tf_local(int(k_step * resample)) + ")" for k, k_step in zip(run_keys, horizon_steps)]
 
     logger.info("\n[Diagnostic: Prediction Statistics]")
-    for h_idx, (h_name, y_pred_raw) in enumerate(zip(horizon_labels, [y_pred_h0_raw, y_pred_h1_raw, y_pred_h2_raw])):
+    for h_idx, (h_name, y_pred_raw) in enumerate(zip(horizon_labels, y_pred_raw_h)):
         y_true_raw = y_test[:, h_idx]
         pred_mean = np.mean(y_pred_raw)
         pred_std = np.std(y_pred_raw)

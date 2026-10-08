@@ -170,7 +170,7 @@ def test_lambda_weights_and_ablation_names():
     ({"HORIZON_STEPS": [10, 0, 20]}, "positive"),
     ({"HORIZON_STEPS": [20, 15, 10], "EXTENDED_TREND_PERIODS": [10, 15, 20]}, "ascending"),
     ({"EXTENDED_TREND_PERIODS": [20, 15, 10]}, "ascending"),
-    ({"HORIZON_STEPS": [10, 20], "EXTENDED_TREND_PERIODS": [10, 20]}, "three horizon towers"),
+    ({"HORIZON_STEPS": [10], "EXTENDED_TREND_PERIODS": [10]}, "at least 2 entries"),  # NT-042: N >= 2
     ({"VAR_CAP": 1e-5}, "VAR_CAP"),
     ({"VAL_FRACTION": 0.6}, "VAL_FRACTION"),
     ({"FOLD_INDEX": 7}, "FOLD_INDEX"),

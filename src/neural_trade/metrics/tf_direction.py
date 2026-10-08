@@ -14,25 +14,25 @@ import tensorflow as tf
 from neural_trade.utils.math import log_ndtr
 
 
-def direction_labels_tf(y_true_raw, last_close_squeeze, deadband_bps, eps=1e-8):
+def direction_labels_tf(y_true_raw, last_close_squeeze, deadband_bps, eps=1e-8, *, n_horizons=None):
     """TF-graph version of direction labeling with deadband (single source of truth).
 
     The single TF labelling rule (custom_loss, train_step, test_step). |return| <= deadband
     is neutral and masked out; "up" means return > deadband.
-    Returns (mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2).
+    Returns (mask_h0, ..., mask_h{N-1}, true_dir_h0, ..., true_dir_h{N-1}): the N masks, then the
+    N labels (N = 3: the reference six). ``n_horizons`` defaults to the static column count of
+    ``y_true_raw`` (3 when it is unknown).
     NumPy twin: neural_trade.metrics.direction_labels.direction_labels_np.
     """
+    if n_horizons is None:
+        cols = y_true_raw.shape[-1] if getattr(y_true_raw, "shape", None) is not None else None
+        n_horizons = int(cols) if cols is not None else 3
+    hs = range(int(n_horizons))
     deadband = tf.cast(deadband_bps, tf.float32) / tf.constant(10000.0, dtype=tf.float32)
-    ret_h0 = y_true_raw[:, 0] / (last_close_squeeze + eps)
-    ret_h1 = y_true_raw[:, 1] / (last_close_squeeze + eps)
-    ret_h2 = y_true_raw[:, 2] / (last_close_squeeze + eps)
-    mask_h0 = tf.cast(tf.abs(ret_h0) > deadband, tf.float32)
-    mask_h1 = tf.cast(tf.abs(ret_h1) > deadband, tf.float32)
-    mask_h2 = tf.cast(tf.abs(ret_h2) > deadband, tf.float32)
-    true_dir_h0 = tf.cast(ret_h0 > deadband, tf.float32)
-    true_dir_h1 = tf.cast(ret_h1 > deadband, tf.float32)
-    true_dir_h2 = tf.cast(ret_h2 > deadband, tf.float32)
-    return mask_h0, mask_h1, mask_h2, true_dir_h0, true_dir_h1, true_dir_h2
+    rets = [y_true_raw[:, i] / (last_close_squeeze + eps) for i in hs]
+    masks = [tf.cast(tf.abs(rets[i]) > deadband, tf.float32) for i in hs]
+    true_dirs = [tf.cast(rets[i] > deadband, tf.float32) for i in hs]
+    return tuple(masks) + tuple(true_dirs)
 
 
 def gaussian_up_prob_given_move(mu_scaled, var_scaled, last_close, deadband_frac,
@@ -89,6 +89,24 @@ PIT_N_BINS = 200
 #: docstring), updated every step, train and val alike (not gated by ``TRAIN_METRICS_EVERY`` the
 #: way the rest of the training diagnostics are), so their sum matches ``loss``/``val_loss`` over
 #: exactly the same steps.
+def step_mean_keys(n_horizons: int = 3) -> tuple:
+    """The step-mean metric keys for N horizons (NT-042); N = 3 is ``STEP_MEAN_KEYS`` exactly."""
+    hs = [f"h{i}" for i in range(int(n_horizons))]
+    keys = ['loss', 'point_loss', *(f'point_{h}' for h in hs),
+            'trend_loss', *(f'trend_{h}' for h in hs)]
+    for h in hs:
+        keys += [f'local_{h}', f'global_{h}', f'extended_{h}']
+    keys += ['dir_loss', *(f'dir_loss_{h}' for h in hs),
+             'nll_loss', *(f'nll_{h}' for h in hs),
+             'crps_loss', *(f'crps_{h}' for h in hs),
+             'soft_ece_loss', *(f'soft_ece_{h}' for h in hs),
+             'reg_loss', 'inter_reg', 'vol_loss',
+             't_perp_loss', 'casimir_loss', 'vac_loss', 'hd_loss', 'ife_loss', 'vac_overflow_loss',
+             'pnl_val',
+             'grad_global_norm']
+    return tuple(keys)
+
+
 CONTRIB_KEYS = (
     'contrib_point', 'contrib_trend', 'contrib_dir', 'contrib_dir_align', 'contrib_reg',
     'contrib_inter_reg', 'contrib_vol', 'contrib_coherence', 'contrib_nll', 'contrib_crps',
@@ -234,14 +252,16 @@ def direction_metrics_from_stats(stats: DirectionStats, prefix: str, h_name: str
 
 
 class DirectionAccumulator(tf.keras.metrics.Metric):
-    """Epoch accumulator of direction statistics for the three horizons."""
+    """Epoch accumulator of direction statistics for the N horizons (three by default)."""
 
-    def __init__(self, name='direction_accumulator', **kwargs):
+    def __init__(self, name='direction_accumulator', n_horizons=3, **kwargs):
         super().__init__(name=name, **kwargs)
-        self.counts = self.add_weight(name='counts', shape=(3, 7), initializer='zeros')
-        self.bin_n = self.add_weight(name='bin_n', shape=(3, DIR_N_BINS), initializer='zeros')
-        self.bin_true = self.add_weight(name='bin_true', shape=(3, DIR_N_BINS), initializer='zeros')
-        self.bin_prob = self.add_weight(name='bin_prob', shape=(3, DIR_N_BINS), initializer='zeros')
+        self.n_horizons = int(n_horizons)
+        n = self.n_horizons
+        self.counts = self.add_weight(name='counts', shape=(n, 7), initializer='zeros')
+        self.bin_n = self.add_weight(name='bin_n', shape=(n, DIR_N_BINS), initializer='zeros')
+        self.bin_true = self.add_weight(name='bin_true', shape=(n, DIR_N_BINS), initializer='zeros')
+        self.bin_prob = self.add_weight(name='bin_prob', shape=(n, DIR_N_BINS), initializer='zeros')
 
     def update_state(self, true_dirs, dir_preds, masks, sample_weight=None):
         stats = [direction_counts(t, p, m) for t, p, m in zip(true_dirs, dir_preds, masks)]
@@ -259,7 +279,8 @@ class DirectionAccumulator(tf.keras.metrics.Metric):
 
     def logs(self, prefix, fns=None):
         out = {}
-        for i, h in enumerate(("h0", "h1", "h2")):
+        for i in range(self.n_horizons):
+            h = f"h{i}"
             stats = direction_stats(self.counts[i], self.bin_n[i], self.bin_true[i], self.bin_prob[i])
             out.update(direction_metrics_from_stats(stats, prefix, h, fns))
         return out
@@ -274,10 +295,11 @@ class PITAccumulator(tf.keras.metrics.Metric):
     epoch ECDF (resolution 1 / PIT_N_BINS).
     """
 
-    def __init__(self, var_floor=1e-4, var_cap=1e3, name='pit_accumulator', **kwargs):
+    def __init__(self, var_floor=1e-4, var_cap=1e3, name='pit_accumulator', n_horizons=3, **kwargs):
         super().__init__(name=name, **kwargs)
         self.var_floor, self.var_cap = float(var_floor), float(var_cap)
-        self.hist = self.add_weight(name='hist', shape=(3, PIT_N_BINS), initializer='zeros')
+        self.n_horizons = int(n_horizons)
+        self.hist = self.add_weight(name='hist', shape=(self.n_horizons, PIT_N_BINS), initializer='zeros')
 
     def update_state(self, ys, mus, variances, sample_weight=None):
         rows = []
@@ -297,9 +319,9 @@ class PITAccumulator(tf.keras.metrics.Metric):
         self.hist.assign(tf.zeros_like(self.hist))
 
     def logs(self):
-        n = tf.reduce_sum(self.hist, axis=1, keepdims=True)                       # [3, 1]
+        n = tf.reduce_sum(self.hist, axis=1, keepdims=True)                       # [N, 1]
         ecdf = tf.cumsum(self.hist, axis=1) / (n + 1e-8)                          # at right edges
         edges = tf.range(1, PIT_N_BINS + 1, dtype=tf.float32) / PIT_N_BINS
         ks = tf.reduce_max(tf.abs(ecdf - edges[None, :]), axis=1)
         ks = tf.where(tf.squeeze(n, 1) > 0, ks, tf.constant(np.nan, tf.float32))
-        return {"pit_ks_h0": ks[0], "pit_ks_h1": ks[1], "pit_ks_h2": ks[2]}
+        return {f"pit_ks_h{i}": ks[i] for i in range(self.n_horizons)}

@@ -45,15 +45,4 @@ def build_gru_small(config) -> tf.keras.Model:
     heads = build_towers_and_heads(config, shared_dense, perp_magnitude, regime_gate, skip_features,
                                    tower_hidden_units=16)
 
-    price_h0, direction_h0, variance_h0, price_h1, direction_h1, variance_h1, \
-        price_h2, direction_h2, variance_h2 = heads
-
-    return tf.keras.Model(
-        inputs=inp,
-        outputs=[
-            price_h0, direction_h0, variance_h0,
-            price_h1, direction_h1, variance_h1,
-            price_h2, direction_h2, variance_h2,
-            vacuum_overflow,
-        ],
-    )
+    return tf.keras.Model(inputs=inp, outputs=list(heads) + [vacuum_overflow])

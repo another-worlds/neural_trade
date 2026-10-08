@@ -2,9 +2,10 @@
 
 learnable indicators -> Bi-GRU -> temporal and cross-indicator attention -> multi-scale
 convolutions blended by an energy gate -> positional encoding -> 2 transformer blocks ->
-three horizon towers, each with a price (scaled delta), direction (P(up)) and variance head,
-plus the T-perp / vacuum-overflow side outputs. Returns an uncompiled functional Keras model
-with the 10 outputs of :class:`neural_trade.core.outputs.PredictiveOutputs`, in that order.
+one tower per horizon (N = len(Config.HORIZON_STEPS), NT-042), each with a price (scaled delta),
+direction (P(up)) and variance head, plus the T-perp / vacuum-overflow side outputs. Returns an
+uncompiled functional Keras model with the 3N + 1 outputs of
+``core.horizons.predictive_outputs_type(N)`` (``PredictiveOutputs`` at N = 3), in that order.
 
 Custom layers are resolved by role through the Layers registry (``Config.LAYERS``).
 
@@ -17,6 +18,7 @@ from __future__ import annotations
 import tensorflow as tf
 from tensorflow.keras import layers, models, regularizers
 
+from neural_trade.core.horizons import horizon_keys, n_horizons
 from neural_trade.indicators import num_learnable_logits
 from neural_trade.models.layers_registry import Layers
 
@@ -265,7 +267,7 @@ def build_gru_attention(config) -> tf.keras.Model:
                                kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(seq_summary)
     shared_dense = layers.Concatenate()([shared_dense, context])
 
-    # === THREE INDEPENDENT OUTPUT TOWERS (h0, h1, h2) ===
+    # === INDEPENDENT OUTPUT TOWERS (h0 .. h{N-1}) ===
     # Each horizon has its own price, direction, and confidence (variance) head
 
     # Variance bias initialization: softplus(x) ≈ x for x > 0
@@ -284,100 +286,52 @@ def build_gru_attention(config) -> tf.keras.Model:
     if bool(getattr(config, 'DIRECTION_SKIP', False)):
         skip_features = layers.Lambda(_trailing_return_features, name='direction_skip_features')(close_seq)
 
-    # ---- TOWER 0 (horizon 0: config.HORIZON_STEPS[0] bars) ----
-    tower_h0 = layers.Dense(16, activation='gelu',
-                           kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
-    price_h0 = layers.Dense(1, name='price_h0')(tower_h0)
-    # Clip + sanitize price outputs (in *scaled* delta units) to prevent extreme values or NaN/Inf
-    # from random init, high dropout (0.8), or early unstable indicator steps from producing inf/nan
-    # that poisons losses (NLL err^2/var, logcosh, coherence signs, etc.) and drives weights to NaN.
-    # NaN/Inf -> 0 (neutral delta); extremes clipped. Wide bound allows exploration.
-    price_h0 = layers.Lambda(
-        lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
-        name='price_h0_clip'
-    )(price_h0)
-    direction_h0 = _direction_head(config, tower_h0, skip_features, 'direction_h0', dir_bias_init)
-    # Clip dir probs to [0,1]. Mathematically a no-op (the head's sigmoid activation already
-    # guarantees [0,1], and clip_by_value does not sanitize NaN/Inf: clip(nan, 0, 1) == nan) -
-    # NT-096 (D-029) looked at removing it, but the layer graph it sits in is load-bearing for
-    # backward-compatible HDF5 weight loading: removing it shifts Keras's auto-numbering of the
-    # unnamed Dense layers downstream (DIRECTION_SKIP's '*_skip'/'*_logit' layers), which broke
-    # tests/test_legacy_bundle.py and tests/test_indicator_families.py (a real saved bundle failed
-    # to load: "Weight count mismatch ... direction_h0_skip"). That is an effect, so D-029 does not
-    # allow removing it; the layer stays. (NaN/Inf protection is the loss guards + post-extraction
-    # sanitization, not this clip.)
-    direction_h0 = layers.Lambda(
-        lambda t: tf.clip_by_value(t, 0.0, 1.0),
-        name='direction_h0_clip'
-    )(direction_h0)
-    # Variance head conditioned on T_⊥ and regime gate:
-    #   high perp_magnitude → more energy in hidden dims → higher σ²
-    #   high regime_gate → white-hole / regime-break → higher σ²
-    tower_h0_var_input = layers.Concatenate()([tower_h0, perp_magnitude, regime_gate])
-    variance_h0 = layers.Dense(1, activation='softplus', name='variance_h0',
-                              bias_initializer=var_bias_init)(tower_h0_var_input)
-    # Sanitize var (NaN/Inf -> 1.0); softplus already >=~0 but upstream nan can leak. Loss also clips.
-    variance_h0 = layers.Lambda(
-        lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
-        name='variance_h0_clip'
-    )(variance_h0)
+    # ---- ONE TOWER PER HORIZON (h0 .. h{N-1}, N = len(config.HORIZON_STEPS); NT-042, D-022) ----
+    # Built in horizon order with exactly the layers (and the layer-creation order) of the
+    # original three hand-written towers, so N = 3 is the same graph, the same auto-numbered
+    # layer names and the same initial weights (golden run, saved bundles).
+    horizon_outputs = []
+    for h in horizon_keys(n_horizons(config)):
+        tower = layers.Dense(16, activation='gelu',
+                             kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
+        price = layers.Dense(1, name=f'price_{h}')(tower)
+        # Clip + sanitize price outputs (in *scaled* delta units) to prevent extreme values or NaN/Inf
+        # from random init, high dropout (0.8), or early unstable indicator steps from producing inf/nan
+        # that poisons losses (NLL err^2/var, logcosh, coherence signs, etc.) and drives weights to NaN.
+        # NaN/Inf -> 0 (neutral delta); extremes clipped. Wide bound allows exploration.
+        price = layers.Lambda(
+            lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
+            name=f'price_{h}_clip'
+        )(price)
+        direction = _direction_head(config, tower, skip_features, f'direction_{h}', dir_bias_init)
+        # Clip dir probs to [0,1]. Mathematically a no-op (the head's sigmoid activation already
+        # guarantees [0,1], and clip_by_value does not sanitize NaN/Inf: clip(nan, 0, 1) == nan) -
+        # NT-096 (D-029) looked at removing it, but the layer graph it sits in is load-bearing for
+        # backward-compatible HDF5 weight loading: removing it shifts Keras's auto-numbering of the
+        # unnamed Dense layers downstream (DIRECTION_SKIP's '*_skip'/'*_logit' layers), which broke
+        # tests/test_legacy_bundle.py and tests/test_indicator_families.py (a real saved bundle failed
+        # to load: "Weight count mismatch ... direction_h0_skip"). That is an effect, so D-029 does not
+        # allow removing it; the layer stays. (NaN/Inf protection is the loss guards + post-extraction
+        # sanitization, not this clip.)
+        direction = layers.Lambda(
+            lambda t: tf.clip_by_value(t, 0.0, 1.0),
+            name=f'direction_{h}_clip'
+        )(direction)
+        # Variance head conditioned on T_⊥ and regime gate:
+        #   high perp_magnitude → more energy in hidden dims → higher σ²
+        #   high regime_gate → white-hole / regime-break → higher σ²
+        var_input = layers.Concatenate()([tower, perp_magnitude, regime_gate])
+        variance = layers.Dense(1, activation='softplus', name=f'variance_{h}',
+                                bias_initializer=var_bias_init)(var_input)
+        # Sanitize var (NaN/Inf -> 1.0); softplus already >=~0 but upstream nan can leak. Loss also clips.
+        variance = layers.Lambda(
+            lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
+            name=f'variance_{h}_clip'
+        )(variance)
+        horizon_outputs += [price, direction, variance]
 
-    # ---- TOWER 1 (horizon 1: config.HORIZON_STEPS[1] bars) ----
-    tower_h1 = layers.Dense(16, activation='gelu',
-                           kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
-    price_h1 = layers.Dense(1, name='price_h1')(tower_h1)
-    price_h1 = layers.Lambda(
-        lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
-        name='price_h1_clip'
-    )(price_h1)
-    direction_h1 = _direction_head(config, tower_h1, skip_features, 'direction_h1', dir_bias_init)
-    # Kept (NT-096, D-029): see the identical comment on direction_h0_clip above.
-    direction_h1 = layers.Lambda(
-        lambda t: tf.clip_by_value(t, 0.0, 1.0),
-        name='direction_h1_clip'
-    )(direction_h1)
-    tower_h1_var_input = layers.Concatenate()([tower_h1, perp_magnitude, regime_gate])
-    variance_h1 = layers.Dense(1, activation='softplus', name='variance_h1',
-                              bias_initializer=var_bias_init)(tower_h1_var_input)
-    variance_h1 = layers.Lambda(
-        lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
-        name='variance_h1_clip'
-    )(variance_h1)
-
-    # ---- TOWER 2 (horizon 2: config.HORIZON_STEPS[2] bars) ----
-    tower_h2 = layers.Dense(16, activation='gelu',
-                           kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(shared_dense)
-    price_h2 = layers.Dense(1, name='price_h2')(tower_h2)
-    price_h2 = layers.Lambda(
-        lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
-        name='price_h2_clip'
-    )(price_h2)
-    direction_h2 = _direction_head(config, tower_h2, skip_features, 'direction_h2', dir_bias_init)
-    # Kept (NT-096, D-029): see the identical comment on direction_h0_clip above.
-    direction_h2 = layers.Lambda(
-        lambda t: tf.clip_by_value(t, 0.0, 1.0),
-        name='direction_h2_clip'
-    )(direction_h2)
-    tower_h2_var_input = layers.Concatenate()([tower_h2, perp_magnitude, regime_gate])
-    variance_h2 = layers.Dense(1, activation='softplus', name='variance_h2',
-                              bias_initializer=var_bias_init)(tower_h2_var_input)
-    variance_h2 = layers.Lambda(
-        lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
-        name='variance_h2_clip'
-    )(variance_h2)
-
-    # === FINAL MODEL: 10 outputs (3 horizons × 3 heads + vacuum_overflow) ===
-    # Output index layout:
-    #   0: price_h0    1: direction_h0    2: variance_h0
-    #   3: price_h1    4: direction_h1    5: variance_h1
-    #   6: price_h2    7: direction_h2    8: variance_h2
-    #   9: vacuum_overflow  [B, 1]  (T_⊥ overflow intensity; 0 at inference)
-    return models.Model(
-        inputs=inp,
-        outputs=[
-            price_h0, direction_h0, variance_h0,
-            price_h1, direction_h1, variance_h1,
-            price_h2, direction_h2, variance_h2,
-            vacuum_overflow,
-        ]
-    )
+    # === FINAL MODEL: 3N + 1 outputs (N horizons x 3 heads + vacuum_overflow) ===
+    # Output index layout (core.horizons.predictive_output_fields(N)):
+    #   3i: price_h{i}    3i+1: direction_h{i}    3i+2: variance_h{i}
+    #   3N: vacuum_overflow  [B, 1]  (T_⊥ overflow intensity; 0 at inference)
+    return models.Model(inputs=inp, outputs=horizon_outputs + [vacuum_overflow])

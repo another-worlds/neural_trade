@@ -17,6 +17,7 @@ from typing import Optional, Tuple
 import tensorflow as tf
 from tensorflow.keras import layers, regularizers
 
+from neural_trade.core.horizons import keys_for
 from neural_trade.indicators import num_learnable_logits
 from neural_trade.models.gru_attention import _direction_head, _trailing_return_features
 from neural_trade.models.layers_registry import Layers
@@ -61,7 +62,7 @@ def direction_skip_features(close_seq, config):
 def build_side_path(config, context, close_seq) -> Tuple[object, object, object]:
     """The T-perp / vacuum-saturation / regime-gate side path, identical to ``gru_attention``'s:
     returns ``(perp_magnitude, vacuum_overflow, regime_gate)`` from a global context vector and the
-    close channel. ``vacuum_overflow`` is the required 10th PredictiveOutputs head."""
+    close channel. ``vacuum_overflow`` is the required last PredictiveOutputs head."""
     t_perp_dim = int(getattr(config, 'T_PERP_DIM', 16))
     h_perp = layers.Dense(t_perp_dim, activation='tanh', name='t_perp_proj')(context)
 
@@ -92,9 +93,10 @@ def build_side_path(config, context, close_seq) -> Tuple[object, object, object]
 
 def build_towers_and_heads(config, tower_input, perp_magnitude, regime_gate, skip_features,
                            tower_hidden_units: Optional[int] = 16,
-                           horizon_names=('h0', 'h1', 'h2')):
-    """The 9 price/direction/variance heads (PredictiveOutputs order), identical math and layer
-    names to ``gru_attention``'s three towers.
+                           horizon_names=None):
+    """The 3N price/direction/variance heads (PredictiveOutputs order), identical math and layer
+    names to ``gru_attention``'s towers. ``horizon_names`` defaults to the config's horizon keys
+    (``core.horizons.keys_for``: h0 .. h{N-1}, NT-042).
 
     ``tower_input`` is the ``[B, F]`` feature vector every horizon's tower reads. When
     ``tower_hidden_units`` is an int, each horizon gets its own ``Dense(tower_hidden_units, gelu)``
@@ -104,7 +106,7 @@ def build_towers_and_heads(config, tower_input, perp_magnitude, regime_gate, ski
     var_bias_init = tf.keras.initializers.Constant(1.0)
     dir_bias_init = tf.keras.initializers.Zeros()
     outputs = []
-    for name in horizon_names:
+    for name in (horizon_names if horizon_names is not None else keys_for(config)):
         if tower_hidden_units is not None:
             tower = layers.Dense(tower_hidden_units, activation='gelu',
                                  kernel_regularizer=regularizers.L2(config.REG_MOMENTUM_L2))(tower_input)

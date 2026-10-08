@@ -2,6 +2,11 @@
 
 Both are namedtuples, i.e. tuples: positional unpacking at existing call sites keeps
 working, and new code can use attribute access.
+
+These two classes are the reference setup's three-horizon layout. A run with N horizons
+(NT-042, D-022) uses ``core.horizons.predictive_outputs_type(N)`` and
+``core.horizons.loss_components_type(N)``, which return these very classes at N = 3 and the
+same field pattern with ``h0 .. h{N-1}`` otherwise.
 """
 from __future__ import annotations
 
