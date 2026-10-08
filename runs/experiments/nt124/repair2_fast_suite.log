@@ -1,0 +1,151 @@
+186839daf8bd621256d598f9a09bd16029bc636f
+E           [4] fig 'calibrated_quantile' traces=26 empty=[]
+E           [4] fig 'calibrated_quantile: 144 trades' traces=34 empty=[]
+E           [6] fig 'Strategies on the same block' traces=15 empty=[]
+E           [widget 8152dd02] fig 'calibrated_quantile' traces=22 empty=[]
+E           [widget d8389a81] fig 'calibrated_quantile: 144 trades' traces=34 empty=[]
+E           figures=6 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 03_signals_and_trades.ipynb  0.2 MB
+E           [2] fig 'calibrated_quantile' traces=25 empty=[]
+E           [6] fig 'calibrated_quantile: 144 trades' traces=34 empty=[]
+E           figures=2 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 04_diagnostics.ipynb  0.0 MB
+E           [1] NOT EXECUTED (no execution count)
+E           [2] NOT EXECUTED (no execution count)
+E           [4] NOT EXECUTED (no execution count)
+E           [6] NOT EXECUTED (no execution count)
+E           [8] NOT EXECUTED (no execution count)
+E           [9] NOT EXECUTED (no execution count)
+E           [11] NOT EXECUTED (no execution count)
+E           [13] NOT EXECUTED (no execution count)
+E           [15] NOT EXECUTED (no execution count)
+E           figures=0 errors=0 stderr=0 empty_panels=0 unexecuted=9 too_large=0  FAIL
+E         ==== 05_compare_runs.ipynb  0.2 MB
+E           [3] fig 'Run comparison: 10 runs' traces=24 empty=[]
+E           [5] fig "Ablation: paired deltas against each metric's decision threshold (posi" traces=5 empty=[]
+E           figures=2 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 06_control_panel.ipynb  0.2 MB
+E           figures=0 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 07_discovered_indicators.ipynb  1.0 MB
+E           [4] fig 'Discovered indicators: learned against the textbook periods' traces=565 empty=[]
+E           [8] fig 'Learned indicator periods, every family' traces=108 empty=[]
+E           [10] fig 'Indicator permutation importance' traces=7 empty=[]
+E           figures=3 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 08_long_run.ipynb  0.2 MB
+E           [4] fig 'Long run progress - long_360d' traces=15 empty=[]
+E           [4] fig 'Training dashboard' traces=73 empty=[]
+E           [4] fig 'Loss terms per horizon (as logged)' traces=38 empty=[]
+E           figures=3 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         ==== 09_candidate_run.ipynb  3.9 MB
+E           [9] fig 'Training dashboard' traces=70 empty=[]
+E           [9] fig 'Loss terms per horizon (as logged)' traces=38 empty=[]
+E           [10] fig 'Learned indicator periods (base values)' traces=45 empty=[]
+E           [13] fig 'Direction heads' traces=39 empty=[]
+E           [13] fig 'Price heads (delta)' traces=54 empty=[]
+E           [13] fig 'Variance heads' traces=55 empty=[]
+E           [15] fig 'calibrated_quantile' traces=22 empty=[]
+E           [15] fig 'calibrated_quantile: 1968 trades' traces=36 empty=[]
+E           figures=8 errors=0 stderr=0 empty_panels=0 unexecuted=0 too_large=0  OK
+E         10 notebook(s), 39 figures: FAIL in 04_diagnostics.ipynb
+E         
+E       assert 1 == 0
+E        +  where 1 = <function main at 0x000001F3E5EACEE0>([])
+E        +    where <function main at 0x000001F3E5EACEE0> = <module 'notebook_tooling_check' from 'D:\\nt\\nt_wt_124\\scripts\\notebooks\\check.py'>.main
+
+tests\test_notebook_tooling.py:226: AssertionError
+_ test_saved_training_dashboards_mark_each_chance_band_edge_in_its_horizon_colour _
+[gw3] win32 -- Python 3.10.21 C:\Users\Step\miniforge3\envs\nt\python.exe
+
+    def test_saved_training_dashboards_mark_each_chance_band_edge_in_its_horizon_colour():
+        """Final check, round 2: the saved outputs of 01 cell 7 and 04 cell 4 still showed the old dashboard.
+        Its MCC and balanced-accuracy panels shaded three neutral tiers with no horizon edges, and its subtitle
+        broke 'dashed = each / horizon's limit' across two lines. In every saved dashboard, each edge of a
+        shaded chance range must now be a dashed line in a horizon colour (a one-sided range's 0 excepted)."""
+        from neural_trade.visualization import theme as T
+    
+        horizon_hex = set(T.HORIZON_COLORS.values())
+        found = {}
+        for name, cell, fig in _saved_training_dashboards():
+            found.setdefault(name, []).append(cell)
+            shapes = fig["layout"].get("shapes", [])
+            rects = [s for s in shapes if s.get("type") == "rect"]
+            dashed = {(s["yref"], round(s["y0"], 6)) for s in shapes
+                      if s.get("type") == "line" and s.get("line", {}).get("color") in horizon_hex
+                      and s.get("line", {}).get("dash") == "dash" and s["y0"] == s["y1"]}
+            edges = {(s["yref"], round(y, 6)) for s in rects for y in (s["y0"], s["y1"]) if y != 0}
+            assert edges <= dashed, (name, cell, sorted(edges - dashed))
+            lines = fig["layout"]["title"]["text"].replace("</span>", "").split("<br>")
+            if rects:   # a run with too small a validation block has no chance range and no such phrase
+                assert any("dashed = each horizon's limit, in its colour" in ln for ln in lines), (name, cell, lines[-2:])
+>       assert set(found) == {"01_train_and_monitor.ipynb", "04_diagnostics.ipynb"}, found
+E       AssertionError: {'01_train_and_monitor.ipynb': [7]}
+E       assert {'01_train_and_monitor.ipynb'} == {'01_train_an...ostics.ipynb'}
+E         
+E         Extra items in the right set:
+E         [0m[33m'[39;49;00m[33m04_diagnostics.ipynb[39;49;00m[33m'[39;49;00m[90m[39;49;00m
+E         Use -v to get more diff
+
+tests\test_notebooks_thin.py:148: AssertionError
+============================== warnings summary ===============================
+tests/registries/test_callbacks.py: 30 warnings
+tests/registries/test_contracts.py: 48 warnings
+tests/registries/test_layers.py: 1 warning
+tests/registries/test_metrics.py: 10 warnings
+tests/registries/test_models.py: 142 warnings
+tests/test_deterministic_gru.py: 500 warnings
+tests/test_calib_fail_loud.py: 144 warnings
+tests/test_applied_periods.py: 336 warnings
+tests/test_direction_readout.py: 10 warnings
+tests/test_attention_head_pool.py: 1015 warnings
+tests/test_epoch_metrics.py: 40 warnings
+tests/test_calib_gradient_mode.py: 245 warnings
+tests/test_eval_metrics.py: 141 warnings
+tests/test_macd_ratio.py: 144 warnings
+tests/test_model_variants.py: 408 warnings
+tests/test_calib_zero_weights.py: 288 warnings
+tests/test_custom_loss.py: 320 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_losses_reference.py: 20 warnings
+tests/test_frozen_twin.py: 240 warnings
+tests/test_ohlcv_input.py: 192 warnings
+tests/test_indicator_families.py: 96 warnings
+tests/test_permutation_importance.py: 8 warnings
+tests/test_physics_terms_bounded.py: 90 warnings
+tests/test_legacy_bundle.py: 48 warnings
+tests/test_nt033_baselines.py: 96 warnings
+tests/test_stability.py: 284 warnings
+tests/test_reset.py: 16 warnings
+tests/test_pnl_utility.py: 280 warnings
+tests/test_served_epoch.py: 49 warnings
+tests/test_train_smoke.py: 192 warnings
+tests/test_training_wiring.py: 40 warnings
+tests/test_telemetry.py: 20 warnings
+tests/test_stability_harness.py: 40 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_config.py::test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type
+  D:\nt\nt_wt_124\src\neural_trade\core\config.py:1063: DeprecationWarning: Config.USE_HUBER is deprecated and has no effect (default True)
+    self.validate()
+
+tests/test_control_panel.py::test_comparing_two_rows_draws_every_metric_per_horizon_with_both_spreads
+tests/test_control_panel.py::test_the_comparison_view_is_built_with_the_top_two_rows_and_a_compare_button
+tests/test_control_panel.py::test_the_comparison_view_is_built_with_the_top_two_rows_and_a_compare_button
+tests/test_control_panel.py::test_executing_the_notebook_on_a_store_with_a_sweep_shows_it_and_still_launches_nothing
+tests/test_control_panel_repair.py::test_viewing_a_verdict_and_executing_the_notebook_write_nothing_into_the_store
+tests/test_control_panel_repair.py::test_viewing_a_verdict_and_executing_the_notebook_write_nothing_into_the_store
+tests/test_control_panel_repair.py::test_concurrent_refreshes_from_several_threads_do_not_collide_and_the_sync_flag_is_per_thread
+tests/test_control_panel_repair2.py::test_a_real_zero_beta_cell_shows_n_a_for_every_constant_statistic
+  D:\nt\nt_wt_124\src\neural_trade\notebook\panel_compare.py:520: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
+
+tests/test_frozen_twin.py::test_one_epoch_cpu_run_leaves_every_applied_period_at_its_configured_value
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\tensorflow\python\data\ops\structured_function.py:264: UserWarning: Even though the `tf.config.experimental_run_functions_eagerly` option is set, this option does not apply to tf.data functions. To force eager execution of tf.data functions, please use `tf.data.experimental.enable_debug_mode()`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_nt041_repair.py:138: the real index already has the new columns
+FAILED tests/test_notebook_tooling.py::test_committed_notebooks_pass_check - ...
+FAILED tests/test_notebooks_thin.py::test_saved_training_dashboards_mark_each_chance_band_edge_in_its_horizon_colour
+2 failed, 2451 passed, 1 skipped, 5639 warnings in 419.40s (0:06:59)
