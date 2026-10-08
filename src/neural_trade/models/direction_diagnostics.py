@@ -66,7 +66,13 @@ def direction_skip_covariance_share(model: tf.keras.Model, x, horizons: Optional
     ``[N, LOOKBACK, len(INPUT_SERIES)]`` (OHLCV), already normalised the way the model expects (the
     same tensor ``model(x)`` would take).
     """
-    horizons = tuple(horizons) if horizons is not None else DEFAULT_HORIZONS
+    if horizons is None:
+        # the model's own horizons (NT-042): every direction_h<i>_logit layer, in index order
+        import re
+
+        found = [m.group(1) for layer in model.layers for m in [re.fullmatch(r"direction_(h\d+)_logit", layer.name)] if m]
+        horizons = tuple(sorted(found, key=lambda h: int(h[1:]))) or DEFAULT_HORIZONS
+    horizons = tuple(horizons)
     layer_names = []
     for h in horizons:
         deep_name, skip_name = f"direction_{h}_logit", f"direction_{h}_skip"

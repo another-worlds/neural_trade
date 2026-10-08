@@ -18,7 +18,9 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
-HORIZONS = ("h0", "h1", "h2")
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
+
+HORIZONS = REFERENCE_HORIZONS
 ZERO_COST_PARAMS: Dict[str, Any] = {"fee_bps": 0.0, "half_spread_bps": 0.0, "slippage_bps": 0.0, "random_seeds": 20}
 DEFAULT_STRATEGY = "calibrated_quantile"
 DEFAULT_STRATEGY_PARAMS: Dict[str, Any] = {"entry_quantile": 0.9}
@@ -158,7 +160,7 @@ def key_numbers_table(run_dir, *, role: str = "dev", baseline: str = "logreg_lag
     model = report.get("model", {}).get("horizons", {})
     base = (report.get("baselines", {}).get(baseline) or {}).get("horizons", {})
     rows = {}
-    for h in HORIZONS:
+    for h in (keys_of(model) if model else HORIZONS):      # the report's horizons (NT-042)
         m, b = model.get(h, {}), base.get(h, {})
         rows[h] = {
             "direction AUC (model)": (m.get("direction") or {}).get("auc"),

@@ -374,8 +374,12 @@ def build_model_checkpoint(config, context):
 
 @Callbacks.register(name="mcc_early_stopping", tags=["regularization", "direction"])
 def build_mcc_early_stopping(config, context):
-    """EarlyStopping on val_dir_mcc_h1 (max); opt-in, without weight restore."""
-    return callbacks.EarlyStopping(monitor="val_dir_mcc_h1", mode="max", patience=config.EARLY,
+    """EarlyStopping on the primary horizon's val_dir_mcc (h1 at three horizons, NT-042; max); opt-in,
+    without weight restore."""
+    from neural_trade.core.horizons import n_horizons, primary_key
+
+    return callbacks.EarlyStopping(monitor=f"val_dir_mcc_{primary_key(n_horizons(config))}", mode="max",
+                                   patience=config.EARLY,
                                    restore_best_weights=False)
 
 

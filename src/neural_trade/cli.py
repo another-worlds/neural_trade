@@ -124,8 +124,11 @@ def cmd_train(args) -> int:
     report = evaluate(test, ctx.config, baselines=baselines, cal_frame=cal, run_id=ctx.run_id)
     report.to_json(ctx.path("eval_report_test.json"))
     report.to_markdown(ctx.path("eval_report_test.md"))
-    h1 = report.model["horizons"]["h1"]
-    logger.info("h1: AUC %.4f  MCC %.4f  EV(delta) %.4f  CRPSS %s  coverage90 %s", h1["direction"]["auc"],
+    from neural_trade.core.horizons import primary_key
+
+    pk = primary_key(report.horizons)          # h1 at three horizons (NT-042)
+    h1 = report.model["horizons"][pk]
+    logger.info("%s: AUC %.4f  MCC %.4f  EV(delta) %.4f  CRPSS %s  coverage90 %s", pk, h1["direction"]["auc"],
                 h1["direction"]["mcc"], h1["delta"]["ev"], h1["variance"].get("crpss"),
                 h1["variance"].get("coverage90"))
     print(ctx.run_dir)  # noqa: T201 - the command's result, for scripting
