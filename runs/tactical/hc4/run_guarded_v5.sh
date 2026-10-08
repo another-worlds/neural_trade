@@ -3,7 +3,7 @@
 # v2 let 3 processes fill the GPU (100% use, 11.9 of 12.3 GB) - the same card draws the desktop - and missed it.
 # usage: run_guarded_v3.sh <tasks-file> <done-marker>      tasks-file: one "spec-name shard" per line.
 # Every CHECK s: free RAM, CPU, GPU use and free GPU memory, our process count -> resources.csv (dashboard panel).
-#  - ONE training process at a time (MAX_PROCS=1), at IDLE priority (64): Windows always serves the owner's work first.
+#  - ONE training process at a time (MAX_PROCS=1), at BELOW-NORMAL priority (16384; owner 2026-10-08): Windows always serves the owner's work first.
 #  - TensorFlow takes GPU memory only as it needs it (TF_FORCE_GPU_ALLOW_GROWTH) instead of the whole card.
 #  - Start only if: free RAM >= 16 GB, free GPU memory >= 5 GB, GPU use < 40%, CPU < 95%.
 #  - Stop ours and re-queue (resume keeps finished trials) if: free RAM < 8 GB, or free GPU memory < 1.5 GB, or
@@ -26,7 +26,7 @@ launch() { local t="$1" sn sh tag; set -- $t; sn=$1; sh=$2; tag=${sh//\//of}
 reap() { local j t; for j in "${!JOBTASK[@]}"; do if ! kill -0 $j 2>/dev/null; then t="${JOBTASK[$j]}"; unset JOBTASK[$j]
   if [ -n "$STOPPED" ] || grep -q "exit [1-9][0-9]* ${t}\$" $LOG; then QUEUE+=("$t"); echo "$(date +%T) requeue $t" >> $LOG; fi; fi; done; STOPPED=; }
 while [ ${#QUEUE[@]} -gt 0 ] || [ -n "$(jobs -rp)" ]; do
-  for p in $(ours_pids); do wmic process where "ProcessId=$p" CALL setpriority 64 >/dev/null 2>&1; done
+  for p in $(ours_pids); do wmic process where "ProcessId=$p" CALL setpriority 16384 >/dev/null 2>&1; done
   f=$(free_gb); c=$(cpu); IFS=, read gu gm gt <<< "$(gq)"; vfree=$((gt - gm)); k=$(ours_pids | wc -l); act=""
   if [ "$c" -ge "$HOT" ] || [ "$gu" -ge "$HOT" ]; then hotc=$((hotc+1)); else hotc=0; fi
   if [ "$k" -gt 0 ] && { awk "BEGIN{exit !($f < $KILL_RAM)}" || [ "$vfree" -lt "$KILL_VRAM_MB" ] || [ "$hotc" -ge "$HOT_CHECKS" ]; }; then

@@ -80,3 +80,6 @@ the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner
 - 2026-10-08, after WSL went down: the lead stopped its GPU jobs and proposed a stricter rule while Docker/WSL runs (1 process,
   4 GB GPU memory). Owner (verbatim): "можно. на докер не обращай внимания , закрой правило" [go ahead; ignore Docker; close the
   rule]: no Docker-specific rule; the existing load guard stays.
+- 2026-10-08: "почему так долго ... совсем не тактические сроки" [why so slow; not tactical timescales] -> fast probe (1 run, 3
+  epochs, every 20 steps). "Какие приоритеты есть в винде ... давай пересмотрим" [which Windows priorities exist; let's
+  revisit]: asked with options; owner chose "Ниже среднего (Recommended)" (below normal) for the lead's training processes.

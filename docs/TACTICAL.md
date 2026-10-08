@@ -39,7 +39,8 @@ for the MVP".
   confidence groups at 1/3 each, every paired difference in seed-noise units, verdict by the 95% interval over slices
   with no group below -0.5. Block: 1 day if the epochs check (runs/tactical/epochs_1d/SPEC.md) passes, else 7 days.
 - **Load guard (owner, 2026-10-07: no critical CPU/RAM load, real time; then "everything lags" -> "more carefully"):**
-  runs start only through `runs/tactical/hc4/run_guarded_v3.sh`: ONE training process, idle priority, TensorFlow grows
+  runs start only through the guard scripts (`runs/tactical/hc4/run_guarded_v*.sh`): our processes at BELOW-NORMAL
+  priority (owner, 2026-10-08: idle starved a run's data preparation from ~1 to ~19 minutes on a busy machine), TensorFlow grows
   GPU memory as needed (TF_FORCE_GPU_ALLOW_GROWTH); start only with >= 16 GB RAM and >= 5 GB GPU memory free, GPU use <
   40%, CPU < 95%; stop and re-queue below 8 GB RAM or 1.5 GB GPU memory free, or at CPU/GPU >= 98% for a minute; checks
   every 10 s into resources.csv and the dashboard. The GPU also draws the owner's desktop: three processes (v2) filled it
