@@ -62,3 +62,34 @@ high-variance third for h1/h2 (+0.007 AUC). A gate that switches direction behav
 (meta_adjust). There is no switch to freeze the periods at textbook values, so "learned beats textbook" was never
 measured (NT-033 todo). Also: the indicator gradient comes from all loss terms, the noisy price head included. Plan: a
 freeze switch (or INDICATOR_LR_MULT 0 if the code allows it), then learned vs frozen vs no per-window shift.
+
+## 8. Indicator parameter search - formalisation (owner, 2026-10-08) - running
+
+**The owner's intent:** the network is a search for indicator parameters and their links. **The problem (measured):** 54
+bounded periods sit in front of ~300k network weights; the network absorbs everything, so the periods barely matter
+(frozen = learned, H21) and their gradient is mostly from the confidence losses, ~10% from direction (H16).
+**Principle:** the error must flow so that the indicator parameters carry the dominant share of the result.
+
+Hypotheses, each with its test (criteria fixed before the runs):
+- **A (lead) thin readout:** after the indicators only a linear head (MODEL_NAME linear_indicators, 7,610 parameters);
+  learned vs frozen periods (hc7_thin_learned / hc7_thin_frozen). Success: learned beats frozen (CI over slices > 0).
+- **B (lead, the owner's split by function):** separate networks per function, each with its own indicator families and
+  only its own loss: direction <- RSI + MACD (hc7_fn_dir), confidence <- ATR, Bollinger, Keltner, Donchian + NLL/CRPS/t_perp
+  (hc7_fn_conf), price <- MA + point loss (hc7_fn_price); each judged on its own function vs the base.
+- **C (lead) direct search:** the space is finite, so search it directly (Optuna, 150 trials) with a logistic readout;
+  the gradient search must beat it (runs/tactical/search/direct_search.py; search on 3 climb slices, check on the other 3).
+- **D (owner) indicators as features -> freeze to the standard:** hc7_frozen (all 14 at textbook values) and hc7_none
+  (no indicators) on the long block.
+- **E (owner) indicators at the END, as a regulariser:** the network (transformer) predicts the future price PATH; the
+  indicators are computed on the predicted path and on the real future, and their mismatch is an extra loss. Lead's
+  notes: (1) the indicator parameters inside this loss must be fixed or variance-normalised, else a long period makes the
+  target constant and the loss trivially small; (2) an indicator over [past + future] is dominated by the known past
+  (lagging), so compute it on the future segment only (e.g. RSI / MA slope of the next 20 bars = the future path's trend
+  direction and strength): a "shape" target that defines trend the way TA does. Needs code (a path head + the loss). - idea
+- **F (owner) JEPA instead of the transformer:** a self-supervised encoder trained to predict the latent embedding of the
+  next segment from the current window (target encoder by EMA, anti-collapse regulariser), pretrained on the whole 2017-2025
+  history before each DATA_END (no labels needed), then small heads for direction and confidence. Lead's notes: promising for
+  regime / volatility representations and for using the whole history; it cannot create direction information that the
+  data lacks; a large build. Test: a linear probe on the frozen JEPA embedding vs our network on the same blocks. - idea
+Proof of dominance for any winner: the indicator group's gradient share from its own function's loss >= 50% (probe) and the
+learned periods move away from their starting values.

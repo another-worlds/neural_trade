@@ -97,6 +97,11 @@ EXPERIMENTS = [
      "base": "hc5_noprice3",
      "specs": [["hc5_noprice3", "база: без цены, 3 горизонта", 12], ["hc6_ma", "только MA", 12], ["hc6_rsi", "только RSI", 12], ["hc6_macd", "только MACD", 12], ["hc6_marsi", "MA + RSI", 12], ["hc6_indgrad", "№10 индикаторы от направления", 12], ["hc6_nohd", "№11 без hd", 12], ["hc6_gate", "№12 ворота режима", 12], ["hc6_geom", "№13 геометрия индикаторов", 12], ["hc6_geomind", "№13+10 геометрия + индикаторы от направления", 12]],
      "compare": [["hc5_noprice3", "hc6_ma"], ["hc5_noprice3", "hc6_rsi"], ["hc5_noprice3", "hc6_macd"], ["hc5_noprice3", "hc6_marsi"], ["hc5_noprice3", "hc6_indgrad"], ["hc5_noprice3", "hc6_nohd"], ["hc5_noprice3", "hc6_gate"], ["hc5_noprice3", "hc6_geom"], ["hc5_noprice3", "hc6_geomind"]], "verdict": None},
+    {"id": "hc7", "title": "Индикаторы: решающий раунд и гипотезы A, B", "when": "08.10", "kind": "hc",
+     "goal": "Нужны ли индикаторы и обучение их периодов (D: без индикаторов, замороженные), тонкое считывание после индикаторов (A), отдельные сети по функциям (B). Длинный блок, 6x2. План, раздел 8.",
+     "base": "hc5_noprice3",
+     "specs": [["hc5_noprice3", "база: без цены, все 14 выученные", 12], ["hc7_none", "D без индикаторов", 12], ["hc7_frozen", "D все 14 заморожены", 12], ["hc7_thin_learned", "A тонкое считывание, выученные", 12], ["hc7_thin_frozen", "A тонкое считывание, заморожены", 12], ["hc7_fn_dir", "B сеть направления (RSI+MACD)", 12], ["hc7_fn_conf", "B сеть уверенности (ATR, BB, Keltner, Donchian)", 12], ["hc7_fn_price", "B сеть цены (MA)", 12]],
+     "compare": [["hc5_noprice3", "hc7_none"], ["hc5_noprice3", "hc7_frozen"], ["hc5_noprice3", "hc7_thin_learned"], ["hc5_noprice3", "hc7_thin_frozen"], ["hc5_noprice3", "hc7_fn_dir"], ["hc5_noprice3", "hc7_fn_conf"], ["hc5_noprice3", "hc7_fn_price"]], "verdict": None},
 ]
 
 
