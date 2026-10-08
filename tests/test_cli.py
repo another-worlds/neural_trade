@@ -117,9 +117,9 @@ def test_cli_backtest_sets_bar_minutes_from_the_artifacts_config(tmp_path, monke
     captured = {}
     real_build = __import__("neural_trade.strategy.params", fromlist=["build_backtest_config"]).build_backtest_config
 
-    def spy(params=None):
+    def spy(params=None, **kw):
         captured["params"] = dict(params or {})
-        return real_build(params)
+        return real_build(params, **kw)
 
     monkeypatch.setattr("neural_trade.strategy.build_backtest_config", spy)
 

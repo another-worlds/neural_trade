@@ -1,0 +1,3 @@
+# golden_nt124
+
+`golden_nt124_before.npz`: `scripts/golden_run.py record` on CPU with the OLD gradient-descent temperature fit (commit 5620075, which only adds the keys `temperature/{h}` and `calibrated/direction_prob/{h}`; 461 arrays). `golden_nt124.npz`: the same after the bounded scalar search (NT-124). Only those six arrays differ (temperature/h0 1.543 -> 1.645, h1 4.139 -> 1000 (upper bound: the 3,000-sequence head has no usable signal), h2 2.644 -> 4.309, and the three calibrated P(up) arrays); the other 455 are equal within atol 1e-6 / rtol 1e-5. `golden_nt124.npz` is the record for later refactors.

@@ -682,7 +682,7 @@ def test_without_raw_heads_a_zero_served_delta_on_one_horizon_marks_that_column(
     assert any("nothing to plot against the outcome" in t for t in texts)
     assert any("has no deciles" in t for t in texts) and any("has no correlation" in t for t in texts)
     assert any("is 0 by construction" in t for t in texts)
-    for row, title in ((2, "realised move ($)"), (3, "mean realised ($)")):
+    for row, title in ((2, "realised move (USDT)"), (3, "mean realised (USDT)")):
         _, ya = _axes(fig, row, 1)
         assert fig.layout["yaxis" + ya[1:]].title.text == title
 

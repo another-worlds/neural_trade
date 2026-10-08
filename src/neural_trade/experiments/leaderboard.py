@@ -412,6 +412,12 @@ class LeaderboardRow:
     board_cost: Optional[CostProfile] = None     # the profile the board ranks at (the scenario's)
     cost_comparable: bool = True
     is_winner: bool = False                  # the top row that is not disqualified
+    dataset_first: Optional[str] = None      # NT-041: the fingerprint's first / last bar and bar count
+    dataset_last: Optional[str] = None
+    dataset_n_bars: Optional[int] = None
+    symbol: Optional[str] = None             # NT-041: the setup in wall-clock units
+    window_minutes: Optional[float] = None
+    horizon_minutes: Optional[Tuple[float, ...]] = None
 
 
 def _first(rows: Sequence[Mapping[str, Any]], key: str):
@@ -428,6 +434,16 @@ def _horizon_steps(rows: Sequence[Mapping[str, Any]]) -> Optional[Tuple[int, ...
         return None
     try:
         return tuple(int(x) for x in json.loads(raw))
+    except (ValueError, TypeError):
+        return None
+
+
+def _horizon_minutes(rows: Sequence[Mapping[str, Any]]) -> Optional[Tuple[float, ...]]:
+    raw = _first(rows, "horizon_minutes")
+    if raw is None:
+        return None
+    try:
+        return tuple(float(x) for x in json.loads(raw))
     except (ValueError, TypeError):
         return None
 
@@ -469,6 +485,9 @@ def _configuration_row(scenario: str, configuration: str, rows: Sequence[Mapping
         guard_rails=tuple(rails), disqualified=disqualified,
         dataset_fingerprint=_first(rows, "dataset_sha256"), bar_minutes=_first(rows, "bar_minutes"),
         horizon_steps=_horizon_steps(rows), strategy=_first(rows, "strategy"),
+        dataset_first=_first(rows, "dataset_first"), dataset_last=_first(rows, "dataset_last"),
+        dataset_n_bars=_first(rows, "dataset_n_bars"), symbol=_first(rows, "symbol"),
+        window_minutes=_first(rows, "window_minutes"), horizon_minutes=_horizon_minutes(rows),
         n_cells=len(rows), n_failed=len(failed), errors=errors, n_incomplete=n_incomplete,
         cost_profile=cost, cost_text=cost_text, board_cost=board_cost, cost_comparable=comparable or not done)
 
@@ -556,7 +575,27 @@ def spec_parts(spec: Any) -> Tuple[Dict[str, Any], Dict[str, Any], Tuple[int, ..
         return {}, {}, ()
     get = (lambda k: spec.get(k)) if isinstance(spec, Mapping) else (lambda k: getattr(spec, k, None))
     folds = tuple(int(f) for f in (get("folds") or ()))
-    return dict(get("leaderboard") or {}), dict(get("backtest") or {}), folds
+    # the board's cost block is the scenario's EFFECTIVE costs: the base Config's profile (NT-041: FEE_BPS,
+    # HALF_SPREAD_BPS, SLIPPAGE_BPS), with the spec's explicit ``backtest:`` entries on top; 0 by default (D-044)
+    backtest = {**_spec_config_profile(spec), **dict(get("backtest") or {})}
+    return dict(get("leaderboard") or {}), backtest, folds
+
+
+def _spec_config_profile(spec: Any) -> Dict[str, float]:
+    """The cost profile of a scenario spec's base Config (only the non-default entries), whether the spec is a
+    ``Scenario`` or its stored mapping; the ``overrides:`` of a mapping whose base_config cannot be resolved."""
+    from neural_trade.core.config import Config
+    from neural_trade.core.costs import cost_profile_of
+    from neural_trade.experiments.scenario import Scenario, ScenarioError
+
+    try:
+        sc = spec if isinstance(spec, Scenario) else Scenario.from_dict(spec)
+        prof = cost_profile_of(sc.base())
+    except (ScenarioError, ValueError, OSError, KeyError, TypeError, AttributeError):
+        ov = (spec.get("overrides") if isinstance(spec, Mapping) else getattr(spec, "overrides", None)) or {}
+        prof = cost_profile_of(Config().copy(**{k: v for k, v in ov.items()
+                                                 if k in ("FEE_BPS", "HALF_SPREAD_BPS", "SLIPPAGE_BPS")}))
+    return {k: v for k, v in prof.items() if v}
 
 
 def find_scenario_spec(name: str, specs_dir="configs/scenarios", stored_dir=None) -> Tuple[Any, str]:
@@ -677,12 +716,20 @@ TABLE_HEADER = ("rank", "configuration", "status", "ranking: dev net Sharpe (spr
                 "dev max drawdown", "dev trades", "dev buy & hold", "dev random-null percentile", "guard-rails",
                 "test net Sharpe (test, not used for ranking)", "test net return (test, not used for ranking)",
                 "test max drawdown (test, not used for ranking)", "test trades (test, not used for ranking)",
-                "dataset fingerprint (sha256, first 12)", "bar (min)", "horizons (bars)", "strategy")
+                "dataset fingerprint (sha256, first 12)", "dataset bars (count, first .. last)", "bar (min)",
+                "instrument", "window (min)", "horizons (bars)", "horizons (min)", "strategy")
 
 
 def row_name(r: LeaderboardRow, with_scenario: bool = False) -> str:
     """``scenario / configuration`` on a board that mixes scenarios (NT-179), else the configuration."""
     return f"{r.scenario} / {r.configuration}" if with_scenario else r.configuration
+
+
+def _dataset_span_text(r: "LeaderboardRow") -> str:
+    """``43,500 bars, 2025-10-11T02:30 .. 2025-11-10T07:29`` (the fingerprint's count and span), or ``n/a``."""
+    if r.dataset_n_bars is None or not r.dataset_first or not r.dataset_last:
+        return "n/a"
+    return f"{int(r.dataset_n_bars):,} bars, {str(r.dataset_first)[:16]} .. {str(r.dataset_last)[:16]}"
 
 
 def table_cells(r: LeaderboardRow, *, with_scenario: bool = False) -> List[str]:
@@ -701,8 +748,12 @@ def table_cells(r: LeaderboardRow, *, with_scenario: bool = False) -> List[str]:
             _fmt_metric(r.test, "total_return", "{:+.2%}", counts=False),
             _fmt_metric(r.test, "max_drawdown", "{:.2%}", counts=False),
             _fmt_metric(r.test, "n_trades", "{:.1f}", counts=False),
-            "n/a" if not fp else fp[:12], "n/a" if r.bar_minutes is None else f"{r.bar_minutes:g}",
-            "n/a" if r.horizon_steps is None else ", ".join(str(h) for h in r.horizon_steps), r.strategy or "n/a"]
+            "n/a" if not fp else fp[:12], _dataset_span_text(r),
+            "n/a" if r.bar_minutes is None else f"{r.bar_minutes:g}", r.symbol or "n/a",
+            "n/a" if r.window_minutes is None else f"{r.window_minutes:g}",
+            "n/a" if r.horizon_steps is None else ", ".join(str(h) for h in r.horizon_steps),
+            "n/a" if r.horizon_minutes is None else ", ".join(f"{h:g}" for h in r.horizon_minutes),
+            r.strategy or "n/a"]
 
 
 def leaderboard_markdown(rows: Sequence[LeaderboardRow], *,

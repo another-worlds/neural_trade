@@ -8,7 +8,7 @@
     neural-trade scenario rescore configs/scenarios/<name>.yaml --study configs/strategy_studies/<study>.yaml
                                   [--store runs] [--random-seeds N]
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
-    neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
+    neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2] [--probe off|on|failed] [--max-probe-reruns K] [--retry-non-verdict [ID]]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
     neural-trade leaderboard [SCENARIO ...] [--scenario a,b,c] [--store runs] [--index runs/index.sqlite]
                                   [--spec FILE] [--out DIR] [--max-drawdown F] [--min-trades N]
@@ -173,6 +173,7 @@ def cmd_predict(args) -> int:
 def cmd_backtest(args) -> int:
     import pandas as pd
 
+    from neural_trade.core.costs import cost_profile_of
     from neural_trade.serving.predictor import Predictor
     from neural_trade.strategy import (Bars, SignalFrame, Strategies, backtest, build_backtest_config, build_strategy,
                                        load_params, var_scale_from)
@@ -184,7 +185,8 @@ def cmd_backtest(args) -> int:
     strategy = build_strategy(args.strategy or params.get("strategy", Strategies.default), params.get("params"),
                               calibration=predictor.bundle.meta.get("weighted_direction_quantiles"))
     bcfg = build_backtest_config({**(params.get("backtest") or {}), "random_seeds": args.random_seeds,
-                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)})
+                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)},
+                                 cost_profile=cost_profile_of(predictor.config))
     var_scale = predictor.bundle.meta.get("var_scale")
     if var_scale is None:
         logger.warning("the artifacts carry no calibration-split var_scale; using this data's own (look-ahead)")
@@ -385,25 +387,29 @@ def cmd_screen(args) -> int:
 
 
 def cmd_stability(args) -> int:
-    from neural_trade.experiments.stability import plan_cases, run_harness
+    from neural_trade.experiments.stability import EXIT_REFUSED, dry_run, run_harness
 
+    cases = [c for c in args.cases.split(",") if c] if args.cases else None
+    seeds = [int(x) for x in args.seeds.split(",") if x] if args.seeds else None
     try:
         if args.dry_run:
-            planned = plan_cases(profile=args.profile, csv=args.csv,
-                                 case_ids=[c for c in args.cases.split(",") if c] if args.cases else None)
-            print(json.dumps({"profile": args.profile, "planned_cells": [p.key for p in planned]}, indent=2))  # noqa: T201
+            print(json.dumps(dry_run(profile=args.profile, csv=args.csv, case_ids=cases, seeds=seeds,  # noqa: T201
+                                     thresholds_path=args.thresholds, probe=args.probe), indent=2))
             return 0
-        res = run_harness(profile=args.profile, csv=args.csv, store=args.store,
-                          case_ids=[c for c in args.cases.split(",") if c] if args.cases else None,
-                          seeds=[int(x) for x in args.seeds.split(",") if x] if args.seeds else None,
-                          thresholds_path=args.thresholds)
+        res = run_harness(profile=args.profile, csv=args.csv, store=args.store, case_ids=cases, seeds=seeds,
+                          thresholds_path=args.thresholds, probe=args.probe,
+                          retry_non_verdict_of=args.retry_non_verdict, max_probe_reruns=args.max_probe_reruns)
     except ValueError as exc:
         logger.error("stability harness refused, nothing was run: %s", exc)
-        return 2
+        return EXIT_REFUSED
     print(json.dumps({"harness_id": res.harness_id, "report": str(res.report), "passed": res.passed,  # noqa: T201
                       "thresholds_sha256": res.thresholds_sha256, "case_passed": res.case_passed,
+                      "case_status": res.case_status, "verdict_failed": res.verdict_failed,
+                      "non_verdict_cells": res.non_verdict_cells, "probe": res.probe_mode,
+                      "probe_reruns": [v.run_id for v in res.reruns],
+                      "not_rerun_cap": [v.run_id for v in res.not_rerun], "retry_of": res.retry_of,
                       "not_run": [c.id for c in res.not_run]}, indent=2))
-    return 0 if res.passed else 1
+    return res.exit_code
 
 
 def cmd_compare(args) -> int:
@@ -608,16 +614,32 @@ def build_parser() -> argparse.ArgumentParser:
                         description="runs the cases as an engine scenario into the run store and writes "
                                     "<store>/stability/<id>/REPORT.md (pass or fail per case, the loss term "
                                     "blamed for a failure, the thresholds file's sha256) and "
-                                    "failing_regions.json. Exit 1 when a case fails. Not a CI job: a GPU "
-                                    "profile is NT-051's.")
-    sb.add_argument("--profile", default="tiny", choices=["tiny", "reference"],
-                    help="tiny: CPU test size; reference: the screen-size layout (default tiny)")
+                                    "failing_regions.json. Exit 1 when a case fails its verdict, 2 when only cells "
+                                    "that are not a verdict (a resource error, a crash) are left, 64 when the "
+                                    "arguments were refused and nothing ran, else 0. Not a CI "
+                                    "job: a GPU profile is NT-051's.")
+    sb.add_argument("--profile", default=None, choices=["tiny", "reference"],
+                    help="tiny: CPU test size; reference: the screen-size layout (default tiny; a retry keeps its "
+                         "launch's profile)")
+    sb.add_argument("--probe", default=None, choices=["off", "on", "failed"],
+                    help="the per-term gradient probe (it never changes training; about 12x a reference cell on CPU): "
+                         "failed = every cell probe-off, a failing cell re-run once with the probe for the blame "
+                         "(default on the reference profile); on = every cell probed; off = never (default on tiny)")
+    sb.add_argument("--max-probe-reruns", type=int, default=10, metavar="K",
+                    help="with --probe failed: re-run at most K failed cells with the probe (default 10: about "
+                         "floor((3 h - probe-off times) / 777 s) on the reference profile); the rest are listed as "
+                         "'not re-run (cap)'")
+    sb.add_argument("--retry-non-verdict", nargs="?", const="latest", default=None, metavar="HARNESS_ID",
+                    help="re-run only the cells of an earlier launch (an id under <store>/stability/, default the "
+                         "newest) that were not a verdict (ResourceExhaustedError, MemoryError, OSError, a crash), "
+                         "as a new launch; its other verdicts are carried over")
     sb.add_argument("--csv", default=None, help="the bars the cases are made from (default: Config's CSV_PATH)")
     sb.add_argument("--store", default="runs", help="run store root; the report goes to <store>/stability/<id>/")
     sb.add_argument("--cases", default=None, help="comma-separated case ids (default: every case)")
     sb.add_argument("--seeds", default=None, help="comma-separated seeds (default: 3, as the thresholds file says)")
     sb.add_argument("--dry-run", action="store_true", help="plan every case through the engine (no training, "
-                                                           "nothing written) and print the cells")
+                                                           "nothing written) and print, per cell: case, seed, n_eff "
+                                                           "per horizon, the probe mode, steps per epoch and epochs")
     sb.add_argument("--thresholds", default=None, help="a thresholds file or a name in configs/ such as v2 (default "
                     "configs/stability_thresholds.yaml, v1; the report carries the sha256 of the file used)")
     sb.set_defaults(func=cmd_stability)

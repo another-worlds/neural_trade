@@ -249,7 +249,12 @@ def test_the_reference_example_spec_is_valid_on_the_bundled_data(tmp_path, monke
     assert {pc.cell.fold: pc.role for pc in planned} == {-3: "dev", -2: "dev", -1: "test"}
     sha = hashlib.sha256((REPO / "binance_btcusdt_1min_ccxt.csv").read_bytes()).hexdigest()
     assert {pc.dataset["sha256"] for pc in planned} == {sha}
-    assert planned[0].setup == {"bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+    setup = planned[0].setup
+    assert {k: setup[k] for k in ("bar_minutes", "LOOKBACK", "HORIZON_STEPS")} == {
+        "bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+    # NT-041: the wall-clock setup and the instrument beside the bars
+    assert (setup["symbol"], setup["quote_currency"], setup["window_minutes"], setup["horizon_minutes"]) == (
+        "BTC/USDT", "USDT", 60, [10, 15, 20])
     assert all(pc.state == "pending" for pc in planned) and not (tmp_path / "runs").exists()   # plan writes nothing
 
 
@@ -469,7 +474,9 @@ def test_meta_records_the_dataset_fingerprint_and_the_setup(uninterrupted, bars_
         assert ds["sha256"] == sha == row["dataset_sha256"]
         assert ds["n_bars"] == len(synthetic_bars) == row["dataset_n_bars"] and ds["n_rows"] == len(synthetic_bars)
         assert ds["first_timestamp"] == "2025-10-11T02:30:00+00:00" and ds["last_timestamp"] == "2025-10-13T04:29:00+00:00"
-        assert meta["setup"] == {"bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+        assert {k: meta["setup"][k] for k in ("bar_minutes", "LOOKBACK", "HORIZON_STEPS")} == {
+            "bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+        assert meta["setup"]["symbol"] == "BTC/USDT" and meta["setup"]["window_minutes"] == 60   # NT-041
         assert (row["bar_minutes"], row["lookback"], json.loads(row["horizon_steps"])) == (1, 60, [10, 15, 20])
         eng = meta["engine"]
         assert eng["cell_key"] == row["cell_key"] and eng["config_hash"] == row["config_hash"]

@@ -79,6 +79,7 @@ that extend or partly replace an entry.
 | D-063 | Tactical session: GPU in parallel with the MVP, no budget, at most 2 minutes per run on ultra-short blocks | owner | |
 | D-064 | Stability thresholds are pre-registered files: v1 frozen, v2 for NT-051 on the reference profile | lead | |
 | D-065 | Engine concurrency and identity: the run id carries a scenario hash; the index refuses a duplicate id; a claim takeover goes through a sentinel; atomic writes retry | lead | |
+| D-066 | The temperature fit at its bound becomes an explicit "no direction signal" state; coding only until the GPU is free; the `timed` layout stays opt-in | owner (NT-195 reading: lead's) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -819,3 +820,13 @@ that extend or partly replace an entry.
   against the project root in the data layer when the cwd lacks it (identity text unchanged, so a sweep started in the CLI resumes in the panel and back without retraining).
 - **Consequence:** NT-182, NT-183, NT-185, NT-034; residues in NT-184, NT-188, NT-189 (P3).
 - **Evidence:** QA reports (Opus and qa-deep), the stress runs in them; CI runs 37504490746 (red) and 37527638543 (green).
+
+## D-066 The temperature fit at its bound becomes an explicit "no direction signal" state; coding only until the GPU is free; the `timed` layout stays opt-in (owner, 2026-10-08)
+- **Owner (verbatim):** "Влить + явное «нет сигнала» (Рекомендуется)"; "Перенести наши worktree/scratch на C:"; "пока работай по кодингу только"; "не важно убери вопрос" ([qa/2026-10-08-quiz-nt124-disk-gpu-timed.md](qa/2026-10-08-quiz-nt124-disk-gpu-timed.md)).
+- **Decision:** (1) NT-124 is merged after QA, with an explicit state: when the temperature fit has no interior minimum (a bound is reached) the run records and reports "no usable direction signal" for that horizon, never calls it
+  well-calibrated, and the strategies that need P(up) refuse or stay flat instead of trading on a degenerate P(up) (NT-174 decided). (2) The owner approved moving our worktrees and scratch to C:. Lead's reading: C: has 6.4 GB
+  free (2026-10-08) and D: 18 GB, so nothing moves while D: keeps at least 10 GB free; scratch (`D:/nt/nt_qa`, renders) moves first if D: falls below 5 GB. (3) Until the owner says otherwise the lead does coding items only:
+  no GPU job, no sweep, no GPU measurement (NT-173, NT-051, NT-050, NT-060 rerun, notebook 01 wait). (4) The `timed` layout stays opt-in and `tscv` stays the default; the question is withdrawn (lead's reading of "не важно";
+  NT-195 is dropped, and a later owner request reopens it).
+- **Consequence:** NT-124 (criterion 7 added), NT-174 (decided), NT-195 (dropped); STATUS "Waiting for the owner" loses questions 1, 2, 7 and NT-195.
+

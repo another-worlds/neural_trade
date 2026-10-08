@@ -17,11 +17,10 @@ import pandas as pd
 
 from neural_trade.data.loaders import validate_ohlcv_frame
 from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, transform_targets
-from neural_trade.data.splits import make_purged_splits
-from neural_trade.data.windowing import (compute_extended_trend_features, frame_series,
-                                         make_multichannel_windows,
-                                         make_sequences_with_extended_trends,
-                                         sequence_anchor_bars, sequence_counts)
+from neural_trade.data.plan import make_plan
+from neural_trade.data.splits import FoldIndices, make_purged_splits
+from neural_trade.data.windowing import (compute_extended_trend_features, frame_series, make_multichannel_windows,
+                                         make_sequences_with_extended_trends, sequence_counts)
 
 logger = logging.getLogger(__name__)
 
@@ -80,26 +79,32 @@ def split_arrays(config, read_csv_kwargs=None):
     """
     dp = DataProcessor(config)
     df, close = dp.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
-    # NT-177: build only the newest MAX_SEQUENCE_COUNT sequences (same rows as window-all-then-cut)
-    n_total, dropped = sequence_counts(config, len(close))
-    X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK, first_seq=dropped)
+    # NT-041: one plan decides the anchors (the hole policy, the MAX_SEQUENCE_COUNT cap) and the folds; NT-177:
+    # only the sequences the fold reads are windowed
+    plan = make_plan(config, df)
+    fold = plan.fold(int(getattr(config, "FOLD_INDEX", -1)))
+    lo, hi = plan.read(fold)
+    anchors = plan.anchors[lo:hi]
+    fold = _shift_fold(fold, lo)
+    X, y, lc, ext = make_sequences_with_extended_trends(config, close, config.LOOKBACK, anchors=anchors)
     # model-input windows (NT-047): identical to X in close-only mode, [N, L, C] otherwise
     series_names = list(getattr(config, "INPUT_SERIES", None) or ["close"])
     Xm = X if series_names == ["close"] else make_multichannel_windows(
-        config, frame_series(config, df), config.LOOKBACK, first_seq=dropped)
-    folds = make_purged_splits(X.shape[0], lookback=config.LOOKBACK, horizon_steps=config.HORIZON_STEPS,
-                               window_step=int(max(1, getattr(config, "WINDOW_STEP", 1))),
-                               n_folds=int(getattr(config, "N_FOLDS", 5)),
-                               val_fraction=float(getattr(config, "VAL_FRACTION", 0.066)),
-                               cal_fraction=float(getattr(config, "CAL_FRACTION", 0.066)))
-    fold = _select_fold(folds, int(getattr(config, "FOLD_INDEX", -1)))
-    out = {"fold": fold, "close": close, "df": df}
+        config, frame_series(config, df), config.LOOKBACK, anchors=anchors)
+    out = {"fold": fold, "close": close, "df": df, "gaps": plan.gaps}
     for name in ("train", "val", "cal", "test"):
         idx = getattr(fold, name)
         out[name] = {"X": X[idx], "X_model": Xm[idx], "y": y[idx], "last_close": lc[idx],
                      "extended_trends": ext[idx], "index": idx,
-                     "anchor_bar": sequence_anchor_bars(config, len(close), n_total, idx)}
+                     "anchor_bar": (anchors[idx] - 1).astype(int)}   # bar positions, the platform int as before (int32 on Windows)
     return out
+
+
+def _shift_fold(fold: FoldIndices, lo: int) -> FoldIndices:
+    """``fold`` with its indices counted from sequence ``lo`` (the first one its windows hold)."""
+    if not lo:
+        return fold
+    return FoldIndices(fold.fold, fold.gap, fold.train - lo, fold.val - lo, fold.cal - lo, fold.test - lo)
 
 
 class DataProcessor:
@@ -124,7 +129,8 @@ class DataProcessor:
         """Apply Config.PREPROCESSORS in order, then validate the standardised frame."""
         from neural_trade.data.preprocessors_registry import run_preprocessors
 
-        return validate_ohlcv_frame(run_preprocessors(df, self.config))
+        return validate_ohlcv_frame(run_preprocessors(df, self.config),
+                                    bar_minutes=getattr(self.config, 'RESAMPLE_MINUTES', None))
 
     def load_and_prepare_data(self, read_csv_kwargs: Optional[dict] = None, **loader_kwargs):
         """Load and prepare minute-level data; returns ``(df, close_values float32)``.
@@ -160,11 +166,24 @@ class DataProcessor:
         input (NT-047), ``X_seq`` itself in close-only mode, otherwise the [N, LOOKBACK, C] windows over
         ``Config.INPUT_SERIES`` built from ``df`` (required then; INPUT_SERIES is part of the data key).
         """
-        # NT-177: only the newest MAX_SEQUENCE_COUNT sequences are built (the oldest are never windowed)
-        n_total, dropped = sequence_counts(self.config, len(close_values))
-        X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
-            self.config, close_values, self.config.LOOKBACK, first_seq=dropped
-        )
+        # NT-177: only the newest MAX_SEQUENCE_COUNT sequences are built (the oldest are never windowed).
+        # NT-041: with the bar frame the plan also applies the hole policy and, for the timed layout, windows only
+        # the span the chosen fold reads (remembered for prepare_datasets_from_windows)
+        self._plan = self._lo = None
+        if df is not None:
+            plan = make_plan(self.config, df)
+            lo, hi = plan.read(plan.fold(int(getattr(self.config, "FOLD_INDEX", -1))))
+            self._plan, self._lo = plan, lo
+            anchors, n_total, dropped = plan.anchors[lo:hi], plan.n_total, 0
+            X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
+                self.config, close_values, self.config.LOOKBACK, anchors=anchors
+            )
+        else:
+            anchors = None
+            n_total, dropped = sequence_counts(self.config, len(close_values))
+            X_seq, y_seq, last_close_seq, extended_trends = make_sequences_with_extended_trends(
+                self.config, close_values, self.config.LOOKBACK, first_seq=dropped
+            )
         logger.info(f"Sequences with extended trends: {X_seq.shape}, {y_seq.shape}, Extended: {extended_trends.shape}")
 
         # Model input windows (NT-047): the close windows themselves in close-only mode
@@ -179,13 +198,13 @@ class DataProcessor:
             if df is None:
                 raise ValueError(f"INPUT_SERIES={series_names} needs the bar frame: call build_windows(close, df)")
             X_model = make_multichannel_windows(self.config, frame_series(self.config, df),
-                                                self.config.LOOKBACK, first_seq=dropped)
+                                                self.config.LOOKBACK, first_seq=dropped, anchors=anchors)
             if X_model.shape[0] != X_seq.shape[0]:
                 raise RuntimeError(f"model windows ({X_model.shape[0]}) and close windows "
                                    f"({X_seq.shape[0]}) disagree - a windowing bug")
 
-        if dropped:
-            logger.info(f"[OK] Limited sequence set from {n_total} to {n_total - dropped} (most recent window)")
+        if n_total > len(X_seq):
+            logger.info(f"[OK] Limited sequence set from {n_total} to {len(X_seq)} (most recent window)")
         return X_seq, y_seq, last_close_seq, extended_trends, X_model
 
     def prepare_datasets(self, df, close_values):
@@ -215,16 +234,26 @@ class DataProcessor:
         # Previously the last TimeSeriesSplit fold was BOTH validation and test with no gap:
         # 79 "validation" windows contained bars that were training labels, model selection
         # happened on the test set, and calibration was fit on the test set too.
-        fold = make_purged_splits(
-            X_seq.shape[0],
-            lookback=self.config.LOOKBACK,
-            horizon_steps=self.config.HORIZON_STEPS,
-            window_step=int(max(1, getattr(self.config, 'WINDOW_STEP', 1))),
-            n_folds=int(getattr(self.config, 'N_FOLDS', 5)),
-            val_fraction=float(getattr(self.config, 'VAL_FRACTION', 0.066)),
-            cal_fraction=float(getattr(self.config, 'CAL_FRACTION', 0.066)),
-        )
-        fold = _select_fold(fold, int(getattr(self.config, 'FOLD_INDEX', -1)))
+        plan = getattr(self, '_plan', None)
+        if plan is not None and getattr(self.config, 'FOLD_LAYOUT', 'tscv') == 'tscv' and                 X_seq.shape[0] != plan.n_sequences:
+            plan = None                 # windows from elsewhere than this plan: cut them by count, as before
+        if plan is not None or getattr(self.config, 'FOLD_LAYOUT', 'tscv') == 'timed':
+            if plan is None:
+                raise ValueError("FOLD_LAYOUT 'timed' places the folds by timestamps: build the windows with "
+                                 "this DataProcessor's build_windows(close, df) (or prepare_datasets), not a "
+                                 "cache made elsewhere")
+            fold = _shift_fold(plan.fold(int(getattr(self.config, 'FOLD_INDEX', -1))), self._lo)
+        else:
+            fold = make_purged_splits(
+                X_seq.shape[0],
+                lookback=self.config.LOOKBACK,
+                horizon_steps=self.config.HORIZON_STEPS,
+                window_step=int(max(1, getattr(self.config, 'WINDOW_STEP', 1))),
+                n_folds=int(getattr(self.config, 'N_FOLDS', 5)),
+                val_fraction=float(getattr(self.config, 'VAL_FRACTION', 0.066)),
+                cal_fraction=float(getattr(self.config, 'CAL_FRACTION', 0.066)),
+            )
+            fold = _select_fold(fold, int(getattr(self.config, 'FOLD_INDEX', -1)))
         self.fold = fold
 
         def _take(idx):

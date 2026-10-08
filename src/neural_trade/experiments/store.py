@@ -46,7 +46,8 @@ RUN_COLUMNS: Tuple[Tuple[str, str], ...] = (
     ("status", "TEXT NOT NULL"), ("commit_sha", "TEXT"), ("config_hash", "TEXT"), ("settings_hash", "TEXT"),
     ("spec_hash", "TEXT"), ("dataset_sha256", "TEXT"), ("dataset_path", "TEXT"), ("dataset_first", "TEXT"),
     ("dataset_last", "TEXT"), ("dataset_n_bars", "INTEGER"), ("bar_minutes", "REAL"), ("lookback", "INTEGER"),
-    ("horizon_steps", "TEXT"), ("strategy", "TEXT"), ("created_utc", "TEXT"), ("finished_utc", "TEXT"),
+    ("horizon_steps", "TEXT"), ("symbol", "TEXT"), ("window_minutes", "REAL"), ("horizon_minutes", "TEXT"),
+    ("strategy", "TEXT"), ("created_utc", "TEXT"), ("finished_utc", "TEXT"),
     ("wall_s", "REAL"), ("sec_per_step", "REAL"), ("error", "TEXT"),
     ("sharpe_net", "REAL"), ("total_return", "REAL"), ("max_drawdown", "REAL"), ("n_trades", "INTEGER"),
     ("buy_and_hold_return", "REAL"), ("random_percentile_return", "REAL"),
@@ -133,6 +134,9 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
         "dataset_n_bars": ds.get("n_bars"), "bar_minutes": setup.get("bar_minutes"),
         "lookback": setup.get("LOOKBACK"),
         "horizon_steps": json.dumps(setup.get("HORIZON_STEPS")) if setup.get("HORIZON_STEPS") is not None else None,
+        "symbol": setup.get("symbol"), "window_minutes": _number(setup.get("window_minutes")),
+        "horizon_minutes": (json.dumps(setup.get("horizon_minutes"))
+                            if setup.get("horizon_minutes") is not None else None),
         "strategy": (eng.get("strategy") or {}).get("name"), "created_utc": meta.get("created_utc"),
         "finished_utc": (result or {}).get("finished_utc"), "wall_s": _number((result or {}).get("wall_s")),
         "sec_per_step": _number((result or {}).get("sec_per_step")),
@@ -155,7 +159,36 @@ class RunIndex:
 
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        return sqlite3.connect(str(self.path), timeout=30)
+        con = sqlite3.connect(str(self.path), timeout=30)
+        self._add_missing_columns(con)
+        return con
+
+    @staticmethod
+    def _present(con: sqlite3.Connection) -> set:
+        try:
+            return {r[1] for r in con.execute("PRAGMA table_info(runs)")}
+        except sqlite3.DatabaseError:
+            return set()
+
+    def _add_missing_columns(self, con: sqlite3.Connection) -> None:
+        """An index made before a column of RUN_COLUMNS existed gets it on every open (``ALTER TABLE ADD COLUMN``,
+        idempotent; NULL in old rows until they are re-read). A file that cannot be written is left as it is:
+        readers then select NULL for the missing columns (:meth:`_select`)."""
+        have = self._present(con)
+        if not have:
+            return
+        for c, t in RUN_COLUMNS:
+            if c not in have:
+                try:
+                    con.execute(f"ALTER TABLE runs ADD COLUMN {c} {t.replace(' PRIMARY KEY', '').replace(' NOT NULL', '')}")
+                    con.commit()
+                except sqlite3.OperationalError:
+                    pass
+
+    def _select(self, con: sqlite3.Connection) -> str:
+        """The column list of a SELECT over ``runs``: NULL for a column the file (read-only, old) lacks."""
+        have = self._present(con)
+        return ", ".join(c if c in have else f"NULL AS {c}" for c in RUN_FIELDS)
 
     def ensure_schema(self) -> "RunIndex":
         cols = ", ".join(f"{c} {t}" for c, t in RUN_COLUMNS)
@@ -212,9 +245,8 @@ class RunIndex:
         if status is not None:
             where.append("status = ?")
             args.append(status)
-        sql = f"SELECT {', '.join(RUN_FIELDS)} FROM runs" + (f" WHERE {' AND '.join(where)}" if where else "") \
-            + " ORDER BY scenario, cell_key, run_id"
         with closing(self._connect()) as con:
+            sql = f"SELECT {self._select(con)} FROM runs" + (f" WHERE {' AND '.join(where)}" if where else "")                 + " ORDER BY scenario, cell_key, run_id"
             return [dict(zip(RUN_FIELDS, r)) for r in con.execute(sql, args)]
 
     def scores(self, run_id: str) -> Dict[str, Optional[float]]:
@@ -228,7 +260,7 @@ class RunIndex:
         if not self.path.exists():
             return {"runs": [], "scores": []}
         with closing(self._connect()) as con:
-            runs = sorted(con.execute(f"SELECT {', '.join(RUN_FIELDS)} FROM runs"), key=repr)
+            runs = sorted(con.execute(f"SELECT {self._select(con)} FROM runs"), key=repr)
             scores = sorted(con.execute("SELECT run_id, name, value FROM scores"), key=repr)
         return {"runs": runs, "scores": scores}
 

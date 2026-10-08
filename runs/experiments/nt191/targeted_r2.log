@@ -1,0 +1,7 @@
+67ae18408886fc75019948cffdac16f9be35720e
+stability harness + cli, not slow, -n 4:
+95 passed, 40 warnings in 49.16s
+slow probe-invariance test (run on the working tree equal to 5c20ce2's code):
+1 passed, 94 deselected, 96 warnings in 679.50s (0:11:19)
+ruff:
+All checks passed!

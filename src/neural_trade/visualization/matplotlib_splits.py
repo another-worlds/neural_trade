@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import numpy as np
 
+from neural_trade.visualization import labels as L
+
 
 def plot_splits(df, start_idx, tscv, X_seq_len):
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(14, 7))
-    ax.plot(df['Date'], df['Close'], label='BTC Close Price', alpha=0.8)
+    ax.plot(df['Date'], df['Close'], label=f'{L.base()} Close Price', alpha=0.8)
     split_boundaries = [0]
     for _train_idx, test_idx in tscv.split(np.arange(X_seq_len)):
         split_boundaries.append(test_idx[0])
@@ -23,14 +25,15 @@ def plot_splits(df, start_idx, tscv, X_seq_len):
         label = labels[i % 2] if labels[i % 2] not in used else ""
         used.add(labels[i % 2])
         ax.axvspan(df['Date'].iloc[s], df['Date'].iloc[e-1], color=color, alpha=0.2, label=label)
-    ax.set_title('BTC Price with Walk-Forward Validation (Train=Yellow, Test=Green)')
+    ax.set_title(f'{L.tag()} Price with Walk-Forward Validation (Train=Yellow, Test=Green)')
     ax.set_xlabel('Date')
-    ax.set_ylabel('BTC Price (USD)')
+    ax.set_ylabel(f'{L.base()} Price ({L.quote()})')
     ax.legend()
     plt.tight_layout()
     plt.show()
 
 
+@L.labelled
 def matplotlib_splits(data, config=None, **_):
     """Registry entry: ``data`` = {"df", "start_idx", "tscv", "X_seq_len"}."""
     return plot_splits(data["df"], data["start_idx"], data["tscv"], data["X_seq_len"])

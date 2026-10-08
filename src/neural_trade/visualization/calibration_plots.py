@@ -18,10 +18,11 @@ Inputs must be in time order (the deadband mask keeps the order).
 """
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
+from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.theme import apply
@@ -106,7 +107,8 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
                        horizon: Optional[str] = None, horizon_steps: Optional[int] = None,
                        ref_rate: Optional[float] = None, ref_label: str = "cal-block up-rate",
                        p_saved=None, saved_label: str = "saved", subtitle: Optional[str] = None,
-                       note: Optional[str] = None, block: str = "test", height: Optional[int] = None):
+                       note: Optional[str] = None, block: str = "test", height: Optional[int] = None,
+                       ece_na: Sequence[str] = ()):
     """Reliability diagram (equal-count bins) of the raw and, if given, calibrated P(up), with the
     distribution of the predictions underneath.
 
@@ -116,7 +118,9 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
     of this block (dashed) and, with ``ref_rate``, of the block the calibration was fitted on
     (dash-dot). ``p_saved`` adds a third curve
     (e.g. the run's saved pipeline next to a refit). Axes are zoomed to the bins and their bands;
-    the subtitle says how many predictions lie outside.
+    the subtitle says how many predictions lie outside. ``ece_na`` names curves ("calibrated",
+    "saved") whose ECE the subtitle gives as "n/a (no direction signal)" instead of a number: a
+    temperature fit at a bound flattens P(up) (D-066), and its small ECE is not a calibration result.
     """
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -193,7 +197,8 @@ def reliability_figure(labels, p_raw, p_cal=None, *, n_bins: int = 10, title: Op
                  band + ("; raw and calibrated P(up) share their bins, so the bars are drawn once" if same_bins else "")]
         short = [nm.split(" P(up)")[0] for nm, _, _, _ in series]
         means = [f"{s} {float(np.mean(p)):.3f}" for s, (_, p, _, _) in zip(short, series)]
-        eces = [f"{s} {ece_pos(labels, p):.3f}" for s, (_, p, _, _) in zip(short, series)]
+        eces = [f"{s} n/a (no direction signal)" if s in ece_na else f"{s} {ece_pos(labels, p):.3f}"
+                for s, (_, p, _, _) in zip(short, series)]
         lines.append(f"mean P(up) {', '.join(means)} vs observed up-rate {base:.3f} · ECE {', '.join(eces)} · "
                      f"AUC {_auc(labels, series[0][1]):.3f} (0.5 = no skill)")
         if any(o[1] > 0 for o in outside):
@@ -277,20 +282,20 @@ def coverage_over_time_figure(y, lo, hi, *, window: int = 500, target: float = 0
     iw = S.thin(n, max_points)
     fig.add_trace(go.Scatter(x=iw.astype(np.int32), y=width[iw].astype(np.float32), mode="lines", name="per sample",
                              line=dict(color=T.rgba(c, 0.35), width=0.8), legend="legend2",
-                             hovertemplate="sample %{x:,}<br>width $%{y:,.0f}<extra></extra>"), 2, 1)
+                             hovertemplate="sample %{x:,}<br>width %{y:,.0f}" + L.amount_suffix() + "<extra></extra>"), 2, 1)
     fig.add_trace(go.Scatter(x=x_roll, y=roll_w[idx].astype(np.float32), mode="lines", name=f"trailing {window} mean",
                              line=dict(color=c, width=1.6), legend="legend2",
-                             hovertemplate="sample %{x:,}<br>mean width $%{y:,.0f}<extra></extra>"), 2, 1)
+                             hovertemplate="sample %{x:,}<br>mean width %{y:,.0f}" + L.amount_suffix() + "<extra></extra>"), 2, 1)
     if saved is not None:
         s_w = np.convolve(s_hi - s_lo, k, mode="valid")
         fig.add_trace(go.Scatter(x=x_roll, y=s_w[idx].astype(np.float32), mode="lines", name="saved pipeline",
                                  line=dict(color=c, width=1.2, dash=T.ALT_DASH), legend="legend2",
-                                 hovertemplate="saved pipeline<br>sample %{x:,}<br>mean width $%{y:,.0f}<extra></extra>"),
+                                 hovertemplate="saved pipeline<br>sample %{x:,}<br>mean width %{y:,.0f}" + L.amount_suffix() + "<extra></extra>"),
                       2, 1)
     bottom = fig.get_subplot(2, 1).xaxis.plotly_name.replace("axis", "")        # "x3"
     fig.update_xaxes(matches=bottom, showticklabels=False, row=1, col=1)
-    fig.update_xaxes(title_text=f"{block} sample (1-minute bars, time order)", row=2, col=1)
-    fig.update_yaxes(title_text="width ($)", tickprefix="$", row=2, col=1)
+    fig.update_xaxes(title_text=f"{block} sample ({L.current().bar} bars, time order)", row=2, col=1)
+    fig.update_yaxes(title_text=f"width ({L.quote()})", ticksuffix=L.amount_suffix(), row=2, col=1)
 
     # coverage by width: do narrow intervals under-cover?
     t = _binned_rate(width, inside, n_width_bins, lag=int(horizon_steps or 0))
@@ -302,21 +307,21 @@ def coverage_over_time_figure(y, lo, hi, *, window: int = 500, target: float = 0
                              error_y=dict(type="data", symmetric=False, array=t[:, 4] - t[:, 1],
                                           arrayminus=t[:, 1] - t[:, 3], thickness=1.2, width=4, color=c),
                              customdata=np.c_[t[:, 2], t[:, 3], t[:, 4]],
-                             hovertemplate="mean width $%{x:,.0f}<br>coverage %{y:.3f} (95% band "
+                             hovertemplate="mean width %{x:,.0f}" + L.amount_suffix() + "<br>coverage %{y:.3f} (95% band "
                                            "%{customdata[1]:.3f}-%{customdata[2]:.3f})<br>n %{customdata[0]:,.0f}"
                                            "<extra></extra>"), 1, 2)
-    fig.update_xaxes(title_text=f"mean interval width, {n_width_bins} equal-count bins", tickprefix="$",
+    fig.update_xaxes(title_text=f"mean interval width, {n_width_bins} equal-count bins", ticksuffix=L.amount_suffix(),
                      row=1, col=2)
     fig.update_yaxes(title_text="share inside", row=1, col=2)
 
     cov_all = float(inside.mean()) if n else float("nan")
     if subtitle is None:
         lines = [f"{block} block, {n:,} samples: overall coverage {cov_all:.3f} vs target {target:.2f}, "
-                 f"mean width ${np.mean(width):,.0f}"]
+                 f"mean width {np.mean(width):,.0f} {L.quote()}"]
         if saved is not None:
             st = f" (built for {saved_target:.2f})" if saved_target is not None else ""
             lines.append(f"dash-dot: the saved pipeline{st}, coverage {float(s_in.mean()):.3f}, "
-                         f"mean width ${np.mean(s_hi - s_lo):,.0f}")
+                         f"mean width {np.mean(s_hi - s_lo):,.0f} {L.quote()}")
         lines += [f"shaded: the 95% range one {window}-sample window shows by chance when coverage is exactly on target",
                   f"({steps_txt} outcomes overlap: ~{n_eff_w:.0f} effective samples per window, autocorrelation from "
                   f"{inflation_from})"
@@ -340,6 +345,7 @@ def _steps_from(config, kw):
     return kw
 
 
+@L.labelled
 def reliability(data, config=None, **kw):
     """``data``: {"labels", "p_raw", "p_cal"?, "p_saved"?} (time order; outside the deadband)."""
     kw = _steps_from(config, kw)
@@ -348,6 +354,7 @@ def reliability(data, config=None, **kw):
     return reliability_figure(data["labels"], data["p_raw"], data.get("p_cal"), **kw)
 
 
+@L.labelled
 def interval_coverage(data, config=None, **kw):
     """``data``: {"y", "lo", "hi"} (time order)."""
     return coverage_over_time_figure(data["y"], data["lo"], data["hi"], **_steps_from(config, kw))

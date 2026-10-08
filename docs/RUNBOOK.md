@@ -148,6 +148,18 @@ experiment log folders `runs/ablations/*/cells/`, `runs/ablations/*/logs/` and
 `artifacts/calibration/*.json`. An experiment's `result.json` (in `runs/experiments/<name>/<variant>/`,
 outside the run directories) is tracked too.
 
+**No usable direction signal (NT-124, D-066).** The temperature fit searches T in [0.01, 1000]. When it ends at
+a bound there is no interior NLL minimum: `artifacts/calibration/pipeline_meta.json` records
+`direction_signal: {h: "none"}` (and `temperature_at_bound`), the report prints "No usable direction signal on
+h1", and `SignalFrame.build` gives that horizon a neutral P(up) (0.5) with no weight, so strategies reading P(up)
+stay flat on it (a warning names the horizons). A normal fit changes nothing. The same state is stored in
+`predictions_*.npz` (`direction_signal__<h>`) and in `frame.meta["direction_signal"]`.
+Notebook 04's calibration explorer shows it too: the comparison table has a `direction signal` column, the
+calibrated-ECE cells of a "none" horizon are NaN in the data and display as "n/a" (`comparison_table(styled=True)`,
+with a caption; every other column stays float, so `round` applies), the "saved" rows carry the saved pipeline's
+own state, the reliability subtitle gives that horizon's calibrated ECE as "n/a (no direction signal)", and the
+note says "no usable direction signal on h (temperature fit at a bound: T = ...)".
+
 `scripts/check_run_evidence.py` finds the run ids cited in `docs/**/*.md`, `README.md`,
 `runs/**/REPORT.md`, `report.md`, `summary.md` and the saved notebooks, and exits 1 when a cited run
 has no directory, git does not track its `config.yaml` or its `meta.json`, or a light file in it is
@@ -641,13 +653,17 @@ $PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n
 
 ### Stability harness and config guard (NT-038, D-026)
 
-`neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]`
-(`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
+`neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
+[--probe off|on|failed] [--max-probe-reruns K] [--retry-non-verdict [ID]] [--thresholds v2] [--dry-run]` (`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
 (index rows, `stability/*` scores) and writes `<store>/stability/<id>/REPORT.md` (pass or fail per case, the loss
-term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit 1 when a case fails.
+term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit codes (NT-191): 1 when a
+case fails its verdict, 2 when no case failed but cells that are not a verdict are left (below), 64 when the
+arguments were refused and nothing ran (an unknown case, a missing `--csv` file, a bad retry, a launch with nothing to
+retry; no run directory is created), else 0.
 
 - **Cases**: price level and volatility x0.1 / x10; extreme inputs (a constant block, spikes and a level jump,
-  prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`); fault injection (a NaN in the input,
+  prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`, 3 MB each, ignored by git
+  (`runs/stability/*/data/`); the sha256 of each file is the cell's `meta.json` `dataset.sha256`); fault injection (a NaN in the input,
   in `crps_loss`, in one gradient), each of which must stop the run; the wide-span horizons 5/60/240; slow
   periods with INDICATOR_LR_MULT 5 and 1. The 1,440 / 10,080-bar long-memory cases and the per-channel-scale
   variant are defined and marked "GPU, NT-051" (never run on CPU). 3 seeds each, strict mode (STRICT_LOSS_MASKS).
@@ -659,8 +675,43 @@ term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions
   constant baseline is non-finite or absurd; the absolute NLL is in scaled units (NLL - ln of the RMS price change,
   limit 8); `fuzz_constant` is a 100-bar flat block (a minority of the training windows). The tiny profile's n_eff is
   11/7/5, so it judges no variance check; the expected n_eff per case and profile is in the v2 file and the report.
-- **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off: on CPU the probe's trace took
-  200 s); `reference` is the screen layout with the probe on. The GPU run on the reference setup is NT-051.
+- **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off); `reference` is the screen layout
+  (probe `failed`, below). The GPU run on the reference setup is NT-051.
+- **The probe and its cost (NT-191)**: the per-term gradient probe never changes training. With `DETERMINISTIC_GRU`
+  on, the same tiny cell's `loss`, every `val_*` epoch metric and every integer counter are bitwise equal with the
+  probe on and off, and so are its verdict fields; every other numeric key (period/*, lambda_*, lr, grad_norm_*,
+  contrib_*, the per-term training sums) agrees within 2 * 1.19e-7 * max(|x|, 1) (2 to 4 float32 ULP of x). One comparison saw `nll_loss` 1 ULP apart
+  (5.028296947 off, 5.028297424 on); a later probe-on run was bitwise equal to probe-off, so the cause of that gap
+  is not established. `term_gradient_share` is report-only. Without `DETERMINISTIC_GRU` two runs of one setup differ in the 7th digit, probe or not (`nll_loss`
+  5.028296947 against 5.028297901, both probe off).
+  It costs about 12x a reference cell on CPU, because about 650 s of it is the host-side tracing of 17 terms x 3
+  variable groups, which a GPU run pays too. **Measured, CPU (the QA review of the NT-051 SPEC, 2026-10-07; logs
+  `D:/nt/nt_qa/nt051spec_ref_off.log`, `nt051spec_ref_on.log`): 58 s per reference cell with the probe off, 777 s
+  with it on (at PROBE_EVERY 5, the reference profile; a cell of 6 steps probes once). The re-run of a failed cell uses
+  PROBE_EVERY 1 and costs more per step: on the tiny profile, CPU, one cell took 32.4 s probe off, 189.9 s with the
+  probe at the profile's cadence and 236.7 s at PROBE_EVERY 1.** GPU per cell: not measured (NT-051 measures it). `--probe failed` (the default on `reference`): every
+  cell runs probe-off; a cell that fails any verdict check is re-run ONCE with the probe on at PROBE_EVERY 1; the
+  REPORT lists both runs of that cell (run ids) and takes the blame from the re-run: the largest probe share of the
+  first epoch whose shares sum to 1 per variable group, labelled "probe sample, one batch" (one batch's gradient
+  split, not an epoch average), else the run's own error text or the masked-term counters, else `-` with the reason.
+  Data and fault cases get no failing region by design. `--max-probe-reruns K` (default 10, from the 3 h cap: floor((10800 s - the sum of the probe-off times) / 777 s),
+  where 777 s is the PROBE_EVERY 5 cost; a re-run probes at PROBE_EVERY 1, about 1.25x dearer on the tiny profile
+  (236.7 against 189.9 s), so at that cost the cap may be about 8: NT-051's SPEC states its measured per-re-run cost
+  and the cap it uses) caps the re-runs of one launch; failed cells beyond it are listed in the REPORT as "not re-run (cap)" with no blame.
+  A re-run that itself crashes leaves the blame `-` with the reason "the probe re-run crashed". `--probe on` probes
+  every cell (the earlier behaviour);
+  `--probe off` never (the `tiny` default). Verdicts and thresholds are identical in every mode.
+- **Not a verdict (NT-191)**: a cell whose run ended in `ResourceExhaustedError`, `MemoryError`, `OSError` (or a
+  subclass other than the setup errors `FileNotFoundError`, `FileExistsError`, `NotADirectoryError`,
+  `IsADirectoryError`, `PermissionError`, which are verdicts), a `PermissionError` with Windows code 5, 32 or 33
+  (`[WinError N]`: access denied, a sharing or lock violation, another process holding the file; NT-185, D-065; a
+  `PermissionError` without those codes stays a verdict), `BrokenProcessPool`, a TensorFlow `InternalError` or
+  `UnknownError` whose message names memory, an allocation, cuDNN or CUDA, or left no `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of
+  the pass and fail counts, never probed and never written as a failing region. `--retry-non-verdict [ID]` (default:
+  the newest launch under `<store>/stability/`) re-runs only those cells as a new launch with the same thresholds
+  (refused if the thresholds file differs), carries every other verdict over, and the case verdict uses the re-run
+  (the REPORT lists both runs). `UnstableTrainingError` and any failed check stay verdicts; the fault cases still pass
+  exactly when the run stops with `UnstableTrainingError` (and, for `fault_nan_term`, names `crps_loss`).
 - **Strict mode fails loudly**: with `STRICT_LOSS_MASKS` the engine's trainer adds `StabilityGuard`
   (`training/stability_guard.py`): the first epoch with a non-finite loss term or step ends the run with
   `UnstableTrainingError` naming the term. A sweep records such a cell as failed with that message; the default
@@ -681,7 +732,9 @@ term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions
 - **Thresholds, repair round 1**: the file was rewritten once before any real run, after QA applied the first
   draft to 54 stored runs (loss divergence, variance-head NLL and CRPS checks added; coverage only where n_eff >= 30;
   periods at the bound and term gradient shares report-only; `nonfinite_step_rate` not evaluated without `n_steps`).
-  `neural-trade stability --dry-run` plans every case of a profile through the engine without training.
+  `neural-trade stability --dry-run [--seeds ..] [--thresholds v2] [--probe ..]` plans every case of a profile
+  through the engine without training and prints, per cell: case, seed, n_eff per horizon (the planner's, beside the
+  thresholds file's expected table), the probe mode, the steps per epoch and the epochs.
 
 ### Frozen sweep scripts
 

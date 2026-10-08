@@ -327,7 +327,7 @@ def test_variance_confidence_row_uses_the_strategies_confidence(viz_frame, viz_c
     assert "&#961; vs |P&#8722;0.5|" in _title(fig, 3, 1)
     # without var_scale the same deciles are labelled by predicted sigma
     fig0 = _conf(viz_frame, viz_config)
-    assert "$" in fig0.layout[fig0.get_subplot(3, 1).xaxis.plotly_name].ticktext[0]
+    assert "USDT" in fig0.layout[fig0.get_subplot(3, 1).xaxis.plotly_name].ticktext[0]
 
 
 def test_selective_curve_is_thinned_and_its_axis_shows_2_percent(viz_frame, viz_config):

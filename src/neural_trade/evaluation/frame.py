@@ -93,6 +93,9 @@ class PredictionFrame:
                     X_raw)
         # evaluate() scores the raw price heads and records the betas from these (report.delta_raw group)
         frame.meta["delta_raw"] = {h: np.asarray(preds["delta"][h], float).reshape(-1)[:len(frame)] for h in HORIZONS}
+        sig = getattr(result.calibration_pipeline, "direction_signal", None)
+        if callable(sig):
+            frame.meta["direction_signal"] = {h: str(v) for h, v in sig().items()}
         betas = getattr(result.calibration_pipeline, "delta_scale", None)
         if cal.get("delta") is not None and betas:
             frame.meta["delta_scale"] = {h: float(betas[h]) for h in HORIZONS if h in betas}
@@ -145,6 +148,8 @@ class PredictionFrame:
                 arrays[f"delta_raw__{h}"] = np.asarray(raw[h])
             if h in betas:
                 arrays[f"delta_scale__{h}"] = np.asarray(float(betas[h]))
+            if h in (self.meta.get("direction_signal") or {}):
+                arrays[f"direction_signal__{h}"] = np.asarray(str(self.meta["direction_signal"][h]))
         for name, value in dict(extra or {}).items():
             arrays[f"{NPZ_EXTRA_PREFIX}{name}"] = np.asarray(value)
         path = Path(path)
@@ -177,5 +182,8 @@ class PredictionFrame:
             betas = per("delta_scale")
             if betas:
                 frame.meta["delta_scale"] = {h: float(v) for h, v in betas.items()}
+            dsig = per("direction_signal")
+            if dsig:
+                frame.meta["direction_signal"] = {h: str(v) for h, v in dsig.items()}
             frame.meta["extra"] = {k[len(NPZ_EXTRA_PREFIX):]: z[k] for k in z.files if k.startswith(NPZ_EXTRA_PREFIX)}
         return frame

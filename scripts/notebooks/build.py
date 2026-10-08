@@ -449,7 +449,7 @@ calib.click_refit()   # the run's saved settings first; then change them and pre
 """),
     ("md", "Static copy of that refit (the explorer above stays interactive): the refit next to the run's saved pipeline, per horizon."),
     ("code", """
-display(calib.comparison_table().round(4))
+display(calib.comparison_table(styled=True))   # missing cells (no direction signal) as n/a
 reliability, coverage = calib.figures("h1")
 reliability.show()
 coverage.show()
@@ -604,6 +604,7 @@ WINDOW = "typical"              # a window index, or "typical" / "longest" / "sh
 """, "parameters"),
     ("code", """
 from neural_trade.data.processor import split_arrays
+from neural_trade.experiments.dataset import verify_run_dataset
 from neural_trade.notebook import pick_run
 from neural_trade.registries.visualizations import Visualizations
 from neural_trade.serving.predictor import Predictor
@@ -614,6 +615,7 @@ from neural_trade.visualization.indicator_evolution import applied_periods
 """ + RUN_PICK + """
 predictor = Predictor.from_artifacts(run_dir / "artifacts")
 cfg = predictor.config.copy(CSV_PATH=CSV_PATH)
+verify_run_dataset(run_dir, cfg)          # the CSV above must be the data the run used (NT-041)
 blocks = split_arrays(cfg)
 block = blocks[BLOCK]
 times = blocks["df"]["timestamp"].to_numpy()[block["anchor_bar"]]

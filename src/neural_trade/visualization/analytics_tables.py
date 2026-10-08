@@ -40,6 +40,7 @@ from typing import Any, Dict, Mapping, Optional, Union
 import numpy as np
 import pandas as pd
 
+from neural_trade.visualization import labels as L
 from neural_trade.evaluation.report import (
     BASELINE_ORDER, BLOCK, BOOT_N, DM_LAG_PER_STEP, DOLLAR_METRICS, GAUSS_CONST_NA, HORIZONS, RESTATED_BASELINE_ROWS,
     Z95, ZERO_BETA_NA, baseline_margin, coherence_block, delta_block, direction_block, independent_agreement,
@@ -123,6 +124,7 @@ def _constant_na(pred, served: bool) -> Optional[str]:
 
 
 # ------------------------------------------------------------------ direction
+@L.labelled
 def classification_table(frame, config=None, *, calibrated: bool = True, readout: str = "head",
                          deadband_bps: Optional[float] = None, digits: Optional[int] = 4) -> pd.DataFrame:
     """Per-horizon classification numbers of P(up) > 0.5 on moves beyond the deadband (up = positive).
@@ -197,6 +199,7 @@ def classification_table(frame, config=None, *, calibrated: bool = True, readout
 
 
 # ------------------------------------------------------------------ price heads
+@L.labelled
 def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndarray]] = None,
                         delta_scale: Optional[Dict[str, float]] = None, digits: Optional[int] = 4,
                         usd_digits: Optional[int] = 2, tail: float = 0.995) -> pd.DataFrame:
@@ -239,7 +242,7 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
                    ("n_eff (non-overlapping outcomes)", len(frame) // max(1, steps))]
         if beta is not None:
             c.append(("shrink beta (served = beta x raw)", beta))
-        for metric, name in (("rmse", "RMSE ($)"), ("mae", "MAE ($)")):
+        for metric, name in (("rmse", f"RMSE ({L.quote()})"), ("mae", f"MAE ({L.quote()})")):
             c += [(f"{name}, raw heads", br[metric])] if br is not None else []
             c += [(f"{name}, {sv}", bs[metric]), (f"{name}, zero prediction", bs[f"{metric}_zero"])]
         for metric, name in (("skill_vs_zero", "skill vs zero (1 - MSE / MSE of 0)"), ("ev", "explained variance")):
@@ -262,17 +265,17 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
         if br is not None:
             c.append(("beta this block would fit: clip(LS slope, 0, 1)",
                       min(max(slope, 0.0), 1.0) if slope is not None else None))
-        c += [("mean predicted ($), raw heads", br["mean_pred"])] if br is not None else []
-        c += [(f"mean predicted ($), {sv}", bs["mean_pred"]), ("mean realised ($)", m),
-              ("mean realised 95% CI ($, n_eff)", _interval(mlo, mhi, usd_digits)),
+        c += [(f"mean predicted ({L.quote()}), raw heads", br["mean_pred"])] if br is not None else []
+        c += [(f"mean predicted ({L.quote()}), {sv}", bs["mean_pred"]), (f"mean realised ({L.quote()})", m),
+              (f"mean realised 95% CI ({L.quote()}, n_eff)", _interval(mlo, mhi, usd_digits)),
               (f"share predicted up (delta > 0){rw}", cs["share_pred_up"]),
               ("share realised up (move > 0)", bs["share_true_up"])]
-        c += [("std predicted ($), raw heads", float(np.std(d)))] if br is not None else []
-        c += [(f"std predicted ($), {sv}", float(np.std(s))), ("std realised ($)", float(np.std(y)))]
-        c += [("median |predicted| ($), raw heads", float(np.median(np.abs(d))))] if br is not None else []
-        c += [(f"median |predicted| ($), {sv}", float(np.median(np.abs(s)))),
-              (f"min predicted ($){rw}", float(np.min(d))), (f"max predicted ($){rw}", float(np.max(d)))]
-        cols[h] = {k: _num(v, usd_digits if "($" in k else digits) for k, v in c}
+        c += [(f"std predicted ({L.quote()}), raw heads", float(np.std(d)))] if br is not None else []
+        c += [(f"std predicted ({L.quote()}), {sv}", float(np.std(s))), (f"std realised ({L.quote()})", float(np.std(y)))]
+        c += [(f"median |predicted| ({L.quote()}), raw heads", float(np.median(np.abs(d))))] if br is not None else []
+        c += [(f"median |predicted| ({L.quote()}), {sv}", float(np.median(np.abs(s)))),
+              (f"min predicted ({L.quote()}){rw}", float(np.min(d))), (f"max predicted ({L.quote()}){rw}", float(np.max(d)))]
+        cols[h] = {k: _num(v, usd_digits if f"({L.quote()}" in k else digits) for k, v in c}
     df = _object_frame(cols)
     if raw is None and not delta_scale:
         df.attrs["caption"] = ("\"model\" = the deltas in the frame: beta x the raw price head in a served frame, the "
@@ -342,6 +345,7 @@ def magnitude_ordering_table(frame, *, raw_delta: Optional[Dict[str, np.ndarray]
     return df
 
 
+@L.labelled
 def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndarray]] = None,
                     calibrated: bool = True, digits: Optional[int] = 4) -> pd.DataFrame:
     """Does sign(delta) agree with P(up) > 0.5? Per horizon and on all three at once, on every sample.
@@ -458,7 +462,7 @@ def baseline_table(report, *, compact: bool = True, digits: Optional[int] = 4) -
         df.attrs["caption"] = ("noise = |z| < 1.96; significantly worse = the model loses with z <= -1.96. "
                                "DM: Diebold-Mariano z of the per-sample loss difference, "
                                f"Bartlett long-run variance with lag {DM_LAG_PER_STEP} x bars ahead. boot: margin / "
-                               f"its paired moving-block bootstrap standard error ({BLOCK}-bar blocks, {BOOT_N} "
+                               f"its paired moving-block bootstrap standard error ({(rep.get('meta') or {}).get('boot_block', BLOCK)}-bar blocks, {BOOT_N} "
                                "resamples).")
     elif margins:
         df.attrs["caption"] = ("This report predates the current noise tests: its DM z uses sd / sqrt(n // bars "
@@ -561,6 +565,13 @@ def _per_h(d: Optional[Mapping[str, Any]], fmt="{:.3f}") -> str:
     if not d:
         return ""
     return " / ".join(fmt.format(float(d[h])) if d.get(h) is not None else "n/a" for h in HORIZONS)
+
+
+def _no_signal_note(direction_signal: Optional[Mapping[str, Any]]) -> str:
+    """"; no usable direction signal on h1 (...)" when the temperature fit ended at a bound (D-066)."""
+    none = [h for h in HORIZONS if (direction_signal or {}).get(h) == "none"]
+    return (f"; no usable direction signal on {', '.join(none)} (temperature fit at a bound: P(up) there is "
+            "neutral, strategies stay flat on it)") if none else ""
 
 
 def run_settings_table(run_dir: Union[str, Path, None] = None, config=None, *,
@@ -698,7 +709,8 @@ def run_settings_table(run_dir: Union[str, Path, None] = None, config=None, *,
             "served delta = beta x raw price head")
     if temps:
         add("serving calibration", "temperature h0 / h1 / h2", "", _per_h(temps),
-            "P(up) = sigmoid(logit / T); T > 1 pulls P(up) towards 0.5")
+            "P(up) = sigmoid(logit / T); T > 1 pulls P(up) towards 0.5"
+            + _no_signal_note(pipe.get("direction_signal")))
     if art.get("var_scale") is not None:
         add("serving calibration", "var_scale", "", art["var_scale"], "the strategies' confidence scale")
     return pd.DataFrame(rows, columns=["group", "setting", "config", "effective", "note"]).set_index(["group", "setting"])
@@ -765,7 +777,7 @@ def direction_stats_line(frame, config=None, h: str = "h1", *, raw_delta: Option
 
 def delta_summary_text(frame, h: str = "h1", *, raw_delta: Optional[Dict[str, np.ndarray]] = None,
                        delta_scale: Optional[Dict[str, float]] = None, sep: str = "<br>") -> str:
-    """'RMSE $ raw 250.12 / served 240.55 / zero 240.61' and 'mean $ predicted raw -3.10 / served -0.07 vs
+    """'RMSE USDT raw 250.12 / served 240.55 / zero 240.61' and 'mean USDT predicted raw -3.10 / served -0.07 vs
     realised 1.20 · beta 0.023' for one horizon (raw only with ``raw_delta``), from report.delta_block."""
     i = HORIZONS.index(h)
     y = frame.y[:, i]
@@ -780,14 +792,14 @@ def delta_summary_text(frame, h: str = "h1", *, raw_delta: Optional[Dict[str, np
         beta = float(delta_scale[h])
     elif raw is not None and float(np.dot(raw[h], raw[h])) > 0:
         beta = float(np.dot(frame.delta[h], raw[h]) / np.dot(raw[h], raw[h]))
-    return ("RMSE $ " + " / ".join(rmse) + sep + "mean $ predicted " + " / ".join(mean)
+    return (f"RMSE {L.quote()} " + " / ".join(rmse) + sep + f"mean {L.quote()} predicted " + " / ".join(mean)
             + f" vs realised {bs['mean_true']:.2f}" + (f"{SEP}beta {beta:.3f}" if beta is not None else ""))
 
 
 # ------------------------------------------------------------------ display
 def _is_usd(label) -> bool:
     parts = label if isinstance(label, tuple) else (label,)
-    return any("($" in str(p) or str(p).rsplit("/", 1)[-1] in DOLLAR_METRICS for p in parts)
+    return any(f"({L.quote()}" in str(p) or str(p).rsplit("/", 1)[-1] in DOLLAR_METRICS for p in parts)
 
 
 def _cell_formatter(decimals: int):
@@ -809,7 +821,7 @@ def _cell_formatter(decimals: int):
 
 def styled(df: pd.DataFrame, *, digits: int = 4, usd_digits: int = 2):
     """The table for display (a pandas Styler): the same decimals down a whole row or column, dollars with
-    ``usd_digits`` (rows or columns labelled "($" or a dollar metric such as delta/rmse), counts without
+    ``usd_digits`` (rows or columns labelled "(USDT" or a dollar metric such as delta/rmse), counts without
     decimals, "z" with 2, missing values as "n/a", and ``df.attrs["caption"]`` (what the table cannot say
     in its labels) as the caption. The DataFrame itself keeps the numbers."""
     st = df.style

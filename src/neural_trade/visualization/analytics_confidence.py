@@ -31,6 +31,7 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
+from neural_trade.visualization import labels as L
 from neural_trade.evaluation.report import _frame_extra, _resolve_raw
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
@@ -342,6 +343,7 @@ def _horizon_stats(frame, config, h, labels, plan, var_scale, gap_from_report):
     return out
 
 
+@L.labelled
 def confidence_analytics_figure(frame, config=None, *, height: Optional[int] = None,
                                 var_scale: Optional[float] = None, report=None, n_boot: int = 1000,
                                 seed: int = 0):
@@ -404,11 +406,11 @@ def confidence_analytics_figure(frame, config=None, *, height: Optional[int] = N
             else:
                 if d["conf_lo"] is not None:
                     ticks = _tick(d["conf_lo"], lambda v: _dec(v, 2))
-                    extra = [f"confidence &#8805; {a:.3f} (mean {m:.3f}), &#963; ${lo_:,.0f}&#8211;${hi_:,.0f}"
+                    extra = [f"confidence &#8805; {a:.3f} (mean {m:.3f}), &#963; {lo_:,.0f}&#8211;{hi_:,.0f} {L.quote()}"
                              for a, m, lo_, hi_ in zip(d["conf_lo"], d["conf_mean"], d["sig_lo"], d["sig_hi"])]
                 else:
-                    ticks = _tick(d["sig_lo"], lambda v: f"${v:,.0f}")
-                    extra = [f"&#963; ${lo_:,.0f}&#8211;${hi_:,.0f}" for lo_, hi_ in zip(d["sig_lo"], d["sig_hi"])]
+                    ticks = _tick(d["sig_lo"], lambda v: f"{v:,.0f} {L.quote()}")
+                    extra = [f"&#963; {lo_:,.0f}&#8211;{hi_:,.0f} {L.quote()}" for lo_, hi_ in zip(d["sig_lo"], d["sig_hi"])]
                 extra = [f"{e}<br>{100 * db:.0f}% of these bars move inside the deadband (not scored)"
                          for e, db in zip(extra, d["deadband"])]
                 ticks = [f"{t}<br><span style='color:{T.MUTED}'>{100 * db:.0f}%</span>"
@@ -585,6 +587,7 @@ def _served_betas(D, raw, delta_scale) -> Dict[str, float]:
     return out
 
 
+@L.labelled
 def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = None,
                                raw_delta: Optional[Dict[str, np.ndarray]] = None, n_boot: int = 1000,
                                seed: int = 0, delta_scale: Optional[Dict[str, float]] = None):

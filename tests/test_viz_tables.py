@@ -104,20 +104,20 @@ def test_delta_quality_table_raw_served_and_zero(viz_frame, viz_config):
     for i, h in enumerate(HORIZONS):
         y = viz_frame.y[:, i]
         col = df[h]
-        assert math.isclose(col["RMSE ($), raw heads"], math.sqrt(np.mean((y - raw[h]) ** 2)))
-        assert math.isclose(col["RMSE ($), served"], math.sqrt(np.mean((y - BETAS[h] * raw[h]) ** 2)))
-        assert math.isclose(col["RMSE ($), zero prediction"], math.sqrt(np.mean(y ** 2)))
-        assert math.isclose(col["MAE ($), zero prediction"], np.mean(np.abs(y)))
+        assert math.isclose(col["RMSE (USDT), raw heads"], math.sqrt(np.mean((y - raw[h]) ** 2)))
+        assert math.isclose(col["RMSE (USDT), served"], math.sqrt(np.mean((y - BETAS[h] * raw[h]) ** 2)))
+        assert math.isclose(col["RMSE (USDT), zero prediction"], math.sqrt(np.mean(y ** 2)))
+        assert math.isclose(col["MAE (USDT), zero prediction"], np.mean(np.abs(y)))
         assert math.isclose(col["shrink beta (served = beta x raw)"], BETAS[h])   # least squares served / raw
         assert math.isclose(col["corr, Pearson, raw heads"], np.corrcoef(y, raw[h])[0, 1])
         # the delta figure's band: N / deff effective samples, deff the Bartlett design effect
         steps = S.horizon_steps(viz_frame, h)
         assert math.isclose(col["corr noise band +/- (95%, N / deff, Bartlett)"],
                             corr_band(len(y), design_effect(raw[h], y, steps)))
-        assert math.isclose(col["mean predicted ($), raw heads"], raw[h].mean())
-        assert math.isclose(col["mean predicted ($), served"], BETAS[h] * raw[h].mean())
+        assert math.isclose(col["mean predicted (USDT), raw heads"], raw[h].mean())
+        assert math.isclose(col["mean predicted (USDT), served"], BETAS[h] * raw[h].mean())
         assert math.isclose(col["share predicted up (delta > 0), raw heads"], np.mean(raw[h] > 0))
-        assert math.isclose(col["max predicted ($), raw heads"], raw[h].max())
+        assert math.isclose(col["max predicted (USDT), raw heads"], raw[h].max())
         slope = float(np.dot(y, raw[h]) / np.dot(raw[h], raw[h]))
         assert math.isclose(col["LS slope of realised on the raw head (unclipped)"], slope)
         assert col["beta this block would fit: clip(LS slope, 0, 1)"] == min(max(slope, 0.0), 1.0)
@@ -126,7 +126,7 @@ def test_delta_quality_table_raw_served_and_zero(viz_frame, viz_config):
     # without raw heads or betas the frame's deltas are "model" (never "predicted, predicted") and a caption says why
     plain = AT.delta_quality_table(viz_frame, viz_config)
     assert not any("raw heads" in str(i) or str(i).endswith(", predicted") for i in plain.index)
-    assert {"RMSE ($), model", "mean predicted ($), model"} <= set(plain.index)
+    assert {"RMSE (USDT), model", "mean predicted (USDT), model"} <= set(plain.index)
     assert "raw_delta" in plain.attrs["caption"] and "caption" in AT.styled(plain).to_html()
     assert {"corr, Pearson, model", "share predicted up (delta > 0), model"} <= set(plain.index)
     with_raw = AT.delta_quality_table(served, viz_config, raw_delta=raw).attrs["caption"]
@@ -144,7 +144,7 @@ def test_the_clipped_beta_row_shows_what_the_calibration_would_fit(viz_frame, vi
 def test_delta_quality_table_rounds_dollars_to_cents_and_ratios_to_four_places(viz_frame, viz_config):
     served, raw = _served(viz_frame)
     df = AT.delta_quality_table(served, viz_config, raw_delta=raw)
-    assert df.loc["RMSE ($), served", "h0"] == round(df.loc["RMSE ($), served", "h0"], 2)
+    assert df.loc["RMSE (USDT), served", "h0"] == round(df.loc["RMSE (USDT), served", "h0"], 2)
     assert df.loc["corr, Pearson, raw heads", "h0"] == round(df.loc["corr, Pearson, raw heads", "h0"], 4)
     assert isinstance(df.loc["n samples", "h0"], int)
 
@@ -162,8 +162,8 @@ def test_delta_quality_table_at_beta_zero_shows_the_raw_heads_correlations_not_t
         assert abs(col["corr, Pearson, raw heads"]) > 0.05                         # the fixture's edge, not the 0.0
         assert col["corr, Spearman, raw heads"] == pytest.approx(spearmanr(y, raw[h]).correlation)
         assert col["share predicted up (delta > 0), raw heads"] == pytest.approx(np.mean(raw[h] > 0))
-        assert col["RMSE ($), served"] == pytest.approx(col["RMSE ($), zero prediction"])
-        for key in ("min predicted ($), raw heads", "max predicted ($), raw heads"):
+        assert col["RMSE (USDT), served"] == pytest.approx(col["RMSE (USDT), zero prediction"])
+        for key in ("min predicted (USDT), raw heads", "max predicted (USDT), raw heads"):
             assert key in df.index
     assert "beta = 0 for h0, h1, h2" in df.attrs["caption"] and "no correlation" in df.attrs["caption"]
     # without the raw heads the served rows say why they are empty, and 0 x a negative head prints as 0.00
@@ -171,7 +171,7 @@ def test_delta_quality_table_at_beta_zero_shows_the_raw_heads_correlations_not_t
     for label in ("corr, Pearson, served", "corr, Spearman, served", "corr noise band +/- (95%, N / deff, Bartlett)",
                   "corr without the 0.5% largest |prediction|, served", "share predicted up (delta > 0), served"):
         assert bare.loc[label].tolist() == [ZERO_BETA_NA] * 3, label
-    assert all(math.copysign(1.0, v) == 1.0 for v in bare.loc["min predicted ($), served"])
+    assert all(math.copysign(1.0, v) == 1.0 for v in bare.loc["min predicted (USDT), served"])
     assert ">-0.00<" not in AT.styled(bare).to_html() and "those rows are n/a" in bare.attrs["caption"]
     # a beta > 0 frame without raw heads keeps its numbers
     kept = AT.delta_quality_table(_served(viz_frame)[0], viz_config, delta_scale=BETAS, digits=None)
@@ -426,7 +426,7 @@ def test_tables_have_no_empty_rows_and_unique_labels(viz_frame, viz_config):
 def test_styled_prints_fixed_decimals_counts_and_missing_values(viz_frame, viz_config):
     served, raw = _served(viz_frame)
     html = AT.styled(AT.delta_quality_table(served, viz_config, raw_delta=raw)).to_html()
-    rmse = AT.delta_quality_table(served, viz_config, raw_delta=raw).loc["RMSE ($), served", "h0"]
+    rmse = AT.delta_quality_table(served, viz_config, raw_delta=raw).loc["RMSE (USDT), served", "h0"]
     assert f">{rmse:.2f}<" in html                                   # dollars in cents
     assert ">3000<" in html                                          # a count, no decimals
     al = AT.styled(AT.alignment_table(served, viz_config, raw_delta=raw)).to_html()
@@ -473,9 +473,9 @@ def test_figure_captions_carry_the_table_numbers(viz_frame, viz_config):
     assert f"sign(delta) = call {coh['delta_dir_align_h2']:.3f} ({coh['delta_dir_align_indep_h2']:.3f} " in stats
     dq = AT.delta_quality_table(served, viz_config, raw_delta=raw, delta_scale=BETAS, digits=None, usd_digits=None)
     txt = AT.delta_summary_text(served, "h0", raw_delta=raw, delta_scale=BETAS)
-    assert (f"RMSE $ raw {dq['h0']['RMSE ($), raw heads']:.2f} / served {dq['h0']['RMSE ($), served']:.2f} / zero "
-            f"{dq['h0']['RMSE ($), zero prediction']:.2f}") in txt
-    assert f"vs realised {dq['h0']['mean realised ($)']:.2f}" in txt and "beta 0.200" in txt
+    assert (f"RMSE USDT raw {dq['h0']['RMSE (USDT), raw heads']:.2f} / served {dq['h0']['RMSE (USDT), served']:.2f} / zero "
+            f"{dq['h0']['RMSE (USDT), zero prediction']:.2f}") in txt
+    assert f"vs realised {dq['h0']['mean realised (USDT)']:.2f}" in txt and "beta 0.200" in txt
     assert "raw" not in AT.delta_summary_text(viz_frame, "h1") and "model" in AT.delta_summary_text(viz_frame, "h1")
 
 

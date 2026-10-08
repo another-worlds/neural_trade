@@ -53,6 +53,10 @@ class RunContext:
         cfg = config.copy()
         seed = int(cfg.SEED if seed is None else seed)
         cfg.override(SEED=seed)
+        # NT-041: every run records what data and setup it used (an engine run passes its own, from the layout)
+        from neural_trade.experiments.dataset import dataset_fingerprint, setup_of
+
+        meta = {"dataset": dataset_fingerprint(cfg), "setup": setup_of(cfg), **dict(meta or {})}
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         run_id = f"{stamp}-{git_sha()}-{config_hash(cfg)}" + (f"-{name}" if name else "")
         run_dir = Path(root) / run_id
@@ -62,7 +66,7 @@ class RunContext:
         ctx = cls(run_id, run_dir, cfg, seed, list(tags))
         cfg.to_yaml(run_dir / "config.yaml")
         (run_dir / "meta.json").write_text(json.dumps(
-            {"run_id": run_id, "seed": seed, "tags": ctx.tags, "created_utc": stamp, **dict(meta or {})}, indent=2,
+            {"run_id": run_id, "seed": seed, "tags": ctx.tags, "created_utc": stamp, **meta}, indent=2,
             default=str), encoding="utf-8")
         if write_env:
             (run_dir / "env.json").write_text(json.dumps(fingerprint(), indent=2, default=str), encoding="utf-8")

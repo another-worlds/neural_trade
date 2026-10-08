@@ -1,0 +1,3 @@
+b684c4da8420456173988834a681f1d2f3d99822
+   by prefix (ok, fail): calib_lambda=14/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}
