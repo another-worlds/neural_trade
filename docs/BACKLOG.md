@@ -76,7 +76,7 @@ changes).
 | [NT-041](#nt-041) | P1 | feature | implementer | done | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
 | [NT-042](#nt-042) | P1 | feature | implementer | todo | Variable number of horizons |
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
-| [NT-044](#nt-044) | P1 | docs | implementer | in-progress | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
+| [NT-044](#nt-044) | P1 | docs | implementer | done | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
@@ -783,7 +783,7 @@ changes).
 
 **Guides for the owner and reviewers, README landing page, ARCHITECTURE**
 
-- **status:** in-progress (2026-10-08): nt-044 ba71e8f (implementer Sonnet; README landing page, docs/ARCHITECTURE.md, docs/guide/{concepts,reading-figures,experiments,own-data}.md, tests/test_docs_guides.py: 30 fast + 1 slow). QA Opus FAIL: 34 claims checked and the CLI, sweep budget numbers (quick 4.04 of 5 min; optuna 10 trials 9.54 h upper / 4.34 h expected; 30 trials refused at 15.60 h), import graph, registries and links hold, fast 2502 passed on ba71e8f; but criterion (5) ('the README carries no status numbers') is not met (README carries a dated snapshot; the lead decided: remove the numbers, keep the qualitative statement and links) and 4 statements are false (TRAIN_METRICS_EVERY; failing_regions.json; CONFIRM_GPU_HOURS; plus P3 wording). Repair round 1 running. New items NT-209, NT-210, NT-211.
+- **status:** done (2026-10-08): merged (nt-044 ac16ca8; implementer Sonnet + repair 1; Opus QA FAIL on ba71e8f, repair 1 verified by the lead against the QA list by reading the delta and the docs tests: 50 passed). README landing page (no status numbers: qualitative statements and links to STATUS and capacity_v1/REPORT.md), docs/ARCHITECTURE.md (module map, layering rules, registries; the layer order labelled the author's reading; 7 subpackages on import cycles of 3 or more stated as debt), docs/guide/{concepts,reading-figures,experiments,own-data}.md; tests/test_docs_guides.py (30+ fast, 1 slow worked example on a tiny CPU scenario; links, backticked paths, every Visualizations key and notebook figure function, every subpackage, documented CLI commands with allow_abbrev=False, Config keys named in the guides). QA verified 34 claims (sweep budget numbers, CLI, import graph, registries). Fast 2503 passed + 1 skipped on ac16ca8 (-n 4). Follow-ups NT-209, NT-210, NT-211.
 - **priority / type / role:** P1 / docs / implementer
 - **area:** docs/guide/concepts.md, docs/guide/reading-figures.md, docs/guide/experiments.md, docs/guide/own-data.md (all new), README.md, docs/ARCHITECTURE.md (new), a docs test in tests/
 - **depends on:** NT-026, NT-030, NT-031 and NT-034 for experiments.md and the README's sweep quick start; NT-041 for own-data.md; NT-027 for the layering rules in ARCHITECTURE.md. The other parts can be written earlier.
