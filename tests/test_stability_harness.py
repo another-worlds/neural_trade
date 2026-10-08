@@ -88,6 +88,16 @@ class HarnessFake:
             raise FileNotFoundError("the bars file went away")
         if how == "winlock":             # a Windows sharing violation (another process holds the file): the machine
             raise PermissionError("[WinError 32] The process cannot access the file: 'x.json'")
+        if how == "atomic":              # utils.atomic gave up after its retries (NT-199): the machine
+            from neural_trade.utils.atomic import AtomicReplaceError
+            raise AtomicReplaceError("could not replace x.json after 20 attempts (another process holds it open?)")
+        if how == "readonly":            # a deterministic denial (NT-199): the setup
+            from neural_trade.utils.atomic import ReadOnlyTargetError
+            raise ReadOnlyTargetError(13, "the target is read-only: x.json")
+        if how == "winattr":             # a lock hit by open(): no [WinError] text, the code only on the exception
+            exc = PermissionError("Permission denied")      # one argument: str() carries no code
+            exc.winerror = 32
+            raise exc
         if how == "permission":          # a plain permission error: the setup
             raise PermissionError("[Errno 13] Permission denied: 'x.json'")
         if how == "probe_fixes" and not ctx.config.PROBE_GRADIENTS:   # fails probe-off, passes in the probe re-run
@@ -1146,6 +1156,39 @@ def test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_
                          case_ids=["control", "scale_x10"],
                          trainer=HarnessFake({"control": "winlock", "scale_x10": "permission"}))
     assert res.case_status == {"control": "NOT A VERDICT", "scale_x10": "FAIL"} and res.exit_code == 1
+
+
+def test_atomic_replace_error_is_not_a_verdict_and_a_read_only_target_is(tmp_path, bars_csv):
+    """NT-199: retries exhausted is the machine; a read-only target (deterministic WinError 5) is the setup."""
+    assert st.is_non_verdict_error("AtomicReplaceError", "could not replace x after 20 attempts: [WinError 5] y")
+    assert not st.is_non_verdict_error("ReadOnlyTargetError", "[Errno 13] the target is read-only: x")
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
+                         case_ids=["control", "scale_x10"],
+                         trainer=HarnessFake({"control": "atomic", "scale_x10": "readonly"}))
+    assert res.case_status == {"control": "NOT A VERDICT", "scale_x10": "FAIL"} and res.exit_code == 1
+
+
+def test_the_runners_winerror_key_decides_when_the_message_has_no_code(tmp_path, bars_csv):
+    """NT-199: end to end through the real runner, which records ``winerror`` in result.json."""
+    assert not st.is_non_verdict_error("PermissionError", "[Errno 13] Permission denied")        # message alone: verdict
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0], case_ids=["control"],
+                         trainer=HarnessFake({"control": "winattr"}))
+    assert res.case_status == {"control": "NOT A VERDICT"}
+
+
+def test_a_setup_error_cell_gets_no_probe_rerun_and_no_blame(tmp_path, bars_csv):
+    """NT-199: FileNotFoundError / a read-only target fail verdict-side, but a probe cannot explain them."""
+    fake = HarnessFake({"control": "filenotfound", "scale_x10": "readonly", "horizons_5_60_240": "bigloss"})
+    res = st.run_harness(profile="tiny", csv=bars_csv, store=tmp_path / "runs", seeds=[0],
+                         case_ids=["control", "scale_x10", "horizons_5_60_240"], trainer=fake, probe="failed")
+    assert res.case_status["control"] == "FAIL" and res.case_status["scale_x10"] == "FAIL"
+    by = {v.case: v for v in res.verdicts}
+    for case in ("control", "scale_x10"):
+        assert by[case].blamed == [] and "setup error" in by[case].blame_reason, case
+    assert sorted(v.case for v in res.reruns) == ["horizons_5_60_240"]           # only the real failure is probed
+    assert [c for c, probe, _ in fake.probes if probe] == ["horizons_5_60_240"]
+    text = res.report.read_text(encoding="utf-8")
+    assert "setup error" in text
 
 
 def test_a_tf_internal_error_is_not_a_verdict_only_with_a_resource_message_and_a_missing_file_is(tmp_path, bars_csv):

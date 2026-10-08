@@ -365,6 +365,7 @@ class Runner:
             logger.exception("[scenario %s] %s failed", sc.name, pc.key)
             doc.update(status="failed", scores={},
                        error={"type": type(exc).__name__, "message": str(exc),
+                              "winerror": getattr(exc, "winerror", None),     # NT-199: the Windows code, when there is one
                               "traceback": traceback.format_exc(limit=20)})
         doc.update(finished_utc=_utc(), wall_s=time.perf_counter() - t0, sec_per_step=_sec_per_step(ctx.run_dir))
         _write_new(ctx.run_dir / RESULT_FILE, doc)

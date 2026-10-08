@@ -1,0 +1,17 @@
+2edba0498ef8907634fb625206c8484a98955639
+tests/test_control_panel.py::test_the_comparison_view_is_built_with_the_top_two_rows_and_a_compare_button
+tests/test_control_panel.py::test_executing_the_notebook_on_a_store_with_a_sweep_shows_it_and_still_launches_nothing
+tests/test_control_panel_repair.py::test_viewing_a_verdict_and_executing_the_notebook_write_nothing_into_the_store
+tests/test_control_panel_repair.py::test_viewing_a_verdict_and_executing_the_notebook_write_nothing_into_the_store
+tests/test_control_panel_repair.py::test_concurrent_refreshes_from_several_threads_do_not_collide_and_the_sync_flag_is_per_thread
+tests/test_control_panel_repair2.py::test_a_real_zero_beta_cell_shows_n_a_for_every_constant_statistic
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
+
+tests/test_frozen_twin.py::test_one_epoch_cpu_run_leaves_every_applied_period_at_its_configured_value
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_nt041_repair.py:138: the real index already has the new columns
+2459 passed, 1 skipped, 5639 warnings in 579.89s (0:09:39)
+All checks passed!

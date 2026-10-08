@@ -154,3 +154,26 @@ def test_the_sweep_summary_writer_goes_through_the_retry_and_keeps_its_bytes(tmp
     _write_json(tmp_path / "sweeps" / "s" / "sweep.json", obj)
     assert len(calls) == 4
     assert (tmp_path / "sweeps" / "s" / "sweep.json").read_bytes() == json.dumps(obj, indent=2, default=str).encode("utf-8")
+
+
+def test_a_read_only_target_is_raised_at_once_without_retries_and_without_a_winerror(tmp_path, monkeypatch):
+    """NT-199: WinError 5 on a read-only target is deterministic: no retry, a distinct type, no winerror code."""
+    from neural_trade.utils.atomic import ReadOnlyTargetError
+
+    target = tmp_path / "a.json"
+    target.write_text("old")
+    monkeypatch.setattr(atomic.os, "access", lambda p, mode: False)     # the read-only attribute, portably
+    calls = _flaky(monkeypatch, 10 ** 6, PermissionError(13, "denied"))
+    with pytest.raises(ReadOnlyTargetError, match="read-only") as ei:
+        atomic_write_json(target, {"k": 1})
+    assert len(calls) == 1 and getattr(ei.value, "winerror", None) is None
+    assert not isinstance(ei.value, AtomicReplaceError) and target.read_text() == "old"
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_a_busy_writable_target_is_still_retried_not_called_read_only(tmp_path, monkeypatch):
+    target = tmp_path / "a.json"
+    target.write_text("old")
+    calls = _flaky(monkeypatch, 3, PermissionError(13, "denied"))
+    atomic_write_json(target, {"k": 1})
+    assert len(calls) == 4

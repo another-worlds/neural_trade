@@ -26,8 +26,22 @@ class AtomicReplaceError(OSError):
     """``os.replace`` kept failing for every retry; the message names the path."""
 
 
+class ReadOnlyTargetError(PermissionError):
+    """The replace target carries the read-only attribute: a deterministic denial (WinError 5 as well), so it is
+    raised at once instead of being retried, and it carries no ``winerror`` so a caller can tell it from a lock."""
+
+
 def _is_busy(exc: OSError) -> bool:
     return isinstance(exc, PermissionError) or getattr(exc, "winerror", None) in (5, 32)
+
+
+def _is_read_only(dst: PathLike) -> bool:
+    """True when ``dst`` exists and is not writable (the read-only attribute on Windows). An ACL denial is not
+    detected: it looks like a lock and is retried (docs/RUNBOOK.md "Not a verdict")."""
+    try:
+        return os.path.isfile(dst) and not os.access(dst, os.W_OK)
+    except OSError:
+        return False
 
 
 def replace_with_retry(src: PathLike, dst: PathLike) -> None:
@@ -41,6 +55,8 @@ def replace_with_retry(src: PathLike, dst: PathLike) -> None:
         except OSError as exc:
             if not _is_busy(exc):
                 raise
+            if _is_read_only(dst):          # NT-199: no retry will change a read-only target
+                raise ReadOnlyTargetError(13, f"the target is read-only: {dst}") from exc
             last = exc
         if attempt < REPLACE_ATTEMPTS - 1:
             time.sleep(delay)
@@ -70,4 +86,4 @@ def atomic_write_json(path: PathLike, obj: Any, *, indent: int | None = 2) -> No
     atomic_write_text(path, json.dumps(obj, indent=indent, default=str))
 
 
-__all__ = ["AtomicReplaceError", "atomic_write_json", "atomic_write_text", "replace_with_retry"]
+__all__ = ["AtomicReplaceError", "ReadOnlyTargetError", "atomic_write_json", "atomic_write_text", "replace_with_retry"]
