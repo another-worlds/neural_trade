@@ -162,6 +162,11 @@ def cmd_predict(args) -> int:
         print(json.dumps(predictor.predict_last(close, alpha=args.alpha), indent=2))  # noqa: T201
         return 0
     frame = predictor.predict_frame(df, alpha=args.alpha, batch_size=args.batch_size)
+    none = [c[:-len("_direction_signal")] for c in frame.columns
+            if c.endswith("_direction_signal") and (frame[c] == "none").any()]
+    if none:  # D-066: the calibrated P(up) of these horizons is flat, not a forecast
+        logger.warning("no usable direction signal for %s: their calibrated P(up) is flat (see *_direction_signal)",
+                       ", ".join(none))
     if args.out:
         frame.to_csv(args.out)
         logger.info("%d rows -> %s", len(frame), args.out)

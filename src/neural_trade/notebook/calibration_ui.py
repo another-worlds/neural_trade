@@ -81,6 +81,20 @@ class CalibrationExplorer:
         return s is not None and self._settings is not None and (
             s[0], s[1]) == self._settings[:2] and abs(s[2] - self._settings[2]) < 1e-9
 
+    def reproduces_saved(self) -> bool:
+        """True when the last refit used the saved settings AND fitted the saved temperatures and signal
+        states. The settings alone are not enough: a run calibrated before NT-124 has a saved T of about 2
+        where today's fit of the same settings ends at a bound (NT-205)."""
+        if not self.matches_saved() or self.pipeline is None:
+            return False
+        sig = getattr(self.saved, "direction_signal", None)
+        if callable(sig) and sig() != self.pipeline.direction_signal():
+            return False
+        st = getattr(getattr(self.saved, "temperature_scaler", None), "temperatures", None) or {}
+        mine = self.pipeline.temperature_scaler.temperatures
+        return all(abs(float(mine.get(h, 1.0)) - float(st.get(h, 1.0))) <= 1e-3 * max(1.0, abs(float(st.get(h, 1.0))))
+                   for h in HORIZONS)
+
     def _score(self, test_out, cal_out, temperatures, betas, alpha, signal=None) -> pd.DataFrame:
         """One row per horizon: test scores of a served output, plus its in-sample fit on the cal block.
 
@@ -210,7 +224,7 @@ class CalibrationExplorer:
         lab, mask = direction_labels_np(test.y, test.last_close, db)[horizon]
         lc, mc = direction_labels_np(cal.y, cal.last_close, db)[horizon]
         served = self._served(self.blocks.get("test"))
-        differs = served is not None and self.saved is not None and not self.matches_saved()
+        differs = served is not None and self.saved is not None and not self.reproduces_saved()
         p_cal = self._out["direction_prob"][horizon][mask]
         lo, hi = self._out["intervals"][horizon]
         # the saved pipeline is drawn only where it differs from the refit (alpha moves the intervals,
@@ -251,6 +265,9 @@ class CalibrationExplorer:
         txt = f"refit: scale={scale}, shrinkage={shrink}, alpha={alpha:.2f} (target {1 - alpha:.2f})"
         if s is None:
             return txt + "; the run has no saved pipeline"
+        if self.matches_saved() and not self.reproduces_saved():
+            return txt + ("; the run's saved settings, but the refit differs from the saved pipeline (its "
+                          "temperatures or signal states: see the table; the saved curve is drawn dash-dotted)")
         return txt + ("; = the run's saved settings (reproduces the served pipeline)" if self.matches_saved()
                       else f"; saved: scale={s[0]}, shrinkage={s[1]}, alpha={s[2]:.2f} (drawn dash-dotted)")
 
