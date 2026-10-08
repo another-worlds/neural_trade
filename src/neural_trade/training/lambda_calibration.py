@@ -278,7 +278,7 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
             # ----------------------------------------------------------------
             logger.info(f"[calib] Warm-up forward passes over {n_warmup}/{train_batches} batches ({warmup_frac:.0%} of epoch) to build the graph and layer losses before sampling...")
             for batch in train_ds.take(n_warmup):
-                x_batch, _, _, _ = batch
+                x_batch = batch[0]
                 _ = custom_model(x_batch, training=True)
 
             # ----------------------------------------------------------------
@@ -326,9 +326,9 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                                        "(every trainable variable was an indicator or a head)")
                 norm_bufs = {name: [] for name in to_measure}
                 for batch in train_ds.take(n_sample):
-                    x_batch, y_batch, last_batch, ext_batch = batch
+                    x_batch, y_batch, last_batch, ext_batch = batch[:4]  # a 5th element = PATH_HEAD's path target
                     with tf.GradientTape(persistent=True) as tape:
-                        _y_pred_raw = custom_model(x_batch, training=True)
+                        _y_pred_raw = custom_model(x_batch, training=True)[:10]
                         (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
                         loss_components = custom_model.custom_loss(
                             x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
@@ -370,8 +370,8 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 t_perp_buf, casimir_buf, vac_buf, hd_buf, ife_buf, vac_overflow_buf = [], [], [], [], [], []
 
                 for batch in train_ds.take(n_sample):
-                    x_batch, y_batch, last_batch, ext_batch = batch
-                    _y_pred_raw = custom_model(x_batch, training=True)
+                    x_batch, y_batch, last_batch, ext_batch = batch[:4]
+                    _y_pred_raw = custom_model(x_batch, training=True)[:10]
                     # Strip 10th output (vacuum_overflow) before passing to custom_loss
                     (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
                     (total,

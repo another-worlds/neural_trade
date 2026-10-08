@@ -40,7 +40,7 @@ def sanitize_var(head, n: int, var_floor: float, var_cap: float) -> np.ndarray:
 
 def heads_to_predictions(heads, n: int, pred_scale: float, pred_mean: float, config) -> dict:
     """``heads`` is the model's 10-output list; ``n`` trims batch padding."""
-    heads = PredictiveOutputs(*heads)
+    heads = PredictiveOutputs(*list(heads)[:len(PredictiveOutputs._fields)])  # Config.PATH_HEAD appends an 11th
     n = int(n)
 
     def delta(head):

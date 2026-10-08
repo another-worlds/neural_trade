@@ -23,13 +23,18 @@ def shuffle_buffer_size(config, n_train: int) -> int:
 
 
 def create_datasets(config, X_train, y_train, last_close_train, extended_trends_train,
-                    X_test, y_test, last_close_test, extended_trends_test):
+                    X_test, y_test, last_close_test, extended_trends_test, *,
+                    path_train=None, path_test=None):
+    """Train/val ``tf.data`` pipelines of ``(X, y, last_close, extended_trends)`` batches. With
+    ``path_train`` / ``path_test`` (Config.PATH_HEAD: the scaled future-path targets ``[N, P]``) every
+    batch carries a fifth element; without them (the default) the batches are the 4-tuples of before."""
     seed = int(getattr(config, "SEED", 42))
 
-    def make_tf_dataset(Xseq, yseq, last_close, extended_trends, batch_size, shuffle=False):
-        ds = tf.data.Dataset.from_tensor_slices((
-            Xseq, yseq, last_close.reshape(-1,1), extended_trends
-        ))
+    def make_tf_dataset(Xseq, yseq, last_close, extended_trends, batch_size, shuffle=False, path=None):
+        parts = (Xseq, yseq, last_close.reshape(-1,1), extended_trends)
+        if path is not None:
+            parts = parts + (path,)
+        ds = tf.data.Dataset.from_tensor_slices(parts)
         if shuffle:
             # Explicit seed: the shuffle order no longer depends on how many random ops were
             # created before it (the implicit op seed does).
@@ -39,7 +44,7 @@ def create_datasets(config, X_train, y_train, last_close_train, extended_trends_
         return ds
 
     train_ds = make_tf_dataset(X_train, y_train, last_close_train, extended_trends_train,
-                               config.BATCH_SIZE, shuffle=True)
+                               config.BATCH_SIZE, shuffle=True, path=path_train)
     val_ds = make_tf_dataset(X_test, y_test, last_close_test, extended_trends_test,
-                             config.BATCH_SIZE, shuffle=False)
+                             config.BATCH_SIZE, shuffle=False, path=path_test)
     return train_ds, val_ds

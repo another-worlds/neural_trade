@@ -352,17 +352,17 @@ class Config:
                                       ge=0.0, tunable=True)
     LAMBDA_QUANTILE: float = _f(1.0, "loss_weights", "unused (no quantile term in the objective)", unit="weight",
                                 ge=0.0, deprecated=True)
-    LAMBDA_SHORT: float = _f(1.0, "loss_weights", "point loss weight, h0", unit="weight", ge=0.0, tunable=True)
-    LAMBDA_POINT: float = _f(1.0, "loss_weights", "point loss weight, h1", unit="weight", ge=0.0, tunable=True)
-    LAMBDA_LONG: float = _f(1.0, "loss_weights", "point loss weight, h2", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_SHORT: float = _f(1.0, "loss_weights", "point loss weight, h0", unit="weight", ge=0.0)
+    LAMBDA_POINT: float = _f(1.0, "loss_weights", "point loss weight, h1", unit="weight", ge=0.0)
+    LAMBDA_LONG: float = _f(1.0, "loss_weights", "point loss weight, h2", unit="weight", ge=0.0)
     LAMBDA_DIR: float = _f(1.0, "loss_weights", "direction loss (DIRECTION_LOSS), summed over the horizons",
-                           unit="weight", ge=0.0, tunable=True)
+                           unit="weight", ge=0.0)
     LAMBDA_INTER: float = _f(1.0, "loss_weights", "weight of model.losses (layer regularisers)", unit="weight", ge=0.0,
                              tunable=True)
     LAMBDA_VOL: float = _f(0.0, "loss_weights", "prediction-spread vs target-spread penalty (0: the calibration "
                            "pass lifts it to CALIB_LAMBDA_MIN 0.1 while CALIB_VOL_ZERO_TO_FLOOR is on, the arm NT-099 "
                            "tested; without calibration, or with that switch off, a true 0, untested; D-057, D-058)",
-                           unit="weight", ge=0.0, tunable=True)
+                           unit="weight", ge=0.0)
     LAMBDA_VAR: float = _f(1.0, "loss_weights", "Gaussian NLL of the variance heads", unit="weight", ge=0.0,
                            tunable=True)
     LAMBDA_TREND_OUTER: float = _f(1.0, "loss_weights", "outer multiplier of the summed extended-trend terms; "
@@ -372,7 +372,7 @@ class Config:
                                  "rescaled by the calibration pass only with CALIB_OUTER", unit="weight", ge=0.0,
                                  tunable=True)
     LAMBDA_DIR_ALIGN_OUTER: float = _f(0.0, "loss_weights", "direction head vs Gaussian readout alignment",
-                                       unit="weight", ge=0.0, tunable=True)
+                                       unit="weight", ge=0.0)
     LAMBDA_COHERENCE: float = _f(1.0, "loss_weights", "weight of the cross-horizon coherence penalty (sign "
                                  "disagreement and magnitude ordering of the price heads)", unit="weight", ge=0.0,
                                  tunable=True)
@@ -380,18 +380,18 @@ class Config:
                                  "rescaled by the calibration pass only with CALIB_OUTER", unit="weight", ge=0.0,
                                  tunable=True)
     LAMBDA_CRPS: float = _f(1.0, "loss_weights", "weight of the Gaussian CRPS of the price and variance heads, summed "
-                            "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
+                            "over the horizons (0 = off)", unit="weight", ge=0.0)
     LAMBDA_SOFT_ECE: float = _f(0.0, "loss_weights", "weight of the differentiable ECE of the direction heads, summed "
-                                "over the horizons (0 = off)", unit="weight", ge=0.0, tunable=True)
+                                "over the horizons (0 = off)", unit="weight", ge=0.0)
     LAMBDA_DIR_ALIGN: float = _f(0.7, "loss_weights", "inner weight of the alignment term", unit="weight", ge=0.0,
                                  tunable=True)
     LAMBDA_PNL: float = _f(0.0, "loss_weights", "weight of the mean-variance P&L utility on the direction heads' "
-                           "implied positions (0 = off; NT-087)", unit="weight", ge=0.0, tunable=True)
+                           "implied positions (0 = off; NT-087)", unit="weight", ge=0.0)
     PNL_GAMMA: float = _f(1.0, "loss_weights", "risk-aversion coefficient of the pnl_utility objective's quadratic "
                           "penalty", unit="dimensionless", gt=0.0, tunable=True)
     PNL_COST_BPS: float = _f(0.0, "loss_weights", "round-trip trading cost assumed by the pnl_utility objective "
                              "(matches strategy/variance_strategies.py's DEFAULT_COST; 0 by default, D-044)",
-                             unit="bps", ge=0.0, tunable=True)
+                             unit="bps", ge=0.0)
     PNL_SIGMA_SOURCE: str = _f("realized_vol", "loss_weights", "volatility scale for the pnl_utility objective's "
                                "r~ = r_H / sigma_H: 'realized_vol' (causal, equal-weighted std of the input "
                                "window's bar-to-bar RAW-price returns, reconstructed from the normalised window "
@@ -406,10 +406,10 @@ class Config:
                               tunable=True)
     LAMBDA_CASIMIR: float = _f(0.1, "physics", "disagreeing horizons need variance", unit="weight", ge=0.0,
                                tunable=True)
-    LAMBDA_VAC: float = _f(0.0, "physics", "vacuum bandwidth threshold (0 = off)", unit="scaled", ge=0.0, tunable=True)
+    LAMBDA_VAC: float = _f(0.0, "physics", "vacuum bandwidth threshold (0 = off)", unit="scaled", ge=0.0)
     LAMBDA_HD: float = _f(0.1, "physics", "variance ordered like realised volatility", unit="weight", ge=0.0,
                           tunable=True)
-    LAMBDA_IFE: float = _f(0.1, "physics", "cross-horizon correlation hinge", unit="weight", ge=0.0, tunable=True)
+    LAMBDA_IFE: float = _f(0.1, "physics", "cross-horizon correlation hinge", unit="weight", ge=0.0)
     RHO_MAX: float = _f(0.95, "physics", "max allowed cross-horizon correlation", unit="dimensionless", ge=0.0, le=1.0,
                         tunable=True)
     VACUUM_E_MAX: float = _f(1.0, "physics", "per-dimension energy ceiling of the vacuum layer",
@@ -648,6 +648,33 @@ class Config:
         "(direction, NLL, CRPS, soft ECE, and every cross-horizon physics term touching them) are 0. "
         "HORIZON_STEPS keeps 3 entries: this is a training mask. Default [0, 1, 2] is today's graph.",
         unit="index")
+    PATH_HEAD: bool = _f(
+        False, "stability",
+        "tactical hypothesis E (exploratory): add a path head, an extra 11th model output [B, P] with "
+        "P = max(HORIZON_STEPS): the next P closes as scaled deltas from the last close (the price "
+        "targets' units), a Dense from the same shared representation the horizon towers use. It "
+        "replaces no output. Off (default): today's graph and loss, bit for bit; the path targets are "
+        "built only when this is on.", unit="flag")
+    LAMBDA_PATH: float = _f(
+        0.0, "stability",
+        "weight of the log-cosh loss between the predicted and the real future path (needs PATH_HEAD). "
+        "0 = off.", unit="dimensionless", ge=0.0)
+    LAMBDA_PATH_IND: float = _f(
+        0.0, "stability",
+        "weight of the path-indicator shape loss (needs PATH_HEAD): technical indicators with FIXED "
+        "parameters (EMA slope for each PATH_IND_EMA period, a smooth RSI of PATH_IND_RSI bars, the "
+        "efficiency ratio net move / path length) are computed on the predicted and on the real "
+        "future path; the loss is the mean squared difference of each feature, each divided by the "
+        "batch variance of the real path's value. The parameters are not learnable on purpose: a "
+        "learnable period or threshold could drift to a value that makes the feature a constant of "
+        "both paths and the loss trivially 0. 0 = off.", unit="dimensionless", ge=0.0)
+    PATH_IND_EMA: List[int] = _f(
+        [5, 10], "stability",
+        "EMA periods (bars) whose slope over the future path is a shape feature of the path-indicator "
+        "loss.", unit="bars")
+    PATH_IND_RSI: int = _f(
+        10, "stability", "period (bars) of the smooth RSI of the path-indicator loss.", unit="bars",
+        ge=2, step=1)
     PROBE_GRADIENTS: bool = _f(
         False, "stability",
         "per-loss-term gradient probe (NT-037, D-026 'about 10%'): every PROBE_EVERY training "
@@ -787,7 +814,7 @@ class Config:
 
     # ================================================================== behaviour
     def __post_init__(self):
-        for name in ("EXTENDED_TREND_PERIODS", "HORIZON_STEPS", "ACTIVE_HORIZONS"):
+        for name in ("EXTENDED_TREND_PERIODS", "HORIZON_STEPS", "ACTIVE_HORIZONS", "PATH_IND_EMA"):
             if isinstance(getattr(self, name), tuple):
                 setattr(self, name, list(getattr(self, name)))
         if self.MOMENTUM_CLIP_MAX is None:
@@ -854,6 +881,11 @@ class Config:
             bad(f"ACTIVE_HORIZONS must be a non-empty sorted list of unique indices from {{0, 1, 2}}, got {_ah}")
         if self.EXTENDED_TREND_PERIODS != sorted(self.EXTENDED_TREND_PERIODS):
             bad("EXTENDED_TREND_PERIODS should be ascending")
+        if (self.LAMBDA_PATH > 0 or self.LAMBDA_PATH_IND > 0) and not self.PATH_HEAD:
+            bad("LAMBDA_PATH / LAMBDA_PATH_IND > 0 need PATH_HEAD=True (there is no predicted path otherwise)")
+        if (not self.PATH_IND_EMA or any(isinstance(p, bool) or not isinstance(p, int) or p < 1
+                                         for p in self.PATH_IND_EMA)):
+            bad(f"PATH_IND_EMA must be a non-empty list of positive ints, got {self.PATH_IND_EMA}")
         if self.VAR_FLOOR != 1e-4:
             warnings.warn(f"Config.VAR_FLOOR={self.VAR_FLOOR} (expected 1e-4). Using provided value.",
                           DeprecationWarning, stacklevel=2)

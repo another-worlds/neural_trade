@@ -486,6 +486,17 @@ def build_gru_attention(config) -> tf.keras.Model:
         direction_h2 = _constant_head(shared_dense, 0.5, 'direction_h2_clip')
         variance_h2 = _constant_head(shared_dense, 1.0, 'variance_h2_clip')
 
+    # Config.PATH_HEAD (tactical hypothesis E, default off = the 10-output graph above, layer for
+    # layer): one extra Dense from the shared representation predicts the next P = max(HORIZON_STEPS)
+    # closes as scaled deltas from the last close ([B, P]); appended AFTER the 10 contract outputs.
+    path_out = []
+    if bool(getattr(config, 'PATH_HEAD', False)):
+        path_len = int(max(config.HORIZON_STEPS))
+        path_raw = layers.Dense(path_len, name='path_head')(shared_dense)
+        path_out = [layers.Lambda(
+            lambda t: tf.where(tf.math.is_finite(t), tf.clip_by_value(t, -100.0, 100.0), tf.zeros_like(t)),
+            name='path_head_clip')(path_raw)]
+
     # === FINAL MODEL: 10 outputs (3 horizons × 3 heads + vacuum_overflow) ===
     # Output index layout:
     #   0: price_h0    1: direction_h0    2: variance_h0
@@ -499,5 +510,5 @@ def build_gru_attention(config) -> tf.keras.Model:
             price_h1, direction_h1, variance_h1,
             price_h2, direction_h2, variance_h2,
             vacuum_overflow,
-        ]
+        ] + path_out
     )

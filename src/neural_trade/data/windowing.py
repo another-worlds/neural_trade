@@ -100,6 +100,28 @@ def make_sequences_with_extended_trends(config, close_array, lookback):
     )
 
 
+def make_path_targets(config, close_array, lookback):
+    """Future-path targets ``[N, P]`` (``P = max(HORIZON_STEPS)``) for the windows of
+    :func:`make_sequences_with_extended_trends`, on the SAME anchors (row k belongs to window k).
+
+    Row for the window ending at bar ``i - 1``: ``close[i + j] - close[i - 1]`` for ``j = 0..P-1``,
+    i.e. the next P closes relative to the last close (the horizon-h price target is entry ``h - 1``).
+    Only bars after the window end and inside the longest horizon are read (``i + P - 1`` is the last
+    bar the price targets already read), so it is as causal as ``y``. Built only when
+    ``Config.PATH_HEAD`` is on; the existing arrays are untouched."""
+    close_array = np.asarray(close_array, dtype='float64')
+    max_extended_period = int(max(config.EXTENDED_TREND_PERIODS))
+    start_idx = int(max(lookback, max_extended_period))
+    step = int(max(1, getattr(config, 'WINDOW_STEP', 1)))
+    p = int(max(int(h) for h in config.HORIZON_STEPS))
+    end_idx = int(len(close_array) - (p - 1))
+    anchors = np.arange(start_idx, end_idx, step)
+    if anchors.size == 0:
+        return np.zeros((0, p), dtype='float32')
+    lc = close_array[anchors - 1][:, None]
+    return (close_array[anchors[:, None] + np.arange(p)[None, :]] - lc).astype('float32')
+
+
 #: bar series a window may carry, in channel order (Config.INPUT_SERIES is a subsequence);
 #: keys = the standardised OHLCV frame's column names (data.loaders.validate_ohlcv_frame)
 SERIES_COLUMNS = {"open": "Open", "high": "High", "low": "Low", "close": "Close",

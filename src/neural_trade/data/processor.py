@@ -20,7 +20,7 @@ from neural_trade.data.scaling import WindowNormalizer, fit_target_scaler, trans
 from neural_trade.data.splits import make_purged_splits
 from neural_trade.data.windowing import (compute_extended_trend_features, frame_series,
                                          make_multichannel_windows,
-                                         make_sequences_with_extended_trends,
+                                         make_sequences_with_extended_trends, make_path_targets,
                                          sequence_anchor_bars)
 
 logger = logging.getLogger(__name__)
@@ -227,11 +227,24 @@ class DataProcessor:
             logger.info(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
         return X_seq, y_seq, last_close_seq, extended_trends, X_model
 
+    def build_path_targets(self, close_values):
+        """Future-path targets ``[N, P]`` on the anchors of :meth:`build_windows` (same
+        ``MAX_SEQUENCE_COUNT`` trim), raw close deltas from the last close. Only for
+        ``Config.PATH_HEAD``; a pure function of the config and ``close_values``."""
+        path = make_path_targets(self.config, close_values, self.config.LOOKBACK)
+        max_sequences = getattr(self.config, 'MAX_SEQUENCE_COUNT', None)
+        if max_sequences and path.shape[0] > max_sequences:
+            path = path[path.shape[0] - max_sequences:]
+        return path
+
     def prepare_datasets(self, df, close_values):
         X_seq, y_seq, last_close_seq, extended_trends, X_model = self.build_windows(close_values, df)
-        return self.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq, extended_trends, X_model=X_model)
+        path_seq = self.build_path_targets(close_values) if bool(getattr(self.config, 'PATH_HEAD', False)) else None
+        return self.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq, extended_trends, X_model=X_model,
+                                                  path_seq=path_seq)
 
-    def prepare_datasets_from_windows(self, X_seq, y_seq, last_close_seq, extended_trends, X_model=None):
+    def prepare_datasets_from_windows(self, X_seq, y_seq, last_close_seq, extended_trends, X_model=None,
+                                      *, path_seq=None):
         """The fold split, target scaling and window normalisation of :meth:`prepare_datasets`, given
         already-built (and, for MAX_SEQUENCE_COUNT, already-trimmed) windows. Splitting an array by
         index and fitting a scaler on it is cheap next to building the windows themselves (no
@@ -288,6 +301,20 @@ class DataProcessor:
         y_cal_scaled = transform_targets(target_scaler, y_cal)
         y_test_scaled = transform_targets(target_scaler, y_test)
 
+        # Config.PATH_HEAD: the future-path targets ([N, P], raw deltas from build_path_targets) split on the
+        # same indices and scaled with the SAME train-fit scaler as the price targets. Nothing is built or
+        # stored when path_seq is None (the default).
+        self.path_train = self.path_test = None
+        path_val = path_cal = None
+        if path_seq is not None:
+            path_seq = np.asarray(path_seq)
+            if path_seq.shape[0] != X_seq.shape[0]:
+                raise RuntimeError(f"path targets ({path_seq.shape[0]}) and windows ({X_seq.shape[0]}) disagree")
+            self.path_train = transform_targets(target_scaler, path_seq[fold.train]).astype('float32')
+            self.path_test = transform_targets(target_scaler, path_seq[fold.test]).astype('float32')
+            path_val = transform_targets(target_scaler, path_seq[fold.val]).astype('float32')
+            path_cal = transform_targets(target_scaler, path_seq[fold.cal]).astype('float32')
+
         # Window normalisation (Config.WINDOW_NORMALIZER, default window_relative:
         # (x - last_close) / target_scale). The previous per-lag-position StandardScaler z-scored the
         # absolute price LEVEL, so the model's dominant signal was "where is BTC vs. its multi-week
@@ -320,9 +347,13 @@ class DataProcessor:
 
         self.val_block = dict(X=_normalise(X_val_seq, last_close_val), y_scaled=y_val_scaled, y_raw=y_val,
                               last_close=last_close_val, extended_trends=extended_trends_val)
+        if path_val is not None:
+            self.val_block['path_scaled'] = path_val
         self.cal_block = dict(X=_normalise(X_cal_seq, last_close_cal), y_scaled=y_cal_scaled, y_raw=y_cal,
                               last_close=last_close_cal, extended_trends=extended_trends_cal,
                               X_raw=_raw_close(X_cal_seq))
+        if path_cal is not None:
+            self.cal_block['path_scaled'] = path_cal
         # RAW test CLOSE windows (conformal realized-vol scales, baselines, backtests).
         self.test_windows_raw = _raw_close(X_test_seq)
 

@@ -996,6 +996,20 @@ def _windowed_cached(cfg: Config, cache: Dict[str, Any]) -> Tuple[Any, Any, Any,
     return cached
 
 
+def _path_cached(cfg: Config, cache: Dict[str, Any]) -> Any:
+    """The raw future-path targets ``[N, P]`` of ``cfg`` (Config.PATH_HEAD only), cached per
+    :func:`data_key` like :func:`_windowed_cached` (they read the same fields)."""
+    from neural_trade.data.processor import DataProcessor
+
+    key = "path:" + data_key(cfg)
+    cached = cache.get(key)
+    if cached is None:
+        _df, close = _load_cached(cfg, cache)
+        cached = DataProcessor(cfg).build_path_targets(close)
+        cache[key] = cached
+    return cached
+
+
 class _EpochTimer(tf.keras.callbacks.Callback):
     """Wall-clock seconds per epoch, for the phase-2 tracing decision (RUNBOOK "Screen mode"):
     ``trace_time ~= epoch_s[0] - median(epoch_s[1:])`` estimates the one-off tf.function tracing cost
@@ -1042,14 +1056,17 @@ def _prepare_trial_data(cfg: Config, cache: Dict[str, Any]) -> _PreparedTrial:
     t1 = time.perf_counter()
     X_seq, y_seq, last_close_seq, extended_trends, X_model = _windowed_cached(cfg, cache)
     dp = DataProcessor(cfg)
+    path_seq = _path_cached(cfg, cache) if bool(getattr(cfg, 'PATH_HEAD', False)) else None
     (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
      X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
      y_train, y_test, target_scaler) = dp.prepare_datasets_from_windows(X_seq, y_seq, last_close_seq,
-                                                                        extended_trends, X_model=X_model)
+                                                                        extended_trends, X_model=X_model,
+                                                                        path_seq=path_seq)
     val_block = dp.val_block
     train_ds, val_ds = create_datasets(cfg, X_train_seq, y_train_scaled, last_close_train,
                                        extended_trends_train, val_block["X"], val_block["y_scaled"],
-                                       val_block["last_close"], val_block["extended_trends"])
+                                       val_block["last_close"], val_block["extended_trends"],
+                                       path_train=dp.path_train, path_test=val_block.get("path_scaled"))
     t_prep = time.perf_counter() - t1
     return _PreparedTrial(train_ds, val_ds, val_block, target_scaler, y_train, int(X_train_seq.shape[0]),
                           t_load, t_prep)
