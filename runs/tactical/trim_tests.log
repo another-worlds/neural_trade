@@ -1,0 +1,5 @@
+git: a89232e5ceee764c9680cf53119f608e77ecaead
+.TRIM_MEASURE (off, on): {'sec': (24.5, 5.0), 'peak_mb': (2142, 818), 'n_bars': (684000, 126087)}
+11 passed in 35.04s
+74 passed in 4.69s
+All checks passed!
