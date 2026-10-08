@@ -671,6 +671,24 @@ class Config:
                                         "without a skip there is nothing for the deep logit to start from - the "
                                         "head keeps its usual glorot-initialised Dense(1, sigmoid)); default off "
                                         "keeps the golden run bit-for-bit (NT-104)", unit="flag")
+    DIRECTION_REGIME_GATE: bool = _f(False, "direction",
+                                     "tactical, exploratory: each horizon's direction logit is g*logit_A + "
+                                     "(1-g)*logit_B (two experts with today's head input, DIRECTION_SKIP "
+                                     "included), g = sigmoid(Dense(gelu Dense(8)(regime features))). Gate "
+                                     "input: log of the close's 1-bar change std over the window, the "
+                                     "efficiency ratio |net change|/sum|changes| over the window and over the "
+                                     "last 15 bars, log of the horizon's variance-head output behind "
+                                     "stop_gradient (read, not trained), and the INDICATOR_GEOMETRY features "
+                                     "when that is on. Needs DIRECTION_HEAD_MODE 'mixed' and no deep dropout/"
+                                     "shrink; off = today's graph", unit="flag")
+    INDICATOR_GEOMETRY: bool = _f(False, "direction",
+                                  "tactical, exploratory: layers.IndicatorGeometry features (slopes, distance "
+                                  "of price to the channel, smooth crossing, squeeze; per learned-indicator "
+                                  "channel, window end only) are concatenated into the input of every "
+                                  "direction head (not price/variance) and of the regime gate; gradients "
+                                  "reach the indicator periods; off = today's graph", unit="flag")
+    GEOM_SLOPE_BARS: List[int] = _f([3, 10], "direction", "k of the geometry slopes (x_t - x_{t-k})/k",
+                                    unit="bars")
     DIRECTION_HEAD_MODE: str = _f("mixed", "direction",
                                   "'mixed' (deep logit + skip logit, today) or 'skip_only' (the deep logit is a "
                                   "frozen zero; the direction logit is the linear skip with a bias; needs "
@@ -847,6 +865,13 @@ class Config:
             bad(f"DIRECTION_LOSS must be 'bce' or 'focal_dice', got {self.DIRECTION_LOSS!r}")
         if self.DIRECTION_HEAD_MODE == "skip_only" and not self.DIRECTION_SKIP:
             bad("DIRECTION_HEAD_MODE 'skip_only' needs DIRECTION_SKIP")
+        if self.INDICATOR_GEOMETRY and (not self.GEOM_SLOPE_BARS or any(
+                isinstance(k, bool) or not isinstance(k, int) or k < 1 or k >= self.LOOKBACK
+                for k in self.GEOM_SLOPE_BARS)):
+            bad("GEOM_SLOPE_BARS must be positive ints below LOOKBACK")
+        if self.DIRECTION_REGIME_GATE and (self.DIRECTION_HEAD_MODE != "mixed" or self.DIRECTION_DEEP_DROPOUT > 0
+                                           or self.DIRECTION_DEEP_SHRINK > 0):
+            bad("DIRECTION_REGIME_GATE needs DIRECTION_HEAD_MODE 'mixed' without deep dropout or shrink")
         if self.NLL_KIND not in ("gaussian", "student_t"):
             bad(f"NLL_KIND must be 'gaussian' or 'student_t', got {self.NLL_KIND!r}")
         if self.NLL_STUDENT_DOF <= 2.0:

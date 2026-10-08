@@ -54,6 +54,7 @@ class Layers(BaseRegistry):
 
 from neural_trade.models.layers import (  # noqa: E402
     EnergyGate,
+    IndicatorGeometry,
     LearnableIndicators,
     PositionalEncodingLayer,
     VacuumSaturationNoise,
@@ -67,4 +68,6 @@ Layers.register(name="vacuum_saturation_noise", tags=["noise", "t_perp", "regula
                 description="Fills the T-perp subspace to E_max with calibrated noise (training only)")(VacuumSaturationNoise)
 Layers.register(name="energy_gate", tags=["gating", "multi_scale", "volatility"],
                 description="Volatility-adaptive blend of short/medium/long conv branches")(EnergyGate)
+Layers.register(name="indicator_geometry", tags=["indicators", "geometry", "tactical"],
+                description="Slopes, distance to price, crossings, squeeze of every indicator channel")(IndicatorGeometry)
 Layers._initialized = True
