@@ -125,7 +125,7 @@ _WINERROR = re.compile(r"\[WinError (\d+)\]")
 
 
 def _winerror(message: str, winerror=None) -> Optional[int]:
-    """The Windows error code: ``winerror`` when given, else the ``[WinError N]`` that ``str(OSError)`` starts with."""
+    """The Windows error code: ``winerror`` when given, else the first ``[WinError N]`` found anywhere in the message."""
     if winerror is not None:
         try:
             return int(winerror)
@@ -449,7 +449,8 @@ def write_case_data(cases: Sequence[Case], csv, out_dir, profile: str = "tiny") 
     todo = [c for c in cases if c.runnable and c.data]
     if not todo:
         return {}
-    base = pd.read_csv(csv)
+    from neural_trade.data.loaders import resolve_data_path
+    base = pd.read_csv(resolve_data_path(csv))          # like the loader: a relative path also resolves from the project root
     d = Path(out_dir) / "data"
     d.mkdir(parents=True, exist_ok=True)
     out = {}
