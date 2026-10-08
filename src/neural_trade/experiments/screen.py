@@ -835,7 +835,8 @@ def _finite_or_none(v: Any) -> Optional[float]:
     return v if math.isfinite(v) else None
 
 
-def _head_metrics_one(y, last_close, delta, prob, sigma, y_train_i, deadband: float, horizon: int) -> Dict[str, Any]:
+def _head_metrics_one(y, last_close, delta, prob, sigma, y_train_i, deadband: float, horizon: int,
+                      active: bool = True) -> Dict[str, Any]:
     """All three heads of one horizon on the validation block. The delta and variance heads are scored
     on every bar with a finite target, the direction head on the non-deadband bars (the AUC mask).
     ``sigma`` is in the target units; the constant-variance reference of the CRPSS is the training
@@ -854,7 +855,8 @@ def _head_metrics_one(y, last_close, delta, prob, sigma, y_train_i, deadband: fl
     dl: Dict[str, Any] = {"corr": None, "skill_vs_zero": None, "n": n_all, "n_eff": n_eff_all}
     if n_all >= 2:
         d = delta_block(y[ok], delta[ok])
-        dl.update(corr=_finite_or_none(d["corr"]), skill_vs_zero=_finite_or_none(d["skill_vs_zero"]))
+        dl.update(corr=_finite_or_none(d["corr"]) if np.ptp(delta[ok]) > 0 else None,  # constant head: no corr
+                  skill_vs_zero=_finite_or_none(d["skill_vs_zero"]))
     out["delta"] = dl
 
     ret = y / np.where(np.abs(last_close) > 1e-9, last_close, np.nan)
@@ -867,7 +869,9 @@ def _head_metrics_one(y, last_close, delta, prob, sigma, y_train_i, deadband: fl
         p, t = prob[mask], labels[mask]
         blk = direction_block(labels, mask, prob)
         pc = np.clip(p, 1e-7, 1 - 1e-7)
-        dr.update(auc=_finite_or_none(auc_score(t.astype(int), p)) if len(np.unique(t)) >= 2 else None,
+        # A head that is not built (Config.ACTIVE_HORIZONS) is constant: no AUC (null, not 0.5).
+        dr.update(auc=(_finite_or_none(auc_score(t.astype(int), p))
+                       if len(np.unique(t)) >= 2 and active else None),
                   brier=_finite_or_none(blk["brier"]), hit_rate=_finite_or_none(blk["acc"]),
                   log_loss=_finite_or_none(-np.mean(t * np.log(pc) + (1 - t) * np.log(1 - pc))),
                   mean_abs_p_dev=_finite_or_none(np.mean(np.abs(p - 0.5))))
@@ -910,6 +914,7 @@ def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scal
     last_close = np.asarray(val_block["last_close"], dtype=float).reshape(-1)
     deadband = float(cfg.DIR_DEADBAND_BPS) / 10000.0
     horizons = list(cfg.HORIZON_STEPS)
+    active_horizons = set(getattr(cfg, 'ACTIVE_HORIZONS', None) or (0, 1, 2))
     y_tr = None if y_train is None else np.asarray(y_train, dtype=float)
     out = _Scored()
     heads_out: Dict[str, Any] = {}
@@ -928,7 +933,7 @@ def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scal
         row: Dict[str, Any] = {"auc": None, "n": n_masked, "n_eff": n_eff}
         y_true = (ret[mask] > 0).astype(int)
         prob_all = np.asarray(preds["direction_prob"][h], dtype=float)
-        if n_masked >= 2 and len(np.unique(y_true)) >= 2:
+        if n_masked >= 2 and len(np.unique(y_true)) >= 2 and i in active_horizons:  # not built: constant, no AUC
             auc = auc_score(y_true, prob_all[mask])
             row["auc"] = auc if math.isfinite(auc) else None
         out[h] = row
@@ -937,7 +942,8 @@ def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scal
         sigma = np.sqrt(np.maximum(var_head, 0.0)) * pred_scale   # the variance head is in scaled units
         y_tr_i = y_tr[:, i] if y_tr is not None and y_tr.ndim == 2 and i < y_tr.shape[1] else None
         heads_out[h] = _head_metrics_one(y_raw[:, i], last_close, delta, prob_all, sigma, y_tr_i, deadband,
-                                         int(horizons[i]) if i < len(horizons) else 1)
+                                         int(horizons[i]) if i < len(horizons) else 1,
+                                         active=i in active_horizons)
         saved[f"delta_{h}"] = delta.astype("float32")
         saved[f"p_up_{h}"] = prob_all.astype("float32")
         saved[f"var_{h}"] = var_head.astype("float32")

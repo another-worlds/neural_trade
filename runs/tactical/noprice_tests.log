@@ -1,0 +1,22 @@
+a4ba2f451b7a6e592e664e42052a2ea7d274f27d
+pytest tests/test_noprice_switches.py tests/test_screen_heads.py tests/test_screen.py tests/test_config*.py tests/test_custom_loss.py tests/test_losses.py tests/test_calib*.py tests/test_stability.py (CPU, -n 8)
+bringing up nodes...
+bringing up nodes...
+........................................................................ [ 33%]
+........................................................................ [ 67%]
+.....................................................................    [100%]
+============================== warnings summary ===============================
+tests/test_noprice_switches.py: 545 warnings
+tests/test_custom_loss.py: 320 warnings
+tests/test_calib_zero_weights.py: 288 warnings
+tests/test_screen.py: 2360 warnings
+tests/test_screen_heads.py: 236 warnings
+tests/test_calib_gradient_mode.py: 293 warnings
+tests/test_stability.py: 284 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_attention_head_pool.py: 1015 warnings
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+213 passed, 5451 warnings in 1342.07s (0:22:22)
+All checks passed!
+golden_run verify (base nt-tactical a4ba2f4 record vs this tree): golden_equal true, 455 arrays, n_fail 0
+note: tests/test_model_variants.py::test_direction_deep_zero_init... fails identically on the base commit (random-op seed under TF_DETERMINISTIC_OPS, alone)

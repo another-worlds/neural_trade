@@ -638,6 +638,18 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     # The scaled deadband is still needed later for dir_align and gauss_p_up calculations.
     deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
 
+    # Tactical switches (Config.PRICE_HEAD, Config.ACTIVE_HORIZONS; the defaults 'on' and (0, 1, 2) leave
+    # this function's graph exactly as it was: every branch below is a Python `if` taken at trace time
+    # and `_z` is created only off the default path, so no op is added to the default graph).
+    _price_on = str(getattr(model.config, 'PRICE_HEAD', 'on')) != 'none'
+    _act = tuple(getattr(model.config, 'ACTIVE_HORIZONS', None) or (0, 1, 2))
+    _all_act = set(_act) == {0, 1, 2}
+    _cross_on = _price_on and _all_act  # terms that read the price of every horizon
+    _z = None if _cross_on else tf.constant(0.0, dtype=tf.float32)
+    if not _all_act:
+        mask_h0, mask_h1, mask_h2 = (m if i in _act else tf.zeros_like(m)
+                                     for i, m in enumerate((mask_h0, mask_h1, mask_h2)))
+
     # y_pred unpacking
     price_h0, dir_h0, var_h0, price_h1, dir_h1, var_h1, price_h2, dir_h2, var_h2 = y_pred
 
@@ -654,9 +666,12 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_h2   = _finite_or_zero(model, dir_h2, "head_dir_h2", fallback=0.5)
     var_h2   = _finite_or_zero(model, var_h2, "head_var_h2", fallback=1.0)
 
-    point_loss_h0_val = model.lambda_short * point_huber(model, y_true_h0, price_h0)
-    point_loss_h1_val = model.lambda_point * point_huber(model, y_true_h1, price_h1)
-    point_loss_h2_val = model.lambda_long * point_huber(model, y_true_h2, price_h2)
+    point_loss_h0_val = (model.lambda_short * point_huber(model, y_true_h0, price_h0)
+                         if _price_on and 0 in _act else _z)
+    point_loss_h1_val = (model.lambda_point * point_huber(model, y_true_h1, price_h1)
+                         if _price_on and 1 in _act else _z)
+    point_loss_h2_val = (model.lambda_long * point_huber(model, y_true_h2, price_h2)
+                         if _price_on and 2 in _act else _z)
     point_loss_val = point_loss_h0_val + point_loss_h1_val + point_loss_h2_val
     point_loss_val = _finite_or_zero(model, point_loss_val, "point_loss")
     point_loss_h0_val = _finite_or_zero(model, point_loss_h0_val, "point_loss_h0")
@@ -677,9 +692,12 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
 
     _zero = tf.constant(0.0, dtype=tf.float32)
     local_trend_h0 = local_trend_h1 = local_trend_h2 = _zero
-    g0, ext0 = extended_trend_loss(model, x_window, y_true_raw_h0, price_h0_s, extended_trends, last_close, horizon_idx=0)
-    g1, ext1 = extended_trend_loss(model, x_window, y_true_raw_h1, price_h1_s, extended_trends, last_close, horizon_idx=1)
-    g2, ext2 = extended_trend_loss(model, x_window, y_true_raw_h2, price_h2_s, extended_trends, last_close, horizon_idx=2)
+    g0, ext0 = (extended_trend_loss(model, x_window, y_true_raw_h0, price_h0_s, extended_trends, last_close, horizon_idx=0)
+                if _price_on and 0 in _act else (_z, _z))
+    g1, ext1 = (extended_trend_loss(model, x_window, y_true_raw_h1, price_h1_s, extended_trends, last_close, horizon_idx=1)
+                if _price_on and 1 in _act else (_z, _z))
+    g2, ext2 = (extended_trend_loss(model, x_window, y_true_raw_h2, price_h2_s, extended_trends, last_close, horizon_idx=2)
+                if _price_on and 2 in _act else (_z, _z))
 
     # For backward compatibility of the "trend_loss_val" formula we keep the previous
     # structure (extended components + coherence). The globals are available in the
@@ -744,6 +762,8 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
 
         coherence_penalty = (dir_disagree_loss + magnitude_loss + target_smoothness_loss) / 3.0
     coherence_penalty = _finite_or_zero(model, coherence_penalty, "coherence_penalty")
+    if not _cross_on:  # reads the price of every horizon: exactly 0 without a price head or a horizon
+        coherence_penalty = _z
 
     # Assign from the registered calls above (scaled correctly, using fixed delta math).
     # Multiply the extended components by the per-horizon lambda here for consistency
@@ -782,6 +802,9 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     dir_loss_h0 = _finite_or_zero(model, dir_loss_h0, "dir_loss_h0")
     dir_loss_h1 = _finite_or_zero(model, dir_loss_h1, "dir_loss_h1")
     dir_loss_h2 = _finite_or_zero(model, dir_loss_h2, "dir_loss_h2")
+    if not _all_act:
+        dir_loss_h0, dir_loss_h1, dir_loss_h2 = (v if i in _act else _z
+                                                 for i, v in enumerate((dir_loss_h0, dir_loss_h1, dir_loss_h2)))
     total_dir_loss = model.lambda_dir * (dir_loss_h0 + dir_loss_h1 + dir_loss_h2)
     total_dir_loss = _finite_or_zero(model, total_dir_loss, "dir_loss")
 
@@ -840,6 +863,9 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     nll_h0_val = _finite_or_zero(model, nll_h0_val, "nll_h0")
     nll_h1_val = _finite_or_zero(model, nll_h1_val, "nll_h1")
     nll_h2_val = _finite_or_zero(model, nll_h2_val, "nll_h2")
+    if not _all_act:
+        nll_h0_val, nll_h1_val, nll_h2_val = (v if i in _act else _z
+                                              for i, v in enumerate((nll_h0_val, nll_h1_val, nll_h2_val)))
     total_nll = model.lambda_var * (nll_h0_val + nll_h1_val + nll_h2_val)
     total_nll = _finite_or_zero(model, total_nll, "nll_loss")
 
@@ -885,6 +911,8 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     vol_diff = tf.abs(pred_std - actual_std)
     vol_diff_clipped = tf.minimum(vol_diff, 10.0)
     vol_loss = vol_diff_clipped * model.lambda_vol
+    if not (_price_on and 1 in _act):  # the std of the h1 price head
+        vol_loss = _z
     vol_loss = _finite_or_zero(model, vol_loss, "vol_loss")
 
     # === CRPS LOSSES (Gaussian Continuous Ranked Probability Score) ===
@@ -895,6 +923,9 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     crps_h0_val = crps_gaussian_loss(model, y_true_h0, price_h0, var_h0_c)
     crps_h1_val = crps_gaussian_loss(model, y_true_h1, price_h1, var_h1_c)
     crps_h2_val = crps_gaussian_loss(model, y_true_h2, price_h2, var_h2_c)
+    if not _all_act:
+        crps_h0_val, crps_h1_val, crps_h2_val = (v if i in _act else _z
+                                                 for i, v in enumerate((crps_h0_val, crps_h1_val, crps_h2_val)))
     total_crps = lambda_crps * (crps_h0_val + crps_h1_val + crps_h2_val)
     total_crps = _finite_or_zero(model, total_crps, "crps_loss")
 
@@ -906,6 +937,10 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     soft_ece_h0_val = soft_ece_loss(model, true_dir_h0, dir_pred_h0, mask_h0)
     soft_ece_h1_val = soft_ece_loss(model, true_dir_h1, dir_pred_h1, mask_h1)
     soft_ece_h2_val = soft_ece_loss(model, true_dir_h2, dir_pred_h2, mask_h2)
+    if not _all_act:
+        soft_ece_h0_val, soft_ece_h1_val, soft_ece_h2_val = (
+            v if i in _act else _z
+            for i, v in enumerate((soft_ece_h0_val, soft_ece_h1_val, soft_ece_h2_val)))
     total_soft_ece = lambda_soft_ece * (soft_ece_h0_val + soft_ece_h1_val + soft_ece_h2_val)
     total_soft_ece = _finite_or_zero(model, total_soft_ece, "soft_ece_loss")
 
@@ -915,37 +950,51 @@ def custom_loss(model, x_window, y_true, y_pred, last_close, extended_trends,
     t_perp_h0_val = t_perp_calibration_loss(model, y_true_h0, price_h0, var_h0_c)
     t_perp_h1_val = t_perp_calibration_loss(model, y_true_h1, price_h1, var_h1_c)
     t_perp_h2_val = t_perp_calibration_loss(model, y_true_h2, price_h2, var_h2_c)
+    if not _all_act:
+        t_perp_h0_val, t_perp_h1_val, t_perp_h2_val = (
+            v if i in _act else _z for i, v in enumerate((t_perp_h0_val, t_perp_h1_val, t_perp_h2_val)))
     total_t_perp = lambda_t_perp * (t_perp_h0_val + t_perp_h1_val + t_perp_h2_val)
     total_t_perp = _finite_or_zero(model, total_t_perp, "t_perp_loss")
 
     # Casimir: destructive cross-horizon interference → T_⊥ (σ) must be high
     lambda_casimir = tf.cast(getattr(model, 'lambda_casimir', 0.0), tf.float32)
-    casimir_val = lambda_casimir * casimir_interference_loss(
-        model, price_h0, price_h1, price_h2, var_h0_c, var_h1_c, var_h2_c)
+    casimir_val = (lambda_casimir * casimir_interference_loss(
+        model, price_h0, price_h1, price_h2, var_h0_c, var_h1_c, var_h2_c) if _cross_on else _z)
     casimir_val = _finite_or_zero(model, casimir_val, "casimir_loss")
 
     # Vacuum bandwidth: cross-horizon spread must not exceed Λ_vac (self-limiting)
     # P0-2: now opt-in (default 0 in Config + helper). When 0 the term is 0.
     lambda_vac_cfg = tf.constant(float(getattr(getattr(model, 'config', None), 'LAMBDA_VAC', 0.0)),
                                  dtype=tf.float32)
-    vac_val = vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac_cfg)
+    vac_val = vacuum_bandwidth_loss(model, price_h0, price_h1, price_h2, lambda_vac_cfg) if _cross_on else _z
     vac_val = _finite_or_zero(model, vac_val, "vac_loss")
 
     # Hyper-decoherence: high local volatility should couple to high σ
     lambda_hd = tf.cast(getattr(model, 'lambda_hd', 0.0), tf.float32)
-    hd_val = lambda_hd * hyper_decoherence_coupling_loss(
-        model, x_window, var_h0_c, var_h1_c, var_h2_c)
+    hd_val = (lambda_hd * hyper_decoherence_coupling_loss(
+        model, x_window, var_h0_c, var_h1_c, var_h2_c) if _all_act else _z)  # couples every horizon's variance
     hd_val = _finite_or_zero(model, hd_val, "hd_loss")
 
     # Information flow entropy: each horizon must carry non-redundant information
     lambda_ife = tf.cast(getattr(model, 'lambda_ife', 0.0), tf.float32)
-    ife_val = lambda_ife * information_flow_entropy_loss(model, price_h0, price_h1, price_h2)
+    ife_val = (lambda_ife * information_flow_entropy_loss(model, price_h0, price_h1, price_h2)
+               if _cross_on else _z)
     ife_val = _finite_or_zero(model, ife_val, "ife_loss")
 
     # Vacuum overflow T_⊥ precision: overflow tracks prediction residual magnitude
     # Active only when lambda_vac_overflow > 0 AND vacuum_overflow tensor is provided.
     lambda_vac_overflow = tf.cast(getattr(model, 'lambda_vac_overflow', 0.0), tf.float32)
-    if vacuum_overflow is not None:
+    if vacuum_overflow is not None and not _cross_on:
+        # Residual over the ACTIVE horizons only (the price is 0 without a price head); the same
+        # scale-invariant form as vacuum_overflow_t_perp_loss.
+        _ys = (y_true_h0, y_true_h1, y_true_h2)
+        _ps = (price_h0, price_h1, price_h2)
+        _res = tf.stop_gradient(
+            tf.add_n([tf.abs(tf.squeeze(_ys[i] - _ps[i], axis=1)) for i in _act]) / float(len(_act)))
+        _ov = tf.reduce_mean(tf.squeeze(vacuum_overflow, axis=1))
+        _mr = tf.reduce_mean(_res)
+        vac_overflow_val = lambda_vac_overflow * (tf.square(_ov - _mr) / (tf.square(_mr) + 1e-8))
+    elif vacuum_overflow is not None:
         vac_overflow_val = lambda_vac_overflow * vacuum_overflow_t_perp_loss(
             model, vacuum_overflow,
             y_true_h0, price_h0,

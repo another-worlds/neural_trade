@@ -619,6 +619,21 @@ class Config:
         "the dropped terms' mask counters (MASK_TERM_NAMES is static either way) simply read 0 "
         "instead of being removed. A later study (batched with NT-099) may adopt True as the "
         "default once judged under D-025.", unit="flag")
+    PRICE_HEAD: str = _f(
+        "on", "stability",
+        "'on' (default): today's graph and loss. 'none' (tactical, exploratory): no price Dense layers "
+        "are built (the price outputs become a constant-zero tensor of the same shape, so the 10-output "
+        "contract holds) and every loss term that exists only for or reads the price prediction is "
+        "exactly 0 and not computed: point, extended trend, coherence, IFE, vol, Casimir, vacuum. NLL "
+        "and CRPS keep the centre fixed at 0 (the variance head learns E[y^2]); the calibration pass "
+        "skips the zeroed terms.", unit="name", choices=("on", "none"))
+    ACTIVE_HORIZONS: List[int] = _f(
+        [0, 1, 2], "horizons",
+        "indices of the horizon towers that are trained (tactical, exploratory). The others are not "
+        "built: their outputs are constants (direction 0.5, variance 1.0, price 0) and their loss terms "
+        "(direction, NLL, CRPS, soft ECE, and every cross-horizon physics term touching them) are 0. "
+        "HORIZON_STEPS keeps 3 entries: this is a training mask. Default [0, 1, 2] is today's graph.",
+        unit="index")
     PROBE_GRADIENTS: bool = _f(
         False, "stability",
         "per-loss-term gradient probe (NT-037, D-026 'about 10%'): every PROBE_EVERY training "
@@ -740,7 +755,7 @@ class Config:
 
     # ================================================================== behaviour
     def __post_init__(self):
-        for name in ("EXTENDED_TREND_PERIODS", "HORIZON_STEPS"):
+        for name in ("EXTENDED_TREND_PERIODS", "HORIZON_STEPS", "ACTIVE_HORIZONS"):
             if isinstance(getattr(self, name), tuple):
                 setattr(self, name, list(getattr(self, name)))
         if self.MOMENTUM_CLIP_MAX is None:
@@ -801,6 +816,10 @@ class Config:
             bad("the architecture has exactly three horizon towers: HORIZON_STEPS needs 3 entries")
         if self.HORIZON_STEPS != sorted(self.HORIZON_STEPS):
             bad("HORIZON_STEPS should be ascending")
+        _ah = list(self.ACTIVE_HORIZONS)
+        if (not _ah or any(isinstance(i, bool) or not isinstance(i, int) for i in _ah)
+                or _ah != sorted(set(_ah)) or not set(_ah) <= {0, 1, 2}):
+            bad(f"ACTIVE_HORIZONS must be a non-empty sorted list of unique indices from {{0, 1, 2}}, got {_ah}")
         if self.EXTENDED_TREND_PERIODS != sorted(self.EXTENDED_TREND_PERIODS):
             bad("EXTENDED_TREND_PERIODS should be ascending")
         if self.VAR_FLOOR != 1e-4:
