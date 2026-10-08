@@ -33,6 +33,12 @@ def _ev(y, d) -> float:
     return float(1 - np.var(y - d) / np.var(y))
 
 
+def no_signal_note(horizon: str, temperature: float) -> str:
+    """The reliability note of a horizon whose temperature fit ended at a search bound (D-066)."""
+    return (f"no usable direction signal on {horizon} (temperature fit at a bound: T = {temperature:.2f}); "
+            "the calibrated P(up) is flat near 0.5, not an improvement")
+
+
 def _inside(y, lo, hi) -> np.ndarray:
     return (np.asarray(y) >= np.asarray(lo)) & (np.asarray(y) <= np.asarray(hi))
 
@@ -75,8 +81,13 @@ class CalibrationExplorer:
         return s is not None and self._settings is not None and (
             s[0], s[1]) == self._settings[:2] and abs(s[2] - self._settings[2]) < 1e-9
 
-    def _score(self, test_out, cal_out, temperatures, betas, alpha) -> pd.DataFrame:
-        """One row per horizon: test scores of a served output, plus its in-sample fit on the cal block."""
+    def _score(self, test_out, cal_out, temperatures, betas, alpha, signal=None) -> pd.DataFrame:
+        """One row per horizon: test scores of a served output, plus its in-sample fit on the cal block.
+
+        ``signal`` is the pipeline's ``direction_signal()``. A horizon whose temperature fit ended at a
+        bound ("none", D-066) has a flat calibrated P(up): its row says so in "direction signal" and the
+        two calibrated-ECE cells are NaN (n/a), so they never read as an improvement over the raw ECE.
+        """
         from neural_trade.metrics.direction_labels import direction_labels_np
         from neural_trade.metrics.numpy_metrics import ece_pos
 
@@ -90,7 +101,9 @@ class CalibrationExplorer:
             lo, hi = test_out["intervals"][h]
             clo, chi = cal_out["intervals"][h]
             (lab, mask), (lc, mc) = lab_t[h], lab_c[h]
+            none = (signal or {}).get(h) == "none"
             rows[h] = {
+                "direction signal": "none (T at a bound)" if none else "ok",
                 "temperature": float(temperatures.get(h, 1.0)),
                 "delta beta": float(betas.get(h, 1.0)),
                 "coverage": float(np.mean(_inside(y, lo, hi))),
@@ -99,9 +112,10 @@ class CalibrationExplorer:
                 "EV raw delta": _ev(y, test.delta[h]),
                 "EV served delta": _ev(y, test_out["delta"][h]),
                 "ECE raw": ece_pos(lab[mask], test.direction_prob[h][mask]),
-                "ECE calibrated": ece_pos(lab[mask], test_out["direction_prob"][h][mask]),
+                "ECE calibrated": np.nan if none else ece_pos(lab[mask], test_out["direction_prob"][h][mask]),
                 "coverage cal (in-sample)": float(np.mean(_inside(yc, clo, chi))),
-                "ECE calibrated cal (in-sample)": ece_pos(lc[mc], cal_out["direction_prob"][h][mc]),
+                "ECE calibrated cal (in-sample)": (np.nan if none else
+                                                   ece_pos(lc[mc], cal_out["direction_prob"][h][mc])),
                 "up-rate cal": float(lc[mc].mean()) if mc.any() else float("nan"),
                 "up-rate test": float(lab[mask].mean()) if mask.any() else float("nan"),
             }
@@ -122,7 +136,8 @@ class CalibrationExplorer:
             return None
         temps = getattr(getattr(self.saved, "temperature_scaler", None), "temperatures", {}) or {}
         betas = getattr(self.saved, "delta_scale", {}) or {}
-        return self._score(test_out, cal_out, temps, betas, SAVED_ALPHA)
+        sig = getattr(self.saved, "direction_signal", None)
+        return self._score(test_out, cal_out, temps, betas, SAVED_ALPHA, sig() if callable(sig) else None)
 
     def refit(self, conformal_scale: str = "realized_vol", shrink_delta: bool = True, alpha: float = 0.1) -> pd.DataFrame:
         """Fit on the calibration block, apply to test (and, for the in-sample fit, to cal); one row per horizon."""
@@ -141,7 +156,8 @@ class CalibrationExplorer:
             out_cal = pipe.apply(self._preds(cal), alpha=alpha, windows=cal.X_raw)
         finally:
             cal_log.setLevel(level)
-        self.last_table = self._score(out, out_cal, pipe.temperature_scaler.temperatures, pipe.delta_scale, alpha)
+        self.last_table = self._score(out, out_cal, pipe.temperature_scaler.temperatures, pipe.delta_scale, alpha,
+                                      pipe.direction_signal())
         self.pipeline, self._out, self._out_cal = pipe, out, out_cal
         self._alpha = float(alpha)
         self._settings = (str(conformal_scale), bool(shrink_delta), float(alpha))
@@ -195,8 +211,9 @@ class CalibrationExplorer:
             lab[mask], test.direction_prob[horizon][mask], p_cal,
             horizon=horizon, horizon_steps=steps, ref_rate=float(lc[mc].mean()) if mc.any() else None,
             p_saved=p_saved, title=f"Direction reliability, {name}",
-            note=(f"refit temperature {temp:.2f}, fit on the calibration block: a temperature stretches P(up) "
-                  "around 0.5 and cannot follow a shift in the up-rate"
+            note=((no_signal_note(horizon, temp) if self.pipeline.direction_signal().get(horizon) == "none"
+                   else f"refit temperature {temp:.2f}, fit on the calibration block: a temperature stretches "
+                        "P(up) around 0.5 and cannot follow a shift in the up-rate")
                   + ("; open diamonds on a dash-dot line: the saved pipeline" if p_saved is not None else "")))
         target = 1 - self._alpha
         cov = coverage_over_time_figure(

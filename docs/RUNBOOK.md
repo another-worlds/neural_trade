@@ -154,6 +154,9 @@ a bound there is no interior NLL minimum: `artifacts/calibration/pipeline_meta.j
 h1", and `SignalFrame.build` gives that horizon a neutral P(up) (0.5) with no weight, so strategies reading P(up)
 stay flat on it (a warning names the horizons). A normal fit changes nothing. The same state is stored in
 `predictions_*.npz` (`direction_signal__<h>`) and in `frame.meta["direction_signal"]`.
+Notebook 04's calibration explorer shows it too: the comparison table has a `direction signal` column, the
+calibrated-ECE cells of a "none" horizon are NaN (n/a), and the reliability note says "no usable direction signal
+on h (temperature fit at a bound: T = ...)".
 
 `scripts/check_run_evidence.py` finds the run ids cited in `docs/**/*.md`, `README.md`,
 `runs/**/REPORT.md`, `report.md`, `summary.md` and the saved notebooks, and exits 1 when a cited run
