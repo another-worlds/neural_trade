@@ -236,8 +236,8 @@ changes).
 | [NT-201](#nt-201) | P3 | polish | implementer | done | NT-191 doc and test residues |
 | [NT-202](#nt-202) | P2 | bug | implementer | todo | tests/test_eval_metrics.py::test_direction_skip_share_matches_a_direct_numpy_computation fails alone on CPU (rel 1e-5 on a value of 3.6e-4) |
 | [NT-203](#nt-203) | P2 | decision | owner | todo | Lower-bound temperature fits: flag as 'no usable direction signal' (D-066 literally) or as their own state, not gated? |
-| [NT-204](#nt-204) | P3 | polish | implementer | todo | Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start |
-| [NT-205](#nt-205) | P2 | bug | implementer | todo | The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124) |
+| [NT-204](#nt-204) | P3 | polish | implementer | done | Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start |
+| [NT-205](#nt-205) | P2 | bug | implementer | done | The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124) |
 | [NT-206](#nt-206) | P2 | bug | implementer | todo | A passing probe re-run still blames a loss term for the first run's FAIL |
 | [NT-207](#nt-207) | P3 | polish | implementer | todo | Stability harness residues from the NT-051 SPEC review |
 
@@ -2699,7 +2699,7 @@ changes).
 
 **Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start**
 
-- **status:** todo
+- **status:** done (2026-10-08): merged as 043c845 (QA Sonnet PASS). predict_last, PredictionBatch.to_frame/predict_frame/CSV and the CLI predict carry a per-horizon direction_signal (ok / none / n/a without a pipeline; columns only when a pipeline is applied) and the CLI warns on 'none' horizons; OnlineTemperatureCalibrator's warm start is clamped to [T_min, T_max] (T = 1000 starts at 10); tests/test_legacy_bundle.py drops the new columns before comparing with the base-commit reference (numbers unchanged). Fast 2466 passed + 1 skipped on 559269a.
 - **priority / type / role:** P3 / polish / implementer
 - **area:** src/neural_trade/serving/predictor.py (~159-179), cli.py (predict), calibration/pipeline.py (~243), calibration/online_calibrator.py
 - **depends on:** NT-124
@@ -2711,7 +2711,7 @@ changes).
 
 **The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124)**
 
-- **status:** todo
+- **status:** done (2026-10-08): merged as 043c845 (nt-205 037a03a; implementer Sonnet; QA Sonnet PASS on the real pre-NT-124 reference run). `CalibrationExplorer.reproduces_saved()` (equal settings, equal direction_signal(), temperatures within 1e-3 relative); the saved curve is drawn whenever it is false; the status text says 'differs from the saved pipeline'. On run 20261003T225052Z-91fa363-11993eec the refit gives T = 1000 / none while the saved T is 1.94 / 2.06 / 1.75 / ok: the figure shows raw, calibrated and the saved dash-dot curve, the subtitle 'calibrated n/a (no direction signal), saved 0.034'. Notebook 04 executed and looked at (commit after the merge). 9 mutations killed.
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/notebook/calibration_ui.py (~213, ~228-254), tests/
 - **depends on:** NT-124
