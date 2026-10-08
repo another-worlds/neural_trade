@@ -25,7 +25,8 @@ DEFAULT_OHLCV = {"atr": [7, 14, 28], "stoch": [{"k_period": 14, "d_period": 3}, 
                  "obv": [10, 20, 40], "vwap": [10, 20, 40], "mfi": [7, 14, 28], "adx": [7, 14, 28], "cci": [10, 20, 40],
                  "donchian": [10, 20, 55]}
 BASE = {"CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT_tactical.csv", "N_FOLDS": 2, "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1,
-        "MAX_SEQUENCE_COUNT": 18000, "FOLD_INDEX": -2, "BATCH_SIZE": 256, "TRAIN_METRICS_EVERY": 10}
+        "MAX_SEQUENCE_COUNT": 18000, "FOLD_INDEX": -2, "BATCH_SIZE": 256, "TRAIN_METRICS_EVERY": 10,
+        "DATA_TAIL_TRIM": True}
 RULES = {"finite": True, "max_nonfinite_grad_steps": 0, "max_clipped_share": 1.0, "clip_skip_epochs": 1,
          "min_train_loss_drop": -10.0, "max_term_share": 1.0}
 

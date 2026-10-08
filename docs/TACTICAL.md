@@ -39,6 +39,8 @@ for the MVP".
   (runs/tactical/data/excerpt_check.json), loading is 2-2.5x faster. Rebuild: `python runs/tactical/data/make_excerpt.py`
   (manifest: runs/tactical/data/excerpt_manifest.json). A run on other DATA_END values (e.g. the 40-slice design) needs
   the full `Bitcoin_BTCUSDT.csv`, as do giant runs (360-day, the long-history studies).
+  Tactical specs also set `DATA_TAIL_TRIM: true` (windows built only from the tail the run keeps; bit-identical arrays,
+  tests/test_data_tail_trim.py): on a long-block slice 24.5 -> 5.0 s and 2.1 GB -> 0.8 GB peak RAM.
 - **Standard screening design (owner, 2026-10-07):** 6 slices x 2 seeds = 12 trials per variant, paired with the
   base on the same (slice, seed); accepted tolerances: error of the effect up to 0.05, false wins up to 10%
   (measured: mean error 0.014, worst 5% 0.043, false 'significant' 7%). It sees only large jumps (about +0.05 AUC);
