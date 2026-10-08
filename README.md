@@ -1,37 +1,46 @@
 # neural-trade
 
-A neural network that predicts financial time series from technical indicators whose parameters
-and combinations are learned by gradient descent. It is meant as a substitute for manual indicator
-search: instead of a person trying RSI 14 against RSI 21, the network learns the indicator periods
-that predict best, shows what it learned, and is judged by net financial metrics after trading
-costs. The design goal is that the instrument, bar size, window and horizons are configuration;
-today the code is built and tested on one reference setup.
+A neural network that predicts financial time series from technical indicators whose **parameters and
+combinations it learns by gradient descent**. It is meant as a substitute for manual indicator search:
+instead of a person trying RSI 14 against RSI 21, the network learns the indicator periods that predict
+best, shows what it learned, and is judged by the financial metrics a manual search would use (dev-fold net
+Sharpe after costs, against manual-search baselines). The instrument, the bar size, the window and the
+horizons are configuration; the goal and the yardstick are in [docs/VISION.md](docs/VISION.md).
 
-**Reference setup: BTC/USDT one-minute bars.** From the last 60 bars (open, high, low, close,
-volume; `Config.INPUT_SERIES`, `["close"]` reproduces the pre-NT-047 close-only input), one
-network predicts, for 10, 15 and 20 minutes ahead:
+**Reference setup, the only one tested: BTC/USDT one-minute bars.** From the last 60 bars (open, high, low,
+close, volume), one network predicts for 10, 15 and 20 minutes ahead the price change in quote currency
+(`delta`), the probability that the price goes up (`direction`) and the variance of the change (`sigma`).
+It learns 14 indicator families, 3 instances each (54 periods), and six "physics-inspired" regularisers act
+on its heads. The code supports exactly three horizons today.
 
-- the price change in quote currency (`delta`; USDT here),
-- the probability that the price goes up (`direction`),
-- the variance of the price change (`sigma`),
+## What works and what does not
 
-and learns a set of technical indicators, their periods trained by gradient descent: EMA, MACD,
-RSI and Bollinger on the close, and - since NT-047 - ATR, Stochastic, Williams %R, Keltner, OBV,
-VWAP, MFI, ADX/DMI, CCI and Donchian on the full OHLCV bars (14 families, 3 instances each, 54
-learned periods, 82 indicator channels; rolling max/min and sign branches use smooth
-differentiable forms). Six "physics-inspired" regularisers act on these heads. An ablation harness tests whether
-each one earns its place.
+Read this before the rest. The live state is [docs/STATUS.md](docs/STATUS.md); the evidence is
+[runs/gates/REPORT.md](runs/gates/REPORT.md) and
+[runs/experiments/capacity_v1/REPORT.md](runs/experiments/capacity_v1/REPORT.md). This page carries no
+numbers (they go stale); the dated ones are in those two files and in STATUS.
 
-The package lives in `src/neural_trade/`. Around the model it provides a typed config, nine
-component registries, a purged evaluation protocol with baselines, post-hoc calibration, a
-serving API, an honest backtest engine, run tracking and a CLI.
+- **The direction head has no skill worth trading.** On the judgement folds of the long history the
+  default model shows no direction skill beyond a simple logistic regression on trailing returns, which
+  scores higher on the same blocks. The calibrated P(up) is not better than a constant 0.5 out of sample. When the calibration finds no usable signal for a horizon the run says
+  so explicitly ("no usable direction signal") and the strategies that read P(up) stay flat on it.
+- **The variance heads and the conformal intervals are the edge that exists.** The variance forecast beats a
+  constant-variance forecast by a small margin, and the 90% conformal intervals hold their coverage.
+- **The owner's trading goal (hit rate above 60%, drawdown under 5%) is not reached.**
+- **The learned indicators are the product, and they are only partly evidenced.** They can be drawn on price
+  next to their textbook defaults (notebook 07). The comparison that would show them beating the same network
+  with frozen periods and technical-analysis rules under the paired test of VISION is built, but its first
+  real sweep has not run yet.
+- **What is solid:** the purged split, the baselines in every report, noise-aware statistics, the next-open
+  backtest with a random null, the resumable experiment engine, sweeps, the leaderboard, the paired
+  comparator and the stability harness, all covered by tests.
 
-> **Status.** What works, what does not, and the evidence for each: [`docs/STATUS.md`](docs/STATUS.md).
-> The goal and the MVP: [`docs/VISION.md`](docs/VISION.md).
+A clear negative answer is a valid outcome of this project (VISION "The yardstick"): it is recorded, not
+tuned away.
 
-## Install
+## Quick start
 
-Python 3.10, TensorFlow 2.10 (the last release with native Windows GPU support).
+Python 3.10 and TensorFlow 2.10 (the last release with native Windows GPU support).
 
 ```powershell
 # Windows, GPU: creates the `nt` conda env (CUDA 11.2 / cuDNN 8.1 + pinned pip stack)
@@ -46,38 +55,8 @@ pip install -r requirements-ci.txt
 pip install -e ".[viz,dev]"
 ```
 
-Importing `neural_trade` does not import TensorFlow. Training modules load it on demand.
-
-## Performance
-
-On Windows, TensorFlow 2.10 finds CUDA/cuDNN only through `PATH`. `import neural_trade` adds the
-conda env's DLL folders when the env has the CUDA runtime, so **import `neural_trade` before
-`tensorflow`** (or start from an activated env). Training logs which device it uses and warns if
-no GPU is visible. Set `NEURAL_TRADE_NO_DLL_PATH=1` to opt out.
-
-Training time, full dataset (~30k training sequences), RTX 4070 Ti:
-
-| | before | now |
-|---|---|---|
-| epoch at batch 64 | ~90 s | 43 s |
-| epoch at batch 256 (the default) | ~20 s | 12 s |
-| 20-epoch run with the default settings | ~32 min | ~4-5 min |
-
-What made the difference:
-
-- **Training metrics.** The step returns only the running loss. The ~150 epoch-level training
-  diagnostics are computed once per epoch and updated every `TRAIN_METRICS_EVERY` steps (10). The
-  training loss and all validation metrics stay exact.
-- **Soft-ECE loss.** It is computed for all bins in one operation.
-- **Learnable indicators.** Every EWMA of every family runs inside 2 batched matrix products
-  (57 first-stage and 12 second-stage averages at the OHLCV default; 24 in close-only mode).
-- **Batch size.** A step costs about the same at 64 or 256 because it is kernel-launch-bound.
-
-For bulk prediction, pass a larger `batch_size` to `Predictor.predict` / `predict_frame`, or
-`--batch-size` in the CLI: about 16,700 windows/s at 1024 on the GPU. The default, the training
-batch, reproduces training output bit for bit.
-
-## Quick start (CLI)
+Extras: `.[notebooks]` for the notebooks, `.[sweep]` for Optuna sweeps. Importing `neural_trade` does not
+import TensorFlow; on Windows, **import `neural_trade` before `tensorflow`** so the CUDA DLLs are found.
 
 ```bash
 # train on the bundled CSV, evaluate on the held-out test block, save a serving bundle
@@ -86,29 +65,56 @@ neural-trade train --config configs/default.yaml --set LR=5e-4 --set EPOCHS=10
 
 # forecast with a saved bundle
 neural-trade predict  --artifacts runs/<run id>/artifacts --csv bars.csv --last
-neural-trade predict  --artifacts runs/<run id>/artifacts --csv bars.csv --out forecasts.csv
 
-# backtest a strategy (fees, spread, slippage, next-open fills, stops on high/low)
-neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv --out bt/ --plot   # calibrated_quantile
+# backtest a strategy (next-open fills, stops on high/low, a random null)
+neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv --out bt/ --plot
 
-# experiment engine: every (variant, fold, seed) cell of a scenario, scored on dev / test folds (resumable)
+# the experiment engine: every (variant, fold, seed) cell of a scenario, scored on dev and test folds
 neural-trade scenario plan configs/scenarios/reference.yaml   # validate, list the cells (no training)
 neural-trade scenario run  configs/scenarios/reference.yaml   # runs/scenarios/<name>/, index runs/index.sqlite
+neural-trade leaderboard reference_default                    # ranked on the dev folds; test columns never rank
 
-# sweeps (NT-030): search Config fields on the dev folds; needs `pip install -e ".[sweep]"` for optuna mode
-neural-trade sweep configs/scenarios/reference.yaml --mode quick --dry-run     # size it to <= 5 min, print the estimate
-neural-trade sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30   # prints and records the GPU budget first
+# sweeps: size the run first, then launch
+neural-trade sweep configs/scenarios/reference.yaml --mode quick --dry-run --sec-per-step 0.17
 
 neural-trade registry list            # every registered component
-neural-trade registry info Optimizers adamw
 neural-trade env                      # versions, CUDA build, devices, git state
 ```
 
-Every Config key with its default, unit, valid range and tunable / deprecated flags:
-[docs/guide/config-reference.md](docs/guide/config-reference.md) (generated by `scripts/gen_config_reference.py`).
+The CSV needs a `timestamp` (or `datetime`) column plus `open`, `high`, `low`, `close`, `volume` (lower case),
+as in `binance_btcusdt_1min_ccxt.csv`. Every Config key with its default, unit and range:
+[docs/guide/config-reference.md](docs/guide/config-reference.md). Tests, notebooks, GPU rules and the traps
+of the development machine: [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
-The CSV needs a timestamp column plus open/high/low/close/volume, as in
-`binance_btcusdt_1min_ccxt.csv`.
+## Guides
+
+| Read | For |
+|---|---|
+| [Concepts](docs/guide/concepts.md) | learned indicators, horizons and heads, costs, dev folds against the test fold, the yardstick |
+| [Reading the figures](docs/guide/reading-figures.md) | every figure the notebooks draw: what it shows, its noise band, how to read it |
+| [Experiments](docs/guide/experiments.md) | scenarios, quick and Optuna sweeps and their GPU budget, the control panel, the leaderboard, A/B verdicts, a worked example |
+| [Your own data](docs/guide/own-data.md) | the CSV format, the dataset spec, wall-clock windows and horizons, costs, the stability harness |
+| [Architecture](docs/ARCHITECTURE.md) | module map, layering rules, the registries, the experiment engine and the run store |
+| [Status](docs/STATUS.md) | what works, what is open, what waits for the owner (the place for current numbers) |
+
+## Notebooks
+
+The notebooks in `notebooks/` contain no functions: the logic and widgets live in `neural_trade.notebook`
+and are tested headlessly. They are generated by `scripts/notebooks/build.py`, executed on the real
+defaults and committed with their outputs ([scripts/notebooks/README.md](scripts/notebooks/README.md)).
+
+| Notebook | What you can do |
+|---|---|
+| `00_data_and_splits` | See the bars, the purged train / val / cal / test blocks of any walk-forward fold, and the label balance per block |
+| `01_train_and_monitor` | Train in the background with Pause / Resume / Stop, watch the live dashboard and health tiles, then read the test report with baselines and the analytics of every head |
+| `02_backtest` | Pick a strategy, settings and costs and press Run; trading dashboard, per-trade analytics, every strategy against a random null |
+| `03_signals_and_trades` | The trading dashboard for a window of bars, the signal features, and the trades |
+| `04_diagnostics` | Everything about a saved run: training dashboard, head analytics, learned periods, and the calibration explorer |
+| `05_compare_runs` | Compare scored runs side by side, and read the ablation verdicts with their paired deltas |
+| `06_control_panel` | Choose a scenario, a search space and a mode; launch or resume a sweep; watch the leaderboard; compare rows with a paired verdict. Executing it starts nothing; only the Launch button does |
+| `07_discovered_indicators` | The learned indicators drawn on price next to their textbook periods, how the periods moved, and permutation importance |
+| `08_long_run` | Launch and monitor the 360-day training run (`LAUNCH = False` by default: nothing starts) |
+| `09_candidate_run` | One saved run end to end from its own files: summary, training record, fit evaluation, backtest |
 
 ## Python API
 
@@ -122,7 +128,6 @@ result = train_and_evaluate(config=cfg, force=True)       # TrainResult: model, 
 
 p = Predictor.from_artifacts("runs/<run id>/artifacts")
 p.predict_last(ohlcv_dataframe)  # {"h0": {"delta", "p_up", "p_up_calibrated", "sigma", "lo90", "hi90", ...}, ...}
-                                 # (a bare close series suffices for close-only bundles)
 ```
 
 Evaluation and backtesting:
@@ -138,140 +143,76 @@ signals = SignalFrame.build(test, var_scale_from(cal))     # confidence scale fr
 bt = backtest(signals, bars, build_strategy("liberal"))    # bars: Bars.from_frame(df, anchor rows)
 ```
 
-## Notebooks
-
-The notebooks in `notebooks/` contain no functions. The logic and widgets live in
-`neural_trade.notebook` and are tested headlessly.
-
-| Notebook | What you can do |
-|---|---|
-| `00_data_and_splits` | See the bars, the purged train / val / cal / test blocks of any walk-forward fold, and the label balance per block |
-| `01_train_and_monitor` | Train in the background with **Pause / Resume / Stop**. The live dashboard shows training-health tiles (convergence, patience, class collapse per horizon, non-finite gradients), the loss batch by batch, and 12 per-epoch panels: losses and components, direction MCC / balanced accuracy / ECE per horizon for train and validation, the price head's Gaussian readout, PIT-KS, predicted vs true up-rate, physics terms, learning rates, gradient norm. Then the test report with baselines, analytics for every head per horizon, and the learned indicator periods |
-| `02_backtest` | Strategy dropdown, per-strategy settings and cost controls with a **Run** button. The trading dashboard stacks price and trades (entries, exits, take-profit / stop levels), P(up) per horizon against the entry lines, confidence, predicted sigma, equity and drawdown on one time axis with shared hover and zoom. Per-trade analytics cover P&L, cost drag, exit reasons and favourable / adverse excursion. Every strategy is compared on the same block |
-| `03_signals_and_trades` | The trading dashboard for a window of bars (`START`, `BARS`), the signal features, and the trades |
-| `04_diagnostics` | Everything about a saved run: its training dashboard, the head analytics, the learned periods, and the **calibration explorer**, which refits on the calibration block (interval scale, delta shrinkage, miscoverage) and shows test coverage, width, temperature, reliability diagram and coverage over time |
-| `05_compare_runs` | Compare scored runs side by side, and read the ablation verdicts with their paired deltas |
-
-The buttons work because training runs in a background thread: Jupyter processes widget
-clicks only while no cell is running.
-
-The figures live in `neural_trade.visualization` and are registered in `Visualizations`
-(`training_dashboard`, `direction_analytics`, `delta_analytics`, `variance_analytics`,
-`confidence_analytics`, `coherence_analytics`, `trading_dashboard`, `trade_analytics`,
-`strategy_comparison`, `indicator_evolution` ...). They share one dark theme in which each
-horizon keeps its colour in every figure (`visualization/theme.py`).
+To add a component (a metric, a loss, an indicator family, a strategy), register it with its registry; see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) "Registries" and [plugins/README.md](plugins/README.md).
 
 ## How it is evaluated
 
-- **Purged four-way split.** Train | val | cal | test in time order, with an 80-sequence gap
-  between blocks (lookback + longest horizon), so no bar is both a training label and an
-  evaluation input. Scalers are fitted on train; early stopping uses val; temperature scaling,
-  conformal intervals and the strategies' confidence scale use cal; test is scored once.
+- **Purged four-way split.** Train, validation, calibration and test in time order, with a gap between
+  blocks (80 bars on the reference setup) so no bar is both a training label and an evaluation input.
+  Scalers are fitted on train; early stopping uses validation; temperature scaling, conformal intervals and
+  the strategies' confidence scale use calibration; the test block is scored once and never ranks.
   `FOLD_INDEX` selects a walk-forward fold.
-- **Baselines in every report.** Zero change, mean change, class prior, logistic regression on
-  trailing returns, and constant variance. Each report says, per metric, whether the model
-  beats each baseline. Explained variance is reported on the price *change* only: on price
-  levels, "no change" already scores 0.999.
-- **Direction metrics** use a 5 bps deadband (moves smaller than that are not labelled).
-  They include MCC, AUC, Brier, positive-class ECE, and a confidence gap with a
-  block-bootstrap interval.
-- **Variance metrics:** CRPS and CRPSS against constant variance, NLL, PIT-KS,
-  variance/error-squared Spearman correlation, and conformal coverage and width. Conformal
-  intervals are scaled by each window's realised volatility (`CONFORMAL_SCALE`), so they
-  keep their coverage when volatility changes between the cal and test blocks.
+- **Baselines in every report.** Zero change, mean change, class prior, a logistic regression on trailing
+  returns, and constant variance; each report says, per metric, whether the model beats each.
+- **Noise-aware statistics.** Consecutive bars share target bars, so intervals and chance bands use
+  effective samples (about `N // horizon`) or a block bootstrap.
+- **Direction metrics** use a 5 bps deadband (smaller moves are not labelled): MCC, AUC, Brier, ECE, and a
+  confidence gap with a block-bootstrap interval. **Variance metrics:** CRPS and CRPSS against constant
+  variance, NLL, PIT-KS, and conformal coverage and width, with intervals scaled by each window's realised
+  volatility.
 
 ## Backtests
 
-`neural_trade.strategy` places orders at a bar's close and fills them at the next bar's
-open. Each side pays a fee, a half-spread and a slippage cost, `BacktestConfig` fields that
-default to 0 bps each (D-044: no trading costs assumed by default; set them explicitly to
-backtest at a cost). Take-profit and
-stop-loss are checked against each bar's high and low; if both are hit in the same bar, the
-stop is assumed to fill first, and a gap through the stop fills at the open. Trades are
-capped at 30 bars, and any open position is marked to market at the end. Every result
-carries three baselines: buy-and-hold, always-flat, and random entries at the same trade
-frequency, holding time and mean position size (the strategy's percentile among 100 random
-seeds, after and before costs). A null at full size would pay more costs than a strategy that
-sizes down; the CLI, `scripts/backtest_gate.py` and the notebooks use this one null.
-`assert_no_lookahead` perturbs all predictions and bars after bar *t* and checks that nothing up to *t*
-changes: the `decisions`, every `exit_signal` answer and each order's `tp`, `sl` and `max_hold`
-(recorded in a private trace, since the `decisions` dicts carry none of them), and the equity
-(for exposure strategies: the fills and every evaluated target). A one-bar peek differs only at
-its own bar, so the default probes are up to 24 bars where the strategy was asked something
-(orders, exit requests, targets) plus a grid of 4. The tests run it on every registered strategy
-and on deliberately leaky strategies (a peek in `decide`, in `exit_signal`, in the TP level).
+`neural_trade.strategy` places orders at a bar's close and fills them at the next bar's open. Fee,
+half-spread and slippage are `BacktestConfig` fields that **default to 0 bps** (D-044); set them explicitly to
+backtest at a cost. Take-profit and stop-loss are checked against each bar's high and low (the stop fills
+first if both are hit in one bar, and a gap through the stop fills at the open). Trades are capped at 30
+bars and any open position is marked to market at the end. Every result carries three baselines:
+buy-and-hold, always-flat, and random entries at the same trade frequency, holding time and mean position
+size. `assert_no_lookahead` perturbs everything after bar *t* and checks that nothing up to *t* changes; the
+tests run it on every registered strategy and on deliberately leaky ones.
 
-The three notebook strategies are ported as `threshold_spike`, `enhanced_multi_horizon` and
-`liberal`, with their knobs as dataclass fields (see `configs/strategies/`). The port fixed
-their look-ahead and sizing bugs; the module docstrings list each fix. They use fixed
-probability lines (a horizon "votes" beyond 0.55 / 0.45), which a calibrated weak-edge model
-almost never crosses. The default, `calibrated_quantile`, therefore sets its entry lines on the
-calibration block instead: long above the 90th percentile of its confidence-weighted P(up),
-short below the 10th. The serving bundle stores those quantiles.
+The default strategy, `calibrated_quantile`, sets its entry lines on the calibration block (long above the
+90th percentile of its confidence-weighted P(up), short below the 10th) because the fixed 0.55 / 0.45 lines
+of the notebook strategies are almost never crossed by calibrated probabilities. The serving bundle stores
+those quantiles.
 
-## Physics-term ablation
+## Performance
+
+Training is kernel-launch bound; the default batch is 256 and the training-set diagnostics are
+updated every `TRAIN_METRICS_EVERY` steps (10); the training loss and the validation metrics are exact. Training speed is a first-class requirement and inference
+speed is not (D-018). Measurements and the trade-offs: [docs/RUNBOOK.md](docs/RUNBOOK.md) and
+[docs/DECISIONS.md](docs/DECISIONS.md) D-010, D-018, D-047.
+
+## Physics-term ablation (frozen history)
 
 ```bash
-python scripts/ablate.py --scale smoke --dry-run      # pending cells, projected hours
-python scripts/ablate.py --scale full                 # 14 conditions x 3 seeds x 2 folds = 84 runs, resumable
+python scripts/ablate.py --scale smoke --dry-run      # pending cells; projected_hours is null without --sec-per-run
 ```
 
-The grid runs all-on, all-off, each term alone, and all-but-one. Each cell trains in its own
-process with frozen, pre-calibrated loss weights, then evaluates against the baselines and
-runs a backtest. Verdicts (VALUE / HARMFUL / NEUTRAL / INCONCLUSIVE) come from paired deltas
-over (seed, fold) under criteria fixed in advance in `configs/ablation_criteria.yaml`.
-Results go to `runs/ablations/<name>/report.md`.
-
-## Layout
-
-```
-src/neural_trade/
-  core/           Config (typed, flat, YAML round-trip), BaseRegistry, exceptions, logging, plugin loader
-  registries/     the ten registries: Models, Losses, Optimizers, Metrics, Callbacks,
-                  DataLoaders, Preprocessors, Layers, Visualizations, Indicators
-  indicators/     the learnable indicator families (registry entries: inputs, learnable
-                  parameters with bounds, output channels, drawing spec, M(eps))
-  data/           loaders, preprocessors, windowing, purged splits, scaling, DataProcessor
-  models/         gru_attention + layers (learnable indicators, positional encoding, noise, energy gate)
-  losses/         the loss terms and the custom objective
-  training/       CustomTrainModel, loss weights, optimizers, lambda calibration, callbacks, trainer, artifacts
-  metrics/        numpy and graph-safe TF metrics, direction labels
-  calibration/    temperature scaling, (normalised) conformal intervals, online calibrator
-  evaluation/     PredictionFrame, baselines, evaluate(), walk-forward, report plots
-  serving/        Predictor (raw OHLCV bars in, forecasts out)
-  strategy/       signals, strategies, backtest engine, performance statistics
-  experiments/    RunContext (one directory per run), ablation harness
-  telemetry/      JSONL epoch logger
-  visualization/  training dashboard, indicator evolution, trading and evaluation figures
-  cli.py          the `neural-trade` command
-configs/          default.yaml, ci.yaml, ablation specs, strategy parameter files
-plugins/          drop-in components (templates/ and a tested example)
-scripts/          gate runs, golden-run oracle, ablation, backtests of saved runs, env setup
-tests/            pytest suite (markers: tf, slow, gpu, data, notebook)
-```
-
-To add a component, register it with its registry, for example
-`@Metrics.register(name="my_metric")`, in a module under `plugins/`. `registries.load_all`
-loads the plugins, and the config then selects the component by name. See `plugins/README.md`.
+The smoke scale has 84 runs by design (the script's docstring). The v1 grid (`runs/ablations/ablate_physics_v1-full`) found no term that earns its place under its own
+criteria (D-003). The script belongs to the frozen set of D-023: new experiments go through the experiment
+engine.
 
 ## Tests
 
 ```bash
-pytest -m "not slow"          # 5-6 min on CPU
-pytest -m slow                # end-to-end training, CLI round trip, reproducibility
+pytest -m "not slow" -n 8     # the fast suite (pytest-xdist; a few minutes on CPU)
+pytest -m slow -n 8           # end-to-end training, CLI round trip, reproducibility
 python scripts/golden_run.py verify <oracle.npz>   # a refactor changed no numbers
 ```
 
+Tests run on the CPU with `CUDA_VISIBLE_DEVICES=-1`.
+
 ## Working on this project
 
-Development runs as a multi-session loop with Claude Code agents. Start with
-[CLAUDE.md](CLAUDE.md) (loaded by every session). It points to the vision
-([docs/VISION.md](docs/VISION.md)), the roadmap and backlog ([docs/ROADMAP.md](docs/ROADMAP.md),
-[docs/BACKLOG.md](docs/BACKLOG.md)), the current state ([docs/STATUS.md](docs/STATUS.md)), settled
-decisions ([docs/DECISIONS.md](docs/DECISIONS.md)), how work is done
-([docs/OPERATING_MODEL.md](docs/OPERATING_MODEL.md)) and how to run everything
-([docs/RUNBOOK.md](docs/RUNBOOK.md)). The notebooks are generated and executed by
-`scripts/notebooks/` ([README](scripts/notebooks/README.md)).
+Development runs as a multi-session loop with Claude Code agents. Start with [CLAUDE.md](CLAUDE.md) (loaded
+by every session). It points to the vision ([docs/VISION.md](docs/VISION.md)), the roadmap and backlog
+([docs/ROADMAP.md](docs/ROADMAP.md), [docs/BACKLOG.md](docs/BACKLOG.md)), the current state
+([docs/STATUS.md](docs/STATUS.md)), settled decisions ([docs/DECISIONS.md](docs/DECISIONS.md)), how work is
+done ([docs/OPERATING_MODEL.md](docs/OPERATING_MODEL.md)) and how to run everything
+([docs/RUNBOOK.md](docs/RUNBOOK.md)).
 
 ## Licence
 
