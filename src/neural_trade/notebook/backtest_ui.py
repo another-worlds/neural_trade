@@ -47,6 +47,10 @@ def trade_stats(result) -> Dict[str, float]:
     return out
 
 
+def _word(n: int) -> str:
+    return {2: "two", 3: "three", 4: "four", 5: "five"}.get(int(n), str(n))
+
+
 def _zero_delta_flag_notes(delta, *, coherence_on_raw: bool = False) -> Dict[str, str]:
     """Notes for the flags table when a served delta is 0 on a horizon (the calibration's beta = 0).
 
@@ -69,8 +73,8 @@ def _zero_delta_flag_notes(delta, *, coherence_on_raw: bool = False) -> Dict[str
         return {"magnitude_coherent": measured, "direction_aligned": measured}
     if len(zero) == len(HORIZONS):
         return {"magnitude_coherent": f"{lead}: true on every bar by ties (|0| <= |0|), not a measured ordering",
-                "direction_aligned": f"{lead}: the share of bars where every P(up) <= 0.5, not a sign "
-                                     "agreement"}
+                "direction_aligned": f"{lead}: the share of bars where all {_word(len(HORIZONS))} P(up) <= 0.5, not a "
+                                     "sign agreement"}
     return {"magnitude_coherent": f"{lead}: every comparison with it is fixed by the 0, not measured",
             "direction_aligned": f"{lead}: there it only asks P(up) <= 0.5"}
 

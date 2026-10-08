@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from neural_trade.core.horizons import horizon_index
+from neural_trade.visualization.theme import horizons_of
 from neural_trade.evaluation.frame import HORIZONS  # noqa: F401  (the reference keys; the UI reads its blocks')
 from neural_trade.notebook._display import show
 
@@ -94,7 +95,7 @@ class CalibrationExplorer:
         st = getattr(getattr(self.saved, "temperature_scaler", None), "temperatures", None) or {}
         mine = self.pipeline.temperature_scaler.temperatures
         return all(abs(float(mine.get(h, 1.0)) - float(st.get(h, 1.0))) <= 1e-3 * max(1.0, abs(float(st.get(h, 1.0))))
-                   for h in self.blocks["test_raw"].horizons)
+                   for h in horizons_of(self.blocks["test_raw"]))
 
     def _score(self, test_out, cal_out, temperatures, betas, alpha, signal=None) -> pd.DataFrame:
         """One row per horizon: test scores of a served output, plus its in-sample fit on the cal block.
@@ -112,7 +113,7 @@ class CalibrationExplorer:
         lab_t = direction_labels_np(test.y, test.last_close, db)
         lab_c = direction_labels_np(cal.y, cal.last_close, db)
         rows = {}
-        for i, h in enumerate(test.horizons):
+        for i, h in enumerate(horizons_of(test)):
             y, yc = test.y[:, i], cal.y[:, i]
             lo, hi = test_out["intervals"][h]
             clo, chi = cal_out["intervals"][h]
@@ -282,7 +283,7 @@ class CalibrationExplorer:
         scale = w.Dropdown(options=["realized_vol", "sigma", "none"], value=saved_scale, description="interval scale")
         shrink = w.Checkbox(value=saved_shrink, description="delta shrinkage")
         alpha = w.FloatSlider(value=SAVED_ALPHA, min=0.02, max=0.4, step=0.01, description="miscoverage")
-        horizon = w.ToggleButtons(options=list(self.blocks["test_raw"].horizons), value="h1")
+        horizon = w.ToggleButtons(options=list(horizons_of(self.blocks["test_raw"])), value="h1")
         refit = w.Button(description="Refit on cal, score on test", icon="refresh", button_style="primary",
                          layout=w.Layout(width="240px"))
         status = w.HTML(f"<i>run's saved settings: scale={saved_scale}, shrinkage={saved_shrink}, "
