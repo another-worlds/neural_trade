@@ -49,6 +49,11 @@ def test_a_pre_nt047_bundle_loads_and_predicts_as_at_the_base_commit(tf):
     p = Predictor.from_artifacts(BUNDLE)
     df = pd.read_csv(CSV).iloc[-700:]
     fr = p.predict_frame(df)
+    # NT-204: a bundle with a calibration pipeline adds one text column per horizon (the signal state); the
+    # numeric frame is the one recorded at the base commit
+    sig_cols = [c for c in fr.columns if c.endswith("_direction_signal")]
+    assert sig_cols == ["h0_direction_signal", "h1_direction_signal", "h2_direction_signal"]
+    fr = fr.drop(columns=sig_cols)
     assert fr.shape == (641, 25)
     assert list(fr.columns) == [str(c) for c in ref["columns"]]
     # Same code path, same weights. The reference was recorded on the lead's machine, where the
