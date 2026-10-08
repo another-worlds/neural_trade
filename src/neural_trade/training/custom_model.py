@@ -803,7 +803,10 @@ class CustomTrainModel(models.Model):
         # PROBE_EVERY steps) IS a runtime tf.cond, so it can change without retracing.
         if bool(getattr(self.config, 'PROBE_GRADIENTS', False)):
             probe_every = max(1, int(getattr(self.config, 'PROBE_EVERY', 50)))
-            do_probe = tf.equal(tf.math.floormod(self.optimizer.iterations, probe_every), 0)
+            # Pinned to the CPU: on the Windows TF 2.10 GPU build the int64 FloorMod is sent to XLA and
+            # fails with "JIT compilation failed" (D-001: XLA JIT ops must be pinned to CPU).
+            with tf.device('/CPU:0'):
+                do_probe = tf.equal(tf.math.floormod(self.optimizer.iterations, probe_every), 0)
 
             def _run_probe():
                 self._run_gradient_probe(x_window, y_true, last_close, extended_trends)
