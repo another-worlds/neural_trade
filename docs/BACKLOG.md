@@ -76,7 +76,7 @@ changes).
 | [NT-041](#nt-041) | P1 | feature | implementer | done | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
 | [NT-042](#nt-042) | P1 | feature | implementer | todo | Variable number of horizons |
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
-| [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
+| [NT-044](#nt-044) | P1 | docs | implementer | in-progress | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
 | [NT-046](#nt-046) | P1 | feature | implementer | done | Indicators package and registry with today's four families |
 | [NT-047](#nt-047) | P1 | feature | implementer | done | OHLCV input and the new indicator families, all learnable and on by default |
@@ -241,6 +241,9 @@ changes).
 | [NT-206](#nt-206) | P2 | bug | implementer | todo | A passing probe re-run still blames a loss term for the first run's FAIL |
 | [NT-207](#nt-207) | P3 | polish | implementer | todo | Stability harness residues from the NT-051 SPEC review |
 | [NT-208](#nt-208) | P3 | polish | implementer | todo | Write each stability verdict as its cell finishes (verdicts.json and the REPORT only after all cells today) |
+| [NT-209](#nt-209) | P2 | feature | implementer | todo | The stability harness takes no dataset spec: window, horizons and bar size of a new setup cannot be run through it |
+| [NT-210](#nt-210) | P2 | feature | implementer | todo | Indicator periods in wall-clock minutes (NT-046 criterion 2 residue) |
+| [NT-211](#nt-211) | P2 | polish | implementer | todo | Docs tests: Config keys and CLI flags named in the guides exist; notebook 09 title says 'whole test block' while its analytics say 'dev block' |
 
 ## Items
 
@@ -780,7 +783,7 @@ changes).
 
 **Guides for the owner and reviewers, README landing page, ARCHITECTURE**
 
-- **status:** todo
+- **status:** in-progress (2026-10-08): nt-044 ba71e8f (implementer Sonnet; README landing page, docs/ARCHITECTURE.md, docs/guide/{concepts,reading-figures,experiments,own-data}.md, tests/test_docs_guides.py: 30 fast + 1 slow). QA Opus FAIL: 34 claims checked and the CLI, sweep budget numbers (quick 4.04 of 5 min; optuna 10 trials 9.54 h upper / 4.34 h expected; 30 trials refused at 15.60 h), import graph, registries and links hold, fast 2502 passed on ba71e8f; but criterion (5) ('the README carries no status numbers') is not met (README carries a dated snapshot; the lead decided: remove the numbers, keep the qualitative statement and links) and 4 statements are false (TRAIN_METRICS_EVERY; failing_regions.json; CONFIRM_GPU_HOURS; plus P3 wording). Repair round 1 running. New items NT-209, NT-210, NT-211.
 - **priority / type / role:** P1 / docs / implementer
 - **area:** docs/guide/concepts.md, docs/guide/reading-figures.md, docs/guide/experiments.md, docs/guide/own-data.md (all new), README.md, docs/ARCHITECTURE.md (new), a docs test in tests/
 - **depends on:** NT-026, NT-030, NT-031 and NT-034 for experiments.md and the README's sweep quick start; NT-041 for own-data.md; NT-027 for the layering rules in ARCHITECTURE.md. The other parts can be written earlier.
@@ -2755,6 +2758,42 @@ changes).
 - **why:** qa-deep on the NT-051 SPEC (2026-10-08): `_judge(_run_spec(...))` judges a launch only after all its cells; a killed or timed-out launch loses `verdicts.json` and REPORT.md although every primary cell already has `stability_verdict.json` (written at ~981 before any probe re-run). Writing each case's verdict as its cell finishes makes the budget kill rule of the NT-051 SPEC cheap and a crash recoverable.
 - **acceptance:** (1) after each primary cell finishes, an append-only `verdicts_partial.json` (or the same file updated atomically) holds the verdicts so far; (2) a launch killed after the primary phase can be reported from it (`--report-only <id>` or the retry reads it); (3) tests with a fake trainer killed mid-launch; (4) fast suite, `-m stability`, ruff.
 - **source:** qa-deep review of the NT-051 SPEC (2026-10-08)
+
+### NT-209
+
+**The stability harness takes no dataset spec: window, horizons and bar size of a new setup cannot be run through it**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/experiments/stability.py, cli.py (stability), tests/
+- **depends on:** NT-041 (done), NT-191 (done)
+- **why:** QA of NT-044 (2026-10-08): `neural-trade stability --csv` on a 5-minute file is refused ('declared bar size is 1 minutes ...'); the harness has no --set or config flag and uses the Config defaults. D-026 says every new setup must pass the harness: unreachable for any non-1-minute setup. NT-052 covers the horizons only (through NT-042).
+- **acceptance:** (1) the harness reads a dataset spec (a scenario/config YAML or --set KEY=VALUE for SYMBOL, BAR_MINUTES, WINDOW_MINUTES, HORIZON_MINUTES) and builds its profile cases on it; (2) the thresholds file is unchanged; the n_eff gates are computed from the spec; (3) a test on a 5-minute CSV with a 12-bar window runs the tiny profile (CPU) and the dry-run shows the spec; (4) the SPEC for any later setup names the spec; (5) fast suite, `-m stability`, ruff.
+- **source:** QA of NT-044 (2026-10-08)
+
+### NT-210
+
+**Indicator periods in wall-clock minutes (NT-046 criterion 2 residue)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/core/config.py, indicators/, models/, tests/
+- **depends on:** NT-041 (done), NT-046 (done)
+- **why:** QA of NT-044 (2026-10-08): the indicator periods (MA_SPANS, MACD_SETTINGS, INDICATOR_FAMILIES and the rest) are still in bars. On 5-minute bars with a 60-minute window (12 bars) nearly every textbook period triggers 'above the period ceiling, the clip will move it' (8 warnings). NT-046's criterion 2 promised wall-clock periods once NT-041 exists, and NT-041 is done.
+- **acceptance:** (1) The periods are configured in minutes (textbook periods stay as bars-at-1-minute defaults) and converted by the bar size like the window and horizons (DatasetSpec); (2) at the reference setup every period equals today's: golden 461/461 and the stored bundles unchanged; (3) on 5-minute bars the converted periods and their warnings are right (test); (4) a non-dividing conversion is refused naming the field; (5) fast suite, ruff.
+- **source:** QA of NT-044 (2026-10-08)
+
+### NT-211
+
+**Docs tests: Config keys and CLI flags named in the guides exist; notebook 09 title says 'whole test block' while its analytics say 'dev block'**
+
+- **status:** todo
+- **priority / type / role:** P2 / polish / implementer
+- **area:** tests/test_docs_guides.py, scripts/notebooks/build.py (notebook 09 title)
+- **depends on:** NT-044
+- **why:** QA of NT-044 (2026-10-08): mutations `Config.ADAPTIVE_INDICATORZ` and `--n-trial` (argparse accepts a prefix) survive test_docs_guides.py; and the executed 09_candidate_run.ipynb's trading dashboard title says 'whole test block' while its analytics say 'dev block' (not caused by NT-044). NT-044 repair 1 covers the two test mutations; this item is the notebook 09 label.
+- **acceptance:** (1) the title and the analytics name the same block (the dev block when the ranking is on dev folds; the test block only where the test fold is meant); (2) notebook 09 regenerated through build.py and executed by the lead; (3) a test on the title text; (4) fast suite, ruff.
+- **source:** QA of NT-044 (2026-10-08)
 
 ## Done log
 
