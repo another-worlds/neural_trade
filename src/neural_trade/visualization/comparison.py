@@ -37,6 +37,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
+from neural_trade.core.horizons import horizon_index
 from neural_trade.visualization import labels as L
 from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
@@ -167,7 +168,7 @@ def block_key(report: Optional[dict]) -> Optional[tuple]:
 def _split_metric(m: str):
     """'h1/direction/auc' -> ('h1', 'direction', 'auc'); 'backtest/sharpe_net' -> (None, 'backtest', 'sharpe_net')."""
     parts = m.split("/")
-    if parts[0] in T.HORIZONS and len(parts) >= 3:
+    if T.is_horizon_key(parts[0]) and len(parts) >= 3:
         return parts[0], parts[1], "/".join(parts[2:])
     return None, parts[0] if len(parts) > 1 else "", parts[-1]
 
@@ -201,7 +202,7 @@ class _RunFacts:
         rep = self.reports.get(rid, {}).get("report") or {}
         hs = (rep.get("meta") or {}).get("horizon_steps")
         if hs is not None:
-            return int(hs[T.HORIZONS.index(h)])
+            return int(hs[horizon_index(h)])
         n, ne = self.n(rid, h), (self.row(rid, h).get("n_eff") or self._col(rid, f"{h}/n_eff"))
         return int(round(n / ne)) if n and ne else None
 
@@ -415,7 +416,7 @@ def runs_comparison_figure(df, metrics: Optional[Sequence[str]] = None, *, title
     for m in metrics:
         h, group, key = _split_metric(m)
         kinds.setdefault(f"{group}/{key}" if group else key, []).append(m)
-    horizons = [h for h in T.HORIZONS if any(_split_metric(m)[0] == h for m in metrics)]
+    horizons = sorted({h for h in (_split_metric(m)[0] for m in metrics) if h}, key=horizon_index)
     grouped = len(horizons) > 1
     offsets = {h: o for h, o in zip(horizons, np.linspace(-0.22, 0.22, len(horizons)) if grouped else [0.0])}
     offsets[None] = 0.0
@@ -498,7 +499,7 @@ def runs_comparison_figure(df, metrics: Optional[Sequence[str]] = None, *, title
                 error_x=dict(type="data", symmetric=False, array=np.where(has_ci, hi - vals, 0).astype(np.float32),
                              arrayminus=np.where(has_ci, vals - lo, 0).astype(np.float32), color=color,
                              thickness=1.4, width=4),
-                name=name, legendgroup=name, showlegend=seen(name), legendrank=1 + T.HORIZONS.index(h) if h else 4,
+                name=name, legendgroup=name, showlegend=seen(name), legendrank=1 + horizon_index(h) if h else 99,
                 hovertext=hover, hoverinfo="text"), r, c)
             # best baseline of each run's own report; none where it sits on the reference (e.g. class_prior)
             bl = [facts.baseline(rid, h, group, key, higher) if h else None for rid in ids]

@@ -38,7 +38,7 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from neural_trade.core.horizons import primary_index
+from neural_trade.core.horizons import horizon_keys, primary_index
 from neural_trade.evaluation.frame import HORIZONS, PredictionFrame  # noqa: F401  (HORIZONS re-exported)
 
 logger = logging.getLogger(__name__)
@@ -176,6 +176,11 @@ class SignalFrame:
 
     def __len__(self):
         return len(self.close)
+
+    @property
+    def horizons(self) -> Tuple[str, ...]:
+        """The horizon keys of the columns, h0 .. h{H-1} (NT-042)."""
+        return horizon_keys(np.asarray(self.p).shape[1])
 
     def sigma_for(self, source: str, h: int) -> np.ndarray:
         """Horizon ``h``'s $ sigma per bar: the model's (``"model"``) or the EWMA twin's (``"ewma"``)."""

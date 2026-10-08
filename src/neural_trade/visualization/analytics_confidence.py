@@ -37,8 +37,13 @@ from neural_trade.visualization import stats as S
 from neural_trade.visualization import theme as T
 from neural_trade.visualization.analytics_common import _grid, _labels
 
-H = T.HORIZONS
+H = T.HORIZONS                  # the reference three; each figure draws its frame's own (NT-042)
 PATTERNS = ("UUU", "UUD", "UDU", "UDD", "DUU", "DUD", "DDU", "DDD")
+
+
+def _patterns(n: int) -> tuple:
+    """The 2^n vote patterns, all-up first, h0 the most significant letter (n = 3: ``PATTERNS``)."""
+    return tuple("".join("D" if (c >> (n - 1 - k)) & 1 else "U" for k in range(n)) for c in range(2 ** n))
 CI_NOTE = "95% CI: 80-bar moving-block bootstrap (neighbouring outcomes overlap)"
 REF_DASH = "6px,4px"            # reference lines (an explicit pattern: the legend draws "dash" as one block)
 TICK = dict(symbol="line-ew-open", size=18, line=dict(color=T.NEUTRAL, width=2), color=T.NEUTRAL)
@@ -179,7 +184,8 @@ def _report_gaps(report, n: int):
     if d.get("n") is not None and int(d["n"]) != int(n):
         return {}, f"the report given scored {int(d['n']):,} samples, this block has {int(n):,}"
     horizons = (d.get("model") or d).get("horizons", {})
-    return {h: horizons[h]["confidence_gap"] for h in H if "confidence_gap" in horizons.get(h, {})}, None
+    return {h: horizons[h]["confidence_gap"] for h in T.horizons_of(horizons)
+            if "confidence_gap" in horizons.get(h, {})}, None
 
 
 def _dec(v: float, digits: int) -> str:
@@ -363,8 +369,10 @@ def confidence_analytics_figure(frame, config=None, *, height: Optional[int] = N
     N = len(frame)
     plan = _boot_plan(N, n_boot=n_boot, seed=seed)
     gaps, gap_note = _report_gaps(report, N)
-    st = {h: _horizon_stats(frame, config, h, labels, plan, var_scale, gaps.get(h)) for h in H}
-    hl = {h: T.horizon_label(h, config) for h in H}
+    hs = T.horizons_of(frame)           # one column per horizon (NT-042)
+    n_h = len(hs)
+    st = {h: _horizon_stats(frame, config, h, labels, plan, var_scale, gaps.get(h)) for h in hs}
+    hl = {h: T.horizon_label(h, config) for h in hs}
     deadband = float(getattr(config, "DIR_DEADBAND_BPS", 0.0) or 0.0) if config is not None else 0.0
 
     def _t(h, text):
@@ -375,22 +383,22 @@ def confidence_analytics_figure(frame, config=None, *, height: Optional[int] = N
         name, base = _majority(st[h]["b"])
         return f"accuracy {st[h]['acc']:.1%} vs {name} {base:.1%}"
 
-    titles = [_t(h, _gap_text(st[h].get("gap"))) for h in H]
-    titles += [_t(h, f"{st[h]['n']:,} scored · {_vs(h)}" if st[h]["ok"] else "") for h in H]
+    titles = [_t(h, _gap_text(st[h].get("gap"))) for h in hs]
+    titles += [_t(h, f"{st[h]['n']:,} scored · {_vs(h)}" if st[h]["ok"] else "") for h in hs]
     titles += [_t(h, f"{_gap_text(st[h].get('var_gap'))} · &#961; vs |P&#8722;0.5| {st[h].get('rho', np.nan):+.2f}")
-               for h in H]
-    titles += [_t(h, _vs(h) if st[h]["ok"] else "") for h in H]
+               for h in hs]
+    titles += [_t(h, _vs(h) if st[h]["ok"] else "") for h in hs]
     # rows 2-4: the short horizon name (row 1 carries the horizon length)
-    titles = titles[:3] + [t.replace(hl[h] + ":", h + ":", 1) for t, h in zip(titles[3:], H * 3)]
+    titles = titles[:n_h] + [t.replace(hl[h] + ":", h + ":", 1) for t, h in zip(titles[n_h:], tuple(hs) * 3)]
     height = int(height or 1960)
     margin = dict(t=170, b=70, l=64, r=24)
     plot_h = height - margin["t"] - margin["b"]
-    fig = _grid(4, titles, row_heights=[0.27, 0.27, 0.27, 0.19], vspace=0.078)
+    fig = _grid(4, titles, row_heights=[0.27, 0.27, 0.27, 0.19], vspace=0.078, cols=n_h)
     for a in fig.layout.annotations:
         a.font = dict(size=13, color=T.INK_2)
 
     rng = {1: [], 2: []}            # y extents: rows 1 + 3 share one range, row 2 its own
-    for j, h in enumerate(H, start=1):
+    for j, h in enumerate(hs, start=1):
         s, c = st[h], T.HORIZON_COLORS[h]
         if not s["ok"]:
             continue
@@ -511,9 +519,9 @@ def confidence_analytics_figure(frame, config=None, *, height: Optional[int] = N
                                 "inside the deadband (not scored)</span>", title_standoff=4, row=3)
 
     # legends as row headings (keys drawn once, on the first panel of the row)
-    ok = next((h for h in H if st[h]["ok"]), None)
+    ok = next((h for h in hs if st[h]["ok"]), None)
     if ok is not None:
-        maj = [(h, *_majority(st[h]["b"])) for h in H if st[h]["ok"]]
+        maj = [(h, *_majority(st[h]["b"])) for h in hs if st[h]["ok"]]
         names = {m[1] for m in maj}
         maj_name = f"{names.pop()} (majority class)" if len(names) == 1 else "majority class"
         maj_key = maj_name + ": " + " · ".join(f"{h} {v:.1%}" for h, _, v in maj)
@@ -551,12 +559,13 @@ def confidence_analytics_figure(frame, config=None, *, height: Optional[int] = N
                        text="<b>Confusion matrix</b>   scored samples only · colour and % = share of the real class "
                             "(the outlined diagonal is the recall) · precision under each column",
                        font=dict(size=12, color=T.INK_2))
-    neff = " / ".join(f"{st[h]['N'] // max(1, st[h]['steps']):,}" for h in H)
-    scored = " / ".join(f"{st[h]['n']:,}" for h in H)
+    neff = " / ".join(f"{st[h]['N'] // max(1, st[h]['steps']):,}" for h in hs)
+    scored = " / ".join(f"{st[h]['n']:,}" for h in hs)
     sub = (f"{frame.split} block, N = {N:,} bars (n_eff = N / steps: {neff}) · calibrated P(up) · moves inside the "
            f"{deadband:g} bps deadband are not scored (scored: {scored})<br>"
            + (CI_NOTE if plan is not None else "95% CI: Wilson on N / steps effective samples")
-           + " · 10 deciles x 3 horizons at 95%: 1-2 outside a reference by chance is expected<br>"
+           + f" · 10 deciles x {n_h} horizons at 95%: {max(1, n_h // 2)}-{n_h - 1} outside a reference by chance is "
+             "expected<br>"
            + src + "; row 3 gap: the same for the strategies' confidence, split at this block's median")
     T.note_on_empty(fig, "fewer than 20 samples outside the deadband")
     T.apply(fig, title="Direction confidence: is a more decided call a more accurate one?", subtitle=sub,
@@ -572,10 +581,11 @@ NA_BETA0 = "n/a (beta = 0: served delta is 0)"
 def _served_betas(D, raw, delta_scale) -> Dict[str, float]:
     """{h: beta} for served = beta x raw: as given (``delta_scale`` / the frame's), else read off the frame
     when served is exactly a multiple of the raw head, else 0 where the served column is identically 0."""
+    hs = T.horizons_of(delta_scale) if delta_scale else tuple(f"h{i}" for i in range(D.shape[1]))
     if delta_scale:
-        return {h: float(delta_scale[h]) for h in H if delta_scale.get(h) is not None}
+        return {h: float(delta_scale[h]) for h in hs if delta_scale.get(h) is not None}
     out = {}
-    for i, h in enumerate(H):
+    for i, h in enumerate(hs):
         d = D[:, i]
         if not np.any(d):
             out[h] = 0.0
@@ -591,7 +601,7 @@ def _served_betas(D, raw, delta_scale) -> Dict[str, float]:
 def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = None,
                                raw_delta: Optional[Dict[str, np.ndarray]] = None, n_boot: int = 1000,
                                seed: int = 0, delta_scale: Optional[Dict[str, float]] = None):
-    """How the three horizons agree with each other and with the price heads.
+    """How the horizons (three in the reference setup) agree with each other and with the price heads.
 
     ``raw_delta``: the price heads before the per-horizon delta shrinkage ({h: array} in dollars,
     e.g. ``result.predictions["delta"]``, or the raw PredictionFrame); default: what the frame carries
@@ -611,19 +621,22 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     labels = _labels(frame, config)
     N = len(frame)
     plan = _boot_plan(N, n_boot=n_boot, seed=seed)
+    H = T.horizons_of(frame)            # the frame's horizons (NT-042); three in the reference setup
+    n_h = len(H)
+    pats = _patterns(n_h)
     P = np.column_stack([np.asarray(frame.prob(h, True), float) for h in H])
     U = P > 0.5
     votes = U.sum(1)
     q = U.mean(0)
     steps = max(S.horizon_steps(frame, h) for h in H)
     # 1. correlation
-    corr = np.corrcoef(P.T) if np.all(P.std(0) > 0) else np.eye(3)
+    corr = np.corrcoef(P.T) if np.all(P.std(0) > 0) else np.eye(n_h)
     band = S.corr_null_r(N, steps=steps)                     # r units, not Fisher z
     # 2. vote patterns
-    code = (~U[:, 0]) * 4 + (~U[:, 1]) * 2 + (~U[:, 2]) * 1        # UUU = 0 ... DDD = 7, the PATTERNS order
-    share = np.bincount(code, minlength=8) / max(N, 1)
-    indep = np.array([np.prod([q[k] if pat[k] == "U" else 1 - q[k] for k in range(3)]) for pat in PATTERNS])
-    unanimous = share[0] + share[7]
+    code = sum((~U[:, k]).astype(int) << (n_h - 1 - k) for k in range(n_h))   # all up = 0 ... all down, the pats order
+    share = np.bincount(code, minlength=2 ** n_h) / max(N, 1)
+    indep = np.array([np.prod([q[k] if pat[k] == "U" else 1 - q[k] for k in range(n_h)]) for pat in pats])
+    unanimous = share[0] + share[-1]
     # the price heads: served (beta x raw) and, when known, raw (resolved as evaluate() does)
     if raw_delta is None:
         raw_delta = _frame_extra(frame, "delta_raw")
@@ -639,29 +652,31 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     # 4. direction head vs price head: the sign of the raw head (a positive beta keeps it, beta = 0 does not),
     #    as evaluation.report.coherence_block and analytics_tables.alignment_table
     DU = (raw if raw is not None else D) > 0
-    sign_na = np.zeros(3, bool) if raw is not None else zero
+    sign_na = np.zeros(n_h, bool) if raw is not None else zero
     align = np.where(sign_na, np.nan, (U == DU).mean(0))
     qd = DU.mean(0)
     align_indep = np.where(sign_na, np.nan, _noskill(q, qd))
-    dcode = (~DU[:, 0]) * 4 + (~DU[:, 1]) * 2 + (~DU[:, 2]) * 1
+    dcode = sum((~DU[:, k]).astype(int) << (n_h - 1 - k) for k in range(n_h))
     all3 = np.nan if sign_na.any() else float((U == DU).all(1).mean())
-    all3_indep = np.nan if sign_na.any() else float(np.sum(share * (np.bincount(dcode, minlength=8) / max(N, 1))))
-    # 5. |delta| ordering
+    all3_indep = np.nan if sign_na.any() else float(np.sum(share * (np.bincount(dcode, minlength=2 ** n_h)
+                                                                     / max(N, 1))))
+    # 5. |delta| ordering: every neighbouring pair, then the whole chain
     def order_rates(A):
-        a = np.abs(np.asarray(A, float))
-        o01, o12 = a[:, 0] <= a[:, 1], a[:, 1] <= a[:, 2]
-        return np.array([o01.mean(), o12.mean(), (o01 & o12).mean()])
+        a = np.abs(np.asarray(A, float))[:, :n_h]
+        le = [a[:, k] <= a[:, k + 1] for k in range(n_h - 1)]
+        return np.array([x.mean() for x in le] + [np.logical_and.reduce(le).mean()])
 
-    order_na = np.array([zero[0] | zero[1], zero[1] | zero[2], zero.any()])   # 0 <= 0 holds trivially
+    order_na = np.array([zero[k] | zero[k + 1] for k in range(n_h - 1)] + [zero.any()])   # 0 <= 0 holds trivially
     served_order = np.where(order_na, np.nan, order_rates(D))
     realised = order_rates(frame.y)
     # 6. the strategies' votes (SignalFrame's own rule)
     # D-051: the two flags follow the raw heads when this figure has them. Agreement does not.
     sf = SignalFrame.build(frame, 1.0, raw_delta=raw)
-    agr = np.round(sf.agreement * 3).astype(int)
-    agr_share = np.array([(agr == a).mean() for a in (1, 2, 3)])
-    agr_up = np.array([((agr == a) & (sf.consensus > 0)).mean() for a in (1, 2, 3)])
-    agr_dn = np.array([((agr == a) & (sf.consensus < 0)).mean() for a in (1, 2, 3)])
+    agr = np.round(sf.agreement * n_h).astype(int)
+    agr_levels = range(1, n_h + 1)
+    agr_share = np.array([(agr == a).mean() for a in agr_levels])
+    agr_up = np.array([((agr == a) & (sf.consensus > 0)).mean() for a in agr_levels])
+    agr_dn = np.array([((agr == a) & (sf.consensus < 0)).mean() for a in agr_levels])
     gate = float(sf.direction_aligned.mean())
     mag_gate = float(sf.magnitude_coherent.mean())
     vote_up, vote_dn = _vote_lines()
@@ -673,14 +688,14 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
         if zero.all():
             order_note = f"beta = 0 on {zero_txt}: served delta = 0, ordering n/a"
         else:
-            order_note = (f"beta {beta_txt}" if len(betas) == 3 else f"beta = 0 on {zero_txt}") + ": served ordering n/a"
+            order_note = (f"beta {beta_txt}" if len(betas) == n_h else f"beta = 0 on {zero_txt}") + ": served ordering n/a"
             if not order_na.all():
                 order_note += f" where it involves {zero_txt}"
         if raw is None:
             order_note += " · pass raw_delta"
     elif raw is None:
         order_note = "served deltas are shrunk per horizon: pass raw_delta for the raw heads"
-    elif len(betas) == 3:
+    elif len(betas) == n_h:
         order_note = f"served = beta x raw · beta {beta_txt}"
     else:
         order_note = "served = beta x raw, with a beta per horizon"
@@ -693,13 +708,13 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     else:
         sign_note = "P(up) &gt; 0.5 vs served delta &gt; 0, per bar"
     heads = ["P(up) correlation between horizons",
-             "Vote pattern h0 h1 h2 (U = P(up) &gt; 0.5)",
+             f"Vote pattern {' '.join(H)} (U = P(up) &gt; 0.5)",
              "Realised up-rate by number of horizons voting up",
              "Direction head and price head give the same sign",
              "Does |delta| grow with the horizon?",
              "Strategy vote agreement (SignalFrame.agreement)"]
     notes = [f"shade = |r| · |r| &lt; {band:.2f} is within chance (n_eff = N / {steps} = {N // steps:,})",
-             f"light = unanimous UUU / DDD: {unanimous:.1%} of bars · grey = split",
+             f"light = unanimous {pats[0]} / {pats[-1]}: {unanimous:.1%} of bars · grey = split",
              "skill = the up-rate rising from left to right",
              sign_note,
              order_note,
@@ -711,8 +726,8 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     fig = _grid(2, heads, vspace=0.2)
 
     # (1, 1) correlation: shade by |r| on a neutral ramp, signed value in the cell, diagonal blank
-    z = np.where(np.eye(3, dtype=bool), np.nan, np.abs(corr))
-    text = [["" if r == k else f"{corr[r, k]:+.2f}" for k in range(3)] for r in range(3)]
+    z = np.where(np.eye(n_h, dtype=bool), np.nan, np.abs(corr))
+    text = [["" if r == k else f"{corr[r, k]:+.2f}" for k in range(n_h)] for r in range(n_h)]
     fig.add_trace(go.Heatmap(z=z, x=list(H), y=list(H), zmin=0, zmax=1, showscale=False,
                              colorscale=[[0, T.SURFACE], [1, T.MUTED]], text=text, texttemplate="%{text}",
                              textfont=dict(color=T.INK, size=13), hoverongaps=False,
@@ -720,17 +735,25 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     fig.update_yaxes(autorange="reversed", showgrid=False, row=1, col=1)
     fig.update_xaxes(showgrid=False, row=1, col=1)
 
-    # (1, 2) the eight vote patterns vs what independent votes would give
-    diss = {"UUD": "h2 dissents", "UDU": "h1 dissents", "DUU": "h0 dissents", "DDU": "h2 dissents",
-            "DUD": "h1 dissents", "UDD": "h0 dissents", "UUU": "unanimous up", "DDD": "unanimous down"}
-    counts = np.bincount(code, minlength=8)
-    fig.add_trace(go.Bar(x=list(PATTERNS), y=share, name="share of bars", legend="legend", showlegend=False,
-                         marker=dict(color=[T.INK_2 if p in ("UUU", "DDD") else T.MUTED for p in PATTERNS]),
+    # (1, 2) the 2^N vote patterns vs what independent votes would give
+    def _dissent(p):
+        ups, downs = p.count("U"), p.count("D")
+        if not downs or not ups:
+            return "unanimous up" if not downs else "unanimous down"
+        lone = "D" if downs == 1 else ("U" if ups == 1 else None)
+        if lone is not None and (n_h > 2 or lone == "D"):
+            return f"{H[p.index(lone)]} dissents"
+        return f"{ups} up / {downs} down"
+
+    diss = {p: _dissent(p) for p in pats}
+    counts = np.bincount(code, minlength=2 ** n_h)
+    fig.add_trace(go.Bar(x=list(pats), y=share, name="share of bars", legend="legend", showlegend=False,
+                         marker=dict(color=[T.INK_2 if p in (pats[0], pats[-1]) else T.MUTED for p in pats]),
                          text=[f"{v:.0%}" for v in share], textposition="outside", textfont=dict(size=10),
-                         customdata=np.column_stack([counts, indep]), hovertext=[diss[p] for p in PATTERNS],
+                         customdata=np.column_stack([counts, indep]), hovertext=[diss[p] for p in pats],
                          hovertemplate="%{x} (%{hovertext}): %{y:.1%} of bars (n %{customdata[0]:,})<br>"
                                        "independent votes would give %{customdata[1]:.1%}<extra></extra>"), 1, 2)
-    fig.add_trace(go.Scatter(x=list(PATTERNS), y=indep, mode="markers", name="if the horizons voted independently",
+    fig.add_trace(go.Scatter(x=list(pats), y=indep, mode="markers", name="if the horizons voted independently",
                              legend="legend", marker=TICK,
                              hovertemplate="%{x}: %{y:.1%} if independent<extra></extra>"), 1, 2)
     fig.update_xaxes(type="category", row=1, col=2)
@@ -742,26 +765,27 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     for i, h in enumerate(H):
         lab, mask = labels[h]
         up = (np.asarray(lab) > 0.5).astype(np.float32)
-        sub = np.array([mask & (votes == v) for v in range(4)])
+        sub = np.array([mask & (votes == v) for v in range(n_h + 1)])
         rate, lo, hi, n = _subset_rates(up, sub, plan, S.horizon_steps(frame, h))
         base_all.append(float(up[mask].mean()) if mask.any() else np.nan)
-        xs = np.arange(4) + (i - 1) * 0.16
+        xs = np.arange(n_h + 1) + (i - (n_h - 1) / 2) * 0.16
         fig.add_trace(go.Scatter(x=xs, y=rate, mode="markers", name=h, legend="legend2",
                                  marker=dict(color=T.HORIZON_COLORS[h], size=9, line=dict(color=T.PAPER, width=1)),
                                  error_y=dict(type="data", symmetric=False, array=hi - rate, arrayminus=rate - lo,
                                               color=T.HORIZON_COLORS[h], thickness=1.5, width=3),
-                                 customdata=np.column_stack([np.arange(4), n, lo, hi]),
+                                 customdata=np.column_stack([np.arange(n_h + 1), n, lo, hi]),
                                  hovertemplate=f"{h}: %{{customdata[0]}} horizons vote up<br>realised up-rate "
                                                "%{y:.3f} [%{customdata[2]:.3f}, %{customdata[3]:.3f}] "
                                                "(n %{customdata[1]:,})<extra></extra>"), 1, 3)
     base = float(np.nanmean(base_all))
-    fig.add_trace(go.Scatter(x=[-0.4, 3.4], y=[base, base], mode="lines", name="test-block up-rate",
+    fig.add_trace(go.Scatter(x=[-0.4, n_h + 0.4], y=[base, base], mode="lines", name="test-block up-rate",
                              legend="legend2", line=dict(color=T.NEUTRAL, dash=REF_DASH, width=1),
                              hovertemplate="up-rate of scored test moves: " +
                                            " · ".join(f"{h} {v:.1%}" for h, v in zip(H, base_all)) +
                                            "<extra></extra>"), 1, 3)
-    fig.update_xaxes(tickmode="array", tickvals=[0, 1, 2, 3], ticktext=["0 (all down)", "1", "2", "3 (all up)"],
-                     range=[-0.5, 3.5], title_text="horizons with P(up) > 0.5", title_standoff=4, row=1, col=3)
+    fig.update_xaxes(tickmode="array", tickvals=list(range(n_h + 1)),
+                     ticktext=["0 (all down)"] + [str(k) for k in range(1, n_h)] + [f"{n_h} (all up)"],
+                     range=[-0.5, n_h + 0.5], title_text="horizons with P(up) > 0.5", title_standoff=4, row=1, col=3)
     fig.update_yaxes(tickformat=".0%", title_text="realised up-rate", title_standoff=4, row=1, col=3)
 
     def _pct(v):
@@ -777,7 +801,7 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
                                hovertext=NA_BETA0)
 
     # (2, 1) direction head vs price head sign agreement, against independent heads
-    cats = list(H) + ["all 3"]
+    cats = list(H) + [f"all {n_h}"]
     vals = np.r_[align, all3]
     ind = np.r_[align_indep, all3_indep]
     head_name = "raw price head" if raw is not None else "served delta"
@@ -798,7 +822,7 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     fig.update_yaxes(tickformat=".0%", range=[0, 1.08], title_text="share of bars", title_standoff=4, row=2, col=1)
 
     # (2, 2) |delta| ordering on the raw heads (served deltas are shrunk per horizon; n/a where beta = 0)
-    ocats = ["|h0| &#8804; |h1|", "|h1| &#8804; |h2|", "both"]
+    ocats = [f"|{a}| &#8804; |{b}|" for a, b in zip(H, H[1:])] + (["both"] if n_h == 3 else ["all"])
     series = [("raw price heads", order_rates(raw), T.INK_2)] if raw is not None else []
     series.append(("served deltas (shrunk)" if raw is not None else "deltas as given", served_order, T.MUTED))
     width = 0.8 / len(series)                  # explicit geometry: the 'n/a' marks sit on the served slots
@@ -811,14 +835,14 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     _na_marks(2, 2, [k + 0.4 - width / 2 for k in np.flatnonzero(order_na)])
     fig.add_trace(go.Scatter(x=ocats, y=realised, mode="markers", name="realised |y|", legend="legend4",
                              marker=TICK, hovertemplate="realised moves: %{x} on %{y:.1%} of bars"
-                                                        "<br>(unordered magnitudes: 50% / 50% / 17%)"
+                                                        f"<br>(unordered magnitudes: {' / '.join(['50%'] * (n_h - 1) + [f'{100 / math.factorial(n_h):.0f}%'])})"
                                                         "<extra></extra>"), 2, 2)
     fig.update_xaxes(type="category", row=2, col=2)
     fig.update_yaxes(tickformat=".0%", range=[0, 1.08], title_text="share of bars", title_standoff=4, row=2, col=2)
     fig.update_layout(barmode="group")
 
     # (2, 3) the strategies' votes: SignalFrame.agreement (a horizon votes only beyond its thresholds)
-    acats = ["1 of 3 or none", "2 of 3", "3 of 3"]
+    acats = [f"1 of {n_h} or none"] + [f"{a} of {n_h}" for a in range(2, n_h + 1)]
     fig.add_trace(go.Bar(x=acats, y=agr_share, name="share of bars", legend="legend5", marker=dict(color=T.MUTED),
                          text=[f"{v:.1%}" for v in agr_share], textposition="outside", textfont=dict(size=10),
                          customdata=np.column_stack([agr_up, agr_dn]),
@@ -835,14 +859,14 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
             _heading(fig, None, r, c_, heads[k], plot_h=plot_h, note=notes[k], lift=KEY_ROW_PX)
         else:
             _heading(fig, legend, r, c_, heads[k], plot_h=plot_h, note=notes[k])
-    chain = "|h0| &#8804; |h1| &#8804; |h2|"
+    chain = " &#8804; ".join(f"|{h}|" for h in H)
     if np.isfinite(all3):
-        heads_line = (f"P(up) and the {head_name} give the same sign on all 3 horizons: {all3:.1%} "
+        heads_line = (f"P(up) and the {head_name} give the same sign on all {n_h} horizons: {all3:.1%} "
                       f"({all3_indep:.1%} if independent)")
     else:
-        heads_line = f"P(up) and the served delta give the same sign on all 3 horizons: {NA_BETA0}"
+        heads_line = f"P(up) and the served delta give the same sign on all {n_h} horizons: {NA_BETA0}"
     if raw is not None:
-        heads_line += f" · {chain} on the raw price heads: {order_rates(raw)[2]:.1%}"
+        heads_line += f" · {chain} on the raw price heads: {order_rates(raw)[-1]:.1%}"
     if raw is not None:
         # The flags are the raw heads. A served delta of 0 does not decide them (D-051).
         gate_line = (f"raw heads: SignalFrame.direction_aligned {gate:.1%} · "
@@ -852,7 +876,7 @@ def coherence_analytics_figure(frame, config=None, *, height: Optional[int] = No
     elif zero.any():
         # No raw heads: the served delta is 0, so the flags are the tie / P(up) rule, not an alignment.
         live = ", ".join(h for h, z in zip(H, zero) if not z)
-        passes = ("P(up) &#8804; 0.5 on all 3: the DDD share" if not live
+        passes = (f"P(up) &#8804; 0.5 on all {n_h}: the {pats[-1]} share" if not live
                   else f"P(up) &#8804; 0.5 on {zero_txt} and sign match on {live}")
         gate_line = (f"SignalFrame direction_aligned, magnitude_coherent: n/a (beta = 0 on {zero_txt}: served delta is "
                      f"0) · direction_aligned then passes {gate:.1%} of bars ({passes})")

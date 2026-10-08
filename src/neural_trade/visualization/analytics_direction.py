@@ -121,7 +121,7 @@ def calibration_applied(frame) -> bool:
     if cal is None:
         return False
     return any(h in cal and not np.array_equal(np.asarray(cal[h], float), np.asarray(frame.direction_prob[h], float))
-               for h in T.HORIZONS)
+               for h in T.horizons_of(frame))
 
 
 def _rate(num, den):
@@ -287,13 +287,15 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     fitted = calibration_applied(frame)
     served = "calibrated P(up)" if fitted else "raw P(up)"          # what frame.prob(h) returns
     raw, betas = _resolve_heads(frame, raw_delta)
+    hs = T.horizons_of(frame)          # one column per horizon (NT-042)
+    n_h = len(hs)
     st = {h: _horizon_stats(frame, h, labels[h], deadband, block=ci_block, max_points=max_points,
                             raw=raw, betas=betas)
-          for h in T.HORIZONS}
-    const_h = [h for h in T.HORIZONS if st[h]["gauss_const"]]
+          for h in hs}
+    const_h = [h for h in hs if st[h]["gauss_const"]]
 
     # row 1: one P(up) axis for all three columns; the tails beyond it are folded into the end bins
-    p_lo, p_hi = _hist_range([st[h]["p_cal"] for h in T.HORIZONS if st[h]["n"]])
+    p_lo, p_hi = _hist_range([st[h]["p_cal"] for h in hs if st[h]["n"]])
     if not p_hi - p_lo > 1e-6:
         p_lo, p_hi = p_lo - 0.01, p_hi + 0.01
     edges = np.linspace(p_lo, p_hi, int(bins) + 1)
@@ -302,7 +304,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     # row 2: one lift range for all three columns (the chance band and both curves fit)
     f_grid = np.linspace(0, 1, 101)
     lift_max = 0.02
-    for h in T.HORIZONS:
+    for h in hs:
         s = st[h]
         s["band"] = np.zeros_like(f_grid)
         if s["both"]:
@@ -316,7 +318,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     # row 3: one reliability range for all three columns, symmetric around 0.5, from what is drawn
     # (bin means, observed rates and their bars, the realised up-rate), not from every single prediction
     vals = [0.5]
-    for h in T.HORIZONS:
+    for h in hs:
         s = st[h]
         for key in ("rel_raw", "rel_cal"):
             vals += list(s[key][:, 0]) + list(s[key][:, 1])
@@ -328,14 +330,14 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
 
     # titles: row 1 names the horizon and its sample sizes; rows 2-3 carry the numbers of the panel
     titles = []
-    for h in T.HORIZONS:
+    for h in hs:
         s, c = st[h], T.HORIZON_COLORS[h]
         out = float(np.mean((s["p_cal"] < p_lo) | (s["p_cal"] > p_hi))) if s["n"] else 0.0
         full = f"{s['p_cal'].min():.2f}-{s['p_cal'].max():.2f}" if s["n"] else "n/a"
         titles.append(f"<span style='color:{c}'>■</span> <b>{T.horizon_label(h, config)}</b>"
                       f" · n {s['n']:,} labelled (≈{s['n_eff']:,} effective)<br>"
                       + _small(f"{out:.1%} beyond the axis, in end bins (range {full})"))
-    for h in T.HORIZONS:
+    for h in hs:
         s = st[h]
         (lo_h, hi_h), (lo_g, hi_g) = s["ci_head"], s["ci_gauss"]
         head = f"AUC head {_f(s['auc_head'], '.3f')} [{_f(lo_h, '.2f')}, {_f(hi_h, '.2f')}]"
@@ -351,7 +353,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
         else:
             verdict = f"{_verdict(lo_h, hi_h, 'head')} · {_verdict(lo_g, hi_g, 'Gaussian')} (95% CI vs 0.5)"
         titles.append(f"{head} · {gauss}<br>" + _small(verdict))
-    for h in T.HORIZONS:
+    for h in hs:
         s = st[h]
         ece = (f"raw {_f(s['ece_eq_raw'], '.2f')} → calibrated {_f(s['ece_eq_cal'], '.2f')}" if fitted
                else f"{_f(s['ece_eq_cal'], '.2f')} ({_NO_CAL})")
@@ -366,9 +368,10 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     table_px = _HEADER_PX + len(score_rows) * _ROW_PX + _WRAP_PX
     plot_px = float(max(height - top - bottom, 3 * gap_px + table_px + 300))
     panel_px = (plot_px - 3 * gap_px - table_px) / 3
-    fig = make_subplots(rows=4, cols=3, subplot_titles=titles, vertical_spacing=gap_px / plot_px,
+    fig = make_subplots(rows=4, cols=n_h, subplot_titles=titles, vertical_spacing=gap_px / plot_px,
                         horizontal_spacing=0.06, row_heights=[panel_px, panel_px, panel_px, table_px],
-                        specs=[[{}, {}, {}], [{}, {}, {}], [{}, {}, {}], [{"type": "table", "colspan": 3}, None, None]])
+                        specs=[[{} for _ in hs] for _ in range(3)]
+                        + [[{"type": "table", "colspan": n_h}] + [None] * (n_h - 1)])
 
     def f32(a):
         return np.asarray(a, dtype=np.float32)
@@ -379,7 +382,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     bin_text[-1] = f"≥ {edges[-2]:.3f} (with the tail above the axis)"
     bin_text = [bin_text[0], *bin_text, bin_text[-1]]
 
-    for j, h in enumerate(T.HORIZONS, start=1):
+    for j, h in enumerate(hs, start=1):
         s, c = st[h], T.HORIZON_COLORS[h]
         first = j == 1
         # ---- row 1: served P(up) by realised class (full-width end bins: steps drawn edge to edge)
@@ -484,7 +487,7 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     if fitted:
         keys.append(("raw", "raw", 3,
                      dict(mode="markers", marker=dict(symbol="circle-open", size=9, color=T.INK_2, line=dict(width=1.6)))))
-        if any(st[h]["monotone"] for h in T.HORIZONS):
+        if any(st[h]["monotone"] for h in hs):
             # a thick translucent bar, as drawn between each raw (open) and calibrated (filled) marker
             keys.append(("○→● calibration shift", "shift", 3,
                          dict(mode="lines", line=dict(color=T.rgba(T.INK_2, _SHIFT_ALPHA + 0.15), width=_SHIFT_WIDTH))))
@@ -495,9 +498,9 @@ def direction_analytics_figure(frame, config=None, *, bins: int = 25, height: in
     # ---- row 4: scorecard
     fig.add_trace(_scorecard(st, config, score_rows), 4, 1)
 
-    blk = max(int(ci_block), 2 * max(st[h]["steps"] for h in T.HORIZONS))
+    blk = max(int(ci_block), 2 * max(st[h]["steps"] for h in hs))
     if fitted:
-        ranking = ("ranks like the raw head" if all(st[h]["monotone"] for h in T.HORIZONS)
+        ranking = ("ranks like the raw head" if all(st[h]["monotone"] for h in hs)
                    else "ranks differently from the raw head")
         uses = f"ROC and scorecard use the served (calibrated) P(up), which {ranking}"
     else:
@@ -533,7 +536,7 @@ def _gauss_key(st):
     One key serves all three columns, so with mixed sources (beta = 0 on some horizons only, raw heads known)
     it names the columns that draw the raw price head's readout, e.g. 'Gaussian readout (price head; raw on h1)'.
     """
-    drawn = [h for h in T.HORIZONS if st[h]["both"] and st[h]["gauss_src"] != "const"]
+    drawn = [h for h in list(st) if st[h]["both"] and st[h]["gauss_src"] != "const"]
     raw_h = [h for h in drawn if st[h]["gauss_src"] == "raw"]
     if not drawn:
         return ""
@@ -615,13 +618,14 @@ def _scorecard_rows(deadband, fitted):
 def _scorecard(st, config, rows):
     import plotly.graph_objects as go
 
-    header = ["metric"] + [T.horizon_label(h, config) for h in T.HORIZONS]
-    cells = [[label for label, _ in rows]] + [[fn(st[h]) for _, fn in rows] for h in T.HORIZONS]
+    hs = list(st)
+    header = ["metric"] + [T.horizon_label(h, config) for h in hs]
+    cells = [[label for label, _ in rows]] + [[fn(st[h]) for _, fn in rows] for h in hs]
     return go.Table(
-        columnwidth=[5, 2, 2, 2],
+        columnwidth=[5] + [2] * len(hs),
         header=dict(values=header, fill_color=T.SURFACE, line_color=T.GRID, height=_HEADER_PX,
-                    align=["left", "right", "right", "right"],
-                    font=dict(size=12, weight="bold", color=[T.INK] + [T.HORIZON_COLORS[h] for h in T.HORIZONS])),
+                    align=["left"] + ["right"] * len(hs),
+                    font=dict(size=12, weight="bold", color=[T.INK] + [T.HORIZON_COLORS[h] for h in hs])),
         cells=dict(values=cells, fill_color=T.PAPER, line_color=T.GRID, height=_ROW_PX,
-                   align=["left", "right", "right", "right"],
-                   font=dict(size=11.5, color=[T.INK_2, T.INK, T.INK, T.INK])))
+                   align=["left"] + ["right"] * len(hs),
+                   font=dict(size=11.5, color=[T.INK_2] + [T.INK] * len(hs))))
