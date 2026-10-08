@@ -31,6 +31,14 @@ for the MVP".
 
 ## Rigour and budget (exploratory)
 
+- **Data: the static excerpt by default (owner, 2026-10-08: "the whole file only for giant runs"):** tactical runs and
+  tests read `D:/nt/neural_trade/Bitcoin_BTCUSDT_tactical.csv` (1,741,241 of 4,598,198 rows, 112 MB,
+  sha256 `e2f4ccfcd973b0c6...`; git-ignored). It holds, unchanged, the 95 days before each of the 12 tactical
+  slices (6 climb + 6 held-out final, runs/tactical/hc4/make_hc4.py) and the file's last 70 days (the protected span,
+  so DATA_END_PROTECTED_DAYS refuses the same dates). Checked: a long-block run gets bit-identical windows from it
+  (runs/tactical/data/excerpt_check.json), loading is 2-2.5x faster. Rebuild: `python runs/tactical/data/make_excerpt.py`
+  (manifest: runs/tactical/data/excerpt_manifest.json). A run on other DATA_END values (e.g. the 40-slice design) needs
+  the full `Bitcoin_BTCUSDT.csv`, as do giant runs (360-day, the long-history studies).
 - **Standard screening design (owner, 2026-10-07):** 6 slices x 2 seeds = 12 trials per variant, paired with the
   base on the same (slice, seed); accepted tolerances: error of the effect up to 0.05, false wins up to 10%
   (measured: mean error 0.014, worst 5% 0.043, false 'significant' 7%). It sees only large jumps (about +0.05 AUC);

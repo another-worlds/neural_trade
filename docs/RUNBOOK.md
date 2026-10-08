@@ -44,6 +44,7 @@ project is about. Every result names the setup it was measured on.
 |---|---|---|
 | Reference dataset: BTC/USDT 1-minute, 30 days (2025-10-11 to 2025-11-10) | `binance_btcusdt_1min_ccxt.csv` (tracked, repo root) | the default `CSV_PATH`: training, tests, CI, notebooks |
 | Long history: BTC/USDT 1-minute, 2017-01-01 to 2025-09-29 | `Bitcoin_BTCUSDT.csv` (291 MB, repo root, gitignored, the owner's) | walk-forward folds over different months (D-022). No run, test or notebook uses it yet; NT-041 adds the 7-day training block, walk-forward folds over the long history and a dataset fingerprint in every run. |
+| Tactical excerpt of the long history (D-062/D-063 tactical work) | `Bitcoin_BTCUSDT_tactical.csv` (112 MB, repo root, gitignored; built by `runs/tactical/data/make_excerpt.py`, sha256 in its manifest) | the 12 tactical slices' last 95 days and the protected tail; bit-identical long-block windows to the full file on those slices; the default for tactical runs and tests. The full file stays for giant runs and any other DATA_END. |
 
 Today the data file is `CSV_PATH`, and the window (`LOOKBACK`), the horizons (`HORIZON_STEPS`,
 exactly three) and the bar size (`RESAMPLE_MINUTES`) are Config keys in bars. NT-041 moves the

@@ -10,7 +10,8 @@ import make_hc2 as m
 allv = m.slices(); climb = [s for i, s in enumerate(allv) if i % 5 != 4]
 CLIMB = climb[1::7][:6]      # the same 6 slices as the candidate check's C2 (its default runs are the round-0 base)
 FINAL = climb[4::7][:6]      # held out: used once per winner, never for a choice inside the climb
-WEEK = {"CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv", "N_FOLDS": 2, "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1,
+WEEK = {"CSV_PATH": "D:/nt/neural_trade/Bitcoin_BTCUSDT_tactical.csv",  # the static excerpt (TACTICAL.md "Data")
+        "N_FOLDS": 2, "VAL_FRACTION": 0.1, "CAL_FRACTION": 0.1,
         "MAX_SEQUENCE_COUNT": 126000, "FOLD_INDEX": -2, "BATCH_SIZE": 256, "TRAIN_METRICS_EVERY": 10}
 RULES = {"finite": True, "max_nonfinite_grad_steps": 0, "max_clipped_share": 1.0, "clip_skip_epochs": 1,
          "min_train_loss_drop": -10.0, "max_term_share": 1.0}
