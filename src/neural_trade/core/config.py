@@ -873,8 +873,10 @@ class Config:
             bad(f"HORIZON_STEPS ({self.HORIZON_STEPS}) length must match "
                 f"EXTENDED_TREND_PERIODS ({self.EXTENDED_TREND_PERIODS}) "
                 "for semantic consistency (DataProcessor CRITICAL + extended_trend_loss).")
-        if len(self.HORIZON_STEPS) != 3:
-            bad("the architecture has exactly three horizon towers: HORIZON_STEPS needs 3 entries")
+        if len(self.HORIZON_STEPS) < 2:
+            # NT-042 (D-022): any number of horizon towers from two up (core/horizons.py); the
+            # pairwise physics terms and the coherence checks need at least one neighbouring pair.
+            bad("HORIZON_STEPS needs at least 2 entries (the pairwise terms need a neighbouring pair)")
         if any(a >= b for a, b in zip(self.HORIZON_STEPS, self.HORIZON_STEPS[1:])):
             bad("HORIZON_STEPS should be strictly ascending (a tie makes a pairwise physics term degenerate)")
         if self.EXTENDED_TREND_PERIODS != sorted(self.EXTENDED_TREND_PERIODS):

@@ -82,6 +82,7 @@ import tensorflow as tf
 
 from neural_trade.core.config import Config
 from neural_trade.core.exceptions import InvalidConfigurationError
+from neural_trade.core.horizons import keys_for
 from neural_trade.experiments.dataset import data_key
 from neural_trade.experiments.scenario import config_hash, short_hash
 
@@ -826,7 +827,7 @@ def _direction_auc(model, val_block: Mapping[str, Any], cfg: Config, target_scal
     deadband = float(cfg.DIR_DEADBAND_BPS) / 10000.0
     horizons = list(cfg.HORIZON_STEPS)
     out: Dict[str, Any] = {}
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(keys_for(cfg)):
         if i >= y_raw.shape[1]:
             continue
         ret = y_raw[:, i] / np.where(np.abs(last_close) > 1e-9, last_close, np.nan)

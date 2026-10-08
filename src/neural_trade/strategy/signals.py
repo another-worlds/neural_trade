@@ -1,7 +1,7 @@
 """Multi-horizon signals for strategies, vectorised and causal.
 
-``SignalFrame.build(frame, var_scale)`` turns the nine heads of every bar into the features the
-notebook strategies used (weighted direction, weighted move, confidence, strength, agreement,
+``SignalFrame.build(frame, var_scale)`` turns the 3H heads of every bar (H horizons, h0 .. h{H-1},
+the frame's own; NT-042) into the features the notebook strategies used (weighted direction, weighted move, confidence, strength, agreement,
 coherence), with three corrections to the notebook versions:
 
 * ``var_scale`` must come from the CALIBRATION split (``var_scale_from(cal_frame)``); the
@@ -16,16 +16,19 @@ Every feature at bar t depends only on predictions at bars <= t (see backtest.as
 Read-outs for the variance-driven strategies (NT-077; docs/research/2026-09-29-strategy-architectures/
 README.md sections 2.0 and 5.2), all causal:
 
-* ``sigma_ret`` [N, 3]: the model's $ sigma over the close, a return-unit sigma per horizon.
-* ``mu_gauss`` [N, 3]: sigma x Phi^-1(P(up)), the expected $ move a Gaussian with that sigma and
+* ``sigma_ret`` [N, H]: the model's $ sigma over the close, a return-unit sigma per horizon.
+* ``mu_gauss`` [N, H]: sigma x Phi^-1(P(up)), the expected $ move a Gaussian with that sigma and
   that P(up) implies (P(up) clipped to [1e-6, 1 - 1e-6]).
-* ``sigma_ewma`` [N, 3]: the model-free twin of ``sigma``: an EWMA (half-life ``EWMA_HALFLIFE`` bars)
+* ``sigma_ewma`` [N, H]: the model-free twin of ``sigma``: an EWMA (half-life ``EWMA_HALFLIFE`` bars)
   of squared one-bar log returns of ``close`` (the anchors are consecutive bars), square-rooted,
   scaled by sqrt(horizon bars) and by the close, in $ like ``sigma``. It is built from the frame
   alone, so the first ``EWMA_WARMUP`` bars of every frame are NaN (every variance strategy waits
   that long, so model and EWMA rows decide on the same bars).
 
 ``sigma_for(source, h)`` returns horizon h's $ sigma from ``"model"`` or ``"ewma"``.
+
+Single-horizon read-outs (the variance-spike detector, the notebook strategies' entry line) use the
+primary horizon ``SignalFrame.primary`` (``core.horizons.primary_index``: index 1, h1, at H = 3).
 """
 from __future__ import annotations
 
@@ -35,29 +38,36 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
-from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+from neural_trade.core.horizons import horizon_keys, primary_index
+from neural_trade.evaluation.frame import HORIZONS, PredictionFrame  # noqa: F401  (HORIZONS re-exported)
 
 logger = logging.getLogger(__name__)
 
+#: Every horizon weighs 1 by default (a horizon missing from this table, h3 and up, too).
 DEFAULT_LAMBDAS = {"h0": 1.0, "h1": 1.0, "h2": 1.0}
 
 
-def _horizon_matrix(raw) -> Optional[np.ndarray]:
-    """Raw heads as [N, 3] in h0, h1, h2 order, or None when they are not all present."""
+def _horizon_matrix(raw, keys=HORIZONS) -> Optional[np.ndarray]:
+    """Raw heads as [N, H] in ``keys`` order, or None when they are not all present."""
     if raw is None:
         return None
     if isinstance(raw, dict):
-        if not all(h in raw for h in HORIZONS):
+        if not all(h in raw for h in keys):
             return None
-        return np.column_stack([np.asarray(raw[h], float).reshape(-1) for h in HORIZONS])
+        return np.column_stack([np.asarray(raw[h], float).reshape(-1) for h in keys])
     arr = np.asarray(raw, float)
-    if arr.ndim == 2 and arr.shape[1] == len(HORIZONS):
+    if arr.ndim == 2 and arr.shape[1] == len(keys):
         return arr
     return None
 
 
 def _magnitude_ordered(deltas: np.ndarray) -> np.ndarray:
-    return (np.abs(deltas[:, 0]) <= np.abs(deltas[:, 1]) + 1e-6) & (np.abs(deltas[:, 1]) <= np.abs(deltas[:, 2]) + 1e-6)
+    """|delta| grows (within 1e-6) from every horizon to the next, per bar."""
+    a = np.abs(np.asarray(deltas, float))
+    ok = np.ones(len(a), dtype=bool)
+    for i in range(a.shape[1] - 1):
+        ok &= a[:, i] <= a[:, i + 1] + 1e-6
+    return ok
 
 
 def _direction_aligned(p: np.ndarray, deltas: np.ndarray) -> np.ndarray:
@@ -75,7 +85,7 @@ _P_CLIP = 1e-6
 
 def var_scale_from(frame: PredictionFrame) -> float:
     """Median positive predicted variance (scaled units) over a frame - use the CAL frame."""
-    v = np.concatenate([frame.variance_scaled[h] for h in HORIZONS])
+    v = np.concatenate([frame.variance_scaled[h] for h in frame.horizons])
     v = v[v > 1e-8]
     return float(np.median(v)) if len(v) else 1.0
 
@@ -120,35 +130,40 @@ VOTE_DOWN = 0.45
 @dataclass
 class SignalFrame:
     close: np.ndarray            # decision price (the last close) per bar
-    p: np.ndarray                # [N, 3] P(up) (calibrated when available)
-    delta: np.ndarray            # [N, 3] predicted $ change
-    sigma: np.ndarray            # [N, 3] predicted $ sigma
-    var_scaled: np.ndarray       # [N, 3]
-    confidence: np.ndarray       # [N, 3] exp(-var / var_scale)
+    p: np.ndarray                # [N, H] P(up) (calibrated when available)
+    delta: np.ndarray            # [N, H] predicted $ change
+    sigma: np.ndarray            # [N, H] predicted $ sigma
+    var_scaled: np.ndarray       # [N, H]
+    confidence: np.ndarray       # [N, H] exp(-var / var_scale)
     weighted_direction: np.ndarray
     weighted_move: np.ndarray
     volatility: np.ndarray       # confidence-weighted $ sigma
     strength: np.ndarray
     avg_confidence: np.ndarray
-    agreement: np.ndarray        # max(votes up, votes down) / 3, votes at 0.55 / 0.45
+    agreement: np.ndarray        # max(votes up, votes down) / H, votes at 0.55 / 0.45
     consensus: np.ndarray        # +1 UP, -1 DOWN, 0 NEUTRAL
     magnitude_coherent: np.ndarray
     direction_aligned: np.ndarray
-    var_spike: np.ndarray        # h1 variance above spike_thresh x its trailing mean
+    var_spike: np.ndarray        # the primary horizon's variance above spike_thresh x its trailing mean
     var_scale: float
     # NT-077 read-outs (module docstring); derived from the fields above in __post_init__ when not given.
     horizon_bars: Tuple[int, ...] = (10, 15, 20)   # bars ahead per horizon (not "horizon_steps": trade_analytics_figure falls back to that attribute)
-    sigma_ret: Optional[np.ndarray] = None     # [N, 3] sigma / close
-    mu_gauss: Optional[np.ndarray] = None      # [N, 3] sigma x Phi^-1(p), in $
-    sigma_ewma: Optional[np.ndarray] = None    # [N, 3] the model-free $ sigma; NaN for the first EWMA_WARMUP bars
+    sigma_ret: Optional[np.ndarray] = None     # [N, H] sigma / close
+    mu_gauss: Optional[np.ndarray] = None      # [N, H] sigma x Phi^-1(p), in $
+    sigma_ewma: Optional[np.ndarray] = None    # [N, H] the model-free $ sigma; NaN for the first EWMA_WARMUP bars
     # True when magnitude_coherent and direction_aligned were computed on the raw heads (D-051).
     # Last, so the positional horizon tuple in build() still binds to horizon_bars.
     coherence_on_raw: bool = False
+    # The column of the primary horizon (NT-042): the one the single-horizon read-outs use (the spike
+    # detector, the notebook strategies' entry line). None = core.horizons.primary_index(H), 1 at H = 3.
+    primary: Optional[int] = None
 
     def __post_init__(self):
         from scipy.special import ndtri
 
         self.horizon_bars = tuple(int(x) for x in self.horizon_bars)
+        if self.primary is None:
+            self.primary = primary_index(np.asarray(self.p).shape[1] if np.ndim(self.p) == 2 else 3)
         close = np.asarray(self.close, dtype=float)
         if self.sigma_ret is None:
             with np.errstate(divide="ignore", invalid="ignore"):
@@ -162,6 +177,11 @@ class SignalFrame:
     def __len__(self):
         return len(self.close)
 
+    @property
+    def horizons(self) -> Tuple[str, ...]:
+        """The horizon keys of the columns, h0 .. h{H-1} (NT-042)."""
+        return horizon_keys(np.asarray(self.p).shape[1])
+
     def sigma_for(self, source: str, h: int) -> np.ndarray:
         """Horizon ``h``'s $ sigma per bar: the model's (``"model"``) or the EWMA twin's (``"ewma"``)."""
         if source == "model":
@@ -174,22 +194,25 @@ class SignalFrame:
     def build(cls, frame: PredictionFrame, var_scale: float, *, lambdas: Optional[Dict[str, float]] = None,
               calibrated: bool = True, spike_window: int = 20, spike_thresh: float = 2.0,
               raw_delta=None) -> "SignalFrame":
-        lam = np.array([(lambdas or DEFAULT_LAMBDAS)[h] for h in HORIZONS], dtype=float)
-        p = np.stack([frame.prob(h, calibrated) for h in HORIZONS], 1)
+        keys = frame.horizons
+        n_h = len(keys)
+        primary = primary_index(n_h)
+        lam = np.array([lambdas[h] if lambdas else DEFAULT_LAMBDAS.get(h, 1.0) for h in keys], dtype=float)
+        p = np.stack([frame.prob(h, calibrated) for h in keys], 1)
         # D-066: a horizon whose temperature fit ended at a bound has no usable direction signal; its
         # calibrated P(up) is a constant 0.5, so it casts no vote and carries no weight (strategies that
         # need P(up) then stay flat on it).
         dsig = (getattr(frame, "meta", None) or {}).get("direction_signal") or {}
         no_signal = np.array([bool(calibrated and frame.direction_prob_calibrated is not None
-                                   and dsig.get(h) == "none") for h in HORIZONS])
+                                   and dsig.get(h) == "none") for h in keys])
         if no_signal.any():
             logger.warning("SignalFrame.build: no usable direction signal on %s (the temperature fit ended at a "
                            "bound, D-066): P(up) is neutral and carries no weight there; strategies reading it "
-                           "stay flat on those horizons", [h for h, n in zip(HORIZONS, no_signal) if n])
+                           "stay flat on those horizons", [h for h, n in zip(keys, no_signal) if n])
             p = np.where(no_signal[None, :], 0.5, p)
-        d = np.stack([frame.delta[h] for h in HORIZONS], 1)
-        v = np.stack([frame.variance_scaled[h] for h in HORIZONS], 1)
-        sig = np.stack([frame.sigma(h) for h in HORIZONS], 1)
+        d = np.stack([frame.delta[h] for h in keys], 1)
+        v = np.stack([frame.variance_scaled[h] for h in keys], 1)
+        sig = np.stack([frame.sigma(h) for h in keys], 1)
         conf = np.exp(-np.clip(v, 0, 1e4) / var_scale) if var_scale > 1e-8 else np.full_like(v, 0.5)
         w = lam[None, :] * conf
         if no_signal.any():
@@ -202,13 +225,13 @@ class SignalFrame:
         strength = np.clip((w * np.abs(p - 0.5) * 2).sum(1) / (wsum + 1e-8), 0, 1)
         up = (p > VOTE_UP).sum(1)
         down = (p < VOTE_DOWN).sum(1)
-        agreement = np.where(up + down == 0, 1 / 3, np.maximum(up, down) / 3.0)
+        agreement = np.where(up + down == 0, 1 / n_h, np.maximum(up, down) / float(n_h))
         consensus = np.sign(up - down).astype(int)
         # D-051: the two coherence flags use the raw heads when the frame has them. ``d`` stays the
         # served delta, which the entry rule and take-profit sizing still read.
-        raw_mat = _horizon_matrix(raw_delta)
+        raw_mat = _horizon_matrix(raw_delta, keys)
         if raw_mat is None:
-            raw_mat = _horizon_matrix((getattr(frame, "meta", None) or {}).get("delta_raw"))
+            raw_mat = _horizon_matrix((getattr(frame, "meta", None) or {}).get("delta_raw"), keys)
         if raw_mat is not None and len(raw_mat) != len(d):
             raw_mat = None
         if raw_mat is None:
@@ -218,10 +241,10 @@ class SignalFrame:
         flag_d = d if raw_mat is None else raw_mat
         mag = _magnitude_ordered(flag_d)
         aligned = _direction_aligned(p, flag_d)
-        spike = v[:, 1] > spike_thresh * (_trailing_mean(v[:, 1], spike_window) + 1e-7)
+        spike = v[:, primary] > spike_thresh * (_trailing_mean(v[:, primary], spike_window) + 1e-7)
         return cls(frame.last_close.astype(float), p, d, sig, v, conf, wdir, wmove, vol, strength,
                    conf.mean(1), agreement, consensus, mag, aligned, spike, float(var_scale),
-                   tuple(frame.horizon_steps), coherence_on_raw=raw_mat is not None)
+                   tuple(frame.horizon_steps), coherence_on_raw=raw_mat is not None, primary=primary)
 
     def agreeing_horizons(self, side: int) -> np.ndarray:
         """How many horizons' predicted deltas point to ``side`` (+1 up, -1 down), per bar."""

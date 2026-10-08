@@ -19,16 +19,19 @@ from typing import Dict, Optional
 import numpy as np
 import pandas as pd
 
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
 from neural_trade.metrics.direction_labels import gaussian_up_prob_given_move_np
 from neural_trade.serving.postprocess import heads_to_predictions
 from neural_trade.training.artifacts import ArtifactBundle
 
-HORIZONS = ("h0", "h1", "h2")
+#: The reference three keys (old importers); a batch carries its own keys (NT-042).
+HORIZONS = REFERENCE_HORIZONS
 
 
 @dataclass
 class PredictionBatch:
-    """Arrays per horizon, each of length N (one entry per input window)."""
+    """Arrays per horizon (h0 .. h{H-1}, the bundle's horizons), each of length N (one entry per
+    input window)."""
 
     delta: Dict[str, np.ndarray]
     direction_prob: Dict[str, np.ndarray]
@@ -54,7 +57,7 @@ class PredictionBatch:
         from neural_trade.evaluation.frame import PredictionFrame
 
         n = len(self.last_close)
-        y = np.full((n, 3), np.nan) if y is None else np.asarray(y, float)
+        y = np.full((n, len(self.horizons)), np.nan) if y is None else np.asarray(y, float)
         frame = PredictionFrame(y, self.last_close, self.delta, self.direction_prob, self.variance_scaled,
                                 pred_scale, pred_mean, tuple(self.horizon_steps), split,
                                 self.direction_prob_calibrated, self.interval)
@@ -66,9 +69,14 @@ class PredictionBatch:
             frame.meta["direction_signal"] = dict(self.direction_signal)
         return frame
 
+    @property
+    def horizons(self) -> tuple:
+        """This batch's horizon keys (h0 .. h{H-1})."""
+        return keys_of(self.delta)
+
     def to_frame(self, index=None) -> pd.DataFrame:
         cols = {"last_close": self.last_close}
-        for h, _steps in zip(HORIZONS, self.horizon_steps):
+        for h, _steps in zip(self.horizons, self.horizon_steps):
             cols[f"{h}_delta"] = self.delta[h]
             cols[f"{h}_price"] = self.last_close + self.delta[h]
             cols[f"{h}_p_up"] = self.direction_prob[h]
@@ -142,9 +150,10 @@ class Predictor:
         heads = self.model.predict(tf.data.Dataset.from_tensor_slices(Xn).batch(bs), verbose=0)
         preds = heads_to_predictions(heads, len(Xn), self.bundle.pred_scale, self.bundle.pred_mean, self.config)
 
-        raw_delta = {h: preds["delta"][h] for h in HORIZONS}
-        prob_cal = {h: preds["direction_prob"][h] for h in HORIZONS}
-        intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in HORIZONS}
+        keys = keys_of(preds["delta"])
+        raw_delta = {h: preds["delta"][h] for h in keys}
+        prob_cal = {h: preds["direction_prob"][h] for h in keys}
+        intervals = {h: (np.full(len(Xn), np.nan), np.full(len(Xn), np.nan)) for h in keys}
         signal = None
         if calibrated and self.bundle.calibration_pipeline is not None:
             # conformal realized vol reads raw CLOSE windows in every input mode
@@ -152,10 +161,10 @@ class Predictor:
             prob_cal, intervals = cal["direction_prob"], cal["intervals"]
             signal = self.bundle.calibration_pipeline.direction_signal()
             preds = dict(preds, delta=cal["delta"])  # delta shrinkage (identity when not fitted)
-        sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in HORIZONS}
+        sigma = {h: np.sqrt(preds["variance"][h]) * self.bundle.pred_scale for h in keys}
         gauss = {h: gaussian_up_prob_given_move_np(preds["delta"][h], preds["variance"][h], lc,
                                                    self.config.DIR_DEADBAND_BPS, self.bundle.pred_scale)
-                 for h in HORIZONS}
+                 for h in keys}
         return PredictionBatch(preds["delta"], preds["direction_prob"], prob_cal, sigma, preds["variance"],
                                gauss, intervals, lc, tuple(self.config.HORIZON_STEPS), raw_delta, signal)
 
@@ -183,7 +192,7 @@ class Predictor:
                     if k.startswith(h + "_") and not k.endswith("_direction_signal")} | {
             "horizon_bars": int(steps), "last_close": float(batch.last_close[0]),
             "direction_signal": str(sig.get(h, "ok")) if sig else "n/a"}
-            for h, steps in zip(HORIZONS, batch.horizon_steps)}
+            for h, steps in zip(batch.horizons, batch.horizon_steps)}
 
     def predict_windows_frame(self, frame: pd.DataFrame, alpha: float = 0.1, batch_size: Optional[int] = None):
         """``(PredictionBatch, preprocessed df, anchor rows)`` for every complete window of a raw frame;

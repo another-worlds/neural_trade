@@ -22,7 +22,8 @@ horizon:
                      the gap is at least 1 pp
     n_eff            N // horizon_steps: non-overlapping outcomes, the honest sample size
 
-Across horizons (``coherence``):
+Across horizons (``coherence``; with N horizons there is one ``mag_<a>_le_<b>`` per neighbouring pair,
+NT-042; the names below are the reference N = 3):
 
     mag_h0_le_h1 mag_h1_le_h2 mag_order_full   share of samples with |d_h0| <= |d_h1| (<= |d_h2|) on the
                                                deltas in the frame: the SERVED deltas, whose ordering
@@ -32,8 +33,9 @@ Across horizons (``coherence``):
     delta_dir_align_h0/h1/h2, _all             sign(delta) agrees with calibrated P(up) > 0.5 (raw heads
                                                when known; the same as the served deltas while beta > 0)
     delta_dir_align_indep_h0/h1/h2, _all       the agreement two independent signs would show
-    coherence_primary                          = delta_dir_align_h1 (kept for older readers)
-    unanimity                                  all three P(up) on the same side of 0.5
+    coherence_primary                          = delta_dir_align of the primary horizon (h1 at N = 3;
+                                               core.horizons.primary_key), kept for older readers
+    unanimity                                  all P(up) on the same side of 0.5
 
 A shrink beta = 0 serves the constant 0: its correlation, sign share, magnitude ordering (1.0 by ties), sign
 agreement and Gaussian readout (the constant 0.5: AUC 0.5, Brier 0.25 by construction) are not statistics of a
@@ -74,7 +76,8 @@ import numpy as np
 from scipy.special import ndtr
 from scipy.stats import spearmanr
 
-from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of, primary_index, primary_key
+from neural_trade.evaluation.frame import HORIZONS, PredictionFrame  # noqa: F401  (HORIZONS re-exported)
 from neural_trade.metrics import numpy_metrics as npm
 from neural_trade.metrics.direction_labels import direction_labels_np, gaussian_up_prob_given_move_np
 from neural_trade.metrics.statistics import BLOCK, BLOCK_PER_HORIZON, BOOT_N, DM_LAG_PER_STEP, Z95, auc_score
@@ -116,9 +119,20 @@ SERVED_ZERO_NA = ZERO_BETA_NA          # alias: both names are imported
 # the same, for a served delta found 0 on every sample with no beta = 0 recorded
 ZERO_DELTA_NA = "n/a (served delta is 0)"
 GAUSS_ZERO_NA = "n/a (served delta is 0: readout is the constant 0.5)"
-MAG_CHECKS = (("abs(d h0) <= abs(d h1)", "mag_h0_le_h1", ("h0", "h1")),
-              ("abs(d h1) <= abs(d h2)", "mag_h1_le_h2", ("h1", "h2")),
-              ("full chain h0 <= h1 <= h2", "mag_order_full", HORIZONS))
+def mag_checks(keys=REFERENCE_HORIZONS):
+    """(label, coherence key, horizons involved) of the magnitude-ordering checks for these horizon keys:
+    one per neighbouring pair, then the full chain (NT-042). The reference three give ``MAG_CHECKS``."""
+    keys = tuple(keys)
+    out = [(f"abs(d {a}) <= abs(d {b})", f"mag_{a}_le_{b}", (a, b)) for a, b in zip(keys, keys[1:])]
+    out.append((f"full chain {' <= '.join(keys)}", "mag_order_full", keys))
+    return tuple(out)
+
+
+MAG_CHECKS = mag_checks()
+
+
+def _count_word(n: int) -> str:
+    return {2: "two", 3: "three", 4: "four", 5: "five"}.get(int(n), str(n))
 
 
 def _ratio(num, den) -> float:
@@ -223,14 +237,16 @@ def confidence_gap(correct, confidence, threshold, *, block=BLOCK, n_boot=1000, 
 
 
 def _delta_dict(delta, n: int) -> Dict[str, np.ndarray]:
-    return {h: np.asarray(delta[h], dtype=float).reshape(-1)[:n] for h in HORIZONS}
+    return {h: np.asarray(delta[h], dtype=float).reshape(-1)[:n] for h in keys_of(delta)}
 
 
 def magnitude_ordering(d: np.ndarray):
-    """(share |d0| <= |d1|, share |d1| <= |d2|, share of the full chain) for an [N, 3] array."""
+    """(share |d0| <= |d1|, ..., share |d_{H-2}| <= |d_{H-1}|, share of the full chain) for an [N, H]
+    array: one share per neighbouring pair, then the chain (H = 3: the reference three numbers)."""
     a = np.abs(np.asarray(d, float))
-    le01, le12 = a[:, 0] <= a[:, 1], a[:, 1] <= a[:, 2]
-    return float(le01.mean()), float(le12.mean()), float((le01 & le12).mean())
+    le = [a[:, i] <= a[:, i + 1] for i in range(a.shape[1] - 1)]
+    full = np.logical_and.reduce(le) if le else np.ones(len(a), bool)
+    return tuple(float(x.mean()) for x in le) + (float(full.mean()),)
 
 
 def independent_agreement(a: np.ndarray, b: np.ndarray) -> float:
@@ -247,30 +263,34 @@ def independent_agreement(a: np.ndarray, b: np.ndarray) -> float:
 
 
 def coherence_block(frame: PredictionFrame, raw_delta: Optional[Dict[str, np.ndarray]] = None) -> Dict[str, float]:
-    """Cross-horizon checks. ``raw_delta``: the price heads before the calibration's delta shrink."""
-    served = np.stack([frame.delta[h] for h in HORIZONS], 1)
-    raw = None if raw_delta is None else np.stack(list(_delta_dict(raw_delta, len(frame)).values()), 1)
-    p = np.stack([frame.prob(h) for h in HORIZONS], 1)
+    """Cross-horizon checks over the frame's N horizons (NT-042). ``raw_delta``: the price heads before the
+    calibration's delta shrink."""
+    keys = frame.horizons
+    pair_keys = [key for _label, key, _inv in mag_checks(keys)[:-1]]
+    served = np.stack([frame.delta[h] for h in keys], 1)
+    raw = None if raw_delta is None else np.stack([_delta_dict(raw_delta, len(frame))[h] for h in keys], 1)
+    p = np.stack([frame.prob(h) for h in keys], 1)
     head_up = p > 0.5
     delta_up = (raw if raw is not None else served) > 0  # a positive shrink keeps the sign; beta = 0 would not
     agree = head_up == delta_up
-    s01, s12, sfull = magnitude_ordering(served)
+    shares = magnitude_ordering(served)
     out = {
-        "mag_order_full": sfull,
+        "mag_order_full": shares[-1],
         "unanimity": float(np.mean(head_up.all(1) | (~head_up).all(1))),
         "delta_dir_align_all": float(np.mean(agree.all(1))),
-        "coherence_primary": float(np.mean(agree[:, 1])),
-        "mag_h0_le_h1": s01, "mag_h1_le_h2": s12,
+        "coherence_primary": float(np.mean(agree[:, primary_index(len(keys))])),
     }
-    for i, h in enumerate(HORIZONS):
+    out.update(zip(pair_keys, shares[:-1]))
+    for i, h in enumerate(keys):
         out[f"delta_dir_align_{h}"] = float(np.mean(agree[:, i]))
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(keys):
         pd_, ph = float(delta_up[:, i].mean()), float(head_up[:, i].mean())
         out[f"delta_dir_align_indep_{h}"] = pd_ * ph + (1 - pd_) * (1 - ph)
     out["delta_dir_align_indep_all"] = independent_agreement(delta_up, head_up)
     if raw is not None:
-        r01, r12, rfull = magnitude_ordering(raw)
-        out.update(mag_h0_le_h1_raw=r01, mag_h1_le_h2_raw=r12, mag_order_full_raw=rfull)
+        rshares = magnitude_ordering(raw)
+        out.update({f"{k}_raw": v for k, v in zip(pair_keys, rshares[:-1])})
+        out["mag_order_full_raw"] = rshares[-1]
     return out
 
 
@@ -279,7 +299,7 @@ def score_frame(frame: PredictionFrame, deadband_bps: float, conf_threshold=None
     labels = direction_labels_np(frame.y, frame.last_close, deadband_bps)
     raw = None if raw_delta is None else _delta_dict(raw_delta, len(frame))
     out: Dict[str, Any] = {"horizons": {}, "coherence": coherence_block(frame, raw)}
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(frame.horizons):
         lab, mask = labels[h]
         yt = frame.y[:, i]
         prob = frame.prob(h)
@@ -311,7 +331,7 @@ def _sample_loss(frame: PredictionFrame, i: int, group: str, metric: str, labels
     """Per-sample loss whose mean orders the model and a baseline like ``metric`` does (None: no such loss).
 
     One value per bar; direction losses are NaN inside the deadband (unscored), so the array keeps time."""
-    h = HORIZONS[i]
+    h = frame.horizons[i]
     y = frame.y[:, i]
     if group == "delta" and metric in ("rmse", "skill_vs_zero"):
         return (y - frame.delta[h]) ** 2
@@ -331,7 +351,7 @@ def _sample_loss(frame: PredictionFrame, i: int, group: str, metric: str, labels
 def _boot_metric(frame: PredictionFrame, i: int, group: str, metric: str, labels, W: np.ndarray):
     """``metric`` of ``frame`` on every bootstrap resample (rows of W), computed like the report computes it
     (with W = 1 it equals the report's value); None for metrics without a bootstrap here."""
-    h = HORIZONS[i]
+    h = frame.horizons[i]
     y = frame.y[:, i]
     if group == "direction" and metric in ("mcc", "auc", "bal_acc", "ece_pos"):
         lab, mask = labels[h]
@@ -434,6 +454,12 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
     def _share(num, den):
         return float(num) / float(den) if num is not None and den else None
 
+    # the horizons the rows carry dir_n_* / var_at_floor_* for (the reference three for a row without
+    # them, as before NT-042)
+    import re as _re
+    found = {k.rsplit("_", 1)[1] for r in rows for k in r
+             if _re.fullmatch(r"(dir_n|var_at_floor)_h\d+", str(k))}
+    hkeys = keys_of(dict.fromkeys(found)) if found else REFERENCE_HORIZONS
     per_epoch = [{
         "epoch": r.get("epoch"),
         "n_steps": r.get("n_steps"),
@@ -444,9 +470,8 @@ def health_block(rows: List[Dict[str, Any]], config=None) -> Dict[str, Any]:
         "grad_clip_share_main": _share(r.get("grad_clip_steps_main"), r.get("n_steps")),
         "grad_clip_share_indicator": _share(r.get("grad_clip_steps_indicator"), r.get("n_steps")),
         "nonfinite_grad_steps": r.get("nonfinite_grad_steps"),
-        "dir_n_h0": r.get("dir_n_h0"), "dir_n_h1": r.get("dir_n_h1"), "dir_n_h2": r.get("dir_n_h2"),
-        "var_at_floor_h0": r.get("var_at_floor_h0"), "var_at_floor_h1": r.get("var_at_floor_h1"),
-        "var_at_floor_h2": r.get("var_at_floor_h2"),
+        **{f"dir_n_{h}": r.get(f"dir_n_{h}") for h in hkeys},
+        **{f"var_at_floor_{h}": r.get(f"var_at_floor_{h}") for h in hkeys},
     } for r in rows]
 
     masked: Dict[str, float] = {}
@@ -528,6 +553,11 @@ class EvalReport:
     health: Optional[Dict[str, Any]] = None
 
     # ------------------------------------------------------------------ views
+    @property
+    def horizons(self) -> tuple:
+        """The report's horizon keys, h0 .. h{H-1} (NT-042; the reference three for an empty report)."""
+        return keys_of(self.model.get("horizons") if isinstance(self.model, dict) else None)
+
     def metric(self, h: str, group: str, name: str) -> float:
         return self.model["horizons"][h][group][name]
 
@@ -580,7 +610,7 @@ class EvalReport:
     # ------------------------------------------------------------------ markdown
     def to_markdown(self, path=None) -> str:
         steps = list(self.meta.get("horizon_steps") or [])
-        head = [f"{h} ({steps[i]} bars)" if i < len(steps) else h for i, h in enumerate(HORIZONS)]
+        head = [f"{h} ({steps[i]} bars)" if i < len(steps) else h for i, h in enumerate(self.horizons)]
         L = [f"# Evaluation report - {self.split} split" + (f" - run `{self.run_id}`" if self.run_id else ""),
              "", f"n = {self.n} samples, one per 1-minute bar. Direction metrics count only moves beyond "
              f"{self.deadband_bps:g} bps (the neutral mask). Consecutive samples share most of their target "
@@ -588,7 +618,7 @@ class EvalReport:
         L += self._md_direction(head) + self._md_delta(head) + self._md_variance(head)
         L += ["## Confidence gap (accuracy of the more confident half minus the less confident half)", "",
               "| horizon | gap | 95% CI | verdict |", "|---|---|---|---|"]
-        for h in HORIZONS:
+        for h in self.horizons:
             g = self.model["horizons"][h]["confidence_gap"]
             L.append(f"| {h} | {_fmt(g['gap'])} | [{_fmt(g['ci'][0])}, {_fmt(g['ci'][1])}] | {g['verdict']} |")
         L += [""] + self._md_coherence()
@@ -611,7 +641,7 @@ class EvalReport:
     def _table(self, head, rows):
         L = ["| metric | " + " | ".join(head) + " |", "|---|" + "---|" * len(head)]
         for label, fn in rows:
-            L.append(f"| {label} | " + " | ".join(fn(h) for h in HORIZONS) + " |")
+            L.append(f"| {label} | " + " | ".join(fn(h) for h in self.horizons) + " |")
         return L + [""]
 
     def _cell(self, group, key, fmt=None):
@@ -622,7 +652,7 @@ class EvalReport:
         """Horizons whose recorded shrink beta is 0 (or below)."""
         betas = self.meta.get("delta_scale") or {}
         out = []
-        for h in HORIZONS:
+        for h in self.horizons:
             try:
                 if betas.get(h) is not None and float(betas[h]) <= 0:
                     out.append(h)
@@ -635,7 +665,7 @@ class EvalReport:
         delta that evaluate() found 0 on every sample (``meta["served_delta_zero"]``: no beta recorded, e.g.
         a frame without ``delta_scale`` and without the raw heads)."""
         zero = set(self._beta_zero()) | set(self.meta.get("served_delta_zero") or ())
-        return [h for h in HORIZONS if h in zero]
+        return [h for h in self.horizons if h in zero]
 
     def _zero_lead(self, zero) -> str:
         """The opening of a note on the horizons ``zero`` whose served delta is 0."""
@@ -672,7 +702,7 @@ class EvalReport:
         steps = list(self.meta.get("horizon_steps") or [])
 
         def n_eff_scored(h):
-            i, n = HORIZONS.index(h), self._get(h, d, "n_masked")
+            i, n = self.horizons.index(h), self._get(h, d, "n_masked")
             return "n/a" if n is None or i >= len(steps) else str(int(n) // max(1, int(steps[i])))
 
         rows = [("n scored (outside the deadband)", self._cell(d, "n_masked")),
@@ -693,14 +723,14 @@ class EvalReport:
         rows += [(f"Gaussian readout: {name}",
                   lambda h, key=key: self._na([h], gauss=True) if h in zero else _fmt(self._get(h, g, key)))
                  for name, key in gauss]
-        raw_gauss = bool(zero) and any(self._get(h, "gauss_direction_raw", "auc") is not None for h in HORIZONS)
+        raw_gauss = bool(zero) and any(self._get(h, "gauss_direction_raw", "auc") is not None for h in self.horizons)
         rows += [(f"Gaussian readout of the raw heads: {name}", self._cell("gauss_direction_raw", key))
                  for name, key in gauss] if raw_gauss else []
         L = [f"## Direction heads: P(up) > 0.5 on moves beyond {self.deadband_bps:g} bps", "",
              "Up is the positive class. Temperature scaling does not move P(up) across 0.5, so the "
              "counts and rates are the same before and after calibration; Brier and ECE are not.", ""] \
             + self._table(head, rows)
-        nosig = [h for h in HORIZONS if h in (self.meta.get("direction_signal_none") or ())]
+        nosig = [h for h in self.horizons if h in (self.meta.get("direction_signal_none") or ())]
         if nosig:
             L += ["", f"**No usable direction signal on {', '.join(nosig)}**: the temperature fit ended at a search "
                   "bound (no interior NLL minimum), so the calibrated P(up) there is a constant and the "
@@ -709,7 +739,7 @@ class EvalReport:
             if raw_gauss:
                 how = ("The rows \"Gaussian readout of the raw heads\" score the raw price heads' readout (with the "
                        "served variance).")
-            elif any(self._get(h, "delta_raw", "rmse") is not None for h in HORIZONS):
+            elif any(self._get(h, "delta_raw", "rmse") is not None for h in self.horizons):
                 how = "This report predates the raw heads' readout: re-score it with evaluate() to show it."
             else:
                 how = "Pass raw_delta to evaluate() to score the raw heads' readout."
@@ -719,7 +749,7 @@ class EvalReport:
         return L
 
     def _md_delta(self, head):
-        has_raw = any(self.model["horizons"][h].get("delta_raw") for h in HORIZONS)
+        has_raw = any(self.model["horizons"][h].get("delta_raw") for h in self.horizons)
         betas = self.meta.get("delta_scale") or {}
         s, r = "delta", "delta_raw"
         sv = "served"  # the frame's deltas: PredictionFrame.from_result holds what the predictor serves
@@ -779,18 +809,21 @@ class EvalReport:
 
     def _md_coherence(self):
         c = self.model["coherence"]
+        hs = self.horizons
+        checks = mag_checks(hs)
         betas = self.meta.get("delta_scale") or {}
         has_raw = "mag_order_full_raw" in c
         served_head = "served deltas" + (" (beta-shrunk: " + " / ".join(
-            f"{h} {betas[h]:.3f}" for h in HORIZONS if betas.get(h) is not None) + ")" if betas else "")
+            f"{h} {betas[h]:.3f}" for h in hs if betas.get(h) is not None) + ")" if betas else "")
         cols = (["raw price heads (the trained ordering)"] if has_raw else []) + [served_head, "realised moves"]
         L = ["## Coherence across horizons", "",
              "Magnitude ordering: the share of samples whose predicted move grows with the horizon, as the loss "
              "asks. Magnitudes in random order would give 0.5, 0.5 and 0.1667.", "",
              "| check | " + " | ".join(cols) + " |", "|---|" + "---|" * len(cols)]
-        realised = self.meta.get("realised_ordering") or [None, None, None]
+        realised = list(self.meta.get("realised_ordering") or [])
+        realised += [None] * (len(checks) - len(realised))
         zero_beta = self._zero_beta()
-        for j, (label, key, involved) in enumerate(MAG_CHECKS):
+        for j, (label, key, involved) in enumerate(checks):
             # a zero-beta horizon's served delta is 0 on every bar: |0| <= |x| holds by ties, |x| <= |0| almost never
             hit = [h for h in involved if h in zero_beta]
             served = self._na(hit) if hit else _fmt(c.get(key))
@@ -801,7 +834,7 @@ class EvalReport:
                   "by ties) and no sign; the served checks that involve "
                   + ("it are n/a" if len(zero_beta) == 1 else "them are n/a")
                   + ("; the sign checks below use the raw heads." if has_raw else ", the sign checks below too.")]
-        if has_raw and len(zero_beta) == len(HORIZONS):
+        if has_raw and len(zero_beta) == len(hs):
             L += ["", "No served delta varies, so there is no served ordering: judge the trained constraint on the "
                   "raw heads."]
         elif has_raw:
@@ -816,18 +849,18 @@ class EvalReport:
         def sign_cell(key, h=None):
             if h in na or (h is None and na):
                 return self._na([h] if h is not None else na)
-            return _fmt(c.get(key, c.get("coherence_primary") if key == "delta_dir_align_h1" else None))
+            return _fmt(c.get(key, c.get("coherence_primary") if key == f"delta_dir_align_{primary_key(hs)}" else None))
 
         L += ["", "Sign agreement: " + ("sign(raw price head) against calibrated P(up) > 0.5 (the served delta, "
                                         "beta x raw, has the same sign while beta > 0)." if has_raw else
                                         "sign(delta in the frame) against calibrated P(up) > 0.5."), "",
-              "| | " + " | ".join(HORIZONS) + " | all 3 |", "|---|---|---|---|---|",
-              "| agree | " + " | ".join(sign_cell(f"delta_dir_align_{h}", h) for h in HORIZONS)
+              "| | " + " | ".join(hs) + f" | all {len(hs)} |", "|---|" + "---|" * (len(hs) + 1),
+              "| agree | " + " | ".join(sign_cell(f"delta_dir_align_{h}", h) for h in hs)
               + f" | {sign_cell('delta_dir_align_all')} |",
               "| expected if the two signs were independent | "
-              + " | ".join(sign_cell(f"delta_dir_align_indep_{h}", h) for h in HORIZONS)
+              + " | ".join(sign_cell(f"delta_dir_align_indep_{h}", h) for h in hs)
               + f" | {sign_cell('delta_dir_align_indep_all')} |", "",
-              f"- P(up) unanimity (all three horizons call the same side): {_fmt(c.get('unanimity'))}"]
+              f"- P(up) unanimity (all {_count_word(len(hs))} horizons call the same side): {_fmt(c.get('unanimity'))}"]
         return L
 
     def _md_health(self):
@@ -853,9 +886,10 @@ class EvalReport:
             def pct(v):
                 return f"{100 * v:.1f}%" if v is not None else "n/a"
 
+            hk = keys_of({k[len("dir_n_"):]: None for k in per_epoch[0] if str(k).startswith("dir_n_h")})
             L += ["| epoch | grad norm max (main / indicator) | clipped steps (main / indicator) | "
-                 "clipped share (main / indicator) | non-finite steps | dir_n (h0/h1/h2) | "
-                 "var@floor (h0/h1/h2) |",
+                 f"clipped share (main / indicator) | non-finite steps | dir_n ({'/'.join(hk)}) | "
+                 f"var@floor ({'/'.join(hk)}) |",
                  "|---|---|---|---|---|---|---|"]
             for r in per_epoch:
                 L.append(
@@ -863,9 +897,8 @@ class EvalReport:
                     f"{_fmt(r.get('grad_norm_max_indicator'))} | {_fmt(r.get('grad_clip_steps_main'))} / "
                     f"{_fmt(r.get('grad_clip_steps_indicator'))} | {pct(r.get('grad_clip_share_main'))} / "
                     f"{pct(r.get('grad_clip_share_indicator'))} | {_fmt(r.get('nonfinite_grad_steps'))} | "
-                    f"{_fmt(r.get('dir_n_h0'))} / {_fmt(r.get('dir_n_h1'))} / {_fmt(r.get('dir_n_h2'))} | "
-                    f"{_fmt(r.get('var_at_floor_h0'))} / {_fmt(r.get('var_at_floor_h1'))} / "
-                    f"{_fmt(r.get('var_at_floor_h2'))} |")
+                    + " / ".join(_fmt(r.get(f'dir_n_{x}')) for x in hk) + " | "
+                    + " / ".join(_fmt(r.get(f'var_at_floor_{x}')) for x in hk) + " |")
             L.append("")
 
         masked = h.get("masked_terms_total") or {}
@@ -917,7 +950,7 @@ class EvalReport:
                 if (name, key) in RESTATED_BASELINE_ROWS:
                     continue
                 metric = key.split("/", 1)[1]
-                cells = [_margin_cell(metric, self.margin(name, key, h), bool(per_h.get(h))) for h in HORIZONS]
+                cells = [_margin_cell(metric, self.margin(name, key, h), bool(per_h.get(h))) for h in self.horizons]
                 L.append(f"| {name} | {key} | " + " | ".join(cells) + " |")
         return L
 
@@ -1000,18 +1033,18 @@ def _resolve_raw(frame: PredictionFrame, raw_delta, delta_scale) -> Optional[Dic
         raw_delta = _frame_extra(frame, "delta_raw")
     if raw_delta is not None:
         return _delta_dict(raw_delta, len(frame))
-    if delta_scale and all(float(delta_scale.get(h, 0.0)) > 0 for h in HORIZONS):
-        return {h: frame.delta[h] / float(delta_scale[h]) for h in HORIZONS}
+    if delta_scale and all(float(delta_scale.get(h, 0.0)) > 0 for h in frame.horizons):
+        return {h: frame.delta[h] / float(delta_scale[h]) for h in frame.horizons}
     return None
 
 
 def _betas(frame: PredictionFrame, raw, delta_scale) -> Dict[str, float]:
     if delta_scale:
-        return {h: float(delta_scale[h]) for h in HORIZONS if h in delta_scale}
+        return {h: float(delta_scale[h]) for h in frame.horizons if h in delta_scale}
     if raw is None:
         return {}
     out = {}
-    for h in HORIZONS:
+    for h in frame.horizons:
         dd = float(np.dot(raw[h], raw[h]))
         out[h] = float(np.dot(frame.delta[h], raw[h]) / dd) if dd > 0 else float("nan")
     return out
@@ -1035,17 +1068,17 @@ def evaluate(frame: PredictionFrame, config, *, baselines=None, cal_frame: Optio
     conf_thr = None
     if cal_frame is not None:  # confidence threshold from the CALIBRATION split, not the test split
         labels = direction_labels_np(cal_frame.y, cal_frame.last_close, deadband)
-        conf_thr = {h: float(np.median(np.abs(cal_frame.prob(h) - 0.5)[labels[h][1]])) for h in HORIZONS
+        conf_thr = {h: float(np.median(np.abs(cal_frame.prob(h) - 0.5)[labels[h][1]])) for h in cal_frame.horizons
                     if labels[h][1].any()}
     raw = _resolve_raw(frame, raw_delta, delta_scale)
     model = score_frame(frame, deadband, conf_thr, raw_delta=raw)
     meta: Dict[str, Any] = {"horizon_steps": list(frame.horizon_steps), "pred_scale": frame.pred_scale,
-                            "realised_ordering": list(magnitude_ordering(frame.y[:, :3]))}
+                            "realised_ordering": list(magnitude_ordering(frame.y[:, :len(frame.horizons)]))}
     betas = _betas(frame, raw, delta_scale)
     if betas:
         meta["delta_scale"] = betas
     # a served delta of 0 on every sample (beta = 0, recorded or not): its statistics are fixed by construction
-    zero = [h for h in HORIZONS if len(frame) and not np.any(np.asarray(frame.delta[h], float))]
+    zero = [h for h in frame.horizons if len(frame) and not np.any(np.asarray(frame.delta[h], float))]
     if zero:
         meta["served_delta_zero"] = zero
     nosig = [h for h, v in ((getattr(frame, "meta", None) or {}).get("direction_signal") or {}).items() if v == "none"]
@@ -1065,12 +1098,12 @@ def evaluate(frame: PredictionFrame, config, *, baselines=None, cal_frame: Optio
             beats: Dict[str, Dict[str, bool]] = {}
             margins: Dict[str, Dict[str, Dict[str, Any]]] = {}
             for group in _metric_groups(name):
-                for metric in (model["horizons"]["h1"][group] or {}):
+                for metric in (model["horizons"][primary_key(frame.horizons)][group] or {}):
                     if metric not in HIGHER_IS_BETTER | LOWER_IS_BETTER:
                         continue
                     key = f"{group}/{metric}"
                     beats[key], margins[key] = {}, {}
-                    for i, h in enumerate(HORIZONS):
+                    for i, h in enumerate(frame.horizons):
                         m, b = model["horizons"][h][group].get(metric), scored["horizons"][h][group].get(metric)
                         ok = (m is not None and b is not None and math.isfinite(m) and math.isfinite(b)
                               and ((m > b) if metric in HIGHER_IS_BETTER else (m < b)))
@@ -1091,7 +1124,7 @@ def evaluate(frame: PredictionFrame, config, *, baselines=None, cal_frame: Optio
             report.beats_baseline[name] = beats
             report.baseline_margins[name] = margins
         if "const_var" in report.baselines:
-            for h in HORIZONS:
+            for h in frame.horizons:
                 c_m = model["horizons"][h]["variance"]["crps"]
                 c_b = report.baselines["const_var"]["horizons"][h]["variance"]["crps"]
                 model["horizons"][h]["variance"]["crpss"] = 1.0 - c_m / c_b if c_b > 0 else float("nan")

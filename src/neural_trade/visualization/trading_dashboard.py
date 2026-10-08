@@ -8,7 +8,8 @@ cursor, every panel's value at that bar in one tooltip):
    entry-to-exit lines;
 2. P(up) per horizon (faint) and the weighted P(up), with the strategy's entry / exit lines, the
    entry zones shaded and a triangle on each decision bar;
-3. confidence and signal strength; 4. predicted sigma h1 with the variance spikes;
+3. confidence and signal strength; 4. predicted sigma of the primary horizon (h1 at three horizons)
+with the variance spikes;
 5. net P&L after costs, in the quote currency, since the start of the view, with each exit marked on the curve;
 6. before costs (the same trades with the costs added back) vs buy & hold, in the quote currency, since the start of
    the view; 7. drawdown from the running peak since the start of the view.
@@ -46,10 +47,10 @@ _THRESHOLDS = (
     ("long_above", "weighted", "long", "long > {v:.3f}"),
     ("short_below", "weighted", "short", "short < {v:.3f}"),
     ("median", "weighted", "exit", "exit {v:.3f}"),
-    ("p_long", "h1", "long", "long > {v:.3f}"),
-    ("p_short", "h1", "short", "short < {v:.3f}"),
-    ("exit_long_below", "h1", "exit", "exit L < {v:.3f}"),
-    ("exit_short_above", "h1", "exit", "exit S > {v:.3f}"),
+    ("p_long", "primary", "long", "long > {v:.3f}"),          # the primary horizon (h1 at three horizons)
+    ("p_short", "primary", "short", "short < {v:.3f}"),
+    ("exit_long_below", "primary", "exit", "exit L < {v:.3f}"),
+    ("exit_short_above", "primary", "exit", "exit S > {v:.3f}"),
 )
 _RIGHT_MARGIN = 104     # room for the labels at the right end of the lines
 # The P(up) axis fits the traded series and the strategy's lines (the decision band). The horizon
@@ -308,13 +309,18 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             if isinstance(v, (int, float)) and np.isfinite(v):
                 lines.append((series, role, float(v), label.format(v=v)))
     line_series = lines[0][0] if lines else "weighted"
-    decide_series = "h1" if line_series == "h1" else "weighted"
+    decide_series = "primary" if line_series == "primary" else "weighted"
+    # the horizons and the primary one (NT-042): the signals' own, the reference h0-h2 / h1 without them
+    hs = T.horizons_of(signals) if has_sig else T.HORIZONS
+    pi = int(getattr(signals, "primary", None) or 1) if has_sig else 1
+    pk = hs[pi]
     hl = lambda h: T.horizon_label(h, config)  # noqa: E731
     steps = getattr(config, "HORIZON_STEPS", None) if config is not None else None
-    hz = "h0-h2" + (f" ({'/'.join(str(s) for s in steps[:3])} bars)" if steps is not None else "")
+    span = f"{hs[0]}-{hs[-1]}"
+    hz = span + (f" ({'/'.join(str(s) for s in steps[:len(hs)])} bars)" if steps is not None else "")
     sig_title = f"P(up): {hz}, weighted (white)"
     if lines:
-        sig_title += "; lines on the weighted" if line_series == "weighted" else "; lines on h1"
+        sig_title += "; lines on the weighted" if line_series == "weighted" else f"; lines on {pk}"
     elif strategy is not None and hasattr(strategy, "base_entry_threshold"):
         sig_title += "; the entry line varies per bar"
 
@@ -325,7 +331,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         "price": f"Price and trades{levels}" if trades else "Price (no trades in this view)",
         "signal": sig_title,
         "conf": "Confidence and signal strength (0 to 1)",
-        "sigma": f"Predicted sigma {hl('h1')}, {L.quote()}",
+        "sigma": f"Predicted sigma {hl(pk)}, {L.quote()}",
         "equity": f"Net P&L after costs, {L.quote()} {since} (equity {_usd(E[lo])} at the start)",
         "pre": f"Before costs (same trades, costs added back){' vs buy & hold' if has_bars else ''}, {L.quote()} {since}",
         "dd": ("Drawdown from the running peak" if whole else
@@ -357,8 +363,8 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
     for d in (getattr(result, "decisions", None) or ()) if detail else ():   # long views: the triangles only
         bar, side = int(d["bar"]), d["side"]
         if has_sig:
-            val = p[bar, 1] if decide_series == "h1" else w[bar]
-            name = "P(up) h1" if decide_series == "h1" else "weighted P(up)"
+            val = p[bar, pi] if decide_series == "primary" else w[bar]
+            name = f"P(up) {pk}" if decide_series == "primary" else "weighted P(up)"
             line = thr.get((decide_series, "long" if side == "LONG" else "short"))
             cmp = f" vs line {line:.3f}" if line is not None else ""
             event(bar, f"<b>decided {side}</b> at this close: {name} {val:.3f}{cmp}; fills at the next open")
@@ -479,7 +485,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             if role == "exit":
                 _hline(fig, ax["signal"], v, T.NEUTRAL, "8px,4px", 1.2, layer="below")
         if detail:
-            for i, h in enumerate(T.HORIZONS):
+            for i, h in enumerate(hs):
                 add(go.Scatter(x0=lo, dx=1, y=_f32(pv[:, i]), mode="lines", name=h, legendgroup=h,
                                line=dict(color=T.rgba(T.HORIZON_COLORS[h], 0.55), width=1),
                                hovertemplate=f"P(up) {hl(h)} %{{y:.3f}}<extra></extra>"), "signal")
@@ -487,13 +493,13 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             k = int(np.ceil(nv / _BAND_POINTS))
             rng = dict(x0=lo + (k - 1) / 2, dx=k, mode="lines", line=dict(width=0), legendgroup="h-range")
             over = "" if k == 1 else f" over {k} bars"
-            band_name = ("h0-h2 range (min-max across horizons)" if k == 1 else
-                         f"h0-h2 range (min-max across horizons and {k}-bar buckets)")
-            add(go.Scatter(y=_f32(_band(np.nanmax(pv, 1), 0, nv, k, np.nanmax)), name="h0-h2 max", showlegend=False,
-                           hovertemplate=f"h0-h2 max{over} %{{y:.3f}}<extra></extra>", **rng), "signal")
+            band_name = (f"{span} range (min-max across horizons)" if k == 1 else
+                         f"{span} range (min-max across horizons and {k}-bar buckets)")
+            add(go.Scatter(y=_f32(_band(np.nanmax(pv, 1), 0, nv, k, np.nanmax)), name=f"{span} max", showlegend=False,
+                           hovertemplate=f"{span} max{over} %{{y:.3f}}<extra></extra>", **rng), "signal")
             add(go.Scatter(y=_f32(_band(np.nanmin(pv, 1), 0, nv, k, np.nanmin)), name=band_name,
                            fill="tonexty", fillcolor=T.rgba(T.INK_2, 0.28),
-                           hovertemplate=f"h0-h2 min{over} %{{y:.3f}}<extra></extra>", **rng), "signal")
+                           hovertemplate=f"{span} min{over} %{{y:.3f}}<extra></extra>", **rng), "signal")
         add(go.Scatter(**_line(wv, lo, max_line_points), mode="lines", name="weighted",
                        line=dict(color=T.INK, width=1.5),
                        hovertemplate="weighted P(up) %{y:.3f}<extra></extra>"), "signal")
@@ -501,7 +507,7 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
             if role != "exit":
                 _hline(fig, ax["signal"], v, T.INK_2, "6px,3px", 1.5)
         # the decision bar (the close the strategy decided at; the fill is the next bar's open)
-        dser = p[:, 1] if decide_series == "h1" else w
+        dser = p[:, pi] if decide_series == "primary" else w
         dec = [(int(d["bar"]), d["side"]) for d in (getattr(result, "decisions", None) or ())
                if lo <= int(d["bar"]) < hi]
         for side, color, symbol in (("LONG", T.LONG_COLOR, "triangle-up"), ("SHORT", T.SHORT_COLOR, "triangle-down")):
@@ -523,13 +529,13 @@ def trading_dashboard_figure(result, bars=None, signals=None, strategy=None, *, 
         add(go.Scatter(**_line(np.asarray(signals.strength, float)[lo:hi], lo, max_line_points),
                        mode="lines", name="signal strength", line=dict(color=T.INK_2, width=1), fill="tozeroy",
                        fillcolor=T.rgba(T.INK_2, 0.15), hovertemplate="strength %{y:.3f}<extra></extra>"), "conf")
-        sig1 = np.asarray(signals.sigma, float)[lo:hi, 1]
+        sig1 = np.asarray(signals.sigma, float)[lo:hi, pi]
         spike = np.asarray(signals.var_spike, bool)[lo:hi]
         spikes = np.where(spike)[0]
         add(go.Scatter(**_line(sig1, lo, max_line_points,
                               text=np.where(spike, " · variance spike", "").tolist() if len(spikes) else None),
-                       mode="lines", name="sigma h1", line=dict(color=T.HORIZON_COLORS["h1"], width=1),
-                       hovertemplate=f"sigma {hl('h1')} %{{y:,.1f}}{L.amount_suffix()}" + ("%{text}" if len(spikes) else "")
+                       mode="lines", name=f"sigma {pk}", line=dict(color=T.HORIZON_COLORS[pk], width=1),
+                       hovertemplate=f"sigma {hl(pk)} %{{y:,.1f}}{L.amount_suffix()}" + ("%{text}" if len(spikes) else "")
                                      + "<extra></extra>"), "sigma")
         if len(spikes):   # the flag is in the sigma hover of that exact bar, not on a nearby marker
             add(go.Scatter(x=x[spikes], y=_f32(sig1[spikes]), mode="markers", name="variance spike",

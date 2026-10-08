@@ -23,7 +23,8 @@ def direction_labels_np(
     produce binary UP labels" code that lived in model.py (_compute_all_horizon_metrics,
     train/test_step), registries/losses.py:custom_loss, and calibration/pipeline.py.
 
-    Returns a dict mapping 'h0'/'h1'/'h2' to (labels, mask) numpy arrays.
+    Returns a dict mapping 'h0' .. 'h{N-1}' (one per column of ``y_true_delta_raw``; NT-042)
+    to (labels, mask) numpy arrays.
     Matches the shape/semantics expected by CalibrationPipeline and the py metrics path.
     """
     lc = np.asarray(last_close, dtype=float).reshape(-1)
@@ -33,10 +34,8 @@ def direction_labels_np(
 
     deadband = deadband_bps / 10_000.0
     result = {}
-    horizons = ("h0", "h1", "h2")
-    for i, h in enumerate(horizons):
-        if i >= y.shape[1]:
-            break
+    for i in range(y.shape[1]):
+        h = f"h{i}"
         ret = y[:, i] / (lc + 1e-12)
         mask = (np.abs(ret) > deadband)
         labels = (ret > deadband).astype(float)

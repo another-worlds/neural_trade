@@ -213,7 +213,7 @@ def variance_summary(frame, *, raw_delta: Optional[Dict[str, np.ndarray]] = None
     u, rv_len = realised_vol_scale(frame, windows, rv_bars)
     half = n // 2
     out = {}
-    for i, h in enumerate(T.HORIZONS):
+    for i, h in enumerate(T.horizons_of(frame)):
         steps = S.horizon_steps(frame, h)
         sig, mu, y = frame.sigma(h), np.asarray(frame.delta[h], float), frame.y[:, i]
         e = y - mu
@@ -256,7 +256,7 @@ def _zero_beta_horizons(frame, raw_delta=None) -> list:
     its served delta is 0 on every sample while the raw head given in ``raw_delta`` is not."""
     betas = (getattr(frame, "meta", None) or {}).get("delta_scale") or {}
     out = []
-    for h in T.HORIZONS:
+    for h in T.horizons_of(frame):
         if h in betas:
             if betas[h] is not None and float(betas[h]) == 0.0:
                 out.append(h)
@@ -333,7 +333,9 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
     n = len(frame)
     summ = variance_summary(frame, raw_delta=raw_delta, windows=windows, rv_bars=rv_bars, seed=seed)
     u, rv_len = realised_vol_scale(frame, windows, rv_bars)
-    has_iv = frame.intervals is not None and all(h in frame.intervals for h in T.HORIZONS)
+    hs = T.horizons_of(frame)           # one column per horizon (NT-042)
+    n_h = len(hs)
+    has_iv = frame.intervals is not None and all(h in frame.intervals for h in hs)
     w = int(min(window, max(2, n // 2)))
     bar_min = int(getattr(config, "RESAMPLE_MINUTES", 1) or 1) if config is not None else 1
     hours = w * bar_min / 60.0
@@ -346,7 +348,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
                 f"<br><span style='font-size:11px;color:{T.MUTED}'>{sub}</span>")
 
     titles = []
-    for h in T.HORIZONS:
+    for h in hs:
         r = summ[h]
         lab = f"<span style='color:{T.HORIZON_COLORS[h]}'>({r['steps']} bars)</span>"
         if "spearman_rv" in r:
@@ -358,16 +360,16 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
         else:
             titles.append(head(h, f"{lab} ρ: head {_signed(r['spearman_head'])}",
                                "no raw input windows: no realised-vol baseline"))
-    for h in T.HORIZONS:
+    for h in hs:
         r = summ[h]
         titles.append(head(h, f"std z {r['std_z']:.2f} · excess kurtosis {_signed(r['excess_kurtosis'], '+.2f')}",
                            f"shape: mean |z| ÷ std z {r['mean_abs_z_over_std']:.2f} (Gaussian 0.80)"))
-    for h in T.HORIZONS:
+    for h in hs:
         r = summ[h]
         ratio = r["p_z3"] / r["gauss_p_z3"]
         titles.append(head(h, f"|z| > 3: {_pct(r['p_z3'])} vs {_pct(r['gauss_p_z3'])} Gaussian ({ratio:.1f}×)",
                            f"|z| > 2.58: {_pct(r['p_z258'])} vs 1.00%"))
-    for h in T.HORIZONS:
+    for h in hs:
         r = summ[h]
         g0, g1 = r["cov_gauss_halves"]
         if "cov_conf" in r:
@@ -377,7 +379,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
         else:
             titles.append(head(h, f"coverage: Gaussian {r['cov_gauss']:.3f}",
                                f"halves: {g0:.3f}→{g1:.3f} (no conformal intervals)"))
-    for h in T.HORIZONS:
+    for h in hs:
         r = summ[h]
         g0, g1 = r["width_gauss_halves"]
         if "width_conf" in r:
@@ -402,9 +404,9 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
                             "was fitted on it)")
     zero = _zero_beta_horizons(frame, raw_delta)
     if zero:
-        where = "every horizon" if len(zero) == len(T.HORIZONS) else ", ".join(zero)
+        where = "every horizon" if len(zero) == len(hs) else ", ".join(zero)
         sub_lines.insert(1, f"β = 0 on {where} (delta shrinkage): the served delta is 0"
-                            f"{'' if len(zero) == len(T.HORIZONS) else ' there'}, so error = y"
+                            f"{'' if len(zero) == len(hs) else ' there'}, so error = y"
                             + (" · row 1 adds the raw heads" if raw_delta is not None else ""))
 
     # ---- vertical layout in pixels: the gap between rows is fixed, whatever the height
@@ -412,13 +414,13 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
     extra = margin_t - _MARGIN_T                   # a fifth subtitle line on the cal block
     height = max(int(height) if height else DEFAULT_HEIGHT + extra, MIN_HEIGHT + extra)
     plot_h = height - margin_t - _MARGIN_B
-    fig = _grid(_ROWS, titles, vspace=_GAP_PX / plot_h, row_heights=list(_ROW_HEIGHTS))
+    fig = _grid(_ROWS, titles, vspace=_GAP_PX / plot_h, row_heights=list(_ROW_HEIGHTS), cols=n_h)
     for a in fig.layout.annotations:
         a.update(font=dict(color=T.INK_2, size=12))
 
     rv_name = f"baseline: {rv_len}-bar realised vol × √horizon"
     tail_lo, tail_hi = [], []
-    for j, h in enumerate(T.HORIZONS, start=1):
+    for j, h in enumerate(hs, start=1):
         i, c = j - 1, T.HORIZON_COLORS[h]
         r = summ[h]
         steps = r["steps"]
@@ -559,7 +561,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
                                  showlegend=False, line=dict(color=c, width=1.5, dash=T.ALT_DASH),
                                  hovertemplate="sample %{x}<br>Gaussian width 2×1.645σ %{y:,.0f}" + L.amount_suffix() + ""
                                                "<extra></extra>"), 5, j)
-        fig.update_xaxes(matches=f"x{12 + j}", row=4, col=j)
+        fig.update_xaxes(matches=f"x{4 * n_h + j}", row=4, col=j)
 
         fig.update_xaxes(title_text=f"predicted σ or baseline forecast ({L.quote()}), bin mean" if u is not None
                          else f"predicted σ ({L.quote()}), bin mean", row=1, col=j)
@@ -575,16 +577,16 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
     fig.update_yaxes(title_text="share inside interval", row=4, col=1)
     fig.update_yaxes(title_text=f"mean width ({L.quote()})", row=5, col=1)
     for row in (2, 4):
-        for col in (2, 3):
-            fig.update_yaxes(matches=f"y{(row - 1) * 3 + 1}", row=row, col=col)
-    # row 3: one fixed log range for all three columns (the shared scale), always reaching below 1x so
+        for col in range(2, n_h + 1):
+            fig.update_yaxes(matches=f"y{(row - 1) * n_h + 1}", row=row, col=col)
+    # row 3: one fixed log range for all columns (the shared scale), always reaching below 1x so
     # the sub-Gaussian rates at k ~ 1 (a peaked centre) read off a tick. No `matches` here: in
     # plotly.js 3.5 a fixed range on a matched group switches off the autorange of the row-4 group.
     lo_r = min([0.5] + [0.85 * v for v in tail_lo])
     hi_r = max([2.0] + [1.2 * v for v in tail_hi])
     yd3 = fig.get_subplot(3, 1).yaxis.domain
     ticks = _log_ticks(lo_r, hi_r, (yd3[1] - yd3[0]) * plot_h)
-    for col in (1, 2, 3):
+    for col in range(1, n_h + 1):
         fig.update_yaxes(type="log", range=[float(np.log10(lo_r)), float(np.log10(hi_r))], autorange=False,
                          tickvals=ticks, ticktext=[f"{v:g}×" for v in ticks], row=3, col=col)
     fig.update_xaxes(title_standoff=6)
@@ -623,7 +625,7 @@ def variance_analytics_figure(frame, config=None, *, window: int = 500, height: 
     # every trace joins its row's legend, so a key toggles that series in all three columns (row 5
     # shares row 4's keys)
     for tr in fig.data:
-        row = (int((tr.yaxis or "y")[1:] or 1) - 1) // 3 + 1
+        row = (int((tr.yaxis or "y")[1:] or 1) - 1) // n_h + 1
         tr.legend = ("legend", "legend2", "legend3", "legend4", "legend4")[row - 1]
 
     T.apply(fig, title="Variance heads", subtitle="<br>".join(sub_lines), height=height)

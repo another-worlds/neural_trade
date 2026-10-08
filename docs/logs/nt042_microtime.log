@@ -1,0 +1,10 @@
+43b2377c5f97c558dca1ac6a0576fa8cf58f26cd
+# NT-042 CPU micro-timing of CustomTrainModel.train_step (D-018): default Config, batch 64, 60 timed steps after 10 warm-up, interleaved base (20e6f85 src) / new; the tactical session's screen shards ran on the machine at the same time (noisy)
+base r1: N=3 steps=60 median=0.36916 mean=0.36850 p10=0.34860 p90=0.38561
+new r1: N=3 steps=60 median=0.35547 mean=0.35647 p10=0.33859 p90=0.37367
+base r2: N=3 steps=60 median=0.34553 mean=0.34807 p10=0.32710 p90=0.36921
+new r2: N=3 steps=60 median=0.32997 mean=0.33603 p10=0.31775 p90=0.35916
+base r3: N=3 steps=60 median=0.36281 mean=0.36523 p10=0.34058 p90=0.39622
+new r3: N=3 steps=60 median=0.37796 mean=0.37966 p10=0.35514 p90=0.40112
+new N=10,20: N=2 steps=60 median=0.37016 mean=0.36958 p10=0.34764 p90=0.39170
+new N=10,15,20,25: N=4 steps=60 median=0.37423 mean=0.37438 p10=0.35600 p90=0.39557

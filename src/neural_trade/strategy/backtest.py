@@ -33,7 +33,7 @@ from typing import Any, Callable, ClassVar, Dict, List, Optional, Sequence
 
 import numpy as np
 
-from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+from neural_trade.evaluation.frame import PredictionFrame
 from neural_trade.strategy.performance import breakeven_cost_bps, periods_per_year, summarize
 from neural_trade.strategy.signals import SignalFrame
 from neural_trade.strategy.strategies import ExposureStrategy, RandomSignal, Strategies, Strategy
@@ -613,18 +613,18 @@ def _perturb_after(frame: PredictionFrame, bars: Bars, t: int, rng) -> tuple:
         a[tail] = a[tail] + rng.normal(0, scale, a[tail].shape)
         return a
 
-    delta = {h: jitter(frame.delta[h], 500.0) for h in HORIZONS}
-    prob = {h: np.clip(jitter(frame.direction_prob[h], 0.3), 0, 1) for h in HORIZONS}
-    var = {h: np.abs(jitter(frame.variance_scaled[h], 1.0)) for h in HORIZONS}
+    delta = {h: jitter(frame.delta[h], 500.0) for h in frame.horizons}
+    prob = {h: np.clip(jitter(frame.direction_prob[h], 0.3), 0, 1) for h in frame.horizons}
+    var = {h: np.abs(jitter(frame.variance_scaled[h], 1.0)) for h in frame.horizons}
     cal = None
     if frame.direction_prob_calibrated is not None:
-        cal = {h: np.clip(jitter(frame.direction_prob_calibrated[h], 0.3), 0, 1) for h in HORIZONS}
+        cal = {h: np.clip(jitter(frame.direction_prob_calibrated[h], 0.3), 0, 1) for h in frame.horizons}
     lc = jitter(frame.last_close, 300.0)
     # the raw heads (D-051 coherence flags) are predictions too: carry them, perturbed after t (NT-179)
     meta = dict(frame.meta or {})
     raw = meta.get("delta_raw")
-    if isinstance(raw, dict) and all(h in raw for h in HORIZONS):
-        meta["delta_raw"] = {h: jitter(raw[h], 500.0) for h in HORIZONS}
+    if isinstance(raw, dict) and all(h in raw for h in frame.horizons):
+        meta["delta_raw"] = {h: jitter(raw[h], 500.0) for h in frame.horizons}
     f2 = PredictionFrame(frame.y, lc, delta, prob, var, frame.pred_scale, frame.pred_mean, frame.horizon_steps,
                          frame.split, cal, meta=meta)
     b2 = Bars(jitter(bars.open, 300.0), jitter(bars.high, 300.0), jitter(bars.low, 300.0), jitter(bars.close, 300.0), bars.breaks)

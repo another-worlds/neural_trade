@@ -38,6 +38,8 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from neural_trade.core.horizons import REFERENCE_HORIZONS, horizon_keys
+
 logger = logging.getLogger(__name__)
 
 
@@ -113,11 +115,13 @@ class TemperatureScaler:
 
     Parameters
     ----------
-    temperatures : dict mapping "h0"/"h1"/"h2" to float T values.
-                   Defaults to T=1.0 (identity) for all horizons.
+    temperatures : dict mapping "h0" .. "h{N-1}" to float T values.
+                   Defaults to T=1.0 (identity) for the reference three horizons
+                   (``fit`` sets one T per horizon it is given; NT-042).
     """
 
-    HORIZONS = ("h0", "h1", "h2")
+    #: The reference three keys, the default before a fit.
+    HORIZONS = REFERENCE_HORIZONS
 
     def __init__(self, temperatures: Optional[Dict[str, float]] = None):
         self.temperatures: Dict[str, float] = dict(temperatures or {h: 1.0 for h in self.HORIZONS})
@@ -136,12 +140,7 @@ class TemperatureScaler:
 
     def fit(
         self,
-        probs_h0: np.ndarray,
-        labels_h0: np.ndarray,
-        probs_h1: np.ndarray,
-        labels_h1: np.ndarray,
-        probs_h2: np.ndarray,
-        labels_h2: np.ndarray,
+        *probs_and_labels: np.ndarray,
         n_steps: int = 0,
         lr: float = 0.0,
     ) -> "TemperatureScaler":
@@ -153,15 +152,18 @@ class TemperatureScaler:
 
         Parameters
         ----------
-        probs_h* : predicted direction probabilities in (0,1) from dir_h* head
-        labels_h*: binary realized direction labels {0,1}
+        probs_and_labels : ``probs_h0, labels_h0, probs_h1, labels_h1, ...``, one pair per
+                           horizon (N pairs; the reference call passes three): the predicted
+                           direction probabilities in (0,1) from the dir_h* head and the binary
+                           realized direction labels {0,1}. A fit replaces the horizon set.
         n_steps, lr: ignored (the fit is a bounded scalar search, not gradient descent)
         """
-        data = [
-            ("h0", probs_h0, labels_h0),
-            ("h1", probs_h1, labels_h1),
-            ("h2", probs_h2, labels_h2),
-        ]
+        if not probs_and_labels or len(probs_and_labels) % 2:
+            raise ValueError("TemperatureScaler.fit expects (probs, labels) pairs, one per horizon")
+        keys = horizon_keys(len(probs_and_labels) // 2)
+        data = [(h, probs_and_labels[2 * i], probs_and_labels[2 * i + 1]) for i, h in enumerate(keys)]
+        self.temperatures = {h: self.temperatures.get(h, 1.0) for h in keys}
+        self.fit_status = {h: self.fit_status.get(h, STATUS_OK) for h in keys}
         for h, probs, labels in data:
             T, status = _fit_temperature_status(probs, labels)
             self.temperatures[h] = T
@@ -178,7 +180,7 @@ class TemperatureScaler:
         Parameters
         ----------
         probs   : raw sigmoid probabilities in (0, 1), shape [N]
-        horizon : one of "h0", "h1", "h2"
+        horizon : one of the fitted horizon keys ("h0", "h1", ...)
 
         Returns
         -------

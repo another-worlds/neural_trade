@@ -434,15 +434,19 @@ def stop(pid: int) -> bool:
 
 
 # ------------------------------------------------------------------ progress
-TABLE_COLUMNS = (
-    ("epoch", "epoch"), ("time_utc", "finished (UTC)"), ("epoch_seconds", "epoch s"), ("sec_per_step", "s / step"),
-    ("loss", "train loss"), ("val_loss", "val loss"), ("lr", "LR"), ("lr_indicator", "indicator LR"),
-    ("val_crps_h0", "val CRPS h0"), ("val_crps_h1", "val CRPS h1"), ("val_crps_h2", "val CRPS h2"),
-    ("val_nll_h0", "val NLL h0"), ("val_nll_h1", "val NLL h1"), ("val_nll_h2", "val NLL h2"),
-    ("val_dir_bal_acc_h0", "val bal. acc h0"), ("val_dir_bal_acc_h1", "val bal. acc h1"),
-    ("val_dir_bal_acc_h2", "val bal. acc h2"),
-    ("val_dir_mcc_h0", "val MCC h0"), ("val_dir_mcc_h1", "val MCC h1"), ("val_dir_mcc_h2", "val MCC h2"),
-)
+def table_columns(horizons=("h0", "h1", "h2")) -> tuple:
+    """(key, label) of the epoch table: timing, losses, learning rates, then the headline validation
+    metrics for every horizon (NT-042; the reference three give ``TABLE_COLUMNS``)."""
+    cols = [("epoch", "epoch"), ("time_utc", "finished (UTC)"), ("epoch_seconds", "epoch s"),
+            ("sec_per_step", "s / step"), ("loss", "train loss"), ("val_loss", "val loss"), ("lr", "LR"),
+            ("lr_indicator", "indicator LR")]
+    for key, label in (("val_crps", "val CRPS"), ("val_nll", "val NLL"), ("val_dir_bal_acc", "val bal. acc"),
+                       ("val_dir_mcc", "val MCC")):
+        cols += [(f"{key}_{h}", f"{label} {h}") for h in horizons]
+    return tuple(cols)
+
+
+TABLE_COLUMNS = table_columns()
 
 
 def epoch_table(rows: List[dict]):
@@ -450,10 +454,16 @@ def epoch_table(rows: List[dict]):
     validation metrics per horizon; columns a run did not log are left out."""
     import pandas as pd
 
+    import re
+
+    from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
+
+    found = {m.group(1) for r in rows for k in r for m in [re.fullmatch(r"val_dir_mcc_(h\d+)", str(k))] if m}
+    columns = table_columns(keys_of(dict.fromkeys(found), default=REFERENCE_HORIZONS) if found else REFERENCE_HORIZONS)
     recs = []
     for r in rows:
         rec = {}
-        for key, label in TABLE_COLUMNS:
+        for key, label in columns:
             if key == "epoch":
                 rec[label] = int(r["epoch"]) + 1
             elif key == "time_utc":

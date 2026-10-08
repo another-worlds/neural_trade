@@ -86,14 +86,17 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     set_if_missing("var_nll", _first_present(out, ["nll_loss"]))
     set_if_missing("val_var_nll", _first_present(out, ["val_nll_loss"]))
 
-    set_if_missing("local_trend_loss", _sum_present(out, ["local_h0", "local_h1", "local_h2"]))
-    set_if_missing("val_local_trend_loss", _sum_present(out, ["val_local_h0", "val_local_h1", "val_local_h2"]))
+    # the logged horizons (NT-042): h0 .. h{N-1} from the keys themselves, the reference three otherwise
+    import re as _re
 
-    set_if_missing("global_trend_loss", _sum_present(out, ["global_h0", "global_h1", "global_h2"]))
-    set_if_missing("val_global_trend_loss", _sum_present(out, ["val_global_h0", "val_global_h1", "val_global_h2"]))
+    from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
 
-    set_if_missing("extended_trend_loss", _sum_present(out, ["extended_h0", "extended_h1", "extended_h2"]))
-    set_if_missing("val_extended_trend_loss", _sum_present(out, ["val_extended_h0", "val_extended_h1", "val_extended_h2"]))
+    found = {m.group(1) for k in out for m in [_re.search(r"_(h\d+)$", str(k))] if m}
+    horizons = keys_of(dict.fromkeys(found), default=REFERENCE_HORIZONS) if found else REFERENCE_HORIZONS
+
+    for name in ("local", "global", "extended"):
+        set_if_missing(f"{name}_trend_loss", _sum_present(out, [f"{name}_{h}" for h in horizons]))
+        set_if_missing(f"val_{name}_trend_loss", _sum_present(out, [f"val_{name}_{h}" for h in horizons]))
 
     # --- Direction metric aliases (primary horizon, head vs gauss preference) ---
     train_pref = "train_gauss_" if prefer_gauss else "train_"
@@ -102,8 +105,7 @@ def add_plot_aliases(logs, primary_horizon="h1", prefer_gauss=True):
     val_pref = "val_gauss_" if prefer_gauss else "val_"
     val_fallback = "val_" if prefer_gauss else "val_gauss_"
 
-    # Average across horizons (h0/h1/h2)
-    horizons = ("h0", "h1", "h2")
+    # Average across the logged horizons (h0/h1/h2 in the reference setup)
 
     train_acc_keys = [f"{train_pref}dir_acc_{h}" for h in horizons]
     train_f1_keys = [f"{train_pref}dir_f1_{h}" for h in horizons]

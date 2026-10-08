@@ -263,7 +263,7 @@ def horizon_stats(frame, raw: Dict[str, np.ndarray], served_known: bool) -> Dict
     """
     n = len(frame)
     out = {}
-    for i, h in enumerate(T.HORIZONS):
+    for i, h in enumerate(T.horizons_of(frame)):
         d = np.asarray(raw[h], float).reshape(-1)[:n]
         s = np.asarray(frame.delta[h], float).reshape(-1)[:n]
         y = np.asarray(frame.y[:, i], float)
@@ -297,11 +297,13 @@ def horizon_stats(frame, raw: Dict[str, np.ndarray], served_known: bool) -> Dict
     return out
 
 
-def magnitude_ordering(delta: Dict[str, np.ndarray]) -> Tuple[float, float, float]:
-    """Shares of samples with |d0| <= |d1|, |d1| <= |d2| and both."""
-    A = np.abs(np.stack([np.asarray(delta[h], float) for h in T.HORIZONS], 1))
-    a, b = A[:, 0] <= A[:, 1], A[:, 1] <= A[:, 2]
-    return float(np.mean(a)), float(np.mean(b)), float(np.mean(a & b))
+def magnitude_ordering(delta: Dict[str, np.ndarray]) -> Tuple[float, ...]:
+    """Shares of samples with |d_i| <= |d_i+1| for every neighbouring pair of the dict's horizons, then
+    the full chain (three horizons: |d0| <= |d1|, |d1| <= |d2| and both)."""
+    A = np.abs(np.stack([np.asarray(delta[h], float) for h in T.horizons_of(delta)], 1))
+    le = [A[:, i] <= A[:, i + 1] for i in range(A.shape[1] - 1)]
+    full = np.logical_and.reduce(le) if le else np.ones(len(A), bool)
+    return tuple(float(np.mean(x)) for x in le) + (float(np.mean(full)),)
 
 
 # ------------------------------------------------------------------ figure
@@ -327,12 +329,14 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
     if config is not None:
         minutes = float(getattr(config, "RESAMPLE_MINUTES", 1) or 1) * float(getattr(config, "WINDOW_STEP", 1) or 1)
     block = getattr(frame, "split", "") or "this"
+    hs = T.horizons_of(frame)            # one column per horizon (NT-042)
+    n_h = len(hs)
     st = horizon_stats(frame, raw, served_known)
     # a row whose head does not vary on any horizon (row 5: beta = 0 on all) has no data at all: a text strip
-    strips = {row: all(st[h][key] for h in T.HORIZONS) for row, key in FLAT_KEY.items()}
+    strips = {row: all(st[h][key] for h in hs) for row, key in FLAT_KEY.items()}
     ctx = dict(
         served_known=served_known, n=n, w=w, n_bins=n_bins, strip=strips[5], strips=strips,
-        labels={h: T.horizon_label(h, config) for h in T.HORIZONS},
+        labels={h: T.horizon_label(h, config) for h in hs},
         per_x=minutes / 60.0 if minutes else 1.0, x_unit="hours into the block" if minutes else "sample (time order)",
         x_suffix=" h" if minutes else "", head=("raw price head" if served_known else "served delta"),
     )
@@ -354,13 +358,13 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
               + (f" ({n * minutes / 1440:.1f} days of {minutes:g}-min bars)" if minutes else "")]
     titles += [flat_d_title(h, 2, f"{ctx['labels'][h]}: corr {_f(st[h]['corr'], '+.3f')}, "
                                   f"rank {_f(st[h]['rank'], '+.3f')} (noise ±{st[h]['band']:.3f})")
-               for h in T.HORIZONS]
+               for h in hs]
     titles += [flat_d_title(h, 3, f"fit {_f(st[h]['slope'], '+.2f')} · w/o top 0.5% {_f(st[h]['slope_trim'], '+.2f')}"
                                   + (f" · served β {_f(st[h]['beta'], '.3f')}" if served_known else ""))
-               for h in T.HORIZONS]
+               for h in hs]
     titles += [flat_d_title(h, 4, f"noise ±{corr_band(w, st[h]['deff']):.2f} (n_eff ≈ {w / st[h]['deff']:.0f} / "
-                                  f"window) · block {_f(st[h]['corr'], '+.3f')}") for h in T.HORIZONS]
-    titles += [skill_title(h) for h in T.HORIZONS]
+                                  f"window) · block {_f(st[h]['corr'], '+.3f')}") for h in hs]
+    titles += [skill_title(h) for h in hs]
 
     # pixel layout: the table and the gaps keep their px height; a strip row shortens the figure
     top_m, bottom_m = 132, 44
@@ -377,8 +381,8 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
             rows_px[k] = STRIP_PX
         # the last strip absorbs the rounding, so the rows fill the plot exactly
         rows_px[cut[-1]] = plot_px - 4 * gap_px - table_px - sum(v for k, v in enumerate(rows_px) if k != cut[-1])
-    specs = [[{"type": "table", "colspan": 3}, None, None]] + [[{}, {}, {}] for _ in range(4)]
-    fig = make_subplots(rows=5, cols=3, specs=specs, subplot_titles=titles, row_heights=[table_px] + rows_px,
+    specs = [[{"type": "table", "colspan": n_h}] + [None] * (n_h - 1)] + [[{} for _ in hs] for _ in range(4)]
+    fig = make_subplots(rows=5, cols=n_h, specs=specs, subplot_titles=titles, row_heights=[table_px] + rows_px,
                         vertical_spacing=gap_px / plot_px, horizontal_spacing=0.055)
     for a in fig.layout.annotations:
         a.update(font=dict(size=12, color=T.INK_2))
@@ -387,7 +391,7 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
     first = T.legend_once()
     x_titles = {2: f"predicted move ({L.quote()}), {ctx['head']}", 3: f"predicted move ({L.quote()}), decile mean",
                 4: ctx["x_unit"], 5: ctx["x_unit"]}
-    for j, h in enumerate(T.HORIZONS, start=1):
+    for j, h in enumerate(hs, start=1):
         _scatter_panel(fig, j, h, st[h], ctx, first)
         _binned_panel(fig, j, h, st[h], ctx, first)
         _rolling_panels(fig, j, h, st[h], ctx, first)
@@ -396,7 +400,7 @@ def delta_analytics_figure(frame, config=None, *, raw_delta: Optional[Dict[str, 
                 fig.update_xaxes(title_text=x_titles[row], row=row, col=j)
     for row, title in ((2, f"realised move ({L.quote()})"), (3, f"mean realised ({L.quote()})"), (4, "Pearson r"), (5, "skill vs 0")):
         # a panel with nothing to measure hides its axes: the y title goes to the first drawn column
-        col = next((j for j, h in enumerate(T.HORIZONS, start=1) if not st[h][FLAT_KEY[row]]), None)
+        col = next((j for j, h in enumerate(hs, start=1) if not st[h][FLAT_KEY[row]]), None)
         if col is not None:
             fig.update_yaxes(title_text=title, row=row, col=col)
     fig.update_xaxes(title_standoff=4)
@@ -430,7 +434,7 @@ def _head_state(q: dict, ctx: dict) -> str:
 
 def _flat_rows_note(st, ctx: dict) -> str:
     """Heading of a row 2-4 strip: the plotted head does not vary on any horizon."""
-    zero = all(_head_state(st[h], ctx).endswith(" is 0") for h in T.HORIZONS)
+    zero = all(_head_state(st[h], ctx).endswith(" is 0") for h in list(st))
     return f"not drawn. The {ctx['head']} " + ("is 0 on every horizon" if zero else "does not vary on any horizon")
 
 
@@ -455,20 +459,20 @@ def _corr_scope(st, served_known: bool) -> str:
     correlation only where beta > 0; where it is 0 (beta = 0) it has none."""
     if not served_known:
         return ""
-    flat = [h for h in T.HORIZONS if st[h]["flat_s"]]
+    flat = [h for h in list(st) if st[h]["flat_s"]]
     if not flat:
         return " (same for raw and served)"
-    if len(flat) == len(T.HORIZONS):
+    if len(flat) == len(list(st)):
         return " (raw head; the served delta is 0: no correlation)"
     return f" (raw head; same for served except {', '.join(flat)}: served delta is 0)"
 
 
 def _strip_note(st, served_known: bool) -> str:
     """Row-5 heading when no horizon has a served delta to draw."""
-    if served_known and all(st[h]["beta"] == 0 for h in T.HORIZONS):
+    if served_known and all(st[h]["beta"] == 0 for h in list(st)):
         return ("not drawn. β = 0 on every horizon, so the served delta is 0 and its skill is 0 by construction"
                 " (raw heads: see the table)")
-    if all(st[h]["served_zero"] for h in T.HORIZONS):
+    if all(st[h]["served_zero"] for h in list(st)):
         return "not drawn. The served delta is 0 on every horizon, so its skill is 0 by construction"
     return "not drawn. The served delta does not vary on any horizon, so its skill is fixed by construction"
 
@@ -753,7 +757,7 @@ def _subtitle(st, served_known: bool, block: str) -> str:
                  f"Fits are least-squares slopes through 0 on the {block} block. "
                  "Skill = 1 - MSE / MSE(predict 0): below 0 is worse than predicting no move."]
     lines.append("Targets overlap (h-bar moves, 1 bar apart): noise bands use N / deff effective samples, deff = "
-                 + " / ".join(f"{st[h]['deff']:.1f}" for h in T.HORIZONS)
+                 + " / ".join(f"{st[h]['deff']:.1f}" for h in list(st))
                  + " (Bartlett); binned CIs and skill ± are Newey-West (lag 2 × horizon).")
     return "<br>".join(lines)
 
@@ -780,57 +784,59 @@ def _add_table(fig, st, config, served_known: bool, px: float):
             return na
         return "≡ 0" if fin[0] == 0 else f"≡ {float(fin[0]):+,.1f}"
 
-    add("served β (served = β × raw, β fit on cal)", [(beta_cell(st[h]), T.INK) for h in T.HORIZONS])
+    add("served β (served = β × raw, β fit on cal)", [(beta_cell(st[h]), T.INK) for h in list(st)])
     for label, key in ((f"RMSE {L.quote()}: raw / served / predict 0", "rmse"), (f"MAE {L.quote()}: raw / served / predict 0", "mae")):
         add(label, [(f"{_f(st[h][key][0], ',.1f') if served_known else na} / {st[h][key][1]:,.1f} / "
-                     f"{st[h][key][2]:,.1f}", T.INK_2) for h in T.HORIZONS])
+                     f"{st[h][key][2]:,.1f}", T.INK_2) for h in list(st)])
     add("skill vs predicting 0: raw head ± 95%",
         [_skill_cell(st[h]["skill_raw"], st[h]["skill_raw_hw"]) if served_known else (na, T.MUTED)
-         for h in T.HORIZONS])
+         for h in list(st)])
     # beta = 0: the served delta is 0, so its skill vs predicting 0 is 0 by construction, not measured
     add("skill vs predicting 0: served delta ± 95%",
         [(f"{na} ({flat_reason(st[h], served_known)})", T.MUTED) if st[h]["flat_s"]
-         else _skill_cell(st[h]["skill_srv"], st[h]["skill_srv_hw"]) for h in T.HORIZONS])
+         else _skill_cell(st[h]["skill_srv"], st[h]["skill_srv_hw"]) for h in list(st)])
     mean_cells = []
-    for h in T.HORIZONS:
+    for h in list(st):
         m, mlo, mhi = st[h]["mean_ci"]
         pred = const(st[h]) if st[h]["flat_d"] else f"{np.mean(st[h]['d']):+,.1f}"
         mean_cells.append((f"{pred} / {m:+,.1f} ± {(mhi - mlo) / 2:,.1f}", T.INK_2))
     add(f"mean {L.quote()}: prediction / realised ± 95%", mean_cells)
     add(f"sd {L.quote()}: prediction / realised",
         [(f"{const(st[h]) if st[h]['flat_d'] else format(np.std(st[h]['d']), ',.1f')} / {np.std(st[h]['y']):,.1f}",
-          T.INK_2) for h in T.HORIZONS])
+          T.INK_2) for h in list(st)])
     add("share above 0: prediction / realised",
         [(f"{na if st[h]['flat_d'] else _pct(np.mean(st[h]['d'] > 0))} / {_pct(np.mean(st[h]['y'] > 0))}", T.INK_2)
-         for h in T.HORIZONS])
+         for h in list(st)])
     add("sign(Δ) matches the side of P(up) vs ½ (if independent)",  # no ">": plotly tables mis-size it
         [(f"{na} (Δ {const(st[h])})", T.MUTED) if st[h]["flat_d"]
-         else (f"{_pct(st[h]['agree'])} ({_pct(st[h]['agree_indep'])})", T.INK_2) for h in T.HORIZONS])
+         else (f"{_pct(st[h]['agree'])} ({_pct(st[h]['agree_indep'])})", T.INK_2) for h in list(st)])
 
-    values = [[r[0] for r in rows]] + [[r[1][k][0] for r in rows] for k in range(3)]
-    colors = [[T.INK_2] * len(rows)] + [[r[1][k][1] for r in rows] for k in range(3)]
+    n_h = len(st)
+    values = [[r[0] for r in rows]] + [[r[1][k][0] for r in rows] for k in range(n_h)]
+    colors = [[T.INK_2] * len(rows)] + [[r[1][k][1] for r in rows] for k in range(n_h)]
     header = ["<b>per horizon</b>" + ("" if served_known else " (x = served delta)")] + [
-        f"<b>{T.horizon_label(h, config)}</b>" for h in T.HORIZONS]
+        f"<b>{T.horizon_label(h, config)}</b>" for h in list(st)]
     fig.add_trace(go.Table(
-        columnwidth=[1.35, 1, 1, 1],
-        header=dict(values=header, fill_color=T.SURFACE, line_color=T.GRID, height=24, align=["left"] + ["right"] * 3,
-                    font=dict(color=[T.INK] + [T.HORIZON_COLORS[h] for h in T.HORIZONS], size=11)),
+        columnwidth=[1.35] + [1] * n_h,
+        header=dict(values=header, fill_color=T.SURFACE, line_color=T.GRID, height=24, align=["left"] + ["right"] * n_h,
+                    font=dict(color=[T.INK] + [T.HORIZON_COLORS[h] for h in list(st)], size=11)),
         cells=dict(values=values, fill_color=T.PAPER, line_color=T.GRID, font=dict(color=colors, size=11),
-                   align=["left"] + ["right"] * 3, height=21)), 1, 1)
+                   align=["left"] + ["right"] * n_h, height=21)), 1, 1)
 
-    # cross-horizon: magnitude ordering (raw vs served) and sign agreement on all three horizons
+    # cross-horizon: magnitude ordering (raw vs served) and sign agreement on all horizons
     # a comparison with a head that does not vary (beta = 0: served delta is 0) holds or fails by
     # construction: n/a, not a measured 0% or 100%
-    labels = ("|Δh0| ≤ |Δh1|", "|Δh1| ≤ |Δh2|", "full chain")
-    pairs = ((0, 1), (1, 2), (0, 1, 2))
+    hs = list(st)
+    labels = tuple(f"|Δ{a}| ≤ |Δ{b}|" for a, b in zip(hs, hs[1:])) + ("full chain",)
+    pairs = tuple((i, i + 1) for i in range(n_h - 1)) + (tuple(range(n_h)),)
 
     def shares(key, heads):
-        flat = [st[h][key] for h in T.HORIZONS]
-        vals = magnitude_ordering({h: st[h][heads] for h in T.HORIZONS})
+        flat = [st[h][key] for h in list(st)]
+        vals = magnitude_ordering({h: st[h][heads] for h in list(st)})
         return ["n/a" if any(flat[i] for i in p) else _pct(v) for p, v in zip(pairs, vals)]
 
     so = shares("flat_s", "s")
-    flat_s = [h for h in T.HORIZONS if st[h]["flat_s"]]
+    flat_s = [h for h in list(st) if st[h]["flat_s"]]
     if served_known and all(st[h]["beta"] == 0 for h in flat_s):
         why = "β = 0: served delta is 0"
     else:
@@ -841,7 +847,7 @@ def _add_table(fig, st, config, served_known: bool, px: float):
             f"{lab}: raw {r} → served {s}" for lab, r, s in zip(labels, ro, so))
         if not flat_s:
             second = "The served ordering reflects the per-horizon β, not the model. "
-        elif len(flat_s) == len(T.HORIZONS):
+        elif len(flat_s) == len(list(st)):
             second = f"Served: n/a on every horizon ({why}, so |Δ| ties on every sample). "
         else:
             second = (f"Served: n/a with {', '.join(flat_s)} ({why}); elsewhere the served "
@@ -853,12 +859,12 @@ def _add_table(fig, st, config, served_known: bool, px: float):
                   "pass raw_delta= for the heads. ")
         if flat_s:
             second = f"Served deltas: n/a with {', '.join(flat_s)} ({why}); pass raw_delta= for the heads. "
-    flat_d = [h for h in T.HORIZONS if st[h]["flat_d"]]
+    flat_d = [h for h in list(st) if st[h]["flat_d"]]
     if flat_d:
-        second += f"sign(Δ) agrees with P(up) > ½ on all 3 horizons: n/a (Δ does not vary on {', '.join(flat_d)})."
+        second += f"sign(Δ) agrees with P(up) > ½ on all {n_h} horizons: n/a (Δ does not vary on {', '.join(flat_d)})."
     else:
-        agree_all = np.all(np.stack([(st[h]["d"] > 0) == st[h]["p_up"] for h in T.HORIZONS], 1), axis=1)
-        second += f"sign(Δ) agrees with P(up) > ½ on all 3 horizons: {_pct(float(np.mean(agree_all)))} of samples."
+        agree_all = np.all(np.stack([(st[h]["d"] > 0) == st[h]["p_up"] for h in list(st)], 1), axis=1)
+        second += f"sign(Δ) agrees with P(up) > ½ on all {n_h} horizons: {_pct(float(np.mean(agree_all)))} of samples."
     y0 = fig.data[-1].domain.y[0]           # the footer sits just under the table, in the gap above row 2
     fig.add_annotation(x=0.0, y=y0 - px, xref="paper", yref="paper", xanchor="left", yanchor="top",
                        text=first + "<br>" + second, showarrow=False, align="left",

@@ -62,10 +62,11 @@ def _rolling_corr(a, b, window):
         return x, np.where(den > 0, cov / den, np.nan)
 
 
-def _grid(rows, titles, *, row_heights=None, vspace=0.09, specs=None):
+def _grid(rows, titles, *, row_heights=None, vspace=0.09, specs=None, cols: int = 3):
+    """``rows`` x ``cols`` panels, one column per horizon (``cols`` = the number of horizons, NT-042)."""
     from plotly.subplots import make_subplots
 
-    fig = make_subplots(rows=rows, cols=3, subplot_titles=titles, vertical_spacing=vspace,
+    fig = make_subplots(rows=rows, cols=cols, subplot_titles=titles, vertical_spacing=vspace,
                         horizontal_spacing=0.06, row_heights=row_heights, specs=specs)
     fig.update_xaxes(title_standoff=6)      # keep x titles off the next row's subplot titles
     return fig

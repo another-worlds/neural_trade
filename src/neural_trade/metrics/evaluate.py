@@ -18,10 +18,13 @@ from neural_trade.metrics.numpy_metrics import reconstruct_prices, safe_mape, sm
 
 from typing import TYPE_CHECKING
 
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_for, keys_of
+
 if TYPE_CHECKING:  # annotations only
     from neural_trade.core.config import Config
 
-HORIZONS = ("h0", "h1", "h2")
+#: The reference three keys (old importers); the functions below read a run's own keys (NT-042).
+HORIZONS = REFERENCE_HORIZONS
 
 
 def _compute_all_horizon_metrics(
@@ -37,7 +40,7 @@ def _compute_all_horizon_metrics(
     Returns a dict with per-horizon delta-space metrics, price-space metrics, and direction metrics.
     """
 
-    horizons = ("h0", "h1", "h2")
+    horizons = keys_for(config) if getattr(config, "HORIZON_STEPS", None) else HORIZONS
     # Compute human-readable horizon labels based on HORIZON_STEPS and RESAMPLE_MINUTES.
     def _format_tf(minutes: int) -> str:
         # Prefer days/hours when evenly divisible, otherwise show minutes
@@ -56,8 +59,8 @@ def _compute_all_horizon_metrics(
 
     horizon_names = tuple(_format_tf(int(step * getattr(config, 'RESAMPLE_MINUTES', 1))) for step in horizon_steps)
     y_true_deltas = np.asarray(y_true_deltas)
-    if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != 3:
-        raise ValueError(f"Expected y_true_deltas shape (N,3), got {y_true_deltas.shape}")
+    if y_true_deltas.ndim != 2 or y_true_deltas.shape[1] != len(horizons):
+        raise ValueError(f"Expected y_true_deltas shape (N,{len(horizons)}), got {y_true_deltas.shape}")
     lc = np.asarray(last_close, dtype=float).reshape(-1)
 
     out: Dict[str, Any] = {
@@ -198,7 +201,7 @@ def registry_metrics(config, y_true_deltas, predictions, last_close, *, pred_sca
     lc = np.asarray(last_close, dtype=float).reshape(-1)
     labels_by_h = compute_direction_labels_np(y, lc, float(getattr(config, "DIR_DEADBAND_BPS", 0.0)))
     out: Dict[str, Dict[str, float]] = {}
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(keys_of(predictions.get("delta"))):
         yt = y[:, i]
         delta = np.asarray(predictions["delta"][h], dtype=float)
         prob = np.asarray(predictions["direction_prob"][h], dtype=float)

@@ -21,7 +21,9 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import pandas as pd
 
-from neural_trade.evaluation.frame import HORIZONS
+from neural_trade.core.horizons import horizon_index
+from neural_trade.visualization.theme import horizons_of
+from neural_trade.evaluation.frame import HORIZONS  # noqa: F401  (the reference keys; the UI reads its blocks')
 from neural_trade.notebook._display import show
 
 # load_run_blocks serves the run with Predictor.predict's default miscoverage (90% intervals)
@@ -93,7 +95,7 @@ class CalibrationExplorer:
         st = getattr(getattr(self.saved, "temperature_scaler", None), "temperatures", None) or {}
         mine = self.pipeline.temperature_scaler.temperatures
         return all(abs(float(mine.get(h, 1.0)) - float(st.get(h, 1.0))) <= 1e-3 * max(1.0, abs(float(st.get(h, 1.0))))
-                   for h in HORIZONS)
+                   for h in horizons_of(self.blocks["test_raw"]))
 
     def _score(self, test_out, cal_out, temperatures, betas, alpha, signal=None) -> pd.DataFrame:
         """One row per horizon: test scores of a served output, plus its in-sample fit on the cal block.
@@ -111,7 +113,7 @@ class CalibrationExplorer:
         lab_t = direction_labels_np(test.y, test.last_close, db)
         lab_c = direction_labels_np(cal.y, cal.last_close, db)
         rows = {}
-        for i, h in enumerate(HORIZONS):
+        for i, h in enumerate(horizons_of(test)):
             y, yc = test.y[:, i], cal.y[:, i]
             lo, hi = test_out["intervals"][h]
             clo, chi = cal_out["intervals"][h]
@@ -190,7 +192,7 @@ class CalibrationExplorer:
         if self.saved_table is None:
             table = self.last_table
         else:
-            rows = [(h, name, t.loc[h]) for h in HORIZONS for name, t in (("refit", self.last_table),
+            rows = [(h, name, t.loc[h]) for h in self.last_table.index for name, t in (("refit", self.last_table),
                                                                           ("saved", self.saved_table))]
             table = pd.DataFrame([r for _, _, r in rows],
                                  index=pd.MultiIndex.from_tuples([(h, n) for h, n, _ in rows],
@@ -218,7 +220,7 @@ class CalibrationExplorer:
 
         if self.pipeline is None:
             self.refit()
-        test, cal, i = self.blocks["test_raw"], self.blocks["cal_raw"], HORIZONS.index(horizon)
+        test, cal, i = self.blocks["test_raw"], self.blocks["cal_raw"], horizon_index(horizon)
         steps = S.horizon_steps(self.config, horizon)
         db = float(self.config.DIR_DEADBAND_BPS)
         lab, mask = direction_labels_np(test.y, test.last_close, db)[horizon]
@@ -281,7 +283,7 @@ class CalibrationExplorer:
         scale = w.Dropdown(options=["realized_vol", "sigma", "none"], value=saved_scale, description="interval scale")
         shrink = w.Checkbox(value=saved_shrink, description="delta shrinkage")
         alpha = w.FloatSlider(value=SAVED_ALPHA, min=0.02, max=0.4, step=0.01, description="miscoverage")
-        horizon = w.ToggleButtons(options=list(HORIZONS), value="h1")
+        horizon = w.ToggleButtons(options=list(horizons_of(self.blocks["test_raw"])), value="h1")
         refit = w.Button(description="Refit on cal, score on test", icon="refresh", button_style="primary",
                          layout=w.Layout(width="240px"))
         status = w.HTML(f"<i>run's saved settings: scale={saved_scale}, shrinkage={saved_shrink}, "

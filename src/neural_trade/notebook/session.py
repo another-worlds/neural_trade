@@ -21,6 +21,7 @@ import threading
 import time
 from typing import Dict, List, Optional
 
+from neural_trade.core.horizons import keys_for
 from neural_trade.notebook._display import show
 
 logger = logging.getLogger(__name__)
@@ -224,7 +225,7 @@ class TrainingSession:
                     session.batch_dir_points.append((x, {h: (d.get(f"train_pred_up_rate_{h}"),
                                                              d.get(f"train_true_up_rate_{h}"),
                                                              d.get(f"train_dir_bal_acc_{h}"))
-                                                         for h in ("h0", "h1", "h2")}))
+                                                         for h in keys_for(session.config)}))
                 except Exception:  # the live strip must never break training
                     logger.debug("running direction metrics unavailable", exc_info=True)
 
@@ -328,7 +329,7 @@ class TrainingSession:
         import pandas as pd
 
         cols = ["epoch", "seconds", "loss", "val_loss", "lr_used", "lr"]
-        for h in ("h0", "h1", "h2"):
+        for h in keys_for(self.config):
             cols += [f"val_dir_mcc_{h}", f"train_dir_mcc_{h}", f"val_gauss_dir_mcc_{h}", f"val_dir_bal_acc_{h}",
                      f"val_dir_brier_{h}", f"val_dir_ece_{h}", f"val_pit_ks_{h}", f"val_pred_up_rate_{h}"]
         cols += ["val_point_loss", "val_dir_loss", "val_nll_loss", "val_crps_loss", "grad_global_norm",

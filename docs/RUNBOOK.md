@@ -46,8 +46,11 @@ project is about. Every result names the setup it was measured on.
 | Long history: BTC/USDT 1-minute, 2017-01-01 to 2025-09-29 | `Bitcoin_BTCUSDT.csv` (291 MB, repo root, gitignored, the owner's) | walk-forward folds over different months (D-022). No run, test or notebook uses it yet; NT-041 adds the 7-day training block, walk-forward folds over the long history and a dataset fingerprint in every run. |
 
 Today the data file is `CSV_PATH`, and the window (`LOOKBACK`), the horizons (`HORIZON_STEPS`,
-exactly three) and the bar size (`RESAMPLE_MINUTES`) are Config keys in bars. NT-041 moves the
-window and horizons to wall-clock time and NT-042 allows any number of horizons (D-022). Backtest
+two or more; three in the reference setup) and the bar size (`RESAMPLE_MINUTES`) are Config keys in
+bars. NT-041 moves the window and horizons to wall-clock time. NT-042 allows any number of horizons
+from two up (D-022): `core/horizons.py` holds the horizon keys and the rules for N horizons (the
+primary horizon, the point-loss weight roles, and the pairwise terms scaled so N = 3 is unchanged).
+Horizons beyond h2 take the colours `theme.HORIZON_EXTENSION`. Backtest
 Sharpe and Sortino are annualised from the run's own bar size through one function,
 `strategy.performance.periods_per_year(bar_minutes, calendar="24/7")` (NT-040): every live path (the
 CLI backtest, the notebook explorer, the engine's scorer) sets `BacktestConfig.bar_minutes` from

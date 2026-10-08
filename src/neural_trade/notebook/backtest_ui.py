@@ -47,6 +47,10 @@ def trade_stats(result) -> Dict[str, float]:
     return out
 
 
+def _word(n: int) -> str:
+    return {2: "two", 3: "three", 4: "four", 5: "five"}.get(int(n), str(n))
+
+
 def _zero_delta_flag_notes(delta, *, coherence_on_raw: bool = False) -> Dict[str, str]:
     """Notes for the flags table when a served delta is 0 on a horizon (the calibration's beta = 0).
 
@@ -54,11 +58,12 @@ def _zero_delta_flag_notes(delta, *, coherence_on_raw: bool = False) -> Dict[str
     are then decided by the 0 (ties, P(up) alone). With raw heads (D-051) those flags are measured on the
     raw heads, and the note says the 0 does not decide them. {} when every served delta varies.
     """
-    from neural_trade.evaluation.frame import HORIZONS
+    from neural_trade.core.horizons import horizon_keys
 
     d = np.asarray(delta, float)
     if d.ndim != 2 or not len(d):
         return {}
+    HORIZONS = horizon_keys(d.shape[1])      # one column per horizon (NT-042)
     zero = [h for h, z in zip(HORIZONS, ~np.any(d, axis=0)) if z]
     if not zero:
         return {}
@@ -68,8 +73,8 @@ def _zero_delta_flag_notes(delta, *, coherence_on_raw: bool = False) -> Dict[str
         return {"magnitude_coherent": measured, "direction_aligned": measured}
     if len(zero) == len(HORIZONS):
         return {"magnitude_coherent": f"{lead}: true on every bar by ties (|0| <= |0|), not a measured ordering",
-                "direction_aligned": f"{lead}: the share of bars where all three P(up) <= 0.5, not a sign "
-                                     "agreement"}
+                "direction_aligned": f"{lead}: the share of bars where all {_word(len(HORIZONS))} P(up) <= 0.5, not a "
+                                     "sign agreement"}
     return {"magnitude_coherent": f"{lead}: every comparison with it is fixed by the 0, not measured",
             "direction_aligned": f"{lead}: there it only asks P(up) <= 0.5"}
 

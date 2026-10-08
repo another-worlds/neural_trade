@@ -1,0 +1,17 @@
+43b2377c5f97c558dca1ac6a0576fa8cf58f26cd
+# scripts/golden_run.py verify tests/fixtures/golden_nt124.npz (src unchanged between this sha and d3b4da0 except notebook/backtest_ui.py and notebook/calibration_ui.py, which the golden run does not import)
+[golden] compared 461 arrays; missing=[] extra=[]
+   ok   calib_lambda/lambda_soft_ece                  max|diff|=0
+   ok   hist/contrib_dir_align                        max|diff|=0
+   ok   hist/contrib_ife                              max|diff|=0
+   ok   hist/contrib_pnl                              max|diff|=0
+   ok   hist/contrib_reg                              max|diff|=0
+   ok   hist/contrib_soft_ece                         max|diff|=0
+   ok   hist/contrib_vac                              max|diff|=0
+   ok   hist/global_h0                                max|diff|=0
+   ok   hist/global_h1                                max|diff|=0
+   ok   hist/global_h2                                max|diff|=0
+   ok   hist/ife_loss                                 max|diff|=0
+   ok   hist/local_h0                                 max|diff|=0
+   by prefix (ok, fail): calib_lambda=14/0, calibrated=3/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0, temperature=3/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}

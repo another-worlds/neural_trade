@@ -17,11 +17,11 @@ from tensorflow.keras import models
 import neural_trade.losses.functions as _losses
 import neural_trade.utils.math as mh
 from neural_trade.core.config import Config
-from neural_trade.core.outputs import PredictiveOutputs
+from neural_trade.core.horizons import horizon_keys, n_horizons, predictive_outputs_type, primary_key
 from neural_trade.metrics.tf_direction import (CONTRIB_KEYS, DirectionAccumulator, PITAccumulator,
-                                               STEP_MEAN_KEYS, TRAIN_ONLY_MEAN_KEYS, direction_counts,
+                                               TRAIN_ONLY_MEAN_KEYS, direction_counts,
                                                direction_labels_tf, direction_metrics_from_stats,
-                                               direction_stats)
+                                               direction_stats, step_mean_keys)
 from neural_trade.registries.losses import Losses
 from neural_trade.registries.metrics import Metrics
 from neural_trade.registries.models import Models
@@ -29,6 +29,19 @@ from neural_trade.training.lambdas import install_lambda_properties
 from neural_trade.training.optim import build_indicator_optimizer
 
 logger = logging.getLogger(__name__)
+
+
+def _sum_left(terms):
+    """``((t0 + t1) + t2) + ...``: the left-to-right sum of the hand-written three-horizon code."""
+    acc = terms[0]
+    for t in terms[1:]:
+        acc = acc + t
+    return acc
+
+
+def _hsum(components, prefix, keys):
+    """``components.<prefix>h0 + ... + components.<prefix>h{N-1}``, summed left to right (NT-042)."""
+    return _sum_left([getattr(components, f"{prefix}{h}") for h in keys])
 
 
 class _Accum:
@@ -221,23 +234,27 @@ class CustomTrainModel(models.Model):
         self.eps = tf.constant(1e-8, dtype=tf.float32)
         # Counts training steps whose update was zeroed by the finite-gradient guard (reset each epoch by Keras).
         self.nonfinite_grad_steps = tf.keras.metrics.Sum(name='nonfinite_grad_steps')
-        # Epoch accumulators behind every logged step metric (see neural_trade.metrics.tf_direction.STEP_MEAN_KEYS).
+        # The horizon count and keys (NT-042, D-022): N = len(Config.HORIZON_STEPS), h0 .. h{N-1}.
+        # At the reference N = 3 every per-horizon structure below is exactly the three-horizon one.
+        self.n_horizons = n_horizons(self.config)
+        self.horizon_keys = horizon_keys(self.n_horizons)
+        # Epoch accumulators behind every logged step metric (see neural_trade.metrics.tf_direction.step_mean_keys).
         # Created with attribute tracking off; the `metrics` property below hands them to
         # Keras so they are reset at every epoch and before every evaluation.
         self._setattr_tracking = False
-        self._step_means = {k: tf.keras.metrics.Mean(name=k) for k in STEP_MEAN_KEYS}
+        self._step_means = {k: tf.keras.metrics.Mean(name=k) for k in step_mean_keys(self.n_horizons)}
         # Step metrics resolved ONCE from the Metrics registry (TF tier), never inside tf.function.
         self._step_metric_fns = Metrics.tf_functions(getattr(self.config, 'STEP_METRICS', None))
-        self._dir_head_acc = DirectionAccumulator(name='dir_head_accumulator')
-        self._dir_gauss_acc = DirectionAccumulator(name='dir_gauss_accumulator')
+        self._dir_head_acc = DirectionAccumulator(name='dir_head_accumulator', n_horizons=self.n_horizons)
+        self._dir_gauss_acc = DirectionAccumulator(name='dir_gauss_accumulator', n_horizons=self.n_horizons)
         self._pit_acc = PITAccumulator(var_floor=float(getattr(self.config, 'VAR_FLOOR', 1e-4)),
                                         var_cap=float(getattr(self.config, 'VAR_CAP', 1e3)),
-                                        name='pit_accumulator')
+                                        name='pit_accumulator', n_horizons=self.n_horizons)
         # Per-term non-finite mask counters (D-026, NT-036): one _Accum('sum') per name in
-        # losses.functions.MASK_TERM_NAMES, updated by _finite_or_zero every time that term's mask
+        # losses.functions.mask_term_names(N), updated by _finite_or_zero every time that term's mask
         # actually fires. Logged as masked_<term> / val_masked_<term> (see _epoch_results). Plain
         # _Accum, not tf.keras.metrics.Sum: see _Accum's docstring (model.submodules / seed drift).
-        self._mask_counters = {t: _Accum("sum") for t in _losses.MASK_TERM_NAMES}
+        self._mask_counters = {t: _Accum("sum") for t in _losses.mask_term_names(self.n_horizons)}
         # Per-group gradient health (NT-037, D-026): train only (test_step never computes
         # gradients). grad_norm_max_* is the epoch maximum of the PRE-CLIP global norm of that
         # group; grad_clip_steps_* counts steps whose pre-clip norm exceeded GRAD_CLIP_NORM.
@@ -250,7 +267,7 @@ class CustomTrainModel(models.Model):
         # Dead-zone counters (D-026, NT-037 acceptance 2): how many variance outputs this epoch sat
         # exactly at VAR_FLOOR, per horizon (a running sum, so `.result()` is the raw epoch total,
         # not an average).
-        self._var_floor_counters = {f'var_at_floor_h{i}': _Accum("sum") for i in range(3)}
+        self._var_floor_counters = {f'var_at_floor_{h}': _Accum("sum") for h in self.horizon_keys}
         # Per-term contributions to `total` (NT-037, D-026/D-045, QA repair round 1 fix 3+4): a
         # plain _Accum("mean") per neural_trade.metrics.tf_direction.CONTRIB_KEYS, updated every
         # single step (train AND val, never gated by TRAIN_METRICS_EVERY) so their sum matches
@@ -387,17 +404,19 @@ class CustomTrainModel(models.Model):
         lc = tf.squeeze(last_close, axis=1)
         deadband_bps = tf.cast(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0), tf.float32)
         deadband = deadband_bps / tf.constant(10000.0, dtype=tf.float32)
-        m0, m1, m2, t0, t1, t2 = direction_labels_tf(y_true_raw, lc, deadband_bps, self.eps)
+        n = len(y_pred_9) // 3
+        labels = direction_labels_tf(y_true_raw, lc, deadband_bps, self.eps, n_horizons=n)
+        masks, trues = tuple(labels[:n]), tuple(labels[n:])
         var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
         var_cap = tf.cast(getattr(self.config, 'VAR_CAP', 1e3), tf.float32)
         heads, gauss = [], []
-        for price, direction, var in (y_pred_9[0:3], y_pred_9[3:6], y_pred_9[6:9]):
+        for price, direction, var in (y_pred_9[3 * i:3 * i + 3] for i in range(n)):
             heads.append(tf.squeeze(direction, axis=1))
             # P(up | the move left the deadband): matches the masked labels.
             gauss.append(_losses.gaussian_up_prob_given_move(
                 tf.squeeze(price, axis=1), tf.clip_by_value(tf.squeeze(var, axis=1), var_floor, var_cap), lc,
                 deadband, self.pred_mean, self.pred_scale, self.eps))
-        return y_true, (t0, t1, t2), tuple(heads), tuple(gauss), (m0, m1, m2)
+        return y_true, trues, tuple(heads), tuple(gauss), masks
 
     def train_epoch_logs(self):
         """The training-set epoch aggregates as floats (called once per epoch by _EpochTrainLogs)."""
@@ -425,20 +444,22 @@ class CustomTrainModel(models.Model):
         """Every addend of the `total = (...)` formula in losses/functions.py, named contrib_*
         (NT-037, D-026/D-045). Reconstructed from the (mostly un-weighted) LossComponents fields
         and the live model.lambda_* weights; their sum equals `c.total` exactly (to float
-        precision), by construction - see tests/test_custom_loss.py."""
-        contrib_point = c.point_h0 + c.point_h1 + c.point_h2
+        precision), by construction - see tests/test_custom_loss.py. Per-horizon sums run over
+        the N horizons of ``c`` (NT-042)."""
+        hk = self.horizon_keys
+        contrib_point = _hsum(c, 'point_', hk)
         return {
             'contrib_point': contrib_point,
-            'contrib_trend': self.lambda_trend_outer * (c.extended_h0 + c.extended_h1 + c.extended_h2),
-            'contrib_dir': self.lambda_dir_outer * self.lambda_dir * (c.dir_h0 + c.dir_h1 + c.dir_h2),
+            'contrib_trend': self.lambda_trend_outer * _hsum(c, 'extended_', hk),
+            'contrib_dir': self.lambda_dir_outer * self.lambda_dir * _hsum(c, 'dir_', hk),
             'contrib_dir_align': self.lambda_dir_align_outer * c.dir_align_val,
             'contrib_reg': tf.constant(0.0, dtype=tf.float32) * c.reg_loss,
             'contrib_inter_reg': 0.1 * c.inter_reg,
             'contrib_vol': 0.1 * c.vol_loss,
             'contrib_coherence': self.lambda_coherence_outer * c.coherence_penalty_val,
-            'contrib_nll': self.lambda_nll_outer * self.lambda_var * (c.nll_h0 + c.nll_h1 + c.nll_h2),
-            'contrib_crps': self.lambda_crps * (c.crps_h0 + c.crps_h1 + c.crps_h2),
-            'contrib_soft_ece': self.lambda_soft_ece * (c.soft_ece_h0 + c.soft_ece_h1 + c.soft_ece_h2),
+            'contrib_nll': self.lambda_nll_outer * self.lambda_var * _hsum(c, 'nll_', hk),
+            'contrib_crps': self.lambda_crps * _hsum(c, 'crps_', hk),
+            'contrib_soft_ece': self.lambda_soft_ece * _hsum(c, 'soft_ece_', hk),
             'contrib_t_perp': c.t_perp_total,
             'contrib_casimir': c.casimir_val,
             'contrib_vac': c.vac_val,
@@ -461,7 +482,7 @@ class CustomTrainModel(models.Model):
         if every <= 1:
             self._update_diagnostics(c, batch, y_true, y_pred_9, last_close, training, grad_global_norm)
             return
-        probe = self._step_means['point_h1']
+        probe = self._step_means[f'point_{primary_key(self.horizon_keys)}']  # point_h1 at N = 3
         with tf.device("/CPU:0"):  # int64 FloorMod has no GPU kernel here (it would need XLA/ptxas)
             due = tf.logical_or(tf.equal(tf.math.floormod(self.optimizer.iterations - 1, every), 0),
                                 tf.equal(probe.count, 0.0))  # first step after a reset always counts
@@ -474,30 +495,29 @@ class CustomTrainModel(models.Model):
 
     def _update_diagnostics(self, c, batch, y_true, y_pred_9, last_close, training, grad_global_norm=None):
         y_true, true_dirs, head_probs, gauss_probs, masks = self._direction_inputs(y_true, y_pred_9, last_close)
-        scalars = {
-            'loss': c.total,
-            'point_loss': c.point_h0 + c.point_h1 + c.point_h2,
-            'point_h0': c.point_h0, 'point_h1': c.point_h1, 'point_h2': c.point_h2,
-            'trend_h0': c.local_h0 + c.global_h0 + c.extended_h0,
-            'trend_h1': c.local_h1 + c.global_h1 + c.extended_h1,
-            'trend_h2': c.local_h2 + c.global_h2 + c.extended_h2,
-            'local_h0': c.local_h0, 'global_h0': c.global_h0, 'extended_h0': c.extended_h0,
-            'local_h1': c.local_h1, 'global_h1': c.global_h1, 'extended_h1': c.extended_h1,
-            'local_h2': c.local_h2, 'global_h2': c.global_h2, 'extended_h2': c.extended_h2,
-            'dir_loss': c.dir_h0 + c.dir_h1 + c.dir_h2,
-            'dir_loss_h0': c.dir_h0, 'dir_loss_h1': c.dir_h1, 'dir_loss_h2': c.dir_h2,
-            'nll_loss': c.nll_h0 + c.nll_h1 + c.nll_h2,
-            'nll_h0': c.nll_h0, 'nll_h1': c.nll_h1, 'nll_h2': c.nll_h2,
-            'crps_loss': c.crps_h0 + c.crps_h1 + c.crps_h2,
-            'crps_h0': c.crps_h0, 'crps_h1': c.crps_h1, 'crps_h2': c.crps_h2,
-            'soft_ece_loss': c.soft_ece_h0 + c.soft_ece_h1 + c.soft_ece_h2,
-            'soft_ece_h0': c.soft_ece_h0, 'soft_ece_h1': c.soft_ece_h1, 'soft_ece_h2': c.soft_ece_h2,
+        hk = self.horizon_keys
+        # Same keys and the same arithmetic as the hand-written three-horizon dict (NT-042): the
+        # sums are left-to-right over h0 .. h{N-1}, and the insertion order of the dict (which
+        # sets the update order of the step means below) is the reference one at N = 3.
+        scalars = {'loss': c.total, 'point_loss': _hsum(c, 'point_', hk)}
+        scalars.update({f'point_{h}': getattr(c, f'point_{h}') for h in hk})
+        scalars.update({f'trend_{h}': getattr(c, f'local_{h}') + getattr(c, f'global_{h}') + getattr(c, f'extended_{h}')
+                        for h in hk})
+        for h in hk:
+            scalars.update({f'local_{h}': getattr(c, f'local_{h}'), f'global_{h}': getattr(c, f'global_{h}'),
+                            f'extended_{h}': getattr(c, f'extended_{h}')})
+        scalars['dir_loss'] = _hsum(c, 'dir_', hk)
+        scalars.update({f'dir_loss_{h}': getattr(c, f'dir_{h}') for h in hk})
+        for name in ('nll', 'crps', 'soft_ece'):
+            scalars[f'{name}_loss'] = _hsum(c, f'{name}_', hk)
+            scalars.update({f'{name}_{h}': getattr(c, f'{name}_{h}') for h in hk})
+        scalars.update({
             'reg_loss': c.reg_loss, 'inter_reg': c.inter_reg, 'vol_loss': c.vol_loss,
             't_perp_loss': c.t_perp_total, 'casimir_loss': c.casimir_val, 'vac_loss': c.vac_val,
             'hd_loss': c.hd_val, 'ife_loss': c.ife_val, 'vac_overflow_loss': c.vac_overflow_val,
             'pnl_val': c.pnl_val,
-        }
-        scalars['trend_loss'] = scalars['trend_h0'] + scalars['trend_h1'] + scalars['trend_h2']
+        })
+        scalars['trend_loss'] = _sum_left([scalars[f'trend_{h}'] for h in hk])
         if training and grad_global_norm is not None:
             scalars['grad_global_norm'] = grad_global_norm
         # contrib_* (NT-037, D-026/D-045) is accumulated unconditionally in _update_epoch_metrics
@@ -509,7 +529,7 @@ class CustomTrainModel(models.Model):
         # applies internally (var_h*_c is not itself exposed on LossComponents).
         var_floor = tf.cast(getattr(self.config, 'VAR_FLOOR', 1e-4), tf.float32)
         tol = var_floor * 1e-6 + 1e-12
-        for i, var_head in enumerate((y_pred_9[2], y_pred_9[5], y_pred_9[8])):
+        for i, var_head in enumerate(y_pred_9[2::3]):
             v = tf.maximum(tf.where(tf.math.is_finite(var_head), var_head, tf.ones_like(var_head)), var_floor)
             at_floor = tf.reduce_sum(tf.cast(tf.abs(v - var_floor) <= tol, tf.float32))
             self._var_floor_counters[f'var_at_floor_h{i}'].update_state(at_floor)
@@ -519,9 +539,8 @@ class CustomTrainModel(models.Model):
             self._step_means[k].update_state(tf.cast(v, tf.float32), sample_weight=batch)
         self._dir_head_acc.update_state(true_dirs, head_probs, masks)
         self._dir_gauss_acc.update_state(true_dirs, gauss_probs, masks)
-        self._pit_acc.update_state([y_true[:, 0], y_true[:, 1], y_true[:, 2]],
-                                   [y_pred_9[0], y_pred_9[3], y_pred_9[6]],
-                                   [y_pred_9[2], y_pred_9[5], y_pred_9[8]])
+        n = len(y_pred_9) // 3
+        self._pit_acc.update_state([y_true[:, i] for i in range(n)], list(y_pred_9[0::3]), list(y_pred_9[2::3]))
 
     def _epoch_results(self, head_prefix, gauss_prefix, training):
         """The running aggregates of every epoch accumulator, as a logs dict."""
@@ -533,7 +552,7 @@ class CustomTrainModel(models.Model):
         # Dead-zone counters (D-026, NT-037 acceptance 2): dir_n_h{0,1,2} is DirectionStats.mask_sum
         # per horizon (the deadband-surviving sample count Keras logs as val_dir_n_h* during
         # evaluation, via its own automatic "val_" prefix - see test_step's comment on prefixing).
-        for i, h in enumerate(("h0", "h1", "h2")):
+        for i, h in enumerate(self.horizon_keys):
             logs[f'dir_n_{h}'] = self._dir_head_acc.counts[i][6]
         logs.update({k: m.result() for k, m in getattr(self, '_var_floor_counters', {}).items()})
         # Per-term non-finite mask counters (D-026, NT-036): masked_<term> / val_masked_<term>.
@@ -688,29 +707,17 @@ class CustomTrainModel(models.Model):
         x_window, y_true, last_close, extended_trends = data
         with tf.GradientTape() as tape:
             y_pred_list = self(x_window, training=True)
-            # Named view for the 10 outputs (robust to future aux heads / reordering).
-            heads = PredictiveOutputs(*y_pred_list)
-            # Still provide the 9-tuple expected by current custom_loss signature + the vacuum separately.
-            y_pred_9 = y_pred_list[:9]
+            # Named view for the 3N + 1 outputs (robust to future aux heads / reordering).
+            heads = predictive_outputs_type(self.n_horizons)(*y_pred_list)
+            # The 3N heads custom_loss reads + the vacuum separately.
+            y_pred_9 = y_pred_list[:3 * self.n_horizons]
             vac_overflow_pred = heads.vacuum_overflow
             loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                                extended_trends,
                                                vacuum_overflow=vac_overflow_pred)
 
-        # loss_components is now a LossComponents NamedTuple (see registries/losses.py).
-        # Positional unpack is preserved for compatibility; attribute access is also available.
-        (total_loss_val,
-         point_h0, point_h1, point_h2,
-         local_h0, global_h0, extended_h0,
-         local_h1, global_h1, extended_h1,
-         local_h2, global_h2, extended_h2,
-         dir_h0, dir_h1, dir_h2,
-         nll_h0, nll_h1, nll_h2,
-         reg_val, inter_reg, vol_loss,
-         crps_h0, crps_h1, crps_h2,
-         soft_ece_h0, soft_ece_h1, soft_ece_h2,
-         t_perp_total, casimir_val, vac_val, hd_val, ife_val,
-         vac_overflow_val, pnl_val, dir_align_val, coherence_penalty_val) = loss_components
+        # loss_components is the N-horizon LossComponents NamedTuple (core.horizons).
+        total_loss_val = loss_components.total
 
         grads = tape.gradient(total_loss_val, self.trainable_variables)
 
@@ -863,18 +870,19 @@ class CustomTrainModel(models.Model):
         mask_snapshot = {k: acc.snapshot() for k, acc in self._mask_counters.items()}
         with tf.GradientTape(persistent=True) as tape:
             y_pred_list = self(x_window, training=False)
-            heads = PredictiveOutputs(*y_pred_list)
-            y_pred_9 = y_pred_list[:9]
+            heads = predictive_outputs_type(self.n_horizons)(*y_pred_list)
+            y_pred_9 = y_pred_list[:3 * self.n_horizons]
             c = self.custom_loss(x_window, y_true, y_pred_9, last_close, extended_trends,
                                  vacuum_overflow=heads.vacuum_overflow)
+            hk = self.horizon_keys
             terms = {
-                'point': c.point_h0 + c.point_h1 + c.point_h2,
-                'trend': self.lambda_trend_outer * (c.extended_h0 + c.extended_h1 + c.extended_h2),
-                'dir': self.lambda_dir_outer * self.lambda_dir * (c.dir_h0 + c.dir_h1 + c.dir_h2),
+                'point': _hsum(c, 'point_', hk),
+                'trend': self.lambda_trend_outer * _hsum(c, 'extended_', hk),
+                'dir': self.lambda_dir_outer * self.lambda_dir * _hsum(c, 'dir_', hk),
                 'dir_align': self.lambda_dir_align_outer * c.dir_align_val,
-                'nll': self.lambda_nll_outer * self.lambda_var * (c.nll_h0 + c.nll_h1 + c.nll_h2),
-                'crps': self.lambda_crps * (c.crps_h0 + c.crps_h1 + c.crps_h2),
-                'soft_ece': self.lambda_soft_ece * (c.soft_ece_h0 + c.soft_ece_h1 + c.soft_ece_h2),
+                'nll': self.lambda_nll_outer * self.lambda_var * _hsum(c, 'nll_', hk),
+                'crps': self.lambda_crps * _hsum(c, 'crps_', hk),
+                'soft_ece': self.lambda_soft_ece * _hsum(c, 'soft_ece_', hk),
                 'vol': 0.1 * c.vol_loss,
                 'inter_reg': 0.1 * c.inter_reg,
                 't_perp': c.t_perp_total,
@@ -926,17 +934,24 @@ class CustomTrainModel(models.Model):
                 self._probe_means[f'probe_conflict_min_{gname}'].update_state(tf.reduce_min(stacked))
         del tape
 
-    def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):
+    def _compute_direction_metrics(self, *arrays, prefix="", **mask_kw):
         """Direction metrics (acc, sensitivity, specificity, balanced acc, F1, MCC, Brier,
         positive-class ECE, predicted/true up rates, mean prob) over the given arrays, per horizon.
 
-        Same formulas as the epoch accumulators (tf_direction.direction_metrics_from_stats); this form
-        evaluates one set of arrays in full.
+        ``arrays`` are the N true-direction arrays, then the N P(up) arrays, then optionally the N
+        masks (``true_h0, ..., true_h{N-1}, p_h0, ..., [mask_h0, ...]``; N = 3 is the old
+        nine-argument call). Masks may also come as ``mask_h0=...`` keywords. Same formulas as the
+        epoch accumulators (tf_direction.direction_metrics_from_stats); this form evaluates one
+        set of arrays in full.
         """
+        n = self.n_horizons
+        if len(arrays) not in (2 * n, 3 * n):
+            raise TypeError(f"_compute_direction_metrics: expected {2 * n} or {3 * n} arrays for {n} horizons, "
+                            f"got {len(arrays)}")
+        trues, preds = arrays[:n], arrays[n:2 * n]
+        masks = list(arrays[2 * n:3 * n]) or [mask_kw.get(f"mask_{h}") for h in self.horizon_keys]
         metrics = {}
-        for h_name, true_dir, dir_pred, mask in (("h0", true_dir_h0, dir_pred_h0, mask_h0),
-                                                 ("h1", true_dir_h1, dir_pred_h1, mask_h1),
-                                                 ("h2", true_dir_h2, dir_pred_h2, mask_h2)):
+        for h_name, true_dir, dir_pred, mask in zip(self.horizon_keys, trues, preds, masks):
             m = tf.ones_like(tf.cast(true_dir, tf.float32)) if mask is None else mask
             stats = direction_stats(*direction_counts(true_dir, dir_pred, m))
             metrics.update(direction_metrics_from_stats(stats, prefix, h_name,
@@ -946,24 +961,10 @@ class CustomTrainModel(models.Model):
     def test_step(self, data):
         x_window, y_true, last_close, extended_trends = data
         y_pred_list = self(x_window, training=False)
-        y_pred_9 = y_pred_list[:9]
+        y_pred_9 = y_pred_list[:3 * self.n_horizons]
         loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                            extended_trends,
                                            vacuum_overflow=None)  # identically 0 at eval (tanh^2 < E_max): the term would be a constant lambda in every val_loss
-
-        # Unpack 35-component tuple (LossComponents NamedTuple; positional ok)
-        (total_loss_val,
-         point_h0, point_h1, point_h2,
-         local_h0, global_h0, extended_h0,
-         local_h1, global_h1, extended_h1,
-         local_h2, global_h2, extended_h2,
-         dir_h0, dir_h1, dir_h2,
-         nll_h0, nll_h1, nll_h2,
-         reg_val, inter_reg, vol_loss,
-         crps_h0, crps_h1, crps_h2,
-         soft_ece_h0, soft_ece_h1, soft_ece_h2,
-         t_perp_total, casimir_val, vac_val, hd_val, ife_val,
-         vac_overflow_val, pnl_val, dir_align_val, coherence_penalty_val) = loss_components
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.

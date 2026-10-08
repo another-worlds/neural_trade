@@ -3,7 +3,10 @@
 Colours come from a validated categorical palette (dark steps, checked for colour-blind
 separation on the chart surface) and are assigned by role, never cycled:
 
-* horizons: h0 / h1 / h2 always take slots 1-3 (blue, orange, aqua) in every figure;
+* horizons: h0 / h1 / h2 always take slots 1-3 (blue, orange, aqua) in every figure; a run with
+  more horizons (NT-042) gives h3, h4, h5 the fixed extension HORIZON_EXTENSION (cyan, magenta,
+  olive), each checked against the reserved status, LONG / SHORT and costs colours
+  (tests/test_horizons_n.py);
 * train vs validation: the same colour, validation solid and training dotted;
 * outcomes (win / loss, good / bad) use the status colours, always with a marker shape too.
 
@@ -12,7 +15,12 @@ separation on the chart surface) and are assigned by role, never cycled:
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
+
+from neural_trade.core.horizons import horizon_index
+
+_log = logging.getLogger(__name__)
 
 # ------------------------------------------------------------------ surfaces and ink
 PAPER = "#121211"
@@ -26,8 +34,72 @@ NEUTRAL = "#9a9890"          # reference lines: "perfect", zero, 50%
 
 # ------------------------------------------------------------------ categorical slots (dark steps)
 SERIES = ("#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300", "#9085e9", "#e66767")
-HORIZONS = ("h0", "h1", "h2")
-HORIZON_COLORS = dict(zip(HORIZONS, SERIES[:3]))
+HORIZONS = ("h0", "h1", "h2")          # the reference three (figures iterate over their frame's own keys)
+#: h3, h4, h5 (NT-042, D-022): outside the reserved roles below by at least 30 CIE76 Delta E, and as
+#: far from h0-h2 and from each other (the palette slots after h2 are SHORT, a pink the non-horizon
+#: series use, a green that reads as GOOD, LONG, and a red next to CRITICAL, so none of them is free).
+HORIZON_EXTENSION = ("#17becf", "#e7298a", "#bcbd22")
+
+
+def horizon_color(h: str) -> str:
+    """The fixed colour of horizon ``h``: SERIES[0..2] for h0-h2, then HORIZON_EXTENSION. Past h5 the
+    extension repeats (logged): seven or more horizons have no distinct colour left."""
+    i = horizon_index(h)
+    if i < 3:
+        return SERIES[i]
+    j = i - 3
+    if j >= len(HORIZON_EXTENSION):
+        _log.warning("horizon %s has no colour of its own (%d horizon colours); it repeats %s", h,
+                     3 + len(HORIZON_EXTENSION), HORIZON_EXTENSION[j % len(HORIZON_EXTENSION)])
+    return HORIZON_EXTENSION[j % len(HORIZON_EXTENSION)]
+
+
+class _HorizonColors(dict):
+    """``{h0: blue, h1: orange, h2: aqua}`` that also answers h3 and up (``horizon_color``)."""
+
+    def __missing__(self, key):
+        try:
+            return horizon_color(key)
+        except ValueError:
+            raise KeyError(key) from None
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
+HORIZON_COLORS = _HorizonColors(zip(HORIZONS, SERIES[:3]))
+
+
+def is_horizon_key(key) -> bool:
+    """True for a horizon key: h0, h1, ..., h12 (NT-042: not only the reference three)."""
+    try:
+        horizon_index(key)
+        return True
+    except (ValueError, TypeError):
+        return False
+
+
+def horizons_of(obj=None) -> tuple:
+    """The horizon keys a figure draws (NT-042): ``obj.horizons`` (PredictionFrame, SignalFrame, EvalReport,
+    PredictionBatch), the ``h*`` keys of a mapping (``{h: ...}``, or a report dict's ``"horizons"``), the keys
+    of ``obj.delta``, else the reference three."""
+    from collections.abc import Mapping
+
+    from neural_trade.core.horizons import keys_of
+
+    hs = getattr(obj, "horizons", None)
+    if hs and not isinstance(hs, Mapping):
+        return tuple(hs)
+    if isinstance(obj, Mapping):
+        inner = obj.get("horizons")
+        return keys_of(inner if isinstance(inner, Mapping) else obj, default=HORIZONS)
+    delta = getattr(obj, "delta", None)
+    if isinstance(delta, Mapping):
+        return keys_of(delta, default=HORIZONS)
+    return HORIZONS
 
 # ------------------------------------------------------------------ status (never used for a series)
 GOOD = "#0ca30c"
@@ -116,7 +188,7 @@ def horizon_label(h: str, config=None) -> str:
     """'h1 (15 bars)' when the config knows the horizon steps, else 'h1'."""
     steps = getattr(config, "HORIZON_STEPS", None) if config is not None else None
     if steps is not None:
-        i = HORIZONS.index(h)
+        i = horizon_index(h)
         if i < len(steps):
             return f"{h} ({steps[i]} bars)"
     return h

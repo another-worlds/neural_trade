@@ -21,6 +21,8 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from neural_trade.core.horizons import horizon_index
+
 Z95 = 1.959964
 
 # ------------------------------------------------------------------------- effective-sample helpers
@@ -98,7 +100,7 @@ def thin(n: int, max_points: int = 1500) -> np.ndarray:
 def horizon_steps(frame_or_config, h: str) -> int:
     """Bars ahead for horizon ``h`` from a PredictionFrame (``horizon_steps``) or a Config (``HORIZON_STEPS``)."""
     steps = getattr(frame_or_config, "horizon_steps", None) or getattr(frame_or_config, "HORIZON_STEPS", None)
-    i = ("h0", "h1", "h2").index(h)
+    i = horizon_index(h)
     return int(steps[i]) if steps is not None and i < len(steps) else 1
 
 

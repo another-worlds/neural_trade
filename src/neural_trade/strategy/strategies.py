@@ -151,7 +151,8 @@ def _side(sign: int) -> str:
 @Strategies.register(name="threshold_spike", tags=["notebook", "trade.ipynb"])
 @dataclass
 class ThresholdSpikeStrategy(Strategy):
-    """h1 direction threshold with a variance-spike veto and exit (trade.ipynb)."""
+    """Primary-horizon (h1 at three horizons) direction threshold with a variance-spike veto and exit
+    (trade.ipynb)."""
 
     name: ClassVar[str] = "threshold_spike"
     p_long: float = 0.65
@@ -169,7 +170,7 @@ class ThresholdSpikeStrategy(Strategy):
         return self.warmup_bars
 
     def decide(self, s, t):
-        p, conf = s.p[t, 1], 1.0 / (1.0 + s.var_scaled[t, 1])
+        p, conf = s.p[t, s.primary], 1.0 / (1.0 + s.var_scaled[t, s.primary])
         if s.var_spike[t] or conf <= self.min_confidence:
             return None
         for sign, ok in ((1, p > self.p_long), (-1, p < self.p_short)):
@@ -182,7 +183,7 @@ class ThresholdSpikeStrategy(Strategy):
     def exit_signal(self, s, t, side, bars_held, entry_price, order):
         if s.var_spike[t]:
             return "SPIKE"
-        p = s.p[t, 1]
+        p = s.p[t, s.primary]
         if (side == "LONG" and p < self.exit_long_below) or (side == "SHORT" and p > self.exit_short_above):
             return "REV"
         return None
@@ -230,12 +231,12 @@ class EnhancedMultiHorizonStrategy(Strategy):
         if s.strength[t] < self.min_signal_strength:
             return None
         # d1 stays the served delta (D-051). Coherence flags may use the raw heads; this entry does not.
-        thr, wdir, d1 = self._threshold(s, t), s.weighted_direction[t], s.delta[t, 1]
+        thr, wdir, d1 = self._threshold(s, t), s.weighted_direction[t], s.delta[t, s.primary]
         size = float(np.clip(self.size_base + s.avg_confidence[t] * self.size_confidence_mult
                              + s.strength[t] * self.size_strength_mult, 0.1, 1.0))
         for sign, ok in ((1, wdir > thr and d1 > 0), (-1, wdir < 1.0 - thr and d1 < 0)):
             if ok and (not self.require_consensus_side or s.consensus[t] == sign):
-                move = max(abs(d1), self.min_move_sigma * s.sigma[t, 1])
+                move = max(abs(d1), self.min_move_sigma * s.sigma[t, s.primary])
                 return Order(_side(sign), size, tp=sign * move * self.tp2_delta_mult,
                              sl=-sign * s.volatility[t] * self.sl_vol_mult, tp_is_offset=True, reason="consensus",
                              max_hold=self.max_hold,
@@ -247,7 +248,7 @@ class EnhancedMultiHorizonStrategy(Strategy):
         tp1 = order.info.get("tp1_offset")
         if tp1 is not None and bars_held >= self.tp1_min_bars and sign * (s.close[t] - entry_price) >= tp1:
             return "TP1"
-        p1 = s.p[t, 1]
+        p1 = s.p[t, s.primary]
         if (side == "LONG" and p1 < self.reversal_long) or (side == "SHORT" and p1 > self.reversal_short):
             return "REV_H1"
         if not s.magnitude_coherent[t] and bars_held >= self.incoherence_min_bars:
@@ -296,7 +297,7 @@ class LiberalStrategy(Strategy):
             thr = self.base_entry_threshold + self.low_quality_threshold_increase
         if strength < self.min_signal_strength or conf < self.min_confidence or agree < self.min_agreement:
             return None
-        d1 = max(abs(s.delta[t, 1]), self.min_move_sigma * s.sigma[t, 1])  # served h1 (D-051)
+        d1 = max(abs(s.delta[t, s.primary]), self.min_move_sigma * s.sigma[t, s.primary])  # served h1 (D-051)
         wdir = s.weighted_direction[t]
         for sign, ok in ((1, wdir > thr), (-1, wdir < 1.0 - thr)):
             if ok and (not self.require_consensus_side or s.consensus[t] == sign):
@@ -356,8 +357,8 @@ class QuantileSignalStrategy(Strategy):
     def decide(self, s, t):
         w = s.weighted_direction[t]
         for sign, ok in ((1, w > self.long_above), (-1, w < self.short_below)):
-            if ok and (not self.require_delta_agreement or np.sign(s.delta[t, 1]) == sign):
-                return Order(_side(sign), self.size, sl=-sign * self.sl_sigma * s.sigma[t, 1], tp_is_offset=True,
+            if ok and (not self.require_delta_agreement or np.sign(s.delta[t, s.primary]) == sign):
+                return Order(_side(sign), self.size, sl=-sign * self.sl_sigma * s.sigma[t, s.primary], tp_is_offset=True,
                              reason="quantile", max_hold=self.max_hold)
         return None
 

@@ -61,7 +61,7 @@ def permutation_importance(data, config=None, **_):
     hi = [float(_field(row, "loss_hi")) for row in rows]
 
     def hlabel(h):
-        return T.horizon_label(h, config) if h in T.HORIZONS else str(h)
+        return T.horizon_label(h, config) if T.is_horizon_key(h) else str(h)
 
     hover = []
     for k, (row, name) in enumerate(zip(rows, names)):

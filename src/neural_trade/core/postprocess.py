@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from neural_trade.core.outputs import PredictiveOutputs
+from neural_trade.core.horizons import REFERENCE_HORIZONS, horizon_keys, n_from_outputs
 
-HORIZONS = ("h0", "h1", "h2")
+#: The reference three horizon keys (kept for old importers; a run's own keys come from its heads).
+HORIZONS = REFERENCE_HORIZONS
 
 
 def inverse_scale(scaled, pred_scale: float, pred_mean: float) -> np.ndarray:
@@ -39,8 +40,10 @@ def sanitize_var(head, n: int, var_floor: float, var_cap: float) -> np.ndarray:
 
 
 def heads_to_predictions(heads, n: int, pred_scale: float, pred_mean: float, config) -> dict:
-    """``heads`` is the model's 10-output list; ``n`` trims batch padding."""
-    heads = PredictiveOutputs(*heads)
+    """``heads`` is the model's 3N + 1 output list (price, direction, variance per horizon, then
+    the overflow; NT-042); ``n`` trims batch padding. The dicts are keyed h0 .. h{N-1}."""
+    heads = list(heads)
+    keys = horizon_keys(n_from_outputs(len(heads)))
     n = int(n)
 
     def delta(head):
@@ -48,10 +51,7 @@ def heads_to_predictions(heads, n: int, pred_scale: float, pred_mean: float, con
 
     vf, vc = float(config.VAR_FLOOR), float(config.VAR_CAP)
     return {
-        "delta": {"h0": delta(heads.price_h0), "h1": delta(heads.price_h1), "h2": delta(heads.price_h2)},
-        "direction_prob": {"h0": sanitize_prob(heads.direction_h0, n), "h1": sanitize_prob(heads.direction_h1, n),
-                           "h2": sanitize_prob(heads.direction_h2, n)},
-        "variance": {"h0": sanitize_var(heads.variance_h0, n, vf, vc),
-                     "h1": sanitize_var(heads.variance_h1, n, vf, vc),
-                     "h2": sanitize_var(heads.variance_h2, n, vf, vc)},
+        "delta": {h: delta(heads[3 * i]) for i, h in enumerate(keys)},
+        "direction_prob": {h: sanitize_prob(heads[3 * i + 1], n) for i, h in enumerate(keys)},
+        "variance": {h: sanitize_var(heads[3 * i + 2], n, vf, vc) for i, h in enumerate(keys)},
     }

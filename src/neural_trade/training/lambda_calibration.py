@@ -34,7 +34,47 @@ from typing import Dict, Optional
 import numpy as np
 import tensorflow as tf
 
+from neural_trade.core.horizons import components_horizons, point_weight_role
+
 logger = logging.getLogger(__name__)
+
+
+def _sum_left(terms):
+    """``((t0 + t1) + t2) + ...`` (the hand-written three-horizon sums, NT-042)."""
+    acc = terms[0]
+    for t in terms[1:]:
+        acc = acc + t
+    return acc
+
+
+def _role_terms(lc, keys, role):
+    """The ``point_<h>`` components of the horizons whose point-loss weight is ``role``
+    (``core.horizons.point_weight_role``: h0 short, the last horizon long, the ones between point)."""
+    n = len(keys)
+    return [getattr(lc, f"point_{h}") for i, h in enumerate(keys) if point_weight_role(i, n) == role]
+
+
+def _role_value(lc, keys, role, *, reduce):
+    """One point-loss role's measured quantity: the single horizon's component at N = 3 (exactly
+    today's ``lc.point_h0`` / ``point_h1`` / ``point_h2``), else the mean (``reduce='mean'``, value
+    mode) or the sum (``reduce='sum'``, gradient mode, as it enters ``total``) over that role's
+    horizons; a role no horizon takes (``point`` at N = 2) measures 0, so its weight is kept."""
+    terms = _role_terms(lc, keys, role)
+    if not terms:
+        return tf.constant(0.0, dtype=tf.float32)
+    if len(terms) == 1:
+        return terms[0]
+    total = _sum_left(terms)
+    return total / float(len(terms)) if reduce == 'mean' else total
+
+
+def _horizon_mean(lc, prefix, keys):
+    """``(lc.<prefix>h0 + ... + lc.<prefix>h{N-1}) / N`` (``/ 3.0`` at the reference N = 3)."""
+    return _sum_left([getattr(lc, f"{prefix}{h}") for h in keys]) / float(len(keys))
+
+
+def _horizon_sum(lc, prefix, keys):
+    return _sum_left([getattr(lc, f"{prefix}{h}") for h in keys])
 
 #: The terms the calibration pass measures and (mostly) rescales, in a fixed order. Matches the
 #: 13 rescaled lambdas of ``_CALIB_LAMBDA_NAMES`` plus ``vac``/``vac_overflow``, which only feed the
@@ -59,13 +99,16 @@ def _term_values(loss_components):
     access does not depend on the tuple's length or field order.
     """
     lc = loss_components
-    ext = (lc.extended_h0 + lc.extended_h1 + lc.extended_h2) / 3.0
-    dirn = (lc.dir_h0 + lc.dir_h1 + lc.dir_h2) / 3.0
-    var = (lc.nll_h0 + lc.nll_h1 + lc.nll_h2) / 3.0
-    crps = (lc.crps_h0 + lc.crps_h1 + lc.crps_h2) / 3.0
-    ece = (lc.soft_ece_h0 + lc.soft_ece_h1 + lc.soft_ece_h2) / 3.0
+    keys = components_horizons(lc)
+    ext = _horizon_mean(lc, 'extended_', keys)
+    dirn = _horizon_mean(lc, 'dir_', keys)
+    var = _horizon_mean(lc, 'nll_', keys)
+    crps = _horizon_mean(lc, 'crps_', keys)
+    ece = _horizon_mean(lc, 'soft_ece_', keys)
     return {
-        'short': lc.point_h0, 'point': lc.point_h1, 'long': lc.point_h2,
+        'short': _role_value(lc, keys, 'short', reduce='mean'),
+        'point': _role_value(lc, keys, 'point', reduce='mean'),
+        'long': _role_value(lc, keys, 'long', reduce='mean'),
         'ext': ext, 'dir': dirn, 'var': var, 'vol': lc.vol_loss,
         'crps': crps, 'ece': ece,
         't_perp': lc.t_perp_total, 'casimir': lc.casimir_val, 'vac': lc.vac_val,
@@ -95,14 +138,17 @@ def _total_term_tensors(custom_model, loss_components):
     """
     lc = loss_components
     m = custom_model
+    keys = components_horizons(lc)
     return {
-        'short': lc.point_h0, 'point': lc.point_h1, 'long': lc.point_h2,
-        'ext': m.lambda_trend_outer * (lc.extended_h0 + lc.extended_h1 + lc.extended_h2),
-        'dir': m.lambda_dir_outer * (lc.dir_h0 + lc.dir_h1 + lc.dir_h2),
-        'var': m.lambda_nll_outer * (lc.nll_h0 + lc.nll_h1 + lc.nll_h2),
+        'short': _role_value(lc, keys, 'short', reduce='sum'),
+        'point': _role_value(lc, keys, 'point', reduce='sum'),
+        'long': _role_value(lc, keys, 'long', reduce='sum'),
+        'ext': m.lambda_trend_outer * _horizon_sum(lc, 'extended_', keys),
+        'dir': m.lambda_dir_outer * _horizon_sum(lc, 'dir_', keys),
+        'var': m.lambda_nll_outer * _horizon_sum(lc, 'nll_', keys),
         'vol': 0.1 * lc.vol_loss,
-        'crps': lc.crps_h0 + lc.crps_h1 + lc.crps_h2,
-        'ece': lc.soft_ece_h0 + lc.soft_ece_h1 + lc.soft_ece_h2,
+        'crps': _horizon_sum(lc, 'crps_', keys),
+        'ece': _horizon_sum(lc, 'soft_ece_', keys),
         't_perp': lc.t_perp_total, 'casimir': lc.casimir_val,
         'hd': lc.hd_val, 'ife': lc.ife_val,
     }
@@ -363,39 +409,31 @@ def calibrate_loss_weights(custom_model, train_ds, cfg, n_train: int) -> Optiona
                 for batch in train_ds.take(n_sample):
                     x_batch, y_batch, last_batch, ext_batch = batch
                     _y_pred_raw = custom_model(x_batch, training=True)
-                    # Strip 10th output (vacuum_overflow) before passing to custom_loss
+                    # Strip the last output (vacuum_overflow) before passing to custom_loss
                     (*y_pred_batch, _vac_overflow_batch) = _y_pred_raw
-                    (total,
-                     point_h0, point_h1, point_h2,
-                     local_h0, global_h0, ext_h0,
-                     local_h1, global_h1, ext_h1,
-                     local_h2, global_h2, ext_h2,
-                     dir_h0, dir_h1, dir_h2,
-                     nll_h0, nll_h1, nll_h2,
-                     reg_val, inter_reg, vol_loss_val,
-                     crps_h0_c, crps_h1_c, crps_h2_c,
-                     soft_ece_h0_c, soft_ece_h1_c, soft_ece_h2_c,
-                     t_perp_c, casimir_c, vac_c, hd_c, ife_c,
-                     vac_overflow_c, _pnl_c, _dir_align_c, _coherence_c) = custom_model.custom_loss(
+                    lc = custom_model.custom_loss(
                         x_batch, y_batch, y_pred_batch, last_batch, ext_batch,
                         vacuum_overflow=_vac_overflow_batch
                     )
+                    # By attribute, over the N horizons of the components (NT-042); at N = 3 the
+                    # same values as the old positional unpack (point_h0/h1/h2 and the /3.0 means).
+                    tv = _term_values(lc)
 
-                    short_buf.append(float(point_h0))
-                    point_buf.append(float(point_h1))
-                    long_buf.append(float(point_h2))
-                    ext_buf.append(float((ext_h0 + ext_h1 + ext_h2) / 3.0))
-                    dir_buf.append(float((dir_h0 + dir_h1 + dir_h2) / 3.0))
-                    var_buf.append(float((nll_h0 + nll_h1 + nll_h2) / 3.0))
-                    vol_buf.append(float(vol_loss_val))
-                    crps_buf.append(float((crps_h0_c + crps_h1_c + crps_h2_c) / 3.0))
-                    ece_buf.append(float((soft_ece_h0_c + soft_ece_h1_c + soft_ece_h2_c) / 3.0))
-                    t_perp_buf.append(float(t_perp_c))
-                    casimir_buf.append(float(casimir_c))
-                    vac_buf.append(float(vac_c))
-                    hd_buf.append(float(hd_c))
-                    ife_buf.append(float(ife_c))
-                    vac_overflow_buf.append(float(vac_overflow_c))
+                    short_buf.append(float(tv['short']))
+                    point_buf.append(float(tv['point']))
+                    long_buf.append(float(tv['long']))
+                    ext_buf.append(float(tv['ext']))
+                    dir_buf.append(float(tv['dir']))
+                    var_buf.append(float(tv['var']))
+                    vol_buf.append(float(tv['vol']))
+                    crps_buf.append(float(tv['crps']))
+                    ece_buf.append(float(tv['ece']))
+                    t_perp_buf.append(float(tv['t_perp']))
+                    casimir_buf.append(float(tv['casimir']))
+                    vac_buf.append(float(tv['vac']))
+                    hd_buf.append(float(tv['hd']))
+                    ife_buf.append(float(tv['ife']))
+                    vac_overflow_buf.append(float(tv['vac_overflow']))
 
                 def _med(buf):
                     return float(np.median(np.array(buf))) if buf else 0.0

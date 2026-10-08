@@ -39,6 +39,8 @@ from typing import Dict, Optional
 
 import numpy as np
 
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
+
 
 def _logit(p: float, eps: float = 1e-7) -> float:
     p = max(min(float(p), 1.0 - eps), eps)
@@ -54,13 +56,15 @@ class OnlineTemperatureCalibrator:
 
     Parameters
     ----------
-    temperatures : initial T per horizon ("h0", "h1", "h2")
+    temperatures : initial T per horizon ("h0", "h1", ...; NT-042: the keys of this dict are
+                   the horizons, the reference three when it is None)
     lr           : gradient step size for temperature update
     ema_decay    : EMA smoothing factor (higher = slower adaptation)
     T_min / T_max: clamp range to prevent degenerate temperatures
     """
 
-    HORIZONS = ("h0", "h1", "h2")
+    #: The reference three keys, used when no temperatures are given.
+    HORIZONS = REFERENCE_HORIZONS
 
     def __init__(
         self,
@@ -76,12 +80,13 @@ class OnlineTemperatureCalibrator:
         self.T_max = T_max
 
         init = temperatures or {h: 1.0 for h in self.HORIZONS}
+        self.horizons = keys_of(init, default=self.HORIZONS)
         # Maintain two copies: raw (updated each step) and EMA-smoothed (used for inference). The warm start
         # is clamped to [T_min, T_max] like every update: an offline fit at its bound (T = 1000, D-066)
         # must not start outside the range the first update would jump into (NT-204).
-        self._T: Dict[str, float] = {h: float(np.clip(init.get(h, 1.0), T_min, T_max)) for h in self.HORIZONS}
+        self._T: Dict[str, float] = {h: float(np.clip(init.get(h, 1.0), T_min, T_max)) for h in self.horizons}
         self._T_ema: Dict[str, float] = dict(self._T)
-        self._n_updates: Dict[str, int] = {h: 0 for h in self.HORIZONS}
+        self._n_updates: Dict[str, int] = {h: 0 for h in self.horizons}
 
     def update(self, prob: float, label: float, horizon: str = "h1") -> None:
         """Incorporate one new (prediction, outcome) pair.
@@ -138,7 +143,7 @@ class OnlineTemperatureCalibrator:
     def state(self) -> Dict[str, Dict[str, float]]:
         return {
             h: {"T": self._T[h], "T_ema": self._T_ema[h], "n_updates": self._n_updates[h]}
-            for h in self.HORIZONS
+            for h in self.horizons
         }
 
     def save(self, path: str) -> None:

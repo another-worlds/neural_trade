@@ -258,6 +258,19 @@ class _Ctx:
     n_val: Optional[int]
     meta: Optional[dict]
     config: Any
+    horizons: Tuple[str, ...] = T.HORIZONS   # the run's horizon keys (NT-042): its config's, else its logged ones
+
+
+def history_horizons(df, config=None) -> Tuple[str, ...]:
+    """The horizon keys a run logged: one per ``config.HORIZON_STEPS`` entry, else the ``*_h<i>`` columns of
+    its history (``val_dir_mcc_h3`` ...), else the reference three (NT-042)."""
+    from neural_trade.core.horizons import keys_for, keys_of
+
+    if config is not None and getattr(config, "HORIZON_STEPS", None):
+        return keys_for(config)
+    cols = getattr(df, "columns", None) if df is not None else None
+    found = {m.group(1) for c in (cols if cols is not None else ()) for m in [re.search(r"_(h\d+)$", str(c))] if m}
+    return keys_of(dict.fromkeys(found), default=T.HORIZONS) if found else T.HORIZONS
 
 
 def _resolve(history, config, weights_epoch=None, n_val=None, meta=None, run_dir=None) -> _Ctx:
@@ -279,7 +292,8 @@ def _resolve(history, config, weights_epoch=None, n_val=None, meta=None, run_dir
         served = x.index(ep) if ep in x else int(np.clip(ep - x[0], 0, len(x) - 1))
     if n_val is None and meta:
         n_val = ((meta.get("fold") or {}).get("val"))
-    return _Ctx(df, x, len(df), val, loss, best, served, ep, note, int(n_val) if n_val else None, meta, config)
+    return _Ctx(df, x, len(df), val, loss, best, served, ep, note, int(n_val) if n_val else None, meta, config,
+                history_horizons(df, config))
 
 
 def _n_eff(ctx: _Ctx, h: str) -> Optional[int]:
@@ -307,7 +321,7 @@ def _enough(ctx: _Ctx, h: str) -> Optional[int]:
 
 
 def _too_few(ctx: _Ctx) -> bool:
-    return any(_n_eff(ctx, h) is not None and _enough(ctx, h) is None for h in T.HORIZONS)
+    return any(_n_eff(ctx, h) is not None and _enough(ctx, h) is None for h in ctx.horizons)
 
 
 def _any_n_eff(ctx: _Ctx) -> bool:
@@ -315,7 +329,7 @@ def _any_n_eff(ctx: _Ctx) -> bool:
     val_dir_n_h* logged, _n_eff can compute a real number even when ctx.n_val itself is unknown
     (no meta.json fold.val, e.g. a bare history without a run_dir) - the "validation size unknown"
     headers must not fire in that case."""
-    return any(_n_eff(ctx, h) is not None for h in T.HORIZONS)
+    return any(_n_eff(ctx, h) is not None for h in ctx.horizons)
 
 
 def _chance(ctx: _Ctx, h: str) -> Optional[float]:
@@ -435,7 +449,7 @@ def loss_contributions(history, config=None, *, prefix: str = "val_", meta: Opti
     raw = {k: c(k) for k in ("point_loss", "dir_loss", "nll_loss", "crps_loss", "soft_ece_loss")}
     if total is None or any(v is None for v in raw.values()) or any(v is None for v in lam.values()):
         return None
-    ext = [c(f"extended_h{i}") for i in range(3)]
+    ext = [c(f"extended_{h}") for h in history_horizons(df, config)]
     trend = np.sum(ext, axis=0) if all(e is not None for e in ext) else c("trend_loss")
     zero = np.zeros(n)
     out = pd.DataFrame({
@@ -729,7 +743,7 @@ def _health(ctx: _Ctx) -> Dict[str, dict]:
     s = ctx.served if ctx.served is not None else n - 1
     for key, up_key, name, label in (("dir", "", "direction", "direction head"),
                                      ("gauss_dir", "gauss_", "price head", "price head (Gaussian readout)")):
-        for h in T.HORIZONS:
+        for h in ctx.horizons:
             tile = _head_tile(ctx, s, key, up_key, h)
             if tile is not None:
                 tile["label"] = f"{label} · {T.horizon_label(h, config)}"
@@ -870,7 +884,7 @@ def _head_tile(ctx: _Ctx, s: int, key: str, up_key: str, h: str) -> Optional[dic
 
 def _skill_tile(ctx: _Ctx, s: int) -> Optional[dict]:
     parts, skills, ceilings, bce = [], [], [], []
-    for h in T.HORIZONS:
+    for h in ctx.horizons:
         br, r = _col(ctx.df, f"val_dir_brier_{h}"), _col(ctx.df, f"val_true_up_rate_{h}")
         if br is None or r is None:
             continue
@@ -950,13 +964,13 @@ def training_health_html(history, config=None, *, title: str = "Training health"
 def _context_parts(ctx: _Ctx, served: bool = True) -> List[str]:
     parts = []
     if ctx.n_val:
-        effs = [f"{h} {_n_eff(ctx, h)}" for h in T.HORIZONS if _n_eff(ctx, h)]
+        effs = [f"{h} {_n_eff(ctx, h)}" for h in ctx.horizons if _n_eff(ctx, h)]
         parts.append(f"validation block {ctx.n_val:,} samples" + (f" (n_eff {' / '.join(effs)})" if effs else ""))
         if _too_few(ctx):
-            few = [h for h in T.HORIZONS if _n_eff(ctx, h) is not None and _enough(ctx, h) is None]
+            few = [h for h in ctx.horizons if _n_eff(ctx, h) is not None and _enough(ctx, h) is None]
             parts.append(f"fewer than {_MIN_N_EFF} effective samples for {' / '.join(few)}: no chance range there")
     elif _any_n_eff(ctx):
-        effs = [f"{h} {_n_eff(ctx, h)}" for h in T.HORIZONS if _n_eff(ctx, h)]
+        effs = [f"{h} {_n_eff(ctx, h)}" for h in ctx.horizons if _n_eff(ctx, h)]
         parts.append(f"validation block sample count not recorded; n_eff {' / '.join(effs)} (from val_dir_n)")
     else:
         parts.append("validation size unknown: no chance ranges")
@@ -1066,7 +1080,7 @@ def _epoch_table(ctx: _Ctx) -> str:
         return txt + (f" <span style='color:{T.MUTED}'>({num(_at(t, s), spec)})</span>" if t is not None else "")
 
     def row(label, fn):
-        cells = [fn(h) for h in T.HORIZONS]
+        cells = [fn(h) for h in ctx.horizons]
         if any(c is not None for c in cells):
             metric_rows.append((label, [c or "–" for c in cells]))
 
@@ -1175,7 +1189,7 @@ def _epoch_table(ctx: _Ctx) -> str:
                       + "; the direction metrics skip moves inside the deadband (not logged), so their true n_eff "
                         "is smaller and their ranges somewhat wider than shown.")
         elif _any_n_eff(ctx):
-            effs = " / ".join(f"{h} {_n_eff(ctx, h)}" for h in T.HORIZONS if _n_eff(ctx, h))
+            effs = " / ".join(f"{h} {_n_eff(ctx, h)}" for h in ctx.horizons if _n_eff(ctx, h))
             ranges = f"Chance ranges: 95% on n_eff = {effs} (from val_dir_n; the total sample count was not recorded)."
         else:
             ranges = "Validation size unknown: no chance ranges."
@@ -1184,7 +1198,7 @@ def _epoch_table(ctx: _Ctx) -> str:
         parts.append(f"<table style='{tbl}'><tr>"
                      f"<th style='{th};text-align:left'>metric</th>"
                      + "".join(f"<th style='{th};color:{T.HORIZON_COLORS[h]}'>{html.escape(T.horizon_label(h, config))}</th>"
-                               for h in T.HORIZONS) + "</tr>")
+                               for h in ctx.horizons) + "</tr>")
         for lab, cells in metric_rows:
             parts.append(f"<tr><td style='{tl}'>{html.escape(lab)}</td>"
                          + "".join(f"<td style='{td}'>{c}</td>" for c in cells) + "</tr>")
@@ -1321,7 +1335,7 @@ def _chance_bands(fig, ctx: _Ctx, row: int, col: int, *, center=0.0, scale=1.0):
     of each horizon's band are also drawn dashed in that horizon's colour, as on the one-sided panels:
     the neutral tiers alone do not say which band is whose."""
     spans, edges = [], []
-    for h in T.HORIZONS:
+    for h in ctx.horizons:
         band = _chance(ctx, h)
         spans.append(None if band is None else (center - scale * band, center + scale * band))
         if band is not None:
@@ -1373,7 +1387,7 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
     # figure-wide key: line styles, the chance band, the served-epoch marker (the horizons join below)
     key = [("validation", dict(mode="lines", line=dict(color=T.INK_2, dash=T.VAL_DASH))),
            ("training", dict(mode="lines", line=dict(color=T.INK_2, dash=T.TRAIN_DASH)))]
-    if any(_chance(ctx, h) for h in T.HORIZONS):
+    if any(_chance(ctx, h) for h in ctx.horizons):
         key.append(("95% chance range (n_eff = val / h bars)",
                     dict(mode="markers", marker=dict(symbol="square", size=12, color=T.rgba(T.NEUTRAL, 0.3)))))
     _style_key(fig, key, 2, 1)
@@ -1423,7 +1437,7 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
 
     # 3-9: per-horizon metrics, validation solid, training dotted
     def horizons(row, col, val_key, train_key=None, *, transform=None):
-        for h in T.HORIZONS:
+        for h in ctx.horizons:
             c = T.HORIZON_COLORS[h]
             v = transform(h, "val_") if transform else _col(df, val_key.format(h=h))
             _line(fig, x, v, row=row, col=col, name=T.horizon_label(h, config), color=c, group=h,
@@ -1459,7 +1473,7 @@ def training_dashboard_figure(history, config=None, *, title: Optional[str] = No
     for (r, c), limit in (((3, 2), lambda h: _skill_ceiling(ctx, h)),
                           ((4, 1), lambda h: _ece_crit(ctx, h, _val_rate(ctx, h))),
                           ((4, 2), lambda h: _ks_crit(ctx, h))):
-        lims = {h: limit(h) for h in T.HORIZONS}
+        lims = {h: limit(h) for h in ctx.horizons}
         _shade(fig, [(0.0, v) if v else None for v in lims.values()], r, c)
         # one-sided: each horizon's limit, so its own line can be read against it
         _horizon_limits(fig, [(h, v) for h, v in lims.items() if v], r, c)
@@ -1639,7 +1653,7 @@ def _title_lines(ctx: _Ctx) -> List[str]:
             parts.append(f"{lab}{checks[k]['value']}")
     how = ["solid = validation, dotted = training", "train metrics sampled every TRAIN_METRICS_EVERY steps",
            "ECE, PIT-KS: raw heads (before temperature scaling / β shrink)"]
-    if any(_chance(ctx, h) for h in T.HORIZONS):
+    if any(_chance(ctx, h) for h in ctx.horizons):
         # two parts, so _wrap breaks between the phrases rather than inside 'dashed = each horizon's limit'
         how += ["shaded = 95% of what chance gives on the validation block with no skill (ECE, PIT-KS: "
                 "a calibrated head)", "dashed = each horizon's limit, in its colour"]
@@ -1691,10 +1705,10 @@ def direction_detail_figure(history, config=None, *, weights_epoch: Optional[int
     rows = ("accuracy", "sensitivity ▲ / specificity ▼", "F1 (up class)", "Brier (lower is better)",
             "mean P(up) − true up-rate")
     # short headings (a column is ~270 px in a 1000 px cell); the first row names the horizon in full
-    titles = [f"{T.horizon_label(h, config) if i == 0 else h} · {r}" for i, r in enumerate(rows) for h in T.HORIZONS]
-    fig = make_subplots(rows=len(rows), cols=3, shared_xaxes=True, subplot_titles=titles, vertical_spacing=0.06,
+    titles = [f"{T.horizon_label(h, config) if i == 0 else h} · {r}" for i, r in enumerate(rows) for h in ctx.horizons]
+    fig = make_subplots(rows=len(rows), cols=len(ctx.horizons), shared_xaxes=True, subplot_titles=titles, vertical_spacing=0.06,
                         horizontal_spacing=0.06)
-    banded = any(_enough(ctx, h) for h in T.HORIZONS)
+    banded = any(_enough(ctx, h) for h in ctx.horizons)
     key = [("validation", dict(mode="lines", line=dict(color=T.INK_2, dash=T.VAL_DASH))),
            ("training", dict(mode="lines", line=dict(color=T.INK_2, dash=T.TRAIN_DASH))),
            ("no-skill reference", dict(mode="lines", line=dict(color=T.NEUTRAL, dash="dash"))),
@@ -1719,7 +1733,7 @@ def direction_detail_figure(history, config=None, *, weights_epoch: Optional[int
     def pair(k, h):
         return _col(df, f"val_{k}_{h}"), _col(df, f"train_{k}_{h}")
 
-    for j, h in enumerate(T.HORIZONS):
+    for j, h in enumerate(ctx.horizons):
         c, col = T.HORIZON_COLORS[h], j + 1
         p, pt = _col(df, f"val_true_up_rate_{h}"), _col(df, f"train_true_up_rate_{h}")
         p0 = _val_rate(ctx, h)
@@ -1764,10 +1778,10 @@ def direction_detail_figure(history, config=None, *, weights_epoch: Optional[int
     for r, t in enumerate(("accuracy", "recall", "F1", "Brier", "mean P(up) − rate"), start=1):
         fig.update_yaxes(title_text=t, row=r, col=1)
     fig.update_xaxes(showticklabels=True, tickformat="d")
-    for col in (1, 2, 3):
+    for col in range(1, len(ctx.horizons) + 1):
         fig.update_xaxes(title_text="epoch", row=len(rows), col=col)
     T.note_on_empty(fig)
-    effs = [f"{h} {_n_eff(ctx, h)}" for h in T.HORIZONS if _n_eff(ctx, h)]
+    effs = [f"{h} {_n_eff(ctx, h)}" for h in ctx.horizons if _n_eff(ctx, h)]
     parts = ["dashed = the no-skill reference on the validation block (up-rate p), dotted grey = the same on the "
              "training block",
              "accuracy max(p, 1 − p)", "F1 of always up 2p / (1 + p)", "Brier p(1 − p)", "recall 0.5", "bias 0"]
@@ -1816,7 +1830,7 @@ def loss_terms_figure(history, config=None, *, weights_epoch: Optional[int] = No
                      ("training", dict(mode="lines", line=dict(color=T.INK_2, dash=T.TRAIN_DASH)))], 1, 1)
     for n_, (k, _) in enumerate(specs):
         r, c = n_ // 2 + 1, n_ % 2 + 1
-        for i, h in enumerate(T.HORIZONS):
+        for i, h in enumerate(ctx.horizons):
             v, t = _col(df, "val_" + k.format(i=i)), _col(df, k.format(i=i))
             _line(fig, x, v, row=r, col=c, name=T.horizon_label(h, config), color=T.HORIZON_COLORS[h], group=h,
                   show=v is not None and first(h))
@@ -1871,7 +1885,7 @@ def batch_loss_figure(points: Sequence[Tuple[float, float]], val_points: Sequenc
         fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name="validation (epoch end)",
                                  line=dict(color=T.INK, width=2)), 1, 1)
     if rows == 2:
-        for h in T.HORIZONS:
+        for h in T.horizons_of({k: None for p in dir_points for k in p[1]}):
             ys = [(p[1].get(h) or (None,))[0] for p in dir_points]
             xs, ys = per_epoch([p[0] for p in dir_points], [np.nan if v is None else v for v in ys])
             fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name=f"{h} up calls (train)",

@@ -40,9 +40,11 @@ from typing import Any, Dict, Mapping, Optional, Union
 import numpy as np
 import pandas as pd
 
+from neural_trade.core.horizons import horizon_index, keys_of
 from neural_trade.visualization import labels as L
+from neural_trade.visualization.theme import horizons_of as _hs
 from neural_trade.evaluation.report import (
-    BASELINE_ORDER, BLOCK, BOOT_N, DM_LAG_PER_STEP, DOLLAR_METRICS, GAUSS_CONST_NA, HORIZONS, RESTATED_BASELINE_ROWS,
+    BASELINE_ORDER, BLOCK, BOOT_N, DM_LAG_PER_STEP, DOLLAR_METRICS, GAUSS_CONST_NA, RESTATED_BASELINE_ROWS,
     Z95, ZERO_BETA_NA, baseline_margin, coherence_block, delta_block, direction_block, independent_agreement,
     magnitude_ordering, margin_z,
 )
@@ -106,11 +108,11 @@ def _corr(a, b) -> float:
 
 
 def _raw_or(frame, raw_delta):
-    return {h: np.asarray(raw_delta[h], float).reshape(-1)[:len(frame)] for h in HORIZONS} if raw_delta else None
+    return {h: np.asarray(raw_delta[h], float).reshape(-1)[:len(frame)] for h in _hs(frame)} if raw_delta else None
 
 
 def _zero_columns(arr) -> list:
-    """Indices of the columns of an [N, 3] array that are 0 on every row (a served delta with beta = 0)."""
+    """Indices of the columns of an [N, H] array that are 0 on every row (a served delta with beta = 0)."""
     arr = np.asarray(arr, float)
     return [i for i in range(arr.shape[1]) if len(arr) and not np.any(arr[:, i])]
 
@@ -143,7 +145,7 @@ def classification_table(frame, config=None, *, calibrated: bool = True, readout
     labels = direction_labels_np(frame.y, frame.last_close, deadband)
     cols: Dict[str, Dict[str, Any]] = {}
     const_h = []                    # horizons whose Gaussian readout is the constant 0.5 (served delta 0)
-    for h in HORIZONS:
+    for h in _hs(frame):
         lab, mask = labels[h]
         p = np.asarray(frame.prob(h, calibrated) if readout == "head" else frame.gauss_prob(h, deadband), float)
         d = direction_block(lab, mask, p)
@@ -225,7 +227,7 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
     rw = ", raw heads" if raw is not None else f", {sv}"
     cols: Dict[str, Dict[str, Any]] = {}
     zero = []                       # horizons whose served delta is 0 on every bar (beta = 0)
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(_hs(frame)):
         y = frame.y[:, i]
         s = np.asarray(frame.delta[h], float)
         d = raw[h] if raw is not None else s
@@ -297,34 +299,37 @@ def delta_quality_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.
 # ------------------------------------------------------------------ across horizons
 def magnitude_ordering_table(frame, *, raw_delta: Optional[Dict[str, np.ndarray]] = None,
                              digits: Optional[int] = 4) -> pd.DataFrame:
-    """Share of samples with |delta_h0| <= |delta_h1| (<= |delta_h2|).
+    """Share of samples with |delta_h0| <= |delta_h1| (<= |delta_h2|): one row per neighbouring pair of
+    the frame's horizons, then the full chain (NT-042).
 
     Columns: the raw heads (the ordering the loss trains; only with ``raw_delta``), the served deltas
     (after a per-horizon shrink beta this mostly reflects the betas), the realised moves, each with its
     95% Wilson interval on n / bars-ahead effective samples (the longer horizon of the check), and the
-    value for magnitudes in random order (1/2, 1/2, 1/6).
+    value for magnitudes in random order (1/2 per pair, 1/H! for the chain: 1/6 at three horizons).
 
     A served delta with beta = 0 is 0 on every bar: |0| <= |0| holds by ties, so a check that involves
     such a horizon measures nothing. Its share is NaN, its interval cell says ``ZERO_BETA_NA`` and
     ``df.attrs["caption"]`` names the horizons (the same for any series with a column of zeros).
     """
     raw = _raw_or(frame, raw_delta)
-    served = np.stack([frame.delta[h] for h in HORIZONS], 1)
+    hs = _hs(frame)
+    pairs = list(zip(hs, hs[1:]))
+    served = np.stack([frame.delta[h] for h in hs], 1)
     n = len(frame)
-    steps = [max(S.horizon_steps(frame, a), S.horizon_steps(frame, b)) for a, b in (("h0", "h1"), ("h1", "h2"))]
-    steps.append(max(S.horizon_steps(frame, h) for h in HORIZONS))
-    involved = ((0, 1), (1, 2), (0, 1, 2))
+    steps = [max(S.horizon_steps(frame, a), S.horizon_steps(frame, b)) for a, b in pairs]
+    steps.append(max(S.horizon_steps(frame, h) for h in hs))
+    involved = [(i, i + 1) for i in range(len(pairs))] + [tuple(range(len(hs)))]
     series = {}
     if raw is not None:
-        series["raw heads (trained ordering)"] = np.stack([raw[h] for h in HORIZONS], 1)
+        series["raw heads (trained ordering)"] = np.stack([raw[h] for h in hs], 1)
     series["served deltas"] = served
-    series["realised moves"] = frame.y[:, :3]
+    series["realised moves"] = frame.y[:, :len(hs)]
     cols: Dict[str, list] = {}
     zero_served = []
     for name, arr in series.items():
         zero = set(_zero_columns(arr))
         if name == "served deltas":
-            zero_served = [HORIZONS[i] for i in sorted(zero)]
+            zero_served = [hs[i] for i in sorted(zero)]
         void = [bool(zero & set(ix)) for ix in involved]
         shares = magnitude_ordering(arr)
         cols[name] = [float("nan") if v else (round(s, digits) if digits is not None else s)
@@ -333,9 +338,11 @@ def magnitude_ordering_table(frame, *, raw_delta: Optional[Dict[str, np.ndarray]
         why = ZERO_BETA_NA if name == "served deltas" else "n/a (0 on every bar)"
         cols[f"{name.split(' (')[0]} 95% CI (n_eff)"] = [why if v else _interval(float(lo), float(hi), digits)
                                                          for (lo, hi), v in zip(cis, void)]
-    cols["magnitudes in random order"] = [round(v, digits) if digits is not None else v for v in (0.5, 0.5, 1 / 6)]
+    random_order = [0.5] * len(pairs) + [1 / math.factorial(len(hs))]
+    cols["magnitudes in random order"] = [round(v, digits) if digits is not None else v for v in random_order]
     cols["n_eff"] = [n // max(1, st) for st in steps]
-    df = pd.DataFrame(cols, index=["|d h0| <= |d h1|", "|d h1| <= |d h2|", "full chain |d h0| <= |d h1| <= |d h2|"])
+    df = pd.DataFrame(cols, index=[f"|d {a}| <= |d {b}|" for a, b in pairs]
+                      + ["full chain " + " <= ".join(f"|d {h}|" for h in hs)])
     df.index.name = "check"
     if zero_served:
         df.attrs["caption"] = (f"beta = 0 for {', '.join(zero_served)}: the served delta is 0 on every bar there, so "
@@ -348,7 +355,7 @@ def magnitude_ordering_table(frame, *, raw_delta: Optional[Dict[str, np.ndarray]
 @L.labelled
 def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndarray]] = None,
                     calibrated: bool = True, digits: Optional[int] = 4) -> pd.DataFrame:
-    """Does sign(delta) agree with P(up) > 0.5? Per horizon and on all three at once, on every sample.
+    """Does sign(delta) agree with P(up) > 0.5? Per horizon and on all H at once, on every sample.
 
     The sign of delta is the same raw or served while beta > 0 (``raw_delta`` protects against beta = 0).
     Without ``raw_delta``, a horizon whose delta is 0 on every bar (beta = 0) has no sign: its row, and
@@ -358,14 +365,15 @@ def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndar
     Wilson interval on n / bars-ahead effective samples (the longest horizon for "all 3").
     """
     raw = _raw_or(frame, raw_delta)
-    D = np.stack([np.asarray((raw if raw is not None else frame.delta)[h], float) for h in HORIZONS], 1)
+    hs = _hs(frame)
+    D = np.stack([np.asarray((raw if raw is not None else frame.delta)[h], float) for h in hs], 1)
     zero = set() if raw is not None else set(_zero_columns(D))
     d = D > 0
-    p = np.stack([np.asarray(frame.prob(h, calibrated), float) for h in HORIZONS], 1) > 0.5
+    p = np.stack([np.asarray(frame.prob(h, calibrated), float) for h in hs], 1) > 0.5
     n = len(frame)
     nan = float("nan")
     rows = {}
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(hs):
         steps = S.horizon_steps(frame, h)
         agree = d[:, i] == p[:, i]
         k = int(agree.sum())
@@ -377,11 +385,11 @@ def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndar
         if i in zero:
             rows[h].update({k_: nan for k_ in ("agree", "95% CI low", "95% CI high", "expected if independent",
                                                "share delta > 0")})
-    steps = max(S.horizon_steps(frame, h) for h in HORIZONS)
+    steps = max(S.horizon_steps(frame, h) for h in hs)
     k = int((d == p).all(1).sum())
     _, lo, hi = S.wilson(k, n, steps=steps)
     indep = independent_agreement(d, p)
-    rows["all 3"] = {"agree": nan if zero else k / n, "95% CI low": nan if zero else float(lo),
+    rows[f"all {len(hs)}"] = {"agree": nan if zero else k / n, "95% CI low": nan if zero else float(lo),
                      "95% CI high": nan if zero else float(hi), "expected if independent": nan if zero else indep,
                      "share delta > 0": nan, "share P(up) > 0.5": nan, "n": n, "n_eff": n // max(1, steps)}
     df = pd.DataFrame.from_dict(rows, orient="index")
@@ -391,8 +399,8 @@ def alignment_table(frame, config=None, *, raw_delta: Optional[Dict[str, np.ndar
         num = [c for c in df.columns if c not in ("n", "n_eff")]
         df[num] = df[num].round(digits)
     if zero:
-        df.attrs["caption"] = (f"The delta is 0 on every bar for {', '.join(HORIZONS[i] for i in sorted(zero))} "
-                               "(a served delta with beta = 0): it has no sign, so those rows and \"all 3\" are n/a. "
+        df.attrs["caption"] = (f"The delta is 0 on every bar for {', '.join(hs[i] for i in sorted(zero))} "
+                               f"(a served delta with beta = 0): it has no sign, so those rows and \"all {len(hs)}\" are n/a. "
                                "Pass raw_delta= to score the raw heads.")
     return df
 
@@ -425,6 +433,7 @@ def baseline_table(report, *, compact: bool = True, digits: Optional[int] = 4) -
     margins = rep.get("baseline_margins") or {}
     names = [n for n in BASELINE_ORDER if n in beats] + [n for n in beats if n not in BASELINE_ORDER]
     current = bool((rep.get("meta") or {}).get("noise_tests"))
+    hs = keys_of((rep.get("model") or {}).get("horizons"))
     rows, index = [], []
     for name in names:
         for key, per_h in beats[name].items():
@@ -432,7 +441,7 @@ def baseline_table(report, *, compact: bool = True, digits: Optional[int] = 4) -
                 continue
             group, metric = key.split("/", 1)
             row: Dict[Any, Any] = {}
-            for h in HORIZONS:
+            for h in hs:
                 mg = (margins.get(name) or {}).get(key, {}).get(h)
                 if mg is None:
                     m = (((rep.get("model") or {}).get("horizons") or {}).get(h) or {}).get(group, {}).get(metric)
@@ -452,10 +461,10 @@ def baseline_table(report, *, compact: bool = True, digits: Optional[int] = 4) -
                 row[(h, "verdict")] = verdict
             rows.append(row)
             index.append((name, key))
-    cols = pd.MultiIndex.from_tuples([(h, f) for h in HORIZONS for f in ("model", "baseline", MARGIN, "z",
+    cols = pd.MultiIndex.from_tuples([(h, f) for h in hs for f in ("model", "baseline", MARGIN, "z",
                                                                              "verdict")], names=["horizon", ""])
     df = pd.DataFrame(rows, index=pd.MultiIndex.from_tuples(index or [], names=["baseline", "metric"]), columns=cols)
-    for h in HORIZONS:
+    for h in hs:
         for f in ("model", "baseline", MARGIN, "z"):
             df[(h, f)] = df[(h, f)].astype(float)
     if current:
@@ -508,7 +517,7 @@ def trailing_move_table(frames: Mapping[str, Any], config, *,
         labels = direction_labels_np(frame.y, frame.last_close, deadband)
         heads = (raw_deltas or {}).get(block) or frame.delta
         n = len(frame)
-        for i, h in enumerate(HORIZONS):
+        for i, h in enumerate(_hs(frame)):
             steps = S.horizon_steps(frame, h)
             y, ext = frame.y[:, i], ext_all[:, i]
             head = np.asarray(heads[h], float).reshape(-1)[:n]
@@ -564,12 +573,12 @@ def _reductions(metrics: list, key: str) -> int:
 def _per_h(d: Optional[Mapping[str, Any]], fmt="{:.3f}") -> str:
     if not d:
         return ""
-    return " / ".join(fmt.format(float(d[h])) if d.get(h) is not None else "n/a" for h in HORIZONS)
+    return " / ".join(fmt.format(float(d[h])) if d.get(h) is not None else "n/a" for h in keys_of(d))
 
 
 def _no_signal_note(direction_signal: Optional[Mapping[str, Any]]) -> str:
     """"; no usable direction signal on h1 (...)" when the temperature fit ended at a bound (D-066)."""
-    none = [h for h in HORIZONS if (direction_signal or {}).get(h) == "none"]
+    none = [h for h in keys_of(direction_signal) if (direction_signal or {}).get(h) == "none"]
     return (f"; no usable direction signal on {', '.join(none)} (temperature fit at a bound: P(up) there is "
             "neutral, strategies stay flat on it)") if none else ""
 
@@ -734,11 +743,12 @@ def scored_counts_text(frame, config=None, *, block: Optional[str] = None,
     (n_eff 534 / 379 / 293)': the per-horizon sample sizes of every direction number."""
     deadband = _deadband(config, deadband_bps)
     labels = direction_labels_np(frame.y, frame.last_close, deadband)
-    n_sc = [int(labels[h][1].sum()) for h in HORIZONS]
-    n_eff = [n // max(1, S.horizon_steps(frame, h)) for n, h in zip(n_sc, HORIZONS)]
+    hs = _hs(frame)
+    n_sc = [int(labels[h][1].sum()) for h in hs]
+    n_eff = [n // max(1, S.horizon_steps(frame, h)) for n, h in zip(n_sc, hs)]
     name = block if block is not None else getattr(frame, "split", "")
     return (f"{name} block {len(frame):,} samples; scored beyond the {deadband:g} bps deadband: "
-            + " / ".join(f"{h} {n:,}" for h, n in zip(HORIZONS, n_sc))
+            + " / ".join(f"{h} {n:,}" for h, n in zip(hs, n_sc))
             + " (n_eff " + " / ".join(f"{n:,}" for n in n_eff) + ")").strip()
 
 
@@ -779,7 +789,7 @@ def delta_summary_text(frame, h: str = "h1", *, raw_delta: Optional[Dict[str, np
                        delta_scale: Optional[Dict[str, float]] = None, sep: str = "<br>") -> str:
     """'RMSE USDT raw 250.12 / served 240.55 / zero 240.61' and 'mean USDT predicted raw -3.10 / served -0.07 vs
     realised 1.20 · beta 0.023' for one horizon (raw only with ``raw_delta``), from report.delta_block."""
-    i = HORIZONS.index(h)
+    i = horizon_index(h)
     y = frame.y[:, i]
     bs = delta_block(y, frame.delta[h])
     raw = _raw_or(frame, raw_delta)

@@ -1,0 +1,34 @@
+43b2377c5f97c558dca1ac6a0576fa8cf58f26cd
+# NT-042 golden run: scripts/golden_run.py record on this head, compared bit-for-bit with a record of the base commit 20e6f85 (D:/nt/scratch_042/exact_cmp.py)
+[golden] recorded 461 arrays -> D:\nt\scratch_042\after2.npz
+common=461 exact=461 differ=0 missing=[] extra=[]
+# N = 3 figures / tables / reports / signals / backtests: sha256 of each, base src vs new src (D:/nt/scratch_042/n3_equiv.py)
+equal alignment_table b03e097748623263 b03e097748623263
+equal backtest_calibrated_quantile d860d48e0f649843 d860d48e0f649843
+equal backtest_enhanced_multi_horizon 7e1dfe5e8bc58060 7e1dfe5e8bc58060
+equal backtest_liberal d089d9f4c6207984 d089d9f4c6207984
+equal backtest_threshold_spike 5ebcf9a71d5573cc 5ebcf9a71d5573cc
+equal baseline_table_stored c20674e15c1deedf c20674e15c1deedf
+equal classification_table 63dfae7078e0e486 63dfae7078e0e486
+equal coherence_analytics 59425e684f53a5eb 59425e684f53a5eb
+equal confidence_analytics 333cca8065aeffeb 333cca8065aeffeb
+equal delta_analytics ee09a7cf7022a49a ee09a7cf7022a49a
+equal delta_analytics_raw 255e16877661acdb 255e16877661acdb
+equal delta_quality_table f51ab869cef8b084 f51ab869cef8b084
+equal direction_analytics 1d07950ca3048939 1d07950ca3048939
+equal evaluate_json 2f6ff0d67c9996f2 2f6ff0d67c9996f2
+equal evaluate_md 9dceada339a44be6 9dceada339a44be6
+equal health_block 38a19b1236d9f6ad 38a19b1236d9f6ad
+equal magnitude_ordering_table f4b350216ff47cd3 f4b350216ff47cd3
+equal scored_counts_text 2be4f1d641419d82 2be4f1d641419d82
+equal signal_arrays 6474afff8dcf216f 6474afff8dcf216f
+equal stored_report_md 37350a9b3a13acaf 37350a9b3a13acaf
+equal trade_analytics_calibrated_quantile a1d193e42c777164 a1d193e42c777164
+equal trade_analytics_threshold_spike 23a7eb8cd6563c4d 23a7eb8cd6563c4d
+equal trading_dashboard_calibrated_quantile 5f431cceffc22839 5f431cceffc22839
+equal trading_dashboard_threshold_spike b25df3597cccaf8b b25df3597cccaf8b
+equal training_dashboard 2f69693a1b502558 2f69693a1b502558
+equal training_direction_detail 87d35995b14a478e 87d35995b14a478e
+equal training_loss_terms fbde1b2a9e6a5b9f fbde1b2a9e6a5b9f
+equal variance_analytics 483156d96fe91bb2 483156d96fe91bb2
+equal 28 of 28
