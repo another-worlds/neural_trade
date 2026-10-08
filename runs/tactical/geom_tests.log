@@ -1,0 +1,4 @@
+base HEAD 092ee24460e2ccfc1ef738e4d05e5fd99e426180 (nt-tactical)
+ruff: All checks passed!
+pytest tests/test_direction_geometry.py tests/test_noprice_switches.py tests/registries tests/test_learnable_indicators.py tests/test_config.py -n 8 (CPU): 161 passed
+test_direction_geometry.py alone: 12 passed

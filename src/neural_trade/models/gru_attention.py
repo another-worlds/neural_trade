@@ -110,6 +110,44 @@ def _direction_head(config, tower, skip_features, name, bias_init):
     return layers.Activation('sigmoid', name=name)(layers.Add()([tower_logit, skip_logit]))
 
 
+def _regime_features(x):
+    """[B, LOOKBACK] window-relative close -> [B, 3]: log of the 1-bar change std over the window, and the
+    efficiency ratio |net change| / sum|changes| over the whole window and over the last 15 bars (about 1 in
+    a clean trend, about 0 in a range). Causal; the DIRECTION_REGIME_GATE's own inputs."""
+    d = x[:, 1:] - x[:, :-1]
+    vol = tf.sqrt(tf.math.reduce_variance(d, axis=1, keepdims=True) + 1e-12)
+
+    def eff(dd):
+        return tf.abs(tf.reduce_sum(dd, axis=1, keepdims=True)) / (tf.reduce_sum(tf.abs(dd), axis=1, keepdims=True) + 1e-9)
+
+    return tf.concat([tf.math.log(vol), eff(d), eff(d[:, -15:])], axis=1)
+
+
+def _gated_direction(config, tower, skip_features, geom, regime_feats, variance, name, bias_init):
+    """DIRECTION_REGIME_GATE: P(up) = sigmoid(g * logit_A + (1 - g) * logit_B). Each expert has today's head
+    input (the tower, plus the geometry features when on) and today's skip logit; the gate g reads
+    [regime_feats, log(stop_gradient(variance)), geometry features when on] through Dense(8, gelu) ->
+    Dense(1, sigmoid). The variance head is read, not trained, through this gate."""
+    tower_in = layers.Concatenate(name=f'{name}_geom_in')([tower, geom]) if geom is not None else tower
+    kernel_init = 'zeros' if bool(getattr(config, 'DIRECTION_DEEP_ZERO_INIT', False)) else 'glorot_uniform'
+    logits = []
+    for tag in ('A', 'B'):
+        lg = layers.Dense(1, name=f'{name}_{tag}_logit', bias_initializer=bias_init,
+                          kernel_initializer=kernel_init)(tower_in)
+        if skip_features is not None:
+            sk = layers.Dense(1, name=f'{name}_{tag}_skip', use_bias=False,
+                              kernel_regularizer=regularizers.L2(float(config.DIRECTION_SKIP_L2)))(skip_features)
+            lg = layers.Add(name=f'{name}_{tag}_sum')([lg, sk])
+        logits.append(lg)
+    log_var = layers.Lambda(lambda v: tf.math.log(tf.stop_gradient(v) + 1e-6), name=f'{name}_gate_logvar')(variance)
+    gate_in = [regime_feats, log_var] + ([geom] if geom is not None else [])
+    gate_in = layers.Concatenate(name=f'{name}_gate_in')(gate_in)
+    hidden = layers.Dense(8, activation='gelu', name=f'{name}_gate_hidden')(gate_in)
+    g = layers.Dense(1, activation='sigmoid', name=f'{name}_gate')(hidden)
+    mixed = layers.Lambda(lambda t: t[0] * t[1] + (1.0 - t[0]) * t[2], name=f'{name}_mix')([g, logits[0], logits[1]])
+    return layers.Activation('sigmoid', name=name)(mixed)
+
+
 def build_gru_attention(config) -> tf.keras.Model:
     """Build the gru_attention architecture for ``config`` (LOOKBACK, indicators, T_PERP_DIM...).
 
@@ -152,6 +190,13 @@ def build_gru_attention(config) -> tf.keras.Model:
 
     # Enhanced Learnable Indicators: Now takes [inp, meta_adjust], outputs sequences [B, LOOKBACK, num_ind]
     ind_seq = Layers.for_role(config, 'indicators', config, name='learnable_indicators')([inp, meta_adjust])
+
+    # INDICATOR_GEOMETRY (tactical): geometry features of the raw indicator sequence (before any channel
+    # re-weighting; the raw close is its last channel), fed to the direction heads only.
+    geom = None
+    if bool(getattr(config, 'INDICATOR_GEOMETRY', False)):
+        geom = Layers.for_role(config, 'indicator_geometry', slope_bars=list(config.GEOM_SLOPE_BARS),
+                               name='indicator_geometry')(ind_seq)
 
     # ATTENTION_MODE (NT-105, B_model_indicators.md 1.4): 'channels' attends across the indicator
     # channels (tokens = channels) before the GRU, instead of the post-GRU 'time' block below.
@@ -306,6 +351,8 @@ def build_gru_attention(config) -> tf.keras.Model:
     # Tactical switches (default = today's graph, layer for layer): PRICE_HEAD='none' builds no price
     # Dense layers; ACTIVE_HORIZONS builds only the listed towers. Both replace the missing head by a
     # constant (price 0, direction 0.5, variance 1.0), so the output contract is unchanged.
+    gate_on = bool(getattr(config, 'DIRECTION_REGIME_GATE', False))
+    regime_feats = layers.Lambda(_regime_features, name='regime_features')(close_seq) if gate_on else None
     price_on = str(getattr(config, 'PRICE_HEAD', 'on')) != 'none'
     active_horizons = set(getattr(config, 'ACTIVE_HORIZONS', None) or (0, 1, 2))
 
@@ -325,7 +372,10 @@ def build_gru_attention(config) -> tf.keras.Model:
             )(price_h0)
         else:
             price_h0 = _constant_head(shared_dense, 0.0, 'price_h0_clip')
-        direction_h0 = _direction_head(config, tower_h0, skip_features, 'direction_h0', dir_bias_init)
+        if not gate_on:
+            direction_h0 = _direction_head(
+                config, tower_h0 if geom is None else layers.Concatenate()([tower_h0, geom]),
+                skip_features, 'direction_h0', dir_bias_init)
         # Clip dir probs to [0,1]. Mathematically a no-op (the head's sigmoid activation already
         # guarantees [0,1], and clip_by_value does not sanitize NaN/Inf: clip(nan, 0, 1) == nan) -
         # NT-096 (D-029) looked at removing it, but the layer graph it sits in is load-bearing for
@@ -335,10 +385,11 @@ def build_gru_attention(config) -> tf.keras.Model:
         # to load: "Weight count mismatch ... direction_h0_skip"). That is an effect, so D-029 does not
         # allow removing it; the layer stays. (NaN/Inf protection is the loss guards + post-extraction
         # sanitization, not this clip.)
-        direction_h0 = layers.Lambda(
-            lambda t: tf.clip_by_value(t, 0.0, 1.0),
-            name='direction_h0_clip'
-        )(direction_h0)
+        if not gate_on:
+            direction_h0 = layers.Lambda(
+                lambda t: tf.clip_by_value(t, 0.0, 1.0),
+                name='direction_h0_clip'
+            )(direction_h0)
         # Variance head conditioned on T_⊥ and regime gate:
         #   high perp_magnitude → more energy in hidden dims → higher σ²
         #   high regime_gate → white-hole / regime-break → higher σ²
@@ -350,6 +401,10 @@ def build_gru_attention(config) -> tf.keras.Model:
             lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
             name='variance_h0_clip'
         )(variance_h0)
+        if gate_on:
+            direction_h0 = _gated_direction(
+                config, tower_h0, skip_features, geom, regime_feats, variance_h0, 'direction_h0', dir_bias_init)
+            direction_h0 = layers.Lambda(lambda t: tf.clip_by_value(t, 0.0, 1.0), name='direction_h0_clip')(direction_h0)
     else:
         price_h0 = _constant_head(shared_dense, 0.0, 'price_h0_clip')
         direction_h0 = _constant_head(shared_dense, 0.5, 'direction_h0_clip')
@@ -367,12 +422,16 @@ def build_gru_attention(config) -> tf.keras.Model:
             )(price_h1)
         else:
             price_h1 = _constant_head(shared_dense, 0.0, 'price_h1_clip')
-        direction_h1 = _direction_head(config, tower_h1, skip_features, 'direction_h1', dir_bias_init)
+        if not gate_on:
+            direction_h1 = _direction_head(
+                config, tower_h1 if geom is None else layers.Concatenate()([tower_h1, geom]),
+                skip_features, 'direction_h1', dir_bias_init)
         # Kept (NT-096, D-029): see the identical comment on direction_h0_clip above.
-        direction_h1 = layers.Lambda(
-            lambda t: tf.clip_by_value(t, 0.0, 1.0),
-            name='direction_h1_clip'
-        )(direction_h1)
+        if not gate_on:
+            direction_h1 = layers.Lambda(
+                lambda t: tf.clip_by_value(t, 0.0, 1.0),
+                name='direction_h1_clip'
+            )(direction_h1)
         tower_h1_var_input = layers.Concatenate()([tower_h1, perp_magnitude, regime_gate])
         variance_h1 = layers.Dense(1, activation='softplus', name='variance_h1',
                                   bias_initializer=var_bias_init)(tower_h1_var_input)
@@ -380,6 +439,10 @@ def build_gru_attention(config) -> tf.keras.Model:
             lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
             name='variance_h1_clip'
         )(variance_h1)
+        if gate_on:
+            direction_h1 = _gated_direction(
+                config, tower_h1, skip_features, geom, regime_feats, variance_h1, 'direction_h1', dir_bias_init)
+            direction_h1 = layers.Lambda(lambda t: tf.clip_by_value(t, 0.0, 1.0), name='direction_h1_clip')(direction_h1)
     else:
         price_h1 = _constant_head(shared_dense, 0.0, 'price_h1_clip')
         direction_h1 = _constant_head(shared_dense, 0.5, 'direction_h1_clip')
@@ -397,12 +460,16 @@ def build_gru_attention(config) -> tf.keras.Model:
             )(price_h2)
         else:
             price_h2 = _constant_head(shared_dense, 0.0, 'price_h2_clip')
-        direction_h2 = _direction_head(config, tower_h2, skip_features, 'direction_h2', dir_bias_init)
+        if not gate_on:
+            direction_h2 = _direction_head(
+                config, tower_h2 if geom is None else layers.Concatenate()([tower_h2, geom]),
+                skip_features, 'direction_h2', dir_bias_init)
         # Kept (NT-096, D-029): see the identical comment on direction_h0_clip above.
-        direction_h2 = layers.Lambda(
-            lambda t: tf.clip_by_value(t, 0.0, 1.0),
-            name='direction_h2_clip'
-        )(direction_h2)
+        if not gate_on:
+            direction_h2 = layers.Lambda(
+                lambda t: tf.clip_by_value(t, 0.0, 1.0),
+                name='direction_h2_clip'
+            )(direction_h2)
         tower_h2_var_input = layers.Concatenate()([tower_h2, perp_magnitude, regime_gate])
         variance_h2 = layers.Dense(1, activation='softplus', name='variance_h2',
                                   bias_initializer=var_bias_init)(tower_h2_var_input)
@@ -410,6 +477,10 @@ def build_gru_attention(config) -> tf.keras.Model:
             lambda t: tf.where(tf.math.is_finite(t), t, tf.ones_like(t)),
             name='variance_h2_clip'
         )(variance_h2)
+        if gate_on:
+            direction_h2 = _gated_direction(
+                config, tower_h2, skip_features, geom, regime_feats, variance_h2, 'direction_h2', dir_bias_init)
+            direction_h2 = layers.Lambda(lambda t: tf.clip_by_value(t, 0.0, 1.0), name='direction_h2_clip')(direction_h2)
     else:
         price_h2 = _constant_head(shared_dense, 0.0, 'price_h2_clip')
         direction_h2 = _constant_head(shared_dense, 0.5, 'direction_h2_clip')
