@@ -724,6 +724,13 @@ class Config:
                                   "reach the indicator periods; off = today's graph", unit="flag")
     GEOM_SLOPE_BARS: List[int] = _f([3, 10], "direction", "k of the geometry slopes (x_t - x_{t-k})/k",
                                     unit="bars")
+    DIRECTION_INDICATOR_SKIP: bool = _f(False, "direction",
+                                        "tactical, exploratory: the learned indicator channels' last-bar values "
+                                        "(raw-close channel included), each z-scored with the sample's own window "
+                                        "mean and std (no trainable scale), are appended to the DIRECTION_SKIP "
+                                        "features, so the linear skip logit reads them and gradients reach the "
+                                        "indicator periods (gru_attention only). With DIRECTION_SKIP off the skip "
+                                        "reads only these. Off = today's graph", unit="flag")
     DIRECTION_HEAD_MODE: str = _f("mixed", "direction",
                                   "'mixed' (deep logit + skip logit, today) or 'skip_only' (the deep logit is a "
                                   "frozen zero; the direction logit is the linear skip with a bias; needs "
@@ -903,8 +910,8 @@ class Config:
             bad("DIR_DEADBAND_BPS must be >= 0")
         if self.DIRECTION_LOSS not in ("bce", "focal_dice"):
             bad(f"DIRECTION_LOSS must be 'bce' or 'focal_dice', got {self.DIRECTION_LOSS!r}")
-        if self.DIRECTION_HEAD_MODE == "skip_only" and not self.DIRECTION_SKIP:
-            bad("DIRECTION_HEAD_MODE 'skip_only' needs DIRECTION_SKIP")
+        if self.DIRECTION_HEAD_MODE == "skip_only" and not (self.DIRECTION_SKIP or self.DIRECTION_INDICATOR_SKIP):
+            bad("DIRECTION_HEAD_MODE 'skip_only' needs DIRECTION_SKIP or DIRECTION_INDICATOR_SKIP")
         if self.INDICATOR_GEOMETRY and (not self.GEOM_SLOPE_BARS or any(
                 isinstance(k, bool) or not isinstance(k, int) or k < 1 or k >= self.LOOKBACK
                 for k in self.GEOM_SLOPE_BARS)):

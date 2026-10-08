@@ -110,6 +110,15 @@ def _direction_head(config, tower, skip_features, name, bias_init):
     return layers.Activation('sigmoid', name=name)(layers.Add()([tower_logit, skip_logit]))
 
 
+def _indicator_last_bar_features(ind_seq):
+    """[B, L, C] learned-indicator channels -> [B, C]: each channel's last-bar value, z-scored with that
+    sample's own window mean and std (no trainable scale or shift, so a Dense on it stays linear in the
+    channels' last-bar values; DIRECTION_INDICATOR_SKIP). Differentiable into the indicator periods."""
+    mean = tf.reduce_mean(ind_seq, axis=1)
+    std = tf.sqrt(tf.math.reduce_variance(ind_seq, axis=1) + 1e-8)
+    return (ind_seq[:, -1, :] - mean) / std
+
+
 def _regime_features(x):
     """[B, LOOKBACK] window-relative close -> [B, 3]: log of the 1-bar change std over the window, and the
     efficiency ratio |net change| / sum|changes| over the whole window and over the last 15 bars (about 1 in
@@ -193,6 +202,7 @@ def build_gru_attention(config) -> tf.keras.Model:
 
     # INDICATOR_GEOMETRY (tactical): geometry features of the raw indicator sequence (before any channel
     # re-weighting; the raw close is its last channel), fed to the direction heads only.
+    raw_ind_seq = ind_seq
     geom = None
     if bool(getattr(config, 'INDICATOR_GEOMETRY', False)):
         geom = Layers.for_role(config, 'indicator_geometry', slope_bars=list(config.GEOM_SLOPE_BARS),
@@ -347,6 +357,12 @@ def build_gru_attention(config) -> tf.keras.Model:
     skip_features = None
     if bool(getattr(config, 'DIRECTION_SKIP', False)):
         skip_features = layers.Lambda(_trailing_return_features, name='direction_skip_features')(close_seq)
+    # DIRECTION_INDICATOR_SKIP (tactical): the learned indicators' standardised last-bar values join the
+    # skip features, so the same linear skip Dense reads them (gradients reach the indicator periods).
+    if bool(getattr(config, 'DIRECTION_INDICATOR_SKIP', False)):
+        ind_last = layers.Lambda(_indicator_last_bar_features, name='direction_indicator_features')(raw_ind_seq)
+        skip_features = ind_last if skip_features is None else layers.Concatenate(
+            name='direction_skip_all_features')([skip_features, ind_last])
 
     # Tactical switches (default = today's graph, layer for layer): PRICE_HEAD='none' builds no price
     # Dense layers; ACTIVE_HORIZONS builds only the listed towers. Both replace the missing head by a
