@@ -1,0 +1,6 @@
+hc5_noprice3 0/3
+hc5_noprice1 0/3
+hc5_noprice3 1/3
+hc5_noprice1 1/3
+hc5_noprice3 2/3
+hc5_noprice1 2/3
