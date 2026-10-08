@@ -5,7 +5,7 @@ Writes runs/tactical/dashboard.html (data inlined, plotly from CDN, reloads ever
     python runs/tactical/dashboard.py            # write once
     python runs/tactical/dashboard.py --loop 20  # rewrite every 20 s
 """
-import collections, datetime, glob, json, math, os, statistics as st, subprocess, sys, time
+import re, collections, datetime, glob, json, math, os, statistics as st, subprocess, sys, time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(ROOT))
@@ -211,7 +211,17 @@ def main():
                 res[os.path.basename(fp)] = {k: (v[-1] if v else None) for k, v in d.get("probe", {}).items()}
             runo = os.path.join(ROOT, "probe", "run.out")
             log = open(runo, encoding="utf-8").read()[-400:] if os.path.exists(runo) else ""
-            x["extra"] = {"runs": res, "log": log}
+            prog = []
+            for a in ("2021-10-13T18:00:00_0", "2023-04-29T08:00:00_1"):
+                cand = glob.glob(os.path.join(ROOT, "probe", f"log_{a[:10]}*_{a[-1]}.txt"))  # bash writes ':' as a private char
+                lp = cand[0] if cand else os.path.join(ROOT, "probe", "missing")
+                txt = open(lp, encoding="utf-8", errors="ignore").read() if os.path.exists(lp) else ""
+                ep = re.findall(r"PROBE_EPOCH (\d+)/(\d+) (\S+)", txt)
+                started = time.strftime("%H:%M", time.localtime(os.path.getctime(lp))) if os.path.exists(lp) else None
+                prog.append({"run": a, "epochs_done": int(ep[-1][0]) if ep else 0, "epochs": int(ep[-1][1]) if ep else 8,
+                             "last": ep[-1][2] if ep else None, "started": started,
+                             "done": os.path.exists(os.path.join(ROOT, "probe", f"probe_{a[:10]}_s{a[-1]}.json"))})
+            x["extra"] = {"runs": res, "log": log, "progress": prog}
             if any("probe_run.py" in l for l in procs_all):
                 x["status"] = "идёт"
             elif res:
@@ -234,7 +244,8 @@ def main():
                 pass
     gl = os.path.join(ROOT, "hc4", "guard.log")
     stops = [l for l in open(gl, encoding="utf-8").read().splitlines() if " stop " in l][-5:] if os.path.exists(gl) else []
-    state = {"res": res, "stops": stops, "est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    procs_all_n = sum(1 for l in procs_all if ("configs/tactical/" in l or "probe_run.py" in l))
+    state = {"procs_all_n": procs_all_n, "res": res, "stops": stops, "est": state_est, "now": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
              "gpu": sh("nvidia-smi --query-gpu=utilization.gpu,memory.used --format=csv,noheader").strip(),
              "procs": len(procs), "exps": exps, "active": active, "hm": [[g + "." + k, lab] for g, k, lab in HM],
              "log": sh("git log --pretty=format:%h|%ad|%s --date=format:%m-%d %H:%M -12").splitlines()}
@@ -399,6 +410,7 @@ function render(){const e=S.exps.find(x=>x.id===cur);let h=`<div class="g"><div 
    if(I)h+='<div class="c full"><h2>Как связаны головы (среднее по 11 прогонам)</h2><table><tr><th></th><th>h0</th><th>h1</th><th>h2</th></tr>'+[['AUC головы направления','auc_direction_head'],['AUC знака головы цены','auc_price_head'],['Корреляция цены с фактом','corr_price_y'],['Выигрыш цены при лучшем масштабе','skill_at_best_beta'],['Разброс прогноза цены / реальный','sd_pred_over_sd_true'],['Самоуверенность направления |p-0,5|','mean_abs_p_minus_half'],['Связь разброса с |движением|','spearman_var_absy']].map(([l,k])=>'<tr><td>'+l+'</td>'+['h0','h1','h2'].map(z=>'<td>'+p3(I[z][k])+'</td>').join('')+'</tr>').join('')+'</table></div>';
    h+='<div class="c full"><h2>Точность направления против порога уверенности</h2><div class="sub">Доля угаданных на барах с уверенностью выше порога; по оси X - какая доля баров остаётся (меньше = строже). Зелёный пунктир - 60%. Пороги взяты по тем же данным (небольшое подглядывание); следующий шаг - пороги с калибровочного блока. Горизонты h0/h2 включаются в легенде.</div><div id="thplot" style="height:380px"></div><h2>Среднее движение в нашу сторону на сделку и случайный эталон</h2><div id="thbps" style="height:300px"></div></div>';}
  if(e.kind==='probe'&&e.extra){const R=e.extra.runs,ks=Object.keys(R);
+   if(e.extra.progress)h+='<div class="c full"><h2>Прогресс</h2>'+e.extra.progress.map(q=>'<div class="row"><div><b>прогон '+q.run+'</b></div><div class="bar"><i style="width:'+(q.done?100:100*q.epochs_done/q.epochs)+'%"></i></div><div class="sub">'+(q.done?'готово':(q.started?('эпоха '+q.epochs_done+'/'+q.epochs+(q.last?' (последняя '+q.last+')':' (сборка графа)')):'ждёт'))+'</div></div>').join('')+'</div>';
    if(!ks.length)h+='<div class="c full"><h2>Результатов пока нет</h2><pre class="sub">'+(e.extra.log||'')+'</pre></div>';
    else{const terms=['point','trend','dir','nll','crps','coherence','ife','vol','t_perp','casimir','hd','vac_overflow','inter_reg'];
     ['trunk','head','indicator'].forEach(g=>{h+='<div class="c full"><h2>Доля градиента и косинус с общим градиентом: '+({trunk:'ствол',head:'головы',indicator:'индикаторы'})[g]+'</h2><table><tr><th>слагаемое</th>'+ks.map(k=>'<th>'+k.replace('probe_','').replace('.json','')+': доля</th><th>cos</th>').join('')+'</tr>'+

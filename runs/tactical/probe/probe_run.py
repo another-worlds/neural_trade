@@ -37,7 +37,10 @@ m = CustomTrainModel(base_model=base, pred_scale=ys, pred_mean=np.mean(prep.y_tr
 reset_stateful_rngs(m, seed)
 m.compile(optimizer=opt.main)
 t0 = time.time()
-h = m.fit(prep.train_ds, validation_data=prep.val_ds, epochs=int(cfg.EPOCHS), verbose=0)
+class _EpochLine(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        print(f"PROBE_EPOCH {epoch + 1}/{int(cfg.EPOCHS)} {time.strftime('%H:%M:%S')}", flush=True)
+h = m.fit(prep.train_ds, validation_data=prep.val_ds, epochs=int(cfg.EPOCHS), verbose=0, callbacks=[_EpochLine()])
 probe = {k: [float(x) for x in v] for k, v in h.history.items() if k.startswith("probe_")}
 other = {k: [float(x) for x in v] for k, v in h.history.items() if not k.startswith("probe_") and not k.startswith("val_probe")}
 tag = ("_" + "_".join(f"{k}{v}" for k, v in kv.items())) if kv else ""
