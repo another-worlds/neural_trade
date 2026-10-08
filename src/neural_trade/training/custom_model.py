@@ -18,6 +18,7 @@ import neural_trade.losses.functions as _losses
 import neural_trade.utils.math as mh
 from neural_trade.core.config import Config
 from neural_trade.core.outputs import PredictiveOutputs
+from neural_trade.losses.path_loss import path_loss_terms
 from neural_trade.metrics.tf_direction import (CONTRIB_KEYS, DirectionAccumulator, PITAccumulator,
                                                STEP_MEAN_KEYS, TRAIN_ONLY_MEAN_KEYS, direction_counts,
                                                direction_labels_tf, direction_metrics_from_stats,
@@ -257,6 +258,13 @@ class CustomTrainModel(models.Model):
         # loss/val_loss over exactly the same steps, within float precision. Not a
         # tf.keras.metrics.Mean (would shift model.submodules - see _Accum's docstring).
         self._contrib_means = {k: _Accum("mean") for k in CONTRIB_KEYS}
+        # Config.PATH_HEAD (tactical hypothesis E): the path head's unweighted loss terms, logged as
+        # path_loss / path_ind_loss. Created only with the switch on, so the default model has none.
+        self._path_on = bool(getattr(self.config, 'PATH_HEAD', False))
+        self._path_means = {k: _Accum("mean") for k in ('path_loss', 'path_ind_loss')} if self._path_on else {}
+        if self._path_on and len(base_model.outputs) != len(PredictiveOutputs._fields) + 1:
+            raise ValueError("Config.PATH_HEAD needs a model with the extra path output (models.gru_attention "
+                             f"builds it); {type(base_model).__name__} has {len(base_model.outputs)} outputs")
         # Per-loss-term gradient probe (D-026 "about 10%", NT-037 acceptance 6): off unless
         # Config.PROBE_GRADIENTS is set, in which case an extra persistent-tape backward pass every
         # PROBE_EVERY steps measures, per term and per variable GROUP (QA repair round 1 fix 5):
@@ -369,7 +377,7 @@ class CustomTrainModel(models.Model):
         that Keras could reset on its own.
         """
         for d in (self._mask_counters, self._grad_health, self._var_floor_counters, self._probe_means,
-                 self._contrib_means):
+                 self._contrib_means, getattr(self, '_path_means', {})):
             for acc in d.values():
                 acc.reset_state()
 
@@ -540,6 +548,7 @@ class CustomTrainModel(models.Model):
         logs.update({f'masked_{t}': m.result() for t, m in getattr(self, '_mask_counters', {}).items()})
         # contrib_* (NT-037, D-026/D-045): computed every step in _update_epoch_metrics.
         logs.update({k: m.result() for k, m in getattr(self, '_contrib_means', {}).items()})
+        logs.update({k: m.result() for k, m in getattr(self, '_path_means', {}).items()})
         return logs
 
 
@@ -684,8 +693,25 @@ class CustomTrainModel(models.Model):
         return self.objective(self, x_window, y_true, y_pred, last_close, extended_trends,
                               vacuum_overflow=vacuum_overflow)
 
+    def _add_path_loss(self, loss_components, y_pred_list, path_true):
+        """Config.PATH_HEAD: add LAMBDA_PATH * log-cosh(path) + LAMBDA_PATH_IND * indicator shape loss
+        (losses.path_loss) to ``total`` and log the two unweighted terms. A Python-level no-op with the
+        switch off. ``path_true`` is the scaled future path ``[B, P]`` (data/windowing.make_path_targets)."""
+        if not self._path_on:
+            return loss_components
+        if path_true is None:
+            raise ValueError("Config.PATH_HEAD is on but the batch has no path target (create_datasets "
+                             "needs path_train / path_test)")
+        path_pred = y_pred_list[len(PredictiveOutputs._fields)]
+        path_term, ind_term = path_loss_terms(path_pred, path_true, self.config)
+        self._path_means['path_loss'].update_state(path_term)
+        self._path_means['path_ind_loss'].update_state(ind_term)
+        extra = float(self.config.LAMBDA_PATH) * path_term + float(self.config.LAMBDA_PATH_IND) * ind_term
+        return loss_components._replace(total=loss_components.total + extra)
+
     def train_step(self, data):
-        x_window, y_true, last_close, extended_trends = data
+        x_window, y_true, last_close, extended_trends = data[:4]
+        path_true = data[4] if len(data) > 4 else None
         # INDICATOR_GRAD_SOURCE='direction' (tactical): a Python-level branch, so with the default
         # 'total' the tape, graph and speed are exactly the previous ones.
         ind_dir_only = (getattr(self.config, 'INDICATOR_GRAD_SOURCE', 'total') == 'direction'
@@ -693,13 +719,14 @@ class CustomTrainModel(models.Model):
         with tf.GradientTape(persistent=ind_dir_only) as tape:
             y_pred_list = self(x_window, training=True)
             # Named view for the 10 outputs (robust to future aux heads / reordering).
-            heads = PredictiveOutputs(*y_pred_list)
+            heads = PredictiveOutputs(*y_pred_list[:len(PredictiveOutputs._fields)])
             # Still provide the 9-tuple expected by current custom_loss signature + the vacuum separately.
             y_pred_9 = y_pred_list[:9]
             vac_overflow_pred = heads.vacuum_overflow
             loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                                extended_trends,
                                                vacuum_overflow=vac_overflow_pred)
+            loss_components = self._add_path_loss(loss_components, y_pred_list, path_true)
             if ind_dir_only:
                 # the 'dir' term of _run_gradient_probe, recorded on the tape
                 dir_term = self.lambda_dir_outer * self.lambda_dir * (
@@ -839,7 +866,7 @@ class CustomTrainModel(models.Model):
     #: included), as opposed to the shared trunk (indicators, GRU/attention body). Used only to
     #: split the gradient probe's variable groups honestly (QA repair round 1 fix 5); not used
     #: anywhere else (the optimizer split is main vs indicator, unaffected).
-    _PROBE_HEAD_NAME_MARKERS = ('price_h', 'direction_h', 'variance_h')
+    _PROBE_HEAD_NAME_MARKERS = ('price_h', 'direction_h', 'variance_h', 'path_head')
 
     def _probe_groups_of(self):
         """{'trunk', 'head', 'indicator'} -> that group's trainable variables, this instance."""
@@ -879,7 +906,7 @@ class CustomTrainModel(models.Model):
         mask_snapshot = {k: acc.snapshot() for k, acc in self._mask_counters.items()}
         with tf.GradientTape(persistent=True) as tape:
             y_pred_list = self(x_window, training=False)
-            heads = PredictiveOutputs(*y_pred_list)
+            heads = PredictiveOutputs(*y_pred_list[:len(PredictiveOutputs._fields)])
             y_pred_9 = y_pred_list[:9]
             c = self.custom_loss(x_window, y_true, y_pred_9, last_close, extended_trends,
                                  vacuum_overflow=heads.vacuum_overflow)
@@ -960,12 +987,14 @@ class CustomTrainModel(models.Model):
         return metrics
 
     def test_step(self, data):
-        x_window, y_true, last_close, extended_trends = data
+        x_window, y_true, last_close, extended_trends = data[:4]
+        path_true = data[4] if len(data) > 4 else None
         y_pred_list = self(x_window, training=False)
         y_pred_9 = y_pred_list[:9]
         loss_components = self.custom_loss(x_window, y_true, y_pred_9, last_close,
                                            extended_trends,
                                            vacuum_overflow=None)  # identically 0 at eval (tanh^2 < E_max): the term would be a constant lambda in every val_loss
+        loss_components = self._add_path_loss(loss_components, y_pred_list, path_true)
 
         # Unpack 35-component tuple (LossComponents NamedTuple; positional ok)
         (total_loss_val,

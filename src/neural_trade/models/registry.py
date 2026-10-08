@@ -32,6 +32,9 @@ def ensure_predictive_outputs(model: tf.keras.Model, name: str = "model") -> tf.
     """Raise unless ``model`` returns the 10 PredictiveOutputs heads, each ``[None, 1]``."""
     outputs = list(model.outputs)
     expected = len(PredictiveOutputs._fields)
+    # Config.PATH_HEAD appends ONE extra [None, P] output after the 10 contract outputs.
+    extra = outputs[expected:] if len(outputs) == expected + 1 else []
+    outputs = outputs[:expected] if extra else outputs
     if len(outputs) != expected:
         raise ComponentValidationError(
             f"{name}: expected {expected} outputs {PredictiveOutputs._fields}, got {len(outputs)}")

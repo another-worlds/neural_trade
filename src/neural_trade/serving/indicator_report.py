@@ -38,7 +38,7 @@ def _metrics_path(run_dir: Path) -> Path:
 def _price_and_direction(heads, y_scaled, y_raw, last_close, deadband):
     """Per-window loss and per-horizon hits for one forward of the ten model outputs."""
     n = len(y_scaled)
-    flat = [np.asarray(head, dtype=float).reshape(n, -1)[:, 0] for head in heads]
+    flat = [np.asarray(head, dtype=float).reshape(n, -1)[:, 0] for head in list(heads)[:len(PredictiveOutputs._fields)]]
     named = PredictiveOutputs(*flat)
     prices = (named.price_h0, named.price_h1, named.price_h2)
     probs = (named.direction_h0, named.direction_h1, named.direction_h2)

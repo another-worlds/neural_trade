@@ -343,6 +343,7 @@ def train_and_evaluate(
     train_ds, val_ds = create_datasets(cfg,
         X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
         _vb["X"], _vb["y_scaled"], _vb["last_close"], _vb["extended_trends"],
+        path_train=getattr(data_processor, 'path_train', None), path_test=_vb.get("path_scaled"),
     )
 
     # Pre-training loss-weight calibration (training.lambda_calibration); restores on failure.

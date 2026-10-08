@@ -1,0 +1,16 @@
+base HEAD 4a0f610217fb1e5e40d319ae5b53880185d7208d + uncommitted pathind working tree
+    c /= stddev[:, None]
+
+tests/test_noprice_switches.py::test_calibration_skips_the_zeroed_terms_under_price_none[value]
+tests/test_noprice_switches.py::test_calibration_skips_the_zeroed_terms_under_price_none[value]
+tests/test_noprice_switches.py::test_calibration_skips_the_zeroed_terms_under_price_none[value]
+tests/test_noprice_switches.py::test_calibration_skips_the_zeroed_terms_under_price_none[gradient]
+tests/test_noprice_switches.py::test_calibration_skips_the_zeroed_terms_under_price_none[gradient]
+tests/test_noprice_switches.py::test_calibration_skips_the_zeroed_terms_under_price_none[gradient]
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\numpy\lib\function_base.py:2854: RuntimeWarning: invalid value encountered in divide
+    c /= stddev[None, :]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_config_metadata.py::test_the_committed_config_reference_is_generated_from_the_metadata
+1 failed, 300 passed, 2344 warnings in 102.92s (0:01:42)
