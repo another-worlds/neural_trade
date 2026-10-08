@@ -258,6 +258,12 @@ class Config:
                                         "the full file's last bar, so a screen trial cannot slice into the "
                                         "long file's dev/test period (D-020)", unit="days", ge=0.0)
 
+    DATA_TAIL_TRIM: bool = _f(False, "data", "with MAX_SEQUENCE_COUNT set, build windows only over the tail of "
+                              "the bars that yields exactly the same most-recent MAX_SEQUENCE_COUNT windows "
+                              "(bit-identical arrays; less RAM and time on a long file). Block anchor_bar "
+                              "values then index the trimmed frame (same bars, same timestamps). False = "
+                              "today's behaviour", unit="flag")
+
     # ------------------------------------------------------------------ horizons
     EXTENDED_TREND_PERIODS: List[int] = _f([10, 15, 20], "horizons",
                                            "lags (bars) of the past-delta momentum features, one per horizon",
