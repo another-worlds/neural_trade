@@ -305,6 +305,13 @@ def test_horizon_mean_terms_hd_overflow_and_vacuum(n):
         return (a - a.mean()) / (a.std() + 1e-3)
 
     assert v["hd_val"] == pytest.approx(1.0 - np.mean(z(log_vol) * z(log_var)), rel=1e-3, abs=1e-5)
+    # small variances, where the 1e-3 offset inside the log makes the mean (not the sum over a fixed count)
+    # visible in the rank-free Pearson value
+    rng = np.random.default_rng(7)
+    small = {**d, "var": [rng.uniform(1e-4, 4e-3, (B, 1)).astype(np.float32) for _ in range(n)]}
+    vs = _vals(_loss(m, small))
+    vv = np.mean([np.maximum(x[:, 0], 1e-4) for x in small["var"]], axis=0)
+    assert vs["hd_val"] == pytest.approx(1.0 - np.mean(z(log_vol) * z(np.log(vv + 1e-3))), rel=1e-4, abs=1e-5)
     res = np.mean([np.abs(d["y"][:, i] - d["price"][i][:, 0]) for i in range(n)], axis=0)
     mean_ov, mean_res = d["ov"].mean(), res.mean()
     assert v["vac_overflow_val"] == pytest.approx((mean_ov - mean_res) ** 2 / (mean_res ** 2 + 1e-8), rel=1e-4)
