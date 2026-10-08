@@ -77,3 +77,6 @@ the Easter weekend of 2022-04-16, where a fade-10-bars rule scores 0.756). Owner
 - "Также еще учти уверенность. Выдай если мы повышаем порог уверенности ... насколько ... прибавляем точность" [show how
   accuracy grows with the confidence threshold]: journal H15.
 - Proposals 1-3 (combination backtest on CPU, the two-heads round, new code for geometry and gating): "да" to all.
+- 2026-10-08, after WSL went down: the lead stopped its GPU jobs and proposed a stricter rule while Docker/WSL runs (1 process,
+  4 GB GPU memory). Owner (verbatim): "можно. на докер не обращай внимания , закрой правило" [go ahead; ignore Docker; close the
+  rule]: no Docker-specific rule; the existing load guard stays.
