@@ -1,0 +1,68 @@
+43b2377c5f97c558dca1ac6a0576fa8cf58f26cd
+# NT-042 mutation check of the per-horizon loss wiring (src/neural_trade/losses/functions.py)
+# runner: D:/nt/scratch_042/mutate.py (30 mutants; each applied, a test selection run with -x, the file restored)
+## new tests: tests/test_horizons_n.py -k 'not tiny_training and not stored and not architecture'
+[new] killed 30 of 30 applied mutants (30 defined)
+  KILLED (6s)            y_true columns reversed
+  KILLED (9s)            raw targets all from h0
+  KILLED (6s)            price heads reversed
+  KILLED (6s)            direction heads all h0
+  KILLED (7s)            variance heads rotated
+  KILLED (6s)            point roles reversed
+  KILLED (6s)            point reads h0's head
+  KILLED (7s)            extended reads column 0
+  KILLED (6s)            extended reads the last head
+  KILLED (7s)            direction mask of h0
+  KILLED (7s)            direction labels of the last horizon
+  KILLED (6s)            NLL log-variance of h0
+  KILLED (7s)            NLL target of h0
+  KILLED (6s)            CRPS variance of the last horizon
+  KILLED (7s)            soft ECE mask of h0
+  KILLED (7s)            vol target column 0
+  KILLED (7s)            vol head the last
+  KILLED (7s)            Casimir interference a x a
+  KILLED (7s)            Casimir variance pair a, a
+  KILLED (9s)            pair scale dropped
+  KILLED (8s)            IFE first pair only
+  KILLED (7s)            magnitude ordering reversed
+  KILLED (9s)            HD mean over a fixed 3
+  KILLED (9s)            overflow residual over a fixed 3
+  KILLED (7s)            trend sum drops the last horizon
+  KILLED (6s)            NLL sum drops h0
+  KILLED (9s)            sign disagreement over a fixed 2 pairs
+  KILLED (10s)           vacuum spread of the first two heads
+  KILLED (6s)            CRPS fields filled with soft ECE
+  KILLED (6s)            local / extended trend fields swapped
+
+## the loss tests before NT-042: test_custom_loss, test_qbox_losses, test_physics_terms_bounded, test_losses, test_pnl_utility
+[old] killed 14 of 30 applied mutants (30 defined)
+  KILLED (10s)           y_true columns reversed
+  KILLED (10s)           raw targets all from h0
+  KILLED (8s)            price heads reversed
+  KILLED (8s)            direction heads all h0
+  survived (27s)         variance heads rotated
+  survived (27s)         point roles reversed
+  survived (27s)         point reads h0's head
+  KILLED (8s)            extended reads column 0
+  KILLED (8s)            extended reads the last head
+  survived (27s)         direction mask of h0
+  survived (27s)         direction labels of the last horizon
+  survived (27s)         NLL log-variance of h0
+  KILLED (8s)            NLL target of h0
+  survived (28s)         CRPS variance of the last horizon
+  survived (28s)         soft ECE mask of h0
+  survived (27s)         vol target column 0
+  survived (27s)         vol head the last
+  KILLED (10s)           Casimir interference a x a
+  survived (28s)         Casimir variance pair a, a
+  survived (27s)         pair scale dropped
+  KILLED (10s)           IFE first pair only
+  KILLED (10s)           magnitude ordering reversed
+  survived (27s)         HD mean over a fixed 3
+  survived (27s)         overflow residual over a fixed 3
+  survived (28s)         trend sum drops the last horizon
+  KILLED (10s)           NLL sum drops h0
+  survived (27s)         sign disagreement over a fixed 2 pairs
+  KILLED (10s)           vacuum spread of the first two heads
+  KILLED (9s)            CRPS fields filled with soft ECE
+  KILLED (7s)            local / extended trend fields swapped
