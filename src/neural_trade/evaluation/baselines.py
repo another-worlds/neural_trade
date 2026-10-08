@@ -19,7 +19,8 @@ from typing import Dict
 
 import numpy as np
 
-from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+from neural_trade.core.horizons import horizon_keys
+from neural_trade.evaluation.frame import PredictionFrame
 from neural_trade.metrics.direction_labels import direction_labels_np
 
 LAGS = (1, 5, 10, 15, 20, 30, 59)
@@ -60,13 +61,14 @@ class BaselineSet:
 
         y = np.asarray(y_train, dtype=float)
         labels = direction_labels_np(y, last_close_train, deadband_bps)
-        prior = np.array([labels[h][0][labels[h][1]].mean() if labels[h][1].any() else 0.5 for h in HORIZONS])
+        keys = horizon_keys(y.shape[1])   # one baseline column per horizon of y (NT-042)
+        prior = np.array([labels[h][0][labels[h][1]].mean() if labels[h][1].any() else 0.5 for h in keys])
         out = cls(y.mean(0), np.sqrt((y ** 2).mean(0)), y.std(0), prior)
         if X_train_raw is not None:
             F = lag_features(X_train_raw)
             out.scaler = StandardScaler().fit(F)
             Fs = out.scaler.transform(F)
-            for h in HORIZONS:
+            for h in keys:
                 lab, mask = labels[h]
                 if mask.sum() > 50 and 0 < lab[mask].mean() < 1:
                     out.logreg[h] = LogisticRegression(C=1.0, max_iter=1000).fit(Fs[mask], lab[mask])
@@ -76,17 +78,18 @@ class BaselineSet:
         n = len(frame)
         scale = float(frame.pred_scale)
         ones = np.ones(n)
+        keys = horizon_keys(len(self.up_prior))
 
         def pf(delta, prob, sigma, name):
-            var = {h: (sigma[i] / scale) ** 2 * ones for i, h in enumerate(HORIZONS)}
+            var = {h: (sigma[i] / scale) ** 2 * ones for i, h in enumerate(keys)}
             return PredictionFrame(frame.y, frame.last_close, delta, prob, var, scale, frame.pred_mean,
                                    frame.horizon_steps, frame.split, None, None, frame.X_raw,
                                    {"baseline": name})
 
-        half = {h: 0.5 * ones for h in HORIZONS}
-        prior = {h: self.up_prior[i] * ones for i, h in enumerate(HORIZONS)}
-        zeros = {h: 0.0 * ones for h in HORIZONS}
-        means = {h: self.mean_delta[i] * ones for i, h in enumerate(HORIZONS)}
+        half = {h: 0.5 * ones for h in keys}
+        prior = {h: self.up_prior[i] * ones for i, h in enumerate(keys)}
+        zeros = {h: 0.0 * ones for h in keys}
+        means = {h: self.mean_delta[i] * ones for i, h in enumerate(keys)}
         out = {
             "zero_delta": pf(zeros, half, self.rms_delta, "zero_delta"),
             "mean_delta": pf(means, prior, self.std_delta, "mean_delta"),
@@ -95,6 +98,6 @@ class BaselineSet:
         }
         if self.logreg and frame.X_raw is not None:
             Fs = self.scaler.transform(lag_features(frame.X_raw))
-            probs = {h: (self.logreg[h].predict_proba(Fs)[:, 1] if h in self.logreg else prior[h]) for h in HORIZONS}
+            probs = {h: (self.logreg[h].predict_proba(Fs)[:, 1] if h in self.logreg else prior[h]) for h in keys}
             out["logreg_lags"] = pf(zeros, probs, self.rms_delta, "logreg_lags")
         return out

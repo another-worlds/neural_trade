@@ -50,9 +50,12 @@ from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
+from neural_trade.core.horizons import REFERENCE_HORIZONS, horizon_keys, keys_of
+
 logger = logging.getLogger(__name__)
 
-HORIZONS = ("h0", "h1", "h2")
+#: The reference three horizon keys (old importers); interval_scale reads a run's own keys (NT-042).
+HORIZONS = REFERENCE_HORIZONS
 SCALE_MODES = ("none", "sigma", "realized_vol")
 
 
@@ -64,7 +67,11 @@ def interval_scale(mode: str, *, windows=None, variance_scaled=None, pred_scale:
     * ``"sigma"``: the model's predicted sigma, ``sqrt(variance_scaled) * pred_scale``.
     * ``"realized_vol"``: std of the input window's 1-bar close changes times sqrt(horizon bars)
       (``windows``: RAW close windows [N, LOOKBACK]).
+
+    The horizon keys are those of ``variance_scaled`` when given, else one per ``horizon_steps``
+    entry (h0 .. h{N-1}; NT-042).
     """
+    keys = keys_of(variance_scaled) if variance_scaled else horizon_keys(len(tuple(horizon_steps)))
     if mode not in SCALE_MODES:
         raise ValueError(f"conformal scale must be one of {SCALE_MODES}, got {mode!r}")
     if mode == "none":
@@ -72,20 +79,20 @@ def interval_scale(mode: str, *, windows=None, variance_scaled=None, pred_scale:
             if windows is not None:
                 n = len(windows)
             elif variance_scaled is not None:
-                n = len(np.asarray(variance_scaled[HORIZONS[0]]).reshape(-1))
+                n = len(np.asarray(variance_scaled[keys[0]]).reshape(-1))
             else:
                 raise ValueError("interval_scale('none') needs n, windows or variance_scaled")
-        return {h: np.ones(int(n)) for h in HORIZONS}
+        return {h: np.ones(int(n)) for h in keys}
     if mode == "sigma":
         if variance_scaled is None or pred_scale is None:
             raise ValueError("conformal scale 'sigma' needs variance_scaled and pred_scale")
         return {h: np.sqrt(np.maximum(np.asarray(variance_scaled[h], float).reshape(-1), 0.0)) * float(pred_scale)
-                for h in HORIZONS}
+                for h in keys}
     if windows is None:
         raise ValueError("conformal scale 'realized_vol' needs the raw input windows")
     X = np.asarray(windows, dtype=float)
     step_sd = np.diff(X, axis=1).std(axis=1)
-    return {h: step_sd * np.sqrt(float(k)) for h, k in zip(HORIZONS, horizon_steps)}
+    return {h: step_sd * np.sqrt(float(k)) for h, k in zip(keys, horizon_steps)}
 
 
 class ConformalRegressor:

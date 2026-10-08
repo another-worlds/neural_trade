@@ -22,8 +22,7 @@ from pathlib import Path
 
 import numpy as np
 
-from neural_trade.core.outputs import PredictiveOutputs
-from neural_trade.core.postprocess import HORIZONS
+from neural_trade.core.horizons import horizon_keys, n_from_outputs
 from neural_trade.metrics.direction_labels import direction_labels_np
 from neural_trade.metrics.statistics import bootstrap_block
 
@@ -36,19 +35,20 @@ def _metrics_path(run_dir: Path) -> Path:
 
 
 def _price_and_direction(heads, y_scaled, y_raw, last_close, deadband):
-    """Per-window loss and per-horizon hits for one forward of the ten model outputs."""
+    """Per-window loss and per-horizon hits for one forward of the 3H + 1 model outputs (NT-042)."""
     n = len(y_scaled)
     flat = [np.asarray(head, dtype=float).reshape(n, -1)[:, 0] for head in heads]
-    named = PredictiveOutputs(*flat)
-    prices = (named.price_h0, named.price_h1, named.price_h2)
-    probs = (named.direction_h0, named.direction_h1, named.direction_h2)
-    sq = np.mean([(prices[i] - y_scaled[:, i]) ** 2 for i in range(3)], axis=0)
+    n_h = n_from_outputs(len(flat))
+    keys = horizon_keys(n_h)
+    prices = tuple(flat[3 * i] for i in range(n_h))
+    probs = tuple(flat[3 * i + 1] for i in range(n_h))
+    sq = np.mean([(prices[i] - y_scaled[:, i]) ** 2 for i in range(n_h)], axis=0)
     labels = direction_labels_np(y_raw, last_close, deadband)
     bce = np.zeros(n, dtype=float)
     labels_out = {}
     scores_out = {}
     hit = {}
-    for i, h in enumerate(HORIZONS):
+    for i, h in enumerate(keys):
         lab, mask = labels[h]
         p = np.clip(probs[i], 1e-6, 1.0 - 1e-6)
         if np.any(mask):
@@ -58,7 +58,7 @@ def _price_and_direction(heads, y_scaled, y_raw, last_close, deadband):
         hit[h] = correct
         labels_out[h] = np.where(mask, lab, np.nan)
         scores_out[h] = np.asarray(p, dtype=float)
-    bce /= len(HORIZONS)
+    bce /= len(keys)
     loss_i = sq + bce
     return {"loss": float(np.mean(loss_i)), "loss_i": loss_i, "hit_i": hit,
             "labels": labels_out, "scores": scores_out}

@@ -21,6 +21,7 @@ from typing import Any, Dict, Optional
 
 from neural_trade import __version__
 from neural_trade.core.config import Config
+from neural_trade.core.horizons import keys_of
 from neural_trade.data.scaling import WindowNormalizer
 
 FORMAT_VERSION = 1
@@ -145,7 +146,8 @@ def _var_scale(predictions) -> Optional[float]:
         return None
     import numpy as np
 
-    v = np.concatenate([np.asarray(predictions["variance"][h], float).reshape(-1) for h in ("h0", "h1", "h2")])
+    v = np.concatenate([np.asarray(predictions["variance"][h], float).reshape(-1)
+                        for h in keys_of(predictions["variance"])])
     v = v[v > 1e-8]
     return float(np.median(v)) if len(v) else None
 

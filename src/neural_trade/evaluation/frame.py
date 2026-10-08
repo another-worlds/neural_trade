@@ -7,7 +7,11 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 import numpy as np
 
-HORIZONS = ("h0", "h1", "h2")
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
+
+#: The reference three keys (old importers). A frame's own keys are ``frame.horizons`` (NT-042):
+#: h0 .. h{H-1}, read from its prediction dicts, so a stored three-horizon frame reads back as h0-h2.
+HORIZONS = REFERENCE_HORIZONS
 NPZ_FORMAT_VERSION = 1          # PredictionFrame.save_npz / load_npz
 NPZ_EXTRA_PREFIX = "extra__"
 
@@ -16,8 +20,8 @@ NPZ_EXTRA_PREFIX = "extra__"
 class PredictionFrame:
     """Per-sample arrays for one split, time-ordered.
 
-    ``y``: realised raw deltas [N, 3]; ``delta``/``direction_prob``/``variance_scaled``: model
-    heads per horizon (variance in SCALED units, sigma_$ = sqrt(var) * pred_scale);
+    ``y``: realised raw deltas [N, H]; ``delta``/``direction_prob``/``variance_scaled``: model
+    heads per horizon (keys h0 .. h{H-1}, ``horizons``) (variance in SCALED units, sigma_$ = sqrt(var) * pred_scale);
     ``direction_prob_calibrated`` and ``intervals`` come from the CalibrationPipeline when fitted.
     ``X_raw``: the raw input windows (baselines and backtests use them).
     """
@@ -29,7 +33,7 @@ class PredictionFrame:
     variance_scaled: Dict[str, np.ndarray]
     pred_scale: float
     pred_mean: float = 0.0
-    horizon_steps: Tuple[int, int, int] = (10, 15, 20)
+    horizon_steps: Tuple[int, ...] = (10, 15, 20)
     split: str = "test"
     direction_prob_calibrated: Optional[Dict[str, np.ndarray]] = None
     intervals: Optional[Dict[str, Tuple[np.ndarray, np.ndarray]]] = None
@@ -40,15 +44,21 @@ class PredictionFrame:
         self.y = np.asarray(self.y, dtype=float)
         self.last_close = np.asarray(self.last_close, dtype=float).reshape(-1)
         n = len(self.last_close)
+        keys = keys_of(self.delta)
         for name in ("delta", "direction_prob", "variance_scaled"):
             d = getattr(self, name)
-            setattr(self, name, {h: np.asarray(d[h], dtype=float).reshape(-1)[:n] for h in HORIZONS})
+            setattr(self, name, {h: np.asarray(d[h], dtype=float).reshape(-1)[:n] for h in keys})
         if self.direction_prob_calibrated is not None:
             self.direction_prob_calibrated = {h: np.asarray(v, float).reshape(-1)[:n]
                                               for h, v in self.direction_prob_calibrated.items()}
 
     def __len__(self):
         return len(self.last_close)
+
+    @property
+    def horizons(self) -> Tuple[str, ...]:
+        """This frame's horizon keys, h0 .. h{H-1} (NT-042)."""
+        return tuple(self.delta)
 
     def sigma(self, h: str) -> np.ndarray:
         """Predicted standard deviation of the delta, in dollars."""
@@ -92,13 +102,14 @@ class PredictionFrame:
                     tuple(result.config.HORIZON_STEPS), split, cal.get("direction_prob"), cal.get("intervals"),
                     X_raw)
         # evaluate() scores the raw price heads and records the betas from these (report.delta_raw group)
-        frame.meta["delta_raw"] = {h: np.asarray(preds["delta"][h], float).reshape(-1)[:len(frame)] for h in HORIZONS}
+        frame.meta["delta_raw"] = {h: np.asarray(preds["delta"][h], float).reshape(-1)[:len(frame)]
+                                   for h in frame.horizons}
         sig = getattr(result.calibration_pipeline, "direction_signal", None)
         if callable(sig):
             frame.meta["direction_signal"] = {h: str(v) for h, v in sig().items()}
         betas = getattr(result.calibration_pipeline, "delta_scale", None)
         if cal.get("delta") is not None and betas:
-            frame.meta["delta_scale"] = {h: float(betas[h]) for h in HORIZONS if h in betas}
+            frame.meta["delta_scale"] = {h: float(betas[h]) for h in frame.horizons if h in betas}
         return frame
 
     @classmethod
@@ -106,10 +117,11 @@ class PredictionFrame:
                  split: str = "test", X_raw=None) -> "PredictionFrame":
         """From the predictions_*.npz that scripts/gate_run.py writes."""
         z = np.load(Path(path))
-        get = lambda kind: {h: z[f"{kind}_{h}"] for h in HORIZONS}  # noqa: E731
-        cal = {h: z[f"calibrated_direction_prob_{h}"] for h in HORIZONS
+        keys = keys_of({f[len("delta_"):]: None for f in z.files if f.startswith("delta_")})
+        get = lambda kind: {h: z[f"{kind}_{h}"] for h in keys}  # noqa: E731
+        cal = {h: z[f"calibrated_direction_prob_{h}"] for h in keys
                if f"calibrated_direction_prob_{h}" in z.files} or None
-        iv = {h: (z[f"interval90_lo_{h}"], z[f"interval90_hi_{h}"]) for h in HORIZONS
+        iv = {h: (z[f"interval90_lo_{h}"], z[f"interval90_hi_{h}"]) for h in keys
               if f"interval90_lo_{h}" in z.files} or None
         return cls(z["y"], z["last_close"], get("delta"), get("direction_prob"), get("variance"),
                    pred_scale, pred_mean, tuple(horizon_steps), split, cal, iv, X_raw)

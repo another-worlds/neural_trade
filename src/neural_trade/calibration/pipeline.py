@@ -37,6 +37,7 @@ from typing import Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
+from neural_trade.core.horizons import REFERENCE_HORIZONS, keys_of
 from neural_trade.calibration.temperature_scaling import TemperatureScaler
 from neural_trade.calibration.conformal import SCALE_MODES, ConformalRegressor, interval_scale
 from neural_trade.calibration.online_calibrator import OnlineTemperatureCalibrator
@@ -48,7 +49,8 @@ except Exception:  # fallback if metrics_utils not on path in some test contexts
 
 logger = logging.getLogger(__name__)
 
-HORIZONS = ("h0", "h1", "h2")
+#: The reference three keys (old importers). A pipeline keeps its own ``horizons`` (NT-042).
+HORIZONS = REFERENCE_HORIZONS
 _DEFAULT_DIR = "calibration"
 
 
@@ -81,12 +83,15 @@ class CalibrationPipeline:
     Wraps three independent calibrators:
 
     * **TemperatureScaler** — per-horizon temperature scaling for direction sigmoid heads
-    * **ConformalRegressor** (×3) — distribution-free price-delta prediction intervals
+    * **ConformalRegressor** (one per horizon) — distribution-free price-delta prediction intervals
     * **OnlineTemperatureCalibrator** — adaptive online temperature for live trading
 
     All methods accept / return the ``predictions_dict`` format produced by
     ``train_and_evaluate``:
     ``{'delta': {'h0':…,'h1':…,'h2':…}, 'direction_prob': {…}, 'variance': {…}}``
+
+    The horizons (``self.horizons``) are the reference three until a fit or a load reads the
+    run's own keys (h0 .. h{N-1}; NT-042).
     """
 
     def __init__(self, conformal_scale: str = "none", shrink_delta: bool = False) -> None:
@@ -100,15 +105,25 @@ class CalibrationPipeline:
         # scale of the price head. A head that is noise gets beta ~ 0 (served delta ~ 0) instead
         # of extrapolating an overfit function; a head with signal keeps it.
         self.shrink_delta = bool(shrink_delta)
-        self.delta_scale: Dict[str, float] = {h: 1.0 for h in HORIZONS}
+        self.horizons: Tuple[str, ...] = tuple(HORIZONS)
+        self.delta_scale: Dict[str, float] = {h: 1.0 for h in self.horizons}
         self.pred_scale: Optional[float] = None
         self.horizon_steps: Tuple[int, ...] = (10, 15, 20)
         self.temperature_scaler = TemperatureScaler()
         self.conformal: Dict[str, ConformalRegressor] = {
-            h: ConformalRegressor() for h in HORIZONS
+            h: ConformalRegressor() for h in self.horizons
         }
         self.online: Optional[OnlineTemperatureCalibrator] = None
         self._fitted = False
+
+    def _set_horizons(self, keys) -> None:
+        """Size the per-horizon state for ``keys`` (h0 .. h{N-1}); a no-op for the same keys."""
+        keys = tuple(keys)
+        if keys == self.horizons:
+            return
+        self.horizons = keys
+        self.delta_scale = {h: float(self.delta_scale.get(h, 1.0)) for h in keys}
+        self.conformal = {h: self.conformal.get(h) or ConformalRegressor() for h in keys}
 
     # ------------------------------------------------------------------
     # Fitting
@@ -175,7 +190,8 @@ class CalibrationPipeline:
         Parameters
         ----------
         predictions_dict  : ``result.predictions`` format
-        y_true_delta_raw  : array [N, 3] of realized price deltas (raw / inverse-scaled units)
+        y_true_delta_raw  : array [N, H] of realized price deltas (raw / inverse-scaled units), one
+                            column per horizon of ``predictions_dict``
         last_close        : array [N] of last close prices
         deadband_bps      : deadband used during training (match Config.DIR_DEADBAND_BPS)
         conformal_alpha   : miscoverage level for coverage reporting
@@ -191,32 +207,26 @@ class CalibrationPipeline:
         N = len(y)
         logger.info(f"CalibrationPipeline: fitting on {N} samples")
 
+        self._set_horizons(keys_of(predictions_dict.get("direction_prob")))
         labels_map = _direction_labels(y, last_close, deadband_bps)
 
         # ------------------------------------------------------------------
         # 1. Temperature scaling — fit on deadband-filtered samples
         # ------------------------------------------------------------------
         logger.info("\n[1/2] Temperature scaling (direction heads)...")
-        h0_lab, h0_mask = labels_map["h0"]
-        h1_lab, h1_mask = labels_map["h1"]
-        h2_lab, h2_mask = labels_map["h2"]
-
-        p_h0 = np.asarray(predictions_dict["direction_prob"]["h0"], dtype=float)
-        p_h1 = np.asarray(predictions_dict["direction_prob"]["h1"], dtype=float)
-        p_h2 = np.asarray(predictions_dict["direction_prob"]["h2"], dtype=float)
-
-        # Apply mask — fit only where |return| > deadband
-        self.temperature_scaler.fit(
-            p_h0[h0_mask], h0_lab[h0_mask],
-            p_h1[h1_mask], h1_lab[h1_mask],
-            p_h2[h2_mask], h2_lab[h2_mask],
-        )
+        pairs = []
+        for h in self.horizons:
+            lab, mask = labels_map[h]
+            p = np.asarray(predictions_dict["direction_prob"][h], dtype=float)
+            # Apply mask — fit only where |return| > deadband
+            pairs += [p[mask], lab[mask]]
+        self.temperature_scaler.fit(*pairs)
 
         # ------------------------------------------------------------------
         # 2. Conformal regressors — fit on all samples (no deadband filter)
         # ------------------------------------------------------------------
         if self.shrink_delta:
-            for i, h in enumerate(HORIZONS[:y.shape[1]]):
+            for i, h in enumerate(self.horizons[:y.shape[1]]):
                 d = np.asarray(predictions_dict["delta"][h], dtype=float)
                 dd = float(np.dot(d, d))
                 self.delta_scale[h] = float(np.clip(np.dot(y[:, i], d) / dd, 0.0, 1.0)) if dd > 0 else 0.0
@@ -225,7 +235,7 @@ class CalibrationPipeline:
 
         logger.info(f"\n[2/2] Conformal regressors (price delta intervals, scale={self.conformal_scale})...")
         scales = self._scales(predictions_dict, windows, N)
-        for i, h in enumerate(HORIZONS):
+        for i, h in enumerate(self.horizons):
             if i >= y.shape[1]:
                 break
             y_true_h = y[:, i]
@@ -283,18 +293,18 @@ class CalibrationPipeline:
         windows          : RAW input windows, required when conformal_scale="realized_vol"
         """
         self._require_fitted()
-        n = len(np.asarray(predictions_dict["delta"][HORIZONS[0]]).reshape(-1))
+        n = len(np.asarray(predictions_dict["delta"][self.horizons[0]]).reshape(-1))
         scales = self._scales(predictions_dict, windows, n)
 
         cal: Dict = {
             "delta": {h: self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float)
-                      for h in HORIZONS},
-            "variance": {h: np.asarray(predictions_dict["variance"][h]) for h in HORIZONS},
+                      for h in self.horizons},
+            "variance": {h: np.asarray(predictions_dict["variance"][h]) for h in self.horizons},
             "direction_prob": {},
             "intervals": {},
         }
 
-        for h in HORIZONS:
+        for h in self.horizons:
             raw_probs = np.asarray(predictions_dict["direction_prob"][h], dtype=float)
             cal["direction_prob"][h] = self.temperature_scaler.calibrate(raw_probs, horizon=h)
 
@@ -314,17 +324,17 @@ class CalibrationPipeline:
 
         Returns
         -------
-        dict mapping 'h0'/'h1'/'h2' to ``(lo, hi)`` arrays in raw price-delta units
+        dict mapping each horizon key to ``(lo, hi)`` arrays in raw price-delta units
         """
         self._require_fitted()
-        n = len(np.asarray(predictions_dict["delta"][HORIZONS[0]]).reshape(-1))
+        n = len(np.asarray(predictions_dict["delta"][self.horizons[0]]).reshape(-1))
         scales = self._scales(predictions_dict, windows, n)
         return {
             h: self.conformal[h].predict_interval(
                 self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float),
                 alpha=alpha, scale=scales[h] if scales is not None else None,
             )
-            for h in HORIZONS
+            for h in self.horizons
         }
 
     # ------------------------------------------------------------------
@@ -377,15 +387,13 @@ class CalibrationPipeline:
 
         Files written:
         - ``temperature_params.json``  — offline temperature scalers
-        - ``conformal_h0.joblib``
-        - ``conformal_h1.joblib``
-        - ``conformal_h2.joblib``
+        - ``conformal_h0.joblib`` ... ``conformal_h{N-1}.joblib`` (one per horizon)
         - ``online_calibrator.json``   — online temperatures + state
         - ``pipeline_meta.json``       — fitted flag
         """
         os.makedirs(directory, exist_ok=True)
         self.temperature_scaler.save(os.path.join(directory, "temperature_params.json"))
-        for h in HORIZONS:
+        for h in self.horizons:
             self.conformal[h].save(os.path.join(directory, f"conformal_{h}.joblib"))
         if self.online is not None:
             self.online.save(os.path.join(directory, "online_calibrator.json"))
@@ -417,7 +425,9 @@ class CalibrationPipeline:
         obj.temperature_scaler = TemperatureScaler.load(
             os.path.join(directory, "temperature_params.json")
         )
-        for h in HORIZONS:
+        # The horizons are the saved temperatures' keys (a pipeline saved before NT-042 has h0-h2).
+        obj._set_horizons(keys_of(obj.temperature_scaler.temperatures))
+        for h in obj.horizons:
             obj.conformal[h] = ConformalRegressor.load(
                 os.path.join(directory, f"conformal_{h}.joblib")
             )
@@ -458,7 +468,7 @@ class CalibrationPipeline:
         logger.info('%s', "=" * 55)
 
         logger.info("\nTemperature scaling (direction heads):")
-        for h in HORIZONS:
+        for h in self.horizons:
             T = self.temperature_scaler.temperatures.get(h, 1.0)
             bound = self.temperature_scaler.fit_status.get(h, "ok")
             if bound != "ok":
@@ -473,7 +483,7 @@ class CalibrationPipeline:
             logger.info(f"  {h}: T = {T:.4f}  ({note})")
 
         logger.info("\nConformal regressors (price delta intervals):")
-        for h in HORIZONS:
+        for h in self.horizons:
             n = self.conformal[h].n_calibration
             if n > 0:
                 q90 = self.conformal[h].empirical_quantile(0.1)

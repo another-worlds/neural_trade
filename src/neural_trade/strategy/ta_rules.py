@@ -93,16 +93,19 @@ def wilder_rsi(close: np.ndarray, n: int) -> np.ndarray:
 def price_only_frame(close, y=None, horizon_steps=(10, 15, 20), split: str = "test"):
     """A PredictionFrame that carries only prices: the heads are neutral (delta 0, P(up) 0.5, variance 1,
     no calibration), for a rule that reads the close alone. ``close``: the decision price of every bar
-    (``last_close``); ``y``: realised deltas [N, 3] (zeros when absent)."""
-    from neural_trade.evaluation.frame import HORIZONS, PredictionFrame
+    (``last_close``); ``y``: realised deltas [N, H] (zeros when absent)."""
+    from neural_trade.core.horizons import horizon_keys
+    from neural_trade.evaluation.frame import PredictionFrame
+
+    keys = horizon_keys(len(tuple(horizon_steps)))   # one neutral head per configured horizon (NT-042)
 
     c = np.asarray(close, dtype=float).reshape(-1)
     n = len(c)
-    zeros = {h: np.zeros(n) for h in HORIZONS}
-    frame = PredictionFrame(np.zeros((n, len(HORIZONS))) if y is None else np.asarray(y, dtype=float), c,
-                            zeros, {h: np.full(n, 0.5) for h in HORIZONS}, {h: np.ones(n) for h in HORIZONS},
+    zeros = {h: np.zeros(n) for h in keys}
+    frame = PredictionFrame(np.zeros((n, len(keys))) if y is None else np.asarray(y, dtype=float), c,
+                            zeros, {h: np.full(n, 0.5) for h in keys}, {h: np.ones(n) for h in keys},
                             1.0, 0.0, tuple(horizon_steps), split)
-    frame.meta["delta_raw"] = {h: np.zeros(n) for h in HORIZONS}      # no raw heads: coherence is not used
+    frame.meta["delta_raw"] = {h: np.zeros(n) for h in keys}      # no raw heads: coherence is not used
     return frame
 
 
