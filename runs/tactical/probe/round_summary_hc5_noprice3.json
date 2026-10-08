@@ -1,0 +1,266 @@
+{
+ "hc6_ma": {
+  "direction.auc": {
+   "diff": 0.0021,
+   "ci": [
+    -0.0239,
+    0.0281
+   ],
+   "slices": 6,
+   "noise_units": 0.08,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0359,
+   "ci": [
+    0.0046,
+    0.0673
+   ],
+   "slices": 6,
+   "noise_units": 1.12,
+   "verdict": "better"
+  },
+  "variance.crpss": {
+   "diff": 0.0028,
+   "ci": [
+    -0.0096,
+    0.0152
+   ],
+   "slices": 6,
+   "noise_units": 0.51,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0161,
+   "ci": [
+    -0.0194,
+    0.0517
+   ],
+   "slices": 6,
+   "noise_units": 0.45,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5852,
+   [
+    0.533,
+    0.6374
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   2.1163,
+   [
+    -1.3541,
+    5.5867
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.5823,
+   [
+    0.5198,
+    0.6449
+   ],
+   6
+  ]
+ },
+ "hc6_rsi": {
+  "direction.auc": {
+   "diff": -0.005,
+   "ci": [
+    -0.0354,
+    0.0254
+   ],
+   "slices": 6,
+   "noise_units": -0.19,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0411,
+   "ci": [
+    -0.0033,
+    0.0855
+   ],
+   "slices": 6,
+   "noise_units": 1.28,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0024,
+   "ci": [
+    -0.0088,
+    0.0135
+   ],
+   "slices": 6,
+   "noise_units": 0.43,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.019,
+   "ci": [
+    -0.0093,
+    0.0474
+   ],
+   "slices": 6,
+   "noise_units": 0.53,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5735,
+   [
+    0.5163,
+    0.6306
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   1.8448,
+   [
+    -2.3115,
+    6.0011
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.5625,
+   [
+    0.4742,
+    0.6508
+   ],
+   6
+  ]
+ },
+ "hc6_macd": {
+  "direction.auc": {
+   "diff": 0.0006,
+   "ci": [
+    -0.0186,
+    0.0198
+   ],
+   "slices": 6,
+   "noise_units": 0.02,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0219,
+   "ci": [
+    -0.004,
+    0.0479
+   ],
+   "slices": 6,
+   "noise_units": 0.68,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0046,
+   "ci": [
+    -0.0012,
+    0.0104
+   ],
+   "slices": 6,
+   "noise_units": 0.84,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.011,
+   "ci": [
+    -0.0097,
+    0.0316
+   ],
+   "slices": 6,
+   "noise_units": 0.3,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5973,
+   [
+    0.5451,
+    0.6495
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   3.9406,
+   [
+    0.1411,
+    7.7401
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.6024,
+   [
+    0.5352,
+    0.6697
+   ],
+   6
+  ]
+ },
+ "hc6_marsi": {
+  "direction.auc": {
+   "diff": -0.0072,
+   "ci": [
+    -0.0484,
+    0.034
+   ],
+   "slices": 6,
+   "noise_units": -0.27,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0427,
+   "ci": [
+    0.0008,
+    0.0847
+   ],
+   "slices": 6,
+   "noise_units": 1.33,
+   "verdict": "better"
+  },
+  "variance.crpss": {
+   "diff": 0.0011,
+   "ci": [
+    -0.0094,
+    0.0116
+   ],
+   "slices": 6,
+   "noise_units": 0.2,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0062,
+   "ci": [
+    -0.0264,
+    0.0388
+   ],
+   "slices": 6,
+   "noise_units": 0.17,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5731,
+   [
+    0.5307,
+    0.6156
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   2.3006,
+   [
+    -2.2174,
+    6.8186
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.562,
+   [
+    0.4821,
+    0.642
+   ],
+   6
+  ]
+ }
+}
