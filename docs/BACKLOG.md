@@ -238,6 +238,8 @@ changes).
 | [NT-203](#nt-203) | P2 | decision | owner | todo | Lower-bound temperature fits: flag as 'no usable direction signal' (D-066 literally) or as their own state, not gated? |
 | [NT-204](#nt-204) | P3 | polish | implementer | todo | Residues of NT-124: no-signal marker in predict_last/predict_frame/CLI predict output; the online calibrator warm start |
 | [NT-205](#nt-205) | P2 | bug | implementer | todo | The calibration explorer says a refit 'reproduces the served pipeline' and hides the saved curve when the refit and the saved pipeline differ (runs calibrated before NT-124) |
+| [NT-206](#nt-206) | P2 | bug | implementer | todo | A passing probe re-run still blames a loss term for the first run's FAIL |
+| [NT-207](#nt-207) | P3 | polish | implementer | todo | Stability harness residues from the NT-051 SPEC review |
 
 ## Items
 
@@ -2716,6 +2718,30 @@ changes).
 - **why:** qa-deep on NT-124 (2026-10-08): on a run calibrated before NT-124 (the reference run) a refit with the saved settings gives T = 1000 ('none') while the saved T is about 1.9-2.1 ('ok'). The status text still says 'the run's saved settings (reproduces the served pipeline)' and, because the settings match, the saved curve is not drawn in the reliability figure, so the figure hides a saved P(up) that does differ from the refit; the comparison table shows the mismatch, so figure and table contradict each other. Also (P3) the 'saved' branch of `ece_na` in `figures()` has no explorer-level test (mutation X2 survives).
 - **acceptance:** (1) The status text and the figure compare the refit and the saved pipeline by their fitted temperatures and signal states, not by the settings alone: when they differ the saved curve is drawn and the text says they differ; (2) a test with a saved pipeline at T ~ 2 and a refit at the bound; (3) a test for the saved branch of ece_na; (4) notebook 04 is regenerated through build.py and executed by the lead; fast suite, ruff.
 - **source:** qa-deep on NT-124 (2026-10-08)
+
+### NT-206
+
+**A passing probe re-run still blames a loss term for the first run's FAIL**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/stability.py (~1157, `_attribute`), tests/test_stability_harness.py, docs/RUNBOOK.md
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on the NT-051 SPEC (2026-10-08): `_attribute` takes the re-run's probe sample whether or not the re-run passed. With HarnessFake({'control': 'probe_fixes'}) and `--probe failed` the first run FAILs and the re-run PASSes, yet REPORT.md, the failures list and verdicts.json name 'crps (probe sample, one batch)'. The blame of a failure that was not reproduced is not evidence. The NT-051 SPEC overrides it in its own REPORT until this is fixed.
+- **acceptance:** (1) When the re-run passes, no term is blamed: the REPORT row says 'failure not reproduced on the re-run; no blame', verdicts.json carries `blamed: null` and a reason; (2) a test with the probe_fixes fake (fails before the change); (3) a re-run that also fails still blames its probe sample; (4) fast suite, ruff.
+- **source:** qa-deep review of the NT-051 SPEC (2026-10-08)
+
+### NT-207
+
+**Stability harness residues from the NT-051 SPEC review**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/experiments/stability.py (~663-664), run_context.py (~64), training/callbacks.py (~372), cli.py (~402-404), configs/stability_thresholds_v2.yaml header (frozen: document elsewhere), docs/RUNBOOK.md
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on the NT-051 SPEC (2026-10-08): (1) a re-run verdict's blame taken from the report-only `term_gradient_share` epoch mean is labelled 'probe sample, one batch'; (2) harness cells write weights.h5 (2.9 MB per cell, git-ignored) although `save_artifacts` is false, on a nearly full D:; (3) any ValueError raised mid-run (for example RunIdCollision at index sync, store.py ~208) exits 64 'nothing ran' after cells trained; (4) the v2 thresholds header names 5 scenarios but its 96 runs and 288 scores come from all 15 stored scenarios (the file is frozen: record the correction in RUNBOOK or the SPEC, not in the file); (5) nothing stops a second `--cases X` launch giving a second primary verdict for a seed (a check or a warning).
+- **acceptance:** (1) the label says what the number is; (2) harness cells write no weights (or a documented switch), golden and stability tests unchanged; (3) 64 only when nothing trained, a mid-run error has its own exit code and message; (4) the correction recorded; (5) a launch that repeats a (case, seed) already holding a primary verdict in the store is refused or warns, with a test; (6) fast suite, `-m stability` serial, ruff.
+- **source:** qa-deep review of the NT-051 SPEC (2026-10-08)
 
 ## Done log
 
