@@ -1,0 +1,4 @@
+c43af2d30abddb2bd9cce8c53a1afaae3aa0f2f7
+(uncommitted S3b/S4 tree)
+   by prefix (ok, fail): calib_lambda=14/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}

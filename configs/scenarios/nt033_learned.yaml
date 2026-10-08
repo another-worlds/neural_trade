@@ -1,0 +1,34 @@
+# NT-033 / VISION "The yardstick": the learned network, the reference the two manual-search baselines are
+# compared with (nt033_frozen_twin.yaml, nt033_ta_*.yaml). Same data, same folds, same strategy and costs as the
+# baselines; the only difference of the twin is FREEZE_INDICATOR_PERIODS.
+#
+# Folds -3 and -2 are dev folds (rows rank on them); fold -1 is the test fold (shown, never used to rank, D-020).
+# Three seeds for the network. The sweep search space (NT-030) is the same for the learned model and its frozen
+# twin (the `search:` block): the baselines get the same number of trials (--n-trials) and the same dev folds.
+# Real GPU runs are NT-050's; this file is a spec only.
+#
+#   neural-trade scenario plan configs/scenarios/nt033_learned.yaml
+# --n-trials 17 is the most that fits the 12 h cap: 11.89 h upper bound at sec_per_step 0.1735 with the reference
+# batch bounds (30 trials = 15.90 h, which the sweep refuses). The learned model and its twin are two launches.
+#   neural-trade sweep configs/scenarios/nt033_learned.yaml --mode optuna --n-trials 17      # GPU, NT-050
+schema_version: 1
+name: nt033_learned
+description: The learned network (periods trained), reference setup, dev folds -3 and -2, test fold -1.
+base_config: ../default.yaml
+overrides: {}
+variants:
+  default: {}
+folds: [-3, -2, -1]
+seeds: [0, 1, 2]
+strategy:
+  name: calibrated_quantile
+  params: {}
+backtest: {}
+run:
+  calibrate: true
+  save_artifacts: false
+search:                       # shared with nt033_frozen_twin.yaml
+  LR: {low: 0.0001, high: 0.01, log: true}
+  BATCH_SIZE: {low: 128, high: 1024, log: true}
+  LAMBDA_DIR: {low: 0.1, high: 3.0}
+  LAMBDA_CRPS: {low: 0.1, high: 3.0}

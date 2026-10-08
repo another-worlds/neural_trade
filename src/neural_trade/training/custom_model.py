@@ -774,13 +774,15 @@ class CustomTrainModel(models.Model):
 
         # Apply gradients with separate optimizers
         self.optimizer.apply_gradients(nn_gvs)
-        self.indicator_optimizer.apply_gradients(ind_gvs)
+        # NT-033: a frozen-period twin has no trainable indicator variable; apply_gradients([]) raises
+        if ind_gvs:
+            self.indicator_optimizer.apply_gradients(ind_gvs)
 
         # Clip learned indicator periods by delegating to the layer that owns them.
         # This encapsulates the period <-> logit conversion and removes duplicated
         # name-based string checks that used to live in train_step.
         min_p = self.config.MOMENTUM_CLIP_MIN
-        max_p = self.config.MOMENTUM_CLIP_MAX
+        max_p = self.config.momentum_clip_max
         if self._indicator_layer is not None:
             self._indicator_layer.clip_learned_periods(min_p, max_p)
         # Fallback for any legacy 'momentum_raw' style vars that might still be

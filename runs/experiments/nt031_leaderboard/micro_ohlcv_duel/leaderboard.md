@@ -1,0 +1,14 @@
+# Leaderboard: `micro_ohlcv_duel`
+
+One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over the dev folds of each fold's seed mean, D-020, D-046). Guard-rails beside it can disqualify a row from the winner (VISION "The yardstick"). The **test-fold columns are test, not used for ranking** (D-020): shown for every row, never used to rank or choose.
+
+Cost profile: the board ranks at 0 bps/side (D-044), the scenario's profile. Rows on this board use a different cost profile: 13 bps/side (fee 10 + half-spread 1 + slippage 2) (2 rows). They are marked not comparable (guard-rail cost_profile) and cannot be the winner; they keep their place in the dev net Sharpe order.
+
+Guard-rails: max drawdown not checked; trades >= 1 on the mean and on every dev fold; beat buy-and-hold; random-null percentile >= 50 [thresholds: stored spec specs/f87fbb09c0d9.json: defaults]; a scored cell on every dev fold of the scenario; the board's cost profile.
+
+| rank | configuration | status | ranking: dev net Sharpe (spread, counts) | cost profile of the stored net Sharpe | dev net return | dev max drawdown | dev trades | dev buy & hold | dev random-null percentile | guard-rails | test net Sharpe (test, not used for ranking) | test net return (test, not used for ranking) | test max drawdown (test, not used for ranking) | test trades (test, not used for ranking) | dataset fingerprint (sha256, first 12) | bar (min) | horizons (bars) | strategy |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `ohlcv14` | done (1 of 5 cells failed, 1 of 5 cells incomplete) | -157.537 (seed sd 18.972, 1 fold x 3 seeds, 3 cells) | 13 bps/side (fee 10 + half-spread 1 + slippage 2) (not comparable) | -98.92% (seed sd 0.83%) | 98.92% (seed sd 0.82%) | 1823.7 (seed sd 271.4) | -6.39% (seed sd 0.00%) | 61 (seed sd 14) | DISQUALIFIED: min_trades OK (1823.7); beat_buy_and_hold FAIL (-98.92% vs -6.39%); beat_random_null OK (61); fold_coverage OK (1 of 1 dev folds); cost_profile FAIL (not comparable: 13 bps/side (fee 10 + half-spread 1 + slippage 2); the board ranks at 0 bps/side (D-044)) | n/a | n/a | n/a | n/a | 67966a49634f | 1 | 10, 15, 20 | calibrated_quantile |
+| 2 | `close4` | done | -163.307 (seed sd 6.174, 1 fold x 3 seeds, 3 cells) | 13 bps/side (fee 10 + half-spread 1 + slippage 2) (not comparable) | -99.23% (seed sd 0.23%) | 99.23% (seed sd 0.23%) | 1891.7 (seed sd 122.9) | -6.39% (seed sd 0.00%) | 47 (seed sd 21) | DISQUALIFIED: min_trades OK (1891.7); beat_buy_and_hold FAIL (-99.23% vs -6.39%); beat_random_null FAIL (47); fold_coverage OK (1 of 1 dev folds); cost_profile FAIL (not comparable: 13 bps/side (fee 10 + half-spread 1 + slippage 2); the board ranks at 0 bps/side (D-044)) | n/a | n/a | n/a | n/a | 67966a49634f | 1 | 10, 15, 20 | calibrated_quantile |
+
+**Winner:** none (every row disqualified or not comparable, or no scored dev data).

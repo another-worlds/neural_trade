@@ -62,18 +62,18 @@ changes).
 | [NT-027](#nt-027) | P1 | refactor | implementer | done | Layering: no circular subpackage imports, one metrics and statistics module, figures only draw |
 | [NT-028](#nt-028) | P1 | infra | implementer | done | Stale removal under D-029: every deletion shows evidence of stale and of no effect |
 | [NT-029](#nt-029) | P1 | infra | implementer | done | Config metadata for the control panel and search spaces, and a generated config reference |
-| [NT-030](#nt-030) | P1 | feature | implementer | todo | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
-| [NT-031](#nt-031) | P1 | feature | implementer | in-progress | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
+| [NT-030](#nt-030) | P1 | feature | implementer | done | Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep` |
+| [NT-031](#nt-031) | P1 | feature | implementer | done | Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank |
 | [NT-032](#nt-032) | P1 | feature | implementer | done | Paired comparator for "A beats B" verdicts (D-025) |
-| [NT-033](#nt-033) | P1 | feature | implementer | todo | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
-| [NT-034](#nt-034) | P1 | feature | implementer | todo | Control-panel notebook 06 (ipywidgets + plotly) |
+| [NT-033](#nt-033) | P1 | feature | implementer | done | Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search |
+| [NT-034](#nt-034) | P1 | feature | implementer | done | Control-panel notebook 06 (ipywidgets + plotly) |
 | [NT-035](#nt-035) | P1 | infra | experimenter | done | GPU measurements: concurrent-runs throughput and deterministic-mode speed |
 | [NT-036](#nt-036) | P1 | feature | implementer | done | Stability invariants in CI (strict mode, masks off) |
 | [NT-037](#nt-037) | P1 | feature | implementer | done | Per-run gradient health at most 2% of sec_per_step, per-term probe behind a flag (absorbs NT-012) |
-| [NT-038](#nt-038) | P1 | feature | implementer | todo | Stability harness and config guard (refuse hyperparameter regions known to fail) |
+| [NT-038](#nt-038) | P1 | feature | implementer | done | Stability harness and config guard (refuse hyperparameter regions known to fail) |
 | [NT-039](#nt-039) | P1 | research | experimenter | todo | Pre-registered A/B: gradient-based loss weighting against today's value calibration |
 | [NT-040](#nt-040) | P1 | bug | implementer | done | Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars) |
-| [NT-041](#nt-041) | P1 | feature | implementer | todo | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
+| [NT-041](#nt-041) | P1 | feature | implementer | done | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
 | [NT-042](#nt-042) | P1 | feature | implementer | todo | Variable number of horizons |
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
 | [NT-044](#nt-044) | P1 | docs | implementer | todo | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
@@ -136,7 +136,7 @@ changes).
 | [NT-101](#nt-101) | P1 | feature | implementer | done | Gradient-norm loss-weight calibration mode (CALIB_MODE: gradient), default off |
 | [NT-102](#nt-102) | P1 | research | experimenter | todo | Re-choose GRAD_CLIP_NORM and the max_clipped_share rule on the cleaned loss |
 | [NT-103](#nt-103) | P1 | feature | implementer | todo | Epoch selection on proper scores (EPOCH_SELECT_METRIC); owner allowed the switch (D-053) |
-| [NT-104](#nt-104) | P1 | feature | implementer | in-progress | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
+| [NT-104](#nt-104) | P1 | feature | implementer | done | Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B |
 | [NT-105](#nt-105) | P2 | feature | implementer | in-progress | Attention across the indicator channels and pooling instead of Flatten; then an A/B |
 | [NT-106](#nt-106) | P3 | feature | implementer | in-progress | MACD parametrised as fast = r x slow; a fast leg may reach the price; then an A/B |
 | [NT-107](#nt-107) | P2 | feature | implementer | todo | Scale-free inputs: each window normalised by its own sigma, the dollar target rescaled at the output; then an A/B |
@@ -152,12 +152,12 @@ changes).
 | [NT-117](#nt-117) | P1 | feature | implementer | done | Shipped defaults: LAMBDA_SOFT_ECE 0 and LAMBDA_VOL 0 (D-057) |
 | [NT-118](#nt-118) | P2 | bug | implementer | in-progress | Calibration keeps a configured LAMBDA_VOL of 0 at 0 (as for soft ECE); then an A/B of 0 against the 0.1 floor |
 | [NT-119](#nt-119) | P2 | bug | implementer | done | The Predictor path carries the raw heads to SignalFrame (D-051 on cli backtest and serving); NT-115 (4) on the reference run |
-| [NT-120](#nt-120) | P3 | bug | implementer | todo | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
+| [NT-120](#nt-120) | P3 | bug | implementer | done | NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator |
 | [NT-121](#nt-121) | P3 | performance | implementer | todo | Measure the fast suite's slowest tests on an idle machine; shrink or mark slow any test over 15 s |
 | [NT-122](#nt-122) | P1 | bug | implementer | done | golden_run verify fails when a value turns NaN or an inf changes |
-| [NT-123](#nt-123) | P1 | test-gap | implementer | todo | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
+| [NT-123](#nt-123) | P1 | test-gap | implementer | done | assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level |
 | [NT-124](#nt-124) | P1 | bug | implementer | todo | Temperature scaling reaches the NLL minimum (bounded scalar search) |
-| [NT-125](#nt-125) | P1 | bug | implementer | todo | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
+| [NT-125](#nt-125) | P1 | bug | implementer | done | The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60 |
 | [NT-126](#nt-126) | P1 | bug | implementer | todo | vac_overflow: a reachable target and an autodiff gradient whose sign matches finite differences |
 | [NT-127](#nt-127) | P1 | bug | implementer | todo | DM cells of the report: a HAC bandwidth that holds up under persistent volatility regimes |
 | [NT-128](#nt-128) | P2 | infra | implementer | todo | A training-free scoring golden tier (report, backtest, null, temperatures, betas) in CI |
@@ -173,7 +173,7 @@ changes).
 | [NT-138](#nt-138) | P2 | bug | implementer | todo | Notebook tooling: check.py misses a vanished figure; a TrainingSession can train twice into one run; the slow test passes unknown parameters |
 | [NT-139](#nt-139) | P2 | bug | implementer | todo | The variance figure crashes when a conformal interval covers every sample |
 | [NT-140](#nt-140) | P2 | bug | implementer | todo | A CalibrationPipeline failure is swallowed and the engine still scores the run |
-| [NT-141](#nt-141) | P2 | bug | implementer | todo | Config.validate gaps: period bounds, schedules, LAYERS, coercion |
+| [NT-141](#nt-141) | P2 | bug | implementer | done | Config.validate gaps: period bounds, schedules, LAYERS, coercion |
 | [NT-142](#nt-142) | P2 | bug | implementer | todo | A non-finite step still moves the weights, and a norm overflow passes the guard |
 | [NT-143](#nt-143) | P2 | infra | owner | todo | A deny list in .claude/settings.json for the git commands CLAUDE.md forbids |
 | [NT-144](#nt-144) | P3 | owner-decision | owner | todo | Local env security updates (tensorflow 2.10.1 and 12 non-TF packages) |
@@ -202,6 +202,38 @@ changes).
 | [NT-167](#nt-167) | P2 | bug | implementer | done | Notebooks pick the newest notebook/CLI run, never a study run under runs/experiments or runs/ablations |
 | [NT-168](#nt-168) | P2 | feature | implementer | todo | Leaderboard: superseded cells and duplicate (fold, seed) pairs |
 | [NT-169](#nt-169) | P3 | infra | implementer | todo | A suite lock: no two full pytest suites at once, enforced instead of checked by eye |
+| [NT-170](#nt-170) | P3 | test-gap | implementer | todo | Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info |
+| [NT-171](#nt-171) | P2 | feature | implementer | todo | Leaderboard: read a recorded zero-cost rescore; stored-spec fallback independent of file mtime |
+| [NT-172](#nt-172) | P2 | bug | implementer | todo | Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain) |
+| [NT-173](#nt-173) | P1 | research | experimenter | in-progress | Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1 |
+| [NT-174](#nt-174) | P2 | decision | owner | done | Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124) |
+| [NT-175](#nt-175) | P3 | bug | implementer | todo | Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match |
+| [NT-176](#nt-176) | P2 | research | experimenter | todo | Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1 |
+| [NT-177](#nt-177) | P2 | bug | implementer | done | split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer |
+| [NT-178](#nt-178) | P3 | docs | lead | todo | D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it |
+| [NT-179](#nt-179) | P2 | feature | implementer | done | Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs) |
+| [NT-180](#nt-180) | P2 | bug | implementer | todo | The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007) |
+| [NT-181](#nt-181) | P3 | polish | implementer | todo | Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene |
+| [NT-182](#nt-182) | P1 | bug | implementer | done | Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row |
+| [NT-183](#nt-183) | P1 | bug | implementer | done | Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan) |
+| [NT-184](#nt-184) | P3 | polish | implementer | todo | Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership |
+| [NT-185](#nt-185) | P1 | bug | implementer | done | A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows) |
+| [NT-186](#nt-186) | P3 | polish | implementer | todo | Control-panel and data-path follow-ups from the NT-034 qa-deep |
+| [NT-187](#nt-187) | P2 | bug | implementer | done | Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file |
+| [NT-188](#nt-188) | P3 | polish | implementer | todo | Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring |
+| [NT-189](#nt-189) | P3 | polish | implementer | todo | Atomic-write follow-ups: the cross-process tests import the installed package; rebuild_index retry untested; _read_summary drops the recorded budget on a transient read error |
+| [NT-190](#nt-190) | P2 | polish | implementer | todo | Stability harness v2 follow-ups: fuzz_jumps expected outcome, the tiny profile's variance-head blind spot, two test gaps, the baseline bound, dry-run n_eff |
+| [NT-191](#nt-191) | P1 | feature | implementer | done | Stability harness before NT-051: a probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run and CSV fixes |
+| [NT-192](#nt-192) | P2 | bug | implementer | todo | The per-term probe fires once per 6-step cell and its epoch mean divides the shares by the number of epochs |
+| [NT-193](#nt-193) | P2 | bug | implementer | todo | The purge gap ignores past-delta lags that reach beyond LOOKBACK (D-034's W must be the longest lag, not LOOKBACK) |
+| [NT-194](#nt-194) | P3 | polish | implementer | todo | Remaining '$' and 'dollars' labels outside the visualization package |
+| [NT-195](#nt-195) | P2 | decision | owner | dropped | Make the `timed` layout (7/2/2/5 days, folds at dates or spacing) the default? |
+| [NT-196](#nt-196) | P3 | polish | implementer | todo | NT-041 residues: hole exits get their own reason, rescore skips an exposure configuration over a break, a test for the engine's break, SKIP_LAGS in minutes, fold roles |
+| [NT-197](#nt-197) | P2 | bug | implementer | todo | The stability harness reads a relative CSV_PATH from the working directory in `write_case_data` |
+| [NT-198](#nt-198) | P2 | polish | implementer | todo | A test for the first run's own verdict file and index row after a passing probe re-run |
+| [NT-199](#nt-199) | P3 | polish | implementer | todo | The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified |
+| [NT-200](#nt-200) | P3 | bug | implementer | todo | Audit of hard-coded or platform-default integer dtypes (int32 on Windows, int64 on Linux) |
+| [NT-201](#nt-201) | P3 | polish | implementer | todo | NT-191 doc and test residues |
 
 ## Items
 
@@ -552,7 +584,7 @@ changes).
 
 **Sweeps: quick mode (about 5 minutes) and Optuna mode (measured budget, resumable), `neural-trade sweep`**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-030 (implementer Sonnet, repair 2 on Opus), merged as the nt-030 merge commit on remediation/plan. Quick mode (<= 5 min estimate, labelled quick), resumable Optuna studies in sqlite, GPU budget printed and recorded before the first trial and refused above --max-hours (default 12), parallel trials in batches with a cell-claim lock and the GPU-free check, one seed per trial on the dev folds, top-5 re-run with 3 seeds ranked by the dev seed mean through the leaderboard (winner must pass the guard-rails), test columns never rank, RESAMPLE_MINUTES refused. QA history: Opus FAIL on 62cd446 (4 P1: GPU-free check read the wrong dmon column; parallel trials imported the main checkout's code; non-finite loss counted COMPLETE; sec_per_step from a different setup); repair 1 e8b985d, qa-deep FAIL (a null loss, which is what the real writers store for NaN, stayed COMPLETE; old close-only runs accepted as the same setup); repair 2 7ea5a06 (Opus), qa-deep PASS on all 9 criteria with real artefacts (budget by hand: reference.yaml, 7 trials, sps 0.1735: upper bound 8.80 h, 17 trials fit; 78 real runs pass run_health; scenario identity of all 10 committed scenarios unchanged). Fast 2098 passed (lead, merged head), ruff clean. CI on the merge push is the evidence for the pins. Follow-ups: NT-175 (P3), and NT-173 BEFORE any --parallel above 1 (the parallel record is pre-D-047).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Correction to (7): environment.yml installs pip deps via `-r requirements.txt` (:25-26): pin optuna in pyproject (extra), requirements.txt and requirements-ci.txt only; never `optuna[optional]` (protobuf conflict with TF 2.10). The sweep's tested pin set: optuna 5.0.0, sqlalchemy 2.0.54, alembic 1.20.0, mako 1.4.3, colorlog 6.12.0, greenlet 3.5.6.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (sweep module), src/neural_trade/cli.py, pyproject.toml, requirements.txt, requirements-ci.txt, environment.yml, scenario specs, tests/
@@ -567,7 +599,7 @@ changes).
 
 **Leaderboard ranked by dev-fold net Sharpe after costs, with guard-rails and test columns that never rank**
 
-- **status:** in-progress (2026-10-06): an implementer's uncommitted work of 2026-10-01 was rescued as nt-031 7ef905d (experiments/leaderboard.py, visualization/leaderboard_fig.py, tests/test_leaderboard.py, cli.py, registries/visualizations.py; about 630 lines, never reviewed). Next: an implementer merges remediation/plan into nt-031, reads the WIP critically against the acceptance criteria, then QA.
+- **status:** done (2026-10-06): nt-031 (WIP 7ef905d rescued, then 3a490c3, repair 9cfae84, lead fix e80e0f7), merged as 5da4549. Round 1 QA (Opus): logic and every number right, figure FAIL; round 2 (implementer on Opus, qa-deep): PASS on everything except one dotted zero line (D-014: dotted = training), fixed by the lead (dashed, test, boards re-rendered). Verified: dev means, fold and seed spreads recomputed from result.json for loss_prune_v1 (ece0 +1.5967, control +0.5846, ece0_vol0 -1.1241) and reference_default (-155.9749); test columns cannot rank (mutations); 23 mutations killed; cost profile per row (13 bps rows are not comparable and cannot win); fold-coverage rail; scenario spec found by name; scenario identity unchanged for all 10 committed scenarios. Real boards: no winner anywhere today (13 of 14 boards are pre-NT-094 13 bps/side; loss_prune_v1 fails buy-and-hold). Follow-ups: NT-168 (supersede), a zero-cost rescore reader for the boards (NT-171), stored-spec fallback by mtime (P3 in NT-171).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** At QA check that the WIP's min_trades default (nt-031 experiments/leaderboard.py:63) disqualifies zero-trade rows (enhanced_multi_horizon yields one that tops net Sharpe) and that a non-finite guard-rail value disqualifies with a stated reason. After NT-042 each row names its traded (primary) horizon.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/experiments/ (leaderboard), src/neural_trade/visualization/ (a leaderboard table and figure, registered in Visualizations), src/neural_trade/cli.py, tests/
@@ -594,7 +626,7 @@ changes).
 
 **Manual-search baselines: frozen-period twin and classic TA rules tuned by the same search**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-033 2290266/af6d5d1/5a7990c (implementer, Sonnet medium), merged as cf30d7d; QA (Opus medium) PASS on 5a7990c: (1) FREEZE_INDICATOR_PERIODS (reuses NT-046's ADAPTIVE_INDICATORS switch): the frozen twin is the same network, QA built it in separate processes: all 160 initial tensors bit-identical, after 10 steps every non-logit weight and the predictions equal a static-learned twin, the 54 logits non-trainable, no L2, meta_adjust gets no gradient; golden_nt117 455/455 with the switch off (QA's own run); the one-line `if ind_gvs:` guard in custom_model.py (outside the file list, justified: apply_gradients([]) raises) leaves the default graph identical (15,964 ops) and CPU step time unchanged. (2) ta_ma_cross, ta_rsi (Wilder, documented: EMA span = 2n-1), ta_bollinger: 27 independent recomputes of the trade lists equal exactly, RSI seeding checked, assert_no_lookahead passes and one-bar-peek mutants are caught. (3) run: {train: false} scenarios: 9 cells without weights, same fold blocks and costs as a trained cell, numbers equal a direct run_backtest (rtol 1e-9); pre-existing scenario hashes unchanged (37 of 37). (4) learned, twin and rule reach the leaderboard with the same dev net Sharpe column at the same 0 bps cost profile. Fast 2135 passed, stability 11, ruff clean. Warm-up loss on a 7236-bar OOS block: 0.2-0.4% at default parameters, up to 3.3% at the top of the ranges. Follow-ups: NT-179 (one board across scenarios, needed by NT-050).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** The RSI 'textbook' periods 9/14/21 are EMA spans, alpha = 2/(p+1) (indicators/families.py:223-233), equal to Wilder RSI 5/7.5/11. The SPEC says whether the frozen twin and the TA RSI rule use EMA-span or Wilder periods.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/models/layers/learnable_indicators.py, src/neural_trade/models/gru_attention.py, src/neural_trade/training/optim.py, src/neural_trade/core/config.py, src/neural_trade/strategy/strategies.py, scenario specs, tests/
@@ -607,7 +639,7 @@ changes).
 
 **Control-panel notebook 06 (ipywidgets + plotly)**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-034 (implementer Sonnet; repair 2 on Opus), merged as b5127e3. Notebook 06 (generated by build.py, drift-tested): widgets choose scenario/search space/mode (quick, Optuna) and launch or resume through the same Sweep code as `neural-trade sweep` (budget estimate first, a Confirm button above a threshold, the sweep's own refusals), a leaderboard that refreshes while a sweep runs (NT-031's figure, ranking and test columns labelled), comparison figures per metric group with fold and seed spreads and the stored NT-032 verdict shown in full (read-only; 'no verdict yet' otherwise), D-007 n/a at beta 0 (the report's own rule); executing the notebook top to bottom launches nothing; check.py now reads widget state; TrainingSession.wait() re-emits the thread's warnings; a relative CSV_PATH resolves against the project root in the data layer when the cwd lacks it (identity unchanged). QA history: Opus FAIL on 027be49 (cwd: relative CSV_PATH refused from notebooks/), Opus FAIL on eef0fd6 (resume across CLI and panel retrained cells because the panel wrote an absolute CSV_PATH; stored verdicts looked up by spec name, not file stem), qa-deep PASS on 6b99ebe: 13 resume cases CLI<->panel from root and notebooks/ (quick, Optuna, stopped mid-sweep): 0 retrained, 0 duplicates, same spec_hash; all 4 stored verdicts shown in full; golden_nt117 455/455; scenario hashes byte-identical; report markdown byte-identical on 24 of 24 real reports; fast 2217 passed. STILL TO DO by the lead: the notebook routine for 06 on the real store (execute.py 06, check.py, render.py, look at the figures). Follow-ups: NT-185 (P1, before NT-050), NT-186 (P3).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Correction to (5): scripts/notebooks/check.py:103-135 does not read `metadata.widgets` outputs, and the TrainingSession thread's warnings and `traceback.print_exc()` (trainer.py:520) never reach the cell, so a failed calibration passes the routine. `wait()` re-emits WARNING+ records; check.py reads widget state.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** scripts/notebooks/build.py, scripts/notebooks/README.md, notebooks/06_control_panel.ipynb (new), src/neural_trade/notebook/ (a panel module), tests/test_notebooks_thin.py
@@ -657,7 +689,7 @@ changes).
 
 **Stability harness and config guard (refuse hyperparameter regions known to fail)**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-038 (implementer Sonnet), merged as e766d57. Harness (experiments/stability.py: scale and volatility x0.1/x10, extreme-input fuzzing, fault injection in input/loss term/gradient, wide-span horizons 5/60/240, a slow-periods CPU proxy; 3 seeds; strict mode; cases as engine scenarios, verdicts indexed as stability/*, REPORT with the thresholds hash), config guard (core/guard.py: Config.validate refuses a config inside a failing region naming region/case/reason/report; the sweep spaces trim or prune regions), StabilityGuard (training/stability_guard.py: strict mode stops on a non-finite term and names it; a NaN gradient with finite losses stops unattributed, the documented limit), `neural-trade stability [--dry-run]`, the BATCH_SIZE x LOOKBACK^2 memory warning (close-only evidence, unvalidated for OHLCV). Thresholds `configs/stability_thresholds.yaml` sha256 0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e: written once before any real harness run (committed alone in 8448523, after qa-deep's evidence from 54 stored runs showed the first draft (sha 3ff83b6e...) unsound: coverage did not read the variance head and ignored n_eff, periods-at-bound 0 failed 8 of 16 healthy cells, two synthetic broken runs passed), from stored training runs and not from harness runs; FROZEN from here: any change is a new file stability_thresholds_v2.yaml named in NT-051's SPEC before GPU time. QA history: qa-deep FAIL on 9514bd9 (fuzz transforms outside the used bars so fuzz_constant/jumps tested nothing; the reference profile could not plan its cases; calibration off; thresholds unsound), repair 1, qa-deep PASS on ce35529: fuzz cases now change the metrics, 15 cases plan under both profiles, 48 of 54 stored runs pass (the 6 failures are runs that never completed), both synthetic broken runs fail, 10 of 10 mutations caught, golden 455/455, scenario identity unchanged for 17 scenarios. Fast 2199 passed + 2 memory-only failures that pass alone; stability marker 16 passed. Follow-up before NT-051: NT-187.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Builds on NT-141 (the static validate gaps). Add a wide-span horizon case (5/60/240) to the harness: with a pooled scaler the scaled variances are 0.054/0.586/2.359 against v_ref 1 and VAR_FLOOR 1e-4.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** a harness module in src/neural_trade/experiments/ whose cases run through the engine (NT-026), a pre-registered thresholds file under configs/, src/neural_trade/core/config.py (validate), the sweep search spaces (NT-030), tests/
@@ -700,7 +732,7 @@ changes).
 
 **Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps)**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-041 (implementer Sonnet; 4 stages + repair round 1), merged as e3bc0e4. Criteria (1)-(8) met, with these readings: (4) the cost profile defaults to 0 bps (D-044 supersedes the '13 bps' in the criterion's text: it is amended here); (6) the 7-day training block and the blocks in time are met for the `timed` layout (TRAIN 7 d, VAL 2 d, CAL 2 d, TEST 5 d, purge gap LOOKBACK + max(H)), which is NOT the default: the default stays `tscv` (NT-195, owner decision: making `timed` the default moves every run's blocks). Delivered: Config SYMBOL/QUOTE_CURRENCY/WINDOW_MINUTES/HORIZON_MINUTES/EXTENDED_TREND_MINUTES with DatasetSpec (minutes converted to bars on every Config path; a non-dividing length refused naming the field); dataset fingerprint (sha256, first/last timestamp, bar count, hole record) and setup in every run's meta and every leaderboard row (index migrated on every open, a read-only old index read with n/a); the effective cost profile on the board, in the setup and in rescore; labels from the spec (visualization/labels.py, 11 modules, 'USDT' not '$'); walk-forward folds at dates or spacing recorded in meta; GAP_POLICY drop (the cap, folds and purge gaps are cut on the UNDROPPED grid, so no block moves; hole-spanning windows are removed inside their blocks; a stored cell whose blocks lose windows to a hole and has no gap record is not matched as done) and a break marker at a hole inside the OOS block (the engine closes an open position at the last decision bar before the hole, no entries at a break; exposure mode refuses a block with a break); PR #15 sub-points (a)-(g) (bar-size check, verify_run_dataset in notebooks 02-04 and 07, zero/negative close refused, stable dedupe, epoch timestamps by magnitude, bootstrap block max(80, 4 x longest horizon), the first-anchor off-by-one in 7 places). QA history: qa-deep FAIL on d99ab26 (P1-A cost profile disqualified every leaderboard row; P1-B old index crashed read-only paths; P1-C the hole re-laid every fold of 6 long-file scenarios by 79 bars under an unchanged identity), repair round 1, qa-deep PASS on 8116227: at the reference nothing moves (golden_nt117 455/455; window arrays bit-equal for 5 configurations; the one intended difference is the zero-filled first sequence when a lag >= LOOKBACK); 0 block boundaries moved in 17 scenarios (12 data keys); the real stored-cell recount is unchanged (loss_prune_v1 6 of 18; h4h_360d, long_360d, long_360d_stab already did not match); the break semantic accepted (no change without a hole: 5 stored loss_prune_v1 cells rescore equal to the last field). Fast 2383 passed + the notebook check until the notebooks are executed; stability 17. Follow-ups: NT-193 (purge gap vs lags), NT-194 ('$' leftovers), NT-195 (owner: `timed` default), NT-196 (P3: hole exits reason, rescore skip, tests, SKIP_LAGS in minutes D-045, fold roles D-037).
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** (a) bar_minutes comes from RESAMPLE_MINUTES (experiments/dataset.py:50, scorer.py:306): compare the declared bar size with the measured median spacing and refuse a mismatch. (b) Notebooks 02-04 rebuild blocks from a hard-coded CSV (build.py:255/271, 325/340; backtest_ui.py:192-203): loaders check the fingerprint. (c) A zero/negative close passes `validate_ohlcv_frame` (data/loaders.py:32-41). (d) `sort_dedupe` uses an unstable sort (preprocessors.py:38). (e) epoch-ms timestamps parse as ns (:27). (f) Bootstrap BLOCK fixed at 80 (statistics.py:230): CIs 44% too narrow at h 240. (g) The window-start off-by-one (windowing.py:69, 129, 144, 165, 190) is live in micro scenarios with EXTENDED_TREND_PERIODS >= LOOKBACK. (h) max_hold fixed at 30 bars (strategies.py:50, 140, 189, 255).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/core/config.py, src/neural_trade/data/ (loaders, splits, windowing, processor), src/neural_trade/strategy/backtest.py (cost profile), src/neural_trade/evaluation/, src/neural_trade/visualization/ (labels), src/neural_trade/experiments/ (run meta), configs/, tests/
@@ -829,7 +861,7 @@ changes).
 
 **First stability-harness run on the reference setup against its pre-registered thresholds**
 
-- **status:** todo
+- **status:** todo (2026-10-07): the SPEC draft (branch nt-051-spec 87ab07d) FAILED the QA review (Opus): the per-term probe makes a reference cell 12x dearer (CPU 777 s vs 58 s), 45 cells would be 3.8/7.5/10 GPU-hours; no --retry-failed exists; blame from the probe is one sample divided by the epoch count; wrong facts. Prerequisites: NT-191 (probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run fixes); the SPEC is then amended with the QA's 11 edits (kept in the QA report D:/nt/nt_qa and summarised in the nt-051-spec branch) and re-reviewed; the GPU must be free (STATUS question 7).
 - **priority / type / role:** P1 / research / experimenter
 - **area:** the stability harness of NT-038 (run as engine scenarios), its reports (for example runs/stability/<id>/), a SPEC (for example runs/experiments/stability_ref_v1/SPEC.md)
 - **depends on:** NT-038 (stability harness and config guard)
@@ -1456,7 +1488,7 @@ changes).
 
 **Capacity variants through the Models registry, deep direction logit zero-initialised; then the capacity A/B**
 
-- **status:** in-progress (2026-10-01): (1) and (2) done, QA (Opus) FAIL on a68d72b (linear_indicators unnormalised: loss 542,944, 50% saturated P(up); share not reported) -> repair 1 e15e4f6 -> PASS; merged. gru_small 77,138 params and linear_indicators 7,610 (default LOOKBACK 60) vs gru_attention 316,751; DIRECTION_DEEP_ZERO_INIT; one covariance-share helper (NT-110). Open: (3) the capacity A/B. SPEC notes from QA: linear_indicators applies a per-sample LayerNormalization over its 246 pooled+last-bar features (a nonlinear readout; per-feature standardisation fit on the training block is the strictly linear alternative); the report should print tower_share beside skip_share (a covariance share can leave [0, 1]: gru_small h0 skip 1.074, tower -0.074).
+- **status:** done (2026-10-06): (3) the capacity A/B `capacity_v1`, experimenter (Sonnet medium) on nt-104-ab, merged: SPEC 0557e20 before any scored cell, 15 cells on the micro layout (N_FOLDS 100, judgement folds -96..-92, 5 pairs, seed 0), 2.35 GPU-hours of 3, runs/experiments/capacity_v1/REPORT.md. Verdicts by the pre-registered rule: gru_small h1 AUC -0.0121 CI [-0.0241, -0.0001], linear_indicators -0.0262 CI [-0.0551, +0.0027]: INCONCLUSIVE for both; nothing supports changing MODEL_NAME (default stays gru_attention). QA (Opus medium) PASS: every number recomputed from predictions_oos.npz to 4 decimals, pre-registration order proven, retried cell checked (bit-identical training), code identity 61014d0 without dirty; REPORT corrected for two stale numbers. Read with: epoch cap 14 probably under-trains the small arms (control stopped early in 3 of 5 cells, the small arms ran to the cap); the paired-t interval is probably too narrow (nested training blocks, one seed); every arm's calibrated h1 Brier is above 0.25 (worse than a constant). One re-run is allowed by the SPEC (more folds, EPOCHS 20, within 3 GPU-hours, a new SPEC) if the owner wants a decision. Follow-ups: NT-176, NT-177, NT-178. Earlier history: in-progress (2026-10-01): (1) and (2) done, QA (Opus) FAIL on a68d72b (linear_indicators unnormalised: loss 542,944, 50% saturated P(up); share not reported) -> repair 1 e15e4f6 -> PASS; merged. gru_small 77,138 params and linear_indicators 7,610 (default LOOKBACK 60) vs gru_attention 316,751; DIRECTION_DEEP_ZERO_INIT; one covariance-share helper (NT-110). Open: (3) the capacity A/B. SPEC notes from QA: linear_indicators applies a per-sample LayerNormalization over its 246 pooled+last-bar features (a nonlinear readout; per-feature standardisation fit on the training block is the strictly linear alternative); the report should print tower_share beside skip_share (a covariance share can leave [0, 1]: gru_small h0 skip 1.074, tower -0.074).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/models/ (new registered variants), src/neural_trade/core/config.py, tests/; runs/experiments/capacity_v1/
 - **depends on:** NT-099 or NT-101 (the objective), NT-032
@@ -1649,7 +1681,7 @@ changes).
 
 **NT-060 kit: seed today's layer for the bitwise check; repeat the 1.10x gate with a stable denominator**
 
-- **status:** todo
+- **status:** done (2026-10-07): nt-120 a04cbe7 (implementer Sonnet), merged as 76e6563; lead-verified (D-060: P3, scripts and tests only, no numbers of the product change): scripts/bench/window_free.py seeds today's Dense layer (GlorotUniform(seed)) so `check_bitwise` passes on CPU (fails with the seed reverted: assert False is True); `common.stable_ratio_gate` (warm-up dropped, A/B interleaved, >= 20 repeats else ValueError, median and IQR of both arms, a statistic definition string) gates the A2 layer's forward+backward at 1.10x today's layer's; synthetic timings with the recorded 3.4-30.8 ms denominator noise: ratio 1.05 PASS in 20 of 20 seeds, 1.20 FAIL in 20 of 20; fast 2316 passed (-n 4), ruff clean. Caveat: the 20-of-20 result assumes outlier-type noise; the GPU IQR (13-19 ms in the old record) may exceed the model: NT-060's GPU rerun (experimenter, `--device gpu`, reps >= 20, quote g_a2.ratio.*.statistic, both IQRs and g_a2.bitwise; two runs must agree on PASS/FAIL) decides.
 - **priority / type / role:** P3 / bug / implementer, then experimenter
 - **area:** scripts/ (the window-free benchmark kit), runs/experiments/ (the NT-060 record)
 - **depends on:** NT-060
@@ -1689,7 +1721,7 @@ changes).
 
 **assert_no_lookahead catches one-bar peeks in decide, exit_signal and the TP/SL level**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-123 f1f100a/4517ac6 (implementer, Sonnet medium), merged; QA (Opus medium) PASS on 4517ac6: the three one-bar peeks caught under default probes (97-100/100 over 100 seeds), both parts of the change needed (mutations), 72 before/after results over 12 strategies x 3 blocks x 2 cost configs with 0 differing fields, no false positives, test 0.74 s, README matches the code; fast 1979 passed, ruff clean. Follow-up: NT-170 (a sparse peek among many orders is missed).
 - **priority / type / role:** P1 / test-gap / implementer
 - **area:** src/neural_trade/strategy/backtest.py, tests/test_backtest.py, README.md
 - **depends on:** none
@@ -1701,19 +1733,19 @@ changes).
 
 **Temperature scaling reaches the NLL minimum (bounded scalar search)**
 
-- **status:** todo
+- **status:** todo (2026-10-08): unblocked by D-066 / NT-174. Code on nt-124 (f47e519; not merged, no QA yet); an implementer rebases it on remediation/plan, adds criterion (7) and the golden re-record, then QA (Opus; P1, changes numbers and a trading default).
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/calibration/temperature_scaling.py, calibration/pipeline.py, tests/test_calibration.py, scripts/golden_run.py
 - **depends on:** NT-122
 - **why:** calibration/temperature_scaling.py:62-106: 500 steps x lr 0.05, no bound, no convergence check; on weak heads the fit stops far from the minimum and pipeline.py:462 prints 'well-calibrated (T ~ 1)'. The calibrated P(up) feeds evaluation and every strategy.
-- **acceptance:** (1) Synthetic blocks (logit sd {0.1, 1, 3} x T* {0.33, 0.5, 2, 5}): NLL(fit) <= min over a dense log-grid on [1e-2, 1e3] + 1e-9. (2) sd 0.1, T* 0.33, n 20k gives T < 0.45. (3) T is bounded; a fit at a bound is flagged, never labelled well-calibrated. (4) The SHARPEN=3 fixture recovers T within 5%. (5) The golden run records temperature/{h} and the calibrated P(up), re-recorded in its own numbers-change commit. (6) Fast suite, ruff.
+- **acceptance:** (1) Synthetic blocks (logit sd {0.1, 1, 3} x T* {0.33, 0.5, 2, 5}): NLL(fit) <= min over a dense log-grid on [1e-2, 1e3] + 1e-9. (2) sd 0.1, T* 0.33, n 20k gives T < 0.45. (3) T is bounded; a fit at a bound is flagged, never labelled well-calibrated. (4) The SHARPEN=3 fixture recovers T within 5%. (5) The golden run records temperature/{h} and the calibrated P(up), re-recorded in its own numbers-change commit. (6) Fast suite, ruff. (7) (D-066) When the fit ends at a bound (no interior minimum), `pipeline_meta.json` records `direction_signal: none` per horizon, the report and the figures say 'no usable direction signal' (never 'well-calibrated'), and a strategy that needs P(up) (calibrated_quantile and the others that read it) refuses or stays flat for that horizon, with a test on the reference-like fixture (h1 at the upper bound); a golden change is recorded in its own commit; the strategies' behaviour with a normal fit is unchanged (golden equality). Role for QA: Opus medium, a number and a trading default change.
 - **source:** PR #15 review sweep (remote session, 2026-09-28; docs/research/2026-09-28-cpu-review-sweep/), re-checked against f9b60eb by the lead's read-only triage (2026-10-06): CPU-04
 
 ### NT-125
 
 **The learned-period ceiling follows LOOKBACK on every override path; default.yaml stops pinning 60**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-125 46ff086/aae39f3 (implementer, Sonnet medium) + repair de4e8f0, merged as 9557745. QA (Opus medium) PASS on all 6 criteria (every override path, golden 455/455 at LOOKBACK 60, 6 mutations caught) and found a P2 regression, fixed in the repair: config_identity treats a stored ceiling equal to LOOKBACK as unset (loss_prune_v1 matches 6 of 18 stored dirs again; spec_hash/settings_hash of all 10 scenarios equal; lead reviewed the diff). Caveat for NT-085: the micro_lookback H4 cells (LOOKBACK 240) ran with a ceiling of 60; re-running them now gives 240. Other scenarios already matched 0 stored cells before NT-125 (reference_default, micro_l2, micro_horizons, long_360d_stab, ...): cause not investigated, see NT-172.
 - **priority / type / role:** P1 / bug / implementer
 - **area:** src/neural_trade/core/config.py, configs/default.yaml, training/custom_model.py, models/layers/learnable_indicators.py, tests/test_config.py
 - **depends on:** none
@@ -1905,7 +1937,7 @@ changes).
 
 **Config.validate gaps: period bounds, schedules, LAYERS, coercion**
 
-- **status:** todo
+- **status:** done (2026-10-06): nt-141 711d5ca (implementer, Sonnet medium), merged; QA (Sonnet medium) PASS on 711d5ca/cd3cec1: every new refusal checked with valid edges and invalid values (period floor, MACD fast >= slow, MOMENTUM_CLIP_MIN > 1, LOSS_WEIGHT_SCHEDULE names and epochs, strictly increasing HORIZON_STEPS, RHO_MAX < 1, CALIB_LAMBDA_MIN <= MAX, partial LAYERS, int coercion of '1.5' and None for a str field; VAR_FLOOR warning through logging; INDICATOR_L2 tunable=False; LambdaScheduleCallback KeyError); NO valid config newly refused: 390 configs (stored runs, bundles, configs/, scenarios, screen specs, legacy bundle) load at the base and at the head, 0 newly refused; `--set` parsing unchanged except CSV_PATH=null (was silently 'None'); golden_nt117 455/455; 10 of 10 mutations caught. Deviation accepted by the lead: a configured period ABOVE the ceiling logs a warning instead of being refused (the ceiling is resolved at use and the clip moves the period; refusing broke ~16 small-LOOKBACK configs and tests; 0 of 364 stored configs trigger it). Follow-up: NT-181 (P3: dedupe that warning, 15 lines per validate and 30 per copy() at a small LOOKBACK; move the schedulable-keys tuple into core).
 - **priority / type / role:** P2 / bug / implementer
 - **area:** src/neural_trade/core/config.py, indicators/base.py, training/callbacks.py, models/layers_registry.py, tests/test_config.py
 - **depends on:** none (NT-038 builds on it)
@@ -2248,6 +2280,390 @@ changes).
 - **why:** D-048 forbids two full suites at once. On 2026-10-06 agents ran overlapping fast suites at least three times (NT-122's implementer, NT-031's QA, NT-048's implementer) because the `wmic ... | grep` check returned empty or was chained past; timings were contaminated (NT-075's noise came partly from the same load).
 - **acceptance:** (1) A full-suite run (`-n` with no file arguments, or `-m "not slow"`/`-m slow`) takes an OS file lock under D:/nt/ (path configurable) and waits, printing who holds it; targeted runs do not take it (test with two subprocesses). (2) RUNBOOK and the agent files point to it. (3) Fast suite, ruff.
 - **source:** lead and QA, 2026-10-06
+
+### NT-170
+
+**Look-ahead guard: probe every order bar; NaN-safe trace comparison; trace Order.info**
+
+- **status:** todo
+- **priority / type / role:** P3 / test-gap / implementer
+- **area:** src/neural_trade/strategy/backtest.py (`_default_probes`, the trace comparison), tests/test_backtest.py
+- **depends on:** NT-123 (done)
+- **why:** QA of NT-123 (2026-10-06): the 24 default probes are spread over every asked bar (mostly exit requests), so a peek confined to a few orders is missed deterministically (a sparse TP peek: 0/100); the trace is compared with dict `==`, so a NaN tp/sl would be a false positive; `Order.info` is not traced (metadata only).
+- **acceptance:** (1) The default probes include every bar where an order was placed (cheap: the 12-strategy test takes 0.74 s); QA's sparse TP peek is caught (test). (2) NaN-equal trace comparison (test). (3) `test_no_lookahead_all_strategies` stays <= 30 s; public results unchanged. (4) Fast suite, ruff.
+- **source:** QA of NT-123 (2026-10-06)
+
+### NT-171
+
+**Leaderboard: read a recorded zero-cost rescore; stored-spec fallback independent of file mtime**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/experiments/leaderboard.py, tests/
+- **depends on:** NT-031, NT-168
+- **why:** qa-deep on NT-031 (2026-10-06): zero-cost rescores exist under runs/scenarios/<s>/rescore/zero_cost_status-* for most scenarios, but the board ignores them, so 13 of 14 real boards (13 bps/side, pre-NT-094) can never crown a winner. Also experiments/leaderboard.py:~550 picks the newest stored spec by file mtime, which git checkout does not preserve (three scenarios have several stored specs; their folds and costs agree today).
+- **acceptance:** (1) A recorded rescore can supply a cell's cost-profile numbers (shown as such in the row and the header) (test). (2) The stored-spec fallback is chosen by the spec's own stamp or hash order, not mtime (test). (3) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-172
+
+**Stored cells of most scenarios no longer match their spec cell (rescore skips them, resume would retrain)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/scenario.py, rescore.py, runner.py, tests/
+- **depends on:** none
+- **why:** QA of NT-125 (2026-10-06) measured: reference_default, micro_l2, micro_horizons, long_360d_stab, h4h_360d, long_360d, micro_pnl_e1 match 0 stored run dirs to a spec cell, loss_prune_v1 only 6 of 18; this predates NT-125 (probably NT-117's default changes and the NT-047 input layout). `config_hash_of_dir` promises that an old cell is recognised exactly when it should be; the micro loop's CPU rescores on stored predictions get nothing.
+- **acceptance:** (1) A report per scenario: which fields differ between a stored dir's config.yaml and the spec cell (by field, counts). (2) Decide per field: a default that changed since the run (the old cell really is a different configuration, keep) or an identity artefact (normalise, as NT-125 did for the ceiling), with tests. (3) No change to the identity of cells that match today. (4) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-173
+
+**Re-measure the GPU parallel-trials record (NT-035) on the D-047 default before any sweep with --parallel above 1**
+
+- **status:** in-progress (2026-10-07): the SPEC and the scripts are written on branch nt-173 (worktree D:/nt/nt_wt_173; SPEC commit 42ebd64: D-047 default, batch 256, N = 1, 2, 3 with 3 repeats each, N = 4 only if N = 3 leaves 2 GB; decision rule: allowed_n = the largest N with aggregate throughput >= 1.15x N = 1, peak fb <= 10746 MB and no crash; the record stores the raw measured peak because the sweep adds WATCH_FB_MARGIN_MB 1024 itself; about 0.35 GPU-hours), but the MEASUREMENT HAS NOT RUN: every GPU-free check failed on memory (fb 10,280-10,520 MB steady, sm 16-63%) because three concurrent `screen` shards of the tactical session (D-063: GPU in parallel, no budget) hold about 10 GB of the 12 GB card. A throughput measurement beside another trainer is not evidence. Needs the owner's decision on GPU sharing (STATUS question 7). To run: `bash D:/nt/nt_wt_173/runs/experiments/gpu_measurements_v2/run_v2.sh` (it waits up to 50 minutes for fb < 2000 MB and exits 3 otherwise); then build parallel_n.json and the REPORT; the sweep reads v2 after a one-line change (DEFAULT_PARALLEL_RECORD in experiments/sweep.py:89 and the --parallel-record default in cli.py:577).
+- **priority / type / role:** P1 / research / experimenter
+- **area:** runs/experiments/gpu_measurements_v1/ (a new parallel_n.json), docs/RUNBOOK.md "GPU rules"
+- **depends on:** NT-030
+- **why:** qa-deep on NT-030 (2026-10-06): runs/experiments/gpu_measurements_v1/parallel_n.json (N = 3 allowed, N = 4 crashed; peak 7821 MB at N = 3, watch level peak_fb + 1024 MB) was measured on 2026-09-29 on the pre-D-047 close-only model (0.1066 s/step). The default is now OHLCV with 14 families (0.1735 s/step, 1.63x), memory unmeasured on the 12 GB card. A plausible D-047 single-process peak of 5000 MB exceeds 3731 + 1024 and stopped an N = 1 sweep in a probe. Also NT-035 saw the desktop alone at a median sm of about 40%, so the RUNBOOK rule 'sm > 30% = busy' can stop sweeps spuriously: judge by fb (memory).
+- **acceptance:** (1) A SPEC first (few GPU-minutes, under 0.5 GPU-hours): peak fb and sm of one process, then N = 2 and 3 concurrently, on the D-047 default and batch 256, with the GPU-free check before each launch. (2) A new parallel_n.json whose `setup` names the input layout, and the watch level from the measured peaks. (3) RUNBOOK 'GPU rules': the busy rule keys on fb (memory), with the desktop's sm baseline stated. (4) NT-030's sweep reads the new record.
+- **source:** QA reports of 2026-10-06
+
+### NT-174
+
+**Direction heads with no usable signal: what the calibrated P(up) and the strategies do when the temperature fit has no interior minimum (NT-124)**
+
+- **status:** done (2026-10-08): the owner decided (D-066): option (a), merge NT-124 and make 'no usable direction signal' an explicit reported state, strategies refuse or stay flat. Implemented in NT-124 criterion (7).
+- **priority / type / role:** P2 / decision / owner
+- **area:** docs/DECISIONS.md, then an implementer item
+- **depends on:** NT-124
+- **why:** NT-124's fix finds the true NLL minimum. On the reference run (20261003T225052Z-91fa363-11993eec, 2866 cal windows) every horizon's temperature goes to the upper bound (T = 1000): the heads carry no usable direction signal on the calibration block and the calibrated P(up) is about 0.5 for every window (cal NLL = ln 2, against 0.72 for the old fit, which stopped at a T worse than a constant 0.5). calibrated_quantile (D-009, the default strategy) and every strategy reading the calibrated P(up) become degenerate: a change of default trading behaviour, the owner's.
+- **acceptance:** The owner chooses and a DECISIONS entry records one of: (a) merge NT-124 as is and make 'no direction signal' an explicit, reported state (strategies that need P(up) refuse or stay flat, the report says so); (b) clamp T to a configured maximum (e.g. 10); (c) fall back to a constant P(up) from the training base rate; (d) skip the direction heads in that case. Lead's recommendation: (a). Then an implementer item for the chosen option.
+- **source:** QA reports of 2026-10-06
+
+### NT-175
+
+**Sweep: a clear 'no eligible trial' outcome; tests for a missing status.json, an empty metrics.jsonl, the quick leader; deterministic mode in the setup match**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/experiments/sweep.py, tests/test_sweep.py
+- **depends on:** NT-030 (done)
+- **why:** qa-deep on NT-030 (2026-10-06): (a) when every trial is failed or ineligible, an Optuna sweep ends `complete` with winner null, no stop_reason or note, and the CLI exits 0; quick mode gives a null leader the same way; (b) surviving mutants N5 (a missing status.json alone is not a failure), N13 (an empty metrics.jsonl is not a failure), N14 (status.json val_loss unchecked), N10 (the quick-leader assertion `leader is None or ...` cannot fail); (c) `seed_everything(deterministic=True)` is not a Config field, so a deterministic run of an otherwise identical setup counts as the same setup for sec_per_step (the NT-114 cuDNN reference ran 0.2106 s/step in that mode against 0.1735 for the default).
+- **acceptance:** (1) sweep.json carries an explicit 'no eligible trial: no re-run, no winner' with the per-trial reasons, the CLI prints it and exits non-zero (tests, optuna and quick). (2) Tests kill N5, N10, N13, N14. (3) A run whose record says deterministic mode is not matched to a non-deterministic setup (needs NT-164 to record the mode). (4) Fast suite, ruff.
+- **source:** qa-deep on NT-030 (2026-10-06)
+
+### NT-176
+
+**Does the calibrated P(up) transfer out of sample? Brier above 0.25 for every arm in capacity_v1**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **area:** runs/experiments/ (SPEC, REPORT); src/neural_trade/calibration/ only through a follow-up implementer item
+- **depends on:** NT-124, NT-174
+- **why:** QA of NT-104 (2026-10-06): in all 45 cell-horizons of capacity_v1 the calibrated h1 Brier is above 0.25 and BCE above ln 2 (control's lowest 0.2502 and 0.6968): the calibrated P(up) is worse out of sample than a constant 0.5 for every arm. Together with NT-124 (the fixed temperature fit goes to the upper bound on the reference run) the calibration of the direction head, and every strategy that reads it (D-009), has no demonstrated value.
+- **acceptance:** (1) A SPEC (CPU on stored predictions, no GPU): for stored runs with predictions (capacity_v1, loss_prune_v1, the reference runs) compare, per fold and horizon, the out-of-sample Brier/BCE of raw P(up), temperature-scaled P(up) (old and NT-124's fit) and a constant (train base rate), with block-bootstrap intervals (D-012). (2) The verdict in a REPORT: does any calibration variant beat the constant out of sample. (3) A recommendation for NT-174 (the owner's decision) from the numbers.
+- **source:** QA of NT-104 (2026-10-06)
+
+### NT-177
+
+**split_arrays windows the whole file before MAX_SEQUENCE_COUNT: a 5.14 GiB array, host MemoryError in the scorer**
+
+- **status:** done (2026-10-06): nt-177 41690ab/6e5865f (implementer, Sonnet medium), merged; lead-verified (D-060: P2, output proven identical): diff reviewed (only the loop start moves, close stays whole so the leading extended-trend features are unchanged), tests/test_split_arrays_cap.py (13) keep the old window-all-then-cut path as the reference and compare X, X_model, y, last_close, extended trends, anchors, split slices, scaler stats with array_equal over cap/fold/series/step cases (they pass on the old source too), peak memory 15 MB against 572 MB on a 500k-bar frame, golden_nt117 455/455, fast 2111 passed. Not asserted: the scorer on the long file (the 5.14 GiB case); the NT-104 gru_small f-93 cell can be re-scored.
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/data/processor.py (split_arrays ~86-90), tests/
+- **depends on:** none
+- **why:** QA of NT-104 (2026-10-06): `split_arrays` builds model windows for the whole long file (4,598,119 x 60 x 5 float32, 5.14 GiB) before applying MAX_SEQUENCE_COUNT; this caused the gru_small f-93 MemoryError in capacity_v1's scorer, and low-memory moments make fast-suite tests flaky (test_peak_memory_stays_small_on_a_month_of_bars failed once with an ArrayMemoryError today).
+- **acceptance:** (1) Cut to the newest MAX_SEQUENCE_COUNT sequences, then window, with identical outputs: a test on a synthetic frame comparing old and new (same arrays) and a peak-memory test on a long frame. (2) Golden run unchanged (455/455 on the current record). (3) Fast suite, ruff.
+- **source:** QA of NT-104 (2026-10-06)
+
+### NT-178
+
+**D-046 note: nested walk-forward training blocks and one seed make per-fold differences correlated; future SPECs state it**
+
+- **status:** todo
+- **priority / type / role:** P3 / docs / lead
+- **area:** docs/DECISIONS.md (a new entry), OPERATING_MODEL if needed
+- **depends on:** none
+- **why:** QA of NT-104 (2026-10-06): the five judgement folds share nested training data and all cells use seed 0, so the paired-t interval over folds is probably anti-conservative; D-046's simulation did not model shared training data. No verdict of capacity_v1 depends on it (a wider interval is also inconclusive).
+- **acceptance:** (1) A DECISIONS entry (the lead's reading, citing the QA report) says so and what a SPEC must state (training-block overlap, a sensitivity analysis with a wider interval). (2) NT-032's comparator docs mention it.
+- **source:** QA of NT-104 (2026-10-06)
+
+### NT-179
+
+**Leaderboard CLI: several scenarios on one board (the learned / frozen twin / TA comparison NT-050 needs)**
+
+- **status:** done (2026-10-07): nt-179 0fe560c (implementer Sonnet), merged as 507b597; lead-verified (D-060: P2, no numbers change; the board logic rests on NT-031's QA'd rails): `neural-trade leaderboard --scenario a,b,c` (repeatable, comma-separated, or several positional names) puts the configurations of several scenarios on one board, rows `scenario / configuration`, per-scenario thresholds with the header naming each source, the dev folds as the union (a scenario that ran other folds fails fold_coverage naming them), the first scenario's cost profile (another one is not comparable and cannot win), the winner across scenarios, `--out` writes `<out>/combined/leaderboard.{md,html,png}`; tested on copies of the real stored scenarios (light files only): the table is as expected, every row disqualified, no winner (13 bps scenarios, folds differ), the PNG looked at; the winner marker looked at on a synthetic store; the nt033 spec headers name `--n-trials 17` (11.89 h upper bound against the 12 h cap; 30 trials = 15.90 h is refused); a rule-only sweep reports a CPU budget (gpu_hours 0) and re-runs a deterministic rule once; `score_strategy_only` pinned to the block's own closes by a mutation test; fast 2301 passed (runs/experiments/nt179/fast_suite.log). Lead fix in the same batch: `_perturb_after` (strategy/backtest.py) now carries `meta['delta_raw']` perturbed after t, so assert_no_lookahead compares raw-head coherence in both runs and no longer logs the D-051 warning on every probe (test fails without the fix, passes with it; the 53 backtest tests pass). Open: MACrossStrategy.warmup() loses one bar (P3, harmless); the *_gpu_hours keys keep their names for a CPU budget.
+- **priority / type / role:** P2 / feature / implementer
+- **area:** src/neural_trade/cli.py (cmd_leaderboard), tests/
+- **depends on:** NT-033
+- **why:** QA of NT-033 (2026-10-06): `neural-trade leaderboard` builds one board per scenario; the multi-scenario branch of `leaderboard_markdown` (leaderboard.py ~678-696, rows named `scenario / configuration`) is reachable only through the Python API. The yardstick (VISION) compares the learned model against the frozen twin and the TA rules on ONE dev-fold net Sharpe column. Also: the nt033 spec headers suggest `--n-trials 30`, which the sweep refuses (15.90 h upper bound at 0.1735 s/step against the 12 h cap); a rule-only sweep's budget line says 'GPU budget 0.79 h' from the default overhead though no GPU is used, and its 3-seed re-run repeats identical deterministic cells; nothing pins that `score_strategy_only` feeds the block's own closes (only the alignment guard at scorer.py:~232); the perturbed frame in `_perturb_after` drops meta['delta_raw'], so every probe logs the D-051 warning; `MACrossStrategy.warmup()` loses one bar.
+- **acceptance:** (1) `--scenario a,b,c` (or several positional scenarios) puts the configurations on one board with the cost-profile and fold-coverage rails applied across scenarios (test). (2) The spec header comments name a trial count that fits 12 h (or say it needs the owner). (3) A rule-only sweep reports a CPU budget and re-runs a deterministic rule once. (4) A test that pins `score_strategy_only`'s closes; the D-051 warning is not logged per probe. (5) Fast suite, ruff.
+- **source:** QA of NT-033 (2026-10-06)
+
+### NT-180
+
+**The scorer stores zeros, not n/a, for served-delta statistics when beta is 0 (D-007)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/scorer.py (and the report fields it reads), evaluation/report.py, tests/
+- **depends on:** none
+- **why:** QA of NT-034 (2026-10-06): for a cell with beta 0 the index holds `h0/delta/corr`, `mean_pred` and `share_pred_up` as 0.0 (cell t0005 of the tiny sweep). D-007: with beta 0 the served delta is exactly 0 and every served-delta statistic must be n/a (not a measured 0% / 100%), with the raw heads alongside. Every consumer of the index (the leaderboard, the comparison figures, the control panel) draws these as measured zeros unless it special-cases beta 0.
+- **acceptance:** (1) The scorer stores NaN/None (and a `served_delta_na: true` flag) for the served-delta statistics when beta is 0; the raw-head statistics are stored beside them (test on a beta-0 cell). (2) The leaderboard and the NT-034 panel show n/a for them (tests). (3) Old stored cells are read through the same rule (beta from their report). (4) Fast suite, ruff.
+- **source:** QA of NT-034 (2026-10-06)
+
+### NT-181
+
+**Config validate: log the above-ceiling period warning once per distinct message; one source for the schedulable lambda keys; test hygiene**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/core/config.py, training/lambdas.py, tests/test_nt033_baselines.py, tests/test_control_panel_repair.py
+- **depends on:** NT-141
+- **why:** QA of NT-141 and NT-034 (2026-10-06): `_validate_indicator_periods` logs the above-ceiling warning on every validate (15 lines per validate and 30 per `copy()` at LOOKBACK 20; a default train logs 0); `_SCHEDULABLE_LAMBDA_KEYS` in core/config.py duplicates training/lambdas._LAMBDA_VARIABLE_KEYS (layering forbids the import; a test pins them equal). Memory-pressure flakiness of heavy tests while a second session trains: tests/test_calib_gradient_mode.py::test_default_model_gradient_mode_equalises_terms_as_they_enter_total OOMs on CPU at -n 8 ([256,57,60,60] float); tests/test_nt033_baselines.py:133-134 uses `next()` without a default and hides the failing cell's error.
+- **acceptance:** (1) The warning is deduplicated per distinct message per process (test). (2) The tuple lives in core and training imports it (the equality test becomes an identity check). (3) The heavy tests' memory use is bounded (smaller batch/sequence for the default-model gradient-mode test, keeping its assertion) and the nt033 test shows the underlying error. (4) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-182
+
+**Run-store run_id collision: two cells with the same config hash that start in the same second overwrite each other's index row**
+
+- **status:** done (2026-10-06): nt-182 603a327 (implementer Sonnet), merged; QA (Opus medium) PASS on 603a327/ce708ed: the collision reproduced on the base (one of two index rows lost, also on rebuild_index) and both rows kept on the head; run id `<stamp>-<sha>-<hash8>-<cellkey>-<6hex of sha256(scenario)>`; the index raises RunIdCollision naming both cells for one run id from two different cells (an identical re-sync still replaces its row); the real store copy (107 engine run dirs, kept index 88 rows): rebuilt 107, the 88 kept rows identical, no directory renamed, same as the old code; all 17 committed scenarios (105 cells) spec/settings/per-cell config hashes byte-identical; every run-id consumer checked (check_run_evidence, comparison.py, notebook/runs.py, rescore, store); the longest Windows path 176 chars; resume recognises old cells through cell key and config hash, not the run id; 3 mutations caught. Follow-ups: NT-184 (P3).
+- **priority / type / role:** P1 / bug / implementer
+- **area:** src/neural_trade/core/run_context.py (run_id, ~line 57), src/neural_trade/experiments/store.py (INSERT OR REPLACE on run_id), src/neural_trade/experiments/runner.py, tests/
+- **depends on:** none (before NT-050)
+- **why:** NT-034's implementer (2026-10-06): run_id = stamp (second) + sha + config hash + cell name, and the index's run_id is the PRIMARY KEY with INSERT OR REPLACE. Two scenarios whose cells share a config hash and finish a cell in the same second overwrite each other's index row. Reproduced deterministically by the old tests/test_nt033_baselines.py::test_a_rule_cell_scores_the_same_block_and_costs_as_a_trained_cell (a rule cell and a trained cell of one fold got the same run_id; the rule row was lost). Plausible in NT-050: the three TA-rule scenarios (nt033_ta_ma_cross, nt033_ta_rsi, nt033_ta_bollinger) have cells of about 0.1 s that differ only in their strategy, and the learned and frozen-twin scenarios run beside them. The engine already retries on a run-id collision for DIRECTORIES (runner.py ~248-254) but the index row is silently replaced.
+- **acceptance:** (1) A test with two minimal scenarios in one store whose cells have the same config hash and start in the same second: both rows are in the index and both run directories exist. (2) The run_id includes the scenario name and/or a uniqueness suffix; existing run ids and stored cells keep resolving (the index rebuilt from the stored dirs equals the kept one; old ids unchanged). (3) INSERT OR REPLACE becomes a refusal that names both cells when the SAME run_id is inserted twice with different content (test). (4) Scenario identity (spec_hash/settings_hash/config hashes) unchanged. (5) Fast suite, ruff.
+- **source:** NT-034 implementer (2026-10-06)
+
+### NT-183
+
+**Claim lock: a stale takeover can give two racers the claim (CI red on remediation/plan)**
+
+- **status:** done (2026-10-07): nt-183 47afa42/1fd55b9 (implementer Sonnet), merged as 6837b06; QA (Opus medium) PASS: the deterministic barrier reproduction fails on the old claims.py (3 of 7 claim tests, `assert 2 == 1`) and passes on the head; 8 real processes x 200 rounds on a stale claim: one winner every round; chaos stress (random pauses at every step) 8 threads x 2000 rounds: one winner every round; mixed stress 8 processes x 90 s on 3 keys (11,016 claims, 3,248 takeovers of dead owners, 7,768 releases): double=0, stolen=0; the 7 claim tests green 50 of 50; the sweep and engine tests pass (97 + the slow real two-process sweep); Windows semantics tested here (a reader holding the stale claim); POSIX reasoned by reading (CI on the merge push is the check); mutations: no sentinel, no re-read, no sentinel age caught by tests; two ordering mutants (re-verify before the sentinel, sentinel removed before the replace) are caught only by the chaos stress. Follow-up: NT-188 (P3).
+- **priority / type / role:** P1 / bug / implementer
+- **area:** src/neural_trade/experiments/claims.py, tests/test_sweep.py
+- **depends on:** NT-030 (done)
+- **why:** CI run 37504490746 on 8bbf8b7 (Linux): tests/test_sweep.py::test_a_claim_file_being_written_is_held_not_stolen_and_a_stale_takeover_is_atomic fails with `assert 2 == 1` (two winners of one stale claim); it passed locally and on the previous CI run by timing luck. qa-deep's earlier P3 on NT-030 ('two takers of one stale claim: both claim') was not closed by repair 2. The race: A and B both decide the same claim is stale; A renames it away and creates its fresh claim; B then renames A's FRESH claim away and creates its own.
+- **acceptance:** (1) A deterministic, barrier-driven reproduction of the interleaving fails on today's code. (2) The takeover protocol is correct on Windows and POSIX without timing assumptions (an exclusive takeover sentinel with its own stale rule, and a re-verification of the stale content before replacing it); the docstring states the proof sketch. (3) 8 racers x 100 rounds: exactly one winner each round; a live claim is never taken over; a dead-pid claim always is. (4) The test file loops 50 times without a failure. (5) Fast suite, ruff; CI green on the merge push.
+- **source:** CI run 37504490746 (2026-10-06)
+
+### NT-184
+
+**Run-id follow-ups: docs describe the new shape; a collision leaves a directory that breaks plan() and rebuild_index(); presentation scripts parse the directory name; check_run_evidence keys on the prefix only; claims release() ownership**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** docs/RUNBOOK.md (~233, ~692), src/neural_trade/experiments/runner.py (docstring ~14, the collision path ~300), experiments/store.py (docstring ~8), scripts/presentation/extract*.py, scripts/check_run_evidence.py (~47-49, ~198), experiments/claims.py (release), tests/
+- **depends on:** NT-182, NT-183
+- **why:** QA of NT-182 and NT-183 (2026-10-06): (1) RUNBOOK, runner.py and store.py still describe the run directory without the scenario suffix; (2) after a RunIdCollision runner.py:~300 leaves the new directory without result.json, so that scenario's plan() and every rebuild_index() raise until it is moved by hand, and the message does not say how to repair it; (3) scripts/presentation/extract.py:229, extract_math.py:42, extract_candidate.py:183 read the seed as `d.name.split('__')[2]` or `[-1]`: for a new-shape directory that gives `s0-xxxxxx`; (4) check_run_evidence.py keys a citation on the `<stamp>-<sha>-<hash8>` prefix only, so a citation of one cell also checks every other cell that shares the prefix (now more likely); (5) CellClaims.release() unlinks without checking that the file is still ours: if a taker replaced a live-but-misjudged claim, the old owner's release deletes the new owner's claim.
+- **acceptance:** (1) Docs updated. (2) The collision path removes (or marks) the directory it created and the error message names the repair; a test that plan() and rebuild_index() work after a collision. (3) The presentation scripts parse the seed with a regex. (4) A citation resolves by the full directory name when it carries a suffix (test). (5) release() verifies ownership (pid and start time) before unlinking (test). (6) Fast suite, ruff.
+- **source:** QA reports of 2026-10-06
+
+### NT-185
+
+**A sweep can be killed by an open notebook: sweep.json is replaced without retry while the panel's poller reads it (Windows)**
+
+- **status:** done (2026-10-07): nt-185 cd70196/1dd8a05 (implementer Sonnet), merged as e1fd914; QA (Opus medium) PASS: with the REAL panel reader (list_sweeps) and the REAL sweep writer in two processes the base fails 857/826/850 of 1000 writes with a tight reader, 233/213/203 with a 50 ms poll and 2/2/1 with a 10 s poll (4 reads); the head 0 in every setup, also 2 and 3 tight readers; new utils/atomic.py (replace_with_retry: 20 attempts, 10 ms to 200 ms, about 3.1 s, AtomicReplaceError naming the path, a unique temp file removed on failure), used by sweep._write_json (sweep.json and winner.json) and store.rebuild_index; the panel's readers read once, close, tolerate missing/half-written files; output byte-identical; sqlite polling cannot kill the engine's writes (0 of 1000 sync failures); AtomicReplaceError is a fatal but resumable sweep error and sweep.json stays the previous good version; 4 mutations caught. Follow-ups: NT-189 (P3).
+- **priority / type / role:** P1 / bug / implementer
+- **area:** src/neural_trade/experiments/sweep.py (`_write_json`, ~115-120, and any other atomic writer: store index, claims, run context), src/neural_trade/notebook/panel_data.py (list_sweeps), tests/
+- **depends on:** none (before NT-050)
+- **why:** qa-deep on NT-034 (2026-10-06): `PD.list_sweeps` reads every sweep.json on every poll (panel_data.py:~100-104, from `_refresh_board`); `sweep._write_json` does a bare `os.replace`; on Windows the replace fails with WinError 5 (PermissionError) while a reader holds the file open, and the sweep job DIES. Cross-process reproduction with the real reader and writer: 152 to 253 of 1000 tight writes failed; with realistic spacing the blocking window is about 0.8 ms per read, about 0.01% per write at a 10 s poll, roughly 1-2% per watched overnight sweep (an estimate). So an open control-panel notebook can kill the CLI sweep that NT-050 will run overnight; it also makes the board test load-flaky.
+- **acceptance:** (1) A shared helper `atomic_write_text/json` retries `os.replace` on PermissionError/OSError with a short backoff (e.g. 20 attempts, 10-200 ms, total about 2 s) and raises a clear error after that; every atomic writer in experiments/ and notebook/ uses it (grep `os.replace`). (2) A cross-process test: a reader loop opening the file repeatedly while a writer replaces it 1000 times: 0 failures. (3) The panel's readers open files read-only and briefly (read the text once, close), and tolerate a missing or half-written file. (4) The board test no longer flakes (run it 20 times). (5) Fast suite, ruff.
+- **source:** qa-deep on NT-034 (2026-10-06)
+
+### NT-186
+
+**Control-panel and data-path follow-ups from the NT-034 qa-deep**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/data/loaders.py (resolve_data_path), src/neural_trade/notebook/panel_compare.py, panel_data.py, runs/compares (a stored record), tests/
+- **depends on:** NT-034
+- **why:** qa-deep on NT-034 (2026-10-06), P3: (1) `resolve_data_path` breaks inputs `pd.read_csv` accepted: a StringIO now raises TypeError and a URL is mangled to `https:\example.com\...` (loaders.py:~28; no caller uses either); the missing-file error text uses Windows separators; (2) the suggested `neural-trade compare` command for a missing verdict (panel_compare.py:~503) works from neither cwd (`root: runs` resolves from the cwd); (3) the panel shows the provisional ece0 verdict (runs/compares/loss_prune_v1_ece0/result.json, estimate 0.002453, includes the suspect f-39 cell) although D-057 adopted the re-run (runs/loss_prune_v1_ece0_f39_rerun/compares/..., 0.002556): a stored-record issue (a supersede marker, with NT-168); (4) a configuration that is n/a on only some cells is averaged over the remaining folds and only the hover says so (the static PNG and the table do not); (5) without PYTHONPATH a worktree's notebooks/ opens the main checkout's data (the editable install's PROJECT_ROOT); the sha is still recorded.
+- **acceptance:** (1) resolve_data_path leaves non-path inputs (file objects, URLs) and the error text separators alone (tests). (2) The suggested command runs from both cwds. (3) The panel prefers a recorded supersede/re-run verdict (with NT-168) or labels the provisional one. (4) The partial-n/a count is shown in the table and as a note on the figure. (5) PROJECT_ROOT is derived from the package location and documented. (6) Fast suite, ruff.
+- **source:** qa-deep on NT-034 (2026-10-06)
+
+### NT-187
+
+**Stability harness before NT-051: fuzz_constant block size, n_eff gating of the variance checks, a degenerate constant baseline, and a v2 thresholds file**
+
+- **status:** done (2026-10-07): nt-187 9e3548d (implementer Sonnet), merged as e55ed52; QA (Opus medium) PASS on fbebfd1: `configs/stability_thresholds_v2.yaml` (sha256 34a122b28861c13622165aed81fdb1e9405eea91fe4823d0a754d070cbade2cb) committed ALONE and first (ad3f590), never edited afterwards, no harness run before it; v1 (0b706aa2...) byte-identical and still the default; the harness takes `--thresholds v2` and the report carries the file's sha256; fuzz_constant is a 100-bar block (flat training windows 21 of 136 tiny and 21 of 360 reference, QA counted them itself; its metrics differ from control and the constant-baseline artefact is gone); the variance checks are not evaluated below the n_eff gates (100 for the NLL excess over the baseline, 30 for the CRPS ratio and the scaled NLL) and for a degenerate baseline; `max_variance_nll_scaled` 8.0 (NLL minus ln rmse_zero) is scale-invariant (identical to 6 digits at price x1, x1e4, x1e-4); expected n_eff per case and profile recomputed by QA through plan_cases and equal to the file; 96 of 96 healthy stored runs pass v1 and v2; QA's two synthetic broken runs and the cap run still fail; 14 of 17 mutations caught. Gates 100 and 30 are labelled extrapolations (all stored runs have n_eff >= 135). For NT-051's SPEC: use v2 on the REFERENCE profile (the tiny profile judges no variance check under v2: do not use tiny alone); name v2 by path or sha256; state the expected outcome of fuzz_jumps before GPU time (NT-190). Follow-ups: NT-190.
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/stability.py (default_cases, _score_checks), configs/stability_thresholds_v2.yaml (new; v1 stays), tests/
+- **depends on:** NT-038 (done)
+- **why:** qa-deep on NT-038 (2026-10-07): (1) fuzz_constant's 400-bar constant block covers 126 of 136 tiny and 321 of 360 reference training windows completely, labels included: a constant TRAINING SET, not constant windows (dir_loss 0, var_at_floor 'not evaluated', the constant-variance baseline NLL about 1e28 so nll_over_const is -9.7e27); NT-051 would record a FAIL the case design guarantees. (2) The variance checks have no n_eff gate (coverage has): a healthy tiny control at h2 (n_eff 5) shows a CRPS ratio 1.145 against the limit 1.5, and round 0's healthy tiny control had an h2 NLL excess +3.79 against the limit 2.0. (3) A non-finite or absurd constant baseline must be 'not evaluated'. (4) max_variance_nll is in dollar units and shifts by ln k per price factor k (at x1e4 the healthy maximum is about 17.5 against the limit 20); the over-baseline checks are scale-invariant. The thresholds v1 are frozen (pre-registration, sha256 0b706aa2...): changes go into a v2 file named in NT-051's SPEC before any GPU time.
+- **acceptance:** (1) fuzz_constant's block is about 60-120 bars (a minority of the training windows are flat); a test that fewer than half of the training windows are fully constant and that the case's metrics differ from control. (2) The variance checks are 'not evaluated' below an n_eff threshold (stated in v2) and when the baseline is non-finite or absurd (tests). (3) max_variance_nll is dropped or expressed in scaled units. (4) configs/stability_thresholds_v2.yaml with every change's rationale and the stored-run evidence, committed in its own commit BEFORE any real harness run; the harness takes the file by name; v1 stays unchanged and still loadable (a test that v1's sha256 is still 0b706aa2...). (5) The expected n_eff per case and profile is listed in the file or the REPORT. (6) Fast suite, ruff.
+- **source:** qa-deep on NT-038 (2026-10-07)
+
+### NT-188
+
+**Claim lock residues: two ordering seams for the tests, an atomic sentinel write, release() ownership and retry, crash leftovers, docstring**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/experiments/claims.py, tests/test_sweep.py
+- **depends on:** NT-183 (done)
+- **why:** QA of NT-183 (2026-10-07), P3: (1) tests: add a seam between the stale verdict and the sentinel and one between the sentinel and the replace, so that the mutants 'remove the sentinel before the replace' (12 of 300 chaos rounds bad) and 'unlink and create instead of replace' (12 of 300 rounds with no winner) and 're-verify before taking the sentinel' (77 of 300) fail a TEST, not only the chaos stress; (2) `_sentinel_dead`: an empty, old sentinel of a LIVE taker (json.dump buffered, the file stays empty until close) is reaped as dead after 30 s: write the sentinel atomically (temp file plus os.link) or judge an unreadable sentinel by its pid; (3) release() checks no ownership and on Windows swallows PermissionError, so a live claim lingers until the process exits: retry briefly and unlink only when the content is still the caller's own pid and start time; (4) `.lock.new-*` and `.lock.takeover.dead-*` leftovers of a crash are never reaped (harmless: they do not match `<key>.lock`); (5) the module docstring says the run store rejects a duplicate run id (NT-182): wrong for a same-scenario duplicate, which the runner stores as `<name>-2`.
+- **acceptance:** (1) The two seams and tests that fail on the three mutants. (2) The sentinel is written atomically or judged by pid (test). (3) release() verifies ownership and retries on PermissionError (tests). (4) Leftovers older than a stated age are cleaned on the next claim. (5) The docstring is corrected. (6) Fast suite, ruff, the claim tests looped 50 times.
+- **source:** QA of NT-183 (2026-10-07)
+
+### NT-189
+
+**Atomic-write follow-ups: the cross-process tests import the installed package; rebuild_index retry untested; _read_summary drops the recorded budget on a transient read error**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** tests/test_atomic_write.py (~30-57), src/neural_trade/experiments/store.py (rebuild_index ~259), src/neural_trade/experiments/sweep.py (_read_summary ~1301-1305), tests/
+- **depends on:** NT-185 (done)
+- **why:** QA of NT-185 (2026-10-07), P3: (1) the writer subprocess of the cross-process tests imports `neural_trade` from the INSTALLED package (the main checkout's src/), not the tree under test: in a worktree without PYTHONPATH both tests fail with ModuleNotFoundError, and after the merge they would silently test the main checkout's code: pass `env` with PYTHONPATH like `sweep._launch_env`; (2) store.rebuild_index's retry (store.py:~259) has no test (the mutation survives) and with 3 tight readers it still failed 4 of 20 times (CLI-only, never during a sweep); (3) existing before the item: `sweep._read_summary` turns any OSError/ValueError into `{}`, and `_save_progress`/`_write_summary` then rewrite sweep.json WITHOUT `launches` (the recorded pre-launch budget), `space`, `mode`: a transient read failure would silently drop the budget record: keep the last good document in memory or raise.
+- **acceptance:** (1) The cross-process tests set PYTHONPATH to the tree under test (a test that fails in a worktree without PYTHONPATH on the old code). (2) A test for rebuild_index's retry. (3) _read_summary keeps the last good document (or raises) and never rewrites sweep.json without launches/space/mode (a test with an injected read failure). (4) Fast suite, ruff.
+- **source:** QA of NT-185 (2026-10-07)
+
+### NT-190
+
+**Stability harness v2 follow-ups: fuzz_jumps expected outcome, the tiny profile's variance-head blind spot, two test gaps, the baseline bound, dry-run n_eff**
+
+- **status:** todo
+- **priority / type / role:** P2 / polish / implementer
+- **area:** src/neural_trade/experiments/stability.py, src/neural_trade/cli.py (stability --dry-run), configs/stability_thresholds_v3.yaml (only if the owner wants it), tests/test_stability_harness.py
+- **depends on:** NT-187 (done)
+- **why:** QA of NT-187 (2026-10-07): (1) P2, NT-051 risk (a forecast QA could not measure: a reference control + fuzz_jumps cell timed out on CPU in the per-term probe): `fuzz_jumps` on tiny already scores scaled NLL 7.19/6.80/6.27 against the limit 8 (the training spikes x4 and x0.25 inflate every sigma against the test block; its constant baseline is equally inflated, scaled about 6.9, near the 'absurd' bound 8): on reference (n_eff 150/100/75) it will be judged and may FAIL variance_nll by design or switch the over-baseline checks off: the kind of by-design outcome NT-187 removed for fuzz_constant: NT-051's SPEC states the expected outcome before GPU time, or the first GPU cell checks it; (2) under v2 the tiny profile judges NO variance check (the cap run and sigma x0.03-30 heads pass tiny under v2; v1 caught them): a lower scaled-NLL gate (healthy tiny scaled NLL is 1.4-2.0) would keep coverage: a v3 matter, v2 is frozen; on reference an h2-only break (sigma about x0.3, n_eff 75) is not judged; (3) tests: the scaled-NLL half of gate 9b is not pinned (mutation M3 survives), no v2 test with a NaN/inf variance head (M12: a NaN head mapped to -inf would pass); (4) `_variance_checks_v2` reports 'absurd baseline' before the n_eff reason, and a healthy 240-bar baseline reaches 8.33 scaled (tiny wide h2): the bound 8 sits only 2.3x above stored values; (5) `stability --dry-run` prints no n_eff per cell; (6) a flaky slow test (test_the_fuzz_cases_change_the_epoch_metrics_against_the_control_in_a_real_tiny_run) failed once under memory pressure.
+- **acceptance:** (1) The SPEC of NT-051 (not this item) carries the fuzz_jumps expectation; this item adds a reference-profile dry n_eff/expectation table for every case to the REPORT template and the dry run (5). (2) Tests pinning the scaled-NLL n_eff gate and a NaN/inf head under v2. (3) The baseline-guard message order (n_eff first) and a documented bound rationale. (4) A v3 file ONLY if the owner decides the tiny blind spot matters (a new frozen file, named in a SPEC before GPU time). (5) Fast suite, ruff.
+- **source:** QA of NT-187 (2026-10-07)
+
+### NT-191
+
+**Stability harness before NT-051: a probe-off default with probe-on re-runs of failing cells, a non-verdict class, dry-run and CSV fixes**
+
+- **status:** done (2026-10-08): merged as 844c8fd (nt-191, implementer Sonnet + repair 1 Sonnet + repair 2 Opus). QA history: Opus qa FAIL on 29c0229 (the slow probe-invariance test failed: nll_loss differs by 1 float32 ULP), Opus qa FAIL on 35aaf64 (mutation M6 survived), qa-deep PASS on 3bbee26 (narrow re-QA of the repair-2 delta). Delivered: `neural-trade stability --probe off|on|failed` (default failed on the reference profile, off on tiny: failing cells are re-run once with the probe, the first run's verdict counts), `--max-probe-reruns` (default 10; the cost basis is the PROBE_EVERY 5 time, so NT-051's SPEC states its own measured cost), a NOT A VERDICT class (resource errors, Windows lock errors WinError 5/32/33; setup errors stay verdicts), `--retry-non-verdict`, exit codes 0 / 1 verdict failure / 2 non-verdict cells left / 64 refused, `--dry-run` honouring seeds and thresholds with n_eff per case, transformed data CSVs ignored by git, RUNBOOK numbers (probe off 58 s against 777 s per reference cell on CPU). Thresholds v1/v2 byte-identical; the per-step path untouched. Fast 2411 passed on the merged head (-n 4), ruff clean. Honest limits: the 1-ULP nll_loss gap's cause is NOT established (a later probe-on run was bitwise equal); the verdict-read keys are bitwise equal. Follow-ups: NT-197 to NT-201.
+- **priority / type / role:** P1 / feature / implementer
+- **area:** src/neural_trade/experiments/stability.py, src/neural_trade/cli.py (`stability` only), .gitignore (one line), tests/test_stability_harness.py, docs/RUNBOOK.md
+- **depends on:** NT-187 (done)
+- **why:** QA review of the NT-051 SPEC (2026-10-07): (1) the per-term gradient probe costs about 12x a reference-profile cell (CPU: 777 s with it, 58 s without, identical numbers; about 650 s is host-side graph tracing that a GPU run also pays), so 45 cells would be 3.8 / 7.5 / 10 GPU-hours (the SPEC said 2.7-5.1), over the 3 h cap at every point; (2) the harness fills `blamed` only from the UnstableTrainingError message, masked-term counters (0 in strict mode) or a failing `term_gradient_share` (which cannot fail: report-only in v2), so every score or variance failure shows '-'; (3) `neural-trade stability` has no `--retry-failed`, a crash (OOM, MemoryError) is recorded as an ordinary verdict FAIL (`run_completed`) and the command exits 1 when any case fails; (4) `--dry-run` silently ignores `--seeds` and `--thresholds`; (5) each data case writes a 3.2 MB transformed CSV under runs/stability/<id>/data/ that `.gitignore:57` (`!runs/**/*.csv`) tracks (8 data cases, about 26 MB).
+- **acceptance:** (1) A harness option `--probe off|on|failed` (default `failed` for the reference profile): every cell runs with the per-term probe OFF; a cell that FAILS a verdict check is re-run once with the probe ON (PROBE_EVERY 1 on its first epochs) to attribute the blame; the REPORT lists both runs per such cell; the thresholds and every verdict check are unchanged and identical with the probe on or off (test: the same cell's verdict fields equal on both, the probe never changes training: assert bitwise-equal epoch metrics on the tiny profile). `on` = today's behaviour. (2) The REPORT's `blamed` for a failed cell comes from the probe re-run (the largest probe share of the epoch whose shares sum to 1, labelled 'probe sample') or the error text, else '-' with the reason; data and fault cases have no failing region by design: state it in the REPORT. (3) A non-verdict class: a cell whose error type is ResourceExhaustedError, MemoryError, OSError or a worker crash is `NOT A VERDICT` (reported as such, excluded from pass/fail counts), `--retry-non-verdict` re-runs only those cells as a new launch and the case verdict uses the re-run (both listed); UnstableTrainingError and any check failure stay verdicts; the exit code is 1 only for a verdict failure, 2 for non-verdict cells left, 0 otherwise. (4) `--dry-run` honours `--seeds`, `--thresholds` and prints the planned cells with n_eff per horizon and the probe mode and the profile's step count. (5) The transformed data CSVs are written under an ignored path (or `.gitignore` excludes `runs/stability/*/data/`), their sha256 stays in each cell's meta.json (test). (6) Measured numbers in the RUNBOOK section for the harness (CPU per-cell time with and without the probe: 58 s / 777 s). (7) Tests for each point; fast suite (`-n 4`), `-m stability` serial, ruff.
+- **source:** QA review of the NT-051 SPEC (2026-10-07)
+
+### NT-192
+
+**The per-term probe fires once per 6-step cell and its epoch mean divides the shares by the number of epochs**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/training/custom_model.py (~776 vs ~808), src/neural_trade/experiments/stability.py (~431-439), tests/
+- **depends on:** NT-191
+- **why:** QA review of the NT-051 SPEC (2026-10-07): `optimizer.iterations` is incremented before the `tf.cond` (custom_model.py:776 vs :808), so with PROBE_EVERY 5 and 6 steps the probe fires once, at iteration 5, in epoch 3; epochs 1-2 log 0 (`_Accum` mean 0/max(0,1)) and `_probe_shares` averages over the epochs, so every share is divided by 3 and `term_gradient_share` can never exceed 1/3 on 14 of the 15 reference cases (horizons_5_60_240 has 24 steps and probes 4 times). It is report-only in v2, but NT-098 (gradient shares of the loss terms) and the harness's blame depend on it. Touches the per-step training path (D-018).
+- **acceptance:** (1) The probe cadence counts steps of the CURRENT epoch (or fires at the first step of every epoch plus every PROBE_EVERY): every epoch with at least one step logs a probe sample; (2) `_probe_shares` averages over the epochs that probed, and a test with a 2-steps-per-epoch cell shows the shares sum to 1 in every epoch; (3) with PROBE_GRADIENTS off nothing changes: golden_nt117 455/455 and the same epoch metrics bitwise; with it on, the training is unchanged (probe is read-only: a bitwise test); (4) sec_per_step with the probe OFF is not worse (D-018: report a short CPU micro-timing before/after); (5) fast suite, `-m stability`, ruff.
+- **source:** QA review of the NT-051 SPEC (2026-10-07)
+
+### NT-193
+
+**The purge gap ignores past-delta lags that reach beyond LOOKBACK (D-034's W must be the longest lag, not LOOKBACK)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/data/splits.py, data/plan.py (the gap), core/config.py (validate), tests/test_purge_rule.py or tests/test_data_processor.py
+- **depends on:** NT-041
+- **why:** qa-deep on NT-041 (2026-10-07): the purge gap is `LOOKBACK + max(H)` bars (80 at the reference), but a past-delta feature with a lag >= LOOKBACK (SKIP_LAGS, EXTENDED_TREND periods >= LOOKBACK) reads bars before the window, so an input of a later block can read a training-label bar. D-034 defines the gap as max(2 max(H), W + max(H)) with W 'the longest finite window any consumer reads': W must be max(LOOKBACK, longest lag + 1). It predates NT-041 and is repeated in the `timed` layout. At the reference (lags below the window) nothing changes.
+- **acceptance:** (1) W = the longest window or lag any consumer reads (a function used by both the `tscv` and the `timed` layouts); (2) the gap grows only when a lag exceeds LOOKBACK, so every reference scenario is unchanged (golden 455/455; spec/settings/config hashes of all committed scenarios and their block timestamps unchanged: a test); (3) a test with EXTENDED_TREND_PERIODS 120 and LOOKBACK 60: no later-block input bar reads a training-label bar (the purge-rule test pattern of NT-066/D-034), failing before the change; (4) `Config.validate` refuses a gap smaller than W + max(H). (5) Fast suite, ruff.
+- **source:** qa-deep on NT-041 (2026-10-07)
+
+### NT-194
+
+**Remaining '$' and 'dollars' labels outside the visualization package**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/evaluation/report.py (~721-772), src/neural_trade/notebook/backtest_ui.py (~103-119, 391, 393), notebook/calibration_ui.py (~98), scripts/notebooks/build.py (~165), core/config.py (~730 help text), tests/
+- **depends on:** NT-041
+- **why:** qa-deep on NT-041 (2026-10-07): the markdown report's rows `RMSE ($)`, `MAE ($)`, `mean predicted/realised ($)`, `CRPS ($)`, `width ... ($)` and `## Price heads (dollars)`, the backtest explorer's `avg win ($)` labels, calibration_ui and notebook 01's markdown still say dollars while the figures now name the quote currency (USDT). The report has no Config in scope.
+- **acceptance:** (1) The report takes the quote currency from the frame/meta (setup.quote_currency; default USDT) and prints it; golden/markdown tests updated; stored reports unchanged; (2) the explorers and the generator text name the quote currency; (3) a test finds no '$' currency label in these files (an AST scan like the visualization one); (4) notebooks regenerated through build.py and executed in the lead's routine. (5) Fast suite, ruff.
+- **source:** qa-deep on NT-041 (2026-10-07)
+
+### NT-195
+
+**Make the `timed` layout (7/2/2/5 days, folds at dates or spacing) the default?**
+
+- **status:** dropped (2026-10-08): the owner withdrew the question ('не важно убери вопрос'); `tscv` stays the default, `timed` stays opt-in (D-066, the lead's reading). A later owner request reopens it.
+- **priority / type / role:** P2 / decision / owner
+- **area:** docs/DECISIONS.md, then an implementer item
+- **depends on:** NT-041
+- **why:** NT-041 criterion (6) asks for a 7-day training block by default; today's default layout `tscv` cuts a capped sequence set into fractions (the train block is about 25 days on the bundled file). Making `timed` the default moves every run's blocks: a golden re-record, test churn in the data and engine tests, every stored scenario's identity changes (new defaults), and on the 30-day bundled file 30-day spacing gives ONE fold (7+2+2+5 days plus gaps = about 16 days), so CI loses its multi-fold layout unless N_FOLDS or the spacing changes.
+- **acceptance:** The owner decides: (a) keep `tscv` the default and `timed` opt-in (recommended until NT-050 and NT-051 are through: no stored number moves); (b) switch the default after NT-050 with a golden re-record and a new identity epoch; (c) never. A DECISIONS entry records it; close NT-041 (6) as 'met for timed' with an amended text.
+- **source:** qa-deep on NT-041 (2026-10-07)
+
+### NT-196
+
+**NT-041 residues: hole exits get their own reason, rescore skips an exposure configuration over a break, a test for the engine's break, SKIP_LAGS in minutes, fold roles**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/strategy/backtest.py (~284), experiments/rescore.py, experiments/leaderboard.py (~588-597), models/gru_attention.py (SKIP_LAGS ~24), data/plan.py, tests/
+- **depends on:** NT-041 (done)
+- **why:** qa-deep on NT-041 (2026-10-07), P2/P3: (1) no test that `run_backtest` closes a position at a break (the mutant 'break ignored in run_backtest' survives; tests/test_nt041_repair.py:~246 checks only Bars); (2) hole exits reuse the reason 'EOW': give them 'HOLE', and optionally fill at the next real bar's open to keep the next-open convention; (3) a strategy study that includes an exposure strategy (vol_target, net_edge_kelly) aborts the whole rescore with a ValueError when any cell's block has a break: skip that configuration x cell instead; (4) `_spec_config_profile` falls back to the `overrides:` only when a stored spec's base_config cannot be resolved, so costs set in a base_config YAML would read as 0 (leaderboard.py ~588-597), untested; (5) D-045 amendment not done: `SKIP_LAGS` is hard-coded in bars (gru_attention.py:24) and learned periods are not reported in minutes; (6) D-037 amendment not done: no dev/judgement fold roles and no refusal of overlapping judgement folds in the plan; (7) a `timed` spacing shorter than a fold gives overlapping folds without a warning, the screen-mode refusal message is generic (processor.py ~240); (8) no test of the fingerprint cache invalidation (the mutant survives; the code does invalidate); (9) analytics_direction CI_BLOCK and analytics_confidence's default BLOCK stay 80.
+- **acceptance:** (1)-(4) a test per point; (5) SKIP_LAGS configured in minutes, converted by the bar size, with the reference unchanged (golden); (6) fold roles recorded in the plan and a refusal for an overlapping judgement fold (test); (7) a warning and a specific message; (8) a cache-invalidation test; (9) the two constants read the report's block. (10) Fast suite, ruff.
+- **source:** qa-deep on NT-041 (2026-10-07)
+
+### NT-197
+
+**The stability harness reads a relative CSV_PATH from the working directory in `write_case_data`**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/experiments/stability.py (~452), tests/test_stability_harness.py
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on NT-191 (2026-10-08): `write_case_data` calls `pd.read_csv(csv)` on the path as given; with a relative CSV_PATH and a working directory without the file every data-transform case crashes after the launch directory is created (an orphan `stability/<id>/`, an uncaught error through the CLI instead of exit 64). The new pre-check resolves the path, this reader does not.
+- **acceptance:** (1) The reader uses `resolve_data_path` like the loader; (2) a test: run from a directory without the bars file with the default relative CSV_PATH, a data case runs; (3) M18b (the pre-check using is_file() without the project-root resolution) is killed by a test; (4) fast suite, ruff.
+- **source:** qa-deep on NT-191 / the CI red of 99e5733 (2026-10-08)
+
+### NT-198
+
+**A test for the first run's own verdict file and index row after a passing probe re-run**
+
+- **status:** todo
+- **priority / type / role:** P2 / polish / implementer
+- **area:** tests/test_stability_harness.py
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on NT-191 (2026-10-08): mutation M6e survives (the first run's `stability_verdict.json` overwritten with the re-run's verdict flips the index's `stability/passed` of that run to 1; 95 tests still pass). The code is correct (checked on the real tiny path).
+- **acceptance:** (1) After a passing re-run the first run's `stability_verdict.json` says passed false, kind primary, and its index row `stability/passed` is 0; the re-run's says true, probe_rerun; (2) M6e is killed by the test; (3) ruff.
+- **source:** qa-deep on NT-191 / the CI red of 99e5733 (2026-10-08)
+
+### NT-199
+
+**The runner records the winerror; AtomicReplaceError and deterministic WinError 5 are classified**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/experiments/runner.py (~338), experiments/stability.py (~145-165), utils/atomic.py, tests/
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on NT-191 (2026-10-08): (a) a lock hit by `open()` gives PermissionError [Errno 13] with no WinError code and counts as a verdict; the runner stores only the type and message; (b) `AtomicReplaceError` (NT-185, after 20 retries) is classed as a verdict; (c) WinError 5 also covers deterministic denials (os.replace onto a read-only file), so a persistent setup error is NOT A VERDICT and every retry exits 2; (d) a setup-error cell (FileNotFoundError) still gets a probe re-run and a loss-term blame; (e) the RUNBOOK sentence about lock violations over-reaches.
+- **acceptance:** (1) The runner's error dict carries `winerror` (getattr) and stability reads it; (2) AtomicReplaceError is non-verdict; (3) a deterministic denial is told apart (the message or a read-only check) or the RUNBOOK states the limit; (4) a setup-error cell gets no probe re-run and no blame; (5) the RUNBOOK wording corrected; tests for each; (6) fast suite, ruff.
+- **source:** qa-deep on NT-191 / the CI red of 99e5733 (2026-10-08)
+
+### NT-200
+
+**Audit of hard-coded or platform-default integer dtypes (int32 on Windows, int64 on Linux)**
+
+- **status:** todo
+- **priority / type / role:** P3 / bug / implementer
+- **area:** src/neural_trade/data/, strategy/, experiments/ (grep np.arange, astype(int), dtype=int, np.int32), tests/
+- **depends on:** NT-041 (done)
+- **why:** CI was red on 99e5733 because NT-041 hard-coded anchor_bar as int32 while the reference path returns the platform int (5f696e3 fixed it). Local suites and QA ran on Windows only, so a platform-dtype difference is invisible there.
+- **acceptance:** (1) The list of places where an array's integer dtype is hard-coded or the platform default and a stored artifact, a golden array or a test compares it; (2) each is made explicit (int64 for new code that is not stored on the Windows path) or documented, with the golden unchanged on Windows (455/455 + the stored arrays); (3) a test that runs a dtype-sensitive comparison with the other platform's default (monkeypatching np.arange is not enough: assert the dtype by construction); (4) fast suite, ruff.
+- **source:** qa-deep on NT-191 / the CI red of 99e5733 (2026-10-08)
+
+### NT-201
+
+**NT-191 doc and test residues**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** src/neural_trade/experiments/stability.py (~1067-1082, `_winerror` docstring), tests/test_stability_harness.py (~1470), docs/RUNBOOK.md
+- **depends on:** NT-191 (done)
+- **why:** qa-deep on NT-191 (2026-10-08): (1) the RUNBOOK and test text say 'within 2 float32 ULP' but the tolerance 2*eps*max(|x|,1) is 2 to 4 ULP of x; (2) the `_winerror` docstring says the code is what str(OSError) starts with but the regex searches anywhere in the message; (3) the cap's default of 10 rests on the PROBE_EVERY 5 cost.
+- **acceptance:** (1) the wording says what the tolerance is; (2) the docstring matches the regex; (3) when NT-051 has measured the per-re-run cost, the default is recomputed from it (NT-051's REPORT); (4) ruff.
+- **source:** qa-deep on NT-191 / the CI red of 99e5733 (2026-10-08)
 
 ## Done log
 

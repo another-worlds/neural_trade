@@ -35,6 +35,14 @@ from .exceptions import InvalidConfigurationError
 
 _log = logging.getLogger(__name__)
 
+#: the roles of Config.LAYERS (the keys Layers.for_role is asked for)
+_LAYER_ROLES = ("indicators", "positional_encoding", "vacuum_noise", "energy_gate")
+#: the loss weights a schedule may set: training.lambdas._LAMBDA_VARIABLE_KEYS, copied because the config
+#: layer must not import training (pinned equal by tests/test_config.py)
+_SCHEDULABLE_LAMBDA_KEYS = ('short', 'point', 'long', 'extended_trend', 'dir', 'var', 'vol',
+                            'crps', 'soft_ece', 't_perp', 'casimir', 'hd', 'ife', 'vac_overflow', 'pnl',
+                            'trend_outer', 'dir_outer', 'nll_outer', 'coherence_outer')
+
 GROUPS = (
     "data", "horizons", "training", "calibration", "loss_weights", "physics",
     "indicators", "architecture", "stability", "direction", "variance", "paths",
@@ -223,7 +231,16 @@ class Config:
     # ------------------------------------------------------------------ data
     CSV_PATH: str = _f("binance_btcusdt_1min_ccxt.csv", "data", "OHLCV CSV (timestamp/datetime, open..volume)",
                        unit="path")
-    LOOKBACK: int = _f(60, "data", "input window length in bars", unit="bars", ge=1, le=1440, step=1)
+    SYMBOL: str = _f("BTC/USDT", "data", "the instrument (base/quote); figure titles and the dataset spec name it "
+                     "(NT-041)", unit="name")
+    QUOTE_CURRENCY: str = _f("USDT", "data", "quote currency the prices and the price-delta target are in; "
+                             "currency labels of the figures come from here (NT-041)", unit="name")
+    LOOKBACK: int = _f(60, "data", "input window length in bars (WINDOW_MINUTES, when set, decides it)",
+                       unit="bars", ge=1, le=1440, step=1)
+    WINDOW_MINUTES: Optional[float] = _f(None, "data", "input window length in wall-clock minutes; None = use "
+                                         "LOOKBACK bars. When set, LOOKBACK = WINDOW_MINUTES / bar size, and a "
+                                         "length that is not a whole number of bars is refused (NT-041)",
+                                         unit="minutes", gt=0.0)
     INPUT_SERIES: List[str] = _f(["open", "high", "low", "close", "volume"], "data",
                                  "which bar series each input window carries, in this fixed order (a "
                                  "subsequence of open, high, low, close, volume that includes 'close'; "
@@ -231,6 +248,14 @@ class Config:
                                  "[B, LOOKBACK] instead of [B, LOOKBACK, len(INPUT_SERIES)]); OHLC channels "
                                  "are window-relative, volume has its own train-fit scale "
                                  "(neural_trade.data.scaling)", unit="name")
+    FEE_BPS: float = _f(0.0, "data", "the instrument's cost profile: exchange fee per side, basis points of the "
+                        "notional (0: no trading costs assumed, D-044). Backtests that build their BacktestConfig "
+                        "from a run read it here; a backtest: spec entry overrides it (NT-041)", unit="bps",
+                        ge=0.0)
+    HALF_SPREAD_BPS: float = _f(0.0, "data", "the instrument's cost profile: half the bid-ask spread per side, "
+                                "basis points (0, D-044); see FEE_BPS", unit="bps", ge=0.0)
+    SLIPPAGE_BPS: float = _f(0.0, "data", "the instrument's cost profile: slippage per side, basis points "
+                             "(0, D-044); see FEE_BPS", unit="bps", ge=0.0)
     WINDOW_STEP: int = _f(1, "data", "stride between consecutive training windows", unit="bars", ge=1, step=1)
     RESAMPLE_MINUTES: int = _f(1, "data", "aggregate to coarser bars (1 = native minute bars); every live "
                                "backtest path annualises Sharpe/Sortino from this bar size (NT-040)",
@@ -243,6 +268,32 @@ class Config:
                              unit="fraction", gt=0.0, lt=0.5)
     N_FOLDS: int = _f(5, "data", "TimeSeriesSplit folds; the last fold's test block is reported", unit="count",
                       ge=2, step=1)
+    GAP_POLICY: str = _f("drop", "data", "holes in the bar timestamps (more than one bar apart): 'drop' builds no "
+                         "input window, past-delta lag or target that spans a hole and records how many windows "
+                         "that removed; 'refuse' makes any hole an error; 'ignore' does not look (the behaviour "
+                         "before NT-041). The bundled file has no hole, so the default changes nothing there "
+                         "(NT-041)", unit="name", choices=("drop", "refuse", "ignore"))
+    FOLD_LAYOUT: str = _f("tscv", "data", "how the folds are placed: 'tscv' = scikit-learn TimeSeriesSplit over the "
+                          "(MAX_SEQUENCE_COUNT-capped) sequences with VAL_FRACTION / CAL_FRACTION blocks (today); "
+                          "'timed' = blocks of TRAIN_MINUTES / VAL_MINUTES / CAL_MINUTES / TEST_MINUTES placed at "
+                          "FOLD_STARTS or FOLD_SPACING_DAYS apart, over the whole file (MAX_SEQUENCE_COUNT is "
+                          "ignored; only the chosen fold's span is windowed). The purge gap between blocks stays "
+                          "(D-005, D-034) (NT-041)", unit="name", choices=("tscv", "timed"))
+    TRAIN_MINUTES: float = _f(7 * 1440.0, "data", "timed layout: length of the training block in wall-clock "
+                              "minutes (7 days, the owner's reference block)", unit="minutes", gt=0.0)
+    VAL_MINUTES: float = _f(2 * 1440.0, "data", "timed layout: length of the validation block in wall-clock minutes",
+                            unit="minutes", gt=0.0)
+    CAL_MINUTES: float = _f(2 * 1440.0, "data", "timed layout: length of the calibration block in wall-clock "
+                            "minutes", unit="minutes", gt=0.0)
+    TEST_MINUTES: float = _f(5 * 1440.0, "data", "timed layout: length of the out-of-sample block in wall-clock "
+                             "minutes (5 days)", unit="minutes", gt=0.0)
+    FOLD_STARTS: Optional[List[str]] = _f(None, "data", "timed layout: the first bar of each fold's training block, "
+                                          "oldest first (ISO-8601, naive = UTC); None = folds FOLD_SPACING_DAYS "
+                                          "apart, the newest ending at the file's last bar, N_FOLDS of them",
+                                          unit="timestamp")
+    FOLD_SPACING_DAYS: float = _f(30.0, "data", "timed layout: days between consecutive folds when FOLD_STARTS is "
+                                  "None (a spacing below a fold's length makes the folds overlap)", unit="days",
+                                  gt=0.0)
     FOLD_INDEX: int = _f(-1, "data", "which purged fold to train/evaluate on (-1 = the latest; walk-forward varies it)",
                          unit="index")
 
@@ -262,8 +313,16 @@ class Config:
     EXTENDED_TREND_PERIODS: List[int] = _f([10, 15, 20], "horizons",
                                            "lags (bars) of the past-delta momentum features, one per horizon",
                                            unit="bars", ge=1, step=1)
-    HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2)",
-                                  unit="bars", ge=1, step=1)
+    HORIZON_STEPS: List[int] = _f([10, 15, 20], "horizons", "forecast horizons in bars (h0, h1, h2); "
+                                  "HORIZON_MINUTES, when set, decides them", unit="bars", ge=1, step=1)
+    HORIZON_MINUTES: Optional[List[float]] = _f(None, "horizons", "forecast horizons in wall-clock minutes; None = "
+                                                "use HORIZON_STEPS bars. When set, HORIZON_STEPS = each / bar "
+                                                "size, and a horizon that is not a whole number of bars is "
+                                                "refused (NT-041)", unit="minutes", gt=0.0)
+    EXTENDED_TREND_MINUTES: Optional[List[float]] = _f(None, "horizons", "past-delta lags in wall-clock minutes; "
+                                                       "None = use EXTENDED_TREND_PERIODS bars. When set, "
+                                                       "EXTENDED_TREND_PERIODS = each / bar size (NT-041)",
+                                                       unit="minutes", gt=0.0)
 
     # ------------------------------------------------------------------ training
     BATCH_SIZE: int = _f(256, "training", "256: a step costs about the same at 64 or 256 on the GPU (launch-bound), so ~3.7x faster epochs",
@@ -468,8 +527,17 @@ class Config:
     ADAPTIVE_INDICATORS: bool = _f(True, "indicators", "shift each learned period per window through the meta_adjust "
                                    "network; off, every applied period in every window equals the family's learned "
                                    "global value (the frozen-twin switch, NT-033/NT-046)", unit="flag")
-    INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits", unit="dimensionless", ge=0.0,
-                             tunable=True)
+    FREEZE_INDICATOR_PERIODS: bool = _f(False, "indicators", "the frozen-period twin (NT-033, VISION 'The yardstick' "
+                                        "(a)): every period logit stays at its configured (textbook) value, as a "
+                                        "non-trainable weight that gets no gradient, no optimizer update and no "
+                                        "clip, and the per-window meta_adjust shift is off (it implies "
+                                        "ADAPTIVE_INDICATORS = False), so every applied period in every window "
+                                        "equals the configured one; the rest of the network is unchanged "
+                                        "(same layers and parameter count). Off (default): today's behaviour",
+                                        unit="flag")
+    INDICATOR_L2: float = _f(0.0, "indicators", "L2 on the indicator logits (pulls every period toward 3 bars, "
+                             "not toward its configured start, so a search must not tune it; NT-141)",
+                             unit="dimensionless", ge=0.0)
     INDICATOR_LR_MULT: float = _f(5.0, "indicators", "indicator optimizer LR = LR * this", unit="dimensionless",
                                   gt=0.0, log=True, tunable=True)
     INDICATOR_GRAD_MULT: float = _f(5.0, "indicators", "straight-through gradient scale on the indicator logits' "
@@ -731,8 +799,6 @@ class Config:
         for name in ("EXTENDED_TREND_PERIODS", "HORIZON_STEPS"):
             if isinstance(getattr(self, name), tuple):
                 setattr(self, name, list(getattr(self, name)))
-        if self.MOMENTUM_CLIP_MAX is None:
-            self.MOMENTUM_CLIP_MAX = self.LOOKBACK
         self.validate()
 
     # --------------------------------------------------------------- metadata
@@ -760,6 +826,27 @@ class Config:
             _SPECS[cls] = cached
         return dict(cached)
 
+    # --------------------------------------------------------------- wall-clock lengths (NT-041)
+    def _resolve_wall_clock(self) -> None:
+        """Set LOOKBACK, HORIZON_STEPS and EXTENDED_TREND_PERIODS (bars) from WINDOW_MINUTES,
+        HORIZON_MINUTES and EXTENDED_TREND_MINUTES (wall-clock minutes) over the bar size
+        RESAMPLE_MINUTES, for each one that is set. Run by every validate(), so a constructor, an
+        override, a copy and a YAML load all resolve alike; a length that is not a whole number of
+        bars is refused. With none set nothing changes (the bar-count fields are the setting)."""
+        pairs = (("WINDOW_MINUTES", "LOOKBACK", False), ("HORIZON_MINUTES", "HORIZON_STEPS", True),
+                 ("EXTENDED_TREND_MINUTES", "EXTENDED_TREND_PERIODS", True))
+        from .dataset_spec import minutes_to_bars
+
+        for minutes_name, bars_name, is_list in pairs:
+            minutes = getattr(self, minutes_name)
+            if minutes is None:
+                continue
+            bar = self.RESAMPLE_MINUTES
+            if is_list:
+                setattr(self, bars_name, [minutes_to_bars(m, bar, minutes_name) for m in minutes])
+            else:
+                setattr(self, bars_name, minutes_to_bars(minutes, bar, minutes_name))
+
     # --------------------------------------------------------------- validation
     def validate(self) -> None:
         """Raise :class:`InvalidConfigurationError` (a ``ValueError``) on invalid settings: the
@@ -767,6 +854,7 @@ class Config:
         def bad(msg):
             raise InvalidConfigurationError(msg)
 
+        self._resolve_wall_clock()
         if self.LOOKBACK <= 0:
             bad("LOOKBACK must be positive")
         if self.LOOKBACK > 1440:
@@ -787,17 +875,34 @@ class Config:
                 "for semantic consistency (DataProcessor CRITICAL + extended_trend_loss).")
         if len(self.HORIZON_STEPS) != 3:
             bad("the architecture has exactly three horizon towers: HORIZON_STEPS needs 3 entries")
-        if self.HORIZON_STEPS != sorted(self.HORIZON_STEPS):
-            bad("HORIZON_STEPS should be ascending")
+        if any(a >= b for a, b in zip(self.HORIZON_STEPS, self.HORIZON_STEPS[1:])):
+            bad("HORIZON_STEPS should be strictly ascending (a tie makes a pairwise physics term degenerate)")
         if self.EXTENDED_TREND_PERIODS != sorted(self.EXTENDED_TREND_PERIODS):
             bad("EXTENDED_TREND_PERIODS should be ascending")
         if self.VAR_FLOOR != 1e-4:
-            warnings.warn(f"Config.VAR_FLOOR={self.VAR_FLOOR} (expected 1e-4). Using provided value.",
-                          DeprecationWarning, stacklevel=2)
+            _log.warning("Config.VAR_FLOOR=%s (expected 1e-4). Using the provided value.", self.VAR_FLOOR)
         if self.VAR_CAP <= self.VAR_FLOOR:
             bad("VAR_CAP must be > VAR_FLOOR")
         if self.LAMBDA_VAC > 0:
             _log.warning("Config.LAMBDA_VAC > 0: vacuum_bandwidth_loss is active (default is off).")
+        if self.FOLD_LAYOUT == "timed":
+            from .dataset_spec import minutes_to_bars
+
+            for name in ("TRAIN_MINUTES", "VAL_MINUTES", "CAL_MINUTES", "TEST_MINUTES"):
+                minutes_to_bars(getattr(self, name), self.RESAMPLE_MINUTES, name)
+            if self.FOLD_STARTS is not None:
+                import pandas as _pd
+
+                if not self.FOLD_STARTS:
+                    bad("FOLD_STARTS must list at least one timestamp (or be None)")
+                try:
+                    starts = [_pd.Timestamp(t) for t in self.FOLD_STARTS]
+                except (ValueError, TypeError) as exc:
+                    bad(f"FOLD_STARTS has an unreadable timestamp: {exc}")
+                if any((a.tzinfo is None) != (starts[0].tzinfo is None) for a in starts):
+                    bad("FOLD_STARTS mixes timestamps with and without a timezone")
+                if any(b <= a for a, b in zip(starts, starts[1:])):
+                    bad("FOLD_STARTS must be strictly ascending")
         if not 0.0 < self.VAL_FRACTION < 0.5 or not 0.0 < self.CAL_FRACTION < 0.5:
             bad("VAL_FRACTION and CAL_FRACTION must be in (0, 0.5)")
         if self.N_FOLDS < 2:
@@ -832,8 +937,18 @@ class Config:
             bad(f"INPUT_SERIES must include 'close', got {series}")
         if [s for s in canonical if s in series] != series or len(set(series)) != len(series):
             bad(f"INPUT_SERIES must be a subsequence of {list(canonical)} without repeats, got {series}")
-        if not (0 < self.MOMENTUM_CLIP_MIN < (self.MOMENTUM_CLIP_MAX or self.LOOKBACK)):
-            bad("need 0 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX")
+        if not (1 < self.MOMENTUM_CLIP_MIN < self.momentum_clip_max):
+            bad("need 1 < MOMENTUM_CLIP_MIN < MOMENTUM_CLIP_MAX (a period of 1 or less saturates the logit)")
+        if not self.RHO_MAX < 1.0:  # a closed [0, 1] field range keeps the sweep metadata finite; 1 is refused here
+            bad(f"RHO_MAX must be < 1 (the IFE hinge never fires at 1), got {self.RHO_MAX}")
+        if self.CALIB_LAMBDA_MIN > self.CALIB_LAMBDA_MAX:
+            bad(f"CALIB_LAMBDA_MIN ({self.CALIB_LAMBDA_MIN}) must be <= CALIB_LAMBDA_MAX ({self.CALIB_LAMBDA_MAX})")
+        self._validate_indicator_periods(bad)
+        self._validate_loss_weight_schedule(bad)
+        missing_roles = [r for r in _LAYER_ROLES if r not in (self.LAYERS or {})]
+        if missing_roles:
+            bad(f"LAYERS must name every architecture role; missing {missing_roles} "
+                f"(roles: {list(_LAYER_ROLES)})")
         negative = [k for k, v in self.lambda_weights().items() if v < 0]
         if negative:
             bad(f"loss weights must be >= 0: {negative}")
@@ -854,10 +969,61 @@ class Config:
                 warnings.warn(
                     f"Config.{spec.name} is deprecated and has no effect (default {spec.default!r})",
                     DeprecationWarning, stacklevel=2)
+        from neural_trade.core.guard import check_config
+        check_config(self)   # NT-038: failing regions (refused) and the GPU-memory warning
+
+    def _validate_indicator_periods(self, bad) -> None:
+        """Every configured starting period must be at least MOMENTUM_CLIP_MIN (refused) and at most the
+        resolved ceiling (warned: the clip would move it on the first step) and a MACD's fast period is below its slow
+        one. Plain Python on the raw fields: the config layer does not import the indicators package."""
+        lo, hi = self.MOMENTUM_CLIP_MIN, self.momentum_clip_max
+        groups = {"MA_SPANS": self.MA_SPANS, "MACD_SETTINGS": self.MACD_SETTINGS,
+                  "RSI_PERIODS": self.RSI_PERIODS, "BB_PERIODS": self.BB_PERIODS}
+        for fam, insts in (self.INDICATOR_FAMILIES or {}).items():
+            groups[f"INDICATOR_FAMILIES[{fam!r}]"] = insts
+        for where, insts in groups.items():
+            for inst in insts or []:
+                items = inst.items() if isinstance(inst, dict) else [("", inst)]
+                for param, value in items:
+                    if param == "ratio" or isinstance(value, bool) or not isinstance(value, numbers.Real):
+                        continue  # a MACD 'ratio' is a fraction, not a period
+                    label = f"{where}: period {param + '=' if param else ''}{value}"
+                    if value < lo:
+                        bad(f"{label} lies below MOMENTUM_CLIP_MIN={lo}")
+                    if value > hi:
+                        # Not refused: small-LOOKBACK test and screen configs keep the default periods and
+                        # explicit small ceilings are built on purpose (tests); the clip moves the period
+                        # (NT-141, reported to the lead).
+                        _log.warning("Config: %s lies above the period ceiling %s; the clip will move it",
+                                     label, hi)
+                if isinstance(inst, dict) and "fast" in inst and "slow" in inst and inst["fast"] >= inst["slow"]:
+                    bad(f"{where}: MACD fast ({inst['fast']}) must be below slow ({inst['slow']})")
+
+    def _validate_loss_weight_schedule(self, bad) -> None:
+        """LOSS_WEIGHT_SCHEDULE: ``{'lambda_<k>': {epoch: value}}`` with k a schedulable loss weight and
+        integer epochs; the callback assigns by name, so an unknown name must never get through."""
+        for name, steps in (self.LOSS_WEIGHT_SCHEDULE or {}).items():
+            if not (isinstance(name, str) and name.startswith("lambda_")
+                    and name[len("lambda_"):] in _SCHEDULABLE_LAMBDA_KEYS):
+                bad(f"LOSS_WEIGHT_SCHEDULE: unknown loss weight {name!r}; known: "
+                    f"{['lambda_' + k for k in _SCHEDULABLE_LAMBDA_KEYS]}")
+            if not isinstance(steps, dict) or not steps:
+                bad(f"LOSS_WEIGHT_SCHEDULE[{name!r}] must be a non-empty {{epoch: value}} mapping")
+            for epoch, value in steps.items():
+                try:
+                    ok = float(epoch).is_integer() and float(epoch) >= 0 and not isinstance(epoch, bool)
+                    float(value)
+                except (TypeError, ValueError):
+                    ok = False
+                if not ok:
+                    bad(f"LOSS_WEIGHT_SCHEDULE[{name!r}]: epoch {epoch!r} must be a non-negative integer "
+                        f"and the value {value!r} a number")
 
     # --------------------------------------------------------------- derived
     @property
     def momentum_clip_max(self) -> float:
+        """The learned-period ceiling, resolved at use: MOMENTUM_CLIP_MAX, or LOOKBACK when it is
+        None, so it follows LOOKBACK on every override / copy / yaml path (NT-125; no extra key, D-032)."""
         return float(self.MOMENTUM_CLIP_MAX if self.MOMENTUM_CLIP_MAX is not None else self.LOOKBACK)
 
     @property
@@ -995,10 +1161,17 @@ def _coerce(value, hint, name):
         if hint is int:
             if isinstance(value, float) and not value.is_integer():
                 raise ValueError(value)
-            return int(float(value)) if isinstance(value, str) else int(value)
+            if isinstance(value, str):
+                f = float(value)
+                if not f.is_integer():
+                    raise ValueError(value)
+                return int(f)
+            return int(value)
         if hint is float:
             return float(value)
         if hint is str:
+            if value is None:
+                raise ValueError(value)  # not Optional: None must not become the string 'None'
             return str(value)
         if origin in (list, List):
             if isinstance(value, str):

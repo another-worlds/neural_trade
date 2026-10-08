@@ -8,7 +8,11 @@
     neural-trade scenario rescore configs/scenarios/<name>.yaml --study configs/strategy_studies/<study>.yaml
                                   [--store runs] [--random-seeds N]
     neural-trade screen configs/screens/<name>.yaml [--shard i/N] [--store runs] [--max-trials N]
+    neural-trade stability [--profile tiny|reference] [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2] [--probe off|on|failed] [--max-probe-reruns K] [--retry-non-verdict [ID]]
     neural-trade compare configs/compares/<name>.yaml [--out DIR] [--simulate] [--n-sim N]
+    neural-trade leaderboard [SCENARIO ...] [--scenario a,b,c] [--store runs] [--index runs/index.sqlite]
+                                  [--spec FILE] [--out DIR] [--max-drawdown F] [--min-trades N]
+                                  [--random-null-percentile P] [--no-beat-buy-and-hold] [--no-beat-random-null]
     neural-trade registry list | info REGISTRY NAME | search QUERY
     neural-trade env
 
@@ -41,6 +45,19 @@ the comparator pairs their runs by (seed, fold), refuses a mismatched pair or to
 prints the paired estimate, its interval and the verdict (JSON to stdout, plus <out>/result.json and
 <out>/report.md when --out is given). ``--simulate`` adds the calibrated null/power check (spec
 needs noise_sd, or seed_sd and block_sd).
+
+``leaderboard`` (neural_trade.experiments.leaderboard, NT-031, D-020) prints, per scenario (one
+named, or every scenario under --store when none is given), one Markdown table row per
+configuration: the ranking column is the dev-fold net Sharpe after costs (mean over the dev folds
+and their seeds, D-046, with the spread and the counts); guard-rails (maximum drawdown, trades,
+beating buy-and-hold, beating the random null) sit beside it and can disqualify a row from the
+winner; the test-fold columns are shown on every row, labelled "test, not used for ranking"
+(D-020), and never affect the order. A configuration with every cell failed appears as a failed,
+disqualified row. Several scenarios (positional, or ``--scenario a,b,c``) go on ONE board (NT-179): rows
+read ``scenario / configuration``, each is judged by its own scenario's guard-rail thresholds (the
+table header says where each came from), the dev folds are the scenarios' union and the cost profile
+the first scenario's, so a scenario that ran other folds or costs fails fold_coverage / cost_profile,
+and the winner is chosen across scenarios by the same rules; ``--out`` writes ``<out>/combined/``.
 """
 from __future__ import annotations
 
@@ -156,6 +173,7 @@ def cmd_predict(args) -> int:
 def cmd_backtest(args) -> int:
     import pandas as pd
 
+    from neural_trade.core.costs import cost_profile_of
     from neural_trade.serving.predictor import Predictor
     from neural_trade.strategy import (Bars, SignalFrame, Strategies, backtest, build_backtest_config, build_strategy,
                                        load_params, var_scale_from)
@@ -167,7 +185,8 @@ def cmd_backtest(args) -> int:
     strategy = build_strategy(args.strategy or params.get("strategy", Strategies.default), params.get("params"),
                               calibration=predictor.bundle.meta.get("weighted_direction_quantiles"))
     bcfg = build_backtest_config({**(params.get("backtest") or {}), "random_seeds": args.random_seeds,
-                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)})
+                                  "bar_minutes": float(predictor.config.RESAMPLE_MINUTES)},
+                                 cost_profile=cost_profile_of(predictor.config))
     var_scale = predictor.bundle.meta.get("var_scale")
     if var_scale is None:
         logger.warning("the artifacts carry no calibration-split var_scale; using this data's own (look-ahead)")
@@ -210,7 +229,7 @@ def cmd_scenario(args) -> int:
     if args.action == "rescore":
         return _scenario_rescore(args, store)
     try:
-        runner = Runner.from_spec(args.spec, store=store)
+        runner = Runner.from_spec(args.spec, store=store, claim_cells=bool(args.claim_cells))
         if args.action == "plan":
             cells = plan_table(runner.plan())
             counts = {s: sum(c["state"] == s for c in cells) for s in ("done", "failed", "pending")}
@@ -223,6 +242,30 @@ def cmd_scenario(args) -> int:
         return 2
     print(json.dumps(report.to_dict(), indent=2))  # noqa: T201 - the command's result, for scripting
     return 1 if report.failed else 0
+
+
+def cmd_sweep(args) -> int:
+    from neural_trade.core.exceptions import InvalidConfigurationError
+    from neural_trade.experiments.scenario import Scenario
+    from neural_trade.experiments.sweep import Sweep, SweepOptions
+    from neural_trade.experiments.store import RunStore
+
+    opts = SweepOptions(mode=args.mode, n_trials=args.n_trials, stop_after=args.stop_after, max_hours=args.max_hours,
+                        parallel=args.parallel, parallel_record=args.parallel_record, sec_per_step=args.sec_per_step,
+                        quick_minutes=args.quick_minutes, overhead_s=args.overhead_s, top_k=args.top_k,
+                        rerun_seeds=args.rerun_seeds, sampler_seed=args.sampler_seed, resume=args.resume,
+                        when_busy=args.when_busy, dry_run=args.dry_run)
+    try:
+        sweep = Sweep(Scenario.from_yaml(args.spec), RunStore(args.store, args.index), opts,
+                      announce=lambda text: print(text, flush=True))  # noqa: T201 - the budget / estimate, before any trial
+        result = sweep.run()
+    except InvalidConfigurationError as exc:
+        logger.error("sweep refused, nothing was started: %s", exc)
+        return 2
+    print(json.dumps({"sweep": result.sweep_id, "mode": result.mode, "label": result.label, "state": result.state,  # noqa: T201
+                      "stop_reason": result.stop_reason, "directory": result.directory,
+                      "budget": result.budget, "winner": result.winner, "ranking": result.ranking[:10]}, indent=2, default=str))
+    return 0 if result.state in ("complete", "quick_complete", "dry_run") else 1
 
 
 def _scenario_rescore(args, store) -> int:
@@ -248,6 +291,86 @@ def _scenario_rescore(args, store) -> int:
     return 0
 
 
+def cmd_leaderboard(args) -> int:
+    from neural_trade.experiments.leaderboard import (
+        build_leaderboard, find_scenario_spec, leaderboard_markdown, scenario_cost_profile, scenario_guard_rails,
+        spec_parts,
+    )
+    from neural_trade.experiments.scenario import Scenario
+    from neural_trade.experiments.store import ENGINE_SUBTREE, RunStore
+
+    store = RunStore(args.store, args.index)
+    # scenario names: positional ones and --scenario a,b,c (repeatable), in order, without repeats (NT-179)
+    named = list(dict.fromkeys([*(args.scenarios or []), *(n.strip() for v in (args.scenario or []) for n in v.split(",")
+                                                           if n.strip())]))
+    if named:
+        scenarios = named
+    else:
+        base = store.root / ENGINE_SUBTREE
+        scenarios = sorted(p.name for p in base.iterdir() if p.is_dir()) if base.is_dir() else []
+    if not scenarios:
+        print(json.dumps({"scenarios": []}))  # noqa: T201 - the command's result
+        return 0
+    if args.spec and not Path(args.spec).is_file():
+        raise SystemExit(f"leaderboard: scenario spec {args.spec} does not exist")
+    if args.spec and len(named) > 1:
+        raise SystemExit("leaderboard: --spec names one scenario's spec; several scenarios on one board each use "
+                         "their own spec (--specs-dir)")
+
+    def inputs(name):
+        """(guard-rail spec, its source line, the scenario's backtest block, its folds) of one scenario."""
+        # the spec by the scenario's `name:` key (configs/scenarios/*.yaml), else the one the store recorded
+        scenario, where = ((Scenario.from_yaml(args.spec), Path(args.spec).name) if args.spec else
+                           find_scenario_spec(name, args.specs_dir, store.scenario_dir(name) / "specs"))
+        rails, source = scenario_guard_rails(
+            scenario, max_drawdown=args.max_drawdown, min_trades=args.min_trades,
+            random_null_percentile=args.random_null_percentile,
+            beat_buy_and_hold=False if args.no_beat_buy_and_hold else None,
+            beat_random_null=False if args.no_beat_random_null else None)
+        if scenario is not None:
+            source = f"{where}: {source}"
+        _, backtest, folds = spec_parts(scenario)
+        return rails, source, backtest, folds
+
+    def emit(board, text, out_name):
+        print(text)  # noqa: T201 - the command's result
+        if args.out:
+            from neural_trade.visualization.leaderboard_fig import leaderboard_figure, write_png
+
+            out = Path(args.out) / out_name
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "leaderboard.md").write_text(text, encoding="utf-8")
+            fig = leaderboard_figure(board)
+            fig.write_html(str(out / "leaderboard.html"), include_plotlyjs="cdn")
+            if not write_png(fig, out / "leaderboard.png"):
+                logger.warning("leaderboard: %s was not written", out / "leaderboard.png")
+
+    if len(named) > 1:
+        # one board for several scenarios (the learned model, its frozen twin, the TA rules: NT-033, NT-050): rows are
+        # `scenario / configuration`, each judged by its own scenario's guard-rail thresholds; the dev folds are the
+        # union of the scenarios' (a scenario that ran others fails fold_coverage) and the cost profile is the first
+        # scenario's (a row scored at another one is not comparable)
+        per = {name: inputs(name) for name in named}
+        rows = [r for name in named for r in store.sync(name)]
+        for name in named:
+            if not any(r.get("scenario") == name for r in rows):
+                logger.warning("leaderboard: scenario %s has no stored cell; it is not on the board", name)
+        first_cost = scenario_cost_profile(per[named[0]][2])
+        board = build_leaderboard(rows, guard_rails={n: v[0] for n, v in per.items()}, store_root=store.root,
+                                  board_cost=first_cost,
+                                  spec_folds=sorted({f for v in per.values() for f in v[3]}))
+        text = leaderboard_markdown(board, guard_rails={n: v[0] for n, v in per.items()},
+                                    guard_rail_source={n: v[1] for n, v in per.items()})
+        emit(board, text, "combined")
+        return 0
+    for name in scenarios:
+        spec, source, backtest, folds = inputs(name)
+        board = build_leaderboard(store.sync(name), guard_rails=spec, store_root=store.root,
+                                  board_cost=scenario_cost_profile(backtest), spec_folds=folds)
+        emit(board, leaderboard_markdown(board, guard_rails=spec, guard_rail_source=source), name)
+    return 0
+
+
 def cmd_screen(args) -> int:
     from neural_trade.core.exceptions import InvalidConfigurationError
     from neural_trade.experiments.screen import ScreenSpec, parse_shard, run_screen
@@ -261,6 +384,32 @@ def cmd_screen(args) -> int:
         return 2
     print(json.dumps(report.to_dict(), indent=2, default=str))  # noqa: T201 - the command's result
     return 0
+
+
+def cmd_stability(args) -> int:
+    from neural_trade.experiments.stability import EXIT_REFUSED, dry_run, run_harness
+
+    cases = [c for c in args.cases.split(",") if c] if args.cases else None
+    seeds = [int(x) for x in args.seeds.split(",") if x] if args.seeds else None
+    try:
+        if args.dry_run:
+            print(json.dumps(dry_run(profile=args.profile, csv=args.csv, case_ids=cases, seeds=seeds,  # noqa: T201
+                                     thresholds_path=args.thresholds, probe=args.probe), indent=2))
+            return 0
+        res = run_harness(profile=args.profile, csv=args.csv, store=args.store, case_ids=cases, seeds=seeds,
+                          thresholds_path=args.thresholds, probe=args.probe,
+                          retry_non_verdict_of=args.retry_non_verdict, max_probe_reruns=args.max_probe_reruns)
+    except ValueError as exc:
+        logger.error("stability harness refused, nothing was run: %s", exc)
+        return EXIT_REFUSED
+    print(json.dumps({"harness_id": res.harness_id, "report": str(res.report), "passed": res.passed,  # noqa: T201
+                      "thresholds_sha256": res.thresholds_sha256, "case_passed": res.case_passed,
+                      "case_status": res.case_status, "verdict_failed": res.verdict_failed,
+                      "non_verdict_cells": res.non_verdict_cells, "probe": res.probe_mode,
+                      "probe_reruns": [v.run_id for v in res.reruns],
+                      "not_rerun_cap": [v.run_id for v in res.not_rerun], "retry_of": res.retry_of,
+                      "not_run": [c.id for c in res.not_run]}, indent=2))
+    return res.exit_code
 
 
 def cmd_compare(args) -> int:
@@ -396,11 +545,54 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--max-cells", type=int, default=None,
                    help="train at most N pending cells, then stop (the same command resumes)")
     s.add_argument("--retry-failed", action="store_true", help="train failed cells again (into new directories)")
+    s.add_argument("--claim-cells", action="store_true",
+                   help="take a lock file per cell before training it, so two processes on one scenario never train "
+                        "the same cell (a sweep's parallel trials use it)")
     s.add_argument("--study", default=None,
                    help="rescore: a strategy study YAML (configs/strategy_studies/*.yaml)")
     s.add_argument("--random-seeds", type=int, default=None,
                    help="rescore: random-null seeds per backtest (default: the scenario's backtest setting)")
     s.set_defaults(func=cmd_scenario)
+
+    sw = sub.add_parser("sweep", help="search Config fields on the dev folds (NT-030): quick mode (about 5 minutes, "
+                                      "sized from a measured sec_per_step) or optuna mode (a resumable study with a "
+                                      "stated GPU budget)",
+                        description="The search space is the scenario's `search:` block (FIELD: {low, high, log, step} "
+                                    "or choices; only Config fields marked tunable; RESAMPLE_MINUTES is refused until "
+                                    "NT-040). quick: trials, epochs and dev folds are sized so that the estimate "
+                                    "(printed first) is at most --quick-minutes; results are labelled quick, one seed, "
+                                    "no winner. optuna: a TPE study in <store>/sweeps/<id>/study.db; the GPU budget "
+                                    "(trials x dev folds x steps x sec_per_step + the top-K x seeds re-run) is "
+                                    "printed and recorded before the first trial and refused above --max-hours; "
+                                    "after the search the top K are re-run with several seeds and the winner is the "
+                                    "best dev-fold seed mean (test columns shown, never ranking). --parallel N "
+                                    "launches N trials at once, only up to NT-035's recorded allowed N, after the "
+                                    "GPU-free check.")
+    sw.add_argument("spec", help="scenario YAML (configs/scenarios/*.yaml) with an optional `search:` block")
+    sw.add_argument("--mode", choices=["quick", "optuna"], required=True)
+    sw.add_argument("--store", default="runs", help="run store root; trials go to <store>/scenarios/<name>-<mode>/")
+    sw.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
+    sw.add_argument("--resume", action="store_true", help="continue an earlier sweep of this scenario and mode "
+                                                          "(without it an existing sweep is refused)")
+    sw.add_argument("--n-trials", type=int, default=30, help="optuna: the study's total number of trials")
+    sw.add_argument("--stop-after", type=int, default=None,
+                    help="run at most N new trials in this call, then stop without the re-run (--resume continues)")
+    sw.add_argument("--max-hours", type=float, default=12.0,
+                    help="optuna: refuse to start when the estimated GPU budget is above this (default 12: one night)")
+    sw.add_argument("--parallel", type=int, default=1, help="trials launched at once (needs NT-035's record)")
+    sw.add_argument("--parallel-record", default="runs/experiments/gpu_measurements_v1/parallel_n.json",
+                    help="NT-035's result file (allowed_n, utilization); no file means --parallel 1")
+    sw.add_argument("--sec-per-step", type=float, default=None,
+                    help="measured seconds per training step (default: the latest run of the same setup in the index)")
+    sw.add_argument("--quick-minutes", type=float, default=5.0, help="quick: the estimate's ceiling")
+    sw.add_argument("--overhead-s", type=float, default=30.0, help="estimated fixed seconds per cell (data, calibration, scoring)")
+    sw.add_argument("--top-k", type=int, default=5, help="optuna: trials re-run with several seeds")
+    sw.add_argument("--rerun-seeds", type=int, default=3, help="optuna: seeds of the re-run")
+    sw.add_argument("--sampler-seed", type=int, default=0)
+    sw.add_argument("--when-busy", choices=["stop", "wait"], default="stop",
+                    help="when the GPU-free check fails: stop (resume later) or wait and check again")
+    sw.add_argument("--dry-run", action="store_true", help="print the estimate / GPU budget and stop")
+    sw.set_defaults(func=cmd_sweep)
 
     sc = sub.add_parser("screen", help="mass, sub-30-second CPU/GPU trials over a grid/sample of Config fields "
                                        "(NT-088): finds broken math and unstable hyperparameter regions, ranks "
@@ -416,6 +608,42 @@ def build_parser() -> argparse.ArgumentParser:
                     help="run at most N pending trials, then stop (the same command resumes)")
     sc.set_defaults(func=cmd_screen)
 
+    sb = sub.add_parser("stability", help="the on-demand stability harness (NT-038, D-026): scale / volatility / "
+                                          "extreme-input / fault-injection cases, 3 seeds, strict mode, judged "
+                                          "against configs/stability_thresholds.yaml",
+                        description="runs the cases as an engine scenario into the run store and writes "
+                                    "<store>/stability/<id>/REPORT.md (pass or fail per case, the loss term "
+                                    "blamed for a failure, the thresholds file's sha256) and "
+                                    "failing_regions.json. Exit 1 when a case fails its verdict, 2 when only cells "
+                                    "that are not a verdict (a resource error, a crash) are left, 64 when the "
+                                    "arguments were refused and nothing ran, else 0. Not a CI "
+                                    "job: a GPU profile is NT-051's.")
+    sb.add_argument("--profile", default=None, choices=["tiny", "reference"],
+                    help="tiny: CPU test size; reference: the screen-size layout (default tiny; a retry keeps its "
+                         "launch's profile)")
+    sb.add_argument("--probe", default=None, choices=["off", "on", "failed"],
+                    help="the per-term gradient probe (it never changes training; about 12x a reference cell on CPU): "
+                         "failed = every cell probe-off, a failing cell re-run once with the probe for the blame "
+                         "(default on the reference profile); on = every cell probed; off = never (default on tiny)")
+    sb.add_argument("--max-probe-reruns", type=int, default=10, metavar="K",
+                    help="with --probe failed: re-run at most K failed cells with the probe (default 10: about "
+                         "floor((3 h - probe-off times) / 777 s) on the reference profile); the rest are listed as "
+                         "'not re-run (cap)'")
+    sb.add_argument("--retry-non-verdict", nargs="?", const="latest", default=None, metavar="HARNESS_ID",
+                    help="re-run only the cells of an earlier launch (an id under <store>/stability/, default the "
+                         "newest) that were not a verdict (ResourceExhaustedError, MemoryError, OSError, a crash), "
+                         "as a new launch; its other verdicts are carried over")
+    sb.add_argument("--csv", default=None, help="the bars the cases are made from (default: Config's CSV_PATH)")
+    sb.add_argument("--store", default="runs", help="run store root; the report goes to <store>/stability/<id>/")
+    sb.add_argument("--cases", default=None, help="comma-separated case ids (default: every case)")
+    sb.add_argument("--seeds", default=None, help="comma-separated seeds (default: 3, as the thresholds file says)")
+    sb.add_argument("--dry-run", action="store_true", help="plan every case through the engine (no training, "
+                                                           "nothing written) and print, per cell: case, seed, n_eff "
+                                                           "per horizon, the probe mode, steps per epoch and epochs")
+    sb.add_argument("--thresholds", default=None, help="a thresholds file or a name in configs/ such as v2 (default "
+                    "configs/stability_thresholds.yaml, v1; the report carries the sha256 of the file used)")
+    sb.set_defaults(func=cmd_stability)
+
     cp = sub.add_parser("compare", help="a pre-registered paired \"A beats B\" verdict over two scenarios "
                                         "(D-025, NT-032): pairs by (seed, fold), refuses fewer than 5 pairs, "
                                         "a fold the spec does not name, or a mismatched dataset/setup fingerprint")
@@ -424,6 +652,33 @@ def build_parser() -> argparse.ArgumentParser:
     cp.add_argument("--simulate", action="store_true", help="add the calibrated null/power simulation")
     cp.add_argument("--n-sim", type=int, default=1000)
     cp.set_defaults(func=cmd_compare)
+
+    lb = sub.add_parser("leaderboard", help="print the leaderboard (NT-031, D-020): one row per "
+                                            "configuration, ranked by the dev-fold net Sharpe after costs, "
+                                            "guard-rails beside it, test-fold columns shown but never ranked")
+    lb.add_argument("scenarios", nargs="*", metavar="scenario",
+                    help="scenario name; several put their configurations on ONE board, rows `scenario / "
+                         "configuration` (NT-179). Default: every scenario under --store, one board each")
+    lb.add_argument("--scenario", action="append", default=None, metavar="a,b,c",
+                    help="scenario names, comma-separated (repeatable): the same as positional names")
+    lb.add_argument("--store", default="runs", help="run store root")
+    lb.add_argument("--index", default=None, help="sqlite index (default <store>/index.sqlite)")
+    lb.add_argument("--out", default=None, help="also write <out>/<scenario>/leaderboard.md, .html and .png (<out>/combined/ for several scenarios on one board) "
+                                                "(the PNG through kaleido or headless Edge, when available)")
+    lb.add_argument("--max-drawdown", type=float, default=None,
+                    help="guard-rail: dev max drawdown must be <= this fraction (default: not checked)")
+    lb.add_argument("--spec", default=None, help="scenario spec for the guard-rail thresholds, the board's cost "
+                    "profile and the dev folds (default: the --specs-dir YAML whose name: is the scenario, else "
+                    "the newest spec the store recorded under <store>/scenarios/<scenario>/specs/)")
+    lb.add_argument("--specs-dir", default="configs/scenarios", help="where to look for the scenario's spec")
+    lb.add_argument("--min-trades", type=float, default=None,
+                    help="guard-rail: trades must be >= this on the dev mean and every dev fold (default 1: "
+                         "a 0-trade row is disqualified); overrides the scenario's leaderboard block")
+    lb.add_argument("--random-null-percentile", type=float, default=None,
+                    help="guard-rail: dev random-null percentile must be >= this (default 50)")
+    lb.add_argument("--no-beat-buy-and-hold", action="store_true", help="drop the buy-and-hold guard-rail")
+    lb.add_argument("--no-beat-random-null", action="store_true", help="drop the random-null guard-rail")
+    lb.set_defaults(func=cmd_leaderboard)
 
     r = sub.add_parser("registry", help="list / inspect / search the component registries")
     r.add_argument("action", choices=["list", "info", "search"])

@@ -31,6 +31,7 @@ the scores of an uninterrupted one. Run one runner per scenario at a time.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -41,6 +42,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from neural_trade.core.config import Config
+from neural_trade.core.costs import COST_FIELDS
 from neural_trade.experiments.dataset import LayoutCache, setup_of
 from neural_trade.experiments.scenario import Cell, Scenario, ScenarioError, config_hash, config_hash_of_dir
 from neural_trade.experiments.store import RESULT_FILE, RunStore
@@ -54,14 +56,34 @@ FINISHED = ("done", "failed")
 def train_cell(ctx, *, calibrate: bool = True, save_artifacts: bool = False):
     """The default trainer: ``train_and_evaluate`` on the cell's run context, from a cleared Keras
     session (unseeded op seeds come from per-process counters, see tests/test_reproducibility.py).
-    It fits the calibration block (the scorer fits the strategy there) and never warm-starts."""
+    It fits the calibration block (the scorer fits the strategy there) and never warm-starts. In strict mode
+    (``STRICT_LOSS_MASKS``, NT-036) the run fails loudly, naming the loss term, at the end of the first epoch
+    with a non-finite term or step (training.stability_guard, NT-038); with the default config nothing is added."""
     import tensorflow as tf
 
+    from neural_trade.training.stability_guard import StabilityGuard
     from neural_trade.training.trainer import train_and_evaluate
 
     tf.keras.backend.clear_session()
+    guard = [StabilityGuard()] if bool(ctx.config.STRICT_LOSS_MASKS) else None
     return train_and_evaluate(config=ctx.config, run_context=ctx, force=True, calibrate=calibrate,
-                              fit_calibration=True, save_artifacts=save_artifacts)
+                              fit_calibration=True, save_artifacts=save_artifacts, extra_callbacks=guard)
+
+
+def cell_run_name(scenario: str, cell_key: str) -> str:
+    """The name part of a new run id: ``<cell key>-<6 hex of the scenario name's sha256>`` (NT-182). The cell
+    key is unique only inside a scenario, the run id is the index's key across scenarios; older ids
+    (no suffix) stay as they are."""
+    return f"{cell_key}-{hashlib.sha256(scenario.encode('utf-8')).hexdigest()[:6]}"
+
+
+def _recorded_gap_policy(run_dir) -> bool:
+    """True when the run's meta.json carries the hole record (``dataset.gaps``) the gap policy writes."""
+    try:
+        meta = json.loads((Path(run_dir) / "meta.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return bool(((meta.get("dataset") or {}).get("gaps")))
 
 
 @dataclass
@@ -120,11 +142,13 @@ class Runner:
     """
 
     def __init__(self, scenario: Scenario, store="runs", *, index_path=None,
-                 trainer: Optional[Callable[..., Any]] = None, check_components: bool = True):
+                 trainer: Optional[Callable[..., Any]] = None, check_components: bool = True,
+                 claim_cells: bool = False):
         self.scenario = scenario
         self.store = store if isinstance(store, RunStore) else RunStore(store, index_path)
         self.trainer = trainer if trainer is not None else train_cell
         self.check_components = check_components
+        self.claim_cells = claim_cells       # NT-030: a lock file per cell (experiments.claims), for parallel runners
         self._layouts = LayoutCache()
 
     @classmethod
@@ -153,7 +177,11 @@ class Runner:
             if same in seen:
                 raise ScenarioError(f"{sc.where()}: folds {seen[same]} and {cell.fold} are the same fold of the data")
             seen[same] = str(cell.fold)
-            planned.append(PlannedCell(cell, cfg, config_hash(cfg), fold, dict(layout.fingerprint), setup_of(cfg)))
+            setup = setup_of(cfg)
+            # the costs the cell is scored at: the config's profile with the spec's backtest: entries on top
+            setup["cost_profile"] = {**setup["cost_profile"], **{k: float(sc.backtest[k]) for k in COST_FIELDS
+                                                                 if sc.backtest.get(k) is not None}}
+            planned.append(PlannedCell(cell, cfg, config_hash(cfg), fold, dict(layout.fingerprint), setup))
         self._mark_states(planned)
         return planned
 
@@ -181,6 +209,18 @@ class Runner:
             attempts = [r for r in by_cell.get(pc.key, [])
                         if r["settings_hash"] == settings
                         and config_hash_of_dir(self.store.root / r["run_dir"]) == pc.config_hash]
+            if sum((pc.fold.get("windows_dropped") or {}).values()):
+                # NT-041: a hole lies inside this fold's blocks. A run made before the gap policy recorded no
+                # dataset.gaps and trained on windows that span the hole: it is not this cell's result.
+                kept = []
+                for r in attempts:
+                    if _recorded_gap_policy(self.store.root / r["run_dir"]):
+                        kept.append(r)
+                    else:
+                        logger.info("[scenario %s] %s: run %s predates the gap policy and its fold's blocks span a "
+                                    "hole (%s windows now dropped): not counted as this cell's result",
+                                    self.scenario.name, pc.key, r["run_id"], pc.fold["windows_dropped"])
+                attempts = kept
             pc.runs = [r["run_id"] for r in attempts]
             states = {r["status"] for r in attempts}
             pc.state = "done" if "done" in states else ("failed" if "failed" in states else "pending")
@@ -208,9 +248,31 @@ class Runner:
                 break
             logger.info("[scenario %s] cell %d/%d %s (%s fold %s, seed %s)", sc.name, i + 1, len(todo), pc.key,
                         pc.role, pc.cell.fold, pc.cell.seed)
-            run_dir, status = self.run_cell(pc)
+            if self.claim_cells:
+                claimed = self._claims().claim(pc.key)
+                if not claimed or self._finished_elsewhere(pc):
+                    if claimed:
+                        self._claims().release(pc.key)
+                    logger.info("[scenario %s] %s is claimed or finished by another process: skipped", sc.name, pc.key)
+                    report.skipped.append(pc.key)
+                    continue
+            try:
+                run_dir, status = self.run_cell(pc)
+            finally:
+                if self.claim_cells:
+                    self._claims().release(pc.key)
             report.ran.append({"cell": pc.key, "status": status, "run_dir": str(run_dir)})
         return report
+
+    def _claims(self):
+        from neural_trade.experiments.claims import CLAIMS_DIR, CellClaims
+
+        return CellClaims(self.store.scenario_dir(self.scenario.name) / CLAIMS_DIR)
+
+    def _finished_elsewhere(self, pc: PlannedCell) -> bool:
+        """After claiming: another process may have finished this cell since the plan was made."""
+        self._mark_states([pc])
+        return pc.state == "done"
 
     def _save_spec(self) -> None:
         """The normalised spec as the runs used it: specs/<spec hash>.json in the scenario directory."""
@@ -236,18 +298,25 @@ class Runner:
                   "spec_hash": sc.spec_hash, "commit": git_sha(),
                   "strategy": {"name": sc.strategy.name, "params": sc.strategy.params}, "backtest": sc.backtest,
                   "run": {"calibrate": sc.run.calibrate, "save_artifacts": sc.run.save_artifacts,
-                          "indicator_report": sc.run.indicator_report},
+                          "indicator_report": sc.run.indicator_report,
+                          **({} if sc.run.train else {"train": False})},
                   "spec": str(sc.source) if sc.source is not None else None}
         return {"engine": engine, "dataset": pc.dataset, "setup": pc.setup,
-                "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"]}}
+                "blocks": {**self._fold_meta(pc), "gap": pc.fold["gap"], **pc.fold["blocks"],
+                   # NT-041: the bars the fold reads (first training window to last test target) and, for the
+                   # timed layout, where it was planned to start
+                   **{k: pc.fold[k] for k in ("read_range", "planned_start", "windows_dropped") if k in pc.fold}}}
 
     def _create_context(self, pc: PlannedCell, meta: Dict[str, Any]):
         from neural_trade.experiments.run_context import RunContext
 
         root = self.store.scenario_dir(self.scenario.name)
         tags = ["scenario", self.scenario.name, pc.role]
+        # NT-182: the run id is global in the index, the cell key only per scenario: a short hash of the
+        # scenario name keeps two scenarios' same-second cells with one config hash apart
+        base = cell_run_name(self.scenario.name, pc.key)
         for attempt in range(1, 1000):
-            name = pc.key if attempt == 1 else f"{pc.key}-{attempt}"
+            name = base if attempt == 1 else f"{base}-{attempt}"
             try:
                 return RunContext.create(pc.config, root=root, seed=pc.cell.seed, tags=tags, name=name, meta=meta)
             except FileExistsError:
@@ -257,7 +326,7 @@ class Runner:
     def run_cell(self, pc: PlannedCell):
         """Train, score and record one cell; returns (run directory, status). KeyboardInterrupt leaves
         the directory without result.json (``incomplete``) and propagates."""
-        from neural_trade.experiments.scorer import score_result
+        from neural_trade.experiments.scorer import score_result, score_strategy_only
 
         sc = self.scenario
         ctx = self._create_context(pc, self._meta(pc))
@@ -266,13 +335,19 @@ class Runner:
         doc: Dict[str, Any] = {"schema_version": ENGINE_SCHEMA_VERSION, "run_id": ctx.run_id, "scenario": sc.name,
                                "cell_key": pc.key, "role": pc.role}
         try:
-            result = self.trainer(ctx, calibrate=sc.run.calibrate, save_artifacts=sc.run.save_artifacts)
-            t_train = time.perf_counter() - t0
-            scored = score_result(result, role=pc.role, strategy=sc.strategy.name,
-                                  strategy_params=sc.strategy.params, backtest_params=sc.backtest,
-                                  run_id=ctx.run_id, out_dir=ctx.run_dir,
-                                  meta={"scenario": sc.name, "cell_key": pc.key, **self._fold_meta(pc),
-                                        "blocks": pc.fold["blocks"], "dataset_sha256": pc.dataset["sha256"]})
+            score_meta = {"scenario": sc.name, "cell_key": pc.key, **self._fold_meta(pc),
+                          "blocks": pc.fold["blocks"], "dataset_sha256": pc.dataset["sha256"]}
+            if sc.run.train:
+                result = self.trainer(ctx, calibrate=sc.run.calibrate, save_artifacts=sc.run.save_artifacts)
+                t_train = time.perf_counter() - t0
+                scored = score_result(result, role=pc.role, strategy=sc.strategy.name,
+                                      strategy_params=sc.strategy.params, backtest_params=sc.backtest,
+                                      run_id=ctx.run_id, out_dir=ctx.run_dir, meta=score_meta)
+            else:       # NT-033: a price-only rule on the same fold; no network, no GPU
+                result, t_train = None, 0.0
+                scored = score_strategy_only(ctx.config, role=pc.role, strategy=sc.strategy.name,
+                                             strategy_params=sc.strategy.params, backtest_params=sc.backtest,
+                                             out_dir=ctx.run_dir, meta=score_meta)
             if sc.run.indicator_report:
                 from neural_trade.serving.indicator_report import write_indicator_report
 

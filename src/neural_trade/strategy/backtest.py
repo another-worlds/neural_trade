@@ -85,12 +85,22 @@ class Bars:
     high: np.ndarray
     low: np.ndarray
     close: np.ndarray
+    # breaks[t] is True when bar t is not followed by the next bar in time (a hole in the data lies between the
+    # decision bars t and t + 1, NT-041): the discrete engine closes a position at bar t's close and enters
+    # nothing there instead of filling across the hole. None = no break.
+    breaks: Optional[np.ndarray] = None
 
     def __post_init__(self):
         for k in ("open", "high", "low", "close"):
             setattr(self, k, np.asarray(getattr(self, k), dtype=float).reshape(-1))
         if not (len(self.open) == len(self.high) == len(self.low) == len(self.close)):
             raise ValueError("open/high/low/close must have equal lengths")
+        if self.breaks is not None:
+            self.breaks = np.asarray(self.breaks, dtype=bool).reshape(-1)
+            if len(self.breaks) != len(self.close):
+                raise ValueError("breaks must have one entry per bar")
+            if not self.breaks.any():
+                self.breaks = None
 
     def __len__(self):
         return len(self.close)
@@ -106,18 +116,24 @@ class Bars:
     def from_frame(cls, df, anchor_bars) -> "Bars":
         """Bars of a standardised OHLCV frame (Open/High/Low/Close columns) at the anchor rows.
 
-        Anchors must be consecutive bars (WINDOW_STEP = 1): the engine fills at bar t+1's open.
+        Anchors move forward one bar at a time (WINDOW_STEP = 1): the engine fills at bar t+1's open. Where an
+        anchor jumps forward (the windows a hole spans were dropped, GAP_POLICY "drop") the bars before and
+        after the jump are not neighbours: ``breaks`` marks it and the engine does not trade across it.
         """
         idx = np.asarray(anchor_bars, dtype=int)
-        if len(idx) > 1 and not np.all(np.diff(idx) == 1):
-            raise ValueError("anchor bars must be consecutive (WINDOW_STEP=1) for next-open fills")
+        steps = np.diff(idx) if len(idx) > 1 else np.zeros(0, dtype=int)
+        if len(steps) and (np.any(steps < 1) or np.median(steps) != 1):
+            raise ValueError("anchor bars must be consecutive (WINDOW_STEP=1) for next-open fills; only isolated "
+                             "jumps (a hole's dropped windows) are allowed")
+        breaks = np.r_[steps != 1, False] if len(steps) else None
         cols = {c.lower(): c for c in df.columns}
         close = df[cols["close"]].to_numpy(float)[idx]
         get = lambda name: df[cols[name]].to_numpy(float)[idx] if name in cols else close  # noqa: E731
-        return cls(get("open"), get("high"), get("low"), close)
+        return cls(get("open"), get("high"), get("low"), close, breaks)
 
     def slice(self, stop: int) -> "Bars":
-        return Bars(self.open[:stop], self.high[:stop], self.low[:stop], self.close[:stop])
+        return Bars(self.open[:stop], self.high[:stop], self.low[:stop], self.close[:stop],
+                    None if self.breaks is None else self.breaks[:stop])
 
 
 @dataclass
@@ -151,6 +167,9 @@ class BacktestResult:
     mode: str = "discrete"
     target_path: Optional[np.ndarray] = None
     targets: List[Dict[str, Any]] = field(default_factory=list)
+    # Private: what the strategy was asked and answered at each bar (exit requests, each order's
+    # tp/sl/max_hold); only ``assert_no_lookahead`` reads it. Not part of equality or repr.
+    _trace: List[Dict[str, Any]] = field(default_factory=list, repr=False, compare=False)
 
     def trades_frame(self):
         import pandas as pd
@@ -193,6 +212,7 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
     position = np.zeros(n)
     trades: List[Trade] = []
     decisions: List[Dict[str, Any]] = []
+    trace: List[Dict[str, Any]] = []
     pos: Optional[_Position] = None
     pending_entry: Optional[Order] = None
     pending_exit: Optional[str] = None
@@ -255,19 +275,27 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
                 px = max(pos.tp, o) if pos.sign > 0 else min(pos.tp, o)
                 close_position(t, px, "TP")
         # 3. at the close
+        broken = bars.breaks is not None and bool(bars.breaks[t])      # a hole follows this bar: no fill across it
         if pos is not None:
             position[t] = pos.sign * pos.qty * pos.entry_mid / max(equity_cash, 1e-12)
             held = t - pos.entry_bar + 1
-            if held >= pos.max_hold:
+            if broken:
+                pending_exit = None
+                close_position(t, c, "EOW")
+            elif held >= pos.max_hold:
                 pending_exit = "TIME"
             else:
                 pending_exit = strategy.exit_signal(signals, t, "LONG" if pos.sign > 0 else "SHORT", held,
                                                     pos.entry_mid, pos.order)
-        elif t >= warmup and t < n - 1:
+                trace.append({"bar": t, "kind": "exit", "request": pending_exit})
+        elif t >= warmup and t < n - 1 and not broken:
             pending_entry = strategy.decide(signals, t)
             if pending_entry is not None:
                 decisions.append({"bar": t, "side": pending_entry.side, "size": pending_entry.size_frac,
                                   "reason": pending_entry.reason})
+                o_ = pending_entry
+                trace.append({"bar": t, "kind": "order", "tp": o_.tp, "sl": o_.sl, "tp_is_offset": o_.tp_is_offset,
+                              "max_hold": o_.max_hold})
         if t == n - 1 and pos is not None and cfg.mark_to_market_at_end:
             close_position(t, c, "EOW")
         unreal = pos.sign * pos.qty * (c - pos.entry_mid) if pos is not None else 0.0
@@ -282,7 +310,7 @@ def run_backtest(signals: SignalFrame, bars: Bars, strategy: Strategy,
     summary["gross_pnl"] = float(sum(t.gross_pnl for t in trades))
     summary["net_pnl"] = float(sum(t.net_pnl for t in trades))
     return BacktestResult(getattr(strategy, "name", type(strategy).__name__), equity, equity_gross, trades,
-                          decisions, position, summary, cfg)
+                          decisions, position, summary, cfg, _trace=trace)
 
 
 # ------------------------------------------------------------------ exposure mode
@@ -317,6 +345,9 @@ def run_exposure_backtest(signals: SignalFrame, bars: Bars, strategy: ExposureSt
     so it equals ``breakeven_cost_bps``). ``avg_hold_bars`` is the mean number of bars from a fill to
     the next fill or the block's end; ``exposure`` the share of bars with a nonzero position.
     """
+    if bars.breaks is not None:
+        raise ValueError("exposure mode does not trade across a hole in the data (the block's bars have a break): "
+                         "use a discrete strategy, or GAP_POLICY 'refuse' / a block without a hole")
     cfg = config or BacktestConfig()
     n = len(bars)
     if len(signals) != n:
@@ -589,26 +620,52 @@ def _perturb_after(frame: PredictionFrame, bars: Bars, t: int, rng) -> tuple:
     if frame.direction_prob_calibrated is not None:
         cal = {h: np.clip(jitter(frame.direction_prob_calibrated[h], 0.3), 0, 1) for h in HORIZONS}
     lc = jitter(frame.last_close, 300.0)
+    # the raw heads (D-051 coherence flags) are predictions too: carry them, perturbed after t (NT-179)
+    meta = dict(frame.meta or {})
+    raw = meta.get("delta_raw")
+    if isinstance(raw, dict) and all(h in raw for h in HORIZONS):
+        meta["delta_raw"] = {h: jitter(raw[h], 500.0) for h in HORIZONS}
     f2 = PredictionFrame(frame.y, lc, delta, prob, var, frame.pred_scale, frame.pred_mean, frame.horizon_steps,
-                         frame.split, cal)
-    b2 = Bars(jitter(bars.open, 300.0), jitter(bars.high, 300.0), jitter(bars.low, 300.0), jitter(bars.close, 300.0))
+                         frame.split, cal, meta=meta)
+    b2 = Bars(jitter(bars.open, 300.0), jitter(bars.high, 300.0), jitter(bars.low, 300.0), jitter(bars.close, 300.0), bars.breaks)
     return f2, b2
+
+
+def _default_probes(base: BacktestResult, n: int, count: int) -> List[int]:
+    """Probe bars for the self-test. A one-bar peek at bar t' reads a bar that differs only when the
+    probe is t' itself, so the probes are spread over the bars where the strategy was actually asked
+    something (decisions, exit requests, evaluated targets) plus a uniform grid."""
+    asked = sorted({int(d["bar"]) for d in base.decisions} | {int(r["bar"]) for r in base._trace}
+                   | {int(d["bar"]) for d in base.targets})
+    asked = [t for t in asked if t < n - 1]
+    picks = [asked[int(i)] for i in np.linspace(0, len(asked) - 1, min(count, len(asked)))] if asked else []
+    grid = [int(i) for i in np.linspace(n // 8, n - 2, 4)] if n > 8 else []
+    return sorted(set(picks) | set(grid))
 
 
 def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Callable[[], Strategy], *,
                         var_scale: float, probes: Sequence[int] = (), config: Optional[BacktestConfig] = None,
-                        seed: int = 0) -> None:
-    """Perturb every prediction and bar AFTER t; the equity curve and every decision up to t
-    must be unchanged. Raises AssertionError naming the first differing bar.
+                        seed: int = 0, n_probes: int = 24) -> None:
+    """Perturb every prediction and bar AFTER t; everything the strategy was asked and answered up to
+    t must be unchanged. Raises AssertionError naming the first differing bar. Compared, per probe t:
 
-    Exposure strategies too: their fills up to bar t (``decisions`` with ``fill_bar`` <= t) and every
+    * the ``decisions`` (bar, side, size, reason) with bar <= t;
+    * the trace of the engine's questions to the strategy at bars <= t: every ``exit_signal`` answer,
+      and each order's ``tp``, ``sl``, ``tp_is_offset`` and ``max_hold`` (the ``decisions`` dicts carry
+      none of these);
+    * the equity up to the mark at bar t's close.
+
+    Exposure strategies: their fills up to bar t (``decisions`` with ``fill_bar`` <= t) and every
     target evaluated at a decision bar <= t (``targets``) must be unchanged; ``SignalFrame.build``
-    rebuilds the EWMA sigma from the perturbed closes."""
+    rebuilds the EWMA sigma from the perturbed closes.
+
+    Without ``probes``, up to ``n_probes`` bars are taken from those the base run asked the strategy
+    about, plus a grid of 4 (see ``_default_probes``); a one-bar peek is caught only at its own bar."""
     cfg = config or BacktestConfig()
     rng = np.random.default_rng(seed)
     n = len(frame)
-    probes = list(probes) or [n // 4, n // 2, (3 * n) // 4]
     base = run_backtest(SignalFrame.build(frame, var_scale), bars, make_strategy(), cfg)
+    probes = list(probes) or _default_probes(base, n, n_probes)
     for t in probes:
         f2, b2 = _perturb_after(frame, bars, t, rng)
         other = run_backtest(SignalFrame.build(f2, var_scale), b2, make_strategy(), cfg)
@@ -617,6 +674,9 @@ def assert_no_lookahead(frame: PredictionFrame, bars: Bars, make_strategy: Calla
         after = [d for d in other.decisions if d[at] <= t]
         if before != after:
             raise AssertionError(f"look-ahead: decisions up to bar {t} changed when data after {t} changed")
+        if [r for r in base._trace if r["bar"] <= t] != [r for r in other._trace if r["bar"] <= t]:
+            raise AssertionError(f"look-ahead: exit requests or order levels up to bar {t} changed when data "
+                                 f"after {t} changed")
         if [d for d in base.targets if d["bar"] <= t] != [d for d in other.targets if d["bar"] <= t]:
             raise AssertionError(f"look-ahead: targets up to bar {t} changed when data after {t} changed")
         # equity[t + 1] is the mark at bar t's close

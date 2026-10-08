@@ -17,7 +17,7 @@ A scenario says what to train and how to score it, in one YAML file (``configs/s
     seeds: [0, 1, 2]
     strategy: {name: calibrated_quantile, params: {}}   # Strategies registry; knobs fit on cal
     backtest: {random_seeds: 100}    # BacktestConfig fields; the costs default to 0 per side (D-044)
-    run: {calibrate: true, save_artifacts: false, indicator_report: false}
+    run: {calibrate: true, save_artifacts: false, indicator_report: false, train: true}
 
 A **configuration** is one variant at one grid point; a **cell** is one (configuration, fold,
 seed), trained into its own run directory. Everything is checked before anything runs:
@@ -37,9 +37,16 @@ trusts that recorded value: :func:`config_hash_of_dir` recomputes it from the ce
 did not exist back then at its current default), so it is directly comparable with a freshly
 computed identity from the current spec.
 
-Extension points (the schema version rises when a key changes meaning): NT-030 adds sweep modes
-(quick, optuna) and a search space, NT-031 guard-rail thresholds, NT-033 rule-based scenarios
-that train no network, NT-038 harness cases.
+Extension points (the schema version rises when a key changes meaning): NT-030 adds the optional
+``search:`` block (the space `neural-trade sweep` searches; experiments/sweep.py), NT-031 guard-rail
+thresholds, NT-038 harness cases.
+
+**Rule-only scenarios (NT-033).** ``run: {train: false}`` trains no network: each cell scores a
+price-only strategy (``Strategy.price_only``: the classic TA rules ``ta_ma_cross``, ``ta_rsi``,
+``ta_bollinger`` and the baselines) on the same fold layout, the same out-of-sample block, the same
+backtest and costs as a trained cell (``experiments.scorer.score_strategy_only``). Such a rule has no
+randomness, so the seeds change nothing and a rule-only spec lists one seed. The frozen-period twin
+is an ordinary training scenario with ``FREEZE_INDICATOR_PERIODS: true`` in a variant.
 """
 from __future__ import annotations
 
@@ -57,11 +64,15 @@ from neural_trade.core.exceptions import InvalidConfigurationError
 
 SCHEMA_VERSION = 1
 TOP_KEYS = ("schema_version", "name", "description", "base_config", "overrides", "variants", "sweep", "folds",
-            "seeds", "strategy", "backtest", "run")
+            "seeds", "strategy", "backtest", "run", "search", "leaderboard")
 SWEEP_KEYS = ("mode", "axes")
 SWEEP_MODES = ("grid",)                     # NT-030 adds "quick" and "optuna"
 STRATEGY_KEYS = ("name", "params")
-RUN_KEYS = ("calibrate", "save_artifacts", "indicator_report")
+RUN_KEYS = ("calibrate", "save_artifacts", "indicator_report", "train")
+# NT-031: the leaderboard's guard-rail thresholds. Scoring-side, so they are NOT in to_dict(), spec_hash
+# or settings(): changing them never changes a run's identity, only which rows the leaderboard disqualifies.
+LEADERBOARD_KEYS = ("max_drawdown", "min_trades", "random_null_percentile", "beat_buy_and_hold",
+                    "beat_random_null")
 # Config fields the engine sets per cell or per run directory.
 RESERVED_FIELDS = {"FOLD_INDEX": "set by `folds:`", "SEED": "set by `seeds:`",
                    "MODEL_PATH": "set to the run directory", "SCALER_PATH": "set to the run directory",
@@ -115,7 +126,14 @@ def config_identity(config: Config) -> Dict[str, Any]:
     default changes the identity like any other field does."""
     defaults = _default_config_dict()
     missing = object()
-    return {k: v for k, v in config.to_dict().items()
+    values = config.to_dict()
+    # NT-125: the period ceiling is resolved at use (None -> LOOKBACK). A stored value equal to this
+    # config's own LOOKBACK is the resolved default (old runs wrote it), so it counts as unset; an
+    # explicit value different from LOOKBACK stays in the identity.
+    ceiling = values.get("MOMENTUM_CLIP_MAX")
+    if ceiling is not None and ceiling == values.get("LOOKBACK"):
+        values["MOMENTUM_CLIP_MAX"] = None
+    return {k: v for k, v in values.items()
             if k not in _IDENTITY_EXCLUDED and v != defaults.get(k, missing)}
 
 
@@ -154,6 +172,8 @@ class RunOptions:
     calibrate: bool = True          # the pre-training loss-weight calibration pass (train_and_evaluate)
     save_artifacts: bool = False    # the serving bundle (artifacts/); the checkpoint weights are always kept
     indicator_report: bool = False  # write indicator_report.html; needs save_artifacts (the bundle)
+    train: bool = True              # False (NT-033): train no network; a price-only strategy is scored on the
+                                    # fold's blocks (scorer.score_strategy_only); calibrate is then unused
 
 
 @dataclass(frozen=True)
@@ -201,6 +221,8 @@ class Scenario:
     axes: Dict[str, List[Any]] = field(default_factory=dict)
     backtest: Dict[str, Any] = field(default_factory=dict)
     run: RunOptions = field(default_factory=RunOptions)
+    search: Dict[str, Any] = field(default_factory=dict)   # NT-030: the search space of `neural-trade sweep`
+    leaderboard: Dict[str, Any] = field(default_factory=dict)     # guard-rail thresholds (LEADERBOARD_KEYS)
     source: Optional[Path] = None           # the spec file (error messages, base_config resolution)
     base_dir: Optional[Path] = None         # where a relative base_config is resolved
 
@@ -278,14 +300,28 @@ class Scenario:
             bad(f"strategy.name must be a string, got {sname!r}")
         strategy = StrategySpec(sname, _mapping(raw_strategy.get("params"), "strategy.params", bad))
         backtest = _mapping(data.get("backtest"), "backtest", bad)
+        search = _mapping(data.get("search"), "search", bad)
+        for fname, rule in search.items():
+            if rule is not None and not isinstance(rule, Mapping):
+                bad(f"search.{fname} must be empty or a mapping of low / high / log / step / choices")
         raw_run = _mapping(data.get("run"), "run", bad)
         _refuse_unknown(raw_run, RUN_KEYS, "run.", bad)
         for key, value in raw_run.items():
             if not isinstance(value, bool):
                 bad(f"run.{key} must be true or false, got {value!r}")
+        board = _mapping(data.get("leaderboard"), "leaderboard", bad)
+        _refuse_unknown(board, LEADERBOARD_KEYS, "leaderboard.", bad)
+        for key, value in board.items():
+            if key in ("beat_buy_and_hold", "beat_random_null"):
+                if not isinstance(value, bool):
+                    bad(f"leaderboard.{key} must be true or false, got {value!r}")
+            elif value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))
+                                        or value != value or value < 0):
+                bad(f"leaderboard.{key} must be a number >= 0 (or null to disable), got {value!r}")
         return cls(name=name, folds=folds, seeds=seeds, strategy=strategy, schema_version=version,
                    description=description, base_config=base, overrides=overrides, variants=variants,
-                   sweep_mode=mode, axes=axes, backtest=backtest, run=RunOptions(**raw_run),
+                   sweep_mode=mode, axes=axes, backtest=backtest, run=RunOptions(**raw_run), search=search,
+                   leaderboard=dict(board),
                    source=Path(source) if source is not None else None,
                    base_dir=Path(base_dir) if base_dir is not None else None)
 
@@ -295,11 +331,16 @@ class Scenario:
 
     def to_dict(self) -> Dict[str, Any]:
         """The normalised spec (defaults filled in), as YAML would hold it."""
-        return {"schema_version": self.schema_version, "name": self.name, "description": self.description,
-                "base_config": self.base_config, "overrides": self.overrides, "variants": self.variants,
-                "sweep": {"mode": self.sweep_mode, "axes": self.axes}, "folds": list(self.folds),
-                "seeds": list(self.seeds), "strategy": dataclasses.asdict(self.strategy),
-                "backtest": dict(self.backtest), "run": dataclasses.asdict(self.run)}
+        out = {"schema_version": self.schema_version, "name": self.name, "description": self.description,
+               "base_config": self.base_config, "overrides": self.overrides, "variants": self.variants,
+               "sweep": {"mode": self.sweep_mode, "axes": self.axes}, "folds": list(self.folds),
+               "seeds": list(self.seeds), "strategy": dataclasses.asdict(self.strategy),
+               "backtest": dict(self.backtest), "run": dataclasses.asdict(self.run)}
+        if self.run.train:           # only when off: the spec hash of every training scenario is unchanged
+            out["run"].pop("train")
+        if self.search:              # only when set: the spec hash of every earlier scenario is unchanged
+            out["search"] = self.search
+        return out
 
     @property
     def spec_hash(self) -> str:
@@ -307,8 +348,11 @@ class Scenario:
 
     def settings(self) -> Dict[str, Any]:
         """What changes a cell's numbers besides its Config: strategy, costs, the calibration pass."""
-        return {"strategy": dataclasses.asdict(self.strategy), "backtest": dict(sorted(self.backtest.items())),
-                "calibrate": bool(self.run.calibrate)}
+        out = {"strategy": dataclasses.asdict(self.strategy), "backtest": dict(sorted(self.backtest.items())),
+               "calibrate": bool(self.run.calibrate)}
+        if not self.run.train:       # a rule-only cell is another computation; every training cell's hash is unchanged
+            out["train"] = False
+        return out
 
     @property
     def settings_hash(self) -> str:
@@ -400,6 +444,14 @@ class Scenario:
         if unknown:
             raise ScenarioError(f"{where}: strategy.params: unknown {self.strategy.name!r} parameter(s) {unknown}; "
                                 f"known: {sorted(known)}")
+        if not self.run.train:
+            if not getattr(cls, "price_only", False):
+                prices = sorted(n for n in Strategies.list_names() if getattr(Strategies.get(n), "price_only", False))
+                raise ScenarioError(f"{where}: run.train is false, so the strategy must read prices only; "
+                                    f"{self.strategy.name!r} reads model heads (price-only strategies: {prices})")
+            if self.run.save_artifacts or self.run.indicator_report:
+                raise ScenarioError(f"{where}: run.train is false: there is no model to save or report on "
+                                    "(run.save_artifacts and run.indicator_report must be false)")
         derived = sorted(set(self.strategy.params) & set(DERIVED_STRATEGY_PARAMS)) \
             if hasattr(cls, "from_calibration") else []
         if derived:

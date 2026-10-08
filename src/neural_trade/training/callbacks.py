@@ -21,6 +21,7 @@ from tensorflow.keras import callbacks
 from tqdm import tqdm
 
 from neural_trade.registries.callbacks import Callbacks
+from neural_trade.training.lambdas import _LAMBDA_VARIABLE_KEYS
 
 logger = logging.getLogger(__name__)
 
@@ -307,6 +308,10 @@ class LambdaScheduleCallback(callbacks.Callback):
 
     def __init__(self, schedule: Dict[str, Dict[Any, float]]):
         super().__init__()
+        known = [f"lambda_{k}" for k in _LAMBDA_VARIABLE_KEYS]
+        unknown = [n for n in (schedule or {}) if n not in known]
+        if unknown:  # on_epoch_begin assigns by name: a typo must not create an attribute (NT-141)
+            raise KeyError(f"unknown loss weight(s) {unknown} in the schedule; known: {known}")
         self.schedule = {name: {int(k): float(v) for k, v in steps.items()}
                          for name, steps in (schedule or {}).items()}
 

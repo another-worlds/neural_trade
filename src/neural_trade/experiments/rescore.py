@@ -256,6 +256,7 @@ class StoredCell:
     role: str
     bar_minutes: float
     scores: Dict[str, Any] = field(default_factory=dict)
+    cost_profile: Dict[str, float] = field(default_factory=dict)   # the run's setup costs (NT-041); {} = engine defaults
 
     def rel(self, root) -> str:
         return _rel(self.run_dir, root)
@@ -295,6 +296,19 @@ def _bar_minutes(run_dir: Path, meta: Mapping[str, Any]) -> float:
         return float((meta.get("setup") or {}).get("bar_minutes", 1))
 
 
+def _cost_profile(run_dir: Path) -> Dict[str, float]:
+    """The run's cost profile from its config.yaml (FEE_BPS, HALF_SPREAD_BPS, SLIPPAGE_BPS); {} for a run made
+    before NT-041 (the engine defaults, 0, apply)."""
+    import yaml
+
+    try:
+        cfg = yaml.safe_load((run_dir / "config.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    return {k: float(cfg[f.upper()]) for k, f in (("fee_bps", "fee_bps"), ("half_spread_bps", "half_spread_bps"),
+                                                  ("slippage_bps", "slippage_bps")) if f.upper() in cfg}
+
+
 def select_cells(scenario: Scenario, store: RunStore) -> Tuple[List[StoredCell], List[Dict[str, str]], List[str]]:
     """(cells to re-score, skipped run directories with the reason, the spec's cells with no usable run).
 
@@ -329,7 +343,8 @@ def select_cells(scenario: Scenario, store: RunStore) -> Tuple[List[StoredCell],
                  + " missing: scored before NT-076, or the files were not kept on this machine)")
         else:
             cell = StoredCell(d, str(meta.get("run_id") or d.name), key, int(eng["fold"]), int(eng["seed"]),
-                              str(eng["role"]), _bar_minutes(d, meta), dict((result or {}).get("scores") or {}))
+                              str(eng["role"]), _bar_minutes(d, meta), dict((result or {}).get("scores") or {}),
+                              _cost_profile(d))
             candidates.setdefault(key, []).append((str(meta.get("created_utc") or ""), cell))
     used: List[StoredCell] = []
     for key in expected:
@@ -472,7 +487,7 @@ def rescore(scenario: Scenario, study: StrategyStudy, store="runs", *, random_se
         for conf in configurations:
             res, strat = fit_and_backtest(signals, bars, strategy=conf.strategy, strategy_params=conf.params,
                                           backtest_params=_backtest_params(scenario, conf, random_seeds),
-                                          bar_minutes=cell.bar_minutes)
+                                          bar_minutes=cell.bar_minutes, cost_profile=cell.cost_profile)
             rows.append(cell_row(conf, cell, store.root, res, strat, signals.var_scale))
     board = leaderboard(rows, configurations)
     out_dir = _new_dir(store.scenario_dir(scenario.name) / RESCORE_SUBDIR, f"{study.name}-{_utc()}")

@@ -598,7 +598,7 @@ def test_health_block_aggregates_grad_health_and_dead_zones():
          "grad_clip_steps_main": 0.0, "grad_clip_steps_indicator": 1.0, "nonfinite_grad_steps": 1.0,
          "masked_crps_loss": 0.0, "period/ma_fast": 1440.0},
     ]
-    cfg = Config(GRAD_CLIP_NORM=20.0, MOMENTUM_CLIP_MIN=1.0, MOMENTUM_CLIP_MAX=1440.0)
+    cfg = Config(GRAD_CLIP_NORM=20.0, MOMENTUM_CLIP_MIN=1.5, MOMENTUM_CLIP_MAX=1440.0)
     h = health_block(rows, cfg)
     assert h["n_epochs"] == 2
     assert h["grad_norm_max_main"] == 30.0

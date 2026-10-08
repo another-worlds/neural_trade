@@ -1,0 +1,31 @@
+# NT-104 (3), verdict for gru_small vs control (today's gru_attention). Design and decision rule:
+# runs/experiments/capacity_v1/SPEC.md.
+#
+#   neural-trade compare configs/compares/capacity_v1_gru_small.yaml --out runs/compares/capacity_v1_gru_small
+name: capacity_v1_gru_small_vs_control
+description: >
+  Does the gru_small arm differ from today's gru_attention in h1 direction AUC (primary), on 5 judgement
+  folds no earlier choice used? Non-inferiority margin and minimum effect are both 0.01 AUC.
+scenario_a: capacity_v1
+scenario_b: capacity_v1
+configuration_a: gru_small
+configuration_b: control
+metric: h1/direction/auc
+direction: higher_better
+metric_kind: diff
+min_effect: 0.01
+non_inferiority_margin: 0.01
+judgment_folds: [-96, -95, -94, -93, -92]
+min_folds: 5
+min_pairs: 5
+pairs_planned: 5                        # 5 folds x 1 seed, both configurations
+alpha: 0.05
+registered_utc: "2026-10-06T00:00:00Z"  # overridden by this file's git commit time once committed
+estimator: mean
+guard_rails:
+  - {metric: h1/variance/crpss, direction: higher_better, max_degradation: 0.005}
+  - {metric: h0/variance/crpss, direction: higher_better, max_degradation: 0.005}
+  - {metric: h2/variance/crpss, direction: higher_better, max_degradation: 0.005}
+  - {metric: h0/direction/auc, direction: higher_better, max_degradation: 0.01}
+  - {metric: h2/direction/auc, direction: higher_better, max_degradation: 0.01}
+  - {metric: h1/direction/brier, direction: lower_better, max_degradation: 0.002}

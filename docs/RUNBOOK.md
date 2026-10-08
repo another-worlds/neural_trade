@@ -183,6 +183,10 @@ adds:
 
 - **Default: one GPU job at a time.** The lead's notebook routine (01 trains about 5 minutes) is one
   GPU job like any other.
+- **The tactical session (D-063):** runs its ultra-short screen trials (at most 2 minutes each) in
+  parallel with the MVP session's GPU job; neither waits for the other. A slower MVP `sec_per_step`
+  measured while tactical trials ran is not evidence for D-018: re-measure with the GPU otherwise idle.
+  [TACTICAL.md](TACTICAL.md) "GPU".
 - **The budget's `sec_per_step`** comes from the `status.json` of the latest real run of the same
   setup (NT-030 (3)).
 - **Parallel sweep trials** (`--parallel N` above 1, NT-030 (4)). The check above cannot see which
@@ -214,7 +218,13 @@ into the frozen set.
   [values]}}`, `folds` (FOLD_INDEX values), `seeds`, `strategy: {name, params}` (Strategies registry,
   default calibrated_quantile), `backtest` (BacktestConfig fields; default costs 0, D-044),
   `run: {calibrate, save_artifacts, indicator_report}`. `indicator_report` writes
-  `indicator_report.html` from `artifacts/` and requires `save_artifacts`. Unknown keys,
+  `indicator_report.html` from `artifacts/` and requires `save_artifacts`. `run: {train: false}`
+  (NT-033) trains no network: each cell scores a price-only strategy (`ta_ma_cross`, `ta_rsi`,
+  `ta_bollinger`, the baselines) on the same fold blocks, backtest and costs, no GPU; its sweep
+  search keys are `strategy.<param>` (ranges declared on the strategy). The manual-search baselines
+  of the yardstick are `configs/scenarios/nt033_*.yaml` (learned, frozen twin with
+  `FREEZE_INDICATOR_PERIODS`, three TA rules); the TA RSI is Wilder's, the network's RSI periods
+  are EMA spans (`strategy/ta_rules.py` docstring). Unknown keys,
   unknown or invalid Config values, unregistered components, folds the data does not have
   and engine-owned fields (FOLD_INDEX, SEED, MODEL_PATH, SCALER_PATH, ARTIFACTS_DIR,
   bar_minutes) are refused before anything trains. Run from the repository root: a relative
@@ -571,7 +581,150 @@ engine above (`scenario run`'s scoring is untouched; a change here never touches
     throwaway-model cost stays roughly fixed; this is an estimate to confirm on a real GPU run, not a
     measured number.
 
-### Sweeps
+### Sweeps (NT-030)
+
+`neural-trade sweep SCENARIO --mode quick|optuna` (code: `experiments/sweep.py`, `experiments/claims.py`).
+A sweep searches the scenario's **`search:` block** (`FIELD: {low, high, log, step}` or `choices:`; `FIELD:`
+alone takes the Config metadata's range) on the **dev folds** with one seed, and ranks trials by the dev-fold
+mean net Sharpe after costs. Only fields marked `tunable` can be searched (`docs/guide/config-reference.md`);
+`RESAMPLE_MINUTES` is refused until NT-040; `PATIENCE` is tunable (capped at `EARLY`), `EARLY` is not (it sets
+how long a trial trains, like `EPOCHS`). Without a `search:` block the space is LR, BATCH_SIZE (128 to 1024: below 128 the
+steps per epoch, hence the budget, more than double), LAMBDA_DIR and LAMBDA_CRPS. The test fold is never run for a trial and never ranks. A trial with a failed cell, a non-finite
+training or validation loss, or non-finite-gradient steps (`metrics.jsonl`, `status.json`) is recorded as failed,
+never dropped, and is FAIL in the study. The trainer's writers store NaN and inf as `null`: a `null` loss counts as
+non-finite, and a missing loss key or missing telemetry file counts as a failure too. A trial that fails a
+search-time guard-rail (no trades on a dev fold, a net Sharpe computed at another cost profile, a missing dev fold:
+`SEARCH_TIME_RAILS`) stays COMPLETE but unranked; it never enters the re-run, and Optuna is told -1e6 for it, not
+its Sharpe. Everything lands in `<store>/scenarios/<scenario>-<mode>/` (engine cells, indexed,
+variant `t0007` = trial 7) and `<store>/sweeps/<scenario>-<mode>/sweep.json` (budget, trials, ranking, winner;
+`study.db` for optuna).
+
+```bash
+PY=C:/Users/Step/miniforge3/envs/nt/python
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode quick --dry-run        # estimate only
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode quick                  # GPU: about 5 minutes
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30 --dry-run   # the GPU budget
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30 [--parallel 3]
+$PY -m neural_trade.cli sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30 --resume    # continue
+```
+
+- **Quick** sizes trials, epochs (at most 3) and dev folds so that the estimate is at most `--quick-minutes`
+  (5), prints it first, and labels every result `quick` (reduced epochs, one seed: a leader, not a winner).
+  `sec_per_step` is the latest finished run of exactly the same setup in the index (dataset fingerprint,
+  BATCH_SIZE, INPUT_SERIES, INDICATOR_FAMILIES, LOOKBACK, HORIZON_STEPS, bar size, MAX_SEQUENCE_COUNT, MODEL_NAME,
+  ATTENTION_MODE, DETERMINISTIC_GRU, PROBE_GRADIENTS and device, compared with the raw keys of the run's
+  config.yaml, and env.json; `--sec-per-step` overrides); with neither it refuses and never falls back to another
+  setup. A field missing from an old run's config.yaml is unknown, so that run is refused: the close-only
+  `reference_default` runs of 82a848f (before D-047, about 0.11 s/step) do not stand for today's OHLCV default. `--overhead-s` (30) is the estimated fixed cost per cell.
+- **Optuna** keeps a TPE study in sqlite; `--resume` finishes an interrupted trial and never repeats a finished
+  one (an existing sweep without `--resume` is refused). `--stop-after K` runs K new trials and stops.
+  The **GPU budget** (trials x dev folds x steps x `sec_per_step` plus the top-5 x 3-seed re-run: seeds after the
+  first on the dev folds, all seeds on the test fold) is printed, as an upper bound (the space's lowest batch size,
+  all EPOCHS) and as the expected figure (each trial's own batch size), with how many trials fit, and written to
+  `sweep.json` (with the code path and git sha the trials run) before the first trial. It is checked before a study
+  or a sweep directory is created; above `--max-hours` (default 12, one night) it refuses, and a larger budget goes to the owner (OPERATING_MODEL). After the search the top 5 are re-run with 3
+  seeds on every fold (eligible trials only: a value and the search-time guard-rails passed); the winner is NT-031's leaderboard winner on the dev folds (its
+  guard-rails come from the scenario's `leaderboard:` block; the test columns are shown, never ranking).
+- **`--parallel N`**: batches of N trials as separate `scenario run --claim-cells` processes, only up to
+  `allowed_n` of `runs/experiments/gpu_measurements_v1/parallel_n.json` (N = 3 at most; no file means 1). The
+  GPU-free check (GPU rules above) runs before each batch, never while own trials run; `--when-busy stop|wait`.
+  After each batch (of the search and of the re-run) the sweep compares the GPU memory and utilisation with the
+  record's level for N and stops launching when someone else is on the GPU. At N = 1 the record is not used: no
+  level is watched (a single process of today's setup may use more memory than the record's N = 1), only the
+  GPU-free check before each batch. A stop during the search or the re-run leaves the sweep `stopped` with its
+  reason (the CLI exits 1); `--resume` finishes it. `--claim-cells` (also on `scenario run`) makes the runner take a
+  lock file `claims/<cell>.lock` first, so two processes never train one cell.
+- The trial processes run with the sweep's own code first on `PYTHONPATH`. The GPU check parses `nvidia-smi dmon`
+  by column name (fb is the 8th column). `parallel_n.json` was measured on 2026-09-29 before D-047 (OHLCV input):
+  the sweep logs a warning when its recorded setup differs from the swept one (whenever it uses the record, N > 1).
+- `CUDA_VISIBLE_DEVICES=-1` skips the GPU check (a CPU run).
+
+### Stability harness and config guard (NT-038, D-026)
+
+`neural-trade stability --profile tiny|reference [--csv FILE] [--store runs] [--cases a,b] [--seeds 0,1,2]
+[--probe off|on|failed] [--max-probe-reruns K] [--retry-non-verdict [ID]] [--thresholds v2] [--dry-run]` (`experiments/stability.py`). On demand, not in CI. It runs the cases as an engine scenario into the run store
+(index rows, `stability/*` scores) and writes `<store>/stability/<id>/REPORT.md` (pass or fail per case, the loss
+term blamed, the thresholds file's sha256), `verdicts.json` and `failing_regions.json`. Exit codes (NT-191): 1 when a
+case fails its verdict, 2 when no case failed but cells that are not a verdict are left (below), 64 when the
+arguments were refused and nothing ran (an unknown case, a missing `--csv` file, a bad retry, a launch with nothing to
+retry; no run directory is created), else 0.
+
+- **Cases**: price level and volatility x0.1 / x10; extreme inputs (a constant block, spikes and a level jump,
+  prices x1e4 and x1e-4: the bars are rewritten into `<id>/data/<case>.csv`, 3 MB each, ignored by git
+  (`runs/stability/*/data/`); the sha256 of each file is the cell's `meta.json` `dataset.sha256`); fault injection (a NaN in the input,
+  in `crps_loss`, in one gradient), each of which must stop the run; the wide-span horizons 5/60/240; slow
+  periods with INDICATOR_LR_MULT 5 and 1. The 1,440 / 10,080-bar long-memory cases and the per-channel-scale
+  variant are defined and marked "GPU, NT-051" (never run on CPU). 3 seeds each, strict mode (STRICT_LOSS_MASKS).
+- **Thresholds**: `configs/stability_thresholds.yaml`, pre-registered (rationale in its comments); its hash is in
+  every report. Never edit it after the first real run: write `_v2` and a new study.
+  **v2** (`configs/stability_thresholds_v2.yaml`, NT-187; select it with `--thresholds v2` or a path; v1 stays the
+  default until NT-051's SPEC names v2, and the report prints the sha256 of the file actually used): the variance-head
+  checks are "not evaluated" below an n_eff gate (excess over the baseline 100, CRPS ratio and NLL 30) and when the
+  constant baseline is non-finite or absurd; the absolute NLL is in scaled units (NLL - ln of the RMS price change,
+  limit 8); `fuzz_constant` is a 100-bar flat block (a minority of the training windows). The tiny profile's n_eff is
+  11/7/5, so it judges no variance check; the expected n_eff per case and profile is in the v2 file and the report.
+- **Profiles**: `tiny` is the CPU size (about 30 s a cell, the per-term probe off); `reference` is the screen layout
+  (probe `failed`, below). The GPU run on the reference setup is NT-051.
+- **The probe and its cost (NT-191)**: the per-term gradient probe never changes training. With `DETERMINISTIC_GRU`
+  on, the same tiny cell's `loss`, every `val_*` epoch metric and every integer counter are bitwise equal with the
+  probe on and off, and so are its verdict fields; every other numeric key (period/*, lambda_*, lr, grad_norm_*,
+  contrib_*, the per-term training sums) agrees within 2 float32 ULP. One comparison saw `nll_loss` 1 ULP apart
+  (5.028296947 off, 5.028297424 on); a later probe-on run was bitwise equal to probe-off, so the cause of that gap
+  is not established. `term_gradient_share` is report-only. Without `DETERMINISTIC_GRU` two runs of one setup differ in the 7th digit, probe or not (`nll_loss`
+  5.028296947 against 5.028297901, both probe off).
+  It costs about 12x a reference cell on CPU, because about 650 s of it is the host-side tracing of 17 terms x 3
+  variable groups, which a GPU run pays too. **Measured, CPU (the QA review of the NT-051 SPEC, 2026-10-07; logs
+  `D:/nt/nt_qa/nt051spec_ref_off.log`, `nt051spec_ref_on.log`): 58 s per reference cell with the probe off, 777 s
+  with it on (at PROBE_EVERY 5, the reference profile; a cell of 6 steps probes once). The re-run of a failed cell uses
+  PROBE_EVERY 1 and costs more per step: on the tiny profile, CPU, one cell took 32.4 s probe off, 189.9 s with the
+  probe at the profile's cadence and 236.7 s at PROBE_EVERY 1.** GPU per cell: not measured (NT-051 measures it). `--probe failed` (the default on `reference`): every
+  cell runs probe-off; a cell that fails any verdict check is re-run ONCE with the probe on at PROBE_EVERY 1; the
+  REPORT lists both runs of that cell (run ids) and takes the blame from the re-run: the largest probe share of the
+  first epoch whose shares sum to 1 per variable group, labelled "probe sample, one batch" (one batch's gradient
+  split, not an epoch average), else the run's own error text or the masked-term counters, else `-` with the reason.
+  Data and fault cases get no failing region by design. `--max-probe-reruns K` (default 10, from the 3 h cap: floor((10800 s - the sum of the probe-off times) / 777 s),
+  where 777 s is the PROBE_EVERY 5 cost; a re-run probes at PROBE_EVERY 1, about 1.25x dearer on the tiny profile
+  (236.7 against 189.9 s), so at that cost the cap may be about 8: NT-051's SPEC states its measured per-re-run cost
+  and the cap it uses) caps the re-runs of one launch; failed cells beyond it are listed in the REPORT as "not re-run (cap)" with no blame.
+  A re-run that itself crashes leaves the blame `-` with the reason "the probe re-run crashed". `--probe on` probes
+  every cell (the earlier behaviour);
+  `--probe off` never (the `tiny` default). Verdicts and thresholds are identical in every mode.
+- **Not a verdict (NT-191)**: a cell whose run ended in `ResourceExhaustedError`, `MemoryError`, `OSError` (or a
+  subclass other than the setup errors `FileNotFoundError`, `FileExistsError`, `NotADirectoryError`,
+  `IsADirectoryError`, `PermissionError`, which are verdicts), a `PermissionError` with Windows code 5, 32 or 33
+  (`[WinError N]`: access denied, a sharing or lock violation, another process holding the file; NT-185, D-065; a
+  `PermissionError` without those codes stays a verdict), `BrokenProcessPool`, a TensorFlow `InternalError` or
+  `UnknownError` whose message names memory, an allocation, cuDNN or CUDA, or left no `result.json` (a crash) is `NOT A VERDICT`: reported as such, left out of
+  the pass and fail counts, never probed and never written as a failing region. `--retry-non-verdict [ID]` (default:
+  the newest launch under `<store>/stability/`) re-runs only those cells as a new launch with the same thresholds
+  (refused if the thresholds file differs), carries every other verdict over, and the case verdict uses the re-run
+  (the REPORT lists both runs). `UnstableTrainingError` and any failed check stay verdicts; the fault cases still pass
+  exactly when the run stops with `UnstableTrainingError` (and, for `fault_nan_term`, names `crps_loss`).
+- **Strict mode fails loudly**: with `STRICT_LOSS_MASKS` the engine's trainer adds `StabilityGuard`
+  (`training/stability_guard.py`): the first epoch with a non-finite loss term or step ends the run with
+  `UnstableTrainingError` naming the term. A sweep records such a cell as failed with that message; the default
+  config (strict off) is unchanged.
+- **Failing regions**: `configs/stability_failing_regions.json` (empty today). A harness failure of a configuration
+  case writes its region to `<id>/failing_regions.json`; copy it into the configs file (a reviewed change) and
+  `Config.validate` refuses a config inside it, naming the region and the report (`core/guard.py`;
+  `NT_FAILING_REGIONS=<path>|off` overrides), and sweep search spaces drop it (a range end is trimmed, any other
+  region is rejected by sampling).
+- **Memory warning**: `Config.validate` logs a warning when BATCH_SIZE x LOOKBACK^2 exceeds 15M
+  (`core/guard.SCORE_ELEMENTS_WARN`). Evidence: `runs/scenarios/micro_lookback` (commit f5aee70, 2026-09-29),
+  measured on the close-only model (4 families, before NT-047): LOOKBACK 240 with batch 256 (14.7M) fit the 12 GB
+  card, batch 512 (29.5M) and 2048 ran out of memory. The level is unvalidated for the OHLCV default (14 families),
+  probably too high there. A warning, not a refusal; the experimenter's memory profile (NT-038 amendment
+  2026-09-30) may move it.
+- **Where the regions file is found**: `NT_FAILING_REGIONS=<path>|off`, else `configs/stability_failing_regions.json`
+  next to the source tree, else the one under the current directory.
+- **Thresholds, repair round 1**: the file was rewritten once before any real run, after QA applied the first
+  draft to 54 stored runs (loss divergence, variance-head NLL and CRPS checks added; coverage only where n_eff >= 30;
+  periods at the bound and term gradient shares report-only; `nonfinite_step_rate` not evaluated without `n_steps`).
+  `neural-trade stability --dry-run [--seeds ..] [--thresholds v2] [--probe ..]` plans every case of a profile
+  through the engine without training and prints, per cell: case, seed, n_eff per horizon (the planner's, beside the
+  thresholds file's expected table), the probe mode, the steps per epoch and the epochs.
+
+### Frozen sweep scripts
 
 What exists today (one GPU job at a time; `ablate.py` and `direction_experiments.py` resume,
 `gate_run.py` overwrites):
@@ -582,7 +735,7 @@ What exists today (one GPU job at a time; `ablate.py` and `direction_experiments
 - `scripts/gate_run.py` with `scripts/check_gates.py` and `scripts/backtest_gate.py`: single named
   runs judged against the M1-M4 gates.
 
-None of them is a search: there is no quick mode, no Optuna study and no leaderboard yet. They
+None of them is a search (use `neural-trade sweep`, above). They
 belong to the frozen set (D-023): they stay runnable as history and are replaced by the experiment
 engine (NT-026: scenario and sweep specs, a resumable runner, one run store with an sqlite index, one
 scorer), the sweeps (NT-030: quick mode, about 5 minutes for the whole sweep, and Optuna mode;

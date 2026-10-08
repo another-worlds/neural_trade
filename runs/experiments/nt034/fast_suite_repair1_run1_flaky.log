@@ -1,0 +1,8 @@
+44b4f39d718d7ef97dec9e74ea7bbb7b8cfa9886
+FAILED tests/test_calib_gradient_mode.py::test_active_terms_built_from_multiple_horizons_keep_a_nonzero_trunk_gradient
+FAILED tests/test_model_variants.py::test_variant_trains_one_cpu_epoch_and_serves_through_predictor[linear_indicators]
+FAILED tests/test_eval_metrics.py::test_ranked_metrics_get_a_paired_bootstrap_noise_flag
+FAILED tests/test_model_variants.py::test_direction_deep_zero_init_starts_the_head_at_the_skip_logit_and_defaults_off
+FAILED tests/test_train_smoke.py::test_training_diagnostics_are_subsampled_but_the_loss_and_epoch_logs_are_complete
+6 failed, 2175 passed, 5373 warnings in 684.64s (0:11:24)
+All checks passed!

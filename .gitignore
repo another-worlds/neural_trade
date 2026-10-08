@@ -55,6 +55,8 @@ runs/experiments/*/logs/
 runs/index.sqlite*
 runs/*/index.sqlite*
 !runs/**/*.csv
+# the stability harness rewrites the bars per data case (3 MB each); the sha256 of each stays in the cell's meta.json
+runs/stability/*/data/
 
 # Claude Code: agent worktrees and machine-local settings (agents/, skills/ and settings.json are tracked)
 .claude/worktrees/

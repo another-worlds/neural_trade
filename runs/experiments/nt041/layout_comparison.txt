@@ -1,0 +1,14 @@
+scenario/cell | base n_seq | head n_seq | boundaries equal | blocks with fewer windows
+capacity_v1/control__f-96__s0 | 1500000 | 1499921 | identical | 20
+h4h_360d/default__f-2__s0 | 698160 | 697520 | identical | 7
+long_360d/default__f-2__s0 | 698160 | 698081 | identical | 7
+loss_prune_v1/control__f-39__s0 | 1000000 | 999921 | identical | 12
+micro_horizons/h_15m__f-2__s0 | 129600 | 129600 | identical | 0
+micro_horizons/h_1h__f-2__s0 | 129600 | 129600 | identical | 0
+micro_horizons/h_4h__f-2__s0 | 129600 | 129600 | identical | 0
+micro_l2/control__f-2__s0 | 129600 | 129600 | identical | 0
+micro_lookback/h_15m_L240__f-2__s0 | 129600 | 129600 | identical | 0
+micro_lookback/h_1h_L240__f-2__s0 | 129600 | 129600 | identical | 0
+micro_lookback/h_4h_L240__f-2__s0 | 129600 | 129600 | identical | 0
+nt033_frozen_twin/default__f-3__s0 | 43421 | 43421 | identical | 0
+layouts compared 12 moved 0

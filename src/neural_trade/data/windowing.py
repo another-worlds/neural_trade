@@ -62,11 +62,56 @@ def compute_extended_trend_features(close_values, index, periods):
     return np.array(features, dtype='float32')
 
 
-def make_sequences_with_extended_trends(config, close_array, lookback):
+def first_anchor(lookback, periods) -> int:
+    """The first anchor bar (the first bar after the window) a sequence can have: the window needs
+    ``lookback`` bars before it, and the longest past-delta lag ``p`` reads ``close[i - 1 - p]``, so
+    ``i >= p + 1``. (Before NT-041 it was ``max(lookback, p)``: with ``p >= lookback`` the first
+    anchor's longest lag fell before the data and was filled with 0.0; the reference setup, p = 20 <
+    lookback = 60, is unchanged.)"""
+    longest = int(max(periods)) if len(periods) else 0
+    return int(max(int(lookback), longest + 1))
+
+
+def sequence_counts(config, n_bars):
+    """``(n_total, dropped)``: the sequences ``n_bars`` bars give, and how many of the OLDEST
+    ``Config.MAX_SEQUENCE_COUNT`` drops (0 without a cap). Pass ``dropped`` as ``first_seq`` to the
+    window builders to build only the kept (newest) sequences (NT-177)."""
+    start = first_anchor(config.LOOKBACK, config.EXTENDED_TREND_PERIODS)
+    step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
+    end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
+    total = len(range(start, end, step))
+    cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
+    return total, (max(0, total - int(cap)) if cap else 0)
+
+
+def anchor_positions(config, n_bars, gap_before=None):
+    """Every anchor (the first bar after a window; the loop variable of the window builders) of ``n_bars`` bars, in
+    order, WINDOW_STEP apart. ``gap_before`` (a bool array of ``n_bars``: True where a bar follows a hole in the
+    timestamps, ``data.gaps.gap_flags``) drops each anchor whose window, past-delta lags or targets would span a
+    hole (NT-041, GAP_POLICY "drop"); without it every anchor is kept and the result is
+    ``range(start, end, step)`` exactly."""
+    start = first_anchor(config.LOOKBACK, config.EXTENDED_TREND_PERIODS)
+    step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
+    end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
+    anchors = np.arange(start, end, step, dtype=np.int64)
+    if gap_before is None or not len(anchors) or not np.any(gap_before):
+        return anchors
+    # bars an anchor i reads: i - back .. i + max(H) - 1; a hole between two of them is a flag at j in (lo, hi]
+    back = max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS)) + 1)
+    forward = int(max(config.HORIZON_STEPS)) - 1
+    prefix = np.cumsum(np.asarray(gap_before, dtype=np.int64))
+    lo = anchors - back
+    hi = anchors + forward
+    return anchors[prefix[hi] - prefix[lo] == 0]
+
+
+def make_sequences_with_extended_trends(config, close_array, lookback, *, first_seq=0, anchors=None):
+    """``first_seq``: skip that many leading sequences (their anchors are never built); the rest
+    are identical to the same rows of the full result. ``anchors`` (:func:`anchor_positions`, possibly cut): the
+    exact anchor list to build, in place of the consecutive range (``first_seq`` is then 0)."""
     X, y, last_close, extended_trends = [], [], [], []
     # Ensure start index is an integer even if periods are provided as floats
-    max_extended_period = int(max(config.EXTENDED_TREND_PERIODS))
-    start_idx = int(max(lookback, max_extended_period))
+    start_idx = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, 'WINDOW_STEP', 1)))
 
     horizon_steps = [int(h) for h in getattr(config, 'HORIZON_STEPS', [1, 5, 15])]
@@ -79,7 +124,9 @@ def make_sequences_with_extended_trends(config, close_array, lookback):
     # Ensure targets are within bounds for all horizons
     end_idx = int(len(close_array) - (max_h - 1))
 
-    for i in range(start_idx, end_idx, step):
+    positions = range(start_idx + int(first_seq) * step, end_idx, step) if anchors is None else anchors
+    for i in positions:
+        i = int(i)
         window = close_array[i-lookback:i]
         # Targets (Option A): predict DELTAS relative to last_close at time t.
         #   delta_h = close[t+h] - last_close[t]
@@ -113,7 +160,7 @@ def frame_series(config, df) -> dict:
             for name in (getattr(config, "INPUT_SERIES", None) or ["close"])}
 
 
-def make_multichannel_windows(config, series: dict, lookback):
+def make_multichannel_windows(config, series: dict, lookback, *, first_seq=0, anchors=None):
     """Input windows ``[N, lookback, C]`` over the ``Config.INPUT_SERIES`` channels (NT-047).
 
     ``series`` maps each configured series name to its bar array (:func:`frame_series`); the
@@ -126,11 +173,11 @@ def make_multichannel_windows(config, series: dict, lookback):
     n = arrays[0].shape[0]
     if any(a.shape[0] != n for a in arrays):
         raise ValueError("all INPUT_SERIES arrays must have the same length")
-    start_idx = int(max(lookback, int(max(config.EXTENDED_TREND_PERIODS))))
+    start_idx = first_anchor(lookback, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
     end_idx = int(n - (int(max(config.HORIZON_STEPS)) - 1))
-    X = [np.stack([a[i - lookback:i] for a in arrays], axis=-1)
-         for i in range(start_idx, end_idx, step)]
+    positions = range(start_idx + int(first_seq) * step, end_idx, step) if anchors is None else anchors
+    X = [np.stack([a[int(i) - lookback:int(i)] for a in arrays], axis=-1) for i in positions]
     return np.array(X, dtype="float32")
 
 
@@ -141,7 +188,7 @@ def sequence_anchor_bars(config, n_bars, n_total_seq=None, seq_index=None):
     ``start + (k + dropped) * step - 1``. ``n_total_seq`` is the uncapped sequence count
     (derived from ``n_bars`` when omitted); ``seq_index`` selects sequences (default all kept).
     """
-    start = int(max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS))))
+    start = first_anchor(config.LOOKBACK, config.EXTENDED_TREND_PERIODS)
     step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
     end = int(n_bars - (int(max(config.HORIZON_STEPS)) - 1))
     total = len(range(start, end, step)) if n_total_seq is None else int(n_total_seq)
@@ -162,7 +209,7 @@ def make_inference_windows(close_array, lookback, *, extended_trend_periods=None
     """
     close = np.asarray(close_array, dtype="float32").reshape(-1)
     periods = [int(p) for p in (extended_trend_periods or [])]
-    start = int(max([lookback] + periods))
+    start = first_anchor(lookback, periods)
     if len(close) < start:
         raise ValueError(f"need at least {start} bars, got {len(close)}")
     X, lc, ext = [], [], []
@@ -187,7 +234,7 @@ def make_inference_input_windows(config, df):
     if names == ["close"]:
         return Xc, lc, ext
     arrays = [df[SERIES_COLUMNS[name]].to_numpy(dtype="float32") for name in names]
-    start = int(max([config.LOOKBACK] + [int(p) for p in config.EXTENDED_TREND_PERIODS]))
+    start = first_anchor(config.LOOKBACK, [int(p) for p in config.EXTENDED_TREND_PERIODS])
     X = np.stack([np.stack([a[i - config.LOOKBACK:i] for a in arrays], axis=-1)
                   for i in range(start, len(close) + 1)]).astype("float32")
     return X, lc, ext

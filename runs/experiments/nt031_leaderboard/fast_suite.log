@@ -1,0 +1,105 @@
+bringing up nodes...
+bringing up nodes...
+
+........................................................................ [  3%]
+........................................................................ [  7%]
+........................................................................ [ 11%]
+........................................................................ [ 14%]
+........................................................................ [ 18%]
+........................................................................ [ 22%]
+........................................................................ [ 25%]
+........................................................................ [ 29%]
+........................................................................ [ 33%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 51%]
+........................................................................ [ 55%]
+........................................................................ [ 58%]
+........................................................................ [ 62%]
+........................................................................ [ 66%]
+........................................................................ [ 69%]
+........................................................................ [ 73%]
+........................................................................ [ 77%]
+........................................................................ [ 80%]
+.......................................................................F [ 84%]
+........................................................................ [ 88%]
+........................................................................ [ 91%]
+........................................................................ [ 95%]
+........................................................................ [ 99%]
+...............                                                          [100%]
+================================== FAILURES ===================================
+_____________ test_every_run_cited_in_this_repository_is_tracked ______________
+[gw0] win32 -- Python 3.10.21 C:\Users\Step\miniforge3\envs\nt\python.exe
+
+cre = <module 'check_run_evidence' from 'D:\\nt\\nt_wt_031\\scripts\\check_run_evidence.py'>
+
+>   ???
+E   AssertionError: check_run_evidence: 159 cited run ids in 23 files: 8 fail (8 without a run directory, 0 with 0 missing paths); stage a run's light files with --list-untracked
+E     FAIL 20260927T181235Z-7785ec9-1bb2f8ee (cited in docs/research/2026-09-28-cpu-review-sweep/findings/core-config-cli.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260927T204649Z-71a0fd2-2f6f3ff7 (cited in docs/research/2026-09-28-cpu-review-sweep/findings/overhaul-structure.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260927T230603Z-71a0fd2-6f1d21e8 (cited in docs/research/2026-09-28-cpu-review-sweep/findings/static-tools-sweep.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260927T235315Z-1a2457a-0ee3b22f (cited in docs/research/2026-09-28-cpu-review-sweep/findings/core-config-cli.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260928T000341Z-1a2457a-34afd9c8 (cited in docs/research/2026-09-28-cpu-review-sweep/findings/core-config-cli.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260928T035957Z-ffb1b67-90888815 (cited in docs/research/2026-09-28-cpu-review-sweep/findings/overhaul-structure.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260928T040901Z-ffb1b67-6f1d21e8 (cited in docs/research/2026-09-28-cpu-review-sweep/findings/static-tools-sweep.md)
+E       no run directory under runs/, in git or on disk
+E     FAIL 20260928T044154Z-ffb1b67-34afd9c8 (cited in docs/research/2026-09-28-cpu-review-sweep/findings/core-config-cli.md)
+E       no run directory under runs/, in git or on disk
+E   assert 8 == 0
+
+D:\nt_wt_031\tests\test_run_evidence.py:232: AssertionError
+============================== warnings summary ===============================
+tests/registries/test_callbacks.py: 30 warnings
+tests/test_custom_loss.py: 320 warnings
+tests/test_losses_reference.py: 20 warnings
+tests/test_attention_head_pool.py: 1015 warnings
+tests/test_deterministic_gru.py: 500 warnings
+tests/registries/test_contracts.py: 48 warnings
+tests/test_macd_ratio.py: 144 warnings
+tests/registries/test_layers.py: 1 warning
+tests/registries/test_metrics.py: 10 warnings
+tests/test_calib_fail_loud.py: 144 warnings
+tests/registries/test_models.py: 142 warnings
+tests/test_direction_readout.py: 10 warnings
+tests/test_epoch_metrics.py: 40 warnings
+tests/test_applied_periods.py: 336 warnings
+tests/test_ohlcv_input.py: 192 warnings
+tests/test_model_variants.py: 408 warnings
+tests/test_legacy_bundle.py: 48 warnings
+tests/test_permutation_importance.py: 8 warnings
+tests/test_physics_terms_bounded.py: 90 warnings
+tests/test_indicator_families.py: 96 warnings
+tests/test_reset.py: 16 warnings
+tests/test_pnl_utility.py: 280 warnings
+tests/test_stability.py: 284 warnings
+tests/test_served_epoch.py: 49 warnings
+tests/test_train_smoke.py: 96 warnings
+tests/test_training_wiring.py: 40 warnings
+tests/test_calib_gradient_mode.py: 245 warnings
+tests/test_eval_metrics.py: 141 warnings
+tests/test_calibration_pass.py: 96 warnings
+tests/test_telemetry.py: 20 warnings
+tests/test_bench_window_free.py: 2 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+tests/test_config.py::test_values_from_yaml_or_the_cli_are_coerced_to_the_field_type
+  D:\nt\nt_wt_031\src\neural_trade\core\config.py:894: DeprecationWarning: Config.USE_HUBER is deprecated and has no effect (default True)
+    self.validate()
+
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_031\src\neural_trade\core\config.py:733: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_run_evidence.py::test_every_run_cited_in_this_repository_is_tracked
+1 failed, 1958 passed, 4873 warnings in 292.33s (0:04:52)

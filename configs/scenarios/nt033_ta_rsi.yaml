@@ -1,0 +1,31 @@
+# NT-033 / VISION "The yardstick" (b): the classic TA rule `ta_rsi` (strategy/ta_rules.py) with its parameters tuned
+# by the same search as the learned model: the same dev folds (-3, -2), the same net Sharpe after costs, the same
+# trial count (--n-trials), the same costs (0, D-044). It trains no network (run.train: false), so a sweep needs
+# no GPU and no sec_per_step; give --overhead-s a CPU estimate (a few seconds). The rule is deterministic: one seed.
+# The ranges are declared on the strategy (`strategy.<param>:` alone takes the declared range;
+# neural_trade.strategy.strategies.strategy_search_space); set here for the record.
+# The rule sees only the out-of-sample block's own closes, so it waits its warm-up at the start of every block.
+#
+# 17 trials match the learned model and its twin (nt033_learned.yaml: the most that fits 12 h of GPU). The sweep reports
+# a CPU budget (no GPU hours) and re-runs the deterministic rule once, not 3 identical seeds.
+#   neural-trade scenario run configs/scenarios/nt033_ta_rsi.yaml                         # the textbook parameters
+#   neural-trade sweep configs/scenarios/nt033_ta_rsi.yaml --mode optuna --n-trials 17 --overhead-s 3
+schema_version: 1
+name: nt033_ta_rsi
+description: Classic RSI threshold (Wilder RSI period 14, 30/70), parameters tuned by the same search, reference setup.
+base_config: ../default.yaml
+overrides: {}
+variants:
+  default: {}
+folds: [-3, -2, -1]
+seeds: [0]
+strategy:
+  name: ta_rsi
+  params: {}
+backtest: {}
+run:
+  train: false
+search:
+  strategy.period: {low: 2, high: 60}
+  strategy.lower: {low: 10.0, high: 40.0}
+  strategy.upper: {low: 60.0, high: 90.0}

@@ -23,7 +23,7 @@ import pytest
 import yaml
 
 from neural_trade.core.config import Config
-from neural_trade.experiments.runner import Runner
+from neural_trade.experiments.runner import Runner, cell_run_name
 from neural_trade.experiments.scenario import Scenario, ScenarioError, config_hash, config_hash_of_dir, config_identity
 from neural_trade.experiments.store import RunStore
 
@@ -249,7 +249,12 @@ def test_the_reference_example_spec_is_valid_on_the_bundled_data(tmp_path, monke
     assert {pc.cell.fold: pc.role for pc in planned} == {-3: "dev", -2: "dev", -1: "test"}
     sha = hashlib.sha256((REPO / "binance_btcusdt_1min_ccxt.csv").read_bytes()).hexdigest()
     assert {pc.dataset["sha256"] for pc in planned} == {sha}
-    assert planned[0].setup == {"bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+    setup = planned[0].setup
+    assert {k: setup[k] for k in ("bar_minutes", "LOOKBACK", "HORIZON_STEPS")} == {
+        "bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+    # NT-041: the wall-clock setup and the instrument beside the bars
+    assert (setup["symbol"], setup["quote_currency"], setup["window_minutes"], setup["horizon_minutes"]) == (
+        "BTC/USDT", "USDT", 60, [10, 15, 20])
     assert all(pc.state == "pending" for pc in planned) and not (tmp_path / "runs").exists()   # plan writes nothing
 
 
@@ -359,7 +364,7 @@ def test_the_runner_never_writes_into_an_existing_directory_or_changes_a_finishe
     store = RunStore(tmp_path / "runs")
     runner = Runner(sc, store, trainer=FakeTrainer())
     [pc] = runner.plan()
-    taken = store.scenario_dir(sc.name) / f"20260102T030405Z-abc1234-{run_context.config_hash(pc.config)}-{pc.key}"
+    taken = store.scenario_dir(sc.name) / f"20260102T030405Z-abc1234-{run_context.config_hash(pc.config)}-{cell_run_name(sc.name, pc.key)}"
     taken.mkdir(parents=True)
     (taken / "evidence.txt").write_text("an earlier run's file", encoding="utf-8")
     report = runner.run()
@@ -469,7 +474,9 @@ def test_meta_records_the_dataset_fingerprint_and_the_setup(uninterrupted, bars_
         assert ds["sha256"] == sha == row["dataset_sha256"]
         assert ds["n_bars"] == len(synthetic_bars) == row["dataset_n_bars"] and ds["n_rows"] == len(synthetic_bars)
         assert ds["first_timestamp"] == "2025-10-11T02:30:00+00:00" and ds["last_timestamp"] == "2025-10-13T04:29:00+00:00"
-        assert meta["setup"] == {"bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+        assert {k: meta["setup"][k] for k in ("bar_minutes", "LOOKBACK", "HORIZON_STEPS")} == {
+            "bar_minutes": 1, "LOOKBACK": 60, "HORIZON_STEPS": [10, 15, 20]}
+        assert meta["setup"]["symbol"] == "BTC/USDT" and meta["setup"]["window_minutes"] == 60   # NT-041
         assert (row["bar_minutes"], row["lookback"], json.loads(row["horizon_steps"])) == (1, 60, [10, 15, 20])
         eng = meta["engine"]
         assert eng["cell_key"] == row["cell_key"] and eng["config_hash"] == row["config_hash"]
@@ -625,3 +632,23 @@ def test_a_real_scenario_trains_scores_and_resumes_through_the_cli(tmp_path, bar
     # an uninterrupted run of the same scenario reproduces every indexed number
     assert main(["scenario", "run", str(path), "--store", str(tmp_path / "runs_b")]) == 0
     assert comparable(RunStore(tmp_path / "runs_b")) == comparable(store)
+
+
+def test_config_identity_treats_a_stored_ceiling_equal_to_lookback_as_unset(tmp_path):
+    """NT-125: old runs stored MOMENTUM_CLIP_MAX: 60.0 beside LOOKBACK 60; today's default is None
+    (resolved at use), so that stored value is the same config and must hash like the spec cell. An
+    explicit 20 differs. LOOKBACK 240 with a stored 60.0 (the H4 micro_lookback cells) is NOT the
+    same config: it really ran a ceiling of 60, while a spec cell now resolves to 240."""
+    spec_cell = Config()
+    old_dir = tmp_path / "old"
+    old_dir.mkdir()
+    (old_dir / "config.yaml").write_text("LOOKBACK: 60\nMOMENTUM_CLIP_MAX: 60.0\n", encoding="utf-8")
+    assert config_hash_of_dir(old_dir) == config_hash(spec_cell)
+    assert "MOMENTUM_CLIP_MAX" not in config_identity(Config(MOMENTUM_CLIP_MAX=60.0))
+    assert config_hash(Config(MOMENTUM_CLIP_MAX=20)) != config_hash(spec_cell)
+    assert config_identity(Config(MOMENTUM_CLIP_MAX=20))["MOMENTUM_CLIP_MAX"] == 20
+    h4 = tmp_path / "h4"
+    h4.mkdir()
+    (h4 / "config.yaml").write_text("LOOKBACK: 240\nMOMENTUM_CLIP_MAX: 60.0\n", encoding="utf-8")
+    assert config_hash_of_dir(h4) != config_hash(Config(LOOKBACK=240))
+    assert config_hash(Config(LOOKBACK=240)) == config_hash(Config(LOOKBACK=240, MOMENTUM_CLIP_MAX=240))

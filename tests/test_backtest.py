@@ -139,7 +139,7 @@ def test_no_lookahead_all_strategies(name):
     f, bars = _frame(500, seed=3)
     vs = var_scale_from(f)
     cal = SignalFrame.build(_frame(500, seed=11)[0], vs)   # calibration-block signals (another sample)
-    assert_no_lookahead(f, bars, lambda: build_strategy(name, calibration=cal), var_scale=vs, probes=(120, 250, 380))
+    assert_no_lookahead(f, bars, lambda: build_strategy(name, calibration=cal), var_scale=vs)   # the default probes
 
 
 def test_lookahead_probe_catches_a_peeking_strategy():
@@ -153,6 +153,55 @@ def test_lookahead_probe_catches_a_peeking_strategy():
     f, bars = _frame(300, seed=4)
     with pytest.raises(AssertionError, match="look-ahead"):
         assert_no_lookahead(f, bars, Peek, var_scale=1.0, probes=(100,))
+
+
+def _one_bar_peek(where):
+    """A strategy that reads bar t + 1 (and nothing further) in ``decide``, ``exit_signal`` or its TP level."""
+    @dataclass
+    class Peek(Strategy):
+        name: ClassVar[str] = f"peek_{where}"
+
+        def decide(self, s, t):
+            if t + 1 >= len(s):
+                return None
+            if where == "decide":
+                return Order("LONG", max_hold=5) if s.close[t + 1] > s.close[t] else None
+            if t % 7:
+                return None
+            # the TP level sits one bar's move above the NEXT close; the order itself is unconditional
+            return Order("LONG", tp=float(s.close[t + 1]) + 1000.0, max_hold=5) if where == "tp" else Order("LONG", max_hold=5)
+
+        def exit_signal(self, s, t, side, held, entry_price, order):
+            return "PEEK" if where == "exit" and t + 1 < len(s) and s.close[t + 1] < s.close[t] else None
+
+    return Peek
+
+
+@pytest.mark.parametrize("where", ["decide", "exit", "tp"])
+def test_default_probes_catch_a_one_bar_peek(where):
+    f, bars = _frame(500, seed=4)
+    with pytest.raises(AssertionError, match="look-ahead"):
+        assert_no_lookahead(f, bars, _one_bar_peek(where), var_scale=1.0)
+
+
+def test_a_causal_strategy_with_levels_passes_the_default_probes():
+    @dataclass
+    class Causal(_one_bar_peek("tp")):
+        def decide(self, s, t):
+            return Order("LONG", tp=float(s.close[t]) + 50.0, sl=float(s.close[t]) - 50.0, max_hold=5) if t % 7 == 0 else None
+
+        def exit_signal(self, s, t, side, held, entry_price, order):
+            return "X" if s.close[t] < s.close[t - 1] else None
+
+    f, bars = _frame(500, seed=4)
+    assert_no_lookahead(f, bars, Causal, var_scale=1.0)
+
+
+def test_trace_leaves_public_results_alone():
+    f, bars = _frame(300, seed=6)
+    res = run_backtest(SignalFrame.build(f, 1.0), bars, build_strategy("liberal"))
+    assert res._trace and all(set(d) == {"bar", "side", "size", "reason"} for d in res.decisions)
+    assert "_trace" not in repr(res) and "_trace" not in res.to_dict()
 
 
 def test_trailing_features_are_causal():
@@ -450,3 +499,32 @@ def test_fit_and_backtest_has_no_bar_minutes_default():
     assert sig.parameters["bar_minutes"].default is inspect.Parameter.empty
     with pytest.raises(TypeError, match="bar_minutes"):
         fit_and_backtest(None, None)
+
+
+def test_the_perturbed_frame_carries_the_raw_heads_perturbed_after_t_and_the_guard_does_not_warn(caplog):
+    """NT-179 (QA of NT-033): `_perturb_after` used to drop meta['delta_raw'], so every probe compared coherence
+    flags on the raw heads (base run) against the served delta (perturbed run) and logged the D-051 warning."""
+    import logging
+
+    import importlib
+
+    bt = importlib.import_module("neural_trade.strategy.backtest")   # `strategy.backtest` is also a function
+
+    frame, bars = _frame(300, seed=5)
+    rng = np.random.default_rng(0)
+    frame.meta["delta_raw"] = {h: frame.delta[h] * 3.0 for h in HORIZONS}
+    t = 100
+    f2, _ = bt._perturb_after(frame, bars, t, rng)
+    for h in HORIZONS:
+        raw2 = f2.meta["delta_raw"][h]
+        assert np.array_equal(raw2[: t + 1], frame.meta["delta_raw"][h][: t + 1])   # up to t: untouched
+        assert not np.allclose(raw2[t + 1:], frame.meta["delta_raw"][h][t + 1:])    # after t: perturbed
+    assert "delta_raw" in frame.meta and frame.meta["delta_raw"] is not f2.meta["delta_raw"]  # the base is not mutated
+
+    with caplog.at_level(logging.WARNING, logger="neural_trade"):
+        caplog.clear()
+        vs = var_scale_from(frame)
+        cal = SignalFrame.build(_frame(300, seed=11)[0], vs)
+        bt.assert_no_lookahead(frame, bars, lambda: build_strategy("calibrated_quantile", calibration=cal),
+                               var_scale=vs, n_probes=4)
+    assert not [r for r in caplog.records if "contrary to D-051" in r.getMessage()]

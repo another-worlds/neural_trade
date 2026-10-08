@@ -17,6 +17,20 @@ OHLCV = {"open": "Open", "high": "High", "low": "Low", "close": "Close", "volume
 NUMERIC = ("Open", "High", "Low", "Close", "Volume")
 
 
+def _parse_timestamps(col: pd.Series) -> pd.Series:
+    """Timestamps as datetimes. A numeric column is epoch time and its unit follows from the magnitude
+    (seconds, milliseconds, microseconds or nanoseconds; pandas alone would read every integer as
+    nanoseconds, so a Binance epoch-ms column became 1970). Text and datetime columns parse as before."""
+    if pd.api.types.is_numeric_dtype(col) and not pd.api.types.is_bool_dtype(col):
+        v = pd.to_numeric(col, errors="coerce")
+        top = v.abs().max()
+        if pd.isna(top):
+            return pd.to_datetime(v, errors="coerce")
+        unit = "s" if top < 1e11 else "ms" if top < 1e14 else "us" if top < 1e17 else "ns"
+        return pd.to_datetime(v, unit=unit, errors="coerce")
+    return pd.to_datetime(col, errors="coerce")
+
+
 def standardize_ohlcv(df: pd.DataFrame, config) -> pd.DataFrame:
     """'timestamp'/'datetime' -> parsed 'timestamp' (bad rows dropped); open..volume -> Open..Volume, numeric."""
     time_column = next((name for name in ("timestamp", "datetime") if name in df.columns), None)
@@ -24,7 +38,7 @@ def standardize_ohlcv(df: pd.DataFrame, config) -> pd.DataFrame:
         raise ValueError("Market data must contain a 'timestamp' or 'datetime' column")
     if time_column != "timestamp":
         df = df.rename(columns={time_column: "timestamp"})
-    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    df["timestamp"] = _parse_timestamps(df["timestamp"])
     df = df.dropna(subset=["timestamp"]).copy()
     df = df.rename(columns=OHLCV)
     for col in NUMERIC:
@@ -34,8 +48,9 @@ def standardize_ohlcv(df: pd.DataFrame, config) -> pd.DataFrame:
 
 
 def sort_dedupe(df: pd.DataFrame, config) -> pd.DataFrame:
-    """Sort by timestamp; keep the last row of duplicated timestamps."""
-    return df.sort_values("timestamp").drop_duplicates(subset=["timestamp"], keep="last")
+    """Sort by timestamp (stable: rows with one timestamp keep their file order); keep the last row of
+    duplicated timestamps."""
+    return df.sort_values("timestamp", kind="stable").drop_duplicates(subset=["timestamp"], keep="last")
 
 
 def resample_bars(df: pd.DataFrame, config) -> pd.DataFrame:

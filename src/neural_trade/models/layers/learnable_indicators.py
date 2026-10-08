@@ -61,7 +61,10 @@ class LearnableIndicators(layers.Layer):
         self.all_logit_vars = []  # every logit, in creation order (metacalibration, optimizer)
         self.meta_scale = 0.5  # == neural_trade.indicators.META_SCALE (kept as attribute)
         self.grad_multiplier = config.INDICATOR_GRAD_MULT  # Apply gradient boost
-        self.adaptive = bool(getattr(config, "ADAPTIVE_INDICATORS", True))
+        # NT-033 (the frozen-period twin): FREEZE_INDICATOR_PERIODS turns the shift off (the NT-046
+        # switch above, reused) and makes every period logit a non-trainable weight at its configured value.
+        self.frozen = bool(getattr(config, "FREEZE_INDICATOR_PERIODS", False))
+        self.adaptive = bool(getattr(config, "ADAPTIVE_INDICATORS", True)) and not self.frozen
         # NT-097 (B_model_indicators.md 2.2, 4.2, 7.5): off (default) reproduces today's behaviour,
         # where only the base logit is clipped to [MOMENTUM_CLIP_MIN, MOMENTUM_CLIP_MAX]
         # (CustomTrainModel.train_step -> clip_learned_periods) and the per-window meta shift can
@@ -110,9 +113,10 @@ class LearnableIndicators(layers.Layer):
                     v = self.add_weight(shape=(),
                                         initializer=initializers.Constant(
                                             self._logit_from_period(inst[p.name])),
-                                        trainable=True,
+                                        trainable=not self.frozen,
                                         name=family.logit_name(i, p.name),
-                                        regularizer=regularizers.L2(self.config.INDICATOR_L2))
+                                        regularizer=(None if self.frozen
+                                                     else regularizers.L2(self.config.INDICATOR_L2)))
                     vm[p.name] = v
                     self.all_logit_vars.append(v)
                 varmaps.append(vm)
@@ -130,7 +134,7 @@ class LearnableIndicators(layers.Layer):
 
         if self.bound_applied:
             min_p = float(self.config.MOMENTUM_CLIP_MIN)
-            max_p = float(getattr(self.config, "MOMENTUM_CLIP_MAX", None) or self.config.LOOKBACK)
+            max_p = float(self.config.momentum_clip_max)
             # logit is decreasing in period: the period floor is the logit ceiling and vice versa
             # (the same convention as clip_learned_periods below).
             self._applied_logit_hi = float(self._logit_from_period(min_p).numpy())
@@ -366,7 +370,12 @@ class LearnableIndicators(layers.Layer):
         clip byte-for-byte unchanged (same bounds, same op, same per-variable independence, so
         the default path is unaffected regardless of iteration order).
         Called from CustomTrainModel.train_step after the optimizer step.
+
+        A frozen twin (``FREEZE_INDICATOR_PERIODS``, NT-033) never clips: its logits stay exactly at
+        the configured values (the bound would otherwise move a configured period outside it).
         """
+        if self.frozen:
+            return
         logit_hi = self._logit_from_period(tf.cast(min_p, tf.float32))
         logit_lo = self._logit_from_period(tf.cast(max_p, tf.float32))
         ratio_logit_hi = self._logit_from_alpha(tf.cast(_RATIO_CLIP_MAX, tf.float32))

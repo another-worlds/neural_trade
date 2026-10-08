@@ -33,9 +33,10 @@ note live in ``strategy/variance_strategies.py``.
 """
 from __future__ import annotations
 
+import dataclasses
 import inspect
 from dataclasses import dataclass
-from typing import Any, ClassVar, Optional, Tuple
+from typing import Any, ClassVar, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -48,6 +49,9 @@ from neural_trade.strategy.trades import Order
 class Strategy:
     name: ClassVar[str] = "strategy"
     max_hold: int = 30
+    # True when the strategy reads no model head (only prices): it can be scored by a scenario that trains
+    # no network (``run.train: false``, NT-033), where every head is a neutral placeholder.
+    price_only: ClassVar[bool] = False
 
     def warmup(self) -> int:
         """Bars at the start with no decisions (trailing features still filling)."""
@@ -117,6 +121,27 @@ class Strategies(BaseRegistry):
     @classmethod
     def validate_component(cls, component: Any) -> bool:
         return inspect.isclass(component) and issubclass(component, Strategy)
+
+
+def search_field(default, low, high, *, log: bool = False, step=None):
+    """A dataclass field whose search range is declared beside its default (NT-033).
+
+    The range uses the keys of a scenario's ``search:`` block (``low``, ``high``, ``log``, ``step``) so
+    :func:`strategy_search_space` hands a sweep the same rule it reads for a Config field. A parameter
+    without it is fixed, not searched. ``step`` makes an integer parameter a grid of that spacing."""
+    rule = {"low": low, "high": high, "log": bool(log)}
+    if step is not None:
+        rule["step"] = step
+    return dataclasses.field(default=default, metadata={"search": rule})
+
+
+def strategy_search_space(name: str) -> Dict[str, Dict[str, Any]]:
+    """``{param: {low, high, log[, step]}}`` for the parameters a strategy declares searchable
+    (:func:`search_field`), in declaration order; ``{}`` when it declares none."""
+    cls = Strategies.get(name)
+    if not dataclasses.is_dataclass(cls):
+        return {}
+    return {f.name: dict(f.metadata["search"]) for f in dataclasses.fields(cls) if "search" in f.metadata}
 
 
 def _side(sign: int) -> str:
@@ -350,6 +375,7 @@ class BuyAndHold(Strategy):
     """Long at the first bar, held to the end."""
 
     name: ClassVar[str] = "buy_and_hold"
+    price_only: ClassVar[bool] = True
     max_hold: int = 10 ** 9
 
     def decide(self, s, t):
@@ -362,6 +388,7 @@ class AlwaysFlat(Strategy):
     """Never trades (the zero line every strategy must beat after costs)."""
 
     name: ClassVar[str] = "always_flat"
+    price_only: ClassVar[bool] = True
 
     def decide(self, s, t):
         return None
@@ -374,6 +401,7 @@ class RandomSignal(Strategy):
     model; ``backtest.random_same_frequency`` sets all three from the strategy it is compared with)."""
 
     name: ClassVar[str] = "random_signal"
+    price_only: ClassVar[bool] = True
     trade_rate: float = 0.05
     hold_bars: int = 10
     seed: int = 0

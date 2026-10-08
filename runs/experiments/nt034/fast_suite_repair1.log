@@ -1,0 +1,10 @@
+44b4f39d718d7ef97dec9e74ea7bbb7b8cfa9886
+tests/test_custom_loss.py::test_dead_zone_counters_dir_n_and_var_at_floor
+  D:\nt\nt_wt_034\src\neural_trade\core\config.py:742: DeprecationWarning: Config.VAR_FLOOR=0.5 (expected 1e-4). Using provided value.
+    self.validate()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_nt033_baselines.py::test_a_rule_cell_scores_the_same_block_and_costs_as_a_trained_cell
+1 failed, 2180 passed, 5594 warnings in 508.02s (0:08:28)
+All checks passed!

@@ -1,0 +1,31 @@
+e7a5e7efc623be0b3f2b3af3cd674f173247d2ae
+Dataset length after cleaning: 3000
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-10-13 04:29:00+00:00
+Dataset length after cleaning: 3000
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-10-13 04:29:00+00:00
+[scenario stab-20261007T091252Z-tiny] control__f-2__s0 done in 0.3 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1604\popen-gw1\test_the_data_csvs_are_untrack0\runs\scenarios\stab-20261007T091252Z-tiny\20261007T091252Z-e7a5e7e-dirty-4a9298e4-control__f-2__s0-7a435f (net Sharpe -2.8018309546353124, trades 15.0)
+[scenario stab-20261007T091252Z-tiny] cell 2/2 scale_x10__f-2__s0 (dev fold -2, seed 0)
+Dataset length after cleaning: 3000
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-10-13 04:29:00+00:00
+Dataset length after cleaning: 3000
+Date range after cleaning: 2025-10-11 02:30:00+00:00 to 2025-10-13 04:29:00+00:00
+[scenario stab-20261007T091252Z-tiny] scale_x10__f-2__s0 done in 0.3 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1604\popen-gw1\test_the_data_csvs_are_untrack0\runs\scenarios\stab-20261007T091252Z-tiny\20261007T091252Z-e7a5e7e-dirty-112535c2-scale_x10__f-2__s0-7a435f (net Sharpe -2.8018309546353124, trades 15.0)
+=========================== short test summary info ===========================
+FAILED tests/test_stability_harness.py::test_failed_mode_runs_probe_off_then_reruns_only_the_failing_cell_once_with_the_probe_and_blames_from_it
+FAILED tests/test_stability_harness.py::test_probe_blame_takes_the_largest_share_of_the_first_epoch_whose_shares_sum_to_one
+FAILED tests/test_stability_harness.py::test_resource_errors_are_not_a_verdict_and_check_failures_and_unstable_runs_are[FileNotFoundError]
+FAILED tests/test_stability_harness.py::test_resource_errors_are_not_a_verdict_and_check_failures_and_unstable_runs_are[OSError]
+FAILED tests/test_stability_harness.py::test_resource_errors_are_not_a_verdict_and_check_failures_and_unstable_runs_are[ResourceExhaustedError]
+FAILED tests/test_stability_harness.py::test_resource_errors_are_not_a_verdict_and_check_failures_and_unstable_runs_are[BrokenProcessPool]
+FAILED tests/test_stability_harness.py::test_the_probe_mode_defaults_to_failed_on_the_reference_profile_and_off_on_tiny
+FAILED tests/test_stability_harness.py::test_the_probe_never_changes_a_cells_verdict_fields_in_the_harness_path
+FAILED tests/test_stability_harness.py::test_resource_errors_are_not_a_verdict_and_check_failures_and_unstable_runs_are[MemoryError]
+FAILED tests/test_stability_harness.py::test_a_run_directory_without_a_result_is_a_worker_crash_and_not_a_verdict
+FAILED tests/test_stability_harness.py::test_retry_non_verdict_reruns_only_those_cells_as_a_new_launch_and_the_case_uses_the_rerun
+FAILED tests/test_stability_harness.py::test_retry_refuses_other_thresholds_a_missing_launch_and_a_launch_with_nothing_to_retry
+FAILED tests/test_stability_harness.py::test_a_crashed_cell_is_not_a_verdict_is_excluded_from_the_counts_and_sets_exit_code_2
+FAILED tests/test_stability_harness.py::test_the_stability_command_exit_codes_are_0_1_2_and_it_has_the_new_options
+FAILED tests/test_stability_harness.py::test_a_verdict_failure_wins_the_exit_code_over_a_crash
+FAILED tests/test_stability_harness.py::test_dry_run_honours_seeds_and_thresholds_and_prints_n_eff_probe_mode_and_steps
+FAILED tests/test_stability_harness.py::test_the_data_csvs_are_untracked_but_their_sha256_stays_in_each_cells_meta
+17 failed, 1 passed in 17.07s

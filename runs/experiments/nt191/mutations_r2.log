@@ -1,0 +1,46 @@
+67ae18408886fc75019948cffdac16f9be35720e
+(mutations applied to src/neural_trade/experiments/stability.py of 5c20ce2's code, working tree, then restored)
+M6 the probe re-run's verdict replaces the first: rc 1 (killed=True)
+                                  trainer=HarnessFake({"control": "probe_fixes"}), probe="failed")
+             assert rr.passed and not rr.non_verdict and rr.rerun_of == v.run_id
+     >       assert not v.passed and v.kind == "primary"
+     E        +  where True = Verdict(case='control', run_id='20261007T123903Z-35aaf64-dirty-e1cff970-control__f-2__s0-b3681e', cell_key='control__f...', retry_of='', blame_source='probe sample, one batch', blame_reason='trunk group, 0.70 of its gradient norm, epoch 0').passed
+     2026-10-07 17:39:03.018598: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+     FAILED tests/test_stability_harness.py::test_a_passing_probe_rerun_never_turns_the_first_runs_fail_into_a_pass
+     1 failed, 94 deselected in 4.64s
+M8c not_rerun not carried on retry: rc 1 (killed=True)
+                                    case_ids=["control", "scale_x10", "horizons_5_60_240"], probe="failed", max_probe_reruns=1,
+     [scenario stab-20261007T123909Z-tiny] horizons_5_60_240__f-2__s0 failed
+     [scenario stab-20261007T123909Z-tiny] horizons_5_60_240__f-2__s0 failed in 0.0 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1696\test_a_retry_carries_the_not_r0\runs\scenarios\stab-20261007T123909Z-tiny\20261007T123910Z-35aaf64-dirty-37c873f6-horizons_5_60_240__f-2__s0-3c1864 (net Sharpe None, trades None)
+     2026-10-07 17:39:09.796582: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+     FAILED tests/test_stability_harness.py::test_a_retry_carries_the_not_rerun_cells_of_its_launch_into_verdicts_and_the_report
+     1 failed, 94 deselected in 6.36s
+M16 WinError lock back to a verdict: rc 1 (killed=True)
+     _ test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is _
+     tmp_path = WindowsPath('C:/Users/Step/AppData/Local/Temp/pytest-of-Step/pytest-1697/test_a_cell_that_failed_on_a_w0')
+         def test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is(tmp_path, bars_csv):
+     [scenario stab-20261007T123918Z-tiny] control__f-2__s0 failed
+     [scenario stab-20261007T123918Z-tiny] control__f-2__s0 failed in 0.0 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1697\test_a_cell_that_failed_on_a_w0\runs\scenarios\stab-20261007T123918Z-tiny\20261007T123918Z-35aaf64-dirty-d7892697-control__f-2__s0-f346ec (net Sharpe None, trades None)
+     [scenario stab-20261007T123918Z-tiny] scale_x10__f-2__s0 failed
+     [scenario stab-20261007T123918Z-tiny] scale_x10__f-2__s0 failed in 0.0 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1697\test_a_cell_that_failed_on_a_w0\runs\scenarios\stab-20261007T123918Z-tiny\20261007T123918Z-35aaf64-dirty-fa71b4c8-scale_x10__f-2__s0-f346ec (net Sharpe None, trades None)
+     2026-10-07 17:39:18.564258: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+     FAILED tests/test_stability_harness.py::test_a_windows_lock_permission_error_is_not_a_verdict_and_other_setup_errors_are
+     FAILED tests/test_stability_harness.py::test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is
+     2 failed, 2 passed, 91 deselected in 4.95s
+M17 every PermissionError non-verdict: rc 1 (killed=True)
+     _ test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is _
+     tmp_path = WindowsPath('C:/Users/Step/AppData/Local/Temp/pytest-of-Step/pytest-1698/test_a_cell_that_failed_on_a_w0')
+         def test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is(tmp_path, bars_csv):
+     [scenario stab-20261007T123924Z-tiny] control__f-2__s0 failed
+     [scenario stab-20261007T123924Z-tiny] control__f-2__s0 failed in 0.0 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1698\test_a_cell_that_failed_on_a_w0\runs\scenarios\stab-20261007T123924Z-tiny\20261007T123925Z-35aaf64-dirty-9493d1ba-control__f-2__s0-f0730a (net Sharpe None, trades None)
+     [scenario stab-20261007T123924Z-tiny] scale_x10__f-2__s0 failed
+     [scenario stab-20261007T123924Z-tiny] scale_x10__f-2__s0 failed in 0.0 s -> C:\Users\Step\AppData\Local\Temp\pytest-of-Step\pytest-1698\test_a_cell_that_failed_on_a_w0\runs\scenarios\stab-20261007T123924Z-tiny\20261007T123925Z-35aaf64-dirty-79a9471d-scale_x10__f-2__s0-f0730a (net Sharpe None, trades None)
+     2026-10-07 17:39:24.943163: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+     FAILED tests/test_stability_harness.py::test_a_windows_lock_permission_error_is_not_a_verdict_and_other_setup_errors_are
+     FAILED tests/test_stability_harness.py::test_a_cell_that_failed_on_a_windows_file_lock_is_not_a_verdict_and_a_plain_permission_error_is
+     2 failed, 2 passed, 91 deselected in 4.94s
+M18 csv check removed: rc 1 (killed=True)
+     2026-10-07 17:39:29.901729: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+     FAILED tests/test_stability_harness.py::test_a_missing_bars_file_is_refused_with_64_and_leaves_no_run_directory
+     1 failed, 94 deselected in 3.56s
+restored: True

@@ -30,6 +30,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from neural_trade.utils.atomic import replace_with_retry
+
 ENGINE_SUBTREE = "scenarios"
 INDEX_NAME = "index.sqlite"
 INDEX_SCHEMA_VERSION = 1
@@ -44,7 +46,8 @@ RUN_COLUMNS: Tuple[Tuple[str, str], ...] = (
     ("status", "TEXT NOT NULL"), ("commit_sha", "TEXT"), ("config_hash", "TEXT"), ("settings_hash", "TEXT"),
     ("spec_hash", "TEXT"), ("dataset_sha256", "TEXT"), ("dataset_path", "TEXT"), ("dataset_first", "TEXT"),
     ("dataset_last", "TEXT"), ("dataset_n_bars", "INTEGER"), ("bar_minutes", "REAL"), ("lookback", "INTEGER"),
-    ("horizon_steps", "TEXT"), ("strategy", "TEXT"), ("created_utc", "TEXT"), ("finished_utc", "TEXT"),
+    ("horizon_steps", "TEXT"), ("symbol", "TEXT"), ("window_minutes", "REAL"), ("horizon_minutes", "TEXT"),
+    ("strategy", "TEXT"), ("created_utc", "TEXT"), ("finished_utc", "TEXT"),
     ("wall_s", "REAL"), ("sec_per_step", "REAL"), ("error", "TEXT"),
     ("sharpe_net", "REAL"), ("total_return", "REAL"), ("max_drawdown", "REAL"), ("n_trades", "INTEGER"),
     ("buy_and_hold_return", "REAL"), ("random_percentile_return", "REAL"),
@@ -85,6 +88,25 @@ def _number(v: Any) -> Optional[float]:
     return None
 
 
+STABILITY_VERDICT_FILE = "stability_verdict.json"
+
+
+def _stability_scores(run_dir: Path) -> Dict[str, Optional[float]]:
+    """NT-038: a stability-harness run directory holds ``stability_verdict.json`` (written after the run, by
+    experiments.stability); its verdict and each check's value are indexed as ``stability/passed`` (1 or 0)
+    and ``stability/<check>`` so the harness's verdicts live in the run store and its index."""
+    try:
+        doc = _read_json(run_dir / STABILITY_VERDICT_FILE)
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(doc, dict):
+        return {}
+    out: Dict[str, Optional[float]] = {"stability/passed": 1.0 if doc.get("passed") else 0.0}
+    for c in doc.get("checks") or []:
+        out[f"stability/{c.get('name')}"] = _number(c.get("value"))
+    return out
+
+
 def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]:
     """(runs row, scores) of one engine run directory, from its files only."""
     run_dir, root = Path(run_dir), Path(root)
@@ -94,6 +116,7 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
     ds = meta.get("dataset") or {}
     setup = meta.get("setup") or {}
     scores = {str(k): _number(v) for k, v in ((result or {}).get("scores") or {}).items()}
+    scores.update(_stability_scores(run_dir))
     try:
         rel = run_dir.resolve().relative_to(root.resolve()).as_posix()
     except ValueError:
@@ -111,6 +134,9 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
         "dataset_n_bars": ds.get("n_bars"), "bar_minutes": setup.get("bar_minutes"),
         "lookback": setup.get("LOOKBACK"),
         "horizon_steps": json.dumps(setup.get("HORIZON_STEPS")) if setup.get("HORIZON_STEPS") is not None else None,
+        "symbol": setup.get("symbol"), "window_minutes": _number(setup.get("window_minutes")),
+        "horizon_minutes": (json.dumps(setup.get("horizon_minutes"))
+                            if setup.get("horizon_minutes") is not None else None),
         "strategy": (eng.get("strategy") or {}).get("name"), "created_utc": meta.get("created_utc"),
         "finished_utc": (result or {}).get("finished_utc"), "wall_s": _number((result or {}).get("wall_s")),
         "sec_per_step": _number((result or {}).get("sec_per_step")),
@@ -121,6 +147,10 @@ def read_run(run_dir, root) -> Tuple[Dict[str, Any], Dict[str, Optional[float]]]
     return row, scores
 
 
+class RunIdCollision(ValueError):
+    """The same run id for two different cells (NT-182): the index never silently replaces a row."""
+
+
 class RunIndex:
     """The sqlite index: a cache of the run directories' light files."""
 
@@ -129,7 +159,36 @@ class RunIndex:
 
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        return sqlite3.connect(str(self.path), timeout=30)
+        con = sqlite3.connect(str(self.path), timeout=30)
+        self._add_missing_columns(con)
+        return con
+
+    @staticmethod
+    def _present(con: sqlite3.Connection) -> set:
+        try:
+            return {r[1] for r in con.execute("PRAGMA table_info(runs)")}
+        except sqlite3.DatabaseError:
+            return set()
+
+    def _add_missing_columns(self, con: sqlite3.Connection) -> None:
+        """An index made before a column of RUN_COLUMNS existed gets it on every open (``ALTER TABLE ADD COLUMN``,
+        idempotent; NULL in old rows until they are re-read). A file that cannot be written is left as it is:
+        readers then select NULL for the missing columns (:meth:`_select`)."""
+        have = self._present(con)
+        if not have:
+            return
+        for c, t in RUN_COLUMNS:
+            if c not in have:
+                try:
+                    con.execute(f"ALTER TABLE runs ADD COLUMN {c} {t.replace(' PRIMARY KEY', '').replace(' NOT NULL', '')}")
+                    con.commit()
+                except sqlite3.OperationalError:
+                    pass
+
+    def _select(self, con: sqlite3.Connection) -> str:
+        """The column list of a SELECT over ``runs``: NULL for a column the file (read-only, old) lacks."""
+        have = self._present(con)
+        return ", ".join(c if c in have else f"NULL AS {c}" for c in RUN_FIELDS)
 
     def ensure_schema(self) -> "RunIndex":
         cols = ", ".join(f"{c} {t}" for c, t in RUN_COLUMNS)
@@ -144,6 +203,11 @@ class RunIndex:
 
     @staticmethod
     def _write(con: sqlite3.Connection, row: Dict[str, Any], scores: Dict[str, Optional[float]]) -> None:
+        old = con.execute("SELECT run_dir, scenario, cell_key FROM runs WHERE run_id = ?", (row["run_id"],)).fetchone()
+        if old is not None and tuple(old) != (row["run_dir"], row["scenario"], row["cell_key"]):
+            raise RunIdCollision(
+                f"run id {row['run_id']} belongs to two cells: {old[1]} / {old[2]} in {old[0]} and "
+                f"{row['scenario']} / {row['cell_key']} in {row['run_dir']}; the index keeps the first")
         con.execute(f"INSERT OR REPLACE INTO runs ({', '.join(RUN_FIELDS)}) VALUES "
                     f"({', '.join('?' for _ in RUN_FIELDS)})", [row.get(c) for c in RUN_FIELDS])
         con.execute("DELETE FROM scores WHERE run_id = ?", (row["run_id"],))
@@ -181,9 +245,8 @@ class RunIndex:
         if status is not None:
             where.append("status = ?")
             args.append(status)
-        sql = f"SELECT {', '.join(RUN_FIELDS)} FROM runs" + (f" WHERE {' AND '.join(where)}" if where else "") \
-            + " ORDER BY scenario, cell_key, run_id"
         with closing(self._connect()) as con:
+            sql = f"SELECT {self._select(con)} FROM runs" + (f" WHERE {' AND '.join(where)}" if where else "")                 + " ORDER BY scenario, cell_key, run_id"
             return [dict(zip(RUN_FIELDS, r)) for r in con.execute(sql, args)]
 
     def scores(self, run_id: str) -> Dict[str, Optional[float]]:
@@ -197,7 +260,7 @@ class RunIndex:
         if not self.path.exists():
             return {"runs": [], "scores": []}
         with closing(self._connect()) as con:
-            runs = sorted(con.execute(f"SELECT {', '.join(RUN_FIELDS)} FROM runs"), key=repr)
+            runs = sorted(con.execute(f"SELECT {self._select(con)} FROM runs"), key=repr)
             scores = sorted(con.execute("SELECT run_id, name, value FROM scores"), key=repr)
         return {"runs": runs, "scores": scores}
 
@@ -245,9 +308,10 @@ class RunStore:
         for scenario, dirs in by_scenario.items():
             fresh.replace_scenario(scenario, dirs, self.root)
         target.parent.mkdir(parents=True, exist_ok=True)
-        os.replace(tmp, target)
+        replace_with_retry(tmp, target)
         return RunIndex(target)
 
 
-__all__ = ["ENGINE_SUBTREE", "HEADLINE_SCORES", "INDEX_NAME", "RESULT_FILE", "RUN_FIELDS", "RunIndex", "RunStore",
+__all__ = ["ENGINE_SUBTREE", "HEADLINE_SCORES", "INDEX_NAME", "RESULT_FILE", "RUN_FIELDS", "RunIdCollision", "RunIndex",
+           "RunStore",
            "STATUSES", "engine_meta", "is_engine_run_dir", "read_run"]

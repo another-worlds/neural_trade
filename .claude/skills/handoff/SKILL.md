@@ -5,6 +5,9 @@ description: End a neural_trade session cleanly so the next session can continue
 
 Write the handoff. The next session starts from these files and nothing else.
 
+In the tactical session (checkout `D:/nt/nt_tactical`, D-062) do not use this skill: follow
+`docs/TACTICAL.md` "Session start and end" (the journal's Handoff section, never STATUS).
+
 1. **Owner rules:** did the owner state a rule, preference or correction in this session? Record each
    one where future sessions read it (OPERATING_MODEL "Keeping the instructions current"). Did the
    owner answer questions (a Q&A)? Write or extend the record `docs/qa/<date>-<topic>.md` (the

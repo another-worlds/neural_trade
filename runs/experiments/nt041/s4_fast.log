@@ -1,0 +1,16 @@
+c43af2d30abddb2bd9cce8c53a1afaae3aa0f2f7
+ M docs/guide/config-reference.md
+ M src/neural_trade/core/config.py
+ M src/neural_trade/data/processor.py
+tests/test_control_panel_repair.py::test_viewing_a_verdict_and_executing_the_notebook_write_nothing_into_the_store
+tests/test_control_panel_repair.py::test_concurrent_refreshes_from_several_threads_do_not_collide_and_the_sync_flag_is_per_thread
+tests/test_control_panel_repair2.py::test_a_real_zero_beta_cell_shows_n_a_for_every_constant_statistic
+  D:\nt\nt_wt_041\src\neural_trade\notebook\panel_compare.py:520: FutureWarning: DataFrame.applymap has been deprecated. Use DataFrame.map instead.
+    return df.applymap(cell).to_html(max_rows=None, classes="nt-scores")
+
+tests/test_frozen_twin.py::test_one_epoch_cpu_run_leaves_every_applied_period_at_its_configured_value
+  C:\Users\Step\miniforge3\envs\nt\lib\site-packages\tensorflow\python\data\ops\structured_function.py:264: UserWarning: Even though the `tf.config.experimental_run_functions_eagerly` option is set, this option does not apply to tf.data functions. To force eager execution of tf.data functions, please use `tf.data.experimental.enable_debug_mode()`.
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2364 passed, 5641 warnings in 661.49s (0:11:01)

@@ -1,0 +1,4 @@
+730f87ce53f112f36a14cb1f22db2bda125a290e
+   ok   hist/local_h0                                 max|diff|=0
+   by prefix (ok, fail): calib_lambda=14/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}

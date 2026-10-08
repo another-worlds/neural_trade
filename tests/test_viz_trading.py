@@ -113,7 +113,7 @@ def test_window_subtitle_gives_the_window_result_and_the_whole_block_separately(
     whole = _fig(viz_backtest).layout.title.text
     s = res.summary
     assert f"{s['n_trades']} trades · net {100 * s['total_return']:+.2f}%" in whole
-    assert f"costs ${s['costs_paid']:,.0f}" in whole and f"max DD {100 * s['max_drawdown']:.2f}%" in whole
+    assert f"costs {s['costs_paid']:,.0f} USDT" in whole and f"max DD {100 * s['max_drawdown']:.2f}%" in whole
 
 
 def test_window_pnl_restarts_at_the_window_and_drawdown_uses_the_window_peak(viz_backtest):
@@ -170,8 +170,8 @@ def test_hover_formats_are_valid_and_levels_are_preformatted(viz_backtest):
     text = _trace(fig, "close").text
     t = next(t for t in res.trades if lo <= t.entry_bar < hi)
     entry = text[t.entry_bar - lo]
-    assert f"{t.side} entry" in entry and f"stop ${t.sl:,.2f}" in entry and "take-profit" not in entry
-    assert "$0.00" not in "".join(text)
+    assert f"{t.side} entry" in entry and f"stop {t.sl:,.2f} USDT" in entry and "take-profit" not in entry
+    assert "0.00 USDT" not in "".join(text)
 
 
 def test_the_unified_hover_lists_an_event_only_on_its_own_bar(viz_backtest):
@@ -185,7 +185,7 @@ def test_the_unified_hover_lists_an_event_only_on_its_own_bar(viz_backtest):
     t = next(t for t in res.trades if lo <= t.entry_bar and t.exit_bar < hi)
     ex = text[t.exit_bar - lo]
     assert f"{t.side} exit ({t.exit_reason})" in ex and f"entered bar {t.entry_bar}" in ex
-    assert f"net {'+' if t.net_pnl > 0 else '-'}${abs(t.net_pnl):,.2f}" in ex
+    assert f"net {'+' if t.net_pnl > 0 else '-'}{abs(t.net_pnl):,.2f} USDT" in ex
     assert "decided" in text[t.entry_bar - 1 - lo]         # the decision is at the close before the fill
     events = {i for i, s in enumerate(text) if s}
     expected = {b - lo for tr in res.trades for b in (tr.entry_bar, tr.exit_bar) if lo <= b < hi}

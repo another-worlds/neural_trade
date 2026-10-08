@@ -1,0 +1,41 @@
+# NT-104 (3): pre-registered capacity A/B (D-045, B_model_indicators.md 1.1 and 7 item 2; D-046; D-048).
+# Hypothesis, metrics, thresholds and budget: runs/experiments/capacity_v1/SPEC.md.
+#
+#   control            - today's model, MODEL_NAME gru_attention (316,751 parameters at LOOKBACK 60)
+#   gru_small          - indicators -> GRU(32) -> heads (77,138 parameters)
+#   linear_indicators  - indicators -> pooled features -> linear heads (7,610 parameters)
+#
+# All arms: today's shipped defaults otherwise (LAMBDA_SOFT_ECE 0, LAMBDA_VOL 0 per D-057/D-058,
+# DIRECTION_SKIP on, DIRECTION_DEEP_ZERO_INIT off, OHLCV + 14 families, D-047).
+#
+# Layout: the newest 1,500,000 sequences of Bitcoin_BTCUSDT.csv (window starts 2022-11-22) cut into 100
+# TimeSeriesSplit folds (96 usable), VAL_FRACTION = CAL_FRACTION = 0.02. Judgement folds -96..-92:
+# OOS blocks 2023-01-13 .. 2023-03-15, entirely before every block any earlier choice scored
+# (loss_prune_v1 -39..-35: 2023-12-08 onward; micro loop and long_360d_stab: 2024-05 onward).
+# FOLD_INDEX -1 (test, untouched) is not requested.
+#
+# CSV_PATH is absolute so the scenario runs from the pinned worktree.
+schema_version: 1
+name: capacity_v1
+description: "NT-104: gru_small and linear_indicators vs today's gru_attention; 5 judgement folds 2023-01..03, seed 0."
+base_config: ../default.yaml
+overrides:
+  CSV_PATH: D:/nt/neural_trade/Bitcoin_BTCUSDT.csv
+  N_FOLDS: 100
+  MAX_SEQUENCE_COUNT: 1500000
+  VAL_FRACTION: 0.02
+  CAL_FRACTION: 0.02
+  SHUFFLE_BUFFER: 0
+  BATCH_SIZE: 1024
+  EPOCHS: 14                  # cap (budget, SPEC "GPU-time estimate"); EARLY 6 usually stops at 11-12
+variants:
+  control: {}
+  gru_small: {MODEL_NAME: gru_small}
+  linear_indicators: {MODEL_NAME: linear_indicators}
+folds: [-96, -95, -94, -93, -92]
+seeds: [0]
+strategy: {name: calibrated_quantile, params: {}}
+backtest: {}                  # default cost profile: 0 (D-044)
+run:
+  calibrate: true
+  save_artifacts: false

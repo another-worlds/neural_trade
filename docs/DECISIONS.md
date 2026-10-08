@@ -70,7 +70,16 @@ that extend or partly replace an entry.
 | D-054 | remediation/plan is not merged into master yet | owner | |
 | D-055 | File a P3 item for Predictor.predict GPU latency | owner | |
 | D-056 | The repository licence is MIT | owner | |
-| D-057 | NT-099 adopts both loss-prune variants; the default edit is a follow-up | lead | |
+| D-057 | NT-099 adopts both loss-prune variants; the default edit is a follow-up | lead | D-058 |
+| D-058 | Reconciling the 2026-10-03/04 takeover: vol is the 0.1 floor, the working copy is D:/nt | owner (plan) and lead | |
+| D-059 | The slow suite runs once per merge batch, not per item | owner | |
+| D-060 | QA by risk; test tiers; CI only on the integration branch | owner | |
+| D-061 | Models and effort: one pinned standard; lead and plans Opus 5.5 high; research by workflow | owner (the non-lead rows: lead's proposal) | |
+| D-062 | A separate tactical-experiment session: its own worktree, MVP priority on the GPU, exploratory rigour | owner | D-063 |
+| D-063 | Tactical session: GPU in parallel with the MVP, no budget, at most 2 minutes per run on ultra-short blocks | owner | |
+| D-064 | Stability thresholds are pre-registered files: v1 frozen, v2 for NT-051 on the reference profile | lead | |
+| D-065 | Engine concurrency and identity: the run id carries a scenario hash; the index refuses a duplicate id; a claim takeover goes through a sentinel; atomic writes retry | lead | |
+| D-066 | The temperature fit at its bound becomes an explicit "no direction signal" state; coding only until the GPU is free; the `timed` layout stays opt-in | owner (NT-195 reading: lead's) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -755,4 +764,69 @@ that extend or partly replace an entry.
   classifier did not let the lead write that file, so the owner applies that part (STATUS).
 - **In force:** from the first session started in `D:/nt/neural_trade` after these files are committed and the
   settings part is applied. A session started in `D:/nt` loads none of the project's `.claude/`.
+
+## D-062 A separate tactical-experiment session: its own worktree, MVP priority on the GPU, exploratory rigour (owner, 2026-10-06)
+- **Owner (verbatim):** "У тебя будет отдельная от работы по MVP сессия заточенная на тактические эксперименты с
+  нейросетью" [a session separate from the MVP work, for tactical experiments with the network], then four
+  answers ([qa/2026-10-06-tactical-session.md](qa/2026-10-06-tactical-session.md)).
+- **Decision:** as [TACTICAL.md](TACTICAL.md). Worktree `D:/nt/nt_tactical` on branch `nt-tactical`; it never
+  commits to `remediation/plan` or edits the planning docs. The MVP has priority on the GPU (a lock file, a
+  waiting flag, tactical launches of at most 30 minutes). Exploratory rigour: screen and micro layouts, one seed,
+  no SPEC, about 3 GPU-hours a day without asking, never the test fold, no default changes except through an MVP
+  backlog item and D-025. Roles as in the MVP: implementer for code, experimenter for the GPU.
+- **Context:** NT-085 stopped the micro loop on 2026-10-03 (D-050). The tactical session resumes hypothesis
+  iteration under the same goal (D-041); D-050 (no new data source) still holds.
+- **Consequence:** CLAUDE.md (start step 2, project rules), OPERATING_MODEL "Roles", RUNBOOK "GPU rules" (the
+  lock applies to the MVP session too), the `/handoff` skill (not used by the tactical session).
+
+
+## D-063 Tactical session: GPU in parallel with the MVP, no budget, at most 2 minutes per run (owner, 2026-10-06)
+- **Owner (verbatim):** "переписываю прошлое правило: используем GPU параллельно с другой сессией. Бюджет -
+  некотролируем. правило: обучение на сверхкоротких массивах. Даю 2 минуты максимум на каждый прогон" [I am
+  rewriting the previous rule: we use the GPU in parallel with the other session. Budget: uncontrolled. Rule:
+  training on ultra-short arrays; 2 minutes at most per run.] ([qa/2026-10-06-tactical-session.md](qa/2026-10-06-tactical-session.md),
+  the hill-climb round).
+- **Decision:** supersedes D-062's GPU part (MVP priority, the lock file, 30-minute launches) and its budget
+  (about 3 GPU-hours a day). The tactical session runs on the GPU in parallel with the MVP session, with no GPU
+  budget; every run trains on an ultra-short block (the screen layout) and takes at most 2 minutes wall-clock.
+  The rest of D-062 stands.
+- **Lead's reading:** the owner's other project on the GPU is still never touched (OPERATING_MODEL "Escalate to
+  the owner"). An MVP speed measurement (D-018) taken while tactical trials run is not evidence.
+- **Hill-climb set in the same round:** target direction AUC (mean of h0-h2) on 5 climb folds; the winner is
+  checked once on 5 other dev folds the loop never saw; never the test fold; levers: anything except the owner's
+  fixed decisions (D-001, D-003, D-050).
+- **Goal (owner, same round):** "Цель - попытка выйти из стратегической ловушки оптимизацией поиском тактического
+  прорыва в расчете нейрокни. Риск менеджмент - отдельный независимый бранч". The tactical session works on the
+  network's direction skill only; risk management (drawdown, sizing, stops) is a separate, independent branch of
+  work (lead's reading: not started by this entry; TACTICAL.md "Goal").
+
+## D-064 Stability thresholds are pre-registered files: v1 frozen, v2 for NT-051 on the reference profile (lead, 2026-10-07)
+- **Context:** NT-038 pre-registers the harness thresholds before its first real run (D-026). qa-deep (2026-10-06) showed the first draft (sha256 3ff83b6e...) unsound against 54 stored runs and two synthetic broken
+  runs; it was rewritten ONCE, before any harness run, from stored training runs (not harness runs), and is `configs/stability_thresholds.yaml`, sha256 0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e (v1).
+  NT-187 added `configs/stability_thresholds_v2.yaml`, sha256 34a122b28861c13622165aed81fdb1e9405eea91fe4823d0a754d070cbade2cb (committed alone, first): n_eff gates on the variance checks, a guard for a degenerate
+  constant baseline, the absolute NLL in scale-invariant units.
+- **Decision:** v1 never changes. v2 is the file for NT-051 and is used on the REFERENCE profile only: under v2 the tiny profile judges no variance check (n_eff 11/7/5), so a tiny-only result says nothing about the variance
+  head. The harness default stays v1 until a SPEC names v2 (`--thresholds v2`; the report carries the sha256 of the file used). The n_eff gates 100 and 30 are extrapolations (every stored healthy run has n_eff >= 135) and
+  are labelled so. Any further change is a new frozen file named in a SPEC before GPU time (NT-190: v3 only if the owner wants the tiny profile's variance coverage back).
+- **Consequence:** NT-051's SPEC names v2 by sha256, states the expected outcome of `fuzz_jumps` and the expected n_eff per case before any GPU time; NT-190.
+- **Evidence:** QA reports of NT-038 (FAIL, then PASS on ce35529) and NT-187 (PASS on fbebfd1), BACKLOG status lines.
+
+## D-065 Engine concurrency and identity: scenario hash in the run id, a duplicate id refused, a sentinel for claim takeover, atomic writes with retry (lead, 2026-10-07)
+- **Context:** the control panel, parallel sweeps and TA-rule scenarios put several writers and scenarios on one run store (Windows). Found by QA and CI: two scenarios with one config hash overwrote each other's index row
+  (NT-182); two racers took one stale claim (NT-183, CI red on 8bbf8b7); an open notebook's poll made the sweep's `os.replace` fail (NT-185).
+- **Decision:** (1) the cell run id is `<stamp>-<sha>-<hash8>-<cellkey>-<6 hex of sha256(scenario name)>`; stored ids are never renamed; the index raises `RunIdCollision` naming both cells when one id comes from two
+  different cells (an identical re-sync replaces). (2) A stale claim is taken over only through an exclusive sentinel `<cell>.lock.takeover`, a re-read under it and an `os.replace` (the claim path is never absent). (3) Every
+  atomic write in experiments/ and notebook/ goes through `utils/atomic.py` (20 retries, about 3 s) and the panel's readers read once, close and tolerate missing or half-written files. (4) A relative `CSV_PATH` is resolved
+  against the project root in the data layer when the cwd lacks it (identity text unchanged, so a sweep started in the CLI resumes in the panel and back without retraining).
+- **Consequence:** NT-182, NT-183, NT-185, NT-034; residues in NT-184, NT-188, NT-189 (P3).
+- **Evidence:** QA reports (Opus and qa-deep), the stress runs in them; CI runs 37504490746 (red) and 37527638543 (green).
+
+## D-066 The temperature fit at its bound becomes an explicit "no direction signal" state; coding only until the GPU is free; the `timed` layout stays opt-in (owner, 2026-10-08)
+- **Owner (verbatim):** "Влить + явное «нет сигнала» (Рекомендуется)"; "Перенести наши worktree/scratch на C:"; "пока работай по кодингу только"; "не важно убери вопрос" ([qa/2026-10-08-quiz-nt124-disk-gpu-timed.md](qa/2026-10-08-quiz-nt124-disk-gpu-timed.md)).
+- **Decision:** (1) NT-124 is merged after QA, with an explicit state: when the temperature fit has no interior minimum (a bound is reached) the run records and reports "no usable direction signal" for that horizon, never calls it
+  well-calibrated, and the strategies that need P(up) refuse or stay flat instead of trading on a degenerate P(up) (NT-174 decided). (2) The owner approved moving our worktrees and scratch to C:. Lead's reading: C: has 6.4 GB
+  free (2026-10-08) and D: 18 GB, so nothing moves while D: keeps at least 10 GB free; scratch (`D:/nt/nt_qa`, renders) moves first if D: falls below 5 GB. (3) Until the owner says otherwise the lead does coding items only:
+  no GPU job, no sweep, no GPU measurement (NT-173, NT-051, NT-050, NT-060 rerun, notebook 01 wait). (4) The `timed` layout stays opt-in and `tscv` stays the default; the question is withdrawn (lead's reading of "не важно";
+  NT-195 is dropped, and a later owner request reopens it).
+- **Consequence:** NT-124 (criterion 7 added), NT-174 (decided), NT-195 (dropped); STATUS "Waiting for the owner" loses questions 1, 2, 7 and NT-195.
 

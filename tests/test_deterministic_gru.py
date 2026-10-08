@@ -65,8 +65,9 @@ def test_on_keeps_weights_layout_and_names(name):
     bundle fit both settings (acceptance 1/3)."""
     off = _build(name)
     on = _build(name, DETERMINISTIC_GRU=True)
-    def layout(model):  # Keras auto-name counters differ between two builds: compare names without digits
-        return [(re.sub(r"\d+", "", w.name), tuple(w.shape)) for w in model.weights]
+    def layout(model):  # Keras auto-name counters differ between two builds, and the first build in a process has none
+        # ('bidirectional' against 'bidirectional_1'): compare names without the counters and their underscore
+        return [(re.sub(r"_?\d+", "", w.name), tuple(w.shape)) for w in model.weights]
 
     assert layout(off) == layout(on)
 

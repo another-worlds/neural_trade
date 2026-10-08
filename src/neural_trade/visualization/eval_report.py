@@ -11,8 +11,10 @@ import numpy as np
 
 from neural_trade.evaluation.frame import HORIZONS
 from neural_trade.metrics.direction_labels import direction_labels_np
+from neural_trade.visualization import labels as L
 
 
+@L.labelled
 def eval_report_figure(data, config, **_):
     """Reliability diagram, PIT histogram and interval coverage for a PredictionFrame."""
     import plotly.graph_objects as go

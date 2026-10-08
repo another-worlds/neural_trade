@@ -95,6 +95,10 @@ neural-trade backtest --artifacts runs/<run id>/artifacts --csv bars.csv --out b
 neural-trade scenario plan configs/scenarios/reference.yaml   # validate, list the cells (no training)
 neural-trade scenario run  configs/scenarios/reference.yaml   # runs/scenarios/<name>/, index runs/index.sqlite
 
+# sweeps (NT-030): search Config fields on the dev folds; needs `pip install -e ".[sweep]"` for optuna mode
+neural-trade sweep configs/scenarios/reference.yaml --mode quick --dry-run     # size it to <= 5 min, print the estimate
+neural-trade sweep configs/scenarios/reference.yaml --mode optuna --n-trials 30   # prints and records the GPU budget first
+
 neural-trade registry list            # every registered component
 neural-trade registry info Optimizers adamw
 neural-trade env                      # versions, CUDA build, devices, git state
@@ -189,8 +193,13 @@ carries three baselines: buy-and-hold, always-flat, and random entries at the sa
 frequency, holding time and mean position size (the strategy's percentile among 100 random
 seeds, after and before costs). A null at full size would pay more costs than a strategy that
 sizes down; the CLI, `scripts/backtest_gate.py` and the notebooks use this one null.
-`assert_no_lookahead` perturbs all data after bar *t* and checks that nothing up to *t*
-changes. The tests run it on every registered strategy.
+`assert_no_lookahead` perturbs all predictions and bars after bar *t* and checks that nothing up to *t*
+changes: the `decisions`, every `exit_signal` answer and each order's `tp`, `sl` and `max_hold`
+(recorded in a private trace, since the `decisions` dicts carry none of them), and the equity
+(for exposure strategies: the fills and every evaluated target). A one-bar peek differs only at
+its own bar, so the default probes are up to 24 bars where the strategy was asked something
+(orders, exit requests, targets) plus a grid of 4. The tests run it on every registered strategy
+and on deliberately leaky strategies (a peek in `decide`, in `exit_signal`, in the TP level).
 
 The three notebook strategies are ported as `threshold_spike`, `enhanced_multi_horizon` and
 `liberal`, with their knobs as dataclass fields (see `configs/strategies/`). The port fixed
