@@ -1,6 +1,7 @@
 # SPEC: first stability-harness run on the reference setup (NT-051)
 
-Status: amended draft 3 (2026-10-08, SPEC repair 1 after the QA FAIL of draft 2, 9e640f5); replaces draft 1 (87ab07d, QA FAIL, never ran). Pre-registered
+Status: amended draft 4 (2026-10-08, SPEC repair 2 after the QA FAIL of draft 3, 7a1d241 "SPEC repair 1"); replaces draft 2
+(9e640f5 "SPEC", QA FAIL, never ran) and draft 1 (87ab07d, QA FAIL, never ran). Pre-registered
 before any GPU time; it does not change after results exist. This is a pre-registered study of the harness (D-026), not an
 "A beats B" verdict: no variant, no paired comparison, no judgement fold; each case is judged by the harness against the
 pre-registered thresholds (the same rule for every case). It is bound by the 3-GPU-hour limit (OPERATING_MODEL "Sweeps and
@@ -11,12 +12,21 @@ pre-registered studies"); more goes to the owner. Setup of every number below: B
 
 - **Code:** `origin/remediation/plan` at `e8a1eac733ea2df8a445578f1942e70c93298536` (2026-10-08; it carries NT-191, merged as
   844c8fd: `--probe`, `--max-probe-reruns`, `--retry-non-verdict`, NOT A VERDICT, dry-run n_eff, exit codes 0/1/2/64). The
-  branch `nt-051-spec` merged that head (merge commit 5d9cd7d) and changes only this SPEC file, so `src/` and `configs/`
-  equal e8a1eac's. The run worktree is made from the SPEC commit (its sha is in the REPORT):
+  branch `nt-051-spec` merged that head (merge commits 5d9cd7d and c6995cc; the second brings only `docs/BACKLOG.md` of
+  0fd680f) and changes only this SPEC file, so `src/` and `configs/` equal e8a1eac's. The run worktree is made detached at the
+  SPEC commit (the last commit of this file, its sha is in the REPORT):
   `git worktree add --detach D:/nt/nt_exp_stability_ref_v1 <spec-commit-sha>`, `PYTHONPATH=D:/nt/nt_exp_stability_ref_v1/src`,
-  cwd the worktree (the bundled CSV path is relative). Before the first launch the experimenter records the output of
-  `git diff --stat e8a1eac <run worktree HEAD = the SPEC commit> -- src configs` (must be empty). The code must not change between the first and the last
-  launch; if NT-190, NT-192 or any `src/` change merges meanwhile, this run does not take it (a new SPEC would).
+  cwd the worktree (the bundled CSV path is relative). Its HEAD never moves during the study. Before the first launch the
+  experimenter records the output of `git diff --stat e8a1eac <run worktree HEAD = the SPEC commit> -- src configs` (must be
+  empty). The code must not change between the first and the last launch; if NT-190, NT-192 or any `src/` change merges
+  meanwhile, this run does not take it (a new SPEC would).
+- **Where the evidence goes and who commits it.** There is no run branch (draft 3's `nt-051-run` is dropped). Every output
+  of the study (the harness store, PILOT.md, the logs, the GPU-free and sampler files, the REPORT) is written to absolute paths
+  under the main checkout `D:/nt/neural_trade/runs/...`. The main checkout stays on `remediation/plan` and must not switch
+  branch during the study. The experimenter commits these light files there by explicit path (CLAUDE.md "Run directories in
+  git"; never `git add -A`, `.` or `runs`): PILOT.md before the next launch, the REPORT with the cited runs' light files
+  (`scripts/check_run_evidence.py --list-untracked`) at the end. Those commits touch only `runs/`; they do not change the run
+  worktree.
 - **Thresholds:** `configs/stability_thresholds_v2.yaml`, sha256
   `34a122b28861c13622165aed81fdb1e9405eea91fe4823d0a754d070cbade2cb` (D-064; checked 2026-10-08 on this branch). v1 (0b706aa2...)
   stays frozen and is NOT used. Every launch passes `--thresholds v2`; the sha256 printed in each harness REPORT.md and in
@@ -85,7 +95,7 @@ other horizons than stated), not accepted silently.
 The REPORT lists them as "not run, with the reason"; the follow-up is research track R6. The `slow_periods_proxy_lr5/lr1`
 cases stand in and are not evidence about 1,440 or 10,080-bar periods.
 
-What the verdict is about (first paragraph of the REPORT): the reference profile trains 360 windows for 3 epochs (6 steps,
+What the verdict is about (first paragraph of the REPORT): the reference profile trains 360 windows (1,800 for the wide-horizon case) for 3 epochs (6 steps,
 24 for the wide-horizon case, which uses N_FOLDS 3 and MAX_SEQUENCE_COUNT 9000, `stability.py` ~265) with 2 folds otherwise. It tests the harness invariants (finite losses and gradients, attribution of
 faults, variance-head sanity, coverage) on the D-047 default model, not the behaviour of a long training run.
 
@@ -109,7 +119,7 @@ range; 1.14-2.88 is the one to compare with.)
    - Why: on the tiny profile the case already scores scaled NLL 7.19 / 6.80 / 6.27 against the limit 8 and its constant
      baseline is about 6.9 (NT-190). The spikes (x4, x0.25) and the x2 level jump inflate every sigma against the test block;
      the baseline is equally inflated. On reference n_eff is 150/100/75, so the checks ARE judged. Possible outcomes: (a) PASS;
-     (b) the baseline's scaled NLL exceeds 8 on a horizon, the over-baseline checks (`nll_over_const` and `crps_over_const`, not evaluated by 9c) report "not evaluated" there and only
+     (b) the baseline's scaled NLL exceeds 8 on a horizon, the over-baseline checks (`variance_nll_over_const` and `variance_crps_over_const`, not evaluated by 9c) report "not evaluated" there and only
      the absolute scaled NLL (9d) is judged; (c) FAIL on `variance_nll` (9d, limit 8.0). My forecast, an estimate: (b) or (c)
      about as likely as (a).
    - How the two numbers are computed and where they are read: for a cell, in its `result.json` under `scores`
@@ -147,13 +157,14 @@ range; 1.14-2.88 is the one to compare with.)
 ## 5. Execution
 
 - **One GPU job at a time.** One launch per case (3 seeds inside a launch): `neural-trade stability --profile reference
-  --thresholds v2 --cases <case> --seeds 0,1,2 --probe failed --max-probe-reruns <K> --store D:/nt/neural_trade/runs`
-  (console to `D:/nt/neural_trade/runs/experiments/stability_ref_v1/logs/<case>.log`). `run_harness` refuses an existing report directory, so a
+  --thresholds v2 --cases <case> --seeds 0,1,2 --probe failed --max-probe-reruns <the section 6 value> --store D:/nt/neural_trade/runs`
+  run under `timeout <10800 - G_used>` (section 6), console to `D:/nt/neural_trade/runs/experiments/stability_ref_v1/logs/<case>.log`. `run_harness` refuses an existing report directory, so a
   launch is never reused; every launch is a new harness id.
 - **GPU-free rule, before every launch (and before the pilot):** run `nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits`
   ten times, 1 s apart. The GPU is free only if **every** sample is below **2000 MB**. Otherwise do not start: wait and re-check
-  every 60 s for about 2 hours at most, then stop and report to the lead for parking. Reason: RUNBOOK "Concurrent training" (NT-035, ~line 828: "judge by fb") says the desktop alone reads a median sm of about
-  40%, so the sm rule of RUNBOOK "GPU rules" (~line 186, median sm above 30%) is not applied; `utilization.gpu` is logged in the
+  every 60 s for about 2 hours at most, then stop and report to the lead for parking. Reason: the RUNBOOK "Determinism" bullet (~line 828, next to NT-035's
+  "Concurrent training" bullet at ~line 827: "A GPU-free check can read a median sm of about 40% from the desktop alone: judge by
+  fb (memory)") says the desktop alone reads a median sm of about 40%, so the sm rule of RUNBOOK "GPU rules" (~line 186, median sm above 30%) is not applied; `utilization.gpu` is logged in the
   samples for information only. The tactical session's `screen`
   shards (D-063, at most 2 minutes each) hold about 10 GB, and the owner's other project (Docker/WSL) is never touched; a tactical
   run on the GPU is waited out. (2026-10-08 the card showed 4,873 MiB in use, so a launch would have waited.) The check, its
@@ -161,12 +172,15 @@ range; 1.14-2.88 is the one to compare with.)
   the REPORT); each launch also writes a 1 s `nvidia-smi` sampler file `D:/nt/neural_trade/runs/experiments/stability_ref_v1/samples_<case>.csv`. The disk check of section 2 is made
   at the same time.
 - **Pilot (before anything else; item 10 of the QA review).** One reference-profile cell: `neural-trade stability --profile reference --thresholds v2 --store
-  D:/nt/neural_trade/runs --cases control --seeds 0 --probe failed --max-probe-reruns 1` (a passing run is then probe-off, as with
+  D:/nt/neural_trade/runs --cases control --seeds 0 --probe failed --max-probe-reruns 1`, run under `timeout 10800` (a passing run is then probe-off, as with
   `off`, and a failing pilot still gets its one blame re-run), its own harness id. If the pilot is NOT A VERDICT it is retried
-  (below) and `t_cell` is taken only from a completed cell. It records: wall time of the launch and of the cell (`time` and `status.json`), the cell's
+  (below; that retry is one cell and is exempt from the section 6 gate) and `t_cell` is taken only from a completed cell. It
+  records: wall time of the launch and of the cell (`time` and `status.json`), the time of a probe re-run if there was one (its
+  "done in X s" console line, section 6), the cell's
   `sec_per_step` from its `status.json`, the steps (6), the cell's directory size, the data CSV size (control writes none), the free
   VRAM check lines, and the cell's verdict. The numbers go to `D:/nt/neural_trade/runs/experiments/stability_ref_v1/PILOT.md`, committed BEFORE the
-  next launch on the branch `nt-051-run` (made from the SPEC commit by the experimenter; the SPEC itself does not change). The pilot cell IS control seed 0: its verdict counts, and the later control launch
+  next launch by the experimenter, by explicit path, on `remediation/plan` in the main checkout (section 1; the SPEC itself does
+  not change). The pilot cell IS control seed 0: its verdict counts, and the later control launch
   runs `--seeds 1,2`; the REPORT combines the two launches for the case (PASS only if all three seeds pass; it lists both ids).
   All GPU numbers in draft 1 were CPU numbers or estimates and are withdrawn (section 7).
 - **Order** (the priority order; the scope rule below stops at the budget): control (pilot = seed 0, then seeds 1,2), fuzz_jumps,
@@ -174,10 +188,11 @@ range; 1.14-2.88 is the one to compare with.)
   fuzz_small_price, horizons_5_60_240, slow_periods_proxy_lr5, slow_periods_proxy_lr1. (A control and the fault cases come
   first because they decide whether the harness itself works; fuzz_jumps because its outcome is the open question.)
 - **Not a verdict:** a cell that ends as NOT A VERDICT (resource error such as out of memory, or a Windows lock error WinError 5,
-  32, 33) is re-run once: `neural-trade stability --retry-non-verdict <harness id> --store D:/nt/neural_trade/runs --max-probe-reruns <remaining K>`
-  with the SAME thresholds file, probe mode and profile (the command refuses a different thresholds file). Without `--store` it
-  looks in the worktree's own `runs/`; without the cap it defaults to 10. A retry launch is subject to the section 6 scope rule
-  (projected = `t_cell` x its non-verdict cells). The case verdict then uses the re-run (both ids listed). A cell
+  32, 33) is re-run once: `neural-trade stability --retry-non-verdict <harness id> --store D:/nt/neural_trade/runs --max-probe-reruns <the section 6 value>`
+  (under `timeout <10800 - G_used>`) with the SAME thresholds file, probe mode and profile (the command refuses a different
+  thresholds file). Without `--store` it looks in the worktree's own `runs/`; without the cap it defaults to 10. A retry launch
+  is subject to the section 6 scope rule, with projected = `t_cell` x its non-verdict cells, weighted as in `K` (a
+  `horizons_5_60_240` cell counts 5, every other cell 1); the pilot's retry is exempt (above). The case verdict then uses the re-run (both ids listed). A cell
   still NOT A VERDICT after that is reported in a "NOT A VERDICT" list and **not counted** as pass or fail; the case is reported
   as NOT A VERDICT. The experimenter reads the verdicts from `<store>/stability/<id>/verdicts.json` (`case_status`: PASS | FAIL |
   NOT A VERDICT, and each verdict's `non_verdict`/`passed`), not from the exit code: exit 1 means some verdict failed even if
@@ -194,32 +209,45 @@ range; 1.14-2.88 is the one to compare with.)
   tracing that a GPU run also pays. Nothing is measured on the GPU for this profile. Draft 1's estimates (2.7 / 3.9 / 5.1
   hours) are withdrawn.
 - **Pilot first.** From the pilot: `t_cell` = the pilot's whole-launch wall time (launch overhead included) for one probe-off
-  reference cell on the GPU (measured, s). After each launch `t_cell = max(t_cell, launch wall time / cells in the launch)`; it never
-  decreases.
-- **Scope rule (time-based).** Let `G_used` = the GPU wall time spent so far (pilot included, launch start to end). Before each
-  case launch the experimenter computes `projected = 3 x t_cell` (the case's 3 cells; a fault case is no longer than `t_cell`,
-  so this is an upper bound; for `horizons_5_60_240`, 24 steps and 1,800 training windows against the 360 of the other cases,
-  `projected = 3 x 5 x t_cell` as an upper bound, 5 = 1,800/360; launching `--seeds 0` first is not used). A case launch starts only if
+  reference cell on the GPU (measured, s); if the pilot cell was re-run with the probe, `t_cell` = the launch wall time minus the
+  re-run's time.
+- **Timing sources and updates.** Each probe re-run's time is its "done in X s" console line: the engine runner prints
+  `[scenario <name>] <cell> <status> in X s` for every cell it runs, the probe re-run included (`runner.py` ~372; the status is
+  `done` or `failed`; the same number is `wall_s` in the re-run cell's `result.json`). After each launch:
+  `t_cell = max(t_cell, (launch wall time - its probe re-run times) / its weighted primary cells)` (weights as in `W` below), and
+  `t_rerun = max(t_rerun, every timed re-run)`. Neither ever decreases. Until a re-run has been timed, `t_rerun = 971 s`
+  (1.25 x 777: the CPU probe-on time at PROBE_EVERY 5 times the 1.25x cost of PROBE_EVERY 1 measured on the tiny profile, CPU
+  236.7 s against 189.9 s; a CPU stand-in, labelled so).
+- **Probe re-run cap `K` and reserve.** Before every launch: `W` = the weighted primary cells still to run, this launch included
+  (a `horizons_5_60_240` cell counts 5, every other cell 1; a retry counts its cells with the same weights).
+  `K = max(0, floor((9720 - G_used - t_cell x W) / t_rerun))`; the launch passes `--max-probe-reruns min(K, 1)` until a re-run
+  has been timed, then `K`; `reserve = K x t_rerun`. Re-runs already done are inside `G_used` and are not subtracted again.
+  Failed cells beyond a launch's cap are listed in the REPORT as "not re-run (cap)" with no blame. (The CLI default 10 assumes
+  777 s per re-run and is never used.)
+- **Scope rule (time-based).** Let `G_used` = the GPU wall time spent so far (pilot, retries and re-runs included, launch start
+  to end). Before each case launch the experimenter computes `projected = t_cell x` the launch's weighted cells: `3 x t_cell`
+  for a case (a fault case is no longer than `t_cell`, so this is an upper bound; control's second launch `2 x t_cell`), and for
+  `horizons_5_60_240`, 24 steps and 1,800 training windows against the 360 of the other cases, `3 x 5 x t_cell` as an upper
+  bound, 5 = 1,800/360 (launching `--seeds 0` first is not used). A case launch starts only if
   `G_used + projected + reserve <= 9720 s` (10,800 s less a 10% margin for launch overhead and contention by tactical runs,
-  D-063), where `reserve` = the probe re-run time still held for the launches to come (below).
-  If after the pilot `45 x t_cell` plus `K` re-runs fits within 10800 s, all 15 cases run. If not, cases run in the order of
-  section 5 until the next one does not fit; **the cases not reached are reported "not run (cap)"** and the MVP-3 exit
-  ("every setup passes the harness") is then NOT met; the rest is a request to the owner with the measured numbers. A case is
-  never started and stopped halfway for the budget (a launch is whole). If the total still passes 10,800 s, section 8.5 is not
-  met and the REPORT says so; no further launch starts.
-- **Cap on probe re-runs per launch, `K`** (`--max-probe-reruns`): `K = floor((10800 - S_off) / t_rerun)`, where `S_off` = the sum
-  of the probe-off times of all cells planned in this run (`t_cell` x the cells still to run, plus `G_used`) and `t_rerun` = the
-  time of one probe re-run. The CLI default 10 assumes 777 s (CPU, PROBE_EVERY 5); a re-run uses PROBE_EVERY 1, which cost
-  about 1.25x on the tiny profile (CPU: 236.7 s against 189.9 s), so until a re-run has been measured `t_rerun` is taken as
-  `1.25 x` the probe-on time and that probe-on time is unknown on the GPU: the first launch that has a failing cell uses
-  `t_rerun = 971 s` (1.25 x 777, a CPU number, labelled as a stand-in) to set `K`, and `K` is recomputed with the measured
-  re-run wall time as soon as one exists. Until one probe re-run's wall time has been measured, every launch passes
-  `--max-probe-reruns min(remaining K, 1)`; failed cells beyond it are "not re-run (cap)". The value given to each launch is the REMAINING `K` (total `K` minus the re-runs
-  already done), so the sum over launches never exceeds `K`. Failed cells beyond the cap are listed in the REPORT as "not
-  re-run (cap)" with no blame.
+  D-063). The gate and `K` use the same 9,720 s, so with the actual times equal to the estimates the gate always holds: if
+  `G_used + 57 x t_cell <= 9720 s` after the pilot (57 = 42 cells plus the 3 horizons cells x 5; the pilot cell is counted
+  again, a one-cell margin), all 15 cases run. If not, cases run in the order of section 5 until the next one does not fit;
+  **the cases not reached are reported "not run (cap)"** and the MVP-3 exit ("every setup passes the harness") is then NOT met;
+  the rest is a request to the owner with the measured numbers. A case is never started and stopped halfway for the budget by
+  choice (a launch is whole); the only exception is the timeout below.
+- **Residual breach.** The gate uses estimates, so actual times above them (contention, a slower re-run than `t_rerun`, a
+  horizons cell above 5 x `t_cell`) can still carry the total past 10,800 s (simulation of these rules: `D:/nt/nt_qa/nt051r4_budget_sim.py`, scratch, not in the repo).
+  Therefore: (a) the pilot runs under `timeout 10800` and every later launch under `timeout <10800 - G_used> s`; a launch killed
+  by the timeout is reported "not run (cap)" for its case, because the harness judges only after all of a launch's cells have run
+  (`stability.py` ~1117: `_judge(_run_spec(...))`), so a killed launch has no verdicts; its cells' directories stay (never
+  deleted, D-029) and its time counts in `G_used`; no further launch starts. (b) If the total still passes 10,800 s (the timeout
+  overshoots by the kill time), section 8.5 is not met, the REPORT says so, no further launch starts, and the lead tells the
+  owner (OPERATING_MODEL: GPU time over about 3 hours for one item goes to the owner).
 - **Expected size, an estimate until the pilot:** on CPU the 45 probe-off cells would take 45 x 58 s about 0.7 h; the GPU number
   may be lower or higher (cell time is mostly fixed cost: windows, calibration, scoring of 1500 windows, backtest, report).
-  If the pilot gives `t_cell` of about 60 s the whole set plus about 8 re-runs (floor(8,100/971)) fits; this is not claimed here.
+  If the pilot gives `t_cell` of about 60 s the whole set plus about 6 re-runs (floor((9720 - 57 x 60)/971)) fits; this is not
+  claimed here.
 
 ## 7. Verdicts and the REPORT
 
@@ -253,10 +281,11 @@ contains, in this order:
   launch a new harness id and report directory); no choice made on any result; criteria not changed after results.
 - A FAIL is a valid outcome: it is recorded, each fix becomes a new backlog item, and the item closes with the REPORT.
 - Acceptance (NT-051 criteria (1)-(4)):
-  1. This SPEC is committed alone (message "SPEC"), before any GPU time, with the code sha and the thresholds sha256 above and a
-     GPU-time basis within 3 hours or the owner's approval requested (here: pilot first, then the scope rule of section 6). The
-     SPEC's last commit before the first launch is the pre-registered text (draft 1, 87ab07d, never ran); no commit to SPEC.md
-     after the first launch's start time.
+  1. This SPEC is committed alone (each of its commits changes only this file: "SPEC", "SPEC repair 1", "SPEC repair 2", and any
+     later "SPEC repair <n>"), before any GPU time, with the code sha and the thresholds sha256 above and a GPU-time basis within
+     3 hours or the owner's approval requested (here: pilot first, then the scope rule of section 6). The SPEC's last commit
+     before the first launch is the pre-registered text; the earlier commits 87ab07d (draft 1) and 9e640f5 (draft 2) were
+     reviewed and never ran (nor did 7a1d241, draft 3). No commit to SPEC.md after the first launch's start time.
   2. For every launch `gpu_free_checks.log` has a line before it, with ten samples all below 2000 MB and the verdict "free".
   3. Every `REPORT.md` of a harness id shows the sha256 `34a122b2...ade2cb`, the cases with PASS / FAIL / NOT A VERDICT, and every
      run id; the REPORT of this item has the items 1-11 of section 7.
@@ -264,6 +293,7 @@ contains, in this order:
      configuration case.
   5. The sum of the wall times of all launches (pilot, retries and re-runs included), recorded in the REPORT, is at most
      10800 s, or the owner's approval is cited.
-  6. The run worktree's `src/` and `configs/` equal e8a1eac's: the printed commit is the run worktree's HEAD (the SPEC commit), not e8a1eac, with
-     `git diff --stat e8a1eac <it> -- src configs` empty, at the first and the last launch.
+  6. At the first and the last launch the run worktree's HEAD (printed in the REPORT) is the SPEC commit or a descendant that
+     changes only `runs/experiments/stability_ref_v1/`, and `git diff --stat e8a1eac HEAD -- src configs` is empty. (The worktree is
+     detached at the SPEC commit and is not expected to move; the evidence commits go to the main checkout, section 1.)
   7. Across all harness ids of the study, every (case, seed) has exactly one primary verdict, except NOT A VERDICT retries.
