@@ -1,0 +1,5 @@
+base sha (tree under test = this plus the uncommitted NT-044 files): 20e6f85c4b7543667d0835e2a9167bc6d4f47070
+
+..............................                                           [100%]
+30 passed in 10.33s
+All checks passed!

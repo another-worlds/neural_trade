@@ -1,0 +1,68 @@
+base sha: 20e6f85c4b7543667d0835e2a9167bc6d4f47070
+## plan
+{
+  "scenario": "reference_default",
+  "spec_hash": "e6a4c0618f65",
+  "index": "C:\\Users\\Step\\AppData\\Local\\Temp\\claude\\d--nt-neural-trade\\6b49db7b-daea-4e46-bd86-5ce6dc89523c\\scratchpad\\store\\index.sqlite",
+  "counts": {
+    "done": 0,
+    "failed": 0,
+    "pending": 9
+  },
+  "cells": [
+    {
+      "cell": "default__f-3__s0",
+      "configuration": "default",
+      "fold": -3,
+      "fold_id": 3,
+      "role": "dev",
+      "seed": 0,
+      "state": "pending",
+      "runs": []
+    },
+    {
+      "cell": "default__f-3__s1",
+      "configuration": "default",
+      "fold": -3,
+      "fold_id": 3,
+      "role": "dev",
+      "seed": 1,
+      "state": "pending",
+      "runs": []
+    },
+## sweep dry
+sweep refused, nothing was started: no measured sec_per_step for THIS setup: no finished run with the same dataset, BATCH_SIZE 256, input layout, LOOKBACK 60, HORIZON_STEPS [10, 15, 20], bar size, MAX_SEQUENCE_COUNT, model (gru_attention, ATTENTION_MODE, DETERMINISTIC_GRU, PROBE_GRADIENTS), all stored in its config.yaml, and device cpu is in the run index C:\Users\Step\AppData\Local\Temp\claude\d--nt-neural-trade\6b49db7b-daea-4e46-bd86-5ce6dc89523c\scratchpad\store\index.sqlite (0 run(s) of other setups were not used); pass --sec-per-step, or run one cell of the setup first
+## sweep optuna dry
+sweep refused, nothing was started: no measured sec_per_step for THIS setup: no finished run with the same dataset, BATCH_SIZE 256, input layout, LOOKBACK 60, HORIZON_STEPS [10, 15, 20], bar size, MAX_SEQUENCE_COUNT, model (gru_attention, ATTENTION_MODE, DETERMINISTIC_GRU, PROBE_GRADIENTS), all stored in its config.yaml, and device cpu is in the run index C:\Users\Step\AppData\Local\Temp\claude\d--nt-neural-trade\6b49db7b-daea-4e46-bd86-5ce6dc89523c\scratchpad\store\index.sqlite (0 run(s) of other setups were not used); pass --sec-per-step, or run one cell of the setup first
+## leaderboard
+# Leaderboard: `(empty)`
+
+One row per configuration. **Ranking column: dev-fold net Sharpe after costs** (mean over the dev folds of each fold's seed mean, D-020, D-046). Guard-rails beside it can disqualify a row from the winner (VISION "The yardstick"). The **test-fold columns are test, not used for ranking** (D-020): shown for every row, never used to rank or choose.
+
+Cost profile: no rows.
+
+Guard-rails: max drawdown not checked; trades >= 1 on the mean and on every dev fold; beat buy-and-hold; random-null percentile >= 50 [thresholds: reference.yaml: defaults]; a scored cell on every dev fold of the scenario; the board's cost profile.
+
+| rank | configuration | status | ranking: dev net Sharpe (spread, counts) | cost profile of the stored net Sharpe | dev net return | dev max drawdown | dev trades | dev buy & hold | dev random-null percentile | guard-rails | test net Sharpe (test, not used for ranking) | test net return (test, not used for ranking) | test max drawdown (test, not used for ranking) | test trades (test, not used for ranking) | dataset fingerprint (sha256, first 12) | dataset bars (count, first .. last) | bar (min) | instrument | window (min) | horizons (bars) | horizons (min) | strategy |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+## stab
+{
+  "profile": "tiny",
+  "probe": "off",
+  "thresholds": "stability_thresholds.yaml",
+  "thresholds_sha256": "0b706aa2c9415a2e7c34ee4183b174c055b6ec965b9aaa9646a6f7abd9e7f36e",
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "n_cells": 45,
+  "cells": [
+    {
+      "case": "control",
+      "seed": 0,
+      "cell": "control__f-2__s0",
+      "fold": -2,
+      "n_eff": {
+        "h0": 11,
+        "h1": 7,
