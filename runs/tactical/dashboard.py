@@ -92,6 +92,11 @@ EXPERIMENTS = [
      "base": "ind2_textbook",
      "specs": [["ind2_textbook", "учебниковые (база)", 12], ["ind2_short", "короткие x0,5", 12], ["ind2_long", "длинные x2", 12], ["ind2_wide", "разнесённые x0,4/x1/x2,5", 12], ["ind2_same", "одинаковые в семействе", 12], ["ind2_random", "случайные 3-55", 12], ["ind2_short_frozen", "короткие, заморожены", 12], ["ind2_long_frozen", "длинные, заморожены", 12]],
      "compare": [["ind2_textbook", "ind2_short"], ["ind2_textbook", "ind2_long"], ["ind2_textbook", "ind2_wide"], ["ind2_textbook", "ind2_same"], ["ind2_textbook", "ind2_random"], ["ind2_textbook", "ind2_short_frozen"], ["ind2_textbook", "ind2_long_frozen"]], "verdict": None},
+    {"id": "hc6", "title": "Гипотезы 10-13 на новой базе", "when": "08.10", "kind": "hc",
+     "goal": "Ваше задание проверить все гипотезы. Новая база - сеть без цены на 3 горизонтах (H19). Длинный блок, 6 срезов x 2 seed'а, все 9 выходов; сравнение по направлению и уверенности и честные пороги ансамбля (подбор на 1-й половине блока, проверка на 2-й, как H20).",
+     "base": "hc5_noprice3",
+     "specs": [["hc5_noprice3", "база: без цены, 3 горизонта", 12], ["hc6_indgrad", "№10 индикаторы от направления", 12], ["hc6_nohd", "№11 без hd", 12], ["hc6_gate", "№12 ворота режима", 12], ["hc6_geom", "№13 геометрия индикаторов", 12], ["hc6_geomind", "№13+10 геометрия + индикаторы от направления", 12]],
+     "compare": [["hc5_noprice3", "hc6_indgrad"], ["hc5_noprice3", "hc6_nohd"], ["hc5_noprice3", "hc6_gate"], ["hc5_noprice3", "hc6_geom"], ["hc5_noprice3", "hc6_geomind"]], "verdict": None},
 ]
 
 

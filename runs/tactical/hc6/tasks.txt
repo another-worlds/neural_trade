@@ -1,0 +1,15 @@
+hc6_indgrad 0/3
+hc6_indgrad 1/3
+hc6_indgrad 2/3
+hc6_nohd 0/3
+hc6_nohd 1/3
+hc6_nohd 2/3
+hc6_gate 0/3
+hc6_gate 1/3
+hc6_gate 2/3
+hc6_geom 0/3
+hc6_geom 1/3
+hc6_geom 2/3
+hc6_geomind 0/3
+hc6_geomind 1/3
+hc6_geomind 2/3
