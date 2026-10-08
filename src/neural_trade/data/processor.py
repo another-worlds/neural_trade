@@ -60,6 +60,36 @@ def apply_data_end(df, config):
     return sliced.reset_index(drop=True)
 
 
+#: windows kept beyond MAX_SEQUENCE_COUNT by ``trim_tail`` (they are cut again by the cap); the exact
+#: row count needs none, so this is only a guard against an off-by-one in a future windowing change
+TAIL_TRIM_MARGIN_WINDOWS = 8
+
+
+def trim_tail(df, config):
+    """Config.DATA_TAIL_TRIM: drop the leading bars that no kept window reads.
+
+    Windows anchor at bars ``start, start + step, ...`` (``start = max(LOOKBACK, max
+    EXTENDED_TREND_PERIODS)``, last anchor below ``n - (max HORIZON_STEPS - 1)``); the cap keeps the
+    newest MAX_SEQUENCE_COUNT = M of the T windows. Dropping ``r0 = (T - M - m) * step`` leading bars
+    (m = TAIL_TRIM_MARGIN_WINDOWS) keeps the anchor grid aligned (anchors shift by exactly r0, a multiple
+    of step), leaves every kept window's inputs, targets and trend features untouched (they read bars
+    from anchor - max(LOOKBACK, max period + 1) on, and ``start`` bars precede the first retained
+    anchor) and yields M + m windows, the cap then cuts the extra m. The remaining frame has
+    ``start + (M + m - 1) * step + max(HORIZON_STEPS)`` bars. No-op when the switch is off, the cap is
+    unset or 0, or T <= M + m. Block ``anchor_bar`` values index the trimmed frame (and ``df``)."""
+    cap = getattr(config, "MAX_SEQUENCE_COUNT", None)
+    if not getattr(config, "DATA_TAIL_TRIM", False) or not cap:
+        return df
+    start = int(max(int(config.LOOKBACK), int(max(config.EXTENDED_TREND_PERIODS))))
+    step = int(max(1, getattr(config, "WINDOW_STEP", 1)))
+    end = int(len(df) - (int(max(config.HORIZON_STEPS)) - 1))
+    total = len(range(start, end, step))
+    extra = total - int(cap) - TAIL_TRIM_MARGIN_WINDOWS
+    if extra <= 0:
+        return df
+    return df.iloc[extra * step:].reset_index(drop=True)
+
+
 def _select_fold(folds, index):
     """The fold at ``index`` of make_purged_splits' list (folds with an empty train block are omitted,
     so index -1 is always the latest; an out-of-range positive index is an error)."""
@@ -135,6 +165,7 @@ class DataProcessor:
         """
         df = self.preprocess(self.load_raw(read_csv_kwargs, **loader_kwargs))
         df = apply_data_end(df, self.config)
+        df = trim_tail(df, self.config)
         logger.info(f"Dataset length after cleaning: {len(df)}")
         logger.info('%s %s %s %s', "Date range after cleaning:", df['Date'].min(), "to", df['Date'].max())
 
