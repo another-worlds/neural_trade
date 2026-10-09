@@ -1,0 +1,24 @@
+2026-10-09 15:06:50.862011: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-09 15:06:50.864135: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-09 15:06:50.864185: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2020-03-30T04 {'a_tb7': 0.5787, 'b_emb': 0.5271, 'c_both': 0.5742} {'a_tb7': 0.063, 'b_emb': 0.085, 'c_both': 0.107}
+2020-08-02T04 {'a_tb7': 0.6114, 'b_emb': 0.5652, 'c_both': 0.5971} {'a_tb7': 0.108, 'b_emb': 0.11, 'c_both': 0.126}
+2021-06-10T18 {'a_tb7': 0.5583, 'b_emb': 0.5282, 'c_both': 0.5509} {'a_tb7': 0.086, 'b_emb': 0.022, 'c_both': 0.087}
+2021-08-12T06 {'a_tb7': 0.5639, 'b_emb': 0.5176, 'c_both': 0.5509} {'a_tb7': 0.078, 'b_emb': 0.071, 'c_both': 0.087}
+2021-10-13T18 {'a_tb7': 0.553, 'b_emb': 0.5279, 'c_both': 0.5474} {'a_tb7': 0.084, 'b_emb': 0.082, 'c_both': 0.108}
+2021-12-15T06 {'a_tb7': 0.5195, 'b_emb': 0.5343, 'c_both': 0.5174} {'a_tb7': 0.058, 'b_emb': 0.064, 'c_both': 0.091}
+2022-10-23T20 {'a_tb7': 0.5321, 'b_emb': 0.5098, 'c_both': 0.5256} {'a_tb7': 0.116, 'b_emb': 0.015, 'c_both': 0.076}
+2023-02-25T20 {'a_tb7': 0.5277, 'b_emb': 0.5407, 'c_both': 0.544} {'a_tb7': 0.14, 'b_emb': 0.274, 'c_both': 0.287}
+2023-04-29T08 {'a_tb7': 0.5278, 'b_emb': 0.492, 'c_both': 0.5161} {'a_tb7': 0.197, 'b_emb': 0.308, 'c_both': 0.341}
+2023-06-30T21 {'a_tb7': 0.5473, 'b_emb': 0.5335, 'c_both': 0.5404} {'a_tb7': 0.18, 'b_emb': 0.264, 'c_both': 0.292}
+2023-09-01T09 {'a_tb7': 0.5572, 'b_emb': 0.5191, 'c_both': 0.5465} {'a_tb7': 0.243, 'b_emb': 0.255, 'c_both': 0.301}
+2024-07-09T22 {'a_tb7': 0.5243, 'b_emb': 0.5285, 'c_both': 0.528} {'a_tb7': 0.2, 'b_emb': 0.215, 'c_both': 0.26}
+2024-11-11T23 {'a_tb7': 0.5428, 'b_emb': 0.5105, 'c_both': 0.5188} {'a_tb7': 0.17, 'b_emb': 0.196, 'c_both': 0.221}
+2025-01-13T11 {'a_tb7': 0.5102, 'b_emb': 0.4951, 'c_both': 0.4984} {'a_tb7': 0.235, 'b_emb': 0.3, 'c_both': 0.323}
+
+14 slices
+a_tb7: mean3 AUC +0.5467 [+0.5313,+0.5622] | h0/h1/h2 0.5477/0.5458/0.5466 | top10 hit +0.5630 [+0.5342,+0.5918] bps +0.39 null95 +3.04 | vol Spearman +0.1398 [+0.1030,+0.1767]
+b_emb: mean3 AUC +0.5235 [+0.5127,+0.5343] | h0/h1/h2 0.5249/0.5237/0.5220 | top10 hit +0.5348 [+0.5142,+0.5554] bps -0.17 null95 +2.88 | vol Spearman +0.1616 [+0.0994,+0.2237]
+c_both: mean3 AUC +0.5397 [+0.5250,+0.5544] | h0/h1/h2 0.5426/0.5400/0.5365 | top10 hit +0.5635 [+0.5316,+0.5954] bps +0.66 null95 +2.84 | vol Spearman +0.1933 [+0.1332,+0.2533]
+paired b_emb-a_tb7: AUC -0.0232 [-0.0357,-0.0107] vol +0.0217 [-0.0145,+0.0580] top10 bps -0.5588 [-2.4774,+1.3598]
+paired c_both-a_tb7: AUC -0.0070 [-0.0124,-0.0017] vol +0.0534 [+0.0222,+0.0846] top10 bps +0.2740 [-0.7145,+1.2626]
