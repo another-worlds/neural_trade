@@ -1,0 +1,86 @@
+{
+ "hc10_g_logreg": {
+  "direction.auc": {
+   "diff": -0.0006,
+   "ci": [
+    -0.0062,
+    0.0049
+   ],
+   "slices": 6,
+   "noise_units": -0.11,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": -0.001,
+   "ci": [
+    -0.0043,
+    0.0023
+   ],
+   "slices": 6,
+   "noise_units": -0.36,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0014,
+   "ci": [
+    -0.0064,
+    0.0092
+   ],
+   "slices": 6,
+   "noise_units": 0.13,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0014,
+   "ci": [
+    -0.0149,
+    0.0177
+   ],
+   "slices": 6,
+   "noise_units": 0.25,
+   "verdict": "no difference"
+  }
+ },
+ "hc10_g_logreg_dir": {
+  "direction.auc": {
+   "diff": 0.0007,
+   "ci": [
+    -0.0061,
+    0.0075
+   ],
+   "slices": 6,
+   "noise_units": 0.12,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": -0.0002,
+   "ci": [
+    -0.0039,
+    0.0034
+   ],
+   "slices": 6,
+   "noise_units": -0.09,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0,
+   "ci": [
+    -0.0078,
+    0.0079
+   ],
+   "slices": 6,
+   "noise_units": 0.0,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0111,
+   "ci": [
+    -0.0039,
+    0.0261
+   ],
+   "slices": 6,
+   "noise_units": 1.97,
+   "verdict": "no difference"
+  }
+ }
+}
