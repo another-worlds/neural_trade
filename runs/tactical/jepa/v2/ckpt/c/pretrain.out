@@ -1,0 +1,69 @@
+variant c device gpu: 1576800 bars, 1574836 valid anchors
+2026-10-09 20:23:48.954879: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-09 20:23:51.206247: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-09 20:23:51.206429: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 2000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-09 20:23:53.998072: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2026-10-09 20:23:56.527093: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+encoder params 26720, trained params 47296
+{'step': 500, 'sec': 159, 'loss': 1.52294, 'loss_fut': 0.31738, 'loss_mask': 0.40874, 'var': 0.07588, 'cov': 0.41741, 'std_mean': 1.04925, 'std_min': 0.94398, 'eff_rank': 30.48635, 'wait_s': 29.20683}
+{'step': 1000, 'sec': 315, 'loss': 1.09996, 'loss_fut': 0.46747, 'loss_mask': 0.407, 'var': 0.00446, 'cov': 0.20318, 'std_mean': 1.0488, 'std_min': 0.93817, 'eff_rank': 30.49539, 'wait_s': 37.67134}
+{'step': 1500, 'sec': 418, 'loss': 1.11031, 'loss_fut': 0.48553, 'loss_mask': 0.40341, 'var': 0.00427, 'cov': 0.2, 'std_mean': 1.05055, 'std_min': 0.95319, 'eff_rank': 30.4064, 'wait_s': 24.37166}
+{'step': 2000, 'sec': 504, 'loss': 1.10981, 'loss_fut': 0.488, 'loss_mask': 0.40257, 'var': 0.00413, 'cov': 0.19857, 'std_mean': 1.05392, 'std_min': 0.91024, 'eff_rank': 30.41305, 'wait_s': 21.12491}
+{'step': 2500, 'sec': 600, 'loss': 1.10656, 'loss_fut': 0.48715, 'loss_mask': 0.40195, 'var': 0.00403, 'cov': 0.1973, 'std_mean': 1.0509, 'std_min': 0.95199, 'eff_rank': 30.43468, 'wait_s': 24.36081}
+{'step': 3000, 'sec': 693, 'loss': 1.0971, 'loss_fut': 0.48388, 'loss_mask': 0.3981, 'var': 0.00389, 'cov': 0.19567, 'std_mean': 1.0498, 'std_min': 0.95436, 'eff_rank': 30.5226, 'wait_s': 22.49557}
+{'step': 3500, 'sec': 847, 'loss': 1.09495, 'loss_fut': 0.48276, 'loss_mask': 0.39691, 'var': 0.00393, 'cov': 0.19561, 'std_mean': 1.04509, 'std_min': 0.97331, 'eff_rank': 30.55278, 'wait_s': 34.18361}
+{'step': 4000, 'sec': 1020, 'loss': 1.09185, 'loss_fut': 0.48138, 'loss_mask': 0.39549, 'var': 0.00396, 'cov': 0.19518, 'std_mean': 1.04867, 'std_min': 0.96747, 'eff_rank': 30.5027, 'wait_s': 40.74716}
+{'step': 4500, 'sec': 1214, 'loss': 1.08738, 'loss_fut': 0.47988, 'loss_mask': 0.39426, 'var': 0.00377, 'cov': 0.19438, 'std_mean': 1.04865, 'std_min': 0.95056, 'eff_rank': 30.47935, 'wait_s': 48.80985}
+{'step': 5000, 'sec': 1429, 'loss': 1.08466, 'loss_fut': 0.47974, 'loss_mask': 0.39233, 'var': 0.00373, 'cov': 0.19393, 'std_mean': 1.04573, 'std_min': 0.94654, 'eff_rank': 30.42752, 'wait_s': 58.38936}
+{'step': 5500, 'sec': 1566, 'loss': 1.08236, 'loss_fut': 0.47824, 'loss_mask': 0.39051, 'var': 0.00389, 'cov': 0.19416, 'std_mean': 1.05221, 'std_min': 0.95836, 'eff_rank': 30.49021, 'wait_s': 28.63823}
+{'step': 6000, 'sec': 1683, 'loss': 1.07823, 'loss_fut': 0.47629, 'loss_mask': 0.3898, 'var': 0.0037, 'cov': 0.19361, 'std_mean': 1.04717, 'std_min': 0.9621, 'eff_rank': 30.50044, 'wait_s': 21.66878}
+{'step': 6500, 'sec': 1833, 'loss': 1.07665, 'loss_fut': 0.47579, 'loss_mask': 0.38881, 'var': 0.00366, 'cov': 0.19376, 'std_mean': 1.04585, 'std_min': 0.96451, 'eff_rank': 30.43191, 'wait_s': 33.39094}
+{'step': 7000, 'sec': 1968, 'loss': 1.071, 'loss_fut': 0.4743, 'loss_mask': 0.38738, 'var': 0.00361, 'cov': 0.19128, 'std_mean': 1.04738, 'std_min': 0.94507, 'eff_rank': 30.51632, 'wait_s': 24.85231}
+{'step': 7500, 'sec': 2127, 'loss': 1.06864, 'loss_fut': 0.47236, 'loss_mask': 0.38575, 'var': 0.00367, 'cov': 0.19219, 'std_mean': 1.04865, 'std_min': 0.9406, 'eff_rank': 30.55567, 'wait_s': 36.39303}
+{'step': 8000, 'sec': 2294, 'loss': 1.06475, 'loss_fut': 0.46987, 'loss_mask': 0.38518, 'var': 0.00365, 'cov': 0.19143, 'std_mean': 1.04773, 'std_min': 0.90705, 'eff_rank': 30.51751, 'wait_s': 41.61104}
+{'step': 8500, 'sec': 2416, 'loss': 1.06004, 'loss_fut': 0.4677, 'loss_mask': 0.38345, 'var': 0.00361, 'cov': 0.19086, 'std_mean': 1.04329, 'std_min': 0.9787, 'eff_rank': 30.52997, 'wait_s': 20.97293}
+{'step': 9000, 'sec': 2526, 'loss': 1.05644, 'loss_fut': 0.46664, 'loss_mask': 0.38278, 'var': 0.00358, 'cov': 0.18913, 'std_mean': 1.04502, 'std_min': 0.96904, 'eff_rank': 30.51722, 'wait_s': 18.60025}
+{'step': 9500, 'sec': 2636, 'loss': 1.0528, 'loss_fut': 0.46494, 'loss_mask': 0.38081, 'var': 0.00348, 'cov': 0.18965, 'std_mean': 1.0445, 'std_min': 0.96241, 'eff_rank': 30.54519, 'wait_s': 19.39838}
+{'step': 10000, 'sec': 2748, 'loss': 1.05362, 'loss_fut': 0.46418, 'loss_mask': 0.38104, 'var': 0.00357, 'cov': 0.19054, 'std_mean': 1.03654, 'std_min': 0.95291, 'eff_rank': 30.42118, 'wait_s': 18.7097}
+{'step': 10500, 'sec': 2872, 'loss': 1.04731, 'loss_fut': 0.46264, 'loss_mask': 0.37915, 'var': 0.00341, 'cov': 0.18847, 'std_mean': 1.04171, 'std_min': 0.91357, 'eff_rank': 30.43281, 'wait_s': 23.03194}
+{'step': 11000, 'sec': 2988, 'loss': 1.04487, 'loss_fut': 0.45996, 'loss_mask': 0.3791, 'var': 0.00349, 'cov': 0.18836, 'std_mean': 1.04429, 'std_min': 0.95832, 'eff_rank': 30.50854, 'wait_s': 19.69249}
+{'step': 11500, 'sec': 3101, 'loss': 1.04247, 'loss_fut': 0.45827, 'loss_mask': 0.37815, 'var': 0.00355, 'cov': 0.18832, 'std_mean': 1.04412, 'std_min': 0.95685, 'eff_rank': 30.4753, 'wait_s': 19.76081}
+{'step': 12000, 'sec': 3215, 'loss': 1.04026, 'loss_fut': 0.45775, 'loss_mask': 0.37773, 'var': 0.00346, 'cov': 0.18747, 'std_mean': 1.04205, 'std_min': 0.95323, 'eff_rank': 30.47447, 'wait_s': 18.53884}
+{'step': 12500, 'sec': 3332, 'loss': 1.03726, 'loss_fut': 0.45648, 'loss_mask': 0.37639, 'var': 0.00347, 'cov': 0.18704, 'std_mean': 1.04508, 'std_min': 0.96829, 'eff_rank': 30.46292, 'wait_s': 18.59664}
+{'step': 13000, 'sec': 3448, 'loss': 1.03472, 'loss_fut': 0.45459, 'loss_mask': 0.37609, 'var': 0.00337, 'cov': 0.18718, 'std_mean': 1.04229, 'std_min': 0.95901, 'eff_rank': 30.47028, 'wait_s': 17.74556}
+{'step': 13500, 'sec': 3576, 'loss': 1.03347, 'loss_fut': 0.45348, 'loss_mask': 0.37603, 'var': 0.00337, 'cov': 0.1871, 'std_mean': 1.04307, 'std_min': 0.93815, 'eff_rank': 30.48252, 'wait_s': 22.65512}
+{'step': 14000, 'sec': 3697, 'loss': 1.03199, 'loss_fut': 0.45296, 'loss_mask': 0.37527, 'var': 0.00339, 'cov': 0.1868, 'std_mean': 1.04819, 'std_min': 0.95328, 'eff_rank': 30.4534, 'wait_s': 20.03102}
+{'step': 14500, 'sec': 3815, 'loss': 1.02763, 'loss_fut': 0.45109, 'loss_mask': 0.37427, 'var': 0.0034, 'cov': 0.18528, 'std_mean': 1.0408, 'std_min': 0.98052, 'eff_rank': 30.55484, 'wait_s': 19.35821}
+{'step': 15000, 'sec': 3932, 'loss': 1.02492, 'loss_fut': 0.45057, 'loss_mask': 0.37396, 'var': 0.00328, 'cov': 0.18399, 'std_mean': 1.04395, 'std_min': 0.94425, 'eff_rank': 30.48278, 'wait_s': 20.1654}
+{'step': 15500, 'sec': 4056, 'loss': 1.02595, 'loss_fut': 0.44962, 'loss_mask': 0.37461, 'var': 0.00336, 'cov': 0.18492, 'std_mean': 1.04667, 'std_min': 0.97661, 'eff_rank': 30.53531, 'wait_s': 21.24924}
+{'step': 16000, 'sec': 4177, 'loss': 1.02236, 'loss_fut': 0.44901, 'loss_mask': 0.37231, 'var': 0.00326, 'cov': 0.18474, 'std_mean': 1.04504, 'std_min': 0.95519, 'eff_rank': 30.48057, 'wait_s': 18.98142}
+{'step': 16500, 'sec': 4234, 'loss': 1.02096, 'loss_fut': 0.448, 'loss_mask': 0.372, 'var': 0.00329, 'cov': 0.18453, 'std_mean': 1.04546, 'std_min': 0.96976, 'eff_rank': 30.50978, 'wait_s': 5.41297}
+{'step': 17000, 'sec': 4295, 'loss': 1.01942, 'loss_fut': 0.44751, 'loss_mask': 0.37207, 'var': 0.00325, 'cov': 0.18361, 'std_mean': 1.04295, 'std_min': 0.9756, 'eff_rank': 30.48108, 'wait_s': 6.5504}
+{'step': 17500, 'sec': 4357, 'loss': 1.01775, 'loss_fut': 0.44581, 'loss_mask': 0.37193, 'var': 0.0033, 'cov': 0.18351, 'std_mean': 1.04518, 'std_min': 0.97149, 'eff_rank': 30.49796, 'wait_s': 6.83759}
+{'step': 18000, 'sec': 4417, 'loss': 1.01577, 'loss_fut': 0.44541, 'loss_mask': 0.37141, 'var': 0.00319, 'cov': 0.18301, 'std_mean': 1.04506, 'std_min': 0.96904, 'eff_rank': 30.44506, 'wait_s': 6.2639}
+{'step': 18500, 'sec': 4476, 'loss': 1.01426, 'loss_fut': 0.44378, 'loss_mask': 0.37109, 'var': 0.00327, 'cov': 0.18307, 'std_mean': 1.04248, 'std_min': 0.91352, 'eff_rank': 30.42982, 'wait_s': 5.63319}
+{'step': 19000, 'sec': 4533, 'loss': 1.01279, 'loss_fut': 0.44214, 'loss_mask': 0.37049, 'var': 0.00327, 'cov': 0.18379, 'std_mean': 1.04451, 'std_min': 0.96404, 'eff_rank': 30.54615, 'wait_s': 5.58289}
+{'step': 19500, 'sec': 4586, 'loss': 1.00651, 'loss_fut': 0.44073, 'loss_mask': 0.36902, 'var': 0.00314, 'cov': 0.18104, 'std_mean': 1.0391, 'std_min': 0.91153, 'eff_rank': 30.50733, 'wait_s': 3.82775}
+{'step': 20000, 'sec': 4639, 'loss': 1.00836, 'loss_fut': 0.44039, 'loss_mask': 0.3696, 'var': 0.00317, 'cov': 0.18254, 'std_mean': 1.0436, 'std_min': 0.96137, 'eff_rank': 30.50431, 'wait_s': 4.56986}
+{'step': 20500, 'sec': 4697, 'loss': 1.00541, 'loss_fut': 0.44031, 'loss_mask': 0.36859, 'var': 0.00317, 'cov': 0.18067, 'std_mean': 1.04462, 'std_min': 0.98358, 'eff_rank': 30.55484, 'wait_s': 5.33635}
+{'step': 21000, 'sec': 4753, 'loss': 1.00522, 'loss_fut': 0.43965, 'loss_mask': 0.36827, 'var': 0.0032, 'cov': 0.1813, 'std_mean': 1.04, 'std_min': 0.94259, 'eff_rank': 30.4551, 'wait_s': 4.6618}
+{'step': 21500, 'sec': 4806, 'loss': 1.00496, 'loss_fut': 0.44028, 'loss_mask': 0.36786, 'var': 0.00319, 'cov': 0.18087, 'std_mean': 1.04764, 'std_min': 0.96672, 'eff_rank': 30.49253, 'wait_s': 5.11629}
+{'step': 22000, 'sec': 4860, 'loss': 1.0031, 'loss_fut': 0.43988, 'loss_mask': 0.36681, 'var': 0.00305, 'cov': 0.18115, 'std_mean': 1.04348, 'std_min': 0.97195, 'eff_rank': 30.52829, 'wait_s': 4.6654}
+{'step': 22500, 'sec': 4917, 'loss': 1.0009, 'loss_fut': 0.43937, 'loss_mask': 0.3666, 'var': 0.00301, 'cov': 0.17988, 'std_mean': 1.04174, 'std_min': 0.95373, 'eff_rank': 30.54449, 'wait_s': 5.32332}
+{'step': 23000, 'sec': 5026, 'loss': 0.9999, 'loss_fut': 0.43901, 'loss_mask': 0.36595, 'var': 0.00308, 'cov': 0.17956, 'std_mean': 1.04654, 'std_min': 0.96939, 'eff_rank': 30.47214, 'wait_s': 19.73573}
+{'step': 23500, 'sec': 5215, 'loss': 1.00011, 'loss_fut': 0.43883, 'loss_mask': 0.36629, 'var': 0.00305, 'cov': 0.17973, 'std_mean': 1.05014, 'std_min': 0.95304, 'eff_rank': 30.47489, 'wait_s': 41.8955}
+{'step': 24000, 'sec': 5396, 'loss': 0.99912, 'loss_fut': 0.4387, 'loss_mask': 0.36554, 'var': 0.00309, 'cov': 0.17944, 'std_mean': 1.03712, 'std_min': 0.91979, 'eff_rank': 30.46871, 'wait_s': 38.16596}
+{'step': 24500, 'sec': 5573, 'loss': 0.99852, 'loss_fut': 0.43799, 'loss_mask': 0.36593, 'var': 0.00316, 'cov': 0.17879, 'std_mean': 1.0458, 'std_min': 0.95633, 'eff_rank': 30.59341, 'wait_s': 39.28575}
+{'step': 25000, 'sec': 5755, 'loss': 0.99752, 'loss_fut': 0.43769, 'loss_mask': 0.36532, 'var': 0.00299, 'cov': 0.17959, 'std_mean': 1.03943, 'std_min': 0.98893, 'eff_rank': 30.5323, 'wait_s': 41.69262}
+{'step': 25500, 'sec': 5939, 'loss': 0.99624, 'loss_fut': 0.43703, 'loss_mask': 0.36487, 'var': 0.0031, 'cov': 0.17886, 'std_mean': 1.04537, 'std_min': 0.97726, 'eff_rank': 30.49426, 'wait_s': 38.84749}
+{'step': 26000, 'sec': 6124, 'loss': 0.99751, 'loss_fut': 0.43791, 'loss_mask': 0.36495, 'var': 0.00308, 'cov': 0.17927, 'std_mean': 1.0385, 'std_min': 0.95687, 'eff_rank': 30.527, 'wait_s': 38.54172}
+{'step': 26500, 'sec': 6292, 'loss': 0.99591, 'loss_fut': 0.43766, 'loss_mask': 0.36437, 'var': 0.00308, 'cov': 0.17846, 'std_mean': 1.04101, 'std_min': 0.96845, 'eff_rank': 30.5709, 'wait_s': 34.26686}
+{'step': 27000, 'sec': 6474, 'loss': 0.99493, 'loss_fut': 0.4374, 'loss_mask': 0.36453, 'var': 0.00295, 'cov': 0.17826, 'std_mean': 1.04243, 'std_min': 0.96504, 'eff_rank': 30.49035, 'wait_s': 42.43}
+{'step': 27500, 'sec': 6656, 'loss': 0.99396, 'loss_fut': 0.43712, 'loss_mask': 0.36341, 'var': 0.00297, 'cov': 0.17858, 'std_mean': 1.04347, 'std_min': 0.98702, 'eff_rank': 30.47116, 'wait_s': 41.22646}
+{'step': 28000, 'sec': 6835, 'loss': 0.99439, 'loss_fut': 0.43757, 'loss_mask': 0.36423, 'var': 0.00297, 'cov': 0.17772, 'std_mean': 1.04524, 'std_min': 0.94602, 'eff_rank': 30.46611, 'wait_s': 40.75508}
+{'step': 28500, 'sec': 7018, 'loss': 0.99414, 'loss_fut': 0.43723, 'loss_mask': 0.36392, 'var': 0.00292, 'cov': 0.17841, 'std_mean': 1.04387, 'std_min': 0.96776, 'eff_rank': 30.54317, 'wait_s': 36.93566}
+{'step': 29000, 'sec': 7194, 'loss': 0.99349, 'loss_fut': 0.43735, 'loss_mask': 0.36297, 'var': 0.00304, 'cov': 0.17798, 'std_mean': 1.04314, 'std_min': 0.9747, 'eff_rank': 30.54117, 'wait_s': 39.38343}
+{'step': 29500, 'sec': 7381, 'loss': 0.99373, 'loss_fut': 0.43723, 'loss_mask': 0.36399, 'var': 0.00303, 'cov': 0.17735, 'std_mean': 1.0431, 'std_min': 0.96672, 'eff_rank': 30.50826, 'wait_s': 40.21336}
+{'step': 30000, 'sec': 7558, 'loss': 0.9937, 'loss_fut': 0.43717, 'loss_mask': 0.36333, 'var': 0.00299, 'cov': 0.17823, 'std_mean': 1.04566, 'std_min': 0.94314, 'eff_rank': 30.46152, 'wait_s': 37.07115}
+saved 30000 steps 7558 s
