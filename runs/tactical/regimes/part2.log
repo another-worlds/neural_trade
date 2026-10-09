@@ -1,0 +1,65 @@
+fold 0 763
+fold 1 1184
+fold 2 964
+fold 3 1204
+fold 4 1147
+fold 5 1148
+fold 6 945
+fold 7 695
+chosen trend:hi 26.73554060285715 unfiltered 20.972919397584384
+{
+ "unfiltered": {
+  "n": 2013,
+  "trades_per_day": 4.4241758241758244,
+  "hit": 0.5380029806259314,
+  "bps": 9.827171801653593,
+  "null95": 5.466955998767032,
+  "monthly_bps_ci": [
+   -11.707,
+   26.643
+  ],
+  "n_months": 15,
+  "months_pos": 10,
+  "success": false
+ },
+ "filtered": {
+  "n": 1169,
+  "trades_per_day": 2.5692307692307694,
+  "hit": 0.5414884516680923,
+  "bps": 15.789245935280377,
+  "null95": 8.211873704453245,
+  "monthly_bps_ci": [
+   -7.56,
+   33.236
+  ],
+  "n_months": 15,
+  "months_pos": 10,
+  "success": false
+ }
+}
+trend:hi 0.542 True 26.73554060285715 8
+trend:mid+hi 0.819 True 25.926348554592774 8
+weekend:weekday 0.746 True 23.492194242312088 8
+session:eu+us 0.684 True 21.53692650937871 8
+vtrend:lo+hi 0.715 True 21.34447932637692 8
+session:asia+eu 0.648 True 19.073321244001185 8
+session:eu 0.332 True 18.189242282571133 8
+vtrend:mid+hi 0.648 True 17.631252163127147 8
+vtrend:lo+mid 0.637 True 17.222492648003964 8
+session:asia+us 0.668 True 16.221403624772336 8
+vtrend:lo 0.352 True 15.801917427695026 8
+vtrend:hi 0.363 True 15.200000066924277 8
+vol:lo+mid 0.85 True 14.271451413844433 8
+vol:mid 0.322 True 13.313601360852665 8
+session:us 0.352 True 12.566270845559545 8
+trend:mid 0.277 True 11.112054066994833 8
+vtrend:mid 0.285 True 8.041319557662996 8
+session:asia 0.316 True 7.6563028566758335 8
+vol:lo 0.528 True 7.0255598788921105 8
+weekend:weekend 0.254 True 0.27910889193324184 8
+vol:hi 0.15 False None 0
+vol:lo+hi 0.678 False None 0
+vol:mid+hi 0.472 False None 0
+trend:lo 0.181 False None 0
+trend:lo+mid 0.458 False None 0
+trend:lo+hi 0.723 False None 0
