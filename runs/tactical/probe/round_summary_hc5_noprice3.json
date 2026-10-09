@@ -1,44 +1,200 @@
 {
- "hc9_e_path_shape": {
+ "hc6_geomind": {
   "direction.auc": {
-   "diff": -0.0045,
+   "diff": 0.0122,
    "ci": [
-    -0.032,
-    0.0229
+    -0.008,
+    0.0325
    ],
    "slices": 6,
-   "noise_units": -0.17,
+   "noise_units": 0.46,
    "verdict": "no difference"
   },
   "direction.log_loss": {
-   "diff": 0.0006,
+   "diff": 0.0521,
    "ci": [
-    -0.0237,
-    0.025
+    0.0158,
+    0.0883
    ],
    "slices": 6,
-   "noise_units": 0.02,
-   "verdict": "no difference"
+   "noise_units": 1.62,
+   "verdict": "better"
   },
   "variance.crpss": {
-   "diff": 0.0002,
+   "diff": -0.0008,
    "ci": [
-    -0.0048,
-    0.0052
+    -0.0039,
+    0.0023
    ],
    "slices": 6,
-   "noise_units": 0.03,
+   "noise_units": -0.15,
    "verdict": "no difference"
   },
   "variance.corr_var_err2_spearman": {
-   "diff": -0.006,
+   "diff": 0.0075,
    "ci": [
-    -0.0206,
-    0.0087
+    -0.0103,
+    0.0252
    ],
    "slices": 6,
-   "noise_units": -0.17,
+   "noise_units": 0.21,
    "verdict": "no difference"
-  }
+  },
+  "mean3_10_hit": [
+   0.5903,
+   [
+    0.4972,
+    0.6834
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   1.3693,
+   [
+    -5.1892,
+    7.9279
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.5812,
+   [
+    0.4629,
+    0.6995
+   ],
+   6
+  ]
+ },
+ "hc6_geom": {
+  "direction.auc": {
+   "diff": 0.0141,
+   "ci": [
+    -0.002,
+    0.0303
+   ],
+   "slices": 6,
+   "noise_units": 0.53,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0541,
+   "ci": [
+    0.0194,
+    0.0888
+   ],
+   "slices": 6,
+   "noise_units": 1.68,
+   "verdict": "better"
+  },
+  "variance.crpss": {
+   "diff": -0.002,
+   "ci": [
+    -0.0088,
+    0.0048
+   ],
+   "slices": 6,
+   "noise_units": -0.37,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": -0.0054,
+   "ci": [
+    -0.0192,
+    0.0084
+   ],
+   "slices": 6,
+   "noise_units": -0.15,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5931,
+   [
+    0.5017,
+    0.6845
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   1.7879,
+   [
+    -4.965,
+    8.5408
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.5823,
+   [
+    0.4579,
+    0.7067
+   ],
+   6
+  ]
+ },
+ "hc6_indgrad": {
+  "direction.auc": {
+   "diff": 0.0014,
+   "ci": [
+    -0.0095,
+    0.0122
+   ],
+   "slices": 6,
+   "noise_units": 0.05,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0056,
+   "ci": [
+    -0.0192,
+    0.0304
+   ],
+   "slices": 6,
+   "noise_units": 0.17,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": -0.001,
+   "ci": [
+    -0.0055,
+    0.0035
+   ],
+   "slices": 6,
+   "noise_units": -0.18,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": -0.0007,
+   "ci": [
+    -0.0086,
+    0.0072
+   ],
+   "slices": 6,
+   "noise_units": -0.02,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5836,
+   [
+    0.5339,
+    0.6333
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   3.7917,
+   [
+    -0.121,
+    7.7044
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.5882,
+   [
+    0.5224,
+    0.654
+   ],
+   6
+  ]
  }
 }
