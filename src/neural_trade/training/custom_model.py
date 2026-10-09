@@ -958,8 +958,8 @@ class CustomTrainModel(models.Model):
             bounds[gname] = (off, off + n)
             off += n
 
-        def _flat_grad(target):
-            gs = tape.gradient(target, all_vars, unconnected_gradients=tf.UnconnectedGradients.ZERO)
+        def _flat_grad(target, _tape=tape):
+            gs = _tape.gradient(target, all_vars, unconnected_gradients=tf.UnconnectedGradients.ZERO)
             return tf.concat([tf.reshape(g, [-1]) for g in gs], axis=0)
 
         names = list(terms)
