@@ -14,7 +14,7 @@ stored for a long span.
 
 The val block of a slice is the lab cache's (located in the series and asserted equal, windows and labels); the training span ends
 81 bars before the val block's first window (the cache's purge gap; longtrain.py uses the same), grows backwards over `span` windows
-(clamped at the data start + the 10,080-bar warm-up; the actual count is recorded).
+(clamped at the data start + a 1,440-bar warm-up; the actual count is recorded).
 
 Deviation from PLAN 10 "cached per (slice, span)": the per-bar features do not depend on the slice (they are causal), so they are
 cached ONCE for the whole file (about 0.6 GB in float16) instead of once per slice and span (24 x up to 0.2 GB); only the
@@ -31,7 +31,7 @@ WIN = 60
 HZ = (10, 15, 20)
 GAPB = 81                      # last training window starts 81 bars before the val block's first window (as longtrain.py)
 INNER, INNER_GAP = 0.15, 80    # inner early-stopping split: the last 15% of the train span, 80 windows apart
-WARM = 10080                   # bars of history a context feature needs; training windows end after it
+WARM = 1440                    # bars of history before the first training window (one day: the 1-week context features are expanding-window over the first week of the file)
 SPANS = {"11.5d": 16560, "90d": 129600, "1y": 525600, "3y": 1576800}   # windows, 1-minute stride
 CLIMB6 = ["2017-05-02T12", "2018-11-16T02", "2020-03-30T04", "2021-10-13T18", "2023-04-29T08", "2024-11-11T23"]
 CTX_SCALES = (60, 240, 1440, 10080)
