@@ -1,0 +1,68 @@
+{
+ "hc8_final_noprice3": {
+  "direction.auc": {
+   "diff": 0.0014,
+   "ci": [
+    -0.0095,
+    0.0124
+   ],
+   "slices": 6,
+   "noise_units": 0.07,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": -0.0215,
+   "ci": [
+    -0.0362,
+    -0.0068
+   ],
+   "slices": 6,
+   "noise_units": -1.14,
+   "verdict": "worse"
+  },
+  "variance.crpss": {
+   "diff": 0.021,
+   "ci": [
+    -0.0048,
+    0.0469
+   ],
+   "slices": 6,
+   "noise_units": 0.77,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": -0.0039,
+   "ci": [
+    -0.0199,
+    0.0121
+   ],
+   "slices": 6,
+   "noise_units": -0.07,
+   "verdict": "no difference"
+  },
+  "mean3_10_hit": [
+   0.5435,
+   [
+    0.5127,
+    0.5744
+   ],
+   6
+  ],
+  "mean3_10_bps": [
+   0.2675,
+   [
+    -1.8382,
+    2.3733
+   ],
+   6
+  ],
+  "mean3_5_hit": [
+   0.5602,
+   [
+    0.5026,
+    0.6179
+   ],
+   6
+  ]
+ }
+}
