@@ -27,6 +27,7 @@ import data as dm  # noqa: E402
 OUT = os.path.join(HERE, "results.jsonl")
 BS, EPOCH_ROWS, MAX_EPOCHS, PATIENCE = 4096, 200_000, 40, 5
 LR, VOL_LR, WD = 1e-3, 2e-3, 0.05
+LIN_LR = 1e-4                  # --train-lin: the unfrozen regression learns at this (lower) rate, without weight decay
 LIN_CAP, LIN_C = 300_000, 0.1
 EVAL_CAP = 80_000
 
@@ -106,22 +107,26 @@ def masked_bce(tf, logit, y, m):
     return tf.reduce_sum(tf.reduce_sum(l * m, 0) / tf.maximum(tf.reduce_sum(m, 0), 1.0))
 
 
-def train_networks(tf, mdl, sp, arch, coef, b, seed, train_lin=False, log=print):
+def train_networks(tf, mdl, sp, arch, coef, b, seed, train_lin=False, warm=0, log=print):
     """Trains the direction model (arch != linear) and the volatility tower. Returns (dir_model, vol_model, log_b, info)."""
     tf.keras.utils.set_random_seed(seed)
     dmod = mdl.build_direction(arch, dm.N_VEC); mdl.set_linear(dmod, coef, b)
     vmod = mdl.build_volatility(dm.N_VEC, sp.mu_vol); log_b = tf.Variable(np.log(np.full(3, 0.7, np.float32)), name="log_b")
     nd, nv = mdl.n_params(dmod), mdl.n_params(vmod) + 3
-    dvars = [v for v in dmod.trainable_variables if train_lin or not v.name.startswith("lin/")]
-    decay = [v for v in dvars if "kernel" in v.name and not v.name.startswith("lin/")]
+    lvars = [v for v in dmod.trainable_variables if v.name.startswith("lin/")] if train_lin else []
+    dvars = [v for v in dmod.trainable_variables if not v.name.startswith("lin/")]
+    decay = [v for v in dvars if "kernel" in v.name]
     vvars = vmod.trainable_variables + [log_b]
-    dopt, vopt = tf.keras.optimizers.Adam(LR), tf.keras.optimizers.Adam(VOL_LR)
+    dopt, vopt, lopt = tf.keras.optimizers.Adam(LR), tf.keras.optimizers.Adam(VOL_LR), tf.keras.optimizers.Adam(LIN_LR)
 
     @tf.function
     def dstep(xs, y, m):
         with tf.GradientTape() as t:
             loss = masked_bce(tf, dmod(xs if len(xs) > 1 else xs[0], training=True), y, m)
-        dopt.apply_gradients(zip(t.gradient(loss, dvars), dvars))
+        g = t.gradient(loss, dvars + lvars)
+        dopt.apply_gradients(zip(g[:len(dvars)], dvars))
+        if lvars:
+            lopt.apply_gradients(zip(g[len(dvars):], lvars))
         for v in decay:
             v.assign(v * (1.0 - LR * WD))
         return loss
@@ -160,7 +165,7 @@ def train_networks(tf, mdl, sp, arch, coef, b, seed, train_lin=False, log=print)
             s = val_dir()
             if s < best_d[0] - 1e-6:
                 best_d = (s, dmod.get_weights(), ep); bad_d = 0
-            else:
+            elif ep > warm:          # --warm N: early stopping cannot start counting before epoch N + 1
                 bad_d += 1
         if bad_v < PATIENCE:
             s = val_vol()
@@ -242,15 +247,15 @@ def make_record(args, seed, names, per, extra, params, seconds, device):
         "mon10_bps", "mon10_null95", "mon_lin10_bps", "bon10_bps", "vol_rho", "vol_rho_base", "d_vol_rho")}
     summ["ll_gap_vs_const"] = tci(np.array(per["ll_h1"]) - np.array(per["ll_const_h1"]))
     return dict(time=time.strftime("%Y-%m-%dT%H:%M:%S"), sha=git_sha(), arch=args.arch, span=args.span, seed=seed, n_slices=len(names),
-                slices=names, device=device, seconds=round(seconds, 1), params=params, train_lin=args.train_lin, summary=summ,
+                slices=names, device=device, seconds=round(seconds, 1), params=params, train_lin=args.train_lin, warm=args.warm, summary=summ,
                 per_slice={k: [round(float(x), 5) for x in v] for k, v in per.items()}, slice_info=extra)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--slices", type=int, default=6, choices=[6, 24]); ap.add_argument("--span", default="90d", choices=list(dm.SPANS))
-    ap.add_argument("--arch", default="patch", choices=["patch", "tcn", "linear"]); ap.add_argument("--seeds", type=int, default=1)
-    ap.add_argument("--tag", default=""); ap.add_argument("--cpu", action="store_true"); ap.add_argument("--train-lin", action="store_true")
+    ap.add_argument("--slices", default="6", help="6 | 24 | final"); ap.add_argument("--span", default="90d", choices=list(dm.SPANS))
+    ap.add_argument("--arch", default="patch", choices=["patch", "patchS", "tcn", "linear"]); ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--tag", default=""); ap.add_argument("--cpu", action="store_true"); ap.add_argument("--train-lin", action="store_true"); ap.add_argument("--warm", type=int, default=0)
     ap.add_argument("--out", default=OUT)
     args = ap.parse_args()
     device = setup_device(args.cpu)
@@ -266,7 +271,7 @@ def main():
         Ps, Vs = [], []
         for seed in range(args.seeds):
             t1 = time.time()
-            dmod, vmod, info = train_networks(tf, mdl, sp, args.arch, coef, b, seed, args.train_lin)
+            dmod, vmod, info = train_networks(tf, mdl, sp, args.arch, coef, b, seed, args.train_lin, args.warm)
             vol_pred = vmod(tf.constant(sp.vec(sp.va_starts)), training=False).numpy()
             P = Plin if args.arch == "linear" else sigmoid(predict(tf, dmod, sp, sp.va_starts, args.arch))
             res = score_slice(lab, sp, P, Plin, vol_pred, base_vol, rng); dt = time.time() - t1; times[seed] += dt

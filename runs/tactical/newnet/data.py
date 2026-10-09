@@ -26,6 +26,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "cache")
 CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
 LAB_CACHE = os.environ.get("LAB_CACHE", "D:/nt/nt_tactical/runs/tactical/lab/cache")
+FINAL_CACHE = os.path.join(HERE, "..", "lab", "cache_final")      # newnet2: the held-out FINAL slices' val blocks (lab/cache2.py --final)
 
 WIN = 60
 HZ = (10, 15, 20)
@@ -43,8 +44,12 @@ F16 = 6e4
 
 
 def slice_names(n):
+    """n: 6 (the climb screen), 24 (all) or 'final' (the held-out slices; their blocks live in FINAL_CACHE and Split gets it)."""
+    n = str(n)
+    if n == "final":
+        return sorted(f[:-4] for f in os.listdir(FINAL_CACHE) if f.endswith(".npz"))
     allp = sorted(f[:-4] for f in os.listdir(LAB_CACHE) if f.endswith(".npz"))
-    return [s for s in allp if s in CLIMB6] if n == 6 else allp
+    return [s for s in allp if s in CLIMB6] if n == "6" else allp
 
 
 # ---------------------------------------------------------------- the per-bar features
@@ -172,7 +177,7 @@ class Split:
     """One (slice, span): training window starts s0 .. s0+n-1 (n recorded), val windows vs .. vs+nva-1 (the lab cache's block),
     the inner early-stopping split (itr / iva are positions in the span) and the training-span standardisation."""
     def __init__(self, name, span, series, lab_cache=None):
-        lab_cache = lab_cache or LAB_CACHE
+        lab_cache = lab_cache or (FINAL_CACHE if os.path.exists(f"{FINAL_CACHE}/{name}.npz") else LAB_CACHE)
         self.name, self.span, self.series = name, span, series
         D = np.load(f"{lab_cache}/{name}.npz")
         self.deadband = float(D["deadband"]); self.rva = D["rva"]; self.nva = len(self.rva)
