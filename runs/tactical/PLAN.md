@@ -106,3 +106,27 @@ learned periods move away from their starting values.
    minimal model built bottom-up from the regression: step 1 the regression trained by our own TF code with the direction loss
    only (must reach the lab's 0.58), then capacity added one piece at a time, each kept only if its step beats the previous one.
    The old model stays the MVP default; a rebuilt model replaces it only through an MVP backlog item and a paired test (D-025).
+
+## 10. The new network: requirements (owner approved, 2026-10-09: "Одобряю твой план по тестированию новой сети. приступай к написанию")
+
+Fixed before any run. Code: runs/tactical/newnet/ (one small file per concern, no registries, no old model code).
+- **Samples vs parameters:** independent h1 samples = training bars / 15. Train on the 3 years before each val block (at least 1
+  year; record the actual span): ~105k independent samples. Parameters per model 20-30k (target <= 1/3 of the independent
+  samples). Regularisation: weight decay, dropout 0.2, early stopping on the direction BCE of an inner split (last 15% of train),
+  an ensemble of 3-5 small copies for the finalist.
+- **Features (fixed periods, no learnable indicators: H25, H26),** all scale-free, standardised over the whole train span, never
+  per window: a last-bar vector of ~50 (the lab's 43 `rich` + context beyond the window: returns over 1h/4h/1d/1w over volatility,
+  realised volatility at those scales and their ratios, position in the daily and weekly range, time of day and day of week as
+  sin/cos) and a 60 x 8 sequence (1-bar return, close-EMA5, close-EMA20, range, body, volume ratio, RSI14, Stoch14; over sd).
+- **Architecture "regression + PatchTST-lite":** the last-bar vector -> a linear logit initialised at the regression's solution;
+  the sequence -> patches of 5 bars (12 tokens, d 32) -> 2 transformer encoder layers (4 heads) -> mean pool -> MLP 32 -> a
+  zero-initialised residual added to the logit, per horizon (P(up)); a separate tower predicts |move| / volatility. No price
+  head (H14), no shared multi-task tower. Fallback: a small TCN (~12k). Physics terms off at first; each is added later only
+  if it improves its own metric and leaves direction AUC within +-0.003 (D-003 keeps them in the project: a default change goes
+  to the owner).
+- **Run times:** the lab seconds; a quick screen (6 slices, 90-day training) <= 10 min; one 3-year fit <= 5 min on the GPU; a full
+  verdict (24 slices x 1 seed, x3 for a finalist) <= 1-1.5 h with 2 processes. Features computed once and cached.
+- **Success (all on the same val blocks):** (1) beats the regression trained on the same span by >= +0.005 mean-of-3 AUC with the
+  95% CI over 24 slices above 0; (2) log loss below the constant; (3) on the held-out FINAL slices the honest top-10% tail
+  (magnitude-filtered) earns more than the random-sign null95; (4) parameters <= 1/3 of the independent samples. If (1) fails even
+  on 3 years, the regression stays the working model and the network waits.
