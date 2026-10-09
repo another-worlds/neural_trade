@@ -1,0 +1,82 @@
+2026-10-09 21:05:55.173528: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-09 21:06:07.074249: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-09 21:06:07.074503: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 3000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-09 21:06:55.277438: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+patch 3y 2017-03-01T00 seed 0: auc3 0.5204 lin 0.5204 d +0.0000 ll-const +0.1750 volrho 0.316/0.296 epochs 40 best 0 n 9697 112s
+patch 3y 2017-03-01T00 seed 1: auc3 0.5204 lin 0.5204 d +0.0000 ll-const +0.1750 volrho 0.129/0.296 epochs 11 best 0 n 9697 77s
+patch 3y 2017-03-01T00 seed 2: auc3 0.5203 lin 0.5204 d -0.0001 ll-const +0.1714 volrho 0.304/0.296 epochs 40 best 16 n 9697 44s
+patch 3y 2017-05-02T12 seed 0: auc3 0.6754 lin 0.6809 d -0.0054 ll-const -0.0381 volrho 0.225/0.151 epochs 28 best 2 n 64061 36s
+patch 3y 2017-05-02T12 seed 1: auc3 0.6763 lin 0.6809 d -0.0045 ll-const -0.0380 volrho 0.226/0.151 epochs 22 best 2 n 64061 63s
+patch 3y 2017-05-02T12 seed 2: auc3 0.6713 lin 0.6809 d -0.0096 ll-const -0.0383 volrho 0.234/0.151 epochs 27 best 3 n 64061 124s
+patch 3y 2017-07-04T00 seed 0: auc3 0.6391 lin 0.6527 d -0.0136 ll-const -0.0233 volrho 0.281/0.195 epochs 16 best 7 n 154061 373s
+patch 3y 2017-07-04T00 seed 1: auc3 0.6527 lin 0.6527 d +0.0000 ll-const -0.0326 volrho 0.283/0.195 epochs 18 best 0 n 154061 172s
+patch 3y 2017-07-04T00 seed 2: auc3 0.6406 lin 0.6527 d -0.0122 ll-const -0.0230 volrho 0.280/0.195 epochs 18 best 6 n 154061 348s
+patch 3y 2017-09-04T12 seed 0: auc3 0.5886 lin 0.5886 d -0.0000 ll-const -0.0100 volrho 0.333/0.252 epochs 16 best 0 n 244061 223s
+patch 3y 2017-09-04T12 seed 1: auc3 0.5886 lin 0.5886 d -0.0000 ll-const -0.0100 volrho 0.318/0.252 epochs 10 best 0 n 244061 161s
+patch 3y 2017-09-04T12 seed 2: auc3 0.5886 lin 0.5886 d -0.0000 ll-const -0.0100 volrho 0.322/0.252 epochs 9 best 0 n 244061 219s
+patch 3y 2018-05-12T13 seed 0: auc3 0.5587 lin 0.5530 d +0.0057 ll-const -0.0021 volrho 0.195/0.168 epochs 26 best 13 n 604121 739s
+patch 3y 2018-05-12T13 seed 1: auc3 0.5603 lin 0.5530 d +0.0072 ll-const -0.0033 volrho 0.193/0.168 epochs 13 best 8 n 604121 603s
+patch 3y 2018-05-12T13 seed 2: auc3 0.5629 lin 0.5530 d +0.0099 ll-const -0.0043 volrho 0.188/0.168 epochs 9 best 3 n 604121 355s
+patch 3y 2018-07-14T01 seed 0: auc3 0.5958 lin 0.5877 d +0.0081 ll-const -0.0119 volrho 0.170/0.090 epochs 14 best 9 n 694121 590s
+patch 3y 2018-07-14T01 seed 1: auc3 0.5949 lin 0.5877 d +0.0072 ll-const -0.0114 volrho 0.157/0.090 epochs 15 best 10 n 694121 612s
+patch 3y 2018-07-14T01 seed 2: auc3 0.5943 lin 0.5877 d +0.0067 ll-const -0.0118 volrho 0.167/0.090 epochs 19 best 14 n 694121 725s
+patch 3y 2018-11-16T02 seed 0: auc3 0.6181 lin 0.6177 d +0.0004 ll-const -0.0194 volrho 0.285/0.203 epochs 22 best 14 n 874181 533s
+patch 3y 2018-11-16T02 seed 1: auc3 0.6151 lin 0.6177 d -0.0026 ll-const -0.0181 volrho 0.289/0.203 epochs 14 best 9 n 874181 465s
+patch 3y 2018-11-16T02 seed 2: auc3 0.6116 lin 0.6177 d -0.0061 ll-const -0.0179 volrho 0.284/0.203 epochs 19 best 14 n 874181 741s
+patch 3y 2019-01-17T14 seed 0: auc3 0.6218 lin 0.6289 d -0.0071 ll-const -0.0199 volrho 0.249/0.195 epochs 16 best 4 n 964181 352s
+patch 3y 2019-01-17T14 seed 1: auc3 0.6273 lin 0.6289 d -0.0016 ll-const -0.0204 volrho 0.260/0.195 epochs 21 best 2 n 964181 250s
+patch 3y 2019-01-17T14 seed 2: auc3 0.6221 lin 0.6289 d -0.0069 ll-const -0.0198 volrho 0.253/0.195 epochs 20 best 3 n 964181 276s
+patch 3y 2019-09-24T15 seed 0: auc3 0.5553 lin 0.5469 d +0.0085 ll-const -0.0035 volrho 0.229/0.172 epochs 23 best 3 n 1324241 286s
+patch 3y 2019-09-24T15 seed 1: auc3 0.5648 lin 0.5469 d +0.0179 ll-const -0.0055 volrho 0.225/0.172 epochs 21 best 10 n 1324241 403s
+patch 3y 2019-09-24T15 seed 2: auc3 0.5645 lin 0.5469 d +0.0177 ll-const -0.0047 volrho 0.234/0.172 epochs 21 best 14 n 1324241 564s
+patch 3y 2019-11-26T03 seed 0: auc3 0.6151 lin 0.6204 d -0.0053 ll-const -0.0197 volrho 0.216/0.159 epochs 25 best 20 n 1414241 643s
+patch 3y 2019-11-26T03 seed 1: auc3 0.6179 lin 0.6204 d -0.0024 ll-const -0.0219 volrho 0.229/0.159 epochs 26 best 21 n 1414241 527s
+patch 3y 2019-11-26T03 seed 2: auc3 0.6213 lin 0.6204 d +0.0009 ll-const -0.0218 volrho 0.239/0.159 epochs 30 best 10 n 1414241 570s
+patch 3y 2020-03-30T04 seed 0: auc3 0.6130 lin 0.6118 d +0.0012 ll-const -0.0179 volrho 0.345/0.310 epochs 21 best 1 n 1576800 184s
+patch 3y 2020-03-30T04 seed 1: auc3 0.6166 lin 0.6118 d +0.0048 ll-const -0.0188 volrho 0.337/0.310 epochs 29 best 3 n 1576800 387s
+patch 3y 2020-03-30T04 seed 2: auc3 0.6206 lin 0.6118 d +0.0088 ll-const -0.0196 volrho 0.347/0.310 epochs 18 best 9 n 1576800 385s
+patch 3y 2020-08-02T04 seed 0: auc3 0.6269 lin 0.6117 d +0.0152 ll-const -0.0226 volrho 0.195/0.122 epochs 34 best 21 n 1576800 676s
+patch 3y 2020-08-02T04 seed 1: auc3 0.6239 lin 0.6117 d +0.0122 ll-const -0.0223 volrho 0.198/0.122 epochs 34 best 29 n 1576800 947s
+patch 3y 2020-08-02T04 seed 2: auc3 0.6271 lin 0.6117 d +0.0154 ll-const -0.0230 volrho 0.194/0.122 epochs 37 best 32 n 1576800 1147s
+patch 3y 2021-06-10T18 seed 0: auc3 0.5595 lin 0.5595 d -0.0000 ll-const -0.0038 volrho 0.171/0.153 epochs 15 best 0 n 1576800 290s
+patch 3y 2021-06-10T18 seed 1: auc3 0.5595 lin 0.5595 d -0.0000 ll-const -0.0038 volrho 0.182/0.153 epochs 23 best 0 n 1576800 246s
+patch 3y 2021-06-10T18 seed 2: auc3 0.5595 lin 0.5595 d -0.0000 ll-const -0.0038 volrho 0.176/0.153 epochs 19 best 0 n 1576800 207s
+patch 3y 2021-08-12T06 seed 0: auc3 0.5321 lin 0.5321 d +0.0000 ll-const +0.0068 volrho 0.234/0.244 epochs 27 best 0 n 1576800 158s
+patch 3y 2021-08-12T06 seed 1: auc3 0.5321 lin 0.5321 d +0.0000 ll-const +0.0068 volrho 0.239/0.244 epochs 12 best 0 n 1576800 122s
+patch 3y 2021-08-12T06 seed 2: auc3 0.5321 lin 0.5321 d +0.0000 ll-const +0.0068 volrho 0.236/0.244 epochs 24 best 0 n 1576800 200s
+patch 3y 2021-10-13T18 seed 0: auc3 0.5402 lin 0.5402 d +0.0000 ll-const +0.0029 volrho 0.189/0.208 epochs 12 best 0 n 1576800 179s
+patch 3y 2021-10-13T18 seed 1: auc3 0.5402 lin 0.5402 d +0.0000 ll-const +0.0029 volrho 0.175/0.208 epochs 16 best 0 n 1576800 111s
+patch 3y 2021-10-13T18 seed 2: auc3 0.5402 lin 0.5402 d +0.0000 ll-const +0.0029 volrho 0.184/0.208 epochs 20 best 0 n 1576800 135s
+patch 3y 2021-12-15T06 seed 0: auc3 0.5486 lin 0.5486 d +0.0000 ll-const -0.0024 volrho 0.223/0.237 epochs 21 best 0 n 1576800 142s
+patch 3y 2021-12-15T06 seed 1: auc3 0.5486 lin 0.5486 d +0.0000 ll-const -0.0024 volrho 0.220/0.237 epochs 20 best 0 n 1576800 147s
+patch 3y 2021-12-15T06 seed 2: auc3 0.5486 lin 0.5486 d +0.0000 ll-const -0.0024 volrho 0.220/0.237 epochs 31 best 0 n 1576800 120s
+patch 3y 2022-10-23T20 seed 0: auc3 0.5442 lin 0.5439 d +0.0003 ll-const -0.0012 volrho 0.206/0.166 epochs 25 best 10 n 1576800 266s
+patch 3y 2022-10-23T20 seed 1: auc3 0.5442 lin 0.5439 d +0.0004 ll-const -0.0013 volrho 0.237/0.166 epochs 26 best 6 n 1576800 172s
+patch 3y 2022-10-23T20 seed 2: auc3 0.5439 lin 0.5439 d +0.0001 ll-const -0.0014 volrho 0.214/0.166 epochs 14 best 3 n 1576800 108s
+patch 3y 2023-02-25T20 seed 0: auc3 0.5260 lin 0.5249 d +0.0010 ll-const +0.0021 volrho 0.341/0.366 epochs 23 best 5 n 1576800 96s
+patch 3y 2023-02-25T20 seed 1: auc3 0.5257 lin 0.5249 d +0.0008 ll-const +0.0025 volrho 0.342/0.366 epochs 18 best 13 n 1576800 153s
+patch 3y 2023-02-25T20 seed 2: auc3 0.5246 lin 0.5249 d -0.0004 ll-const +0.0028 volrho 0.346/0.366 epochs 19 best 9 n 1576800 138s
+patch 3y 2023-04-29T08 seed 0: auc3 0.5295 lin 0.5272 d +0.0024 ll-const +0.0023 volrho 0.397/0.423 epochs 14 best 9 n 1576800 118s
+patch 3y 2023-04-29T08 seed 1: auc3 0.5274 lin 0.5272 d +0.0003 ll-const +0.0026 volrho 0.406/0.423 epochs 14 best 3 n 1576800 76s
+patch 3y 2023-04-29T08 seed 2: auc3 0.5280 lin 0.5272 d +0.0009 ll-const +0.0025 volrho 0.406/0.423 epochs 16 best 6 n 1576800 88s
+patch 3y 2023-06-30T21 seed 0: auc3 0.5512 lin 0.5488 d +0.0024 ll-const -0.0045 volrho 0.346/0.327 epochs 17 best 4 n 1576800 60s
+patch 3y 2023-06-30T21 seed 1: auc3 0.5542 lin 0.5488 d +0.0055 ll-const -0.0046 volrho 0.345/0.327 epochs 13 best 8 n 1576800 79s
+patch 3y 2023-06-30T21 seed 2: auc3 0.5481 lin 0.5488 d -0.0006 ll-const -0.0034 volrho 0.345/0.327 epochs 20 best 7 n 1576800 74s
+patch 3y 2023-09-01T09 seed 0: auc3 0.5461 lin 0.5372 d +0.0089 ll-const -0.0056 volrho 0.390/0.357 epochs 33 best 12 n 1576800 110s
+patch 3y 2023-09-01T09 seed 1: auc3 0.5445 lin 0.5372 d +0.0074 ll-const -0.0045 volrho 0.394/0.357 epochs 18 best 10 n 1576800 94s
+patch 3y 2023-09-01T09 seed 2: auc3 0.5486 lin 0.5372 d +0.0115 ll-const -0.0054 volrho 0.395/0.357 epochs 22 best 12 n 1576800 106s
+patch 3y 2024-07-09T22 seed 0: auc3 0.5353 lin 0.5351 d +0.0002 ll-const -0.0013 volrho 0.385/0.348 epochs 17 best 2 n 1576800 46s
+patch 3y 2024-07-09T22 seed 1: auc3 0.5412 lin 0.5351 d +0.0061 ll-const -0.0020 volrho 0.390/0.348 epochs 24 best 7 n 1576800 64s
+patch 3y 2024-07-09T22 seed 2: auc3 0.5351 lin 0.5351 d -0.0000 ll-const -0.0014 volrho 0.384/0.348 epochs 21 best 0 n 1576800 26s
+patch 3y 2024-11-11T23 seed 0: auc3 0.5432 lin 0.5434 d -0.0002 ll-const -0.0025 volrho 0.351/0.309 epochs 35 best 1 n 1576800 34s
+patch 3y 2024-11-11T23 seed 1: auc3 0.5434 lin 0.5434 d -0.0000 ll-const -0.0022 volrho 0.350/0.309 epochs 20 best 0 n 1576800 26s
+patch 3y 2024-11-11T23 seed 2: auc3 0.5434 lin 0.5434 d -0.0000 ll-const -0.0022 volrho 0.348/0.309 epochs 23 best 0 n 1576800 28s
+patch 3y 2025-01-13T11 seed 0: auc3 0.5096 lin 0.5101 d -0.0005 ll-const +0.0026 volrho 0.399/0.392 epochs 15 best 2 n 1576800 30s
+patch 3y 2025-01-13T11 seed 1: auc3 0.5088 lin 0.5101 d -0.0013 ll-const +0.0031 volrho 0.396/0.392 epochs 10 best 1 n 1576800 26s
+patch 3y 2025-01-13T11 seed 2: auc3 0.5101 lin 0.5101 d +0.0000 ll-const +0.0030 volrho 0.402/0.392 epochs 35 best 0 n 1576800 33s
+== patch 3y seed 0: mean3 AUC 0.5706 [0.5518,0.5894]  d vs linear +0.0009 [-0.0015,+0.0034]  params {'direction': 20186, 'volatility': 2534, 'total': 22720}  6274.3 s
+== patch 3y seed 1: mean3 AUC 0.5720 [0.5528,0.5913]  d vs linear +0.0024 [+0.0002,+0.0046]  params {'direction': 20186, 'volatility': 2534, 'total': 22720}  5982.7 s
+== patch 3y seed 2: mean3 AUC 0.5712 [0.5524,0.5899]  d vs linear +0.0015 [-0.0015,+0.0045]  params {'direction': 20186, 'volatility': 2534, 'total': 22720}  6761.5 s
+== ensemble of 3: mean3 AUC 0.5723  d vs linear +0.0026 [+0.0001,+0.0052]
+total 19071 s on gpu
