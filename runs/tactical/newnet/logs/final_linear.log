@@ -1,0 +1,13 @@
+2026-10-09 21:16:47.099847: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-09 21:17:00.093205: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-09 21:17:00.093413: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 3000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-09 21:18:28.477304: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+linear 1y 2018-01-07T13 seed 0: auc3 0.5714 lin 0.5714 d +0.0000 ll-const -0.0058 volrho 0.262/0.235 epochs 11 best 0 n 424121 71s
+linear 1y 2019-05-22T15 seed 0: auc3 0.6116 lin 0.6116 d +0.0000 ll-const -0.0179 volrho 0.233/0.224 epochs 18 best 0 n 525600 57s
+linear 1y 2020-12-05T05 seed 0: auc3 0.5790 lin 0.5790 d +0.0000 ll-const -0.0072 volrho 0.236/0.191 epochs 14 best 0 n 525600 33s
+linear 1y 2022-06-20T19 seed 0: auc3 0.5313 lin 0.5313 d +0.0000 ll-const +0.0002 volrho 0.358/0.352 epochs 19 best 0 n 525600 42s
+linear 1y 2024-01-04T09 seed 0: auc3 0.5359 lin 0.5359 d +0.0000 ll-const -0.0022 volrho 0.473/0.442 epochs 26 best 0 n 525600 72s
+linear 1y 2025-05-18T11 seed 0: auc3 0.5123 lin 0.5123 d +0.0000 ll-const +0.0024 volrho 0.419/0.410 epochs 18 best 0 n 525600 59s
+== linear 1y seed 0: mean3 AUC 0.5569 [0.5183,0.5955]  d vs linear +0.0000 [+0.0000,+0.0000]  params {'direction': 183, 'volatility': 2534, 'total': 2717}  333.6 s
+total 615 s on gpu

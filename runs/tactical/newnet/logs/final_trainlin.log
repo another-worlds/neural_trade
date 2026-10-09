@@ -1,0 +1,28 @@
+2026-10-09 21:29:31.728493: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-09 21:29:40.920659: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-09 21:29:40.920817: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 3000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-09 21:30:14.258062: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+patch 1y 2018-01-07T13 seed 0: auc3 0.5783 lin 0.5714 d +0.0069 ll-const -0.0072 volrho 0.273/0.235 epochs 30 best 4 n 424121 365s
+patch 1y 2018-01-07T13 seed 1: auc3 0.5780 lin 0.5714 d +0.0066 ll-const -0.0071 volrho 0.272/0.235 epochs 15 best 4 n 424121 448s
+patch 1y 2018-01-07T13 seed 2: auc3 0.5802 lin 0.5714 d +0.0088 ll-const -0.0072 volrho 0.267/0.235 epochs 23 best 8 n 424121 584s
+patch 1y 2019-05-22T15 seed 0: auc3 0.6188 lin 0.6116 d +0.0072 ll-const -0.0203 volrho 0.236/0.224 epochs 28 best 2 n 525600 475s
+patch 1y 2019-05-22T15 seed 1: auc3 0.6184 lin 0.6116 d +0.0068 ll-const -0.0197 volrho 0.216/0.224 epochs 10 best 2 n 525600 367s
+patch 1y 2019-05-22T15 seed 2: auc3 0.6179 lin 0.6116 d +0.0063 ll-const -0.0208 volrho 0.240/0.224 epochs 20 best 2 n 525600 435s
+patch 1y 2020-12-05T05 seed 0: auc3 0.5849 lin 0.5790 d +0.0059 ll-const -0.0094 volrho 0.246/0.191 epochs 19 best 4 n 525600 470s
+patch 1y 2020-12-05T05 seed 1: auc3 0.5822 lin 0.5790 d +0.0032 ll-const -0.0087 volrho 0.237/0.191 epochs 14 best 2 n 525600 396s
+patch 1y 2020-12-05T05 seed 2: auc3 0.5817 lin 0.5790 d +0.0027 ll-const -0.0085 volrho 0.239/0.191 epochs 19 best 3 n 525600 420s
+patch 1y 2022-06-20T19 seed 0: auc3 0.5369 lin 0.5313 d +0.0056 ll-const -0.0002 volrho 0.352/0.352 epochs 18 best 8 n 525600 460s
+patch 1y 2022-06-20T19 seed 1: auc3 0.5354 lin 0.5313 d +0.0041 ll-const -0.0001 volrho 0.351/0.352 epochs 24 best 4 n 525600 269s
+patch 1y 2022-06-20T19 seed 2: auc3 0.5318 lin 0.5313 d +0.0005 ll-const +0.0009 volrho 0.364/0.352 epochs 14 best 9 n 525600 484s
+patch 1y 2024-01-04T09 seed 0: auc3 0.5378 lin 0.5359 d +0.0019 ll-const -0.0021 volrho 0.472/0.442 epochs 26 best 2 n 525600 374s
+patch 1y 2024-01-04T09 seed 1: auc3 0.5392 lin 0.5359 d +0.0033 ll-const -0.0030 volrho 0.475/0.442 epochs 15 best 2 n 525600 335s
+patch 1y 2024-01-04T09 seed 2: auc3 0.5357 lin 0.5359 d -0.0002 ll-const -0.0015 volrho 0.479/0.442 epochs 22 best 4 n 525600 374s
+patch 1y 2025-05-18T11 seed 0: auc3 0.5139 lin 0.5123 d +0.0016 ll-const +0.0026 volrho 0.420/0.410 epochs 18 best 3 n 525600 257s
+patch 1y 2025-05-18T11 seed 1: auc3 0.5123 lin 0.5123 d +0.0000 ll-const +0.0024 volrho 0.420/0.410 epochs 17 best 0 n 525600 204s
+patch 1y 2025-05-18T11 seed 2: auc3 0.5123 lin 0.5123 d +0.0000 ll-const +0.0023 volrho 0.423/0.410 epochs 18 best 1 n 525600 227s
+== patch 1y seed 0: mean3 AUC 0.5618 [0.5210,0.6026]  d vs linear +0.0049 [+0.0023,+0.0075]  params {'direction': 20186, 'volatility': 2534, 'total': 22720}  2401.3 s
+== patch 1y seed 1: mean3 AUC 0.5609 [0.5202,0.6017]  d vs linear +0.0040 [+0.0014,+0.0067]  params {'direction': 20186, 'volatility': 2534, 'total': 22720}  2018.3 s
+== patch 1y seed 2: mean3 AUC 0.5599 [0.5182,0.6016]  d vs linear +0.0030 [-0.0009,+0.0070]  params {'direction': 20186, 'volatility': 2534, 'total': 22720}  2524.6 s
+== ensemble of 3: mean3 AUC 0.5613  d vs linear +0.0044 [+0.0012,+0.0075]
+total 6966 s on gpu
