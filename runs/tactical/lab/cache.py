@@ -19,12 +19,20 @@ import make_hc4 as H
 
 OUT = "runs/tactical/lab/cache"; os.makedirs(OUT, exist_ok=True)
 slices = H.FINAL if "--final" in sys.argv else H.CLIMB
+if "--many" in sys.argv:  # 30 slices for resolution (AUDIT.md: judge on 20-40): the 6 CLIMB plus 24 more climb slices, never FINAL
+    pool = [s for s in H.climb if s not in H.FINAL and s not in H.CLIMB]
+    slices = H.CLIMB + [pool[round(i * (len(pool) - 1) / 23)] for i in range(24)]
+    from datetime import datetime as _D  # a slice spans ~87.5 days: drop any within 90 days of a FINAL slice (18 extra remain)
+    slices = [s for s in slices if s in H.CLIMB or min(abs((_D.fromisoformat(s) - _D.fromisoformat(f)).days) for f in H.FINAL) >= 90]
 for de in slices:
     p = f"{OUT}/{de[:13].replace(':', '')}.npz"
     if os.path.exists(p):
         continue
     t = time.time()
-    cfg = Config.from_yaml("configs/default.yaml").override(**dict(H.WEEK), DATA_END=de, SEED=0)
+    ov = dict(H.WEEK)
+    if de not in H.CLIMB and de not in H.FINAL:  # the excerpt covers only the 12 hill-climb slices: others need the full file
+        ov["CSV_PATH"] = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
+    cfg = Config.from_yaml("configs/default.yaml").override(**ov, DATA_END=de, SEED=0)
     cache = {}; S._load_cached(cfg, cache)
     X_seq, y_seq, lc_seq, ext, X_model = S._windowed_cached(cfg, cache)
     dp = DataProcessor(cfg); dp.prepare_datasets_from_windows(X_seq, y_seq, lc_seq, ext, X_model=X_model)
