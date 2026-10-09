@@ -93,3 +93,16 @@ Hypotheses, each with its test (criteria fixed before the runs):
   data lacks; a large build. Test: a linear probe on the frozen JEPA embedding vs our network on the same blocks. - idea
 Proof of dominance for any winner: the indicator group's gradient share from its own function's loss >= 50% (probe) and the
 learned periods move away from their starting values.
+
+## 9. New direction (owner, 2026-10-09): the regression lab and a full network rebuild
+
+**Owner (verbatim):** "Во-первых хочу большой шаг в сторону логрегиечсивного подхода. Это мгновенные результаты и скорость.
+Во-вторых сеть надо разобрать и пересобрать полностью. Она была собрана на очень старых агентах по кусочкам. ... В общем,
+я думаю, что там большой хаос. Регрессия это подтверждает".
+1. **The regression lab** (runs/tactical/lab/): the primary search tool, seconds per run on the CPU, on the network's exact blocks;
+   choices on the 6 climb slices only, a winner checked once on the FINAL slices (`cache.py --final`). Judged on mean-of-3 AUC,
+   log loss vs the constant, and the honest tail's bps against the random null (hit rate alone is not an edge, H27).
+2. **The rebuild:** first an inventory of the current network (every layer, loss, gradient path; a ranked "chaos list"), then a new
+   minimal model built bottom-up from the regression: step 1 the regression trained by our own TF code with the direction loss
+   only (must reach the lab's 0.58), then capacity added one piece at a time, each kept only if its step beats the previous one.
+   The old model stays the MVP default; a rebuilt model replaces it only through an MVP backlog item and a paired test (D-025).
