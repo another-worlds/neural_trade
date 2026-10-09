@@ -1,0 +1,325 @@
+<style>
+.nt { display: grid; gap: var(--cds-gap-lg); font-family: var(--font-anthropic-sans); }
+.nt-head h1 { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); margin: 0; text-wrap: balance; }
+.nt-take { color: var(--color-fg-muted); font-size: var(--cds-font-size-body); margin: var(--cds-gap-xs) 0 0; max-width: 70ch; }
+.nt-nav { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); }
+.nt-nav a { font-size: var(--cds-font-size-caption); color: var(--color-fg); text-decoration: none; border: 1px solid var(--color-border-line); border-radius: 999px; padding: var(--cds-pad-xs) var(--cds-pad-sm); }
+.nt-nav a:hover, .nt-nav a:focus-visible { background: var(--color-panel); }
+.nt-tiles { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+.nt-tile, .nt-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); min-width: 0; }
+.nt-tile .lab { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); letter-spacing: .02em; }
+.nt-tile .num { font-family: var(--font-anthropic-serif); font-weight: 400; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; margin-top: var(--cds-gap-xs); }
+.nt-tile .sub { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-top: var(--cds-gap-xs); }
+.nt-sec { display: grid; gap: var(--cds-gap-md); }
+.nt-sec > h2 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.nt-grid { display: grid; gap: var(--cds-gap-md); grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); }
+.nt-card h3 { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); margin: 0; }
+.nt-card .note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: var(--cds-gap-xs) 0 var(--cds-gap-md); }
+.nt-chart { position: relative; min-height: 260px; }
+.nt-chart svg text { fill: var(--color-fg-muted); font-size: 11px; font-family: var(--font-anthropic-sans); }
+.nt-chart .lbl { fill: var(--color-fg); }
+.nt-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); max-width: 18rem; z-index: 2; }
+.nt-tip .t { color: var(--cds-text-secondary); }
+.nt-legend { display: flex; flex-wrap: wrap; gap: var(--cds-gap-sm); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-top: var(--cds-gap-sm); }
+.nt-legend i { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .3rem; vertical-align: middle; }
+.nt-tablebox { max-height: 30rem; overflow: auto; }
+.nt-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-caption); font-variant-numeric: tabular-nums; }
+.nt-table th { position: sticky; top: 0; background: var(--color-panel); text-align: left; font-weight: var(--cds-font-weight-medium); padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); cursor: pointer; white-space: nowrap; }
+.nt-table td { padding: var(--cds-pad-xs) var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); vertical-align: top; }
+.nt-search { width: 100%; max-width: 22rem; font: inherit; font-size: var(--cds-font-size-caption); padding: var(--cds-pad-xs) var(--cds-pad-sm); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); background: var(--color-bg); color: var(--color-fg); margin-bottom: var(--cds-gap-sm); }
+.chip { display: inline-flex; align-items: center; gap: .3rem; border-radius: 999px; padding: 0 .5rem; border: 1px solid var(--color-border-line); white-space: nowrap; }
+.chip::before { content: ""; width: .45rem; height: .45rem; border-radius: 50%; background: var(--cds-chart-muted); }
+.chip.effect::before { background: var(--color-ok); } .chip.partial::before { background: var(--color-warn); }
+.chip.failed::before { background: var(--color-bad); } .chip.info::before { background: var(--cds-chart-reference); }
+.nt-fail { display: flex; align-items: center; justify-content: center; gap: .4rem; min-height: 260px; color: var(--color-fg-muted); font-size: var(--cds-font-size-caption); }
+.nt-fail::before { content: ""; width: .375rem; height: .375rem; border-radius: 50%; background: var(--color-bad); }
+[data-dash-source-state=empty] { color: transparent; }
+[data-dash-source-state=refreshing] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+@media (max-width: 40rem) { .nt-table .wide { display: none; } }
+</style>
+
+<div class="nt">
+  <header class="nt-head" id="top">
+    <h1>Neural Trade, тактическая сессия</h1>
+    <p class="nt-take" id="take">Направление на минутах упирается в AUC <b data-source="models" data-field="auc" data-where="step=L0" class="dash-skeleton">—</b>: простая регрессия забирает весь сигнал, сети её не обгоняют. Лучшая часовая стратегия на отложенном периоде дала <b data-source="hourly_final" data-field="bps" data-where="rank=1&amp;selection=meta" class="dash-skeleton">—</b> б.п. на сделку и не прошла заранее зафиксированный критерий.</p>
+  </header>
+
+  <nav class="nt-nav" aria-label="Разделы">
+    <a href="#sec-summary">Итоги</a><a href="#sec-direction">Направление</a><a href="#sec-hourly">Часовая стратегия</a><a href="#sec-journal">Журнал</a><a href="#sec-queue">Очередь</a>
+  </nav>
+
+  <section class="nt-sec" id="sec-summary">
+    <div class="nt-tiles">
+      <div class="nt-tile"><div class="lab">Экспериментов в журнале</div><div class="num" data-source="kpi" data-field="experiments">—</div><div class="sub">записи H5–H38</div></div>
+      <div class="nt-tile"><div class="lab">С подтверждённым эффектом</div><div class="num" data-source="kpi" data-field="effects">—</div><div class="sub">ещё <span data-source="kpi" data-field="partial">—</span> частично</div></div>
+      <div class="nt-tile"><div class="lab">AUC регрессии, 24 среза</div><div class="num" data-source="models" data-field="auc" data-where="step=L0">—</div><div class="sub">среднее 3 горизонтов; 0,5 — монетка</div></div>
+      <div class="nt-tile"><div class="lab">Часовая стратегия, отложено</div><div class="num" data-source="hourly_final" data-field="bps" data-where="rank=1&amp;selection=meta">—</div><div class="sub">б.п. на сделку; случайный уровень <span data-source="hourly_final" data-field="null95" data-where="rank=1&amp;selection=meta">—</span></div></div>
+    </div>
+    <div class="nt-card">
+      <h3 id="verdicts">Чем закончились эксперименты</h3>
+      <p class="note">Каждая запись журнала по исходу. Зелёный — эффект подтверждён, жёлтый — частичный, красный — не выдержал проверки, серый — эффекта нет.</p>
+      <div class="nt-chart" id="ch-verdicts" data-source="verdict_counts" style="min-height:120px"></div>
+    </div>
+  </section>
+
+  <section class="nt-sec" id="sec-direction">
+    <h2>Направление: потолок около 0,57</h2>
+    <div class="nt-grid">
+      <div class="nt-card">
+        <h3 id="models">Модели против регрессии</h3>
+        <p class="note">AUC направления, среднее 10/15/20 мин, 24 среза, 95% интервал по срезам. Пунктир — простая регрессия.</p>
+        <div class="nt-chart" id="ch-models" data-source="models"></div>
+      </div>
+      <div class="nt-card">
+        <h3 id="longtrain">Больше данных не помогает</h3>
+        <p class="note">AUC по объёму обучения: от 11,5 дня до 3 лет до проверочного блока (H35).</p>
+        <div class="nt-chart" id="ch-long" data-source="longtrain"></div>
+        <div class="nt-legend" id="lg-long" data-source="longtrain"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="nt-sec" id="sec-hourly">
+    <h2>Часовая стратегия: тройной барьер</h2>
+    <div class="nt-grid">
+      <div class="nt-card">
+        <h3 id="hourly-dev">94 конфигурации на dev-периоде</h3>
+        <p class="note">Доход мета-модели на сделку, 2017 — июнь 2024, 8 периодов. Точки — конфигурации, по сроку сделки; чёрточка — случайный уровень (95%).</p>
+        <div class="nt-chart" id="ch-dev" data-source="hourly_dev"></div>
+        <div class="nt-legend" id="lg-dev" data-source="hourly_dev"></div>
+      </div>
+      <div class="nt-card">
+        <h3 id="hourly-final">Одна проверка на отложенном периоде</h3>
+        <p class="note">Июль 2024 — сентябрь 2025, тройка лучших. Полоса — 95% интервал по месяцам; критерий: выше случайного уровня и интервал выше нуля.</p>
+        <div class="nt-chart" id="ch-final" data-source="hourly_final"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="nt-sec" id="sec-journal">
+    <h2>Журнал экспериментов</h2>
+    <div class="nt-card">
+      <input class="nt-search" id="q-journal" type="search" placeholder="Поиск по журналу" aria-label="Поиск по журналу">
+      <div class="nt-tablebox">
+        <table class="nt-table" id="t-journal" data-source="journal" data-row-key="id">
+          <thead><tr><th data-field="id">ID</th><th data-field="date" class="wide">Дата</th><th data-field="area">Область</th><th data-field="test">Что проверяли</th><th data-field="verdict">Итог</th><th data-field="key">Ключевое число</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="nt-sec" id="sec-queue">
+    <h2>Очередь и текущие задачи</h2>
+    <div class="nt-card">
+      <div class="nt-tablebox">
+        <table class="nt-table" id="t-tasks" data-source="tasks" data-row-key="task">
+          <thead><tr><th data-field="task">Задача</th><th data-field="who" class="wide">Кто</th><th data-field="status">Состояние</th><th data-field="since" class="wide">С</th><th data-field="next">Дальше</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+dash.calc('kpi', {
+  inputs: ['journal'], title: 'Счёт экспериментов',
+  description: 'Сколько записей в журнале и сколько из них с подтверждённым или частичным эффектом.',
+  fn: (journal) => [{ experiments: journal.length, effects: journal.filter(r => r.verdict === 'effect').length,
+                      partial: journal.filter(r => r.verdict === 'partial').length }]
+});
+dash.calc('verdict_counts', {
+  inputs: ['journal'], title: 'Исходы экспериментов',
+  description: 'Число записей журнала по исходу.',
+  fn: (journal) => ['effect', 'partial', 'info', 'none', 'failed'].map(v => ({ verdict: v, n: journal.filter(r => r.verdict === v).length }))
+});
+</script>
+
+<script>
+(function () {
+  const VERD = { effect: 'эффект', partial: 'частично', none: 'нет эффекта', failed: 'не выдержал', info: 'справка' };
+  const VCOL = { effect: 'var(--color-ok)', partial: 'var(--color-warn)', failed: 'var(--color-bad)', info: 'var(--cds-chart-reference)', none: 'var(--cds-chart-muted)' };
+  const f2 = d3.format('.2f'), f3 = (x) => d3.format('.3f')(x).replace('.', ','), f1 = (x) => d3.format('+.1f')(x).replace('.', ',');
+  const ru = (x, d) => d3.format('.' + d + 'f')(x).replace('.', ',');
+  let animated = false;
+
+  function tipOf(box) {
+    let t = box.querySelector('.nt-tip');
+    if (!t) { t = document.createElement('div'); t.className = 'nt-tip'; t.hidden = true; box.appendChild(t); }
+    return t;
+  }
+  function showTip(box, ev, lines) {
+    const t = tipOf(box); t.replaceChildren();
+    lines.forEach((l, i) => { const d = document.createElement('div'); if (i === 0) d.className = 't'; d.textContent = l; t.appendChild(d); });
+    t.hidden = false;
+    const r = box.getBoundingClientRect(); let x = ev.clientX - r.left + 12, y = ev.clientY - r.top + 12;
+    if (x + 200 > r.width) x = Math.max(0, ev.clientX - r.left - 210);
+    t.style.left = x + 'px'; t.style.top = y + 'px';
+  }
+  const hideTip = (box) => { const t = box.querySelector('.nt-tip'); if (t) t.hidden = true; };
+  function failed(el) { el.replaceChildren(); const d = document.createElement('div'); d.className = 'nt-fail'; d.textContent = 'Failed to load'; el.appendChild(d); }
+  function prep(el, d) {
+    if (d.status === 'ok') { el.classList.remove('dash-skeleton'); return true; }
+    if (d.status === 'error' || d.status === 'connect' || d.status === 'declined') { el.classList.remove('dash-skeleton'); failed(el); return false; }
+    el.replaceChildren(); el.classList.add('dash-skeleton'); return false;
+  }
+  function fillText() {
+    const fmt = { models: (v) => ru(v, 3), hourly_final: (v) => ru(v, 1), kpi: (v) => String(v) };
+    document.querySelectorAll('[data-source][data-field]:not(th)').forEach(el => {
+      const id = el.dataset.source, d = dash.data(id);
+      if (d.status !== 'ok') { if (d.status !== 'loading') el.classList.remove('dash-skeleton'); return; }
+      let rows = d.data; if (!Array.isArray(rows)) return;
+      if (el.dataset.where) {
+        const conds = el.dataset.where.split('&').map(s => s.split('=').map(decodeURIComponent));
+        rows = rows.filter(r => conds.every(([k, v]) => String(r[k]) === v));
+      }
+      const r = rows[0]; if (!r) { el.textContent = '—'; return; }
+      el.textContent = (fmt[id] || String)(r[el.dataset.field]); el.classList.remove('dash-skeleton');
+    });
+  }
+
+  function drawVerdicts() {
+    const el = document.getElementById('ch-verdicts'), d = dash.data('verdict_counts');
+    if (!prep(el, d)) return;
+    const rows = d.data, W = el.clientWidth, H = 96, total = d3.sum(rows, r => r.n);
+    const x = d3.scaleLinear([0, total], [0, W]); let acc = 0;
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    rows.filter(r => r.n > 0).forEach(r => {
+      const x0 = x(acc), w = x(r.n) - 2; acc += r.n;
+      svg.append('rect').attr('x', x0).attr('y', 8).attr('width', Math.max(2, w)).attr('height', 36).attr('rx', 4).style('fill', VCOL[r.verdict])
+        .on('mousemove', (ev) => showTip(el, ev, [VERD[r.verdict], `${r.n} из ${total}`])).on('mouseleave', () => hideTip(el));
+      if (w > 60) {
+        svg.append('text').attr('class', 'lbl').attr('x', x0 + 6).attr('y', 62).text(VERD[r.verdict]);
+        svg.append('text').attr('x', x0 + 6).attr('y', 78).text(r.n);
+      }
+    });
+    el.replaceChildren(svg.node());
+  }
+
+  function drawModels() {
+    const el = document.getElementById('ch-models'), d = dash.data('models');
+    if (!prep(el, d)) return;
+    const rows = d.data, W = el.clientWidth, rowH = 30, m = { t: 10, r: 16, b: 34, l: 0 };
+    const svg = d3.create('svg').attr('width', '100%');
+    m.l = Math.min(W * 0.42, 170);
+    const H = m.t + rows.length * rowH + m.b; svg.attr('viewBox', `0 0 ${W} ${H}`);
+    const x = d3.scaleLinear([0.54, 0.6], [m.l, W - m.r]), y = d3.scaleBand(rows.map(r => r.model), [m.t, H - m.b]).padding(0.3);
+    x.ticks(4).forEach(t => svg.append('line').attr('x1', x(t)).attr('x2', x(t)).attr('y1', m.t).attr('y2', H - m.b).style('stroke', 'var(--cds-chart-grid)'));
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).ticks(4).tickFormat(t => ru(t, 2)))
+      .attr('font-size', null).attr('font-family', null).call(g => g.select('.domain').style('stroke', 'var(--cds-chart-axis)')).call(g => g.selectAll('line').style('stroke', 'var(--cds-chart-axis)'));
+    const base = rows.find(r => r.step === 'L0');
+    if (base) svg.append('line').attr('x1', x(base.auc)).attr('x2', x(base.auc)).attr('y1', m.t).attr('y2', H - m.b).attr('stroke-dasharray', '4 3').style('stroke', 'var(--cds-chart-reference)');
+    rows.forEach((r, i) => {
+      const cy = y(r.model) + y.bandwidth() / 2, col = r.step === 'L0' ? dash.colors[0] : (r.family.startsWith('Новая') ? dash.colors[1] : 'var(--cds-chart-muted)');
+      svg.append('text').attr('class', 'lbl').attr('x', m.l - 8).attr('y', cy).attr('dy', '0.35em').attr('text-anchor', 'end').text(r.model);
+      svg.append('line').attr('x1', x(r.lo)).attr('x2', x(r.hi)).attr('y1', cy).attr('y2', cy).attr('stroke-width', 2).attr('stroke-linecap', 'round').style('stroke', col);
+      svg.append('circle').attr('cx', x(r.auc)).attr('cy', cy).attr('r', 5).style('fill', col)
+        .on('mousemove', (ev) => showTip(el, ev, [r.model + ' · ' + r.family, `AUC ${f3(r.auc)}`, `95%: ${f3(r.lo)}…${f3(r.hi)}`])).on('mouseleave', () => hideTip(el));
+    });
+    el.style.minHeight = H + 'px'; el.replaceChildren(svg.node());
+  }
+
+  function drawLong() {
+    const el = document.getElementById('ch-long'), lg = document.getElementById('lg-long'), d = dash.data('longtrain');
+    if (!prep(el, d)) { lg.replaceChildren(); return; }
+    const spans = ['11.5d', '90d', '365d', '3y'], label = { '11.5d': '11,5 дня', '90d': '90 дней', '365d': '1 год', '3y': '3 года' };
+    const steps = ['L0', 'L5', 'L6', 'L7'], name = { L0: 'Регрессия', L5: '43 признака', L6: '+ нелинейная', L7: '+ GRU' };
+    const W = el.clientWidth, H = 260, m = { t: 14, r: 92, b: 30, l: 44 };
+    const x = d3.scalePoint(spans, [m.l, W - m.r]).padding(0.2), y = d3.scaleLinear([0.564, 0.576], [H - m.b, m.t]);
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    y.ticks(4).forEach(t => svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(t)).attr('y2', y(t)).style('stroke', 'var(--cds-chart-grid)'));
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(4).tickFormat(t => ru(t, 3)).tickSize(0)).attr('font-size', null).attr('font-family', null).call(g => g.select('.domain').remove());
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickFormat(s => label[s]).tickSize(0)).attr('font-size', null).attr('font-family', null).call(g => g.select('.domain').style('stroke', 'var(--cds-chart-axis)'));
+    const ends = [];
+    steps.forEach((s, i) => {
+      const pts = spans.map(sp => d.data.find(r => r.span === sp && r.step === s)).filter(Boolean);
+      const col = i === 0 ? dash.colors[0] : dash.colors[i];
+      svg.append('path').attr('d', d3.line(r => x(r.span), r => y(r.auc))(pts)).attr('fill', 'none').attr('stroke-width', 2).attr('stroke-linecap', 'round').attr('stroke-linejoin', 'round').style('stroke', col);
+      pts.forEach(r => svg.append('circle').attr('cx', x(r.span)).attr('cy', y(r.auc)).attr('r', 4).style('fill', col)
+        .on('mousemove', (ev) => showTip(el, ev, [label[r.span], `${name[s]}: AUC ${f3(r.auc)}`, `${r.n} срезов`])).on('mouseleave', () => hideTip(el)));
+      const last = pts[pts.length - 1]; if (last) ends.push({ y: y(last.auc), text: name[s], col });
+    });
+    ends.sort((a, b) => a.y - b.y); for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
+    ends.forEach(e => svg.append('text').attr('x', W - m.r + 8).attr('y', e.y).attr('dy', '0.35em').style('fill', e.col).text(e.text));
+    el.replaceChildren(svg.node()); lg.replaceChildren();
+  }
+
+  function drawDev() {
+    const el = document.getElementById('ch-dev'), lg = document.getElementById('lg-dev'), d = dash.data('hourly_dev');
+    if (!prep(el, d)) { lg.replaceChildren(); return; }
+    const rows = d.data, Ts = [...new Set(rows.map(r => r.T))].sort((a, b) => a - b), feats = ['tb7', 'rich', 'ctx'];
+    const fname = { tb7: '13 признаков', rich: '43 признака', ctx: '43 + часовой контекст' };
+    const W = el.clientWidth, H = 300, m = { t: 14, r: 12, b: 32, l: 44 };
+    const x = d3.scaleBand(Ts, [m.l, W - m.r]).padding(0.25), y = d3.scaleLinear([Math.min(-5, d3.min(rows, r => r.bps)), d3.max(rows, r => r.bps) + 3], [H - m.b, m.t]).nice();
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    y.ticks(5).forEach(t => svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(t)).attr('y2', y(t)).style('stroke', t === 0 ? 'var(--cds-chart-axis)' : 'var(--cds-chart-grid)'));
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0)).attr('font-size', null).attr('font-family', null).call(g => g.select('.domain').remove());
+    svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x).tickFormat(t => t + ' ч').tickSize(0)).attr('font-size', null).attr('font-family', null).call(g => g.select('.domain').remove());
+    const rng = d3.randomLcg(7);
+    rows.forEach(r => {
+      const jx = x(r.T) + x.bandwidth() * (0.15 + 0.7 * rng()), col = dash.colors[feats.indexOf(r.feat)];
+      svg.append('line').attr('x1', jx - 4).attr('x2', jx + 4).attr('y1', y(r.null95)).attr('y2', y(r.null95)).attr('stroke-width', 1).style('stroke', 'var(--cds-chart-reference)');
+      svg.append('circle').attr('cx', jx).attr('cy', y(r.bps)).attr('r', 4).attr('fill-opacity', 0.85).style('fill', col)
+        .on('mousemove', (ev) => showTip(el, ev, [`${r.T} ч · тейк ${ru(r.tp, 1)} · стоп ${ru(r.sl, 1)}`, `${fname[r.feat]}, ${r.primary === 'hgb' ? 'бустинг' : 'регрессия'}, цель: ${r.target === 'sign' ? 'знак' : 'сделка'}${r.meta === 'mag' ? ', + размер движения' : ''}`,
+          `доход ${f1(r.bps)} б.п. (${f1(r.bps_lo)}…${f1(r.bps_hi)})`, `случайный уровень ${ru(r.null95, 1)} · попадания ${d3.format('.1%')(r.hit)}`, `${ru(r.tpd, 1)} сделок в день`]))
+        .on('mouseleave', () => hideTip(el));
+    });
+    svg.append('text').attr('x', m.l).attr('y', m.t - 2).text('б.п. на сделку');
+    el.replaceChildren(svg.node());
+    lg.replaceChildren(...feats.map((f, i) => { const s = document.createElement('span'); const dot = document.createElement('i'); dot.style.background = dash.colors[i]; s.append(dot, fname[f]); return s; }));
+  }
+
+  function drawFinal() {
+    const el = document.getElementById('ch-final'), d = dash.data('hourly_final');
+    if (!prep(el, d)) return;
+    const rows = d.data.filter(r => r.selection === 'meta');
+    const W = el.clientWidth, H = 280, m = { t: 16, r: 12, b: 60, l: 44 };
+    const short = (t) => t.replace(/^T(\d+)_tp([\d.]+)_sl([\d.]+)_(\w+?)_(\w+?)_(\w+?)_(\w+)$/, (_, T, tp, sl, f, p, tg, me) => `${T} ч ${tp}/${sl}\n${f} ${p}`);
+    const x = d3.scaleBand(rows.map(r => r.tag), [m.l, W - m.r]).padding(0.45);
+    const y = d3.scaleLinear([Math.min(-15, d3.min(rows, r => r.ci_lo)) , Math.max(30, d3.max(rows, r => r.ci_hi))], [H - m.b, m.t]).nice();
+    const svg = d3.create('svg').attr('width', '100%').attr('viewBox', `0 0 ${W} ${H}`);
+    y.ticks(5).forEach(t => svg.append('line').attr('x1', m.l).attr('x2', W - m.r).attr('y1', y(t)).attr('y2', y(t)).style('stroke', t === 0 ? 'var(--cds-chart-axis)' : 'var(--cds-chart-grid)'));
+    svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(0)).attr('font-size', null).attr('font-family', null).call(g => g.select('.domain').remove());
+    rows.forEach((r, i) => {
+      const bx = x(r.tag), bw = x.bandwidth(), cx = bx + bw / 2, pass = r.bps > r.null95 && r.ci_lo > 0;
+      const col = i === 0 ? (pass ? 'var(--color-ok)' : dash.colors[0]) : 'var(--cds-chart-muted)';
+      svg.append('rect').attr('x', bx).attr('width', bw).attr('y', Math.min(y(0), y(r.bps))).attr('height', Math.abs(y(r.bps) - y(0))).attr('rx', 4).style('fill', col)
+        .on('mousemove', (ev) => showTip(el, ev, [`#${r.rank} · ${r.tag}`, `доход ${f1(r.bps)} б.п. на сделку`, `случайный уровень ${ru(r.null95, 1)}`, `интервал по месяцам ${f1(r.ci_lo)}…${f1(r.ci_hi)}`, `${r.n} сделок · попадания ${d3.format('.1%')(r.hit)}`, `при издержках 10 б.п.: ${f1(r.net10)}`]))
+        .on('mouseleave', () => hideTip(el));
+      svg.append('line').attr('x1', cx).attr('x2', cx).attr('y1', y(r.ci_lo)).attr('y2', y(r.ci_hi)).attr('stroke-width', 1.5).style('stroke', 'var(--color-fg)');
+      svg.append('line').attr('x1', bx - 4).attr('x2', bx + bw + 4).attr('y1', y(r.null95)).attr('y2', y(r.null95)).attr('stroke-dasharray', '4 3').style('stroke', 'var(--cds-chart-status-critical)');
+      short(r.tag).split('\n').forEach((line, k) => svg.append('text').attr('x', cx).attr('y', H - m.b + 16 + k * 13).attr('text-anchor', 'middle').attr('class', k === 0 ? 'lbl' : null).text(line));
+    });
+    svg.append('text').attr('x', m.l).attr('y', m.t - 4).text('б.п. на сделку · пунктир: случайный уровень');
+    el.replaceChildren(svg.node());
+  }
+
+  function table(id, src, render) {
+    const t = document.getElementById(id), body = t.querySelector('tbody'), d = dash.data(src);
+    body.replaceChildren();
+    if (d.status !== 'ok') return;
+    let rows = d.data.slice(); const st = t._sort;
+    if (st) rows.sort((a, b) => d3[st.dir](a[st.k], b[st.k]));
+    const q = (t._q || '').toLowerCase();
+    rows.filter(r => !q || Object.values(r).join(' ').toLowerCase().includes(q)).forEach(r => body.appendChild(render(r)));
+  }
+  function td(text, cls) { const c = document.createElement('td'); c.textContent = text; if (cls) c.className = cls; return c; }
+  function drawTables() {
+    table('t-journal', 'journal', (r) => {
+      const tr = document.createElement('tr');
+      const v = document.createElement('td'); const chip = document.createElement('span'); chip.className = 'chip ' + r.verdict; chip.textContent = VERD[r.verdict] || r.verdict; v.appendChild(chip);
+      tr.append(td(r.id), td(r.date, 'wide'), td(r.area), td(r.test), v, td(r.key)); return tr;
+    });
+    table('t-tasks', 'tasks', (r) => { const tr = document.createElement('tr'); tr.append(td(r.task), td(r.who, 'wide'), td(r.status), td(r.since, 'wide'), td(r.next)); return tr; });
+  }
+  document.querySelectorAll('.nt-table').forEach(t => t.querySelectorAll('th').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.field, cur = t._sort; t._sort = { k, dir: cur && cur.k === k && cur.dir === 'ascending' ? 'descending' : 'ascending' };
+    t.querySelectorAll('th').forEach(h => h.removeAttribute('aria-sort')); th.setAttribute('aria-sort', t._sort.dir); drawTables();
+  })));
+  document.getElementById('q-journal').addEventListener('input', (e) => { document.getElementById('t-journal')._q = e.target.value; drawTables(); });
+
+  dash.onData(() => { fillText(); drawVerdicts(); drawModels(); drawLong(); drawDev(); drawFinal(); drawTables(); });
+  const named = document.getElementById(location.hash.slice(1)); if (named) { named.scrollIntoView(); dash.setLink(named.id); }
+})();
+</script>
