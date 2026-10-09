@@ -15,7 +15,10 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
-os.chdir(r"D:\nt\nt_tactical")
+# The heavy cache is read in place from the main tactical checkout (untracked); results go to this checkout's lab folder.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.chdir(ROOT)
+CACHE = os.environ.get("LAB_CACHE", "D:/nt/nt_tactical/runs/tactical/lab/cache") + "/*.npz"
 LAB = "runs/tactical/lab"; GAP = 20; TQ = {2: 12.71, 3: 4.30, 4: 3.18, 5: 2.78, 6: 2.57, 7: 2.45}
 
 
@@ -136,38 +139,51 @@ def network_auc():
     return {k: float(np.mean(v)) for k, v in net.items()}
 
 
+def evaluate_slice(D, P, rng):
+    """Score P_val [N,3] (P(up) per horizon) on one cached slice D (an npz with rtr, rva, deadband). Returns the per-slice
+    values: auc_h0..2, auc3 (mean), ll_h1 / ll_const_h1 (log loss of P and of the train base rate), brier_h1, and the honest
+    tail (thresholds on the first half of val, tested on the second half after GAP bars): hon{10,5}_hit / _bps, hon10_null95
+    (random-sign null, drawn from rng)."""
+    db = float(D["deadband"]); rtr, rva = D["rtr"], D["rva"]; out = {}
+    for i in range(3):
+        mtr, mva = np.abs(rtr[:, i]) > db, np.abs(rva[:, i]) > db
+        y = (rva[mva, i] > 0).astype(int); out[f"auc_h{i}"] = roc_auc_score(y, P[mva, i])
+        if i == 1:
+            q = np.clip(P[mva, 1], 1e-7, 1 - 1e-7); base = (rtr[mtr, 1] > 0).mean()
+            out["ll_h1"] = float(-np.mean(y * np.log(q) + (1 - y) * np.log(1 - q)))
+            out["ll_const_h1"] = float(-np.mean(y * np.log(base) + (1 - y) * np.log(1 - base)))
+            out["brier_h1"] = float(np.mean((q - y) ** 2))
+    out["auc3"] = np.mean([out[f"auc_h{i}"] for i in range(3)])
+    n = len(P); A = np.zeros(n, bool); A[:n // 2] = True; B = np.zeros(n, bool); B[n // 2 + GAP:] = True
+    s = P.mean(1); conf = np.abs(s - 0.5); ret = rva[:, 1]; m = np.abs(ret) > db
+    for cov in (10, 5):
+        thr = np.quantile(conf[A], 1 - cov / 100); k = B & (conf >= thr) & m
+        mv = np.sign(s[k] - 0.5) * ret[k] * 1e4
+        out[f"hon{cov}_hit"] = float(np.mean(mv > 0)); out[f"hon{cov}_bps"] = float(np.mean(mv))
+        if cov == 10:
+            null = [np.mean(np.sign(s[k] - 0.5) * rng.choice([-1, 1], k.sum()) * ret[k] * 1e4) for _ in range(300)]
+            out["hon10_null95"] = float(np.quantile(null, 0.95))
+    return out
+
+
 def run(set_name, kind="logreg", C=0.1, tag=None, quiet=False):
     t0 = time.time(); fs = SETS[set_name]; net = network_auc(); rng = np.random.default_rng(0)
     per = {"auc_h0": [], "auc_h1": [], "auc_h2": [], "auc3": [], "ll_h1": [], "ll_const_h1": [], "brier_h1": [],
            "vs_net": [], "hon10_hit": [], "hon10_bps": [], "hon5_hit": [], "hon5_bps": [], "hon10_null95": []}
-    for p in sorted(glob.glob(f"{LAB}/cache/*.npz")):
+    for p in sorted(glob.glob(CACHE)):
         D = np.load(p); db = float(D["deadband"]); key = str(D["data_end"])[:13]
         Ftr, Fva = np.nan_to_num(fs(D["Wtr"])), np.nan_to_num(fs(D["Wva"]))
         sc = StandardScaler().fit(Ftr); Ftr, Fva = sc.transform(Ftr), sc.transform(Fva)
         P = np.zeros((len(Fva), 3))
         for i in range(3):
-            rtr, rva = D["rtr"][:, i], D["rva"][:, i]; mtr, mva = np.abs(rtr) > db, np.abs(rva) > db
+            rtr = D["rtr"][:, i]; mtr = np.abs(rtr) > db
             m = model_of(kind, C).fit(Ftr[mtr], (rtr[mtr] > 0).astype(int))
             P[:, i] = m.predict_proba(Fva)[:, 1]
-            y = (rva[mva] > 0).astype(int); a = roc_auc_score(y, P[mva, i]); per[f"auc_h{i}"].append(a)
-            if i == 1:
-                q = np.clip(P[mva, 1], 1e-7, 1 - 1e-7); base = (rtr[mtr] > 0).mean()
-                per["ll_h1"].append(float(-np.mean(y * np.log(q) + (1 - y) * np.log(1 - q))))
-                per["ll_const_h1"].append(float(-np.mean(y * np.log(base) + (1 - y) * np.log(1 - base))))
-                per["brier_h1"].append(float(np.mean((q - y) ** 2)))
-        per["auc3"].append(np.mean([per[f"auc_h{i}"][-1] for i in range(3)]))
+        r = evaluate_slice(D, P, rng)
+        for k, v in r.items():
+            per[k].append(v)
         if key in net:
             per["vs_net"].append(per["auc3"][-1] - net[key])
-        # honest tail: thresholds from the first half of val, tested on the second half
-        n = len(Fva); A = np.zeros(n, bool); A[:n // 2] = True; B = np.zeros(n, bool); B[n // 2 + GAP:] = True
-        s = P.mean(1); conf = np.abs(s - 0.5); ret = D["rva"][:, 1]; m = np.abs(ret) > db
-        for cov in (10, 5):
-            thr = np.quantile(conf[A], 1 - cov / 100); k = B & (conf >= thr) & m
-            mv = np.sign(s[k] - 0.5) * ret[k] * 1e4
-            per[f"hon{cov}_hit"].append(float(np.mean(mv > 0))); per[f"hon{cov}_bps"].append(float(np.mean(mv)))
-            if cov == 10:
-                null = [np.mean(np.sign(s[k] - 0.5) * rng.choice([-1, 1], k.sum()) * ret[k] * 1e4) for _ in range(300)]
-                per["hon10_null95"].append(float(np.quantile(null, 0.95)))
     res = {"tag": tag or f"{set_name}_{kind}_C{C}", "set": set_name, "model": kind, "C": C, "n_features": int(Ftr.shape[1]),
            "seconds": round(time.time() - t0, 1), "per_slice": {k: [round(float(x), 4) for x in v] for k, v in per.items()},
            **{k: ci(v) for k, v in per.items() if len(v) > 1}}
