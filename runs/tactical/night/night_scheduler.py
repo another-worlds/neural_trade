@@ -19,7 +19,7 @@ import yaml
 ROOT = r"D:\nt\nt_tactical"; os.chdir(ROOT)
 NIGHT = "runs/tactical/night"; QUEUE = f"{NIGHT}/queue.txt"; LOG = f"{NIGHT}/log.txt"; STATUS = f"{NIGHT}/status.json"
 PY = r"C:\Users\Step\miniforge3\envs\nt\python.exe"
-MAX_PROCS, HEADROOM, MIN_RAM_GB, CHECK = 3, 700, 6.0, 10
+MAX_PROCS, HEADROOM, MIN_RAM_GB, CHECK = int(os.environ.get("NIGHT_MAX_PROCS", 3)), 700, 6.0, 10
 os.makedirs(f"{NIGHT}/logs", exist_ok=True)
 
 
