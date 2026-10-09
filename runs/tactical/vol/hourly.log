@@ -1,0 +1,8 @@
+hourly fold 0: 5729 test, 19617 train, 2s; rv12 0.216 rv24 0.208 rv168 0.231 rv720 0.165 ewma 0.222 garch 0.217 har 0.244 har_tod 0.249 hgb_ctx 0.290
+hourly fold 1: 5729 test, 25346 train, 1s; rv12 0.223 rv24 0.208 rv168 0.236 rv720 0.184 ewma 0.227 garch 0.221 har 0.242 har_tod 0.248 hgb_ctx 0.282
+hourly fold 2: 5729 test, 31075 train, 1s; rv12 0.308 rv24 0.319 rv168 0.346 rv720 0.333 ewma 0.366 garch 0.323 har 0.361 har_tod 0.363 hgb_ctx 0.383
+hourly fold 3: 5729 test, 36804 train, 1s; rv12 0.087 rv24 0.104 rv168 0.186 rv720 0.138 ewma 0.172 garch 0.097 har 0.147 har_tod 0.148 hgb_ctx 0.185
+hourly fold 4: 5729 test, 42533 train, 1s; rv12 0.142 rv24 0.155 rv168 0.135 rv720 0.021 ewma 0.109 garch 0.149 har 0.162 har_tod 0.173 hgb_ctx 0.219
+hourly fold 5: 5729 test, 48262 train, 1s; rv12 0.282 rv24 0.279 rv168 0.258 rv720 0.167 ewma 0.242 garch 0.288 har 0.309 har_tod 0.319 hgb_ctx 0.333
+hourly fold 6: 5729 test, 53991 train, 1s; rv12 0.247 rv24 0.260 rv168 0.193 rv720 0.194 ewma 0.200 garch 0.258 har 0.273 har_tod 0.290 hgb_ctx 0.385
+hourly fold 7: 5729 test, 59720 train, 1s; rv12 0.173 rv24 0.173 rv168 0.143 rv720 0.140 ewma 0.136 garch 0.185 har 0.201 har_tod 0.221 hgb_ctx 0.292
