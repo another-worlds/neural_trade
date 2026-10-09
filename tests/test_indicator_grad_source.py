@@ -122,3 +122,23 @@ def test_direction_source_finite_with_price_head_none_and_active_horizons(tf):
         assert np.isfinite(float(logs["loss"]))
         assert float(logs["nonfinite_grad_steps"]) == 0.0
         assert all(np.all(np.isfinite(v.numpy())) for v in m.trainable_variables)
+
+
+def test_direction_source_with_geometry_indicator_update_is_the_direction_gradient(tf):
+    """The hc6_geomind combination (INDICATOR_GEOMETRY + direction source): the geometry features add a
+    second path from the indicator sequence to the direction heads; the indicator variables must still
+    move by exactly the direction-only gradient (that path included) and everything else by the total."""
+    over = dict(PRICE_HEAD="none", INDICATOR_GEOMETRY=True)
+    m, vs, upd, g_total, g_dir = _step_updates(tf, INDICATOR_GRAD_SOURCE="direction", **over)
+    checked_ind = 0
+    for v, u, gt, gd in zip(vs, upd, g_total, g_dir):
+        if id(v) in m._indicator_var_ids:
+            if gd is None:
+                np.testing.assert_allclose(u, 0.0, atol=1e-9, err_msg=v.name)
+                continue
+            assert np.all(np.isfinite(u)), v.name
+            np.testing.assert_allclose(u, _expected(gd), rtol=1e-4, atol=3e-7, err_msg=v.name)
+            checked_ind += 1
+        elif gt is not None:
+            np.testing.assert_allclose(u, _expected(gt), rtol=1e-4, atol=3e-7, err_msg=v.name)
+    assert checked_ind > 0
