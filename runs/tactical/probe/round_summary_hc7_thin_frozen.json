@@ -1,0 +1,44 @@
+{
+ "hc7_thin_learned": {
+  "direction.auc": {
+   "diff": -0.002,
+   "ci": [
+    -0.0054,
+    0.0014
+   ],
+   "slices": 6,
+   "noise_units": -0.21,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": -0.0012,
+   "ci": [
+    -0.0025,
+    0.0001
+   ],
+   "slices": 6,
+   "noise_units": -0.24,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0046,
+   "ci": [
+    0.0024,
+    0.0068
+   ],
+   "slices": 6,
+   "noise_units": 1.03,
+   "verdict": "better"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0399,
+   "ci": [
+    0.0182,
+    0.0617
+   ],
+   "slices": 6,
+   "noise_units": 3.1,
+   "verdict": "better"
+  }
+ }
+}
