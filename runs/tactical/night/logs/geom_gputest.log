@@ -1,0 +1,34 @@
+GPU memory capped at 5500 MB for this process (NT_GPU_MEMORY_LIMIT_MB)
+[screen hc6_geom_gputest] trial 1/1 (grid {}, slice 2018-11-16T02:00:00, seed 0)
+2026-10-10 02:29:25.505084: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-10 02:29:26.381004: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-10 02:29:26.381075: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 5500 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+Dataset length after cleaning: 126087
+Date range after cleaning: 2018-08-20 12:34:00 to 2018-11-16 02:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+2026-10-10 02:29:52.619305: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2026-10-10 02:29:53.830381: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+2026-10-10 02:29:55.252165: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-10 02:29:55.252501: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-10 02:29:55.252510: W tensorflow/stream_executor/gpu/asm_compiler.cc:80] Couldn't get ptxas version string: INTERNAL: Couldn't invoke ptxas.exe --version
+2026-10-10 02:29:55.254368: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-90f0-11080-65d6f0ca67529" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-90f0-11080-65d6f0ca67ad9" "-arch=sm_89" "--warn-on-spills"'
+2026-10-10 02:29:55.254488: W tensorflow/stream_executor/gpu/redzone_allocator.cc:314] INTERNAL: Failed to launch ptxas
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+{
+  "name": "hc6_geom_gputest",
+  "results_path": "runs\\tactical\\screens\\hc6_geom_gputest\\results.jsonl",
+  "n_trials": 1,
+  "ran": 1,
+  "skipped": 0,
+  "passed": 1,
+  "failed": 0
+}

@@ -1,0 +1,46 @@
+GPU memory capped at 5500 MB for this process (NT_GPU_MEMORY_LIMIT_MB)
+[screen hc6_geomind_gputest] trial 1/1 (grid {}, slice 2018-11-16T02:00:00, seed 0)
+2026-10-10 02:25:58.929497: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-10 02:25:59.928416: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-10 02:25:59.928611: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 5500 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+Dataset length after cleaning: 126087
+Date range after cleaning: 2018-08-20 12:34:00 to 2018-11-16 02:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+2026-10-10 02:26:26.486572: E tensorflow/core/grappler/optimizers/meta_optimizer.cc:954] function_optimizer failed: INVALID_ARGUMENT: Input 0 of node zeros_like_145 was passed float from custom_train_model/model/bidirectional/forward_gru/PartitionedCall:6 incompatible with expected variant.
+2026-10-10 02:26:26.825837: E tensorflow/core/grappler/optimizers/meta_optimizer.cc:954] shape_optimizer failed: OUT_OF_RANGE: src_output = 32, but num_outputs is only 25
+2026-10-10 02:26:26.908347: E tensorflow/core/grappler/optimizers/meta_optimizer.cc:954] layout failed: OUT_OF_RANGE: src_output = 32, but num_outputs is only 25
+2026-10-10 02:26:27.641989: E tensorflow/core/grappler/optimizers/tfg_optimizer_hook.cc:134] tfg_optimizer{tfg-consolidate-attrs,tfg-toposort,tfg-shape-inference{graph-version=0},tfg-prepare-attrs-export} failed: INVALID_ARGUMENT: Result #32 of node 'custom_train_model/model/bidirectional/forward_gru/PartitionedCall' is out of bounds
+	when importing GraphDef to MLIR module in GrapplerHook
+2026-10-10 02:26:27.754512: E tensorflow/core/grappler/optimizers/meta_optimizer.cc:954] function_optimizer failed: INVALID_ARGUMENT: Input 0 of node zeros_like_43 was passed float from custom_train_model/model/bidirectional/forward_gru/PartitionedCall:6 incompatible with expected variant.
+2026-10-10 02:26:28.032733: E tensorflow/core/grappler/optimizers/meta_optimizer.cc:954] shape_optimizer failed: OUT_OF_RANGE: src_output = 32, but num_outputs is only 25
+2026-10-10 02:26:28.409492: E tensorflow/core/grappler/optimizers/tfg_optimizer_hook.cc:134] tfg_optimizer{tfg-consolidate-attrs,tfg-functional-to-region,tfg.func(tfg-cf-sink),tfg-region-to-functional{force-control-capture=true},tfg-lift-legacy-call,symbol-privatize{},symbol-dce,tfg-prepare-attrs-export} failed: INVALID_ARGUMENT: Result #32 of node 'custom_train_model/model/bidirectional/forward_gru/PartitionedCall' is out of bounds
+	when importing GraphDef to MLIR module in GrapplerHook
+2026-10-10 02:26:28.427922: E tensorflow/core/grappler/optimizers/tfg_optimizer_hook.cc:134] tfg_optimizer{tfg-consolidate-attrs,tfg-functional-to-region,tfg.func(tfg-cf-sink),tfg-region-to-functional{force-control-capture=true},tfg-lift-legacy-call,symbol-privatize{},symbol-dce,tfg-prepare-attrs-export} failed: INVALID_ARGUMENT: Result #32 of node 'custom_train_model/model/bidirectional/forward_gru/PartitionedCall' is out of bounds
+	when importing GraphDef to MLIR module in GrapplerHook
+2026-10-10 02:26:28.517056: W tensorflow/core/common_runtime/process_function_library_runtime.cc:941] Ignoring multi-device function optimization failure: INVALID_ARGUMENT: Input 0 of node zeros_like_43 was passed float from custom_train_model/model/bidirectional/forward_gru/PartitionedCall:6 incompatible with expected variant.
+2026-10-10 02:26:31.549763: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2026-10-10 02:26:32.889047: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+2026-10-10 02:26:34.461404: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-10 02:26:34.461745: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-10 02:26:34.461754: W tensorflow/stream_executor/gpu/asm_compiler.cc:80] Couldn't get ptxas version string: INTERNAL: Couldn't invoke ptxas.exe --version
+2026-10-10 02:26:34.463504: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-388-47884-65d6f00aea243" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-388-47884-65d6f00aea785" "-arch=sm_89" "--warn-on-spills"'
+2026-10-10 02:26:34.463628: W tensorflow/stream_executor/gpu/redzone_allocator.cc:314] INTERNAL: Failed to launch ptxas
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+{
+  "name": "hc6_geomind_gputest",
+  "results_path": "runs\\tactical\\screens\\hc6_geomind_gputest\\results.jsonl",
+  "n_trials": 1,
+  "ran": 1,
+  "skipped": 0,
+  "passed": 1,
+  "failed": 0
+}
