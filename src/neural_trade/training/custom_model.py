@@ -49,9 +49,9 @@ class _Accum:
     since these are invisible to Keras's own ``reset_metrics()``.
     """
 
-    def __init__(self, kind: str = "sum"):
+    def __init__(self, kind: str = "sum", shape=()):
         self.kind = kind
-        self._value = tf.Variable(0.0, trainable=False, dtype=tf.float32)
+        self._value = tf.Variable(tf.zeros(shape, tf.float32), trainable=False, dtype=tf.float32)
         self._count = tf.Variable(0.0, trainable=False, dtype=tf.float32) if kind == "mean" else None
 
     def update_state(self, x, weight=None):
@@ -71,7 +71,7 @@ class _Accum:
         return self._value
 
     def reset_state(self):
-        self._value.assign(0.0)
+        self._value.assign(tf.zeros_like(self._value))
         if self._count is not None:
             self._count.assign(0.0)
 
@@ -288,6 +288,10 @@ class CustomTrainModel(models.Model):
         for g in self._probe_groups:
             self._probe_means[f'probe_conflict_mean_{g}'] = _Accum("mean")
             self._probe_means[f'probe_conflict_min_{g}'] = _Accum("mean")
+        # Full term x term cosine matrix per group (mean over the probed batches); only with the probe on.
+        n_terms = len(self._probe_terms)
+        self._probe_mats = ({g: _Accum("mean", shape=(n_terms, n_terms)) for g in self._probe_groups}
+                            if bool(getattr(self.config, 'PROBE_GRADIENTS', False)) else {})
         self._setattr_tracking = True
 
         # Robust (non-string) collection of indicator vars for gradient routing
@@ -377,7 +381,7 @@ class CustomTrainModel(models.Model):
         that Keras could reset on its own.
         """
         for d in (self._mask_counters, self._grad_health, self._var_floor_counters, self._probe_means,
-                 self._contrib_means, getattr(self, '_path_means', {})):
+                 self._probe_mats, self._contrib_means, getattr(self, '_path_means', {})):
             for acc in d.values():
                 acc.reset_state()
 
@@ -419,6 +423,12 @@ class CustomTrainModel(models.Model):
                 # probe_* key is written, not even a stale/never-updated 0.
                 if bool(getattr(self.config, 'PROBE_GRADIENTS', False)) and self._probe_means:
                     logs.update({k: m.result() for k, m in self._probe_means.items()})
+                    # pairwise term cosines, one scalar key per pair (i < j): probe_pcos_<a>__<b>_<group>
+                    for g, acc in self._probe_mats.items():
+                        mat = acc.result()
+                        for i, a in enumerate(self._probe_terms):
+                            for j in range(i + 1, len(self._probe_terms)):
+                                logs[f'probe_pcos_{a}__{self._probe_terms[j]}_{g}'] = mat[i, j]
                 return logs
             self._train_results_fn = tf.function(_all)
         return {k: float(v) for k, v in self._train_results_fn().items()}
@@ -937,36 +947,46 @@ class CustomTrainModel(models.Model):
         for name in terms:
             self._probe_means[f'probe_value_share_{name}'].update_state(abs_values[name] / value_sum)
 
-        def _flat_grad(target, vs, _tape=tape):
-            gs = _tape.gradient(target, vs)
-            return tf.concat([tf.reshape(g if g is not None else tf.zeros_like(v), [-1])
-                              for g, v in zip(gs, vs)], axis=0)
-
+        # One tape.gradient per term over ALL trainable variables (the old code took one per term AND
+        # group: 3x the backward graph, the cause of the 12-19 min compile), then the flat vector is
+        # split per group; the term x term inner products come from ONE matmul (a Gram matrix) instead
+        # of 136 reduce_sum pairs per group.
+        all_vars = [v for vs in groups.values() for v in vs]
+        bounds, off = {}, 0
         for gname, vs in groups.items():
-            if not vs:
+            n = sum(int(np.prod(v.shape)) for v in vs)
+            bounds[gname] = (off, off + n)
+            off += n
+
+        def _flat_grad(target, _tape=tape):
+            gs = _tape.gradient(target, all_vars, unconnected_gradients=tf.UnconnectedGradients.ZERO)
+            return tf.concat([tf.reshape(g, [-1]) for g in gs], axis=0)
+
+        names = list(terms)
+        total_all = _flat_grad(c.total)
+        term_all = tf.stack([_flat_grad(terms[n]) for n in names], axis=0)      # [T, D]
+        for gname, (lo, hi) in bounds.items():
+            if hi == lo:
                 continue
-            total_flat = _flat_grad(c.total, vs)
+            F = term_all[:, lo:hi]
+            total_flat = total_all[lo:hi]
+            gram = tf.matmul(F, F, transpose_b=True)                            # [T, T]
+            norms = tf.sqrt(tf.maximum(tf.linalg.diag_part(gram), 0.0))
             total_norm = tf.norm(total_flat)
-            flats, norms = {}, {}
-            for name, val in terms.items():
-                flats[name] = _flat_grad(val, vs)
-                norms[name] = tf.norm(flats[name])
-            norm_sum = tf.add_n(list(norms.values())) + self.eps
-            for name in terms:
-                cos = tf.reduce_sum(flats[name] * total_flat) / (norms[name] * total_norm + self.eps)
-                self._probe_means[f'probe_cos_{name}_{gname}'].update_state(cos)
-                self._probe_means[f'probe_grad_share_{name}_{gname}'].update_state(norms[name] / norm_sum)
-            names = list(terms)
-            pair_cos = []
-            for i in range(len(names)):
-                for j in range(i + 1, len(names)):
-                    a, b = flats[names[i]], flats[names[j]]
-                    na, nb = norms[names[i]], norms[names[j]]
-                    pair_cos.append(tf.reduce_sum(a * b) / (na * nb + self.eps))
-            if pair_cos:
-                stacked = tf.stack(pair_cos)
+            norm_sum = tf.reduce_sum(norms) + self.eps
+            cos_tot = tf.linalg.matvec(F, total_flat) / (norms * total_norm + self.eps)
+            shares = norms / norm_sum
+            for i, name in enumerate(names):
+                self._probe_means[f'probe_cos_{name}_{gname}'].update_state(cos_tot[i])
+                self._probe_means[f'probe_grad_share_{name}_{gname}'].update_state(shares[i])
+            pair = gram / (norms[:, None] * norms[None, :] + self.eps)
+            iu = np.triu_indices(len(names), k=1)
+            if len(iu[0]):
+                stacked = tf.gather_nd(pair, np.stack(iu, axis=1))
                 self._probe_means[f'probe_conflict_mean_{gname}'].update_state(tf.reduce_mean(stacked))
                 self._probe_means[f'probe_conflict_min_{gname}'].update_state(tf.reduce_min(stacked))
+            if self._probe_mats:
+                self._probe_mats[gname].update_state(pair)
         del tape
 
     def _compute_direction_metrics(self, true_dir_h0, true_dir_h1, true_dir_h2, dir_pred_h0, dir_pred_h1, dir_pred_h2, mask_h0=None, mask_h1=None, mask_h2=None, prefix=""):

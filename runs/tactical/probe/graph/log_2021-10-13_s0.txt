@@ -1,0 +1,23 @@
+2026-10-09 20:56:38.238895: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-09 20:56:38.244510: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-09 20:56:38.245147: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-09 20:56:38.246305: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Dataset length after cleaning: 2515321
+Date range after cleaning: 2017-01-01 00:00:00 to 2021-10-13 18:00:00
+Sequences with extended trends: (2515242, 60), (2515242, 3), Extended: (2515242, 3)
+[OK] Limited sequence set from 2515242 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+PROBE_EPOCH 1/8 t=2252s 21:37:02
+PROBE_EPOCH 2/8 t=3139s 21:51:48
+PROBE_EPOCH 3/8 t=3967s 22:05:37
+PROBE_EPOCH 4/8 t=4836s 22:20:06
+PROBE_EPOCH 5/8 t=5672s 22:34:01
+PROBE_EPOCH 6/8 t=6360s 22:45:29
+PROBE_EPOCH 7/8 t=7067s 22:57:17
+PROBE_EPOCH 8/8 t=7847s 23:10:16
+wrote runs/tactical/probe/graph/gprobe_2021-10-13_s0.json probe keys 533
