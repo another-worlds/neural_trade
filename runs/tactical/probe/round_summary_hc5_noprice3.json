@@ -1,68 +1,44 @@
 {
- "hc9_e_shape": {
+ "hc9_e_path_shape": {
   "direction.auc": {
-   "diff": 0.0011,
+   "diff": -0.0045,
    "ci": [
-    -0.0064,
-    0.0087
+    -0.032,
+    0.0229
    ],
    "slices": 6,
-   "noise_units": 0.04,
+   "noise_units": -0.17,
    "verdict": "no difference"
   },
   "direction.log_loss": {
-   "diff": -0.0028,
+   "diff": 0.0006,
    "ci": [
-    -0.0218,
-    0.0162
+    -0.0237,
+    0.025
    ],
    "slices": 6,
-   "noise_units": -0.09,
+   "noise_units": 0.02,
    "verdict": "no difference"
   },
   "variance.crpss": {
-   "diff": 0.0005,
+   "diff": 0.0002,
    "ci": [
-    -0.004,
-    0.005
+    -0.0048,
+    0.0052
    ],
    "slices": 6,
-   "noise_units": 0.09,
+   "noise_units": 0.03,
    "verdict": "no difference"
   },
   "variance.corr_var_err2_spearman": {
-   "diff": 0.0015,
+   "diff": -0.006,
    "ci": [
-    -0.007,
-    0.01
+    -0.0206,
+    0.0087
    ],
    "slices": 6,
-   "noise_units": 0.04,
+   "noise_units": -0.17,
    "verdict": "no difference"
-  },
-  "mean3_10_hit": [
-   0.5854,
-   [
-    0.4951,
-    0.6758
-   ],
-   6
-  ],
-  "mean3_10_bps": [
-   2.9852,
-   [
-    -3.6452,
-    9.6156
-   ],
-   6
-  ],
-  "mean3_5_hit": [
-   0.594,
-   [
-    0.4909,
-    0.6971
-   ],
-   6
-  ]
+  }
  }
 }

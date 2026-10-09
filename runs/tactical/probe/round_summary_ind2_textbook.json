@@ -1,0 +1,380 @@
+{
+ "ind2_cross3a": {
+  "direction.auc": {
+   "diff": 0.0109,
+   "ci": [
+    -0.0062,
+    0.0281
+   ],
+   "slices": 6,
+   "noise_units": 0.23,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0571,
+   "ci": [
+    0.0174,
+    0.0967
+   ],
+   "slices": 6,
+   "noise_units": 0.59,
+   "verdict": "better"
+  },
+  "variance.crpss": {
+   "diff": 0.1715,
+   "ci": [
+    0.0949,
+    0.2481
+   ],
+   "slices": 6,
+   "noise_units": 1.96,
+   "verdict": "better"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0375,
+   "ci": [
+    -0.0365,
+    0.1116
+   ],
+   "slices": 6,
+   "noise_units": 0.43,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_cross3b": {
+  "direction.auc": {
+   "diff": 0.009,
+   "ci": [
+    -0.0014,
+    0.0194
+   ],
+   "slices": 6,
+   "noise_units": 0.19,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0331,
+   "ci": [
+    -0.0231,
+    0.0892
+   ],
+   "slices": 6,
+   "noise_units": 0.34,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.1406,
+   "ci": [
+    0.0794,
+    0.2018
+   ],
+   "slices": 6,
+   "noise_units": 1.61,
+   "verdict": "better"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0327,
+   "ci": [
+    -0.0124,
+    0.0777
+   ],
+   "slices": 6,
+   "noise_units": 0.38,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_short": {
+  "direction.auc": {
+   "diff": 0.0058,
+   "ci": [
+    -0.018,
+    0.0297
+   ],
+   "slices": 6,
+   "noise_units": 0.12,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0011,
+   "ci": [
+    -0.0581,
+    0.0604
+   ],
+   "slices": 6,
+   "noise_units": 0.01,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0043,
+   "ci": [
+    -0.0875,
+    0.0961
+   ],
+   "slices": 6,
+   "noise_units": 0.05,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0265,
+   "ci": [
+    -0.0477,
+    0.1008
+   ],
+   "slices": 6,
+   "noise_units": 0.31,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_long": {
+  "direction.auc": {
+   "diff": -0.0026,
+   "ci": [
+    -0.0168,
+    0.0116
+   ],
+   "slices": 6,
+   "noise_units": -0.06,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0114,
+   "ci": [
+    -0.0336,
+    0.0563
+   ],
+   "slices": 6,
+   "noise_units": 0.12,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.012,
+   "ci": [
+    -0.0222,
+    0.0461
+   ],
+   "slices": 6,
+   "noise_units": 0.14,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0193,
+   "ci": [
+    -0.0525,
+    0.0911
+   ],
+   "slices": 6,
+   "noise_units": 0.22,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_wide": {
+  "direction.auc": {
+   "diff": 0.0032,
+   "ci": [
+    -0.0175,
+    0.0239
+   ],
+   "slices": 6,
+   "noise_units": 0.07,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": -0.0112,
+   "ci": [
+    -0.0544,
+    0.032
+   ],
+   "slices": 6,
+   "noise_units": -0.12,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0048,
+   "ci": [
+    -0.0195,
+    0.0291
+   ],
+   "slices": 6,
+   "noise_units": 0.05,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0186,
+   "ci": [
+    -0.0295,
+    0.0666
+   ],
+   "slices": 6,
+   "noise_units": 0.21,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_same": {
+  "direction.auc": {
+   "diff": -0.0124,
+   "ci": [
+    -0.0285,
+    0.0037
+   ],
+   "slices": 6,
+   "noise_units": -0.26,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": -0.0007,
+   "ci": [
+    -0.0428,
+    0.0414
+   ],
+   "slices": 6,
+   "noise_units": -0.01,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0139,
+   "ci": [
+    -0.0509,
+    0.0788
+   ],
+   "slices": 6,
+   "noise_units": 0.16,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0429,
+   "ci": [
+    -0.0016,
+    0.0875
+   ],
+   "slices": 6,
+   "noise_units": 0.5,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_random": {
+  "direction.auc": {
+   "diff": 0.0002,
+   "ci": [
+    -0.0159,
+    0.0163
+   ],
+   "slices": 6,
+   "noise_units": 0.0,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.015,
+   "ci": [
+    -0.0523,
+    0.0822
+   ],
+   "slices": 6,
+   "noise_units": 0.16,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0194,
+   "ci": [
+    -0.0344,
+    0.0733
+   ],
+   "slices": 6,
+   "noise_units": 0.22,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0288,
+   "ci": [
+    -0.0211,
+    0.0786
+   ],
+   "slices": 6,
+   "noise_units": 0.33,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_short_frozen": {
+  "direction.auc": {
+   "diff": 0.0021,
+   "ci": [
+    -0.0127,
+    0.0169
+   ],
+   "slices": 6,
+   "noise_units": 0.04,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0107,
+   "ci": [
+    -0.0521,
+    0.0736
+   ],
+   "slices": 6,
+   "noise_units": 0.11,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": -0.0079,
+   "ci": [
+    -0.0499,
+    0.0341
+   ],
+   "slices": 6,
+   "noise_units": -0.09,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0093,
+   "ci": [
+    -0.0659,
+    0.0846
+   ],
+   "slices": 6,
+   "noise_units": 0.11,
+   "verdict": "no difference"
+  }
+ },
+ "ind2_long_frozen": {
+  "direction.auc": {
+   "diff": 0.0007,
+   "ci": [
+    -0.0154,
+    0.0168
+   ],
+   "slices": 6,
+   "noise_units": 0.01,
+   "verdict": "no difference"
+  },
+  "direction.log_loss": {
+   "diff": 0.0135,
+   "ci": [
+    -0.0357,
+    0.0628
+   ],
+   "slices": 6,
+   "noise_units": 0.14,
+   "verdict": "no difference"
+  },
+  "variance.crpss": {
+   "diff": 0.0268,
+   "ci": [
+    -0.0336,
+    0.0872
+   ],
+   "slices": 6,
+   "noise_units": 0.31,
+   "verdict": "no difference"
+  },
+  "variance.corr_var_err2_spearman": {
+   "diff": 0.0451,
+   "ci": [
+    -0.0272,
+    0.1174
+   ],
+   "slices": 6,
+   "noise_units": 0.52,
+   "verdict": "no difference"
+  }
+ }
+}
