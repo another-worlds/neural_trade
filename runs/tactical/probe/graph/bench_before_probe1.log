@@ -1,0 +1,19 @@
+2026-10-09 20:38:03.936942: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-09 20:38:03.948657: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-09 20:38:03.948873: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-09 20:38:03.949627: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Dataset length after cleaning: 2515321
+Date range after cleaning: 2017-01-01 00:00:00 to 2021-10-13 18:00:00
+Sequences with extended trends: (2515242, 60), (2515242, 3), Extended: (2515242, 3)
+[OK] Limited sequence set from 2515242 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+RESULT probe=1 first_fit(compile+1 step)=394.9s next_6_steps=131.13s per_step=21.855s
+
+real	11m21.704s
+user	0m0.000s
+sys	0m0.000s
