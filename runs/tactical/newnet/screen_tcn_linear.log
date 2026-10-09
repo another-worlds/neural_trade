@@ -1,0 +1,18 @@
+linear 90d 2017-05-02T12 seed 0: auc3 0.6809 lin 0.6809 d +0.0000 ll-const -0.0429 volrho 0.212/0.151 epochs 33 best 0 n 55421 26s
+linear 90d 2018-11-16T02 seed 0: auc3 0.6242 lin 0.6242 d +0.0000 ll-const -0.0213 volrho 0.264/0.203 epochs 16 best 0 n 129600 19s
+linear 90d 2020-03-30T04 seed 0: auc3 0.6058 lin 0.6058 d +0.0000 ll-const -0.0096 volrho 0.333/0.310 epochs 15 best 0 n 129600 20s
+linear 90d 2021-10-13T18 seed 0: auc3 0.5515 lin 0.5515 d +0.0000 ll-const -0.0006 volrho 0.178/0.208 epochs 16 best 0 n 129600 19s
+linear 90d 2023-04-29T08 seed 0: auc3 0.5285 lin 0.5285 d +0.0000 ll-const +0.0061 volrho 0.440/0.423 epochs 14 best 0 n 129600 14s
+linear 90d 2024-11-11T23 seed 0: auc3 0.5362 lin 0.5362 d +0.0000 ll-const -0.0022 volrho 0.337/0.309 epochs 19 best 0 n 129600 20s
+== linear 90d seed 0: mean3 AUC 0.5879 [0.5252,0.6505]  d vs linear +0.0000 [+0.0000,+0.0000]  params {'direction': 183, 'volatility': 2534, 'total': 2717}  118.8 s
+total 121 s on gpu
+Relying on driver to perform ptx compilation. 
+This message will be only logged once.
+tcn 90d 2017-05-02T12 seed 0: auc3 0.6793 lin 0.6809 d -0.0016 ll-const -0.0413 volrho 0.223/0.151 epochs 28 best 4 n 55421 110s
+tcn 90d 2018-11-16T02 seed 0: auc3 0.6245 lin 0.6242 d +0.0002 ll-const -0.0217 volrho 0.255/0.203 epochs 12 best 1 n 129600 225s
+tcn 90d 2020-03-30T04 seed 0: auc3 0.6109 lin 0.6058 d +0.0051 ll-const -0.0122 volrho 0.321/0.310 epochs 25 best 5 n 129600 83s
+tcn 90d 2021-10-13T18 seed 0: auc3 0.5663 lin 0.5515 d +0.0149 ll-const -0.0019 volrho 0.169/0.208 epochs 14 best 6 n 129600 69s
+tcn 90d 2023-04-29T08 seed 0: auc3 0.5159 lin 0.5285 d -0.0125 ll-const +0.0103 volrho 0.437/0.423 epochs 13 best 5 n 129600 52s
+tcn 90d 2024-11-11T23 seed 0: auc3 0.5362 lin 0.5362 d -0.0000 ll-const -0.0022 volrho 0.342/0.309 epochs 24 best 0 n 129600 34s
+== tcn 90d seed 0: mean3 AUC 0.5889 [0.5250,0.6527]  d vs linear +0.0010 [-0.0084,+0.0104]  params {'direction': 11534, 'volatility': 2534, 'total': 14068}  572.9 s
+total 574 s on gpu
