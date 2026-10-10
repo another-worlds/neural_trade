@@ -28,6 +28,11 @@ for the MVP".
   (screen layout, NT-088; the micro layout's ~4-minute cells are too long). A run that hits 2 minutes
   is stopped and recorded as over-limit, not extended.
 - No lock file and no waiting flag (D-062's are withdrawn).
+- **Never idle (owner, 2026-10-10: "почему стоит????").** The queue must not run dry while the owner is away: when the
+  last running task finishes, the lead immediately starts the next steps it recommended (and reports them), instead
+  of waiting for the owner to pick. Questions go alongside the running work, never in place of it.
+- **Heavy variants (persistent-tape ones: INDICATOR_GRAD_SOURCE direction, geometry + indgrad): at most 2 processes
+  on the GPU at once** (H43: three such processes on the 12 GB card coincided with two driver resets).
 
 ## Rigour and budget (exploratory)
 
