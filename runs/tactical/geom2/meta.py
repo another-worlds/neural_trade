@@ -45,27 +45,32 @@ def first_touch(M):
     return np.where(M.any(1), M.argmax(1), 10 ** 6)
 
 
-def build(kind):
-    S = SETUP[kind]; b = bars(kind); A = b.values.astype(np.float64); n = len(A); T = S["T"]
+def labels(kind, T, tp_m, sl_m):
+    """Triple-barrier labels for the anchors of `kind` at time limit T (bars) and barriers tp_m / sl_m sigma sqrt(T)."""
+    S = SETUP[kind]; b = bars(kind); A = b.values.astype(np.float64); n = len(A)
     first = L + 168 if kind == "1h" else L
     anch = np.arange(first, n - T, S["stride"]); t_entry = b.index[anch - 1]; t_exit = b.index[anch + T - 1]
     c0 = A[anch - 1, 3]; lr = np.diff(np.log(A[:, 3]))
     sig = np.maximum(swv(lr, L - 1)[anch - L].std(1), 1e-6); unit = sig * math.sqrt(T)
     Hf, Lf = swv(A[:, 1], T)[anch], swv(A[:, 2], T)[anch]; rT = A[anch + T - 1, 3] / c0 - 1
-    tp, sl = S["tp"] * unit, S["sl"] * unit
+    tp, sl = tp_m * unit, sl_m * unit
     lt, ls = first_touch(Hf >= (c0 * (1 + tp))[:, None]), first_touch(Lf <= (c0 * (1 - sl))[:, None])
     st_, ss = first_touch(Lf <= (c0 * (1 - tp))[:, None]), first_touch(Hf >= (c0 * (1 + sl))[:, None])
     pl_long = np.where(ls <= lt, np.where(ls < T, -sl, rT), np.where(lt < T, tp, rT))
     pl_short = np.where(ss <= st_, np.where(ss < T, -sl, -rT), np.where(st_ < T, tp, -rT))
+    return dict(rT=rT, pl_long=pl_long, pl_short=pl_short, sig=sig, unit=unit,
+                t_entry=t_entry.values.astype("datetime64[ns]").astype(np.int64), t_exit=t_exit.values.astype("datetime64[ns]").astype(np.int64)), A, anch
+
+
+def build(kind):
+    S = SETUP[kind]; lab_, A, anch = labels(kind, S["T"], S["tp"], S["sl"])
     F = {k: [] for k in ("tb7", "rich", "g5", "gR")}
     for k in range(0, len(anch), 20000):
         W = np.stack([A[i - L:i] for i in anch[k:k + 20000]]).astype(np.float32)
         F["tb7"].append(np.nan_to_num(lab.fs_tb7(W))); F["rich"].append(np.nan_to_num(lab.fs_rich(W)))
         F["g5"].append(G.geom_base5(W)); F["gR"].append(G.geom_rich(W))
     F = {k: np.concatenate(v).astype(np.float32) for k, v in F.items()}
-    np.savez(f"{FC}/meta_{kind}.npz", rT=rT, pl_long=pl_long, pl_short=pl_short, sig=sig, unit=unit,
-             t_entry=t_entry.values.astype("datetime64[ns]").astype(np.int64), t_exit=t_exit.values.astype("datetime64[ns]").astype(np.int64),
-             **{f"F_{k}": v for k, v in F.items()})
+    np.savez(f"{FC}/meta_{kind}.npz", **lab_, **{f"F_{k}": v for k, v in F.items()})
     print(kind, len(anch), "anchors", {k: v.shape[1] for k, v in F.items()}, flush=True)
 
 
@@ -101,8 +106,13 @@ def split(D, S, Fp, Fm, tr, te, rng):
     return out
 
 
-def run(kind, feat, variant, q=None):
-    S = dict(SETUP[kind]); S["q"] = q or S["q"]; D = np.load(f"{FC}/meta_{kind}.npz"); t0 = time.time(); rng = np.random.default_rng(0)
+def run(kind, feat, variant, q=None, T=None, M=None):
+    S = dict(SETUP[kind]); S["q"] = q or S["q"]; D = dict(np.load(f"{FC}/meta_{kind}.npz"))
+    if T or M:      # other barrier geometry: new labels on the first n_T anchors of the cached features (T >= the cached T keeps them a prefix)
+        assert (T or S["T"]) >= S["T"]; S["T"] = T or S["T"]; S["tp"] = S["sl"] = M or S["tp"]
+        lab_, _, anch = labels(kind, S["T"], S["tp"], S["sl"]); D.update(lab_)
+        D = {k: (v[:len(anch)] if k.startswith("F_") else v) for k, v in D.items()}
+    t0 = time.time(); rng = np.random.default_rng(0)
     F, g5, gR = D[f"F_{feat}"], D["F_g5"], D["F_gR"]
     perm = np.random.default_rng(1).permutation(len(F)); gP = gR[perm]       # controls: geometry rows shuffled across time (same marginals, no information)
     Fp, Fm = {"base": (F, F), "mG5": (F, np.hstack([F, g5])), "mGR": (F, np.hstack([F, gR])), "pmGR": (np.hstack([F, gR]), np.hstack([F, gR])),
@@ -112,7 +122,7 @@ def run(kind, feat, variant, q=None):
     path = os.path.join(HERE, "meta_rows.jsonl")
     for f in range(8):
         tr = np.arange(0, max(1, edges[f] - gap)); te = np.arange(edges[f], edges[f + 1]); r = split(D, S, Fp, Fm, tr, te, rng)
-        open(path, "a", encoding="utf-8").write(json.dumps(dict(bars=kind, feat=feat, variant=variant, q=S["q"], fold=f, **r)) + "\n")
+        open(path, "a", encoding="utf-8").write(json.dumps(dict(bars=kind, feat=feat, variant=variant, q=S["q"], T=S["T"], M=S["tp"], fold=f, **r)) + "\n")
         print(f"{kind} {feat} {variant} fold {f}: " + " ".join(f"{k} {v['bps']:+.2f} (null {v['null95']:+.2f}, n {v['n']})" for k, v in r.items() if v),
               f"{time.time() - t0:.0f}s", flush=True)
 
@@ -123,15 +133,15 @@ def report():
     fmt = lambda c: f"{c[0]:+.2f} [{c[1]:+.2f},{c[2]:+.2f}]"; lines = []
     cells = {}
     for r in rows:
-        cells.setdefault((r["bars"], r["feat"], r["variant"], r.get("q", SETUP[r["bars"]]["q"])), {})[r["fold"]] = r
-    for (bars_, feat, var, q_), fd in sorted(cells.items()):
+        cells.setdefault((r["bars"], r["feat"], r["variant"], r.get("q", SETUP[r["bars"]]["q"]), r.get("T", SETUP[r["bars"]]["T"]), r.get("M", SETUP[r["bars"]]["tp"])), {})[r["fold"]] = r
+    for (bars_, feat, var, q_, T_, M_), fd in sorted(cells.items()):
         if len(fd) < 8 or any(fd[f].get("meta") is None or fd[f].get("primary") is None for f in range(8)):
             continue
         for sel in ("primary", "meta"):
             v = {k: np.array([fd[f][sel][k] for f in range(8)]) for k in ("bps", "hit", "null95", "per_day", "n")}
-            lines.append(f"{bars_:4s} {feat:4s} q{q_:.2f} {var:5s} {sel:8s} bps {fmt(ci(v['bps']))} hit {v['hit'].mean():.3f} null95 {v['null95'].mean():+.2f} "
+            lines.append(f"{bars_:4s} {feat:4s} T{T_} M{M_} q{q_:.2f} {var:6s} {sel:8s} bps {fmt(ci(v['bps']))} hit {v['hit'].mean():.3f} null95 {v['null95'].mean():+.2f} "
                          f"excess {fmt(ci(v['bps'] - v['null95']))} trades/day {v['per_day'].mean():.1f}")
-        base = cells.get((bars_, feat, "base", q_))
+        base = cells.get((bars_, feat, "base", q_, T_, M_))
         if var != "base" and base and len(base) == 8:
             for sel in ("primary", "meta"):
                 d = np.array([fd[f][sel]["bps"] - base[f][sel]["bps"] for f in range(8)])
@@ -141,11 +151,11 @@ def report():
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--bars", default="1h"); ap.add_argument("--feat", default="tb7"); ap.add_argument("--variant", default="base"); ap.add_argument("--q", type=float, default=0.0)
+    ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--bars", default="1h"); ap.add_argument("--feat", default="tb7"); ap.add_argument("--variant", default="base"); ap.add_argument("--q", type=float, default=0.0); ap.add_argument("--T", type=int, default=0); ap.add_argument("--M", type=float, default=0.0)
     a = ap.parse_args()
     if a.cmd == "build":
         build(a.bars)
     elif a.cmd == "run":
-        run(a.bars, a.feat, a.variant, a.q or None)
+        run(a.bars, a.feat, a.variant, a.q or None, a.T or None, a.M or None)
     else:
         report()
