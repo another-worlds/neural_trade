@@ -15,7 +15,8 @@ import lab  # noqa: E402  (chdirs to the worktree root)
 import geomlib as G  # noqa: E402
 
 FC = os.path.join(HERE, "featcache"); os.makedirs(FC, exist_ok=True)
-BASE = {"tb7": lab.fs_tb7, "rich": lab.fs_rich, "g5": G.geom_base5, "gR": G.geom_rich}
+BASE = {"tb7": lab.fs_tb7, "rich": lab.fs_rich, "g5": G.geom_base5, "gR": G.geom_rich,
+        **{f"gc{w}": (lambda W, w=w: G.geom(W, None, (w,))) for w in (3, 5, 10, 20)}}      # one crossing window each (exp 2)
 SETS = ["tb7", "rich", "g5", "gR", "tb7+g5", "rich+g5", "tb7+gR", "rich+gR"]
 
 

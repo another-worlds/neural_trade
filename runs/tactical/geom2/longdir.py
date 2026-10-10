@@ -38,7 +38,7 @@ def main():
         def feat(name, W, tag):
             k = (name, tag)
             if k not in cache:
-                cache[k] = {"tb7": lab.fs_tb7, "rich": lab.fs_rich, "g5": G.geom_base5, "gR": G.geom_rich}[name](W)
+                cache[k] = R.BASE[name](W)
                 cache[k] = np.nan_to_num(cache[k]).astype(np.float32)
             return cache[k]
         for sname in a.sets.split(","):

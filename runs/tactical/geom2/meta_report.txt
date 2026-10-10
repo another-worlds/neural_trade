@@ -1,3 +1,47 @@
+15min tb7  hgb T4 M1.0 q0.10 base   primary  bps +1.72 [+0.33,+3.10] hit 0.550 null95 +1.93 excess -0.22 [-1.77,+1.34] trades/day 8.8
+15min tb7  hgb T4 M1.0 q0.10 base   meta     bps +1.72 [+0.33,+3.12] hit 0.552 null95 +1.65 excess +0.07 [-1.21,+1.35] trades/day 10.4
+15min tb7  log T4 M1.0 q0.10 base   primary  bps +0.57 [-0.60,+1.75] hit 0.540 null95 +1.93 excess -1.36 [-3.14,+0.43] trades/day 8.2
+15min tb7  log T4 M1.0 q0.10 base   meta     bps +2.10 [+0.59,+3.61] hit 0.556 null95 +1.70 excess +0.40 [-0.83,+1.62] trades/day 11.3
+15min tb7  log T4 M1.0 q0.10 mG5    primary  bps +0.57 [-0.60,+1.75] hit 0.540 null95 +1.95 excess -1.38 [-3.08,+0.31] trades/day 8.2
+15min tb7  log T4 M1.0 q0.10 mG5    meta     bps +2.18 [+0.72,+3.65] hit 0.555 null95 +1.62 excess +0.57 [-0.68,+1.81] trades/day 10.7
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 -0.03 [-0.37,+0.31]
+       paired vs base (meta): d bps +0.09 [-0.49,+0.66], d excess over null95 +0.17 [-0.46,+0.80]
+15min tb7  log T4 M1.0 q0.10 mGR    primary  bps +0.57 [-0.60,+1.75] hit 0.540 null95 +1.93 excess -1.35 [-3.11,+0.40] trades/day 8.2
+15min tb7  log T4 M1.0 q0.10 mGR    meta     bps +2.27 [+0.68,+3.87] hit 0.556 null95 +1.70 excess +0.57 [-0.98,+2.13] trades/day 10.4
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 +0.00 [-0.18,+0.19]
+       paired vs base (meta): d bps +0.18 [-0.39,+0.74], d excess over null95 +0.18 [-0.66,+1.02]
+15min tb7  log T4 M1.0 q0.10 mPerm  primary  bps +0.57 [-0.60,+1.75] hit 0.540 null95 +2.05 excess -1.47 [-3.15,+0.21] trades/day 8.2
+15min tb7  log T4 M1.0 q0.10 mPerm  meta     bps +1.57 [+0.00,+3.14] hit 0.547 null95 +1.69 excess -0.11 [-1.58,+1.35] trades/day 10.3
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 -0.12 [-0.36,+0.13]
+       paired vs base (meta): d bps -0.52 [-1.23,+0.18], d excess over null95 -0.51 [-1.26,+0.24]
+15min tb7  log T4 M1.0 q0.10 mRich  primary  bps +0.57 [-0.60,+1.75] hit 0.540 null95 +1.99 excess -1.42 [-3.16,+0.33] trades/day 8.2
+15min tb7  log T4 M1.0 q0.10 mRich  meta     bps +2.13 [+1.47,+2.80] hit 0.559 null95 +1.63 excess +0.51 [-0.22,+1.24] trades/day 11.6
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 -0.06 [-0.24,+0.12]
+       paired vs base (meta): d bps +0.04 [-0.99,+1.07], d excess over null95 +0.11 [-0.76,+0.99]
+15min tb7  log T4 M1.0 q0.10 pmG5   primary  bps +0.80 [-0.71,+2.32] hit 0.538 null95 +2.12 excess -1.32 [-3.06,+0.42] trades/day 8.0
+15min tb7  log T4 M1.0 q0.10 pmG5   meta     bps +2.36 [+0.57,+4.14] hit 0.554 null95 +1.69 excess +0.66 [-0.79,+2.12] trades/day 10.8
+       paired vs base (primary): d bps +0.23 [-0.66,+1.12], d excess over null95 +0.04 [-0.84,+0.92]
+       paired vs base (meta): d bps +0.26 [-0.56,+1.07], d excess over null95 +0.27 [-0.72,+1.26]
+15min tb7  hgb T4 M1.0 q0.10 pmGR   primary  bps +1.97 [+0.36,+3.58] hit 0.556 null95 +2.55 excess -0.58 [-2.21,+1.04] trades/day 7.4
+15min tb7  hgb T4 M1.0 q0.10 pmGR   meta     bps +2.51 [+1.15,+3.87] hit 0.558 null95 +1.81 excess +0.70 [-0.38,+1.78] trades/day 9.2
+       paired vs base (primary): d bps +0.25 [-0.63,+1.14], d excess over null95 -0.37 [-1.21,+0.47]
+       paired vs base (meta): d bps +0.79 [-0.45,+2.02], d excess over null95 +0.63 [-0.55,+1.81]
+15min tb7  log T4 M1.0 q0.10 pmGR   primary  bps +1.96 [+0.06,+3.87] hit 0.551 null95 +2.01 excess -0.05 [-2.05,+1.96] trades/day 8.1
+15min tb7  log T4 M1.0 q0.10 pmGR   meta     bps +2.44 [+1.02,+3.85] hit 0.555 null95 +1.81 excess +0.63 [-0.64,+1.90] trades/day 9.8
+       paired vs base (primary): d bps +1.39 [+0.14,+2.64], d excess over null95 +1.31 [-0.06,+2.68]
+       paired vs base (meta): d bps +0.34 [-0.41,+1.09], d excess over null95 +0.23 [-0.41,+0.87]
+15min tb7  log T4 M1.0 q0.10 pmPerm primary  bps -0.37 [-1.75,+1.01] hit 0.532 null95 +2.13 excess -2.49 [-4.70,-0.29] trades/day 7.9
+15min tb7  log T4 M1.0 q0.10 pmPerm meta     bps +1.27 [-0.07,+2.62] hit 0.541 null95 +1.63 excess -0.36 [-1.67,+0.96] trades/day 10.8
+       paired vs base (primary): d bps -0.94 [-1.52,-0.36], d excess over null95 -1.14 [-2.03,-0.25]
+       paired vs base (meta): d bps -0.82 [-1.77,+0.12], d excess over null95 -0.75 [-1.64,+0.13]
+15min tb7  hgb T4 M1.0 q0.10 pmRich primary  bps +1.79 [-0.33,+3.91] hit 0.557 null95 +1.93 excess -0.14 [-2.43,+2.14] trades/day 8.8
+15min tb7  hgb T4 M1.0 q0.10 pmRich meta     bps +2.63 [+1.12,+4.15] hit 0.562 null95 +1.71 excess +0.92 [-0.33,+2.17] trades/day 10.8
+       paired vs base (primary): d bps +0.07 [-1.30,+1.44], d excess over null95 +0.07 [-1.35,+1.50]
+       paired vs base (meta): d bps +0.91 [-0.21,+2.02], d excess over null95 +0.85 [-0.06,+1.76]
+15min tb7  log T4 M1.0 q0.10 pmRich primary  bps +1.40 [+0.36,+2.44] hit 0.547 null95 +1.83 excess -0.43 [-1.62,+0.77] trades/day 8.3
+15min tb7  log T4 M1.0 q0.10 pmRich meta     bps +1.99 [+0.99,+2.98] hit 0.557 null95 +1.71 excess +0.28 [-1.04,+1.60] trades/day 10.5
+       paired vs base (primary): d bps +0.83 [-0.53,+2.18], d excess over null95 +0.93 [-0.64,+2.50]
+       paired vs base (meta): d bps -0.11 [-1.38,+1.15], d excess over null95 -0.11 [-1.30,+1.07]
 1h   rich log T12 M1.5 q0.20 base   primary  bps +26.02 [+10.58,+41.46] hit 0.576 null95 +11.49 excess +14.53 [-0.53,+29.59] trades/day 3.4
 1h   rich log T12 M1.5 q0.20 base   meta     bps +30.70 [+13.11,+48.28] hit 0.568 null95 +10.99 excess +19.71 [+4.55,+34.87] trades/day 4.3
 1h   rich log T12 M1.5 q0.20 mG5    primary  bps +26.02 [+10.58,+41.46] hit 0.576 null95 +10.92 excess +15.10 [+0.56,+29.65] trades/day 3.4
@@ -468,8 +512,66 @@
 1min_a tb7  log T15 M1.0 q0.10 pmRich meta     bps +5.20 [+3.28,+7.12] hit 0.609 null95 +1.04 excess +4.17 [+2.76,+5.58] trades/day 154.5
        paired vs base (primary): d bps +0.12 [-0.31,+0.56], d excess over null95 +0.11 [-0.21,+0.44]
        paired vs base (meta): d bps +0.74 [-0.21,+1.68], d excess over null95 +0.71 [-0.12,+1.53]
+5min tb7  hgb T6 M1.0 q0.10 base   primary  bps +1.59 [+0.63,+2.56] hit 0.544 null95 +1.02 excess +0.57 [-0.12,+1.27] trades/day 23.1
+5min tb7  hgb T6 M1.0 q0.10 base   meta     bps +1.49 [+0.45,+2.53] hit 0.541 null95 +0.63 excess +0.86 [+0.03,+1.70] trades/day 35.4
+5min tb7  log T6 M1.0 q0.10 base   primary  bps +0.08 [-0.73,+0.89] hit 0.524 null95 +1.05 excess -0.97 [-1.97,+0.03] trades/day 22.5
+5min tb7  log T6 M1.0 q0.10 base   meta     bps +1.42 [+0.52,+2.31] hit 0.539 null95 +0.66 excess +0.76 [-0.01,+1.52] trades/day 38.6
+5min tb7  log T6 M1.0 q0.10 mG5    primary  bps +0.08 [-0.73,+0.89] hit 0.524 null95 +1.00 excess -0.92 [-1.88,+0.03] trades/day 22.5
+5min tb7  log T6 M1.0 q0.10 mG5    meta     bps +1.52 [+0.51,+2.52] hit 0.540 null95 +0.70 excess +0.82 [-0.02,+1.65] trades/day 37.3
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 +0.05 [-0.06,+0.16]
+       paired vs base (meta): d bps +0.10 [-0.35,+0.55], d excess over null95 +0.06 [-0.45,+0.57]
+5min tb7  log T6 M1.0 q0.10 mGR    primary  bps +0.08 [-0.73,+0.89] hit 0.524 null95 +1.06 excess -0.98 [-2.00,+0.04] trades/day 22.5
+5min tb7  log T6 M1.0 q0.10 mGR    meta     bps +1.44 [+0.67,+2.21] hit 0.539 null95 +0.61 excess +0.84 [+0.23,+1.44] trades/day 37.1
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 -0.01 [-0.10,+0.08]
+       paired vs base (meta): d bps +0.03 [-0.36,+0.41], d excess over null95 +0.08 [-0.36,+0.52]
+5min tb7  log T6 M1.0 q0.10 mPerm  primary  bps +0.08 [-0.73,+0.89] hit 0.524 null95 +1.06 excess -0.98 [-2.03,+0.07] trades/day 22.5
+5min tb7  log T6 M1.0 q0.10 mPerm  meta     bps +1.49 [+0.45,+2.54] hit 0.540 null95 +0.67 excess +0.82 [-0.03,+1.67] trades/day 36.9
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 -0.01 [-0.09,+0.07]
+       paired vs base (meta): d bps +0.08 [-0.30,+0.46], d excess over null95 +0.06 [-0.33,+0.46]
+5min tb7  log T6 M1.0 q0.10 mRich  primary  bps +0.08 [-0.73,+0.89] hit 0.524 null95 +1.08 excess -1.01 [-2.10,+0.08] trades/day 22.5
+5min tb7  log T6 M1.0 q0.10 mRich  meta     bps +1.26 [+0.43,+2.09] hit 0.538 null95 +0.59 excess +0.67 [-0.08,+1.41] trades/day 38.4
+       paired vs base (primary): d bps +0.00 [+0.00,+0.00], d excess over null95 -0.04 [-0.14,+0.07]
+       paired vs base (meta): d bps -0.16 [-0.52,+0.20], d excess over null95 -0.09 [-0.41,+0.23]
+5min tb7  log T6 M1.0 q0.10 pmG5   primary  bps +0.68 [-0.26,+1.61] hit 0.531 null95 +0.95 excess -0.27 [-1.24,+0.70] trades/day 22.5
+5min tb7  log T6 M1.0 q0.10 pmG5   meta     bps +1.37 [+0.32,+2.43] hit 0.539 null95 +0.60 excess +0.77 [-0.09,+1.63] trades/day 36.5
+       paired vs base (primary): d bps +0.60 [-0.14,+1.34], d excess over null95 +0.70 [-0.08,+1.49]
+       paired vs base (meta): d bps -0.04 [-0.59,+0.51], d excess over null95 +0.01 [-0.59,+0.62]
+5min tb7  hgb T6 M1.0 q0.10 pmGR   primary  bps +2.39 [+0.31,+4.48] hit 0.552 null95 +1.03 excess +1.36 [-0.36,+3.08] trades/day 22.5
+5min tb7  hgb T6 M1.0 q0.10 pmGR   meta     bps +1.70 [+0.24,+3.16] hit 0.543 null95 +0.69 excess +1.01 [-0.19,+2.21] trades/day 33.0
+       paired vs base (primary): d bps +0.80 [-0.71,+2.31], d excess over null95 +0.79 [-0.63,+2.21]
+       paired vs base (meta): d bps +0.21 [-0.39,+0.81], d excess over null95 +0.15 [-0.42,+0.72]
+5min tb7  log T6 M1.0 q0.10 pmGR   primary  bps +2.16 [+0.58,+3.75] hit 0.548 null95 +0.95 excess +1.22 [-0.03,+2.47] trades/day 23.0
+5min tb7  log T6 M1.0 q0.10 pmGR   meta     bps +1.87 [+0.43,+3.31] hit 0.544 null95 +0.69 excess +1.18 [-0.02,+2.39] trades/day 34.4
+       paired vs base (primary): d bps +2.09 [+0.39,+3.79], d excess over null95 +2.19 [+0.47,+3.91]
+       paired vs base (meta): d bps +0.46 [-0.43,+1.34], d excess over null95 +0.43 [-0.50,+1.35]
+5min tb7  log T6 M1.0 q0.10 pmPerm primary  bps +0.02 [-1.13,+1.18] hit 0.524 null95 +0.97 excess -0.95 [-2.18,+0.28] trades/day 22.2
+5min tb7  log T6 M1.0 q0.10 pmPerm meta     bps +1.20 [+0.28,+2.12] hit 0.537 null95 +0.60 excess +0.61 [-0.14,+1.35] trades/day 38.2
+       paired vs base (primary): d bps -0.05 [-0.50,+0.40], d excess over null95 +0.02 [-0.49,+0.53]
+       paired vs base (meta): d bps -0.21 [-0.64,+0.22], d excess over null95 -0.15 [-0.62,+0.32]
+5min tb7  hgb T6 M1.0 q0.10 pmRich primary  bps +2.32 [+1.06,+3.58] hit 0.556 null95 +0.94 excess +1.38 [+0.34,+2.41] trades/day 22.6
+5min tb7  hgb T6 M1.0 q0.10 pmRich meta     bps +1.69 [+0.77,+2.61] hit 0.544 null95 +0.64 excess +1.05 [+0.32,+1.78] trades/day 35.6
+       paired vs base (primary): d bps +0.73 [+0.34,+1.11], d excess over null95 +0.80 [+0.31,+1.30]
+       paired vs base (meta): d bps +0.20 [-0.21,+0.61], d excess over null95 +0.18 [-0.18,+0.55]
+5min tb7  log T6 M1.0 q0.10 pmRich primary  bps +1.50 [+0.17,+2.83] hit 0.543 null95 +1.01 excess +0.49 [-0.56,+1.55] trades/day 22.7
+5min tb7  log T6 M1.0 q0.10 pmRich meta     bps +1.52 [+0.39,+2.65] hit 0.541 null95 +0.70 excess +0.82 [-0.08,+1.72] trades/day 37.0
+       paired vs base (primary): d bps +1.43 [+0.18,+2.68], d excess over null95 +1.46 [+0.17,+2.76]
+       paired vs base (meta): d bps +0.10 [-0.40,+0.61], d excess over null95 +0.06 [-0.44,+0.57]
 
 Direct pairs (a minus b, 8 folds, d bps and d excess over null95):
+15min tb7  log T4 M1.0 q0.10 mGR - mRich primary : d bps +0.00 [+0.00,+0.00], d excess +0.06 [-0.02,+0.14]
+15min tb7  log T4 M1.0 q0.10 mGR - mRich meta    : d bps +0.14 [-1.06,+1.34], d excess +0.07 [-1.26,+1.39]
+15min tb7  log T4 M1.0 q0.10 mGR - mPerm primary : d bps +0.00 [+0.00,+0.00], d excess +0.12 [-0.07,+0.31]
+15min tb7  log T4 M1.0 q0.10 mGR - mPerm meta    : d bps +0.70 [-0.36,+1.76], d excess +0.69 [-0.49,+1.87]
+15min tb7  log T4 M1.0 q0.10 pmG5 - pmRich primary : d bps -0.60 [-2.35,+1.16], d excess -0.89 [-2.51,+0.72]
+15min tb7  log T4 M1.0 q0.10 pmG5 - pmRich meta    : d bps +0.37 [-1.10,+1.84], d excess +0.38 [-1.09,+1.86]
+15min tb7  hgb T4 M1.0 q0.10 pmGR - pmRich primary : d bps +0.18 [-1.77,+2.14], d excess -0.44 [-2.45,+1.57]
+15min tb7  hgb T4 M1.0 q0.10 pmGR - pmRich meta    : d bps -0.12 [-1.01,+0.77], d excess -0.22 [-1.03,+0.59]
+15min tb7  log T4 M1.0 q0.10 pmGR - pmRich primary : d bps +0.57 [-1.19,+2.32], d excess +0.38 [-1.26,+2.02]
+15min tb7  log T4 M1.0 q0.10 pmGR - pmRich meta    : d bps +0.45 [-0.53,+1.43], d excess +0.35 [-0.46,+1.15]
+15min tb7  log T4 M1.0 q0.10 pmGR - pmPerm primary : d bps +2.33 [+0.96,+3.71], d excess +2.45 [+0.97,+3.93]
+15min tb7  log T4 M1.0 q0.10 pmGR - pmPerm meta    : d bps +1.16 [+0.14,+2.18], d excess +0.99 [+0.07,+1.90]
+15min tb7  log T4 M1.0 q0.10 pmGR - pmG5 primary : d bps +1.16 [+0.32,+2.00], d excess +1.27 [+0.42,+2.13]
+15min tb7  log T4 M1.0 q0.10 pmGR - pmG5 meta    : d bps +0.08 [-0.70,+0.87], d excess -0.03 [-0.89,+0.82]
 1h   tb7  log T12 M1.5 q0.20 mGR - mRich primary : d bps +0.00 [+0.00,+0.00], d excess -0.03 [-0.73,+0.67]
 1h   tb7  log T12 M1.5 q0.20 mGR - mRich meta    : d bps -0.17 [-9.48,+9.15], d excess -0.07 [-9.41,+9.26]
 1h   tb7  log T12 M1.5 q0.20 mGR - mPerm primary : d bps +0.00 [+0.00,+0.00], d excess +0.26 [-0.57,+1.10]
@@ -552,3 +654,17 @@ Direct pairs (a minus b, 8 folds, d bps and d excess over null95):
 1min_a tb7  log T15 M1.0 q0.10 pmGR - pmPerm meta    : d bps +1.57 [+0.96,+2.18], d excess +1.62 [+0.93,+2.31]
 1min_a tb7  log T15 M1.0 q0.10 pmGR - pmG5 primary : d bps +1.60 [-0.28,+3.49], d excess +1.59 [-0.35,+3.54]
 1min_a tb7  log T15 M1.0 q0.10 pmGR - pmG5 meta    : d bps +0.48 [+0.07,+0.88], d excess +0.50 [+0.08,+0.93]
+5min tb7  log T6 M1.0 q0.10 mGR - mRich primary : d bps +0.00 [+0.00,+0.00], d excess +0.03 [-0.07,+0.12]
+5min tb7  log T6 M1.0 q0.10 mGR - mRich meta    : d bps +0.18 [-0.33,+0.69], d excess +0.17 [-0.37,+0.71]
+5min tb7  log T6 M1.0 q0.10 mGR - mPerm primary : d bps +0.00 [+0.00,+0.00], d excess -0.00 [-0.08,+0.08]
+5min tb7  log T6 M1.0 q0.10 mGR - mPerm meta    : d bps -0.05 [-0.44,+0.33], d excess +0.02 [-0.33,+0.36]
+5min tb7  log T6 M1.0 q0.10 pmG5 - pmRich primary : d bps -0.82 [-1.65,-0.00], d excess -0.76 [-1.63,+0.10]
+5min tb7  log T6 M1.0 q0.10 pmG5 - pmRich meta    : d bps -0.15 [-0.57,+0.28], d excess -0.05 [-0.45,+0.34]
+5min tb7  hgb T6 M1.0 q0.10 pmGR - pmRich primary : d bps +0.07 [-1.36,+1.51], d excess -0.01 [-1.30,+1.27]
+5min tb7  hgb T6 M1.0 q0.10 pmGR - pmRich meta    : d bps +0.01 [-0.88,+0.91], d excess -0.04 [-0.77,+0.70]
+5min tb7  log T6 M1.0 q0.10 pmGR - pmRich primary : d bps +0.66 [-0.06,+1.39], d excess +0.73 [+0.01,+1.44]
+5min tb7  log T6 M1.0 q0.10 pmGR - pmRich meta    : d bps +0.35 [-0.18,+0.88], d excess +0.36 [-0.16,+0.88]
+5min tb7  log T6 M1.0 q0.10 pmGR - pmPerm primary : d bps +2.14 [+0.54,+3.75], d excess +2.17 [+0.60,+3.74]
+5min tb7  log T6 M1.0 q0.10 pmGR - pmPerm meta    : d bps +0.67 [+0.03,+1.31], d excess +0.58 [-0.01,+1.16]
+5min tb7  log T6 M1.0 q0.10 pmGR - pmG5 primary : d bps +1.49 [+0.35,+2.62], d excess +1.49 [+0.34,+2.64]
+5min tb7  log T6 M1.0 q0.10 pmGR - pmG5 meta    : d bps +0.50 [-0.01,+1.01], d excess +0.41 [-0.07,+0.90]

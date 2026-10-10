@@ -29,6 +29,8 @@ CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"; L = 60; HOLD = pd.Timestamp("202
 FC = os.path.join(HERE, "featcache"); os.makedirs(FC, exist_ok=True)
 SETUP = {"1min": dict(T=15, tp=1.0, sl=1.0, q=0.10, stride=5, start="2020-01-01", min_leaf=500),
          "1h": dict(T=12, tp=1.5, sl=1.5, q=0.20, stride=1, start="2017-01-01", min_leaf=300),
+         "5min": dict(T=6, tp=1.0, sl=1.0, q=0.10, stride=1, start="2020-01-01", rule="5min", min_leaf=300),     # bar-size generality: 5- and 15-minute bars
+         "15min": dict(T=4, tp=1.0, sl=1.0, q=0.10, stride=1, start="2020-01-01", rule="15min", min_leaf=300),
          "1min_a": dict(T=15, tp=1.0, sl=1.0, q=0.10, stride=5, start="2017-01-01", end="2020-01-01", min_leaf=500)}   # replication on 2017-2019 (dev, before 2024-07)
 TQ = {8: 2.36}
 
@@ -37,8 +39,8 @@ def bars(kind):
     s = pd.read_csv(CSV, usecols=["timestamp", "open", "high", "low", "close", "volume"])
     s.index = pd.to_datetime(s["timestamp"]); s = s.drop(columns="timestamp").sort_index()
     s = s[(s.index >= SETUP[kind]["start"]) & (s.index < pd.Timestamp(SETUP[kind].get("end", HOLD)))]
-    if kind == "1h":
-        s = s.resample("1h").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
+    if kind == "1h" or SETUP[kind].get("rule"):
+        s = s.resample("1h" if kind == "1h" else SETUP[kind]["rule"]).agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
     s.columns = list("ohlcv"); return s
 
 
