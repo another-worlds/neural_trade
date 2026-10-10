@@ -28,14 +28,15 @@ import geomlib as G  # noqa: E402
 CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"; L = 60; HOLD = pd.Timestamp("2024-07-01")
 FC = os.path.join(HERE, "featcache"); os.makedirs(FC, exist_ok=True)
 SETUP = {"1min": dict(T=15, tp=1.0, sl=1.0, q=0.10, stride=5, start="2020-01-01", min_leaf=500),
-         "1h": dict(T=12, tp=1.5, sl=1.5, q=0.20, stride=1, start="2017-01-01", min_leaf=300)}
+         "1h": dict(T=12, tp=1.5, sl=1.5, q=0.20, stride=1, start="2017-01-01", min_leaf=300),
+         "1min_a": dict(T=15, tp=1.0, sl=1.0, q=0.10, stride=5, start="2017-01-01", end="2020-01-01", min_leaf=500)}   # replication on 2017-2019 (dev, before 2024-07)
 TQ = {8: 2.36}
 
 
 def bars(kind):
     s = pd.read_csv(CSV, usecols=["timestamp", "open", "high", "low", "close", "volume"])
     s.index = pd.to_datetime(s["timestamp"]); s = s.drop(columns="timestamp").sort_index()
-    s = s[(s.index >= SETUP[kind]["start"]) & (s.index < HOLD)]
+    s = s[(s.index >= SETUP[kind]["start"]) & (s.index < pd.Timestamp(SETUP[kind].get("end", HOLD)))]
     if kind == "1h":
         s = s.resample("1h").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
     s.columns = list("ohlcv"); return s
@@ -117,7 +118,15 @@ def run(kind, feat, variant, q=None, T=None, M=None, primary=None):
     perm = np.random.default_rng(1).permutation(len(F)); gP = gR[perm]       # controls: geometry rows shuffled across time (same marginals, no information)
     Fp, Fm = {"base": (F, F), "mG5": (F, np.hstack([F, g5])), "mGR": (F, np.hstack([F, gR])), "pmGR": (np.hstack([F, gR]), np.hstack([F, gR])),
               "mRich": (F, np.hstack([F, D["F_rich"]])), "mPerm": (F, np.hstack([F, gP])), "pmPerm": (np.hstack([F, gP]), np.hstack([F, gP])),
-              "pmRich": (np.hstack([F, D["F_rich"]]), np.hstack([F, D["F_rich"]])), "pmG5": (np.hstack([F, g5]), np.hstack([F, g5]))}[variant]
+              "pmRich": (np.hstack([F, D["F_rich"]]), np.hstack([F, D["F_rich"]])), "pmG5": (np.hstack([F, g5]), np.hstack([F, g5]))}.get(variant, (F, F))
+    if variant.startswith("pmG_"):      # ablation by channel group / feature type: primary and meta get F + that part of the 22-channel geometry
+        names = G.geom_names(None, (3, 5, 10, 20)); grp = variant[4:]
+        CH = {"trend": ("ema", "sma", "vwap"), "band": ("bb_", "kel", "don"), "osc": ("rsi", "macd", "stoch", "cci", "mfi", "dmi"), "vol": ("adx", "atr", "obv")}
+        if grp in CH:
+            cols = [i for i, nm in enumerate(names) if nm.startswith(CH[grp])]
+        else:
+            cols = [i for i, nm in enumerate(names) if nm.split(".")[1].startswith({"slope": "slope", "pos": "pos", "cross": "cross", "squeeze": "squeeze"}[grp])]
+        Fp = Fm = np.hstack([F, gR[:, cols]])
     n = len(F); edges = np.linspace(n * 0.3, n, 9).astype(int); gap = max(1, 2 * S["T"] // S["stride"])
     path = os.path.join(HERE, "meta_rows.jsonl")
     for f in range(8):
