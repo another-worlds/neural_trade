@@ -17,7 +17,7 @@ def paired(a, b, key):
     s = [x for x in a if x in b]; return np.array([a[x][key] - b[x][key] for x in s]) if len(s) > 1 else None
 ref = by.get(("tb7", "logreg"), {})
 out = []
-sets = ["tb7", "rich", "g5", "gR", "tb7+g5", "rich+g5", "tb7+gR", "rich+gR"]
+sets = ["tb7", "rich", "g5", "gR", "tb7+g5", "rich+g5", "tb7+gR", "rich+gR", "gc3", "gc5", "gc10", "gc20", "tb7+gc3", "tb7+gc5", "tb7+gc10", "tb7+gc20"]
 for m in ("logreg", "hgb", "mlp", "logreg_c01", "logreg_c001", "hgb_reg", "mlp_reg"):
     out.append(f"\n== model {m}: 24 slices; mean3 AUC, d vs tb7 logreg, d vs same model on the base set (tb7/rich), h1 logloss - constant, top-10% hit, excess over null95")
     for s in sets:
