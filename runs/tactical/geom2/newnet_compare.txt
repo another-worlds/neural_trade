@@ -1,0 +1,14 @@
+linear seed 0: plain mean3 0.5700, geometry 0.5710; params 2717 vs 8457; sec 484 vs 733
+    mean3 AUC                    geometry - plain +0.0010 [-0.0030,+0.0049]
+    d vs own regression          geometry - plain +0.0000 [+0.0000,+0.0000]
+    h1 log loss (lower better)   geometry - plain -0.0005 [-0.0019,+0.0009]
+    vol Spearman                 geometry - plain -0.0069 [-0.0094,-0.0044]
+    top-10% bps                  geometry - plain +0.7495 [-1.1387,+2.6377]
+    mag-filtered top-10% bps     geometry - plain +0.2387 [-2.3110,+2.7884]
+patch seed 0: plain mean3 0.5701, geometry 0.5711; params 22720 vs 28460; sec 2883 vs 2930
+    mean3 AUC                    geometry - plain +0.0010 [-0.0039,+0.0058]
+    d vs own regression          geometry - plain -0.0000 [-0.0023,+0.0023]
+    h1 log loss (lower better)   geometry - plain -0.0010 [-0.0029,+0.0010]
+    vol Spearman                 geometry - plain -0.0028 [-0.0074,+0.0017]
+    top-10% bps                  geometry - plain +0.5282 [-0.8388,+1.8952]
+    mag-filtered top-10% bps     geometry - plain +0.5190 [-1.4105,+2.4485]
