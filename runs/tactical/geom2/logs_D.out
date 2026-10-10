@@ -1,0 +1,10 @@
+job1 rc 0 22s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant mRich
+job3 rc 0 22s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant mPerm
+job5 rc 0 83s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmPerm
+job7 rc 0 62s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmRich
+job0 rc 0 91s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant mRich
+job9 rc 0 22s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG5
+job2 rc 0 123s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant mPerm
+job6 rc 0 125s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmRich
+job8 rc 0 83s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG5
+job4 rc 0 256s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmPerm

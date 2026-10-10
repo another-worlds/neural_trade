@@ -1,0 +1,2 @@
+job5 rc 0 21s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant base --T 12 --M 1.0
+job4 rc 0 22s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant base --T 24 --M 1.5

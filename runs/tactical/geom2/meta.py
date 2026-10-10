@@ -82,7 +82,7 @@ def split(D, S, Fp, Fm, tr, te, rng):
     """Fp: primary features, Fm: meta features (columns beyond Fp may be added); out-of-fold primary inside tr."""
     y = (D["rT"] > 0).astype(int); gap = max(1, 2 * S["T"] // S["stride"]); blocks = np.array_split(tr, 4)
     sp = StandardScaler().fit(Fp[tr]); Xp = sp.transform(Fp); sm = StandardScaler().fit(Fm[tr]); Xm = sm.transform(Fm)
-    clf = lambda: LogisticRegression(C=0.1, max_iter=1000)
+    clf = (lambda: hgb(S['min_leaf'])) if S.get('primary') == 'hgb' else (lambda: LogisticRegression(C=0.1, max_iter=1000))
     oof_idx, oof_p = [], []
     for k in (1, 2, 3):
         fi = np.concatenate(blocks[:k]); fi = fi[fi < blocks[k][0] - gap]
@@ -106,8 +106,8 @@ def split(D, S, Fp, Fm, tr, te, rng):
     return out
 
 
-def run(kind, feat, variant, q=None, T=None, M=None):
-    S = dict(SETUP[kind]); S["q"] = q or S["q"]; D = dict(np.load(f"{FC}/meta_{kind}.npz"))
+def run(kind, feat, variant, q=None, T=None, M=None, primary=None):
+    S = dict(SETUP[kind]); S["q"] = q or S["q"]; S["primary"] = primary or "logreg"; D = dict(np.load(f"{FC}/meta_{kind}.npz"))
     if T or M:      # other barrier geometry: new labels on the first n_T anchors of the cached features (T >= the cached T keeps them a prefix)
         assert (T or S["T"]) >= S["T"]; S["T"] = T or S["T"]; S["tp"] = S["sl"] = M or S["tp"]
         lab_, _, anch = labels(kind, S["T"], S["tp"], S["sl"]); D.update(lab_)
@@ -122,7 +122,7 @@ def run(kind, feat, variant, q=None, T=None, M=None):
     path = os.path.join(HERE, "meta_rows.jsonl")
     for f in range(8):
         tr = np.arange(0, max(1, edges[f] - gap)); te = np.arange(edges[f], edges[f + 1]); r = split(D, S, Fp, Fm, tr, te, rng)
-        open(path, "a", encoding="utf-8").write(json.dumps(dict(bars=kind, feat=feat, variant=variant, q=S["q"], T=S["T"], M=S["tp"], fold=f, **r)) + "\n")
+        open(path, "a", encoding="utf-8").write(json.dumps(dict(bars=kind, feat=feat, variant=variant, q=S["q"], T=S["T"], M=S["tp"], pkind=S["primary"], fold=f, **r)) + "\n")
         print(f"{kind} {feat} {variant} fold {f}: " + " ".join(f"{k} {v['bps']:+.2f} (null {v['null95']:+.2f}, n {v['n']})" for k, v in r.items() if v),
               f"{time.time() - t0:.0f}s", flush=True)
 
@@ -133,29 +133,42 @@ def report():
     fmt = lambda c: f"{c[0]:+.2f} [{c[1]:+.2f},{c[2]:+.2f}]"; lines = []
     cells = {}
     for r in rows:
-        cells.setdefault((r["bars"], r["feat"], r["variant"], r.get("q", SETUP[r["bars"]]["q"]), r.get("T", SETUP[r["bars"]]["T"]), r.get("M", SETUP[r["bars"]]["tp"])), {})[r["fold"]] = r
-    for (bars_, feat, var, q_, T_, M_), fd in sorted(cells.items()):
+        cells.setdefault((r["bars"], r["feat"], r["variant"], r.get("q", SETUP[r["bars"]]["q"]), r.get("T", SETUP[r["bars"]]["T"]), r.get("M", SETUP[r["bars"]]["tp"]), r.get("pkind", "logreg")), {})[r["fold"]] = r
+    for (bars_, feat, var, q_, T_, M_, pr_), fd in sorted(cells.items()):
         if len(fd) < 8 or any(fd[f].get("meta") is None or fd[f].get("primary") is None for f in range(8)):
             continue
         for sel in ("primary", "meta"):
             v = {k: np.array([fd[f][sel][k] for f in range(8)]) for k in ("bps", "hit", "null95", "per_day", "n")}
-            lines.append(f"{bars_:4s} {feat:4s} T{T_} M{M_} q{q_:.2f} {var:6s} {sel:8s} bps {fmt(ci(v['bps']))} hit {v['hit'].mean():.3f} null95 {v['null95'].mean():+.2f} "
+            lines.append(f"{bars_:4s} {feat:4s} {pr_[:3]} T{T_} M{M_} q{q_:.2f} {var:6s} {sel:8s} bps {fmt(ci(v['bps']))} hit {v['hit'].mean():.3f} null95 {v['null95'].mean():+.2f} "
                          f"excess {fmt(ci(v['bps'] - v['null95']))} trades/day {v['per_day'].mean():.1f}")
-        base = cells.get((bars_, feat, "base", q_, T_, M_))
+        base = cells.get((bars_, feat, "base", q_, T_, M_, pr_))
         if var != "base" and base and len(base) == 8:
             for sel in ("primary", "meta"):
                 d = np.array([fd[f][sel]["bps"] - base[f][sel]["bps"] for f in range(8)])
                 e = np.array([(fd[f][sel]["bps"] - fd[f][sel]["null95"]) - (base[f][sel]["bps"] - base[f][sel]["null95"]) for f in range(8)])
                 lines.append(f"       paired vs base ({sel}): d bps {fmt(ci(d))}, d excess over null95 {fmt(ci(e))}")
+    PAIRS = [("pmGR", "pmRich"), ("pmGR", "pmPerm"), ("mGR", "mRich"), ("mGR", "mPerm"), ("pmG5", "pmRich"), ("pmGR", "pmG5")]
+    lines.append("\nDirect pairs (a minus b, 8 folds, d bps and d excess over null95):")
+    for (bars_, feat, var, q_, T_, M_, pr_), fd in sorted(cells.items()):
+        for a_, b_ in PAIRS:
+            if var != a_ or len(fd) < 8:
+                continue
+            ob = cells.get((bars_, feat, b_, q_, T_, M_, pr_))
+            if not ob or len(ob) < 8:
+                continue
+            for sel in ("primary", "meta"):
+                d = np.array([fd[f][sel]["bps"] - ob[f][sel]["bps"] for f in range(8)])
+                e = np.array([(fd[f][sel]["bps"] - fd[f][sel]["null95"]) - (ob[f][sel]["bps"] - ob[f][sel]["null95"]) for f in range(8)])
+                lines.append(f"{bars_:4s} {feat:4s} {pr_[:3]} T{T_} M{M_} q{q_:.2f} {a_} - {b_} {sel:8s}: d bps {fmt(ci(d))}, d excess {fmt(ci(e))}")
     txt = "\n".join(lines); print(txt); open(os.path.join(HERE, "meta_report.txt"), "w", encoding="utf-8").write(txt + "\n")
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--bars", default="1h"); ap.add_argument("--feat", default="tb7"); ap.add_argument("--variant", default="base"); ap.add_argument("--q", type=float, default=0.0); ap.add_argument("--T", type=int, default=0); ap.add_argument("--M", type=float, default=0.0)
+    ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--bars", default="1h"); ap.add_argument("--feat", default="tb7"); ap.add_argument("--variant", default="base"); ap.add_argument("--q", type=float, default=0.0); ap.add_argument("--T", type=int, default=0); ap.add_argument("--M", type=float, default=0.0); ap.add_argument("--primary", default="")
     a = ap.parse_args()
     if a.cmd == "build":
         build(a.bars)
     elif a.cmd == "run":
-        run(a.bars, a.feat, a.variant, a.q or None, a.T or None, a.M or None)
+        run(a.bars, a.feat, a.variant, a.q or None, a.T or None, a.M or None, a.primary or None)
     else:
         report()
