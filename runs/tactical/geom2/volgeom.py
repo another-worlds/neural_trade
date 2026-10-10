@@ -21,7 +21,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor  # noqa: E402
 from sklearn.linear_model import Ridge  # noqa: E402
 
 VOL_CH = ("atr14", "bb_width", "bb_up", "bb_lo", "kel_up", "kel_lo", "don_up", "don_lo", "adx14", "obv")
-LEARNED = ["hgb_har", "hgb_har_vg", "hgb_har_gR", "hgb_gR", "ridge_har", "ridge_har_vg"]
+LEARNED = ["hgb_har", "hgb_har_vg", "hgb_har_gR", "hgb_gR", "ridge_har", "ridge_har_vg", "ridge_vec", "ridge_vec_vg", "ridge_vec_gR", "hgb_vec", "hgb_vec_gR"]
 LEARNED_H = ["hgb_har", "hgb_har_vg", "hgb_har_gR", "hgb_gR", "hgb_ctx_ref", "hgb_ctx_gR"]
 STRIDE = 10
 
@@ -64,12 +64,13 @@ def windows(A, t):
     return A[t[:, None] + np.arange(-V.WIN + 1, 1)[None, :]]
 
 
-def run_minute(shard, of):
+def run_minute(shard, of, vec_models=False):
     close, tod = V.load_minute(); A = ohlcv(); assert len(A) == len(close)
     lr = np.concatenate([[0.0], np.diff(np.log(np.maximum(close, 1e-9)))]); cs = V.cum_sq(lr)
     logv = [np.log(V.trailing_var(cs, k) + 1e-12) for k in V.HAR_LAGS]
     names = sorted(f[:-4] for f in os.listdir(V.LAB_CACHE) if f.endswith(".npz"))[shard::of]
-    out = os.path.join(HERE, f"volgeom_rows_{shard}.jsonl")
+    out = os.path.join(HERE, f"volgeom_rows_{'vec' if vec_models else ''}{shard}.jsonl")
+    vec = np.load(f"{V.SERIES_CACHE}/series_vec.npy", mmap_mode="r") if vec_models else None
     for nm in names:
         t0 = time.time(); D = np.load(f"{V.LAB_CACHE}/{nm}.npz"); rva = D["rva"].astype(np.float64); nva = len(rva)
         vs = V.locate_val(close, D["Wva"]); avail = vs - V.GAPB - (1440 - V.WIN + 1) + 1
@@ -87,9 +88,15 @@ def run_minute(shard, of):
         Wtr, Wva = windows(A, sub), windows(A, t_va)
         Gtr, Gva = {"vg": vg(Wtr), "gR": gR(Wtr)}, {"vg": vg(Wva), "gR": gR(Wva)}
         U = V.Unit(nm, [rv[:, i] for i in range(3)]); gap = max(1, 80 // STRIDE)
-        jobs = [("hgb_har", "hgb", Htr, Hva), ("hgb_har_vg", "hgb", np.hstack([Htr, Gtr["vg"]]), np.hstack([Hva, Gva["vg"]])),
-                ("hgb_har_gR", "hgb", np.hstack([Htr, Gtr["gR"]]), np.hstack([Hva, Gva["gR"]])), ("hgb_gR", "hgb", Gtr["gR"], Gva["gR"]),
-                ("ridge_har", "ridge", Htr, Hva), ("ridge_har_vg", "ridge", np.hstack([Htr, Gtr["vg"]]), np.hstack([Hva, Gva["vg"]]))]
+        if vec_models:   # the network's 60 per-bar features (rich + volatility context): does geometry add on top of them?
+            Vtr, Vva = np.asarray(vec[sub], np.float32), np.asarray(vec[t_va], np.float32)
+            jobs = [("ridge_vec", "ridge", Vtr, Vva), ("ridge_vec_vg", "ridge", np.hstack([Vtr, Gtr["vg"]]), np.hstack([Vva, Gva["vg"]])),
+                    ("ridge_vec_gR", "ridge", np.hstack([Vtr, Gtr["gR"]]), np.hstack([Vva, Gva["gR"]])),
+                    ("hgb_vec", "hgb", Vtr, Vva), ("hgb_vec_gR", "hgb", np.hstack([Vtr, Gtr["gR"]]), np.hstack([Vva, Gva["gR"]]))]
+        else:
+          jobs = [("hgb_har", "hgb", Htr, Hva), ("hgb_har_vg", "hgb", np.hstack([Htr, Gtr["vg"]]), np.hstack([Hva, Gva["vg"]])),
+                  ("hgb_har_gR", "hgb", np.hstack([Htr, Gtr["gR"]]), np.hstack([Hva, Gva["gR"]])), ("hgb_gR", "hgb", Gtr["gR"], Gva["gR"]),
+                  ("ridge_har", "ridge", Htr, Hva), ("ridge_har_vg", "ridge", np.hstack([Htr, Gtr["vg"]]), np.hstack([Hva, Gva["vg"]]))]
         for fname, kind, Xtr, Xte in jobs:
             row = add_forecast(U, fname, Xtr, Ytr, rtr, Xte, gap, kind, 3)
             row.update(setup="minute", n_val=int(nva), n_train=int(len(sub)))
@@ -135,6 +142,8 @@ def report():
     for setup, std, lrn in (("minute", V.STANDARD_MIN, LEARNED + ["ridge", "tower_patch", "tower_linear"]),
                             ("hourly", V.STANDARD_HR, LEARNED_H + ["hgb_ctx"])):
         rows = [r for r in base + mine if r["setup"] == setup]
+        if len({r["unit"] for r in mine if r["setup"] == setup and r["forecast"] == (lrn[0])}) < (24 if setup == "minute" else 8):
+            lines.append(f"== {setup}: incomplete"); continue
         res = V.table(rows, setup, std, lrn); units = len({r["unit"] for r in mine if r["setup"] == setup})
         best_sp, best_ql = res["spearman"]["best"], res["qlike_cal"]["best"]
         lines.append(f"\n== {setup}: {units} units. best standard: Spearman -> {best_sp}, QLIKE(cal) -> {best_ql}")
@@ -150,6 +159,7 @@ def report():
             if f not in res["spearman"]["cis"]:
                 continue
             ctrl = "hgb_har" if not f.startswith("ridge") else "ridge_har"
+            if "_vec" in f: ctrl = "ridge_vec" if f.startswith("ridge") else "hgb_vec"
             if f == "hgb_ctx_gR": ctrl = "hgb_ctx_ref"
             ps = pair(f, ctrl, "spearman") if f != ctrl and ctrl in by else None
             pq = pair(f, ctrl, "qlike_cal") if f != ctrl and ctrl in by else None
@@ -162,4 +172,4 @@ def report():
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--shard", type=int, default=0); ap.add_argument("--of", type=int, default=1)
     a = ap.parse_args()
-    {"minute": lambda: run_minute(a.shard, a.of), "hourly": run_hourly, "report": report}[a.cmd]()
+    {"minute": lambda: run_minute(a.shard, a.of), "minutevec": lambda: run_minute(a.shard, a.of, True), "hourly": run_hourly, "report": report}[a.cmd]()
