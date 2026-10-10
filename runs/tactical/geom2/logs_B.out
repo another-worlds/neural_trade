@@ -1,0 +1,31 @@
+job0 rc 0 77s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant base
+job1 rc 0 93s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant mG5
+job2 rc 0 166s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant mGR
+job4 rc 0 265s: runs/tactical/geom2/volgeom.py minutevec --shard 0 --of 6
+job5 rc 0 305s: runs/tactical/geom2/volgeom.py minutevec --shard 1 --of 6
+job6 rc 0 298s: runs/tactical/geom2/volgeom.py minutevec --shard 2 --of 6
+job7 rc 0 308s: runs/tactical/geom2/volgeom.py minutevec --shard 3 --of 6
+job3 rc 0 438s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmGR
+job8 rc 0 297s: runs/tactical/geom2/volgeom.py minutevec --shard 4 --of 6
+job9 rc 0 244s: runs/tactical/geom2/volgeom.py minutevec --shard 5 --of 6
+job10 rc 0 204s: runs/tactical/geom2/readout.py --shard 0 --of 6 --models logreg_c01,logreg_c001,hgb_reg,mlp_reg
+job16 rc 0 10s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant base
+job17 rc 0 12s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant mG5
+job18 rc 0 22s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant mGR
+job11 rc 0 203s: runs/tactical/geom2/readout.py --shard 1 --of 6 --models logreg_c01,logreg_c001,hgb_reg,mlp_reg
+job20 rc 0 17s: runs/tactical/geom2/meta.py run --bars 1h --feat rich --variant base
+job19 rc 0 53s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmGR
+job12 rc 0 209s: runs/tactical/geom2/readout.py --shard 2 --of 6 --models logreg_c01,logreg_c001,hgb_reg,mlp_reg
+job21 rc 0 18s: runs/tactical/geom2/meta.py run --bars 1h --feat rich --variant mG5
+job13 rc 0 196s: runs/tactical/geom2/readout.py --shard 3 --of 6 --models logreg_c01,logreg_c001,hgb_reg,mlp_reg
+job22 rc 0 47s: runs/tactical/geom2/meta.py run --bars 1h --feat rich --variant mGR
+job23 rc 0 114s: runs/tactical/geom2/meta.py run --bars 1h --feat rich --variant pmGR
+job24 rc 0 118s: runs/tactical/geom2/hdir.py run --shard 0 --of 6
+job15 rc 0 224s: runs/tactical/geom2/readout.py --shard 5 --of 6 --models logreg_c01,logreg_c001,hgb_reg,mlp_reg
+job14 rc 0 309s: runs/tactical/geom2/readout.py --shard 4 --of 6 --models logreg_c01,logreg_c001,hgb_reg,mlp_reg
+job26 rc 0 240s: runs/tactical/geom2/hdir.py run --shard 2 --of 6
+job28 rc 0 177s: runs/tactical/geom2/hdir.py run --shard 4 --of 6
+job25 rc 0 320s: runs/tactical/geom2/hdir.py run --shard 1 --of 6
+job30 rc 0 221s: runs/tactical/geom2/featscreen.py
+job29 rc 0 366s: runs/tactical/geom2/hdir.py run --shard 5 --of 6
+job27 rc 0 412s: runs/tactical/geom2/hdir.py run --shard 3 --of 6

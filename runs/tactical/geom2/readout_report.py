@@ -5,7 +5,9 @@ import glob, json, os
 import numpy as np
 from scipy import stats
 HERE = os.path.dirname(os.path.abspath(__file__))
-rows = [json.loads(l) for f in sorted(glob.glob(f"{HERE}/readout_rows_*.jsonl")) for l in open(f)]
+import sys
+PFX = sys.argv[1] if len(sys.argv) > 1 else "readout"
+rows = [json.loads(l) for f in sorted(glob.glob(f"{HERE}/{PFX}_rows_*.jsonl")) for l in open(f)]
 by = {}
 for r in rows:
     by.setdefault((r["set"], r["model"]), {})[r["slice"]] = r
@@ -27,4 +29,4 @@ for m in ("logreg", "hgb", "mlp", "logreg_c01", "logreg_c001", "hgb_reg", "mlp_r
         ex = np.array([x["hon10_bps"] - x["hon10_null95"] for x in d.values()]); ll = np.array([x["ll_h1"] - x["ll_const_h1"] for x in d.values()])
         out.append(f"{s:9s} n={n:2d} feats {next(iter(d.values()))['n_feat']:3d} | AUC {ci(a)} | d vs tb7-logreg {ci(p1) if p1 is not None and (s, m) != ('tb7', 'logreg') else '-':27s} | "
                    f"d vs {base_set or 'base'}-{m} {ci(p2) if p2 is not None else '-':27s} | ll-const {ll.mean():+.4f} | hit {np.mean([x['hon10_hit'] for x in d.values()]):.3f} excess {ci(ex)}")
-txt = "\n".join(out); print(txt); open(f"{HERE}/readout_report.txt", "w", encoding="utf-8").write(txt + "\n")
+txt = "\n".join(out); print(txt); open(f"{HERE}/{PFX}_report.txt", "w", encoding="utf-8").write(txt + "\n")

@@ -1,0 +1,40 @@
+220 features, 24 slices; Bonferroni |t| threshold 4.36; AUC-0.5 on the val blocks (mean of 3 horizons)
+tb7: 13 features, 12 beyond the Bonferroni threshold, max |AUC-0.5| 0.0622, max |t| 10.21
+rich: 43 features, 35 beyond the Bonferroni threshold, max |AUC-0.5| 0.0629, max |t| 10.32
+gR: 164 features, 109 beyond the Bonferroni threshold, max |AUC-0.5| 0.0629, max |t| 10.60
+
+Top 20 by |t| overall:  group name  mean(AUC-0.5)  t  slices with the same sign  train-block mean
+gR    kel_up.slope10               -0.0352 t -10.60 same 24/24 train -0.0409
+rich  rich_9                       -0.0500 t -10.32 same 24/24 train -0.0450
+tb7   tb7_12                       -0.0493 t -10.21 same 24/24 train -0.0508
+rich  rich_7                       -0.0493 t -10.21 same 24/24 train -0.0508
+gR    kel_up.slope3                -0.0344 t -10.18 same 22/24 train -0.0351
+gR    ema40.slope3                 -0.0523 t -10.02 same 24/24 train -0.0536
+gR    macd_line.pos                -0.0473 t -9.77 same 24/24 train -0.0504
+gR    kel_lo.pos                   -0.0513 t -9.49 same 24/24 train -0.0575
+gR    ema20.slope3                 -0.0503 t -9.40 same 24/24 train -0.0528
+rich  rich_32                      -0.0296 t -9.39 same 24/24 train -0.0317
+gR    ema40.pos                    -0.0629 t -9.36 same 24/24 train -0.0625
+rich  rich_13                      -0.0629 t -9.36 same 24/24 train -0.0625
+gR    ema40.slope10                -0.0438 t -9.32 same 24/24 train -0.0462
+rich  rich_8                       -0.0490 t -9.28 same 24/24 train -0.0475
+gR    sma20.slope3                 -0.0419 t -9.25 same 24/24 train -0.0475
+rich  rich_28                      -0.0529 t -9.18 same 24/24 train -0.0547
+tb7   tb7_11                       -0.0493 t -9.16 same 23/24 train -0.0534
+rich  rich_6                       -0.0493 t -9.16 same 23/24 train -0.0534
+gR    obv.slope3                   -0.0252 t -9.12 same 23/24 train -0.0265
+rich  rich_25                      -0.0600 t -9.07 same 24/24 train -0.0572
+
+Top 12 geometry features by |t|:
+gR    kel_up.slope10               -0.0352 t -10.60 same 24/24 train -0.0409
+gR    kel_up.slope3                -0.0344 t -10.18 same 22/24 train -0.0351
+gR    ema40.slope3                 -0.0523 t -10.02 same 24/24 train -0.0536
+gR    macd_line.pos                -0.0473 t -9.77 same 24/24 train -0.0504
+gR    kel_lo.pos                   -0.0513 t -9.49 same 24/24 train -0.0575
+gR    ema20.slope3                 -0.0503 t -9.40 same 24/24 train -0.0528
+gR    ema40.pos                    -0.0629 t -9.36 same 24/24 train -0.0625
+gR    ema40.slope10                -0.0438 t -9.32 same 24/24 train -0.0462
+gR    sma20.slope3                 -0.0419 t -9.25 same 24/24 train -0.0475
+gR    obv.slope3                   -0.0252 t -9.12 same 23/24 train -0.0265
+gR    dmi_diff.pos                 -0.0399 t -9.04 same 23/24 train -0.0434
+gR    vwap20.slope3                -0.0324 t -8.94 same 24/24 train -0.0375

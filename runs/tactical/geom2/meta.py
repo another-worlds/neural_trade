@@ -101,15 +101,18 @@ def split(D, S, Fp, Fm, tr, te, rng):
     return out
 
 
-def run(kind, feat, variant):
-    S = SETUP[kind]; D = np.load(f"{FC}/meta_{kind}.npz"); t0 = time.time(); rng = np.random.default_rng(0)
+def run(kind, feat, variant, q=None):
+    S = dict(SETUP[kind]); S["q"] = q or S["q"]; D = np.load(f"{FC}/meta_{kind}.npz"); t0 = time.time(); rng = np.random.default_rng(0)
     F, g5, gR = D[f"F_{feat}"], D["F_g5"], D["F_gR"]
-    Fp, Fm = {"base": (F, F), "mG5": (F, np.hstack([F, g5])), "mGR": (F, np.hstack([F, gR])), "pmGR": (np.hstack([F, gR]), np.hstack([F, gR]))}[variant]
+    perm = np.random.default_rng(1).permutation(len(F)); gP = gR[perm]       # controls: geometry rows shuffled across time (same marginals, no information)
+    Fp, Fm = {"base": (F, F), "mG5": (F, np.hstack([F, g5])), "mGR": (F, np.hstack([F, gR])), "pmGR": (np.hstack([F, gR]), np.hstack([F, gR])),
+              "mRich": (F, np.hstack([F, D["F_rich"]])), "mPerm": (F, np.hstack([F, gP])), "pmPerm": (np.hstack([F, gP]), np.hstack([F, gP])),
+              "pmRich": (np.hstack([F, D["F_rich"]]), np.hstack([F, D["F_rich"]])), "pmG5": (np.hstack([F, g5]), np.hstack([F, g5]))}[variant]
     n = len(F); edges = np.linspace(n * 0.3, n, 9).astype(int); gap = max(1, 2 * S["T"] // S["stride"])
     path = os.path.join(HERE, "meta_rows.jsonl")
     for f in range(8):
         tr = np.arange(0, max(1, edges[f] - gap)); te = np.arange(edges[f], edges[f + 1]); r = split(D, S, Fp, Fm, tr, te, rng)
-        open(path, "a", encoding="utf-8").write(json.dumps(dict(bars=kind, feat=feat, variant=variant, fold=f, **r)) + "\n")
+        open(path, "a", encoding="utf-8").write(json.dumps(dict(bars=kind, feat=feat, variant=variant, q=S["q"], fold=f, **r)) + "\n")
         print(f"{kind} {feat} {variant} fold {f}: " + " ".join(f"{k} {v['bps']:+.2f} (null {v['null95']:+.2f}, n {v['n']})" for k, v in r.items() if v),
               f"{time.time() - t0:.0f}s", flush=True)
 
@@ -120,15 +123,15 @@ def report():
     fmt = lambda c: f"{c[0]:+.2f} [{c[1]:+.2f},{c[2]:+.2f}]"; lines = []
     cells = {}
     for r in rows:
-        cells.setdefault((r["bars"], r["feat"], r["variant"]), {})[r["fold"]] = r
-    for (bars_, feat, var), fd in sorted(cells.items()):
+        cells.setdefault((r["bars"], r["feat"], r["variant"], r.get("q", SETUP[r["bars"]]["q"])), {})[r["fold"]] = r
+    for (bars_, feat, var, q_), fd in sorted(cells.items()):
         if len(fd) < 8 or any(fd[f].get("meta") is None or fd[f].get("primary") is None for f in range(8)):
             continue
         for sel in ("primary", "meta"):
             v = {k: np.array([fd[f][sel][k] for f in range(8)]) for k in ("bps", "hit", "null95", "per_day", "n")}
-            lines.append(f"{bars_:4s} {feat:4s} {var:5s} {sel:8s} bps {fmt(ci(v['bps']))} hit {v['hit'].mean():.3f} null95 {v['null95'].mean():+.2f} "
+            lines.append(f"{bars_:4s} {feat:4s} q{q_:.2f} {var:5s} {sel:8s} bps {fmt(ci(v['bps']))} hit {v['hit'].mean():.3f} null95 {v['null95'].mean():+.2f} "
                          f"excess {fmt(ci(v['bps'] - v['null95']))} trades/day {v['per_day'].mean():.1f}")
-        base = cells.get((bars_, feat, "base"))
+        base = cells.get((bars_, feat, "base", q_))
         if var != "base" and base and len(base) == 8:
             for sel in ("primary", "meta"):
                 d = np.array([fd[f][sel]["bps"] - base[f][sel]["bps"] for f in range(8)])
@@ -138,11 +141,11 @@ def report():
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--bars", default="1h"); ap.add_argument("--feat", default="tb7"); ap.add_argument("--variant", default="base")
+    ap = argparse.ArgumentParser(); ap.add_argument("cmd"); ap.add_argument("--bars", default="1h"); ap.add_argument("--feat", default="tb7"); ap.add_argument("--variant", default="base"); ap.add_argument("--q", type=float, default=0.0)
     a = ap.parse_args()
     if a.cmd == "build":
         build(a.bars)
     elif a.cmd == "run":
-        run(a.bars, a.feat, a.variant)
+        run(a.bars, a.feat, a.variant, a.q or None)
     else:
         report()
