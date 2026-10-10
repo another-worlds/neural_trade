@@ -1,0 +1,8 @@
+.....                                                                    [100%]
+============================== warnings summary ===============================
+runs/tactical/jepa/v3/test_tradefilter.py: 15 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+5 passed, 15 warnings in 3.06s
