@@ -19,20 +19,20 @@ STRIDE = 5
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("--shard", type=int, default=0); ap.add_argument("--of", type=int, default=1)
-    ap.add_argument("--final", action="store_true"); ap.add_argument("--sets", default=",".join(SETS)); ap.add_argument("--models", default=",".join(MODELS))
+    ap.add_argument("--final", action="store_true"); ap.add_argument("--span", type=int, default=V.SPAN, help="training windows before the val block (525600 = 1 year, 1576800 = 3 years)"); ap.add_argument("--sets", default=",".join(SETS)); ap.add_argument("--models", default=",".join(MODELS))
     a = ap.parse_args()
     close, tod = V.load_minute(); A = VG.ohlcv(); assert len(A) == len(close)
     src = os.path.join(TAC, "lab", "cache_final") if a.final else V.LAB_CACHE
     files = sorted(glob.glob(src + "/*.npz"))[a.shard::a.of]; rng = np.random.default_rng(0)
-    out = os.path.join(HERE, f"longdir{'_final' if a.final else ''}_rows_{a.shard}.jsonl")
+    out = os.path.join(HERE, f"longdir{'3y' if a.span > V.SPAN else ''}{'_final' if a.final else ''}_rows_{a.shard}.jsonl")
     done = {(json.loads(l)["slice"], json.loads(l)["set"], json.loads(l)["model"]) for l in open(out)} if os.path.exists(out) else set()
     for p in files:
         D0 = np.load(p); key = os.path.basename(p)[:-4]; db = float(D0["deadband"]); rva = D0["rva"]; nva = len(rva); t0 = time.time()
         vs = V.locate_val(close, D0["Wva"]); avail = vs - V.GAPB - (1440 - V.WIN + 1) + 1
-        n = int(min(V.SPAN, avail)); s0 = vs - V.GAPB - (n - 1)
-        t_tr = s0 + V.WIN - 1 + np.arange(n); t_va = vs + V.WIN - 1 + np.arange(nva); sub = t_tr[::STRIDE]
+        n = int(min(a.span, avail)); s0 = vs - V.GAPB - (n - 1)
+        t_tr = s0 + V.WIN - 1 + np.arange(n); t_va = vs + V.WIN - 1 + np.arange(nva); sub = t_tr[::max(1, a.span // 105000)]
         rtr = np.stack([close[sub + h] / close[sub] - 1.0 for h in V.HZ], 1).astype(np.float32)
-        assert np.allclose(np.stack([close[t_va + h] / close[t_va] - 1.0 for h in V.HZ], 1), rva, rtol=1e-4, atol=2e-6) and sub[-1] + max(V.HZ) < vs
+        assert a.span > 0 and np.allclose(np.stack([close[t_va + h] / close[t_va] - 1.0 for h in V.HZ], 1), rva, rtol=1e-4, atol=2e-6) and sub[-1] + max(V.HZ) < vs
         Wtr, Wva = VG.windows(A, sub), D0["Wva"]
         D = dict(deadband=db, rtr=rtr, rva=rva); cache = {}
         def feat(name, W, tag):

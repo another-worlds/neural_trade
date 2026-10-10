@@ -11,7 +11,7 @@ def ci(d):
     d = np.asarray(d, float); h = stats.t.ppf(.975, len(d) - 1) * d.std(ddof=1) / np.sqrt(len(d)); return f"{d.mean():+.4f} [{d.mean() - h:+.4f},{d.mean() + h:+.4f}]"
 out = []
 KEYS = [("auc3", "mean3 AUC"), ("d_auc3", "d vs own regression"), ("ll_h1", "h1 log loss (lower better)"), ("vol_rho", "vol Spearman"), ("hon10_bps", "top-10% bps"), ("mon10_bps", "mag-filtered top-10% bps")]
-for arch in ("linear", "patch"):
+for arch in ("linear", "patch", "linear3y", "patch3y"):
     seeds = sorted({s for (t, s) in R if t.startswith(f"geom2_{arch}_base") and isinstance(s, int)})
     pairs = []
     for s in seeds:

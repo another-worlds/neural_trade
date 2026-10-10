@@ -1,0 +1,6 @@
+job0 rc 0 572s: runs/tactical/geom2/longdir.py --shard 0 --of 6 --span 1576800 --sets tb7,rich,gR,tb7+gR,rich+gR --m
+job1 rc 0 579s: runs/tactical/geom2/longdir.py --shard 1 --of 6 --span 1576800 --sets tb7,rich,gR,tb7+gR,rich+gR --m
+job2 rc 0 622s: runs/tactical/geom2/longdir.py --shard 2 --of 6 --span 1576800 --sets tb7,rich,gR,tb7+gR,rich+gR --m
+job3 rc 0 625s: runs/tactical/geom2/longdir.py --shard 3 --of 6 --span 1576800 --sets tb7,rich,gR,tb7+gR,rich+gR --m
+job4 rc 0 665s: runs/tactical/geom2/longdir.py --shard 4 --of 6 --span 1576800 --sets tb7,rich,gR,tb7+gR,rich+gR --m
+job5 rc 0 671s: runs/tactical/geom2/longdir.py --shard 5 --of 6 --span 1576800 --sets tb7,rich,gR,tb7+gR,rich+gR --m

@@ -33,3 +33,10 @@ patch: mean over 3 seeds (per-slice differences averaged over seeds, then t over
     vol Spearman                 geometry - plain -0.0049 [-0.0087,-0.0011]
     top-10% bps                  geometry - plain +0.3140 [-0.8841,+1.5120]
     mag-filtered top-10% bps     geometry - plain -0.2133 [-1.6271,+1.2005]
+linear3y seed 0: plain mean3 0.5696, geometry 0.5709; params 2717 vs 8457; sec 267 vs 536
+    mean3 AUC                    geometry - plain +0.0013 [-0.0022,+0.0048]
+    d vs own regression          geometry - plain +0.0000 [+0.0000,+0.0000]
+    h1 log loss (lower better)   geometry - plain -0.0005 [-0.0018,+0.0008]
+    vol Spearman                 geometry - plain -0.0041 [-0.0074,-0.0007]
+    top-10% bps                  geometry - plain +1.4784 [-0.1317,+3.0885]
+    mag-filtered top-10% bps     geometry - plain +2.0014 [-0.6089,+4.6118]
