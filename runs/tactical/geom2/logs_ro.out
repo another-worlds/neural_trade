@@ -1,0 +1,6 @@
+job1 rc 0 346s: runs/tactical/geom2/readout.py --shard 1 --of 6
+job0 rc 0 380s: runs/tactical/geom2/readout.py --shard 0 --of 6
+job5 rc 0 388s: runs/tactical/geom2/readout.py --shard 5 --of 6
+job2 rc 0 390s: runs/tactical/geom2/readout.py --shard 2 --of 6
+job4 rc 0 425s: runs/tactical/geom2/readout.py --shard 4 --of 6
+job3 rc 0 432s: runs/tactical/geom2/readout.py --shard 3 --of 6

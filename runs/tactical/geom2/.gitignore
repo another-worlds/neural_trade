@@ -1,0 +1,4 @@
+featcache/
+logs/
+__pycache__/
+*.done

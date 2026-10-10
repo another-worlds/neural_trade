@@ -1,0 +1,30 @@
+
+== model logreg: 24 slices; mean3 AUC, d vs tb7 logreg, d vs same model on the base set (tb7/rich), h1 logloss - constant, top-10% hit, excess over null95
+tb7       n=24 feats  13 | AUC +0.5701 [+0.5517,+0.5884] | d vs tb7-logreg -                           | d vs None-logreg -                           | ll-const -0.0069 | hit 0.595 excess -1.2609 [-3.7146,+1.1928]
+rich      n=24 feats  43 | AUC +0.5663 [+0.5465,+0.5861] | d vs tb7-logreg -0.0037 [-0.0073,-0.0002]   | d vs None-logreg -                           | ll-const -0.0044 | hit 0.599 excess +0.4373 [-1.9516,+2.8261]
+g5        n=24 feats  25 | AUC +0.5647 [+0.5476,+0.5818] | d vs tb7-logreg -0.0054 [-0.0107,-0.0001]   | d vs None-logreg -                           | ll-const -0.0055 | hit 0.591 excess -0.7234 [-3.0071,+1.5603]
+gR        n=24 feats 164 | AUC +0.5627 [+0.5453,+0.5800] | d vs tb7-logreg -0.0074 [-0.0129,-0.0019]   | d vs None-logreg -                           | ll-const +0.0054 | hit 0.592 excess +0.0374 [-2.2365,+2.3113]
+tb7+g5    n=24 feats  38 | AUC +0.5684 [+0.5506,+0.5862] | d vs tb7-logreg -0.0017 [-0.0053,+0.0019]   | d vs tb7-logreg -0.0017 [-0.0053,+0.0019]   | ll-const -0.0056 | hit 0.597 excess -0.4928 [-2.8822,+1.8967]
+rich+g5   n=24 feats  68 | AUC +0.5669 [+0.5476,+0.5862] | d vs tb7-logreg -0.0032 [-0.0076,+0.0012]   | d vs rich-logreg +0.0006 [-0.0021,+0.0033]   | ll-const -0.0032 | hit 0.606 excess +0.7036 [-1.7072,+3.1144]
+tb7+gR    n=24 feats 177 | AUC +0.5624 [+0.5452,+0.5796] | d vs tb7-logreg -0.0077 [-0.0130,-0.0023]   | d vs tb7-logreg -0.0077 [-0.0130,-0.0023]   | ll-const +0.0063 | hit 0.596 excess +0.0386 [-2.0781,+2.1552]
+rich+gR   n=24 feats 207 | AUC +0.5623 [+0.5448,+0.5798] | d vs tb7-logreg -0.0077 [-0.0136,-0.0019]   | d vs rich-logreg -0.0040 [-0.0090,+0.0010]   | ll-const +0.0091 | hit 0.606 excess +0.7224 [-1.4218,+2.8665]
+
+== model hgb: 24 slices; mean3 AUC, d vs tb7 logreg, d vs same model on the base set (tb7/rich), h1 logloss - constant, top-10% hit, excess over null95
+tb7       n=24 feats  13 | AUC +0.5592 [+0.5419,+0.5766] | d vs tb7-logreg -0.0108 [-0.0158,-0.0058]   | d vs None-hgb -                           | ll-const +0.0010 | hit 0.581 excess -0.7228 [-3.2177,+1.7721]
+rich      n=24 feats  43 | AUC +0.5602 [+0.5420,+0.5784] | d vs tb7-logreg -0.0099 [-0.0163,-0.0034]   | d vs None-hgb -                           | ll-const +0.0094 | hit 0.604 excess +0.6048 [-1.7002,+2.9097]
+g5        n=24 feats  25 | AUC +0.5555 [+0.5393,+0.5717] | d vs tb7-logreg -0.0146 [-0.0212,-0.0079]   | d vs None-hgb -                           | ll-const +0.0053 | hit 0.595 excess +0.2200 [-2.1436,+2.5836]
+gR        n=24 feats 164 | AUC +0.5559 [+0.5386,+0.5731] | d vs tb7-logreg -0.0142 [-0.0207,-0.0077]   | d vs None-hgb -                           | ll-const +0.0122 | hit 0.607 excess +0.5409 [-1.6076,+2.6894]
+tb7+g5    n=24 feats  38 | AUC +0.5569 [+0.5405,+0.5733] | d vs tb7-logreg -0.0132 [-0.0193,-0.0070]   | d vs tb7-hgb -0.0023 [-0.0054,+0.0007]   | ll-const +0.0077 | hit 0.594 excess +0.5066 [-1.7738,+2.7869]
+rich+g5   n=24 feats  68 | AUC +0.5588 [+0.5409,+0.5767] | d vs tb7-logreg -0.0112 [-0.0178,-0.0047]   | d vs rich-hgb -0.0014 [-0.0033,+0.0005]   | ll-const +0.0114 | hit 0.609 excess +1.2726 [-0.9765,+3.5217]
+tb7+gR    n=24 feats 177 | AUC +0.5564 [+0.5391,+0.5736] | d vs tb7-logreg -0.0137 [-0.0202,-0.0072]   | d vs tb7-hgb -0.0029 [-0.0072,+0.0014]   | ll-const +0.0128 | hit 0.610 excess +0.6970 [-1.5070,+2.9009]
+rich+gR   n=24 feats 207 | AUC +0.5577 [+0.5397,+0.5758] | d vs tb7-logreg -0.0123 [-0.0191,-0.0056]   | d vs rich-hgb -0.0025 [-0.0053,+0.0004]   | ll-const +0.0135 | hit 0.611 excess +0.5190 [-1.7001,+2.7380]
+
+== model mlp: 24 slices; mean3 AUC, d vs tb7 logreg, d vs same model on the base set (tb7/rich), h1 logloss - constant, top-10% hit, excess over null95
+tb7       n=24 feats  13 | AUC +0.5641 [+0.5470,+0.5812] | d vs tb7-logreg -0.0060 [-0.0105,-0.0014]   | d vs None-mlp -                           | ll-const -0.0011 | hit 0.601 excess +0.2349 [-2.2515,+2.7212]
+rich      n=24 feats  43 | AUC +0.5509 [+0.5347,+0.5672] | d vs tb7-logreg -0.0191 [-0.0266,-0.0117]   | d vs None-mlp -                           | ll-const +0.0776 | hit 0.581 excess -0.3808 [-2.7230,+1.9614]
+g5        n=24 feats  25 | AUC +0.5520 [+0.5359,+0.5681] | d vs tb7-logreg -0.0181 [-0.0246,-0.0115]   | d vs None-mlp -                           | ll-const +0.0142 | hit 0.593 excess +0.4078 [-1.8320,+2.6476]
+gR        n=24 feats 164 | AUC +0.5313 [+0.5200,+0.5426] | d vs tb7-logreg -0.0387 [-0.0493,-0.0282]   | d vs None-mlp -                           | ll-const +0.5694 | hit 0.558 excess -1.7504 [-3.2028,-0.2981]
+tb7+g5    n=24 feats  38 | AUC +0.5503 [+0.5345,+0.5661] | d vs tb7-logreg -0.0198 [-0.0259,-0.0136]   | d vs tb7-mlp -0.0138 [-0.0180,-0.0096]   | ll-const +0.0458 | hit 0.598 excess +0.1744 [-2.2563,+2.6051]
+rich+g5   n=24 feats  68 | AUC +0.5450 [+0.5301,+0.5600] | d vs tb7-logreg -0.0250 [-0.0316,-0.0184]   | d vs rich-mlp -0.0059 [-0.0099,-0.0019]   | ll-const +0.1810 | hit 0.578 excess -0.2661 [-2.3932,+1.8610]
+tb7+gR    n=24 feats 177 | AUC +0.5325 [+0.5218,+0.5432] | d vs tb7-logreg -0.0376 [-0.0478,-0.0273]   | d vs tb7-mlp -0.0316 [-0.0396,-0.0236]   | ll-const +0.5727 | hit 0.554 excess -1.3261 [-2.9331,+0.2808]
+rich+gR   n=24 feats 207 | AUC +0.5334 [+0.5218,+0.5450] | d vs tb7-logreg -0.0367 [-0.0466,-0.0268]   | d vs rich-mlp -0.0175 [-0.0245,-0.0106]   | ll-const +0.6953 | hit 0.570 excess -0.6323 [-2.0842,+0.8196]

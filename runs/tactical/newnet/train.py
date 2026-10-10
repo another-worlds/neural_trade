@@ -256,13 +256,17 @@ def main():
     ap.add_argument("--slices", default="6", help="6 | 24 | final"); ap.add_argument("--span", default="90d", choices=list(dm.SPANS))
     ap.add_argument("--arch", default="patch", choices=["patch", "patchS", "tcn", "linear"]); ap.add_argument("--seeds", type=int, default=1)
     ap.add_argument("--tag", default=""); ap.add_argument("--cpu", action="store_true"); ap.add_argument("--train-lin", action="store_true"); ap.add_argument("--warm", type=int, default=0)
+    ap.add_argument("--geom", default="", help="path of series_geom.npy: append the geometry features to the last-bar vector (geom2)")
     ap.add_argument("--out", default=OUT)
     args = ap.parse_args()
     device = setup_device(args.cpu)
     import tensorflow as tf
     import lab
     import model as mdl
-    series = dm.Series(); names = dm.slice_names(args.slices); rng = np.random.default_rng(0)
+    series = dm.Series()
+    if args.geom:
+        dm.set_geom(series, args.geom)
+    names = dm.slice_names(args.slices); rng = np.random.default_rng(0)
     t0 = time.time(); per = {s: {} for s in range(args.seeds)}; ens_per = {}; extra = {s: [] for s in range(args.seeds)}; params = None
     times = {s: 0.0 for s in range(args.seeds)}
     for name in names:

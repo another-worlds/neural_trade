@@ -24,6 +24,8 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CACHE = os.path.join(HERE, "cache")
+SERIES_DIR = os.environ.get("SERIES_CACHE", CACHE)      # geom2: the per-bar arrays may live in another checkout (read-only)
+N_GEOM = 0                                                # geom2: columns of geometry appended to the last-bar vector (set_geom)
 CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
 LAB_CACHE = os.environ.get("LAB_CACHE", "D:/nt/nt_tactical/runs/tactical/lab/cache")
 FINAL_CACHE = os.path.join(HERE, "..", "lab", "cache_final")      # newnet2: the held-out FINAL slices' val blocks (lab/cache2.py --final)
@@ -145,10 +147,11 @@ class Series:
     """The memory-mapped per-bar arrays. `from_arrays` builds the same object from in-memory arrays (tests)."""
     def __init__(self, vec=None, seq=None, close=None):
         if vec is None:
-            if not os.path.exists(f"{CACHE}/series_close.npy"):
+            if not os.path.exists(f"{SERIES_DIR}/series_close.npy"):
                 raise RuntimeError("series cache missing: run `python data.py --build`")
-            vec, seq, close = (np.load(f"{CACHE}/series_{k}.npy", mmap_mode="r") for k in ("vec", "seq", "close"))
+            vec, seq, close = (np.load(f"{SERIES_DIR}/series_{k}.npy", mmap_mode="r") for k in ("vec", "seq", "close"))
         self.vec, self.seq, self.close = vec, seq, close
+        self.geom = None
         self._ar = np.arange(WIN)
 
     def labels(self, starts):
@@ -156,10 +159,20 @@ class Series:
         return np.stack([self.close[last + h] / self.close[last] - 1.0 for h in HZ], 1).astype(np.float32)
 
     def raw_vec(self, starts):
-        return np.asarray(self.vec[np.asarray(starts) + WIN - 1], np.float32)
+        i = np.asarray(starts) + WIN - 1; v = np.asarray(self.vec[i], np.float32)
+        return v if self.geom is None else np.concatenate([v, np.asarray(self.geom[i], np.float32)], 1)
 
     def raw_seq(self, starts):
         return np.asarray(self.seq[np.asarray(starts)[:, None] + self._ar], np.float32)
+
+
+def set_geom(series, path=None):
+    """geom2: append the per-bar geometry (runs/tactical/geom2/geomlib.geom_rich, float16 [T, F], built by build_geom.py) to the vector.
+    Changes N_VEC, and moves the per-split caches to cache_geom/ so the plain network's caches stay untouched."""
+    global N_VEC, N_GEOM, CACHE
+    g = np.load(path or f"{CACHE}/series_geom.npy", mmap_mode="r"); assert len(g) == len(series.close)
+    series.geom = g; N_GEOM = g.shape[1]; N_VEC = N_RICH + N_CTX + N_GEOM
+    CACHE = CACHE.rstrip("/\\") + "_geom"; os.makedirs(CACHE, exist_ok=True)
 
 
 # ---------------------------------------------------------------- slices, splits, standardisation
