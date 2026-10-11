@@ -61,6 +61,18 @@ def frontier_tables(res, title, chosen_of):
     return out
 
 
+def frontier_all(res, title):
+    out = [f"## {title}\n", "Largest fixed weight (0.01 grid, <= 1) with max DD < 5% and the cumulative return there, 2 bps; every rule (descriptive).\n",
+           "| combination | " + " | ".join(RULES) + " |", "|---|" + "---|" * len(RULES)]
+    for combo, d in res["combos"].items():
+        cells = []
+        for r in RULES:
+            f = d["rules"][r]["levels"]["2"]["frontier"]
+            cells.append("n/a" if f is None else f"w {f['w_dd5']:.2f} / {f['cum_at_w_dd5']:+.1f}%")
+        out.append(f"| {combo} | " + " | ".join(cells) + " |")
+    return out + [""]
+
+
 def verdicts(res):
     out = ["## Verdicts on the look (pre-registered rules, 2 bps)\n", "| combination | chosen | n | hit | cum % | max DD % | months DD<5 | DD goal | hit goal | beats X0 (Calmar and null p95) |\n|---|---|---|---|---|---|---|---|---|---|"]
     for combo, d in res["combos"].items():
@@ -86,6 +98,7 @@ if __name__ == "__main__":
     lines += phase_tables(rs, "Selection 2021-01..2024-06 (all rules; the choice used the Calmar at 2 bps)", ch)
     lines += phase_tables(rl, "The ONE look 2024-07-01..2025-07-20", ch)
     lines += verdicts(rl)
-    lines += [""] + frontier_tables(rs, "Leverage frontier, selection", ch) + frontier_tables(rl, "Leverage frontier, look", ch)
+    lines += [""] + frontier_all(rs, "Price of DD < 5%, all rules, selection") + frontier_all(rl, "Price of DD < 5%, all rules, look")
+    lines += frontier_tables(rs, "Leverage frontier, selection", ch) + frontier_tables(rl, "Leverage frontier, look", ch)
     open(f"{HERE}/tables.md", "w").write("\n".join(lines) + "\n")
     print("wrote tables.md")
