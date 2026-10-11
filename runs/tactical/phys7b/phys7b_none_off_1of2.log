@@ -1,0 +1,9 @@
+{
+  "name": "phys7b_none_off",
+  "results_path": "runs\\tactical\\screens\\phys7b_none_off\\results.shard-1-of-2.jsonl",
+  "n_trials": 6,
+  "ran": 6,
+  "skipped": 0,
+  "passed": 6,
+  "failed": 0
+}
