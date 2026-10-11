@@ -1,0 +1,10 @@
+nn sel part 1/3: 9 months, anchors 74765, end_pos 3942720
+2020-04 107s 30 rows
+2020-10 136s 30 rows
+2021-04 102s 30 rows
+2021-10 96s 30 rows
+2022-04 96s 30 rows
+2022-10 89s 30 rows
+2023-04 112s 30 rows
+2023-10 128s 30 rows
+2024-04 96s 30 rows

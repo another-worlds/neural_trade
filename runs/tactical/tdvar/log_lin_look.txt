@@ -1,0 +1,14 @@
+lin look part 0/1: 13 months, anchors 74765, end_pos 4495960
+2024-07 1s 90 rows
+2024-08 1s 90 rows
+2024-09 1s 90 rows
+2024-10 1s 90 rows
+2024-11 1s 90 rows
+2024-12 1s 90 rows
+2025-01 1s 90 rows
+2025-02 1s 90 rows
+2025-03 1s 90 rows
+2025-04 1s 90 rows
+2025-05 1s 90 rows
+2025-06 1s 90 rows
+2025-07 1s 90 rows
