@@ -1,0 +1,10 @@
+1min tb7 base fold 0: primary +5.97 (null +5.01, n 789) meta +4.95 (null +2.18, n 2273) 11s
+1min tb7 base fold 1: primary +3.87 (null +1.69, n 1781) meta +2.80 (null +1.29, n 3013) 21s11min tb7 base fold 2: primary +1.35 (null +3.10, n 815) meta +1.89 (null +2.16, n 1674) 30s
+1min tb7 base fold 3: primary +3.02 (null +1.80, n 941) meta +2.08 (null +0.95, n 2657) 42s
+1min tb7 base fold 4: primary +1.70 (null +1.09, n 1672) meta +2.07 (null +1.17, n 1727) 56s
+1min tb7 base fold 5: primary +0.56 (null +0.99, n 1438) meta +1.42 (null +0.83, n 2183) 1min 1min tb7 base fold 6: primary +1.84 (null +1.57, n 1217) meta -0.71 (null +0.91, n 20221min tb1min tb7 base fold 7: primary +1.07 (null +1.63, n 1589) meta +1.41 (null +1.47, n 2230) 100s
+1min tb7 base fold 0: primary +6.55 (null +6.53, n 207) m1min tb7 base fold 1: primary +8.01min tb7 base fold 1: primary +2.58 (null +2.19, n 791) m1min tb7 base fold 2: primary +1.81 1min tb7 base fold 2: primary +2.27 (null +3.95, n 283) m1min tb7 base fold 3: primary +14.81min tb7 base fold 3: primary +4.74 (null +3.39, n 278) me1min tb7 base fold 4: primary +8.811min tb7 base fold 4: primary +1.11 (null +1.27, n 557) 1min tb7 base fold 5: primary -1.28 1min tb7 base fold 5: primary +1.83 (null +1.43, n 460) meta +1.44 (null +0.97, n 922) 36s
+1min tb7 base fold 6: primary +1.46 (null +2.20, n 263) meta +0.17 (null +0.83, n 1002) 45s
+1min tb7 base fold 7: primary +0.15 (null +2.54, n 524) meta +1.82 (null +2.16, n 949) 55s
+ 1783) 42s
+GRID DONE
