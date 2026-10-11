@@ -12,6 +12,8 @@ Variants:
   pmGR    primary AND meta use F + gR
 Per fold: n trades, hit, mean bps, random-side null95 (same trades), trades/day; for the primary top-q ("primary") and the meta top-q ("meta").
 usage: python meta.py build --bars 1min|1h   |   python meta.py run --bars 1min|1h --feat tb7|rich --variant base|mG5|mGR|pmGR   |   python meta.py report"""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import argparse, json, math, os, sys, time
 import numpy as np
 import pandas as pd
@@ -25,7 +27,7 @@ sys.path.insert(0, HERE); sys.path.insert(0, os.path.join(TAC, "lab"))
 import lab  # noqa: E402  (chdirs to the worktree)
 import geomlib as G  # noqa: E402
 
-CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"; L = 60; HOLD = pd.Timestamp("2024-07-01")
+CSV = C.CSV; L = 60; HOLD = pd.Timestamp("2024-07-01")
 FC = os.path.join(HERE, "featcache"); os.makedirs(FC, exist_ok=True)
 SETUP = {"1min": dict(T=15, tp=1.0, sl=1.0, q=0.10, stride=5, start="2020-01-01", min_leaf=500),
          "1h": dict(T=12, tp=1.5, sl=1.5, q=0.20, stride=1, start="2017-01-01", min_leaf=300),

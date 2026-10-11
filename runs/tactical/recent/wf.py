@@ -6,12 +6,12 @@ import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-CACHE = "D:/nt/nt_recent_cache"
+CACHE = "D:/nt/nt_recut_cache/recent"
 SETS = {"tb7": ["tb7"], "rich": ["rich"], "ctx": ["ctx"], "gR": ["gR"], "novel": ["novel"], "har": ["har"],
         "all": ["tb7", "rich", "ctx", "gR", "novel", "har"]}
 MODELS = ("logreg", "l1", "hgb")
 TRAIN_DAYS = (60, 365)
-MONTHS = {"sel": ("2021-01", "2024-06"), "look": ("2024-07", "2025-09")}
+MONTHS = {"sel": ("2021-01", "2024-06"), "look": ("2024-07", "2025-07")}
 BAR_MIN = {"1m": 1, "1h": 60}; HOR = {"1m": 15, "1h": 1}
 CS = (0.003, 0.01, 0.03, 0.1, 0.3); CLIP = 8.0
 MIN_TRAIN, MIN_TEST = 500, 300

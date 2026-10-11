@@ -58,11 +58,11 @@ pl, sel = trades(D, S, F, tr, te)
 t = pd.to_datetime(D["t_entry"][te])
 for name, k in sel.items():
     mon = pd.Series(pl[k] * 1e4, index=t[k]).groupby(pd.Grouper(freq="M")).mean().dropna()
-    se = mon.std(ddof=1) / math.sqrt(len(mon)); tq = 2.14 if len(mon) == 15 else 2.0
+    se = mon.std(ddof=1) / math.sqrt(len(mon)); tq = {15: 2.14, 13: 2.18}.get(len(mon), 2.0)   # t_.975,df (13 months in the recut: 2.179)
     res[name + "_monthly"] = {"months": int(len(mon)), "mean": float(mon.mean()), "ci": [float(mon.mean() - tq * se), float(mon.mean() + tq * se)],
                               "positive_months": int((mon > 0).sum())}
 m = res["meta"]; mm = res["meta_monthly"]
 res["success"] = bool(m and m["bps"] > m["null95"] and mm["ci"][0] > 0)
 print(json.dumps({k: res[k] for k in res if k.endswith("monthly") or k == "success"}, indent=1))
-open(os.path.join(HERE, "holdout_min_nextopen.json"), "w").write(json.dumps(res, indent=1))
+open(os.path.join(HERE, "holdout_min_nextopen_recut.json"), "w").write(json.dumps(res, indent=1))
 print(f"total {time.time() - t0:.0f}s")

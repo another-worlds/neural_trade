@@ -1,0 +1,44 @@
+anchors 583817, train 473164, test 110644, prep 10s
+{
+ "config": "1min T15 M1 q0.10 primary hgb tb7, meta hgb base",
+ "train_n": 473164,
+ "test_n": 110644,
+ "primary": {
+  "n": 5231,
+  "hit": 0.5109921621104951,
+  "bps": 0.19969385820877025,
+  "null95": 0.5797235350749664,
+  "per_day": 68.11197916666667
+ },
+ "meta": {
+  "n": 11274,
+  "hit": 0.5147241440482526,
+  "bps": 0.21276896951568527,
+  "null95": 0.28543941022270714,
+  "per_day": 146.796875
+ }
+}
+D:\nt\nt_recut\runs\tactical\geom2\holdout_min_nextopen.py:60: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  mon = pd.Series(pl[k] * 1e4, index=t[k]).groupby(pd.Grouper(freq="M")).mean().dropna()
+{
+ "primary_monthly": {
+  "months": 13,
+  "mean": 0.23229255526481232,
+  "ci": [
+   -0.49381020612678617,
+   0.9583953166564108
+  ],
+  "positive_months": 9
+ },
+ "meta_monthly": {
+  "months": 13,
+  "mean": 0.22318080356469255,
+  "ci": [
+   -0.3437353507691741,
+   0.7900969578985593
+  ],
+  "positive_months": 9
+ },
+ "success": false
+}
+total 25s

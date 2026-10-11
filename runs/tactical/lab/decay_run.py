@@ -6,7 +6,7 @@ from multiprocessing import Pool
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import decay_lib as D
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "decay")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "recut", "decay")
 HS = (1, 3, 10, 15, 30)
 
 

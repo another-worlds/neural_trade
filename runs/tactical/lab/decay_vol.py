@@ -3,6 +3,8 @@
 (a) HAR-style ridge on log realised variance over the last 15, 60, 240, 1440 bars + hour-of-day sin/cos; (b) the same + tb7;
 trained on the 60 days before each month, scored on the month by Spearman(prediction, |r|); also (c) trailing RV60 alone.
 Descriptive; yearly means. usage: python decay_vol.py -> runs/tactical/lab/decay_vol.json"""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import json, os, sys, time
 import numpy as np
 import pandas as pd
@@ -10,11 +12,11 @@ from scipy.stats import spearmanr
 from sklearn.linear_model import Ridge
 from sklearn.preprocessing import StandardScaler
 
-os.chdir(r"D:\nt\nt_tactical"); sys.path.insert(0, "runs/tactical/lab")
+os.chdir(r"D:\nt\nt_recut"); sys.path.insert(0, "runs/tactical/lab")
 from lab import fs_tb7  # noqa: E402
 
 t0 = time.time(); L, H, STRIDE = 60, 15, 10
-s = pd.read_csv("D:/nt/neural_trade/Bitcoin_BTCUSDT.csv", usecols=["timestamp", "open", "high", "low", "close", "volume"])
+s = pd.read_csv(C.CSV, usecols=["timestamp", "open", "high", "low", "close", "volume"])
 s.index = pd.to_datetime(s["timestamp"]); s = s.drop(columns="timestamp").sort_index(); A = s.values.astype(np.float64)
 lr = np.concatenate([[0.0], np.diff(np.log(A[:, 3]))]); cs2 = np.concatenate([[0.0], np.cumsum(lr ** 2)])
 anch = np.arange(1440 + 1, len(A) - H, STRIDE); t = s.index[anch - 1]
@@ -36,7 +38,7 @@ for m in pd.period_range(t[0].to_period("M") + 3, t[-1].to_period("M"), freq="M"
         sc = StandardScaler().fit(X[tr]); mdl = Ridge(alpha=1.0).fit(sc.transform(X[tr]), y[tr])
         row[name] = float(spearmanr(mdl.predict(sc.transform(X[te])), np.abs(r[te]))[0])
     row["rv60"] = float(spearmanr(HAR[te, 1], np.abs(r[te]))[0]); out.append(row)
-json.dump(out, open("runs/tactical/lab/decay_vol.json", "w"), indent=1)
+json.dump(out, open("runs/tactical/recut/lab/decay_vol.json", "w"), indent=1)
 df = pd.DataFrame(out); df["year"] = df["month"].str[:4]
 print(df.groupby("year")[["rv60", "har", "har_tb7"]].mean().round(3).to_string())
 print("corr(month, har)", round(np.corrcoef(np.arange(len(df)), df["har"])[0, 1], 3), f"{time.time() - t0:.0f}s")

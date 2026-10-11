@@ -1,5 +1,7 @@
 """Forward-candidate study: data truncation, feature cache and the monthly walk-forward with trade selection.
 NO bar on or after CUTOFF is ever loaded (load_bars cuts while reading the file, chunk by chunk)."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import os, sys
 os.environ.setdefault("OMP_NUM_THREADS", "2")
 import numpy as np
@@ -7,9 +9,9 @@ import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__)); TAC = os.path.dirname(HERE)
 sys.path.insert(0, os.path.join(TAC, "recent")); sys.path.insert(0, os.path.join(TAC, "equity"))
-CSV = os.environ.get("NT_FWD_CSV", "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv")
+CSV = os.environ.get("NT_FWD_CSV", C.CSV)
 CUTOFF = pd.Timestamp("2024-07-01")
-CACHE = "D:/nt/nt_fwd_cache"
+CACHE = "D:/nt/nt_recut_cache/fwd"
 L = 60; BAR_MIN = 60; HMAX = 4
 FIRST_MONTH, LAST_MONTH = "2019-01", "2024-06"
 COST = 2.0

@@ -1,11 +1,13 @@
 """Runs SPEC.md. Selection 2021-01..2024-06 -> strategy -> ONE look at 2024-07..2025-09 -> per-year descriptive."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import json, os, sys
 import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import callib as C  # noqa
 
-CSV = sys.argv[1] if len(sys.argv) > 1 else "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
+CSV = sys.argv[1] if len(sys.argv) > 1 else C.CSV
 df = C.hourly_returns(CSV)
 sel = df.loc[C.SEL_START:C.SEL_END]
 assert sel.index.max() < pd.Timestamp("2024-07-01")

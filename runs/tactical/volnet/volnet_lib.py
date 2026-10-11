@@ -1,4 +1,6 @@
 """volnet: features, models and the monthly walk-forward step (SPEC.md). Anchor a sees bars < a only (last bar a-1)."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import os, sys, time
 import numpy as np
 import pandas as pd
@@ -6,7 +8,7 @@ from scipy.stats import spearmanr
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "lab"))
-CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
+CSV = C.CSV
 HORIZONS = (15, 60, 240)
 STRIDE, FIRST, T_SEQ, PATCH = 10, 1441, 240, 10
 TRAIN_DAYS, HOLD_FRAC = 365, 0.15

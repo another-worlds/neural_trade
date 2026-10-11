@@ -7,7 +7,7 @@ import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import volnet_lib as V  # noqa: E402
 
-STAGES = {"sel": ("2021-01", "2024-06"), "look": ("2024-07", "2025-09")}
+STAGES = {"sel": ("2021-01", "2024-06"), "look": ("2024-07", "2025-07")}
 
 
 def month_models(D, m, want, dev_log):

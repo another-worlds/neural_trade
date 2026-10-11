@@ -4,7 +4,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import decay_lib as D
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "decay")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "recut", "decay")
 YEARS = [str(y) for y in range(2017, 2026)]
 ld = lambda n: json.load(open(os.path.join(OUT, n + ".json")))
 f = lambda v: "   n/a   " if not v or v["mean"] is None else (f"{v['mean']:.3f}" + (f"±{(v['hi'] - v['lo']) / 2:.3f}" if v["lo"] is not None else ""))
@@ -33,7 +33,7 @@ def main():
     table(q3s, "auc_deadband_model", title="Q3 same test bars, model trained with the deadband target")
     table(q3s, "keep_frac", title="Q3 fraction of the month's bars kept")
     # Q4: pick on months up to 2024-06 (2021-01.. as the 'recent' selection window), show 2024-07..2025-09 once
-    sel = ("2021-01", "2024-06"); hold = ("2024-07", "2025-09")
+    sel = ("2021-01", "2024-06"); hold = ("2024-07", "2025-07")
     cand = {**{f"Q1 {k}": v for k, v in q1s.items()}, **{f"Q2 {k}": v for k, v in q2s.items()}}
     sc = {k: D.tint([r["auc"] for r in v["rows"] if sel[0] <= r["month"] <= sel[1]])["mean"] for k, v in cand.items()}
     print(f"\nQ4 selection on {sel[0]}..{sel[1]} (mean monthly AUC), best 6 of {len(sc)} candidates; then the one-time look at {hold[0]}..{hold[1]}")

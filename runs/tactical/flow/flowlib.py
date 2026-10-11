@@ -1,12 +1,14 @@
 """Order-flow features from OHLCV bars (SPEC.md): bulk volume classification, VPIN, A/D, volume-weighted return gap, Kyle lambda.
 Everything is causal: the row of bar t is a function of bars <= t only. Anchors and next-open labels at the bottom."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import os, sys
 import numpy as np
 import pandas as pd
 from scipy.special import ndtr
 
-CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
-CACHE = "D:/nt/nt_flow_cache"
+CSV = C.CSV
+CACHE = "D:/nt/nt_recut_cache/flow"
 L = 60
 CELLS = {"1m": dict(bar_min=1, H=15, stride=10), "5m": dict(bar_min=5, H=3, stride=2)}
 NAMES = ["imb5", "imb15", "imb60", "vpin", "ad15", "ad60", "vwd15", "vwd60", "kyle60"]

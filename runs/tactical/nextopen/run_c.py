@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'equity'))
 import eqlib as E  # noqa: E402
 
 src = open(os.path.join(WT, "runs/tactical/hourly/hourly.py"), encoding="utf-8").read()
-src = src.replace('os.chdir(r"D:' + chr(92) + 'nt' + chr(92) + 'nt_tactical")', f'os.chdir(r"{WT}")')
+src = src.replace('os.chdir(r"D:' + chr(92) + 'nt' + chr(92) + 'nt_recut")', f'os.chdir(r"{WT}")')
 assert f'os.chdir(r"{WT}")' in src
 assert 'out[name]["_pl"] = pl[k]' in src
 src = src.replace('out[name]["_pl"] = pl[k]', 'out[name]["_pl"] = pl[k]; out[name]["_side"] = side[k]')

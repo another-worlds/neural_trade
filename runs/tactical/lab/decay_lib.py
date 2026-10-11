@@ -2,13 +2,15 @@
 Protocol = decay.py (H51): for every calendar month M a model is trained on the `train_days` before M (labels must END before M starts)
 and scored on M; tb7 features on 60-bar windows; target = sign of the H-bar return beyond a deadband (5 bps at a 15-minute horizon,
 scaled by sqrt(horizon minutes / 15)); AUC per month; yearly means with 95% t-intervals over months. Descriptive only."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import os, sys, math
 import numpy as np
 import pandas as pd
 
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
-CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
-CACHE = "D:/nt/nt_decay_cache"
+CSV = C.CSV
+CACHE = "D:/nt/nt_recut_cache/decay"
 L = 60
 BAR_MIN = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 STRIDE = {"1m": 10, "5m": 2, "15m": 1, "1h": 1}

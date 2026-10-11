@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.join(TAC, "recent")); sys.path.insert(0, HERE)
 import wf                                           # noqa: E402  (walk_forward, lowprio: imported, unchanged)
 import flowlib as FL                                # noqa: E402
 
-SEL = ("2021-01", "2024-06"); LOOK = ("2024-07", "2025-09")
-STAB_SEL = ("2017-03", "2024-06"); STAB_LOOK = ("2024-07", "2025-09")
+SEL = ("2021-01", "2024-06"); LOOK = ("2024-07", "2025-07")
+STAB_SEL = ("2017-03", "2024-06"); STAB_LOOK = ("2024-07", "2025-07")
 LAST_SEL_MONTH = pd.Period("2024-06", "M")
 SETS = {"tb7": ("tb7",), "flow": ("flow",), "tb7+flow": ("tb7", "flow")}
 

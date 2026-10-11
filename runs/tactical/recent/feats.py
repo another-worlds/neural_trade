@@ -1,6 +1,8 @@
 """Feature blocks for the 'recent' study (SPEC.md): tb7, rich, ctx, gR, novel, har for every anchor of a bar cell. All causal.
 Window blocks (tb7, rich, gR, novel) read only the 60 bars A[i-60:i]; ctx and har are per-bar trailing statistics read at the
 anchor's last bar i-1. usage: python feats.py build 1m|1h  -> D:/nt/nt_recent_cache/<bar>_<block>.npy, <bar>_t.npy, <bar>_r.npy"""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import os, sys
 os.environ.setdefault("OMP_NUM_THREADS", "4")
 import numpy as np
@@ -14,8 +16,8 @@ import geomlib as G                           # noqa: E402
 import features as NF                         # noqa: E402
 import data as ND                             # noqa: E402
 
-CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
-CACHE = "D:/nt/nt_recent_cache"
+CSV = C.CSV
+CACHE = "D:/nt/nt_recut_cache/recent"
 L = 60
 BAR_MIN = {"1m": 1, "1h": 60}
 STRIDE = {"1m": 10, "1h": 1}
