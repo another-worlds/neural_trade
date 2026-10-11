@@ -34,3 +34,25 @@ def test_trades_nonoverlapping_and_entry_time():
     ent, ex, side, ret, mon = F.trades_from([("2019-01", np.arange(10), p, r)], t, 2, 0.4)
     assert (ent[1:] >= ex[:-1]).all() and ent[0] == t[0] + h and ex[0] == t[0] + 3 * h
     assert side[0] == 1 and ret[0] == 0.001
+
+
+def test_forward_refuses_spent_months(tmp_path):
+    import forward
+    try:
+        forward.run_forward(_csv(tmp_path), "2025-09", "2025-12"); assert False
+    except SystemExit as e:
+        assert "spent" in str(e)
+
+
+def test_forward_runs_on_synthetic(tmp_path):
+    import forward
+    rng = np.random.default_rng(0); n = 90 * 1440
+    ts = pd.date_range("2021-01-01", periods=n, freq="min"); c = 100 * np.exp(np.cumsum(rng.normal(0, 3e-4, n)))
+    df = pd.DataFrame({"timestamp": ts, "open": np.r_[c[0], c[:-1]], "high": c * 1.0005, "low": c * 0.9995, "close": c, "volume": rng.random(n) + 1})
+    p = tmp_path / "s.csv"; df.to_csv(p, index=False)
+    cfg = dict(forward.CFG, T=30)
+    orig = (forward.F.__dict__.get("x"),)
+    import wf
+    wf.MIN_TRAIN, wf.MIN_TEST = 100, 100
+    res = forward.run_forward(str(p), "2021-03", "2021-03", min_month="2021-01", cfg=cfg, out_dir=str(tmp_path))
+    assert res["n_months"] == 1 and res["n_trades"] > 0 and "PASS" in res

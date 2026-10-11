@@ -80,7 +80,7 @@ def trades_from(preds, t, H, frac):
         conf = np.abs(p - 0.5); k = conf >= np.quantile(conf, 1 - frac)
         t0 = t[idx][k]
         ent.append(t0 + bar_ns); ex.append(t0 + (H + 1) * bar_ns)
-        sd = np.where(p[k] > 0.5, 1, -1); side.append(sd); ret.append(sd * r[idx][k]); mon += [m] * int(k.sum())
+        sd = np.where(p[k] > 0.5, 1, -1); side.append(sd); ret.append(sd * r[k]); mon += [m] * int(k.sum())
     ent, ex, side, ret = (np.concatenate(a) for a in (ent, ex, side, ret)); mon = np.array(mon)
     o = np.argsort(ent, kind="stable"); ent, ex, side, ret, mon = ent[o], ex[o], side[o], ret[o], mon[o]
     keep, _ = E.non_overlapping(ent, ex)

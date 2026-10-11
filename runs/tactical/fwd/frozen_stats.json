@@ -1,0 +1,110 @@
+{
+ "label": "IN-SAMPLE-OF-SELECTION 2019-01..2024-06; not evidence",
+ "choice": {
+  "set": "rich",
+  "model": "logreg",
+  "T": 730,
+  "H": 4,
+  "top": 0.1,
+  "score_mean_monthly_net_bps": 493.90096405461384,
+  "n_months": 66,
+  "n_trades": 2651,
+  "max_dd_pct": 12.110920041162585,
+  "hit": 0.5926065635609205,
+  "mean_trade_net_bps": 12.296289561525656
+ },
+ "costs": {
+  "0": {
+   "n_trades": 2651,
+   "hit": 0.6043002640513014,
+   "mean_bps": 14.296289561525654,
+   "trades_per_day": 1.321480496822166,
+   "cum_return_pct": 378.9946362760456,
+   "max_drawdown_pct": 11.646400463012782,
+   "longest_drawdown_days": 305.5,
+   "n_months": 66,
+   "monthly_hit_mean": 0.6024773148834845,
+   "monthly_hit_min": 0.35294117647058826,
+   "monthly_hit_max": 0.7906976744186046,
+   "months_hit_above_60": 33,
+   "share_months_hit_above_60": 0.5,
+   "mean_monthly_net_bps": 574.2342973879472,
+   "monthly_positive_share": 0.7272727272727273,
+   "monthly_hit_months_above_60_traded": 33,
+   "n_months_traded": 66,
+   "monthly_ci95_mean": [
+    326.19849242475016,
+    822.2701023511443
+   ]
+  },
+  "1": {
+   "n_trades": 2651,
+   "hit": 0.5978875895888344,
+   "mean_bps": 13.29628956152565,
+   "trades_per_day": 1.321480496822166,
+   "cum_return_pct": 352.4846362760297,
+   "max_drawdown_pct": 11.78228284741087,
+   "longest_drawdown_days": 425.1666666666667,
+   "n_months": 66,
+   "monthly_hit_mean": 0.5959587106602755,
+   "monthly_hit_min": 0.35294117647058826,
+   "monthly_hit_max": 0.7906976744186046,
+   "months_hit_above_60": 33,
+   "share_months_hit_above_60": 0.5,
+   "mean_monthly_net_bps": 534.0676307212805,
+   "monthly_positive_share": 0.7121212121212122,
+   "monthly_hit_months_above_60_traded": 33,
+   "n_months_traded": 66,
+   "monthly_ci95_mean": [
+    286.25625624414374,
+    781.8790051984172
+   ]
+  },
+  "2": {
+   "n_trades": 2651,
+   "hit": 0.5926065635609205,
+   "mean_bps": 12.296289561525656,
+   "trades_per_day": 1.321480496822166,
+   "cum_return_pct": 325.9746362760334,
+   "max_drawdown_pct": 12.110920041162585,
+   "longest_drawdown_days": 952.1666666666666,
+   "n_months": 66,
+   "monthly_hit_mean": 0.5908054042962351,
+   "monthly_hit_min": 0.35294117647058826,
+   "monthly_hit_max": 0.7906976744186046,
+   "months_hit_above_60": 32,
+   "share_months_hit_above_60": 0.48484848484848486,
+   "mean_monthly_net_bps": 493.90096405461384,
+   "monthly_positive_share": 0.7121212121212122,
+   "monthly_hit_months_above_60_traded": 31,
+   "n_months_traded": 66,
+   "monthly_ci95_mean": [
+    246.31131860738844,
+    741.4906095018392
+   ]
+  },
+  "5": {
+   "n_trades": 2651,
+   "hit": 0.5714824594492645,
+   "mean_bps": 9.296289561525652,
+   "trades_per_day": 1.321480496822166,
+   "cum_return_pct": 246.444636276041,
+   "max_drawdown_pct": 14.606129916556968,
+   "longest_drawdown_days": 1029.7083333333333,
+   "n_months": 66,
+   "monthly_hit_mean": 0.5693836886153528,
+   "monthly_hit_min": 0.35294117647058826,
+   "monthly_hit_max": 0.7906976744186046,
+   "months_hit_above_60": 22,
+   "share_months_hit_above_60": 0.3333333333333333,
+   "mean_monthly_net_bps": 373.40096405461384,
+   "monthly_positive_share": 0.6060606060606061,
+   "monthly_hit_months_above_60_traded": 21,
+   "n_months_traded": 66,
+   "monthly_ci95_mean": [
+    126.46022463408192,
+    620.3417034751458
+   ]
+  }
+ }
+}
