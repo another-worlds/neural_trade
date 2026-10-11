@@ -71,6 +71,8 @@ for the MVP".
   records the GPU minutes each round used.
 - **Choices never use test data** (D-020): select on dev folds only; the long file's protected span
   (`DATA_END_PROTECTED_DAYS`) stays protected.
+  **Hard cutoff for every tactical script, model or analysis: no bar after 2025-07-20** (the 64 protected days plus
+  margin). Breach of 2026-10-09..11: H66 in the journal; any new SPEC states its last bar and a test asserts it.
 - **No default changes from here.** A finding becomes a default only through an MVP backlog item and
   a paired test (D-025, D-046).
 - Standing decisions still hold: no new data source (D-050), trading costs 0 (D-044), TF 2.10 (D-001),
