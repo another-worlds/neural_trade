@@ -1,0 +1,2 @@
+patch start AUC 0.490  trained AUC 0.786 {'best_epoch': 25, 'epochs_run': 30, 'val_bce0': 0.6953119469575939, 'val_bce_best': 0.6155659611496542, 'n_params': 20262}
+tcn start AUC 0.490  trained AUC 0.828 {'best_epoch': 10, 'epochs_run': 15, 'val_bce0': 0.6953119469575939, 'val_bce_best': 0.5370308427202205, 'n_params': 22438}
