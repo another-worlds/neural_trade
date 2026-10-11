@@ -1,0 +1,15 @@
+device gpu
+anchors 459652, vec 25, months 8
+2026-10-11 06:32:09.374277: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-11 06:32:10.899029: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-11 06:32:10.899129: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 4000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-11 06:32:12.580759: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2024-07 39s {('har', 15): 0.334, ('ridge_full', 15): 0.34, ('ens', 15): 0.345}
+2024-09 30s {('har', 15): 0.346, ('ridge_full', 15): 0.351, ('ens', 15): 0.353}
+2024-11 25s {('har', 15): 0.417, ('ridge_full', 15): 0.421, ('ens', 15): 0.421}
+2025-01 26s {('har', 15): 0.42, ('ridge_full', 15): 0.423, ('ens', 15): 0.423}
+2025-03 23s {('har', 15): 0.445, ('ridge_full', 15): 0.449, ('ens', 15): 0.449}
+2025-05 26s {('har', 15): 0.328, ('ridge_full', 15): 0.329, ('ens', 15): 0.332}
+2025-07 23s {('har', 15): 0.392, ('ridge_full', 15): 0.397, ('ens', 15): 0.397}
+2025-09 16s {('har', 15): 0.372, ('ridge_full', 15): 0.378, ('ens', 15): 0.38}
