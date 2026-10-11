@@ -10,7 +10,8 @@ CAND = ["hgb", "mlp", "seq", "ens"]
 
 
 def load(stage):
-    rows = [json.loads(l) for f in sorted(glob.glob(f"{HERE}/results_{stage}_[0-9].jsonl")) for l in open(f)]
+    pat = f"{HERE}/results_look_recut_[0-9].jsonl" if stage == "look" else f"{HERE}/results_{stage}_[0-9].jsonl"      # recut: look files carry the tag
+    rows = [json.loads(l) for f in sorted(glob.glob(pat)) for l in open(f)]
     return pd.DataFrame(rows)
 
 
@@ -62,12 +63,12 @@ def main():
         print(txt); print(score, "SELECTED", best)
     else:
         sel = json.load(open(f"{HERE}/selection.json"))["selected"]; df = load("look")
-        out, txt = table(df, [sel], f"THE ONE LOOK, 2024-07..2025-09: {sel} vs har")
+        out, txt = table(df, [sel], f"THE ONE LOOK, recut, 2024-07..2025-07-20: {sel} vs har")
         verdict = {}
         for H in sorted(df.H.unique()):
             o = out[f"{sel}_{H}"]; verdict[str(H)] = bool(o["sp"]["lo"] > 0 and o["ql"]["lo"] > 0)
-        json.dump({"selected": sel, "success_by_horizon": verdict, "detail": out}, open(f"{HERE}/look.json", "w"), indent=1)
-        open(f"{HERE}/look_tables.txt", "w").write(txt + f"\n\nsuccess (both lower bounds > 0) by horizon: {verdict}\n")
+        json.dump({"selected": sel, "success_by_horizon": verdict, "detail": out}, open(f"{HERE}/look_recut.json", "w"), indent=1)
+        open(f"{HERE}/look_tables_recut.txt", "w").write(txt + f"\n\nsuccess (both lower bounds > 0) by horizon: {verdict}\n")
         print(txt); print(verdict)
 
 

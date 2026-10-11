@@ -4,6 +4,8 @@ usage: python hourly.py --T 24 --tp 1 --sl 1 [--feat tb7|rich|ctx] [--primary lo
 Without --final: 8 walk-forward folds inside the dev period (entries before 2024-07-01 whose labels end before it).
 With --final: train on the whole dev period (minus the 2T gap), score the held-out period 2024-07-01..2025-09-29 once.
 Appends one JSON line to runs/tactical/hourly/results.jsonl (dev) or final.jsonl (held-out)."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import argparse, json, math, os, sys, time
 import numpy as np
 import pandas as pd
@@ -11,11 +13,11 @@ from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostin
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
-os.chdir(r"D:\nt\nt_tactical"); sys.path.insert(0, "runs/tactical/lab")
+os.chdir(r"D:\nt\nt_recut"); sys.path.insert(0, "runs/tactical/lab")
 from lab import fs_rich, fs_tb7  # noqa: E402
 
-OUT = "runs/tactical/hourly"; L = 60; HOLD = pd.Timestamp("2024-07-01"); COSTS = (5, 10)
-TQ = {7: 2.36, 14: 2.14, 15: 2.13, 16: 2.12}
+OUT = "runs/tactical/recut/hourly"; L = 60; HOLD = pd.Timestamp("2024-07-01"); COSTS = (5, 10)
+TQ = {7: 2.36, 12: 2.18, 14: 2.14, 15: 2.13, 16: 2.12}   # 12 added by the recut (13 look months; t_.975,12 = 2.179)
 
 
 def tq(n): return TQ.get(n - 1, 2.0)
@@ -25,7 +27,7 @@ def bars():
     p = f"{OUT}/bars_1h.npz"
     if os.path.exists(p):
         d = np.load(p, allow_pickle=True); return pd.DataFrame(d["A"], index=pd.to_datetime(d["t"]), columns=list("ohlcv"))
-    s = pd.read_csv("D:/nt/neural_trade/Bitcoin_BTCUSDT.csv", usecols=["timestamp", "open", "high", "low", "close", "volume"])
+    s = pd.read_csv(C.CSV, usecols=["timestamp", "open", "high", "low", "close", "volume"])
     s.index = pd.to_datetime(s["timestamp"]); s = s.drop(columns="timestamp").sort_index()
     b = s.resample("1h").agg({"open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"}).dropna()
     b.columns = list("ohlcv"); np.savez(p, A=b.values, t=b.index.values.astype("datetime64[ns]")); return b

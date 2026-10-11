@@ -1,4 +1,4 @@
-"""Strategy (a): H48 minute triple barrier, boosting primary on tb7 + boosting meta; train 2020-01..2024-06, test 2024-07..2025-09.
+"""Strategy (a): H48 minute triple barrier, boosting primary on tb7 + boosting meta; train 2020-01..2024-06, test 2024-07..2025-07-20 (recut).
 Same configuration and code path as runs/tactical/geom2/holdout_min.py (its `trades`), plus the exit time of each trade.
 usage: python run_a.py"""
 import json, os, sys, time
@@ -55,7 +55,7 @@ j_te = np.where(side > 0, jl[te], js[te])
 entry_ns = D["t_entry"][te] + bar_ns                               # position opens at the close of the anchor's last bar
 exit_ns = D["t_entry"][te] + (j_te + 2) * bar_ns                   # bar anch+j ends 2+j bars after the open of bar anch-1
 k = sel
-res = E.finish("a_h48_minute_barrier_meta", "(a) H48 minute triple barrier, boosting primary + meta, 2024-07..2025-09", entry_ns[k], exit_ns[k],
+res = E.finish("a_h48_minute_barrier_meta", "(a) H48 minute triple barrier, boosting primary + meta, 2024-07..2025-07-20 (recut)", entry_ns[k], exit_ns[k],
                D["pl_long"][te][k], D["pl_short"][te][k], side[k], int(hold), HERE,
                extra={"signals_all_selected": int(k.sum()), "config": "1min T15 M1 q0.10 hgb tb7 + hgb meta (holdout_min.py)",
                       "hold_bars_median": float(np.median(j_te[k] + 1)), "reproduces_H48": {"n": int(k.sum()), "hit": float(np.mean(pl[k] > 0)), "bps": float(pl[k].mean() * 1e4)}})

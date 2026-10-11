@@ -1,0 +1,5 @@
+q3 1m|15|60|logreg|1.0: 3s
+q3 5m|3|60|logreg|1.0: 3s
+q3 1m|15|60|logreg|0.5: 4s
+q3 5m|3|60|logreg|0.5: 4s
+q3 total 4s

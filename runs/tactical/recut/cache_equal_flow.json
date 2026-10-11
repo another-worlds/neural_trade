@@ -1,0 +1,16 @@
+{
+ "1m": {
+  "t_equal": true,
+  "rows": 394018,
+  "r_equal_before_lim_minus_2h": true,
+  "tb7": true,
+  "flow": true
+ },
+ "5m": {
+  "t_equal": true,
+  "rows": 394018,
+  "r_equal_before_lim_minus_2h": true,
+  "tb7": true,
+  "flow": true
+ }
+}

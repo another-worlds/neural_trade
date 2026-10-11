@@ -1,0 +1,18 @@
+== H56 1m look 2024-07..2025-07-20 (recut): close entry vs next-open entry (the same picks; label return changes)
+pick             entry         AUC    base             diff95 [lo,hi] ok95 ok98.3 top10 hit     bps
+all:hgb:365      close      0.5337  0.5295 +0.0042 [+0.0000,+0.0083] True  False     0.5460   +1.03
+all:hgb:365      nextopen   0.5316  0.5278 +0.0038 [-0.0021,+0.0098] False False     0.5471   +1.30
+all:l1:365       close      0.5320  0.5295 +0.0025 [-0.0005,+0.0055] False False     0.5462   +0.64
+all:l1:365       nextopen   0.5301  0.5278 +0.0023 [-0.0016,+0.0063] False False     0.5390   +0.22
+gR:l1:365        close      0.5307  0.5295 +0.0012 [-0.0029,+0.0054] False False     0.5466   +0.74
+gR:l1:365        nextopen   0.5285  0.5278 +0.0007 [-0.0042,+0.0056] False False     0.5422   +0.56
+
+== H56 1h look 2024-07..2025-07-20 (recut): close entry vs next-open entry (the same picks; label return changes)
+pick             entry         AUC    base             diff95 [lo,hi] ok95 ok98.3 top10 hit     bps
+rich:logreg:365  close      0.5490  0.5479 +0.0011 [-0.0062,+0.0084] False False     0.5501   +4.50
+rich:logreg:365  nextopen   0.5482  0.5488 -0.0006 [-0.0062,+0.0051] False False     0.5580   +5.24
+all:hgb:365      close      0.5458  0.5479 -0.0021 [-0.0132,+0.0091] False False     0.5711   +3.37
+all:hgb:365      nextopen   0.5464  0.5488 -0.0024 [-0.0123,+0.0076] False False     0.5878   +4.71
+rich:l1:365      close      0.5487  0.5479 +0.0008 [-0.0053,+0.0070] False False     0.5602   +3.92
+rich:l1:365      nextopen   0.5502  0.5488 +0.0014 [-0.0045,+0.0074] False False     0.5615   +3.48
+

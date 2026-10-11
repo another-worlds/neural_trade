@@ -1,0 +1,15 @@
+== H57 look, recut, SECOND run (same code, same data, GPU nondeterminism) ==
+-- horizon 15 min: mean level of har: spearman 0.4011, qlike 2.5311
+model        metric   all months [95% CI]            2024  2025
+ens          dSpear  +0.0060 [+0.0045,+0.0076] n=13  +0.0079  +0.0045
+ens          dQLIKE  +0.8571 [-0.8063,+2.5205] n=13  +1.6741  +0.1569
+-- horizon 60 min: mean level of har: spearman 0.3622, qlike 1.8917
+model        metric   all months [95% CI]            2024  2025
+ens          dSpear  +0.0044 [+0.0020,+0.0069] n=13  +0.0052  +0.0037
+ens          dQLIKE  +0.2161 [-0.1585,+0.5907] n=13  +0.3787  +0.0767
+-- horizon 240 min: mean level of har: spearman 0.3058, qlike 1.7682
+model        metric   all months [95% CI]            2024  2025
+ens          dSpear  +0.0061 [-0.0009,+0.0132] n=13  +0.0136  -0.0002
+ens          dQLIKE  +0.0222 [-0.0053,+0.0497] n=13  +0.0304  +0.0151
+
+success by horizon: {'15': False, '60': False, '240': False}

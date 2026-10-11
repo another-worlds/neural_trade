@@ -1,0 +1,32 @@
+== (a) H48 minute triple barrier, boosting primary + meta, 2024-07..2025-07-20 (recut)
+   signals 11821, trades 8358, skipped while a position was open 3463
+cost  trades/day  hit     mean bps  cum ret %  maxDD %  longest DD d  months hit>60%   null cum% med/p95   null maxDD% med/p95
+   0      21.71  0.5219     +0.43      +35.9     18.0           158   0/13 (0%) [0.50-0.55]     +0.2/  +30.4     19.6/  40.1
+   1      21.71  0.5056     -0.57      -47.7     48.6           384   0/13 (0%) [0.48-0.53]    -83.4/  -53.2     84.5/ 115.5
+   2      21.71  0.4878     -1.57     -131.3    131.7           385   0/13 (0%) [0.46-0.51]   -166.9/ -136.8    166.5/ 198.4
+   5      21.71  0.4313     -4.57     -382.0    382.1           385   0/13 (0%) [0.41-0.45]   -417.7/ -387.5    417.1/ 449.3
+
+== (b) H56 1h rich l1 365 d, top-10% most confident, 2024-07..2025-07-20 (recut)
+   signals 927, trades 927, skipped while a position was open 0
+cost  trades/day  hit     mean bps  cum ret %  maxDD %  longest DD d  months hit>60%   null cum% med/p95   null maxDD% med/p95
+   0       2.41  0.5609     +4.03      +37.3     10.6            64   2/13 (15%) [0.49-0.63]     -0.5/  +28.4     18.9/  39.9
+   1       2.41  0.5512     +3.03      +28.0     11.4            74   1/13 (8%) [0.47-0.63]     -9.8/  +19.1     23.2/  46.7
+   2       2.41  0.5415     +2.03      +18.8     12.1           132   1/13 (8%) [0.45-0.62]    -19.1/   +9.8     28.6/  54.4
+   5       2.41  0.5102     -0.97       -9.0     16.7           139   1/13 (8%) [0.40-0.61]    -46.9/  -18.0     50.4/  79.3
+
+== (b) H56 1m all l1 365 d, top-10% most confident, 2024-07..2025-07-20 (recut)
+   signals 5537, trades 4269, skipped while a position was open 1268
+cost  trades/day  hit     mean bps  cum ret %  maxDD %  longest DD d  months hit>60%   null cum% med/p95   null maxDD% med/p95
+   0      11.09  0.5458     +0.72      +30.8     13.1           128   0/13 (0%) [0.50-0.59]     -1.9/  +35.0     21.7/  45.4
+   1      11.09  0.5254     -0.28      -11.9     26.2           214   0/13 (0%) [0.47-0.57]    -44.6/   -7.6     48.6/  81.6
+   2      11.09  0.5029     -1.28      -54.5     56.5           385   0/13 (0%) [0.44-0.55]    -87.3/  -50.3     87.9/ 121.8
+   5      11.09  0.4399     -4.28     -182.6    182.5           385   0/13 (0%) [0.36-0.50]   -215.3/ -178.4    212.9/ 248.5
+
+== (c) H38 hourly T12 tp/sl 1.5, rich HGB barrier+mag meta, 2024-07..2025-07-20 (recut)
+   signals 1767, trades 447, skipped while a position was open 1320
+cost  trades/day  hit     mean bps  cum ret %  maxDD %  longest DD d  months hit>60%   null cum% med/p95   null maxDD% med/p95
+   0       1.16  0.5414    +10.54      +47.1     20.0           152   2/13 (15%) [0.39-0.72]     -0.5/  +58.7     32.6/  68.8
+   1       1.16  0.5369     +9.54      +42.7     20.8           160   2/13 (15%) [0.39-0.72]     -5.0/  +54.2     34.7/  71.9
+   2       1.16  0.5324     +8.54      +38.2     21.8           165   2/13 (15%) [0.37-0.72]     -9.5/  +49.8     36.6/  74.8
+   5       1.16  0.5213     +5.54      +24.8     25.1           222   2/13 (15%) [0.34-0.72]    -22.9/  +36.4     43.4/  85.2
+

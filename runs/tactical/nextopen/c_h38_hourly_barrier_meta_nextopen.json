@@ -1,110 +1,110 @@
 {
- "strategy": "(c) H38 hourly T12 tp/sl 1.5, rich HGB barrier+mag meta, 2024-07..2025-09",
- "n_signals": 1957,
- "n_trades": 508,
- "n_skipped": 1449,
+ "strategy": "(c) H38 hourly T12 tp/sl 1.5, rich HGB barrier+mag meta, 2024-07..2025-07-20 (recut)",
+ "n_signals": 1733,
+ "n_trades": 438,
+ "n_skipped": 1295,
  "levels": {
   "0": {
    "stats": {
-    "n_trades": 508,
-    "hit": 0.5275590551181102,
-    "mean_bps": 2.3068834119703006,
-    "trades_per_day": 1.1153599853627298,
-    "cum_return_pct": 11.718967732809116,
+    "n_trades": 438,
+    "hit": 0.5182648401826484,
+    "mean_bps": 2.001725849472142,
+    "trades_per_day": 1.1386481802426343,
+    "cum_return_pct": 8.767559220687971,
     "max_drawdown_pct": 28.64472886162539,
     "longest_drawdown_days": 169.375,
-    "n_months": 15,
-    "monthly_hit_mean": 0.5262360983969083,
+    "n_months": 13,
+    "monthly_hit_mean": 0.5171989902660467,
     "monthly_hit_min": 0.36363636363636365,
     "monthly_hit_max": 0.6923076923076923,
-    "months_hit_above_60": 4,
-    "share_months_hit_above_60": 0.26666666666666666
+    "months_hit_above_60": 3,
+    "share_months_hit_above_60": 0.23076923076923078
    },
    "null": {
-    "cum_return_pct_median": -0.45123986141937245,
-    "cum_return_pct_p95": 59.730903670818726,
-    "max_drawdown_pct_median": 32.706479418567966,
-    "max_drawdown_pct_p95": 69.49524528492063,
-    "hit_median": 0.49803149606299213,
-    "hit_p95": 0.531496062992126,
+    "cum_return_pct_median": -0.07458944657632305,
+    "cum_return_pct_p95": 54.56779268823071,
+    "max_drawdown_pct_median": 32.24022297866968,
+    "max_drawdown_pct_p95": 69.768249723515,
+    "hit_median": 0.4977168949771689,
+    "hit_p95": 0.5365296803652968,
     "draws": 1000
    }
   },
   "1": {
    "stats": {
-    "n_trades": 508,
-    "hit": 0.5275590551181102,
-    "mean_bps": 1.3068834119702954,
-    "trades_per_day": 1.1153599853627298,
-    "cum_return_pct": 6.638967732809142,
+    "n_trades": 438,
+    "hit": 0.5182648401826484,
+    "mean_bps": 1.0017258494721395,
+    "trades_per_day": 1.1386481802426343,
+    "cum_return_pct": 4.387559220688009,
     "max_drawdown_pct": 29.13472886162537,
     "longest_drawdown_days": 171.83333333333334,
-    "n_months": 15,
-    "monthly_hit_mean": 0.5262360983969083,
+    "n_months": 13,
+    "monthly_hit_mean": 0.5171989902660467,
     "monthly_hit_min": 0.36363636363636365,
     "monthly_hit_max": 0.6923076923076923,
-    "months_hit_above_60": 4,
-    "share_months_hit_above_60": 0.26666666666666666
+    "months_hit_above_60": 3,
+    "share_months_hit_above_60": 0.23076923076923078
    },
    "null": {
-    "cum_return_pct_median": -5.531239861419174,
-    "cum_return_pct_p95": 54.65090367081897,
-    "max_drawdown_pct_median": 34.63642426810405,
-    "max_drawdown_pct_p95": 73.13973113714452,
-    "hit_median": 0.49803149606299213,
-    "hit_p95": 0.531496062992126,
+    "cum_return_pct_median": -4.454589446576146,
+    "cum_return_pct_p95": 50.18779268823089,
+    "max_drawdown_pct_median": 33.88648723992539,
+    "max_drawdown_pct_p95": 73.49610489304696,
+    "hit_median": 0.4977168949771689,
+    "hit_p95": 0.5365296803652968,
     "draws": 1000
    }
   },
   "2": {
    "stats": {
-    "n_trades": 508,
-    "hit": 0.5216535433070866,
-    "mean_bps": 0.30688341197030145,
-    "trades_per_day": 1.1153599853627298,
-    "cum_return_pct": 1.5589677328090579,
+    "n_trades": 438,
+    "hit": 0.5114155251141552,
+    "mean_bps": 0.0017258494721416502,
+    "trades_per_day": 1.1386481802426343,
+    "cum_return_pct": 0.007559220687913815,
     "max_drawdown_pct": 30.01964590938116,
-    "longest_drawdown_days": 298.2916666666667,
-    "n_months": 15,
-    "monthly_hit_mean": 0.5201754923363022,
+    "longest_drawdown_days": 227.5,
+    "n_months": 13,
+    "monthly_hit_mean": 0.5102059832730397,
     "monthly_hit_min": 0.3333333333333333,
     "monthly_hit_max": 0.6923076923076923,
-    "months_hit_above_60": 3,
-    "share_months_hit_above_60": 0.2
+    "months_hit_above_60": 2,
+    "share_months_hit_above_60": 0.15384615384615385
    },
    "null": {
-    "cum_return_pct_median": -10.611239861419218,
-    "cum_return_pct_p95": 49.57090367081905,
-    "max_drawdown_pct_median": 36.641514806617124,
-    "max_drawdown_pct_p95": 76.99931017915345,
-    "hit_median": 0.4940944881889764,
-    "hit_p95": 0.5295275590551181,
+    "cum_return_pct_median": -8.834589446576242,
+    "cum_return_pct_p95": 45.80779268823091,
+    "max_drawdown_pct_median": 35.889176104991094,
+    "max_drawdown_pct_p95": 76.63312426641396,
+    "hit_median": 0.4942922374429224,
+    "hit_p95": 0.5319634703196348,
     "draws": 1000
    }
   },
   "5": {
    "stats": {
-    "n_trades": 508,
-    "hit": 0.5098425196850394,
-    "mean_bps": -2.6931165880297043,
-    "trades_per_day": 1.1153599853627298,
-    "cum_return_pct": -13.681032267190885,
+    "n_trades": 438,
+    "hit": 0.502283105022831,
+    "mean_bps": -2.998274150527864,
+    "trades_per_day": 1.1386481802426343,
+    "cum_return_pct": -13.132440779312038,
     "max_drawdown_pct": 35.38340986391439,
-    "longest_drawdown_days": 298.2916666666667,
-    "n_months": 15,
-    "monthly_hit_mean": 0.5079801350229276,
+    "longest_drawdown_days": 227.5,
+    "n_months": 13,
+    "monthly_hit_mean": 0.5018209349255147,
     "monthly_hit_min": 0.3333333333333333,
     "monthly_hit_max": 0.6410256410256411,
     "months_hit_above_60": 2,
-    "share_months_hit_above_60": 0.13333333333333333
+    "share_months_hit_above_60": 0.15384615384615385
    },
    "null": {
-    "cum_return_pct_median": -25.851239861419323,
-    "cum_return_pct_p95": 34.330903670818685,
-    "max_drawdown_pct_median": 44.59907514613281,
-    "max_drawdown_pct_p95": 88.2198040451318,
-    "hit_median": 0.4881889763779528,
-    "hit_p95": 0.5217519685039369,
+    "cum_return_pct_median": -21.974589446576303,
+    "cum_return_pct_p95": 32.66779268823071,
+    "max_drawdown_pct_median": 42.214862626521466,
+    "max_drawdown_pct_p95": 87.76893248872513,
+    "hit_median": 0.4908675799086758,
+    "hit_p95": 0.5273972602739726,
     "draws": 1000
    }
   }
@@ -113,14 +113,14 @@
   "config": "T12 tp1.5 sl1.5 q0.2 rich hgb barrier mag",
   "hold_hours_median": 12.0,
   "final_meta_nextopen": {
-   "n": 1957,
-   "hit": 0.5334695963208993,
-   "bps": 5.351435458994514,
-   "null95": 6.294236650346219,
-   "n_months": 15,
+   "n": 1733,
+   "hit": 0.532602423542989,
+   "bps": 6.954795661686482,
+   "null95": 6.014150651571531,
+   "n_months": 13,
    "monthly_bps_ci": [
-    -17.089610597372346,
-    24.071985662297475
+    -19.12974284570815,
+    28.86808274163473
    ]
   },
   "entry": "nextopen"

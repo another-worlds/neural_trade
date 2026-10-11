@@ -1,0 +1,122 @@
+{
+ "strategy": "(a) H48 minute triple barrier, boosting primary + meta, 2024-07..2025-09",
+ "n_signals": 13818,
+ "n_trades": 9756,
+ "n_skipped": 4062,
+ "levels": {
+  "0": {
+   "stats": {
+    "n_trades": 9756,
+    "hit": 0.5222427224272242,
+    "mean_bps": 0.4389647871473816,
+    "trades_per_day": 21.39587727781543,
+    "cum_return_pct": 42.82540463409865,
+    "max_drawdown_pct": 17.956724376692563,
+    "longest_drawdown_days": 157.6888888888889,
+    "n_months": 15,
+    "monthly_hit_mean": 0.5224415763874592,
+    "monthly_hit_min": 0.500772797527048,
+    "monthly_hit_max": 0.5500821018062397,
+    "months_hit_above_60": 0,
+    "share_months_hit_above_60": 0.0
+   },
+   "null": {
+    "cum_return_pct_median": -0.9510427384934739,
+    "cum_return_pct_p95": 32.01063919153573,
+    "max_drawdown_pct_median": 20.3363558267457,
+    "max_drawdown_pct_p95": 41.06043691063422,
+    "hit_median": 0.4985649856498565,
+    "hit_p95": 0.5069751947519475,
+    "draws": 1000
+   }
+  },
+  "1": {
+   "stats": {
+    "n_trades": 9756,
+    "hit": 0.5052275522755227,
+    "mean_bps": -0.5610352128526183,
+    "trades_per_day": 21.39587727781543,
+    "cum_return_pct": -54.734595365897,
+    "max_drawdown_pct": 56.57646353591579,
+    "longest_drawdown_days": 455.11805555555554,
+    "n_months": 15,
+    "monthly_hit_mean": 0.5050873038621002,
+    "monthly_hit_min": 0.47920133111480867,
+    "monthly_hit_max": 0.5294117647058824,
+    "months_hit_above_60": 0,
+    "share_months_hit_above_60": 0.0
+   },
+   "null": {
+    "cum_return_pct_median": -98.51104273849018,
+    "cum_return_pct_p95": -65.54936080846007,
+    "max_drawdown_pct_median": 99.1282518294232,
+    "max_drawdown_pct_p95": 129.61920109242868,
+    "hit_median": 0.48185731857318576,
+    "hit_p95": 0.48985239852398527,
+    "draws": 1000
+   }
+  },
+  "2": {
+   "stats": {
+    "n_trades": 9756,
+    "hit": 0.486469864698647,
+    "mean_bps": -1.5610352128526188,
+    "trades_per_day": 21.39587727781543,
+    "cum_return_pct": -152.2945953658988,
+    "max_drawdown_pct": 152.64463094729297,
+    "longest_drawdown_days": 455.97569444444446,
+    "n_months": 15,
+    "monthly_hit_mean": 0.4861939424075071,
+    "monthly_hit_min": 0.45857988165680474,
+    "monthly_hit_max": 0.5061919504643962,
+    "months_hit_above_60": 0,
+    "share_months_hit_above_60": 0.0
+   },
+   "null": {
+    "cum_return_pct_median": -196.07104273849197,
+    "cum_return_pct_p95": -163.10936080846292,
+    "max_drawdown_pct_median": 195.32694352008596,
+    "max_drawdown_pct_p95": 226.64604989213123,
+    "hit_median": 0.4636121361213612,
+    "hit_p95": 0.4714073390733907,
+    "draws": 1000
+   }
+  },
+  "5": {
+   "stats": {
+    "n_trades": 9756,
+    "hit": 0.42927429274292744,
+    "mean_bps": -4.561035212852619,
+    "trades_per_day": 21.39587727781543,
+    "cum_return_pct": -444.97459536590213,
+    "max_drawdown_pct": 445.1746309472963,
+    "longest_drawdown_days": 455.97569444444446,
+    "n_months": 15,
+    "monthly_hit_mean": 0.4288538068261519,
+    "monthly_hit_min": 0.4059900166389351,
+    "monthly_hit_max": 0.4523809523809524,
+    "months_hit_above_60": 0,
+    "share_months_hit_above_60": 0.0
+   },
+   "null": {
+    "cum_return_pct_median": -488.7510427384943,
+    "cum_return_pct_p95": -455.7893608084665,
+    "max_drawdown_pct_median": 488.30177260848745,
+    "max_drawdown_pct_p95": 519.4537829097517,
+    "hit_median": 0.41133661336613364,
+    "hit_p95": 0.41872181221812216,
+    "draws": 1000
+   }
+  }
+ },
+ "extra": {
+  "signals_all_selected": 13818,
+  "config": "1min T15 M1 q0.10 hgb tb7 + hgb meta (holdout_min.py)",
+  "hold_bars_median": 13.0,
+  "reproduces_H48": {
+   "n": 13818,
+   "hit": 0.5226516138370242,
+   "bps": 0.5400233381790451
+  }
+ }
+}

@@ -1,4 +1,4 @@
-"""Strategy (c): H38 hourly dev winner T12_tp1.5_sl1.5_rich_hgb_barrier_mag, meta selection (q 0.2), held-out 2024-07..2025-09.
+"""Strategy (c): H38 hourly dev winner T12_tp1.5_sl1.5_rich_hgb_barrier_mag, meta selection (q 0.2), held-out 2024-07..2025-07-20 (recut).
 Runs runs/tactical/hourly/hourly.py's own code (build, run_split; the only edits: work directory, and run_split also returns the side).
 usage: python run_c.py"""
 import json, os, sys, time, types
@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(HERE), 'equity'))
 import eqlib as E  # noqa: E402
 
 src = open(os.path.join(WT, "runs/tactical/hourly/hourly.py"), encoding="utf-8").read()
-src = src.replace('os.chdir(r"D:' + chr(92) + 'nt' + chr(92) + 'nt_tactical")', f'os.chdir(r"{WT}")')
+src = src.replace('os.chdir(r"D:' + chr(92) + 'nt' + chr(92) + 'nt_recut")', f'os.chdir(r"{WT}")')
 assert f'os.chdir(r"{WT}")' in src
 assert 'out[name]["_pl"] = pl[k]' in src
 src = src.replace('out[name]["_pl"] = pl[k]', 'out[name]["_pl"] = pl[k]; out[name]["_side"] = side[k]')
@@ -47,7 +47,7 @@ jl, js = np.minimum(np.minimum(ls, lt), T - 1), np.minimum(np.minimum(ss, st_), 
 j = np.where(side > 0, jl[rows], js[rows]); hour = 3600 * 10 ** 9
 entry_ns = D["t_entry"].values.astype("datetime64[ns]").astype(np.int64)[rows] + hour
 exit_ns = D["t_entry"].values.astype("datetime64[ns]").astype(np.int64)[rows] + (j + 2) * hour
-res = E.finish("c_h38_hourly_barrier_meta_nextopen", "(c) H38 hourly T12 tp/sl 1.5, rich HGB barrier+mag meta, 2024-07..2025-09", entry_ns, exit_ns,
+res = E.finish("c_h38_hourly_barrier_meta_nextopen", "(c) H38 hourly T12 tp/sl 1.5, rich HGB barrier+mag meta, 2024-07..2025-07-20 (recut)", entry_ns, exit_ns,
                D["pl_long"][rows], D["pl_short"][rows], side, int(H.HOLD.value), HERE,
                extra={"config": "T12 tp1.5 sl1.5 q0.2 rich hgb barrier mag", "hold_hours_median": float(np.median(j + 1)),
                       "final_meta_nextopen": final_meta, "entry": "nextopen"})

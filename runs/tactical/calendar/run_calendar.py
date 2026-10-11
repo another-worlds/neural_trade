@@ -1,11 +1,13 @@
 """Runs SPEC.md. Selection 2021-01..2024-06 -> strategy -> ONE look at 2024-07..2025-09 -> per-year descriptive."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as CUT  # noqa: E402  (H66: no bar after CUT.CUTOFF is read)
 import json, os, sys
 import pandas as pd
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import callib as C  # noqa
 
-CSV = sys.argv[1] if len(sys.argv) > 1 else "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
+CSV = sys.argv[1] if len(sys.argv) > 1 else CUT.CSV
 df = C.hourly_returns(CSV)
 sel = df.loc[C.SEL_START:C.SEL_END]
 assert sel.index.max() < pd.Timestamp("2024-07-01")
@@ -39,7 +41,7 @@ else:
     out["test"] = {"note": "no bucket significant after Holm on the selection period: no strategy, no trades"}
 bt = C.buckets(te.index)
 out["test_descriptive_buckets"] = {n: C.effect(te.r.values, bt[n]) for n in names}
-json.dump(out, open(f"{HERE}/results.json", "w"), indent=1, default=float)
+json.dump(out, open(f"{HERE}/results_recut.json", "w"), indent=1, default=float)
 
 L = [f"SELECTION {C.SEL_START}..{C.SEL_END}, {len(sel)} hours; Holm over {len(names)}; NW lags {C.NW_LAGS}",
      f"{'bucket':16s}{'n':>7s}{'mean bps':>9s}{'95% lo':>8s}{'95% hi':>8s}{'p':>8s} holm"]
@@ -56,5 +58,5 @@ ys = sorted(yr)
 L.append(f"{'bucket':16s}" + "".join(f"{y:>9d}" for y in ys))
 for n in names:
     L.append(f"{n:16s}" + "".join(f"{yr[y][n]['mean_bps']:8.2f}{'*' if yr[y][n]['lo'] > 0 or yr[y][n]['hi'] < 0 else ' '}" for y in ys))
-open(f"{HERE}/results.txt", "w").write("\n".join(L))
+open(f"{HERE}/results_recut.txt", "w").write("\n".join(L))
 print("\n".join(L))

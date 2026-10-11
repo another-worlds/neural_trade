@@ -5,6 +5,8 @@ target = the sign of the 15-minute return beyond the 5-bps deadband; for each ca
 is trained on the 60 days before M (ending 15 bars before M starts) and scored on M: AUC, the top-10% hit rate and mean bps
 (threshold from the training predictions), and the month's realised volatility. Descriptive; no choice is made from it.
 usage: python decay.py -> runs/tactical/lab/decay.json"""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import json, os, sys, time
 import numpy as np
 import pandas as pd
@@ -12,11 +14,11 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import StandardScaler
 
-os.chdir(r"D:\nt\nt_tactical"); sys.path.insert(0, "runs/tactical/lab")
+os.chdir(r"D:\nt\nt_recut"); sys.path.insert(0, "runs/tactical/lab")
 from lab import fs_tb7  # noqa: E402
 
 t0 = time.time(); L, H, STRIDE, DB = 60, 15, 10, 5e-4
-s = pd.read_csv("D:/nt/neural_trade/Bitcoin_BTCUSDT.csv", usecols=["timestamp", "open", "high", "low", "close", "volume"])
+s = pd.read_csv(C.CSV, usecols=["timestamp", "open", "high", "low", "close", "volume"])
 s.index = pd.to_datetime(s["timestamp"]); s = s.drop(columns="timestamp").sort_index(); A = s.values.astype(np.float64)
 anch = np.arange(L, len(A) - H, STRIDE); t = s.index[anch - 1]
 r = A[anch + H - 1, 3] / A[anch - 1, 3] - 1
@@ -37,7 +39,7 @@ for m in pd.period_range(t[0].to_period("M") + 3, t[-1].to_period("M"), freq="M"
     out.append({"month": str(m), "auc": float(roc_auc_score(y[te & mask], clf.predict_proba(sc.transform(F[te & mask]))[:, 1])),
                 "top10_hit": float(np.mean(mv > 0)) if k.sum() else None, "top10_bps": float(np.mean(mv)) if k.sum() else None,
                 "n_top10": int(k.sum()), "vol_bps": float(np.std(r[te]) * 1e4)})
-json.dump(out, open("runs/tactical/lab/decay.json", "w"), indent=1)
+json.dump(out, open("runs/tactical/recut/lab/decay.json", "w"), indent=1)
 df = pd.DataFrame(out); df["year"] = df["month"].str[:4]
 print(df.groupby("year")[["auc", "top10_hit", "top10_bps", "vol_bps"]].mean().round(4).to_string())
 print("corr(month index, AUC)", round(np.corrcoef(np.arange(len(df)), df["auc"])[0, 1], 3), f"{time.time() - t0:.0f}s")

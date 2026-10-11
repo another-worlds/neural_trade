@@ -1,0 +1,118 @@
+{
+ "strategy": "(b) H56 1h rich l1 365 d, top-10% most confident, NEXT-OPEN entry, 2024-07..2025-09",
+ "n_signals": 1099,
+ "n_trades": 1099,
+ "n_skipped": 0,
+ "levels": {
+  "0": {
+   "stats": {
+    "n_trades": 1099,
+    "hit": 0.5696087352138307,
+    "mean_bps": 4.002991420538092,
+    "trades_per_day": 2.41494231825673,
+    "cum_return_pct": 43.99287571171362,
+    "max_drawdown_pct": 9.226124080265041,
+    "longest_drawdown_days": 135.83333333333334,
+    "n_months": 15,
+    "monthly_hit_mean": 0.569706597793904,
+    "monthly_hit_min": 0.4722222222222222,
+    "monthly_hit_max": 0.6710526315789473,
+    "months_hit_above_60": 2,
+    "share_months_hit_above_60": 0.13333333333333333
+   },
+   "null": {
+    "cum_return_pct_median": -1.2210789702384761,
+    "cum_return_pct_p95": 32.43870625672188,
+    "max_drawdown_pct_median": 19.70158409529353,
+    "max_drawdown_pct_p95": 39.81239534074228,
+    "hit_median": 0.49772520473157417,
+    "hit_p95": 0.5232029117379435,
+    "draws": 1000
+   }
+  },
+  "1": {
+   "stats": {
+    "n_trades": 1099,
+    "hit": 0.5559599636032757,
+    "mean_bps": 3.0029914205380925,
+    "trades_per_day": 2.41494231825673,
+    "cum_return_pct": 33.00287571171437,
+    "max_drawdown_pct": 9.956306600645307,
+    "longest_drawdown_days": 143.875,
+    "n_months": 15,
+    "monthly_hit_mean": 0.5559920223859149,
+    "monthly_hit_min": 0.4583333333333333,
+    "monthly_hit_max": 0.6578947368421053,
+    "months_hit_above_60": 2,
+    "share_months_hit_above_60": 0.13333333333333333
+   },
+   "null": {
+    "cum_return_pct_median": -12.211078970238258,
+    "cum_return_pct_p95": 21.448706256722833,
+    "max_drawdown_pct_median": 24.356597950187016,
+    "max_drawdown_pct_p95": 47.46239287189493,
+    "hit_median": 0.48680618744313015,
+    "hit_p95": 0.5131938125568699,
+    "draws": 1000
+   }
+  },
+  "2": {
+   "stats": {
+    "n_trades": 1099,
+    "hit": 0.5441310282074613,
+    "mean_bps": 2.0029914205380925,
+    "trades_per_day": 2.41494231825673,
+    "cum_return_pct": 22.012875711713242,
+    "max_drawdown_pct": 10.809909235235192,
+    "longest_drawdown_days": 201.25,
+    "n_months": 15,
+    "monthly_hit_mean": 0.5442064361174414,
+    "monthly_hit_min": 0.4444444444444444,
+    "monthly_hit_max": 0.6447368421052632,
+    "months_hit_above_60": 2,
+    "share_months_hit_above_60": 0.13333333333333333
+   },
+   "null": {
+    "cum_return_pct_median": -23.201078970238385,
+    "cum_return_pct_p95": 10.45870625672134,
+    "max_drawdown_pct_median": 30.74870750904158,
+    "max_drawdown_pct_p95": 56.81378633727961,
+    "hit_median": 0.4740673339399454,
+    "hit_p95": 0.49954504094631486,
+    "draws": 1000
+   }
+  },
+  "5": {
+   "stats": {
+    "n_trades": 1099,
+    "hit": 0.5068243858052776,
+    "mean_bps": -0.9970085794619116,
+    "trades_per_day": 2.41494231825673,
+    "cum_return_pct": -10.957124288286412,
+    "max_drawdown_pct": 18.410740130046513,
+    "longest_drawdown_days": 201.25,
+    "n_months": 15,
+    "monthly_hit_mean": 0.5071789898010616,
+    "monthly_hit_min": 0.42105263157894735,
+    "monthly_hit_max": 0.631578947368421,
+    "months_hit_above_60": 1,
+    "share_months_hit_above_60": 0.06666666666666667
+   },
+   "null": {
+    "cum_return_pct_median": -56.171078970237915,
+    "cum_return_pct_p95": -22.51129374327816,
+    "max_drawdown_pct_median": 58.50381550824733,
+    "max_drawdown_pct_p95": 87.51361277351656,
+    "hit_median": 0.4394904458598726,
+    "hit_p95": 0.46410373066424015,
+    "draws": 1000
+   }
+  }
+ },
+ "extra": {
+  "config": "1h rich:l1:365",
+  "entry": "nextopen",
+  "months": 15,
+  "hold": "1 bars of 60 min"
+ }
+}

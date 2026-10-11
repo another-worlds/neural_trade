@@ -5,11 +5,13 @@ The variant fills at the OPEN of the next bar, A[i, 0], which is the first price
 was (close of the label bar A[i+H-1, 3] / first barrier touch), so the holding period is one bar shorter and the entry TIMESTAMP is
 unchanged (close of bar i-1 = open of bar i).
 Columns of A: open, high, low, close, volume."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import os
 import numpy as np
 import pandas as pd
 
-CSV = "D:/nt/neural_trade/Bitcoin_BTCUSDT.csv"
+CSV = C.CSV
 BAR_MIN = {"1m": 1, "1h": 60}; HOR = {"1m": 15, "1h": 1}
 
 

@@ -1,4 +1,6 @@
 """Part 2 (SPEC.md): one regime filter chosen on the hourly dev folds, applied once to the held-out period."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import argparse, importlib.util, itertools, json, math, os, sys, time
 import numpy as np
 import pandas as pd
@@ -7,13 +9,13 @@ from scipy import stats
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import regime_vars as R  # noqa: E402
 
-spec = importlib.util.spec_from_file_location("hourly", "D:/nt/nt_tactical/runs/tactical/hourly/hourly.py")
-H = importlib.util.module_from_spec(spec); spec.loader.exec_module(H)      # chdirs to D:/nt/nt_tactical; read-only use
-OUT = os.path.join(HERE, "results.jsonl")
+spec = importlib.util.spec_from_file_location("hourly", "D:/nt/nt_recut/runs/tactical/hourly/hourly.py")
+H = importlib.util.module_from_spec(spec); spec.loader.exec_module(H)      # chdirs to D:/nt/nt_recut; read-only use
+OUT = os.path.join(HERE, "results_recut.jsonl")
 
 
 def minutes():
-    s = pd.read_csv("D:/nt/neural_trade/Bitcoin_BTCUSDT.csv", usecols=["timestamp", "close"])
+    s = pd.read_csv(C.CSV, usecols=["timestamp", "close"])
     s.index = pd.to_datetime(s["timestamp"]); s = s.sort_index(); return s.index, s["close"].values
 
 
@@ -40,7 +42,7 @@ def name(f): return f"{f[0]}:" + "+".join(R.CELLS[f[0]][j] for j in sorted(f[1])
 
 def main():
     t0 = time.time(); a = argparse.Namespace(T=12, tp=1.5, sl=1.5, q=0.2, feat="rich", primary="hgb", target="barrier", meta="mag")
-    ranking = json.load(open("D:/nt/nt_tactical/runs/tactical/hourly/ranking.json"))
+    ranking = json.load(open("D:/nt/nt_recut/runs/tactical/hourly/ranking.json"))
     assert ranking["top3"][0] == "T12_tp1.5_sl1.5_rich_hgb_barrier_mag", ranking["top3"][0]
     D = H.build(a); idx = np.arange(len(D["F"])); dev = idx[D["t_exit"] < H.HOLD]; held = idx[D["t_entry"] >= H.HOLD]
     mi, mc = minutes(); te_all = pd.DatetimeIndex(D["t_entry"])

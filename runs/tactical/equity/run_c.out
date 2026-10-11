@@ -1,64 +1,64 @@
-meta: n 2013 hit 0.5380 bps 9.83 (H38: 2013, 0.538, +9.83)
+meta: n 1767 hit 0.5393 bps 12.69 (H38: 2013, 0.538, +9.83)
 {
  "0": {
-  "n_trades": 521,
-  "hit": 0.5393474088291746,
-  "mean_bps": 8.950773162233762,
-  "trades_per_day": 1.1439026621535084,
-  "cum_return_pct": 46.63352817523787,
+  "n_trades": 447,
+  "hit": 0.5413870246085011,
+  "mean_bps": 10.544758047302954,
+  "trades_per_day": 1.1641888225718937,
+  "cum_return_pct": 47.13506847144417,
   "max_drawdown_pct": 19.9594465373468,
   "longest_drawdown_days": 151.875,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5393297980928118,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5420135328939334,
   "monthly_hit_min": 0.39473684210526316,
   "monthly_hit_max": 0.7241379310344828,
   "months_hit_above_60": 2,
-  "share_months_hit_above_60": 0.13333333333333333
+  "share_months_hit_above_60": 0.15384615384615385
  },
  "1": {
-  "n_trades": 521,
-  "hit": 0.5355086372360844,
-  "mean_bps": 7.9507731622337605,
-  "trades_per_day": 1.1439026621535084,
-  "cum_return_pct": 41.423528175238246,
+  "n_trades": 447,
+  "hit": 0.5369127516778524,
+  "mean_bps": 9.544758047302949,
+  "trades_per_day": 1.1641888225718937,
+  "cum_return_pct": 42.66506847144444,
   "max_drawdown_pct": 20.814145226541445,
   "longest_drawdown_days": 159.79166666666666,
-  "n_months": 15,
-  "monthly_hit_mean": 0.535507794270808,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5376035284839289,
   "monthly_hit_min": 0.39473684210526316,
   "monthly_hit_max": 0.7241379310344828,
   "months_hit_above_60": 2,
-  "share_months_hit_above_60": 0.13333333333333333
+  "share_months_hit_above_60": 0.15384615384615385
  },
  "2": {
-  "n_trades": 521,
-  "hit": 0.5297504798464492,
-  "mean_bps": 6.950773162233764,
-  "trades_per_day": 1.1439026621535084,
-  "cum_return_pct": 36.21352817523835,
+  "n_trades": 447,
+  "hit": 0.5324384787472036,
+  "mean_bps": 8.544758047302954,
+  "trades_per_day": 1.1641888225718937,
+  "cum_return_pct": 38.195068471444515,
   "max_drawdown_pct": 21.831653722316155,
   "longest_drawdown_days": 164.875,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5295748707940249,
+  "n_months": 13,
+  "monthly_hit_mean": 0.533606850398182,
   "monthly_hit_min": 0.3684210526315789,
   "monthly_hit_max": 0.7241379310344828,
   "months_hit_above_60": 2,
-  "share_months_hit_above_60": 0.13333333333333333
+  "share_months_hit_above_60": 0.15384615384615385
  },
  "5": {
-  "n_trades": 521,
-  "hit": 0.5182341650671785,
-  "mean_bps": 3.95077316223376,
-  "trades_per_day": 1.1439026621535084,
-  "cum_return_pct": 20.5835281752379,
+  "n_trades": 447,
+  "hit": 0.5212527964205816,
+  "mean_bps": 5.544758047302949,
+  "trades_per_day": 1.1641888225718937,
+  "cum_return_pct": 24.785068471444195,
   "max_drawdown_pct": 25.05020801053296,
-  "longest_drawdown_days": 293.7916666666667,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5188598298219459,
+  "longest_drawdown_days": 222.29166666666666,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5233800937209969,
   "monthly_hit_min": 0.34210526315789475,
   "monthly_hit_max": 0.7241379310344828,
   "months_hit_above_60": 2,
-  "share_months_hit_above_60": 0.13333333333333333
+  "share_months_hit_above_60": 0.15384615384615385
  }
 }
-n_signals 2013 trades 521 skipped 1492; 17s
+n_signals 1767 trades 447 skipped 1320; 20s

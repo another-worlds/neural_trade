@@ -1,0 +1,9 @@
+D:\nt\nt_recut\runs\tactical\hourly\hourly.py:160: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  months = pd.Series(v["_pl"], index=pd.DatetimeIndex(v["_t"])).groupby(pd.Grouper(freq="M")).mean().dropna() * 1e4
+T12_tp1.5_sl1.5_rich_hgb_barrier_mag final {"n": 1767, "hit": 0.5393322014714205, "bps": 12.685344003711906, "null95": 6.0900481369345885, "per_unit": 0.055946271530672935, "trades_per_day": 4.6015625, "monthly_bps_ci": [-12.027, 31.716], "n_months": 13, "net5_bps": 7.685344003711906, "net10_bps": 2.685344003711906} 5.5s
+D:\nt\nt_recut\runs\tactical\hourly\hourly.py:160: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  months = pd.Series(v["_pl"], index=pd.DatetimeIndex(v["_t"])).groupby(pd.Grouper(freq="M")).mean().dropna() * 1e4
+T12_tp1.5_sl1.5_tb7_logreg_sign_base final {"n": 1594, "hit": 0.5006273525721455, "bps": 0.4689154099850694, "null95": 5.827271764144207, "per_unit": -0.02972967378857742, "trades_per_day": 4.151041666666667, "monthly_bps_ci": [-15.351, 14.622], "n_months": 13, "net5_bps": -4.531084590014931, "net10_bps": -9.531084590014931} 1.3s
+D:\nt\nt_recut\runs\tactical\hourly\hourly.py:160: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  months = pd.Series(v["_pl"], index=pd.DatetimeIndex(v["_t"])).groupby(pd.Grouper(freq="M")).mean().dropna() * 1e4
+T12_tp2.0_sl2.0_tb7_logreg_barrier_base final {"n": 1510, "hit": 0.5099337748344371, "bps": 6.463699882998512, "null95": 6.0269244842381635, "per_unit": 0.013908500971929895, "trades_per_day": 3.9322916666666665, "monthly_bps_ci": [-10.074, 22.667], "n_months": 13, "net5_bps": 1.4636998829985117, "net10_bps": -3.5363001170014883} 1.3s

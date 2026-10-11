@@ -1,0 +1,15 @@
+== THE ONE LOOK, 2024-07..2025-09: ens vs har ==
+-- horizon 15 min: mean level of har: spearman 0.3963, qlike 2.3902
+model        metric   all months [95% CI]            2024  2025
+ens          dSpear  +0.0061 [+0.0047,+0.0074] n=15  +0.0077  +0.0050
+ens          dQLIKE  +0.7451 [-0.6757,+2.1658] n=15  +1.6730  +0.1264
+-- horizon 60 min: mean level of har: spearman 0.3575, qlike 1.8543
+model        metric   all months [95% CI]            2024  2025
+ens          dSpear  +0.0059 [+0.0034,+0.0084] n=15  +0.0058  +0.0059
+ens          dQLIKE  +0.1923 [-0.1274,+0.5120] n=15  +0.3798  +0.0673
+-- horizon 240 min: mean level of har: spearman 0.2949, qlike 1.7656
+model        metric   all months [95% CI]            2024  2025
+ens          dSpear  +0.0089 [+0.0020,+0.0158] n=15  +0.0148  +0.0050
+ens          dQLIKE  +0.0263 [+0.0042,+0.0483] n=15  +0.0322  +0.0223
+
+success (both lower bounds > 0) by horizon: {'15': False, '60': False, '240': True}

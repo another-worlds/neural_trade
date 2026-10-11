@@ -1,9 +1,11 @@
 """Calendar-effect library (SPEC.md). Hourly next-open to next-open returns in bps; buckets; Newey-West; Holm."""
+import sys as _sys; _sys.path.insert(0, "D:/nt/nt_recut/runs/tactical/common")  # noqa: E402
+import cutoff as C  # noqa: E402  (H66: no bar after C.CUTOFF is read)
 import numpy as np, pandas as pd
 from scipy import stats as sps
 
 SEL_START, SEL_END = "2021-01-01", "2024-06-30"
-TEST_START, TEST_END = "2024-07-01", "2025-09-30"
+TEST_START, TEST_END = "2024-07-01", "2025-07-20"
 NW_LAGS = 48
 
 

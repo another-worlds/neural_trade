@@ -8,7 +8,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 def read(phase, bar):
-    p = f"{HERE}/{phase}_{bar}.jsonl"
+    p = f"{HERE}/{'look_recut' if phase == 'look' else phase}_{bar}.jsonl"
     return [json.loads(l) for l in open(p, encoding="utf-8")] if os.path.exists(p) else []
 
 
@@ -90,7 +90,7 @@ def stability(upto):
 
 
 def look():
-    sel_ = json.load(open(f"{HERE}/selection.json")); out = ["LOOK 2024-07..2025-09 (descriptive; period already used by H38, H56, H63)"]
+    sel_ = json.load(open(f"{HERE}/selection.json")); out = ["LOOK 2024-07..2025-07-20, recut (descriptive; period already used by H38, H56, H63)"]
     if not sel_["adds"]:
         out.append("no test added in selection: no tb7 vs tb7+flow look was run.")
     for key in sel_["adds"]:
@@ -99,7 +99,7 @@ def look():
         out.append(f"{key}: tb7 {tb['auc'].mean():.4f}  tb7+flow {bo['auc'].mean():.4f}  diff {d['mean']:+.4f} [{d['lo']:+.4f},{d['hi']:+.4f}] "
                    f"positive months {d['pos_months']}/{d['n']}")
     out += ["", stability("look")]
-    open(f"{HERE}/look_table.txt", "w", encoding="utf-8").write("\n".join(out) + "\n"); print("\n".join(out))
+    open(f"{HERE}/look_table_recut.txt", "w", encoding="utf-8").write("\n".join(out) + "\n"); print("\n".join(out))
 
 
 if __name__ == "__main__":
