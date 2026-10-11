@@ -1,0 +1,64 @@
+meta: n 2013 hit 0.5380 bps 9.83 (H38: 2013, 0.538, +9.83)
+{
+ "0": {
+  "n_trades": 521,
+  "hit": 0.5393474088291746,
+  "mean_bps": 8.950773162233762,
+  "trades_per_day": 1.1439026621535084,
+  "cum_return_pct": 46.63352817523787,
+  "max_drawdown_pct": 19.9594465373468,
+  "longest_drawdown_days": 151.875,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5393297980928118,
+  "monthly_hit_min": 0.39473684210526316,
+  "monthly_hit_max": 0.7241379310344828,
+  "months_hit_above_60": 2,
+  "share_months_hit_above_60": 0.13333333333333333
+ },
+ "1": {
+  "n_trades": 521,
+  "hit": 0.5355086372360844,
+  "mean_bps": 7.9507731622337605,
+  "trades_per_day": 1.1439026621535084,
+  "cum_return_pct": 41.423528175238246,
+  "max_drawdown_pct": 20.814145226541445,
+  "longest_drawdown_days": 159.79166666666666,
+  "n_months": 15,
+  "monthly_hit_mean": 0.535507794270808,
+  "monthly_hit_min": 0.39473684210526316,
+  "monthly_hit_max": 0.7241379310344828,
+  "months_hit_above_60": 2,
+  "share_months_hit_above_60": 0.13333333333333333
+ },
+ "2": {
+  "n_trades": 521,
+  "hit": 0.5297504798464492,
+  "mean_bps": 6.950773162233764,
+  "trades_per_day": 1.1439026621535084,
+  "cum_return_pct": 36.21352817523835,
+  "max_drawdown_pct": 21.831653722316155,
+  "longest_drawdown_days": 164.875,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5295748707940249,
+  "monthly_hit_min": 0.3684210526315789,
+  "monthly_hit_max": 0.7241379310344828,
+  "months_hit_above_60": 2,
+  "share_months_hit_above_60": 0.13333333333333333
+ },
+ "5": {
+  "n_trades": 521,
+  "hit": 0.5182341650671785,
+  "mean_bps": 3.95077316223376,
+  "trades_per_day": 1.1439026621535084,
+  "cum_return_pct": 20.5835281752379,
+  "max_drawdown_pct": 25.05020801053296,
+  "longest_drawdown_days": 293.7916666666667,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5188598298219459,
+  "monthly_hit_min": 0.34210526315789475,
+  "monthly_hit_max": 0.7241379310344828,
+  "months_hit_above_60": 2,
+  "share_months_hit_above_60": 0.13333333333333333
+ }
+}
+n_signals 2013 trades 521 skipped 1492; 17s
