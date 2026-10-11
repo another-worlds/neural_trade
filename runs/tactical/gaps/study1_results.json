@@ -1,0 +1,782 @@
+{
+ "results": [
+  {
+   "series": "S_auc",
+   "T": 100,
+   "ex_july": false,
+   "kstar": 5,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2018-03",
+     "ci95_months": [
+      "2018-02",
+      "2018-04"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2019-05",
+     "ci95_months": [
+      "2018-10",
+      "2020-05"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2020-05",
+     "ci95_months": [
+      "2019-11",
+      "2021-12"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2021-03",
+     "ci95_months": [
+      "2020-12",
+      "2023-10"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2024-09",
+     "ci95_months": [
+      "2023-10",
+      "2024-12"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2018-02",
+     "mean": 0.5267631354994109,
+     "n": 11
+    },
+    {
+     "from": "2018-03",
+     "to": "2019-04",
+     "mean": 0.5744167425613304,
+     "n": 14
+    },
+    {
+     "from": "2019-05",
+     "to": "2020-04",
+     "mean": 0.5496825774149072,
+     "n": 12
+    },
+    {
+     "from": "2020-05",
+     "to": "2021-02",
+     "mean": 0.5717722863728414,
+     "n": 10
+    },
+    {
+     "from": "2021-03",
+     "to": "2024-08",
+     "mean": 0.5451026181727887,
+     "n": 42
+    },
+    {
+     "from": "2024-09",
+     "to": "2025-07",
+     "mean": 0.5210648491275033,
+     "n": 11
+    }
+   ],
+   "bic_k": {
+    "0": -761.5527066417227,
+    "1": -776.2053310518733,
+    "2": -799.8648230340866,
+    "3": -807.6716200434616,
+    "4": -809.0159749281927,
+    "5": -809.8750680833589
+   },
+   "bic_trend": -768.1076913412536,
+   "trend_slope_per_month": -0.00024420381965172206,
+   "sup_chow_F": 33.27691390412994,
+   "sup_chow_tau": "2019-05",
+   "sup_chow_p": 0.00399800099950025,
+   "breaks_supported": true
+  },
+  {
+   "series": "S_auc",
+   "T": 99,
+   "ex_july": true,
+   "kstar": 5,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2018-03",
+     "ci95_months": [
+      "2018-02",
+      "2018-04"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2019-05",
+     "ci95_months": [
+      "2018-10",
+      "2020-05"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2020-05",
+     "ci95_months": [
+      "2019-09",
+      "2021-11"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2021-03",
+     "ci95_months": [
+      "2020-11",
+      "2023-10"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2024-09",
+     "ci95_months": [
+      "2023-07",
+      "2024-12"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2018-02",
+     "mean": 0.5267631354994109,
+     "n": 11
+    },
+    {
+     "from": "2018-03",
+     "to": "2019-04",
+     "mean": 0.5744167425613304,
+     "n": 14
+    },
+    {
+     "from": "2019-05",
+     "to": "2020-04",
+     "mean": 0.5496825774149072,
+     "n": 12
+    },
+    {
+     "from": "2020-05",
+     "to": "2021-02",
+     "mean": 0.5717722863728414,
+     "n": 10
+    },
+    {
+     "from": "2021-03",
+     "to": "2024-08",
+     "mean": 0.5451026181727887,
+     "n": 42
+    },
+    {
+     "from": "2024-09",
+     "to": "2025-06",
+     "mean": 0.5210434016105102,
+     "n": 10
+    }
+   ],
+   "bic_k": {
+    "0": -754.4078965045883,
+    "1": -767.5047155250282,
+    "2": -791.77166871846,
+    "3": -798.3481335958854,
+    "4": -799.607066975274,
+    "5": -800.3855926697427
+   },
+   "bic_trend": -759.868300328556,
+   "trend_slope_per_month": -0.00023530199747670723,
+   "sup_chow_F": 32.65691238149527,
+   "sup_chow_tau": "2019-05",
+   "sup_chow_p": 0.004497751124437781,
+   "breaks_supported": true
+  },
+  {
+   "series": "S_har",
+   "T": 100,
+   "ex_july": false,
+   "kstar": 1,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2022-10",
+     "ci95_months": [
+      "2022-03",
+      "2023-07"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2022-09",
+     "mean": 0.3068452201309771,
+     "n": 66
+    },
+    {
+     "from": "2022-10",
+     "to": "2025-07",
+     "mean": 0.40433254477015307,
+     "n": 34
+    }
+   ],
+   "bic_k": {
+    "0": -482.94832825789007,
+    "1": -506.51498041938913,
+    "2": -501.1194965821164,
+    "3": -500.73817643654036,
+    "4": -496.97593617685044,
+    "5": -493.35315969439193
+   },
+   "bic_trend": -496.89686160716894,
+   "trend_slope_per_month": 0.0012453333530344848,
+   "sup_chow_F": 8.066517682296567,
+   "sup_chow_tau": "2022-04",
+   "sup_chow_p": 0.11494252873563218,
+   "breaks_supported": false
+  },
+  {
+   "series": "S_har",
+   "T": 99,
+   "ex_july": true,
+   "kstar": 1,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2022-10",
+     "ci95_months": [
+      "2022-02",
+      "2023-06"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2022-09",
+     "mean": 0.3068452201309771,
+     "n": 66
+    },
+    {
+     "from": "2022-10",
+     "to": "2025-06",
+     "mean": 0.40467266595940554,
+     "n": 33
+    }
+   ],
+   "bic_k": {
+    "0": -477.45829164129344,
+    "1": -500.3702162055547,
+    "2": -494.93517059954905,
+    "3": -494.510325424257,
+    "4": -490.6893256400732,
+    "5": -487.0658283213
+   },
+   "bic_trend": -490.8727277536487,
+   "trend_slope_per_month": 0.0012506063066267433,
+   "sup_chow_F": 7.999994703823316,
+   "sup_chow_tau": "2022-04",
+   "sup_chow_p": 0.10944527736131934,
+   "breaks_supported": false
+  },
+  {
+   "series": "M_logvol",
+   "T": 100,
+   "ex_july": false,
+   "kstar": 5,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2017-11",
+     "ci95_months": [
+      "2017-10",
+      "2017-11"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2018-05",
+     "ci95_months": [
+      "2018-05",
+      "2020-06"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2020-11",
+     "ci95_months": [
+      "2020-08",
+      "2021-05"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2022-01",
+     "ci95_months": [
+      "2021-11",
+      "2022-06"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2024-01",
+     "ci95_months": [
+      "2023-06",
+      "2024-08"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2017-10",
+     "mean": 20.76286760502276,
+     "n": 7
+    },
+    {
+     "from": "2017-11",
+     "to": "2018-04",
+     "mean": 22.291401774949364,
+     "n": 6
+    },
+    {
+     "from": "2018-05",
+     "to": "2020-10",
+     "mean": 21.285325738941488,
+     "n": 30
+    },
+    {
+     "from": "2020-11",
+     "to": "2021-12",
+     "mean": 22.456318505399512,
+     "n": 14
+    },
+    {
+     "from": "2022-01",
+     "to": "2023-12",
+     "mean": 21.226899686098474,
+     "n": 24
+    },
+    {
+     "from": "2024-01",
+     "to": "2025-07",
+     "mean": 22.136966266403476,
+     "n": 19
+    }
+   ],
+   "bic_k": {
+    "0": -66.75213423118258,
+    "1": -71.18643904643793,
+    "2": -83.30600026173661,
+    "3": -98.4927378185204,
+    "4": -102.25749988792916,
+    "5": -114.35338598874101
+   },
+   "bic_trend": -70.62647343264692,
+   "trend_slope_per_month": 0.006913625090199118,
+   "sup_chow_F": 15.831614690541288,
+   "sup_chow_tau": "2022-07",
+   "sup_chow_p": 0.2638680659670165,
+   "breaks_supported": false
+  },
+  {
+   "series": "M_logvol",
+   "T": 99,
+   "ex_july": true,
+   "kstar": 5,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2017-11",
+     "ci95_months": [
+      "2017-10",
+      "2017-11"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2018-05",
+     "ci95_months": [
+      "2018-05",
+      "2020-10"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2020-11",
+     "ci95_months": [
+      "2020-08",
+      "2021-05"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2022-01",
+     "ci95_months": [
+      "2021-10",
+      "2022-06"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2024-01",
+     "ci95_months": [
+      "2023-07",
+      "2024-07"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2017-10",
+     "mean": 20.76286760502276,
+     "n": 7
+    },
+    {
+     "from": "2017-11",
+     "to": "2018-04",
+     "mean": 22.291401774949364,
+     "n": 6
+    },
+    {
+     "from": "2018-05",
+     "to": "2020-10",
+     "mean": 21.285325738941488,
+     "n": 30
+    },
+    {
+     "from": "2020-11",
+     "to": "2021-12",
+     "mean": 22.456318505399512,
+     "n": 14
+    },
+    {
+     "from": "2022-01",
+     "to": "2023-12",
+     "mean": 21.226899686098474,
+     "n": 24
+    },
+    {
+     "from": "2024-01",
+     "to": "2025-06",
+     "mean": 22.155153319130225,
+     "n": 18
+    }
+   ],
+   "bic_k": {
+    "0": -65.12638053855119,
+    "1": -69.63396088407202,
+    "2": -81.3503161762527,
+    "3": -96.67562264169409,
+    "4": -100.38834078988742,
+    "5": -112.40377690879711
+   },
+   "bic_trend": -68.9071734845694,
+   "trend_slope_per_month": 0.007008536525703025,
+   "sup_chow_F": 16.466059833766767,
+   "sup_chow_tau": "2022-07",
+   "sup_chow_p": 0.24437781109445278,
+   "breaks_supported": false
+  },
+  {
+   "series": "M_logrv",
+   "T": 100,
+   "ex_july": false,
+   "kstar": 2,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2018-04",
+     "ci95_months": [
+      "2017-12",
+      "2018-11"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2022-10",
+     "ci95_months": [
+      "2022-05",
+      "2023-02"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2018-03",
+     "mean": -1.9573317141803923,
+     "n": 12
+    },
+    {
+     "from": "2018-04",
+     "to": "2022-09",
+     "mean": -3.05764353821079,
+     "n": 54
+    },
+    {
+     "from": "2022-10",
+     "to": "2025-07",
+     "mean": -4.082829223863459,
+     "n": 34
+    }
+   ],
+   "bic_k": {
+    "0": -18.86918204650941,
+    "1": -65.5357033858812,
+    "2": -86.32684620467245,
+    "3": -81.54543795370182,
+    "4": -80.31338083663948,
+    "5": -76.42214534832007
+   },
+   "bic_trend": -69.02991960188541,
+   "trend_slope_per_month": -0.020005030038102948,
+   "sup_chow_F": 7.867804968226041,
+   "sup_chow_tau": "2019-05",
+   "sup_chow_p": 0.383808095952024,
+   "breaks_supported": false
+  },
+  {
+   "series": "M_logrv",
+   "T": 99,
+   "ex_july": true,
+   "kstar": 2,
+   "breaks": [
+    {
+     "first_month_of_new_regime": "2018-04",
+     "ci95_months": [
+      "2017-12",
+      "2018-10"
+     ]
+    },
+    {
+     "first_month_of_new_regime": "2022-10",
+     "ci95_months": [
+      "2022-04",
+      "2023-02"
+     ]
+    }
+   ],
+   "segments": [
+    {
+     "from": "2017-04",
+     "to": "2018-03",
+     "mean": -1.9573317141803923,
+     "n": 12
+    },
+    {
+     "from": "2018-04",
+     "to": "2022-09",
+     "mean": -3.05764353821079,
+     "n": 54
+    },
+    {
+     "from": "2022-10",
+     "to": "2025-06",
+     "mean": -4.046513823630975,
+     "n": 33
+    }
+   ],
+   "bic_k": {
+    "0": -22.879399185770644,
+    "1": -67.25123260401227,
+    "2": -88.76051020710761,
+    "3": -84.52175356480105,
+    "4": -83.26930086932481,
+    "5": -80.23033498700465
+   },
+   "bic_trend": -69.63060082708499,
+   "trend_slope_per_month": -0.019376199368838703,
+   "sup_chow_F": 7.824517782738105,
+   "sup_chow_tau": "2019-05",
+   "sup_chow_p": 0.3743128435782109,
+   "breaks_supported": false
+  }
+ ],
+ "events": [
+  {
+   "event": "zero-fee start (memory)",
+   "date": "2022-07-21",
+   "metric": "notional",
+   "ratio_after_before": 0.8747480385360631,
+   "abs_percentile": 28.896434634974533,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "zero-fee end (memory)",
+   "date": "2023-03-31",
+   "metric": "notional",
+   "ratio_after_before": 0.6122256853056528,
+   "abs_percentile": 81.96943972835314,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "FTX collapse (memory)",
+   "date": "2022-11-08",
+   "metric": "notional",
+   "ratio_after_before": 2.2907541268991296,
+   "abs_percentile": 96.5365025466893,
+   "data_verified": true,
+   "label": "data-verified"
+  },
+  {
+   "event": "COVID crash (memory)",
+   "date": "2020-03-12",
+   "metric": "notional",
+   "ratio_after_before": 2.253018214458889,
+   "abs_percentile": 95.78947368421052,
+   "data_verified": true,
+   "label": "data-verified"
+  },
+  {
+   "event": "China mining ban (memory)",
+   "date": "2021-05-19",
+   "metric": "notional",
+   "ratio_after_before": 0.7364534604127495,
+   "abs_percentile": 60.441426146010194,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "halving 2020 (memory)",
+   "date": "2020-05-11",
+   "metric": "notional",
+   "ratio_after_before": 0.8645803338965998,
+   "abs_percentile": 31.544991511035654,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "halving 2024 (memory)",
+   "date": "2024-04-20",
+   "metric": "notional",
+   "ratio_after_before": 0.6345852657648072,
+   "abs_percentile": 79.18505942275043,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "spot-ETF launch (memory)",
+   "date": "2024-01-11",
+   "metric": "notional",
+   "ratio_after_before": 0.7224761585032501,
+   "abs_percentile": 64.34634974533107,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "Terra/Luna (memory)",
+   "date": "2022-05-09",
+   "metric": "notional",
+   "ratio_after_before": 0.9432309131259252,
+   "abs_percentile": 11.409168081494057,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "zero-fee start window (data's own largest |jump|)",
+   "date": "2022-06-20",
+   "metric": "notional",
+   "ratio_after_before": 0.40930735997364776,
+   "abs_percentile": 97.86078098471987,
+   "data_verified": true,
+   "label": "data date"
+  },
+  {
+   "event": "zero-fee end window (data's own largest |jump|)",
+   "date": "2023-03-09",
+   "metric": "notional",
+   "ratio_after_before": 3.2500626049252856,
+   "abs_percentile": 99.38879456706282,
+   "data_verified": true,
+   "label": "data date"
+  },
+  {
+   "event": "zero-fee start (memory)",
+   "date": "2022-07-21",
+   "metric": "rv",
+   "ratio_after_before": 0.7779083527239653,
+   "abs_percentile": 34.431239388794566,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "zero-fee end (memory)",
+   "date": "2023-03-31",
+   "metric": "rv",
+   "ratio_after_before": 0.39344034784641657,
+   "abs_percentile": 91.78268251273344,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "FTX collapse (memory)",
+   "date": "2022-11-08",
+   "metric": "rv",
+   "ratio_after_before": 2.013873235223816,
+   "abs_percentile": 82.13921901528013,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "COVID crash (memory)",
+   "date": "2020-03-12",
+   "metric": "rv",
+   "ratio_after_before": 6.172696602334612,
+   "abs_percentile": 99.04923599320882,
+   "data_verified": true,
+   "label": "data-verified"
+  },
+  {
+   "event": "China mining ban (memory)",
+   "date": "2021-05-19",
+   "metric": "rv",
+   "ratio_after_before": 2.1534456941815177,
+   "abs_percentile": 86.3497453310696,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "halving 2020 (memory)",
+   "date": "2020-05-11",
+   "metric": "rv",
+   "ratio_after_before": 0.9403439732130839,
+   "abs_percentile": 9.235993208828523,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "halving 2024 (memory)",
+   "date": "2024-04-20",
+   "metric": "rv",
+   "ratio_after_before": 0.5137610800726493,
+   "abs_percentile": 79.62648556876061,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "spot-ETF launch (memory)",
+   "date": "2024-01-11",
+   "metric": "rv",
+   "ratio_after_before": 0.7400422690828055,
+   "abs_percentile": 40.30560271646859,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "Terra/Luna (memory)",
+   "date": "2022-05-09",
+   "metric": "rv",
+   "ratio_after_before": 1.3450460687628432,
+   "abs_percentile": 39.592529711375214,
+   "data_verified": false,
+   "label": "unverified in the data (memory date)"
+  },
+  {
+   "event": "zero-fee start window (data's own largest |jump|)",
+   "date": "2022-06-09",
+   "metric": "rv",
+   "ratio_after_before": 3.8811075176186547,
+   "abs_percentile": 97.07979626485569,
+   "data_verified": true,
+   "label": "data date"
+  },
+  {
+   "event": "zero-fee end window (data's own largest |jump|)",
+   "date": "2023-03-08",
+   "metric": "rv",
+   "ratio_after_before": 4.475891627437619,
+   "abs_percentile": 97.72495755517826,
+   "data_verified": true,
+   "label": "data date"
+  }
+ ]
+}

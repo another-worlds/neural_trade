@@ -1,0 +1,3 @@
+auc: months 100 (to 2025-07), compared 99 months <= 2025-06: max |diff| 0.00e+00, mean 0.00e+00; months only mine [], only stored []
+har: months 100 (to 2025-07), compared 99 months <= 2025-06: max |diff| 0.00e+00, mean 0.00e+00; months only mine [], only stored []
+run time 17s

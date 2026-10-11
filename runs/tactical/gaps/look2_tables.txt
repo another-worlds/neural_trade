@@ -1,0 +1,64 @@
+== THE ONE LOOK, stride 7, all look months incl. partial 2025-07 ==
+-- H=15 min: har level spearman 0.4062, qlike 2.3710, n months 13
+   m15  dSpear  +0.00017 [-0.00025,+0.00059] t=+0.88 n=13
+   m15  dQLIKE  +0.03737 [-0.04119,+0.11593] t=+1.04 n=13
+   moh  dSpear  +0.00131 [+0.00014,+0.00249] t=+2.44 n=13
+   moh  dQLIKE  -0.02882 [-0.08481,+0.02716] t=-1.12 n=13
+   cal  dSpear  +0.00102 [-0.00231,+0.00436] t=+0.67 n=13
+   cal  dQLIKE  +0.30331 [-0.31957,+0.92620] t=+1.06 n=13
+-- H=60 min: har level spearman 0.3610, qlike 1.8441, n months 13
+   m15  dSpear  -0.00030 [-0.00053,-0.00006] t=-2.77 n=13
+   m15  dQLIKE  +0.00132 [-0.00108,+0.00373] t=+1.20 n=13
+   moh  dSpear  -0.00120 [-0.00197,-0.00043] t=-3.40 n=13
+   moh  dQLIKE  -0.00176 [-0.00784,+0.00432] t=-0.63 n=13
+   cal  dSpear  -0.00299 [-0.00861,+0.00263] t=-1.16 n=13
+   cal  dQLIKE  +0.04945 [-0.04973,+0.14862] t=+1.09 n=13
+-- H=240 min: har level spearman 0.3076, qlike 1.7645, n months 13
+   m15  dSpear  -0.00013 [-0.00026,-0.00001] t=-2.28 n=13
+   m15  dQLIKE  -0.00006 [-0.00028,+0.00016] t=-0.59 n=13
+   moh  dSpear  -0.00098 [-0.00191,-0.00006] t=-2.31 n=13
+   moh  dQLIKE  -0.00234 [-0.00567,+0.00100] t=-1.52 n=13
+   cal  dSpear  -0.00515 [-0.01485,+0.00455] t=-1.16 n=13
+   cal  dQLIKE  -0.01739 [-0.03919,+0.00442] t=-1.74 n=13
+== THE ONE LOOK, stride 7, ex-July (<= 2025-06) ==
+-- H=15 min: har level spearman 0.4045, qlike 2.4376, n months 12
+   cal  dSpear  +0.00070 [-0.00288,+0.00428] t=+0.43 n=12
+   cal  dQLIKE  +0.32767 [-0.35388,+1.00922] t=+1.06 n=12
+-- H=60 min: har level spearman 0.3619, qlike 1.8639, n months 12
+   cal  dSpear  -0.00420 [-0.00965,+0.00126] t=-1.69 n=12
+   cal  dQLIKE  +0.05254 [-0.05612,+0.16120] t=+1.06 n=12
+-- H=240 min: har level spearman 0.3101, qlike 1.7619, n months 12
+   cal  dSpear  -0.00749 [-0.01656,+0.00158] t=-1.82 n=12
+   cal  dQLIKE  -0.02138 [-0.04334,+0.00057] t=-2.14 n=12
+
+SUCCESS (selected=cal, both lower bounds > 0): {'15': False, '60': False, '240': False}
+
+== stride 10 (H57 stride), all look months (descriptive) ==
+-- H=15 min: har level spearman 0.4011, qlike 2.5311, n months 13
+   m15  dSpear  +0.00298 [+0.00179,+0.00417] t=+5.47 n=13
+   m15  dQLIKE  +0.01770 [-0.02057,+0.05597] t=+1.01 n=13
+   moh  dSpear  +0.00394 [+0.00242,+0.00546] t=+5.64 n=13
+   moh  dQLIKE  +0.00107 [-0.00398,+0.00611] t=+0.46 n=13
+   cal  dSpear  +0.00335 [+0.00014,+0.00655] t=+2.28 n=13
+   cal  dQLIKE  +0.32771 [-0.34519,+1.00061] t=+1.06 n=13
+-- H=60 min: har level spearman 0.3622, qlike 1.8917, n months 13
+   m15  dSpear  -0.00003 [-0.00012,+0.00005] t=-0.87 n=13
+   m15  dQLIKE  -0.00007 [-0.00073,+0.00060] t=-0.22 n=13
+   moh  dSpear  -0.00001 [-0.00020,+0.00018] t=-0.10 n=13
+   moh  dQLIKE  +0.00040 [-0.00085,+0.00165] t=+0.69 n=13
+   cal  dSpear  -0.00155 [-0.00687,+0.00376] t=-0.64 n=13
+   cal  dQLIKE  +0.06423 [-0.06327,+0.19174] t=+1.10 n=13
+-- H=240 min: har level spearman 0.3058, qlike 1.7682, n months 13
+   m15  dSpear  -0.00001 [-0.00005,+0.00002] t=-0.68 n=13
+   m15  dQLIKE  +0.00003 [-0.00002,+0.00007] t=+1.40 n=13
+   moh  dSpear  -0.00002 [-0.00016,+0.00013] t=-0.25 n=13
+   moh  dQLIKE  +0.00007 [-0.00017,+0.00030] t=+0.63 n=13
+   cal  dSpear  -0.00389 [-0.01418,+0.00639] t=-0.83 n=13
+   cal  dQLIKE  -0.01460 [-0.03670,+0.00751] t=-1.44 n=13
+
+== H57 ensemble vs the periodic multiplier, same months (2024-07..2025-06), Spearman diff vs har ==
+H=15: H57 ens +0.00596 | m15/s10 +0.00286 | moh/s10 +0.00395 | cal/s10 +0.00303 | m15/s7 +0.00010 | moh/s7 +0.00121 | cal/s7 +0.00070
+H=60: H57 ens +0.00484 | m15/s10 -0.00005 | moh/s10 -0.00002 | cal/s10 -0.00268 | m15/s7 -0.00025 | moh/s7 -0.00117 | cal/s7 -0.00420
+H=240: H57 ens +0.00689 | m15/s10 -0.00002 | moh/s10 -0.00003 | cal/s10 -0.00621 | m15/s7 -0.00014 | moh/s7 -0.00107 | cal/s7 -0.00749
+
+fraction of H57's ensemble gain reproduced by cal at stride 10: {'15': 0.5087537842928418, '60': -0.5525248515469198}; pre-registered reading: does not explain

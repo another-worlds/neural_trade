@@ -1,0 +1,5 @@
+bars 4495960 last 2025-07-20 23:59:00
+auc series 100 15s
+har series 100 17s
+auc: months 100 (to 2025-07), compared 99 months <= 2025-06: max |diff| 0.00e+00, mean 0.00e+00; months only mine [], only stored []
+har: months 100 (to 2025-07), compared 99 months <= 2025-06: max |diff| 0.00e+00, mean 0.00e+00; months only mine [], only stored []
