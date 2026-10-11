@@ -177,8 +177,11 @@ def main():
             out[f"curve_{mod}_vs_{base}"] = c.to_dict("records")
             if (base, mod) == ("nn_direct", "nn_td"):
                 curves.append(("nn_td vs nn_direct", c, ":"))
+                out["verdict_nn_secondary"] = verdict(c, stage)
     v = out["verdict"]
     txt.insert(0, f"verdict ({stage}, headline td vs direct): {json.dumps(v, indent=1)}")
+    if "verdict_nn_secondary" in out:
+        txt.insert(1, f"secondary (NOT in the pre-registered verdict), nn_td vs nn_direct, same C1-C3 arithmetic: {json.dumps(out['verdict_nn_secondary'], indent=1)}")
     open(f"{HERE}/{stage}_tables.txt".replace("sel_tables", "selection_tables").replace("look_tables", "look_tables"), "w").write("\n".join(txt))
     json.dump(out, open(f"{HERE}/{'selection' if stage == 'sel' else 'look'}.json", "w"), indent=1, default=float)
     plot(curves, f"{HERE}/curve_{stage}.png", f"tdvar {stage}: gain over direct HAR vs training window")

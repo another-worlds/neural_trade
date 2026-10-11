@@ -133,3 +133,39 @@ def test_gap_makes_anchors_invalid():
     ok = D.contiguous(a, 240)
     assert not ok[0] and ok[1] and not ok[2]                # [0] and [2] touch the gap (forward / through the 10080-bar lag)
     assert ok[3]
+
+
+def test_nn_gradient_matches_finite_difference():
+    import tdvar_nn as N
+    rng = np.random.default_rng(0)
+    z = rng.normal(size=(300, 4)); y = np.exp(0.5 * z[:, 0] + rng.normal(0, 0.3, 300))
+    net = N.Net(z, y, 1e-3)                     # trained a little; now check the analytic gradient of the loss at this point
+    net.w2 = rng.normal(0, 0.3, N.HID)          # non-zero last layer so every gradient is exercised
+
+    def loss():
+        lf = net.logf(z)
+        return float(np.mean(y * np.exp(-lf) + lf - np.log(y) - 1) + N.L2 * (np.sum(net.W1 ** 2) + np.sum(net.w2 ** 2)))
+
+    h = np.tanh(z @ net.W1 + net.b1); lf = net.logf(z); g = (1.0 - y * np.exp(-lf)) / len(y)
+    gW1 = z.T @ (np.outer(g, net.w2) * (1 - h * h)) + 2 * N.L2 * net.W1
+    for (i, j) in ((0, 0), (2, 5), (3, 15)):
+        e = 1e-6; w0 = net.W1[i, j]
+        net.W1[i, j] = w0 + e; lp = loss(); net.W1[i, j] = w0 - e; lm = loss(); net.W1[i, j] = w0
+        assert (lp - lm) / (2 * e) == pytest.approx(gW1[i, j], rel=1e-4, abs=1e-8)
+
+
+def test_nn_cell_ignores_bars_from_month_start():
+    import tdvar_nn as N
+    close, idx = synth()
+    t0 = pd.Timestamp("2019-02-10"); pos0 = int(idx.searchsorted(t0))
+    D = L.Data(close, idx)
+    c2 = close.copy(); c2[pos0:] *= 1.0 + np.random.default_rng(2).normal(0, 0.05, len(c2) - pos0)
+    D2 = L.Data(c2, idx)
+    r1, i1 = N.cell_nn(D, t0, t0 + pd.Timedelta(days=5), 20, 240, D.n)
+    r2, i2 = N.cell_nn(D2, t0, t0 + pd.Timedelta(days=5), 20, 240, D2.n)
+    assert i1["n_train"] == i2["n_train"]
+    # the training features/targets are identical, so a fit on them must be identical: compare via a probe forecast
+    a = D.anch[(D.anch + 240 <= pos0)][-50:]
+    X = D.feat(a); X2 = D2.feat(a)
+    np.testing.assert_allclose(X, X2)
+    np.testing.assert_allclose(D.rate(a, 240), D2.rate(a, 240))
