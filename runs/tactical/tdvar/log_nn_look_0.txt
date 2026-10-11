@@ -1,0 +1,6 @@
+nn look part 0/3: 5 months, anchors 74765, end_pos 4495960
+2024-07 118s 30 rows
+2024-10 147s 30 rows
+2025-01 118s 30 rows
+2025-04 112s 30 rows
+2025-07 72s 30 rows
