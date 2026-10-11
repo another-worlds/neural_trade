@@ -1,0 +1,12 @@
+phase simB
+T=30: months 24  events 4202  mean n_eff/month 1462  train rate 0.0195
+   ll_pow_vs_B          mean  +0.218%  CI [ +0.006,  +0.430]  t  +2.13  p1 0.0221
+   bs_pow_vs_B          mean  +0.039%  CI [ -0.001,  +0.079]  t  +2.02  p1 0.0276
+   ll_exp_vs_B          mean  +0.218%  CI [ -0.010,  +0.446]  t  +1.97  p1 0.0302
+   ll_pow_vs_exp        mean  -0.000%  CI [ -0.116,  +0.116]  t  -0.00  p1 0.5003
+   ll_pow_nofs_vs_B     mean  -0.032%  CI [ -0.132,  +0.068]  t  -0.67  p1 0.7446
+   ll_fs_vs_B           mean  +0.246%  CI [ +0.050,  +0.442]  t  +2.59  p1 0.0082
+   ll_B_vs_const        mean  -0.043%  CI [ -0.351,  +0.265]  t  -0.29  p1 0.6127
+   ll_pow_vs_const      mean  +0.175%  CI [ -0.225,  +0.574]  t  +0.90  p1 0.1877
+   Holm p (pow vs B) 0.0221   p mean 0.829  by year {"2020": 0.86, "2021": 0.8}  range 0.06  c=10 share 0.71  kernel coef>0 share 0.38
+pass: False

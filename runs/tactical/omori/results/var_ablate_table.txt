@@ -1,0 +1,13 @@
+post-hoc ablation, T=15, 66 months, 255s (descriptive; not a verdict)
+left  a=0.025 all       gain vs FHS  +0.85%  t  +5.45  p1 0.0000
+left  a=0.025 sv_clock  gain vs FHS  +0.76%  t  +5.55  p1 0.0000
+left  a=0.025 shock     gain vs FHS  +0.14%  t  +1.31  p1 0.0975
+left  a=0.050 all       gain vs FHS  +0.62%  t  +5.14  p1 0.0000
+left  a=0.050 sv_clock  gain vs FHS  +0.55%  t  +5.12  p1 0.0000
+left  a=0.050 shock     gain vs FHS  +0.14%  t  +1.65  p1 0.0517
+right a=0.025 all       gain vs FHS  +0.67%  t  +3.02  p1 0.0018
+right a=0.025 sv_clock  gain vs FHS  +0.76%  t  +3.62  p1 0.0003
+right a=0.025 shock     gain vs FHS  -0.03%  t  -0.29  p1 0.6148
+right a=0.050 all       gain vs FHS  +0.51%  t  +3.01  p1 0.0019
+right a=0.050 sv_clock  gain vs FHS  +0.52%  t  +3.57  p1 0.0003
+right a=0.050 shock     gain vs FHS  +0.06%  t  +0.77  p1 0.2207
