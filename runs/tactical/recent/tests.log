@@ -1,0 +1,24 @@
+.F.                                                                      [100%]
+================================== FAILURES ===================================
+_ test_corrupting_the_scored_months_future_and_the_border_labels_changes_nothing _
+
+    def test_corrupting_the_scored_months_future_and_the_border_labels_changes_nothing():
+        X, t, r = _synth(); H, bm = 3, 15
+        for kind in wf.MODELS:
+            a = wf.walk_forward(X, t, r, "1m", kind, 20, "2020-02", "2020-02", H=H, bar_min=bm, db=0.0)
+            assert len(a) == 1 and a[0]["month"] == "2020-02"
+            m0, m1 = pd.Timestamp("2020-02-01"), pd.Timestamp("2020-03-01")
+            X2, r2 = X.copy(), r.copy()
+            fut = np.asarray(t >= m1); X2[fut] += 5.0; r2[fut] *= -3.0                        # everything after the scored month
+            border = np.asarray((t >= m0 - pd.Timedelta(minutes=bm * H)) & (t < m0))           # anchors whose label closes after the month start
+            assert border.sum() >= H
+            r2[border] = -r2[border] * 7                                                       # their labels reach into the scored month
+            b = wf.walk_forward(X2, t, r2, "1m", kind, 20, "2020-02", "2020-02", H=H, bar_min=bm, db=0.0)
+>           assert abs(a[0]["auc"] - b[0]["auc"]) < 1e-9 and abs(a[0]["top10_bps"] - b[0]["top10_bps"]) < 1e-9
+E           assert (5.161023947097831e-07 < 1e-09)
+E            +  where 5.161023947097831e-07 = abs((0.6342748761354253 - 0.6342743600330306))
+
+runs\tactical\recent\test_recent.py:42: AssertionError
+=========================== short test summary info ===========================
+FAILED runs/tactical/recent/test_recent.py::test_corrupting_the_scored_months_future_and_the_border_labels_changes_nothing
+1 failed, 2 passed in 1.36s
