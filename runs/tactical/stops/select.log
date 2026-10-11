@@ -1,0 +1,4 @@
+a_1h_rich_l1_365|prev {'X0_time': 0.617, 'X1_sym1': -0.249, 'X2_sym15': 0.183, 'X3_sym2': 0.589, 'X4_asym': -0.124, 'X5_trail1': -0.087, 'X6_best_plus_filter': 0.55} -> best5 X3_sym2 chosen None
+a_1h_rich_l1_365|same {'X0_time': 2.211, 'X1_sym1': 0.234, 'X2_sym15': 1.889, 'X3_sym2': 1.703, 'X4_asym': 0.243, 'X5_trail1': 0.3, 'X6_best_plus_filter': 1.971} -> best5 X2_sym15 chosen None
+b_h62_4h_rich_logreg_730|prev {'X0_time': 1.861, 'X1_sym1': 0.74, 'X2_sym15': 1.492, 'X3_sym2': 1.595, 'X4_asym': 1.587, 'X5_trail1': 0.985, 'X6_best_plus_filter': 2.744} -> best5 X3_sym2 chosen X6_best_plus_filter
+b_h62_4h_rich_logreg_730|same {'X0_time': 1.222, 'X1_sym1': 0.614, 'X2_sym15': 1.514, 'X3_sym2': 0.828, 'X4_asym': 1.197, 'X5_trail1': 0.838, 'X6_best_plus_filter': 3.819} -> best5 X2_sym15 chosen X6_best_plus_filter
