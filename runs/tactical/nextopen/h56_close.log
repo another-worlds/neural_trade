@@ -1,0 +1,9 @@
+close 8 cells to run
+1m gR l1 365 15 months 357.9 s
+1m all hgb 365 15 months 41.3 s
+1m tb7 logreg 365 15 months 7.9 s
+1h rich l1 365 15 months 10.1 s
+1h rich logreg 365 15 months 7.3 s
+1h all hgb 365 15 months 27.7 s
+1h tb7 logreg 365 15 months 7.0 s
+1m all l1 365 15 months 514.6 s
