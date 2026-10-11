@@ -1,8 +1,9 @@
 """Arrow-of-time study (SPEC.md): window channels, the four reversal transforms, the small NEEP-style 1D-CNN, helpers.
 Hard cutoff: no bar after 2025-07-20 (LAST_BAR). Every bar loader here drops later rows before anything else sees them.
 Channels of a 60-bar window (all scaled by the window's own realised volatility, a time-symmetric scalar):
-  body = ln(c/o), up = ln(h / max(o,c)), dn = ln(min(o,c) / l), lv = ln(1+volume) - mean over the window.
-A time reversal of a window reverses the bar order and swaps each bar's open and close: body -> -body, up and dn unchanged."""
+  body = ln(c/o), up = ln(h / max(o,c)), dn = ln(min(o,c) / l), lv = ln(1+volume) - mean over the window, gap = ln(o_k / c_(k-1)).
+A time reversal of a window reverses the bar order and swaps each bar's open and close: body -> -body, up and dn unchanged,
+gaps negated and re-attached to the new neighbours."""
 import os
 import numpy as np
 import pandas as pd
@@ -27,47 +28,61 @@ def load_bars():
 
 # ---------------------------------------------------------------- channels and transforms
 def channels(W):
-    """W [N, L, 5] (o, h, l, c, v) float64 -> X [N, L, 4] float32 (body, up, dn, lv) and sigma [N] (window RV, unscaled).
-    Windows with sigma == 0 are marked by sigma == 0 (no information in their order); the caller drops them."""
+    """W [N, L, 5] (o, h, l, c, v) float64 -> X [N, L, 5] float32 (body, up, dn, lv, gap) and sigma [N] (window RV, unscaled).
+    gap_k = ln(o_k / c_(k-1)) (0 for the first bar). sigma = sqrt(mean(body^2 + gap^2)): the close-to-close path's RMS, invariant
+    under time reversal. Windows with sigma == 0 are marked by sigma == 0 (no information in their order); the caller drops them."""
     o, h, l, c, v = (W[..., i] for i in range(5))
     o = np.maximum(o, 1e-9); h = np.maximum(h, 1e-9); l = np.maximum(l, 1e-9); c = np.maximum(c, 1e-9)
     body = np.log(c / o)
     up = np.log(h / np.maximum(o, c)); dn = np.log(np.minimum(o, c) / l)
-    sig = np.sqrt(np.mean(body * body, axis=1))
+    gap = np.zeros_like(body); gap[:, 1:] = np.log(o[:, 1:] / c[:, :-1])
+    sig = np.sqrt(np.mean(body * body + gap * gap, axis=1))
     lv = np.log1p(np.maximum(v, 0.0)); lv = lv - lv.mean(axis=1, keepdims=True)
     s = np.where(sig > 0, sig, 1.0)[:, None]
-    X = np.stack([body / s, up / s, dn / s, lv], axis=2)
+    X = np.stack([body / s, up / s, dn / s, lv, gap / s], axis=2)
     X = np.clip(X, -CLIP, CLIP)
     return X.astype(np.float32), sig
 
 
 def to_abs(X):
-    """sign-free channels for the |r| classifier: (|body|, up + dn, lv)."""
-    return np.stack([np.abs(X[..., 0]), X[..., 1] + X[..., 2], X[..., 3]], axis=-1)
+    """sign-free channels for the |r| classifier: (|body|, up + dn, lv, |gap|)."""
+    return np.stack([np.abs(X[..., 0]), X[..., 1] + X[..., 2], X[..., 3], np.abs(X[..., 4])], axis=-1)
+
+
+def _reverse(X, gi, gap_sign):
+    """bar order reversed; the gap channel (between a bar and the previous one) is re-attached to the new neighbours:
+    reversed gap_j = gap_sign * gap_(k+1) of the original bar k that became bar j."""
+    Y = X[:, ::-1].copy()
+    Y[..., gi] = 0.0; Y[:, 1:, gi] = gap_sign * X[:, 1:, gi][:, ::-1]
+    return Y
 
 
 def t_full(X):
-    """true time reversal: bar order reversed, open and close swapped (body negated; wicks and volume unchanged)."""
-    Y = X[:, ::-1].copy(); Y[..., 0] *= -1.0
+    """true time reversal: bar order reversed, open and close swapped (body negated, gaps negated and re-attached; wicks, volume unchanged)."""
+    Y = _reverse(X, 4, -1.0); Y[..., 0] *= -1.0
     return Y
 
 
 def t_sign(X):
-    """sign only: the mirror image of the price path (body negated, up and dn swapped), order kept."""
-    Y = X.copy(); Y[..., 0] *= -1.0; Y[..., 1], Y[..., 2] = X[..., 2].copy(), X[..., 1].copy()
+    """sign only: the mirror image of the price path (body and gap negated, up and dn swapped), order kept."""
+    Y = X.copy(); Y[..., 0] *= -1.0; Y[..., 4] *= -1.0; Y[..., 1], Y[..., 2] = X[..., 2].copy(), X[..., 1].copy()
     return Y
 
 
-def t_order(X):
-    """order only: bar order reversed, no sign change."""
-    return X[:, ::-1].copy()
+def t_order(X, gi=4):
+    """order only: bar order reversed, no sign change (gap channel at index gi)."""
+    return _reverse(X, gi, 1.0)
+
+
+def t_order_abs(A):
+    return t_order(A, gi=3)
 
 
 MODELS = {              # name -> (input builder, transform, n channels)
-    "full": (lambda X: X, t_full, 4),
-    "sign": (lambda X: X, t_sign, 4),
-    "order": (lambda X: X, t_order, 4),
-    "abs": (to_abs, t_order, 3),
+    "full": (lambda X: X, t_full, 5),
+    "sign": (lambda X: X, t_sign, 5),
+    "order": (lambda X: X, t_order, 5),
+    "abs": (to_abs, t_order_abs, 4),
 }
 
 

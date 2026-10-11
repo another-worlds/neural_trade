@@ -1,0 +1,12 @@
+{
+ "n_anchors": 296307,
+ "dropped_flat": 71,
+ "first": "2019-12-01 00:09:00",
+ "last_anchor": "2025-07-20 23:39:00",
+ "last_bar_loaded": "2025-07-20 23:59:00",
+ "gap_diagnostic": {
+  "share_gap_over_1e-4": 0.5532061124222886,
+  "median_gap": 0.00013309376475361765,
+  "max_gap": 0.03577497272758021
+ }
+}

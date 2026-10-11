@@ -18,9 +18,11 @@ Tactical, exploratory (D-062/063; owner 2026-10-11: any target allowed). Hypothe
 
 ## Models (GPU, small 1D-CNN, NEEP-style, Kim et al. PRL 2020)
 
-Window channels, all divided by the window's OWN realised volatility `sigma_w = sqrt(mean(body^2))` (a time-symmetric scalar; no
+Window channels, all divided by the window's OWN realised volatility `sigma_w = sqrt(mean(body^2 + gap^2))` (a time-symmetric scalar; no
 trailing EWMA, correction 2): `body = ln(c/o)`, `up = ln(h / max(o,c))`, `dn = ln(min(o,c) / l)` (scaled, clipped at +-20) and
-`lv = ln(1+volume) - window mean`. Gaps `o_k` vs `c_(k-1)` are ignored (their share is reported by `prep.py`).
+`lv = ln(1+volume) - window mean`, `gap_k = ln(o_k / c_(k-1))` (0 for the first bar; scaled). The gaps are not negligible on this file (55% of
+bars have |gap| > 1e-4, median 1.3e-4; `prep_info.json`), so they are a channel; time reversal negates them and re-attaches them to the new
+neighbours (tested against reversing the raw bars).
 
 The classifier sees a window `x` or its transform `T(x)` and says which (label 1 = original). Conv(32,k5) - Conv(32,k5,s2) -
 Conv(32,k3,s2) - [global mean, global max] - Dense(16) - Dense(1); Adam 2e-3, batch 256 windows (512 samples), at most 12 epochs, early
@@ -29,10 +31,10 @@ stop with patience 2 on a validation block (the last 10% of the training rows, s
 
 | model | input | T | role |
 |---|---|---|---|
-| `full` | body, up, dn, lv | time reversal: bar order reversed, open and close swapped (body negated, wicks and volume unchanged) | main: EP_total |
-| `abs` | |body|, up+dn, lv (sign-free) | order reversal | EP_vol: asymmetry of magnitudes in time (Zumbach-type) |
-| `order` | body, up, dn, lv | order reversal only | control: time order without the sign flip |
-| `sign` | body, up, dn, lv | mirror image of the price path (body negated, up and dn swapped), order kept | control: sign (skew) only |
+| `full` | body, up, dn, lv, gap | time reversal: bar order reversed, open and close swapped (body negated, gaps negated and re-attached, wicks and volume unchanged) | main: EP_total |
+| `abs` | |body|, up+dn, lv, |gap| (sign-free) | order reversal | EP_vol: asymmetry of magnitudes in time (Zumbach-type) |
+| `order` | body, up, dn, lv, gap | order reversal only | control: time order without the sign flip |
+| `sign` | body, up, dn, lv, gap | mirror image of the price path (body and gap negated, up and dn swapped), order kept | control: sign (skew) only |
 
 (The README's "three controls" are `sign`, `order` and, for correction 3, `abs`; `full` is the estimator.)
 

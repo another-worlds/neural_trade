@@ -35,17 +35,20 @@ def test_sign_transform_is_the_mirror_image_of_the_price_path():
 
 def test_order_transform_only_reverses_and_abs_is_sign_free():
     X, _ = AL.channels(rand_windows(seed=2))
-    assert np.array_equal(AL.t_order(X), X[:, ::-1])
+    assert np.array_equal(AL.t_order(X)[..., :4], X[:, ::-1][..., :4])
+    assert np.allclose(AL.t_order(X)[:, 1:, 4], X[:, 1:, 4][:, ::-1]) and np.all(AL.t_order(X)[:, 0, 4] == 0)
     assert np.array_equal(AL.t_order(AL.t_order(X)), X)
     A1 = AL.to_abs(X); A2 = AL.to_abs(AL.t_sign(X)); A3 = AL.to_abs(AL.t_full(X))
-    assert np.allclose(A1, A2) and np.allclose(A3, A1[:, ::-1])                          # |r| channels ignore the sign, reversal = order
+    assert np.allclose(A1, A2) and np.allclose(A3[..., :3], A1[:, ::-1][..., :3]) and np.allclose(A3, AL.t_order_abs(A1))
+    assert np.allclose(A3[:, 1:, 3], A1[:, 1:, 3][:, ::-1])                          # |r| channels ignore the sign, reversal = order
 
 
 def test_window_scaling_is_time_symmetric_unit_rms_body():
     X, sig = AL.channels(rand_windows(seed=3))
-    assert np.allclose(np.sqrt(np.mean(X[..., 0] ** 2, axis=1)), 1.0, atol=1e-4)
+    rms = lambda Z: np.sqrt(np.mean(Z[..., 0] ** 2 + Z[..., 4] ** 2, axis=1))
+    assert np.allclose(rms(X), 1.0, atol=1e-4)
     for T in (AL.t_full, AL.t_order, AL.t_sign):
-        assert np.allclose(np.sqrt(np.mean(T(X)[..., 0] ** 2, axis=1)), 1.0, atol=1e-4)
+        assert np.allclose(rms(T(X)), 1.0, atol=1e-4)
 
 
 def test_hard_cutoff_bars_and_anchors():
