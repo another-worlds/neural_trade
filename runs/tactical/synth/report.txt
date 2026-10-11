@@ -1,0 +1,116 @@
+SPEC: runs/tactical/synth/SPEC.md. dir = mean AUC of h10/15/20 (lab: close-entry labels; wf: next-open labels); vol = Spearman with next-hour log RV. Intervals: 95% t over slices (lab) / months (wf; months are weakly dependent, so a little optimistic).
+
+=== lab: 24 slices; seconds per unit 222
+-- dir: mean [95% CI]
+   tb7   0.5701 [0.5517,0.5884]
+   c3    0.5627 [0.5453,0.5800]
+   C1    0.5454 [0.5325,0.5583]
+   C2a   0.5465 [0.5326,0.5604]
+   C2b   0.5516 [0.5350,0.5681]
+   B     0.5470 [0.5318,0.5623]
+   A     0.5328 [0.5221,0.5434]
+-- vol: mean [95% CI]
+   har   0.5508 [0.4951,0.6066]
+   c3    0.2520 [0.1999,0.3040]
+   C1    0.2559 [0.2027,0.3092]
+   C2a   0.3405 [0.2676,0.4134]
+   C2b   0.2970 [0.2277,0.3663]
+   B     0.3218 [0.2520,0.3916]
+   A     0.2955 [0.2262,0.3648]
+
+=== wf: 42 months; seconds per unit 381
+-- dir: mean [95% CI]
+   tb7   0.5445 [0.5405,0.5485]
+   c3    0.5381 [0.5345,0.5416]
+   C1    0.5311 [0.5285,0.5336]
+   C2a   0.5309 [0.5272,0.5346]
+   C2b   0.5360 [0.5325,0.5395]
+   B     0.5311 [0.5279,0.5342]
+   A     0.5208 [0.5177,0.5239]
+-- vol: mean [95% CI]
+   har   0.6999 [0.6725,0.7273]
+   c3    0.3013 [0.2629,0.3397]
+   C1    0.3349 [0.3009,0.3690]
+   C2a   0.4706 [0.4267,0.5145]
+   C2b   0.4301 [0.3828,0.4774]
+   B     0.4428 [0.3972,0.4885]
+   A     0.4585 [0.4149,0.5020]
+
+=== Paired differences X - baseline (family of 32 tests, Holm-adjusted two-sided p)
+   protocol target X   vs     diff     95% CI              p       Holm p
+   lab   dir   A   C1    -0.0126 [-0.0199,-0.0054]  0.0014  0.0129
+   lab   dir   A   C2a   -0.0138 [-0.0205,-0.0070]  0.0003  0.0035
+   lab   dir   A   c3    -0.0299 [-0.0418,-0.0180]  0.0000  0.0005
+   lab   dir   A   tb7   -0.0373 [-0.0495,-0.0251]  0.0000  0.0000
+   lab   dir   B   C1    +0.0016 [-0.0020,+0.0052]  0.3550  0.7100
+   lab   dir   B   C2b   -0.0045 [-0.0084,-0.0007]  0.0236  0.0943
+   lab   dir   B   c3    -0.0156 [-0.0227,-0.0086]  0.0001  0.0016
+   lab   dir   B   tb7   -0.0230 [-0.0293,-0.0168]  0.0000  0.0000
+   lab   vol   A   C1    +0.0395 [+0.0140,+0.0651]  0.0040  0.0274
+   lab   vol   A   C2a   -0.0450 [-0.0693,-0.0207]  0.0009  0.0085
+   lab   vol   A   c3    +0.0435 [+0.0095,+0.0775]  0.0143  0.0716
+   lab   vol   A   har   -0.2553 [-0.2967,-0.2140]  0.0000  0.0000
+   lab   vol   B   C1    +0.0658 [+0.0470,+0.0847]  0.0000  0.0000
+   lab   vol   B   C2b   +0.0248 [+0.0088,+0.0408]  0.0039  0.0274
+   lab   vol   B   c3    +0.0698 [+0.0401,+0.0996]  0.0001  0.0010
+   lab   vol   B   har   -0.2290 [-0.2757,-0.1824]  0.0000  0.0000
+   wf    dir   A   C1    -0.0103 [-0.0130,-0.0075]  0.0000  0.0000
+   wf    dir   A   C2a   -0.0101 [-0.0134,-0.0068]  0.0000  0.0000
+   wf    dir   A   c3    -0.0173 [-0.0205,-0.0140]  0.0000  0.0000
+   wf    dir   A   tb7   -0.0237 [-0.0269,-0.0205]  0.0000  0.0000
+   wf    dir   B   C1    +0.0000 [-0.0021,+0.0021]  0.9963  0.9963
+   wf    dir   B   C2b   -0.0049 [-0.0080,-0.0018]  0.0027  0.0213
+   wf    dir   B   c3    -0.0070 [-0.0105,-0.0035]  0.0003  0.0031
+   wf    dir   B   tb7   -0.0135 [-0.0169,-0.0100]  0.0000  0.0000
+   wf    vol   A   C1    +0.1236 [+0.1046,+0.1425]  0.0000  0.0000
+   wf    vol   A   C2a   -0.0121 [-0.0290,+0.0048]  0.1563  0.4688
+   wf    vol   A   c3    +0.1572 [+0.1334,+0.1809]  0.0000  0.0000
+   wf    vol   A   har   -0.2414 [-0.2701,-0.2128]  0.0000  0.0000
+   wf    vol   B   C1    +0.1079 [+0.0916,+0.1242]  0.0000  0.0000
+   wf    vol   B   C2b   +0.0127 [+0.0068,+0.0186]  0.0001  0.0011
+   wf    vol   B   c3    +0.1415 [+0.1260,+0.1570]  0.0000  0.0000
+   wf    vol   B   har   -0.2571 [-0.2881,-0.2261]  0.0000  0.0000
+
+=== Win rule (both protocols, all four differences: CI above 0 and Holm p < 0.05)
+   A dir: no (0/8 tests pass)
+   A vol: no (3/8 tests pass)
+   B dir: no (0/8 tests pass)
+   B vol: no (6/8 tests pass)
+   -> the ONE look is NOT triggered
+
+=== Exploratory contrasts (not in the family; raw 95% CI)
+   lab dir A - B: -0.0143 [-0.0240,-0.0046]
+   lab dir C2a - tb7: -0.0236 [-0.0325,-0.0146]
+   lab dir C2b - tb7: -0.0185 [-0.0239,-0.0131]
+   lab dir B - C1: +0.0016 [-0.0020,+0.0052]
+   lab dir c3 - tb7: -0.0074 [-0.0129,-0.0019]
+   lab vol A - B: -0.0263 [-0.0490,-0.0036]
+   lab vol C2a - har: -0.2103 [-0.2541,-0.1666]
+   lab vol C2b - har: -0.2539 [-0.3017,-0.2060]
+   lab vol B - C1: +0.0658 [+0.0470,+0.0847]
+   lab vol c3 - har: -0.2989 [-0.3399,-0.2579]
+   wf dir A - B: -0.0103 [-0.0140,-0.0065]
+   wf dir C2a - tb7: -0.0136 [-0.0169,-0.0104]
+   wf dir C2b - tb7: -0.0086 [-0.0123,-0.0048]
+   wf dir B - C1: +0.0000 [-0.0021,+0.0021]
+   wf dir c3 - tb7: -0.0065 [-0.0091,-0.0038]
+   wf vol A - B: +0.0157 [-0.0025,+0.0338]
+   wf vol C2a - har: -0.2293 [-0.2631,-0.1955]
+   wf vol C2b - har: -0.2698 [-0.3036,-0.2360]
+   wf vol B - C1: +0.1079 [+0.0916,+0.1242]
+   wf vol c3 - har: -0.3986 [-0.4255,-0.3717]
+
+=== Sensitivity: number of synthetic series K (lab slices, direction, mean AUC; diff against tb7 of the main run)
+   K= 8 A   n=24 0.5317 [0.5195,0.5439]   vs tb7 -0.0384 [-0.0489,-0.0278]
+   K= 8 B   n=24 0.5503 [0.5353,0.5653]   vs tb7 -0.0198 [-0.0261,-0.0135]
+   K= 8 C1  n=24 0.5482 [0.5348,0.5617]   vs tb7 -0.0218 [-0.0287,-0.0150]
+   K=12 A   n=24 0.5328 [0.5221,0.5434]   vs tb7 -0.0373 [-0.0495,-0.0251]
+   K=12 B   n=24 0.5470 [0.5318,0.5623]   vs tb7 -0.0230 [-0.0293,-0.0168]
+   K=12 C1  n=24 0.5454 [0.5325,0.5583]   vs tb7 -0.0247 [-0.0320,-0.0174]
+   K=16 A   n=24 0.5366 [0.5247,0.5485]   vs tb7 -0.0334 [-0.0445,-0.0223]
+   K=16 B   n=24 0.5468 [0.5328,0.5609]   vs tb7 -0.0232 [-0.0307,-0.0157]
+   K=16 C1  n=24 0.5424 [0.5295,0.5554]   vs tb7 -0.0276 [-0.0349,-0.0204]
+
+=== Notes
+- The volatility baseline (har) reads in-window realised volatility (5/15/59 bars) and time of day; the synthetic arms see the OHLCV channels only, so they could learn volatility but start without the RV statistic.
+- No pre-registered parameter was changed after results; the ONE look (2024-07-01 .. 2025-07-20) was not triggered and no look-period data was read (cutoff test in test_synth.py).

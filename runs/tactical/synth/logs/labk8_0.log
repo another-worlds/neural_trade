@@ -1,0 +1,73 @@
+2026-10-11 23:23:45.802894: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'cudart64_110.dll'; dlerror: cudart64_110.dll not found
+2026-10-11 23:23:45.802960: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+2017-03-01T00: train 11078 val 8488
+2026-10-11 23:23:54.780398: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-11 23:23:54.783311: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-11 23:23:54.783430: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-11 23:23:54.784026: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:5 out of the last 13 calls to <function Model.make_predict_function.<locals>.predict_function at 0x00000198C6E2CCA0> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+WARNING:tensorflow:5 out of the last 13 calls to <function Model.make_predict_function.<locals>.predict_function at 0x00000198C6E2E200> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+  C1 {'dir': [0.5261391386666259], 'sec': 11.5}
+  B {'dir': (0.543876350178046, [0.5514059332584045, 0.5426215475966369, 0.5376015696790967]), 'sec': 3.6}
+WARNING:tensorflow:AutoGraph could not transform <function _classes at 0x000001988ABCE7A0> and will run it as-is.
+Please report this to the TensorFlow team. When filing the bug, set the verbosity to 10 (on Linux, `export AUTOGRAPH_VERBOSITY=10`) and attach the full output.
+Cause: <gast.gast.Expr object at 0x00000198CB553880>
+To silence this warning, decorate the function with @tf.autograph.experimental.do_not_convert
+  A {'dir': (0.5210979430251528, [0.5263723564881053, 0.536036314934502, 0.500885157652851]), 'epochs_dir': 4, 'sec': 30.6}
+2017-03-01T00 done in 71s
+2017-07-04T00: train 16560 val 12600
+  C1 {'dir': [0.6014158464910438], 'sec': 15.4}
+  B {'dir': (0.6318056037658478, [0.6509091993943874, 0.6273940787874401, 0.6171135331157159]), 'sec': 5.4}
+  A {'dir': (0.6047470569410164, [0.6294167407100866, 0.5986140640404956, 0.5862103660724671]), 'epochs_dir': 2, 'sec': 33.4}
+2017-07-04T00 done in 85s
+2018-05-12T13: train 16560 val 12600
+  C1 {'dir': [0.5414081775444513], 'sec': 16.1}
+  B {'dir': (0.5421155059295231, [0.5524046279154698, 0.5409060316304842, 0.533035858242615]), 'sec': 5.3}
+  A {'dir': (0.5366505080832314, [0.5470482111364522, 0.5441754473978426, 0.5187278657153995]), 'epochs_dir': 2, 'sec': 34.3}
+2018-05-12T13 done in 84s
+2018-11-16T02: train 16560 val 12600
+  C1 {'dir': [0.5862596840023445], 'sec': 16.3}
+  B {'dir': (0.5853602682828452, [0.5925007470464334, 0.5826387175004809, 0.580941340301621]), 'sec': 5.4}
+  A {'dir': (0.5256346024926222, [0.4925525330734249, 0.5177528811476124, 0.5665983932568293]), 'epochs_dir': 1, 'sec': 28.2}
+2018-11-16T02 done in 81s
+2019-09-24T15: train 16560 val 12600
+  C1 {'dir': [0.5414709034109971], 'sec': 16.2}
+  B {'dir': (0.5317773892496357, [0.5365163063112031, 0.5311756909434738, 0.5276401704942302]), 'sec': 5.1}
+  A {'dir': (0.5178780552927612, [0.5308575645384279, 0.5179978574710856, 0.5047787438687702]), 'epochs_dir': 3, 'sec': 40.1}
+2019-09-24T15 done in 90s
+2020-03-30T04: train 16560 val 12600
+  C1 {'dir': [0.5494010507458379], 'sec': 15.9}
+  B {'dir': (0.5577616236624058, [0.5662124159353419, 0.5579737486231486, 0.5490987064287268]), 'sec': 5.0}
+  A {'dir': (0.5325309959233638, [0.5391190300270414, 0.5305786544919755, 0.5278953032510747]), 'epochs_dir': 2, 'sec': 35.1}
+2020-03-30T04 done in 83s
+2021-06-10T18: train 16560 val 12600
+  C1 {'dir': [0.53872700680047], 'sec': 15.4}
+  B {'dir': (0.5283408983527167, [0.5362839220189675, 0.5270587621372409, 0.5216800109019417]), 'sec': 6.3}
+  A {'dir': (0.538467181102762, [0.5428690124971463, 0.5331015307803498, 0.53943100003079]), 'epochs_dir': 3, 'sec': 41.4}
+2021-06-10T18 done in 92s
+2021-10-13T18: train 16560 val 12600
+  C1 {'dir': [0.5355176303437826], 'sec': 15.9}
+  B {'dir': (0.5206255270817741, [0.5324732553708018, 0.5177158852434331, 0.5116874406310874]), 'sec': 5.0}
+  A {'dir': (0.5231985195355129, [0.5156341910368881, 0.5204427063177735, 0.533518661251877]), 'epochs_dir': 2, 'sec': 33.7}
+2021-10-13T18 done in 84s
+2022-10-23T20: train 16560 val 12600
+  C1 {'dir': [0.5186817823676568], 'sec': 17.0}
+  B {'dir': (0.5186578514830548, [0.5193643516886198, 0.5127586860687333, 0.5238505166918112]), 'sec': 5.5}
+  A {'dir': (0.5207335366672771, [0.5230209579144696, 0.521175428561909, 0.5180042235254527]), 'epochs_dir': 4, 'sec': 47.8}
+2022-10-23T20 done in 100s
+2023-04-29T08: train 16560 val 12600
+  C1 {'dir': [0.5173745567062807], 'sec': 16.3}
+  B {'dir': (0.5095131852079519, [0.514462146836512, 0.506241957502619, 0.5078354512847247]), 'sec': 5.1}
+  A {'dir': (0.514283529031374, [0.5003744785900626, 0.5138853975055885, 0.5285907109984707]), 'epochs_dir': 4, 'sec': 45.7}
+2023-04-29T08 done in 98s
+2023-09-01T09: train 16560 val 12600
+  C1 {'dir': [0.5219356743079123], 'sec': 15.7}
+  B {'dir': (0.529516901062268, [0.5240750444308881, 0.5245013250368629, 0.539974333719053]), 'sec': 5.2}
+  A {'dir': (0.5083880031060511, [0.5164877189683355, 0.5084251062816375, 0.5002511840681808]), 'epochs_dir': 3, 'sec': 42.9}
+2023-09-01T09 done in 91s
+2024-11-11T23: train 16560 val 12600
+  C1 {'dir': [0.5189260149262468], 'sec': 15.2}
+  B {'dir': (0.5213580055658714, [0.5187267041353376, 0.5251782691103025, 0.5201690434519741]), 'sec': 4.9}
+  A {'dir': (0.4964359222477186, [0.5068680792594543, 0.5025123755799846, 0.47992731190371685]), 'epochs_dir': 2, 'sec': 34.1}
+2024-11-11T23 done in 82s
