@@ -1,0 +1,72 @@
+S_auc all k* 5 supF p 0.004 supported True 21s
+S_auc ex_july k* 5 supF p 0.0045 supported True 42s
+S_har all k* 1 supF p 0.1149 supported False 53s
+S_har ex_july k* 1 supF p 0.1094 supported False 64s
+M_logvol all k* 5 supF p 0.2639 supported False 86s
+M_logvol ex_july k* 5 supF p 0.2444 supported False 106s
+M_logrv all k* 2 supF p 0.3838 supported False 120s
+M_logrv ex_july k* 2 supF p 0.3743 supported False 135s
+
+== S_auc (T=100): k*=5, BIC k* -809.9 vs trend -768.1 (delta +41.8), sup-Chow F=33.28 at 2019-05, p=0.0040, breaks supported: True; trend slope -0.00024/month
+   regime 2017-04..2018-02 (n=11): mean 0.5268
+   regime 2018-03..2019-04 (n=14): mean 0.5744
+   regime 2019-05..2020-04 (n=12): mean 0.5497
+   regime 2020-05..2021-02 (n=10): mean 0.5718
+   regime 2021-03..2024-08 (n=42): mean 0.5451
+   regime 2024-09..2025-07 (n=11): mean 0.5211
+   break -> new regime from 2018-03, 95% interval 2018-02..2018-04; events inside (+-1 month): none
+   break -> new regime from 2019-05, 95% interval 2018-10..2020-05; events inside (+-1 month): COVID crash (memory) 2020-03-12 [notional; data-verified]; COVID crash (memory) 2020-03-12 [rv; data-verified]; halving 2020 (memory) 2020-05-11 [notional; unverified in the data (memory date)]; halving 2020 (memory) 2020-05-11 [rv; unverified in the data (memory date)]
+   break -> new regime from 2020-05, 95% interval 2019-11..2021-12; events inside (+-1 month): COVID crash (memory) 2020-03-12 [notional; data-verified]; COVID crash (memory) 2020-03-12 [rv; data-verified]; China mining ban (memory) 2021-05-19 [notional; unverified in the data (memory date)]; China mining ban (memory) 2021-05-19 [rv; unverified in the data (memory date)]; halving 2020 (memory) 2020-05-11 [notional; unverified in the data (memory date)]; halving 2020 (memory) 2020-05-11 [rv; unverified in the data (memory date)]
+   break -> new regime from 2021-03, 95% interval 2020-12..2023-10; events inside (+-1 month): China mining ban (memory) 2021-05-19 [notional; unverified in the data (memory date)]; China mining ban (memory) 2021-05-19 [rv; unverified in the data (memory date)]; FTX collapse (memory) 2022-11-08 [notional; data-verified]; FTX collapse (memory) 2022-11-08 [rv; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [notional; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [rv; unverified in the data (memory date)]; zero-fee end (memory) 2023-03-31 [notional; unverified in the data (memory date)]; zero-fee end (memory) 2023-03-31 [rv; unverified in the data (memory date)]; zero-fee end window (data's own largest |jump|) 2023-03-08 [rv; data date]; zero-fee end window (data's own largest |jump|) 2023-03-09 [notional; data date]; zero-fee start (memory) 2022-07-21 [notional; unverified in the data (memory date)]; zero-fee start (memory) 2022-07-21 [rv; unverified in the data (memory date)]; zero-fee start window (data's own largest |jump|) 2022-06-09 [rv; data date]; zero-fee start window (data's own largest |jump|) 2022-06-20 [notional; data date]
+   break -> new regime from 2024-09, 95% interval 2023-10..2024-12; events inside (+-1 month): halving 2024 (memory) 2024-04-20 [notional; unverified in the data (memory date)]; halving 2024 (memory) 2024-04-20 [rv; unverified in the data (memory date)]; spot-ETF launch (memory) 2024-01-11 [notional; unverified in the data (memory date)]; spot-ETF launch (memory) 2024-01-11 [rv; unverified in the data (memory date)]
+
+== S_har (T=100): k*=1, BIC k* -506.5 vs trend -496.9 (delta +9.6), sup-Chow F=8.07 at 2022-04, p=0.1149, breaks supported: False; trend slope +0.00125/month
+   regime 2017-04..2022-09 (n=66): mean 0.3068
+   regime 2022-10..2025-07 (n=34): mean 0.4043
+   break -> new regime from 2022-10, 95% interval 2022-03..2023-07; events inside (+-1 month): FTX collapse (memory) 2022-11-08 [notional; data-verified]; FTX collapse (memory) 2022-11-08 [rv; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [notional; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [rv; unverified in the data (memory date)]; zero-fee end (memory) 2023-03-31 [notional; unverified in the data (memory date)]; zero-fee end (memory) 2023-03-31 [rv; unverified in the data (memory date)]; zero-fee end window (data's own largest |jump|) 2023-03-08 [rv; data date]; zero-fee end window (data's own largest |jump|) 2023-03-09 [notional; data date]; zero-fee start (memory) 2022-07-21 [notional; unverified in the data (memory date)]; zero-fee start (memory) 2022-07-21 [rv; unverified in the data (memory date)]; zero-fee start window (data's own largest |jump|) 2022-06-09 [rv; data date]; zero-fee start window (data's own largest |jump|) 2022-06-20 [notional; data date]
+
+== M_logvol (T=100): k*=5, BIC k* -114.4 vs trend -70.6 (delta +43.7), sup-Chow F=15.83 at 2022-07, p=0.2639, breaks supported: False; trend slope +0.00691/month
+   regime 2017-04..2017-10 (n=7): mean 20.7629
+   regime 2017-11..2018-04 (n=6): mean 22.2914
+   regime 2018-05..2020-10 (n=30): mean 21.2853
+   regime 2020-11..2021-12 (n=14): mean 22.4563
+   regime 2022-01..2023-12 (n=24): mean 21.2269
+   regime 2024-01..2025-07 (n=19): mean 22.1370
+   break -> new regime from 2017-11, 95% interval 2017-10..2017-11; events inside (+-1 month): none
+   break -> new regime from 2018-05, 95% interval 2018-05..2020-06; events inside (+-1 month): COVID crash (memory) 2020-03-12 [notional; data-verified]; COVID crash (memory) 2020-03-12 [rv; data-verified]; halving 2020 (memory) 2020-05-11 [notional; unverified in the data (memory date)]; halving 2020 (memory) 2020-05-11 [rv; unverified in the data (memory date)]
+   break -> new regime from 2020-11, 95% interval 2020-08..2021-05; events inside (+-1 month): China mining ban (memory) 2021-05-19 [notional; unverified in the data (memory date)]; China mining ban (memory) 2021-05-19 [rv; unverified in the data (memory date)]
+   break -> new regime from 2022-01, 95% interval 2021-11..2022-06; events inside (+-1 month): Terra/Luna (memory) 2022-05-09 [notional; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [rv; unverified in the data (memory date)]; zero-fee start (memory) 2022-07-21 [notional; unverified in the data (memory date)]; zero-fee start (memory) 2022-07-21 [rv; unverified in the data (memory date)]; zero-fee start window (data's own largest |jump|) 2022-06-09 [rv; data date]; zero-fee start window (data's own largest |jump|) 2022-06-20 [notional; data date]
+   break -> new regime from 2024-01, 95% interval 2023-06..2024-08; events inside (+-1 month): halving 2024 (memory) 2024-04-20 [notional; unverified in the data (memory date)]; halving 2024 (memory) 2024-04-20 [rv; unverified in the data (memory date)]; spot-ETF launch (memory) 2024-01-11 [notional; unverified in the data (memory date)]; spot-ETF launch (memory) 2024-01-11 [rv; unverified in the data (memory date)]
+
+== M_logrv (T=100): k*=2, BIC k* -86.3 vs trend -69.0 (delta +17.3), sup-Chow F=7.87 at 2019-05, p=0.3838, breaks supported: False; trend slope -0.02001/month
+   regime 2017-04..2018-03 (n=12): mean -1.9573
+   regime 2018-04..2022-09 (n=54): mean -3.0576
+   regime 2022-10..2025-07 (n=34): mean -4.0828
+   break -> new regime from 2018-04, 95% interval 2017-12..2018-11; events inside (+-1 month): none
+   break -> new regime from 2022-10, 95% interval 2022-05..2023-02; events inside (+-1 month): FTX collapse (memory) 2022-11-08 [notional; data-verified]; FTX collapse (memory) 2022-11-08 [rv; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [notional; unverified in the data (memory date)]; Terra/Luna (memory) 2022-05-09 [rv; unverified in the data (memory date)]; zero-fee end (memory) 2023-03-31 [notional; unverified in the data (memory date)]; zero-fee end (memory) 2023-03-31 [rv; unverified in the data (memory date)]; zero-fee end window (data's own largest |jump|) 2023-03-08 [rv; data date]; zero-fee end window (data's own largest |jump|) 2023-03-09 [notional; data date]; zero-fee start (memory) 2022-07-21 [notional; unverified in the data (memory date)]; zero-fee start (memory) 2022-07-21 [rv; unverified in the data (memory date)]; zero-fee start window (data's own largest |jump|) 2022-06-09 [rv; data date]; zero-fee start window (data's own largest |jump|) 2022-06-20 [notional; data date]
+
+== event checks (14-day median after / before, percentile of |log ratio| over all dates) ==
+  zero-fee start (memory)                                 2022-07-21 notional  ratio 0.87 pct 28.9  unverified in the data (memory date)
+  zero-fee end (memory)                                   2023-03-31 notional  ratio 0.61 pct 82.0  unverified in the data (memory date)
+  FTX collapse (memory)                                   2022-11-08 notional  ratio 2.29 pct 96.5  data-verified
+  COVID crash (memory)                                    2020-03-12 notional  ratio 2.25 pct 95.8  data-verified
+  China mining ban (memory)                               2021-05-19 notional  ratio 0.74 pct 60.4  unverified in the data (memory date)
+  halving 2020 (memory)                                   2020-05-11 notional  ratio 0.86 pct 31.5  unverified in the data (memory date)
+  halving 2024 (memory)                                   2024-04-20 notional  ratio 0.63 pct 79.2  unverified in the data (memory date)
+  spot-ETF launch (memory)                                2024-01-11 notional  ratio 0.72 pct 64.3  unverified in the data (memory date)
+  Terra/Luna (memory)                                     2022-05-09 notional  ratio 0.94 pct 11.4  unverified in the data (memory date)
+  zero-fee start window (data's own largest |jump|)       2022-06-20 notional  ratio 0.41 pct 97.9  data date
+  zero-fee end window (data's own largest |jump|)         2023-03-09 notional  ratio 3.25 pct 99.4  data date
+  zero-fee start (memory)                                 2022-07-21 rv        ratio 0.78 pct 34.4  unverified in the data (memory date)
+  zero-fee end (memory)                                   2023-03-31 rv        ratio 0.39 pct 91.8  unverified in the data (memory date)
+  FTX collapse (memory)                                   2022-11-08 rv        ratio 2.01 pct 82.1  unverified in the data (memory date)
+  COVID crash (memory)                                    2020-03-12 rv        ratio 6.17 pct 99.0  data-verified
+  China mining ban (memory)                               2021-05-19 rv        ratio 2.15 pct 86.3  unverified in the data (memory date)
+  halving 2020 (memory)                                   2020-05-11 rv        ratio 0.94 pct 9.2  unverified in the data (memory date)
+  halving 2024 (memory)                                   2024-04-20 rv        ratio 0.51 pct 79.6  unverified in the data (memory date)
+  spot-ETF launch (memory)                                2024-01-11 rv        ratio 0.74 pct 40.3  unverified in the data (memory date)
+  Terra/Luna (memory)                                     2022-05-09 rv        ratio 1.35 pct 39.6  unverified in the data (memory date)
+  zero-fee start window (data's own largest |jump|)       2022-06-09 rv        ratio 3.88 pct 97.1  data date
+  zero-fee end window (data's own largest |jump|)         2023-03-08 rv        ratio 4.48 pct 97.7  data date
+
+run time 135s
