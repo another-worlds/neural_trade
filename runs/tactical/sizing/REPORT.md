@@ -1,0 +1,238 @@
+# Volatility sizing and timing on a weak direction signal: REPORT (SPEC.md, commit cf8450f; selection commit 7ccd83b)
+
+**Answer: no.** On the one look (2024-07-01..2025-07-20, 2 bps) neither side signal meets the owner's goal under any rule, and sizing
+adds no evidence of value over fixed notional. All numbers are generated from `results_sel.json` / `results_look.json` by `make_report.py`.
+
+## Verdicts (pre-registered rules, SPEC "Verdict rules")
+- **(a) 1-hour rich L1 365 d:** selection chose NO rule (best, R4_brake, Calmar 1.58 against R0's 1.89 at 2 bps), so (a) is reported at R0 only:
+  927 trades, hit 0.542, max DD 12.1%, cum +18.8%. Drawdown goal and hit goal NOT met. Sizing: "does not help" (rule 5).
+- **(b) frozen H62 (4 h):** selection chose R2_volchange_filter (Calmar 2.71 against 1.22). On the look: 400 trades, hit 0.535, max DD 9.2%,
+  cum +41.7%, months with DD < 5%: 0.67. Drawdown goal NOT met (9.2% > 5%), hit goal NOT met. Sizing does not beat R0 (look Calmar 4.30
+  against R0's 5.01). The chosen rule's selection gain (Calmar x2.2) did not carry over.
+
+## What the numbers say (look, 2 bps, descriptive for the unchosen rules)
+- **Hit rate cannot be moved by sizing** and was not: 0.542 in (a) for every rule; the vol-change filter moved (b)'s hit from 0.540 to 0.535
+  on the look (selection: 0.576 to 0.592, +1.6 points on 1,692 trades, which did not hold). No rule comes near 0.60 and 0.60 is outside
+  every trade-count interval (hit 0.54 +- 0.03). Months with hit > 60%: at most 3 of 12-13 for any rule.
+- **Drawdown falls with size, not with skill.** Rules that cut the average notional (R4 brake avg weight 0.54, R5 0.52) cut the drawdown
+  (12.1% to 6.3% / 5.4% in (a)) and the return (+18.8% to +7.6% / +1.3%) by about the same factor; their look Calmar is below R0's
+  (1.14 / 0.23 against 1.47 in (a); 4.47 / 1.76 against 5.01 in (b)). Estimate (arithmetic, not run): R0 at 0.4x notional gives
+  about 4.8% drawdown and +7.5% in (a), so "DD < 5%" is reachable by leverage alone; the only R-rule under 5% at positive return in
+  (a) is none (R5: 5.4%, +1.3%). The goal is a statement about size, and the Calmar (scale-free) shows no gain from the vol information.
+- **Volatility targeting hurt** in selection and look (Calmar 0.56 / 0.24 against 1.89 / 1.22 in selection): the edge of these signals is
+  concentrated in high-volatility periods (FORWARD_SPEC says the same), and R1 shrinks exactly those trades.
+- **Random-side null:** every look R0 and most rules beat the null p95 of cumulative return at 2 bps (e.g. (a) R0 +18.8% vs +10.1%,
+  P(null >= actual) 0.018), so the direction signals themselves still carry something on the look; the sizing rules do not add to it.
+  Caveat: this look period was used for direction by these signals before (H56/H61/H73); the selection period was in H56's own selection.
+- The HAR forecast is good as a level (Spearman 0.73-0.85 with the realised log-vol of the trade window; it is mostly the persistent level and
+  intraday seasonality, much higher than the 0.40 of H53 which scored a different target). Predictable volatility does not translate into
+  better risk-adjusted trades here.
+
+## Checks
+- `check_b_frozen.log`: the R0 sequence of (b) on the selection months equals `fwdlib.trades_from` (1,692 trades, equal entries and exits).
+- Look R0 of (a) equals `runs/tactical/equity/b_h56_1h_rich_l1_365.json` exactly at 0/1/2/5 bps (hit, cum, DD: 0.5415 / 18.78 / 12.13 at 2 bps; 927 trades).
+- Tests: `tests.log` (8 passed in 11 s): sizing inputs ignore later bars, HAR training rows close before the month start, the brake
+  ignores the trade itself and later P&L, hand-computed brake path, cost scales with weight, non-overlap after the filter, cutoff, R0 = frozen sequence.
+- Data: last bar of the look 2025-07-20 23:00 (hourly), 1 hourly gap in the look data, 0 in the selection. Month 2025-07 has no (b) trades
+  (too few masked test anchors for the 4-hour label: the frozen MIN_TEST rule); (b)'s look covers 12 months, (a)'s 13.
+- Run times: selection 31 s, look 26 s per phase (plus a one-off 1-hour feature cache build for the look); CPU, below-normal priority, 1 process.
+
+## Limits
+One look path (about 450 and 930 trades), no multiple-testing correction across six rules x two signals in the descriptive tables; the verdict uses
+only the chosen rules. Costs enter weighted. The inherited month-quantile top-10% selection is not known at entry (SPEC caveat). Nothing here
+changes a default or the MVP.
+
+## SELECTION 2021-01..2024-06
+
+### a_1h_rich_l1_365 (3082 signals; HAR Spearman of the forecast with the realised log-vol of the trade window 0.849; months 42)
+
+**2 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 3082 | 0.587 | +3.28 | +101.1 | 15.3 | +1.89 | 15/42 | 0.43 | 1.00 | +14.8 | 30.8 / 72.5 | 0.000 |
+| R1_voltarget | 3082 | 0.587 | +1.06 | +32.8 | 16.9 | +0.56 | 15/42 | 0.48 | 1.04 | +1.3 | 31.3 / 70.0 | 0.010 |
+| R2_volchange_filter | 2669 | 0.590 | +3.91 | +104.3 | 16.1 | +1.86 | 16/42 | 0.48 | 1.00 | +12.6 | 30.2 / 66.1 | 0.002 |
+| R3_vt_plus_filter | 2669 | 0.590 | +1.39 | +37.1 | 18.2 | +0.58 | 16/42 | 0.62 | 0.97 | +3.8 | 26.8 / 61.5 | 0.004 |
+| R4_brake | 3082 | 0.587 | +1.85 | +56.9 | 10.3 | +1.58 | 15/42 | 0.90 | 0.56 | +8.8 | 17.5 / 39.7 | 0.000 |
+| R5_all | 2669 | 0.590 | +0.83 | +22.1 | 11.9 | +0.53 | 16/42 | 0.83 | 0.55 | +2.9 | 15.7 / 33.3 | 0.004 |
+
+**0 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 3082 | 0.604 | +5.28 | +162.8 | 13.7 | +3.40 | 18/42 | 0.48 | 1.00 | +76.5 | 17.6 / 39.8 | 0.000 |
+| R1_voltarget | 3082 | 0.604 | +3.15 | +97.0 | 15.4 | +1.80 | 18/42 | 0.55 | 1.04 | +65.6 | 15.7 / 34.7 | 0.010 |
+| R2_volchange_filter | 2669 | 0.606 | +5.91 | +157.7 | 14.6 | +3.09 | 20/42 | 0.50 | 1.00 | +66.0 | 17.0 / 38.5 | 0.002 |
+| R3_vt_plus_filter | 2669 | 0.606 | +3.33 | +88.9 | 16.5 | +1.54 | 20/42 | 0.67 | 0.97 | +55.7 | 15.4 / 32.7 | 0.004 |
+| R4_brake | 3082 | 0.604 | +3.15 | +97.1 | 9.1 | +3.04 | 18/42 | 0.86 | 0.63 | +39.0 | 10.8 / 22.8 | 0.000 |
+| R5_all | 2669 | 0.606 | +2.25 | +59.9 | 10.0 | +1.71 | 20/42 | 0.81 | 0.59 | +31.7 | 9.5 / 18.4 | 0.002 |
+
+**1 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 3082 | 0.599 | +4.28 | +131.9 | 14.5 | +2.61 | 16/42 | 0.45 | 1.00 | +45.7 | 22.8 / 52.2 | 0.000 |
+| R1_voltarget | 3082 | 0.599 | +2.11 | +64.9 | 16.0 | +1.16 | 16/42 | 0.52 | 1.04 | +33.5 | 21.0 / 47.6 | 0.010 |
+| R2_volchange_filter | 2669 | 0.600 | +4.91 | +131.0 | 15.3 | +2.45 | 18/42 | 0.50 | 1.00 | +39.3 | 21.2 / 49.6 | 0.002 |
+| R3_vt_plus_filter | 2669 | 0.600 | +2.36 | +63.0 | 17.3 | +1.04 | 18/42 | 0.64 | 0.97 | +29.8 | 19.9 / 43.8 | 0.004 |
+| R4_brake | 3082 | 0.599 | +2.34 | +72.0 | 9.8 | +2.11 | 16/42 | 0.90 | 0.58 | +24.1 | 14.0 / 29.4 | 0.000 |
+| R5_all | 2669 | 0.600 | +1.36 | +36.4 | 10.5 | +0.99 | 18/42 | 0.83 | 0.56 | +17.0 | 12.0 / 24.8 | 0.006 |
+
+**5 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 3082 | 0.550 | +0.28 | +8.7 | 35.5 | +0.07 | 7/42 | 0.36 | 1.00 | -77.6 | 85.0 / 147.7 | 0.000 |
+| R1_voltarget | 3082 | 0.550 | -2.07 | -63.7 | 69.4 | -0.26 | 7/42 | 0.36 | 1.04 | -95.1 | 96.8 / 155.9 | 0.010 |
+| R2_volchange_filter | 2669 | 0.558 | +0.91 | +24.3 | 31.9 | +0.22 | 11/42 | 0.45 | 1.00 | -67.5 | 79.0 / 130.8 | 0.002 |
+| R3_vt_plus_filter | 2669 | 0.558 | -1.52 | -40.7 | 53.4 | -0.22 | 11/42 | 0.50 | 0.97 | -73.9 | 80.7 / 127.7 | 0.004 |
+| R4_brake | 3082 | 0.550 | +0.29 | +9.0 | 22.3 | +0.12 | 7/42 | 0.88 | 0.53 | -37.8 | 47.9 / 79.0 | 0.000 |
+| R5_all | 2669 | 0.558 | -0.76 | -20.4 | 30.4 | -0.19 | 11/42 | 0.83 | 0.50 | -37.2 | 44.3 / 67.2 | 0.008 |
+
+### b_h62_4h_rich_logreg_730 (3082 signals; HAR Spearman of the forecast with the realised log-vol of the trade window 0.830; months 42)
+
+**2 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 1692 | 0.576 | +4.97 | +84.1 | 19.7 | +1.22 | 17/42 | 0.36 | 1.00 | +68.1 | 26.5 / 63.4 | 0.022 |
+| R1_voltarget | 1692 | 0.576 | +1.44 | +24.4 | 29.4 | +0.24 | 17/42 | 0.33 | 1.07 | +57.9 | 23.5 / 62.4 | 0.134 |
+| R2_volchange_filter | 1512 | 0.592 | +7.00 | +105.9 | 11.2 | +2.71 | 22/42 | 0.33 | 1.00 | +67.6 | 24.6 / 63.3 | 0.006 |
+| R3_vt_plus_filter | 1512 | 0.592 | +3.00 | +45.3 | 15.7 | +0.82 | 22/42 | 0.40 | 1.01 | +55.8 | 23.7 / 59.3 | 0.070 |
+| R4_brake | 1692 | 0.576 | +1.54 | +26.0 | 14.5 | +0.51 | 17/42 | 0.67 | 0.53 | +35.5 | 16.7 / 36.7 | 0.088 |
+| R5_all | 1512 | 0.592 | +0.87 | +13.1 | 14.5 | +0.26 | 22/42 | 0.76 | 0.53 | +26.8 | 14.5 / 33.6 | 0.128 |
+
+**0 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 1692 | 0.589 | +6.97 | +118.0 | 17.0 | +1.99 | 18/42 | 0.36 | 1.00 | +101.9 | 22.8 / 49.9 | 0.022 |
+| R1_voltarget | 1692 | 0.589 | +3.58 | +60.6 | 25.8 | +0.67 | 18/42 | 0.38 | 1.07 | +94.1 | 19.8 / 46.5 | 0.134 |
+| R2_volchange_filter | 1512 | 0.601 | +9.00 | +136.1 | 9.6 | +4.05 | 23/42 | 0.36 | 1.00 | +97.9 | 21.0 / 50.4 | 0.006 |
+| R3_vt_plus_filter | 1512 | 0.601 | +5.03 | +76.0 | 13.7 | +1.59 | 23/42 | 0.43 | 1.01 | +86.5 | 19.5 / 46.0 | 0.070 |
+| R4_brake | 1692 | 0.589 | +1.77 | +30.0 | 14.4 | +0.59 | 18/42 | 0.67 | 0.52 | +55.3 | 14.0 / 29.6 | 0.154 |
+| R5_all | 1512 | 0.601 | +1.99 | +30.1 | 11.8 | +0.73 | 23/42 | 0.74 | 0.57 | +44.2 | 12.6 / 26.1 | 0.136 |
+
+**1 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 1692 | 0.582 | +5.97 | +101.1 | 18.3 | +1.58 | 18/42 | 0.36 | 1.00 | +85.0 | 24.5 / 55.2 | 0.022 |
+| R1_voltarget | 1692 | 0.582 | +2.51 | +42.5 | 27.6 | +0.44 | 18/42 | 0.36 | 1.07 | +76.0 | 21.4 / 52.7 | 0.134 |
+| R2_volchange_filter | 1512 | 0.598 | +8.00 | +121.0 | 10.4 | +3.34 | 23/42 | 0.36 | 1.00 | +82.7 | 22.9 / 56.1 | 0.006 |
+| R3_vt_plus_filter | 1512 | 0.598 | +4.01 | +60.7 | 14.7 | +1.18 | 23/42 | 0.40 | 1.01 | +71.1 | 21.4 / 52.2 | 0.070 |
+| R4_brake | 1692 | 0.582 | +2.01 | +34.0 | 15.2 | +0.64 | 18/42 | 0.67 | 0.53 | +44.9 | 15.1 / 32.8 | 0.098 |
+| R5_all | 1512 | 0.598 | +0.98 | +14.8 | 13.8 | +0.31 | 23/42 | 0.74 | 0.54 | +36.8 | 13.5 / 29.4 | 0.198 |
+
+**5 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 1692 | 0.553 | +1.97 | +33.4 | 32.7 | +0.29 | 11/42 | 0.31 | 1.00 | +17.3 | 36.7 / 93.5 | 0.022 |
+| R1_voltarget | 1692 | 0.553 | -1.77 | -30.0 | 58.0 | -0.15 | 11/42 | 0.19 | 1.07 | +3.6 | 39.4 / 98.9 | 0.134 |
+| R2_volchange_filter | 1512 | 0.572 | +4.00 | +60.5 | 18.8 | +0.92 | 13/42 | 0.33 | 1.00 | +22.3 | 36.1 / 89.1 | 0.006 |
+| R3_vt_plus_filter | 1512 | 0.572 | -0.05 | -0.7 | 36.4 | -0.01 | 13/42 | 0.36 | 1.01 | +9.8 | 35.1 / 88.8 | 0.070 |
+| R4_brake | 1692 | 0.553 | +0.09 | +1.5 | 23.4 | +0.02 | 11/42 | 0.64 | 0.51 | +8.5 | 23.7 / 52.4 | 0.084 |
+| R5_all | 1512 | 0.572 | -0.24 | -3.7 | 24.1 | -0.04 | 13/42 | 0.71 | 0.52 | +4.1 | 21.5 / 48.4 | 0.082 |
+
+## LOOK 2024-07-01..2025-07-20
+
+### a_1h_rich_l1_365 (927 signals; HAR Spearman of the forecast with the realised log-vol of the trade window 0.804; months 13)
+
+**2 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 927 | 0.542 | +2.03 | +18.8 | 12.1 | +1.47 | 1/13 | 0.77 | 1.00 | +10.1 | 12.8 / 28.5 | 0.018 |
+| R1_voltarget | 927 | 0.542 | +1.01 | +9.4 | 7.9 | +1.12 | 1/13 | 0.77 | 1.05 | +2.8 | 11.4 / 26.0 | 0.014 |
+| R2_volchange_filter | 807 | 0.542 | +2.25 | +18.2 | 12.5 | +1.38 | 1/13 | 0.85 | 1.00 | +14.5 | 11.4 / 26.5 | 0.036 |
+| R3_vt_plus_filter | 807 | 0.542 | +1.14 | +9.2 | 8.5 | +1.03 | 1/13 | 0.92 | 0.96 | +6.5 | 10.2 / 22.4 | 0.042 |
+| R4_brake | 927 | 0.542 | +0.82 | +7.6 | 6.3 | +1.14 | 1/13 | 0.92 | 0.54 | +4.4 | 7.7 / 15.7 | 0.034 |
+| R5_all | 807 | 0.542 | +0.16 | +1.3 | 5.4 | +0.23 | 1/13 | 1.00 | 0.52 | +4.0 | 6.0 / 12.4 | 0.092 |
+
+**0 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 927 | 0.561 | +4.03 | +37.3 | 10.6 | +3.33 | 2/13 | 0.85 | 1.00 | +28.7 | 8.9 / 18.8 | 0.018 |
+| R1_voltarget | 927 | 0.561 | +3.11 | +28.8 | 7.1 | +3.88 | 2/13 | 0.85 | 1.05 | +22.2 | 7.5 / 15.2 | 0.014 |
+| R2_volchange_filter | 807 | 0.563 | +4.25 | +34.3 | 11.2 | +2.91 | 3/13 | 0.85 | 1.00 | +30.6 | 8.6 / 18.4 | 0.036 |
+| R3_vt_plus_filter | 807 | 0.563 | +3.06 | +24.7 | 7.8 | +3.02 | 3/13 | 0.92 | 0.96 | +22.0 | 6.9 / 14.1 | 0.042 |
+| R4_brake | 927 | 0.561 | +2.24 | +20.8 | 6.8 | +2.92 | 2/13 | 0.92 | 0.59 | +16.7 | 6.0 / 10.9 | 0.022 |
+| R5_all | 807 | 0.563 | +1.35 | +10.9 | 5.0 | +2.07 | 3/13 | 1.00 | 0.55 | +13.4 | 4.6 / 8.3 | 0.094 |
+
+**1 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 927 | 0.551 | +3.03 | +28.0 | 11.4 | +2.34 | 1/13 | 0.77 | 1.00 | +19.4 | 10.5 / 23.2 | 0.018 |
+| R1_voltarget | 927 | 0.551 | +2.06 | +19.1 | 7.5 | +2.42 | 1/13 | 0.85 | 1.05 | +12.5 | 9.2 / 19.8 | 0.014 |
+| R2_volchange_filter | 807 | 0.553 | +3.25 | +26.3 | 11.9 | +2.10 | 2/13 | 0.85 | 1.00 | +22.6 | 9.7 / 21.9 | 0.036 |
+| R3_vt_plus_filter | 807 | 0.553 | +2.10 | +17.0 | 8.1 | +1.98 | 2/13 | 0.92 | 0.96 | +14.3 | 8.3 / 17.7 | 0.042 |
+| R4_brake | 927 | 0.551 | +1.41 | +13.1 | 7.2 | +1.73 | 1/13 | 0.92 | 0.57 | +9.8 | 6.6 / 13.1 | 0.032 |
+| R5_all | 807 | 0.553 | +0.85 | +6.9 | 5.2 | +1.25 | 2/13 | 1.00 | 0.53 | +8.6 | 5.3 / 10.1 | 0.078 |
+
+**5 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 927 | 0.510 | -0.97 | -9.0 | 16.7 | -0.51 | 1/13 | 0.54 | 1.00 | -17.7 | 26.8 / 50.5 | 0.018 |
+| R1_voltarget | 927 | 0.510 | -2.14 | -19.8 | 23.2 | -0.81 | 1/13 | 0.62 | 1.05 | -26.4 | 30.3 / 51.3 | 0.014 |
+| R2_volchange_filter | 807 | 0.517 | -0.75 | -6.0 | 14.6 | -0.39 | 1/13 | 0.69 | 1.00 | -9.7 | 19.8 / 44.7 | 0.036 |
+| R3_vt_plus_filter | 807 | 0.517 | -1.74 | -14.0 | 17.8 | -0.75 | 1/13 | 0.69 | 0.96 | -16.7 | 21.6 / 41.7 | 0.042 |
+| R4_brake | 927 | 0.510 | -0.73 | -6.8 | 9.1 | -0.71 | 1/13 | 0.92 | 0.51 | -10.2 | 14.7 / 26.7 | 0.034 |
+| R5_all | 807 | 0.517 | -1.02 | -8.2 | 9.5 | -0.82 | 1/13 | 1.00 | 0.49 | -8.3 | 11.5 / 22.0 | 0.048 |
+
+### b_h62_4h_rich_logreg_730 (879 signals; HAR Spearman of the forecast with the realised log-vol of the trade window 0.733; months 12)
+
+**2 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 450 | 0.540 | +10.66 | +48.0 | 9.1 | +5.01 | 2/12 | 0.58 | 1.00 | +31.6 | 12.3 / 26.7 | 0.008 |
+| R1_voltarget | 450 | 0.540 | +5.30 | +23.9 | 10.3 | +2.19 | 2/12 | 0.50 | 1.04 | +22.9 | 11.3 / 24.4 | 0.044 |
+| R2_volchange_filter | 400 | 0.535 | +10.43 | +41.7 | 9.2 | +4.30 | 3/12 | 0.67 | 1.00 | +32.2 | 11.6 / 26.0 | 0.014 |
+| R3_vt_plus_filter | 400 | 0.535 | +4.48 | +17.9 | 10.3 | +1.66 | 3/12 | 0.67 | 0.99 | +21.7 | 10.2 / 22.2 | 0.086 |
+| R4_brake | 450 | 0.540 | +6.61 | +29.7 | 6.3 | +4.47 | 2/12 | 0.92 | 0.64 | +18.2 | 7.6 / 15.0 | 0.012 |
+| R5_all | 400 | 0.535 | +2.91 | +11.6 | 6.3 | +1.76 | 3/12 | 0.83 | 0.57 | +13.3 | 6.4 / 12.6 | 0.066 |
+
+**0 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 450 | 0.547 | +12.66 | +57.0 | 8.7 | +6.25 | 3/12 | 0.58 | 1.00 | +40.6 | 10.7 / 22.5 | 0.008 |
+| R1_voltarget | 450 | 0.547 | +7.38 | +33.2 | 9.4 | +3.35 | 3/12 | 0.58 | 1.04 | +32.3 | 9.8 / 20.1 | 0.044 |
+| R2_volchange_filter | 400 | 0.542 | +12.43 | +49.7 | 8.5 | +5.58 | 3/12 | 0.67 | 1.00 | +40.2 | 10.6 / 22.4 | 0.014 |
+| R3_vt_plus_filter | 400 | 0.542 | +6.45 | +25.8 | 9.4 | +2.59 | 3/12 | 0.75 | 0.99 | +29.6 | 9.0 / 19.0 | 0.086 |
+| R4_brake | 450 | 0.547 | +7.67 | +34.5 | 6.2 | +5.28 | 3/12 | 0.92 | 0.65 | +23.0 | 7.1 / 13.0 | 0.014 |
+| R5_all | 400 | 0.542 | +3.62 | +14.5 | 6.0 | +2.30 | 3/12 | 0.92 | 0.59 | +19.0 | 5.8 / 11.1 | 0.088 |
+
+**1 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 450 | 0.542 | +11.66 | +52.5 | 8.7 | +5.69 | 3/12 | 0.58 | 1.00 | +36.1 | 11.6 / 24.5 | 0.008 |
+| R1_voltarget | 450 | 0.542 | +6.34 | +28.5 | 9.9 | +2.75 | 3/12 | 0.50 | 1.04 | +27.6 | 10.5 / 22.4 | 0.044 |
+| R2_volchange_filter | 400 | 0.537 | +11.43 | +45.7 | 8.8 | +4.91 | 3/12 | 0.67 | 1.00 | +36.2 | 11.0 / 24.3 | 0.014 |
+| R3_vt_plus_filter | 400 | 0.537 | +5.46 | +21.9 | 9.9 | +2.10 | 3/12 | 0.67 | 0.99 | +25.6 | 9.6 / 20.6 | 0.086 |
+| R4_brake | 450 | 0.542 | +7.53 | +33.9 | 6.3 | +5.14 | 3/12 | 0.92 | 0.65 | +20.7 | 7.5 / 13.9 | 0.012 |
+| R5_all | 400 | 0.537 | +3.14 | +12.6 | 5.9 | +2.02 | 3/12 | 0.92 | 0.58 | +15.8 | 6.2 / 11.8 | 0.084 |
+
+**5 bps round trip**
+
+| rule | trades | hit | mean bps | cum % | max DD % | Calmar | months hit>60% | months DD<5% | avg w | null cum p95 | null DD p5 / med | P(null cum >= actual) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| R0_fixed | 450 | 0.518 | +7.66 | +34.5 | 10.4 | +3.16 | 2/12 | 0.50 | 1.00 | +18.1 | 14.8 / 33.8 | 0.008 |
+| R1_voltarget | 450 | 0.518 | +2.19 | +9.9 | 11.8 | +0.79 | 2/12 | 0.42 | 1.04 | +8.9 | 15.0 / 32.8 | 0.044 |
+| R2_volchange_filter | 400 | 0.507 | +7.43 | +29.7 | 10.4 | +2.72 | 2/12 | 0.50 | 1.00 | +20.2 | 13.5 / 32.7 | 0.014 |
+| R3_vt_plus_filter | 400 | 0.507 | +1.51 | +6.1 | 12.2 | +0.47 | 2/12 | 0.58 | 0.99 | +9.8 | 12.6 / 28.7 | 0.086 |
+| R4_brake | 450 | 0.518 | +3.82 | +17.2 | 6.5 | +2.52 | 2/12 | 0.75 | 0.58 | +10.4 | 9.0 / 18.9 | 0.018 |
+| R5_all | 400 | 0.507 | +0.90 | +3.6 | 7.5 | +0.46 | 2/12 | 0.92 | 0.53 | +5.5 | 7.7 / 15.9 | 0.074 |
+
+## Verdicts (look, 2 bps; rules of SPEC.md)
+
+- **a_1h_rich_l1_365**: chosen rule in selection = None. Look at 2 bps (R0_fixed): 927 trades, hit 0.542 (95% binomial lower bound 0.509), max DD 12.1%, cum +18.8%, months DD<5% 0.77. Drawdown goal: NOT met. Hit goal: NOT met. Goal met: NO. Sizing beats R0 (Calmar +1.47 vs +1.47, and cum above null p95 +10.1): n/a (no rule chosen).
+- **b_h62_4h_rich_logreg_730**: chosen rule in selection = R2_volchange_filter. Look at 2 bps (R2_volchange_filter): 400 trades, hit 0.535 (95% binomial lower bound 0.486), max DD 9.2%, cum +41.7%, months DD<5% 0.67. Drawdown goal: NOT met. Hit goal: NOT met. Goal met: NO. Sizing beats R0 (Calmar +4.30 vs +5.01, and cum above null p95 +32.2): no.
+
+Run times: selection 31.1 s, look 25.9 s (CPU, below-normal priority).

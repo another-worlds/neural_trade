@@ -1,0 +1,2 @@
+a_1h_rich_l1_365 {'R0_fixed': 1.892, 'R1_voltarget': 0.556, 'R2_volchange_filter': 1.857, 'R3_vt_plus_filter': 0.583, 'R4_brake': 1.576, 'R5_all': 0.531} -> pick: None
+b_h62_4h_rich_logreg_730 {'R0_fixed': 1.222, 'R1_voltarget': 0.237, 'R2_volchange_filter': 2.71, 'R3_vt_plus_filter': 0.824, 'R4_brake': 0.515, 'R5_all': 0.258} -> pick: R2_volchange_filter

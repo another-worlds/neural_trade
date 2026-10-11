@@ -1,0 +1,24 @@
+{
+ "picks": {
+  "a_1h_rich_l1_365": null,
+  "b_h62_4h_rich_logreg_730": "R2_volchange_filter"
+ },
+ "calmar_2bps_sel": {
+  "a_1h_rich_l1_365": {
+   "R0_fixed": 1.8915558565663086,
+   "R1_voltarget": 0.5558043006024046,
+   "R2_volchange_filter": 1.8567228184205513,
+   "R3_vt_plus_filter": 0.5833722476755322,
+   "R4_brake": 1.5755177158289586,
+   "R5_all": 0.53050988771717
+  },
+  "b_h62_4h_rich_logreg_730": {
+   "R0_fixed": 1.2219236321782483,
+   "R1_voltarget": 0.23659310973698702,
+   "R2_volchange_filter": 2.7102023861759466,
+   "R3_vt_plus_filter": 0.8242170839244545,
+   "R4_brake": 0.5146514255470074,
+   "R5_all": 0.25777714022649434
+  }
+ }
+}

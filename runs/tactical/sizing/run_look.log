@@ -1,0 +1,16 @@
+look: 74934 hourly bars to 2025-07-20 23:00:00, 1 gaps (8s)
+a_1h_rich_l1_365 signals 927 HAR spearman 0.804 (24s)
+  R0_fixed               n   927 hit 0.542 mean   +2.03 cum    +18.8% dd  12.1% calmar  +1.47 m>60 1/13 ddm<5 0.77
+  R1_voltarget           n   927 hit 0.542 mean   +1.01 cum     +9.4% dd   7.9% calmar  +1.12 m>60 1/13 ddm<5 0.77
+  R2_volchange_filter    n   807 hit 0.542 mean   +2.25 cum    +18.2% dd  12.5% calmar  +1.38 m>60 1/13 ddm<5 0.85
+  R3_vt_plus_filter      n   807 hit 0.542 mean   +1.14 cum     +9.2% dd   8.5% calmar  +1.03 m>60 1/13 ddm<5 0.92
+  R4_brake               n   927 hit 0.542 mean   +0.82 cum     +7.6% dd   6.3% calmar  +1.14 m>60 1/13 ddm<5 0.92
+  R5_all                 n   807 hit 0.542 mean   +0.16 cum     +1.3% dd   5.4% calmar  +0.23 m>60 1/13 ddm<5 1.00
+b_h62_4h_rich_logreg_730 signals 879 HAR spearman 0.733 (26s)
+  R0_fixed               n   450 hit 0.540 mean  +10.66 cum    +48.0% dd   9.1% calmar  +5.01 m>60 2/12 ddm<5 0.58
+  R1_voltarget           n   450 hit 0.540 mean   +5.30 cum    +23.9% dd  10.3% calmar  +2.19 m>60 2/12 ddm<5 0.50
+  R2_volchange_filter    n   400 hit 0.535 mean  +10.43 cum    +41.7% dd   9.2% calmar  +4.30 m>60 3/12 ddm<5 0.67
+  R3_vt_plus_filter      n   400 hit 0.535 mean   +4.48 cum    +17.9% dd  10.3% calmar  +1.66 m>60 3/12 ddm<5 0.67
+  R4_brake               n   450 hit 0.540 mean   +6.61 cum    +29.7% dd   6.3% calmar  +4.47 m>60 2/12 ddm<5 0.92
+  R5_all                 n   400 hit 0.535 mean   +2.91 cum    +11.6% dd   6.3% calmar  +1.76 m>60 3/12 ddm<5 0.83
+done 25.9s
