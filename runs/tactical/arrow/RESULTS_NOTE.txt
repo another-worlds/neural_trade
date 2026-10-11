@@ -1,0 +1,2 @@
+results/*.npz (per-task held-out logits, 34 MB) are not committed; regenerate with prep.py + drive.sh (SPEC.md), then analyze.py -> results.json.
+Wall clock 2026-10-11 18:21-21:11 (2 h 50 min, two processes, chunks of <=100 s); summed task time 5.0 h; some tasks ran twice after the partition shifted (amendment 2), same seed.

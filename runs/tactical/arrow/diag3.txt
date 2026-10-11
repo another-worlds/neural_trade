@@ -1,0 +1,3 @@
+full_ng s0 2020-07: ep_gain +0.16210 epochs 9 29.6s
+full_b s0 2020-07: ep_gain +0.05505 epochs 6 22.5s
+full_bg s0 2020-07: ep_gain +0.29034 epochs 8 34.5s
