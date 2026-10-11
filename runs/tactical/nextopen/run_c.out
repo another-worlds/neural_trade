@@ -1,0 +1,67 @@
+D:\nt\nt_wt_nextopen\runs\tactical\nextopen\run_c.py:29: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+  _mo = pd.Series(m["_pl"], index=pd.DatetimeIndex(m["_t"])).groupby(pd.Grouper(freq="M")).mean().dropna() * 1e4
+final meta (next-open): {'n': 1957, 'hit': 0.5334695963208993, 'bps': 5.351435458994514, 'null95': 6.294236650346219, 'n_months': 15, 'monthly_bps_ci': [-17.089610597372346, 24.071985662297475]}
+meta: n 1957 hit 0.5335 bps 5.35 (H38: 2013, 0.538, +9.83)
+{
+ "0": {
+  "n_trades": 508,
+  "hit": 0.5275590551181102,
+  "mean_bps": 2.3068834119703006,
+  "trades_per_day": 1.1153599853627298,
+  "cum_return_pct": 11.718967732809116,
+  "max_drawdown_pct": 28.64472886162539,
+  "longest_drawdown_days": 169.375,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5262360983969083,
+  "monthly_hit_min": 0.36363636363636365,
+  "monthly_hit_max": 0.6923076923076923,
+  "months_hit_above_60": 4,
+  "share_months_hit_above_60": 0.26666666666666666
+ },
+ "1": {
+  "n_trades": 508,
+  "hit": 0.5275590551181102,
+  "mean_bps": 1.3068834119702954,
+  "trades_per_day": 1.1153599853627298,
+  "cum_return_pct": 6.638967732809142,
+  "max_drawdown_pct": 29.13472886162537,
+  "longest_drawdown_days": 171.83333333333334,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5262360983969083,
+  "monthly_hit_min": 0.36363636363636365,
+  "monthly_hit_max": 0.6923076923076923,
+  "months_hit_above_60": 4,
+  "share_months_hit_above_60": 0.26666666666666666
+ },
+ "2": {
+  "n_trades": 508,
+  "hit": 0.5216535433070866,
+  "mean_bps": 0.30688341197030145,
+  "trades_per_day": 1.1153599853627298,
+  "cum_return_pct": 1.5589677328090579,
+  "max_drawdown_pct": 30.01964590938116,
+  "longest_drawdown_days": 298.2916666666667,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5201754923363022,
+  "monthly_hit_min": 0.3333333333333333,
+  "monthly_hit_max": 0.6923076923076923,
+  "months_hit_above_60": 3,
+  "share_months_hit_above_60": 0.2
+ },
+ "5": {
+  "n_trades": 508,
+  "hit": 0.5098425196850394,
+  "mean_bps": -2.6931165880297043,
+  "trades_per_day": 1.1153599853627298,
+  "cum_return_pct": -13.681032267190885,
+  "max_drawdown_pct": 35.38340986391439,
+  "longest_drawdown_days": 298.2916666666667,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5079801350229276,
+  "monthly_hit_min": 0.3333333333333333,
+  "monthly_hit_max": 0.6410256410256411,
+  "months_hit_above_60": 2,
+  "share_months_hit_above_60": 0.13333333333333333
+ }
+}
+n_signals 1957 trades 508 skipped 1449; 12s
