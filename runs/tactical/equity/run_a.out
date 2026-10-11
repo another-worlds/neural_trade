@@ -1,0 +1,65 @@
+anchors 604265, train 473164, test 131092
+meta selection: n 13818, hit 0.5227, bps 0.540  (H48: n 13818, hit 0.5227, bps 0.540)
+{
+ "0": {
+  "n_trades": 9756,
+  "hit": 0.5222427224272242,
+  "mean_bps": 0.4389647871473816,
+  "trades_per_day": 21.39587727781543,
+  "cum_return_pct": 42.82540463409865,
+  "max_drawdown_pct": 17.956724376692563,
+  "longest_drawdown_days": 157.6888888888889,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5224415763874592,
+  "monthly_hit_min": 0.500772797527048,
+  "monthly_hit_max": 0.5500821018062397,
+  "months_hit_above_60": 0,
+  "share_months_hit_above_60": 0.0
+ },
+ "1": {
+  "n_trades": 9756,
+  "hit": 0.5052275522755227,
+  "mean_bps": -0.5610352128526183,
+  "trades_per_day": 21.39587727781543,
+  "cum_return_pct": -54.734595365897,
+  "max_drawdown_pct": 56.57646353591579,
+  "longest_drawdown_days": 455.11805555555554,
+  "n_months": 15,
+  "monthly_hit_mean": 0.5050873038621002,
+  "monthly_hit_min": 0.47920133111480867,
+  "monthly_hit_max": 0.5294117647058824,
+  "months_hit_above_60": 0,
+  "share_months_hit_above_60": 0.0
+ },
+ "2": {
+  "n_trades": 9756,
+  "hit": 0.486469864698647,
+  "mean_bps": -1.5610352128526188,
+  "trades_per_day": 21.39587727781543,
+  "cum_return_pct": -152.2945953658988,
+  "max_drawdown_pct": 152.64463094729297,
+  "longest_drawdown_days": 455.97569444444446,
+  "n_months": 15,
+  "monthly_hit_mean": 0.4861939424075071,
+  "monthly_hit_min": 0.45857988165680474,
+  "monthly_hit_max": 0.5061919504643962,
+  "months_hit_above_60": 0,
+  "share_months_hit_above_60": 0.0
+ },
+ "5": {
+  "n_trades": 9756,
+  "hit": 0.42927429274292744,
+  "mean_bps": -4.561035212852619,
+  "trades_per_day": 21.39587727781543,
+  "cum_return_pct": -444.97459536590213,
+  "max_drawdown_pct": 445.1746309472963,
+  "longest_drawdown_days": 455.97569444444446,
+  "n_months": 15,
+  "monthly_hit_mean": 0.4288538068261519,
+  "monthly_hit_min": 0.4059900166389351,
+  "monthly_hit_max": 0.4523809523809524,
+  "months_hit_above_60": 0,
+  "share_months_hit_above_60": 0.0
+ }
+}
+n_signals 13818 trades 9756 skipped 4062; 27s
