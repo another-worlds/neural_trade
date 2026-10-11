@@ -84,3 +84,18 @@ GPU cap 3000 MB per process, at most 2 processes, below-normal priority, `tf.ran
 480 tasks (4 models x 2 seeds x 60 months). Order: `full`, `abs`, `order`, `sign`. Tests (seconds): `test_arrow.py` (reversal transforms
 against the raw-bar construction, the mirror transform, scaling, cutoff, causality of the window features, gate edges from earlier months
 only, month split, detrending). Run times are reported with the results.
+
+## Amendment 1 (after the first 4 + 6 trained tasks, before the analysis of any question)
+
+The first tasks of `full` gave EP of about +0.40 nats per window in 2020-07..10 (ln 2 = 0.69), far above a market-dynamics effect. A
+diagnostic of ONE month (2020-07, seed 0, same protocol, `diag3.txt` and `results/`) decomposed it by channel (EP, nats): all channels
+`full` +0.395 (2020-07 s0: see results), without volume `full_nv` +0.423; volume alone (order reversal) +0.013; body only +0.055;
+body + gap +0.290; body + wicks (no gap, no volume) +0.162; `abs_nv` +0.118. So most of the irreversibility is in the **gap** between a bar's
+open and the previous close and in the wicks: a feed/microstructure effect (first-trade vs last-trade prices), not necessarily market
+dynamics. This is reported, not hidden. Changes, none of which alters a criterion above:
+- `full` stays the primary estimator and the gates/criteria of (i)-(iii) are evaluated on it exactly as written.
+- A fifth model `full_ng` (body, up, dn only; no gap, no volume; time reversal) is added, 2 seeds x 60 months, as the **sensitivity
+  estimator**: every table that has `EP_full` also reports `EP_nogap` (`full_ng`), including the tracking test (i), the gate (ii)
+  (a second, non-primary gate; a pass on `full_ng` alone is not a pass of the criterion) and the pooled decomposition (iii). The
+  question "is it market dynamics or the feed" is read from the pair.
+- The one-month diagnostics (`full_nv`, `full_b`, `full_bg`, `vol_only`, `abs_nv`) are not run further.

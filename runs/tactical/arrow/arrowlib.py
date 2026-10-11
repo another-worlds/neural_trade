@@ -78,12 +78,26 @@ def t_order_abs(A):
     return t_order(A, gi=3)
 
 
-MODELS = {              # name -> (input builder, transform, n channels)
+def _sub(f, keep):
+    return lambda X: f(X)[..., keep]
+
+
+MODELS = {              # name -> (forward input from X [N, L, 5], transformed input from X, n channels)
     "full": (lambda X: X, t_full, 5),
     "sign": (lambda X: X, t_sign, 5),
     "order": (lambda X: X, t_order, 5),
-    "abs": (to_abs, t_order_abs, 4),
+    "abs": (to_abs, lambda X: t_order_abs(to_abs(X)), 4),
+    "full_ng": (_sub(lambda X: X, [0, 1, 2]), _sub(t_full, [0, 1, 2]), 3),      # SPEC amendment 1: no gap, no volume
 }
+# price-only variants (volume channel dropped), added after the first two trained tasks showed a very large EP (SPEC amendment 1)
+VARIANTS = {
+    "full_nv": (_sub(lambda X: X, [0, 1, 2, 4]), _sub(t_full, [0, 1, 2, 4]), 4),
+    "abs_nv": (_sub(to_abs, [0, 1, 3]), _sub(lambda X: t_order_abs(to_abs(X)), [0, 1, 3]), 3),
+    "full_b": (_sub(lambda X: X, [0]), _sub(t_full, [0]), 1),
+    "full_bg": (_sub(lambda X: X, [0, 4]), _sub(t_full, [0, 4]), 2),
+    "vol_only": (lambda X: X[..., 3:4], lambda X: t_order(X)[..., 3:4], 1),
+}
+ALL_MODELS = {**MODELS, **VARIANTS}
 
 
 # ---------------------------------------------------------------- anchors

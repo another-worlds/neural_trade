@@ -15,7 +15,7 @@ TRAIN_DAYS = 365
 MIN_TRAIN = 8000
 MAX_EPOCHS, PATIENCE, BATCH, LR = 12, 2, 256, 2e-3
 GAP = pd.Timedelta(minutes=AL.L)
-ORDER = ("full", "abs", "order", "sign")
+ORDER = ("full", "abs", "order", "sign", "full_ng")
 
 
 def months():
@@ -42,15 +42,13 @@ def tasks(models, seeds):
 
 
 def make_inputs(model_name, X):
-    """forward and transformed model inputs for windows X [N, L, 4]."""
-    build, tr_fn, _ = AL.MODELS[model_name]
-    if model_name == "abs":
-        a = build(X); return a, tr_fn(a)
-    return X, tr_fn(X)
+    """forward and transformed model inputs for windows X [N, L, 5]."""
+    fwd, rev, _ = AL.ALL_MODELS[model_name]
+    return fwd(X), rev(X)
 
 
 def fit_task(tf, model_name, seed, Xtr, Xva, Xte):
-    n_ch = AL.MODELS[model_name][2]
+    n_ch = AL.ALL_MODELS[model_name][2]
     tf.keras.backend.clear_session(); tf.random.set_seed(seed); rs = np.random.RandomState(seed)
     mdl = AL.build_model(tf, n_ch); opt = tf.keras.optimizers.Adam(LR)
     ftr, rtr = (tf.constant(a, tf.float32) for a in make_inputs(model_name, Xtr))

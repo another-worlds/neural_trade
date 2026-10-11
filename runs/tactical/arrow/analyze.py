@@ -172,7 +172,7 @@ def main():
     ep_a = ep["full"][sel_m]; years = np.array([int(m[:4]) for m in auc_months])
     smean = np.array([np.log(sig[mo == pd.Period(m, "M").ordinal]).mean() for m in auc_months])
     Q = {}
-    for name, series in (("EP_full", ep_a), ("EP_vol(abs)", ep["abs"][sel_m]), ("EP_dir(full-abs)", ep["full"][sel_m] - ep["abs"][sel_m]),
+    for name, series in (("EP_full", ep_a), ("EP_vol(abs)", ep["abs"][sel_m]), ("EP_nogap(full_ng)", ep["full_ng"][sel_m]), ("EP_dir(full-abs)", ep["full"][sel_m] - ep["abs"][sel_m]),
                          ("log_sigma", smean)):
         Q[name] = {"raw_spearman": float(stats.spearmanr(series, auc_m).correlation)}
         for kind in ("diff", "dev"):
@@ -184,7 +184,7 @@ def main():
     out["i_tracking"] = Q
 
     # ---- (ii) gates: AUC by quintile of the EP score vs the sigma quintile
-    gates = {"EP_full": np.abs(score["full"]), "EP_abs": np.abs(score["abs"]), "EP_sign": np.abs(score["sign"]),
+    gates = {"EP_full": np.abs(score["full"]), "EP_abs": np.abs(score["abs"]), "EP_sign": np.abs(score["sign"]), "EP_ng": np.abs(score["full_ng"]),
              "EP_order": np.abs(score["order"]), "sigma": sig.astype(float)}
     spreads = {g: [] for g in list(gates) + ["EP_full|sigma"]}
     binauc = {g: [] for g in list(gates) + ["EP_full|sigma"]}
@@ -246,7 +246,7 @@ def main():
         return float(np.mean(v)), float(np.percentile(out_, 2.5)), float(np.percentile(out_, 97.5))
     dirv = (gain["full"] - gain["abs"])[ok]
     D = {"EP_total(full)": boot(gain["full"][ok]), "EP_vol(abs)": boot(gain["abs"][ok]), "EP_dir(full-abs)": boot(dirv),
-         "EP_sign_control": boot(gain["sign"][ok]), "EP_order_control": boot(gain["order"][ok])}
+         "EP_sign_control": boot(gain["sign"][ok]), "EP_order_control": boot(gain["order"][ok]), "EP_nogap_novol(full_ng)": boot(gain["full_ng"][ok])}
     D["share_vol_of_total"] = D["EP_vol(abs)"][0] / D["EP_total(full)"][0] if D["EP_total(full)"][0] else float("nan")
     yr = pd.DatetimeIndex(t[ok].astype("datetime64[ns]")).year
     D["by_year"] = {int(y_): {"EP_total": float(gain["full"][ok][yr == y_].mean()), "EP_vol": float(gain["abs"][ok][yr == y_].mean()),
@@ -289,9 +289,9 @@ def figure(out, auc_months, ep_months, ep, auc_m):
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(3, 1, figsize=(10, 9))
     x = pd.PeriodIndex(ep_months, freq="M").to_timestamp()
-    for mn, c in (("full", "#3987e5"), ("abs", "#d95926"), ("order", "#199e70"), ("sign", "#777777")):
+    for mn, c in (("full", "#3987e5"), ("abs", "#d95926"), ("order", "#199e70"), ("sign", "#777777"), ("full_ng", "#9467bd")):
         ax[0].plot(x, ep[mn], label=f"EP {mn}", color=c)
-    ax[0].set_ylabel("EP (nats / window)"); ax[0].legend(ncol=4); ax[0].set_title("Monthly held-out log-loss gain over ln 2 (mean of 2 seeds)")
+    ax[0].set_ylabel("EP (nats / window)"); ax[0].legend(ncol=5); ax[0].set_title("Monthly held-out log-loss gain over ln 2 (mean of 2 seeds)")
     xa = pd.PeriodIndex(auc_months, freq="M").to_timestamp()
     ax[1].plot(xa, auc_m, color="k"); ax[1].axhline(0.5, color="#aaa"); ax[1].set_ylabel("tb7 AUC"); ax[1].set_title("tb7 next-open AUC by month (h = 15, 365-day training)")
     g = out["ii_gates"]["bin_auc_mean"]
