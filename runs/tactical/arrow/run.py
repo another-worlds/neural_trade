@@ -15,6 +15,7 @@ TRAIN_DAYS = 365
 MIN_TRAIN = 8000
 MAX_EPOCHS, PATIENCE, BATCH, LR = 12, 2, 256, 2e-3
 GAP = pd.Timedelta(minutes=AL.L)
+SINGLE_SEED = ("order", "sign")                # SPEC amendment 2: the two controls run with seed 0 only (shrunk, owner 2026-10-11)
 ORDER = ("full", "abs", "order", "sign", "full_ng")
 
 
@@ -38,7 +39,7 @@ def month_split(t_ns, month):
 
 
 def tasks(models, seeds):
-    return [(m, s, mo) for m in models for s in seeds for mo in months()]
+    return [(m, s, mo) for m in models for s in seeds for mo in months() if not (m in SINGLE_SEED and s > 0)]
 
 
 def make_inputs(model_name, X):

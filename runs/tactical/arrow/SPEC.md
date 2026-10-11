@@ -99,3 +99,9 @@ dynamics. This is reported, not hidden. Changes, none of which alters a criterio
   (a second, non-primary gate; a pass on `full_ng` alone is not a pass of the criterion) and the pooled decomposition (iii). The
   question "is it market dynamics or the feed" is read from the pair.
 - The one-month diagnostics (`full_nv`, `full_b`, `full_bg`, `vol_only`, `abs_nv`) are not run further.
+
+## Amendment 2 (shrink, owner 2026-10-11: "shorten at the cost of precision")
+
+Measured pace: about 2.4 tasks per minute with two processes (about 30 s per task), i.e. 600 tasks = 4+ hours. The controls `order`
+and `sign` run with **seed 0 only** (480 tasks in total). Cost: their monthly EP has no seed-to-seed spread; they are controls, not
+inputs of any criterion.
