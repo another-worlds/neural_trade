@@ -1,0 +1,16 @@
+482b8f4d90d55190ecf49e31209e95968f1b49f4
+platform win32 -- Python 3.10.21, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\Step\miniforge3\envs\nt\python.exe
+rootdir: D:\nt\nt_tdconfirm
+configfile: pyproject.toml
+plugins: anyio-4.13.0, cov-7.1.0, timeout-2.3.1, xdist-3.8.0
+collecting ... collected 7 items
+
+test_tdconfirm.py::test_cutoff_no_bar_after_2025_07_20 PASSED            [ 14%]
+test_tdconfirm.py::test_periods_end_before_cutoff_and_confirmation_precedes_tdvar PASSED [ 28%]
+test_tdconfirm.py::test_training_labels_end_before_the_month_and_fit_ignores_later_bars PASSED [ 42%]
+test_tdconfirm.py::test_td_target_uses_only_the_frozen_stage1_net PASSED [ 57%]
+test_tdconfirm.py::test_regularised_fit_restores_the_base_constants PASSED [ 71%]
+test_tdconfirm.py::test_midas_q_is_qlike_fitted_and_not_worse_than_sse_on_heavy_tails PASSED [ 85%]
+test_tdconfirm.py::test_cell_confirm_runs_and_has_every_model PASSED     [100%]
+
+============================== 7 passed in 9.52s ==============================
