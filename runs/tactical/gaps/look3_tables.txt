@@ -1,0 +1,39 @@
+== THE ONE LOOK 2024-07..2025-07 (partial July) ==
+-- target A (all months): mean over months of MSE / Spearman / R2 vs rw / skill vs ar
+   rw  mse 0.5076  spearman +nan  R2_rw +0.0000  skill_ar -0.0520  n=13
+   ar  mse 0.4822  spearman +0.2146  R2_rw +0.0492  skill_ar +0.0000  n=13
+   arlvl mse 0.4622  spearman +0.3306  R2_rw +0.0886  skill_ar +0.0413  n=13
+   S1  mse 0.4059  spearman +0.4472  R2_rw +0.1980  skill_ar +0.1566  n=13
+   S2  mse 0.4041  spearman +0.4627  R2_rw +0.2035  skill_ar +0.1620  n=13
+   S3  mse 0.4035  spearman +0.4623  R2_rw +0.2047  skill_ar +0.1633  n=13
+   SELECTED S3: skill vs ar +0.1633 [+0.1466,+0.1801], R2 vs rw +0.2047 [+0.1906,+0.2188] -> threshold met: True
+   (descriptive) S1: skill vs ar +0.1566 [+0.1448,+0.1683]
+   (descriptive) S2: skill vs ar +0.1620 [+0.1440,+0.1801]
+-- target B (all months): mean over months of MSE / Spearman / R2 vs rw / skill vs ar
+   rw  mse 0.5661  spearman +0.0061  R2_rw +0.0000  skill_ar -0.9579  n=13
+   ar  mse 0.2893  spearman +0.0061  R2_rw +0.4887  skill_ar +0.0000  n=13
+   S1  mse 0.2869  spearman +0.0887  R2_rw +0.4931  skill_ar +0.0087  n=13
+   S2  mse 0.2870  spearman +0.0863  R2_rw +0.4929  skill_ar +0.0083  n=13
+   S3  mse 0.2862  spearman +0.0971  R2_rw +0.4943  skill_ar +0.0111  n=13
+   SELECTED S3: skill vs ar +0.0111 [+0.0022,+0.0199], R2 vs rw +0.4943 [+0.4820,+0.5066] -> threshold met: False
+   (descriptive) S1: skill vs ar +0.0087 [-0.0005,+0.0179]
+   (descriptive) S2: skill vs ar +0.0083 [-0.0008,+0.0175]
+-- target A (ex-July): mean over months of MSE / Spearman / R2 vs rw / skill vs ar
+   rw  mse 0.4999  spearman +nan  R2_rw +0.0000  skill_ar -0.0504  n=12
+   ar  mse 0.4757  spearman +0.2105  R2_rw +0.0478  skill_ar +0.0000  n=12
+   arlvl mse 0.4533  spearman +0.3303  R2_rw +0.0916  skill_ar +0.0460  n=12
+   S1  mse 0.4009  spearman +0.4452  R2_rw +0.1958  skill_ar +0.1555  n=12
+   S2  mse 0.3993  spearman +0.4602  R2_rw +0.2013  skill_ar +0.1610  n=12
+   S3  mse 0.3986  spearman +0.4599  R2_rw +0.2026  skill_ar +0.1623  n=12
+   SELECTED S3: skill vs ar +0.1623 [+0.1441,+0.1806], R2 vs rw +0.2026 [+0.1879,+0.2172] -> threshold met: True
+   (descriptive) S1: skill vs ar +0.1555 [+0.1429,+0.1682]
+   (descriptive) S2: skill vs ar +0.1610 [+0.1413,+0.1807]
+-- target B (ex-July): mean over months of MSE / Spearman / R2 vs rw / skill vs ar
+   rw  mse 0.5653  spearman +0.0125  R2_rw +0.0000  skill_ar -0.9495  n=12
+   ar  mse 0.2901  spearman +0.0125  R2_rw +0.4865  skill_ar +0.0000  n=12
+   S1  mse 0.2886  spearman +0.0831  R2_rw +0.4894  skill_ar +0.0056  n=12
+   S2  mse 0.2887  spearman +0.0804  R2_rw +0.4893  skill_ar +0.0054  n=12
+   S3  mse 0.2878  spearman +0.0948  R2_rw +0.4909  skill_ar +0.0084  n=12
+   SELECTED S3: skill vs ar +0.0084 [+0.0011,+0.0157], R2 vs rw +0.4909 [+0.4801,+0.5017] -> threshold met: False
+   (descriptive) S1: skill vs ar +0.0056 [-0.0012,+0.0125]
+   (descriptive) S2: skill vs ar +0.0054 [-0.0017,+0.0125]
