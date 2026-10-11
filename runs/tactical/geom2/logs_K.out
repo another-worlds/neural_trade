@@ -1,0 +1,2 @@
+job1 rc 0 41s: runs/tactical/geom2/meta.py build --bars 15min
+job0 rc 0 103s: runs/tactical/geom2/meta.py build --bars 5min

@@ -1,0 +1,16 @@
+job3 rc 0 60s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_vol
+job5 rc 0 123s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_pos
+job1 rc 0 159s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_band
+job2 rc 0 170s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_osc
+job8 rc 0 47s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_trend
+job9 rc 0 41s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_band
+job4 rc 0 216s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_slope
+job7 rc 0 97s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_squeeze
+job11 rc 0 15s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_vol
+job0 rc 0 235s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_trend
+job10 rc 0 33s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_osc
+job13 rc 0 20s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_pos
+job12 rc 0 29s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_slope
+job15 rc 0 15s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_squeeze
+job14 rc 0 26s: runs/tactical/geom2/meta.py run --bars 1h --feat tb7 --variant pmG_cross
+job6 rc 0 196s: runs/tactical/geom2/meta.py run --bars 1min --feat tb7 --variant pmG_cross

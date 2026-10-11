@@ -1,0 +1,4 @@
+job0 rc 0 50s: runs/tactical/geom2/meta.py run --bars 1min_a --feat tb7 --variant base --primary hgb
+job3 rc 0 73s: runs/tactical/geom2/meta.py run --bars 1min_a --feat tb7 --variant pmG5 --primary hgb
+job2 rc 0 98s: runs/tactical/geom2/meta.py run --bars 1min_a --feat tb7 --variant pmRich --primary hgb
+job1 rc 0 230s: runs/tactical/geom2/meta.py run --bars 1min_a --feat tb7 --variant pmGR --primary hgb

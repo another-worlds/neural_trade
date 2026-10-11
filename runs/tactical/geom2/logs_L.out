@@ -1,0 +1,24 @@
+job0 rc 0 59s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant base
+job1 rc 0 90s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant mG5
+job4 rc 0 119s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant pmG5
+job5 rc 0 157s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant pmRich
+job7 rc 0 131s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant mRich
+job2 rc 0 229s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant mGR
+job8 rc 0 160s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant mPerm
+job12 rc 0 21s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant base
+job13 rc 0 38s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant mG5
+job9 rc 0 221s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant base --primary hgb
+job6 rc 0 326s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant pmPerm
+job14 rc 0 91s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant mGR
+job16 rc 0 70s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant pmG5
+job17 rc 0 74s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant pmRich
+job19 rc 0 80s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant mRich
+job18 rc 0 160s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant pmPerm
+job3 rc 0 619s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant pmGR
+job15 rc 0 244s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant pmGR
+job20 rc 0 51s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant mPerm
+job21 rc 0 56s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant base --primary hgb
+job11 rc 0 452s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant pmRich --primary hgb
+job23 rc 0 88s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant pmRich --primary hgb
+job22 rc 0 167s: runs/tactical/geom2/meta.py run --bars 15min --feat tb7 --variant pmGR --primary hgb
+job10 rc 0 680s: runs/tactical/geom2/meta.py run --bars 5min --feat tb7 --variant pmGR --primary hgb

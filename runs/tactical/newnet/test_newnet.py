@@ -108,3 +108,13 @@ def test_volatility_gradient_does_not_reach_the_direction_branch():
     assert all(g is None for g in t.gradient(loss, net.trainable_variables))
     assert all(g is not None for g in t.gradient(loss, vol.trainable_variables))
     assert not {id(v) for v in net.variables} & {id(v) for v in vol.variables}
+
+
+def test_series_geometry_columns_are_appended_and_causal():
+    """geom2: raw_vec appends the per-bar geometry of the window's LAST bar; the plain vector is unchanged."""
+    rs = np.random.RandomState(0); T = 200
+    vec = rs.randn(T, dm.N_VEC).astype(np.float16); seq = rs.randn(T, dm.N_SEQ).astype(np.float16); close = 100 + rs.rand(T)
+    s = dm.Series(vec, seq, close); starts = np.array([0, 5, 30]); plain = s.raw_vec(starts)
+    s.geom = rs.randn(T, 7).astype(np.float16); v = s.raw_vec(starts)
+    assert v.shape == (3, dm.N_VEC + 7) and np.array_equal(v[:, :dm.N_VEC], plain)
+    np.testing.assert_array_equal(v[:, dm.N_VEC:], np.asarray(s.geom[starts + dm.WIN - 1], np.float32))

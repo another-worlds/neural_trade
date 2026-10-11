@@ -1,0 +1,8 @@
+job0 rc 0 318s: runs/tactical/geom2/volgeom.py minute --shard 0 --of 6
+job2 rc 0 353s: runs/tactical/geom2/volgeom.py minute --shard 2 --of 6
+job1 rc 0 367s: runs/tactical/geom2/volgeom.py minute --shard 1 --of 6
+job3 rc 0 376s: runs/tactical/geom2/volgeom.py minute --shard 3 --of 6
+job5 rc 0 378s: runs/tactical/geom2/volgeom.py minute --shard 5 --of 6
+job4 rc 0 392s: runs/tactical/geom2/volgeom.py minute --shard 4 --of 6
+job7 rc 0 142s: runs/tactical/geom2/meta.py build --bars 1min
+job6 rc 0 203s: runs/tactical/geom2/volgeom.py hourly

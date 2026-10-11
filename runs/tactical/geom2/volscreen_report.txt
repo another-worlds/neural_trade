@@ -1,0 +1,20 @@
+24 slices; window volatility alone: Spearman with log|r| +0.237 [t 12.3]
+164 geometry features; Bonferroni |t| > 4.25
+  slope   : 46 features; raw: max|rho| 0.039, beyond Bonferroni 10; after window-vol control: max|rho| 0.051, beyond Bonferroni 22
+  pos     : 19 features; raw: max|rho| 0.063, beyond Bonferroni 3; after window-vol control: max|rho| 0.060, beyond Bonferroni 8
+  cross   : 76 features; raw: max|rho| 0.017, beyond Bonferroni 0; after window-vol control: max|rho| 0.020, beyond Bonferroni 1
+  squeeze : 23 features; raw: max|rho| 0.036, beyond Bonferroni 8; after window-vol control: max|rho| 0.047, beyond Bonferroni 19
+Top 12 after the window-volatility control:  name  rho  t  same sign
+  atr14.slope3             +0.037 t +11.9 same 24/24  (raw +0.025)
+  atr14.slope10            +0.051 t +11.8 same 24/24  (raw +0.035)
+  obv.squeeze              +0.047 t +10.8 same 24/24  (raw +0.036)
+  bb_lo.slope3             -0.042 t -9.9 same 24/24  (raw -0.034)
+  bb_lo.slope10            -0.044 t -9.4 same 23/24  (raw -0.039)
+  adx14.slope3             +0.025 t +9.4 same 23/24  (raw +0.017)
+  kel_lo.slope3            -0.039 t -8.2 same 23/24  (raw -0.031)
+  bb_width.slope3          +0.033 t +8.2 same 23/24  (raw +0.024)
+  kel_lo.slope10           -0.042 t -8.1 same 23/24  (raw -0.034)
+  bb_width.squeeze         +0.041 t +8.1 same 23/24  (raw +0.028)
+  kel_up.pos               -0.056 t -8.1 same 23/24  (raw -0.060)
+  bb_width.slope10         +0.038 t +8.0 same 23/24  (raw +0.028)
+Squeeze features (after control): ema5 +0.028, ema10 +0.030, ema20 +0.038, ema40 +0.045, sma20 +0.032, bb_up +0.033, bb_lo +0.031, kel_up +0.031, kel_lo +0.031, don_up +0.025, don_lo +0.025, vwap20 +0.034, rsi14 +0.020, macd_line +0.021, macd_hist +0.033, stoch14 -0.013, cci20 +0.011, mfi14 -0.005, dmi_diff +0.019, adx14 +0.022, atr14 +0.035, bb_width +0.041, obv +0.047

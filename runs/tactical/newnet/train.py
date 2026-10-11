@@ -256,13 +256,18 @@ def main():
     ap.add_argument("--slices", default="6", help="6 | 24 | final"); ap.add_argument("--span", default="90d", choices=list(dm.SPANS))
     ap.add_argument("--arch", default="patch", choices=["patch", "patchS", "tcn", "linear"]); ap.add_argument("--seeds", type=int, default=1)
     ap.add_argument("--tag", default=""); ap.add_argument("--cpu", action="store_true"); ap.add_argument("--train-lin", action="store_true"); ap.add_argument("--warm", type=int, default=0)
+    ap.add_argument("--geom", default="", help="path of series_geom.npy: append the geometry features to the last-bar vector (geom2)")
+    ap.add_argument("--seed0", type=int, default=0, help="first seed (geom2: extra seeds of an arm already run with seed 0)")
     ap.add_argument("--out", default=OUT)
     args = ap.parse_args()
     device = setup_device(args.cpu)
     import tensorflow as tf
     import lab
     import model as mdl
-    series = dm.Series(); names = dm.slice_names(args.slices); rng = np.random.default_rng(0)
+    series = dm.Series()
+    if args.geom:
+        dm.set_geom(series, args.geom)
+    names = dm.slice_names(args.slices); rng = np.random.default_rng(0)
     t0 = time.time(); per = {s: {} for s in range(args.seeds)}; ens_per = {}; extra = {s: [] for s in range(args.seeds)}; params = None
     times = {s: 0.0 for s in range(args.seeds)}
     for name in names:
@@ -271,7 +276,7 @@ def main():
         Ps, Vs = [], []
         for seed in range(args.seeds):
             t1 = time.time()
-            dmod, vmod, info = train_networks(tf, mdl, sp, args.arch, coef, b, seed, args.train_lin, args.warm)
+            dmod, vmod, info = train_networks(tf, mdl, sp, args.arch, coef, b, seed + args.seed0, args.train_lin, args.warm)
             vol_pred = vmod(tf.constant(sp.vec(sp.va_starts)), training=False).numpy()
             P = Plin if args.arch == "linear" else sigmoid(predict(tf, dmod, sp, sp.va_starts, args.arch))
             res = score_slice(lab, sp, P, Plin, vol_pred, base_vol, rng); dt = time.time() - t1; times[seed] += dt
@@ -289,7 +294,7 @@ def main():
                 ens_per.setdefault(k, []).append(v)
     with open(args.out, "a", encoding="utf-8") as f:
         for seed in range(args.seeds):
-            rec = make_record(args, seed, names, per[seed], extra[seed], params, times[seed], device); rec["tag"] = args.tag
+            rec = make_record(args, seed + args.seed0, names, per[seed], extra[seed], params, times[seed], device); rec["tag"] = args.tag
             f.write(json.dumps(rec) + "\n")
             s = rec["summary"]
             print(f"== {args.arch} {args.span} seed {seed}: mean3 AUC {s['auc3'][0]:.4f} [{s['auc3'][1]:.4f},{s['auc3'][2]:.4f}]  "

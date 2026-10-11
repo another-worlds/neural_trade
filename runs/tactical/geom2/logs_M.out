@@ -1,0 +1,6 @@
+job0 rc 0 447s: runs/tactical/geom2/readout.py --shard 0 --of 3 --sets gc3,gc5,gc10,gc20,tb7+gc3,tb7+gc5,tb7+gc10,tb
+job1 rc 0 448s: runs/tactical/geom2/readout.py --shard 1 --of 3 --sets gc3,gc5,gc10,gc20,tb7+gc3,tb7+gc5,tb7+gc10,tb
+job2 rc 0 450s: runs/tactical/geom2/readout.py --shard 2 --of 3 --sets gc3,gc5,gc10,gc20,tb7+gc3,tb7+gc5,tb7+gc10,tb
+job3 rc 0 1148s: runs/tactical/geom2/longdir.py --shard 0 --of 3 --sets gc3,gc5,gc10,gc20,tb7+gc3,tb7+gc5,tb7+gc10,tb
+job4 rc 0 1214s: runs/tactical/geom2/longdir.py --shard 1 --of 3 --sets gc3,gc5,gc10,gc20,tb7+gc3,tb7+gc5,tb7+gc10,tb
+job5 rc 0 1235s: runs/tactical/geom2/longdir.py --shard 2 --of 3 --sets gc3,gc5,gc10,gc20,tb7+gc3,tb7+gc5,tb7+gc10,tb
