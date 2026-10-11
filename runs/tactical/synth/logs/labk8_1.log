@@ -1,0 +1,71 @@
+2026-10-11 23:23:45.802894: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'cudart64_110.dll'; dlerror: cudart64_110.dll not found
+2026-10-11 23:23:45.802975: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+2017-05-02T12: train 16560 val 12600
+2026-10-11 23:23:54.898549: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-11 23:23:54.900173: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-11 23:23:54.900224: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-11 23:23:54.900488: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+  C1 {'dir': [0.6187329691614804], 'sec': 16.0}
+  B {'dir': (0.6111464026031147, [0.6253917853936717, 0.6113639652377288, 0.5966834571779436]), 'sec': 4.9}
+WARNING:tensorflow:AutoGraph could not transform <function _classes at 0x0000026BB60CE7A0> and will run it as-is.
+Please report this to the TensorFlow team. When filing the bug, set the verbosity to 10 (on Linux, `export AUTOGRAPH_VERBOSITY=10`) and attach the full output.
+Cause: <gast.gast.Expr object at 0x0000026BEF262FB0>
+To silence this warning, decorate the function with @tf.autograph.experimental.do_not_convert
+  A {'dir': (0.5691498677646166, [0.6090584824999613, 0.5576013915179565, 0.5407897292759322]), 'epochs_dir': 3, 'sec': 38.6}
+2017-05-02T12 done in 93s
+2017-09-04T12: train 16560 val 12600
+  C1 {'dir': [0.5401801537065726], 'sec': 15.6}
+  B {'dir': (0.5496547723545752, [0.5628140744129606, 0.540840181937164, 0.5453100607136009]), 'sec': 5.7}
+  A {'dir': (0.5083642115735724, [0.5061126461650922, 0.5116114775094883, 0.5073685110461366]), 'epochs_dir': 4, 'sec': 43.4}
+2017-09-04T12 done in 95s
+2018-07-14T01: train 16560 val 12600
+  C1 {'dir': [0.5687767449496878], 'sec': 16.1}
+  B {'dir': (0.572770210416394, [0.5799368974622683, 0.5717025512365659, 0.5666711825503479]), 'sec': 5.0}
+  A {'dir': (0.5277896043523079, [0.5511702731160186, 0.5273845790257918, 0.5048139609151134]), 'epochs_dir': 4, 'sec': 49.3}
+2018-07-14T01 done in 98s
+2019-01-17T14: train 16560 val 12600
+  C1 {'dir': [0.6088203530522693], 'sec': 15.2}
+  B {'dir': (0.6146026547205756, [0.6205423234278369, 0.6105978015138706, 0.6126678392200192]), 'sec': 5.1}
+  A {'dir': (0.5963664669640979, [0.5862125636755118, 0.6074082919339496, 0.5954785452828325]), 'epochs_dir': 3, 'sec': 38.2}
+2019-01-17T14 done in 87s
+2019-11-26T03: train 16560 val 12600
+  C1 {'dir': [0.5851868479499789], 'sec': 15.5}
+  B {'dir': (0.5977384450824963, [0.6178991038107653, 0.5978496957992447, 0.5774665356374789]), 'sec': 5.3}
+  A {'dir': (0.5511623566443181, [0.5478300112118719, 0.5592380811113604, 0.5464189776097221]), 'epochs_dir': 1, 'sec': 27.6}
+2019-11-26T03 done in 77s
+2020-08-02T04: train 16560 val 12600
+  C1 {'dir': [0.5761496749687885], 'sec': 15.0}
+  B {'dir': (0.581441399392978, [0.5747392573354385, 0.5809758981748638, 0.5886090426686317]), 'sec': 5.4}
+  A {'dir': (0.5788483807548136, [0.5699690242304726, 0.5735170375990839, 0.5930590804348845]), 'epochs_dir': 2, 'sec': 34.0}
+2020-08-02T04 done in 81s
+2021-08-12T06: train 16560 val 12600
+  C1 {'dir': [0.5296360825176015], 'sec': 17.6}
+  B {'dir': (0.5219129941698263, [0.5223453246729456, 0.5141688021910725, 0.5292248556454605]), 'sec': 5.4}
+  A {'dir': (0.5295290681125321, [0.5284877513261437, 0.5354451014446171, 0.5246543515668356]), 'epochs_dir': 2, 'sec': 33.6}
+2021-08-12T06 done in 84s
+2021-12-15T06: train 16560 val 12600
+  C1 {'dir': [0.5367574164864424], 'sec': 15.9}
+  B {'dir': (0.5338892533187937, [0.5271308426028478, 0.5283507995634531, 0.54618611779008]), 'sec': 5.9}
+  A {'dir': (0.5158178860576036, [0.49604103524206145, 0.5153522021959565, 0.5360604207347929]), 'epochs_dir': 3, 'sec': 39.6}
+2021-12-15T06 done in 91s
+2023-02-25T20: train 16560 val 12600
+  C1 {'dir': [0.5261941503532833], 'sec': 15.9}
+  B {'dir': (0.5267259717795177, [0.5254254503818203, 0.5248925047656545, 0.5298599601910783]), 'sec': 5.0}
+  A {'dir': (0.5034888564222691, [0.498540596511373, 0.49964276540938285, 0.5122832073460517]), 'epochs_dir': 3, 'sec': 40.9}
+2023-02-25T20 done in 90s
+2023-06-30T21: train 16560 val 12600
+  C1 {'dir': [0.54019451456577], 'sec': 17.1}
+  B {'dir': (0.5374564294258929, [0.5382240300797785, 0.5364870975750012, 0.5376581606228987]), 'sec': 5.5}
+  A {'dir': (0.5211692296458563, [0.5340091359555361, 0.515674103153646, 0.5138244498283868]), 'epochs_dir': 2, 'sec': 34.1}
+2023-06-30T21 done in 83s
+2024-07-09T22: train 16560 val 12600
+  C1 {'dir': [0.5259743094459206], 'sec': 15.7}
+  B {'dir': (0.5276263442712462, [0.5247928553079283, 0.5269668647890988, 0.5311193127167115]), 'sec': 5.1}
+  A {'dir': (0.5188305111572321, [0.5170100317637302, 0.5221186275800908, 0.5173628741278755]), 'epochs_dir': 3, 'sec': 42.0}
+2024-07-09T22 done in 91s
+2025-01-13T11: train 16560 val 12600
+  C1 {'dir': [0.5033468650470385], 'sec': 15.8}
+  B {'dir': (0.5109427023607577, [0.5104683306158284, 0.5137204624525186, 0.508639314013926]), 'sec': 4.9}
+  A {'dir': (0.5000872706267261, [0.5061066098081024, 0.4879851698213141, 0.5061700322507618]), 'epochs_dir': 3, 'sec': 38.2}
+2025-01-13T11 done in 87s

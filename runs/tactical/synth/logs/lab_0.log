@@ -1,0 +1,67 @@
+2026-10-11 21:48:54.856902: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'cudart64_110.dll'; dlerror: cudart64_110.dll not found
+2026-10-11 21:48:54.856937: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+2017-03-01T00: train 11078 val 8488
+  tb7 {'dir': (0.5609183629533088, [0.5865359963224905, 0.550490881089615, 0.5457282114478208]), 'sec': 0.3}
+  c3 {'dir': (0.5390843330620168, [0.5486924619473685, 0.5348898545980689, 0.5336706826406128]), 'vol': {'spearman': 0.36867290603374364, 'r2': -0.3354988473746028}, 'sec': 2.5}
+2026-10-11 21:49:07.018502: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-11 21:49:07.021358: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-11 21:49:07.021430: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-11 21:49:07.021780: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:5 out of the last 13 calls to <function Model.make_predict_function.<locals>.predict_function at 0x000002530256CDC0> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+WARNING:tensorflow:5 out of the last 13 calls to <function Model.make_predict_function.<locals>.predict_function at 0x000002530256E200> triggered tf.function retracing. Tracing is expensive and the excessive number of tracings could be due to (1) creating @tf.function repeatedly in a loop, (2) passing tensors with different shapes, (3) passing Python objects instead of tensors. For (1), please define your @tf.function outside of the loop. For (2), @tf.function has reduce_retracing=True option that can avoid unnecessary retracing. For (3), please refer to https://www.tensorflow.org/guide/function#controlling_retracing and https://www.tensorflow.org/api_docs/python/tf/function for  more details.
+  C1 {'dir': [0.5351978862599621], 'vol': {'spearman': 0.3412430408098111, 'r2': -0.4719729459724893}, 'sec': 16.2}
+  B {'dir': (0.5321306900574171, [0.5456980281214148, 0.528102827616814, 0.5225912144340225]), 'vol': {'spearman': 0.39750126200645675, 'r2': -0.479297322655478}, 'sec': 4.9}
+  C2b {'dir': (0.5467620252438944, [0.553062878860912, 0.5437546156798928, 0.5434685811908784]), 'vol': {'spearman': 0.4003756836805503, 'r2': -0.3960326920348769}, 'sec': 2.5}
+WARNING:tensorflow:AutoGraph could not transform <function _classes at 0x00000253429DE7A0> and will run it as-is.
+Please report this to the TensorFlow team. When filing the bug, set the verbosity to 10 (on Linux, `export AUTOGRAPH_VERBOSITY=10`) and attach the full output.
+Cause: <gast.gast.Expr object at 0x0000025303306BF0>
+To silence this warning, decorate the function with @tf.autograph.experimental.do_not_convert
+  A {'dir': (0.5160513950730389, [0.5267795105003074, 0.5160913043606922, 0.5052833703581172]), 'epochs_dir': 2, 'vol': {'spearman': 0.3674867073498352, 'r2': -0.568750156649976}, 'epochs_vol': 7, 'sec': 89.0}
+  C2a {'dir': (0.5018036581504944, [0.5087539154151184, 0.5016081705946942, 0.4950488884416706]), 'epochs_dir': 2, 'vol': {'spearman': 0.3628013937715852, 'r2': -0.3236554897661841}, 'epochs_vol': 1, 'sec': 26.9}
+2017-03-01T00 done in 169s
+2018-05-12T13: train 16560 val 12600
+  tb7 {'dir': (0.5619769988288492, [0.5756678703400632, 0.561319028146166, 0.5489440980003184]), 'sec': 0.4}
+  c3 {'dir': (0.5697084698077358, [0.578987742598426, 0.5675277129084831, 0.5626099539162983]), 'vol': {'spearman': 0.06841263366068993, 'r2': -1.5740300694951248}, 'sec': 3.6}
+  C1 {'dir': [0.5334699183774263], 'vol': {'spearman': 0.03498581651761017, 'r2': -1.556460477468429}, 'sec': 21.7}
+  B {'dir': (0.5173577469024556, [0.5244613728191532, 0.5160293644390794, 0.5115825034491345]), 'vol': {'spearman': 0.04042774816068379, 'r2': -1.5719496806827746}, 'sec': 7.0}
+  C2b {'dir': (0.5335960746954408, [0.5374094745339406, 0.5362814870222276, 0.5270972625301544]), 'vol': {'spearman': 0.027775468691620404, 'r2': -1.583200547562444}, 'sec': 3.5}
+  A {'dir': (0.525393458975759, [0.5150183778580227, 0.5345198909031733, 0.5266421081660809]), 'epochs_dir': 3, 'vol': {'spearman': 0.05122071207196266, 'r2': -1.4007823846081813}, 'epochs_vol': 3, 'sec': 105.9}
+  C2a {'dir': (0.5287200117990936, [0.5289217878917682, 0.5279662699881545, 0.5292719775173579]), 'epochs_dir': 4, 'vol': {'spearman': 0.017590184169204912, 'r2': -1.0980924130031893}, 'epochs_vol': 2, 'sec': 49.7}
+2018-05-12T13 done in 221s
+2019-09-24T15: train 16560 val 12600
+  tb7 {'dir': (0.5545227024003999, [0.5677145986335477, 0.5522855105063783, 0.5435679980612735]), 'sec': 0.5}
+  c3 {'dir': (0.5669993020781904, [0.5774712822547678, 0.5650809809202666, 0.5584456430595366]), 'vol': {'spearman': 0.1495069410276125, 'r2': -0.019295978207084286}, 'sec': 3.7}
+  C1 {'dir': [0.5382048517634678], 'vol': {'spearman': 0.19549639713295452, 'r2': 0.005967277573603565}, 'sec': 22.4}
+  B {'dir': (0.5370207834939352, [0.5418203994850566, 0.5385991866939897, 0.5306427643027596]), 'vol': {'spearman': 0.24687962234374322, 'r2': 0.030518289359596662}, 'sec': 6.8}
+  C2b {'dir': (0.5264852141759689, [0.5321188120084628, 0.5278830907275377, 0.5194537397919063]), 'vol': {'spearman': 0.20441588575070704, 'r2': 0.010447394327995685}, 'sec': 3.2}
+  A {'dir': (0.528367524862588, [0.5366702541477308, 0.5156174850801356, 0.5328148353598974]), 'epochs_dir': 2, 'vol': {'spearman': 0.1836317092514745, 'r2': -0.15886018349397757}, 'epochs_vol': 1, 'sec': 81.5}
+  C2a {'dir': (0.5307151617253302, [0.5446899105239229, 0.5311301264790815, 0.5163254481729862]), 'epochs_dir': 3, 'vol': {'spearman': 0.3056887471132303, 'r2': -0.033814491077858166}, 'epochs_vol': 2, 'sec': 45.6}
+2019-09-24T15 done in 191s
+2021-06-10T18: train 16560 val 12600
+  tb7 {'dir': (0.558317672918922, [0.5612521627507976, 0.5557324032150255, 0.5579684527909428]), 'sec': 0.5}
+  c3 {'dir': (0.5661745572843353, [0.56212024270322, 0.5617100533908693, 0.5746933757589165]), 'vol': {'spearman': 0.102800229995056, 'r2': -1.3630812877770717}, 'sec': 3.7}
+  C1 {'dir': [0.536609240649608], 'vol': {'spearman': 0.1537463980388423, 'r2': -1.322584035400027}, 'sec': 21.6}
+  B {'dir': (0.546538171476741, [0.5480107927153601, 0.5460310248070914, 0.5455726969077714]), 'vol': {'spearman': 0.15838627145625955, 'r2': -1.3087048923048066}, 'sec': 7.2}
+  C2b {'dir': (0.5324797938496696, [0.5380809630819395, 0.5264484310453557, 0.5329099874217136]), 'vol': {'spearman': 0.137241880864901, 'r2': -1.3250293786521423}, 'sec': 3.3}
+  A {'dir': (0.5357896381389023, [0.5346416809642093, 0.5404256515020537, 0.5323015819504441]), 'epochs_dir': 3, 'vol': {'spearman': 0.21260002864090527, 'r2': -1.3964515854596442}, 'epochs_vol': 8, 'sec': 145.8}
+  C2a {'dir': (0.546311435839994, [0.5385938626799709, 0.5501368281265131, 0.5502036167134978]), 'epochs_dir': 3, 'vol': {'spearman': 0.2355166256268063, 'r2': -1.5298105528969548}, 'epochs_vol': 5, 'sec': 57.8}
+2021-06-10T18 done in 268s
+2022-10-23T20: train 16560 val 12600
+  tb7 {'dir': (0.5320694063832331, [0.5336765194853301, 0.5295306901018839, 0.5330010095624851]), 'sec': 0.5}
+  c3 {'dir': (0.5212647201207831, [0.5254069990360272, 0.5197122215408634, 0.5186749397854585]), 'vol': {'spearman': 0.20999838221996203, 'r2': -0.059980146842581794}, 'sec': 3.3}
+  C1 {'dir': [0.5202510015694641], 'vol': {'spearman': 0.19658734906832798, 'r2': -0.006518717328020784}, 'sec': 20.9}
+  B {'dir': (0.517677807543237, [0.5250028261176118, 0.5103888134810675, 0.5176417830310318]), 'vol': {'spearman': 0.24761334465789572, 'r2': 0.005775939597592927}, 'sec': 7.0}
+  C2b {'dir': (0.5270969987765406, [0.5314369165277365, 0.5250751059257326, 0.5247789738761528]), 'vol': {'spearman': 0.19023724100761746, 'r2': -0.0024668683317752294}, 'sec': 3.2}
+  A {'dir': (0.5214560798718376, [0.5341488912609451, 0.5240636450827534, 0.5061557032718144]), 'epochs_dir': 2, 'vol': {'spearman': 0.20727716654864317, 'r2': -0.19963736603867543}, 'epochs_vol': 6, 'sec': 122.4}
+  C2a {'dir': (0.5163956703985964, [0.5344781193951095, 0.5135129383691126, 0.5011959534315671]), 'epochs_dir': 4, 'vol': {'spearman': 0.21742643798069328, 'r2': -0.06064728882766057}, 'epochs_vol': 6, 'sec': 65.0}
+2022-10-23T20 done in 250s
+2023-09-01T09: train 16560 val 12600
+  tb7 {'dir': (0.5572038651383054, [0.5521662021978263, 0.5647304069357952, 0.5547149862812949]), 'sec': 0.4}
+  c3 {'dir': (0.5575426814052862, [0.556614091986279, 0.556622752124366, 0.5593912001052134]), 'vol': {'spearman': 0.4278007822796455, 'r2': 0.17565334458137405}, 'sec': 3.7}
+  C1 {'dir': [0.5242436169831031], 'vol': {'spearman': 0.4457031610849036, 'r2': 0.1918581805365355}, 'sec': 21.1}
+  B {'dir': (0.5210772902674622, [0.5174231306978905, 0.5194220001722801, 0.526386739932216]), 'vol': {'spearman': 0.5809313103811199, 'r2': 0.2904238343613402}, 'sec': 6.9}
+  C2b {'dir': (0.5287598437142677, [0.5327522858900069, 0.5229963061113843, 0.5305309391414118]), 'vol': {'spearman': 0.5471068379618583, 'r2': 0.25693131380691636}, 'sec': 3.1}
+  A {'dir': (0.5119242163321095, [0.5240562457882312, 0.5076922316863691, 0.5040241715217281]), 'epochs_dir': 2, 'vol': {'spearman': 0.598936914697877, 'r2': 0.270075201244372}, 'epochs_vol': 2, 'sec': 89.9}
+  C2a {'dir': (0.5390893546021395, [0.5474429419108848, 0.5420237087857798, 0.5278014131097539]), 'epochs_dir': 5, 'vol': {'spearman': 0.661797746857211, 'r2': 0.3788807634773689}, 'epochs_vol': 3, 'sec': 55.0}
+2023-09-01T09 done in 207s
