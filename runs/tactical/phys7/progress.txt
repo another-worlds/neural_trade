@@ -1,0 +1,5 @@
+18:45:13 done phys7_none_on
+19:14:18 done phys7_none_off
+19:50:10 done phys7_price_on
+20:18:50 done phys7_price_off
+all done
