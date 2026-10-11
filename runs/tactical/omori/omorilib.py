@@ -240,3 +240,16 @@ def score_month(B, month, T, k, train_days=TRAIN_DAYS):
 
 def prof_base(eta, y):
     p = np.clip(sigmoid(eta), 1e-12, 1 - 1e-12); return float(np.sum(y * np.log(p) + (1 - y) * np.log(1 - p)))
+
+
+def calibrate_k(B, first_month, T, target=0.02):
+    """k with a `target` event rate on the training year of `first_month` (reads nothing at or after the month start)."""
+    m0 = pd.Period(first_month, "M").start_time
+    i_m0 = int(np.searchsorted(B.t_ns, np.datetime64(m0, "ns").astype(np.int64)))
+    i_lo = int(np.searchsorted(B.t_ns, np.datetime64(m0 - pd.Timedelta(days=TRAIN_DAYS), "ns").astype(np.int64)))
+    anch = np.arange(max(i_lo, WARM + T + 5), i_m0 - T - 2, STRIDE)
+    coef = fit_har(B, anch, T); sig = sigma_hat(B, coef, anch, T); lo, hi = 0.5, 12.0
+    for _ in range(40):
+        k = 0.5 * (lo + hi); r = float(np.nanmean(target_event(B, anch, T, k, sig)))
+        lo, hi = (k, hi) if r > target else (lo, k)
+    return round(0.5 * (lo + hi), 3)

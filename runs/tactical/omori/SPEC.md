@@ -74,3 +74,13 @@ the mean chosen p within 0.9 +- 0.2. If B fails, the challenger lacks power and 
 ## 6. Budget
 
 CPU only, 4 processes, below normal priority, resumable per month (`results/*.jsonl`). Times are reported.
+
+## 7. Amendment 1 (before any real-data result; the control only)
+
+The first draft of the section 5 simulator triggered feedback on single bars with |eps| > 3.5, which the T-window shock stream of section 2 cannot
+see, and produced no measurable effect (trial runs on 2 simulated months, 14-month paths, nothing from the real file). The control is
+repaired so that it matches the stream: feedback sigma_t = sigma_clock (1 + 4 sum over trigger bars j (t-j+1)^-0.9), a trigger being the
+onset (60-bar refractory) of a T = 30 endpoint excursion |ln C_t - ln C_{t-30}| > 2.0 sigma_clock(t-30) sqrt(30). The Omori exponent is
+still 0.9. k is recalibrated to a 2% rate on each simulated path's first year (`omorilib.calibrate_k`). Pass criteria as in section 5.
+Settings (4, 2.0) were chosen among (1.5/2.5), (4/2.5), (8/2.5), (4/2.0) on two simulated months; the real data, the selection and the look
+were not touched.
