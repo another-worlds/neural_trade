@@ -44,12 +44,12 @@ def _fit(kind, Xtr, ytr, gap_rows=0):
     best, bc = -1.0, CS[0]
     if len(np.unique(ytr[a])) > 1 and len(np.unique(ytr[b])) > 1:
         for C in CS:
-            m = LogisticRegression(penalty="l1", solver="liblinear", C=C, max_iter=200).fit(Xtr[a], ytr[a])
+            m = LogisticRegression(penalty="l1", solver="liblinear", C=C, max_iter=200, random_state=0).fit(Xtr[a], ytr[a])
             s = roc_auc_score(ytr[b], m.decision_function(Xtr[b]))
             if s > best:
                 best, bc = s, C
     info["C"] = bc
-    return LogisticRegression(penalty="l1", solver="liblinear", C=bc, max_iter=200).fit(Xtr, ytr), info
+    return LogisticRegression(penalty="l1", solver="liblinear", C=bc, max_iter=200, random_state=0).fit(Xtr, ytr), info
 
 
 def walk_forward(X, t, r, bar, kind, train_days, first, last, H=None, bar_min=None, db=None):

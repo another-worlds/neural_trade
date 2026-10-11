@@ -35,3 +35,5 @@ Look: `look_table.txt`, `look.json`. Rows: `sel_*.jsonl`, `look_*.jsonl`. Tests:
   the earlier decay runs' level (0.54-0.58 for 2021-23).
 - Picks were taken per cell (3 + 3 looks); 6 looks in total, so one success at 95% in three of six is weak evidence on its own.
 - L1 is slow on 284 features (all:l1:365: 17 min for 42 months); features clipped at +-8 after standardisation for every set.
+- Reproducibility note: the L1 fits of the selection and look runs used liblinear without a seed (run-to-run AUC noise about 5e-7, found by
+  the test); wf.py now fixes `random_state=0`. The committed results were not recomputed; the effect is far below the table precision.
