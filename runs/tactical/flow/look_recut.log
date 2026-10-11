@@ -1,0 +1,7 @@
+look 6 configurations
+1m stab flow logreg 60 13 months 0.9 s auc 0.5141
+5m stab flow logreg 60 13 months 0.2 s auc 0.5236
+1m stab flow logreg 365 13 months 1.2 s auc 0.5214
+1m main tb7 logreg 365 13 months 1.7 s auc 0.5278
+5m stab flow logreg 365 13 months 0.6 s auc 0.5298
+1m main tb7+flow logreg 365 13 months 2.1 s auc 0.5275

@@ -1,67 +1,67 @@
-D:\nt\nt_wt_nextopen\runs\tactical\nextopen\run_c.py:29: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
+D:\nt\nt_recut\runs\tactical\nextopen\run_c.py:29: FutureWarning: 'M' is deprecated and will be removed in a future version, please use 'ME' instead.
   _mo = pd.Series(m["_pl"], index=pd.DatetimeIndex(m["_t"])).groupby(pd.Grouper(freq="M")).mean().dropna() * 1e4
-final meta (next-open): {'n': 1957, 'hit': 0.5334695963208993, 'bps': 5.351435458994514, 'null95': 6.294236650346219, 'n_months': 15, 'monthly_bps_ci': [-17.089610597372346, 24.071985662297475]}
-meta: n 1957 hit 0.5335 bps 5.35 (H38: 2013, 0.538, +9.83)
+final meta (next-open): {'n': 1733, 'hit': 0.532602423542989, 'bps': 6.954795661686482, 'null95': 6.014150651571531, 'n_months': 13, 'monthly_bps_ci': [-19.12974284570815, 28.86808274163473]}
+meta: n 1733 hit 0.5326 bps 6.95 (H38: 2013, 0.538, +9.83)
 {
  "0": {
-  "n_trades": 508,
-  "hit": 0.5275590551181102,
-  "mean_bps": 2.3068834119703006,
-  "trades_per_day": 1.1153599853627298,
-  "cum_return_pct": 11.718967732809116,
+  "n_trades": 438,
+  "hit": 0.5182648401826484,
+  "mean_bps": 2.001725849472142,
+  "trades_per_day": 1.1386481802426343,
+  "cum_return_pct": 8.767559220687971,
   "max_drawdown_pct": 28.64472886162539,
   "longest_drawdown_days": 169.375,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5262360983969083,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5171989902660467,
   "monthly_hit_min": 0.36363636363636365,
-  "monthly_hit_max": 0.6923076923076923,
-  "months_hit_above_60": 4,
-  "share_months_hit_above_60": 0.26666666666666666
- },
- "1": {
-  "n_trades": 508,
-  "hit": 0.5275590551181102,
-  "mean_bps": 1.3068834119702954,
-  "trades_per_day": 1.1153599853627298,
-  "cum_return_pct": 6.638967732809142,
-  "max_drawdown_pct": 29.13472886162537,
-  "longest_drawdown_days": 171.83333333333334,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5262360983969083,
-  "monthly_hit_min": 0.36363636363636365,
-  "monthly_hit_max": 0.6923076923076923,
-  "months_hit_above_60": 4,
-  "share_months_hit_above_60": 0.26666666666666666
- },
- "2": {
-  "n_trades": 508,
-  "hit": 0.5216535433070866,
-  "mean_bps": 0.30688341197030145,
-  "trades_per_day": 1.1153599853627298,
-  "cum_return_pct": 1.5589677328090579,
-  "max_drawdown_pct": 30.01964590938116,
-  "longest_drawdown_days": 298.2916666666667,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5201754923363022,
-  "monthly_hit_min": 0.3333333333333333,
   "monthly_hit_max": 0.6923076923076923,
   "months_hit_above_60": 3,
-  "share_months_hit_above_60": 0.2
+  "share_months_hit_above_60": 0.23076923076923078
+ },
+ "1": {
+  "n_trades": 438,
+  "hit": 0.5182648401826484,
+  "mean_bps": 1.0017258494721395,
+  "trades_per_day": 1.1386481802426343,
+  "cum_return_pct": 4.387559220688009,
+  "max_drawdown_pct": 29.13472886162537,
+  "longest_drawdown_days": 171.83333333333334,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5171989902660467,
+  "monthly_hit_min": 0.36363636363636365,
+  "monthly_hit_max": 0.6923076923076923,
+  "months_hit_above_60": 3,
+  "share_months_hit_above_60": 0.23076923076923078
+ },
+ "2": {
+  "n_trades": 438,
+  "hit": 0.5114155251141552,
+  "mean_bps": 0.0017258494721416502,
+  "trades_per_day": 1.1386481802426343,
+  "cum_return_pct": 0.007559220687913815,
+  "max_drawdown_pct": 30.01964590938116,
+  "longest_drawdown_days": 227.5,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5102059832730397,
+  "monthly_hit_min": 0.3333333333333333,
+  "monthly_hit_max": 0.6923076923076923,
+  "months_hit_above_60": 2,
+  "share_months_hit_above_60": 0.15384615384615385
  },
  "5": {
-  "n_trades": 508,
-  "hit": 0.5098425196850394,
-  "mean_bps": -2.6931165880297043,
-  "trades_per_day": 1.1153599853627298,
-  "cum_return_pct": -13.681032267190885,
+  "n_trades": 438,
+  "hit": 0.502283105022831,
+  "mean_bps": -2.998274150527864,
+  "trades_per_day": 1.1386481802426343,
+  "cum_return_pct": -13.132440779312038,
   "max_drawdown_pct": 35.38340986391439,
-  "longest_drawdown_days": 298.2916666666667,
-  "n_months": 15,
-  "monthly_hit_mean": 0.5079801350229276,
+  "longest_drawdown_days": 227.5,
+  "n_months": 13,
+  "monthly_hit_mean": 0.5018209349255147,
   "monthly_hit_min": 0.3333333333333333,
   "monthly_hit_max": 0.6410256410256411,
   "months_hit_above_60": 2,
-  "share_months_hit_above_60": 0.13333333333333333
+  "share_months_hit_above_60": 0.15384615384615385
  }
 }
-n_signals 1957 trades 508 skipped 1449; 12s
+n_signals 1733 trades 438 skipped 1295; 19s

@@ -1,0 +1,9 @@
+== 1m LOOK months 2024-07..2025-09 (one look)
+all:hgb:365      n=15 AUC 0.5317 [0.5264,0.5369] (baseline 0.5269); diff95 +0.0047 [-0.0014,+0.0109] success95=False; diff98.3 [-0.0031,+0.0126] success=False; AUC-0.5 95% [+0.0264,+0.0369]; top10 hit 0.5496 +1.26 bps
+all:l1:365       n=15 AUC 0.5309 [0.5262,0.5356] (baseline 0.5269); diff95 +0.0040 [+0.0004,+0.0076] success95=True; diff98.3 [-0.0006,+0.0085] success=False; AUC-0.5 95% [+0.0262,+0.0356]; top10 hit 0.5435 +0.43 bps
+gR:l1:365        n=15 AUC 0.5284 [0.5221,0.5348] (baseline 0.5269); diff95 +0.0015 [-0.0031,+0.0061] success95=False; diff98.3 [-0.0043,+0.0073] success=False; AUC-0.5 95% [+0.0221,+0.0348]; top10 hit 0.5417 +0.55 bps
+
+== 1h LOOK months 2024-07..2025-09 (one look)
+rich:logreg:365  n=15 AUC 0.5471 [0.5302,0.5640] (baseline 0.5490); diff95 -0.0019 [-0.0074,+0.0037] success95=False; diff98.3 [-0.0089,+0.0051] success=False; AUC-0.5 95% [+0.0302,+0.0640]; top10 hit 0.5574 +5.13 bps
+all:hgb:365      n=15 AUC 0.5429 [0.5268,0.5591] (baseline 0.5490); diff95 -0.0060 [-0.0169,+0.0048] success95=False; diff98.3 [-0.0198,+0.0077] success=False; AUC-0.5 95% [+0.0268,+0.0591]; top10 hit 0.5810 +4.56 bps
+rich:l1:365      n=15 AUC 0.5495 [0.5343,0.5646] (baseline 0.5490); diff95 +0.0005 [-0.0040,+0.0050] success95=False; diff98.3 [-0.0052,+0.0062] success=False; AUC-0.5 95% [+0.0343,+0.0646]; top10 hit 0.5697 +4.03 bps

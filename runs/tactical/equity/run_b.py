@@ -1,4 +1,4 @@
-"""Strategy (b): H56 picks, monthly walk-forward over the look months 2024-07..2025-09; each month trades its 10% most confident
+"""Strategy (b): H56 picks, monthly walk-forward over the look months 2024-07..2025-07-20 (recut); each month trades its 10% most confident
 predictions (|P-0.5| >= the 90th percentile of the month's own predictions, as recent/wf.py): long if P > 0.5, else short, held for
 the label horizon (1m: 15 bars after the entry; 1h: 1 bar). Same fit as wf.walk_forward (imported pieces), plus the predictions.
 usage: python run_b.py 1m|1h   (1m: all:l1:365, 1h: rich:l1:365)"""
@@ -50,7 +50,7 @@ repro = {"max_abs_hit_diff": float(np.max(np.abs(dh))), "max_abs_bps_diff": floa
          "mean_hit_rerun": float(np.mean([c[1] for c in chk])), "mean_hit_stored": float(np.mean([s["top10_hit"] for s in st]))}
 print("rerun vs stored look rows:", json.dumps(repro), flush=True)
 cat = {k: np.concatenate([x[k] for x in rows]) for k in ("entry", "exit", "r", "side")}
-res = E.finish(f"b_h56_{bar}_{name}_{kind}_{T}", f"(b) H56 {bar} {name} {kind} {T} d, top-10% most confident, 2024-07..2025-09",
+res = E.finish(f"b_h56_{bar}_{name}_{kind}_{T}", f"(b) H56 {bar} {name} {kind} {T} d, top-10% most confident, 2024-07..2025-07-20 (recut)",
                cat["entry"], cat["exit"], cat["r"], -cat["r"], cat["side"], int(pd.Timestamp("2024-07-01").value), HERE,
                extra={"config": f"{bar} {name}:{kind}:{T}", "months": len(rows), "rerun_vs_stored_look": repro, "hold": f"{H} bars of {bm} min"})
 print(json.dumps({c: v["stats"] for c, v in res["levels"].items()}, indent=1)); print(f"n_signals {res['n_signals']} trades {res['n_trades']} skipped {res['n_skipped']}; {time.time() - t0:.0f}s")

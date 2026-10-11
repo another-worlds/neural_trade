@@ -1,0 +1,24 @@
+{
+ "1m": {
+  "t_equal": true,
+  "rows": 241056,
+  "r_equal_before_lim_minus_2h": true,
+  "tb7": true,
+  "rich": true,
+  "ctx": true,
+  "gR": true,
+  "novel": true,
+  "har": true
+ },
+ "1h": {
+  "t_equal": true,
+  "rows": 40176,
+  "r_equal_before_lim_minus_2h": true,
+  "tb7": true,
+  "rich": true,
+  "ctx": true,
+  "gR": true,
+  "novel": true,
+  "har": true
+ }
+}

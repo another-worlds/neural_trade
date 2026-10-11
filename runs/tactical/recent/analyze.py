@@ -66,7 +66,7 @@ def look():
     picks = json.load(open(f"{HERE}/selection.json"))["picks"]; res = {}; txt = []
     for bar in BARS:
         rows = load("look", bar); res[bar] = []
-        txt.append(f"== {bar} LOOK months 2024-07..2025-09 (one look)")
+        txt.append(f"== {bar} LOOK months 2024-07..2025-07-20 (recut; one look)")
         for p in picks[bar]:
             s, m, t_ = p.split(":"); t_ = int(t_); d = rows[(s, m, t_)]; b = rows[("tb7", "logreg", t_)]
             mo = {x["month"]: x for x in d["months"]}; bm = {x["month"]: x for x in b["months"]}; com = sorted(set(mo) & set(bm))

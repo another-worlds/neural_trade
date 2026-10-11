@@ -70,14 +70,14 @@ def run(phase, workers=4):
     import multiprocessing as mp
     if phase == "look" and not os.path.exists(f"{HERE}/selection.json"):
         sys.exit("look refused: selection.json does not exist")
-    if phase == "look" and any(os.path.exists(f"{HERE}/look_{b}.jsonl") for b in FL.CELLS):
+    if phase == "look" and any(os.path.exists(f"{HERE}/look_recut_{b}.jsonl") for b in FL.CELLS):
         sys.exit("look refused: it was already run (one look only)")
     todo = tasks(phase)
     todo.sort(key=lambda x: x[3] != "hgb")
     print(phase, len(todo), "configurations", flush=True)
     with mp.Pool(workers) as pool:
         for d in pool.imap_unordered(_task, todo):
-            with open(f"{HERE}/{phase}_{d['bar']}.jsonl", "a", encoding="utf-8") as fh:
+            with open(f"{HERE}/{'look_recut' if phase == 'look' else phase}_{d['bar']}.jsonl", "a", encoding="utf-8") as fh:
                 fh.write(json.dumps(d) + "\n")
             print(d["bar"], d["tag"], d["set"], d["model"], d["T"], len(d["months"]), "months", d["seconds"], "s",
                   f"auc {np.mean([m['auc'] for m in d['months']]):.4f}", flush=True)

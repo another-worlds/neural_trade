@@ -1,9 +1,9 @@
 nextopen 8 cells to run
-1m gR l1 365 15 months 346.1 s
-1m all hgb 365 15 months 43.8 s
-1m tb7 logreg 365 15 months 8.3 s
-1h rich l1 365 15 months 10.5 s
-1h rich logreg 365 15 months 7.7 s
-1h all hgb 365 15 months 28.7 s
-1h tb7 logreg 365 15 months 7.4 s
-1m all l1 365 15 months 577.1 s
+1m tb7 logreg 365 13 months 10.7 s
+1h rich l1 365 13 months 12.5 s
+1h rich logreg 365 13 months 8.1 s
+1h tb7 logreg 365 13 months 8.2 s
+1h all hgb 365 13 months 29.0 s
+1m all hgb 365 13 months 48.2 s
+1m gR l1 365 13 months 294.6 s
+1m all l1 365 13 months 454.6 s

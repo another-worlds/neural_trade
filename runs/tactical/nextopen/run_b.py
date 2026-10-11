@@ -1,4 +1,4 @@
-"""Strategy (b): H56 picks, monthly walk-forward over the look months 2024-07..2025-09; each month trades its 10% most confident
+"""Strategy (b): H56 picks, monthly walk-forward over the look months 2024-07..2025-07-20 (recut); each month trades its 10% most confident
 predictions (|P-0.5| >= the 90th percentile of the month's own predictions, as recent/wf.py): long if P > 0.5, else short, held for
 the label horizon (1m: 15 bars after the entry; 1h: 1 bar). Same fit as wf.walk_forward (imported pieces), plus the predictions.
 usage: python run_b.py 1m|1h   (1m: all:l1:365, 1h: rich:l1:365)"""
@@ -43,7 +43,7 @@ for m in pd.period_range(f, l, freq="M"):
     print(chk[-1], f"{time.time() - t0:.0f}s", flush=True)
 repro = None  # the stored look rows are close-entry; the side-by-side is in analyze_no.py / summary tables
 cat = {k: np.concatenate([x[k] for x in rows]) for k in ("entry", "exit", "r", "side")}
-res = E.finish(f"b_h56_{bar}_{name}_{kind}_{T}_nextopen", f"(b) H56 {bar} {name} {kind} {T} d, top-10% most confident, NEXT-OPEN entry, 2024-07..2025-09",
+res = E.finish(f"b_h56_{bar}_{name}_{kind}_{T}_nextopen", f"(b) H56 {bar} {name} {kind} {T} d, top-10% most confident, NEXT-OPEN entry, 2024-07..2025-07-20 (recut)",
                cat["entry"], cat["exit"], cat["r"], -cat["r"], cat["side"], int(pd.Timestamp("2024-07-01").value), HERE,
                extra={"config": f"{bar} {name}:{kind}:{T}", "entry": "nextopen", "months": len(rows), "hold": f"{H} bars of {bm} min"})
 print(json.dumps({c: v["stats"] for c, v in res["levels"].items()}, indent=1)); print(f"n_signals {res['n_signals']} trades {res['n_trades']} skipped {res['n_skipped']}; {time.time() - t0:.0f}s")

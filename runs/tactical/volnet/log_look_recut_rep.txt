@@ -1,0 +1,20 @@
+device gpu
+anchors 449428, vec 25, months 13
+2026-10-11 19:17:35.048327: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-11 19:17:37.692358: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-11 19:17:37.692443: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 4000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-11 19:17:40.033017: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2024-07 75s {('har', 15): 0.334, ('ridge_full', 15): 0.34, ('ens', 15): 0.345}
+2024-08 73s {('har', 15): 0.444, ('ridge_full', 15): 0.45, ('ens', 15): 0.453}
+2024-09 60s {('har', 15): 0.346, ('ridge_full', 15): 0.351, ('ens', 15): 0.353}
+2024-10 58s {('har', 15): 0.409, ('ridge_full', 15): 0.414, ('ens', 15): 0.414}
+2024-11 56s {('har', 15): 0.417, ('ridge_full', 15): 0.421, ('ens', 15): 0.421}
+2024-12 56s {('har', 15): 0.396, ('ridge_full', 15): 0.408, ('ens', 15): 0.406}
+2025-01 55s {('har', 15): 0.42, ('ridge_full', 15): 0.423, ('ens', 15): 0.423}
+2025-02 59s {('har', 15): 0.482, ('ridge_full', 15): 0.489, ('ens', 15): 0.487}
+2025-03 57s {('har', 15): 0.445, ('ridge_full', 15): 0.449, ('ens', 15): 0.449}
+2025-04 52s {('har', 15): 0.437, ('ridge_full', 15): 0.44, ('ens', 15): 0.44}
+2025-05 68s {('har', 15): 0.328, ('ridge_full', 15): 0.329, ('ens', 15): 0.333}
+2025-06 64s {('har', 15): 0.36, ('ridge_full', 15): 0.366, ('ens', 15): 0.366}
+2025-07 54s {('har', 15): 0.397, ('ridge_full', 15): 0.403, ('ens', 15): 0.403}

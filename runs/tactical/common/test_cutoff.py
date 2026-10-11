@@ -67,8 +67,8 @@ LOADERS = {
     "flowlib": "import sys; sys.path.insert(0,'flow'); import flowlib as F; print(F.load_bars('1m').index.max())",
     "recent_feats": "import sys; sys.path.insert(0,'recent'); import feats as F; print(F.load_bars('1m').index.max())",
     "callib": "import sys; sys.path.insert(0,'calendar'); import callib as K, cutoff; print(K.hourly_returns(cutoff.CSV).index.max())",
-    "geom2_meta": "import sys; sys.path.insert(0,'geom2'); import meta as M; print(M.bars('1min').index.max())",
-    "geom2_meta_nextopen": "import sys; sys.path.insert(0,'geom2'); import meta_nextopen as M; print(M.bars('1min').index.max())",
+    "geom2_meta": "import sys; sys.path.insert(0,'geom2'); import meta as M; M.SETUP['1min_full'] = dict(M.SETUP['1min'], end='2100-01-01'); print(M.bars('1min_full').index.max())",
+    "geom2_meta_nextopen": "import sys; sys.path.insert(0,'geom2'); import meta_nextopen as M; M.SETUP['1min_full'] = dict(M.SETUP['1min'], end='2100-01-01'); print(M.bars('1min_full').index.max())",
     "hourly": "import sys; sys.path.insert(0,'hourly'); import hourly as H; print(H.bars().index.max())",
 }
 

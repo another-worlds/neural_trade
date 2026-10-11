@@ -1,5 +1,5 @@
 1h look: 4 configurations to run, 0 done
-  tb7:logreg:365 15 months 0.9s auc 0.5476
-  rich:logreg:365 15 months 1.1s auc 0.5474
-  rich:l1:365 15 months 4.2s auc 0.5479
-  all:hgb:365 15 months 15.5s auc 0.5422
+  tb7:logreg:365 13 months 1.0s auc 0.5479
+  rich:logreg:365 13 months 1.3s auc 0.5490
+  rich:l1:365 13 months 4.2s auc 0.5487
+  all:hgb:365 13 months 22.1s auc 0.5458

@@ -22,7 +22,7 @@ FILES = {
     "nextopen/nolib.py": [], "volnet/volnet_lib.py": [],
     "volnet/run.py": [('"look": ("2024-07", "2025-09")', '"look": ("2024-07", "2025-07")')],
     "calendar/callib.py": [('TEST_START, TEST_END = "2024-07-01", "2025-09-30"', 'TEST_START, TEST_END = "2024-07-01", "2025-07-20"')],
-    "calendar/run_calendar.py": [("for y in range(2017, 2026)", "for y in range(2017, 2026)")],
+    "calendar/run_calendar.py": [],
     "flow/flowlib.py": [('CACHE = "D:/nt/nt_flow_cache"', 'CACHE = "D:/nt/nt_recut_cache/flow"')],
     "flow/flowrun.py": [('LOOK = ("2024-07", "2025-09")', 'LOOK = ("2024-07", "2025-07")'),
                         ('STAB_LOOK = ("2024-07", "2025-09")', 'STAB_LOOK = ("2024-07", "2025-07")')],
