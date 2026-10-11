@@ -1,0 +1,45 @@
+== seeds012: seeds (0, 1, 2); runs on/off 18/18
+Spearman on-off per slice [0.0117, 0.0131, -0.004, 0.0182, 0.0124, 0.0184] mean/lo/hi/sd/n [0.0116, 0.0031, 0.0202, 0.0082, 6] up 5
+   h0 (10) [0.0103, -0.0035, 0.0242, 0.0132, 6]
+   h1 (15) [0.0089, 0.0029, 0.0148, 0.0056, 6]
+   h2 (20) [0.0158, 0.0048, 0.0267, 0.0105, 6]
+NET-HAR+tod physics on Spearman [-0.0639, -0.0995, -0.0284, 0.0339, 6] net mean 0.2201
+NET-HAR+tod physics off Spearman [-0.0756, -0.1157, -0.0355, 0.0382, 6] net mean 0.2084
+QLIKE on-off per slice [-0.0647, 0.1271, 0.0335, -0.0217, -0.0113, -0.0275] mean/lo/hi/sd/n [0.0059, -0.0647, 0.0765, 0.0672, 6] up 2
+   h0 (10) [0.0355, -0.0755, 0.1466, 0.1058, 6]
+   h1 (15) [-0.0111, -0.0521, 0.0299, 0.0391, 6]
+   h2 (20) [-0.0067, -0.097, 0.0836, 0.0861, 6]
+NET-HAR+tod physics on QLIKE [0.1655, -0.0314, 0.3624, 0.1876, 6] net mean 2.5592
+NET-HAR+tod physics off QLIKE [0.1596, 0.0302, 0.289, 0.1233, 6] net mean 2.5533
+constant-variance runs on []
+constant-variance runs off []
+== seeds12: seeds (1, 2); runs on/off 12/12
+Spearman on-off per slice [-0.001, 0.0083, -0.0065, 0.0242, 0.014, 0.007] mean/lo/hi/sd/n [0.0077, -0.0037, 0.0191, 0.0109, 6] up 4
+   h0 (10) [0.0066, -0.0155, 0.0287, 0.021, 6]
+   h1 (15) [0.0049, -0.0046, 0.0143, 0.009, 6]
+   h2 (20) [0.0116, 0.002, 0.0211, 0.0091, 6]
+NET-HAR+tod physics on Spearman [-0.0707, -0.1038, -0.0376, 0.0316, 6] net mean 0.2133
+NET-HAR+tod physics off Spearman [-0.0784, -0.1165, -0.0403, 0.0363, 6] net mean 0.2056
+QLIKE on-off per slice [-0.0351, -0.1095, 0.0742, -0.0336, 0.0162, 0.0124] mean/lo/hi/sd/n [-0.0126, -0.0778, 0.0527, 0.0622, 6] up 3
+   h0 (10) [0.0198, -0.0373, 0.0768, 0.0543, 6]
+   h1 (15) [-0.0376, -0.1622, 0.087, 0.1188, 6]
+   h2 (20) [-0.0199, -0.0741, 0.0343, 0.0517, 6]
+NET-HAR+tod physics on QLIKE [0.1586, 0.0112, 0.3061, 0.1405, 6] net mean 2.5524
+NET-HAR+tod physics off QLIKE [0.1712, 0.0163, 0.3261, 0.1476, 6] net mean 2.565
+constant-variance runs on []
+constant-variance runs off []
+== seed0: seeds (0,); runs on/off 6/6
+Spearman on-off per slice [0.0372, 0.0226, 0.0011, 0.0062, 0.009, 0.0413] mean/lo/hi/sd/n [0.0196, 0.0019, 0.0373, 0.0169, 6] up 6
+   h0 (10) [0.0178, -0.0024, 0.0379, 0.0192, 6]
+   h1 (15) [0.0168, -0.0019, 0.0355, 0.0178, 6]
+   h2 (20) [0.0241, 0.0055, 0.0428, 0.0178, 6]
+NET-HAR+tod physics on Spearman [-0.0504, -0.0914, -0.0094, 0.0391, 6] net mean 0.2336
+NET-HAR+tod physics off Spearman [-0.07, -0.1164, -0.0236, 0.0442, 6] net mean 0.214
+QLIKE on-off per slice [-0.1237, 0.6003, -0.0481, 0.0021, -0.0663, -0.1072] mean/lo/hi/sd/n [0.0428, -0.2476, 0.3332, 0.2767, 6] up 2
+   h0 (10) [0.067, -0.2627, 0.3966, 0.3141, 6]
+   h1 (15) [0.0418, -0.2027, 0.2864, 0.233, 6]
+   h2 (20) [0.0196, -0.2806, 0.3199, 0.2861, 6]
+NET-HAR+tod physics on QLIKE [0.1792, -0.151, 0.5094, 0.3146, 6] net mean 2.573
+NET-HAR+tod physics off QLIKE [0.1364, 0.0206, 0.2522, 0.1103, 6] net mean 2.5301
+constant-variance runs on []
+constant-variance runs off []

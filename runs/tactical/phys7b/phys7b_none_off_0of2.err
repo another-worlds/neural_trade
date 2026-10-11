@@ -1,0 +1,75 @@
+GPU memory capped at 4000 MB for this process (NT_GPU_MEMORY_LIMIT_MB)
+[screen phys7b_none_off] trial 1/6 (grid {}, slice 2017-05-02T12:00:00, seed 1)
+2026-10-11 21:12:09.999220: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-11 21:12:11.650255: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-11 21:12:11.650728: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 4000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+Dataset length after cleaning: 126087
+Date range after cleaning: 2017-02-03 22:34:00 to 2017-05-02 12:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+2026-10-11 21:13:01.389841: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2026-10-11 21:13:02.968593: I tensorflow/stream_executor/cuda/cuda_dnn.cc:384] Loaded cuDNN version 8100
+2026-10-11 21:13:05.303461: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:13:05.304049: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:13:05.304186: W tensorflow/stream_executor/gpu/asm_compiler.cc:80] Couldn't get ptxas version string: INTERNAL: Couldn't invoke ptxas.exe --version
+2026-10-11 21:13:05.306080: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5be4-44108-65d92db406ad6" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5be4-44108-65d92db407031" "-arch=sm_89" "--warn-on-spills"'
+2026-10-11 21:13:05.306339: W tensorflow/stream_executor/gpu/redzone_allocator.cc:314] INTERNAL: Failed to launch ptxas
+Relying on driver to perform ptx compilation. 
+Modify $PATH to customize ptxas location.
+This message will be only logged once.
+[screen phys7b_none_off] trial 2/6 (grid {}, slice 2018-11-16T02:00:00, seed 1)
+Dataset length after cleaning: 126087
+Date range after cleaning: 2018-08-20 12:34:00 to 2018-11-16 02:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+[screen phys7b_none_off] trial 3/6 (grid {}, slice 2020-03-30T04:00:00, seed 1)
+Dataset length after cleaning: 126087
+Date range after cleaning: 2020-01-02 14:34:00 to 2020-03-30 04:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+[screen phys7b_none_off] trial 4/6 (grid {}, slice 2021-10-13T18:00:00, seed 1)
+Dataset length after cleaning: 126087
+Date range after cleaning: 2021-07-18 04:34:00 to 2021-10-13 18:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+[screen phys7b_none_off] trial 5/6 (grid {}, slice 2023-04-29T08:00:00, seed 1)
+Dataset length after cleaning: 126087
+Date range after cleaning: 2023-01-31 18:34:00 to 2023-04-29 08:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
+[screen phys7b_none_off] trial 6/6 (grid {}, slice 2024-11-11T23:00:00, seed 1)
+Dataset length after cleaning: 126087
+Date range after cleaning: 2024-08-16 09:34:00 to 2024-11-11 23:00:00
+Sequences with extended trends: (126008, 60), (126008, 3), Extended: (126008, 3)
+[OK] Limited sequence set from 126008 to 126000 (most recent window)
+[INFO] Dataset Statistics:
+   Total sequences: 126000
+   Train sequences: 16560 (batches/epoch: 65)
+   Val sequences:   12600   Cal sequences: 12600   (purge gap: 80 sequences, fold 1)
+   Test sequences:  42000 (batches: 165)
