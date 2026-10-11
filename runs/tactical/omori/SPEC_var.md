@@ -63,3 +63,12 @@ raised to the simulated 95th percentile of the gamma = 0 gain (stated before the
 ## 6. Budget
 
 CPU only, 4 processes, below normal priority; the power simulation about 10 min, selection about 15-25 min, the look about 5 min. Times are reported.
+
+## 7. Power simulation result (recorded before the real run; `results/power_var_table.txt`, 247 s)
+
+Size at gamma = 0: rejection 0.00 in every cell (Bonferroni-8 level), mean gain -0.03% to -0.09% (the estimation cost of the 8-feature fit),
+so no liberal-test adjustment. gamma = 0.10 gives a mean FZ0 gain of 1.2-1.6% in every cell (sd across replications 0.07-0.19%) and a
+rejection rate of 1.00 (0.90 with the gain >= 1% requirement in the cell T = 60, a = 5%): every primary cell is adequately powered for the
+1% claim under the section 4 reading rule. Caveat, stated now: this world is favourable (a persistent latent state seen through a proxy, a
+perfect sigma_hat, iid t5 innovations, no regime change); in the real data a 1% gain is a stronger statement than it is here, and the simulation
+says only that the estimator and the test do not lose a 1% effect of that kind to noise or to the 8-feature fit cost.
