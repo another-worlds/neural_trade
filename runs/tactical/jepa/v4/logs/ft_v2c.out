@@ -1,0 +1,109 @@
+2026-10-10 22:05:00.551669: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-10 22:05:00.553498: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-10 22:05:00.553589: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-10 22:05:00.553865: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2020-03-30T04 {'auc_base': 0.5787, 'auc_ft': 0.5783, 'dir_best_epoch': 1, 'vol_ft': 0.0526, 'vol_ridge_tb7': 0.0526, 'vol_har': 0.3163, 'vol_har_tod': 0.3139, 'vol_best_epoch': 0, 'volB_ft': 0.3084, 'volB_ridge': 0.3212, 'volB_best_epoch': 2} 31s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2020-08-02T04 {'auc_base': 0.6114, 'auc_ft': 0.6062, 'dir_best_epoch': 0, 'vol_ft': 0.1056, 'vol_ridge_tb7': 0.1056, 'vol_har': 0.1434, 'vol_har_tod': 0.1479, 'vol_best_epoch': 0, 'volB_ft': 0.1563, 'volB_ridge': 0.1636, 'volB_best_epoch': 2} 59s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2021-06-10T18 {'auc_base': 0.5583, 'auc_ft': 0.56, 'dir_best_epoch': 1, 'vol_ft': 0.0995, 'vol_ridge_tb7': 0.0907, 'vol_har': 0.1762, 'vol_har_tod': 0.18, 'vol_best_epoch': 2, 'volB_ft': 0.1674, 'volB_ridge': 0.1728, 'volB_best_epoch': 2} 91s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2021-08-12T06 {'auc_base': 0.5639, 'auc_ft': 0.5639, 'dir_best_epoch': 0, 'vol_ft': 0.0996, 'vol_ridge_tb7': 0.0693, 'vol_har': 0.2545, 'vol_har_tod': 0.2549, 'vol_best_epoch': 2, 'volB_ft': 0.252, 'volB_ridge': 0.2526, 'volB_best_epoch': 2} 135s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2021-10-13T18 {'auc_base': 0.553, 'auc_ft': 0.5625, 'dir_best_epoch': 0, 'vol_ft': 0.1408, 'vol_ridge_tb7': 0.0773, 'vol_har': 0.2187, 'vol_har_tod': 0.2193, 'vol_best_epoch': 1, 'volB_ft': 0.2062, 'volB_ridge': 0.2074, 'volB_best_epoch': 1} 173s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2021-12-15T06 {'auc_base': 0.5195, 'auc_ft': 0.5142, 'dir_best_epoch': 0, 'vol_ft': 0.0527, 'vol_ridge_tb7': 0.0527, 'vol_har': 0.2477, 'vol_har_tod': 0.2502, 'vol_best_epoch': 0, 'volB_ft': 0.2393, 'volB_ridge': 0.2382, 'volB_best_epoch': 1} 211s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2022-10-23T20 {'auc_base': 0.5321, 'auc_ft': 0.531, 'dir_best_epoch': 1, 'vol_ft': 0.1081, 'vol_ridge_tb7': 0.1132, 'vol_har': 0.1987, 'vol_har_tod': 0.2023, 'vol_best_epoch': 2, 'volB_ft': 0.1977, 'volB_ridge': 0.2016, 'volB_best_epoch': 1} 254s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2023-02-25T20 {'auc_base': 0.5277, 'auc_ft': 0.532, 'dir_best_epoch': 0, 'vol_ft': 0.289, 'vol_ridge_tb7': 0.1327, 'vol_har': 0.3573, 'vol_har_tod': 0.3617, 'vol_best_epoch': 2, 'volB_ft': 0.3421, 'volB_ridge': 0.3639, 'volB_best_epoch': 4} 301s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2023-04-29T08 {'auc_base': 0.5278, 'auc_ft': 0.5285, 'dir_best_epoch': 0, 'vol_ft': 0.3547, 'vol_ridge_tb7': 0.196, 'vol_har': 0.4267, 'vol_har_tod': 0.426, 'vol_best_epoch': 7, 'volB_ft': 0.4346, 'volB_ridge': 0.4346, 'volB_best_epoch': 0} 350s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2023-06-30T21 {'auc_base': 0.5473, 'auc_ft': 0.5469, 'dir_best_epoch': 1, 'vol_ft': 0.2837, 'vol_ridge_tb7': 0.1575, 'vol_har': 0.345, 'vol_har_tod': 0.3467, 'vol_best_epoch': 1, 'volB_ft': 0.3479, 'volB_ridge': 0.3479, 'volB_best_epoch': 0} 388s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2023-09-01T09 {'auc_base': 0.5572, 'auc_ft': 0.5528, 'dir_best_epoch': 2, 'vol_ft': 0.3146, 'vol_ridge_tb7': 0.2278, 'vol_har': 0.3745, 'vol_har_tod': 0.3787, 'vol_best_epoch': 4, 'volB_ft': 0.3792, 'volB_ridge': 0.3867, 'volB_best_epoch': 1} 437s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2024-07-09T22 {'auc_base': 0.5243, 'auc_ft': 0.525, 'dir_best_epoch': 1, 'vol_ft': 0.1959, 'vol_ridge_tb7': 0.1959, 'vol_har': 0.3604, 'vol_har_tod': 0.3637, 'vol_best_epoch': 0, 'volB_ft': 0.3763, 'volB_ridge': 0.3773, 'volB_best_epoch': 1} 471s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2024-11-11T23 {'auc_base': 0.5428, 'auc_ft': 0.5245, 'dir_best_epoch': 1, 'vol_ft': 0.2397, 'vol_ridge_tb7': 0.1714, 'vol_har': 0.3192, 'vol_har_tod': 0.3256, 'vol_best_epoch': 1, 'volB_ft': 0.3331, 'volB_ridge': 0.3335, 'volB_best_epoch': 2} 503s
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+WARNING:tensorflow:Gradients do not exist for variables ['mask_tok:0'] when minimizing the loss. If you're using `model.compile()`, did you forget to provide a `loss` argument?
+2025-01-13T11 {'auc_base': 0.5102, 'auc_ft': 0.5263, 'dir_best_epoch': 1, 'vol_ft': 0.2986, 'vol_ridge_tb7': 0.2352, 'vol_har': 0.3972, 'vol_har_tod': 0.4005, 'vol_best_epoch': 2, 'volB_ft': 0.3981, 'volB_ridge': 0.404, 'volB_best_epoch': 3} 539s
+
+ft_v2c: 14 slices
+DIRECTION mean3 AUC: tb7 +0.5467 [+0.5313,+0.5622] | fine-tuned +0.5466 [+0.5318,+0.5614] | d -0.0001 [-0.0046,+0.0043]
+VOL Spearman: ft +0.1882 [+0.1271,+0.2494] | tb7 ridge +0.1341 [+0.0975,+0.1708] | HAR +0.2954 [+0.2443,+0.3465] | HAR+tod +0.2980 [+0.2470,+0.3489]
+  d ft-HARtod -0.1097 [-0.1457,-0.0738] | d ft-HAR -0.1072 [-0.1439,-0.0705] | d ft-ridge +0.0541 [+0.0198,+0.0884] | d ridge-HARtod -0.1638 [-0.1986,-0.1291]
+VOL B (linear part = tb7 + HAR log-variances): ft +0.2956 [+0.2429,+0.3483] | ridge +0.3004 [+0.2474,+0.3534] | d ft-HARtod -0.0024 [-0.0079,+0.0031] | d ft-ridgeB -0.0048 [-0.0084,-0.0011] | d ridgeB-HARtod +0.0024 [-0.0026,+0.0074]

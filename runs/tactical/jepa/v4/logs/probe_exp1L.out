@@ -1,0 +1,26 @@
+2026-10-11 06:07:23.433417: W tensorflow/stream_executor/platform/default/dso_loader.cc:64] Could not load dynamic library 'cudart64_110.dll'; dlerror: cudart64_110.dll not found
+2026-10-11 06:07:23.433477: I tensorflow/stream_executor/cuda/cudart_stub.cc:29] Ignore above cudart dlerror if you do not have a GPU set up on your machine.
+2026-10-11 06:07:24.950638: E tensorflow/stream_executor/cuda/cuda_driver.cc:265] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+2026-10-11 06:07:24.952296: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:169] retrieving CUDA diagnostic information for host: WS028-STP
+2026-10-11 06:07:24.952351: I tensorflow/stream_executor/cuda/cuda_diagnostics.cc:176] hostname: WS028-STP
+2026-10-11 06:07:24.952704: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2022-10-23T20 {'tb7': (0.532, 0.116, 0.146), "('e1L', 'emb')": (0.494, 0.031, 0.027), "('e1L', 'both')": (0.517, 0.102, 0.123), "('v2c', 'emb')": (0.503, 0.035, 0.025), "('v2c', 'both')": (0.522, 0.103, 0.125)}
+2023-02-25T20 {'tb7': (0.528, 0.14, 0.173), "('e1L', 'emb')": (0.523, 0.292, 0.249), "('e1L', 'both')": (0.536, 0.305, 0.268), "('v2c', 'emb')": (0.499, 0.279, 0.245), "('v2c', 'both')": (0.524, 0.296, 0.27)}
+2023-04-29T08 {'tb7': (0.528, 0.197, 0.214), "('e1L', 'emb')": (0.482, 0.349, 0.311), "('e1L', 'both')": (0.515, 0.364, 0.336), "('v2c', 'emb')": (0.489, 0.33, 0.292), "('v2c', 'both')": (0.522, 0.35, 0.323)}
+2023-06-30T21 {'tb7': (0.547, 0.18, 0.175), "('e1L', 'emb')": (0.506, 0.271, 0.242), "('e1L', 'both')": (0.539, 0.295, 0.267), "('v2c', 'emb')": (0.515, 0.266, 0.237), "('v2c', 'both')": (0.542, 0.292, 0.264)}
+2023-09-01T09 {'tb7': (0.557, 0.243, 0.228), "('e1L', 'emb')": (0.5, 0.307, 0.254), "('e1L', 'both')": (0.536, 0.333, 0.285), "('v2c', 'emb')": (0.526, 0.293, 0.228), "('v2c', 'both')": (0.556, 0.326, 0.276)}
+2024-07-09T22 {'tb7': (0.524, 0.2, 0.191), "('e1L', 'emb')": (0.509, 0.299, 0.264), "('e1L', 'both')": (0.518, 0.314, 0.289), "('v2c', 'emb')": (0.521, 0.291, 0.249), "('v2c', 'both')": (0.526, 0.31, 0.268)}
+2024-11-11T23 {'tb7': (0.543, 0.17, 0.156), "('e1L', 'emb')": (0.516, 0.199, 0.177), "('e1L', 'both')": (0.535, 0.22, 0.204), "('v2c', 'emb')": (0.505, 0.222, 0.183), "('v2c', 'both')": (0.526, 0.236, 0.213)}
+2025-01-13T11 {'tb7': (0.51, 0.235, 0.258), "('e1L', 'emb')": (0.504, 0.334, 0.315), "('e1L', 'both')": (0.512, 0.346, 0.34), "('v2c', 'emb')": (0.511, 0.332, 0.285), "('v2c', 'both')": (0.513, 0.346, 0.317)}
+
+exp1L: 8 slices from ['2022-07-28T06:42', '2022-11-30T06:42', '2023-01-31T18:42', '2023-04-04T07:42', '2023-06-05T19:42', '2024-04-13T08:42', '2024-08-16T09:42', '2024-10-17T21:42']
+tb7: auc +0.5337 [+0.5213,+0.5460] | ridge +0.1850 [+0.1485,+0.2214] | hgb +0.1928 [+0.1609,+0.2247]
+e1L    b_emb: auc +0.5042 [+0.4936,+0.5148] (d vs tb7 -0.0295 [-0.0457,-0.0132]) | ridge +0.2603 [+0.1739,+0.3467] (d +0.0753 [+0.0111,+0.1396]) | hgb +0.2298 [+0.1523,+0.3072] (d +0.0370 [-0.0198,+0.0938])
+       vs v2c: dAUC -0.0044 [-0.0171,+0.0083] | d ridge +0.0045 [-0.0067,+0.0157] | d hgb +0.0117 [+0.0011,+0.0224]
+e1L    c_both: auc +0.5259 [+0.5165,+0.5354] (d vs tb7 -0.0077 [-0.0154,-0.0000]) | ridge +0.2850 [+0.2132,+0.3567] (d +0.1000 [+0.0500,+0.1500]) | hgb +0.2639 [+0.2042,+0.3237] (d +0.0712 [+0.0337,+0.1086])
+       vs v2c: dAUC -0.0027 [-0.0111,+0.0057] | d ridge +0.0025 [-0.0051,+0.0101] | d hgb +0.0069 [-0.0027,+0.0165]
+       collapse: std 1.004 min 0.908 eff_rank 27.8
+v2c    b_emb: auc +0.5086 [+0.4986,+0.5185] (d vs tb7 -0.0251 [-0.0379,-0.0123]) | ridge +0.2558 [+0.1757,+0.3359] (d +0.0708 [+0.0130,+0.1287]) | hgb +0.2180 [+0.1471,+0.2890] (d +0.0253 [-0.0286,+0.0792])
+v2c    c_both: auc +0.5287 [+0.5173,+0.5400] (d vs tb7 -0.0050 [-0.0102,+0.0002]) | ridge +0.2825 [+0.2148,+0.3501] (d +0.0975 [+0.0523,+0.1428]) | hgb +0.2570 [+0.2040,+0.3100] (d +0.0642 [+0.0305,+0.0980])
+       collapse: std 1.020 min 0.917 eff_rank 28.4
