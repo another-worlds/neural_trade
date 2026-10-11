@@ -1,0 +1,21 @@
+== selection months 2019-01..2024-06 (stride 7): paired skill vs ar ==
+-- target A (selection): mean over months of MSE / Spearman / R2 vs rw / skill vs ar
+   rw  mse 0.5890  spearman +nan  R2_rw +0.0000  skill_ar -0.1088  n=66
+   ar  mse 0.5320  spearman +0.2955  R2_rw +0.0974  skill_ar +0.0000  n=66
+   arlvl mse 0.5365  spearman +0.4019  R2_rw +0.0939  skill_ar -0.0043  n=66
+   S1  mse 0.4456  spearman +0.5016  R2_rw +0.2450  skill_ar +0.1636  n=66
+   S2  mse 0.4368  spearman +0.5159  R2_rw +0.2607  skill_ar +0.1809  n=66
+   S3  mse 0.4319  spearman +0.5200  R2_rw +0.2684  skill_ar +0.1895  n=66
+   skill_ar S1: +0.1636 [+0.1564,+0.1709] t=+45.17
+   skill_ar S2: +0.1809 [+0.1734,+0.1884] t=+48.07
+   skill_ar S3: +0.1895 [+0.1828,+0.1963] t=+55.94
+-- target B (selection): mean over months of MSE / Spearman / R2 vs rw / skill vs ar
+   rw  mse 0.5905  spearman +0.0402  R2_rw +0.0000  skill_ar -0.8401  n=66
+   ar  mse 0.3222  spearman +0.0402  R2_rw +0.4536  skill_ar +0.0000  n=66
+   S1  mse 0.3164  spearman +0.0886  R2_rw +0.4631  skill_ar +0.0169  n=66
+   S2  mse 0.3128  spearman +0.1065  R2_rw +0.4689  skill_ar +0.0266  n=66
+   S3  mse 0.3105  spearman +0.1178  R2_rw +0.4730  skill_ar +0.0338  n=66
+   skill_ar S1: +0.0169 [+0.0065,+0.0273] t=+3.25
+   skill_ar S2: +0.0266 [+0.0158,+0.0374] t=+4.93
+   skill_ar S3: +0.0338 [+0.0229,+0.0446] t=+6.22
+SELECTED: {'A': 'S3', 'B': 'S3'}
