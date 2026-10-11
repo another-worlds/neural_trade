@@ -34,6 +34,17 @@ for the MVP".
 - **Heavy variants (persistent-tape ones: INDICATOR_GRAD_SOURCE direction, geometry + indgrad): at most 2 processes
   on the GPU at once** (H43: three such processes on the 12 GB card coincided with two driver resets).
 
+## Owner decisions of 2026-10-11 (after the research of runs/tactical/research/2026-10-11-unknown/)
+
+- **Any target (owner: "разрешаю брать любые цели"):** the tactical session may study any target or question
+  (path shape, volatility structure, tails, regimes, risk), not only direction skill; D-063's direction-only goal is
+  widened for this session. The MVP lead should record it as a decision.
+- **Long GPU studies are shrunk instead of skipped (owner: "сократи за счёт потерь точности"):** a study that would
+  exceed the 2-minute rule (e.g. hypothesis 7, physics terms on the variance axis, ~11 GPU-h) runs in a reduced form
+  (fewer slices, seeds or epochs) with the loss of precision stated in its SPEC.
+- **Recompute (owner: "пересчитать"):** every tactical result that read the protected span after 2025-07-20 (H66) is
+  recomputed with the hard cutoff 2025-07-20 and its verdict re-stated.
+
 ## Rigour and budget (exploratory)
 
 - **Data: the static excerpt by default (owner, 2026-10-08: "the whole file only for giant runs"):** tactical runs and
