@@ -1,0 +1,840 @@
+2026-10-11 18:17:58.706294: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:17:58.707003: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:17:58.710911: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6908-46136-65d906902776f" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6908-46136-65d90690283e4" "-arch=sm_89" "--warn-on-spills"'
+full s0 2020-08: ep_gain +0.41079 epochs 7 32.1s
+full s0 2020-10: ep_gain +0.42382 epochs 8 27.7s
+full s0 2020-12: ep_gain +0.56235 epochs 9 36.3s
+chunk done: 3 tasks, 237 left in this part, 100s
+2026-10-11 18:19:47.717151: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:19:47.718225: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:19:47.722274: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-70c0-43016-65d906f81d88b" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-70c0-43016-65d906f81e241" "-arch=sm_89" "--warn-on-spills"'
+full s0 2021-01: ep_gain +0.61637 epochs 6 38.7s
+full s0 2021-03: ep_gain +0.53972 epochs 6 19.1s
+full s0 2021-05: ep_gain +0.57066 epochs 7 30.4s
+chunk done: 3 tasks, 234 left in this part, 92s
+2026-10-11 18:25:46.634845: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:25:46.635642: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:25:46.638377: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9c0c-31416-65d9084e67da4" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9c0c-31416-65d9084e684c9" "-arch=sm_89" "--warn-on-spills"'
+full s0 2021-04: ep_gain +0.50741 epochs 4 37.7s
+full s0 2021-07: ep_gain +0.51287 epochs 10 45.2s
+chunk done: 2 tasks, 293 left in this part, 87s
+2026-10-11 18:27:18.437446: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:27:18.438288: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:27:18.440770: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-94d8-47040-65d908a5f49b3" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-94d8-47040-65d908a5f5029" "-arch=sm_89" "--warn-on-spills"'
+full s0 2021-08: ep_gain +0.42650 epochs 8 54.6s
+chunk done: 1 tasks, 292 left in this part, 59s
+2026-10-11 18:28:22.164509: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:28:22.165321: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:28:22.168113: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4a1c-23924-65d908e2baf6d" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4a1c-23924-65d908e2bb70e" "-arch=sm_89" "--warn-on-spills"'
+full s0 2021-10: ep_gain +0.37494 epochs 10 63.9s
+chunk done: 1 tasks, 291 left in this part, 68s
+2026-10-11 18:29:35.667850: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:29:35.668540: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:29:35.671043: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-634c-45064-65d90928d415c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-634c-45064-65d90928d47cb" "-arch=sm_89" "--warn-on-spills"'
+full s0 2021-11: ep_gain +0.45519 epochs 11 70.7s
+chunk done: 1 tasks, 291 left in this part, 75s
+2026-10-11 18:30:52.424053: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:30:52.424699: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:30:52.427256: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5f50-31184-65d9097207615" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5f50-31184-65d9097207d51" "-arch=sm_89" "--warn-on-spills"'
+full s0 2022-01: ep_gain +0.47210 epochs 9 58.7s
+chunk done: 1 tasks, 290 left in this part, 62s
+2026-10-11 18:31:58.027902: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:31:58.028583: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:31:58.031043: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b85c-30792-65d909b097f44" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b85c-30792-65d909b098595" "-arch=sm_89" "--warn-on-spills"'
+full s0 2022-02: ep_gain +0.48337 epochs 9 57.7s
+chunk done: 1 tasks, 289 left in this part, 61s
+2026-10-11 18:33:06.220530: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:33:06.221173: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:33:06.223649: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-953c-43744-65d909f1a0891" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-953c-43744-65d909f1a0f92" "-arch=sm_89" "--warn-on-spills"'
+full s0 2022-04: ep_gain +0.42454 epochs 8 47.2s
+chunk done: 1 tasks, 288 left in this part, 51s
+2026-10-11 18:33:59.056952: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:33:59.057610: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:33:59.059998: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5934-16312-65d90a24040e5" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5934-16312-65d90a24047a1" "-arch=sm_89" "--warn-on-spills"'
+full s0 2022-06: ep_gain +0.47167 epochs 6 36.9s
+full s0 2022-08: ep_gain +0.40599 epochs 7 26.6s
+chunk done: 2 tasks, 286 left in this part, 67s
+2026-10-11 18:35:09.982100: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:35:09.982828: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:35:09.985285: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8548-11692-65d90a67a7cbf" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8548-11692-65d90a67a8352" "-arch=sm_89" "--warn-on-spills"'
+full s0 2022-09: ep_gain +0.37987 epochs 10 29.2s
+full s0 2022-11: ep_gain +0.51914 epochs 8 28.4s
+full s0 2023-01: ep_gain +0.42478 epochs 9 36.0s
+chunk done: 3 tasks, 284 left in this part, 97s
+2026-10-11 18:36:50.928384: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:36:50.929196: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:36:50.931823: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-57f0-33332-65d90ac7ece5a" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-57f0-33332-65d90ac7ed5a7" "-arch=sm_89" "--warn-on-spills"'
+full s0 2023-02: ep_gain +0.35816 epochs 6 35.0s
+full s0 2023-04: ep_gain +0.41590 epochs 7 23.0s
+full s0 2023-06: ep_gain +0.50355 epochs 12 47.2s
+chunk done: 3 tasks, 281 left in this part, 109s
+2026-10-11 18:38:44.106507: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:38:44.107210: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:38:44.110350: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6848-38712-65d90b33dc3ec" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6848-38712-65d90b33dcc63" "-arch=sm_89" "--warn-on-spills"'
+full s0 2023-07: ep_gain +0.51232 epochs 9 39.7s
+full s0 2023-09: ep_gain +0.39460 epochs 6 20.1s
+full s0 2023-11: ep_gain +0.41345 epochs 9 28.2s
+chunk done: 3 tasks, 279 left in this part, 91s
+2026-10-11 18:40:22.039555: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:40:22.040312: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:40:22.044218: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b098-40512-65d90b9141b1a" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b098-40512-65d90b91426d4" "-arch=sm_89" "--warn-on-spills"'
+full s0 2023-10: ep_gain +0.42931 epochs 9 46.3s
+chunk done: 1 tasks, 279 left in this part, 50s
+2026-10-11 18:41:17.201515: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:41:17.202210: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:41:17.204727: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8c2c-24760-65d90bc5dcf41" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8c2c-24760-65d90bc5dd616" "-arch=sm_89" "--warn-on-spills"'
+full s0 2023-12: ep_gain +0.44354 epochs 8 45.0s
+chunk done: 1 tasks, 278 left in this part, 49s
+2026-10-11 18:42:09.181525: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:42:09.182328: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:42:09.184895: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-702c-23284-65d90bf76f69b" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-702c-23284-65d90bf76fdd8" "-arch=sm_89" "--warn-on-spills"'
+full s0 2024-02: ep_gain +0.45029 epochs 12 59.7s
+chunk done: 1 tasks, 277 left in this part, 63s
+2026-10-11 18:43:18.871838: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:43:18.872508: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:43:18.875330: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8f64-20736-65d90c39e59d9" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8f64-20736-65d90c39e6180" "-arch=sm_89" "--warn-on-spills"'
+full s0 2024-04: ep_gain +0.49532 epochs 6 40.7s
+full s0 2024-06: ep_gain +0.46178 epochs 12 43.0s
+chunk done: 2 tasks, 275 left in this part, 88s
+2026-10-11 18:44:54.939673: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:44:54.940645: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:44:54.947269: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6754-19596-65d90c9583c1b" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6754-19596-65d90c9585167" "-arch=sm_89" "--warn-on-spills"'
+full s0 2024-07: ep_gain +0.45032 epochs 7 35.8s
+full s0 2024-09: ep_gain +0.47431 epochs 8 19.2s
+full s0 2024-11: ep_gain +0.47137 epochs 7 14.5s
+full s0 2025-01: ep_gain +0.47916 epochs 8 15.1s
+chunk done: 4 tasks, 272 left in this part, 89s
+2026-10-11 18:46:26.861075: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:46:26.861813: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:46:26.865578: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b330-20652-65d90ced2d719" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b330-20652-65d90ced2e0dd" "-arch=sm_89" "--warn-on-spills"'
+full s0 2025-02: ep_gain +0.51399 epochs 10 42.5s
+chunk done: 1 tasks, 271 left in this part, 47s
+2026-10-11 18:47:27.385157: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:47:27.385933: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:47:27.388706: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5c14-23632-65d90d26e5d71" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5c14-23632-65d90d26e64ce" "-arch=sm_89" "--warn-on-spills"'
+full s0 2025-04: ep_gain +0.48322 epochs 9 52.9s
+chunk done: 1 tasks, 270 left in this part, 59s
+2026-10-11 18:48:34.420787: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:48:34.421591: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:48:34.424204: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6264-24940-65d90d66d3f81" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6264-24940-65d90d66d460b" "-arch=sm_89" "--warn-on-spills"'
+full s0 2025-06: ep_gain +0.50402 epochs 8 26.9s
+full s1 2020-08: ep_gain +0.41352 epochs 11 32.7s
+chunk done: 2 tasks, 208 left in this part, 66s
+2026-10-11 18:49:50.948610: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:49:50.949621: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:49:50.952491: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-144c-13424-65d90dafcf921" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-144c-13424-65d90dafd00a5" "-arch=sm_89" "--warn-on-spills"'
+full s1 2020-09: ep_gain +0.45170 epochs 6 35.3s
+full s1 2020-11: ep_gain +0.52087 epochs 12 47.0s
+chunk done: 2 tasks, 207 left in this part, 88s
+2026-10-11 18:51:25.973439: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:51:25.974851: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:51:25.977864: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7ce0-43400-65d90e0a6f182" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7ce0-43400-65d90e0a6f90d" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-01: ep_gain +0.60684 epochs 12 66.3s
+chunk done: 1 tasks, 206 left in this part, 72s
+2026-10-11 18:52:46.882240: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:52:46.883108: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:52:46.886468: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8e00-39572-65d90e5798174" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8e00-39572-65d90e5798a46" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-02: ep_gain +0.58256 epochs 9 53.7s
+chunk done: 1 tasks, 205 left in this part, 60s
+2026-10-11 18:53:55.237194: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:53:55.238002: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:53:55.241075: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8d28-32528-65d90e98c84a2" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8d28-32528-65d90e98c8ccc" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-04: ep_gain +0.52608 epochs 8 49.8s
+chunk done: 1 tasks, 204 left in this part, 56s
+2026-10-11 18:54:59.162074: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:54:59.163150: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:54:59.166788: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ae90-37608-65d90ed5bf0a9" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ae90-37608-65d90ed5bf993" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-05: ep_gain +0.58043 epochs 9 53.6s
+chunk done: 1 tasks, 204 left in this part, 59s
+2026-10-11 18:55:58.330248: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:55:58.331141: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:55:58.333787: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a814-32652-65d90f0e2c536" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a814-32652-65d90f0e2ccb5" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-07: ep_gain +0.50916 epochs 9 53.0s
+chunk done: 1 tasks, 203 left in this part, 56s
+2026-10-11 18:57:13.893619: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:57:13.894974: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:57:13.898570: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-201c-34580-65d90f563c884" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-201c-34580-65d90f563d1f6" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-08: ep_gain +0.41385 epochs 9 36.3s
+full s1 2021-10: ep_gain +0.39610 epochs 8 19.1s
+full s1 2021-12: ep_gain +0.48952 epochs 12 40.6s
+chunk done: 3 tasks, 200 left in this part, 103s
+2026-10-11 18:59:00.618480: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:59:00.619528: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:59:00.622582: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6478-27316-65d90fbc0453e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6478-27316-65d90fbc04d29" "-arch=sm_89" "--warn-on-spills"'
+full s1 2021-11: ep_gain +0.47699 epochs 10 43.5s
+chunk done: 1 tasks, 200 left in this part, 50s
+2026-10-11 18:59:54.954720: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:59:54.955504: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 18:59:54.958283: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4020-45684-65d90fefd5f13" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4020-45684-65d90fefd6650" "-arch=sm_89" "--warn-on-spills"'
+full s1 2022-02: ep_gain +0.47203 epochs 8 39.6s
+full s1 2022-04: ep_gain +0.42109 epochs 6 20.0s
+chunk done: 2 tasks, 198 left in this part, 64s
+2026-10-11 19:01:12.352730: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:01:12.353608: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:01:12.356444: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-920-27500-65d91039a5f6e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-920-27500-65d91039a6684" "-arch=sm_89" "--warn-on-spills"'
+full s1 2022-06: ep_gain +0.46906 epochs 10 41.9s
+chunk done: 1 tasks, 197 left in this part, 48s
+2026-10-11 19:02:04.566638: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:02:04.567464: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:02:04.570220: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6040-29252-65d9106b717d6" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6040-29252-65d9106b71ef9" "-arch=sm_89" "--warn-on-spills"'
+full s1 2022-08: ep_gain +0.40552 epochs 7 31.7s
+full s1 2022-10: ep_gain +0.37461 epochs 6 19.4s
+full s1 2022-12: ep_gain +0.43894 epochs 7 24.3s
+chunk done: 3 tasks, 194 left in this part, 80s
+2026-10-11 19:03:35.958089: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:03:35.959098: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:03:35.962431: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ae54-24332-65d910c299e6e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ae54-24332-65d910c29a6ea" "-arch=sm_89" "--warn-on-spills"'
+full s1 2023-01: ep_gain +0.41449 epochs 7 35.2s
+full s1 2023-03: ep_gain +0.49605 epochs 12 39.9s
+chunk done: 2 tasks, 193 left in this part, 82s
+2026-10-11 19:05:04.356846: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:05:04.358055: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:05:04.361434: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-641c-8464-65d91116e7ad2" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-641c-8464-65d91116e8398" "-arch=sm_89" "--warn-on-spills"'
+full s1 2023-04: ep_gain +0.41432 epochs 9 39.2s
+full s1 2023-06: ep_gain +0.50816 epochs 7 18.0s
+full s1 2023-08: ep_gain +0.46829 epochs 10 22.5s
+chunk done: 3 tasks, 190 left in this part, 86s
+2026-10-11 19:06:41.291958: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:06:41.294292: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:06:41.297304: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5df0-14072-65d9117359c31" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5df0-14072-65d911735a3d6" "-arch=sm_89" "--warn-on-spills"'
+full s1 2023-07: ep_gain +0.52181 epochs 11 49.8s
+chunk done: 1 tasks, 190 left in this part, 56s
+2026-10-11 19:07:40.640544: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:07:40.641353: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:07:40.645666: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1aa4-36740-65d911abf2c73" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1aa4-36740-65d911abf3889" "-arch=sm_89" "--warn-on-spills"'
+full s1 2023-10: ep_gain +0.44685 epochs 9 37.6s
+full s1 2023-12: ep_gain +0.43535 epochs 6 22.9s
+chunk done: 2 tasks, 188 left in this part, 66s
+2026-10-11 19:08:58.043979: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:08:58.044827: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:08:58.047934: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-bab8-28880-65d911f5c41c7" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-bab8-28880-65d911f5c494b" "-arch=sm_89" "--warn-on-spills"'
+full s1 2023-11: ep_gain +0.40228 epochs 9 42.2s
+chunk done: 1 tasks, 188 left in this part, 49s
+2026-10-11 19:09:55.147936: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:09:55.148813: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:09:55.151768: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1450-34952-65d9122c39840" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1450-34952-65d9122c39fe9" "-arch=sm_89" "--warn-on-spills"'
+full s1 2024-02: ep_gain +0.45655 epochs 10 50.0s
+chunk done: 1 tasks, 187 left in this part, 57s
+2026-10-11 19:11:02.366016: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:11:02.366795: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:11:02.369850: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6a7c-40432-65d9126c54274" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6a7c-40432-65d9126c54ada" "-arch=sm_89" "--warn-on-spills"'
+full s1 2024-03: ep_gain +0.49943 epochs 8 37.9s
+full s1 2024-05: ep_gain +0.50765 epochs 7 22.8s
+chunk done: 2 tasks, 186 left in this part, 67s
+2026-10-11 19:12:08.319558: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:12:08.320275: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:12:08.323054: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6918-20836-65d912ab3a136" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6918-20836-65d912ab3a8b7" "-arch=sm_89" "--warn-on-spills"'
+full s1 2024-06: ep_gain +0.43215 epochs 9 36.5s
+full s1 2024-08: ep_gain +0.42711 epochs 8 23.4s
+full s1 2024-10: ep_gain +0.44532 epochs 8 23.6s
+chunk done: 3 tasks, 183 left in this part, 87s
+2026-10-11 19:13:38.460967: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:13:38.461648: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:13:38.463885: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-26e8-32000-65d91301313ef" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-26e8-32000-65d91301319ff" "-arch=sm_89" "--warn-on-spills"'
+full s1 2024-09: ep_gain +0.47000 epochs 9 34.9s
+full s1 2024-12: ep_gain +0.41179 epochs 8 17.1s
+full s1 2025-02: ep_gain +0.50853 epochs 7 11.8s
+full s1 2025-04: ep_gain +0.48330 epochs 12 18.8s
+chunk done: 4 tasks, 180 left in this part, 86s
+2026-10-11 19:15:07.989287: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:15:07.989911: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:15:07.992118: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-fcc-32332-65d9135692bb2" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-fcc-32332-65d91356931b0" "-arch=sm_89" "--warn-on-spills"'
+full s1 2025-06: ep_gain +0.51301 epochs 7 19.1s
+abs s0 2020-08: ep_gain +0.14357 epochs 7 16.2s
+abs s0 2020-10: ep_gain +0.23154 epochs 9 34.4s
+chunk done: 3 tasks, 177 left in this part, 73s
+2026-10-11 19:16:30.792937: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:16:30.793551: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:16:30.795763: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b140-33080-65d913a58a767" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b140-33080-65d913a58adb3" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2020-12: ep_gain +0.38374 epochs 8 53.7s
+chunk done: 1 tasks, 176 left in this part, 57s
+2026-10-11 19:17:30.397166: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:17:30.397803: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:17:30.400136: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ab70-33892-65d913de62485" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ab70-33892-65d913de62b07" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-02: ep_gain +0.38306 epochs 9 44.7s
+chunk done: 1 tasks, 175 left in this part, 48s
+2026-10-11 19:18:23.601213: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:18:23.601856: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:18:23.604200: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6494-24584-65d914111f8d8" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6494-24584-65d914111ff63" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-03: ep_gain +0.35436 epochs 10 62.4s
+chunk done: 1 tasks, 175 left in this part, 65s
+2026-10-11 19:19:33.494155: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:19:33.494887: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:19:33.497161: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1b58-11672-65d91453c7487" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1b58-11672-65d91453c7a9e" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-05: ep_gain +0.34409 epochs 6 45.5s
+chunk done: 1 tasks, 174 left in this part, 49s
+2026-10-11 19:20:24.941291: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:20:24.941942: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:20:24.944397: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4fc4-43780-65d91484d7991" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4fc4-43780-65d91484d808d" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-06: ep_gain +0.38418 epochs 8 51.3s
+chunk done: 1 tasks, 173 left in this part, 54s
+2026-10-11 19:21:24.466134: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:21:24.466922: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:21:24.469173: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-afa0-25740-65d914bd9c10a" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-afa0-25740-65d914bd9c770" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-08: ep_gain +0.26606 epochs 10 63.0s
+chunk done: 1 tasks, 172 left in this part, 66s
+2026-10-11 19:22:35.232360: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:22:35.233060: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:22:35.235664: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8574-29036-65d9150118f45" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8574-29036-65d9150119684" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-09: ep_gain +0.25242 epochs 8 54.9s
+chunk done: 1 tasks, 172 left in this part, 58s
+2026-10-11 19:23:37.849008: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:23:37.849656: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:23:37.851950: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2814-27032-65d9153cd0355" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2814-27032-65d9153cd09a3" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2021-11: ep_gain +0.29767 epochs 10 61.8s
+chunk done: 1 tasks, 171 left in this part, 65s
+2026-10-11 19:24:46.603245: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:24:46.603911: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:24:46.606175: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4414-22792-65d9157e61ea1" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4414-22792-65d9157e62502" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-01: ep_gain +0.22060 epochs 7 46.3s
+chunk done: 1 tasks, 170 left in this part, 49s
+2026-10-11 19:25:41.773550: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:25:41.774305: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:25:41.777046: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6a9c-37436-65d915b2ff409" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6a9c-37436-65d915b2ffbf3" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-02: ep_gain +0.29607 epochs 7 47.8s
+chunk done: 1 tasks, 169 left in this part, 51s
+2026-10-11 19:26:37.228472: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:26:37.229139: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:26:37.231505: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-36f0-14176-65d915e7e206f" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-36f0-14176-65d915e7e26e1" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-03: ep_gain +0.22264 epochs 12 68.8s
+chunk done: 1 tasks, 169 left in this part, 72s
+2026-10-11 19:27:53.948373: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:27:53.949078: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:27:53.951920: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-fc4-39692-65d916310c7be" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-fc4-39692-65d916310cf7d" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-05: ep_gain +0.23461 epochs 4 33.7s
+abs s0 2022-07: ep_gain +0.24186 epochs 11 36.2s
+chunk done: 2 tasks, 167 left in this part, 73s
+2026-10-11 19:29:10.757552: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:29:10.758210: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:29:10.760615: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4a44-34120-65d9167a4cb5d" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4a44-34120-65d9167a4d21f" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-08: ep_gain +0.26380 epochs 12 69.8s
+chunk done: 1 tasks, 166 left in this part, 73s
+2026-10-11 19:30:31.005766: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:30:31.006474: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:30:31.008792: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2710-10376-65d916c6d4930" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2710-10376-65d916c6d4f89" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-10: ep_gain +0.24715 epochs 12 51.7s
+chunk done: 1 tasks, 165 left in this part, 55s
+2026-10-11 19:31:28.999234: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:31:28.999941: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:31:29.002525: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b424-15400-65d916fe23223" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b424-15400-65d916fe238e9" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2022-11: ep_gain +0.31377 epochs 9 43.6s
+chunk done: 1 tasks, 165 left in this part, 47s
+2026-10-11 19:32:18.975074: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:32:18.975824: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:32:18.978392: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a82c-14048-65d9172dcc474" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a82c-14048-65d9172dccb87" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2023-01: ep_gain +0.27678 epochs 6 37.2s
+abs s0 2023-03: ep_gain +0.36259 epochs 11 39.7s
+chunk done: 2 tasks, 163 left in this part, 80s
+2026-10-11 19:33:44.251657: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:33:44.252346: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:33:44.254868: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9d78-35868-65d9177f1fbd7" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9d78-35868-65d9177f202e8" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2023-05: ep_gain +0.38927 epochs 9 47.9s
+chunk done: 1 tasks, 162 left in this part, 51s
+2026-10-11 19:34:37.949345: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:34:37.949984: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:34:37.952082: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-55dc-11384-65d917b25583b" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-55dc-11384-65d917b255e07" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2023-07: ep_gain +0.35970 epochs 11 55.7s
+chunk done: 1 tasks, 161 left in this part, 59s
+2026-10-11 19:35:41.165647: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:35:41.166334: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:35:41.168596: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-654-31928-65d917ee9f31d" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-654-31928-65d917ee9f969" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2023-08: ep_gain +0.27843 epochs 6 36.2s
+abs s0 2023-10: ep_gain +0.38118 epochs 12 42.8s
+chunk done: 2 tasks, 159 left in this part, 82s
+2026-10-11 19:37:07.464923: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:37:07.465593: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:37:07.468331: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-15b4-44492-65d91840ec5d0" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-15b4-44492-65d91840ecd98" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2023-11: ep_gain +0.38863 epochs 12 57.7s
+chunk done: 1 tasks, 159 left in this part, 61s
+2026-10-11 19:38:11.368034: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:38:11.368680: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:38:11.371284: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-52fc-17616-65d9187dddb02" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-52fc-17616-65d9187dde2ab" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-01: ep_gain +0.39658 epochs 12 57.3s
+chunk done: 1 tasks, 158 left in this part, 60s
+2026-10-11 19:39:14.528971: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:39:14.529629: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:39:14.531980: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2458-35672-65d918ba19d78" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2458-35672-65d918ba1a43e" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-02: ep_gain +0.39922 epochs 12 41.5s
+abs s0 2024-04: ep_gain +0.39789 epochs 12 26.4s
+chunk done: 2 tasks, 156 left in this part, 71s
+2026-10-11 19:40:30.357136: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:40:30.357744: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:40:30.359946: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4e14-21776-65d919026a909" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4e14-21776-65d919026af41" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-05: ep_gain +0.38638 epochs 9 45.6s
+chunk done: 1 tasks, 156 left in this part, 49s
+2026-10-11 19:41:22.658830: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:41:22.659454: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:41:22.661711: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-760c-43044-65d919344b898" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-760c-43044-65d919344beca" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-07: ep_gain +0.40085 epochs 12 48.1s
+chunk done: 1 tasks, 155 left in this part, 51s
+2026-10-11 19:42:17.567364: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:42:17.568007: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:42:17.570380: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-70fc-5924-65d91968a8f22" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-70fc-5924-65d91968a95d5" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-08: ep_gain +0.35357 epochs 10 43.2s
+chunk done: 1 tasks, 154 left in this part, 46s
+2026-10-11 19:43:07.217207: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:43:07.217833: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:43:07.220365: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b608-31796-65d91998027c3" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b608-31796-65d9199802f18" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-10: ep_gain +0.33226 epochs 12 57.4s
+chunk done: 1 tasks, 153 left in this part, 60s
+2026-10-11 19:44:10.531713: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:44:10.532340: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:44:10.534392: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-77e4-27528-65d919d46420e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-77e4-27528-65d919d4647c7" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2024-11: ep_gain +0.29997 epochs 12 57.0s
+chunk done: 1 tasks, 153 left in this part, 60s
+2026-10-11 19:45:13.823148: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:45:13.823795: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:45:13.825912: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5f7c-37248-65d91a10c024b" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5f7c-37248-65d91a10c085c" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2025-01: ep_gain +0.40719 epochs 12 57.0s
+chunk done: 1 tasks, 152 left in this part, 60s
+2026-10-11 19:46:17.369123: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:46:17.369762: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:46:17.375176: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7a5c-35664-65d91a4d5a4bd" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7a5c-35664-65d91a4d5b78b" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2025-02: ep_gain +0.36103 epochs 12 55.5s
+chunk done: 1 tasks, 151 left in this part, 58s
+2026-10-11 19:47:18.678204: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:47:18.678863: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:47:18.681220: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a4f4-36112-65d91a87d2568" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a4f4-36112-65d91a87d2c32" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2025-04: ep_gain +0.32632 epochs 10 48.1s
+chunk done: 1 tasks, 150 left in this part, 51s
+2026-10-11 19:48:13.426738: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:48:13.427371: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:48:13.429705: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5e70-41416-65d91abc08ac3" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5e70-41416-65d91abc0912b" "-arch=sm_89" "--warn-on-spills"'
+abs s0 2025-05: ep_gain +0.31384 epochs 11 53.1s
+chunk done: 1 tasks, 150 left in this part, 56s
+2026-10-11 19:49:12.432933: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:49:12.433564: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:49:12.435855: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9870-16512-65d91af44e7b4" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9870-16512-65d91af44ee23" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2020-07: ep_gain +0.12800 epochs 6 25.3s
+abs s1 2020-09: ep_gain +0.21067 epochs 6 17.2s
+abs s1 2020-11: ep_gain +0.28843 epochs 9 24.9s
+chunk done: 3 tasks, 147 left in this part, 70s
+2026-10-11 19:50:24.690282: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:50:24.690947: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:50:24.693545: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b774-45364-65d91b3937720" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b774-45364-65d91b3937e26" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2020-12: ep_gain +0.38014 epochs 5 18.7s
+abs s1 2021-02: ep_gain +0.37288 epochs 9 16.0s
+abs s1 2021-04: ep_gain +0.32632 epochs 7 11.7s
+abs s1 2021-06: ep_gain +0.38268 epochs 7 14.4s
+abs s1 2021-08: ep_gain +0.26300 epochs 9 33.4s
+chunk done: 5 tasks, 142 left in this part, 97s
+2026-10-11 19:52:07.559725: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:52:07.560354: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:52:07.562721: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1f74-4296-65d91b9b520bd" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-1f74-4296-65d91b9b52737" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2021-05: ep_gain +0.36344 epochs 6 35.1s
+abs s1 2021-09: ep_gain +0.26563 epochs 9 33.8s
+chunk done: 2 tasks, 142 left in this part, 72s
+2026-10-11 19:53:20.325472: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:53:20.326120: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:53:20.328536: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7b94-39284-65d91be0b7203" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7b94-39284-65d91be0b78fa" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2021-10: ep_gain +0.24931 epochs 6 29.4s
+abs s1 2021-12: ep_gain +0.24615 epochs 9 32.8s
+chunk done: 2 tasks, 140 left in this part, 65s
+2026-10-11 19:54:31.601345: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:54:31.601961: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:54:31.604380: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b068-44328-65d91c24b0742" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b068-44328-65d91c24b0dca" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2022-01: ep_gain +0.21443 epochs 7 39.8s
+abs s1 2022-03: ep_gain +0.21991 epochs 12 43.5s
+chunk done: 2 tasks, 139 left in this part, 86s
+2026-10-11 19:56:01.253291: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:56:01.253922: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:56:01.256213: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-3f14-47684-65d91c7a3023c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-3f14-47684-65d91c7a3089e" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2022-04: ep_gain +0.17487 epochs 5 32.1s
+abs s1 2022-06: ep_gain +0.25369 epochs 9 31.6s
+chunk done: 2 tasks, 137 left in this part, 67s
+2026-10-11 19:57:08.486697: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:57:08.487381: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:57:08.489634: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-22b4-36340-65d91cba4e8ef" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-22b4-36340-65d91cba4ef2a" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2022-07: ep_gain +0.20725 epochs 9 38.1s
+abs s1 2022-09: ep_gain +0.30422 epochs 12 39.2s
+chunk done: 2 tasks, 136 left in this part, 80s
+2026-10-11 19:58:34.006615: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:58:34.007255: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:58:34.009246: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b254-28456-65d91d0bdd6f0" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b254-28456-65d91d0bddc7b" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2022-10: ep_gain +0.27990 epochs 12 52.9s
+chunk done: 1 tasks, 135 left in this part, 56s
+2026-10-11 19:59:30.752954: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:59:30.753597: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 19:59:30.755974: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6a88-44448-65d91d41fb857" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6a88-44448-65d91d41fbe8a" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2022-12: ep_gain +0.22208 epochs 7 32.7s
+abs s1 2023-02: ep_gain +0.36136 epochs 9 32.8s
+chunk done: 2 tasks, 133 left in this part, 68s
+2026-10-11 20:00:41.453541: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:00:41.454163: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:00:41.456308: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8ed0-41604-65d91d856866c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8ed0-41604-65d91d8568c8b" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2023-04: ep_gain +0.36894 epochs 12 34.4s
+abs s1 2023-06: ep_gain +0.39059 epochs 12 23.0s
+abs s1 2023-08: ep_gain +0.35963 epochs 10 36.5s
+chunk done: 3 tasks, 130 left in this part, 97s
+2026-10-11 20:02:23.014867: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:02:23.015483: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:02:23.017833: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-28a8-43636-65d91de643a53" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-28a8-43636-65d91de6440fa" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2023-07: ep_gain +0.33855 epochs 10 37.8s
+abs s1 2023-10: ep_gain +0.36971 epochs 12 33.2s
+chunk done: 2 tasks, 129 left in this part, 74s
+2026-10-11 20:03:40.033744: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:03:40.034371: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:03:40.036461: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8b98-15144-65d91e2fb715c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8b98-15144-65d91e2fb773f" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2023-11: ep_gain +0.40983 epochs 12 45.1s
+chunk done: 1 tasks, 129 left in this part, 48s
+2026-10-11 20:04:31.773108: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:04:31.773749: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:04:31.776035: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8b58-4252-65d91e610ec4e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8b58-4252-65d91e610f2b9" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2024-01: ep_gain +0.39176 epochs 12 51.2s
+chunk done: 1 tasks, 128 left in this part, 54s
+2026-10-11 20:05:28.917785: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:05:28.918406: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:05:28.920969: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5b6c-25812-65d91e978e19d" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5b6c-25812-65d91e978e8f8" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2024-02: ep_gain +0.39366 epochs 12 47.9s
+chunk done: 1 tasks, 127 left in this part, 51s
+2026-10-11 20:06:23.015119: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:06:23.015753: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:06:23.017947: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-fb8-19276-65d91ecb25762" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-fb8-19276-65d91ecb25d6b" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2024-04: ep_gain +0.39276 epochs 10 36.4s
+abs s1 2024-06: ep_gain +0.37100 epochs 12 38.3s
+chunk done: 2 tasks, 125 left in this part, 78s
+2026-10-11 20:07:44.331744: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:07:44.332399: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:07:44.334697: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7c20-26384-65d91f18b2289" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7c20-26384-65d91f18b28e6" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2024-07: ep_gain +0.38287 epochs 11 41.4s
+abs s1 2024-09: ep_gain +0.37241 epochs 12 37.5s
+chunk done: 2 tasks, 124 left in this part, 82s
+2026-10-11 20:09:08.832165: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:09:08.832818: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:09:08.835062: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4b4-34520-65d91f694824c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4b4-34520-65d91f6948850" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2024-10: ep_gain +0.33203 epochs 12 42.9s
+chunk done: 1 tasks, 123 left in this part, 46s
+2026-10-11 20:09:57.277876: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:09:57.278546: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:09:57.281102: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-580c-39264-65d91f977bb71" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-580c-39264-65d91f977c297" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2024-12: ep_gain +0.39891 epochs 12 33.4s
+abs s1 2025-02: ep_gain +0.37590 epochs 12 38.7s
+chunk done: 2 tasks, 121 left in this part, 75s
+2026-10-11 20:11:17.128524: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:11:17.129135: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:11:17.131258: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b520-27512-65d91fe3a27c6" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b520-27512-65d91fe3a2dc7" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2025-01: ep_gain +0.34492 epochs 8 29.3s
+abs s1 2025-04: ep_gain +0.31244 epochs 8 23.9s
+abs s1 2025-06: ep_gain +0.29462 epochs 11 31.5s
+chunk done: 3 tasks, 119 left in this part, 88s
+2026-10-11 20:12:50.886942: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:12:50.887580: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:12:50.889814: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-af30-4820-65d9203d0cbb6" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-af30-4820-65d9203d0d1eb" "-arch=sm_89" "--warn-on-spills"'
+abs s1 2025-05: ep_gain +0.28209 epochs 8 43.5s
+chunk done: 1 tasks, 119 left in this part, 46s
+2026-10-11 20:13:40.186884: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:13:40.187515: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:13:40.189905: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8f84-33880-65d9206c10d94" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8f84-33880-65d9206c11459" "-arch=sm_89" "--warn-on-spills"'
+order s0 2020-08: ep_gain +0.65432 epochs 8 29.5s
+order s0 2020-10: ep_gain +0.61265 epochs 6 17.4s
+order s0 2020-12: ep_gain +0.63632 epochs 6 20.5s
+order s0 2021-02: ep_gain +0.39958 epochs 8 28.8s
+chunk done: 4 tasks, 115 left in this part, 99s
+2026-10-11 20:15:20.277155: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:15:20.277815: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:15:20.280075: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b60c-41672-65d920cb84f52" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b60c-41672-65d920cb85570" "-arch=sm_89" "--warn-on-spills"'
+order s0 2021-01: ep_gain +0.55939 epochs 9 36.4s
+order s0 2021-04: ep_gain +0.41696 epochs 6 18.2s
+order s0 2021-06: ep_gain +0.43602 epochs 8 25.7s
+chunk done: 3 tasks, 113 left in this part, 83s
+2026-10-11 20:16:46.860972: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:16:46.861612: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:16:46.863886: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4368-13060-65d9211e17945" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4368-13060-65d9211e17f8d" "-arch=sm_89" "--warn-on-spills"'
+order s0 2021-05: ep_gain +0.42939 epochs 5 23.6s
+order s0 2021-08: ep_gain +0.50442 epochs 8 26.7s
+order s0 2021-10: ep_gain +0.40801 epochs 10 30.7s
+chunk done: 3 tasks, 111 left in this part, 84s
+2026-10-11 20:18:13.981346: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:18:13.981978: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:18:13.984187: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6e28-4584-65d921712d334" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6e28-4584-65d921712d932" "-arch=sm_89" "--warn-on-spills"'
+order s0 2021-12: ep_gain +0.43074 epochs 8 29.4s
+order s0 2022-02: ep_gain +0.46837 epochs 8 15.9s
+order s0 2022-04: ep_gain +0.41249 epochs 12 17.2s
+order s0 2022-06: ep_gain +0.52473 epochs 8 12.2s
+order s0 2022-08: ep_gain +0.47301 epochs 12 18.3s
+chunk done: 5 tasks, 106 left in this part, 96s
+2026-10-11 20:19:53.035384: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:19:53.036027: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:19:53.038241: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6894-34952-65d921cfa4515" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6894-34952-65d921cfa4b4e" "-arch=sm_89" "--warn-on-spills"'
+order s0 2022-10: ep_gain +0.24276 epochs 5 14.9s
+order s0 2022-12: ep_gain +0.41452 epochs 7 10.4s
+order s0 2023-02: ep_gain +0.33250 epochs 8 11.5s
+order s0 2023-04: ep_gain +0.35743 epochs 9 13.9s
+order s0 2023-06: ep_gain +0.50886 epochs 9 13.7s
+order s0 2023-08: ep_gain +0.43696 epochs 10 14.7s
+chunk done: 6 tasks, 100 left in this part, 82s
+2026-10-11 20:21:17.228516: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:21:17.229164: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:21:17.231680: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-88d8-45876-65d9221fef484" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-88d8-45876-65d9221fefb52" "-arch=sm_89" "--warn-on-spills"'
+order s0 2023-10: ep_gain +0.45104 epochs 7 14.3s
+order s0 2023-12: ep_gain +0.45524 epochs 10 14.9s
+order s0 2024-02: ep_gain +0.42003 epochs 7 10.4s
+order s0 2024-04: ep_gain +0.49155 epochs 10 14.8s
+order s0 2024-06: ep_gain +0.42024 epochs 8 12.8s
+order s0 2024-08: ep_gain +0.41116 epochs 8 13.4s
+chunk done: 6 tasks, 94 left in this part, 84s
+2026-10-11 20:22:43.904094: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:22:43.904729: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:22:43.907198: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-3478-12752-65d92272984f3" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-3478-12752-65d9227298c3a" "-arch=sm_89" "--warn-on-spills"'
+order s0 2024-01: ep_gain +0.43761 epochs 8 17.0s
+order s0 2024-05: ep_gain +0.48733 epochs 8 12.1s
+order s0 2024-09: ep_gain +0.44124 epochs 12 19.3s
+order s0 2024-11: ep_gain +0.44955 epochs 9 14.2s
+order s0 2025-01: ep_gain +0.42302 epochs 6 10.0s
+order s0 2025-03: ep_gain +0.44208 epochs 11 17.9s
+chunk done: 6 tasks, 91 left in this part, 93s
+2026-10-11 20:24:22.161160: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:24:22.161832: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:24:22.164043: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a9f0-39784-65d922d04cdc2" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a9f0-39784-65d922d04d3f6" "-arch=sm_89" "--warn-on-spills"'
+order s0 2025-05: ep_gain +0.39222 epochs 12 25.7s
+sign s0 2020-07: ep_gain +0.09787 epochs 4 4.5s
+sign s0 2020-09: ep_gain +0.17861 epochs 7 12.1s
+sign s0 2020-11: ep_gain +0.03941 epochs 10 25.7s
+chunk done: 4 tasks, 87 left in this part, 71s
+2026-10-11 20:25:37.614021: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:25:37.614656: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:25:37.616829: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a1a0-39392-65d9231841f5a" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a1a0-39392-65d9231842538" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2020-12: ep_gain -0.01535 epochs 10 35.8s
+sign s0 2021-02: ep_gain +0.06284 epochs 5 10.7s
+sign s0 2021-04: ep_gain +0.01952 epochs 4 7.5s
+sign s0 2021-06: ep_gain -0.09052 epochs 3 10.0s
+sign s0 2021-08: ep_gain -0.04782 epochs 3 9.5s
+sign s0 2021-10: ep_gain +0.05844 epochs 4 11.6s
+chunk done: 6 tasks, 81 left in this part, 88s
+2026-10-11 20:27:09.005513: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:27:09.006185: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:27:09.008468: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-81c8-47836-65d9236f6a581" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-81c8-47836-65d9236f6abf3" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2021-03: ep_gain +0.04795 epochs 6 25.1s
+sign s0 2021-07: ep_gain -0.06828 epochs 3 8.7s
+sign s0 2021-11: ep_gain +0.02373 epochs 5 19.0s
+sign s0 2022-01: ep_gain +0.15818 epochs 3 10.6s
+sign s0 2022-03: ep_gain +0.29085 epochs 6 19.7s
+chunk done: 5 tasks, 79 left in this part, 86s
+2026-10-11 20:28:38.234370: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:28:38.235030: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:28:38.237260: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-81b0-42096-65d923c482bb0" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-81b0-42096-65d923c483204" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2022-02: ep_gain +0.21800 epochs 8 32.0s
+sign s0 2022-05: ep_gain +0.20761 epochs 6 22.2s
+sign s0 2022-07: ep_gain +0.16670 epochs 5 15.2s
+sign s0 2022-09: ep_gain -0.10835 epochs 9 29.9s
+chunk done: 4 tasks, 76 left in this part, 102s
+2026-10-11 20:30:23.553349: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:30:23.553972: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:30:23.556343: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-68fc-38504-65d92428f35cc" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-68fc-38504-65d92428f3c86" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2022-10: ep_gain -0.13472 epochs 3 17.8s
+sign s0 2022-12: ep_gain +0.11690 epochs 5 18.1s
+sign s0 2023-02: ep_gain -0.04089 epochs 6 21.8s
+sign s0 2023-04: ep_gain -0.01156 epochs 3 10.7s
+sign s0 2023-06: ep_gain +0.02294 epochs 4 14.5s
+chunk done: 5 tasks, 71 left in this part, 86s
+2026-10-11 20:31:53.272159: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:31:53.272800: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:31:53.275028: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5d0c-28440-65d9247e835f9" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5d0c-28440-65d9247e83bfe" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2023-01: ep_gain +0.05759 epochs 3 17.1s
+sign s0 2023-05: ep_gain -0.01206 epochs 5 16.1s
+sign s0 2023-08: ep_gain +0.10220 epochs 5 16.7s
+sign s0 2023-10: ep_gain +0.02920 epochs 7 20.2s
+sign s0 2023-12: ep_gain +0.10353 epochs 5 12.2s
+chunk done: 5 tasks, 68 left in this part, 85s
+2026-10-11 20:33:20.122744: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:33:20.123428: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:33:20.125964: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4f58-41048-65d924d157243" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4f58-41048-65d924d157996" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2023-11: ep_gain +0.09607 epochs 5 17.0s
+sign s0 2024-02: ep_gain -0.21296 epochs 6 18.6s
+sign s0 2024-04: ep_gain +0.00765 epochs 4 11.5s
+sign s0 2024-06: ep_gain +0.00702 epochs 7 22.3s
+chunk done: 4 tasks, 65 left in this part, 72s
+2026-10-11 20:34:37.822125: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:34:37.822755: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:34:37.825019: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b590-40224-65d9251b70b3c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b590-40224-65d9251b7118c" "-arch=sm_89" "--warn-on-spills"'
+sign s0 2024-05: ep_gain +0.02205 epochs 5 19.9s
+sign s0 2024-08: ep_gain -0.02393 epochs 3 9.2s
+sign s0 2024-10: ep_gain -0.03618 epochs 4 13.8s
+sign s0 2024-12: ep_gain -0.00723 epochs 5 14.2s
+sign s0 2025-02: ep_gain -0.04677 epochs 3 9.0s
+sign s0 2025-04: ep_gain -0.02460 epochs 3 10.2s
+sign s0 2025-06: ep_gain +0.01843 epochs 4 15.5s
+chunk done: 7 tasks, 59 left in this part, 95s
+2026-10-11 20:36:15.498217: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:36:15.498844: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:36:15.501200: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2ca4-36336-65d9257897677" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2ca4-36336-65d9257897d1c" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2020-08: ep_gain +0.13514 epochs 9 27.4s
+full_ng s0 2020-10: ep_gain +0.21179 epochs 10 26.0s
+full_ng s0 2020-12: ep_gain +0.24853 epochs 4 14.2s
+full_ng s0 2021-02: ep_gain +0.28454 epochs 3 9.1s
+full_ng s0 2021-04: ep_gain +0.34764 epochs 7 22.3s
+chunk done: 5 tasks, 55 left in this part, 102s
+2026-10-11 20:38:01.146125: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:38:01.146826: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:38:01.149117: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-874c-37312-65d925dd585e6" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-874c-37312-65d925dd58c57" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2021-05: ep_gain +0.41194 epochs 6 28.4s
+full_ng s0 2021-07: ep_gain +0.28615 epochs 12 36.3s
+chunk done: 2 tasks, 53 left in this part, 68s
+2026-10-11 20:39:12.209825: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:39:12.210468: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:39:12.212868: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9578-33428-65d926211de3d" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9578-33428-65d926211e51c" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2021-06: ep_gain +0.45029 epochs 9 34.7s
+full_ng s0 2021-09: ep_gain +0.26777 epochs 11 32.9s
+chunk done: 2 tasks, 52 left in this part, 71s
+2026-10-11 20:40:25.864084: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:40:25.864718: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:40:25.866960: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4fec-868-65d926675be28" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-4fec-868-65d926675c45b" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2021-10: ep_gain +0.28950 epochs 11 38.9s
+full_ng s0 2021-12: ep_gain +0.30384 epochs 7 16.7s
+full_ng s0 2022-02: ep_gain +0.29128 epochs 5 7.8s
+full_ng s0 2022-04: ep_gain +0.24430 epochs 12 31.2s
+chunk done: 4 tasks, 49 left in this part, 98s
+2026-10-11 20:42:06.940668: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:42:06.941305: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:42:06.943547: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5220-41196-65d926c7c0c92" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-5220-41196-65d926c7c12e8" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2022-03: ep_gain +0.29634 epochs 12 43.0s
+chunk done: 1 tasks, 49 left in this part, 46s
+2026-10-11 20:42:56.198106: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:42:56.198727: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:42:56.200826: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2eb0-23516-65d926f6ba860" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-2eb0-23516-65d926f6bae4b" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2022-06: ep_gain +0.30446 epochs 8 30.4s
+full_ng s0 2022-08: ep_gain +0.18920 epochs 6 17.4s
+full_ng s0 2022-10: ep_gain +0.27733 epochs 5 17.9s
+full_ng s0 2022-12: ep_gain +0.26116 epochs 9 27.3s
+chunk done: 4 tasks, 45 left in this part, 96s
+2026-10-11 20:44:35.908263: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:44:35.908908: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:44:35.911246: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a1e0-43328-65d92755d1d4c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a1e0-43328-65d92755d23cc" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2022-11: ep_gain +0.32208 epochs 5 24.8s
+full_ng s0 2023-02: ep_gain +0.23824 epochs 6 19.1s
+full_ng s0 2023-04: ep_gain +0.27048 epochs 7 21.1s
+full_ng s0 2023-06: ep_gain +0.32634 epochs 9 26.2s
+chunk done: 4 tasks, 42 left in this part, 94s
+2026-10-11 20:46:13.470675: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:46:13.471322: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:46:13.473577: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-81ec-43744-65d927b2dcc73" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-81ec-43744-65d927b2dd2b8" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2023-03: ep_gain +0.30232 epochs 5 22.4s
+full_ng s0 2023-07: ep_gain +0.21511 epochs 7 22.6s
+full_ng s0 2023-09: ep_gain +0.13077 epochs 6 16.8s
+full_ng s0 2023-11: ep_gain +0.13140 epochs 8 22.6s
+chunk done: 4 tasks, 39 left in this part, 87s
+2026-10-11 20:47:44.118849: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:47:44.119493: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:47:44.121943: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-baac-46336-65d928094fade" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-baac-46336-65d92809501e8" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2023-12: ep_gain +0.19989 epochs 7 28.4s
+full_ng s0 2024-02: ep_gain +0.27230 epochs 6 17.8s
+full_ng s0 2024-04: ep_gain +0.33377 epochs 8 21.4s
+full_ng s0 2024-06: ep_gain +0.20452 epochs 11 23.5s
+chunk done: 4 tasks, 36 left in this part, 94s
+2026-10-11 20:49:21.064528: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:49:21.065147: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:49:21.067378: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9a74-25672-65d92865c40d4" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9a74-25672-65d92865c470d" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2024-05: ep_gain +0.29516 epochs 10 35.8s
+full_ng s0 2024-08: ep_gain +0.34857 epochs 11 29.9s
+chunk done: 2 tasks, 35 left in this part, 69s
+2026-10-11 20:50:33.364719: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:50:33.365342: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:50:33.367575: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-632c-27000-65d928aab77a7" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-632c-27000-65d928aab7db0" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2024-07: ep_gain +0.26550 epochs 9 36.4s
+full_ng s0 2024-10: ep_gain +0.29221 epochs 11 30.4s
+chunk done: 2 tasks, 34 left in this part, 70s
+2026-10-11 20:51:47.323156: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:51:47.323813: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:51:47.326182: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6b00-32908-65d928f13fbc0" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-6b00-32908-65d928f140247" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2024-12: ep_gain +0.16106 epochs 9 34.0s
+full_ng s0 2025-02: ep_gain +0.39563 epochs 8 23.6s
+full_ng s0 2025-04: ep_gain +0.34888 epochs 8 22.3s
+chunk done: 3 tasks, 31 left in this part, 83s
+2026-10-11 20:53:13.962948: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:53:13.963803: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:53:13.966175: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ba8-44824-65d92943e014c" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-ba8-44824-65d92943e07f7" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2025-01: ep_gain +0.32207 epochs 7 29.7s
+full_ng s0 2025-05: ep_gain +0.31850 epochs 7 19.9s
+full_ng s1 2020-07: ep_gain +0.15867 epochs 10 21.0s
+chunk done: 3 tasks, 29 left in this part, 73s
+2026-10-11 20:54:30.726816: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:54:30.727563: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:54:30.730670: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9280-14904-65d9298d153b3" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9280-14904-65d9298d15ce5" "-arch=sm_89" "--warn-on-spills"'
+full_ng s0 2025-06: ep_gain +0.39972 epochs 10 36.2s
+full_ng s1 2020-09: ep_gain +0.14672 epochs 4 10.9s
+full_ng s1 2020-11: ep_gain +0.21809 epochs 9 23.8s
+chunk done: 3 tasks, 27 left in this part, 74s
+2026-10-11 20:55:47.920433: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:55:47.921092: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:55:47.923342: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-52b8-32108-65d929d6b34e2" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-52b8-32108-65d929d6b3b12" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2020-10: ep_gain +0.18854 epochs 8 27.2s
+full_ng s1 2021-01: ep_gain +0.26979 epochs 3 9.7s
+full_ng s1 2021-03: ep_gain +0.37182 epochs 4 10.3s
+full_ng s1 2021-05: ep_gain +0.41056 epochs 6 17.8s
+full_ng s1 2021-07: ep_gain +0.30857 epochs 7 10.0s
+full_ng s1 2021-09: ep_gain +0.27367 epochs 8 17.9s
+chunk done: 6 tasks, 22 left in this part, 96s
+2026-10-11 20:57:26.586591: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:57:26.587222: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:57:26.589508: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9100-47932-65d92a34cbb6f" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9100-47932-65d92a34cc1e9" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2021-02: ep_gain +0.30247 epochs 3 16.7s
+full_ng s1 2021-06: ep_gain +0.43707 epochs 10 30.3s
+full_ng s1 2021-10: ep_gain +0.27163 epochs 10 26.5s
+chunk done: 3 tasks, 22 left in this part, 76s
+2026-10-11 20:58:47.058555: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:58:47.059199: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 20:58:47.061491: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b37c-4408-65d92a818a31f" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-b37c-4408-65d92a818a96e" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2021-12: ep_gain +0.30732 epochs 10 39.1s
+full_ng s1 2022-02: ep_gain +0.29602 epochs 5 14.3s
+full_ng s1 2022-04: ep_gain +0.24525 epochs 10 30.1s
+chunk done: 3 tasks, 19 left in this part, 86s
+2026-10-11 21:00:16.702059: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:00:16.702682: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:00:16.705068: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-786c-28740-65d92ad707cf2" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-786c-28740-65d92ad708398" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2022-03: ep_gain +0.30547 epochs 8 33.6s
+full_ng s1 2022-06: ep_gain +0.30990 epochs 8 24.8s
+full_ng s1 2022-08: ep_gain +0.19377 epochs 9 25.7s
+chunk done: 3 tasks, 17 left in this part, 87s
+2026-10-11 21:01:47.135876: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:01:47.136502: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:01:47.138674: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-622c-38192-65d92b2d4660e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-622c-38192-65d92b2d46c44" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2022-07: ep_gain +0.29680 epochs 12 45.7s
+chunk done: 1 tasks, 17 left in this part, 49s
+2026-10-11 21:02:39.042151: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:02:39.042810: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:02:39.045177: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-af3c-32172-65d92b5ec6d13" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-af3c-32172-65d92b5ec73c7" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2022-10: ep_gain +0.27980 epochs 6 25.7s
+full_ng s1 2022-12: ep_gain +0.27514 epochs 10 27.9s
+full_ng s1 2023-02: ep_gain +0.23181 epochs 6 17.8s
+full_ng s1 2023-04: ep_gain +0.26132 epochs 7 21.2s
+chunk done: 4 tasks, 13 left in this part, 96s
+2026-10-11 21:04:17.790541: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:04:17.791180: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:04:17.793531: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9b00-26292-65d92bbcf34e6" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-9b00-26292-65d92bbcf3b7f" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2023-05: ep_gain +0.21568 epochs 6 21.7s
+full_ng s1 2023-07: ep_gain +0.22105 epochs 9 13.3s
+full_ng s1 2023-09: ep_gain +0.12852 epochs 8 23.3s
+full_ng s1 2023-11: ep_gain +0.11948 epochs 6 16.4s
+full_ng s1 2024-01: ep_gain +0.21854 epochs 8 24.2s
+chunk done: 5 tasks, 8 left in this part, 102s
+2026-10-11 21:06:03.046214: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:06:03.046850: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:06:03.049039: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8b28-33668-65d92c21547dc" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8b28-33668-65d92c2154ddb" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2023-12: ep_gain +0.20571 epochs 8 25.7s
+full_ng s1 2024-03: ep_gain +0.30234 epochs 8 24.5s
+full_ng s1 2024-05: ep_gain +0.30218 epochs 10 27.4s
+chunk done: 3 tasks, 6 left in this part, 80s
+2026-10-11 21:07:26.948453: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:07:26.949090: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:07:26.951381: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7360-42904-65d92c71586fc" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-7360-42904-65d92c7158d69" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2024-07: ep_gain +0.24531 epochs 5 23.2s
+full_ng s1 2024-09: ep_gain +0.27324 epochs 11 33.8s
+chunk done: 2 tasks, 4 left in this part, 60s
+2026-10-11 21:08:30.324158: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:08:30.324784: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:08:30.327221: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a048-37760-65d92cadc9048" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-a048-37760-65d92cadc9734" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2024-10: ep_gain +0.28692 epochs 9 34.6s
+full_ng s1 2024-12: ep_gain +0.15741 epochs 10 29.4s
+chunk done: 2 tasks, 3 left in this part, 67s
+2026-10-11 21:09:41.031012: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:09:41.031637: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:09:41.034093: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-68a8-28796-65d92cf13771e" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-68a8-28796-65d92cf137d94" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2025-01: ep_gain +0.31788 epochs 8 31.9s
+full_ng s1 2025-03: ep_gain +0.27445 epochs 10 29.4s
+chunk done: 2 tasks, 1 left in this part, 64s
+2026-10-11 21:10:49.012122: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:10:49.012754: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "--version"'
+2026-10-11 21:10:49.015064: E tensorflow/core/platform/windows/subprocess.cc:287] Call to CreateProcess failed. Error code: 2, command: '"ptxas.exe" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8490-20464-65d92d320c62b" "-o" "C:\Users\Step\AppData\Local\Temp\/tempfile-WS028-STP-8490-20464-65d92d320ccb7" "-arch=sm_89" "--warn-on-spills"'
+full_ng s1 2025-05: ep_gain +0.34449 epochs 9 34.9s
+chunk done: 1 tasks, 0 left in this part, 38s
+part 1 finished rc=0 Sun Oct 11 21:11:20     2026
