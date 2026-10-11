@@ -1,0 +1,28 @@
+device gpu
+anchors 459652, vec 25, months 21
+2026-10-11 06:21:35.562464: I tensorflow/core/platform/cpu_feature_guard.cc:193] This TensorFlow binary is optimized with oneAPI Deep Neural Network Library (oneDNN) to use the following CPU instructions in performance-critical operations:  AVX AVX2
+To enable them in other operations, rebuild TensorFlow with the appropriate compiler flags.
+2026-10-11 06:21:37.147047: W tensorflow/core/common_runtime/gpu/gpu_bfc_allocator.cc:42] Overriding orig_value setting because the TF_FORCE_GPU_ALLOW_GROWTH environment variable is set. Original config value was 0.
+2026-10-11 06:21:37.147151: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1616] Created device /job:localhost/replica:0/task:0/device:GPU:0 with 4000 MB memory:  -> device: 0, name: NVIDIA GeForce RTX 4070 Ti, pci bus id: 0000:01:00.0, compute capability: 8.9
+2026-10-11 06:21:38.787032: I tensorflow/stream_executor/cuda/cuda_blas.cc:1614] TensorFloat-32 will be used for the matrix multiplication. This will only be logged once.
+2021-02 41s {('har', 15): 0.292, ('ridge_full', 15): 0.299, ('hgb', 15): 0.303, ('mlp', 15): 0.307, ('seq', 15): 0.291, ('ens', 15): 0.306}
+2021-04 29s {('har', 15): 0.322, ('ridge_full', 15): 0.329, ('hgb', 15): 0.328, ('mlp', 15): 0.332, ('seq', 15): 0.32, ('ens', 15): 0.331}
+2021-06 33s {('har', 15): 0.218, ('ridge_full', 15): 0.23, ('hgb', 15): 0.231, ('mlp', 15): 0.229, ('seq', 15): 0.219, ('ens', 15): 0.231}
+2021-08 29s {('har', 15): 0.212, ('ridge_full', 15): 0.22, ('hgb', 15): 0.22, ('mlp', 15): 0.226, ('seq', 15): 0.211, ('ens', 15): 0.225}
+2021-10 25s {('har', 15): 0.238, ('ridge_full', 15): 0.238, ('hgb', 15): 0.235, ('mlp', 15): 0.236, ('seq', 15): 0.238, ('ens', 15): 0.242}
+2021-12 30s {('har', 15): 0.263, ('ridge_full', 15): 0.263, ('hgb', 15): 0.261, ('mlp', 15): 0.265, ('seq', 15): 0.264, ('ens', 15): 0.27}
+2022-02 22s {('har', 15): 0.293, ('ridge_full', 15): 0.306, ('hgb', 15): 0.302, ('mlp', 15): 0.306, ('seq', 15): 0.293, ('ens', 15): 0.306}
+2022-04 30s {('har', 15): 0.359, ('ridge_full', 15): 0.356, ('hgb', 15): 0.343, ('mlp', 15): 0.356, ('seq', 15): 0.359, ('ens', 15): 0.36}
+2022-06 29s {('har', 15): 0.47, ('ridge_full', 15): 0.477, ('hgb', 15): 0.483, ('mlp', 15): 0.479, ('seq', 15): 0.47, ('ens', 15): 0.481}
+2022-08 25s {('har', 15): 0.251, ('ridge_full', 15): 0.254, ('hgb', 15): 0.257, ('mlp', 15): 0.253, ('seq', 15): 0.251, ('ens', 15): 0.259}
+2022-10 26s {('har', 15): 0.36, ('ridge_full', 15): 0.367, ('hgb', 15): 0.358, ('mlp', 15): 0.367, ('seq', 15): 0.36, ('ens', 15): 0.366}
+2022-12 29s {('har', 15): 0.392, ('ridge_full', 15): 0.394, ('hgb', 15): 0.336, ('mlp', 15): 0.399, ('seq', 15): 0.392, ('ens', 15): 0.396}
+2023-02 24s {('har', 15): 0.386, ('ridge_full', 15): 0.393, ('hgb', 15): 0.397, ('mlp', 15): 0.395, ('seq', 15): 0.386, ('ens', 15): 0.396}
+2023-04 28s {('har', 15): 0.376, ('ridge_full', 15): 0.383, ('hgb', 15): 0.388, ('mlp', 15): 0.385, ('seq', 15): 0.376, ('ens', 15): 0.387}
+2023-06 24s {('har', 15): 0.348, ('ridge_full', 15): 0.357, ('hgb', 15): 0.361, ('mlp', 15): 0.36, ('seq', 15): 0.348, ('ens', 15): 0.36}
+2023-08 29s {('har', 15): 0.498, ('ridge_full', 15): 0.501, ('hgb', 15): 0.503, ('mlp', 15): 0.501, ('seq', 15): 0.498, ('ens', 15): 0.505}
+2023-10 29s {('har', 15): 0.438, ('ridge_full', 15): 0.443, ('hgb', 15): 0.446, ('mlp', 15): 0.446, ('seq', 15): 0.438, ('ens', 15): 0.448}
+2023-12 21s {('har', 15): 0.343, ('ridge_full', 15): 0.347, ('hgb', 15): 0.346, ('mlp', 15): 0.347, ('seq', 15): 0.343, ('ens', 15): 0.35}
+2024-02 30s {('har', 15): 0.394, ('ridge_full', 15): 0.404, ('hgb', 15): 0.406, ('mlp', 15): 0.407, ('seq', 15): 0.395, ('ens', 15): 0.407}
+2024-04 21s {('har', 15): 0.328, ('ridge_full', 15): 0.334, ('hgb', 15): 0.336, ('mlp', 15): 0.334, ('seq', 15): 0.328, ('ens', 15): 0.336}
+2024-06 24s {('har', 15): 0.481, ('ridge_full', 15): 0.486, ('hgb', 15): 0.491, ('mlp', 15): 0.488, ('seq', 15): 0.481, ('ens', 15): 0.489}
