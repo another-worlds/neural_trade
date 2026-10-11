@@ -1,0 +1,13 @@
+{
+ "set": "rich",
+ "model": "logreg",
+ "T": 730,
+ "H": 4,
+ "top": 0.1,
+ "score_mean_monthly_net_bps": 493.90096405461384,
+ "n_months": 66,
+ "n_trades": 2651,
+ "max_dd_pct": 12.110920041162585,
+ "hit": 0.5926065635609205,
+ "mean_trade_net_bps": 12.296289561525656
+}
