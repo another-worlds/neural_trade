@@ -1,0 +1,61 @@
+== repl: months 2020-02 .. 2024-06 (53); skipped cells 0
+
+-- H = 240: mean monthly QLIKE by window (all months of the period; 365 truncated months flagged below)
+            W          nn_td      nn_direct  nn_direct_reg        midas_q          naive     har_direct       har_iter      midas_sse  best_baseline     n_eff_test
+           30         6.6092         6.6844         0.5142         0.3571         0.4598         3.1040         3.1681         0.4092        midas_q          182.5
+           60         0.6748         1.1268         0.3266         0.3474         0.4601         0.5457         0.5434         0.3894  nn_direct_reg          182.5
+           90         0.3251         0.3424         0.3131         0.3423         0.4594         0.3600         0.3604         0.3857  nn_direct_reg          182.5
+          365         0.2965         0.2966         0.2995         0.3389         0.4573         0.3463         0.3462         0.3767  nn_direct_reg          182.5
+
+-- H = 1440: mean monthly QLIKE by window (all months of the period; 365 truncated months flagged below)
+            W          nn_td      nn_direct  nn_direct_reg        midas_q          naive     har_direct       har_iter      midas_sse  best_baseline     n_eff_test
+           30         4.8750         4.5872         0.3953         0.2904         0.3608         1.1689         1.3301         0.3189        midas_q           30.4
+           60         1.7092         1.0893         0.2854         0.2682         0.3608         0.3765         0.4065         0.4130        midas_q           30.4
+           90         0.3231         0.3541         0.2640         0.2616         0.3606         0.2854         0.2855         0.2974        midas_q           30.4
+          365         0.2258         0.2250         0.2252         0.2451         0.3581         0.2615         0.2608         0.2772  nn_direct_reg           30.4
+
+-- H = 240: gain % of nn_td (mean of monthly gains, 95% t-interval | 95% block bootstrap | months gain>0)
+W=  30 vs BEST baseline (midas_q)                 -822.92  t[-2400.41,+754.57]  boot[-2407.06, -21.05]  28/53
+W=  30 vs per-month oracle                        -1436.47  t[-4223.07,+1350.14]  boot[-4225.01, -32.58]  4/53
+W=  30 vs nn_direct                                 +7.36  t[  +4.53, +10.20]  boot[  +4.62, +10.16]  43/53
+        per baseline: nn_direct_reg -96.8  midas_q -822.9  naive -1396.3  har_direct -23.2  har_iter -22.7
+W=  60 vs BEST baseline (nn_direct_reg)            -30.73  t[ -80.76, +19.29]  boot[ -82.13,  -3.70]  15/53
+W=  60 vs per-month oracle                         -86.47  t[-242.45, +69.51]  boot[-244.21,  -5.59]  14/53
+W=  60 vs nn_direct                                 +4.14  t[  +1.13,  +7.14]  boot[  +1.84,  +7.18]  41/53
+        per baseline: nn_direct_reg -30.7  midas_q -49.0  naive -53.8  har_direct -16.4  har_iter -18.5
+W=  90 vs BEST baseline (nn_direct_reg)             -2.36  t[  -4.47,  -0.24]  boot[  -4.38,  -0.73]  20/53
+W=  90 vs per-month oracle                          -5.90  t[ -12.77,  +0.97]  boot[ -13.18,  -1.60]  16/53
+W=  90 vs nn_direct                                 +1.56  t[  +0.06,  +3.07]  boot[  +0.49,  +3.28]  41/53
+        per baseline: nn_direct_reg -2.4  midas_q +4.9  naive +26.5  har_direct +8.4  har_iter +8.5
+W= 365 vs BEST baseline (nn_direct_reg)             +0.86  t[  +0.38,  +1.34]  boot[  +0.47,  +1.26]  38/53
+W= 365 vs per-month oracle                          -0.35  t[  -1.28,  +0.58]  boot[  -1.40,  +0.49]  32/53
+W= 365 vs nn_direct                                 -0.00  t[  -0.22,  +0.21]  boot[  -0.18,  +0.18]  27/53
+        per baseline: nn_direct_reg +0.9  midas_q +10.7  naive +32.9  har_direct +10.3  har_iter +10.3
+
+-- H = 1440: gain % of nn_td (mean of monthly gains, 95% t-interval | 95% block bootstrap | months gain>0)
+W=  30 vs BEST baseline (midas_q)                 -384.27  t[-1011.39,+242.85]  boot[-1017.54, -54.72]  6/53
+W=  30 vs per-month oracle                        -688.50  t[-1885.18,+508.19]  boot[-1889.50, -72.86]  1/53
+W=  30 vs nn_direct                                 +9.80  t[  +3.53, +16.06]  boot[  +3.63, +15.42]  39/53
+        per baseline: nn_direct_reg -136.1  midas_q -384.3  naive -649.6  har_direct -54.7  har_iter -59.4
+W=  60 vs BEST baseline (midas_q)                 -121.72  t[-332.24, +88.81]  boot[-336.78, -10.23]  17/53
+W=  60 vs per-month oracle                        -217.65  t[-598.21,+162.91]  boot[-601.85, -21.36]  6/53
+W=  60 vs nn_direct                                 +5.01  t[  -0.28, +10.31]  boot[  +0.16,  +9.69]  40/53
+        per baseline: nn_direct_reg -70.1  midas_q -121.7  naive -184.3  har_direct -73.1  har_iter -74.8
+W=  90 vs BEST baseline (midas_q)                   -6.34  t[ -17.92,  +5.25]  boot[ -18.87,  +2.05]  31/53
+W=  90 vs per-month oracle                         -20.28  t[ -38.11,  -2.45]  boot[ -39.10,  -9.08]  14/53
+W=  90 vs nn_direct                                 +5.61  t[  +3.47,  +7.75]  boot[  +3.49,  +8.20]  41/53
+        per baseline: nn_direct_reg -6.9  midas_q -6.3  naive +11.4  har_direct +0.6  har_iter +0.4
+W= 365 vs BEST baseline (nn_direct_reg)             +0.91  t[  -0.31,  +2.13]  boot[  -0.49,  +2.17]  32/53
+W= 365 vs per-month oracle                          -3.99  t[  -6.03,  -1.95]  boot[  -6.01,  -2.09]  18/53
+W= 365 vs nn_direct                                 +0.40  t[  -0.70,  +1.49]  boot[  -0.74,  +1.53]  32/53
+        per baseline: nn_direct_reg +0.9  midas_q +6.9  naive +28.6  har_direct +8.9  har_iter +8.7
+
+-- C2 months (all four windows complete): 53 (2020-02 .. 2024-06)
+H=240: gain vs nn_direct by W [30, 60, 90, 365]: +7.36  +4.14  +1.56  -0.00  Spearman(gain, log W) = -1.00  (30/60/90 on all months: -1.00)
+      control W=365: -0.00 [-0.22,+0.21]
+H=1440: gain vs nn_direct by W [30, 60, 90, 365]: +9.80  +5.01  +5.61  +0.40  Spearman(gain, log W) = -0.80  (30/60/90 on all months: -0.50)
+      control W=365: +0.40 [-0.70,+1.49]
+
+C1 (W=60, gain_best >= 2.0% and both 95% intervals > 0): {240: False, 1440: False}
+C2 (Spearman < 0): {240: True, 1440: True}
+VERDICT (repl): NOT CONFIRMED

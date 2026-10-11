@@ -1,0 +1,6 @@
+conf part 0/4: 5 months, reg {'l2': 0.1, 'steps': 50}, end_pos 1051200
+2017-07 38s 64 rows skipped []
+2017-11 55s 64 rows skipped []
+2018-03 73s 64 rows skipped []
+2018-07 72s 64 rows skipped []
+2018-11 68s 64 rows skipped []
