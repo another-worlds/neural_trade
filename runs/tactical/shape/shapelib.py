@@ -209,8 +209,8 @@ def split_masks(t, m0, m1, T, train_days=365):
 
 
 def _std(Xtr, X):
-    mu = Xtr.mean(0); sd = Xtr.std(0) + 1e-9
-    return np.clip((np.nan_to_num(X) - mu) / sd, -8, 8)
+    Xtr = np.nan_to_num(Xtr, nan=0.0, posinf=0.0, neginf=0.0); mu = Xtr.mean(0); sd = Xtr.std(0) + 1e-9
+    return np.clip((np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0) - mu) / sd, -8, 8)
 
 
 def rank_gauss(y):
