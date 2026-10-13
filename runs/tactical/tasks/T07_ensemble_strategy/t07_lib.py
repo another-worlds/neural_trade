@@ -281,6 +281,13 @@ def vote_hourly(p_hour, need=3):
     return np.where(agree.sum(0) >= need, s, 0.0)
 
 
+def vote_minute(pos, need=3):
+    """DIAGNOSTIC (not one of the six fixed combinations): the C3 vote evaluated per minute on the members' minute positions."""
+    sg = np.sign(pos.astype(np.int16).sum(0))
+    agree = ((np.sign(pos) == sg[None, :]) & (sg[None, :] != 0)).sum(0)
+    return np.where(agree >= need, sg, 0).astype(np.float64)
+
+
 def har_scale(sig_hat, sig_med):
     """Exposure multiplier min(1, sigma* / sigma_HAR); NaN forecasts (no history yet) scale by 1."""
     with np.errstate(invalid="ignore", divide="ignore"):

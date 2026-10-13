@@ -46,8 +46,10 @@ def main():
     sl = {"sel": slice(0, hs), "look1": slice(hs, view.nh)}
     mem, r2m = A.table_for({m: pos[i] for i, m in enumerate(T.MEMBERS)}, view, sl)
     com, r2c = A.table_for(combos, view, sl)
+    dg = {"D3": T.vote_minute(pos)}; dg["D6"] = dg["D3"] * np.repeat(har, 60)
+    dgt, _ = A.table_for(dg, view, sl)
     bh = A.buy_hold(view, sl)
-    res["look1"] = {"members": mem, "combos": com, "buy_hold": bh, "null": {}, "period": "2024-07-01 .. 2025-07-20 23:59",
+    res["look1"] = {"diagnostic_minute_vote": dgt, "members": mem, "combos": com, "buy_hold": bh, "null": {}, "period": "2024-07-01 .. 2025-07-20 23:59",
                     "sel_recheck_calmar_2bps": {c: com[c]["sel"]["2"]["calmar"] for c in T.COMBOS}}
     for c in T.COMBOS:
         res["look1"]["null"][c] = A.null_summary(combos[c], view, sl["look1"], T.VERDICT_COST)
@@ -65,10 +67,12 @@ def main():
     fsl = {"fwd": slice(fh0, fg.nh)}
     fmem, fr2m = A.table_for({m: f["pos"][i] for i, m in enumerate(T.MEMBERS)}, fview, fsl)
     fcom, fr2c = A.table_for(fcombos, fview, fsl)
+    fdg = {"D3": T.vote_minute(f["pos"])}; fdg["D6"] = fdg["D3"] * np.repeat(fhar, 60)
+    fdgt, _ = A.table_for(fdg, fview, fsl)
     fbh = A.buy_hold(fview, fsl)
     fnull = {c: A.null_summary(fcombos[c], fview, fsl["fwd"], T.VERDICT_COST) for c in T.COMBOS}
     ht = fview.hour_t[fsl["fwd"]]
-    fres = {"members": fmem, "combos": fcom, "buy_hold": fbh, "null": fnull, "period": "2025-11-01 .. 2026-09-30 23:59 (calibration month 2025-10)",
+    fres = {"diagnostic_minute_vote": fdgt, "members": fmem, "combos": fcom, "buy_hold": fbh, "null": fnull, "period": "2025-11-01 .. 2026-09-30 23:59 (calibration month 2025-10)",
             "sigma_star": f["sig_star"], "meta": {k: {kk: vv for kk, vv in v.items() if kk != "p"} for k, v in f["meta"].items()},
             "corr_2bps": A.correlation(T.net(fg_, fu_, 2)[:, fsl["fwd"]]).round(3).tolist(),
             "monthly": {c: A.monthly_summary(fr2c[(c, "fwd")], ht) for c in T.COMBOS}}
@@ -97,6 +101,8 @@ def main():
     out += table_text("COMBINATIONS, Look 1", com, "look1", bh)
     out += table_text("MEMBERS, forward 2025-11..2026-09 (frozen models)", fmem, "fwd", fbh)
     out += table_text("COMBINATIONS, forward", fcom, "fwd", fbh)
+    out += table_text("DIAGNOSTIC (not one of the six, not selectable): the vote per minute, Look 1", dgt, "look1", bh)
+    out += table_text("DIAGNOSTIC: the vote per minute, forward", fdgt, "fwd", fbh)
     for per, key in (("Look 1", res["look1"]), ("forward", fres)):
         out += ["", f"Random-side null at 2 bps, cumulative return, {per}: " + ", ".join(f"{c} p50 {v['p50']:+.3f} p95 {v['p95']:+.3f}" for c, v in key["null"].items())]
         cm = key["corr_2bps"]

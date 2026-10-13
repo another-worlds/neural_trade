@@ -253,3 +253,9 @@ def test_rsi_meanrev_hysteresis():
     assert set(np.unique(p)) <= {-1, 0, 1}
     i = np.flatnonzero(p == -1)
     assert len(i) and (p[i[0]:i[0] + 1] == -1).all()
+
+
+def test_minute_vote_diagnostic_matches_the_hourly_rule_on_constant_positions():
+    pos = np.repeat(np.array([[1, 1, 0], [1, 1, 0], [1, -1, 0], [0, -1, 0], [0, 0, 0], [0, 0, 0]], np.int8), 60, axis=1)
+    assert list(T.vote_minute(pos)[::60]) == [1.0, 0.0, 0.0]
+    assert list(T.vote_hourly(pos.reshape(6, 3, 60).mean(2))) == list(T.vote_minute(pos)[::60])
