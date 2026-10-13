@@ -1,0 +1,70 @@
+{
+ "spec": "runs/tactical/tasks/T05_interval_models/SPEC.md @7a02d55",
+ "months": [
+  "2019-01",
+  "2024-06"
+ ],
+ "n_months": 66,
+ "summary": {
+  "M0": {
+   "iscore_bps": 291.7294721602675,
+   "pooled_cover": 0.896510871359624,
+   "cover_sd": 0.018167248594473055,
+   "width_bps": 178.3227430424229,
+   "n_months": 66
+  },
+  "M1": {
+   "iscore_bps": 300.0592964498678,
+   "pooled_cover": 0.8973775697485846,
+   "cover_sd": 0.01890371013395247,
+   "width_bps": 194.10877608041963,
+   "n_months": 66
+  },
+  "M2": {
+   "iscore_bps": 291.5634746807154,
+   "pooled_cover": 0.8969357235110753,
+   "cover_sd": 0.017685280484980668,
+   "width_bps": 178.22590251270307,
+   "n_months": 66
+  },
+  "M3": {
+   "iscore_bps": 291.6489649767525,
+   "pooled_cover": 0.8966055526962331,
+   "cover_sd": 0.01821130532002548,
+   "width_bps": 178.3380966474836,
+   "n_months": 66
+  },
+  "M4": {
+   "iscore_bps": 290.5742292649577,
+   "pooled_cover": 0.8979165250492829,
+   "cover_sd": 0.0176272841445029,
+   "width_bps": 180.43909233298254,
+   "n_months": 66
+  },
+  "M5": {
+   "iscore_bps": 301.95843663805016,
+   "pooled_cover": 0.8995115414121599,
+   "cover_sd": 0.001410276117994394,
+   "width_bps": 198.03885394070076,
+   "n_months": 66
+  }
+ },
+ "qualifies_pooled_cover_088_092": {
+  "M0": true,
+  "M1": true,
+  "M2": true,
+  "M3": true,
+  "M4": true,
+  "M5": true
+ },
+ "candidates_excluding_M0_M1": [
+  "M2",
+  "M3",
+  "M4",
+  "M5"
+ ],
+ "chosen": "M4",
+ "qr_stride": 4,
+ "code_head_when_run": "7a02d559b9712a62ecc402a35bb71321adc297c0",
+ "runtime_s": 2866.0679013729095
+}

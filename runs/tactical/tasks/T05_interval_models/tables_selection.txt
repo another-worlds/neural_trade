@@ -1,0 +1,14 @@
+== T05 selection: monthly walk-forward 2019-01..2024-06 (66 months), T=60, 90% intervals ==
+model  mean_iscore_bps  pooled_cover  monthly_cover_sd  mean_width_bps  qualifies
+M0           291.729       0.8965           0.0182         178.32  True
+M1           300.059       0.8974           0.0189         194.11  True
+M2           291.563       0.8969           0.0177         178.23  True
+M3           291.649       0.8966           0.0182         178.34  True
+M4           290.574       0.8979           0.0176         180.44  True
+M5           301.958       0.8995           0.0014         198.04  True
+chosen (lowest score among M2-M5 with pooled coverage in [0.88, 0.92]): M4
+  M1 - M0 mean monthly iscore diff +8.330 [+6.966,+9.693] bps, months lower 1/66 (descriptive)
+  M2 - M0 mean monthly iscore diff -0.166 [-0.443,+0.111] bps, months lower 40/66 (descriptive)
+  M3 - M0 mean monthly iscore diff -0.081 [-0.238,+0.077] bps, months lower 40/66 (descriptive)
+  M4 - M0 mean monthly iscore diff -1.155 [-1.735,-0.575] bps, months lower 43/66 (descriptive)
+  M5 - M0 mean monthly iscore diff +10.229 [+8.746,+11.712] bps, months lower 1/66 (descriptive)
