@@ -1,0 +1,77 @@
+=== arm frozen  (VERDICT ARM) ===
+trades 437 of 844 signals; thresholds 2025-11:0.0990, 2025-12:0.1035, 2026-01:0.1089, 2026-02:0.1024, 2026-03:0.1062, 2026-04:0.1061, 2026-05:0.1150, 2026-06:0.1093, 2026-07:0.1044, 2026-08:0.1126, 2026-09:0.1019
+-- cost 0 bps: hit 0.519, mean -1.9 bps/trade, mean monthly -74 bps, 95% CI [-484, +336], cum -8.13%, maxDD 18.72%, months hit>60% 1/11, months DD<5% 3/11
+   month      n   hit  mean_bps  sum_bps  maxDD%
+   2025-11   46  0.543     -13.6     -624  9.64
+   2025-12   47  0.638      +4.3     +204  6.59
+   2026-01   36  0.556      -3.6     -129  5.69
+   2026-02   39  0.436     -30.0    -1169  11.69
+   2026-03   38  0.500      +5.8     +219  6.53
+   2026-04   43  0.558     +24.2    +1041  1.10
+   2026-05   31  0.516      -1.0      -32  2.00
+   2026-06   36  0.500      -2.0      -71  7.21
+   2026-07   46  0.370     -14.3     -656  7.21
+   2026-08   31  0.516      -6.4     -197  5.06
+   2026-09   44  0.568     +13.7     +603  4.83
+   null (random side, same trades): cum median -0.78% p95 +34.17%, hit median 0.499 p95 0.542, DD median 21.47% ; share of null draws with cum >= actual 0.634
+-- cost 1 bps: hit 0.513, mean -2.9 bps/trade, mean monthly -114 bps, 95% CI [-523, +296], cum -12.50%, maxDD 22.49%, months hit>60% 1/11, months DD<5% 3/11
+   null (random side, same trades): cum median -5.15% p95 +29.80%, hit median 0.494 p95 0.535, DD median 23.21% ; share of null draws with cum >= actual 0.634
+-- cost 2 bps: hit 0.503, mean -3.9 bps/trade, mean monthly -153 bps, 95% CI [-563, +256], cum -16.87%, maxDD 26.26%, months hit>60% 1/11, months DD<5% 2/11
+   month      n   hit  mean_bps  sum_bps  maxDD%
+   2025-11   46  0.543     -15.6     -716  10.17
+   2025-12   47  0.638      +2.3     +110  6.75
+   2026-01   36  0.528      -5.6     -201  6.00
+   2026-02   39  0.410     -32.0    -1247  12.47
+   2026-03   38  0.500      +3.8     +143  7.12
+   2026-04   43  0.558     +22.2     +955  1.20
+   2026-05   31  0.484      -3.0      -94  2.19
+   2026-06   36  0.500      -4.0     -143  7.44
+   2026-07   46  0.348     -16.3     -748  8.03
+   2026-08   31  0.516      -8.4     -259  5.58
+   2026-09   44  0.500     +11.7     +515  5.09
+   null (random side, same trades): cum median -9.52% p95 +25.43%, hit median 0.485 p95 0.526, DD median 25.28% ; share of null draws with cum >= actual 0.634
+   leverage frontier (2 bps): 1x: -16.9% / DD 26.3%; 2x: -33.7% / DD 51.6%; 3x: -50.6% / DD 76.2%; 5x: -84.4% / DD 123.0%; 10x: -168.7% / DD 228.0%; 20x: -337.4% / DD 397.8%; max leverage with DD<5%: 0.19x -> -3.2%
+-- cost 5 bps: hit 0.476, mean -6.9 bps/trade, mean monthly -273 bps, 95% CI [-682, +136], cum -29.98%, maxDD 37.60%, months hit>60% 1/11, months DD<5% 2/11
+   null (random side, same trades): cum median -22.63% p95 +12.32%, hit median 0.465 p95 0.503, DD median 33.02% ; share of null draws with cum >= actual 0.634
+criteria (2 bps): {'months >= 6': True, 'mean monthly net bps at 2 bps > 0': False, '95% t lower bound > 0': False, 'max drawdown < 15%': False}
+VERDICT: failed: mean monthly net bps at 2 bps > 0, 95% t lower bound > 0, max drawdown < 15%
+
+=== arm diag_oct_scaler  (diagnostic only, not a verdict) ===
+trades 428 of 830 signals; thresholds 2025-11:0.0971, 2025-12:0.1034, 2026-01:0.1081, 2026-02:0.1021, 2026-03:0.1039, 2026-04:0.1028, 2026-05:0.1126, 2026-06:0.1079, 2026-07:0.1044, 2026-08:0.1120, 2026-09:0.1008
+-- cost 0 bps: hit 0.526, mean -1.4 bps/trade, mean monthly -53 bps, 95% CI [-510, +404], cum -5.85%, maxDD 15.68%, months hit>60% 2/11, months DD<5% 4/11
+   month      n   hit  mean_bps  sum_bps  maxDD%
+   2025-11   45  0.489     -23.7    -1065  12.28
+   2025-12   45  0.667     +16.2     +727  2.76
+   2026-01   36  0.583      +0.8      +30  5.03
+   2026-02   38  0.447     -26.3     -998  10.84
+   2026-03   36  0.472      -2.9     -106  8.60
+   2026-04   45  0.622     +26.2    +1179  1.27
+   2026-05   33  0.545      +6.1     +200  1.97
+   2026-06   34  0.471      -8.0     -272  7.54
+   2026-07   44  0.409     -11.5     -507  5.64
+   2026-08   28  0.500      -7.3     -204  5.13
+   2026-09   44  0.545      +9.8     +431  4.00
+   null (random side, same trades): cum median +0.05% p95 +33.59%, hit median 0.500 p95 0.542, DD median 20.17% ; share of null draws with cum >= actual 0.618
+-- cost 1 bps: hit 0.519, mean -2.4 bps/trade, mean monthly -92 bps, 95% CI [-548, +364], cum -10.13%, maxDD 18.47%, months hit>60% 2/11, months DD<5% 4/11
+   null (random side, same trades): cum median -4.23% p95 +29.31%, hit median 0.493 p95 0.535, DD median 21.87% ; share of null draws with cum >= actual 0.618
+-- cost 2 bps: hit 0.512, mean -3.4 bps/trade, mean monthly -131 bps, 95% CI [-586, +324], cum -14.41%, maxDD 22.15%, months hit>60% 2/11, months DD<5% 4/11
+   month      n   hit  mean_bps  sum_bps  maxDD%
+   2025-11   45  0.489     -25.7    -1155  13.04
+   2025-12   45  0.667     +14.2     +637  2.82
+   2026-01   36  0.556      -1.2      -42  5.30
+   2026-02   38  0.421     -28.3    -1074  11.54
+   2026-03   36  0.472      -4.9     -178  9.18
+   2026-04   45  0.622     +24.2    +1089  1.42
+   2026-05   33  0.515      +4.1     +134  2.16
+   2026-06   34  0.471     -10.0     -340  8.08
+   2026-07   44  0.386     -13.5     -595  6.43
+   2026-08   28  0.500      -9.3     -260  5.59
+   2026-09   44  0.500      +7.8     +343  4.49
+   null (random side, same trades): cum median -8.51% p95 +25.03%, hit median 0.488 p95 0.530, DD median 23.91% ; share of null draws with cum >= actual 0.618
+   leverage frontier (2 bps): 1x: -14.4% / DD 22.1%; 2x: -28.8% / DD 43.6%; 3x: -43.2% / DD 64.3%; 5x: -72.1% / DD 103.7%; 10x: -144.1% / DD 192.3%; 20x: -288.2% / DD 335.5%; max leverage with DD<5%: 0.22x -> -3.2%
+-- cost 5 bps: hit 0.488, mean -6.4 bps/trade, mean monthly -248 bps, 95% CI [-701, +206], cum -27.25%, maxDD 33.22%, months hit>60% 1/11, months DD<5% 3/11
+   null (random side, same trades): cum median -21.35% p95 +12.19%, hit median 0.470 p95 0.512, DD median 31.46% ; share of null draws with cum >= actual 0.618
+criteria (2 bps): {'months >= 6': True, 'mean monthly net bps at 2 bps > 0': False, '95% t lower bound > 0': False, 'max drawdown < 15%': False}
+VERDICT: failed: mean monthly net bps at 2 bps > 0, 95% t lower bound > 0, max drawdown < 15%
+
+run time 5.5 s
