@@ -86,6 +86,31 @@ def test_exits_are_checked_from_the_bar_after_the_entry_bar():
     assert tr["ebar"][0] == 1 and tr["reason"][0] == "time"
 
 
+def test_pess_variant_checks_the_stop_in_the_entry_bar():
+    def go(rows, family, stop, pess, **kw):
+        O, Hi, Lo, Cl = bars(rows, 100)
+        return L.simulate(O, Hi, Lo, Cl, np.array([0]), O[[0]], np.array([0.01]), family, 1.5, 15, stop, pess=pess)
+    # BRK long: buy stop at 101.5; entry bar spikes to 102 and falls to 100.0, closes 100.2. Stop = 101.5 * 0.99 = 100.485 (reached by the low).
+    rows = [flat(), (100.0, 102.0, 100.0, 100.2), flat(101.0)]
+    a = go(rows, "BRK", 1.0, False); b = go(rows, "BRK", 1.0, True)
+    assert a["reason"][0] == "time" and a["xbar"][0] == 16                       # primary: the entry bar is ignored
+    assert b["reason"][0] == "stop" and b["xbar"][0] == b["ebar"][0] == 1 and b["xpx"][0] == pytest.approx(100.2)   # close 100.2 is worse than the stop 100.485
+    # close better than the stop: filled at the stop
+    rows = [flat(), (100.0, 102.0, 100.0, 101.0), flat(101.0)]
+    assert go(rows, "BRK", 1.0, True)["xpx"][0] == pytest.approx(101.5 * 0.99)
+    # no stop: identical to the primary; stop not reached in the entry bar: identical
+    assert go(rows, "BRK", None, True)["reason"][0] == "time"
+    rows = [flat(), (100.0, 102.0, 101.0, 101.8), flat(101.8)]
+    assert go(rows, "BRK", 1.0, True)["reason"][0] == "time"
+    # short mirrored: sell stop at 98.5, stop at 98.5 * 1.01 = 99.485; the entry bar rebounds to 100 and closes 99.9 (worse than the stop)
+    rows = [flat(), (100.0, 100.0, 98.0, 99.9), flat(99.9)]
+    s = go(rows, "BRK", 1.0, True)
+    assert s["side"][0] == -1 and s["reason"][0] == "stop" and s["xpx"][0] == pytest.approx(99.9) and s["xbar"][0] == 1
+    # the next decision after an entry-bar stop is allowed from the bar after it
+    O, Hi, Lo, Cl = bars([flat(), (100.0, 102.0, 100.0, 100.2), flat(100.2)], 100)
+    assert list(L.simulate(O, Hi, Lo, Cl, np.array([0]), O[[0]], np.array([0.01]), "BRK", 1.5, 15, 1.0, pess=True)["xbar"]) == [1]
+
+
 def test_gap_beyond_target_and_stop_fill_at_the_open():
     rows = [flat(), (100, 100, 98.9, 99.2), (101.0, 101.5, 100.5, 101.0), flat(101.0)]       # long entered at 99; bar 2 opens above the target 100
     tr = run(rows, "REV", dec=(0,), pad=100)

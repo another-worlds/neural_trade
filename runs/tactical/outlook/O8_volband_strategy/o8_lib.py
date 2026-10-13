@@ -144,7 +144,7 @@ def shuffle_within(x, seed, H, key):
 
 
 # ------------------------------------------------------------------ engine
-def simulate(O, Hi, Lo, Cl, dec, m, sig, family, k, Hh, stop_s, valid=STEP, tmin=None):
+def simulate(O, Hi, Lo, Cl, dec, m, sig, family, k, Hh, stop_s, valid=STEP, tmin=None, pess=False):
     """Run one configuration over decisions `dec` (bar indices, sorted), decision prices `m`, forecast stds `sig` (nan = no decision).
     Returns a dict of per-trade arrays (gross log return, no cost) sorted by entry. See SPEC "Mechanics":
       REV: buy limit L = m (1 - k sig), sell limit U = m (1 + k sig); limits fill only on a bar that trades THROUGH the level by TT; price = limit,
@@ -192,7 +192,10 @@ def simulate(O, Hi, Lo, Cl, dec, m, sig, family, k, Hh, stop_s, valid=STEP, tmin
         e = dj + int(ebar_rel[j]); side = 1 if take_long[j] else -1; p0 = float(epx[j]); s0 = float(sg[j]); mj = float(mm[j])
         stop_px = None if stop_s is None else (p0 * (1 - stop_s * s0) if side == 1 else p0 * (1 + stop_s * s0))
         tgt = mj if family == "REV" else None
-        xbar, xpx, why = _exit(O, Hi, Lo, e, Hh, side, stop_px, tgt)
+        if pess and stop_px is not None and ((Lo[e] <= stop_px) if side == 1 else (Hi[e] >= stop_px)):
+            xbar, why = e, "stop"; xpx = float(min(stop_px, Cl[e]) if side == 1 else max(stop_px, Cl[e]))
+        else:
+            xbar, xpx, why = _exit(O, Hi, Lo, e, Hh, side, stop_px, tgt)
         res["dec"].append(dj); res["ebar"].append(e); res["xbar"].append(xbar); res["side"].append(side); res["epx"].append(p0)
         res["xpx"].append(xpx); res["reason"].append(why); res["both"].append(bool(both[j])); res["sig"].append(s0)
         free_from = xbar if why == "time" else xbar + 1      # a time stop is the OPEN of its bar: a decision on that bar is allowed
