@@ -1,0 +1,89 @@
+train bars 596440 2024-06-01 00:00:00 2025-07-20 23:59:00 | fwd bars 527041 2025-10-01 00:00:00 2026-10-02 00:00:00 7s
+anchors train 84966 fwd 75026 7s
+T 15 train rows 74729 last label end 2025-07-20 20:11:00 frozen q {'trail': {'lo': -1.683, 'hi': 1.683, 'q05': -1.683, 'es': -2.46}, 'HAR': {'lo': -2.058, 'hi': 2.055, 'q05': -2.058, 'es': -2.995}, 'HAR+': {'lo': -2.058, 'hi': 2.055, 'q05': -2.058, 'es': -2.995}}
+T 60 train rows 74729 last label end 2025-07-20 20:56:00 frozen q {'trail': {'lo': -1.66, 'hi': 1.644, 'q05': -1.66, 'es': -2.601}, 'HAR': {'lo': -2.109, 'hi': 2.079, 'q05': -2.109, 'es': -3.184}, 'HAR+': {'lo': -2.109, 'hi': 2.079, 'q05': -2.109, 'es': -3.184}}
+T 240 train rows 74729 last label end 2025-07-20 23:56:00 frozen q {'trail': {'lo': -1.767, 'hi': 1.715, 'q05': -1.767, 'es': -2.737}, 'HAR': {'lo': -2.237, 'hi': 2.149, 'q05': -2.237, 'es': -3.333}, 'HAR+': {'lo': -2.237, 'hi': 2.149, 'q05': -2.237, 'es': -3.333}}
+scored T 15 8s
+scored T 60 8s
+scored T 240 8s
+== T03: forward test of vol-based 90% return intervals (SPEC.md). Scored months 2025-11..2026-09 (11) ==
+train rows {15: 74729, 60: 74729, 240: 74729}; metrics are monthly means; width/interval score in bps of the T-minute log return
+-- T=15: mean over months (cover | width bps | interval score bps | VaR5 hit | FZ0)
+   frozen trail cover 0.9018 (pooled 0.9018) | width 69.50 | iscore 98.43 | VaR hit 0.0497 | FZ0 -5.4200
+   frozen HAR   cover 0.9010 (pooled 0.9011) | width 65.45 | iscore 96.63 | VaR hit 0.0506 | FZ0 -5.4423
+   frozen HAR+  cover 0.9010 (pooled 0.9011) | width 65.45 | iscore 96.63 | VaR hit 0.0506 | FZ0 -5.4423
+   cal    trail cover 0.8994 (pooled 0.8994) | width 68.94 | iscore 98.39 | VaR hit 0.0501 | FZ0 -5.4192
+   cal    HAR   cover 0.8991 (pooled 0.8992) | width 65.11 | iscore 96.71 | VaR hit 0.0504 | FZ0 -5.4407
+   cal    HAR+  cover 0.8991 (pooled 0.8992) | width 65.11 | iscore 96.71 | VaR hit 0.0504 | FZ0 -5.4407
+-- T=60: mean over months (cover | width bps | interval score bps | VaR5 hit | FZ0)
+   frozen trail cover 0.9013 (pooled 0.9013) | width 141.23 | iscore 207.01 | VaR hit 0.0502 | FZ0 -4.6103
+   frozen HAR   cover 0.9045 (pooled 0.9046) | width 132.74 | iscore 197.17 | VaR hit 0.0485 | FZ0 -4.6901
+   frozen HAR+  cover 0.9045 (pooled 0.9046) | width 132.74 | iscore 197.17 | VaR hit 0.0485 | FZ0 -4.6901
+   cal    trail cover 0.9002 (pooled 0.9001) | width 140.51 | iscore 206.95 | VaR hit 0.0496 | FZ0 -4.6076
+   cal    HAR   cover 0.8999 (pooled 0.9002) | width 130.36 | iscore 197.53 | VaR hit 0.0497 | FZ0 -4.6883
+   cal    HAR+  cover 0.8999 (pooled 0.9002) | width 130.36 | iscore 197.53 | VaR hit 0.0497 | FZ0 -4.6883
+-- T=240: mean over months (cover | width bps | interval score bps | VaR5 hit | FZ0)
+   frozen trail cover 0.9052 (pooled 0.9052) | width 310.59 | iscore 445.34 | VaR hit 0.0503 | FZ0 -3.7827
+   frozen HAR   cover 0.9039 (pooled 0.9041) | width 287.33 | iscore 418.34 | VaR hit 0.0500 | FZ0 -3.8755
+   frozen HAR+  cover 0.9039 (pooled 0.9041) | width 287.33 | iscore 418.34 | VaR hit 0.0500 | FZ0 -3.8755
+   cal    trail cover 0.8990 (pooled 0.8989) | width 309.31 | iscore 447.23 | VaR hit 0.0503 | FZ0 -3.7826
+   cal    HAR   cover 0.9008 (pooled 0.9010) | width 287.68 | iscore 420.35 | VaR hit 0.0494 | FZ0 -3.8803
+   cal    HAR+  cover 0.9008 (pooled 0.9010) | width 287.68 | iscore 420.35 | VaR hit 0.0494 | FZ0 -3.8803
+== paired monthly differences a - b (negative = a better for iscore/width/FZ0): mean [95% t-CI]  p(mean<0), months n=11 ==
+   T= 15 frozen HAR  -trail iscore_bps   -1.7964 [  -2.1707,  -1.4221] p=0.0000  months a lower 11/11
+   T= 15 frozen HAR  -trail width_bps    -4.0435 [  -5.9464,  -2.1405] p=0.0004  months a lower 11/11
+   T= 15 frozen HAR  -trail fz0          -0.0224 [  -0.0297,  -0.0151] p=0.0000  months a lower 11/11
+   T= 15 frozen HAR+ -trail iscore_bps   -1.7964 [  -2.1707,  -1.4221] p=0.0000  months a lower 11/11
+   T= 15 frozen HAR+ -trail width_bps    -4.0434 [  -5.9464,  -2.1405] p=0.0004  months a lower 11/11
+   T= 15 frozen HAR+ -trail fz0          -0.0224 [  -0.0297,  -0.0151] p=0.0000  months a lower 11/11
+   T= 15 frozen HAR+ -HAR   iscore_bps   -0.0000 [  -0.0000,  +0.0000] p=0.0556  months a lower 8/11
+   T= 15 frozen HAR+ -HAR   width_bps    +0.0000 [  +0.0000,  +0.0000] p=1.0000  months a lower 0/11
+   T= 15 frozen HAR+ -HAR   fz0          -0.0000 [  -0.0000,  +0.0000] p=0.0659  months a lower 7/11
+   T= 15 cal    HAR  -trail iscore_bps   -1.6769 [  -2.0212,  -1.3327] p=0.0000  months a lower 11/11
+   T= 15 cal    HAR  -trail width_bps    -3.8272 [  -6.0928,  -1.5616] p=0.0018  months a lower 11/11
+   T= 15 cal    HAR  -trail fz0          -0.0215 [  -0.0287,  -0.0143] p=0.0000  months a lower 11/11
+   T= 15 cal    HAR+ -trail iscore_bps   -1.6769 [  -2.0212,  -1.3327] p=0.0000  months a lower 11/11
+   T= 15 cal    HAR+ -trail width_bps    -3.8272 [  -6.0928,  -1.5616] p=0.0018  months a lower 11/11
+   T= 15 cal    HAR+ -trail fz0          -0.0215 [  -0.0287,  -0.0143] p=0.0000  months a lower 11/11
+   T= 15 cal    HAR+ -HAR   iscore_bps   -0.0000 [  -0.0000,  +0.0000] p=0.2656  months a lower 5/11
+   T= 15 cal    HAR+ -HAR   width_bps    +0.0000 [  -0.0000,  +0.0001] p=0.8640  months a lower 4/11
+   T= 15 cal    HAR+ -HAR   fz0          -0.0000 [  -0.0000,  +0.0000] p=0.2563  months a lower 7/11
+   T= 60 frozen HAR  -trail iscore_bps   -9.8344 [ -11.6732,  -7.9956] p=0.0000  months a lower 11/11
+   T= 60 frozen HAR  -trail width_bps    -8.4886 [ -13.6262,  -3.3510] p=0.0021  months a lower 11/11
+   T= 60 frozen HAR  -trail fz0          -0.0798 [  -0.0976,  -0.0621] p=0.0000  months a lower 11/11
+   T= 60 frozen HAR+ -trail iscore_bps   -9.8344 [ -11.6732,  -7.9956] p=0.0000  months a lower 11/11
+   T= 60 frozen HAR+ -trail width_bps    -8.4886 [ -13.6261,  -3.3510] p=0.0021  months a lower 11/11
+   T= 60 frozen HAR+ -trail fz0          -0.0798 [  -0.0976,  -0.0621] p=0.0000  months a lower 11/11
+   T= 60 frozen HAR+ -HAR   iscore_bps   -0.0000 [  -0.0000,  +0.0000] p=0.1893  months a lower 8/11
+   T= 60 frozen HAR+ -HAR   width_bps    +0.0000 [  +0.0000,  +0.0000] p=1.0000  months a lower 0/11
+   T= 60 frozen HAR+ -HAR   fz0          -0.0000 [  -0.0000,  +0.0000] p=0.1091  months a lower 7/11
+   T= 60 cal    HAR  -trail iscore_bps   -9.4151 [ -11.2446,  -7.5856] p=0.0000  months a lower 11/11
+   T= 60 cal    HAR  -trail width_bps   -10.1454 [ -17.8031,  -2.4877] p=0.0072  months a lower 9/11
+   T= 60 cal    HAR  -trail fz0          -0.0807 [  -0.0992,  -0.0623] p=0.0000  months a lower 11/11
+   T= 60 cal    HAR+ -trail iscore_bps   -9.4151 [ -11.2446,  -7.5856] p=0.0000  months a lower 11/11
+   T= 60 cal    HAR+ -trail width_bps   -10.1454 [ -17.8032,  -2.4877] p=0.0072  months a lower 9/11
+   T= 60 cal    HAR+ -trail fz0          -0.0807 [  -0.0992,  -0.0623] p=0.0000  months a lower 11/11
+   T= 60 cal    HAR+ -HAR   iscore_bps   -0.0000 [  -0.0000,  +0.0000] p=0.1274  months a lower 8/11
+   T= 60 cal    HAR+ -HAR   width_bps    -0.0000 [  -0.0002,  +0.0002] p=0.3624  months a lower 6/11
+   T= 60 cal    HAR+ -HAR   fz0          -0.0000 [  -0.0000,  +0.0000] p=0.0323  months a lower 9/11
+   T=240 frozen HAR  -trail iscore_bps  -27.0037 [ -38.4427, -15.5646] p=0.0002  months a lower 11/11
+   T=240 frozen HAR  -trail width_bps   -23.2566 [ -36.7318,  -9.7815] p=0.0016  months a lower 11/11
+   T=240 frozen HAR  -trail fz0          -0.0928 [  -0.1418,  -0.0438] p=0.0009  months a lower 10/11
+   T=240 frozen HAR+ -trail iscore_bps  -27.0037 [ -38.4428, -15.5646] p=0.0002  months a lower 11/11
+   T=240 frozen HAR+ -trail width_bps   -23.2568 [ -36.7320,  -9.7816] p=0.0016  months a lower 11/11
+   T=240 frozen HAR+ -trail fz0          -0.0928 [  -0.1418,  -0.0438] p=0.0009  months a lower 10/11
+   T=240 frozen HAR+ -HAR   iscore_bps   -0.0000 [  -0.0000,  +0.0000] p=0.4061  months a lower 5/11
+   T=240 frozen HAR+ -HAR   width_bps    -0.0002 [  -0.0002,  -0.0001] p=0.0000  months a lower 11/11
+   T=240 frozen HAR+ -HAR   fz0          +0.0000 [  -0.0000,  +0.0000] p=0.6673  months a lower 4/11
+   T=240 cal    HAR  -trail iscore_bps  -26.8845 [ -38.5066, -15.2624] p=0.0002  months a lower 10/11
+   T=240 cal    HAR  -trail width_bps   -21.6316 [ -42.9325,  -0.3308] p=0.0236  months a lower 7/11
+   T=240 cal    HAR  -trail fz0          -0.0977 [  -0.1404,  -0.0550] p=0.0002  months a lower 11/11
+   T=240 cal    HAR+ -trail iscore_bps  -26.8844 [ -38.5065, -15.2623] p=0.0002  months a lower 10/11
+   T=240 cal    HAR+ -trail width_bps   -21.6315 [ -42.9324,  -0.3305] p=0.0236  months a lower 7/11
+   T=240 cal    HAR+ -trail fz0          -0.0977 [  -0.1404,  -0.0550] p=0.0002  months a lower 11/11
+   T=240 cal    HAR+ -HAR   iscore_bps   +0.0001 [  +0.0000,  +0.0001] p=0.9823  months a lower 2/11
+   T=240 cal    HAR+ -HAR   width_bps    +0.0001 [  -0.0001,  +0.0004] p=0.8439  months a lower 5/11
+   T=240 cal    HAR+ -HAR   fz0          +0.0000 [  -0.0000,  +0.0000] p=0.8249  months a lower 4/11
+== PRE-REGISTERED CRITERION (cal, HAR vs trail; iscore diff CI entirely below 0 and pooled HAR coverage in [0.88, 0.92]) ==
+   T=15: {'mean_diff_iscore_bps': -1.6769155079028273, 'ci': [-2.0211796094766488, -1.332651406329006], 'p_lt0': 3.7340696125440306e-07, 'c1_ci_below_0': True, 'pooled_cover': 0.8992437429603733, 'c2_cover_in_band': True, 'success': True, 'holm_p': 7.468139225088061e-07, 'success_holm': True}
+done 10s
