@@ -103,3 +103,17 @@
 23:59:21 META_k1.5 trades/mo 38.2 m2% -1.061 t -1.27 elig True 144s
 23:59:21 CHOICE {'rule': 'highest t-statistic of the monthly net return at 2 bps (PESS fills) on 2021-01..2024-06 among configurations with >= 20 trades per month (SPEC.md)', 'config': 'ENS_k1.0_doff_g0.0_tauoff_szvt', 'cfg': {'k': 1.0, 'delta': None, 'g': 0.0, 'tau': None, 'size': 'vt'}, 't_2bps': 4.0906247265677855, 'mean_m_2bps': 0.03760160645372109, 'trades_per_month': 136.02380952380952, 'n_trades': 5713, 'n_months': 42, 'n_eligible': 25, 'n_configs': 33, 'fills': 'PESS', 'selection_months': ['2021-01', '2024-06']}
 23:59:21 total 144s
+00:05:12 ROBUST check {'rule_pick': 'ENS_k1.0_d0.02_goff_tau2.0_sz1x', 'choice_robust_config': 'ENS_k1.0_d0.02_goff_tau2.0_sz1x', 'satisfies_rule': True, 'selection_jsonl': {'t_2bps': 3.2049770264773403, 'm2_pct': 1.8237762173779042, 'm5_pct': 0.18949050309218934, 'trades_per_month': 54.476190476190474, 'hit_pct': 46.02272727272727, 'maxdd_pct': 15.953179413968806}, 'choice_robust_json': {'t_2bp_pess': 3.2, 'm2bp_pct': 1.82, 'm5bp_pct': 0.19, 'trades_per_month': 54.5, 'hit_pct': 46.0, 'maxdd_pct': 15.95}}
+00:05:45 span B valid decisions 36780 33s
+00:06:26 ROBUST check {'rule_pick': 'ENS_k1.0_d0.02_goff_tau2.0_sz1x', 'choice_robust_config': 'ENS_k1.0_d0.02_goff_tau2.0_sz1x', 'satisfies_rule': True, 'selection_jsonl': {'t_2bps': 3.2049770264773403, 'm2_pct': 1.8237762173779042, 'm5_pct': 0.18949050309218934, 'trades_per_month': 54.476190476190474, 'hit_pct': 46.02272727272727, 'maxdd_pct': 15.953179413968806}, 'choice_robust_json': {'t_2bp_pess': 3.2, 'm2bp_pct': 1.82, 'm5bp_pct': 0.19, 'trades_per_month': 54.5, 'hit_pct': 46.0, 'maxdd_pct': 15.95}}
+00:06:35 span B valid decisions 36780 9s
+00:06:49 span C valid decisions 35597 23s
+00:08:01 span A valid decisions 87676 95s
+00:08:06 describe done 99s
+00:08:18 freeze bars 525600 2025-10-01 00:00:00 2026-09-30 23:59:00
+00:08:40 FROZEN sha256 9c5259a60e0c2c6e966f530585bb354e881ee1d53f3a5098ff01b3d8bb055195 sigma n_tr 73825 dv n_tr 73825 pup n_tr 62845 last label ends 2026-09-30 20:55:00 2026-09-30 20:55:00 2026-09-30 20:55:00
+00:08:56 ROBUST check {'rule_pick': 'ENS_k1.0_d0.02_goff_tau2.0_sz1x', 'choice_robust_config': 'ENS_k1.0_d0.02_goff_tau2.0_sz1x', 'satisfies_rule': True, 'selection_jsonl': {'t_2bps': 3.2049770264773403, 'm2_pct': 1.8237762173779042, 'm5_pct': 0.18949050309218934, 'trades_per_month': 54.476190476190474, 'hit_pct': 46.02272727272727, 'maxdd_pct': 15.953179413968806}, 'choice_robust_json': {'t_2bp_pess': 3.2, 'm2bp_pct': 1.82, 'm5bp_pct': 0.19, 'trades_per_month': 54.5, 'hit_pct': 46.0, 'maxdd_pct': 15.95}}
+00:09:05 span B valid decisions 36780 9s
+00:09:19 span C valid decisions 35597 23s
+00:09:29 span A valid decisions 87676 33s
+00:09:34 describe done 37s

@@ -1,4 +1,4 @@
-"""O9 tests, PHASE 1 (SPEC "Tests"): causality of dV and p_up, labels before the month, gates, size cap, the engine against O8's, META's training set,
+"""O9 tests, PHASES 1 and 2 (SPEC "Tests"): causality of dV and p_up, labels before the month, gates, size cap, the engine against O8's, META's training set,
 the choice gate. pytest in this folder."""
 import json, os, subprocess, sys
 import numpy as np
@@ -8,6 +8,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import o9_lib as L  # noqa: E402
 import run_o9 as R  # noqa: E402
+import o9_p2 as P2  # noqa: E402
+import score_P as SP  # noqa: E402
 L8 = L.L8; P5 = L.P5; O3 = L.O3; T = L.T
 
 
@@ -244,23 +246,143 @@ def test_grid_is_the_literal_32_with_distinct_names():
     g = L.grid(); assert len(g) == 32 and len({L.cfg_name(c) for c in g}) == 32
 
 
-def test_choice_gate_refuses_without_a_committed_unchanged_choice_and_phase2_stubs_stop(tmp_path, monkeypatch):
+def _mini_repo(tmp_path, monkeypatch):
     def g(*a):
         subprocess.run(["git", "-C", str(tmp_path), *a], check=True, capture_output=True)
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t")
     (tmp_path / "keep.txt").write_text("x"); g("add", "keep.txt"); g("commit", "-q", "-m", "init")
-    monkeypatch.setattr(R, "HERE", str(tmp_path)); monkeypatch.setattr(R, "CHOICE", str(tmp_path / "choice.json"))
-    with pytest.raises(SystemExit, match="not tracked"):
-        R.describe()
-    (tmp_path / "choice.json").write_text(json.dumps({"config": "x"}))
-    with pytest.raises(SystemExit, match="not tracked"):
-        R.freeze()
-    g("add", "choice.json")
-    with pytest.raises(SystemExit, match="not in HEAD|differs"):
+    monkeypatch.setattr(R, "HERE", str(tmp_path)); monkeypatch.setattr(R, "CHOICE", str(tmp_path / "choice.json")); monkeypatch.setattr(R, "CHOICE_R", str(tmp_path / "choice_robust.json"))
+    return g
+
+
+def test_choice_gate_covers_both_choice_files(tmp_path, monkeypatch):
+    g = _mini_repo(tmp_path, monkeypatch)
+    with pytest.raises(SystemExit, match="choice.json is not tracked"):
         R.choice_gate()
-    g("commit", "-q", "-m", "choice")
-    with pytest.raises(SystemExit, match="PHASE 2 not implemented"):
-        R.describe()
-    (tmp_path / "choice.json").write_text(json.dumps({"config": "y"}))
-    with pytest.raises(SystemExit, match="differs"):
+    (tmp_path / "choice.json").write_text(json.dumps({"config": "x"})); g("add", "choice.json"); g("commit", "-q", "-m", "c1")
+    with pytest.raises(SystemExit, match="choice_robust.json is not tracked"):               # the second file is missing
+        R.choice_gate()
+    (tmp_path / "choice_robust.json").write_text(json.dumps({"config": "y"}))
+    with pytest.raises(SystemExit, match="choice_robust.json is not tracked"):               # present but untracked
         R.freeze()
+    g("add", "choice_robust.json")
+    with pytest.raises(SystemExit, match="not in HEAD|differs"):
+        R.describe()
+    g("commit", "-q", "-m", "c2")
+    a, b = R.choice_gate(); assert a["config"] == "x" and b["config"] == "y"
+    (tmp_path / "choice.json").write_text(json.dumps({"config": "z"}))
+    with pytest.raises(SystemExit, match="choice.json differs"):
+        R.choice_gate()
+
+
+def test_robust_candidate_satisfies_its_rule_and_matches_selection_jsonl():
+    ch2 = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "choice_robust.json")))
+    rep = R.check_robust(ch2)
+    assert rep["satisfies_rule"] and rep["rule_pick"] == "ENS_k1.0_d0.02_goff_tau2.0_sz1x"
+    sj, cj = rep["selection_jsonl"], rep["choice_robust_json"]
+    assert sj["t_2bps"] == pytest.approx(cj["t_2bp_pess"], abs=0.01) and sj["m2_pct"] == pytest.approx(cj["m2bp_pct"], abs=0.01) and sj["m5_pct"] == pytest.approx(cj["m5bp_pct"], abs=0.01)
+    assert sj["trades_per_month"] == pytest.approx(cj["trades_per_month"], abs=0.05) and sj["hit_pct"] == pytest.approx(cj["hit_pct"], abs=0.05) and sj["maxdd_pct"] == pytest.approx(cj["maxdd_pct"], abs=0.01)
+
+
+# ------------------------------------------------------------------ phase 2: arms, freeze, scoring
+def test_arms_change_only_what_they_name():
+    c = {"k": 1.0, "delta": 0.02, "g": 0.0, "tau": 2.0, "size": "vt"}
+    assert P2.arm_cfg(c, "NO_REG") == {**c, "delta": None} and P2.arm_cfg(c, "NO_DV") == {**c, "g": None} and P2.arm_cfg(c, "FULL") == c and P2.arm_cfg(c, "NO_GEOM") == c
+    S = {"L1": np.array([1.0, 2.0]), "R0": np.array([3.0, 4.0]), "dv": np.array([0.1, 0.2]), "p": np.array([0.4, 0.6])}
+    ta = pd.date_range("2024-01-01", periods=2, freq="D").values.astype("datetime64[ns]")
+    assert np.array_equal(P2.arm_inputs(S, "NO_GEOM", ta, ["2024-01"])[0], S["R0"]) and np.array_equal(P2.arm_inputs(S, "FULL", ta, ["2024-01"])[0], S["L1"])
+
+
+def test_shuf_keeps_each_months_multiset_is_seeded_and_independent_per_variable():
+    rng = np.random.default_rng(0); ta = (pd.Timestamp("2024-01-01") + pd.to_timedelta(np.arange(0, 70 * 1440, 15), "m")).values.astype("datetime64[ns]")
+    S = {k: rng.normal(size=len(ta)) for k in ("L1", "R0", "dv", "p")}; S["L1"] = np.abs(S["L1"]) + 1; S["dv"][::17] = np.nan
+    months = ["2024-01", "2024-02"]; mo = pd.DatetimeIndex(ta).to_period("M").astype(str).values
+    sg, dv, p = P2.arm_inputs(S, "SHUF", ta, months)
+    for x, y in ((sg, S["L1"]), (dv, S["dv"]), (p, S["p"])):
+        for m in months:
+            r = mo == m
+            assert np.array_equal(np.sort(x[r][np.isfinite(x[r])]), np.sort(y[r][np.isfinite(y[r])])) and np.array_equal(np.isfinite(x[r]), np.isfinite(y[r]))
+        assert not np.array_equal(x[mo == "2024-01"], y[mo == "2024-01"], equal_nan=True)
+    sg2, dv2, p2 = P2.arm_inputs(S, "SHUF", ta, months)
+    assert np.array_equal(sg, sg2) and np.array_equal(dv, dv2, equal_nan=True) and np.array_equal(p, p2)               # seeded
+    S2 = {**S, "p": S["L1"].copy()}                                                                                   # the same values in two variables
+    sg3, dv3, p3 = P2.arm_inputs(S2, "SHUF", ta, months); assert not np.array_equal(sg3, p3)                           # are permuted differently
+
+
+def test_block_bootstrap_and_holm():
+    x = np.full(60, 0.001); r = P2.boot_ci(x); assert r["lo"] > 0 and r["mean"] == pytest.approx(0.001) and r["p_two_sided"] < 0.01
+    rng = np.random.default_rng(0); z = rng.normal(0, 0.01, 90); z -= z.mean(); r0 = P2.boot_ci(z); assert r0["lo"] < 0 < r0["hi"] and r0["p_two_sided"] > 0.5
+    assert np.array_equal(P2.block_means(z), P2.block_means(z))
+    assert P2.holm([0.01, 0.04]) == pytest.approx([0.02, 0.04]) and P2.holm([0.04, 0.01]) == pytest.approx([0.04, 0.02])
+
+
+def test_freeze_loader_reads_no_bar_after_the_cut_and_the_cut_file_refuses_the_forbidden_gap(tmp_path):
+    n = int((P5.B_HI - P5.B_LO).total_seconds() // 60) + 1 + 3000                                        # 3,000 bars beyond the freeze limit
+    idx = pd.date_range(P5.B_LO, periods=n, freq="min"); rng = np.random.default_rng(0); c = 100 + np.cumsum(rng.normal(0, 0.01, n))
+    f = tmp_path / "fwd.csv"
+    pd.DataFrame({"timestamp": idx, "open": c, "high": c + 0.01, "low": c - 0.01, "close": c, "volume": 1.0}).to_csv(f, index=False)
+    b = P5.load_freeze_bars(str(f)); assert b.index.min() == P5.B_LO and b.index.max() == P5.B_HI and len(b) == n - 3000
+    idx2 = pd.date_range("2025-07-19 23:00", periods=40 * 60, freq="min")
+    g = tmp_path / "cut.csv"; pd.DataFrame({"timestamp": idx2, "open": 1.0, "high": 1.0, "low": 1.0, "close": 1.0, "volume": 1.0}).to_csv(g, index=False)
+    with pytest.raises(AssertionError):
+        T.load_bars(str(g), pd.Timestamp("2025-07-19 23:00"), pd.Timestamp("2025-07-22 00:00"))
+    ok = T.load_bars(str(g), pd.Timestamp("2025-07-19 23:00"), T.CUTOFF); assert ok.index.max() <= T.CUTOFF
+
+
+def test_artefact_roundtrip_reload_identity_tamper_and_no_label_after_the_cut():
+    s = synth(61000); m0 = pd.Timestamp("2024-02-05 00:00"); tr = s[s.index < m0]
+    art = P2.freeze_fit(tr, m0); art_j = json.loads(json.dumps(art))
+    assert P5.sha_of(art_j) == art["sha256"]
+    for k in ("sigma", "dv", "pup"):
+        assert pd.Timestamp(art_j[k]["last_label_end"]) <= m0
+    assert pd.Timestamp(art["last_bar"]) < m0
+    DF, DX = P2.make_dframe_for(s, 6145); months = ["2024-02"]
+    S1 = P2.signals_frozen(P2.load_artefact(art), DF, DX, months); S2 = P2.signals_frozen(P2.load_artefact(art_j), DF, DX, months)
+    for k in S1:
+        assert np.array_equal(S1[k], S2[k], equal_nan=True)
+    assert np.isfinite(S1["L1"]).sum() > 100 and np.isfinite(S1["p"]).sum() > 100
+    F = P5.build_frame(tr, 6144); X = P2.make_X(F, L.train_extras(tr, F["ta"])); sp = L.pup_fit(X, m0)       # p_up from the artefact equals sklearn's on the same fit
+    rows = np.where(np.isfinite(S1["p"]))[0][:200]
+    assert np.allclose(P2.pup_predict_j(art_j["pup"], DX["tb7"][rows]), L.pup_predict(sp, DX["tb7"][rows]), atol=1e-12)
+    bad = json.loads(json.dumps(art)); bad["dv"]["w"][0] += 1e-9
+    with pytest.raises(ValueError, match="sha256"):
+        P2.load_artefact(bad)
+
+
+def test_freeze_is_independent_of_bars_after_the_cut():
+    s = synth(61000); m0 = pd.Timestamp("2024-02-05 00:00")
+    a1 = P2.freeze_fit(s[s.index < m0], m0)
+    s2 = s.copy(); s2.loc[s2.index >= m0, :] = np.random.default_rng(2).uniform(1, 1000, s2[s2.index >= m0].shape)
+    a2 = P2.freeze_fit(s2[s2.index < m0], m0); assert a1["sha256"] == a2["sha256"]
+
+
+def test_complete_months_and_score_refusals(tmp_path, monkeypatch):
+    t = pd.Timestamp
+    assert SP.complete_months(t("2027-02-01 01:15")) == [pd.Period(m, "M") for m in ("2026-11", "2026-12", "2027-01")]
+    assert len(SP.complete_months(t("2027-02-01 01:14"))) == 2 and SP.complete_months(t("2026-10-12 23:59")) == []
+    # the current forward file ends in 2026-10: scoring refuses before any bar is read (only the last timestamp is read)
+    if os.path.exists(T.FWD_CSV) and os.path.exists(SP.FROZEN):
+        monkeypatch.setattr(sys, "argv", ["score_P.py"])
+        monkeypatch.setattr(SP.T, "load_bars", lambda *a, **k: (_ for _ in ()).throw(AssertionError("a bar was read")))
+        with pytest.raises(SystemExit, match="REFUSED: 0 complete months"):
+            SP.main()
+    res = tmp_path / "results_P.json"; res.write_text("{}"); monkeypatch.setattr(SP, "RESULTS", str(res))          # a second scoring is refused
+    with pytest.raises(SystemExit, match="exists"):
+        SP.main()
+    monkeypatch.setattr(SP, "RESULTS", str(tmp_path / "none.json"))                                                # a tampered artefact is refused
+    s = synth(61000); m0 = pd.Timestamp("2024-02-05 00:00"); art = P2.freeze_fit(s[s.index < m0], m0); art["m0"] = "tampered"
+    fz = tmp_path / "frozen_P.json"; fz.write_text(json.dumps(art)); monkeypatch.setattr(SP, "FROZEN", str(fz))
+    with pytest.raises(SystemExit, match="sha256"):
+        SP.main()
+
+
+def test_score_core_on_synthetic_bars_structure_and_paired_series():
+    s = synth(110000, "2026-06-10"); m0 = pd.Timestamp("2026-07-10 00:00")
+    art = P2.freeze_fit(s[s.index < m0], m0)
+    cands = {"PRIMARY": {"k": 1.0, "delta": None, "g": 0.0, "tau": None, "size": "vt"}, "ROBUST": {"k": 1.0, "delta": 0.02, "g": None, "tau": 2.0, "size": "1x"}}
+    res = SP.score_core(art, s, cands, ["2026-07", "2026-08"])
+    assert set(res["per_candidate"]) == {"PRIMARY", "ROBUST"} and res["months"] == ["2026-07", "2026-08"]
+    for nm, r in res["per_candidate"].items():
+        assert set(r) >= {"c1", "c2_FULL_minus_SHUF", "c3_FULL_minus_BASE", "works_prospectively", "adds_over_breakout", "owner_target_met"} and r["c1"]["n_days"] == 62
+        assert 0 <= r["c1"]["p_holm"] <= 1
+    assert res["stats"]["PRIMARY/FULL"]["n_trades"] > 20 and res["stats"]["BASE/FULL"]["n_trades"] > 20

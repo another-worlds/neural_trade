@@ -1,6 +1,18 @@
-d721cfec3ef03db34ba1681e9b040a43fd18549c
+ca1bd23852254295b36b73d12943a018a235ae8f
+runs/tactical/outlook/O9_ensemble_strategy/test_o9.py::test_signals_at_a_decision_do_not_depend_on_bars_at_or_after_it_end_to_end
     return np.log(bank + EPS_CH[None, :, None]).reshape(len(bank), -1)
 
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-18 passed, 1 warning in 2.78s
-All checks passed!
+F841 Local variable `e` is assigned to but never used
+   --> runs\tactical\outlook\O9_ensemble_strategy\run_o9.py:361:59
+    |
+359 | …     i = int(rng.choice(idx)); r = tf.iloc[i]
+360 | …     O, Hi, Lo, Cl = s["open"].values, s["high"].values, s["low"].values, s["close"].values
+361 | …     d = int(s.index.get_loc(r["decision_time"])); e = int(s.index.get_loc(r["entry_time"])); x = int(s.index.get_loc(r["exit_time"]…
+    |                                                     ^
+362 | …     m = float(O[d]); sg = float(r["sigma"]); c = cands[nm]; side = int(r["side"])
+363 | …     out["examples"].append({"candidate": nm, "span": sp, "decision_time": str(r["decision_time"]), "m": m, "sigma": sg, "p_up": flo…
+    |
+help: Remove assignment to unused variable `e`
+
+Found 1 error.
+No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
