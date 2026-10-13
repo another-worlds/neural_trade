@@ -1,0 +1,5 @@
+392ee5c41be0494e2bc552eefeda0488375d6655
+....................s....                                                [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] test_t08.py:233: results.json not committed yet
+24 passed, 1 skipped in 12.89s

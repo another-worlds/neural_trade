@@ -9,7 +9,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import numpy as np
 import t08_lib as L
-import scores as SC
+import t08_scores as SC
 import t08_analysis as A
 import t07_lib as T
 
