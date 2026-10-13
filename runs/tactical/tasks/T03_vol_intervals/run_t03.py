@@ -14,6 +14,45 @@ except Exception:
 FS = ("trail", "HAR", "HAR+"); VERS = ("frozen", "cal"); METRICS = ("cover", "width_bps", "iscore_bps", "var_hit", "fz0")
 
 
+def plot(df, res):
+    """cover_width_T*.png from the monthly rows. Forecasters use the non-horizon slots (D-014), all solid
+    (dotted = training); HAR+ is omitted (identical to HAR: the HAR+ quantiles differ in the 7th digit)."""
+    import matplotlib; matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from neural_trade.visualization import theme as TH
+    cols = {"trail": TH.OTHER_SERIES[0], "HAR": TH.OTHER_SERIES[1]}
+    mk = {"trail": "s", "HAR": "o"}
+    fs = ("trail", "HAR")
+    panels = (("cover", "coverage (target 0.90)"), ("width_bps", "mean width, bps"), ("iscore_bps", "interval score, bps (lower is better)"))
+    for H in L.HZ:
+        fig, ax = plt.subplots(3, 2, figsize=(13, 10.5), facecolor=TH.PAPER, sharex=True)
+        for j, ver in enumerate(VERS):
+            for i, (k, yl) in enumerate(panels):
+                a_ = ax[i, j]; a_.set_facecolor(TH.SURFACE); a_.grid(color=TH.GRID, lw=.6)
+                for sp in a_.spines.values():
+                    sp.set_color(TH.AXIS)
+                a_.tick_params(colors=TH.MUTED)
+                for f in fs:
+                    d = df[(df.H == H) & (df.f == f) & (df.ver == ver)].sort_values("month")
+                    a_.plot(d.month, d[k], color=cols[f], marker=mk[f], lw=1.6, ms=4.5, ls="-", label=f)
+                if k == "cover":
+                    a_.axhline(0.90, color=TH.NEUTRAL, lw=.8, ls=":"); a_.axhspan(0.88, 0.92, color=TH.NEUTRAL, alpha=.12)
+                a_.set_ylabel(yl, color=TH.INK, fontsize=9); a_.set_title(f"{ver}", color=TH.INK, fontsize=10)
+                if i == 2:
+                    a_.tick_params(axis="x", rotation=60)
+        ax[0, 0].legend(facecolor=TH.SURFACE, edgecolor=TH.AXIS, labelcolor=TH.INK)
+        pr = res["paired"][f"{H}|HAR-trail|cal|iscore_bps"]
+        fig.suptitle(f"T03 T={H} min: 90% interval coverage, width and interval score by month (cal diff HAR-trail interval score {pr['mean']:+.2f} bps [{pr['ci'][0]:+.2f},{pr['ci'][1]:+.2f}])\n"
+                     "HAR+ omitted: identical to HAR", color=TH.INK, fontsize=11)
+        fig.tight_layout(); fig.savefig(f"{HERE}/cover_width_T{H}.png", dpi=110, facecolor=TH.PAPER); plt.close(fig)
+
+
+def plot_only():
+    r = json.load(open(f"{HERE}/results.json"))
+    plot(pd.DataFrame(r["rows"]), r["summary"])
+    print("plotted from results.json")
+
+
 def main():
     t0 = time.time(); el = lambda: f"{time.time() - t0:.0f}s"
     tr_bars = T1.load_train(); fw_bars = T1.load_fwd()
@@ -80,33 +119,9 @@ def main():
     open(f"{HERE}/tables.txt", "w").write("\n".join(lines))
     print("\n".join(lines[:80]), flush=True)
 
-    import matplotlib; matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from neural_trade.visualization import theme as TH
-    cols = {"trail": TH.NEUTRAL, "HAR": TH.SERIES[0], "HAR+": TH.SERIES[1]}
-    for H in L.HZ:
-        fig, ax = plt.subplots(2, 2, figsize=(13, 7.5), facecolor=TH.PAPER, sharex=True)
-        for j, ver in enumerate(VERS):
-            for i, (k, yl) in enumerate((("cover", "coverage (target 0.90)"), ("width_bps", "mean width, bps"))):
-                a_ = ax[i, j]; a_.set_facecolor(TH.SURFACE); a_.grid(color=TH.GRID, lw=.6)
-                for sp in a_.spines.values():
-                    sp.set_color(TH.AXIS)
-                a_.tick_params(colors=TH.MUTED)
-                for f in FS:
-                    d = df[(df.H == H) & (df.f == f) & (df.ver == ver)].sort_values("month")
-                    a_.plot(d.month, d[k], color=cols[f], marker="o", lw=1.4, ms=4, ls={"trail": "--", "HAR": "-", "HAR+": ":"}[f], label=f)
-                if k == "cover":
-                    a_.axhline(0.90, color=TH.INK, lw=.8, ls=":"); a_.axhspan(0.88, 0.92, color=TH.INK, alpha=.07)
-                a_.set_ylabel(yl, color=TH.INK); a_.set_title(f"{ver}", color=TH.INK, fontsize=10)
-                if i == 1:
-                    a_.tick_params(axis="x", rotation=60)
-        ax[0, 0].legend(facecolor=TH.SURFACE, edgecolor=TH.AXIS, labelcolor=TH.INK)
-        pr = res["paired"][f"{H}|HAR-trail|cal|iscore_bps"]
-        fig.suptitle(f"T03 T={H} min: 90% interval coverage and width by month (cal diff HAR-trail interval score {pr['mean']:+.2f} bps [{pr['ci'][0]:+.2f},{pr['ci'][1]:+.2f}])",
-                     color=TH.INK, fontsize=11)
-        fig.tight_layout(); fig.savefig(f"{HERE}/cover_width_T{H}.png", dpi=110, facecolor=TH.PAPER); plt.close(fig)
+    plot(df, res)
     print("done", el())
 
 
 if __name__ == "__main__":
-    main()
+    plot_only() if "--plot-only" in sys.argv else main()
