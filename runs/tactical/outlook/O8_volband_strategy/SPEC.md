@@ -103,3 +103,21 @@ B and C are also reported separately, along with A.
 `runs/tactical/outlook/O8_volband_strategy/`: code, `selection.jsonl`, `choice.json`, `tests.jsonl`, `trades_*.parquet` or `.csv.gz`
 (chosen configuration, every arm), `tables.txt`, the equity and drawdown figures (theme colours), `run.log`, `tests.log`, `REPORT.md`.
 A new section in the outlook HTML report draws the strategy on real BTC windows (orders, fills, exits) from the selection and test spans.
+
+## Addendum (lead, 2026-10-13, after the selection and BEFORE any test-span number; choice.json 3253588 unchanged)
+The implementer flagged that exits are checked only from the bar AFTER the entry bar. For a breakout entry that triggers inside a
+spike, this ignores a reversal inside the same minute and flatters BRK. Two additions, both of which can only make a pass harder:
+- **PESS variant (reported for every arm):**
+  - In the entry bar, the stop is checked too. If the entry bar's range reaches the stop level beyond the entry price, the
+    position is assumed stopped in that bar, at the stop price, or at the bar's close if that is worse.
+    - Long: the stop level is entry * (1 - s * sigma), reached when low <= that level.
+    - Short: the stop level is entry * (1 + s * sigma), reached when high >= that level.
+  - For configurations with no stop, PESS = the primary.
+- **The verdict "strategy works on independent data"** now also needs criterion 1 (mean monthly net return > 0, lower bound > 0,
+  pooled B + C, 2 bps) to hold under PESS.
+
+Also reported:
+- 5 bps under both fill variants.
+- TRAIL is not scale-matched to L1, so it stays descriptive. L1 uses sqrt(exp(E ln RV)); TRAIL uses sqrt(RV).
+
+The arms L1, R0 and SHUF share one scale convention, so criteria 2 and 3 are unaffected.
