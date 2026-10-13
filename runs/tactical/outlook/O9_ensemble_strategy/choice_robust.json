@@ -1,0 +1,19 @@
+{
+  "name": "ROBUST",
+  "config": {
+    "k": 1.0,
+    "delta": 0.02,
+    "g": null,
+    "tau": 2.0,
+    "size": "1x"
+  },
+  "rule": "max t(2 bps, PESS) among eligible configs with mean monthly net > 0 at 5 bps; chosen after the selection table (SPEC addendum)",
+  "selection": {
+    "t_2bp_pess": 3.2,
+    "m2bp_pct": 1.82,
+    "m5bp_pct": 0.19,
+    "trades_per_month": 54.5,
+    "hit_pct": 46.0,
+    "maxdd_pct": 15.95
+  }
+}
