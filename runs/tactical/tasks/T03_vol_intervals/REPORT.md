@@ -32,6 +32,12 @@ changes little.
 - Frozen-version numbers and the per-month tables are in `tables.txt` and `results.json`.
 - Figures: `cover_width_T15/T60/T240.png`.
 
+## Independent QA: PASS
+
+- **Reproduced in separate code:** at T = 60 the difference is -9.48 [-11.25, -7.70] and coverage is 0.9005. No leakage, and no single month drives the result.
+- **Gain against stronger baselines:** the 4.5% / 7% above is measured against the pre-registered 4T trail. QA added stronger baselines after the fact: trail over T bars and EWMA 0.94. Against them the T = 60 gain is about 4.4 bps (~2.2%), still 11/11 months with the CI below 0. HAR beats every baseline tried, at every horizon.
+- **Figure issue, not yet fixed:** the figure draws the forecasters in horizon colours and HAR+ dotted (D-014). It also has no interval-score panel.
+
 ## Readings and caveats
 
 - **HAR+ is degenerate by construction.** The frozen S1 vol-change forecast is a linear function of the same HAR
