@@ -1,0 +1,30 @@
+22:56:26 bars 4167640 2017-08-17 00:00:00 2025-07-20 23:59:00 non-1-minute steps 1 0s
+22:56:26 decision frame 277429 valid 276609 2017-08-21 06:30:00 2025-07-20 22:45:00 1s
+22:57:42 sigma L1 H 15 valid decisions 122040 median sigma 0.0022648898523644177 77s
+22:58:59 sigma L1 H 60 valid decisions 122040 median sigma 0.004928185384039082 153s
+22:59:00 REV_k1.0_H15_s1.0 trades 46984 mean% 2bps -44.945 t -21.43 155s
+22:59:01 REV_k1.0_H15_snone trades 43318 mean% 2bps -50.013 t -15.63 155s
+22:59:01 REV_k1.0_H60_s1.0 trades 9688 mean% 2bps -15.666 t -12.57 156s
+22:59:01 REV_k1.0_H60_snone trades 8682 mean% 2bps -15.485 t -11.48 156s
+22:59:02 REV_k1.5_H15_s1.0 trades 25278 mean% 2bps -29.906 t -13.94 157s
+22:59:02 REV_k1.5_H15_snone trades 23882 mean% 2bps -33.741 t -15.30 157s
+22:59:03 REV_k1.5_H60_s1.0 trades 3731 mean% 2bps -5.292 t -6.63 157s
+22:59:03 REV_k1.5_H60_snone trades 3446 mean% 2bps -7.052 t -6.00 158s
+22:59:03 REV_k2.0_H15_s1.0 trades 13661 mean% 2bps -18.577 t -12.38 158s
+22:59:03 REV_k2.0_H15_snone trades 13119 mean% 2bps -21.504 t -12.82 158s
+22:59:04 REV_k2.0_H60_s1.0 trades 1681 mean% 2bps -2.836 t -3.49 158s
+22:59:04 REV_k2.0_H60_snone trades 1593 mean% 2bps -4.502 t -4.59 158s
+22:59:04 BRK_k1.0_H15_s1.0 trades 46351 mean% 2bps -1.610 t -0.52 159s
+22:59:05 BRK_k1.0_H15_snone trades 43806 mean% 2bps -11.158 t -3.99 159s
+22:59:05 BRK_k1.0_H60_s1.0 trades 9176 mean% 2bps +4.433 t +3.32 160s
+22:59:05 BRK_k1.0_H60_snone trades 8684 mean% 2bps +1.274 t +0.78 160s
+22:59:05 BRK_k1.5_H15_s1.0 trades 26212 mean% 2bps +4.700 t +2.26 160s
+22:59:06 BRK_k1.5_H15_snone trades 25288 mean% 2bps +1.204 t +0.53 160s
+22:59:06 BRK_k1.5_H60_s1.0 trades 3645 mean% 2bps +4.044 t +3.49 161s
+22:59:06 BRK_k1.5_H60_snone trades 3520 mean% 2bps +2.769 t +2.41 161s
+22:59:06 BRK_k2.0_H15_s1.0 trades 14337 mean% 2bps +4.933 t +2.99 161s
+22:59:06 BRK_k2.0_H15_snone trades 13993 mean% 2bps +4.331 t +2.47 161s
+22:59:07 BRK_k2.0_H60_s1.0 trades 1681 mean% 2bps +2.415 t +2.51 161s
+22:59:07 BRK_k2.0_H60_snone trades 1636 mean% 2bps +2.552 t +2.66 161s
+22:59:07 CHOICE {'rule': 'highest t-statistic of the monthly net return at 2 bps on 2021-01..2024-06, L1 arm (SPEC.md)', 'config': 'BRK_k1.5_H60_s1.0', 'family': 'BRK', 'k': 1.5, 'H': 60, 'stop': 1.0, 't_2bps': 3.492654841621236, 'mean_m_2bps': 0.04044155661123942, 'n_trades': 3645, 'n_months': 42, 'selection_months': ['2021-01', '2024-06']}
+22:59:07 total 161s
