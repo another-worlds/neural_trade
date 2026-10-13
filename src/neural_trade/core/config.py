@@ -393,8 +393,10 @@ class Config:
                                "serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block",
                                unit="flag")
     CONFORMAL_SCALE: str = _f("realized_vol", "calibration",
-                              "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head) or 'none'",
-                              unit="name", choices=("realized_vol", "sigma", "none"))
+                              "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head), 'none', or "
+                              "'har' (opt-in: HAR forecast of the absolute return fitted on the training block, "
+                              "calibration/har_scale.py; the default stays 'realized_vol')",
+                              unit="name", choices=("realized_vol", "sigma", "none", "har"))
 
     # ------------------------------------------------------------------ loss weights
     LAMBDA_LOCAL_TREND: float = _f(1.0, "loss_weights", "retired term (always 0 in the objective)", unit="weight",
@@ -919,8 +921,8 @@ class Config:
             bad(f"NLL_STUDENT_DOF must be > 2 (so the Student-t variance exists), got {self.NLL_STUDENT_DOF}")
         if int(self.TRAIN_METRICS_EVERY) < 1:
             bad("TRAIN_METRICS_EVERY must be >= 1")
-        if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol"):
-            bad(f"CONFORMAL_SCALE must be 'none', 'sigma' or 'realized_vol', got {self.CONFORMAL_SCALE!r}")
+        if self.CONFORMAL_SCALE not in ("none", "sigma", "realized_vol", "har"):
+            bad(f"CONFORMAL_SCALE must be 'none', 'sigma', 'realized_vol' or 'har', got {self.CONFORMAL_SCALE!r}")
         if self.PNL_GAMMA <= 0:
             bad("PNL_GAMMA must be > 0")
         if self.PNL_COST_BPS < 0:

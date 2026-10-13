@@ -78,6 +78,8 @@ class TrainResult:
     normalizer: Optional[Any] = None  # data.scaling.WindowNormalizer fitted on train
     windows_test: Optional[np.ndarray] = None  # RAW test windows [N, LOOKBACK]
     windows_cal: Optional[np.ndarray] = None   # RAW calibration windows
+    har_sigma_cal: Optional[Dict[str, np.ndarray]] = None   # CONFORMAL_SCALE="har": HAR scale per horizon, cal block
+    har_sigma_test: Optional[Dict[str, np.ndarray]] = None  # ... and test block
     artifacts_dir: Optional[str] = None  # where the serving bundle was written, if any
     # The epoch (1-based) whose weights the model holds after training: the weights that are
     # evaluated on TEST, calibrated and bundled. None when no training ran (weights loaded).
@@ -277,6 +279,27 @@ class LearningRateInEffect(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs=None):
         if logs is not None:
             logs.update(self._rates)
+
+
+def _har_scales(cfg, data_processor, df, close_values):
+    """CONFORMAL_SCALE='har': the HAR interval scale (calibration.har_scale) of the cal and test blocks, fitted on the
+    TRAINING block's decision bars only. Decision bar = anchor - 1 (the last input bar)."""
+    from neural_trade.calibration.har_scale import HarScale
+    from neural_trade.data.gaps import timestamps_ns
+
+    plan, fold = getattr(data_processor, '_plan', None), getattr(data_processor, 'fold', None)
+    if plan is None or fold is None:
+        raise ValueError("CONFORMAL_SCALE='har' needs the bar frame's data plan (DataProcessor.prepare_datasets)")
+    lo = int(getattr(data_processor, '_lo', 0) or 0)
+    anchors = np.asarray(plan.anchors)[lo:]
+    close = np.asarray(close_values, dtype=float)
+    times = timestamps_ns(df)
+    har = HarScale(bar_minutes=float(cfg.RESAMPLE_MINUTES)).fit(
+        close, times, anchors[np.asarray(fold.train)] - 1, tuple(cfg.HORIZON_STEPS))
+    out = []
+    for idx in (fold.cal, fold.test):
+        out.append(har.sigma_by_horizon(close, times, anchors[np.asarray(idx)] - 1, tuple(cfg.HORIZON_STEPS)))
+    return out[0], out[1]
 
 
 def train_and_evaluate(
@@ -493,10 +516,13 @@ def train_and_evaluate(
     predictions_calibrated = None
     calibration_report: Optional[Dict[str, Any]] = None
     _cb = getattr(data_processor, 'cal_block', None)
+    har_cal = har_test = None
     if fit_calibration and _CalibrationPipeline is not None and _cb is not None:
         try:
             logger.info("\nFitting CalibrationPipeline on the calibration split...")
             predictions_cal = _predict_heads(custom_model, _cb['X'], _cb['y_raw'].shape[0], target_scaler, cfg)
+            if getattr(cfg, 'CONFORMAL_SCALE', 'none') == 'har':
+                har_cal, har_test = _har_scales(cfg, data_processor, df, close_values)
             cal_pipeline = _CalibrationPipeline(conformal_scale=getattr(cfg, 'CONFORMAL_SCALE', 'none'),
                                                 shrink_delta=bool(getattr(cfg, 'DELTA_SHRINKAGE', False)))
             cal_pipeline.fit_from_arrays(
@@ -505,11 +531,13 @@ def train_and_evaluate(
                 last_close=np.asarray(_cb['last_close'], dtype=float),
                 deadband_bps=float(getattr(cfg, 'DIR_DEADBAND_BPS', 0.0)),
                 windows=_cb.get('X_raw'),
+                har_sigma=har_cal,
                 pred_scale=float(target_scaler.scale_[0]),
                 horizon_steps=tuple(cfg.HORIZON_STEPS),
             )
             predictions_calibrated = cal_pipeline.apply(predictions, alpha=0.1,
-                                                        windows=getattr(data_processor, 'test_windows_raw', None))
+                                                        windows=getattr(data_processor, 'test_windows_raw', None),
+                                                        har_sigma=har_test)
             calibration_report = _calibration_coverage_report(predictions_calibrated, np.asarray(y_test), cal_pipeline)
             for _h, _row in calibration_report.items():
                 logger.info(f"  [test] {_h}: conformal coverage@90 = {_row['coverage90']:.3f} (target >= 0.90), "
@@ -543,6 +571,8 @@ def train_and_evaluate(
         fold=getattr(data_processor, 'fold', None),
         windows_test=getattr(data_processor, 'test_windows_raw', None),
         windows_cal=(_cb.get('X_raw') if _cb is not None else None),
+        har_sigma_cal=har_cal,
+        har_sigma_test=har_test,
         normalizer=getattr(data_processor, 'normalizer', None),
         weights_epoch=weights_epoch,
         weights_val_loss=weights_val_loss,

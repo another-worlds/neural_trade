@@ -155,6 +155,7 @@ class CalibrationPipeline:
             deadband_bps=deadband_bps,
             conformal_alpha=conformal_alpha,
             windows=getattr(result, "windows_cal", None),
+            har_sigma=getattr(result, "har_sigma_cal", None),
             pred_scale=float(result.target_scaler.scale_[0]),
             horizon_steps=tuple(getattr(result.config, "HORIZON_STEPS", self.horizon_steps)),
         )
@@ -169,6 +170,8 @@ class CalibrationPipeline:
         windows: Optional[np.ndarray] = None,
         pred_scale: Optional[float] = None,
         horizon_steps: Optional[Sequence[int]] = None,
+        *,
+        har_sigma: Optional[Dict[str, np.ndarray]] = None,
     ) -> "CalibrationPipeline":
         """Fit from raw arrays when a TrainResult is not available.
 
@@ -182,6 +185,7 @@ class CalibrationPipeline:
         windows           : RAW input windows [N, LOOKBACK] (conformal_scale="realized_vol")
         pred_scale        : target-scaler scale (conformal_scale="sigma")
         horizon_steps     : bars per horizon (conformal_scale="realized_vol")
+        har_sigma         : per-horizon HAR scale of this block (conformal_scale="har")
         """
         if pred_scale is not None:
             self.pred_scale = float(pred_scale)
@@ -224,7 +228,7 @@ class CalibrationPipeline:
                         + ", ".join(f"{h} {b:.3f}" for h, b in self.delta_scale.items()))
 
         logger.info(f"\n[2/2] Conformal regressors (price delta intervals, scale={self.conformal_scale})...")
-        scales = self._scales(predictions_dict, windows, N)
+        scales = self._scales(predictions_dict, windows, N, har_sigma)
         for i, h in enumerate(HORIZONS):
             if i >= y.shape[1]:
                 break
@@ -252,19 +256,21 @@ class CalibrationPipeline:
     # Applying
     # ------------------------------------------------------------------
 
-    def _scales(self, predictions_dict, windows, n):
+    def _scales(self, predictions_dict, windows, n, har_sigma=None):
         """Per-horizon conformal scales, or None for plain (unnormalised) conformal."""
         if self.conformal_scale == "none":
             return None
         return interval_scale(self.conformal_scale, windows=windows,
                               variance_scaled=predictions_dict.get("variance"), pred_scale=self.pred_scale,
-                              horizon_steps=self.horizon_steps, n=n)
+                              horizon_steps=self.horizon_steps, n=n, har_sigma=har_sigma)
 
     def apply(
         self,
         predictions_dict: Dict,
         alpha: float = 0.1,
         windows: Optional[np.ndarray] = None,
+        *,
+        har_sigma: Optional[Dict[str, np.ndarray]] = None,
     ) -> Dict:
         """Apply all calibrators and return a drop-in replacement predictions dict.
 
@@ -281,10 +287,11 @@ class CalibrationPipeline:
         predictions_dict : raw ``result.predictions``-format dict
         alpha            : conformal miscoverage level (default 0.1 → 90% coverage)
         windows          : RAW input windows, required when conformal_scale="realized_vol"
+        har_sigma        : per-horizon HAR scale of these predictions, required when conformal_scale="har"
         """
         self._require_fitted()
         n = len(np.asarray(predictions_dict["delta"][HORIZONS[0]]).reshape(-1))
-        scales = self._scales(predictions_dict, windows, n)
+        scales = self._scales(predictions_dict, windows, n, har_sigma)
 
         cal: Dict = {
             "delta": {h: self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float)
@@ -309,6 +316,8 @@ class CalibrationPipeline:
         predictions_dict: Dict,
         alpha: float = 0.1,
         windows: Optional[np.ndarray] = None,
+        *,
+        har_sigma: Optional[Dict[str, np.ndarray]] = None,
     ) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
         """Return only conformal intervals without scaling direction probs.
 
@@ -318,7 +327,7 @@ class CalibrationPipeline:
         """
         self._require_fitted()
         n = len(np.asarray(predictions_dict["delta"][HORIZONS[0]]).reshape(-1))
-        scales = self._scales(predictions_dict, windows, n)
+        scales = self._scales(predictions_dict, windows, n, har_sigma)
         return {
             h: self.conformal[h].predict_interval(
                 self.delta_scale[h] * np.asarray(predictions_dict["delta"][h], dtype=float),

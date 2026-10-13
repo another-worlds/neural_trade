@@ -22,7 +22,8 @@ The conformal quantile is:
 With u = 1 the interval has one width everywhere; after a volatility regime change between
 the calibration and test blocks it over- or under-covers everywhere (the M4 gate saw 0.965
 coverage at a 0.90 target). ``interval_scale`` provides u: the window's realised volatility
-(default, Config.CONFORMAL_SCALE="realized_vol"), the model's own sigma, or none.
+(default, Config.CONFORMAL_SCALE="realized_vol"), the model's own sigma, a HAR forecast of the absolute
+return (opt-in, ``calibration.har_scale``), or none.
 
 Fit one `ConformalRegressor` per output horizon; save/load with joblib.
 
@@ -53,17 +54,20 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 HORIZONS = ("h0", "h1", "h2")
-SCALE_MODES = ("none", "sigma", "realized_vol")
+SCALE_MODES = ("none", "sigma", "realized_vol", "har")
 
 
 def interval_scale(mode: str, *, windows=None, variance_scaled=None, pred_scale: Optional[float] = None,
-                   horizon_steps: Sequence[int] = (10, 15, 20), n: Optional[int] = None) -> Dict[str, np.ndarray]:
+                   horizon_steps: Sequence[int] = (10, 15, 20), n: Optional[int] = None,
+                   har_sigma=None) -> Dict[str, np.ndarray]:
     """Per-sample conformal scale u per horizon (raw price-delta units), known at prediction time.
 
     * ``"none"``: 1 everywhere (plain split conformal).
     * ``"sigma"``: the model's predicted sigma, ``sqrt(variance_scaled) * pred_scale``.
     * ``"realized_vol"``: std of the input window's 1-bar close changes times sqrt(horizon bars)
       (``windows``: RAW close windows [N, LOOKBACK]).
+    * ``"har"``: ``har_sigma``, the per-horizon HAR forecast ``calibration.har_scale.HarScale.sigma_by_horizon``
+      computed by the caller from the full bar series (fitted on the training block only).
     """
     if mode not in SCALE_MODES:
         raise ValueError(f"conformal scale must be one of {SCALE_MODES}, got {mode!r}")
@@ -81,6 +85,13 @@ def interval_scale(mode: str, *, windows=None, variance_scaled=None, pred_scale:
             raise ValueError("conformal scale 'sigma' needs variance_scaled and pred_scale")
         return {h: np.sqrt(np.maximum(np.asarray(variance_scaled[h], float).reshape(-1), 0.0)) * float(pred_scale)
                 for h in HORIZONS}
+    if mode == "har":
+        if har_sigma is None:
+            raise ValueError("conformal scale 'har' needs har_sigma (HarScale.sigma_by_horizon on the full bar series)")
+        out = {h: np.asarray(har_sigma[h], dtype=float).reshape(-1) for h in HORIZONS[:len(horizon_steps)]}
+        if not all(np.isfinite(v).all() and (v > 0).all() for v in out.values()):
+            raise ValueError("har_sigma must be finite and positive")
+        return out
     if windows is None:
         raise ValueError("conformal scale 'realized_vol' needs the raw input windows")
     X = np.asarray(windows, dtype=float)
