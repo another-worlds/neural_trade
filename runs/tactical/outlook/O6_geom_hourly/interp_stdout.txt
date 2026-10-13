@@ -1,0 +1,77 @@
+[
+ {
+  "feature": "g60.ema20.slope3",
+  "col": 16,
+  "coef_standardised": -1.142822412353177
+ },
+ {
+  "feature": "g60.ema10.slope10",
+  "col": 9,
+  "coef_standardised": 0.6011355099238811
+ },
+ {
+  "feature": "g60.ema40.slope3",
+  "col": 24,
+  "coef_standardised": 0.5639688807234835
+ },
+ {
+  "feature": "g60.macd_line.slope3",
+  "col": 104,
+  "coef_standardised": 0.5561943263019107
+ },
+ {
+  "feature": "g60.ema10.pos",
+  "col": 10,
+  "coef_standardised": 0.5328214602214624
+ },
+ {
+  "feature": "g60.ema5.slope3",
+  "col": 0,
+  "coef_standardised": -0.465995493146493
+ },
+ {
+  "feature": "g60.ema40.slope10",
+  "col": 25,
+  "coef_standardised": -0.4538251517427755
+ },
+ {
+  "feature": "g60.ema5.slope10",
+  "col": 1,
+  "coef_standardised": -0.4397515639302804
+ },
+ {
+  "feature": "g60.ema10.slope3",
+  "col": 8,
+  "coef_standardised": 0.4312808603212724
+ },
+ {
+  "feature": "g60.ema20.slope10",
+  "col": 17,
+  "coef_standardised": 0.4209348520455267
+ },
+ {
+  "feature": "g60.bb_width.slope3",
+  "col": 158,
+  "coef_standardised": -0.420657426203308
+ },
+ {
+  "feature": "g60.bb_up.slope3",
+  "col": 40,
+  "coef_standardised": 0.3153063446351616
+ },
+ {
+  "feature": "g60.ema5.pos",
+  "col": 2,
+  "coef_standardised": -0.29448981579856404
+ },
+ {
+  "feature": "g60.bb_width.slope10",
+  "col": 159,
+  "coef_standardised": 0.27869241512303744
+ },
+ {
+  "feature": "g60.bb_up.slope10",
+  "col": 41,
+  "coef_standardised": -0.25810845932318766
+ }
+]
