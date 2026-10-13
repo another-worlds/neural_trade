@@ -65,3 +65,20 @@ Notes on the judgement-span results:
 5. **`score_B.py` months rule:** it requires 3 of 3 months positive, following O4.
 6. **HGB freeze:** the HGB state is also frozen (base64 pickle), though it is not needed.
 7. **Extra files:** `choice.json`, `summary.json`, `runtime.json`, `freeze.log`, `run_stdout.txt`.
+
+## QA (2026-10-13, qa agent, read-only at 9755e40; scratch D:/nt/nt_qa_o5_scratch/)
+**The verdict holds as stated: yes. All four checks PASS.**
+1. **Leakage.** None found.
+   - The data read stops at 2024-07-01 03:59.
+   - Independent S3, EWMA-bank (pandas ewm), label and G1/G15 computations match the cache exactly (bank to 1.6e-11).
+   - A probe that overwrites the bars at and after anchor a in the study's own `build_frame` leaves the features unchanged.
+   - Every training label ends before its month.
+2. **Independent recompute.** A sklearn refit of 10 judgement months reproduces Spearman exactly and QLIKE to 2e-13. The criterion line also recomputes exactly.
+3. **Base choice.** The base was chosen on the selection rows only, and run.log logs the choice before any judgement month ran.
+4. **Robustness** (information only):
+   - leave-one-month-out ranges from +0.0049 to +0.0063, and the lowest lower bound is +0.0019;
+   - without 2018-07/08 (the months with shorter training history) the gain is +0.0054 [+0.0022, +0.0086];
+   - without the top 3 months it is +0.0038 (lower bound +0.0011);
+   - sign test p 0.005, Wilcoxon p 0.0008.
+
+**Correction to the SPEC (QA finding).** The SPEC's "Why this span" is wrong. O4 scored BANK against S3 on 2017-09..2018-12, which overlaps 2018-07..2018-12, 6 of O5's 30 months. On those months nothing was chosen and geometry was never scored. On the 24 months that O4 never touched (2019-01..2020-12), the gain is +0.0055 [+0.0018, +0.0091], 19/24 positive.
