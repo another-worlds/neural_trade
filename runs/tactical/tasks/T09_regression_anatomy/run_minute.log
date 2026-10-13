@@ -1,0 +1,11 @@
+[    0s] dataset 449589
+[   57s] walk close 100 months
+[  125s] walk nopen 100 months
+[  131s] walk mid 100 months
+[  132s] rank ['macd', 'bb20', 'cci20', 'ret20', 'stoch14']
+[  140s] subsets
+[  162s] q2
+[  195s] impulse
+[  245s] conditions
+[  253s] done analyses
+[  254s] saved

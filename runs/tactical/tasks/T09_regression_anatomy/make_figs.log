@@ -1,0 +1,16 @@
+fig1_coef_heatmap True
+fig2_importance_by_year True
+fig3_partial_dependence True
+fig3b_tail_edge True
+fig4a_impulse_auc_close True
+fig4b_impulse_auc_nopen True
+fig4c_impulse_bps_nopen True
+fig5a_conditions_close True
+fig5b_conditions_nopen True
+fig6_decay_decomposition True
+fig7_breakeven_cost True
+fig8a_window_2019 True
+fig8b_window_2025 True
+fig9_microstructure True
+fig10_hourly True
+fig11_forward_year True

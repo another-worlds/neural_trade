@@ -1,0 +1,24 @@
+{
+ "close": {
+  "n_months": 99,
+  "max_abs_diff": 3.5557249666862134e-07,
+  "mean_diff": -8.798362130888785e-09,
+  "worst_month": "2022-02",
+  "n_over_0.001": 0,
+  "mean_auc_mine": 0.5627411798962967,
+  "mean_auc_stored": 0.5627411886946588,
+  "months_mine_not_stored": [],
+  "months_stored_not_mine": []
+ },
+ "nopen": {
+  "n_months": 99,
+  "max_abs_diff": 6.295315780890931e-07,
+  "mean_diff": -9.430528353176532e-09,
+  "worst_month": "2022-10",
+  "n_over_0.001": 0,
+  "mean_auc_mine": 0.5480291487353472,
+  "mean_auc_stored": 0.5480291581658754,
+  "months_mine_not_stored": [],
+  "months_stored_not_mine": []
+ }
+}
