@@ -66,6 +66,15 @@ for the MVP".
   their follow-ups.
 - The review of what failed and what was never tested: [runs/tactical/REVIEW_2026-10-13.md](../runs/tactical/REVIEW_2026-10-13.md).
 
+## Report style (owner, 2026-10-13: "возьми эту визуализацию на вооружение!!! очень крутая")
+
+- Results for the owner go into a self-contained HTML report in the style of `runs/tactical/report/tactical_report.html`:
+  - built by `report/build_report.py` + `rcommon.py`;
+  - a section per variant;
+  - each idea drawn on real BTC windows;
+  - rich interactive figures in `visualization/theme.py`.
+- It is sent to the owner as a file and opened in the browser (it lives outside the VS Code workspace).
+
 ## Rigour and budget (exploratory)
 
 - **Data: the static excerpt by default (owner, 2026-10-08: "the whole file only for giant runs"):** tactical runs and
