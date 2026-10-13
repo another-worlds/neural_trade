@@ -1,0 +1,13 @@
+{
+ "close_diff_mean": -46.80888773148139,
+ "close_diff_std": 23.638778873057518,
+ "close_diff_median": -47.83999999999651,
+ "ret1m_corr": 0.9205247918449757,
+ "ret1h_corr": 0.9987465790385998,
+ "volume_sum_dl": 427546.46336000005,
+ "volume_sum_main": 27483.850145260003,
+ "volume_corr": 0.4425699398575102,
+ "main_zero_vol_frac": 0.006111111111111111,
+ "main_integer_price_frac": 1.0,
+ "dl_integer_price_frac": 0.06840277777777778
+}

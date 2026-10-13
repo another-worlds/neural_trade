@@ -1,0 +1,33 @@
+{
+ "rows_download": 43200,
+ "rows_main": 43200,
+ "rows_union": 43200,
+ "missing_in_main": 0,
+ "missing_in_download": 0,
+ "open": {
+  "max_abs_diff": 265.6900000000023,
+  "match_rate_exact": 9.259259259259259e-05,
+  "match_rate_1e-8": 9.259259259259259e-05
+ },
+ "high": {
+  "max_abs_diff": 276.7899999999936,
+  "match_rate_exact": 0.00034722222222222224,
+  "match_rate_1e-8": 0.00034722222222222224
+ },
+ "low": {
+  "max_abs_diff": 248.0,
+  "match_rate_exact": 6.944444444444444e-05,
+  "match_rate_1e-8": 6.944444444444444e-05
+ },
+ "close": {
+  "max_abs_diff": 291.6399999999994,
+  "match_rate_exact": 9.259259259259259e-05,
+  "match_rate_1e-8": 9.259259259259259e-05
+ },
+ "volume": {
+  "max_abs_diff": 447.42826661,
+  "match_rate_exact": 0.0,
+  "match_rate_1e-8": 0.0
+ },
+ "all_ohlcv_exact_rate": 0.0
+}
