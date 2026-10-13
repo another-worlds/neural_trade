@@ -1,0 +1,60 @@
+20:35:05 sel 2021-01 24s free 31 GB
+20:35:27 sel 2021-02 22s free 31 GB
+20:35:49 sel 2021-03 22s free 31 GB
+20:36:11 sel 2021-04 22s free 31 GB
+20:36:35 sel 2021-05 23s free 31 GB
+20:36:57 sel 2021-06 22s free 31 GB
+20:37:18 sel 2021-07 22s free 31 GB
+20:37:40 sel 2021-08 22s free 31 GB
+20:38:02 sel 2021-09 22s free 30 GB
+20:38:24 sel 2021-10 22s free 30 GB
+20:38:46 sel 2021-11 22s free 30 GB
+20:39:08 sel 2021-12 22s free 30 GB
+20:39:30 sel 2022-01 22s free 30 GB
+20:39:52 sel 2022-02 22s free 30 GB
+20:40:15 sel 2022-03 23s free 30 GB
+20:40:37 sel 2022-04 22s free 30 GB
+20:40:59 sel 2022-05 22s free 30 GB
+20:41:21 sel 2022-06 22s free 30 GB
+20:41:43 sel 2022-07 22s free 30 GB
+20:42:05 sel 2022-08 22s free 30 GB
+20:42:28 sel 2022-09 23s free 30 GB
+20:42:50 sel 2022-10 22s free 30 GB
+20:43:12 sel 2022-11 22s free 30 GB
+20:43:34 sel 2022-12 22s free 30 GB
+20:43:55 sel 2023-01 22s free 30 GB
+20:44:17 sel 2023-02 22s free 30 GB
+20:44:39 sel 2023-03 22s free 30 GB
+20:45:01 sel 2023-04 22s free 30 GB
+20:45:25 sel 2023-05 23s free 29 GB
+20:45:47 sel 2023-06 23s free 29 GB
+20:46:10 sel 2023-07 23s free 30 GB
+20:46:34 sel 2023-08 24s free 32 GB
+20:46:56 sel 2023-09 22s free 32 GB
+20:47:18 sel 2023-10 21s free 32 GB
+20:47:40 sel 2023-11 22s free 32 GB
+20:48:01 sel 2023-12 22s free 32 GB
+20:48:23 sel 2024-01 22s free 32 GB
+20:48:45 sel 2024-02 22s free 32 GB
+20:49:06 sel 2024-03 21s free 32 GB
+20:49:28 sel 2024-04 22s free 37 GB
+20:49:50 sel 2024-05 22s free 33 GB
+20:50:12 sel 2024-06 22s free 34 GB
+20:50:34 look 2024-07 22s free 33 GB
+20:51:00 look 2024-08 25s free 35 GB
+20:52:12 look 2024-09 72s free 30 GB
+20:53:39 look 2024-10 87s free 27 GB
+20:55:09 look 2024-11 90s free 26 GB
+20:56:37 look 2024-12 88s free 27 GB
+20:58:04 look 2025-01 88s free 27 GB
+20:58:27 look 2025-02 23s free 38 GB
+20:58:50 look 2025-03 23s free 34 GB
+20:59:21 look 2025-04 31s free 35 GB
+20:59:44 look 2025-05 22s free 35 GB
+21:00:06 look 2025-06 22s free 34 GB
+21:00:28 look 2025-07 22s free 34 GB
+21:00:38 frozen H 15 11s
+21:00:50 frozen H 60 11s
+21:01:00 frozen H 240 10s
+21:01:00 total 1579s
+21:04:11 interp.json written ['g15.ema20.slope3', 'g15.ema20.pos', 'g15.ema40.slope3']

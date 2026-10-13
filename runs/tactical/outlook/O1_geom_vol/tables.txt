@@ -1,0 +1,291 @@
+O1 tables. Months: sel 42, look 13, fwd 12
+
+SELECTION: mean Spearman gain over R0 at H=60: R1 +0.0039, R2 +0.0073; R2 - R1 = +0.0034 (R2 needs >= +0.002) -> G* = R2
+SANITY GATE: Rsh - R0 mean Spearman at H=60 on selection months = -0.0013 (limit +-0.003): PASS
+
+===== PRIMARY target ln RV(a,a+H) =====
+
+-- span sel  H=15  target lnrv --
+model   Spearman     QLIKE
+R0        0.7198    0.4065   (n months 42)
+R1        0.7284    0.3925   (n months 42)
+R2        0.7341    0.3792   (n months 42)
+Rsh       0.7183    0.4076   (n months 42)
+H0        0.7080    0.4175   (n months 42)
+H2        0.7179    0.4023   (n months 42)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0085 [+0.0074,+0.0097] +42/42  |  -0.0140 [-0.0174,-0.0106] +2/42 (better in 40/42)
+  R2            +0.0143 [+0.0127,+0.0158] +42/42  |  -0.0273 [-0.0372,-0.0174] +1/42 (better in 41/42)
+  Rsh           -0.0015 [-0.0018,-0.0013] +1/42  |  +0.0011 [+0.0002,+0.0020] +33/42 (better in 9/42)
+  H0            -0.0119 [-0.0200,-0.0037] +1/42  |  +0.0110 [-0.0098,+0.0318] +34/42 (better in 8/42)
+  H2            -0.0019 [-0.0144,+0.0106] +34/42  |  -0.0042 [-0.0268,+0.0183] +10/42 (better in 32/42)
+  H2-H0 (vs H0) +0.0100 [+0.0053,+0.0147] +40/42  |  -0.0152 [-0.0196,-0.0109] +2/42 (better in 40/42)
+
+-- span sel  H=60  target lnrv --
+model   Spearman     QLIKE
+R0        0.7307    0.3332   (n months 42)
+R1        0.7347    0.3290   (n months 42)
+R2        0.7380    0.3225   (n months 42)
+Rsh       0.7294    0.3340   (n months 42)
+H0        0.7225    0.3452   (n months 42)
+H2        0.7273    0.3388   (n months 42)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0039 [+0.0027,+0.0051] +41/42  |  -0.0042 [-0.0063,-0.0021] +8/42 (better in 34/42)
+  R2            +0.0073 [+0.0057,+0.0089] +40/42  |  -0.0107 [-0.0159,-0.0055] +7/42 (better in 35/42)
+  Rsh           -0.0013 [-0.0016,-0.0011] +1/42  |  +0.0009 [+0.0003,+0.0014] +34/42 (better in 8/42)
+  H0            -0.0082 [-0.0146,-0.0018] +11/42  |  +0.0120 [-0.0017,+0.0256] +27/42 (better in 15/42)
+  H2            -0.0034 [-0.0122,+0.0054] +23/42  |  +0.0056 [-0.0103,+0.0215] +19/42 (better in 23/42)
+  H2-H0 (vs H0) +0.0048 [+0.0018,+0.0078] +39/42  |  -0.0064 [-0.0106,-0.0021] +13/42 (better in 29/42)
+
+-- span sel  H=240  target lnrv --
+model   Spearman     QLIKE
+R0        0.6766    0.2874   (n months 42)
+R1        0.6773    0.2869   (n months 42)
+R2        0.6778    0.2851   (n months 42)
+Rsh       0.6751    0.2883   (n months 42)
+H0        0.6702    0.3001   (n months 42)
+H2        0.6683    0.3012   (n months 42)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0008 [-0.0003,+0.0018] +27/42  |  -0.0005 [-0.0014,+0.0004] +20/42 (better in 22/42)
+  R2            +0.0012 [-0.0017,+0.0041] +27/42  |  -0.0023 [-0.0053,+0.0006] +17/42 (better in 25/42)
+  Rsh           -0.0015 [-0.0017,-0.0012] +1/42  |  +0.0009 [+0.0006,+0.0011] +36/42 (better in 6/42)
+  H0            -0.0064 [-0.0153,+0.0026] +18/42  |  +0.0127 [-0.0023,+0.0276] +30/42 (better in 12/42)
+  H2            -0.0082 [-0.0182,+0.0018] +19/42  |  +0.0138 [-0.0025,+0.0300] +28/42 (better in 14/42)
+  H2-H0 (vs H0) -0.0019 [-0.0054,+0.0016] +21/42  |  +0.0011 [-0.0017,+0.0039] +20/42 (better in 22/42)
+
+-- span look  H=15  target lnrv --
+model   Spearman     QLIKE
+R0        0.7842    0.3226   (n months 13)
+R1        0.7894    0.3123   (n months 13)
+R2        0.7936    0.3045   (n months 13)
+Rsh       0.7831    0.3234   (n months 13)
+H0        0.7812    0.3206   (n months 13)
+H2        0.7886    0.3115   (n months 13)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0053 [+0.0035,+0.0070] +13/13  |  -0.0103 [-0.0148,-0.0058] +0/13 (better in 13/13)
+  R2            +0.0094 [+0.0065,+0.0123] +13/13  |  -0.0181 [-0.0246,-0.0116] +0/13 (better in 13/13)
+  Rsh           -0.0011 [-0.0014,-0.0008] +0/13  |  +0.0009 [+0.0003,+0.0014] +10/13 (better in 3/13)
+  H0            -0.0029 [-0.0044,-0.0014] +0/13  |  -0.0019 [-0.0104,+0.0065] +6/13 (better in 7/13)
+  H2            +0.0044 [+0.0019,+0.0069] +11/13  |  -0.0111 [-0.0195,-0.0026] +2/13 (better in 11/13)
+  H2-H0 (vs H0) +0.0073 [+0.0049,+0.0097] +13/13  |  -0.0091 [-0.0127,-0.0056] +0/13 (better in 13/13)
+
+-- span look  H=60  target lnrv --
+model   Spearman     QLIKE
+R0        0.7988    0.2542   (n months 13)
+R1        0.8016    0.2504   (n months 13)
+R2        0.8042    0.2459   (n months 13)
+Rsh       0.7979    0.2550   (n months 13)
+H0        0.7969    0.2533   (n months 13)
+H2        0.8014    0.2502   (n months 13)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0029 [+0.0021,+0.0036] +13/13  |  -0.0038 [-0.0061,-0.0016] +1/13 (better in 12/13)
+  R2            +0.0054 [+0.0032,+0.0076] +12/13  |  -0.0083 [-0.0118,-0.0048] +2/13 (better in 11/13)
+  Rsh           -0.0008 [-0.0011,-0.0005] +1/13  |  +0.0008 [+0.0004,+0.0012] +11/13 (better in 2/13)
+  H0            -0.0019 [-0.0062,+0.0024] +4/13  |  -0.0008 [-0.0072,+0.0055] +6/13 (better in 7/13)
+  H2            +0.0026 [-0.0012,+0.0065] +8/13  |  -0.0039 [-0.0107,+0.0028] +3/13 (better in 10/13)
+  H2-H0 (vs H0) +0.0045 [+0.0015,+0.0076] +11/13  |  -0.0031 [-0.0061,-0.0001] +4/13 (better in 9/13)
+
+-- span look  H=240  target lnrv --
+model   Spearman     QLIKE
+R0        0.7309    0.2454   (n months 13)
+R1        0.7316    0.2445   (n months 13)
+R2        0.7294    0.2447   (n months 13)
+Rsh       0.7300    0.2461   (n months 13)
+H0        0.7296    0.2457   (n months 13)
+H2        0.7305    0.2459   (n months 13)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0007 [-0.0001,+0.0015] +10/13  |  -0.0009 [-0.0018,+0.0000] +4/13 (better in 9/13)
+  R2            -0.0015 [-0.0048,+0.0018] +5/13  |  -0.0007 [-0.0043,+0.0030] +5/13 (better in 8/13)
+  Rsh           -0.0009 [-0.0013,-0.0006] +1/13  |  +0.0007 [+0.0003,+0.0012] +12/13 (better in 1/13)
+  H0            -0.0013 [-0.0144,+0.0118] +7/13  |  +0.0003 [-0.0086,+0.0092] +7/13 (better in 6/13)
+  H2            -0.0004 [-0.0105,+0.0097] +7/13  |  +0.0005 [-0.0082,+0.0093] +6/13 (better in 7/13)
+  H2-H0 (vs H0) +0.0009 [-0.0041,+0.0059] +6/13  |  +0.0002 [-0.0028,+0.0032] +6/13 (better in 7/13)
+
+-- span fwd  H=15  target lnrv --
+model   Spearman     QLIKE
+R0        0.7585    0.3622   (n months 12)
+R1        0.7636    0.3535   (n months 12)
+R2        0.7666    0.3499   (n months 12)
+Rsh       0.7572    0.3636   (n months 12)
+H0        0.7639    0.3604   (n months 12)
+H2        0.7658    0.3532   (n months 12)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0051 [+0.0039,+0.0063] +12/12  |  -0.0087 [-0.0123,-0.0051] +1/12 (better in 11/12)
+  R2            +0.0081 [+0.0062,+0.0099] +12/12  |  -0.0123 [-0.0179,-0.0068] +0/12 (better in 12/12)
+  Rsh           -0.0013 [-0.0018,-0.0008] +0/12  |  +0.0014 [+0.0006,+0.0022] +10/12 (better in 2/12)
+  H0            +0.0054 [+0.0032,+0.0076] +11/12  |  -0.0018 [-0.0058,+0.0022] +5/12 (better in 7/12)
+  H2            +0.0073 [+0.0049,+0.0098] +12/12  |  -0.0090 [-0.0156,-0.0024] +2/12 (better in 10/12)
+  H2-H0 (vs H0) +0.0020 [-0.0009,+0.0048] +8/12  |  -0.0072 [-0.0133,-0.0012] +4/12 (better in 8/12)
+
+-- span fwd  H=60  target lnrv --
+model   Spearman     QLIKE
+R0        0.7761    0.2884   (n months 12)
+R1        0.7805    0.2827   (n months 12)
+R2        0.7813    0.2807   (n months 12)
+Rsh       0.7751    0.2894   (n months 12)
+H0        0.7964    0.2710   (n months 12)
+H2        0.7935    0.2713   (n months 12)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0044 [+0.0030,+0.0058] +12/12  |  -0.0058 [-0.0086,-0.0030] +0/12 (better in 12/12)
+  R2            +0.0052 [+0.0029,+0.0075] +12/12  |  -0.0077 [-0.0126,-0.0028] +2/12 (better in 10/12)
+  Rsh           -0.0009 [-0.0013,-0.0006] +0/12  |  +0.0009 [+0.0004,+0.0014] +11/12 (better in 1/12)
+  H0            +0.0204 [+0.0138,+0.0269] +12/12  |  -0.0174 [-0.0260,-0.0088] +1/12 (better in 11/12)
+  H2            +0.0174 [+0.0128,+0.0221] +12/12  |  -0.0172 [-0.0249,-0.0094] +2/12 (better in 10/12)
+  H2-H0 (vs H0) -0.0030 [-0.0060,+0.0001] +5/12  |  +0.0002 [-0.0064,+0.0069] +8/12 (better in 4/12)
+
+-- span fwd  H=240  target lnrv --
+model   Spearman     QLIKE
+R0        0.6957    0.3002   (n months 12)
+R1        0.6981    0.2969   (n months 12)
+R2        0.6969    0.2958   (n months 12)
+Rsh       0.6948    0.3011   (n months 12)
+H0        0.7420    0.2544   (n months 12)
+H2        0.7322    0.2595   (n months 12)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0024 [+0.0009,+0.0039] +10/12  |  -0.0033 [-0.0060,-0.0006] +2/12 (better in 10/12)
+  R2            +0.0012 [-0.0012,+0.0036] +8/12  |  -0.0045 [-0.0102,+0.0012] +4/12 (better in 8/12)
+  Rsh           -0.0009 [-0.0011,-0.0007] +0/12  |  +0.0009 [+0.0004,+0.0013] +12/12 (better in 0/12)
+  H0            +0.0463 [+0.0323,+0.0603] +12/12  |  -0.0458 [-0.0603,-0.0314] +0/12 (better in 12/12)
+  H2            +0.0365 [+0.0243,+0.0488] +11/12  |  -0.0407 [-0.0514,-0.0301] +0/12 (better in 12/12)
+  H2-H0 (vs H0) -0.0098 [-0.0146,-0.0050] +2/12  |  +0.0051 [-0.0016,+0.0118] +10/12 (better in 2/12)
+
+===== SECONDARY target ln(|r_H|+1e-5) (ridge only) =====
+
+-- span sel  H=15  target absr --
+model   Spearman     QLIKE
+R0        0.3547    1.7092   (n months 42)
+R1        0.3553    1.7023   (n months 42)
+R2        0.3574    1.6964   (n months 42)
+Rsh       0.3491    1.7205   (n months 42)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0006 [-0.0005,+0.0017] +22/42  |  -0.0070 [-0.0119,-0.0021] +14/42 (better in 28/42)
+  R2            +0.0027 [+0.0009,+0.0044] +30/42  |  -0.0128 [-0.0205,-0.0052] +11/42 (better in 31/42)
+  Rsh           -0.0056 [-0.0065,-0.0047] +0/42  |  +0.0113 [+0.0083,+0.0144] +37/42 (better in 5/42)
+
+-- span sel  H=60  target absr --
+model   Spearman     QLIKE
+R0        0.3117    1.8395   (n months 42)
+R1        0.3109    1.8423   (n months 42)
+R2        0.3118    1.8486   (n months 42)
+Rsh       0.3056    1.8514   (n months 42)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            -0.0008 [-0.0018,+0.0002] +15/42  |  +0.0027 [-0.0025,+0.0080] +27/42 (better in 15/42)
+  R2            +0.0001 [-0.0030,+0.0032] +23/42  |  +0.0091 [-0.0020,+0.0201] +25/42 (better in 17/42)
+  Rsh           -0.0061 [-0.0071,-0.0052] +1/42  |  +0.0119 [+0.0087,+0.0150] +38/42 (better in 4/42)
+
+-- span sel  H=240  target absr --
+model   Spearman     QLIKE
+R0        0.2533    1.9311   (n months 42)
+R1        0.2519    1.9358   (n months 42)
+R2        0.2448    1.9594   (n months 42)
+Rsh       0.2471    1.9435   (n months 42)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            -0.0014 [-0.0026,-0.0002] +12/42  |  +0.0048 [+0.0007,+0.0088] +27/42 (better in 15/42)
+  R2            -0.0086 [-0.0137,-0.0034] +15/42  |  +0.0283 [+0.0162,+0.0405] +37/42 (better in 5/42)
+  Rsh           -0.0063 [-0.0076,-0.0050] +4/42  |  +0.0124 [+0.0102,+0.0147] +41/42 (better in 1/42)
+
+-- span look  H=15  target absr --
+model   Spearman     QLIKE
+R0        0.4017    1.5328   (n months 13)
+R1        0.4010    1.5310   (n months 13)
+R2        0.4005    1.5285   (n months 13)
+Rsh       0.3956    1.5432   (n months 13)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            -0.0006 [-0.0016,+0.0004] +5/13  |  -0.0018 [-0.0063,+0.0026] +4/13 (better in 9/13)
+  R2            -0.0011 [-0.0031,+0.0008] +6/13  |  -0.0043 [-0.0129,+0.0042] +5/13 (better in 8/13)
+  Rsh           -0.0060 [-0.0077,-0.0044] +0/13  |  +0.0104 [+0.0074,+0.0133] +13/13 (better in 0/13)
+
+-- span look  H=60  target absr --
+model   Spearman     QLIKE
+R0        0.3617    1.6323   (n months 13)
+R1        0.3605    1.6362   (n months 13)
+R2        0.3550    1.6472   (n months 13)
+Rsh       0.3564    1.6456   (n months 13)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            -0.0011 [-0.0034,+0.0012] +6/13  |  +0.0039 [-0.0023,+0.0100] +6/13 (better in 7/13)
+  R2            -0.0066 [-0.0092,-0.0040] +1/13  |  +0.0149 [+0.0090,+0.0208] +13/13 (better in 0/13)
+  Rsh           -0.0053 [-0.0066,-0.0039] +0/13  |  +0.0133 [+0.0090,+0.0176] +13/13 (better in 0/13)
+
+-- span look  H=240  target absr --
+model   Spearman     QLIKE
+R0        0.3096    1.7486   (n months 13)
+R1        0.3078    1.7544   (n months 13)
+R2        0.2974    1.7790   (n months 13)
+Rsh       0.3055    1.7614   (n months 13)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            -0.0018 [-0.0037,+0.0000] +3/13  |  +0.0058 [+0.0019,+0.0096] +11/13 (better in 2/13)
+  R2            -0.0121 [-0.0205,-0.0037] +1/13  |  +0.0304 [+0.0105,+0.0503] +10/13 (better in 3/13)
+  Rsh           -0.0041 [-0.0058,-0.0024] +1/13  |  +0.0127 [+0.0095,+0.0159] +13/13 (better in 0/13)
+
+-- span fwd  H=15  target absr --
+model   Spearman     QLIKE
+R0        0.3848    1.6328   (n months 12)
+R1        0.3858    1.6271   (n months 12)
+R2        0.3857    1.6308   (n months 12)
+Rsh       0.3808    1.6424   (n months 12)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0010 [-0.0003,+0.0023] +8/12  |  -0.0057 [-0.0097,-0.0017] +3/12 (better in 9/12)
+  R2            +0.0009 [-0.0013,+0.0031] +9/12  |  -0.0020 [-0.0090,+0.0049] +5/12 (better in 7/12)
+  Rsh           -0.0040 [-0.0052,-0.0028] +0/12  |  +0.0096 [+0.0049,+0.0142] +12/12 (better in 0/12)
+
+-- span fwd  H=60  target absr --
+model   Spearman     QLIKE
+R0        0.3545    1.7028   (n months 12)
+R1        0.3560    1.6978   (n months 12)
+R2        0.3545    1.7018   (n months 12)
+Rsh       0.3491    1.7159   (n months 12)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            +0.0014 [-0.0005,+0.0033] +5/12  |  -0.0051 [-0.0153,+0.0051] +4/12 (better in 8/12)
+  R2            -0.0000 [-0.0027,+0.0027] +6/12  |  -0.0010 [-0.0151,+0.0131] +6/12 (better in 6/12)
+  Rsh           -0.0054 [-0.0074,-0.0034] +1/12  |  +0.0131 [+0.0092,+0.0170] +12/12 (better in 0/12)
+
+-- span fwd  H=240  target absr --
+model   Spearman     QLIKE
+R0        0.2751    1.8742   (n months 12)
+R1        0.2748    1.8788   (n months 12)
+R2        0.2696    1.8981   (n months 12)
+Rsh       0.2705    1.8832   (n months 12)
+paired vs R0 (mean [95% t-CI] +months positive/n):  Spearman gain | QLIKE diff (negative = better)
+  R1            -0.0004 [-0.0018,+0.0011] +6/12  |  +0.0046 [-0.0018,+0.0110] +8/12 (better in 4/12)
+  R2            -0.0055 [-0.0111,+0.0001] +4/12  |  +0.0239 [+0.0088,+0.0390] +10/12 (better in 2/12)
+  Rsh           -0.0047 [-0.0065,-0.0029] +1/12  |  +0.0091 [+0.0039,+0.0142] +10/12 (better in 2/12)
+
+===== PRE-REGISTERED CRITERION (G* vs R0 at H=60, primary target) =====
+sel   G*=R2: Spearman gain +0.0073 [+0.0057,+0.0089] +40/42; QLIKE diff -0.0107 [-0.0159,-0.0055] +7/42; gain>=+0.005 True, lower>0 True, QLIKE<=0 True -> PASS
+look  G*=R2: Spearman gain +0.0054 [+0.0032,+0.0076] +12/13; QLIKE diff -0.0083 [-0.0118,-0.0048] +2/13; gain>=+0.005 True, lower>0 True, QLIKE<=0 True -> PASS
+fwd   G*=R2: Spearman gain +0.0052 [+0.0029,+0.0075] +12/12; QLIKE diff -0.0077 [-0.0126,-0.0028] +2/12; gain>=+0.005 True, lower>0 True, QLIKE<=0 True -> PASS
+
+VERDICT: holds
+
+===== SECONDARY H=15 and 240 (G* vs R0 Spearman gain; Holm over the two within each span; not part of the verdict) =====
+sel   H= 15: +0.0143 [+0.0127,+0.0158] +42/42  p=0.0000 Holm p=0.0000
+sel   H=240: +0.0012 [-0.0017,+0.0041] +27/42  p=0.4004 Holm p=0.4004
+look  H= 15: +0.0094 [+0.0065,+0.0123] +13/13  p=0.0000 Holm p=0.0000
+look  H=240: -0.0015 [-0.0048,+0.0018] +5/13  p=0.3369 Holm p=0.3369
+fwd   H= 15: +0.0081 [+0.0062,+0.0099] +12/12  p=0.0000 Holm p=0.0000
+fwd   H=240: +0.0012 [-0.0012,+0.0036] +8/12  p=0.2842 Holm p=0.2842
+
+===== INTERPRETATION =====
+Incremental Spearman of each channel group (its G1 columns) added alone to S3, vs R0, H=60, selection months:
+  price_bands  +0.0036 [+0.0024,+0.0049] +40/42
+  oscillators  +0.0009 [+0.0000,+0.0019] +28/42
+  volatility   +0.0012 [+0.0010,+0.0015] +41/42
+  volume       +0.0000 [-0.0001,+0.0002] +28/42
+  all (G*)     +0.0073 [+0.0057,+0.0089] +40/42
+
+Top 15 standardised geometry coefficients of the frozen G* at H=60 (ridge on ln RV; + means higher forecast RV):
+  -0.5440  g15.ema20.slope3                   channel ema20      group price_bands
+  +0.3683  g15.ema20.pos                      channel ema20      group price_bands
+  +0.3314  g15.ema40.slope3                   channel ema40      group price_bands
+  +0.3154  g1.ema10.slope10                   channel ema10      group price_bands
+  -0.2459  g1.ema20.slope3                    channel ema20      group price_bands
+  -0.2282  g15.sma20.pos                      channel sma20      group price_bands
+  +0.2154  g15.ema10.slope10                  channel ema10      group price_bands
+  +0.1765  g15.atr14.slope3                   channel atr14      group volatility
+  +0.1762  g15.ema10.slope3                   channel ema10      group price_bands
+  -0.1652  g15.ema20.cross20                  channel ema20      group price_bands
+  +0.1599  g1.ema40.slope3                    channel ema40      group price_bands
+  +0.1595  g1.kel_lo.pos                      channel kel_lo     group price_bands
+  +0.1523  g15.ema20.slope10                  channel ema20      group price_bands
+  +0.1493  g1.ema5.slope3                     channel ema5       group price_bands
+  -0.1472  g1.ema5.slope10                    channel ema5       group price_bands
