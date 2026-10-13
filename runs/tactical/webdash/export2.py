@@ -5,7 +5,7 @@ usage: python export2.py -> runs/tactical/webdash/out/{decay_monthly,regimes,dec
 import json, os
 from collections import defaultdict
 
-os.chdir(r"D:\nt\nt_tactical"); OUT = "runs/tactical/webdash/out"; os.makedirs(OUT, exist_ok=True)
+os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")); OUT = "runs/tactical/webdash/out"; os.makedirs(OUT, exist_ok=True)
 L = lambda p: json.load(open(p, encoding="utf-8"))
 
 

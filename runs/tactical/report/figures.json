@@ -1,0 +1,197 @@
+[
+ {
+  "section": "s1",
+  "key": "verdict_areas",
+  "title": "Журнал по областям и вердиктам"
+ },
+ {
+  "section": "s1",
+  "key": "verdict_areas",
+  "title": "Журнал"
+ },
+ {
+  "section": "s2",
+  "key": "decay",
+  "title": "Затухание: AUC направления, ступени, Спирмен HAR, hit"
+ },
+ {
+  "section": "s2",
+  "key": "decay",
+  "title": ""
+ },
+ {
+  "section": "s3",
+  "key": "decay_map",
+  "title": ""
+ },
+ {
+  "section": "s4",
+  "key": "h24_0",
+  "title": "H24 Спокойное"
+ },
+ {
+  "section": "s4",
+  "key": "h24_1",
+  "title": "H24 Трендовое"
+ },
+ {
+  "section": "s4",
+  "key": "h24_2",
+  "title": "H24 Волатильное"
+ },
+ {
+  "section": "s4",
+  "key": "n1",
+  "title": "N1 кривизна и кручение, 3D"
+ },
+ {
+  "section": "s4",
+  "key": "n2",
+  "title": "N2 площади Леви"
+ },
+ {
+  "section": "s4",
+  "key": "n3",
+  "title": "N3 фазовый портрет"
+ },
+ {
+  "section": "s4",
+  "key": "n4",
+  "title": "N4 оболочка"
+ },
+ {
+  "section": "s4",
+  "key": "n5_ecdf",
+  "title": "N5 ECDF"
+ },
+ {
+  "section": "s4",
+  "key": "n5_hist",
+  "title": "N5 гистограммы"
+ },
+ {
+  "section": "s4",
+  "key": "n6",
+  "title": "N6 Фишер-Рао"
+ },
+ {
+  "section": "s4",
+  "key": "n7",
+  "title": "N7 выпуклость"
+ },
+ {
+  "section": "s4",
+  "key": "h67",
+  "title": "H67 форма пути"
+ },
+ {
+  "section": "s4",
+  "key": "h80",
+  "title": "H80 синтетические ряды (случайная TCN, контроль C1)"
+ },
+ {
+  "section": "s4",
+  "key": "h80_heat",
+  "title": "H80 признаки геометрии по рядам"
+ },
+ {
+  "section": "s4",
+  "key": "forest",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "verdict_board",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "h67_gain",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "h68",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "h69",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "h70",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "td",
+  "title": ""
+ },
+ {
+  "section": "s5",
+  "key": "arrow",
+  "title": ""
+ },
+ {
+  "section": "s6",
+  "key": "models",
+  "title": ""
+ },
+ {
+  "section": "s6",
+  "key": "longtrain",
+  "title": ""
+ },
+ {
+  "section": "s6",
+  "key": "coefs",
+  "title": ""
+ },
+ {
+  "section": "s7",
+  "key": "goal",
+  "title": ""
+ },
+ {
+  "section": "s7",
+  "key": "frontier",
+  "title": ""
+ },
+ {
+  "section": "s7",
+  "key": "hdev",
+  "title": ""
+ },
+ {
+  "section": "s7",
+  "key": "hmap",
+  "title": ""
+ },
+ {
+  "section": "s7",
+  "key": "hfin",
+  "title": ""
+ },
+ {
+  "section": "s7",
+  "key": "equity_a_h48_minute_barrier_meta",
+  "title": "Кривая капитала a_h48_minute_barrier_meta (сохранённый PNG)"
+ },
+ {
+  "section": "s7",
+  "key": "equity_b_h56_1h_rich_l1_365",
+  "title": "Кривая капитала b_h56_1h_rich_l1_365 (сохранённый PNG)"
+ },
+ {
+  "section": "s7",
+  "key": "equity_b_h56_1m_all_l1_365",
+  "title": "Кривая капитала b_h56_1m_all_l1_365 (сохранённый PNG)"
+ },
+ {
+  "section": "s7",
+  "key": "equity_c_h38_hourly_barrier_meta",
+  "title": "Кривая капитала c_h38_hourly_barrier_meta (сохранённый PNG)"
+ }
+]
