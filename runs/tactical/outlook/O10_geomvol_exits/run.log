@@ -22,3 +22,7 @@
 01:59:05 span C valid decisions 35597 E4 models {60: 1} 112s
 02:02:01 span A valid decisions 87676 E4 models {60: 27} 289s
 02:02:36 describe done 324s
+02:02:55 freeze bars 525600 2025-10-01 00:00:00 2026-09-30 23:59:00
+02:03:21 freeze E4 T 60 E0 positions 653 checkpoints 2099 model 2099
+02:03:21 freeze E4 T 240 E0 positions 612 checkpoints 4457 model 4457
+02:03:21 FROZEN sha256 3f87ef099e8782cae547920a706bbc569ae225caf5ff6b4ffa774c8007509e3c O9 models sha256 9c5259a60e0c2c6e966f530585bb354e881ee1d53f3a5098ff01b3d8bb055195 sigma15 n_tr 73825 E4 {'60': 2099, '240': 4457}

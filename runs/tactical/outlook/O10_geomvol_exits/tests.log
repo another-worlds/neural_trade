@@ -1,5 +1,7 @@
-1b4b3c0c921b7bf98d6c191209bf45da12e138b9
+2b42dfa0474a92d75f0e1908d135c19c7e5f567f
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-29 passed, 1 warning in 46.15s
+32 passed, 1 warning in 27.33s
 All checks passed!
+frozen sha256
+3f87ef099e8782cae547920a706bbc569ae225caf5ff6b4ffa774c8007509e3c
