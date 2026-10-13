@@ -3,7 +3,7 @@
 tactical_report.html (rcommon helpers, the CSS of build_report.py read as text, plotly embedded once, no external requests,
 text in Russian). Every number is read from the committed result files of runs/tactical/outlook/O*/ or computed here from their
 rows (paired month differences with 95% t-intervals); candles come from the committed windows (interp.json) or the cut price
-file (hard cutoff 2025-07-20). O2 reads its REPORT.md when it exists, so a later rebuild fills the section.
+file (hard cutoff 2025-07-20). O2, O6 and O7 read their REPORT.md and score files (asserts tie the recomputed numbers to the reports).
 
 usage: python runs/tactical/report/build_outlook_report.py   (CPU, about 1 minute)   -> outlook_report.html"""
 import html as H
@@ -30,7 +30,10 @@ HERE = Path(__file__).resolve().parent
 NEUT = T.NEUTRAL
 HC = T.HORIZON_COLORS                       # h0/h1/h2 colours: used only for the volatility horizons 15/60/240
 HCOL = {15: HC["h0"], 60: HC["h1"], 240: HC["h2"]}
-SPANC = {"sel": GOLD, "look": PINK, "fwd": VIOLET}
+# D-014: h0/h1/h2 colours are only for horizons. Spans, models and experiments use the other theme series colours.
+SPANC = {"sel": TAN, "look": PINK, "fwd": VIOLET}
+MODC = {"R0": NEUT, "L0": NEUT, "HAR": TAN, "L1": PINK, "L2": VIOLET, "L2sh": NEUT}
+EXPC = {"O1": PINK, "O2": "#c3c2b7", "O3": TAN, "O4": SALMON, "O5": VIOLET, "O6": INK2, "O7": "#8a8984"}
 SPANN = {"sel": "подбор 2021-01..2024-06", "look": "взгляд 2024-07..2025-07", "fwd": "вперёд 2025-10..2026-09"}
 FIGS = []
 t_start = time.time()
@@ -69,6 +72,11 @@ def sg(x, nd=4):
 
 def fmt_ci(t, nd=4):
     return f"{sg(t[0], nd)} [{sg(t[1], nd)}; {sg(t[2], nd)}], {t[3]}/{t[4]}"
+
+
+def fmt7(t, d, nd=2):
+    """interval-score difference (bps; negative = first model better): mean [95% t], months with a - b < 0."""
+    return f"{sg(t[0], nd)} [{sg(t[1], nd)}; {sg(t[2], nd)}], лучше {sum(v < 0 for v in d.values())}/{len(d)}"
 
 
 def paired(rows, a, b, key="spearman", **flt):
@@ -144,7 +152,114 @@ choice5 = jf("O5_geom_bestbase/choice.json")
 sha4 = (OUT / "O4_bank_confirm/frozen_B.sha256").read_text().strip()
 sha5 = (OUT / "O5_geom_bestbase/frozen_B.sha256").read_text().strip()
 o2_report = txt("O2_phys_var8/REPORT.md")
-o2_prog = txt("O2_phys_var8/progress.txt")
+R6 = jl("O6_geom_hourly/results.jsonl")
+R7 = jl("O7_geom_intervals/results.jsonl")
+interp6 = jf("O6_geom_hourly/interp.json")
+sum7 = jf("O7_geom_intervals/summary.json")
+sha6 = (OUT / "O6_geom_hourly/frozen_B.sha256").read_text().strip()
+o6_report = txt("O6_geom_hourly/REPORT.md")
+o7_report = txt("O7_geom_intervals/REPORT.md")
+assert "Verdict: **fail**" in o6_report and "Verdict: **pass**" in o7_report
+assert o2_report and "NO DETECTABLE EFFECT" in o2_report
+
+# O2: per-slice scores of the 8-epoch runs (seeds 0, 1) and of the 4-epoch references (phys7 seed 0, phys7b seed 1)
+TACD = OUT.parent
+
+
+def o2_scores(path, seeds):
+    out = {}
+    for r in json.load(open(TACD / path, encoding="utf-8")):
+        if r["seed"] in seeds:
+            out.setdefault(r["slice"], []).append(r)
+    return out
+
+
+def o2_cells(epochs):
+    """{(cell, slice): {metric: value}} averaged over the two seeds. Values: spearman_h (3), qlike_h (3), har_tod spearman_h/qlike_h."""
+    res = {}
+    for cell in ("on", "off"):
+        if epochs == 8:
+            sc = o2_scores(f"outlook/O2_phys_var8/scores_o2_none_{cell}.json", (0, 1))
+        else:
+            a = o2_scores(f"phys7/scores_phys7_none_{cell}.json", (0,))
+            b = o2_scores(f"phys7b/scores_phys7b_none_{cell}.json", (1,))
+            sc = {k: a[k] + b[k] for k in a}
+        for sl, rs in sc.items():
+            assert len(rs) == 2, (epochs, cell, sl)
+            res[cell, sl] = {
+                "sp": np.mean([r["net"]["spearman_h"] for r in rs], axis=0), "ql": np.mean([r["net"]["qlike_h"] for r in rs], axis=0),
+                "hsp": np.mean([r["har_tod"]["spearman_h"] for r in rs], axis=0), "hql": np.mean([r["har_tod"]["qlike_h"] for r in rs], axis=0),
+                "sp_all": np.mean([r["net"]["spearman"] for r in rs]), "ql_all": np.mean([r["net"]["qlike"] for r in rs]),
+                "hsp_all": np.mean([r["har_tod"]["spearman"] for r in rs]), "hql_all": np.mean([r["har_tod"]["qlike"] for r in rs])}
+    return res
+
+
+O2S = {8: o2_cells(8), 4: o2_cells(4)}
+O2_SLICES = sorted({sl for (_, sl) in O2S[8]})
+assert len(O2_SLICES) == 6 and sorted({sl for (_, sl) in O2S[4]}) == O2_SLICES
+O2J = jf("O2_phys_var8/report_tables.json")
+
+
+def o2_onoff(ep, key="sp", h=None):
+    """per-slice on - off; h None = mean over the three horizons (the key '<key>_all' for the pooled mean is not used)."""
+    v = []
+    for sl in O2_SLICES:
+        a, b = O2S[ep]["on", sl][key], O2S[ep]["off", sl][key]
+        v.append(float(np.mean(a - b)) if h is None else float(a[h] - b[h]))
+    return np.array(v)
+
+
+def o2_gap(ep, cell, key="sp"):
+    hk = "h" + key
+    return np.array([float(np.mean(O2S[ep][cell, sl][key] - O2S[ep][cell, sl][hk])) for sl in O2_SLICES])
+
+
+O2_ONOFF = {(ep, h): tci(o2_onoff(ep, "sp", h)) for ep in (4, 8) for h in (None, 0, 1, 2)}
+O2_D = tci(o2_onoff(8) - o2_onoff(4))
+O2_QL = {ep: tci(o2_onoff(ep, "ql")) for ep in (4, 8)}
+O2_GAP = {(ep, c): tci(o2_gap(ep, c)) for ep in (4, 8) for c in ("on", "off")}
+O2_GAPQ = {(ep, c): tci(o2_gap(ep, c, "ql")) for ep in (4, 8) for c in ("on", "off")}
+for (ep, h), nm in (((8, None), "8ep_seeds01_spearman_on_minus_off"), ((8, 0), "8ep_seeds01_spearman_h0_on_minus_off"), ((4, None), "4ep_seeds01_spearman_on_minus_off"),
+                    ((8, 2), "8ep_seeds01_spearman_h2_on_minus_off"), ((4, 1), "4ep_seeds01_spearman_h1_on_minus_off")):
+    assert np.allclose(O2_ONOFF[ep, h][:3], O2J[nm][:3], atol=1e-9), (nm, O2_ONOFF[ep, h], O2J[nm])
+assert np.allclose(O2_D[:3], O2J["d8_minus_d4_spearman"][:3], atol=1e-9)
+assert np.allclose(O2_GAP[8, "on"][:3], O2J["8ep_seeds01_on_spearman_net_minus_har"][:3], atol=1e-9)
+assert np.allclose(O2_GAP[4, "off"][:3], O2J["4ep_seeds01_off_spearman_net_minus_har"][:3], atol=1e-9)
+assert np.allclose(O2_GAPQ[8, "off"][:3], O2J["8ep_seeds01_off_qlike_net_minus_har"][:3], atol=1e-9)
+assert abs(O2_ONOFF[8, None][0] - 0.0094) < 6e-5 and O2_ONOFF[8, None][3] == 3 and abs(O2_D[0] + 0.0062) < 6e-5
+assert "+0.0094 [-0.0068, +0.0257]" in o2_report and "-0.0062 [-0.0238, +0.0114]" in o2_report
+
+# O6: judgement months 2019-01..2020-12, L2 (L1 + hourly geometry) against L1
+O6 = {H_: tci(list(paired(R6, "L2", "L1", span="judge", H=H_).values())) for H_ in (15, 60, 240)}
+O6sh = {H_: tci(list(paired(R6, "L2sh", "L1", span="judge", H=H_).values())) for H_ in (15, 60, 240)}
+O6q = {H_: tci(list(paired(R6, "L2", "L1", key="qlike", span="judge", H=H_).values())) for H_ in (15, 60, 240)}
+assert abs(O6[240][0] + 0.0143) < 6e-5 and O6[240][3] == 8 and O6[240][4] == 24 and abs(O6[60][0] + 0.0039) < 6e-5 and abs(O6sh[240][0] + 0.0009) < 6e-5, O6
+assert abs(O6q[240][0] + 0.0007) < 6e-5
+assert "-0.0143 [-0.0231, -0.0055]" in o6_report
+
+# O7: interval score (bps; lower is better), judgement months 2019-02..2020-12
+O7R0 = {T_: paired(R7, "L1", "R0", key="iscore_bps", span="judge", H=T_) for T_ in (15, 60, 240)}
+O7HAR = {T_: paired(R7, "L1", "HAR", key="iscore_bps", span="judge", H=T_) for T_ in (15, 60, 240)}
+O7C = {T_: tci(list(O7R0[T_].values())) for T_ in (15, 60, 240)}
+O7H = {T_: tci(list(O7HAR[T_].values())) for T_ in (15, 60, 240)}
+
+
+def O7better(d):
+    """months with a - b < 0 (a better)."""
+    return int(sum(v < 0 for v in d.values()))
+
+assert abs(O7C[60][0] + 1.75) < 6e-3 and O7better(O7R0[60]) == 18 and len(O7R0[60]) == 23, O7C
+assert abs(O7H[60][0] - 0.65) < 6e-3 and O7better(O7HAR[60]) == 16 and abs(O7C[15][0] + 1.84) < 6e-3
+assert abs(sum7["paired_T60_L1_R0"]["mean"] - O7C[60][0]) < 1e-9
+assert "-1.75 bps on average, 95% t-interval [-2.64, -0.86]" in o7_report
+
+
+def o7_pool(span, T_, m):
+    rr = [r for r in R7 if r["span"] == span and r["H"] == T_ and r["model"] == m]
+    return (sum(r["n_in"] for r in rr) / sum(r["n"] for r in rr), float(np.mean([r["width_bps"] for r in rr])), float(np.mean([r["iscore_bps"] for r in rr])), len(rr))
+
+
+assert abs(o7_pool("judge", 60, "L1")[0] - 0.8925) < 6e-5 and abs(o7_pool("judge", 60, "HAR")[2] - 305.11) < 6e-3 and abs(o7_pool("judge", 240, "R0")[1] - 377.31) < 6e-3
 
 # headline numbers (computed from rows; checked against the committed tables below)
 O1 = {}
@@ -170,50 +285,75 @@ def sec1():
     verdicts = [
         ("O1", "Геометрия индикаторов поверх честного прогноза волатильности (HAR)", "good", "держится, узко",
          f"G*−R0, H=60: взгляд {sg(O1['look', 60][0])}, вперёд {sg(O1['fwd', 60][0])}; порог +0,005 пройден на ножах; на бустинге-базе вперёд не держится"),
-        ("O2", "Физические члены на голове дисперсии при 8 эпохах вместо 4", "info", "идёт" if not o2_report else "результат есть",
-         "считается на GPU; секция читает runs/tactical/outlook/O2_phys_var8/REPORT.md и заполнится при пересборке" if not o2_report else "см. секцию O2"),
+        ("O2", "Физические члены на голове дисперсии при 8 эпохах вместо 4", "bad", "нет детектируемого эффекта",
+         f"вкл−выкл, Спирмен |r|: 8 эпох {sg(O2_ONOFF[8, None][0])} [{sg(O2_ONOFF[8, None][1])}; {sg(O2_ONOFF[8, None][2])}], 3/6 срезов; 4 эпохи {sg(O2_ONOFF[4, None][0])}; 8 эпох = 4 в пределах шума"),
         ("O3", "Синтетические индикаторы волатильности (обучаемые ядра памяти)", "bad", "нет",
          f"LK−R0 на взгляде {sg(O3['look'][0])} [{sg(O3['look'][1])}; {sg(O3['look'][2])}]: ядра ничего не выучили; побочная находка BANK (плотный HAR)"),
         ("O4", "Подтверждение BANK на 2017-09..2018-12", "bad", "не подтверждено",
          f"BANK−R0, H=60: {sg(A4[60][0])} [{sg(A4[60][1])}; {sg(A4[60][2])}]; один месяц (2017-09, 10,7 дня обучения) тянет среднее вниз; часть B заморожена"),
         ("O5", "Геометрия поверх лучшей базы (BANK) на 2018-07..2020-12", "good", "геометрия добавляет",
          f"L1−L0, H=60: {sg(J5[60][0])} [{sg(J5[60][1])}; {sg(J5[60][2])}], {J5[60][3]}/{J5[60][4]} месяцев; запас по порогу малый; часть B заморожена"),
+        ("O6", "Часовая геометрия (G60) для H=240", "bad", "провал",
+         f"L2−L1, H=240: {sg(O6[240][0])} [{sg(O6[240][1])}; {sg(O6[240][2])}], {O6[240][3]}/{O6[240][4]} месяцев; лестница геометрии останавливается на 15 минутах"),
+        ("O7", "Геометрия как 90%-интервалы доходности", "part", "проходит, но крошечно",
+         f"интервальная оценка L1−R0, T=60: {sg(O7C[60][0], 2)} б.п. [{sg(O7C[60][1], 2)}; {sg(O7C[60][2], 2)}], {O7better(O7R0[60])}/23 месяцев лучше (0,6% от 307 б.п.); "
+         f"против HAR: {sg(O7H[60][0], 2)} б.п. [{sg(O7H[60][1], 2)}; {sg(O7H[60][2], 2)}] - не лучше"),
     ]
     rows = [[f"<b>{i}</b>", n, badge(k, t), d] for i, n, k, t, d in verdicts]
     board = table(rows, ["", "вопрос", "вердикт", "ключевое число"])
 
-    # forest of the headline effects
-    items = [("O1 G*−R0 · подбор", O1["sel", 60]), ("O1 G*−R0 · взгляд", O1["look", 60]), ("O1 G*−R0 · вперёд", O1["fwd", 60]),
-             ("O3 LK−R0 · взгляд", O3["look"]), ("O3 LK−R0 · вперёд", O3["fwd"]), ("O3 BANK−R0 · взгляд", O3b["look"]), ("O3 BANK−R0 · вперёд", O3b["fwd"]),
-             ("O4 BANK−R0 · 2017-09..2018-12", A4[60]), ("O5 L1−L0 · 2018-07..2020-12", J5[60])]
-    fig = go.Figure()
-    col = {"O1": GOLD, "O3": TAN, "O4": SALMON, "O5": VIOLET}
-    for nm, t in items:
-        c = col[nm[:2]]
-        fig.add_trace(go.Scatter(x=[t[0]], y=[nm], mode="markers", marker=dict(color=c, size=11, symbol="diamond"), error_x=dict(type="data", symmetric=False, array=[t[2] - t[0]], arrayminus=[t[0] - t[1]], color=c, thickness=2.2),
-                                 showlegend=False, hovertemplate=nm + f"<br>{ru(t[0], 4, True)} [{ru(t[1], 4, True)}; {ru(t[2], 4, True)}]<br>месяцы с плюсом {t[3]}/{t[4]}<extra></extra>"))
-    fig.add_vline(x=0, line=dict(color=NEUT, width=1))
-    fig.add_vline(x=0.005, line=dict(color=T.GOOD, width=1, dash="dash"), annotation_text="порог +0,005", annotation_font_color=T.GOOD)
-    fig.update_layout(xaxis_title="выигрыш по Спирмену (H=60, ln RV), среднее по месяцам ± 95% t-интервал", yaxis=dict(autorange="reversed"))
-    f1 = F(fig, "o1", "ov_forest", "Все ключевые эффекты H=60", 440, subtitle="парные разности по месяцам; эффекты порядка 0,005 на базе 0,73-0,80")
+    # forest of the headline effects: three panels because the units differ
+    itA = [("O1 G*−R0 · подбор", O1["sel", 60], "O1"), ("O1 G*−R0 · взгляд", O1["look", 60], "O1"), ("O1 G*−R0 · вперёд", O1["fwd", 60], "O1"),
+           ("O3 LK−R0 · взгляд", O3["look"], "O3"), ("O3 LK−R0 · вперёд", O3["fwd"], "O3"), ("O3 BANK−R0 · взгляд", O3b["look"], "O3"), ("O3 BANK−R0 · вперёд", O3b["fwd"], "O3"),
+           ("O4 BANK−R0 · 2017-09..2018-12", A4[60], "O4"), ("O5 L1−L0 · 2018-07..2020-12", J5[60], "O5"),
+           ("O6 L2−L1 · H=60 (вторичный)", O6[60], "O6"), ("O6 L2−L1 · H=240 (основной)", O6[240], "O6")]
+    itB = [("O2 вкл−выкл · 4 эпохи", O2_ONOFF[4, None], "O2"), ("O2 вкл−выкл · 8 эпох", O2_ONOFF[8, None], "O2")]
+    itC = [("O7 L1−R0 · T=60", O7C[60], "O7"), ("O7 L1−HAR · T=60", O7H[60], "O7")]
+    fig = make_subplots(rows=3, cols=1, row_heights=[0.66, 0.15, 0.15], vertical_spacing=0.13,
+                        subplot_titles=["А. Спирмен по ln RV (больше - лучше); H=60, кроме O6 H=240",
+                                        "Б. O2: Спирмен головы дисперсии с |r| на 10/15/20 мин (другая метрика), 6 срезов",
+                                        "В. O7: интервальная оценка 90%-интервала, базисные пункты (меньше - лучше)"])
+    for r, items, nd in ((1, itA, 4), (2, itB, 4), (3, itC, 2)):
+        for nm, t, ex in items:
+            c = EXPC[ex]
+            cnt = f"единиц с плюсом {t[3]} из {t[4]}" if r < 3 else f"месяцев с отрицательной разностью {O7better(O7R0[60] if 'R0' in nm else O7HAR[60])} из {t[4]}"
+            fig.add_trace(go.Scatter(x=[t[0]], y=[nm], mode="markers", marker=dict(color=c, size=11, symbol="diamond"),
+                                     error_x=dict(type="data", symmetric=False, array=[t[2] - t[0]], arrayminus=[t[0] - t[1]], color=c, thickness=2.2),
+                                     showlegend=False, hovertemplate=nm + f"<br>{ru(t[0], nd, True)} [{ru(t[1], nd, True)}; {ru(t[2], nd, True)}]<br>{cnt}<extra></extra>"), row=r, col=1)
+        fig.add_vline(x=0, line=dict(color=NEUT, width=1), row=r, col=1)
+        fig.update_yaxes(autorange="reversed", row=r, col=1)
+    fig.add_vline(x=0.005, line=dict(color=T.GOOD, width=1, dash="dash"), row=1, col=1, annotation_text="порог +0,005", annotation_font_color=T.GOOD)
+    fig.add_vline(x=0.010, line=dict(color=T.GOOD, width=1, dash="dash"), row=2, col=1, annotation_text="порог SPEC +0,010", annotation_font_color=T.GOOD)
+    fig.update_xaxes(title_text="выигрыш по Спирмену, среднее по месяцам ± 95% t-интервал", row=1, col=1)
+    fig.update_xaxes(title_text="вкл − выкл, среднее по срезам ± 95% t-интервал", row=2, col=1)
+    fig.update_xaxes(title_text="разность интервальной оценки, б.п. (отрицательное - первая модель лучше)", row=3, col=1)
+    fig.update_annotations(font_size=12, font_color=INK2)
+    f1 = F(fig, "o0", "ov_forest", "Все ключевые эффекты", 860, subtitle="парные разности; три панели, потому что метрики разные; эффекты порядка 0,005 на базе 0,73-0,80")
 
-    tiles = [(f"{sg(O1['look', 60][0])}", "O1: выигрыш геометрии, взгляд (H=60)", f"вперёд {sg(O1['fwd', 60][0])}; все 13/13 и 12/12 интервалов выше 0 на взгляде и вперёде"),
+    tiles = [(f"{sg(O1['look', 60][0])}", "O1: выигрыш геометрии, взгляд (H=60)", f"вперёд {sg(O1['fwd', 60][0])}; 12/13 и 12/12 месяцев в плюсе (взгляд и вперёд)"),
              (f"{sg(J5[15][0], 4)}", "O5: выигрыш геометрии при H=15", f"{J5[15][3]}/{J5[15][4]} месяцев; при H=240 ничего ({sg(J5[240][0])})"),
-             (f"{sg(O3b['look'][0])}", "O3: BANK−R0, взгляд (H=60)", f"вперёд {sg(O3b['fwd'][0])}; но в O4 на раннем периоде не подтвердилось"),
+             (f"{sg(O7C[60][0], 2)} б.п.", "O7: геометрия как интервалы, T=60", f"{O7better(O7R0[60])}/23 месяцев лучше, 0,6% оценки; против HAR {sg(O7H[60][0], 2)} б.п. - не лучше"),
+             (f"{sg(O6[240][0])}", "O6: часовая геометрия, H=240", f"{O6[240][3]}/{O6[240][4]} месяцев в плюсе: вредит; на H=60 {sg(O6[60][0])}"),
+             (f"{sg(O2_ONOFF[8, None][0])}", "O2: физика, 8 эпох", f"4 эпохи {sg(O2_ONOFF[4, None][0])}; разность {sg(O2_D[0])} [{sg(O2_D[1])}; {sg(O2_D[2])}]: шум"),
              (f"{sg(O3['look'][0])}", "O3: синтетические ядра", "ядра остались около равномерных: «нет»")]
     th = "".join(f'<div class="tile"><div class="big">{a}</div><div class="lab">{b}</div><div class="sub">{c}</div></div>' for a, b, c in tiles)
 
     body = ('<div class="lead">Запрос владельца: найти <b>положительный прогноз</b> (outlook) для четырёх идей: <b>геометрия индикаторов</b>, <b>физика</b>, '
-            '<b>регрессия</b> и <b>синтетические индикаторы</b>. Общий вывод: геометрия помогает предсказывать <b>размер движений</b> (волатильность) '
+            '<b>регрессия</b> и <b>синтетические индикаторы</b>. Общий вывод: геометрия (15-минутная кривизна тренда EMA) помогает предсказывать <b>размер движений</b> (волатильность) '
             'на горизонтах 15 и 60 минут, на 240 минутах - нет. <b>Направление не заявляется</b>: ни один результат не про направление цены.</div>'
             f'<div class="tiles">{th}</div>'
-            + card("Доска вердиктов O1-O5", board, "Единица - месяц; 95% t-интервалы парных разностей по месяцам; «k/n» - месяцев с плюсом. Всё одно зерно, только CPU.")
-            + card("Все ключевые эффекты на одной оси", f1, "Метрика - выигрыш по Спирмену против опорной модели на H=60 (цель ln RV). Порог из SPEC - +0,005 (O1/O3/O4) и +0,003 (O5).")
-            + card("Как читать", "<ul class='note'><li><b>Что работает:</b> плотные признаки геометрии MA-каналов (особенно на 15-минутном масштабе) добавляют около +0,005 Спирмена к линейному HAR; "
-                   "эффект стабилен по знаку (почти каждый месяц), мал по размеру.</li>"
-                   "<li><b>Что не работает:</b> обучаемые ядра памяти не выучили форму; прибавка BANK - просто более плотный HAR.</li>"
-                   "<li><b>Оговорки:</b> прибавка геометрии O1 затухает на форвардном году и не держится против бустинга; O4 не подтвердил BANK на раннем периоде; "
-                   "порог размера пройден на грани.</li></ul>"))
+            + card("Доска вердиктов O1-O7", board, "Единица - месяц (O2: срез); 95% t-интервалы парных разностей; «k/n» - единиц с плюсом. Всё одно зерно и только CPU; O2 - GPU, 2 зерна.")
+            + card("Все ключевые эффекты, три оси", f1, "Панель А - выигрыш по Спирмену против опорной модели (цель ln RV). Порог из SPEC - +0,005 (O1/O3/O4), +0,003 (O5 и O6). "
+                   "Панель Б - O2, другая метрика и данные. Панель В - O7, базисные пункты.")
+            + card("Общий вывод", "<ul class='note'>"
+                   f"<li><b>Геометрия работает на коротких масштабах:</b> 15-минутная кривизна тренда EMA добавляет к прогнозу размера движения на 15-60 минутах поверх лучшей линейной базы "
+                   f"(O1 {sg(O1['look', 60][0])} на взгляде и O5 {sg(J5[60][0])} на 2018-2020; обе с QA PASS). Эффект стабилен по знаку, мал по размеру.</li>"
+                   f"<li><b>Как интервалы - крошечный выигрыш:</b> O7, {sg(O7C[60][0], 2)} б.п. при оценке около 307 б.п. (0,6%); не лучше HAR ({sg(O7H[60][0], 2)} б.п. [{sg(O7H[60][1], 2)}; {sg(O7H[60][2], 2)}]).</li>"
+                   f"<li><b>Часовая геометрия вредит:</b> O6, L2−L1 {sg(O6[240][0])} при H=240 и {sg(O6[60][0])} при H=60; лестница геометрии останавливается на 15 минутах.</li>"
+                   f"<li><b>Физика - малый эффект раннего обучения:</b> O2, {sg(O2_ONOFF[4, None][0])} на 4 эпохах и {sg(O2_ONOFF[8, None][0])} на 8; не растёт с обучением и не отличим от нуля.</li>"
+                   "<li><b>Синтетические ядра - нет</b> (O3). <b>BANK не подтверждён ретроспективно</b> (O4).</li>"
+                   "<li><b>Ждут проспективной оценки:</b> score_B для O4, O5, O6 и O7 с 2026-10/11 (см. «Что ещё не готово»).</li>"
+                   "<li><b>Оговорки:</b> прибавка O1 затухает на форварде и не держится против бустинга; порог размера пройден на грани; интервалы по месяцам оптимистичны из-за перекрытия меток.</li></ul>"))
     return body
 
 
@@ -274,7 +414,7 @@ def sec_o1():
 
     # coefficients
     top = interp["top"]
-    GC = {"price_bands": GOLD, "volatility": PINK, "oscillators": TAN, "volume": VIOLET}
+    GC = {"price_bands": TAN, "volatility": PINK, "oscillators": TAN, "volume": VIOLET}
     fig = go.Figure(go.Bar(y=[t["name"] for t in top], x=[t["coef"] for t in top], orientation="h",
                            marker=dict(color=[GC.get(t["group"], NEUT) for t in top], line=dict(color=SURFACE, width=1)),
                            text=[ru(t["coef"], 3, True) for t in top], textposition="outside",
@@ -336,20 +476,78 @@ def sec_o1():
 
 # ======================================================================================================== section O2
 def sec_o2():
-    if o2_report:
-        body = card("O2: REPORT.md (прочитан при сборке)", md(o2_report))
-        for p in sorted((OUT / "O2_phys_var8").glob("scores*.json")):
-            body += card(f"{p.name}", f"<pre class='note' style='white-space:pre-wrap'>{H.escape(p.read_text(encoding='utf-8')[:6000])}</pre>")
-        return body
-    spec = txt("O2_phys_var8/SPEC.md") or ""
-    q = re.search(r"## Question\n(.*?)\n\n", spec, re.S)
-    last = (o2_prog or "").strip().splitlines()[-1] if o2_prog else "нет данных"
-    return ('<div class="lead">Статус: <b>идёт</b>. REPORT.md ещё нет; секция читает runs/tactical/outlook/O2_phys_var8/REPORT.md при каждой пересборке.</div>'
-            + card("Вопрос (SPEC)", f"<p class='note'>{H.escape(q.group(1)) if q else 'см. SPEC.md'}</p>")
-            + card("Что будет показано здесь", "<ul class='note'><li>эффект физики (вкл − выкл) по Спирмену головы дисперсии с |r| на 6 срезах, 95% t-интервал;</li>"
-                   "<li>разность эффектов при 8 и 4 эпохах на тех же срезах и зёрнах (растёт, тот же в пределах шума, сжимается);</li>"
-                   "<li>сеть минус HAR+tod по Спирмену и QLIKE; число эпох и обслуживаемая эпоха каждого прогона.</li></ul>")
-            + card("Прогресс", f"<p class='note'>Последняя строка progress.txt: <code>{H.escape(last)}</code></p>"))
+    parts = []
+    lab = [f"срез {sl[:7]}" for sl in O2_SLICES]
+    EPC = {4: TAN, 8: PINK}
+    EPN = {4: "4 эпохи (зёрна 0 и 1)", 8: "8 эпох (зёрна 0 и 1)"}
+    # fig 1: per slice on - off, and by horizon
+    fig = make_subplots(rows=1, cols=2, column_widths=[0.58, 0.42], horizontal_spacing=0.1,
+                        subplot_titles=["по срезам: вкл − выкл, среднее по трём горизонтам", "по горизонтам 10/15/20 минут: среднее по срезам ± 95% t"])
+    for ep in (4, 8):
+        v = o2_onoff(ep)
+        fig.add_trace(go.Bar(x=lab, y=v, name=EPN[ep], legendgroup=str(ep), marker=dict(color=EPC[ep], line=dict(color=SURFACE, width=0.8)),
+                             hovertemplate="%{x}: %{y:+.4f}<extra>" + EPN[ep] + "</extra>"), row=1, col=1)
+        xs = ["среднее", "h0 (10 мин)", "h1 (15 мин)", "h2 (20 мин)"]
+        ts = [O2_ONOFF[ep, h] for h in (None, 0, 1, 2)]
+        fig.add_trace(go.Bar(x=xs, y=[t[0] for t in ts], name=EPN[ep], legendgroup=str(ep), showlegend=False, marker=dict(color=EPC[ep], line=dict(color=SURFACE, width=0.8)),
+                             error_y=dict(type="data", symmetric=False, array=[t[2] - t[0] for t in ts], arrayminus=[t[0] - t[1] for t in ts], color=INK2),
+                             text=[ru(t[0], 4, True) for t in ts], textposition="outside",
+                             hovertemplate="%{x}: %{y:+.4f}<extra>" + EPN[ep] + "</extra>"), row=1, col=2)
+    for c in (1, 2):
+        fig.add_hline(y=0, line=dict(color=NEUT, width=1), row=1, col=c)
+        fig.add_hline(y=0.010, line=dict(color=T.GOOD, width=1, dash="dot"), row=1, col=c)
+    fig.add_annotation(xref="x2 domain", yref="y2", x=1.0, y=0.010, text="порог SPEC +0,010", showarrow=False, xanchor="right", yanchor="bottom", font=dict(color=T.GOOD, size=11))
+    fig.update_layout(barmode="group", yaxis_title="вкл − выкл, Спирмен с |r|")
+    fig.update_annotations(font_size=12, font_color=INK2)
+    f1 = F(fig, "o2", "o2_onoff", "O2 эффект физики на голове дисперсии: 4 и 8 эпох", 470, lift=10,
+           subtitle="одни и те же 6 срезов и те же два зерна; 4 эпохи - прежние прогоны phys7 (зерно 0) и phys7b (зерно 1)")
+    rows = []
+    for nm, h in (("среднее по горизонтам", None), ("h0 (10 мин)", 0), ("h1 (15 мин)", 1), ("h2 (20 мин)", 2)):
+        rows.append([nm, fmt_ci(O2_ONOFF[4, h]), fmt_ci(O2_ONOFF[8, h])])
+    rows.append(["QLIKE, среднее (меньше - лучше)", fmt_ci(O2_QL[4], 3), fmt_ci(O2_QL[8], 3)])
+    t1 = table(rows, ["вкл − выкл", "4 эпохи, среднее [95% ИИ], срезов с плюсом", "8 эпох"])
+    parts.append(card("Вердикт: нет детектируемого эффекта; 8 эпох = 4 в пределах шума", f1 + t1 +
+                      f"<p class='note'><b>Парная разность d8 − d4</b> (те же срезы и зёрна): {fmt_ci(O2_D)} - интервал содержит 0. Эффект на 8 эпохах {sg(O2_ONOFF[8, None][0])} "
+                      f"[{sg(O2_ONOFF[8, None][1])}; {sg(O2_ONOFF[8, None][2])}] ниже порога +0,010 и интервал содержит 0; на 4 эпохах эффект был "
+                      f"{sg(O2_ONOFF[4, None][0])} [{sg(O2_ONOFF[4, None][1])}; {sg(O2_ONOFF[4, None][2])}] на тех же срезах и зёрнах. Эффект не растёт с обучением; точечная оценка чуть сжимается, "
+                      "но это не установлено (2 зерна, 6 срезов).</p>",
+                      "Цель - ранговая корреляция головы дисперсии с |r| на отложенном блоке фолда −2; физика включена против шести лямбд, равных 0; цена не предсказывается (PRICE_HEAD none)."))
+
+    # fig 2: net minus HAR+tod per cell, 4 vs 8 epochs (Spearman and QLIKE)
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.1,
+                        subplot_titles=["Спирмен: сеть − HAR+tod (больше - лучше)", "QLIKE: сеть − HAR+tod (меньше - лучше)"])
+    cells = [("on", "физика вкл"), ("off", "физика выкл")]
+    for ci, G, G0 in ((1, O2_GAP, "sp"), (2, O2_GAPQ, "ql")):
+        for ep in (4, 8):
+            ts = [G[ep, c] for c, _ in cells]
+            fig.add_trace(go.Bar(x=[n for _, n in cells], y=[t[0] for t in ts], name=EPN[ep], legendgroup=str(ep), showlegend=(ci == 1),
+                                 marker=dict(color=EPC[ep], line=dict(color=SURFACE, width=0.8)),
+                                 error_y=dict(type="data", symmetric=False, array=[t[2] - t[0] for t in ts], arrayminus=[t[0] - t[1] for t in ts], color=INK2),
+                                 text=[ru(t[0], 3, True) for t in ts], textposition="outside",
+                                 hovertemplate="%{x}: %{y:+.4f}<extra>" + EPN[ep] + "</extra>"), row=1, col=ci)
+            for c, n in cells:
+                v = o2_gap(ep, c, G0)
+                fig.add_trace(go.Scatter(x=[n] * len(v), y=v, mode="markers", showlegend=False, legendgroup=str(ep),
+                                         marker=dict(color=INK2, size=5, opacity=0.55, symbol="circle-open"), hovertext=lab,
+                                         hovertemplate="%{hovertext}: %{y:+.4f}<extra>" + EPN[ep] + "</extra>"), row=1, col=ci)
+        fig.add_hline(y=0, line=dict(color=NEUT, width=1), row=1, col=ci)
+    fig.update_layout(barmode="group", yaxis_title="сеть − HAR+tod, Спирмен", yaxis2_title="сеть − HAR+tod, QLIKE")
+    fig.update_annotations(font_size=12, font_color=INK2)
+    f2 = F(fig, "o2", "o2_gap", "O2 сеть против HAR+tod: 4 и 8 эпох", 470, lift=10,
+           subtitle="столбец - среднее по 6 срезам ± 95% t; кружки - отдельные срезы")
+    rows = []
+    for c, n in cells:
+        rows.append([n, fmt_ci(O2_GAP[4, c]), fmt_ci(O2_GAP[8, c]), sg(float(np.mean(o2_gap(8, c)) - np.mean(o2_gap(4, c))), 4),
+                     fmt_ci(O2_GAPQ[4, c], 3), fmt_ci(O2_GAPQ[8, c], 3)])
+    t2 = table(rows, ["ячейка", "Спирмен, 4 эпохи", "8 эпох", "изменение 8 − 4", "QLIKE, 4 эпохи (плюс - хуже)", "8 эпох"])
+    parts.append(card("Дольше обучение не закрывает разрыв с HAR", f2 + t2,
+                      "Сеть остаётся на 0,06-0,07 по Спирмену ниже HAR+tod; на 8 эпохах разрыв чуть шире (в пределах шума). Больший разрыв, чем эффект физики, - главный вывод по этой оси."))
+
+    parts.append(card("Прогоны и ограничения", "<ul class='note'><li>24 прогона (6 срезов × 2 зерна × вкл/выкл), все прошли, нет нефинитных шагов, нет константной дисперсии, 8 эпох в каждом (раннего останова нет).</li>"
+                      "<li>GPU: 2 ч 23 мин по часам (бюджет 3,1 ч), 2 процесса, ниже обычного приоритета. Отклонений от SPEC нет.</li>"
+                      "<li>Ограничения: 2 зерна и 8 эпох вместо полной длины; интервал широкий (sd 0,0155 по 6 срезам). Обслуживаемая (лучшая по валидации) эпоха в результатах не записана.</li></ul>"
+                      "<p class='note'>Ниже полный REPORT.md, как лежит в репозитории.</p>" + md(o2_report), None))
+    return "".join(parts)
 
 
 # ======================================================================================================== section O3
@@ -367,9 +565,9 @@ def sec_o3():
         mn, mx = M[:, k, :].min(0), M[:, k, :].max(0)
         fig.add_trace(go.Scatter(x=taus + taus[::-1], y=list(mx) + list(mn[::-1]), fill="toself", fillcolor=T.rgba(NEUT, 0.14), line=dict(width=0), name="min-max по месяцам",
                                  legendgroup="mm", showlegend=(k == 0), hoverinfo="skip"), row=r, col=c)
-        fig.add_trace(go.Scatter(x=taus + taus[::-1], y=list(q90) + list(q10[::-1]), fill="toself", fillcolor=T.rgba(GOLD, 0.28), line=dict(width=0), name="10-90% по месяцам",
+        fig.add_trace(go.Scatter(x=taus + taus[::-1], y=list(q90) + list(q10[::-1]), fill="toself", fillcolor=T.rgba(TAN, 0.34), line=dict(width=0), name="10-90% по месяцам",
                                  legendgroup="q", showlegend=(k == 0), hoverinfo="skip"), row=r, col=c)
-        fig.add_trace(go.Scatter(x=taus, y=q50, mode="lines", line=dict(color=GOLD, width=1.6), name="медиана по месяцам", legendgroup="med", showlegend=(k == 0),
+        fig.add_trace(go.Scatter(x=taus, y=q50, mode="lines", line=dict(color=TAN, width=1.6), name="медиана по месяцам", legendgroup="med", showlegend=(k == 0),
                                  hovertemplate="τ=%{x} мин<br>вес %{y:.3f}<extra>медиана</extra>"), row=r, col=c)
         fig.add_trace(go.Scatter(x=taus, y=P[k], mode="lines+markers", line=dict(color=PINK, width=2.4), marker=dict(size=6), name="замороженная (365 дней до 2025-07-20)", legendgroup="fz", showlegend=(k == 0),
                                  hovertemplate="τ=%{x} мин<br>вес %{y:.3f}<extra>заморож.</extra>"), row=r, col=c)
@@ -383,7 +581,7 @@ def sec_o3():
 
     # monthly paired gain
     fig = go.Figure()
-    series = [("LK − R0 (кандидат)", "LK", "R0", PINK), ("BANK − R0 (контроль)", "BANK", "R0", GOLD), ("LK − BANK (добавляет ли синтетика)", "LK", "BANK", VIOLET)]
+    series = [("LK − R0 (кандидат)", "LK", "R0", PINK), ("BANK − R0 (контроль)", "BANK", "R0", TAN), ("LK − BANK (добавляет ли синтетика)", "LK", "BANK", VIOLET)]
     for nm, a, b, c_ in series:
         xs, ys = [], []
         for sp in ("sel", "look", "fwd"):
@@ -410,7 +608,7 @@ def sec_o3():
     wq, ws = win3["windows"]["quiet"], win3["windows"]["shock"]
     fig = make_subplots(rows=3, cols=2, shared_xaxes=False, vertical_spacing=0.07, horizontal_spacing=0.06,
                         subplot_titles=[f"Спокойный день {wq['day']} + следующий (диапазон {ru(wq['daily_range'] * 100, 2)}%)", f"День шока {ws['day']} + следующий (диапазон {ru(ws['daily_range'] * 100, 1)}%)"])
-    IC = [GOLD, PINK, TAN, VIOLET, SALMON, "#c3c2b7"]
+    IC = [VIOLET, PINK, TAN, "#8a8984", SALMON, "#c3c2b7"]
     corr_rows = []
     for c, (key, w) in enumerate((("quiet", wq), ("shock", ws)), 1):
         t = pd.to_datetime(w["t"])
@@ -443,7 +641,7 @@ def sec_o4():
     dq = paired(R4, "BANK", "R0", H=60, key="qlike")
     days = {r["month"]: r["train_days"] for r in R4 if r["H"] == 60 and r["model"] == "BANK"}
     ms = list(d60)
-    cols = [SALMON if m == "2017-09" else GOLD for m in ms]
+    cols = [SALMON if m == "2017-09" else TAN for m in ms]
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(go.Bar(x=ms, y=[d60[m] for m in ms], name="BANK − R0, Спирмен (H=60)", marker=dict(color=cols, line=dict(color=SURFACE, width=0.8)),
                          hovertemplate="%{x}: %{y:+.4f}<extra>Спирмен</extra>"), secondary_y=False)
@@ -490,7 +688,7 @@ def sec_o5():
     parts = []
     s, ql = choice5["sel_spearman_h60"], choice5["sel_qlike_h60"]
     rows = [[m_, ru(s[m_], 4), ru(ql[m_], 4), "<b>выбрана</b>" if m_ == "L0" else ""] for m_ in ("S3", "L0", "N0")]
-    fig = go.Figure(go.Bar(x=["S3 ridge", "L0 = BANK ridge", "N0 = HGB на S3+bank"], y=[s[m_] for m_ in ("S3", "L0", "N0")], marker=dict(color=[NEUT, GOLD, SALMON], line=dict(color=SURFACE, width=1)),
+    fig = go.Figure(go.Bar(x=["S3 ridge", "L0 = BANK ridge", "N0 = HGB на S3+bank"], y=[s[m_] for m_ in ("S3", "L0", "N0")], marker=dict(color=[NEUT, TAN, SALMON], line=dict(color=SURFACE, width=1)),
                            text=[ru(s[m_], 4) for m_ in ("S3", "L0", "N0")], textposition="outside", hovertemplate="%{x}: %{y:.4f}<extra></extra>"))
     fig.update_layout(yaxis=dict(title="средний Спирмен (подбор, H=60)", range=[0.70, 0.745]))
     f0 = F(fig, "o5", "o5_base", "O5 выбор базы на подборе", 340, subtitle="42 месяца 2021-01..2024-06; ось не от нуля")
@@ -500,9 +698,8 @@ def sec_o5():
     d = paired(R5, "L1", "L0", span=JSP, H=60)
     dq = paired(R5, "L1", "L0", span=JSP, H=60, key="qlike")
     ms = list(d)
-    colr = [VIOLET if 2018 <= int(m[:4]) else GOLD for m in ms]
     fig = go.Figure()
-    for y, c_ in (("2018", GOLD), ("2019", PINK), ("2020", VIOLET)):
+    for y, c_ in (("2018", TAN), ("2019", PINK), ("2020", VIOLET)):
         idx = [m for m in ms if m.startswith(y)]
         fig.add_trace(go.Bar(x=idx, y=[d[m] for m in idx], name=y, marker=dict(color=c_, line=dict(color=SURFACE, width=0.5)), hovertemplate="%{x}: %{y:+.4f}<extra>" + y + "</extra>"))
         t = tci([d[m] for m in idx])
@@ -539,15 +736,223 @@ def sec_o5():
     return "".join(parts)
 
 
+# ======================================================================================================== section O6
+def sec_o6():
+    parts = []
+    # monthly L2 - L1 at H=240 (Spearman, QLIKE)
+    d = paired(R6, "L2", "L1", span="judge", H=240)
+    dq = paired(R6, "L2", "L1", key="qlike", span="judge", H=240)
+    ds = paired(R6, "L2sh", "L1", span="judge", H=240)
+    ms = list(d)
+    assert len(ms) == 24 and ms[0] == "2019-01" and ms[-1] == "2020-12"
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.1,
+                        subplot_titles=["Спирмен: L2 − L1 (больше - лучше; порог +0,003)", "QLIKE: L2 − L1 (меньше - лучше)"])
+    fig.add_trace(go.Bar(x=ms, y=[d[m] for m in ms], name="L2 − L1 (L1 + часовая геометрия)", marker=dict(color=MODC["L2"], line=dict(color=SURFACE, width=0.5)),
+                         hovertemplate="%{x}: %{y:+.4f}<extra>L2−L1</extra>"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=ms, y=[ds[m] for m in ms], mode="lines+markers", name="контроль: L2sh − L1 (G60 перемешана)", line=dict(color=NEUT, width=1.6), marker=dict(size=5),
+                             hovertemplate="%{x}: %{y:+.4f}<extra>L2sh−L1</extra>"), row=1, col=1)
+    fig.add_trace(go.Bar(x=ms, y=[dq[m] for m in ms], name="QLIKE L2 − L1", showlegend=False, marker=dict(color=MODC["L2"], line=dict(color=SURFACE, width=0.5)),
+                         hovertemplate="%{x}: %{y:+.4f}<extra>QLIKE</extra>"), row=2, col=1)
+    vlines_band(fig, ms[0], ms[-1], O6[240], MODC["L2"], "")
+    fig.add_hline(y=0.003, line=dict(color=T.GOOD, width=1, dash="dot"), row=1, col=1, annotation_text="порог +0,003", annotation_font_color=T.GOOD)
+    for r in (1, 2):
+        fig.add_hline(y=0, line=dict(color=NEUT, width=1), row=r, col=1)
+    fig.update_xaxes(type="category", tickangle=-60, nticks=30, row=2, col=1)
+    fig.update_yaxes(title_text="L2 − L1, Спирмен", row=1, col=1)
+    fig.update_yaxes(title_text="L2 − L1, QLIKE", row=2, col=1)
+    fig.update_annotations(font_size=12, font_color=INK2)
+    f1 = F(fig, "o6", "o6_monthly", "O6 помесячно: L2 − L1 при H=240", 640, lift=10,
+           subtitle="24 месяца суждения 2019-01..2020-12; штрих и заливка - среднее и 95% t по месяцам")
+    qm = O6q[240]
+    parts.append(card("Вердикт: провал", f1,
+                      f"<b>Критерий (H=240, L2 − L1):</b> Спирмен {fmt_ci(O6[240])} при пороге ≥ +0,003 с нижней границей > 0 и ≥ 16 месяцев из 24 - не выполнен; месяцев с плюсом {O6[240][3]}/24 (нужно 16). "
+                      f"QLIKE {sg(qm[0])} [{sg(qm[1])}; {sg(qm[2])}] - выполнен только по среднему. Контроль с перемешанной G60 (L2sh − L1) {fmt_ci(O6sh[240])} - внутри ±0,003, то есть вердикт «провал», а не «сломано». "
+                      "Вред приходит от самих часовых признаков, а не от числа столбцов (прочтение руководителя, не проверялось)."))
+
+    # per-horizon summary
+    fig = go.Figure()
+    for nm, G, col in (("L2 − L1 (часовая геометрия)", O6, MODC["L2"]), ("L2sh − L1 (контроль, G60 перемешана)", O6sh, NEUT)):
+        xs = [f"H={H_} мин" for H_ in (15, 60, 240)]
+        ts = [G[H_] for H_ in (15, 60, 240)]
+        fig.add_trace(go.Bar(x=xs, y=[t[0] for t in ts], name=nm, marker=dict(color=col, line=dict(color=SURFACE, width=1)),
+                             error_y=dict(type="data", symmetric=False, array=[t[2] - t[0] for t in ts], arrayminus=[t[0] - t[1] for t in ts], color=INK2),
+                             text=[ru(t[0], 4, True) for t in ts], textposition="outside", hovertemplate="%{x}: %{y:+.4f}<extra>" + nm + "</extra>"))
+    fig.add_hline(y=0, line=dict(color=NEUT, width=1))
+    fig.update_layout(barmode="group", yaxis_title="разность Спирмена против L1")
+    f2 = F(fig, "o6", "o6_horizons", "O6 по горизонтам", 420, subtitle="24 месяца суждения; среднее ± 95% t")
+    base = {}
+    for H_ in (15, 60, 240):
+        for m_ in ("L1", "L2", "L2sh"):
+            rr = [r for r in R6 if r["span"] == "judge" and r["H"] == H_ and r["model"] == m_]
+            base[H_, m_] = (float(np.mean([r["spearman"] for r in rr])), float(np.mean([r["qlike"] for r in rr])), len(rr))
+    assert abs(base[240, "L1"][0] - 0.6280) < 6e-5 and abs(base[60, "L2"][1] - 0.2851) < 6e-5 and base[15, "L2sh"][2] == 24
+    rows = [[f"H={H_}"] + [f"{ru(base[H_, m_][0], 4)} / {ru(base[H_, m_][1], 4)}" for m_ in ("L1", "L2", "L2sh")] + [fmt_ci(O6[H_]), fmt_ci(O6q[H_])] for H_ in (15, 60, 240)]
+    t1 = table(rows, ["горизонт", "L1: Спирмен / QLIKE", "L2", "L2sh", "L2 − L1, Спирмен", "L2 − L1, QLIKE (меньше - лучше)"])
+    # spent spans (descriptive)
+    sp_n = {"spent1": "2021-01..2024-06", "spent2": "2024-07..2025-07"}
+    rows2 = []
+    for sp in ("spent1", "spent2"):
+        rows2.append([sp_n[sp]] + [fmt_ci(tci(list(paired(R6, "L2", "L1", span=sp, H=H_).values()))) for H_ in (15, 60, 240)])
+    assert abs(tci(list(paired(R6, "L2", "L1", span="spent1", H=240).values()))[0] + 0.0085) < 6e-5
+    t2 = table(rows2, ["потраченный отрезок (описательно)", "H=15", "H=60", "H=240"])
+    parts.append(card("По горизонтам и по потраченным отрезкам", f2 + t1 + t2,
+                      f"Побочно (без вердикта): на H=60 L2 − L1 {fmt_ci(O6[60])}, Холм p 0,021; на H=15 {fmt_ci(O6[15])}. Знак отрицательный на каждом отрезке и каждом горизонте."))
+
+    # coefficients
+    top = interp6["top_g60_coefficients"]
+    assert len(top) == 15 and top[0]["feature"] == "g60.ema20.slope3" and abs(top[0]["coef_standardised"] + 1.1428) < 5e-4
+    cf = [t["coef_standardised"] for t in top]
+    fig = go.Figure(go.Bar(y=[t["feature"] for t in top], x=cf, orientation="h",
+                           marker=dict(color=[MODC["L2"] if c > 0 else PINK for c in cf], line=dict(color=SURFACE, width=1)),
+                           text=[ru(c, 2, True) for c in cf], textposition="outside",
+                           hovertemplate="%{y}<br>коэффициент %{x:+.3f}<extra></extra>"))
+    fig.add_vline(x=0, line=dict(color=NEUT, width=1))
+    fig.update_layout(yaxis=dict(autorange="reversed"), xaxis_title="стандартизованный коэффициент замороженной L2 (H=240); фиолетовый - плюс, розовый - минус", margin=dict(l=190))
+    f3 = F(fig, "o6", "o6_coefs", "O6 топ-15 коэффициентов G60", 560, subtitle="подгонка на Binance 2025-10-05..2026-09-30, стандартизованные признаки")
+    parts.append(card("Топ-15 коэффициентов часовой геометрии", f3,
+                      "Коэффициенты велики и имеют противоположные знаки на коллинеарных часовых наклонах EMA (ema20.slope3 −1,14; ema10.slope10 +0,60; ema40.slope3 +0,56): "
+                      "это подгонка нестационарной структуры, а не читаемый сигнал."))
+
+    # real hourly windows
+    W = interp6["windows"]
+    picks = [("g60.ema20.slope3", "highest"), ("g60.ema20.slope3", "lowest"), ("g60.ema10.slope10", "highest")]
+    fig = make_subplots(rows=1, cols=3, horizontal_spacing=0.035, subplot_titles=["a", "b", "c"])
+    titles = []
+    for c, (ft, wh) in enumerate(picks, 1):
+        w = next(x for x in W[ft] if x["which"] == wh)
+        A = np.array(w["hourly_ohlcv"], float)
+        end = pd.Timestamp(w["last_bar_end"])
+        assert end <= pd.Timestamp(C.CUTOFF)
+        t = pd.date_range(end=end, periods=len(A), freq="60min")
+        assert t.max() <= pd.Timestamp(C.CUTOFF) and len(A) == 60
+        titles.append(f"{ft}: {ru(w['feature_value'], 2, True)} ({wh}); конец {str(end)[:10]}")
+        fig.add_trace(go.Candlestick(x=t, open=A[:, 0], high=A[:, 1], low=A[:, 2], close=A[:, 3], showlegend=False,
+                                     increasing=dict(line=dict(color=UP), fillcolor=UP), decreasing=dict(line=dict(color=DOWN), fillcolor=DOWN),
+                                     hovertemplate="%{x|%Y-%m-%d %H:%M}<br>O %{open:.0f} H %{high:.0f} L %{low:.0f} C %{close:.0f}<extra></extra>"), row=1, col=c)
+        fig.add_trace(go.Scatter(x=t, y=ema(A[:, 3], 20), mode="lines", line=dict(color=GOLD, width=2), name="EMA20", legendgroup="e20", showlegend=(c == 1), hovertemplate="EMA20 %{y:.0f}<extra></extra>"), row=1, col=c)
+        fig.add_trace(go.Scatter(x=t, y=ema(A[:, 3], 40), mode="lines", line=dict(color=PINK, width=2, dash="dash"), name="EMA40", legendgroup="e40", showlegend=(c == 1), hovertemplate="EMA40 %{y:.0f}<extra></extra>"), row=1, col=c)
+        fig.update_xaxes(rangeslider_visible=False, row=1, col=c)
+    for i, tt in enumerate(titles):
+        fig.layout.annotations[i].text = tt
+    fig.update_annotations(font_size=11, font_color=INK2)
+    f4 = F(fig, "o6", "o6_windows", "O6 реальные часовые окна для двух главных признаков G60", 520, lift=6,
+           subtitle="60 часовых свечей до конца окна; линии - EMA20 и EMA40 по закрытиям; данные не позже 2025-07-20")
+    parts.append(card("Реальные часовые окна BTC", f4,
+                      "Окна из interp.json (самые высокие и самые низкие значения признака на отрезке до 2025-07-20). Время свечей - по концу последнего часового бара, по часу назад (метки приблизительны: окна определены позициями баров)."))
+
+    parts.append(card("Практический вывод и заморозка", "<p class='note'>Волатильная модель остаётся на G1 + G15 (L1 из O5); для H=240 нужно что-то другое, чем геометрия. "
+                      f"Артефакт части B заморожен (frozen_B.json, sha256 <code>{sha6}</code>), но score_B.py не запускался: после провала он почти не нужен.</p>"))
+    return "".join(parts)
+
+
+# ======================================================================================================== section O7
+def sec_o7():
+    parts = []
+    MODS = ("L1", "R0", "HAR")
+    ms = sorted({r["month"] for r in R7 if r["span"] == "judge" and r["H"] == 60})
+    assert len(ms) == 23 and ms[0] == "2019-02" and ms[-1] == "2020-12"
+    # fig 1: monthly differences at T = 60, coverage, width
+    dR, dH = O7R0[60], O7HAR[60]
+    fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.07, row_heights=[0.4, 0.3, 0.3],
+                        subplot_titles=["Интервальная оценка, б.п.: разность по месяцам (отрицательное - L1 лучше)", "Покрытие по месяцам (цель 0,90; допуск 0,88-0,92)", "Средняя ширина интервала, б.п."])
+    fig.add_trace(go.Bar(x=ms, y=[dR[m] for m in ms], name="L1 − R0", marker=dict(color=PINK, line=dict(color=SURFACE, width=0.5)), hovertemplate="%{x}: %{y:+.2f} б.п.<extra>L1−R0</extra>"), row=1, col=1)
+    fig.add_trace(go.Bar(x=ms, y=[dH[m] for m in ms], name="L1 − HAR", marker=dict(color=TAN, line=dict(color=SURFACE, width=0.5)), hovertemplate="%{x}: %{y:+.2f} б.п.<extra>L1−HAR</extra>"), row=1, col=1)
+    for m_ in MODS:
+        rr = {r["month"]: r for r in R7 if r["span"] == "judge" and r["H"] == 60 and r["model"] == m_}
+        col = MODC[m_]
+        fig.add_trace(go.Scatter(x=ms, y=[rr[m]["cover"] for m in ms], mode="lines+markers", name=m_, legendgroup=m_, line=dict(color=col, width=1.6), marker=dict(size=5),
+                                 hovertemplate="%{x}: %{y:.3f}<extra>" + m_ + "</extra>"), row=2, col=1)
+        fig.add_trace(go.Scatter(x=ms, y=[rr[m]["width_bps"] for m in ms], mode="lines+markers", name=m_, legendgroup=m_, showlegend=False, line=dict(color=col, width=1.6), marker=dict(size=5),
+                                 hovertemplate="%{x}: %{y:.1f} б.п.<extra>" + m_ + "</extra>"), row=3, col=1)
+    fig.add_hrect(y0=0.88, y1=0.92, fillcolor=T.rgba(T.GOOD, 0.10), line_width=0, row=2, col=1)
+    fig.add_hline(y=0.90, line=dict(color=T.GOOD, width=1, dash="dot"), row=2, col=1)
+    fig.add_hline(y=0, line=dict(color=NEUT, width=1), row=1, col=1)
+    fig.update_xaxes(type="category", tickangle=-60, nticks=30, row=3, col=1)
+    fig.update_layout(barmode="group")
+    fig.update_yaxes(title_text="б.п.", row=1, col=1)
+    fig.update_yaxes(title_text="покрытие", row=2, col=1)
+    fig.update_yaxes(title_text="ширина, б.п.", row=3, col=1)
+    fig.update_annotations(font_size=12, font_color=INK2)
+    f1 = F(fig, "o7", "o7_monthly", "O7 помесячно при T=60: оценка, покрытие, ширина", 900, lift=10,
+           subtitle="23 месяца суждения 2019-02..2020-12; каждый месяц оценён по подгонке предыдущего месяца")
+    p = {m_: o7_pool("judge", 60, m_) for m_ in MODS}
+    parts.append(card("Вердикт: проходит, но крошечно; не лучше HAR", f1 +
+                      table([[m_, ru(p[m_][0], 4), ru(p[m_][1], 2), ru(p[m_][2], 2)] for m_ in MODS], ["модель (T=60, суждение)", "покрытие (собранное)", "средняя ширина, б.п.", "средняя интервальная оценка, б.п."]),
+                      f"<b>Критерий (T=60, L1 − R0):</b> {sg(O7C[60][0], 2)} б.п. [{sg(O7C[60][1], 2)}; {sg(O7C[60][2], 2)}], L1 лучше в {O7better(dR)} из 23 месяцев (нужно 15), "
+                      f"собранное покрытие L1 {ru(p['L1'][0], 4)} внутри [0,88; 0,92] - выполнен. Размер: −1,75 б.п. при оценке около 307 б.п. (0,6%). Ширина не меняется ({sg(p['L1'][1] - p['R0'][1], 2)} б.п.): выигрыш - меньше и мельче промахи при том же покрытии. "
+                      f"<b>Против HAR</b> L1 не лучше: {fmt7(O7H[60], dH)}; месяц 2020-03 один говорит в пользу HAR."))
+
+    # fig 2: per-T differences
+    fig = go.Figure()
+    for nm, G, col in (("L1 − R0 (S3 + геометрия против S3)", O7C, PINK), ("L1 − HAR", O7H, TAN)):
+        ts = [G[T_] for T_ in (15, 60, 240)]
+        fig.add_trace(go.Bar(x=[f"T={T_} мин" for T_ in (15, 60, 240)], y=[t[0] for t in ts], name=nm, marker=dict(color=col, line=dict(color=SURFACE, width=1)),
+                             error_y=dict(type="data", symmetric=False, array=[t[2] - t[0] for t in ts], arrayminus=[t[0] - t[1] for t in ts], color=INK2),
+                             text=[ru(t[0], 2, True) for t in ts], textposition="outside", hovertemplate="%{x}: %{y:+.2f} б.п.<extra>" + nm + "</extra>"))
+    fig.add_hline(y=0, line=dict(color=NEUT, width=1))
+    fig.update_layout(barmode="group", yaxis_title="разность интервальной оценки, б.п. (меньше - лучше)")
+    f2 = F(fig, "o7", "o7_horizons", "O7 по горизонтам", 430, subtitle="23 месяца суждения; среднее ± 95% t")
+    rows = []
+    for T_ in (15, 60, 240):
+        pp = {m_: o7_pool("judge", T_, m_) for m_ in MODS}
+        hp = sum7["summary"]["judge|L1-HAR"][str(T_)]["holm"]
+        rows.append([f"T={T_}"] + [f"{ru(pp[m_][0], 3)} / {ru(pp[m_][1], 1)} / {ru(pp[m_][2], 1)}" for m_ in MODS] +
+                    [fmt7(O7C[T_], O7R0[T_]), fmt7(O7H[T_], O7HAR[T_]), ru(hp, 3)])
+    assert "0,65" in rows[1][5]
+    t1 = table(rows, ["горизонт", "L1: покрытие / ширина / оценка", "R0", "HAR", "L1 − R0, б.п. [ИИ], месяцев лучше", "L1 − HAR, б.п.", "Холм p (L1−HAR)"])
+    # descriptive spans
+    rows2 = []
+    spn = {"spent1": "2021-02..2024-06", "spent2": "2024-08..2025-07"}
+    for sp in ("spent1", "spent2"):
+        cells = []
+        for T_ in (15, 60, 240):
+            dd = paired(R7, "L1", "R0", key="iscore_bps", span=sp, H=T_)
+            tt = tci(list(dd.values()))
+            cells.append(f"{sg(tt[0], 2)} б.п., {O7better(dd)}/{len(dd)}")
+        rows2.append([spn[sp]] + cells)
+    assert rows2[0][2].startswith("−0,76") and rows2[1][3].startswith("−2,30")
+    t2 = table(rows2, ["потраченный отрезок (описательно), L1 − R0", "T=15", "T=60", "T=240"])
+    parts.append(card("По горизонтам: покрытие, ширина, оценка, различия", f2 + t1 + t2,
+                      "T=15: L1 лучше R0 в 23 из 23 месяцев, но от HAR отличие на границе значимости ({}). На T=240 эффекта нет. На потраченных отрезках знак тот же; покрытие всех моделей 0,896-0,900."
+                      .format(fmt7(O7H[15], O7HAR[15]))))
+
+    # cover-width pooled figure over horizons
+    fig = make_subplots(rows=1, cols=2, horizontal_spacing=0.1, subplot_titles=["Собранное покрытие (цель 0,90)", "Средняя ширина, б.п."])
+    for m_ in MODS:
+        xs = [f"T={T_} мин" for T_ in (15, 60, 240)]
+        pp = [o7_pool("judge", T_, m_) for T_ in (15, 60, 240)]
+        fig.add_trace(go.Bar(x=xs, y=[q[0] for q in pp], name=m_, legendgroup=m_, marker=dict(color=MODC[m_], line=dict(color=SURFACE, width=1)),
+                             hovertemplate="%{x}: %{y:.4f}<extra>" + m_ + "</extra>"), row=1, col=1)
+        fig.add_trace(go.Bar(x=xs, y=[q[1] for q in pp], name=m_, legendgroup=m_, showlegend=False, marker=dict(color=MODC[m_], line=dict(color=SURFACE, width=1)),
+                             hovertemplate="%{x}: %{y:.1f} б.п.<extra>" + m_ + "</extra>"), row=1, col=2)
+    fig.add_hline(y=0.90, line=dict(color=T.GOOD, width=1, dash="dot"), row=1, col=1)
+    fig.update_yaxes(range=[0.86, 0.92], row=1, col=1, title_text="покрытие (ось не от нуля)")
+    fig.update_yaxes(title_text="ширина, б.п.", row=1, col=2)
+    fig.update_layout(barmode="group")
+    fig.update_annotations(font_size=12, font_color=INK2)
+    f3 = F(fig, "o7", "o7_cover_width", "O7 покрытие и ширина по горизонтам", 430, lift=10, subtitle="суждение 2019-02..2020-12; собранное покрытие = попавшие / все")
+    parts.append(card("Покрытие и ширина по моделям", f3, "Все три модели калибруются на предыдущем месяце, поэтому покрытие почти одинаково (0,891-0,894); различия видны в ширине и в числе и размере промахов (интервальная оценка)."))
+
+    parts.append(card("Оговорки O7", "<ul class='note'><li>Месяцы суждения - те же, по которым O5 ранжировал L1: это ещё один взгляд на них.</li>"
+                      "<li>Интервалы t по месяцам оптимистичны: разности коррелированы (перекрытие меток и режимы волатильности).</li>"
+                      "<li>Покрытие в отдельных месяцах от 0,80 до 0,95 у каждой модели; худшие 2020-03, 2020-11 и 2019-05.</li>"
+                      "<li>Месяц M оценён по подгонке месяца M−1 (прогноз на месяц старше); вариант с подгонкой месяца M не запускался.</li>"
+                      "<li>Проспективная часть: score_B.py сравнит замороженную L1 с L0 (не R0); калибровка на 2026-10, оценка 2026-11..2027-01, один раз. Это единственная непотраченная проверка.</li>"
+                      "<li>Без QA-агента: результат малый и вторичный к O5 (QA PASS); критерий проверен руководителем.</li></ul>"))
+    return "".join(parts)
+
+
 def sec_pending():
     body = ("<ul class='note'>"
             "<li><b>O4, часть B:</b> score_B.py (O4_bank_confirm) оценивает BANK−R0 на первых 3 полных месяцах с 2026-10 (2026-10..12), критерий A при H=60, 3 из 3 месяцев с плюсом. "
             f"Артефакт заморожен: sha256 <code>{sha4[:16]}...</code>.</li>"
             "<li><b>O5, часть B:</b> score_B.py (O5_geom_bestbase) оценивает L1−L0 на тех же месяцах, один раз. "
             f"sha256 <code>{sha5[:16]}...</code>.</li>"
-            f"<li><b>O2:</b> {'результат есть (секция O2)' if o2_report else 'идёт на GPU; REPORT.md ещё нет. Пересборка отчёта заполнит секцию.'}</li>"
+            f"<li><b>O6, часть B:</b> артефакт заморожен (sha256 <code>{sha6[:16]}...</code>), score_B.py не запускался; после провала на H=240 он почти не нужен.</li>"
+            "<li><b>O7, часть B:</b> score_B.py сравнит замороженную L1 с L0: калибровка на 2026-10, оценка 2026-11..2027-01, один раз; единственная непотраченная проверка интервалов.</li>"
+            "<li><b>O2:</b> результат есть (секция O2); для более решающего ответа нужно больше срезов или зёрен.</li>"
             "<li>Пересборка: <code>python runs/tactical/report/build_outlook_report.py</code></li></ul>")
-    return card("Что ещё не готово", body, "До появления трёх полных месяцев 2026-10.. часть B не оценивается и не обсуждается.")
+    return card("Что ещё не готово", body, "До появления полных месяцев 2026-10.. часть B не оценивается и не обсуждается.")
 
 
 # ======================================================================================================== assemble
@@ -562,7 +967,8 @@ def build():
     d = load_bars()
     assert d["timestamp"].max() <= pd.Timestamp(C.CUTOFF)
     secs = [("o0", "Обзор", sec1), ("o1", "O1. Геометрия", sec_o1), ("o2", "O2. Физика", sec_o2), ("o3", "O3. Синтетические индикаторы", sec_o3),
-            ("o4", "O4. Подтверждение BANK", sec_o4), ("o5", "O5. Геометрия на лучшей базе", sec_o5), ("pend", "Что ещё не готово", sec_pending)]
+            ("o4", "O4. Подтверждение BANK", sec_o4), ("o5", "O5. Геометрия на лучшей базе", sec_o5),
+            ("o6", "O6. Часовая геометрия", sec_o6), ("o7", "O7. Геометрия как интервалы", sec_o7), ("pend", "Что ещё не готово", sec_pending)]
     built = []
     for sid, title, fn in secs:
         body = fn()
@@ -575,7 +981,7 @@ def build():
              f"<nav><h1>Outlook</h1><div class='sub'>neural_trade · тактическая сессия<br>данные цен до {C.CUTOFF[:10]}</div>{nav}</nav><main>"]
     for sid, title, body in built:
         parts.append(f'<section id="{sid}"><h2>{title}</h2>{body}</section>')
-    parts.append(f"<footer>Сгенерировано runs/tactical/report/build_outlook_report.py (коммит основы {sha}); данные: runs/tactical/outlook/O1..O5 (results, tables, interp, kernels, windows, summary). "
+    parts.append(f"<footer>Сгенерировано runs/tactical/report/build_outlook_report.py (коммит основы {sha}); данные: runs/tactical/outlook/O1..O7 (results, tables, interp, kernels, windows, summary, REPORT). "
                  f"Цены - только до {C.CUTOFF}; числа прогнозного года вперёд (2025-10..2026-09) - результаты, не бары. Исследовательская работа, одно зерно, не влияет на умолчания MVP (D-062).</footer></main>")
     parts.append("""<script>(function(){const q=new URLSearchParams(location.search).get('only');
 if(q){document.body.classList.add('only');document.querySelectorAll('main > section').forEach(s=>{if(s.id!==q)s.style.display='none'});}
