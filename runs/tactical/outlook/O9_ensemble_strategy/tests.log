@@ -1,0 +1,6 @@
+d721cfec3ef03db34ba1681e9b040a43fd18549c
+    return np.log(bank + EPS_CH[None, :, None]).reshape(len(bank), -1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+18 passed, 1 warning in 2.78s
+All checks passed!

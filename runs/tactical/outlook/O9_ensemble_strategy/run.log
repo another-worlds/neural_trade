@@ -1,0 +1,105 @@
+23:57:10 loaded 277429 decisions 12s
+23:59:04 signals 2018-12 rows 2976 dV n_tr 74864 p_up n_tr 66775 base 0.507
+23:59:04 signals 2019-01 rows 2976 dV n_tr 74864 p_up n_tr 66434 base 0.505
+23:59:04 signals 2019-02 rows 2688 dV n_tr 74862 p_up n_tr 65518 base 0.504
+23:59:04 signals 2019-03 rows 2976 dV n_tr 74860 p_up n_tr 64606 base 0.504
+23:59:05 signals 2019-04 rows 2880 dV n_tr 74859 p_up n_tr 63508 base 0.507
+23:59:05 signals 2019-05 rows 2976 dV n_tr 74856 p_up n_tr 63216 base 0.508
+23:59:05 signals 2019-06 rows 2880 dV n_tr 74857 p_up n_tr 63338 base 0.512
+23:59:05 signals 2019-07 rows 2973 dV n_tr 74856 p_up n_tr 63750 base 0.516
+23:59:05 signals 2019-08 rows 2976 dV n_tr 74841 p_up n_tr 64113 base 0.516
+23:59:05 signals 2019-09 rows 2879 dV n_tr 74841 p_up n_tr 64149 base 0.515
+23:59:05 signals 2019-10 rows 2974 dV n_tr 74849 p_up n_tr 64256 base 0.512
+23:59:05 signals 2019-11 rows 2880 dV n_tr 74978 p_up n_tr 65327 base 0.512
+23:59:06 signals 2019-12 rows 2976 dV n_tr 75047 p_up n_tr 65719 base 0.511
+23:59:06 signals 2020-01 rows 2976 dV n_tr 75047 p_up n_tr 65339 base 0.512
+23:59:06 signals 2020-02 rows 2784 dV n_tr 75049 p_up n_tr 65718 base 0.514
+23:59:06 signals 2020-03 rows 2976 dV n_tr 75050 p_up n_tr 66245 base 0.512
+23:59:06 signals 2020-04 rows 2845 dV n_tr 75052 p_up n_tr 67334 base 0.51
+23:59:06 signals 2020-05 rows 2976 dV n_tr 74978 p_up n_tr 67461 base 0.51
+23:59:06 signals 2020-06 rows 2880 dV n_tr 74978 p_up n_tr 67382 base 0.508
+23:59:06 signals 2020-07 rows 2975 dV n_tr 74978 p_up n_tr 66799 base 0.504
+23:59:07 signals 2020-08 rows 2953 dV n_tr 74996 p_up n_tr 65871 base 0.505
+23:59:07 signals 2020-09 rows 2879 dV n_tr 74944 p_up n_tr 65663 base 0.506
+23:59:07 signals 2020-10 rows 2976 dV n_tr 74940 p_up n_tr 65679 base 0.508
+23:59:07 signals 2020-11 rows 2880 dV n_tr 74945 p_up n_tr 65359 base 0.512
+23:59:07 signals 2020-12 rows 2976 dV n_tr 74946 p_up n_tr 65684 base 0.517
+23:59:07 signals 2021-01 rows 2976 dV n_tr 74945 p_up n_tr 66106 base 0.52
+23:59:07 signals 2021-02 rows 2688 dV n_tr 74945 p_up n_tr 66605 base 0.519
+23:59:07 signals 2021-03 rows 2976 dV n_tr 74945 p_up n_tr 66921 base 0.521
+23:59:08 signals 2021-04 rows 2866 dV n_tr 74945 p_up n_tr 66921 base 0.524
+23:59:08 signals 2021-05 rows 2976 dV n_tr 74985 p_up n_tr 67089 base 0.522
+23:59:08 signals 2021-06 rows 2880 dV n_tr 74985 p_up n_tr 67356 base 0.519
+23:59:08 signals 2021-07 rows 2976 dV n_tr 74984 p_up n_tr 68031 base 0.519
+23:59:08 signals 2021-08 rows 2976 dV n_tr 74984 p_up n_tr 68863 base 0.519
+23:59:08 signals 2021-09 rows 2879 dV n_tr 75036 p_up n_tr 69184 base 0.52
+23:59:08 signals 2021-10 rows 2973 dV n_tr 75036 p_up n_tr 69384 base 0.522
+23:59:08 signals 2021-11 rows 2877 dV n_tr 75026 p_up n_tr 69880 base 0.518
+23:59:08 signals 2021-12 rows 2976 dV n_tr 75019 p_up n_tr 69765 base 0.514
+23:59:09 signals 2022-01 rows 2952 dV n_tr 75020 p_up n_tr 69751 base 0.508
+23:59:09 signals 2022-02 rows 2686 dV n_tr 74965 p_up n_tr 69458 base 0.507
+23:59:09 signals 2022-03 rows 2976 dV n_tr 74960 p_up n_tr 69282 base 0.506
+23:59:09 signals 2022-04 rows 2880 dV n_tr 74959 p_up n_tr 69042 base 0.505
+23:59:09 signals 2022-05 rows 2972 dV n_tr 74996 p_up n_tr 68809 base 0.505
+23:59:09 signals 2022-06 rows 2880 dV n_tr 74978 p_up n_tr 68603 base 0.504
+23:59:09 signals 2022-07 rows 2960 dV n_tr 74978 p_up n_tr 68462 base 0.502
+23:59:10 signals 2022-08 rows 2974 dV n_tr 74941 p_up n_tr 68526 base 0.501
+23:59:10 signals 2022-09 rows 2880 dV n_tr 74938 p_up n_tr 68372 base 0.499
+23:59:10 signals 2022-10 rows 2972 dV n_tr 74943 p_up n_tr 68270 base 0.498
+23:59:10 signals 2022-11 rows 2878 dV n_tr 74942 p_up n_tr 67739 base 0.497
+23:59:10 signals 2022-12 rows 2859 dV n_tr 74945 p_up n_tr 67382 base 0.499
+23:59:10 signals 2023-01 rows 2886 dV n_tr 74683 p_up n_tr 65981 base 0.501
+23:59:10 signals 2023-02 rows 2682 dV n_tr 74537 p_up n_tr 65089 base 0.505
+23:59:11 signals 2023-03 rows 2958 dV n_tr 74530 p_up n_tr 64642 base 0.504
+23:59:11 signals 2023-04 rows 2876 dV n_tr 74485 p_up n_tr 64391 base 0.502
+23:59:11 signals 2023-05 rows 2974 dV n_tr 74477 p_up n_tr 64149 base 0.502
+23:59:11 signals 2023-06 rows 2871 dV n_tr 74488 p_up n_tr 63480 base 0.502
+23:59:11 signals 2023-07 rows 2924 dV n_tr 74480 p_up n_tr 62943 base 0.507
+23:59:11 signals 2023-08 rows 2855 dV n_tr 74404 p_up n_tr 61717 base 0.506
+23:59:11 signals 2023-09 rows 2856 dV n_tr 74146 p_up n_tr 60539 base 0.505
+23:59:11 signals 2023-10 rows 2961 dV n_tr 74082 p_up n_tr 59536 base 0.505
+23:59:12 signals 2023-11 rows 2879 dV n_tr 74054 p_up n_tr 59446 base 0.508
+23:59:12 signals 2023-12 rows 2976 dV n_tr 74054 p_up n_tr 59405 base 0.509
+23:59:12 signals 2024-01 rows 2976 dV n_tr 74318 p_up n_tr 60460 base 0.511
+23:59:12 signals 2024-02 rows 2781 dV n_tr 74517 p_up n_tr 61116 base 0.507
+23:59:12 signals 2024-03 rows 2974 dV n_tr 74517 p_up n_tr 61220 base 0.51
+23:59:12 signals 2024-04 rows 2877 dV n_tr 74559 p_up n_tr 61475 base 0.512
+23:59:12 signals 2024-05 rows 2976 dV n_tr 74551 p_up n_tr 61830 base 0.511
+23:59:13 signals 2024-06 rows 2870 dV n_tr 74559 p_up n_tr 62229 base 0.512
+23:59:13 signals 195126 valid 135s
+23:59:14 ENS_k1.0_doff_goff_tauoff_sz1x trades/mo 219.5 m2% +0.967 t +0.75 elig True 137s
+23:59:14 ENS_k1.0_doff_goff_tauoff_szvt trades/mo 219.5 m2% +3.981 t +3.41 elig True 137s
+23:59:15 ENS_k1.0_doff_goff_tau2.0_sz1x trades/mo 229.8 m2% +0.663 t +0.71 elig True 137s
+23:59:15 ENS_k1.0_doff_goff_tau2.0_szvt trades/mo 229.8 m2% +1.740 t +1.92 elig True 137s
+23:59:15 ENS_k1.0_doff_g0.0_tauoff_sz1x trades/mo 136.0 m2% +2.178 t +2.84 elig True 138s
+23:59:15 ENS_k1.0_doff_g0.0_tauoff_szvt trades/mo 136.0 m2% +3.760 t +4.09 elig True 138s
+23:59:15 ENS_k1.0_doff_g0.0_tau2.0_sz1x trades/mo 136.4 m2% +1.119 t +1.60 elig True 138s
+23:59:15 ENS_k1.0_doff_g0.0_tau2.0_szvt trades/mo 136.4 m2% +1.973 t +2.66 elig True 138s
+23:59:16 ENS_k1.0_d0.02_goff_tauoff_sz1x trades/mo 53.8 m2% +1.788 t +2.80 elig True 138s
+23:59:16 ENS_k1.0_d0.02_goff_tauoff_szvt trades/mo 53.8 m2% +1.867 t +2.48 elig True 138s
+23:59:16 ENS_k1.0_d0.02_goff_tau2.0_sz1x trades/mo 54.5 m2% +1.824 t +3.20 elig True 139s
+23:59:16 ENS_k1.0_d0.02_goff_tau2.0_szvt trades/mo 54.5 m2% +1.164 t +2.29 elig True 139s
+23:59:16 ENS_k1.0_d0.02_g0.0_tauoff_sz1x trades/mo 31.1 m2% +0.744 t +1.28 elig True 139s
+23:59:16 ENS_k1.0_d0.02_g0.0_tauoff_szvt trades/mo 31.1 m2% +1.081 t +1.47 elig True 139s
+23:59:17 ENS_k1.0_d0.02_g0.0_tau2.0_sz1x trades/mo 31.1 m2% +0.550 t +1.28 elig True 139s
+23:59:17 ENS_k1.0_d0.02_g0.0_tau2.0_szvt trades/mo 31.1 m2% +0.478 t +1.08 elig True 139s
+23:59:17 ENS_k1.5_doff_goff_tauoff_sz1x trades/mo 88.5 m2% -3.355 t -2.74 elig True 140s
+23:59:17 ENS_k1.5_doff_goff_tauoff_szvt trades/mo 88.5 m2% -1.825 t -1.46 elig True 140s
+23:59:18 ENS_k1.5_doff_goff_tau2.0_sz1x trades/mo 91.7 m2% -4.929 t -4.19 elig True 140s
+23:59:18 ENS_k1.5_doff_goff_tau2.0_szvt trades/mo 91.7 m2% -3.047 t -3.14 elig True 140s
+23:59:18 ENS_k1.5_doff_g0.0_tauoff_sz1x trades/mo 50.1 m2% -0.726 t -1.02 elig True 140s
+23:59:18 ENS_k1.5_doff_g0.0_tauoff_szvt trades/mo 50.1 m2% -0.569 t -0.74 elig True 141s
+23:59:18 ENS_k1.5_doff_g0.0_tau2.0_sz1x trades/mo 50.1 m2% -1.273 t -1.99 elig True 141s
+23:59:18 ENS_k1.5_doff_g0.0_tau2.0_szvt trades/mo 50.1 m2% -1.035 t -1.69 elig True 141s
+23:59:18 ENS_k1.5_d0.02_goff_tauoff_sz1x trades/mo 15.0 m2% -0.182 t -0.26 elig False 141s
+23:59:18 ENS_k1.5_d0.02_goff_tauoff_szvt trades/mo 15.0 m2% +0.122 t +0.23 elig False 141s
+23:59:19 ENS_k1.5_d0.02_goff_tau2.0_sz1x trades/mo 15.1 m2% -0.582 t -1.38 elig False 141s
+23:59:19 ENS_k1.5_d0.02_goff_tau2.0_szvt trades/mo 15.1 m2% -0.360 t -1.04 elig False 141s
+23:59:19 ENS_k1.5_d0.02_g0.0_tauoff_sz1x trades/mo 8.1 m2% -0.008 t -0.03 elig False 142s
+23:59:19 ENS_k1.5_d0.02_g0.0_tauoff_szvt trades/mo 8.1 m2% +0.030 t +0.09 elig False 142s
+23:59:19 ENS_k1.5_d0.02_g0.0_tau2.0_sz1x trades/mo 8.1 m2% -0.062 t -0.26 elig False 142s
+23:59:19 ENS_k1.5_d0.02_g0.0_tau2.0_szvt trades/mo 8.1 m2% -0.113 t -0.45 elig False 142s
+23:59:20 META candidates 5302 hit 0.33289324783100716 142s
+23:59:21 META_k1.5 trades/mo 38.2 m2% -1.061 t -1.27 elig True 144s
+23:59:21 CHOICE {'rule': 'highest t-statistic of the monthly net return at 2 bps (PESS fills) on 2021-01..2024-06 among configurations with >= 20 trades per month (SPEC.md)', 'config': 'ENS_k1.0_doff_g0.0_tauoff_szvt', 'cfg': {'k': 1.0, 'delta': None, 'g': 0.0, 'tau': None, 'size': 'vt'}, 't_2bps': 4.0906247265677855, 'mean_m_2bps': 0.03760160645372109, 'trades_per_month': 136.02380952380952, 'n_trades': 5713, 'n_months': 42, 'n_eligible': 25, 'n_configs': 33, 'fills': 'PESS', 'selection_months': ['2021-01', '2024-06']}
+23:59:21 total 144s
