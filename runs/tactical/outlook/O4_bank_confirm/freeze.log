@@ -1,0 +1,7 @@
+bars 525600 2025-10-01 00:00:00 2026-09-30 23:59:00
+{'spec': 'O4 SPEC.md Part B freeze', 'last_bar': '2026-09-30 23:59:00', 'n_bars': 525600, 'file_first_bar': '2025-10-01 00:00:00', 'stride': 7, 'warm_bars': 6144, 'ridge_alpha': 1.0, 'horizons': [15, 60, 240], 'taus': [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048], 'eps_ch': [1e-10, 1e-06, 0.001], 'channels': ['r2', 'range', 'volume'], 's3_names': ['rv15', 'rv60', 'rv240', 'rv1440', 'tod_sin', 'tod_cos', 'vol15r', 'vol60r', 'vol240r', 'rng15', 'rng60', 'rv5', 'lrv_h2', 'lrv_h3', 'lrv_h4', 'lrv_disp'], 'bank_features': 'S3 (16) + ln(EWMA_tau(channel) + eps_channel), channel-major, 36', 'o3_lib_note': 'definitions of o3_lib.py at 5e4ab42', 'sha256': '83dd3ad75f78bc74d8271d13dee87b44be39956825ae760f7158f8fe13a1e4f7'}
+{'15': {'n_tr': 73825, 'first_ta': '2025-10-05 06:24:00', 'last_label_end': '2026-09-30 20:10:00'}, '60': {'n_tr': 73825, 'first_ta': '2025-10-05 06:24:00', 'last_label_end': '2026-09-30 20:55:00'}, '240': {'n_tr': 73825, 'first_ta': '2025-10-05 06:24:00', 'last_label_end': '2026-09-30 23:55:00'}}
+
+real	0m12.706s
+user	0m0.000s
+sys	0m0.015s

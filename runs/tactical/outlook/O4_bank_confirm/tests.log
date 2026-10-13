@@ -1,0 +1,10 @@
+d8712e63c2b581aa546e2c3695c8ade7bb9ebc3e
+.......                                                                  [100%]
+============================== warnings summary ===============================
+runs/tactical/outlook/O4_bank_confirm/test_o4.py::test_part_a_reads_no_bar_after_the_end_and_labels_end_before_the_month
+runs/tactical/outlook/O4_bank_confirm/test_o4.py::test_reproduces_o3_values_on_a_selection_month
+  D:\nt\nt_tactical_outlook\runs\tactical\outlook\O4_bank_confirm\o4_lib.py:28: RuntimeWarning: divide by zero encountered in log
+    y = np.log(F[f"rv{H}"]); v = F[f"rv{H}"]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+7 passed, 2 warnings in 8.59s
