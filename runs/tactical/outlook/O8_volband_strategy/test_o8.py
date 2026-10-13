@@ -299,19 +299,18 @@ def test_run_script_refuses_the_test_without_a_committed_unchanged_choice(tmp_pa
     (tmp_path / "keep.txt").write_text("x"); g("add", "keep.txt"); g("commit", "-q", "-m", "init")
     monkeypatch.setattr(R, "HERE", str(tmp_path)); monkeypatch.setattr(R, "CHOICE", str(tmp_path / "choice.json"))
     with pytest.raises(SystemExit, match="not tracked"):
-        R.test()
+        R.choice_gate()
     (tmp_path / "choice.json").write_text(json.dumps({"config": "REV_k1.0_H15_snone"}))
     with pytest.raises(SystemExit, match="not tracked"):                       # present but untracked
-        R.test()
+        R.choice_gate()
     g("add", "choice.json")
     with pytest.raises(SystemExit, match="not in HEAD|differs"):               # staged, not committed
-        R.test()
+        R.choice_gate()
     g("commit", "-q", "-m", "choice")
-    with pytest.raises(SystemExit, match="verified committed"):                # passes the gate
-        R.test()
+    assert R.choice_gate()["config"] == "REV_k1.0_H15_snone"                    # passes the gate
     (tmp_path / "choice.json").write_text(json.dumps({"config": "BRK_k2.0_H60_s1.0"}))
     with pytest.raises(SystemExit, match="differs"):                           # edited after its commit
-        R.test()
+        R.choice_gate()
 
 
 def test_config_grid_has_24_distinct_configurations():

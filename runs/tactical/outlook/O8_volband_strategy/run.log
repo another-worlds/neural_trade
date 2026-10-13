@@ -28,3 +28,9 @@
 22:59:07 BRK_k2.0_H60_snone trades 1636 mean% 2bps +2.552 t +2.66 161s
 22:59:07 CHOICE {'rule': 'highest t-statistic of the monthly net return at 2 bps on 2021-01..2024-06, L1 arm (SPEC.md)', 'config': 'BRK_k1.5_H60_s1.0', 'family': 'BRK', 'k': 1.5, 'H': 60, 'stop': 1.0, 't_2bps': 3.492654841621236, 'mean_m_2bps': 0.04044155661123942, 'n_trades': 3645, 'n_months': 42, 'selection_months': ['2021-01', '2024-06']}
 22:59:07 total 161s
+23:04:36 span B decisions 36780 25s
+23:05:18 span B decisions 36780 24s
+23:05:28 span C decisions 35597 35s
+23:06:19 span A decisions 87676 85s
+23:07:31 VERDICT {'works': False, 'adds': False, 'c1_primary': True, 'c1_PESS': False, 'c2': False, 'c3': False}
+23:07:31 total 157s
