@@ -1,0 +1,84 @@
+Selection period 2019-01-01 .. 2024-06-30 (in-sample of selection, not evidence of skill)
+hours 48192, years 5.50
+Buy-and-hold (no cost): return +17.918 maxDD 0.769 Calmar 0.92
+
+Hourly score coverage by member (share of hours with a score): M1 1.000, M2 1.000, M3 1.000, M4 1.000, M5 1.000, M6 1.000
+Percentile-confidence coverage: M1 1.000, M2 1.000, M3 1.000, M4 1.000, M5 1.000, M6 1.000
+
+FAMILY A (one member, c >= q, 4-hour holds), 2 bps
+A_M1_q0.90       Calmar   +0.19  return   +1.027  maxDD  0.729  trades/y   667.3  hit@2bps 0.548  mean bps   +3.05  n 3671
+A_M1_q0.95       Calmar   +0.26  return   +1.100  maxDD  0.563  trades/y   423.2  hit@2bps 0.555  mean bps   +4.36  n 2328
+A_M1_q0.98       Calmar   +0.23  return   +0.496  maxDD  0.323  trades/y   235.4  hit@2bps 0.551  mean bps   +4.43  n 1295
+A_M2_q0.90       Calmar   +2.48  return  +17.665  maxDD  0.283  trades/y   473.5  hit@2bps 0.595  mean bps  +12.42  n 2605
+A_M2_q0.95       Calmar   +0.69  return   +2.278  maxDD  0.348  trades/y   268.8  hit@2bps 0.606  mean bps   +9.22  n 1479
+A_M2_q0.98       Calmar   +0.21  return   +0.533  maxDD  0.380  trades/y   116.3  hit@2bps 0.619  mean bps   +8.06  n 640
+A_M3_q0.90       Calmar   -0.02  return   -0.082  maxDD  0.722  trades/y   639.3  hit@2bps 0.575  mean bps   +1.12  n 3517
+A_M3_q0.95       Calmar   +0.35  return   +1.308  maxDD  0.464  trades/y   425.9  hit@2bps 0.588  mean bps   +5.10  n 2343
+A_M3_q0.98       Calmar   +0.28  return   +0.696  maxDD  0.363  trades/y   259.4  hit@2bps 0.585  mean bps   +5.39  n 1427
+A_M4_q0.90       Calmar   +0.07  return   +0.245  maxDD  0.562  trades/y   268.1  hit@2bps 0.492  mean bps   +3.22  n 1475
+A_M4_q0.95       Calmar   +0.06  return   +0.156  maxDD  0.484  trades/y   156.0  hit@2bps 0.484  mean bps   +3.74  n 858
+A_M4_q0.98       Calmar   +0.08  return   +0.201  maxDD  0.418  trades/y    96.3  hit@2bps 0.466  mean bps   +5.96  n 530
+A_M5_q0.90       Calmar   -0.36  return   -0.883  maxDD  0.896  trades/y   332.3  hit@2bps 0.526  mean bps   -9.71  n 1828
+A_M5_q0.95       Calmar   -0.35  return   -0.874  maxDD  0.886  trades/y   183.8  hit@2bps 0.503  mean bps  -18.14  n 1011
+A_M5_q0.98       Calmar   -0.18  return   -0.517  maxDD  0.685  trades/y    86.2  hit@2bps 0.504  mean bps  -11.96  n 474
+A_M6_q0.90       Calmar   -0.08  return   -0.289  maxDD  0.735  trades/y   443.7  hit@2bps 0.439  mean bps   +0.09  n 2441
+A_M6_q0.95       Calmar   +0.18  return   +0.548  maxDD  0.453  trades/y   265.2  hit@2bps 0.462  mean bps   +4.35  n 1459
+A_M6_q0.98       Calmar   -0.06  return   -0.117  maxDD  0.391  trades/y   140.3  hit@2bps 0.488  mean bps   -0.10  n 772
+
+FAMILY B (consensus), 2 bps
+B_K1_q0.80       Calmar   +1.03  return   +3.541  maxDD  0.308  trades/y   188.5  hit@2bps 0.617  mean bps  +15.84  n 1037
+B_K1_q0.90       Calmar   +1.00  return   +1.532  maxDD  0.183  trades/y    52.9  hit@2bps 0.646  mean bps  +33.51  n 291
+B_K1_q0.95       Calmar   +1.08  return   +0.429  maxDD  0.062  trades/y    13.6  hit@2bps 0.693  mean bps  +48.63  n 75
+B_K2_q0.80       Calmar   +0.07  return   +0.134  maxDD  0.317  trades/y    69.4  hit@2bps 0.547  mean bps   +4.37  n 382
+B_K2_q0.90       Calmar   +0.32  return   +0.255  maxDD  0.130  trades/y    16.9  hit@2bps 0.591  mean bps  +25.45  n 93
+B_K2_q0.95       Calmar   +0.04  return   +0.011  maxDD  0.051  trades/y     3.6  hit@2bps 0.550  mean bps   +6.55  n 20
+B_K3_q0.80       Calmar    +nan  return   +0.000  maxDD  0.000  trades/y     0.0  hit@2bps nan  mean bps    +nan  n 0
+B_K3_q0.90       Calmar    +nan  return   +0.000  maxDD  0.000  trades/y     0.0  hit@2bps nan  mean bps    +nan  n 0
+B_K3_q0.95       Calmar    +nan  return   +0.000  maxDD  0.000  trades/y     0.0  hit@2bps nan  mean bps    +nan  n 0
+
+All configurations at 0 / 1 / 2 / 5 bps: Calmar / return
+A_M1_q0.90       0bps  +0.43   +3.223 | 1bps  +0.30   +1.926 | 2bps  +0.19   +1.027 | 5bps  -0.08   -0.326
+A_M1_q0.95       0bps  +0.46   +2.345 | 1bps  +0.35   +1.650 | 2bps  +0.26   +1.100 | 5bps  +0.01   +0.044
+A_M1_q0.98       0bps  +0.43   +0.938 | 1bps  +0.33   +0.703 | 2bps  +0.23   +0.496 | 5bps  +0.01   +0.014
+A_M2_q0.90       0bps  +3.93  +30.423 | 1bps  +3.35  +23.218 | 2bps  +2.48  +17.665 | 5bps  +1.10   +7.544
+A_M2_q0.95       0bps  +1.21   +3.406 | 1bps  +0.91   +2.800 | 2bps  +0.69   +2.278 | 5bps  +0.30   +1.103
+A_M2_q0.98       0bps  +0.32   +0.742 | 1bps  +0.26   +0.634 | 2bps  +0.21   +0.533 | 5bps  +0.10   +0.265
+A_M3_q0.90       0bps  +0.20   +0.855 | 1bps  +0.08   +0.305 | 2bps  -0.02   -0.082 | 5bps  -0.22   -0.680
+A_M3_q0.95       0bps  +0.75   +2.688 | 1bps  +0.52   +1.918 | 2bps  +0.35   +1.308 | 5bps  +0.04   +0.143
+A_M3_q0.98       0bps  +0.46   +1.256 | 1bps  +0.37   +0.956 | 2bps  +0.28   +0.696 | 5bps  +0.05   +0.105
+A_M4_q0.90       0bps  +0.19   +0.672 | 1bps  +0.13   +0.443 | 2bps  +0.07   +0.245 | 5bps  -0.06   -0.201
+A_M4_q0.95       0bps  +0.13   +0.372 | 1bps  +0.09   +0.260 | 2bps  +0.06   +0.156 | 5bps  -0.04   -0.106
+A_M4_q0.98       0bps  +0.14   +0.336 | 1bps  +0.11   +0.267 | 2bps  +0.08   +0.201 | 5bps  +0.01   +0.025
+A_M5_q0.90       0bps  -0.32   -0.832 | 1bps  -0.34   -0.860 | 2bps  -0.36   -0.883 | 5bps  -0.41   -0.933
+A_M5_q0.95       0bps  -0.33   -0.846 | 1bps  -0.34   -0.861 | 2bps  -0.35   -0.874 | 5bps  -0.38   -0.907
+A_M5_q0.98       0bps  -0.16   -0.469 | 1bps  -0.17   -0.493 | 2bps  -0.18   -0.517 | 5bps  -0.21   -0.581
+A_M6_q0.90       0bps  +0.04   +0.159 | 1bps  -0.02   -0.092 | 2bps  -0.08   -0.289 | 5bps  -0.22   -0.658
+A_M6_q0.95       0bps  +0.36   +1.072 | 1bps  +0.26   +0.791 | 2bps  +0.18   +0.548 | 5bps  -0.00   -0.001
+A_M6_q0.98       0bps  +0.01   +0.030 | 1bps  -0.02   -0.047 | 2bps  -0.06   -0.117 | 5bps  -0.15   -0.300
+B_K1_q0.80       0bps  +1.25   +4.587 | 1bps  +1.13   +4.037 | 2bps  +1.03   +3.541 | 5bps  +0.74   +2.327
+B_K1_q0.90       0bps  +1.07   +1.684 | 1bps  +1.04   +1.607 | 2bps  +1.00   +1.532 | 5bps  +0.90   +1.321
+B_K1_q0.95       0bps  +1.16   +0.451 | 1bps  +1.12   +0.440 | 2bps  +1.08   +0.429 | 5bps  +0.98   +0.398
+B_K2_q0.80       0bps  +0.13   +0.224 | 1bps  +0.10   +0.179 | 2bps  +0.07   +0.134 | 5bps  +0.01   +0.012
+B_K2_q0.90       0bps  +0.36   +0.279 | 1bps  +0.34   +0.267 | 2bps  +0.32   +0.255 | 5bps  +0.27   +0.221
+B_K2_q0.95       0bps  +0.06   +0.015 | 1bps  +0.05   +0.013 | 2bps  +0.04   +0.011 | 5bps  +0.02   +0.005
+B_K3_q0.80       0bps   +nan   +0.000 | 1bps   +nan   +0.000 | 2bps   +nan   +0.000 | 5bps   +nan   +0.000
+B_K3_q0.90       0bps   +nan   +0.000 | 1bps   +nan   +0.000 | 2bps   +nan   +0.000 | 5bps   +nan   +0.000
+B_K3_q0.95       0bps   +nan   +0.000 | 1bps   +nan   +0.000 | 2bps   +nan   +0.000 | 5bps   +nan   +0.000
+
+HIT RATE BY CONFIDENCE DECILE per member, selection (all hourly decisions; gross hit of the member's sign against the 4-hour
+open-to-open return; net = after 2 bps; n = decisions; decile 10 is the most confident)
+M1  0.501 0.491 0.513 0.511 0.506 0.521 0.520 0.534 0.548 0.562   net@2bps: 0.484 0.479 0.501 0.496 0.495 0.511 0.508 0.521 0.535 0.550   n: 5058 4963 4857 4880 4791 4760 4695 4487 4434 5264
+M2  0.503 0.507 0.517 0.515 0.532 0.533 0.559 0.563 0.585 0.607   net@2bps: 0.490 0.496 0.504 0.502 0.521 0.521 0.544 0.549 0.575 0.597   n: 4859 4837 4914 4739 4786 4863 4798 4827 4767 4799
+M3  0.504 0.506 0.504 0.522 0.538 0.537 0.562 0.562 0.576 0.580   net@2bps: 0.491 0.492 0.492 0.511 0.524 0.525 0.551 0.550 0.562 0.570   n: 5075 5048 4827 4701 4713 4621 4568 4427 4362 5847
+M4  0.505 0.507 0.492 0.494 0.483 0.483 0.482 0.478 0.491 0.493   net@2bps: 0.489 0.497 0.479 0.481 0.468 0.472 0.466 0.466 0.479 0.483   n: 5097 4816 4745 4580 4798 4758 5003 4359 4650 5383
+M5  0.509 0.513 0.526 0.524 0.544 0.554 0.558 0.560 0.549 0.522   net@2bps: 0.495 0.497 0.513 0.511 0.532 0.541 0.546 0.546 0.539 0.511   n: 4958 4815 4949 4722 4720 4832 4724 4831 4706 4932
+M6  0.496 0.489 0.498 0.471 0.477 0.459 0.447 0.429 0.432 0.453   net@2bps: 0.481 0.476 0.483 0.458 0.465 0.445 0.436 0.418 0.422 0.444   n: 4871 4800 4830 4783 4790 4814 4851 4794 4800 4853
+
+HIT RATE BY CONFIDENCE DECILE of the consensus rules (q-free consensus confidence; K1 min c of M1-M3, K3 min c of all six, K2 third-highest c of
+the leading direction without a veto), selection
+K1  0.534 0.533 0.545 0.555 0.557 0.585 0.590 0.584 0.618 0.677   net@2bps: 0.522 0.523 0.529 0.541 0.548 0.575 0.575 0.574 0.610 0.658   n: 4525 4022 3603 3135 2709 2383 1944 1352 903 316
+K3  0.566 1.000 nan nan nan nan nan nan nan nan   net@2bps: 0.545 1.000 nan nan nan nan nan nan nan nan   n: 143 2 0 0 0 0 0 0 0 0
+K2  0.492 0.495 0.503 0.536 0.540 0.561 0.555 0.545 0.589 0.612   net@2bps: 0.470 0.484 0.488 0.522 0.528 0.549 0.530 0.537 0.571 0.592   n: 1822 2566 2830 2364 1971 1505 960 613 336 98
+
+FINALIST A: A_M2_q0.90
+FINALIST B: B_K1_q0.80
