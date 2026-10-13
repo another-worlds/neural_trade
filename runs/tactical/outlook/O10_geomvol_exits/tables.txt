@@ -1,0 +1,64 @@
+O10 DESCRIPTIVE results on spans already seen by O8/O9 (A, B, C). No verdict: these spans informed the design (SPEC "Spans and selection").
+entry (all arms): ROBUST {'k': 1.0, 'delta': 0.02, 'g': None}. Arms: CHOICE = E0_T240; E0 = E0_T60; GV = E4_T60; SHUF = CHOICE's exit signal permuted within the month; GV_SHUF = GV's exit signal permuted within the month
+CHOICE = the pre-registered choice (max t over the 14 configurations); E0 = ROBUST's own exit (target 2 sigma, T 60); GV = the best geometry/volatility exit of the selection span (max t among the non-E0 configurations; an added arm, named from selection numbers only).
+SHUF for E0-type exits (price levels only): the sigma_60 that sizes the stop and the target is permuted within the month; the entries keep the real sigma. For E1/E2a/E2b/E3 the exit signal series is permuted; for E4 its probability is drawn from the month's probabilities of the base arm.
+Returns in % of capital per month: sum of position log returns, no compounding. t = t-statistic of the monthly net at 2 bps; CI = 95% t-interval of the monthly mean.
+
+===== B 2024-07..2025-07-20 (walk-forward); 13 months; buy-and-hold log return +63.9% (daily-close max DD 33.1%) =====
+arm      fills trades  hit%    win   loss   hold   m0bp%   m2bp%   m5bp%     t2  CI2 lo  CI2 hi    mo+ Sharpe  maxDD%  Calmar reasons | owner target
+CHOICE   PESS     616  44.2   73.7  -46.9  101.9  +3.955  +3.007  +1.586  +2.44  +0.327  +5.688  9/13   2.45   14.82    2.50 stop:316 target:199 time:101 | not met
+CHOICE   orig     616  44.5   73.8  -46.9  102.2  +4.161  +3.214  +1.792  +2.63  +0.553  +5.874 10/13   2.60   14.82    2.67 stop:314 target:201 time:101 | not met
+E0       PESS     658  49.4   45.5  -36.1   46.4  +3.136  +2.124  +0.605  +2.70  +0.409  +3.839  9/13   2.11    9.21    2.84 stop:195 target:88 time:375 | not met
+E0       orig     658  49.7   45.7  -36.1   46.6  +3.337  +2.324  +0.806  +3.03  +0.653  +3.996 10/13   2.29    9.22    3.11 stop:193 target:90 time:375 | not met
+SHUF     PESS     625  41.8   60.8  -39.5   92.7  +2.120  +1.158  -0.284  +1.08  -1.172  +3.488  9/13   1.02   10.85    1.32 stop:315 target:186 time:124 | not met
+SHUF     orig     625  44.6   60.3  -40.0   93.6  +3.267  +2.305  +0.863  +2.27  +0.096  +4.514  9/13   2.05    7.59    3.75 stop:297 target:203 time:125 | not met
+GV       PESS     686  48.3   21.2  -16.6    8.5  +1.913  +0.858  -0.725  +1.74  -0.215  +1.930  9/13   1.34    5.04    2.10 learn:642 stop:39 time:5 | not met
+GV       orig     686  48.5   21.2  -15.7    8.7  +2.210  +1.154  -0.429  +2.21  +0.018  +2.291 10/13   1.87    5.04    2.83 learn:648 stop:33 time:5 | not met
+GV_SHUF  PESS     692  47.5   20.6  -16.3    8.5  +1.733  +0.668  -0.929  +1.45  -0.335  +1.671  8/13   0.99    6.12    1.35 learn:655 stop:37 | not met
+GV_SHUF  orig     691  48.3   21.3  -15.7    8.7  +2.227  +1.164  -0.430  +2.20  +0.013  +2.315 11/13   1.96    5.64    2.55 learn:658 stop:31 time:2 | not met
+paired monthly net at 2 bps, PESS: CHOICE - E0: mean +0.883%  95% t-interval [-1.478, +3.244]  t +0.82  first better in 9/13 months
+paired monthly net at 2 bps, PESS: CHOICE - SHUF: mean +1.849%  95% t-interval [+0.366, +3.332]  t +2.72  first better in 10/13 months
+paired monthly net at 2 bps, PESS: GV - E0: mean -1.266%  95% t-interval [-2.751, +0.219]  t -1.86  first better in 5/13 months
+paired monthly net at 2 bps, PESS: GV - GV_SHUF: mean +0.190%  95% t-interval [-0.948, +1.328]  t +0.36  first better in 7/13 months
+paired monthly net at 2 bps, PESS: GV - CHOICE: mean -2.149%  95% t-interval [-4.509, +0.211]  t -1.98  first better in 5/13 months
+monthly net at 2 bps, CHOICE PESS (%): 24-07:+7.0 24-08:-1.4 24-09:-1.3 24-10:+6.9 24-11:+4.8 24-12:+9.0 25-01:+6.8 25-02:+0.8 25-03:-6.0 25-04:-0.7 25-05:+2.4 25-06:+5.9 25-07:+4.8
+
+===== C 2025-10-05..2026-10-12 (frozen fit to 2025-07-20); 13 months; buy-and-hold log return -33.2% (daily-close max DD 75.4%) =====
+arm      fills trades  hit%    win   loss   hold   m0bp%   m2bp%   m5bp%     t2  CI2 lo  CI2 hi    mo+ Sharpe  maxDD%  Calmar reasons | owner target
+CHOICE   PESS     612  40.4   67.4  -42.0  102.0  +1.951  +1.009  -0.403  +1.66  -0.313  +2.331 10/13   0.86    8.02    1.58 stop:337 target:183 time:92 | not met
+CHOICE   orig     612  41.2   67.2  -42.2  103.1  +2.281  +1.339  -0.073  +2.19  +0.008  +2.671 11/13   1.15    8.02    2.10 stop:332 target:188 time:92 | not met
+E0       PESS     653  45.9   40.3  -31.8   45.9  +1.682  +0.677  -0.830  +1.19  -0.559  +1.913  8/13   0.76    6.08    1.40 stop:194 target:87 time:372 | not met
+E0       orig     653  46.7   40.4  -31.7   46.4  +2.015  +1.011  -0.496  +1.72  -0.273  +2.294  9/13   1.14    6.08    2.09 stop:187 target:89 time:377 | not met
+SHUF     PESS     620  37.1   56.3  -37.5   91.7  -0.348  -1.301  -2.732  -2.08  -2.665  +0.062  4/13  -1.31   20.98   -0.78 stop:356 target:152 time:112 | not met
+SHUF     orig     620  39.8   56.0  -37.8   93.8  +0.750  -0.204  -1.635  -0.29  -1.751  +1.344  9/13  -0.20   14.63   -0.18 stop:339 target:167 time:114 | not met
+GV       PESS     675  45.0   16.3  -13.2    9.2  +1.072  +0.033  -1.525  +0.07  -1.021  +1.087  7/13   0.07    5.29    0.08 learn:636 stop:31 time:8 | not met
+GV       orig     675  45.6   16.7  -12.6    9.5  +1.430  +0.391  -1.166  +0.90  -0.560  +1.343  9/13   0.87    4.42    1.12 learn:643 stop:23 time:9 | not met
+GV_SHUF  PESS     678  45.1   17.9  -14.8    9.1  +1.016  -0.027  -1.592  -0.06  -0.972  +0.918  6/13  -0.05    4.75   -0.07 learn:638 stop:40 | not met
+GV_SHUF  orig     681  45.5   18.2  -13.8    9.1  +1.447  +0.400  -1.172  +1.56  -0.158  +0.957  8/13   0.79    3.73    1.35 learn:654 stop:27 | not met
+paired monthly net at 2 bps, PESS: CHOICE - E0: mean +0.332%  95% t-interval [-0.705, +1.369]  t +0.70  first better in 7/13 months
+paired monthly net at 2 bps, PESS: CHOICE - SHUF: mean +2.310%  95% t-interval [+1.057, +3.564]  t +4.02  first better in 11/13 months
+paired monthly net at 2 bps, PESS: GV - E0: mean -0.644%  95% t-interval [-1.903, +0.615]  t -1.11  first better in 4/13 months
+paired monthly net at 2 bps, PESS: GV - GV_SHUF: mean +0.060%  95% t-interval [-0.754, +0.875]  t +0.16  first better in 5/13 months
+paired monthly net at 2 bps, PESS: GV - CHOICE: mean -0.976%  95% t-interval [-2.048, +0.096]  t -1.98  first better in 3/13 months
+monthly net at 2 bps, CHOICE PESS (%): 25-10:+3.6 25-11:+0.4 25-12:-2.2 26-01:+3.1 26-02:+0.1 26-03:+2.2 26-04:+4.2 26-05:+2.8 26-06:+1.8 26-07:-3.1 26-08:-0.3 26-09:+0.3 26-10:+0.1
+
+===== A 2018-07..2020-12 (walk-forward); 30 months; buy-and-hold log return +152.0% (daily-close max DD 102.7%) =====
+arm      fills trades  hit%    win   loss   hold   m0bp%   m2bp%   m5bp%     t2  CI2 lo  CI2 hi    mo+ Sharpe  maxDD%  Calmar reasons | owner target
+CHOICE   PESS    1463  38.4  113.4  -72.9  110.0  +0.326  -0.649  -2.112  -0.56  -3.006  +1.708 15/30  -0.27   44.55   -0.17 stop:779 target:342 time:342 | not met
+CHOICE   orig    1458  40.1  115.1  -72.1  112.9  +2.380  +1.408  -0.050  +1.11  -1.189  +4.005 19/30   0.61   21.44    0.79 stop:749 target:360 time:349 | not met
+E0       PESS    1552  42.5   76.1  -55.6   44.4  +1.247  +0.212  -1.340  +0.18  -2.137  +2.562 18/30   0.10   42.99    0.06 stop:446 target:204 time:902 | not met
+E0       orig    1552  44.1   78.4  -53.4   45.6  +3.459  +2.425  +0.873  +1.95  -0.121  +4.971 20/30   1.24   20.63    1.41 stop:410 target:219 time:923 | not met
+SHUF     PESS    1507  34.0   96.2  -58.6   92.9  -1.962  -2.967  -4.474  -2.97  -5.011  -0.924 10/30  -1.69   98.15   -0.36 stop:855 target:324 time:328 | not met
+SHUF     orig    1501  37.9   97.7  -58.6   96.5  +1.327  +0.326  -1.175  +0.27  -2.109  +2.761 11/30   0.19   30.59    0.13 stop:790 target:379 time:332 | not met
+GV       PESS    1610  40.8   47.9  -39.1   16.6  -0.871  -1.945  -3.555  -1.80  -4.150  +0.260  9/30  -1.25  101.97   -0.23 learn:1197 stop:251 time:162 | not met
+GV       orig    1609  42.4   49.6  -36.4   17.2  +1.088  +0.015  -1.594  +0.01  -2.137  +2.167 12/30   0.01   57.24    0.00 learn:1236 stop:207 time:166 | not met
+GV_SHUF  PESS    1623  38.2   55.5  -37.9   17.7  -0.102  -1.184  -2.807  -1.27  -3.087  +0.718 13/30  -0.72   77.25   -0.18 learn:1274 stop:207 time:142 | not met
+GV_SHUF  orig    1620  39.5   53.0  -34.7   17.9  +1.059  -0.021  -1.641  -0.02  -1.960  +1.917 13/30  -0.01   58.66   -0.00 learn:1294 stop:178 time:148 | not met
+paired monthly net at 2 bps, PESS: CHOICE - E0: mean -0.862%  95% t-interval [-2.448, +0.725]  t -1.11  first better in 10/30 months
+paired monthly net at 2 bps, PESS: CHOICE - SHUF: mean +2.318%  95% t-interval [+0.170, +4.466]  t +2.21  first better in 17/30 months
+paired monthly net at 2 bps, PESS: GV - E0: mean -2.157%  95% t-interval [-4.297, -0.017]  t -2.06  first better in 10/30 months
+paired monthly net at 2 bps, PESS: GV - GV_SHUF: mean -0.760%  95% t-interval [-1.868, +0.347]  t -1.40  first better in 12/30 months
+paired monthly net at 2 bps, PESS: GV - CHOICE: mean -1.295%  95% t-interval [-3.630, +1.039]  t -1.13  first better in 14/30 months
+monthly net at 2 bps, CHOICE PESS (%): 18-07:-0.8 18-08:+1.1 18-09:+0.0 18-10:-6.7 18-11:+13.9 18-12:+4.7 19-01:-0.2 19-02:-2.2 19-03:+0.1 19-04:-2.0 19-05:-13.2 19-06:+2.8 19-07:+0.0 19-08:+1.8 19-09:+4.5 19-10:-5.7 19-11:-6.9 19-12:+5.2 20-01:+3.7 20-02:-2.2 20-03:+3.9 20-04:-16.2 20-05:+5.5 20-06:-8.7 20-07:-5.4 20-08:+10.3 20-09:-0.0 20-10:-5.8 20-11:+2.4 20-12:-3.2
+
+Note: E4's models: A trains on A's own earlier checkpoints, B on the selection pool + B's own, C one fit at 2025-07-21 on the selection pool + B. A month without a model leaves E4 holding (stop and time stop only).

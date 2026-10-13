@@ -17,3 +17,8 @@
 01:52:56 E4_T240 trades/mo 57.5 m2% +1.612 t +2.15 274s
 01:52:56 CHOICE {'rule': 'highest t-statistic of the monthly net return at 2 bps (PESS fills) on 2021-01..2024-06 among the 14 configurations (SPEC.md)', 'config': 'E0_T240', 'cfg': {'exit': 'E0', 'T': 240}, 'entry': {'k': 1.0, 'delta': 0.02, 'g': None}, 't_2bps': 3.3166060778054716, 'mean_m_2bps': 0.025611410708520226, 'trades_per_month': 50.5, 'n_trades': 2121, 'n_months': 42, 'n_configs': 14, 'fills': 'PESS', 'selection_months': ['2021-01', '2024-06']}
 01:52:56 total 274s
+01:57:13 arms {'CHOICE': {'exit': 'E0', 'T': 240}, 'E0': {'exit': 'E0', 'T': 60}, 'GV': {'exit': 'E4', 'T': 60}} SHUF of {'SHUF': 'CHOICE', 'GV_SHUF': 'GV'} pairs [('CHOICE', 'E0'), ('CHOICE', 'SHUF'), ('GV', 'E0'), ('GV', 'GV_SHUF'), ('GV', 'CHOICE')]
+01:58:09 span B valid decisions 36780 E4 models {60: 13} 56s
+01:59:05 span C valid decisions 35597 E4 models {60: 1} 112s
+02:02:01 span A valid decisions 87676 E4 models {60: 27} 289s
+02:02:36 describe done 324s
