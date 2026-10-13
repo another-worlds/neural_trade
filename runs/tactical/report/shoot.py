@@ -8,7 +8,7 @@ EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PROF = os.path.join(os.environ.get("TEMP", "."), "edge_prof_tviz")
 os.makedirs(os.path.join(HERE, "png"), exist_ok=True)
 JOBS = [("s1", None), ("s2", None), ("s3", None)] + [("s4", b) for b in ("intro", "g_h24", "g_n1", "g_n2", "g_n3", "g_n4", "g_n5", "g_n6", "g_n7", "g_h67", "g_h80", "forest")] + \
-       [("s5", None), ("s6", None), ("s7", None), ("s8", None)]
+       [("s5", None), ("s6", None), ("s7", None), ("s9", None), ("s10", None), ("s8", None)]
 
 
 def shot(sec, blk, h=9000):
@@ -35,4 +35,4 @@ if __name__ == "__main__":
         nm = sec + (f"_{blk}" if blk else "")
         if only and nm not in only and sec not in only:
             continue
-        shot(sec, blk, 16000 if sec in ("s7", "s8") else 9000)
+        shot(sec, blk, 16000 if sec in ("s7", "s8", "s9", "s10") else 9000)

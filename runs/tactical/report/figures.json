@@ -193,5 +193,65 @@
   "section": "s7",
   "key": "equity_c_h38_hourly_barrier_meta",
   "title": "Кривая капитала c_h38_hourly_barrier_meta (сохранённый PNG)"
+ },
+ {
+  "section": "s9",
+  "key": "h81_dev_lock",
+  "title": ""
+ },
+ {
+  "section": "s9",
+  "key": "h81_months",
+  "title": ""
+ },
+ {
+  "section": "s9",
+  "key": "h82_months",
+  "title": ""
+ },
+ {
+  "section": "s9",
+  "key": "h82_equity",
+  "title": ""
+ },
+ {
+  "section": "s9",
+  "key": "h82_lev",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t01_skill",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t03_months",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t03_day0",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t03_day1",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t03_day2",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t02_equity",
+  "title": ""
+ },
+ {
+  "section": "s10",
+  "key": "t04_months",
+  "title": ""
  }
 ]

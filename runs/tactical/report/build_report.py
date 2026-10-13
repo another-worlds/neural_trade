@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from rcommon import (T, C, TAC, ROOT, UP, DOWN, PINK, GOLD, TAN, VIOLET, SALMON, INK, INK2, MUTED, GRID, SURFACE, PAPER, AXIS, S,  # noqa: E402
                      jload, jfile, load_bars, pick_windows, span_text, fig_html, badge, jbadge, table, card, ru)
 import geom_figs as G  # noqa: E402
+import fut_sections as FS  # noqa: E402
 
 t_start = time.time()
 FIGS = []            # (section, key, title) of every figure, for the report's list
@@ -57,6 +58,14 @@ models = jload("models")
 longtrain = jload("longtrain")
 hdev = jload("hourly_dev")
 hfin = jload("hourly_final")
+# H81 (hill-climb v2 lockbox) is not in verdicts.json (written by export2.py): its row is added here from the committed result file
+_lb = jfile("hc2/lockbox_result.json")
+from scipy import stats as _sps  # noqa: E402
+_mm = np.asarray(_lb["winner"]["lockbox"]["monthly_net_bps"], float)
+_lo81 = float(_mm.mean() - _sps.t.ppf(0.975, len(_mm) - 1) * _mm.std(ddof=1) / np.sqrt(len(_mm)))
+verdicts = verdicts + [{"id": "H81-19", "h": "H81", "name": "Hill-climb v2: победитель на сейфе", "unit": "Нижняя граница 95% интервала среднего месяца на сейфе, б.п. (12 месяцев)",
+                        "effect": _lo81, "threshold": 0.0, "ratio": 1.0 if _lo81 > 0 else -1.0, "verdict": "прошла" if _lb["PASS"] else "не прошла"}]
+PASSED = lambda v: v["verdict"].startswith("прошла")
 raw_n = {r["month"]: r["n_top10"] for r in jfile("recut/lab/decay.json")}
 
 # the English journal text of every row (LOG.md), for the searchable table
@@ -82,7 +91,7 @@ def sec1():
     h_old, _ = year_mean(decay, "har_spearman", 2018, 2018)
     h_new, _ = year_mean(decay, "har_spearman", 2025, 2025)
     eq1h = json.load(open(TAC / "equity" / "b_h56_1h_rich_l1_365.json", encoding="utf-8"))["levels"]["0"]["stats"]
-    npass = sum(1 for v in verdicts if v["verdict"] == "прошла")
+    npass = sum(1 for v in verdicts if PASSED(v))
     cnt = defaultdict(int)
     for r in journal:
         cnt[r["verdict"]] += 1
@@ -90,8 +99,10 @@ def sec1():
         (f"{ru(c_old, 3)} → {ru(c_new, 3)}", "AUC направления, вход по закрытию", f"среднее 2018-20 → 2025; при входе по следующему открытию {ru(a_old, 3)} → {ru(a_new, 3)}"),
         (f"{ru(h_old, 2)} → {ru(h_new, 2)}", "Спирмен прогноза волатильности (HAR)", "2018 → 2025: волатильность стала предсказуемее, направление - наоборот"),
         ("0", "стратегий в цели hit > 60% и просадка < 5%", f"лучшая честная часовая: hit {pct(eq1h['hit'])}, просадка {ru(eq1h['max_drawdown_pct'], 1)}%"),
-        ("2 из 13", "порогов исследования H67-H80 пройдено", "прошли: изменение волатильности на час (H72) и физика на оси дисперсии (H77)"),
-        (f"{len(journal)}", "гипотез в журнале H5-H80", f"эффект {cnt['effect']}, частично {cnt['partial']}, нет эффекта {cnt['none']}, не подтвердилось {cnt['failed']}, справка {cnt['info']}"),
+        (f"{npass} из {len(verdicts)}", "порогов исследования H67-H86 пройдено", "все пройденные - про волатильность или физику на оси дисперсии: H72, H77 и на новых данных H83 (прогноз), H85 (интервалы)"),
+        ("-16,9%", "кандидат H62 вперёд (H82, Binance 2025-11..2026-09)", "hit 50,3%, 437 сделок, просадка 26% при пределе 15%; на подборе было hit 59%: преимущество исчезло"),
+        ("+0,142", "скилл прогноза изменения волатильности на новых данных (H83)", "12 из 12 месяцев; на взгляде было +0,163. Единственный результат сессии, переживший невиданные данные"),
+        (f"{len(journal)}", "гипотез в журнале H5-H86", f"эффект {cnt['effect']}, частично {cnt['partial']}, нет эффекта {cnt['none']}, не подтвердилось {cnt['failed']}, справка {cnt['info']}"),
         ("0,521", "AUC направления сейчас (с 2024-09)", "ступень решения H72: было 0,545 (2021-03..2024-08) и около 0,57 (2018-21)"),
     ]
     tiles_html = "".join(f'<div class="tile"><div class="big">{a}</div><div class="lab">{b}</div><div class="sub">{c}</div></div>' for a, b, c in tiles)
@@ -115,9 +126,9 @@ def sec1():
             'владельца (hit &gt; 60% при просадке &lt; 5%): честная часовая стратегия даёт hit около 57% и просадку около 9-10%, а просадка &lt; 5% '
             'достигается только плечом около 0,4x. Геометрия индикаторов (наклоны, пересечения, оболочки, кривизна, площади Леви, фазовые портреты, '
             'Вассерштейн, Фишер-Рао) и синтетические индикаторы из сети не добавили направления ни к регрессии, ни к сети; из семи неизведанных направлений '
-            'исследования порог прошли два, и оба - про волатильность. Отрицательный, оформленный с доказательствами ответ - допустимый результат (VISION).</div>').replace('HOLD', ru(h_old, 2)).replace('HNEW', ru(h_new, 2))
-    body += card("Все 76 гипотез журнала: области и вердикты", F(fig, "s1", "verdict_areas", "Журнал", 380),
-                 "Цвет и значок в легенде вместе обозначают вердикт (число - гипотез); полный список с поиском - в разделе 8.")
+            'исследования порог прошли два, и оба - про волатильность. Проверка на будущем (раздел 8): победитель большого подбора H81 проваливает сейф, а замороженный кандидат H62 на невиданных данных Binance 2025-11..2026-09 даёт hit 50%, итог -16,9% и просадку 26% (H82). Из волатильностного трека (раздел 9) на новых данных держатся прогноз изменения волатильности на час (H83) и 90%-интервалы доходности по HAR (H85: интервальная оценка -9,4 б.п. против скользящей RV, 11 из 11 месяцев); переключение экспозиции BTC по волатильности (H84) и 15-минутный календарь (H86) не подтвердились. Отрицательный, оформленный с доказательствами ответ - допустимый результат (VISION).</div>').replace('HOLD', ru(h_old, 2)).replace('HNEW', ru(h_new, 2))
+    body += card(f"Все {len(journal)} гипотез журнала: области и вердикты", F(fig, "s1", "verdict_areas", "Журнал", 380),
+                 "Цвет и значок в легенде вместе обозначают вердикт (число - гипотез); полный список с поиском - в разделе 10.")
     return body
 
 
@@ -390,7 +401,7 @@ def sec5():
     ratio = [v["ratio"] for v in vs]
     fig = go.Figure()
     for i, v in enumerate(vs):
-        ok = v["verdict"] == "прошла"
+        ok = PASSED(v)
         col, sym = (T.GOOD, "diamond") if ok else (T.CRITICAL, "x")
         zero = v["threshold"] == 0
         fig.add_trace(go.Bar(y=[names[i]], x=[ratio[i]], orientation="h", marker=dict(color=col, opacity=0.55, line=dict(color=col, width=1)), showlegend=False,
@@ -403,10 +414,10 @@ def sec5():
     fig.add_vline(x=1, line=dict(color=GOLD, width=2, dash="dash"), annotation_text="порог = 1", annotation_position="top")
     fig.add_vline(x=0, line=dict(color=NEUT, width=1))
     fig.update_yaxes(autorange="reversed")
-    fig.update_xaxes(title_text="эффект / заранее записанный порог (для H78, H79 порог 0 - показан знак ±1)")
+    fig.update_xaxes(title_text="эффект / заранее записанный порог (для H78, H79, H81-H84 порог 0 - показан знак ±1)")
     fig.update_layout(bargap=0.35, showlegend=True)
-    rows = [[v["h"], v["name"], v["unit"], ru(v["effect"], 4, True), ru(v["threshold"], 4), badge("good", "прошла") if v["verdict"] == "прошла" else badge("bad", "не прошла")] for v in vs]
-    body = card("Доска вердиктов H67-H80: эффект против порога, записанного до результата", F(fig, "s5", "verdict_board", "", 120 + 40 * len(vs)),
+    rows = [[v["h"], v["name"], v["unit"], ru(v["effect"], 4, True), ru(v["threshold"], 4), badge("good", v["verdict"]) if PASSED(v) else badge("bad", "не прошла")] for v in vs]
+    body = card("Доска вердиктов H67-H86: эффект против порога, записанного до результата", F(fig, "s5", "verdict_board", "", 120 + 40 * len(vs)),
                 "Единицы у гипотез разные (Спирмен, AUC, скилл в %, Calmar), поэтому по оси - отношение эффекта к порогу. Данные - вердикты журнала (экспорт export2.py); подробные карточки ниже.")
     body += card("Таблица вердиктов", table(rows, ["гипотеза", "направление", "мера", "эффект", "порог", "вердикт"]))
     charts = []
@@ -865,7 +876,9 @@ def build():
     t0 = time.time()
     for sid, title, fn, args in (("s1", "1. Итог", sec1, ()), ("s2", "2. Затухание рынка", sec2, ()), ("s3", "3. Карта затухания", sec3, ()),
                                  ("s4", "4. Геометрия", sec4, (ws,)), ("s5", "5. Неизведанные направления", sec5, ()), ("s6", "6. Модели и регрессия", sec6, ()),
-                                 ("s7", "7. Торговля", sec7, ()), ("s8", "8. Журнал H5-H80", sec8, ())):
+                                 ("s7", "7. Торговля", sec7, ()),
+                                 ("s9", "8. Проверка на будущем", lambda: FS.sec9(F, reg), ()), ("s10", "9. Волатильность", lambda: FS.sec10(F, reg), ()),
+                                 ("s8", "10. Журнал H5-H86", sec8, ())):
         body = fn(*args)
         secs.append((sid, title, body))
         print(f" {sid} done {time.time() - t0:.0f}s", flush=True)
