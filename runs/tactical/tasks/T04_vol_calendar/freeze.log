@@ -1,0 +1,3 @@
+bars 525600 2025-10-01 00:00:00 2026-09-30 23:59:00
+{'spec': 'T04 SPEC.md Part B freeze', 'train_from': '2025-10-02 00:00:00', 'train_label_end_max': '2026-09-30 20:53:00', 'last_bar': '2026-09-30 23:59:00', 'n_bars': 525600, 'n_train_rows': 74474, 'stride': 7, 'warm': 1620, 'ridge_alpha': 1.0, 'n_slots': 96, 'drops': {'anchors': 74820, 'kept': 74474, 'dropped': 346, 'zero_rv_prev_windows': 0, 'zero_rv_next_windows': 0, 'feature_rv_floor': 346, 'feature_floor_only': 346}, 'sha256': '61749ad6d52d4faaf06066e39439c28110a6db2520d0e568c1322dd1cc5e80db'}
+real frozen sha ok 61749ad6d52d4faaf06066e39439c28110a6db2520d0e568c1322dd1cc5e80db
