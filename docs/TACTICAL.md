@@ -65,6 +65,19 @@ for the MVP".
 - **This session** works on the volatility track: runs/tactical/tasks/T01_vol_forward and T02_vol_exposure (SPECs) and
   their follow-ups.
 - The review of what failed and what was never tested: [runs/tactical/REVIEW_2026-10-13.md](../runs/tactical/REVIEW_2026-10-13.md).
+- **The two run in parallel** (owner, 2026-10-13: the volatility session continues while a new one starts):
+
+| | Volatility session | Outlook session |
+|---|---|---|
+| Worktree | `D:/nt/nt_tactical` | `D:/nt/nt_tactical_outlook` |
+| Branch | `nt-tactical` | `nt-tactical-outlook` |
+| Journal | `runs/tactical/LOG.md` | `runs/tactical/LOG_outlook.md`, hypotheses numbered **O1, O2, ...** |
+| Work folders | `runs/tactical/tasks/T*` | `runs/tactical/outlook/` |
+
+  - The outlook session never edits LOG.md, `runs/tactical/tasks/` or this file's volatility rules. The volatility session never edits LOG_outlook.md or `runs/tactical/outlook/`.
+  - The outlook session merges `origin/nt-tactical` into its branch at start and between items. It merges its branch into `nt-tactical` by fetch-and-merge, never a rebase (D-004), and pushes `nt-tactical` after a merge.
+  - Every other rule of this file applies to both, including the report style.
+  - **The GPU is shared:** at most 2 heavy processes in total, for both sessions together.
 
 ## Report style (owner, 2026-10-13: "возьми эту визуализацию на вооружение!!! очень крутая")
 
