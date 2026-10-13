@@ -358,7 +358,7 @@ def make_windows(trades, frames, cands):
                 continue
             i = int(rng.choice(idx)); r = tf.iloc[i]
             O, Hi, Lo, Cl = s["open"].values, s["high"].values, s["low"].values, s["close"].values
-            d = int(s.index.get_loc(r["decision_time"])); e = int(s.index.get_loc(r["entry_time"])); x = int(s.index.get_loc(r["exit_time"]))
+            d = int(s.index.get_loc(r["decision_time"])); x = int(s.index.get_loc(r["exit_time"]))
             m = float(O[d]); sg = float(r["sigma"]); c = cands[nm]; side = int(r["side"])
             out["examples"].append({"candidate": nm, "span": sp, "decision_time": str(r["decision_time"]), "m": m, "sigma": sg, "p_up": float(r["p_up"]), "dV": float(r["dV"]), "w": float(r["w"]),
                                     "buy_stop_U": m * (1 + c["k"] * sg), "sell_stop_L": m * (1 - c["k"] * sg), "side": side, "entry_time": str(r["entry_time"]), "entry_px": float(r["entry_px"]),
