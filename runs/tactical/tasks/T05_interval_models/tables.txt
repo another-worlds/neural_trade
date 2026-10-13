@@ -1,0 +1,74 @@
+== T05 selection: monthly walk-forward 2019-01..2024-06 (66 months), T=60, 90% intervals ==
+model  mean_iscore_bps  pooled_cover  monthly_cover_sd  mean_width_bps  qualifies
+M0           291.729       0.8965           0.0182         178.32  True
+M1           300.059       0.8974           0.0189         194.11  True
+M2           291.563       0.8969           0.0177         178.23  True
+M3           291.649       0.8966           0.0182         178.34  True
+M4           290.574       0.8979           0.0176         180.44  True
+M5           301.958       0.8995           0.0014         198.04  True
+chosen (lowest score among M2-M5 with pooled coverage in [0.88, 0.92]): M4
+  M1 - M0 mean monthly iscore diff +8.330 [+6.966,+9.693] bps, months lower 1/66 (descriptive)
+  M2 - M0 mean monthly iscore diff -0.166 [-0.443,+0.111] bps, months lower 40/66 (descriptive)
+  M3 - M0 mean monthly iscore diff -0.081 [-0.238,+0.077] bps, months lower 40/66 (descriptive)
+  M4 - M0 mean monthly iscore diff -1.155 [-1.735,-0.575] bps, months lower 43/66 (descriptive)
+  M5 - M0 mean monthly iscore diff +10.229 [+8.746,+11.712] bps, months lower 1/66 (descriptive)
+
+== T05 Look A: 2017-09..2018-12 (16 months), chosen M4 (selection.json at f763b844cadb655051c020aa81845c449b3ed4b6) ==
+model  mean_iscore_bps  pooled_cover  monthly_cover_sd  mean_width_bps
+M0           446.099       0.8908           0.0245         277.89
+M1           463.336       0.8913           0.0268         296.03
+M4           449.931       0.8907           0.0273         276.74
+M4_vs_M0: diff +3.833 bps [-2.812,+10.477], better 8/16, pooled cover 0.8907, cover sd 0.0273 (ref 0.0245) -> c1 False c2 False c3 True c4 False  SUCCESS False
+M4_vs_M1: diff -13.405 bps [-24.148,-2.661], better 13/16, pooled cover 0.8907, cover sd 0.0273 (ref 0.0268) -> c1 True c2 True c3 True c4 False  SUCCESS False
+VERDICT (success against BOTH M0 and M1): False
+M0 - M1 on this block: -17.237 bps [-24.798,-9.676], M0 better in 15/16
+train days used per month (first 3): [('2017-09', 14.0, 2868), ('2017-10', 44.0, 9039), ('2017-11', 75.0, 15416)]
+== per month (model: n, cover, width, iscore) ==
+2017-09 M0 n=6172 cov=0.8415 w=286.67 is=511.71
+2017-09 M1 n=6172 cov=0.8509 w=296.50 is=526.72
+2017-09 M4 n=6172 cov=0.8310 w=306.97 is=557.08
+2017-10 M0 n=6377 cov=0.8614 w=215.77 is=387.09
+2017-10 M1 n=6377 cov=0.8824 w=251.10 is=400.29
+2017-10 M4 n=6377 cov=0.8959 w=252.34 is=384.70
+2017-11 M0 n=6164 cov=0.8983 w=346.59 is=518.59
+2017-11 M1 n=6164 cov=0.8887 w=355.08 is=524.86
+2017-11 M4 n=6164 cov=0.8684 w=312.89 is=537.10
+2017-12 M0 n=6377 cov=0.9061 w=609.60 is=835.02
+2017-12 M1 n=6377 cov=0.8802 w=574.34 is=843.78
+2017-12 M4 n=6377 cov=0.8959 w=581.96 is=841.57
+2018-01 M0 n=6378 cov=0.9194 w=532.60 is=695.12
+2018-01 M1 n=6378 cov=0.9238 w=583.37 is=739.22
+2018-01 M4 n=6378 cov=0.9075 w=506.92 is=694.34
+2018-02 M0 n=5760 cov=0.8814 w=478.59 is=666.40
+2018-02 M1 n=5760 cov=0.8816 w=502.51 is=713.34
+2018-02 M4 n=5760 cov=0.8872 w=478.12 is=668.68
+2018-03 M0 n=6377 cov=0.8695 w=331.53 is=570.38
+2018-03 M1 n=6377 cov=0.8915 w=387.34 is=600.40
+2018-03 M4 n=6377 cov=0.8942 w=360.32 is=567.24
+2018-04 M0 n=6171 cov=0.9062 w=248.76 is=414.75
+2018-04 M1 n=6171 cov=0.9105 w=286.88 is=443.94
+2018-04 M4 n=6171 cov=0.9105 w=249.28 is=407.79
+2018-05 M0 n=6377 cov=0.9006 w=209.49 is=324.42
+2018-05 M1 n=6377 cov=0.9153 w=238.33 is=339.76
+2018-05 M4 n=6377 cov=0.9078 w=213.51 is=321.83
+2018-06 M0 n=6172 cov=0.9268 w=184.93 is=321.94
+2018-06 M1 n=6172 cov=0.9264 w=198.49 is=324.61
+2018-06 M4 n=6172 cov=0.9245 w=184.63 is=318.26
+2018-07 M0 n=6375 cov=0.8609 w=125.53 is=289.18
+2018-07 M1 n=6375 cov=0.8565 w=136.45 is=284.90
+2018-07 M4 n=6375 cov=0.8595 w=125.80 is=288.52
+2018-08 M0 n=6377 cov=0.8735 w=171.52 is=341.18
+2018-08 M1 n=6377 cov=0.8575 w=179.47 is=356.41
+2018-08 M4 n=6377 cov=0.8725 w=173.20 is=341.30
+2018-09 M0 n=6163 cov=0.9160 w=144.34 is=247.81
+2018-09 M1 n=6163 cov=0.9268 w=174.56 is=256.69
+2018-09 M4 n=6163 cov=0.9257 w=155.20 is=246.81
+2018-10 M0 n=6243 cov=0.9125 w=71.75 is=131.77
+2018-10 M1 n=6243 cov=0.9199 w=88.07 is=137.42
+2018-10 M4 n=6243 cov=0.9273 w=78.33 is=135.28
+2018-11 M0 n=6102 cov=0.8804 w=215.25 is=405.67
+2018-11 M1 n=6102 cov=0.8571 w=198.48 is=424.87
+2018-11 M4 n=6102 cov=0.8582 w=186.80 is=409.13
+2018-12 M0 n=6377 cov=0.8985 w=273.25 is=476.56
+2018-12 M1 n=6377 cov=0.8912 w=285.47 is=496.17
+2018-12 M4 n=6377 cov=0.8852 w=261.55 is=479.28

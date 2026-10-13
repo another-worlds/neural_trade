@@ -1,0 +1,82 @@
+[   13s] bars 3417241 2018-01-01 00:00:00 .. 2024-07-01 02:00:00, anchors 487963
+[   85s] 2019-01 train 74661 (364 d) cal 6369 test 6375
+[  159s] 2019-02 train 74864 (365 d) cal 6367 test 5758
+[  218s] 2019-03 train 74862 (365 d) cal 5750 test 6375
+[  252s] 2019-04 train 74860 (365 d) cal 6367 test 6169
+[  317s] 2019-05 train 74858 (365 d) cal 6161 test 6377
+[  421s] 2019-06 train 74858 (365 d) cal 6369 test 6172
+[  502s] 2019-07 train 74858 (365 d) cal 6163 test 6369
+[  542s] 2019-08 train 74851 (365 d) cal 6360 test 6377
+[  576s] 2019-09 train 74851 (365 d) cal 6368 test 6170
+[  610s] 2019-10 train 74858 (365 d) cal 6162 test 6372
+[  648s] 2019-11 train 74988 (365 d) cal 6364 test 6172
+[  684s] 2019-12 train 75054 (365 d) cal 6163 test 6376
+[  775s] 2020-01 train 75054 (365 d) cal 6368 test 6377
+[  830s] 2020-02 train 75056 (365 d) cal 6369 test 5966
+[  865s] 2020-03 train 75057 (365 d) cal 5957 test 6377
+[  899s] 2020-04 train 75061 (365 d) cal 6369 test 6132
+[  933s] 2020-05 train 75023 (365 d) cal 6124 test 6378
+[  966s] 2020-06 train 75023 (365 d) cal 6369 test 6171
+[ 1000s] 2020-07 train 75024 (365 d) cal 6163 test 6377
+[ 1036s] 2020-08 train 75032 (365 d) cal 6369 test 6362
+[ 1070s] 2020-09 train 75016 (365 d) cal 6354 test 6167
+[ 1163s] 2020-10 train 75012 (365 d) cal 6158 test 6377
+[ 1271s] 2020-11 train 75017 (365 d) cal 6368 test 6171
+[ 1341s] 2020-12 train 75017 (365 d) cal 6163 test 6377
+[ 1437s] 2021-01 train 75018 (365 d) cal 6369 test 6378
+[ 1540s] 2021-02 train 75018 (365 d) cal 6369 test 5760
+[ 1616s] 2021-03 train 75018 (365 d) cal 5751 test 6377
+[ 1649s] 2021-04 train 75018 (365 d) cal 6368 test 6158
+[ 1688s] 2021-05 train 75045 (365 d) cal 6150 test 6377
+[ 1720s] 2021-06 train 75044 (365 d) cal 6369 test 6172
+[ 1753s] 2021-07 train 75044 (365 d) cal 6163 test 6377
+[ 1784s] 2021-08 train 75044 (365 d) cal 6368 test 6377
+[ 1816s] 2021-09 train 75060 (365 d) cal 6369 test 6167
+[ 1848s] 2021-10 train 75060 (365 d) cal 6159 test 6371
+[ 1879s] 2021-11 train 75053 (365 d) cal 6362 test 6164
+[ 1911s] 2021-12 train 75047 (365 d) cal 6156 test 6377
+[ 1942s] 2022-01 train 75047 (365 d) cal 6369 test 6358
+[ 1974s] 2022-02 train 75027 (365 d) cal 6350 test 5754
+[ 2007s] 2022-03 train 75021 (365 d) cal 5746 test 6377
+[ 2039s] 2022-04 train 75021 (365 d) cal 6369 test 6172
+[ 2070s] 2022-05 train 75034 (365 d) cal 6163 test 6369
+[ 2102s] 2022-06 train 75027 (365 d) cal 6361 test 6171
+[ 2134s] 2022-07 train 75026 (365 d) cal 6163 test 6360
+[ 2167s] 2022-08 train 75008 (365 d) cal 6351 test 6374
+[ 2199s] 2022-09 train 75005 (365 d) cal 6365 test 6171
+[ 2230s] 2022-10 train 75010 (365 d) cal 6163 test 6364
+[ 2263s] 2022-11 train 75003 (365 d) cal 6356 test 6168
+[ 2294s] 2022-12 train 75006 (365 d) cal 6159 test 6125
+[ 2326s] 2023-01 train 74756 (365 d) cal 6118 test 6181
+[ 2358s] 2023-02 train 74578 (365 d) cal 6173 test 5749
+[ 2389s] 2023-03 train 74573 (365 d) cal 5741 test 6362
+[ 2421s] 2023-04 train 74558 (365 d) cal 6354 test 6164
+[ 2453s] 2023-05 train 74549 (365 d) cal 6155 test 6369
+[ 2485s] 2023-06 train 74549 (365 d) cal 6360 test 6162
+[ 2517s] 2023-07 train 74541 (365 d) cal 6154 test 6294
+[ 2549s] 2023-08 train 74475 (365 d) cal 6286 test 6113
+[ 2581s] 2023-09 train 74214 (365 d) cal 6105 test 6115
+[ 2613s] 2023-10 train 74157 (365 d) cal 6106 test 6341
+[ 2645s] 2023-11 train 74135 (365 d) cal 6333 test 6168
+[ 2676s] 2023-12 train 74135 (365 d) cal 6160 test 6378
+[ 2708s] 2024-01 train 74387 (365 d) cal 6369 test 6377
+[ 2739s] 2024-02 train 74583 (365 d) cal 6368 test 5958
+[ 2771s] 2024-03 train 74587 (365 d) cal 5950 test 6374
+[ 2802s] 2024-04 train 74598 (365 d) cal 6365 test 6163
+[ 2833s] 2024-05 train 74599 (365 d) cal 6155 test 6377
+[ 2866s] 2024-06 train 74607 (365 d) cal 6369 test 6151
+== T05 selection: monthly walk-forward 2019-01..2024-06 (66 months), T=60, 90% intervals ==
+model  mean_iscore_bps  pooled_cover  monthly_cover_sd  mean_width_bps  qualifies
+M0           291.729       0.8965           0.0182         178.32  True
+M1           300.059       0.8974           0.0189         194.11  True
+M2           291.563       0.8969           0.0177         178.23  True
+M3           291.649       0.8966           0.0182         178.34  True
+M4           290.574       0.8979           0.0176         180.44  True
+M5           301.958       0.8995           0.0014         198.04  True
+chosen (lowest score among M2-M5 with pooled coverage in [0.88, 0.92]): M4
+  M1 - M0 mean monthly iscore diff +8.330 [+6.966,+9.693] bps, months lower 1/66 (descriptive)
+  M2 - M0 mean monthly iscore diff -0.166 [-0.443,+0.111] bps, months lower 40/66 (descriptive)
+  M3 - M0 mean monthly iscore diff -0.081 [-0.238,+0.077] bps, months lower 40/66 (descriptive)
+  M4 - M0 mean monthly iscore diff -1.155 [-1.735,-0.575] bps, months lower 43/66 (descriptive)
+  M5 - M0 mean monthly iscore diff +10.229 [+8.746,+11.712] bps, months lower 1/66 (descriptive)
+[ 2866s] done
