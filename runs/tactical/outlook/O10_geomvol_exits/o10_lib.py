@@ -11,6 +11,7 @@ Exit rules (every rule keeps the protective stop at 1 sigma_60 from the entry an
   E4   at a decision time: a logistic model (C 0.1, standardised) predicts that holding to the next checkpoint earns > 0; close if P < 0.5
 All signals use bars < the bar they act on (decision features are those of the frame, the EMA is causal, E4's features are built from closed bars).
 """
+import json
 import os
 import sys
 import numpy as np
@@ -54,6 +55,30 @@ def spec_of(c, models=None, plog=None, shuf=None, seed=SEED):
     e = c["exit"]; kind = "E1" if e.startswith("E1") else e
     return {"kind": kind, "c": int(e[3]) if kind == "E1" else None, "T": int(c["T"]), "models": models or {}, "plog": plog, "shuf": shuf,
             "rng": np.random.default_rng([seed, 4242]) if shuf is not None else None}
+
+
+def gv_config(sel_path):
+    """The best geometry/volatility exit of the selection span (max t-statistic at 2 bps, PESS, among the configurations that are not E0). Selection numbers only.
+    Reported beside the choice (the choice itself is the pre-registered max over all 14)."""
+    rows = [json.loads(x) for x in open(sel_path, encoding="utf-8")]
+    r = max((r for r in rows if r["exit"] != "E0"), key=lambda r: r["t_2bps"]); return {"exit": r["exit"], "T": int(r["T"])}
+
+
+def arm_configs(cfg, gv):
+    """The arms of a descriptive or prospective run: full arms {name: config}, SHUF arms {name: base arm}, and the paired comparisons [(a, b)] (a - b).
+    CHOICE = the pre-registered choice; E0 = ROBUST's own exit (T 60); E0_240 = E0 with T 240 (left out when it IS the choice); GV = the best non-E0 exit."""
+    e0 = {"exit": "E0", "T": 60}; e0b = {"exit": "E0", "T": 240}
+    full = {"CHOICE": cfg, "E0": e0}
+    if cfg != e0b:
+        full["E0_240"] = e0b
+    if gv != cfg:
+        full["GV"] = gv
+    shuf = {"SHUF": "CHOICE"}
+    pairs = [("CHOICE", "E0"), ("CHOICE", "SHUF")] + ([("CHOICE", "E0_240")] if "E0_240" in full else [])
+    if "GV" in full:
+        shuf["GV_SHUF"] = "GV"; same_t = "E0" if gv["T"] == 60 else ("CHOICE" if cfg == e0b else "E0_240")
+        pairs += [("GV", same_t), ("GV", "GV_SHUF"), ("GV", "CHOICE")]
+    return full, shuf, pairs
 
 
 # ------------------------------------------------------------------ context: bars, decision rows and the exit signals

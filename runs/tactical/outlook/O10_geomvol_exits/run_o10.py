@@ -16,6 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__)); sys.path.insert(0, HERE)
 import o10_lib as O  # noqa: E402
 L9 = O.L9; L8 = O.L8; P5 = O.P5; P2 = O.P2; O3 = O.O3
 LOG = os.path.join(HERE, "run.log"); SEL = os.path.join(HERE, "selection.jsonl"); CHOICE = os.path.join(HERE, "choice.json"); TABLE = os.path.join(HERE, "tables_selection.txt")
+OUT = HERE                                                    # where tables, figures and windows are written (tests redirect it)
 O9SCR = L9.SCRATCH
 FWD_END = pd.Timestamp("2026-10-12 23:59")
 SPAN_NAMES = {"A": "A 2018-07..2020-12 (walk-forward)", "B": "B 2024-07..2025-07-20 (walk-forward)", "C": "C 2025-10-05..2026-10-12 (frozen fit to 2025-07-20)"}
@@ -184,104 +185,98 @@ def buy_hold(s, months):
     return {"log_return": float(np.log(x["close"].iloc[-1] / x["open"].iloc[0])), "max_dd_daily": float((np.maximum.accumulate(z) - z).max())}
 
 
-def run_arms(ctx, rows, S, months, allm, cfg, models, e0_models=None):
-    """The arms of one span: CHOICE (FULL), SHUF, E0 (ROBUST's exit, T 60) and E0T (E0 at the choice's T, when T differs), both fills.
-    Returns {(arm, fills): (trade frame, raw trades)} and E4's probability log of the FULL arm."""
+def run_arms(ctx, rows, S, months, allm, full, shuf_of, models_t):
+    """The arms of one span (O.arm_configs), both fills. models_t: {T: E4 models}. A SHUF arm permutes the exit signal of its base arm within the month
+    (E4: draws from the base arm's probabilities of the same month). Returns {(arm, fills): (trade frame, raw trades)}."""
     aL, aS = L9.gate_masks(S["p"], S["dv"], O.ENTRY["delta"], O.ENTRY["g"]); out = {}
-    e0 = {"exit": "E0", "T": 60}; e0t = {"exit": "E0", "T": cfg["T"]}
     for fn, pess in FILLS.items():
-        plog = []
-        out[("CHOICE", fn)] = O.trades10(ctx, rows, O.spec_of(cfg, models=models, plog=plog), S, S["sig"], aL, aS, pess)
-        out[("E0", fn)] = O.trades10(ctx, rows, O.spec_of(e0), S, S["sig"], aL, aS, pess)
-        if cfg["T"] != 60:
-            out[("E0T", fn)] = O.trades10(ctx, rows, O.spec_of(e0t), S, S["sig"], aL, aS, pess)
-        kind = O.spec_of(cfg)["kind"]; c2, sx = O.make_shuf(ctx, S["sig"], kind, allm)
-        shuf = None
-        if kind == "E4":
-            shuf = {}
-            for mo, P in plog:
-                shuf.setdefault(mo, []).append(P)
-            shuf = {k: np.array(v) for k, v in shuf.items()}
-        out[("SHUF", fn)] = O.trades10(c2, rows, O.spec_of(cfg, models=models, shuf=shuf), S, sx, aL, aS, pess)
+        plogs = {}
+        for name, c in full.items():
+            plogs[name] = []
+            out[(name, fn)] = O.trades10(ctx, rows, O.spec_of(c, models=models_t.get(c["T"], {}) if c["exit"] == "E4" else None, plog=plogs[name]), S, S["sig"], aL, aS, pess)
+        for name, base in shuf_of.items():
+            c = full[base]; kind = O.spec_of(c)["kind"]; c2, sx = O.make_shuf(ctx, S["sig"], kind, allm); sh = None
+            if kind == "E4":
+                sh = {}
+                for mo, P in plogs[base]:
+                    sh.setdefault(mo, []).append(P)
+                sh = {k: np.array(v) for k, v in sh.items()}
+            out[(name, fn)] = O.trades10(c2, rows, O.spec_of(c, models=models_t.get(c["T"], {}) if c["exit"] == "E4" else None, shuf=sh), S, sx, aL, aS, pess)
     return out
 
 
-def e4_models_for(sp, cfg, ctx, rows, S, months, recs_sel, recs_b):
-    """E4's models for a span: A trains on its own past; B on the selection pool + its own past; C one fit at the cut on the selection pool + B."""
-    if cfg["exit"] != "E4":
-        return {}, None
-    aL, aS = L9.gate_masks(S["p"], S["dv"], O.ENTRY["delta"], O.ENTRY["g"]); Tt = cfg["T"]
+def e4_models_for(sp, Tt, ctx, rows, S, months, recs_sel, recs_b):
+    """E4's models for a span and T: A trains on its own past; B on the selection pool + its own past; C one fit at the cut on the selection pool + B."""
+    aL, aS = L9.gate_masks(S["p"], S["dv"], O.ENTRY["delta"], O.ENTRY["g"])
     if sp == "C":
-        m = O.e4_fit(O.cat_rec([recs_sel[Tt], recs_b[Tt]]), O3.TRAIN_END); assert m is not None; return {"*": m}, None
-    tr = O.simulate10(ctx, rows, O.spec_of({"exit": "E0", "T": Tt}), S["sig"], S["sig"], aL, aS, pess=True); own = O.e4_records(ctx, tr)
-    pool = O.cat_rec([own] if sp == "A" else [recs_sel[Tt], own])
-    return O.e4_models(pool, months), own
+        m = O.e4_fit(O.cat_rec([recs_sel[Tt], recs_b[Tt]]), O3.TRAIN_END); assert m is not None; return {"*": m}
+    own = O.e4_records(ctx, O.simulate10(ctx, rows, O.spec_of({"exit": "E0", "T": Tt}), S["sig"], S["sig"], aL, aS, pess=True))
+    return O.e4_models(O.cat_rec([own] if sp == "A" else [recs_sel[Tt], own]), months)
 
 
 def describe():
-    ch = choice_gate(); cfg = ch["cfg"]
+    ch = choice_gate(); cfg = ch["cfg"]; gv = O.gv_config(SEL); full, shuf_of, pairs = O.arm_configs(cfg, gv)
     nice(); t0 = time.time(); assert free_gb() >= 8, "less than 8 GB free RAM"
     out_p = os.path.join(HERE, "describe.jsonl")
     if os.path.exists(out_p):
         raise SystemExit("REFUSED: describe.jsonl exists; the descriptive run is made once.")
+    log("arms", full, "SHUF of", shuf_of, "pairs", pairs)
     TF = L8.load_train_frame(); s_cut = L8.load_bars_cut(); X = L9.load_train_extras(TF, s_cut); cut = {}
     recs_sel = {Tt: dict(np.load(os.path.join(O.SCRATCH, f"recs_sel_T{Tt}.npz"))) for Tt in O.TS}; recs_b = {}
-    rec = []; res = {}; trades = {}; bh = {}; frames = {}; gc = O.gcols()
+    e4_ts = sorted({c["T"] for c in full.values() if c["exit"] == "E4"})
+    rec = []; res = {}; trades = {}; bh = {}; frames = {}; gc = O.gcols(); aL = aS = None
     for sp in ("B", "C", "A"):
         s, DF, S, months, allm = prepare_span(sp, TF, X, cut); ctx = O.make_ctx(s, DF, S, gc)
-        mo_of = ctx["mo_row"]; rows = np.where(np.isin(mo_of, months) & np.isfinite(S["sig"]))[0]
-        models, own = e4_models_for(sp, cfg, ctx, rows, S, months, recs_sel, recs_b)
+        rows = np.where(np.isin(ctx["mo_row"], months) & np.isfinite(S["sig"]))[0]
         if sp == "B":                                                         # B's own E0 checkpoints (both T) feed C's single fit
             aL, aS = L9.gate_masks(S["p"], S["dv"], O.ENTRY["delta"], O.ENTRY["g"])
             for Tt in O.TS:
                 recs_b[Tt] = O.e4_records(ctx, O.simulate10(ctx, rows, O.spec_of({"exit": "E0", "T": Tt}), S["sig"], S["sig"], aL, aS, pess=True))
-        log("span", sp, "valid decisions", len(rows), "E4 models", len(models), f"{time.time() - t0:.0f}s")
-        arms = run_arms(ctx, rows, S, months, allm, cfg, models); bh[sp] = buy_hold(s, months); trades[sp] = arms; allf = []
+        models_t = {Tt: e4_models_for(sp, Tt, ctx, rows, S, months, recs_sel, recs_b) for Tt in e4_ts}
+        log("span", sp, "valid decisions", len(rows), "E4 models", {Tt: len(m) for Tt, m in models_t.items()}, f"{time.time() - t0:.0f}s")
+        arms = run_arms(ctx, rows, S, months, allm, full, shuf_of, models_t); bh[sp] = buy_hold(s, months); trades[sp] = arms; allf = []
         for (arm, fn), (tf, tr) in arms.items():
             d = descr10(tf, months, s); d.update({"span": sp, "arm": arm, "fills": fn}); res[(sp, arm, fn)] = d; rec.append(d); allf.append(tf.assign(arm=arm, fills=fn))
         pd.concat(allf).to_csv(os.path.join(HERE, f"trades_{sp}.csv.gz"), index=False)
         if sp in ("A", "B"):
-            frames[sp] = (ctx, S, models)
-    paired = {}
-    for sp in ("B", "C", "A"):
-        paired[sp] = {}
-        for other in ("E0", "E0T", "SHUF"):
-            if (sp, other, "PESS") in res:
-                paired[sp][other] = O.paired_monthly(res[(sp, "CHOICE", "PESS")]["monthly_2bps"], res[(sp, other, "PESS")]["monthly_2bps"])
+            frames[sp] = (ctx, S, models_t)
+    paired = {sp: {f"{a} - {b}": O.paired_monthly(res[(sp, a, "PESS")]["monthly_2bps"], res[(sp, b, "PESS")]["monthly_2bps"]) for a, b in pairs} for sp in ("B", "C", "A")}
     with open(out_p, "w", encoding="utf-8") as f:
         for d in rec:
             f.write(json.dumps(d) + "\n")
-        f.write(json.dumps({"verdict": "descriptive", "buy_hold": bh, "choice": ch, "paired_monthly_2bps_PESS_choice_minus": paired}) + "\n")
-    write_tables(res, bh, ch, paired)
-    make_figures(trades, cfg)
-    make_windows(trades, frames, cfg)
+        f.write(json.dumps({"verdict": "descriptive", "buy_hold": bh, "choice": ch, "arms": full, "shuf_of": shuf_of, "paired_monthly_2bps_PESS": paired}) + "\n")
+    write_tables(res, bh, ch, paired, full, shuf_of)
+    make_figures(trades, full)
+    make_windows(trades, frames, full)
     log("describe done", f"{time.time() - t0:.0f}s"); json.dump({"runtime_s": time.time() - t0}, open(os.path.join(HERE, "runtime_describe.json"), "w"))
 
 
-def arm_keys(res, sp):
-    return [k for k in ("CHOICE", "E0", "E0T", "SHUF") if (sp, k, "PESS") in res]
+ORDER = ("CHOICE", "E0", "E0_240", "SHUF", "GV", "GV_SHUF")
+COL = {"CHOICE": "#d55181", "E0": "#9a9890", "E0_240": "#c98500", "SHUF": "#9085e9", "GV": "#2a9d8f", "GV_SHUF": "#6b8fb5"}
 
 
-def write_tables(res, bh, ch, paired):
+def write_tables(res, bh, ch, paired, full, shuf_of):
     o = []; Q = o.append; f = lambda x, p=2: "n/a" if x is None else f"{x:.{p}f}"
     Q("O10 DESCRIPTIVE results on spans already seen by O8/O9 (A, B, C). No verdict: these spans informed the design (SPEC \"Spans and selection\").")
-    Q(f"choice: {ch['config']} on ROBUST's entry {ch['entry']}  |  E0 = ROBUST's own exit (target 2 sigma, T 60)  |  E0T = E0 at the choice's T  |  SHUF = the exit signal permuted within the month")
+    Q(f"entry (all arms): ROBUST {ch['entry']}. Arms: " + "; ".join(f"{k} = {O.cfg_name(c)}" for k, c in full.items()) + "; " + "; ".join(f"{k} = {b}'s exit signal permuted within the month" for k, b in shuf_of.items()))
+    Q("CHOICE = the pre-registered choice (max t over the 14 configurations); E0 = ROBUST's own exit (target 2 sigma, T 60); GV = the best geometry/volatility exit of the selection span (max t among the non-E0 configurations; an added arm, named from selection numbers only).")
+    Q("SHUF for E0-type exits (price levels only): the sigma_60 that sizes the stop and the target is permuted within the month; the entries keep the real sigma. For E1/E2a/E2b/E3 the exit signal series is permuted; for E4 its probability is drawn from the month's probabilities of the base arm.")
     Q("Returns in % of capital per month: sum of position log returns, no compounding. t = t-statistic of the monthly net at 2 bps; CI = 95% t-interval of the monthly mean.")
     for sp in ("B", "C", "A"):
         any_ = res[(sp, "CHOICE", "PESS")]
         Q(f"\n===== {SPAN_NAMES[sp]}; {len(any_['months'])} months; buy-and-hold log return {100 * bh[sp]['log_return']:+.1f}% (daily-close max DD {100 * bh[sp]['max_dd_daily']:.1f}%) =====")
         Q(f"{'arm':8s} {'fills':5s} {'trades':>6s} {'hit%':>5s} {'win':>6s} {'loss':>6s} {'hold':>6s} {'m0bp%':>7s} {'m2bp%':>7s} {'m5bp%':>7s} {'t2':>6s} {'CI2 lo':>7s} {'CI2 hi':>7s} {'mo+':>6s} {'Sharpe':>6s} {'maxDD%':>7s} {'Calmar':>7s} reasons | owner target")
-        for key in arm_keys(res, sp):
+        for key in [k for k in ORDER if (sp, k, "PESS") in res]:
             for fn in FILLS:
                 d = res[(sp, key, fn)]; rs = " ".join(f"{k}:{v}" for k, v in sorted(d["reasons"].items()))
                 Q(f"{key:8s} {fn:5s} {d['n_trades']:6d} {f(None if d['hit_2bps'] is None else 100 * d['hit_2bps'], 1):>5s} {f(d['avg_win_bps'], 1):>6s} {f(d['avg_loss_bps'], 1):>6s} {f(d['mean_hold_min'], 1):>6s} "
                   f"{100 * d['mean_m_0bps']:+7.3f} {100 * d['mean_m_2bps']:+7.3f} {100 * d['mean_m_5bps']:+7.3f} {d['t_2bps']:+6.2f} {100 * d['ci_2bps'][1]:+7.3f} {100 * d['ci_2bps'][2]:+7.3f} "
                   f"{d['months_pos_2bps']:2d}/{len(d['months']):<2d} {f(d['sharpe_daily']):>6s} {100 * d['max_dd_2bps']:7.2f} {f(d['calmar']):>7s} {rs} | {'MET' if d['target_met'] else 'not met'}")
-        for other, pr in paired[sp].items():
-            Q(f"paired monthly net at 2 bps, PESS: CHOICE - {other}: mean {100 * pr['mean']:+.3f}%  95% t-interval [{100 * pr['lo']:+.3f}, {100 * pr['hi']:+.3f}]  t {pr['t']:+.2f}  CHOICE better in {pr['months_better']}/{pr['n']} months")
+        for name, pr in paired[sp].items():
+            Q(f"paired monthly net at 2 bps, PESS: {name}: mean {100 * pr['mean']:+.3f}%  95% t-interval [{100 * pr['lo']:+.3f}, {100 * pr['hi']:+.3f}]  t {pr['t']:+.2f}  first better in {pr['months_better']}/{pr['n']} months")
         Q("monthly net at 2 bps, CHOICE PESS (%): " + " ".join(f"{m[2:]}:{100 * x:+.1f}" for m, x in zip(any_["months"], any_["monthly_2bps"])))
     Q("\nNote: E4's models: A trains on A's own earlier checkpoints, B on the selection pool + B's own, C one fit at 2025-07-21 on the selection pool + B. A month without a model leaves E4 holding (stop and time stop only).")
-    open(os.path.join(HERE, "tables.txt"), "w", encoding="utf-8").write("\n".join(o) + "\n"); print("\n".join(o))
+    open(os.path.join(OUT, "tables.txt"), "w", encoding="utf-8").write("\n".join(o) + "\n"); print("\n".join(o))
 
 
 def curve(tf, cost=2.0):
@@ -291,15 +286,13 @@ def curve(tf, cost=2.0):
     return t, c, dd
 
 
-COL = {"CHOICE": "#d55181", "E0": "#9a9890", "E0T": "#c98500", "SHUF": "#9085e9"}
-
-
-def make_figures(trades, cfg):
+def make_figures(trades, full):
     import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(HERE)))), "src"))
     from neural_trade.visualization import theme as TH
-    keys = [("CHOICE", "PESS", "-"), ("CHOICE", "orig", ":"), ("E0", "PESS", "-"), ("E0", "orig", ":"), ("E0T", "PESS", "-"), ("SHUF", "PESS", "-")]
-    nm = f"{cfg['exit']}_T{cfg['T']}"
+    present = [k for k in ORDER if (k, "PESS") in trades["B"]]
+    keys = [(k, "PESS", "-") for k in present] + [(k, "orig", ":") for k in ("CHOICE", "E0", "GV") if k in present]
+    nm = "  ".join(f"{k} = {O.cfg_name(c)}" for k, c in full.items())
 
     def style(a):
         a.set_facecolor(TH.SURFACE); a.grid(color=TH.GRID, lw=0.6); a.tick_params(colors=TH.MUTED); a.axhline(0, color=TH.NEUTRAL, lw=0.8)
@@ -308,23 +301,20 @@ def make_figures(trades, cfg):
     fig, ax = plt.subplots(2, 3, figsize=(18, 8), facecolor=TH.PAPER)
     for j, sp in enumerate(("B", "C", "A")):
         for key, fn, ls in keys:
-            if (key, fn) not in trades[sp]:
-                continue
             t, c, dd = curve(trades[sp][(key, fn)][0])
             if len(t):
-                lw = 1.7 if key == "CHOICE" else 1.0
+                lw = 1.7 if key in ("CHOICE", "GV") else 1.0
                 ax[0, j].plot(t, 100 * c, ls, color=COL[key], lw=lw, label=f"{key} {fn}"); ax[1, j].plot(t, -100 * dd, ls, color=COL[key], lw=lw)
         ax[0, j].set_title(SPAN_NAMES[sp], color=TH.INK, fontsize=10)
         ax[0, j].set_ylabel("cumulative net return, 2 bps (% of capital)", color=TH.MUTED); ax[1, j].set_ylabel("drawdown (% of capital)", color=TH.MUTED)
         style(ax[0, j]); style(ax[1, j])
     ax[0, 0].legend(facecolor=TH.SURFACE, edgecolor=TH.AXIS, labelcolor=TH.INK, fontsize=7)
-    fig.suptitle(f"O10 descriptive: equity and drawdown of {nm} (CHOICE), E0 (ROBUST's exit), E0T and SHUF. Solid = PESS fills, dotted = original fills", color=TH.INK)
-    fig.tight_layout(); fig.savefig(os.path.join(HERE, "equity_dd.png"), dpi=110, facecolor=TH.PAPER); plt.close(fig)
-    # holding times and exit R-multiples (gross log return / entry sigma_60), PESS fills
-    fig, ax = plt.subplots(2, 3, figsize=(18, 8), facecolor=TH.PAPER)
-    dist = {}
+    fig.suptitle(f"O10 descriptive: equity and drawdown (position returns in order, no compounding). Solid = PESS fills, dotted = original fills.  {nm}", color=TH.INK, fontsize=9)
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "equity_dd.png"), dpi=110, facecolor=TH.PAPER); plt.close(fig)
+    fig, ax = plt.subplots(2, 3, figsize=(18, 8), facecolor=TH.PAPER); dist = {}
+    dkeys = [k for k in ("CHOICE", "E0", "GV", "SHUF", "GV_SHUF") if k in present]
     for j, sp in enumerate(("B", "C", "A")):
-        for key in ("CHOICE", "E0", "SHUF"):
+        for key in dkeys:
             tf = trades[sp][(key, "PESS")][0]
             if len(tf) == 0:
                 continue
@@ -334,60 +324,63 @@ def make_figures(trades, cfg):
         ax[0, j].set_title(SPAN_NAMES[sp], color=TH.INK, fontsize=10); ax[0, j].set_xlabel("holding time (minutes, entry bar to exit bar)", color=TH.MUTED); ax[1, j].set_xlabel("exit R-multiple (gross log return / entry sigma_60, clipped to [-4, 6])", color=TH.MUTED)
         for r in (0, 1):
             style(ax[r, j]); ax[r, j].legend(facecolor=TH.SURFACE, edgecolor=TH.AXIS, labelcolor=TH.INK, fontsize=7); ax[r, j].set_ylabel("density", color=TH.MUTED)
-    fig.suptitle(f"O10 descriptive: distribution of holding times (top) and exit R-multiples (bottom), {nm} against E0 and SHUF (PESS fills)", color=TH.INK)
-    fig.tight_layout(); fig.savefig(os.path.join(HERE, "hold_R.png"), dpi=110, facecolor=TH.PAPER); plt.close(fig)
+    fig.suptitle(f"O10 descriptive: distribution of holding times (top) and exit R-multiples (bottom), PESS fills.  {nm}", color=TH.INK, fontsize=9)
+    fig.tight_layout(); fig.savefig(os.path.join(OUT, "hold_R.png"), dpi=110, facecolor=TH.PAPER); plt.close(fig)
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
     pf = make_subplots(rows=2, cols=3, subplot_titles=[SPAN_NAMES[x] for x in ("B", "C", "A")] + [""] * 3)
     for j, sp in enumerate(("B", "C", "A"), 1):
         for key, fn, ls in keys:
-            if (key, fn) not in trades[sp]:
-                continue
             t, c, dd = curve(trades[sp][(key, fn)][0])
             if len(t):
                 kw = dict(x=t, mode="lines", line=dict(color=COL[key], dash="solid" if ls == "-" else "dot"), name=f"{key} {fn}", legendgroup=f"{key}{fn}", showlegend=(j == 1))
                 pf.add_trace(go.Scatter(y=100 * c, **kw), row=1, col=j); kw["showlegend"] = False; pf.add_trace(go.Scatter(y=-100 * dd, **kw), row=2, col=j)
-    pf.update_layout(template="plotly_dark", paper_bgcolor=TH.PAPER, plot_bgcolor=TH.SURFACE, height=700, title=f"O10 descriptive equity (top, % of capital, 2 bps) and drawdown (bottom), {nm}")
-    open(os.path.join(HERE, "equity_dd.plotly.json"), "w", encoding="utf-8").write(pf.to_json())
+    pf.update_layout(template="plotly_dark", paper_bgcolor=TH.PAPER, plot_bgcolor=TH.SURFACE, height=700, title=f"O10 descriptive equity (top, % of capital, 2 bps) and drawdown (bottom). {nm}")
+    open(os.path.join(OUT, "equity_dd.plotly.json"), "w", encoding="utf-8").write(pf.to_json())
     ph = make_subplots(rows=2, cols=3, subplot_titles=[SPAN_NAMES[x] for x in ("B", "C", "A")] + [""] * 3)
     for j, sp in enumerate(("B", "C", "A"), 1):
-        for key in ("CHOICE", "E0", "SHUF"):
+        for key in dkeys:
             if (sp, key) in dist:
                 hold, R = dist[(sp, key)]
                 ph.add_trace(go.Histogram(x=hold, name=key, marker_color=COL[key], opacity=0.55, histnorm="probability density", legendgroup=key, showlegend=(j == 1)), row=1, col=j)
                 ph.add_trace(go.Histogram(x=np.clip(R, -4, 6), name=key, marker_color=COL[key], opacity=0.55, histnorm="probability density", legendgroup=key, showlegend=False), row=2, col=j)
-    ph.update_layout(template="plotly_dark", paper_bgcolor=TH.PAPER, plot_bgcolor=TH.SURFACE, height=700, barmode="overlay", title=f"O10 holding time (min, top) and exit R-multiple (bottom), {nm}")
-    open(os.path.join(HERE, "hold_R.plotly.json"), "w", encoding="utf-8").write(ph.to_json())
+    ph.update_layout(template="plotly_dark", paper_bgcolor=TH.PAPER, plot_bgcolor=TH.SURFACE, height=700, barmode="overlay", title=f"O10 holding time (min, top) and exit R-multiple (bottom). {nm}")
+    open(os.path.join(OUT, "hold_R.plotly.json"), "w", encoding="utf-8").write(ph.to_json())
 
 
-def make_windows(trades, frames, cfg):
-    """Six real example trades of the choice (PESS; three winners and three losers; spans A and B, cut-file bars only, <= 2025-07-20) with the exit signal:
-    the 1-minute EMA20 (E2a), the trailing level (E1), or the decision-time values of slope3 / dV / sigma_15 / P (E2b, E3, E4)."""
-    out = {"note": "cut-file bars only (<= 2025-07-20)", "choice": cfg, "examples": []}; rng = np.random.default_rng(7)
-    sp_ = O.spec_of(cfg)
-    for sp, win, nsel in (("B", True, 2), ("B", False, 1), ("A", True, 1), ("A", False, 2)):
-        tf, tr = trades[sp][("CHOICE", "PESS")]; ctx, S, models = frames[sp]
-        net = tf["ret_gross"].values - 2e-4; want = (net > 0) if win else (net <= 0); idx = np.where(want)[0]
-        sig = np.array([r in SIGNAL_REASONS for r in tf["reason"].values]); pref = idx[sig[idx]] if sig[idx].any() else idx
-        for i in rng.choice(pref, size=min(nsel, len(pref)), replace=False):
-            e = int(tr["ebar"][i]); x = int(tr["xbar"][i]); d = int(tr["dec"][i]); side = int(tr["side"][i]); p0 = float(tr["epx"][i]); s0 = float(tr["sig"][i])
-            lo = max(0, d - 8); hi = min(ctx["n"] - 1, x + 12); ex = {"span": sp, "decision_time": str(ctx["idx"][d]), "entry_time": str(ctx["idx"][e]), "exit_time": str(ctx["idx"][x]), "side": side,
-                                                                       "entry_px": p0, "exit_px": float(tr["xpx"][i]), "reason": str(tr["reason"][i]), "gross_ret": float(tr["ret"][i]), "sigma_60": s0,
-                                                                       "stop_px": p0 * (1 - side * s0), "p_up": float(S["p"][tr["row"][i]]),
-                                                                       "bars": [{"t": str(ctx["idx"][j]), "o": float(ctx["O"][j]), "h": float(ctx["Hi"][j]), "l": float(ctx["Lo"][j]), "c": float(ctx["Cl"][j]), "ema20": float(ctx["ema"][j])} for j in range(lo, hi + 1)]}
-            if sp_["kind"] == "E1":
-                m = min(x, e + cfg["T"] - 1) - e; ext = (ctx["Hi"] if side == 1 else ctx["Lo"])[e + 1:e + max(m, 1)]
-                lv = O.trail_levels(side, p0, ex["stop_px"], ext, O.sigma15_path(ctx, e, max(m, 1)), sp_["c"]); ex["trail"] = [{"t": str(ctx["idx"][e + 1 + q]), "level": float(v)} for q, v in enumerate(lv)]
-            if sp_["kind"] in ("E2b", "E3", "E4"):
-                dec = []
-                for a in range(e + 1, x + 1):
-                    r = int(ctx["barrow"][a])
-                    if r >= 0:
-                        P = O.e4_prob(ctx, O.spec_of(cfg, models=models), r, a, e, side, p0, s0) if sp_["kind"] == "E4" else None
-                        dec.append({"t": str(ctx["idx"][a]), "slope3_15m_ema20": float(ctx["slope"][r]), "dV": float(ctx["dvx"][r]), "sigma_15": float(ctx["s15"][r]), "P_hold": None if P is None else float(P)})
-                ex["decisions"] = dec
-            out["examples"].append(ex)
-    json.dump(out, open(os.path.join(HERE, "windows.json"), "w"), indent=1)
+def make_windows(trades, frames, full):
+    """Real example trades (PESS; spans A and B, cut-file bars only, <= 2025-07-20) with the exit drawn: the CHOICE (one winner and one loser per span) and the GV arm
+    (two winners and one loser in B, one winner and two losers in A). The signal: the 1-minute EMA20 (all), the stop and target (E0), the trailing level (E1) or the
+    decision-time values of slope3 / dV / sigma_15 / P (E2b, E3, E4); trades that exited on the signal are preferred."""
+    out = {"note": "cut-file bars only (<= 2025-07-20)", "arms": {k: O.cfg_name(c) for k, c in full.items()}, "examples": []}; rng = np.random.default_rng(7)
+    for name, counts in (("CHOICE", {("B", True): 1, ("B", False): 1, ("A", True): 1, ("A", False): 1}), ("GV", {("B", True): 2, ("B", False): 1, ("A", True): 1, ("A", False): 2})):
+        if name not in full:
+            continue
+        cfg = full[name]; sp_ = O.spec_of(cfg)
+        for (sp, win), nsel in counts.items():
+            tf, tr = trades[sp][(name, "PESS")]; ctx, S, models_t = frames[sp]
+            net = tf["ret_gross"].values - 2e-4; want = (net > 0) if win else (net <= 0); idx = np.where(want)[0]
+            sig = np.array([r in SIGNAL_REASONS for r in tf["reason"].values]); pref = idx[sig[idx]] if sig[idx].any() else idx
+            for i in rng.choice(pref, size=min(nsel, len(pref)), replace=False):
+                e = int(tr["ebar"][i]); x = int(tr["xbar"][i]); d = int(tr["dec"][i]); side = int(tr["side"][i]); p0 = float(tr["epx"][i]); s0 = float(tr["sig"][i])
+                lo = max(0, d - 8); hi = min(ctx["n"] - 1, x + 12)
+                ex = {"arm": name, "config": O.cfg_name(cfg), "span": sp, "decision_time": str(ctx["idx"][d]), "entry_time": str(ctx["idx"][e]), "exit_time": str(ctx["idx"][x]), "side": side,
+                      "entry_px": p0, "exit_px": float(tr["xpx"][i]), "reason": str(tr["reason"][i]), "gross_ret": float(tr["ret"][i]), "sigma_60": s0, "stop_px": p0 * (1 - side * s0),
+                      "target_px": p0 * (1 + side * O.TAU * s0) if sp_["kind"] == "E0" else None, "p_up": float(S["p"][tr["row"][i]]),
+                      "bars": [{"t": str(ctx["idx"][j]), "o": float(ctx["O"][j]), "h": float(ctx["Hi"][j]), "l": float(ctx["Lo"][j]), "c": float(ctx["Cl"][j]), "ema20": float(ctx["ema"][j])} for j in range(lo, hi + 1)]}
+                if sp_["kind"] == "E1":
+                    m = max(min(x, e + cfg["T"] - 1) - e, 1); ext = (ctx["Hi"] if side == 1 else ctx["Lo"])[e + 1:e + m]
+                    lv = O.trail_levels(side, p0, ex["stop_px"], ext, O.sigma15_path(ctx, e, m), sp_["c"]); ex["trail"] = [{"t": str(ctx["idx"][e + 1 + q]), "level": float(v)} for q, v in enumerate(lv)]
+                if sp_["kind"] in ("E2b", "E3", "E4"):
+                    dec = []
+                    for a in range(e + 1, x + 1):
+                        r = int(ctx["barrow"][a])
+                        if r >= 0:
+                            P = O.e4_prob(ctx, O.spec_of(cfg, models=models_t.get(cfg["T"], {})), r, a, e, side, p0, s0) if sp_["kind"] == "E4" else None
+                            dec.append({"t": str(ctx["idx"][a]), "slope3_15m_ema20": float(ctx["slope"][r]), "dV": float(ctx["dvx"][r]), "sigma_15": float(ctx["s15"][r]), "P_hold": None if P is None else float(P)})
+                    ex["decisions"] = dec
+                out["examples"].append(ex)
+    json.dump(out, open(os.path.join(OUT, "windows.json"), "w"), indent=1)
 
 
 # ------------------------------------------------------------------ freeze

@@ -388,7 +388,7 @@ def test_complete_months_and_score_refusals(tmp_path, monkeypatch):
         SP.main()
 
 
-@pytest.mark.parametrize("cfg", [{"exit": "E1c1", "T": 240}, {"exit": "E4", "T": 60}, {"exit": "E2a", "T": 60}, {"exit": "E0", "T": 60}])
+@pytest.mark.parametrize("cfg", [{"exit": "E1c1", "T": 240}, {"exit": "E4", "T": 60}, {"exit": "E2a", "T": 60}, {"exit": "E0", "T": 60}, {"exit": "E0", "T": 240}])
 def test_score_core_on_synthetic_bars_structure_and_paired_series(cfg):
     s = synth(110000, "2026-06-10"); m0 = pd.Timestamp("2026-07-10 00:00"); old = O.E4_MIN; O.E4_MIN = 20
     try:
@@ -397,7 +397,46 @@ def test_score_core_on_synthetic_bars_structure_and_paired_series(cfg):
         O.E4_MIN = old
     res = SP.score_core(art, s, cfg, ["2026-07", "2026-08"])
     assert res["months"] == ["2026-07", "2026-08"] and res["c1_CHOICE"]["n_days"] == 62 and res["CHOICE_minus_E0"]["n_days"] == 62
-    assert set(res) >= {"c1_CHOICE", "CHOICE_minus_E0", "CHOICE_minus_SHUF", "exits_add", "strategy_works", "owner_target_met"} and ("CHOICE_minus_E0T" in res) == (cfg["T"] != 60)
+    assert set(res) >= {"c1_CHOICE", "CHOICE_minus_E0", "CHOICE_minus_SHUF", "exits_add", "strategy_works", "owner_target_met"} and ("CHOICE - E0_240" in res["paired_daily"]) == (cfg != {"exit": "E0", "T": 240})
     assert res["stats"]["CHOICE"]["n_trades"] > 5 and res["stats"]["E0"]["n_trades"] > 5 and res["stats"]["SHUF"]["n_trades"] >= 0
-    if cfg["exit"] == "E0":                                                                              # the choice is E0: it adds nothing over itself
+    if cfg == {"exit": "E0", "T": 60}:                                                                   # the choice is E0 itself: it adds nothing over itself
         assert res["CHOICE_minus_E0"]["mean"] == 0 and res["exits_add"] is False
+    assert res["gv"] == {"exit": "E4", "T": 60} and set(res["arms"]) >= {"CHOICE", "E0"} and ("GV" in res["arms"]) == (cfg != res["gv"])
+
+
+# ------------------------------------------------------------------ the arms and the descriptive post-processing
+def test_gv_is_the_best_non_e0_exit_of_the_selection_and_arms_follow_the_choice():
+    sel = os.path.join(HERE0, "selection.jsonl")
+    if not os.path.exists(sel):
+        pytest.skip("selection.jsonl not produced yet")
+    rows = [json.loads(x) for x in open(sel)]; gv = O.gv_config(sel)
+    best = max((r for r in rows if r["exit"] != "E0"), key=lambda r: r["t_2bps"]); assert gv == {"exit": best["exit"], "T": best["T"]} and gv["exit"] != "E0"
+    e0b = {"exit": "E0", "T": 240}; full, shuf_of, pairs = O.arm_configs(e0b, {"exit": "E4", "T": 60})
+    assert list(full) == ["CHOICE", "E0", "GV"] and shuf_of == {"SHUF": "CHOICE", "GV_SHUF": "GV"}                       # the choice IS E0 at T 240: no separate E0_240 arm
+    assert pairs == [("CHOICE", "E0"), ("CHOICE", "SHUF"), ("GV", "E0"), ("GV", "GV_SHUF"), ("GV", "CHOICE")]
+    full, shuf_of, pairs = O.arm_configs({"exit": "E2a", "T": 240}, {"exit": "E4", "T": 240})
+    assert list(full) == ["CHOICE", "E0", "E0_240", "GV"] and ("GV", "E0_240") in pairs
+    full, shuf_of, pairs = O.arm_configs({"exit": "E4", "T": 60}, {"exit": "E4", "T": 60}); assert "GV" not in full and "GV_SHUF" not in shuf_of
+
+
+def test_run_arms_and_the_descriptive_post_processing_on_synthetic_spans(tmp_path, monkeypatch):
+    monkeypatch.setattr(R, "OUT", str(tmp_path)); cfg = {"exit": "E0", "T": 240}; gv = {"exit": "E4", "T": 60}; full, shuf_of, pairs = O.arm_configs(cfg, gv)
+    res = {}; trades = {}; frames = {}; bh = {}; months = ["2024-01", "2024-02"]
+    s, DF, S, ctx = _syn_ctx(60000); rows = np.where(np.isin(ctx["mo_row"], months) & np.isfinite(S["sig"]))[0]; models_t = {60: {"*": _model(-0.1)}}
+    arms = R.run_arms(ctx, rows, S, months, months, full, shuf_of, models_t)
+    assert set(a for a, _ in arms) == {"CHOICE", "E0", "GV", "SHUF", "GV_SHUF"} and {f for _, f in arms} == {"PESS", "orig"}
+    assert all(len(tf) > 20 for tf, _ in arms.values())
+    assert arms[("CHOICE", "PESS")][0]["reason"].isin(["stop", "target", "time"]).all() and arms[("GV", "PESS")][0]["reason"].isin(["learn", "stop", "time"]).any()
+    assert not np.array_equal(arms[("SHUF", "PESS")][0]["exit_px"].values[:20], arms[("CHOICE", "PESS")][0]["exit_px"].values[:20])                  # E0's SHUF changes the exit levels
+    assert (arms[("SHUF", "PESS")][0]["entry_px"].values[:1] > 0).all()
+    for sp in ("B", "C", "A"):
+        trades[sp] = arms; frames[sp] = (ctx, S, models_t); bh[sp] = R.buy_hold(s, months)
+        for (arm, fn), (tf, tr) in arms.items():
+            d = R.descr10(tf, months, s); d.update({"span": sp, "arm": arm, "fills": fn}); res[(sp, arm, fn)] = d
+    paired = {sp: {f"{a} - {b}": O.paired_monthly(res[(sp, a, "PESS")]["monthly_2bps"], res[(sp, b, "PESS")]["monthly_2bps"]) for a, b in pairs} for sp in ("B", "C", "A")}
+    ch = {"entry": O.ENTRY, "cfg": cfg}
+    R.write_tables(res, bh, ch, paired, full, shuf_of); R.make_figures(trades, full); R.make_windows({k: v for k, v in trades.items()}, frames, full)
+    for f in ("tables.txt", "equity_dd.png", "hold_R.png", "equity_dd.plotly.json", "hold_R.plotly.json", "windows.json"):
+        assert (tmp_path / f).stat().st_size > 1000, f
+    w = json.load(open(tmp_path / "windows.json")); assert {e["arm"] for e in w["examples"]} == {"CHOICE", "GV"} and len(w["examples"]) >= 6
+    assert any("decisions" in e for e in w["examples"] if e["arm"] == "GV") and all(e["target_px"] is not None for e in w["examples"] if e["arm"] == "CHOICE")
