@@ -142,4 +142,11 @@ any default changes.
   - **Intervals:** 90% return intervals scaled by a frozen HAR forecast (log RV 15/60/240/1440 + hour) beat trailing-RV scaling at the same coverage. At T = 60 the interval score is -2.2% to -4.5% depending on the baseline, 11/11 months, qa PASS. Relevant to D-008 (conformal intervals scaled by realised volatility): a candidate MVP paired test of a HAR scale against `realized_vol`.
   - **Vol-change forecast:** the next-hour change in volatility is predictable beyond HAR levels by +0.02..+0.03 skill, on the forward months and on untouched 2017-18 (qa-deep PASS).
   - **Exposure timing:** using volatility to time BTC exposure does not beat de-leveraging (H84).
+- **2026-10-13 (H85, H87): opt-in `CONFORMAL_SCALE: har` is ready as a PR branch.**
+  - Branch: `nt-tactical-harscale`, head e84fea7, based on remediation/plan 6871e8e.
+  - The owner opens the PR, because there is no gh on this machine. Body: D:/nt/prbody_harscale.md.
+  - Default unchanged, golden 455/455.
+  - Refuses training spans under 2 days. A smoke run on 5.7 days: coverage within noise of realized_vol, intervals 9-15% narrower.
+  - Not servable.
+  - Adoption as default needs a real-fold paired study (D-025, D-046).
 - **2026-10-13, owner decision (please record in DECISIONS as an exception to D-050):** download BTC/USDT 1-minute bars after 2025-09-29 into a separate file for the H62 forward test; the main file and the MVP's protected span are unchanged.
