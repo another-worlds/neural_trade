@@ -87,3 +87,21 @@ Top standardised coefficients of the frozen G* (fit on the 365 days ending 2025-
 
 ## Runtime
 Features 110 s; walk-forward 22-95 s per month; total 1,579 s. The feature cache in D:/nt/nt_scratch/o1/ and `frozen_coefs_h60.npz` are local and not in git.
+
+## QA (2026-10-13, qa agent, read-only at ac6a87e; scratch D:/nt/nt_qa_o1_scratch/)
+**Verdict holds as stated: yes; all five checks PASS.**
+1. **Causality and leakage.**
+   - Every feature at anchor a uses bars < a, and the targets start at bar a.
+   - The 15-minute groups end at a-1, which a pandas resample confirms.
+   - A probe that overwrote every bar from a onward left all features unchanged.
+   - Training labels end before each month (frozen fit: by 2025-07-20 20:58).
+   - No forbidden bar exists in either file.
+2. **Independent recompute.** The QA's own sklearn ridge reproduced every look and forward month at H = 60 exactly (|dSpearman| 0, |dQLIKE| 2e-14).
+3. **Selection.** G* was chosen on the selection span only, and the SPEC predates the run.
+4. **QLIKE.** QLIKE uses the SPEC form.
+5. **Robustness** (information only):
+   - **Forward gain decays over the year:** about +0.009 in 2025-10..2026-02, about +0.0025 in 2026-03..09. Per month: +0.0117, +0.0082, +0.0063, +0.0110, +0.0076, +0.0030, +0.0014, +0.0014, +0.0035, +0.0034, +0.0021, +0.0027.
+   - **Without the partial 2025-10:** +0.0046 [+0.0025, +0.0067], 11/11 positive. The sign and the interval survive; the +0.005 size bar does not.
+   - **Leave-one-month-out:** 4 of 12 forward cases and 1 of 13 look cases fall below +0.005.
+   - **Reading:** a robust positive gain over linear S3 (the lower bound stays above 0 in every case). The pre-registered size bar is met on a knife edge, and the gain shrinks across the forward year, so the frozen fit ages.
+6. **Minor.** `o1_lib.py` drops rows whose 5th previous hour has zero RV, although S3 uses only 4 previous hours (68 rows). This is causal and harmless.
