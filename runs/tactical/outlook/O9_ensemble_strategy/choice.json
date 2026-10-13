@@ -1,0 +1,23 @@
+{
+ "rule": "highest t-statistic of the monthly net return at 2 bps (PESS fills) on 2021-01..2024-06 among configurations with >= 20 trades per month (SPEC.md)",
+ "config": "ENS_k1.0_doff_g0.0_tauoff_szvt",
+ "cfg": {
+  "k": 1.0,
+  "delta": null,
+  "g": 0.0,
+  "tau": null,
+  "size": "vt"
+ },
+ "t_2bps": 4.0906247265677855,
+ "mean_m_2bps": 0.03760160645372109,
+ "trades_per_month": 136.02380952380952,
+ "n_trades": 5713,
+ "n_months": 42,
+ "n_eligible": 25,
+ "n_configs": 33,
+ "fills": "PESS",
+ "selection_months": [
+  "2021-01",
+  "2024-06"
+ ]
+}
