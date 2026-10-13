@@ -1,0 +1,44 @@
+{
+ "winner": {
+  "feat": "rich+ctx",
+  "model": "hgb",
+  "T": 730,
+  "H": 4,
+  "q": 0.2,
+  "side": "agree",
+  "exit": "time",
+  "size": "fixed"
+ },
+ "dev": {
+  "n": 3432,
+  "cum": 354.4375070534803,
+  "dd": 7.484958915830695,
+  "calmar": 10.533369624719878,
+  "calmar_raw": 10.533369624719878,
+  "hit": 0.5952797202797203,
+  "mean_bps": 10.32743318920397,
+  "valid": true
+ },
+ "baseline": {
+  "feat": "rich",
+  "model": "logreg",
+  "T": 730,
+  "H": 4,
+  "q": 0.1,
+  "side": "follow",
+  "exit": "time",
+  "size": "fixed"
+ },
+ "baseline_dev": {
+  "n": 2118,
+  "cum": 220.49162488438142,
+  "dd": 12.762133289002135,
+  "calmar": 3.8431372406550057,
+  "calmar_raw": 3.8431372406550057,
+  "hit": 0.5915958451369216,
+  "mean_bps": 10.410369446854649,
+  "valid": true
+ },
+ "chosen_by": "best final dev Calmar over 10 climbs (baseline start + 9 random)",
+ "n_distinct_evaluated": 183
+}
