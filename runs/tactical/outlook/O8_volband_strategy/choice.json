@@ -1,0 +1,16 @@
+{
+ "rule": "highest t-statistic of the monthly net return at 2 bps on 2021-01..2024-06, L1 arm (SPEC.md)",
+ "config": "BRK_k1.5_H60_s1.0",
+ "family": "BRK",
+ "k": 1.5,
+ "H": 60,
+ "stop": 1.0,
+ "t_2bps": 3.492654841621236,
+ "mean_m_2bps": 0.04044155661123942,
+ "n_trades": 3645,
+ "n_months": 42,
+ "selection_months": [
+  "2021-01",
+  "2024-06"
+ ]
+}
