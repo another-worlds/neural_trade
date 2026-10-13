@@ -1,0 +1,21 @@
+# O2: 2 cells (physics on/off), 2 shards per cell in parallel, one cell at a time, below-normal priority. Resumable.
+# Code pinned in D:/nt/nt_o2 (commit 287bbc6 + the two o2 configs copied in). Results go to the outlook worktree's store.
+$env:PYTHONPATH = "D:/nt/nt_o2/src"; $env:PYTHONIOENCODING = "utf-8"
+$env:TF_FORCE_GPU_ALLOW_GROWTH = "true"; $env:NT_GPU_MEMORY_LIMIT_MB = "4000"
+Set-Location D:/nt/nt_o2
+$out = "D:/nt/nt_tactical_outlook/runs/tactical/outlook/O2_phys_var8"
+$store = "D:/nt/nt_tactical_outlook/runs/tactical"
+$py = "C:/Users/Step/miniforge3/envs/nt/python.exe"
+foreach ($cell in "o2_none_on", "o2_none_off") {
+  $ps = @()
+  foreach ($sh in "0/2", "1/2") {
+    $tag = $sh.Replace("/", "of")
+    $p = Start-Process -FilePath $py -ArgumentList "-m neural_trade.cli screen configs/tactical/$cell.yaml --store $store --shard $sh" `
+      -RedirectStandardOutput "$out/${cell}_${tag}.log" -RedirectStandardError "$out/${cell}_${tag}.err" -PassThru -WindowStyle Hidden
+    try { $p.PriorityClass = "BelowNormal" } catch {}
+    $ps += $p
+  }
+  $ps | Wait-Process
+  "$(Get-Date -Format T) done $cell" | Add-Content "$out/progress.txt"
+}
+"all done" | Add-Content "$out/progress.txt"
