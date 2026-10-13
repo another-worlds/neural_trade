@@ -45,6 +45,11 @@ for the MVP".
 - **Recompute (owner: "пересчитать"):** every tactical result that read the protected span after 2025-07-20 (H66) is
   recomputed with the hard cutoff 2025-07-20 and its verdict re-stated.
 
+## Hill-climb v2 (owner, 2026-10-13)
+
+- Owner's choices: confirmation by a **lockbox from the past** (months set aside before the climb and never used for any choice), objective **trading Calmar / return at 2 bps round trip**, scale **1 hour**. Method as H67-H80: SPEC committed first, next-open fills, thresholds from the past only, cutoff 2025-07-20, monthly walk-forward, null and planted controls, one lockbox look for the winner.
+- Caveat recorded with the choice: the lockbox months were seen by earlier tactical studies, so its cleanliness is partial.
+
 ## Rigour and budget (exploratory)
 
 - **Data: the static excerpt by default (owner, 2026-10-08: "the whole file only for giant runs"):** tactical runs and
