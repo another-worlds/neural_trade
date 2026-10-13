@@ -49,7 +49,7 @@ Reading note: the Spearman of `rw` for target A is undefined (a constant predict
 
 ## Per-month counts and tables
 Per-month MSE, R2 vs rw, Spearman, skill vs ar, n_te and dropped rows for both arms and every model: `tables.txt` (rows) and
-`results.json`. Scored rows per month are 5,760-6,377 (stride 7). Dropped rows (a zero-RV window): 0 in most months, 10 in 2025-12 (see
+`results.json`. Scored rows per month are 5,760-6,377 (stride 7). Dropped rows (a zero-RV window): 0 in 2025-10, 2025-11, 2026-02, 2026-03, 2026-06 and a few (for example 10 in 2025-12) in the other months (see
 `tables.txt` for each month). Training rows for arm F: 74,652 (A and B), first row 2024-07-21 00:01.
 
 ## Deviations from the SPEC (none changes a criterion)
