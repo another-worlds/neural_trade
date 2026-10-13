@@ -1,0 +1,1 @@
+{"train_H15": {"anchors": 422488, "dropped": 1656}, "fwd_H15": {"anchors": 74380, "dropped": 349}, "train_H60": {"anchors": 422488, "dropped": 1612}, "fwd_H60": {"anchors": 74380, "dropped": 349}, "train_H240": {"anchors": 422488, "dropped": 1594}, "fwd_H240": {"anchors": 74380, "dropped": 349}}
