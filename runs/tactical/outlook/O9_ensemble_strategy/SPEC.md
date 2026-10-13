@@ -92,3 +92,15 @@ Outlook lead, 2026-10-13. Committed BEFORE any number of this study is computed.
 ## Outputs
 `runs/tactical/outlook/O9_ensemble_strategy/`: code, `selection.jsonl`, `choice.json`, `describe.jsonl`, `trades_*.csv.gz`, `tables.txt`,
 `frozen_P.json` (+ sha256), `score_P.py`, figures, `run.log`, `tests.log`, `REPORT.md`, and an O9 section of the outlook report.
+
+## Addendum (lead, 2026-10-14, after the selection table and BEFORE any A/B/C, freeze or prospective number; choice.json 38e08d6 unchanged)
+- **Primary stays as pre-registered:** the t-only rule chose `ENS_k1.0_doff_g0.0_tauoff_szvt`. It is cost-fragile: +3.76 %/month at
+  2 bps, -1.08 % at 5 bps, max drawdown 36 %.
+- **Second candidate "ROBUST", added now, explicitly chosen AFTER seeing the selection table** (forking-path risk stated):
+  - **Rule:** the highest t at 2 bps (PESS) among the eligible configurations whose mean monthly net is > 0 at 5 bps as well.
+  - **Result:** `k1.0, delta 0.02, g off, tau 2, size 1x` (t +3.20; +1.82 %/month at 2 bps, +0.19 % at 5 bps; 54.5 trades/month; hit 46.0 %; max DD 16 %).
+  - It is written to `choice_robust.json` and committed alone before phase 2.
+- **Prospective verdict:** both candidates are frozen and scored. Criteria 1-3 of the SPEC are applied to each, with a Holm correction
+  over the two candidates (the bootstrap p-values of criterion 1). Criteria 2 and 3 are reported per candidate.
+- **The selection table is descriptive evidence, not a verdict.** The regression gate (+0.55 %/month, hit +5 points) and vol-targeted
+  sizing (13/16 pairs) helped on the selection months. The 2-sigma target hurt. META was negative.
