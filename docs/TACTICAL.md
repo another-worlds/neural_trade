@@ -55,6 +55,17 @@ for the MVP".
 - The owner approved downloading BTC/USDT 1-minute bars AFTER 2025-09-29 (same instrument and exchange; an exception to D-050 for the forward test of the frozen H62 candidate, runs/tactical/fwd/FORWARD_SPEC.md). The new bars go to a SEPARATE file; D:/nt/neural_trade/Bitcoin_BTCUSDT.csv is never modified, so the MVP's protected span (its last 64 days) does not move.
 - No protected bar (2025-07-21..2025-09-29) is read: the forward model is trained on data up to 2025-07-20 only, and the first new month serves only to calibrate the entry threshold.
 
+## Division of work (owner, 2026-10-13)
+
+- Owner (verbatim): "Я хочу позитивный аутлук насчет геометрии, физики, регрессии и синтетических интерпретируемых
+  индикаторов ... Этим займется следующая сессия. В этой сесии занимайся тем, что предложил в конце ... У кого что
+  получается - тот то и делает".
+- **The next tactical session** works on geometry, physics, regression and synthetic interpretable indicators. Its start:
+  [runs/tactical/OUTLOOK_positive.md](../runs/tactical/OUTLOOK_positive.md).
+- **This session** works on the volatility track: runs/tactical/tasks/T01_vol_forward and T02_vol_exposure (SPECs) and
+  their follow-ups.
+- The review of what failed and what was never tested: [runs/tactical/REVIEW_2026-10-13.md](../runs/tactical/REVIEW_2026-10-13.md).
+
 ## Rigour and budget (exploratory)
 
 - **Data: the static excerpt by default (owner, 2026-10-08: "the whole file only for giant runs"):** tactical runs and
