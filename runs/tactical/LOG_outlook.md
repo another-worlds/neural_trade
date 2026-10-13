@@ -22,7 +22,57 @@ Rules: [docs/TACTICAL.md](../../docs/TACTICAL.md), in particular:
 
 ## Handoff
 
-_Rewritten at the end of every outlook session._ 2026-10-13: started; O1 (CPU) and O2 (GPU) running, O3 SPEC committed.
+_Rewritten at the end of every outlook session._ **2026-10-13 (session 1).**
+
+**State:**
+- O1-O7 are done and recorded. Nothing is running.
+- GPU used today: O2, 2.4 h wall (4.7 h process).
+- Report: `runs/tactical/report/outlook_report.html`, built by `build_outlook_report.py`.
+
+**What the evidence says (positive outlook, honestly bounded):**
+- **Geometry, the one confirmed positive.** 15-minute EMA trend curvature adds to the forecast of the SIZE of the next 15-60 minutes:
+  - over S3 (O1, QA PASS): look and forward both pass;
+  - over the best linear base, BANK (O5, QA PASS): +0.0056 [+0.0024, +0.0088] at H = 60, +0.012 at H = 15, judged on 2018-07..2020-12.
+- **Limits:**
+  - the effect is small, about 0.5-1 Spearman points;
+  - it ages within a forward year (O1 QA);
+  - it does not hold over a boosted base on the forward months (O1);
+  - hourly geometry HURTS (O6);
+  - as 90% intervals it gains only 0.6% over S3 and does not beat T03's HAR form (O7).
+- **Physics:** on the variance head it is a small early-training effect; 8 epochs = 4 epochs within noise, and the HAR gap stays (O2).
+- **Synthetic learned kernels:** they learn nothing beyond HAR (O3).
+- **BANK (a denser HAR):** not confirmed retrospectively (O4, a SPEC design error of the lead: 10.7 training days in 2017-09).
+- **Direction:** no outlook study touched direction.
+
+**Pending (score once, never refit):**
+
+| study | `score_B.py` | months |
+|---|---|---|
+| O4 | `O4_bank_confirm/score_B.py` | 3 complete months from 2026-10 |
+| O5 | `O5_geom_bestbase/score_B.py` | 3 complete months from 2026-10 |
+| O6 | `O6_geom_hourly/score_B.py` | 3 complete months from 2026-10 (moot after the fail) |
+| O7 | `O7_geom_intervals/score_B.py` | calibrated on 2026-10, scored on 2026-11..2027-01 |
+
+They need the Binance file extended past 2026-12. That extension is the owner's forward-data permission (TACTICAL.md "Forward data").
+
+**Next candidates (not started):**
+1. The regression prospect: a readable per-period coefficient atlas of L1 (what geometry the market rewards, by year), descriptive only.
+2. Geometry for H = 240 by another route: daily-cycle-aligned features, not geometry.
+3. The combined readable model (regression side + L1 size) judged on CRPS, when a forward period is available.
+
+None of them looks strong. Ask the owner before spending GPU.
+
+**Housekeeping:**
+- The merge of `origin/nt-tactical` into this branch was blocked by the permission classifier (5 commits behind, H87/T05). The owner was asked.
+- The pinned worktree `D:/nt/nt_o2` (O2's code, nothing heavy) was left in place for the owner to remove.
+
+## For the MVP lead (outlook)
+- **2026-10-13 (O1, O5, O7):** geometry features of the last 60 bars of 15 minutes (EMA slopes and positions; `geom2/geomlib.geom_rich`) add about +0.005 Spearman (H = 60) and +0.012 (H = 15) to a linear HAR-type forecast of realised volatility. This held:
+  - on the look;
+  - on the Binance forward months;
+  - on 2018-07..2020-12 over a denser HAR.
+
+  Candidate (not urgent): the variance head / conformal scale (D-008) could take these as inputs. Needs a paired MVP test (D-025). As intervals the gain is 0.6% and is not better than HAR (O7), so the expected value for trading is small.
 
 ## Hypotheses
 
