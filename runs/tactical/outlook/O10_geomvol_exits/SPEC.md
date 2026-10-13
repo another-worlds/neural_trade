@@ -64,3 +64,11 @@ Every rule keeps the protective stop at 1 sigma_60 from the entry (PESS-checked 
 `runs/tactical/outlook/O10_geomvol_exits/`: code, `selection.jsonl`, `choice.json`, `describe.jsonl`, `tables.txt`, `trades_*.csv.gz`,
 `frozen_P.json` (+ sha256), `score_P.py`, figures (equity and drawdown; the distribution of holding times and of the exit R-multiples),
 `windows.json` (real example trades with the exit signal drawn, from cut-file bars <= 2025-07-20), `run.log`, `tests.log`, `REPORT.md`.
+
+## Addendum (lead, 2026-10-14, after describe and BEFORE any prospective number)
+- **The selection chose E0_T240.** That is a price-level exit; only its time stop is longer than ROBUST's. So the verdict "geometry/volatility
+  exits add" (choice - E0) would test the time stop, not geometry.
+- **The geometry/volatility verdict is named now, before scoring:** GV - E0 at the same T (GV = E4_T60, the best non-E0 exit by
+  selection t; E0 = E0_T60), paired daily, with a lower bound > 0.
+- **Choice - E0 stays reported** under its own name: "longer time stop adds".
+- `score_P.py` already computes both; this addendum only names which one carries which verdict.
