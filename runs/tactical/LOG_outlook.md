@@ -55,12 +55,19 @@ _Rewritten at the end of every outlook session._ **2026-10-13 (session 1).**
 
 They need the Binance file extended past 2026-12. That extension is the owner's forward-data permission (TACTICAL.md "Forward data").
 
-**Next candidates (not started):**
-1. The regression prospect: a readable per-period coefficient atlas of L1 (what geometry the market rewards, by year), descriptive only.
-2. Geometry for H = 240 by another route: daily-cycle-aligned features, not geometry.
-3. The combined readable model (regression side + L1 size) judged on CRPS, when a forward period is available.
+**Next candidates (lead's ranking for the owner, 2026-10-13, after O8):**
 
-None of them looks strong. Ask the owner before spending GPU.
+| from | direction | strength |
+|---|---|---|
+| O5 | the geometry G1 + G15 as an input to the MVP variance head and the conformal scale (D-008); needs a paired MVP test | strong |
+| O1 | focus on H = 15 (+0.008..+0.014, every month positive); monthly refit instead of a frozen fit (the gain decays over the forward year); prospective SPEC from 2026-10 | strong |
+| O6 | H = 240 needs another source: 15-minute geometry for the volatility CHANGE target (H72/T01 holds forward); coordinate with the volatility session | medium |
+| O4 | prospective `score_B` from 2026-10 (already frozen) | medium |
+| O2 | physics as a regulariser of a HAR-skip variance net (judged at the HAR frontier) | weak |
+| O7 | quantile regression with geometry for the tails (VaR 5 %, ES) | weak |
+| O3, O8 | none; the size forecast is not a spot trading signal without a direction source | none |
+
+Direction (up/down) is not a candidate: minute-scale direction has decayed (H51, H52). The owner has not chosen yet.
 
 **Housekeeping:**
 - The merge of `origin/nt-tactical` into this branch was blocked by the permission classifier (5 commits behind, H87/T05). The owner was asked.
