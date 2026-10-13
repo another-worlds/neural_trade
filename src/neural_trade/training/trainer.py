@@ -297,8 +297,10 @@ def _har_scales(cfg, data_processor, df, close_values):
     har = HarScale(bar_minutes=float(cfg.RESAMPLE_MINUTES)).fit(
         close, times, anchors[np.asarray(fold.train)] - 1, tuple(cfg.HORIZON_STEPS))
     out = []
-    for idx in (fold.cal, fold.test):
+    for name, idx in (("cal", fold.cal), ("test", fold.test)):
         out.append(har.sigma_by_horizon(close, times, anchors[np.asarray(idx)] - 1, tuple(cfg.HORIZON_STEPS)))
+        logger.info(f"HAR scale clip shares on {name} (features beyond +-5 sd / forecast beyond the training range): "
+                    + ", ".join(f"H={k} {v['z']:.3f}/{v['y']:.3f}" for k, v in har.clip_fractions.items()))
     return out[0], out[1]
 
 
@@ -517,12 +519,13 @@ def train_and_evaluate(
     calibration_report: Optional[Dict[str, Any]] = None
     _cb = getattr(data_processor, 'cal_block', None)
     har_cal = har_test = None
+    if fit_calibration and _CalibrationPipeline is not None and _cb is not None             and getattr(cfg, 'CONFORMAL_SCALE', 'none') == 'har':
+        # outside the try below: a layout that cannot support the HAR scale must fail loudly, not run uncalibrated
+        har_cal, har_test = _har_scales(cfg, data_processor, df, close_values)
     if fit_calibration and _CalibrationPipeline is not None and _cb is not None:
         try:
             logger.info("\nFitting CalibrationPipeline on the calibration split...")
             predictions_cal = _predict_heads(custom_model, _cb['X'], _cb['y_raw'].shape[0], target_scaler, cfg)
-            if getattr(cfg, 'CONFORMAL_SCALE', 'none') == 'har':
-                har_cal, har_test = _har_scales(cfg, data_processor, df, close_values)
             cal_pipeline = _CalibrationPipeline(conformal_scale=getattr(cfg, 'CONFORMAL_SCALE', 'none'),
                                                 shrink_delta=bool(getattr(cfg, 'DELTA_SHRINKAGE', False)))
             cal_pipeline.fit_from_arrays(

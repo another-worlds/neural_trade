@@ -39,7 +39,7 @@ CALIB_DAMPING_VOL: null
 CALIB_DAMPING_PHYSICS: 0.0  # 0: bounded physics regularisers are never rescaled
 CALIB_OUTER: false  # also calibrate the outer group multipliers
 DELTA_SHRINKAGE: true  # serve beta x price-head delta, beta = clip(E[yd]/E[d^2], 0, 1) on the calibration block
-CONFORMAL_SCALE: realized_vol  # conformal interval scale: 'realized_vol' (window), 'sigma' (variance head), 'none', or 'har' (opt-in: HAR forecast of the absolute return fitted on the training block, calibration/har_scale.py; the default stays 'realized_vol')
+CONFORMAL_SCALE: realized_vol  # conformal interval scale: 'realized_vol' (window), 'sigma' (variance head), 'none', or 'har' (opt-in: HAR forecast of the absolute return fitted on the training block, calibration/har_scale.py; needs a training block of at least 2 days; training/evaluation only: a serving bundle cannot compute it (the Predictor has no bar history), so do not serve a 'har' run; the default stays 'realized_vol')
 
 # ---- loss_weights
 LAMBDA_LOCAL_TREND: 1.0  # retired term (always 0 in the objective)

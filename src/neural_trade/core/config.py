@@ -395,7 +395,7 @@ class Config:
     CONFORMAL_SCALE: str = _f("realized_vol", "calibration",
                               "conformal interval scale: 'realized_vol' (window), 'sigma' (variance head), 'none', or "
                               "'har' (opt-in: HAR forecast of the absolute return fitted on the training block, "
-                              "calibration/har_scale.py; the default stays 'realized_vol')",
+                              "calibration/har_scale.py; needs a training block of at least 2 days; training/evaluation only: a serving bundle cannot compute it (the Predictor has no bar history), so do not serve a 'har' run; the default stays 'realized_vol')",
                               unit="name", choices=("realized_vol", "sigma", "none", "har"))
 
     # ------------------------------------------------------------------ loss weights

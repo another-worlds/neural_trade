@@ -1,0 +1,4 @@
+7a1bc9e3beb274b809d60c5d56ce22a8e901622c
+(+ uncommitted repair-round-1 changes)
+   by prefix (ok, fail): calib_lambda=14/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}

@@ -16,6 +16,9 @@ Model, per horizon of H bars. At a decision bar t (the last input bar; only bars
   scale is in raw price-delta units and calibrated to the mean absolute return; the conformal quantile of the
   calibration block rescales it anyway).
 
+The fit refuses a training block whose decision bars span less than two longest windows (the long RV and the
+time of day would not vary in training and every later block would saturate the clips).
+
 A decision bar with less than the longest window of history (only possible at the start of the data) uses
 the history it has. Pure numpy; no state besides the fitted coefficients.
 """
@@ -36,6 +39,7 @@ RV_FLOOR = 1e-12
 Y_MARGIN = 1.0  # the forecast of ln|r| is clipped to the training targets' range +- this (a factor e)
 Z_CLIP = 5.0   # standardised features are clipped here: a block far outside the training span cannot extrapolate
 _MIN_FIT_ROWS = 30
+MIN_SPAN_WINDOWS = 2   # the training decision bars must span at least this many longest windows (2 days at 1440 min)
 _DAY_NS = 86_400 * 10**9
 
 
@@ -55,6 +59,7 @@ class HarScale:
         self.bar_minutes = float(bar_minutes)
         self.windows_bars = tuple(max(1, int(round(float(w) / self.bar_minutes))) for w in windows_minutes)
         self.models: Dict[int, dict] = {}
+        self.clip_fractions: Dict[int, dict] = {}   # last sigma() call per horizon: {'z': share z-clipped, 'y': share y-clipped}
 
     # ------------------------------------------------------------------ features
     def features(self, close: np.ndarray, times_ns: np.ndarray, decision: np.ndarray) -> np.ndarray:
@@ -80,6 +85,13 @@ class HarScale:
         close = np.asarray(close, dtype=float)
         t_all = np.asarray(train_decision, dtype=np.int64).reshape(-1)
         full = t_all >= max(self.windows_bars)
+        span = int(t_all.max() - t_all.min()) if len(t_all) else 0
+        if span < MIN_SPAN_WINDOWS * max(self.windows_bars):
+            raise ValueError(
+                f"HAR scale: the training block's decision bars span {span} bars "
+                f"({span * self.bar_minutes / 1440:.2f} days); the {max(self.windows_bars)}-bar RV and the time-of-day "
+                f"features need at least {MIN_SPAN_WINDOWS * max(self.windows_bars)} bars ({MIN_SPAN_WINDOWS} longest windows) "
+                f"to vary inside training. Use a longer training block or CONFORMAL_SCALE='realized_vol'")
         lc = np.log(close)
         self.models = {}
         for H in (int(h) for h in horizon_bars):
@@ -107,8 +119,13 @@ class HarScale:
             raise RuntimeError(f"HarScale was not fitted for horizon {horizon}")
         m = self.models[int(horizon)]
         t = np.asarray(decision, dtype=np.int64).reshape(-1)
-        Z = np.clip((self.features(close, times_ns, t) - m["mu"]) / m["sd"], -Z_CLIP, Z_CLIP)
-        s = np.exp(np.clip(Z @ m["coef"] + m["ic"], m["y_lo"], m["y_hi"])) * m["c"] * np.asarray(close, dtype=float)[t]
+        Z0 = (self.features(close, times_ns, t) - m["mu"]) / m["sd"]
+        Z = np.clip(Z0, -Z_CLIP, Z_CLIP)
+        lin = Z @ m["coef"] + m["ic"]
+        # diagnostics: the share of rows whose features / forecast hit a clip (high = the block is outside training)
+        self.clip_fractions[int(horizon)] = {"z": float(np.mean(np.any(np.abs(Z0) > Z_CLIP, axis=1))) if len(t) else 0.0,
+                                             "y": float(np.mean((lin < m["y_lo"]) | (lin > m["y_hi"]))) if len(t) else 0.0}
+        s = np.exp(np.clip(lin, m["y_lo"], m["y_hi"])) * m["c"] * np.asarray(close, dtype=float)[t]
         return np.maximum(s, np.finfo(float).tiny)
 
     def sigma_by_horizon(self, close, times_ns, decision, horizon_steps: Sequence[int],

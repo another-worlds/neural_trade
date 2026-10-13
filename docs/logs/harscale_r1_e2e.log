@@ -1,0 +1,25 @@
+7a1bc9e3beb274b809d60c5d56ce22a8e901622c
+(+ uncommitted repair-round-1 changes)
+== CONFORMAL_SCALE/MAX_SEQUENCE_COUNT: realized_vol 12000
+   Train sequences: 8176 (batches/epoch: 511)
+REPORT {'h0': (0.863, 487.9), 'h1': (0.863, 573.7), 'h2': (0.9, 731.9)}
+h0 rv cal [ 91.2 135.3 185.4] rv test [ 85.4 140.3 278.7] |y| cal [  9.4  85.6 247.3] |y| test [  7.   90.1 361.3]
+h1 rv cal [111.7 165.6 227.1] rv test [104.6 171.8 341.3] |y| cal [ 10.  102.9 319.6] |y| test [ 11.1 111.1 412.7]
+h2 rv cal [129.  191.3 262.2] rv test [120.8 198.4 394.1] |y| cal [ 11.1 103.5 381.5] |y| test [ 10.6 123.  504.3]
+n cal/test 792 2000 beta {'h0': 0.31635666328504025, 'h1': 0.24663403191452032, 'h2': 0.12036543220068437}
+== CONFORMAL_SCALE/MAX_SEQUENCE_COUNT: har 12000
+   Train sequences: 8176 (batches/epoch: 511)
+HAR scale clip shares on cal (features beyond +-5 sd / forecast beyond the training range): H=10 0.000/0.000, H=15 0.000/0.000, H=20 0.000/0.000
+HAR scale clip shares on test (features beyond +-5 sd / forecast beyond the training range): H=10 0.000/0.000, H=15 0.000/0.000, H=20 0.000/0.000
+REPORT {'h0': (0.833, 443.6), 'h1': (0.831, 517.5), 'h2': (0.86, 624.4)}
+h0 rv cal [ 91.2 135.3 185.4] rv test [ 85.4 140.3 278.7] |y| cal [  9.4  85.6 247.3] |y| test [  7.   90.1 361.3]
+h0 har cal [ 85.9 112.8 149.4] har test [ 76.1 114.2 200.4] qhat 1.7713842749192559
+h1 rv cal [111.7 165.6 227.1] rv test [104.6 171.8 341.3] |y| cal [ 10.  102.9 319.6] |y| test [ 11.1 111.1 412.7]
+h1 har cal [112.8 144.1 186.8] har test [ 97.5 144.2 239.2] qhat 1.6713149631290878
+h2 rv cal [129.  191.3 262.2] rv test [120.8 198.4 394.1] |y| cal [ 11.1 103.5 381.5] |y| test [ 10.6 123.  504.3]
+h2 har cal [139.9 173.9 223.4] har test [118.  172.2 271.6] qhat 1.7145208685563949
+n cal/test 792 2000 beta {'h0': 0.31635666328504025, 'h1': 0.24663403191452032, 'h2': 0.12036543220068437}
+== CONFORMAL_SCALE/MAX_SEQUENCE_COUNT: har 600
+   Train sequences: 180 (batches/epoch: 12)
+    raise ValueError(
+ValueError: HAR scale: the training block's decision bars span 179 bars (0.12 days); the 1440-bar RV and the time-of-day features need at least 2880 bars (2 longest windows) to vary inside training. Use a longer training block or CONFORMAL_SCALE='realized_vol'

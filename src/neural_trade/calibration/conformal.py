@@ -87,7 +87,7 @@ def interval_scale(mode: str, *, windows=None, variance_scaled=None, pred_scale:
                 for h in HORIZONS}
     if mode == "har":
         if har_sigma is None:
-            raise ValueError("conformal scale 'har' needs har_sigma (HarScale.sigma_by_horizon on the full bar series)")
+            raise ValueError("conformal scale 'har' needs har_sigma (HarScale.sigma_by_horizon on the full bar series); serving has no bar history, so a 'har' bundle cannot be served")
         out = {h: np.asarray(har_sigma[h], dtype=float).reshape(-1) for h in HORIZONS[:len(horizon_steps)]}
         if not all(np.isfinite(v).all() and (v > 0).all() for v in out.values()):
             raise ValueError("har_sigma must be finite and positive")

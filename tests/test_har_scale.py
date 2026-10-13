@@ -2,6 +2,8 @@
 interval scale. The default 'realized_vol' path is untouched (golden run; see the logs named in the PR)."""
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -81,7 +83,7 @@ def test_fit_reads_only_the_training_decision_bars():
 def test_too_few_training_rows_is_refused():
     close, ts = _series()
     with pytest.raises(ValueError, match="training rows"):
-        HarScale(windows_minutes=(3, 6, 12, 24)).fit(close, ts, np.arange(60, 70), (5,))
+        HarScale(windows_minutes=(3, 6, 12, 24)).fit(close, ts, np.array([60, 300, 500]), (5,))
 
 
 def test_interval_scale_har_mode():
@@ -135,17 +137,38 @@ def test_pipeline_har_needs_sigma_and_realized_vol_path_is_bit_identical():
         assert np.isfinite(lo).all() and (hi > lo).all()
 
 
-def test_trainer_hook_uses_train_decisions_and_aligns_with_blocks(tf, tiny_close_only_config, tmp_path, synthetic_bars):
-    """_har_scales: the blocks' decision bars (anchor - 1) are the blocks' last_close bars; the fit rows are train only."""
+def test_short_training_span_is_refused_not_clipped():
+    """A training block shorter than two longest windows cannot make the long RV / time of day vary: refuse."""
+    close, ts = _series()
+    with pytest.raises(ValueError, match="span"):
+        HarScale(windows_minutes=(3, 6, 12, 24)).fit(close, ts, np.arange(60, 100), (5,))
+    # the default 1440-minute window needs 2880 bars of decisions
+    close, ts = _series(n=6000)
+    with pytest.raises(ValueError, match="2880"):
+        HarScale().fit(close, ts, np.arange(1500, 3000), (5,))
+    HarScale().fit(close, ts, np.arange(1500, 4500), (5,))
+
+
+def test_trainer_hook_aligns_with_blocks_and_refuses_the_tiny_layout(tf, tiny_close_only_config, tmp_path):
+    """_har_scales: the blocks' decision bars (anchor - 1) are the blocks' last_close bars; sigma has no clip saturation
+    on a layout with a multi-day training block; the 3-hour tiny layout is refused."""
     from neural_trade.data.processor import DataProcessor
     from neural_trade.training.trainer import _har_scales
 
+    bundled = Path(__file__).resolve().parents[1] / "binance_btcusdt_1min_ccxt.csv"
+    if not bundled.exists():
+        pytest.skip("bundled csv not present")
     cfg = tiny_close_only_config
-    csv = tmp_path / "bars.csv"
-    synthetic_bars.to_csv(csv, index=False)
-    cfg.CSV_PATH = str(csv)
+    cfg.CSV_PATH = str(bundled)
     cfg.SCALER_PATH = str(tmp_path / "scaler.joblib")
     cfg.CONFORMAL_SCALE = "har"
+    cfg.MAX_SEQUENCE_COUNT = 600
+    dp = DataProcessor(cfg)
+    df, close = dp.load_and_prepare_data()
+    dp.prepare_datasets(df, close)
+    with pytest.raises(ValueError, match="span"):
+        _har_scales(cfg, dp, df, close)
+    cfg.MAX_SEQUENCE_COUNT = 12000
     dp = DataProcessor(cfg)
     df, close = dp.load_and_prepare_data()
     dp.prepare_datasets(df, close)
@@ -157,3 +180,4 @@ def test_trainer_hook_uses_train_decisions_and_aligns_with_blocks(tf, tiny_close
         assert set(sig) == {"h0", "h1", "h2"}
         for v in sig.values():
             assert len(v) == n and np.isfinite(v).all() and (v > 0).all()
+            assert v.std() / v.mean() > 0.01        # varies: not a clip-saturated constant
