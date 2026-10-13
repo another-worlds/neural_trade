@@ -22,9 +22,12 @@ Rules: [docs/TACTICAL.md](../../docs/TACTICAL.md), in particular:
 
 ## Handoff
 
-_Rewritten at the end of every outlook session._ Not started.
+_Rewritten at the end of every outlook session._ 2026-10-13: started; O1 (CPU) and O2 (GPU) running, O3 SPEC committed.
 
 ## Hypotheses
 
 | # | Date | Hypothesis | Method | Cost | Result | Evidence |
 |---|---|---|---|---|---|---|
+| O1 | 2026-10-13 | Prospect 2: does indicator geometry (1-minute window, and new: 60 bars of 15 minutes) add to a FAIR volatility base (S3: HAR + volume/range + hourly RV lags), on the size of the next 15/60/240 minutes? | SPEC 8d9d20c: ridge R0 = S3, R1 = +G1, R2 = +G1+G15, shuffled control; monthly walk-forward, selection 2021-01..2024-06, one look 2024-07..2025-07-20, Binance forward 2025-10..2026-09 frozen; pass = Spearman gain >= +0.005 with CI > 0 and QLIKE not worse at H = 60 | CPU | running (implementer) | runs/tactical/outlook/O1_geom_vol/ |
+| O2 | 2026-10-13 | Prospect 3: do the physics terms help the variance head more when the net trains 8 epochs instead of H75/H77's 4? | SPEC 287bbc6: PRICE_HEAD none, physics on/off, 6 climb slices x seeds 0, 1, 8 epochs; phys7 scoring; d8 - d4 on the same seeds | ~3 h GPU wall (estimate) | running (experimenter) | runs/tactical/outlook/O2_phys_var8/ |
+| O3 | 2026-10-13 | Prospect 4: synthetic interpretable volatility indicators = learned memory kernels (softmax mixture over an EWMA bank of r^2, range, volume); do they add over S3 and over a linear readout of the whole bank? | SPEC (this commit): as O1's spans and criterion; controls BANK (ridge on all 36 EWMA logs) and shuffled | CPU | SPEC committed | runs/tactical/outlook/O3_synth_volind/ |
