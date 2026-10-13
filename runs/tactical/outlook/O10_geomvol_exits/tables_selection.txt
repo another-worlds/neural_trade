@@ -1,0 +1,23 @@
+O10 selection: 14 exit configurations on ROBUST's entry, 42 months 2021-01..2024-06, PESS fills primary. Returns: mean monthly net return in % of capital (sum of position log returns, no compounding).
+Rank: t-statistic of the monthly net at 2 bps. win/loss = average net trade (2 bps) in bps; hold = mean bars from entry to exit. orig = original fills (O8's primary variant).
+config      tr/mo   m0bp%   m2bp%   m5bp%  t(2bp)   mo+   hit%    win   loss   hold  maxDD%                            reasons | orig m2%  orig t orig tr orig hit
+E0_T240      50.5  +3.571  +2.561  +1.046   +3.32 28/42 42.1   94.9  -60.1  102.2   21.89      stop:1138 target:616 time:367 |   +3.677   +5.23    2119     43.0
+E0_T60       54.5  +2.913  +1.824  +0.189   +3.20 30/42 46.0   57.9  -43.2   45.8   15.95      stop:652 target:310 time:1326 |   +2.983   +5.62    2286     47.1
+E4_T60       57.2  +3.258  +2.115  +0.399   +2.22 27/42 47.1   33.2  -22.5   10.5   12.58        learn:2197 stop:155 time:50 |   +3.063   +3.26    2401     48.0
+E4_T240      57.5  +2.761  +1.612  -0.112   +2.15 26/42 47.7   28.6  -20.7    8.4   11.05         learn:2263 stop:149 time:1 |   +2.648   +3.46    2412     48.6
+E1c2_T60     55.1  +2.442  +1.339  -0.315   +2.06 30/42 41.2   53.3  -33.2   33.9   17.31        stop:64 time:554 trail:1698 |   +2.267   +3.71    2314     42.0
+E1c2_T240    54.4  +2.444  +1.355  -0.278   +1.94 27/42 39.1   57.9  -33.1   42.6   19.73          stop:63 time:6 trail:2217 |   +2.273   +3.40    2284     39.9
+E2a_T60      55.9  +1.858  +0.740  -0.937   +1.51 22/42 36.8   45.7  -24.5   18.8   14.19           ema:2244 stop:84 time:20 |   +1.655   +3.11    2345     37.4
+E3_T240      56.5  +1.977  +0.848  -0.846   +1.46 21/42 46.4   35.1  -27.6   22.4   16.30          stop:328 time:10 vol:2033 |   +1.914   +3.24    2370     47.4
+E3_T60       56.6  +1.827  +0.694  -1.005   +1.42 23/42 46.2   33.2  -26.2   18.2   11.63         stop:274 time:170 vol:1935 |   +1.760   +3.44    2378     47.2
+E2b_T60      55.8  +2.030  +0.914  -0.760   +1.40 23/42 43.6   41.3  -29.1   25.8   23.33         geo:1234 stop:371 time:738 |   +1.963   +3.04    2341     44.6
+E2a_T240     55.9  +1.790  +0.672  -1.004   +1.39 22/42 36.8   45.4  -24.5   18.8   14.90                   ema:2263 stop:84 |   +1.574   +3.02    2343     37.5
+E2b_T240     52.7  +2.428  +1.374  -0.208   +1.37 24/42 38.2   61.7  -33.9   63.6   32.14         geo:1329 stop:564 time:321 |   +2.325   +2.41    2211     39.0
+E1c1_T60     56.7  +1.492  +0.358  -1.344   +0.92 23/42 41.1   32.3  -21.4   11.0   13.86          stop:54 time:6 trail:2322 |   +1.259   +3.17    2380     41.8
+E1c1_T240    56.7  +1.489  +0.355  -1.347   +0.91 23/42 41.1   32.2  -21.4   11.1   13.86                 stop:54 trail:2328 |   +1.256   +3.16    2380     41.8
+
+CHOICE: E0_T240  t=+3.32  mean monthly net +2.561%  50.5 trades/month  (14 configurations)
+
+Paired against E0 at the same T (descriptive; mean monthly net at 2 bps and t, PESS)
+  T=60: E0 m2 +1.824% t +3.20 | E1c1 -1.466% | E1c2 -0.485% | E2a -1.084% | E2b -0.910% | E3 -1.130% | E4 +0.291%
+  T=240: E0 m2 +2.561% t +3.32 | E1c1 -2.206% | E1c2 -1.206% | E2a -1.889% | E2b -1.188% | E3 -1.713% | E4 -0.949%

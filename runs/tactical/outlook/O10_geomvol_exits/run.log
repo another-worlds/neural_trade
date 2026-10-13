@@ -1,0 +1,19 @@
+01:52:47 signals 195126 valid 195126 s15 265s
+01:52:49 E4 pool T 60 E0 positions 3546 checkpoints 10904 models 42 267s
+01:52:51 E4 pool T 240 E0 positions 3306 checkpoints 23458 models 42 269s
+01:52:51 E0_T60 trades/mo 54.5 m2% +1.824 t +3.20 269s
+01:52:52 E1c1_T60 trades/mo 56.7 m2% +0.358 t +0.92 270s
+01:52:52 E1c2_T60 trades/mo 55.1 m2% +1.339 t +2.06 270s
+01:52:52 E2a_T60 trades/mo 55.9 m2% +0.740 t +1.51 270s
+01:52:53 E2b_T60 trades/mo 55.8 m2% +0.914 t +1.40 271s
+01:52:53 E3_T60 trades/mo 56.6 m2% +0.694 t +1.42 271s
+01:52:53 E4_T60 trades/mo 57.2 m2% +2.115 t +2.22 271s
+01:52:54 E0_T240 trades/mo 50.5 m2% +2.561 t +3.32 272s
+01:52:54 E1c1_T240 trades/mo 56.7 m2% +0.355 t +0.91 272s
+01:52:54 E1c2_T240 trades/mo 54.4 m2% +1.355 t +1.94 272s
+01:52:55 E2a_T240 trades/mo 55.9 m2% +0.672 t +1.39 273s
+01:52:55 E2b_T240 trades/mo 52.7 m2% +1.374 t +1.37 273s
+01:52:55 E3_T240 trades/mo 56.5 m2% +0.848 t +1.46 273s
+01:52:56 E4_T240 trades/mo 57.5 m2% +1.612 t +2.15 274s
+01:52:56 CHOICE {'rule': 'highest t-statistic of the monthly net return at 2 bps (PESS fills) on 2021-01..2024-06 among the 14 configurations (SPEC.md)', 'config': 'E0_T240', 'cfg': {'exit': 'E0', 'T': 240}, 'entry': {'k': 1.0, 'delta': 0.02, 'g': None}, 't_2bps': 3.3166060778054716, 'mean_m_2bps': 0.025611410708520226, 'trades_per_month': 50.5, 'n_trades': 2121, 'n_months': 42, 'n_configs': 14, 'fills': 'PESS', 'selection_months': ['2021-01', '2024-06']}
+01:52:56 total 274s
