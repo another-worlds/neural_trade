@@ -46,9 +46,9 @@ Trade statistics:
 ## Reading (lead)
 1. **The edge does not survive honest fills.**
    - With the primary fills the strategy is positive on B, flat on C (the most recent, fully frozen period) and positive on A.
-   - Once the stop is also checked inside the entry minute (PESS), it loses on every span.
+   - Once the stop is also checked inside the entry minute (PESS), pooled B + C loses (-1.06 %). C and A lose (-3.30, -4.29), and B stays weakly positive (+1.18 %, interval [-1.82, +4.18] includes 0). (Corrected 2026-10-13: the first version said PESS loses on every span; B does not.)
    - The selection profit came largely from ignoring reversals inside the breakout minute: a fill-model artefact, not an edge.
-2. **The size forecast does not drive it.** R0 (no geometry) matches L1, and shuffled sigma (SHUF) is as good or better (B: +7.4 % with 2.6x the trades).
+2. **The size forecast does not drive it.** R0 (no geometry) matches L1 on every span. Shuffled sigma (SHUF) is not reliably worse: on B it is far better (+7.4 % with 2.6x the trades), on C and A it is worse but not significantly (L1 - SHUF +1.19 and +1.80, intervals include 0). Pooled L1 - SHUF is -1.24. (Corrected 2026-10-13: the first version said SHUF is as good or better everywhere.)
    - Whatever the strategy earns comes from momentum after a band break in trending periods (B, A).
    - It does not come from WHEN the forecast says moves are large.
 3. **Consistent with the whole project.** The size of moves is forecastable (O1, O5, H53, H83), but on spot a size forecast alone does not make money: direction is needed, and minute-scale direction has decayed (H51, H52). T02 (vol-timed exposure) and H78/H79 (vol-sized direction) failed the same way.
