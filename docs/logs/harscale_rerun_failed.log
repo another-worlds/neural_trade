@@ -1,0 +1,6 @@
+b04580b76fc8447bf30c2a6f56a5109365ba6b0d
+(working tree adds frame.py compat fix + regenerated config-reference.md after the full run above)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+160 passed, 145 warnings in 83.28s (0:01:23)
+All checks passed!

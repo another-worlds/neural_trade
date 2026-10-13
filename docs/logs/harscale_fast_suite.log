@@ -1,0 +1,10 @@
+b04580b76fc8447bf30c2a6f56a5109365ba6b0d
+    warnings.warn(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_nt041_repair.py:138: the real index already has the new columns
+FAILED tests/test_config_metadata.py::test_the_committed_config_reference_is_generated_from_the_metadata
+FAILED tests/test_rescore.py::test_a_frame_and_bars_loaded_from_the_npz_reproduce_the_scorers_backtest_exactly
+2 failed, 2509 passed, 1 skipped, 5639 warnings in 1031.05s (0:17:11)
+All checks passed!

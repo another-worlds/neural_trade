@@ -1,0 +1,9 @@
+b04580b76fc8447bf30c2a6f56a5109365ba6b0d
+   ok   hist/contrib_vac                              max|diff|=0
+   ok   hist/global_h0                                max|diff|=0
+   ok   hist/global_h1                                max|diff|=0
+   ok   hist/global_h2                                max|diff|=0
+   ok   hist/ife_loss                                 max|diff|=0
+   ok   hist/local_h0                                 max|diff|=0
+   by prefix (ok, fail): calib_lambda=14/0, coverage=3/0, hist=375/0, period=54/0, pred=9/0
+{"golden_equal": true, "n_fail": 0, "n_missing": 0}

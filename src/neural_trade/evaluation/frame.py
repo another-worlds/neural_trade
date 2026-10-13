@@ -80,8 +80,8 @@ class PredictionFrame:
             if result.predictions_cal is None:
                 raise ValueError("this TrainResult has no calibration-split predictions")
             preds, y, lc = result.predictions_cal, result.y_cal, result.last_close_cal
-            cal = (result.calibration_pipeline.apply(preds, windows=getattr(result, "windows_cal", None),
-                                                     har_sigma=getattr(result, "har_sigma_cal", None))
+            extra = {"har_sigma": result.har_sigma_cal} if getattr(result, "har_sigma_cal", None) is not None else {}
+            cal = (result.calibration_pipeline.apply(preds, windows=getattr(result, "windows_cal", None), **extra)
                    if result.calibration_pipeline is not None else {})
             if X_raw is None:
                 X_raw = getattr(result, "windows_cal", None)

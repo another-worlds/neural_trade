@@ -1,0 +1,7 @@
+b04580b76fc8447bf30c2a6f56a5109365ba6b0d
+FAILED tests/test_config_metadata.py::test_the_committed_config_reference_is_generated_from_the_metadata
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!! xdist.dsession.Interrupted: stopping after 1 failures !!!!!!!!!!!!
+1 failed, 544 passed, 3047 warnings in 378.68s (0:06:18)
+changed files: 10 (against origin/remediation/plan)
+WIDE change (src/neural_trade/core/config.py): run the whole fast suite: pytest -m 'not slow' -n 8
