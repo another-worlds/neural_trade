@@ -1,0 +1,5 @@
+winner   dev     n=3432 hit=0.595 mean=10.33bps cum=354.4% dd=7.5% calmar=10.53 months hit>60=25/54 dd<5=12/54 w_dd5=0.55 cum@w=194.9
+winner   lockbox n=727 hit=0.574 mean=0.79bps cum=5.8% dd=31.1% calmar=0.19 months hit>60=4/12 dd<5=2/12 w_dd5=0.11 cum@w=0.6
+baseline dev     n=2118 hit=0.592 mean=10.41bps cum=220.5% dd=12.8% calmar=3.84 months hit>60=23/54 dd<5=23/54 w_dd5=0.22 cum@w=48.5
+baseline lockbox n=470 hit=0.598 mean=19.30bps cum=90.7% dd=9.2% calmar=9.79 months hit>60=6/12 dd<5=5/12 w_dd5=0.37 cum@w=33.6
+{'1 mean monthly net bps, 95% t-interval lower bound > 0': False, "2 lockbox Calmar above the baseline's": False, "3 cumulative return above the winner's random-side null p95": False} NOT PASSED
