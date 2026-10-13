@@ -33,7 +33,7 @@ HCOL = {15: HC["h0"], 60: HC["h1"], 240: HC["h2"]}
 # D-014: h0/h1/h2 colours are only for horizons. Spans, models and experiments use the other theme series colours.
 SPANC = {"sel": TAN, "look": PINK, "fwd": VIOLET}
 MODC = {"R0": NEUT, "L0": NEUT, "HAR": TAN, "L1": PINK, "L2": VIOLET, "L2sh": NEUT}
-EXPC = {"O1": PINK, "O2": "#c3c2b7", "O3": TAN, "O4": SALMON, "O5": VIOLET, "O6": INK2, "O7": "#8a8984"}
+EXPC = {"O1": PINK, "O2": "#c3c2b7", "O3": TAN, "O4": SALMON, "O5": VIOLET, "O6": INK2, "O7": "#8a8984", "O8": SALMON}
 SPANN = {"sel": "подбор 2021-01..2024-06", "look": "взгляд 2024-07..2025-07", "fwd": "вперёд 2025-10..2026-09"}
 FIGS = []
 t_start = time.time()
@@ -261,6 +261,30 @@ def o7_pool(span, T_, m):
 
 assert abs(o7_pool("judge", 60, "L1")[0] - 0.8925) < 6e-5 and abs(o7_pool("judge", 60, "HAR")[2] - 305.11) < 6e-3 and abs(o7_pool("judge", 240, "R0")[1] - 377.31) < 6e-3
 
+# O8: a vol-band strategy on the L1 size forecast (tests B, C, A; the configuration was chosen on the selection months)
+o8_report = txt("O8_volband_strategy/REPORT.md")
+o8_sel = jl("O8_volband_strategy/selection.jsonl")
+o8_tests = jl("O8_volband_strategy/tests.jsonl")
+o8_choice = jf("O8_volband_strategy/choice.json")
+o8_win = jf("O8_volband_strategy/windows.json")
+o8_tab = txt("O8_volband_strategy/tables.txt")
+o8_seltab = txt("O8_volband_strategy/tables_selection.txt")
+O8CR = o8_tests[-1]["criteria"]
+O8V = o8_tests[-1]["verdict"]
+O8BH = o8_tests[-1]["buy_hold"]
+O8R = {(r["span"], r["arm"], r["variant"]): r for r in o8_tests[:-1]}
+O8_COST = 0.0002                              # 2 bps round trip, the primary cost of the SPEC
+assert len(o8_sel) == 24 and len(O8R) == 24 and o8_choice["config"] == "BRK_k1.5_H60_s1.0"
+assert "strategy works on independent data: no" in o8_report and "geometry adds to the strategy: no" in o8_report
+assert not O8V["works"] and not O8V["adds"] and not any(r["target_met"] for r in O8R.values())
+assert ("+1.971% [+0.050, +3.892]" in o8_tab and "-1.057% [-3.374, +1.260]" in o8_tab
+        and "-1.242% [-3.401, +0.916]" in o8_tab and "-0.375% [-1.407, +0.657]" in o8_tab)
+assert abs(O8CR["c1_primary"]["mean"] - 0.019709) < 1e-6 and O8CR["c1_primary"]["pos"] == 17 and O8CR["c1_primary"]["n"] == 26
+_ch = [s for s in o8_sel if s["config"] == o8_choice["config"]][0]
+assert abs(_ch["t_2bps"] - 3.49) < 5e-3 and abs(_ch["mean_m_2bps"] * 100 - 4.044) < 5e-4 and _ch["n_trades"] == 3645
+assert max(s["t_2bps"] for s in o8_sel) == _ch["t_2bps"] and all(s["mean_m_2bps"] < 0 for s in o8_sel if s["family"] == "REV")
+assert "+3.49" in o8_seltab and "All 12 band-reversion (REV) configurations lost" in o8_report
+
 # headline numbers (computed from rows; checked against the committed tables below)
 O1 = {}
 for sp in ("sel", "look", "fwd"):
@@ -298,6 +322,9 @@ def sec1():
         ("O7", "Геометрия как 90%-интервалы доходности", "part", "проходит, но крошечно",
          f"интервальная оценка L1−R0, T=60: {sg(O7C[60][0], 2)} б.п. [{sg(O7C[60][1], 2)}; {sg(O7C[60][2], 2)}], {O7better(O7R0[60])}/23 месяцев лучше (0,6% от 307 б.п.); "
          f"против HAR: {sg(O7H[60][0], 2)} б.п. [{sg(O7H[60][1], 2)}; {sg(O7H[60][2], 2)}] - не лучше"),
+        ("O8", "Стратегия «пробой полосы» на прогнозе размера (L1), независимые данные B, C, A", "bad", "не работает; геометрия не добавляет",
+         f"L1 нетто 2 б.п.: {pct(O8CR['c1_primary']['mean'])} % в месяц [{pct(O8CR['c1_primary']['lo'])}; {pct(O8CR['c1_primary']['hi'])}] на B + C, но при PESS-заливках {pct(O8CR['c1_PESS']['mean'])} %; "
+         f"L1−SHUF {pct(O8CR['c2_L1_minus_SHUF']['mean'])} %, L1−R0 {pct(O8CR['c3_L1_minus_R0']['mean'])} %; цель владельца (попаданий &gt; 60 %, просадка &lt; 5 %) не выполнена нигде"),
     ]
     rows = [[f"<b>{i}</b>", n, badge(k, t), d] for i, n, k, t, d in verdicts]
     board = table(rows, ["", "вопрос", "вердикт", "ключевое число"])
@@ -334,15 +361,16 @@ def sec1():
              (f"{sg(J5[15][0], 4)}", "O5: выигрыш геометрии при H=15", f"{J5[15][3]}/{J5[15][4]} месяцев; при H=240 ничего ({sg(J5[240][0])})"),
              (f"{sg(O7C[60][0], 2)} б.п.", "O7: геометрия как интервалы, T=60", f"{O7better(O7R0[60])}/23 месяцев лучше, 0,6% оценки; против HAR {sg(O7H[60][0], 2)} б.п. - не лучше"),
              (f"{sg(O6[240][0])}", "O6: часовая геометрия, H=240", f"{O6[240][3]}/{O6[240][4]} месяцев в плюсе: вредит; на H=60 {sg(O6[60][0])}"),
+             (f"{pct(O8CR['c1_PESS']['mean'])} %", "O8: стратегия, честные заливки (PESS)", f"основные заливки {pct(O8CR['c1_primary']['mean'])} %/мес на B + C; геометрия не добавляет: L1−R0 {pct(O8CR['c3_L1_minus_R0']['mean'])} %"),
              (f"{sg(O2_ONOFF[8, None][0])}", "O2: физика, 8 эпох", f"4 эпохи {sg(O2_ONOFF[4, None][0])}; разность {sg(O2_D[0])} [{sg(O2_D[1])}; {sg(O2_D[2])}]: шум"),
              (f"{sg(O3['look'][0])}", "O3: синтетические ядра", "ядра остались около равномерных: «нет»")]
     th = "".join(f'<div class="tile"><div class="big">{a}</div><div class="lab">{b}</div><div class="sub">{c}</div></div>' for a, b, c in tiles)
 
     body = ('<div class="lead">Запрос владельца: найти <b>положительный прогноз</b> (outlook) для четырёх идей: <b>геометрия индикаторов</b>, <b>физика</b>, '
             '<b>регрессия</b> и <b>синтетические индикаторы</b>. Общий вывод: геометрия (15-минутная кривизна тренда EMA) помогает предсказывать <b>размер движений</b> (волатильность) '
-            'на горизонтах 15 и 60 минут, на 240 минутах - нет. <b>Направление не заявляется</b>: ни один результат не про направление цены.</div>'
+            'на горизонтах 15 и 60 минут, на 240 минутах - нет. <b>Направление не заявляется</b>: ни один результат не про направление цены. Стратегия на прогнозе размера (O8, пробой полосы) на независимых данных не работает.</div>'
             f'<div class="tiles">{th}</div>'
-            + card("Доска вердиктов O1-O7", board, "Единица - месяц (O2: срез); 95% t-интервалы парных разностей; «k/n» - единиц с плюсом. Всё одно зерно и только CPU; O2 - GPU, 2 зерна.")
+            + card("Доска вердиктов O1-O8", board, "Единица - месяц (O2: срез); 95% t-интервалы парных разностей; «k/n» - единиц с плюсом. Всё одно зерно и только CPU; O2 - GPU, 2 зерна.")
             + card("Все ключевые эффекты, три оси", f1, "Панель А - выигрыш по Спирмену против опорной модели (цель ln RV). Порог из SPEC - +0,005 (O1/O3/O4), +0,003 (O5 и O6). "
                    "Панель Б - O2, другая метрика и данные. Панель В - O7, базисные пункты.")
             + card("Общий вывод", "<ul class='note'>"
@@ -352,6 +380,8 @@ def sec1():
                    f"<li><b>Часовая геометрия вредит:</b> O6, L2−L1 {sg(O6[240][0])} при H=240 и {sg(O6[60][0])} при H=60; лестница геометрии останавливается на 15 минутах.</li>"
                    f"<li><b>Физика - малый эффект раннего обучения:</b> O2, {sg(O2_ONOFF[4, None][0])} на 4 эпохах и {sg(O2_ONOFF[8, None][0])} на 8; не растёт с обучением и не отличим от нуля.</li>"
                    "<li><b>Синтетические ядра - нет</b> (O3). <b>BANK не подтверждён ретроспективно</b> (O4).</li>"
+                   f"<li><b>Стратегия на прогнозе размера не работает</b> (O8): пробой полосы m(1 ± 1,5σ̂) даёт {pct(O8CR['c1_primary']['mean'])} % в месяц с основными заливками, но {pct(O8CR['c1_PESS']['mean'])} % при честных (PESS); "
+                   f"L1 не лучше ни перемешанной σ̂, ни σ̂ без геометрии: размер прогнозируем, но на споте без направления это не деньги.</li>"
                    "<li><b>Ждут проспективной оценки:</b> score_B для O4, O5, O6 и O7 с 2026-10/11 (см. «Что ещё не готово»).</li>"
                    "<li><b>Оговорки:</b> прибавка O1 затухает на форварде и не держится против бустинга; порог размера пройден на грани; интервалы по месяцам оптимистичны из-за перекрытия меток.</li></ul>"))
     return body
@@ -942,6 +972,311 @@ def sec_o7():
     return "".join(parts)
 
 
+# ======================================================================================================== section O8
+O8D = OUT / "O8_volband_strategy"
+O8ARMS = [("L1", "primary", "L1 (основной)", PINK, "solid"), ("L1", "PESS", "L1, PESS-заливки", PINK, "dash"),
+          ("R0", "primary", "R0 (σ̂ без геометрии)", GOLD, "solid"), ("SHUF", "primary", "SHUF (σ̂ перемешана)", VIOLET, "solid"),
+          ("TRAIL", "primary", "TRAIL (σ по прошлому)", NEUT, "solid")]
+O8SPANS = [("B", "B: 2024-07..2025-07-20, шаг вперёд (вердикт)"), ("C", "C: 2025-10-05..2026-10-12, заморожено (вердикт)"),
+           ("A", "A: 2018-07..2020-12, шаг вперёд (отдельно, не вердикт)")]
+O8_BH_RANGE = {"B": ("2024-07-01", C.CUTOFF), "A": ("2018-07-01", "2020-12-31 23:59")}
+
+
+def px(x):
+    return f"{x:,.0f}".replace(",", " ")
+
+
+def pct(x, nd=2, sign=True):
+    return ru(x * 100, nd, sign)
+
+
+def o8_sortable(rows, header):
+    """rows: [[(shown, sort value), ...]]; a click on a header sorts the table (script at the end of the page)."""
+    h = "".join(f"<th>{x}</th>" for x in header)
+    b = "".join("<tr>" + "".join(f'<td data-v="{v}">{s}</td>' for s, v in r) + "</tr>" for r in rows)
+    return f'<table class="rt sortable"><thead><tr>{h}</tr></thead><tbody>{b}</tbody></table>'
+
+
+def o8_trade_traces(fig, ex, row, col, show_leg):
+    """Candles of one real example, its two stop orders, the entry, the stop level and the exit."""
+    b = pd.DataFrame(ex["bars"])
+    t = pd.to_datetime(b["t"])
+    assert t.max() <= pd.Timestamp(C.CUTOFF) and t.min() < pd.Timestamp(ex["entry_time"]) < t.max()
+    kw = dict(row=row, col=col)
+    fig.add_trace(go.Candlestick(x=t, open=b["o"], high=b["h"], low=b["l"], close=b["c"], showlegend=False,
+                                 increasing=dict(line=dict(color=UP), fillcolor=UP), decreasing=dict(line=dict(color=DOWN), fillcolor=DOWN),
+                                 hovertemplate="%{x|%Y-%m-%d %H:%M}<br>O %{open:.0f} H %{high:.0f} L %{low:.0f} C %{close:.0f}<extra></extra>"), **kw)
+    td, te, tx, tts = (pd.Timestamp(ex[k]) for k in ("decision_time", "entry_time", "exit_time", "time_stop_time"))
+    U, L, m, sgm = ex["buy_stop_U"], ex["sell_stop_L"], ex["m"], ex["sigma"]
+    assert abs(U - m * (1 + 1.5 * sgm)) < 1e-6 * m and abs(L - m * (1 - 1.5 * sgm)) < 1e-6 * m
+    assert abs(ex["stop_px"] - ex["entry_px"] * (1 - ex["side"] * sgm)) < 1e-6 * m and tts - te == pd.Timedelta(minutes=60)
+    td15 = td + pd.Timedelta(minutes=15)
+
+    def seg(x0, x1, y, name, color, dash, width, show):
+        fig.add_trace(go.Scatter(x=[x0, x1], y=[y, y], mode="lines", line=dict(color=color, width=width, dash=dash), name=name, legendgroup=name, showlegend=show,
+                                 hovertemplate=name + ": %{y:.0f}<extra></extra>"), **kw)
+
+    seg(td, tx, m, "якорь m (цена на момент решения)", MUTED, "dot", 1.6, show_leg)
+    seg(td, td15, U, "стоп-ордера m(1 ± 1,5σ̂), живут 15 минут", GOLD, "dash", 2.4, show_leg)
+    seg(td, td15, L, "стоп-ордера m(1 ± 1,5σ̂), живут 15 минут", GOLD, "dash", 2.4, False)
+    seg(te, tx, ex["stop_px"], "защитный стоп: вход ∓ 1σ̂", SALMON, "dash", 2.4, show_leg)
+    lo, hi = min(b["l"].min(), L), max(b["h"].max(), U)
+    if tts <= t.max():
+        fig.add_trace(go.Scatter(x=[tts, tts], y=[lo, hi], mode="lines", line=dict(color=VIOLET, width=1.6, dash="dot"), name="тайм-стоп: вход + 60 минут",
+                                 legendgroup="тайм-стоп", showlegend=show_leg, hoverinfo="skip"), **kw)
+    long_ = ex["side"] == 1
+    fig.add_trace(go.Scatter(x=[te], y=[ex["entry_px"]], mode="markers", marker=dict(symbol="triangle-up" if long_ else "triangle-down", size=14, color=INK, line=dict(color=PAPER, width=1.5)),
+                             name="вход" + (" (покупка)" if long_ else " (продажа)"), legendgroup="вход", showlegend=show_leg,
+                             hovertemplate="вход %{x|%H:%M}, %{y:.0f}<extra></extra>"), **kw)
+    xc = SALMON if ex["reason"] == "stop" else VIOLET
+    fig.add_trace(go.Scatter(x=[tx], y=[ex["exit_px"]], mode="markers", marker=dict(symbol="x", size=13, color=xc, line=dict(color=xc, width=3)),
+                             name="выход", legendgroup="выход", showlegend=show_leg, hovertemplate="выход %{x|%H:%M}, %{y:.0f}<extra></extra>"), **kw)
+    return td, te, tx, tts, U, L
+
+
+def o8_ex_text(ex):
+    net = ex["gross_ret"] - O8_COST
+    side = "покупка" if ex["side"] == 1 else "продажа"
+    why = "сработал защитный стоп" if ex["reason"] == "stop" else "тайм-стоп через 60 минут"
+    return side, why, ex["gross_ret"], net
+
+
+def o8_schematic(ex):
+    fig = make_subplots(rows=1, cols=1)
+    td, te, tx, tts, U, L = o8_trade_traces(fig, ex, 1, 1, True)
+    side, why, gross, net = o8_ex_text(ex)
+    m, sgm = ex["m"], ex["sigma"]
+    A = lambda **k: fig.add_annotation(xref="x", yref="y", showarrow=True, arrowhead=2, arrowcolor=INK2, font=dict(size=12, color=INK), bgcolor=T.rgba(PAPER, 0.85),
+                                       bordercolor=AXIS, borderwidth=1, borderpad=3, align="left", **k)
+    A(x=td, y=m, text=f"<b>1. Решение {td:%H:%M}</b><br>якорь m = {px(m)}<br>σ̂ (прогноз L1, 60 минут) = {ru(sgm * 100, 2)} %", ax=-30, ay=70, xanchor="right")
+    A(x=td + pd.Timedelta(minutes=7), y=U, text=f"<b>2. Покупка-стоп</b> U = m(1 + 1,5σ̂)<br>= {px(U)}", ax=-120, ay=-30, xanchor="right")
+    A(x=td + pd.Timedelta(minutes=7), y=L, text=f"<b>2. Продажа-стоп</b> L = m(1 − 1,5σ̂)<br>= {px(L)}", ax=-120, ay=30, xanchor="right")
+    A(x=te, y=ex["entry_px"], text=f"<b>3. Вход {te:%H:%M}</b><br>цена дошла до уровня: {side} по {px(ex['entry_px'])};<br>второй ордер снят", ax=-30, ay=-110, xanchor="right")
+    A(x=te + pd.Timedelta(minutes=20), y=ex["stop_px"], text=f"<b>4. Защитный стоп</b> на 1σ̂ от входа = {px(ex['stop_px'])}<br>" + ("не тронут" if ex["reason"] == "time" else "сработал"),
+      ax=30, ay=60, xanchor="left")
+    A(x=tx, y=ex["exit_px"], text=f"<b>5. Выход {tx:%H:%M}</b><br>{why}<br>брутто {pct(gross)} %, нетто (2 б.п.) {pct(net)} %", ax=-70, ay=-60, xanchor="right")
+    fig.update_xaxes(rangeslider_visible=False)
+    fig.update_yaxes(title_text="цена BTC/USDT")
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0))
+    return F(fig, "o8", "o8_schematic", "Одна сделка на реальных барах BTC", 640,
+             subtitle=f"{ex['span']}; {td:%Y-%m-%d}; минутные свечи от {str(pd.DataFrame(ex['bars'])['t'].iloc[0])[11:16]} до {str(pd.DataFrame(ex['bars'])['t'].iloc[-1])[11:16]} UTC")
+
+
+def o8_examples():
+    exs = o8_win["examples"]
+    assert len(exs) == 6 and sum(e["span"].startswith("selection") for e in exs) == 3
+    titles = []
+    for i, ex in enumerate(exs):
+        side, why, gross, net = o8_ex_text(ex)
+        titles.append(f"{'подбор' if ex['span'].startswith('selection') else 'тест B'} {str(ex['decision_time'])[:10]} · {side} · "
+                      f"{'стоп' if ex['reason'] == 'stop' else 'время'} · {pct(gross)} %")
+    fig = make_subplots(rows=2, cols=3, subplot_titles=titles, vertical_spacing=0.14, horizontal_spacing=0.06)
+    for i, ex in enumerate(exs):
+        o8_trade_traces(fig, ex, i // 3 + 1, i % 3 + 1, i == 0)
+    fig.update_xaxes(rangeslider_visible=False, tickformat="%H:%M")
+    fig.update_annotations(font_size=12, font_color=INK2)
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.04, x=0))
+    return F(fig, "o8", "o8_examples", "Шесть реальных сделок", 780, lift=24, subtitle="три из подбора (2021-2024), три из теста B (2024-07..2025-07); брутто доходность в заголовке")
+
+
+def o8_selection():
+    S = sorted(o8_sel, key=lambda s: s["t_2bps"])
+    fig = go.Figure()
+    for fam, col, pat in (("BRK", VIOLET, ""), ("REV", TAN, "/")):
+        d = [s for s in S if s["family"] == fam]
+        fig.add_trace(go.Bar(y=[s["config"] for s in d], x=[s["t_2bps"] for s in d], orientation="h", name=("пробой (BRK)" if fam == "BRK" else "возврат к якорю (REV)"),
+                             marker=dict(color=col, pattern_shape=pat, line=dict(color=SURFACE, width=0.8)),
+                             customdata=[[s["mean_m_2bps"] * 100, s["n_trades"], s["months_pos_2bps"], s["n_months"]] for s in d],
+                             hovertemplate="%{y}<br>t = %{x:+.2f}; среднее нетто %{customdata[0]:+.2f} %/мес; сделок %{customdata[1]}; месяцев с плюсом %{customdata[2]}/%{customdata[3]}<extra></extra>"))
+    fig.add_vline(x=0, line=dict(color=NEUT, width=1))
+    fig.add_annotation(x=_ch["t_2bps"], y=o8_choice["config"], text=f"выбрано: t = {ru(_ch['t_2bps'], 2, True)}", showarrow=True, ax=70, ay=0, font=dict(size=12, color=INK), arrowcolor=INK2)
+    fig.update_yaxes(categoryorder="array", categoryarray=[s["config"] for s in S])
+    fig.update_layout(barmode="overlay", xaxis_title="t-статистика среднего месячного нетто (2 б.п.), 42 месяца подбора 2021-01..2024-06", yaxis=dict(autorange=True, dtick=1),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0))
+    f = F(fig, "o8", "o8_selection", "24 конфигурации на месяцах подбора", 760, subtitle="сверху вниз по убыванию t; рисунок: штриховка - REV, сплошной - BRK; все 12 REV убыточны")
+    rows = []
+    for s in sorted(o8_sel, key=lambda s: -s["t_2bps"]):
+        r = s["reasons"]
+        rows.append([(s["config"] + (" ★" if s["config"] == o8_choice["config"] else ""), s["config"]), ("пробой" if s["family"] == "BRK" else "возврат", s["family"]), (ru(s["k"], 1), s["k"]),
+                     (str(s["H"]), s["H"]), ("нет" if s["stop"] is None else ru(s["stop"], 1) + "σ̂", s["stop"] or 0), (px(s["n_trades"]), s["n_trades"]),
+                     (ru(s["mean_m_0bps"] * 100, 2, True), s["mean_m_0bps"]), (ru(s["mean_m_2bps"] * 100, 2, True), s["mean_m_2bps"]), (ru(s["mean_m_5bps"] * 100, 2, True), s["mean_m_5bps"]),
+                     (ru(s["t_2bps"], 2, True), s["t_2bps"]), (f"{s['months_pos_2bps']}/{s['n_months']}", s["months_pos_2bps"]), (ru(s["hit_2bps"] * 100, 1), s["hit_2bps"]),
+                     (ru(s["max_dd_2bps"] * 100, 1), s["max_dd_2bps"]), (f"{r.get('target', 0)}/{r.get('stop', 0)}/{r.get('time', 0)}", r.get("target", 0) + r.get("stop", 0) + r.get("time", 0))])
+    chosen = [r for r in rows if r[0][1] == o8_choice["config"]][0]
+    assert chosen[9][0] == "+3,49" and chosen[7][0] == "+4,04" and chosen[12][0] == "28,2", chosen
+    tb = o8_sortable(rows, ["конфигурация", "тип", "k", "H, мин", "стоп", "сделок", "0 б.п., %/мес", "2 б.п., %/мес", "5 б.п., %/мес", "t (2 б.п.)", "месяцев +", "попаданий, %", "макс. просадка, %", "цель/стоп/время"])
+    return f, tb
+
+
+def o8_equity():
+    sps = ["B", "C", "A"]
+    fig = make_subplots(rows=3, cols=3, shared_xaxes=False, vertical_spacing=0.07, horizontal_spacing=0.07, row_heights=[0.40, 0.28, 0.32],
+                        subplot_titles=[dict(o8_spans_title)[s] for s in sps] + [""] * 6)
+    bars = pd.read_csv(C.ensure_cut_csv(), usecols=["timestamp", "close"])
+    bars["timestamp"] = pd.to_datetime(bars["timestamp"])
+    C.assert_cut(bars["timestamp"], "O8 buy-and-hold bars")
+    for ci, sp in enumerate(sps, start=1):
+        tr = pd.read_csv(O8D / f"trades_{sp}.csv.gz", parse_dates=["entry_time", "exit_time"])
+        for arm, var, nm, col, dash in O8ARMS:
+            d = tr[(tr["arm"] == arm) & (tr["variant"] == var)].sort_values("exit_time")
+            net = (d["ret_gross"] - O8_COST).to_numpy()
+            eq = np.cumsum(net) * 100
+            ddv = (np.maximum.accumulate(np.r_[0.0, eq])[1:] - eq)
+            row = O8R[sp, arm, var]
+            assert len(d) == row["n_trades"] and abs(eq[-1] - row["total_net"] * 100) < 1e-6 and abs(ddv.max() - row["max_dd"] * 100) < 1e-6, (sp, arm, var)
+            show = ci == 1
+            fig.add_trace(go.Scatter(x=d["exit_time"], y=eq, mode="lines", line=dict(color=col, width=2.2 if arm == "L1" else 1.5, dash=dash), name=nm, legendgroup=nm, showlegend=show,
+                                     hovertemplate="%{x|%Y-%m-%d %H:%M}<br>" + nm + ": %{y:+.1f} %<extra></extra>"), row=1, col=ci)
+            fig.add_trace(go.Scatter(x=d["exit_time"], y=-ddv, mode="lines", line=dict(color=col, width=2.2 if arm == "L1" else 1.5, dash=dash), name=nm, legendgroup=nm, showlegend=False,
+                                     hovertemplate="%{x|%Y-%m-%d %H:%M}<br>" + nm + ": просадка %{y:.1f} %<extra></extra>"), row=2, col=ci)
+        # buy and hold: only the cut file is read; C is a forward span, so its number comes from the test result
+        bh = O8BH[sp]
+        if sp in O8_BH_RANGE:
+            lo, hi = O8_BH_RANGE[sp]
+            b = bars[(bars["timestamp"] >= lo) & (bars["timestamp"] <= hi)]
+            lr = np.log(b["close"].to_numpy() / b["close"].iloc[0]) * 100
+            day = pd.DataFrame({"t": b["timestamp"].dt.floor("D"), "lr": lr}).groupby("t").last()
+            assert abs(day["lr"].iloc[-1] - bh["log_return"] * 100) < 1.0, (sp, day["lr"].iloc[-1], bh["log_return"])
+            fig.add_trace(go.Scatter(x=day.index, y=day["lr"], mode="lines", line=dict(color=INK2, width=1.8), name="купить и держать (лог.)", legendgroup="bh", showlegend=ci == 1,
+                                     hovertemplate="%{x|%Y-%m-%d}: %{y:+.1f} %<extra>купить и держать</extra>"), row=3, col=ci)
+        else:
+            fig.add_trace(go.Scatter(x=[0.5], y=[0.5], mode="text", showlegend=False, hoverinfo="skip", textfont=dict(size=13, color=INK2),
+                                     text=[f"бары после {C.CUTOFF[:10]} не читались;<br>число из теста: купить и держать<br><b>{pct(bh['log_return'], 1)} %</b> (лог.), макс. просадка по дням <b>{ru(bh['max_dd_daily'] * 100, 1)} %</b>"]), row=3, col=ci)
+            fig.update_xaxes(visible=False, range=[0, 1], row=3, col=ci)
+            fig.update_yaxes(visible=False, range=[0, 1], row=3, col=ci)
+        fig.update_yaxes(title_text="сумма нетто-доходностей позиций, %" if ci == 1 else None, row=1, col=ci)
+        fig.update_yaxes(title_text="просадка, п.п." if ci == 1 else None, row=2, col=ci)
+        if sp in O8_BH_RANGE:
+            fig.update_yaxes(title_text="купить и держать, %" if ci == 1 else None, row=3, col=ci)
+        fig.add_hline(y=0, line=dict(color=NEUT, width=1), row=1, col=ci)
+    fig.update_annotations(font_size=12, font_color=INK2)
+    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.0, x=0))
+    return F(fig, "o8", "o8_equity", "Накопленная доходность и просадка", 1000, lift=24,
+             subtitle="2 б.п. за круг; одно плечо, без реинвестирования; пунктир - PESS-заливки; низ - купить и держать (отдельная шкала)")
+
+
+o8_spans_title = [(s, t) for s, t in O8SPANS]
+
+
+def o8_monthly_tables():
+    out = []
+    for sp, ttl in O8SPANS:
+        rows_ = []
+        r0 = O8R[sp, "L1", "primary"]
+        months = r0["months"]
+        for arm, var, nm, col, dash in O8ARMS:
+            assert O8R[sp, arm, var]["months"] == months
+        for i, mo in enumerate(months):
+            cells = [mo]
+            for arm, var, nm, col, dash in O8ARMS:
+                v = O8R[sp, arm, var]["monthly_2bps"][i] * 100
+                g = ("&#9650;", T.GOOD) if v > 0 else ("&#9660;", T.CRITICAL)
+                cells.append(f'<span style="color:{g[1]}">{g[0]}</span> {ru(v, 1, True)}')
+            rows_.append(cells)
+        mean = ["<b>среднее</b>"] + [f"<b>{ru(O8R[sp, a, v]['mean_m_2bps'] * 100, 2, True)}</b>" for a, v, *_ in O8ARMS]
+        rows_.append(mean)
+        pos = ["месяцев +"] + [str(int(sum(x > 0 for x in O8R[sp, a, v]["monthly_2bps"]))) + f"/{len(months)}" for a, v, *_ in O8ARMS]
+        rows_.append(pos)
+        tb = table(rows_, ["месяц"] + [nm for _, _, nm, _, _ in O8ARMS])
+        out.append(f"<div><h4>{ttl}</h4>{tb}</div>")
+    # the monthly L1 numbers must equal the committed table text
+    for sp in ("B", "C", "A"):
+        line = " ".join(f"{m}:{v * 100:+.1f}" for m, v in zip(O8R[sp, "L1", "primary"]["months"], O8R[sp, "L1", "primary"]["monthly_2bps"]))
+        assert line in o8_tab, (sp, line)
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(440px,1fr));gap:18px">' + "".join(out) + "</div>"
+
+
+def o8_span_table():
+    rows = []
+    for sp, _ in O8SPANS:
+        for arm in ("L1", "R0", "TRAIL", "SHUF"):
+            for var in ("primary", "PESS"):
+                r = O8R[sp, arm, var]
+                rs = r["reasons"]
+                rows.append([f"<b>{sp}</b>" if (arm, var) == ("L1", "primary") else sp, arm, "основные" if var == "primary" else "PESS", px(r["n_trades"]), ru(r["hit"] * 100, 1),
+                             ru(r["mean_trade_bps"], 2, True), ru(r["median_trade_bps"], 2, True), ru(r["mean_m_2bps"] * 100, 2, True), ru(r["mean_m_5bps"] * 100, 2, True), ru(r["t_2bps"], 2, True),
+                             ru(r["sharpe_daily"], 2, True), ru(r["max_dd"] * 100, 1), ru(r["calmar"], 2, True), f"{rs.get('stop', 0)}/{rs.get('time', 0)}", badge("bad", "не выполнено")])
+    # a few cells tie to REPORT.md
+    assert O8R["B", "L1", "primary"]["n_trades"] == 955 and O8R["C", "L1", "primary"]["n_trades"] == 1154 and O8R["A", "L1", "primary"]["n_trades"] == 2015
+    assert "B 955 (hit 43.5 %, max DD 11.9 %)" in o8_report and abs(O8R["B", "L1", "primary"]["max_dd"] * 100 - 11.85) < 5e-3
+    return table(rows, ["отрезок", "прогноз σ̂", "заливки", "сделок", "попаданий, %", "средняя сделка, б.п.", "медианная, б.п.", "нетто 2 б.п., %/мес", "5 б.п., %/мес", "t", "Шарп (дн.)", "макс. просадка, %", "Кальмар", "стоп/время", "цель владельца"])
+
+
+def o8_verdict():
+    def ci_row(label, key, kind_text):
+        c = O8CR[key]
+        ok = c["lo"] > 0
+        res = badge("good", "выполнен") if ok else badge("bad", "не выполнен")
+        if key == "c1_primary":
+            res = badge("part", "выполнен, на грани")
+        return [label, f"{pct(c['mean'], 3)} % [{pct(c['lo'], 3)}; {pct(c['hi'], 3)}]", f"{c['pos']}/{c['n']}", ru(c["t"], 2, True), res]
+    rows = [ci_row("<b>1.</b> L1: средний месячный нетто (2 б.п.), основные заливки", "c1_primary", ""),
+            ci_row("<b>1.</b> то же при PESS-заливках (стоп проверяется и в минуте входа)", "c1_PESS", ""),
+            ci_row("<b>2.</b> L1 − SHUF (σ̂ перемешана - нулевая гипотеза), парно по месяцам", "c2_L1_minus_SHUF", ""),
+            ci_row("<b>3.</b> L1 − R0 (та же стратегия, σ̂ без геометрии), парно по месяцам", "c3_L1_minus_R0", ""),
+            ci_row("<span class='note'>справочно: L1 − SHUF при PESS</span>", "c2_L1_minus_SHUF_PESS", ""),
+            ci_row("<span class='note'>справочно: L1 − R0 при PESS</span>", "c3_L1_minus_R0_PESS", "")]
+    tb = table(rows, ["критерий (B + C вместе, 26 месяцев, 2 б.п.)", "среднее, % в месяц [95% t-интервал]", "месяцев с плюсом", "t", "результат"])
+    allrows = list(O8R.values())
+    best_hit = max(allrows, key=lambda r: r["hit"])
+    best_dd = min(allrows, key=lambda r: r["max_dd"])
+    assert not any(r["hit"] > 0.60 and r["max_dd"] < 0.05 for r in allrows) and max(r["hit"] for r in allrows) < 0.60 and min(r["max_dd"] for r in allrows) > 0.05
+    tgt = table([["цель владельца: попаданий &gt; 60 %, макс. просадка &lt; 5 %", badge("bad", "не выполнено нигде"),
+                  f"лучшее попадание среди 24 строк: {ru(best_hit['hit'] * 100, 1)} % ({best_hit['span']}, {best_hit['arm']}, {best_hit['variant']}); меньшая просадка: {ru(best_dd['max_dd'] * 100, 1)} % ({best_dd['span']}, {best_dd['arm']}, {best_dd['variant']}); "
+                  "ни одна строка не выполняет обе части"]], ["", "результат", "числа"])
+    v = (f'<div class="verdictline">{badge("bad", "стратегия работает на независимых данных: нет")} &nbsp; {badge("bad", "геометрия добавляет к стратегии: нет")}</div>')
+    return v + tb + tgt
+
+
+def sec_o8():
+    parts = []
+    fl = ("<ul class='note'>"
+          "<li><b>Что прогнозируем.</b> Не знак, а размер: каждые 15 минут (в :00, :15, :30, :45) модель L1 из O5 даёт σ̂ - ожидаемое стандартное отклонение лог-доходности на ближайшие H минут "
+          "(из логарифма реализованной волатильности; геометрия индикаторов входит в признаки). Направление не прогнозируется.</li>"
+          "<li><b>Якорь и полоса.</b> Якорь m - цена открытия минуты решения. Ставятся два стоп-ордера: покупка выше <b>m(1 + k·σ̂)</b> и продажа ниже <b>m(1 − k·σ̂)</b> (в выбранной настройке k = 1,5). "
+          "Они живут 15 минут; сработавший первым побеждает, второй снимается; одна позиция одновременно.</li>"
+          "<li><b>Вход и выход.</b> Вход по цене уровня (при гэпе - по открытию, то есть по худшей цене). От цены входа ставится защитный стоп на 1·σ̂ против позиции. "
+          "Выход - стоп или тайм-стоп через H = 60 минут, что раньше. Стоимость 2 б.п. за круг (D-044: по умолчанию 0; это выбор владельца для этого исследования); 0 и 5 б.п. тоже посчитаны.</li>"
+          "<li><b>Идея.</b> Если σ̂ хорошо оценивает размер колебаний, полоса стоит там, где обычное колебание кончается: выход за неё чаще означает начало движения, которое стоит поймать (BRK). "
+          "Вторая идея - возврат к якорю (REV). Какая из двух работает и с какими k, H, стопом - решили 24 конфигурации на месяцах подбора 2021-01..2024-06 (по t-статистике), "
+          "до того как был посчитан хоть один тестовый месяц. Тесты: B (2024-07..2025-07-20), C (2025-10-05..2026-10-12, заморожено), A (2018-07..2020-12, отдельно).</li>"
+          "<li><b>Две проверки.</b> «Не удача»: та же стратегия с перемешанной σ̂ (SHUF). «Геометрия нужна»: та же стратегия с σ̂ без геометрии (R0). "
+          "PESS (добавлено до тестов): стоп проверяется и в минуте входа - худший порядок внутри минуты.</li></ul>")
+    parts.append(card("1. Как это работает", fl + o8_schematic(o8_win["examples"][0]),
+                      "Свечи - реальные минутные бары из файла цен до 2025-07-20. Серые пунктиры: якорь; золотые: два стоп-ордера (живут 15 минут); красный: защитный стоп; фиолетовый пунктир: тайм-стоп."))
+    ex = o8_examples()
+    fw = o8_win["forward_numbers_only"]
+    assert len(fw) == 2 and all(pd.Timestamp(f["entry_time"]) > pd.Timestamp(C.CUTOFF) for f in fw)
+    frows = [[str(f["entry_time"])[:16], str(f["exit_time"])[:16], "покупка" if f["side"] == 1 else "продажа", px(f["entry_px"]), px(f["exit_px"]), "стоп" if f["reason"] == "stop" else "время",
+              pct(f["ret_gross"], 2), ru(f["sigma"] * 100, 2)] for f in fw]
+    parts.append(card("Шесть реальных сделок", ex + "<h4>Две сделки на прогнозном файле (после 2025-07-20) - только числа, без баров</h4>" +
+                      table(frows, ["вход", "выход", "сторона", "цена входа", "цена выхода", "выход по", "брутто, %", "σ̂, %"]),
+                      "Три сделки из месяцев подбора и три из теста B. Свечи со сделок прогнозного периода не рисуются: бары после отсечки не читаются."))
+    f, tb = o8_selection()
+    parts.append(card("2. Подбор: 24 конфигурации на 42 месяцах (2021-01..2024-06)", f + "<h4>Таблица (щёлкните по заголовку, чтобы отсортировать)</h4>" + tb,
+                      f"Выбор: максимум t при 2 б.п. - BRK k=1,5, H=60, стоп 1σ̂: {pct(_ch['mean_m_2bps'], 2)} % в месяц, t = {ru(_ch['t_2bps'], 2, True)}, {px(_ch['n_trades'])} сделок. "
+                      "Все 12 конфигураций возврата к якорю (REV) убыточны; прибыльны только пробои (BRK). Колонки «0 / 2 / 5 б.п.» - среднее нетто в месяц при этой стоимости круга; «цель/стоп/время» - число выходов по причинам."))
+    parts.append(card("3. Независимые тесты: доходность и просадка", o8_equity() + "<h4>Месячные доходности (2 б.п., основные заливки, если не указано иное)</h4>" + o8_monthly_tables(),
+                      "Кривая - сумма нетто-доходностей позиций, в процентах капитала при плече 1; просадка - от максимума этой суммы, в порядке сделок. "
+                      "Основная кривая L1 растёт на B и A, на C она плоская; при PESS кривая уходит вниз на C и A, а на B остаётся слабо положительной."))
+    parts.append(card("Все числа по отрезкам и вариантам заливок", o8_span_table(),
+                      "Попадание - доля позиций с положительным нетто. «PESS» - худший порядок внутри минуты входа. TRAIL не приведён к масштабу L1 (только описательно)."))
+    parts.append(card("4. Табло вердиктов", o8_verdict(),
+                      "Вердикт «стратегия работает» требует критериев 1 (при обоих вариантах заливок) и 2; «геометрия добавляет» - критерия 3. Нижняя граница интервала должна быть выше нуля. Единица - месяц; месяцы не независимы."))
+    rd = ("<ul class='note'>"
+          "<li><b>Прибыль исчезает при честных заливках.</b> С основными заливками стратегия положительна на B, около нуля на C (самый свежий, полностью замороженный период) и положительна на A. "
+          "Если стоп проверяется и внутри минуты входа (PESS), среднее по B + C отрицательно (−1,06 % в месяц), на C и A убыток, на B +1,18 % с интервалом, включающим ноль. Подбор заработал в основном на том, что игнорировал разворот внутри минуты пробоя: это артефакт модели заливок, а не преимущество.</li>"
+          "<li><b>Прогноз размера не движет результатом.</b> L1 − R0 по B + C: −0,38 % [−1,41; +0,66] (R0 на B даже лучше). SHUF (σ̂ перемешана, время потеряно) на B заметно лучше L1 (+7,36 против +3,68 % в месяц, при 2,6 раза большем числе сделок); по B + C L1 − SHUF = −1,24 % [−3,40; +0,92]. "
+          "Доход - от импульса после пробоя полосы в трендовые периоды (B, A), а не от того, КОГДА прогноз говорит, что движения будут большими.</li>"
+          "<li><b>В согласии со всем проектом.</b> Размер движений прогнозируем (O1, O5, H53, H83), но на споте одного размера мало: нужно направление, а минутное направление выдохлось (H51, H52). "
+          "T02 (экспозиция по волатильности) и H78/H79 (направление, масштабированное волатильностью) закончились так же.</li></ul>")
+    cav = ("<ul class='note'><li>PESS - граница (худший порядок внутри минуты), а не модель заливок: истина между основными и PESS. Стоп-маркет-заливки без проскальзывания сверх 2 б.п. - оптимистично для пробоев.</li>"
+           "<li>Месяцы не независимы; три месяца неполные: 2025-07 (до 20-го), 2025-10 (с 5-го), 2026-10 (12 дней). Месяцы C читали ранние тактические исследования; цены на них не использовались для подбора стратегии, 12 дней 2026-10 не читал никто.</li>"
+           "<li>SHUF - не чистая нулевая гипотеза: перемешивание меняет число сделок. Гэп-страж: решения, у которых следующие 75 баров пересекают 19-часовой разрыв файла (до 2025-03-15), ордеров не ставят.</li></ul>")
+    parts.append(card("5. Чтение руководителя", rd + "<h4>Оговорки</h4>" + cav, "Из REPORT.md O8."))
+    return "".join(parts)
+
+
 def sec_pending():
     body = ("<ul class='note'>"
             "<li><b>O4, часть B:</b> score_B.py (O4_bank_confirm) оценивает BANK−R0 на первых 3 полных месяцах с 2026-10 (2026-10..12), критерий A при H=60, 3 из 3 месяцев с плюсом. "
@@ -960,7 +1295,7 @@ def get_css():
     src = (HERE / "build_report.py").read_text(encoding="utf-8")
     m = re.search(r'CSS = """(.*?)""" % dict', src, re.S)
     css = m.group(1) % dict(PAPER=PAPER, SURFACE=SURFACE, INK=INK, INK2=INK2, MUTED=MUTED, GRID=GRID, AXIS=AXIS, PINK=PINK, GOLD=GOLD, FONT=T.FONT)
-    return css + ".lead{max-width:1500px}ul.note{padding-left:20px}td ul{margin:0}"
+    return css + ".lead{max-width:1500px}ul.note{padding-left:20px}td ul{margin:0}.verdictline{margin:6px 0 14px;font-size:15px}table.sortable th{cursor:pointer}"
 
 
 def build():
@@ -968,7 +1303,7 @@ def build():
     assert d["timestamp"].max() <= pd.Timestamp(C.CUTOFF)
     secs = [("o0", "Обзор", sec1), ("o1", "O1. Геометрия", sec_o1), ("o2", "O2. Физика", sec_o2), ("o3", "O3. Синтетические индикаторы", sec_o3),
             ("o4", "O4. Подтверждение BANK", sec_o4), ("o5", "O5. Геометрия на лучшей базе", sec_o5),
-            ("o6", "O6. Часовая геометрия", sec_o6), ("o7", "O7. Геометрия как интервалы", sec_o7), ("pend", "Что ещё не готово", sec_pending)]
+            ("o6", "O6. Часовая геометрия", sec_o6), ("o7", "O7. Геометрия как интервалы", sec_o7), ("o8", "O8. Стратегия: пробой полосы", sec_o8), ("pend", "Что ещё не готово", sec_pending)]
     built = []
     for sid, title, fn in secs:
         body = fn()
@@ -981,14 +1316,15 @@ def build():
              f"<nav><h1>Outlook</h1><div class='sub'>neural_trade · тактическая сессия<br>данные цен до {C.CUTOFF[:10]}</div>{nav}</nav><main>"]
     for sid, title, body in built:
         parts.append(f'<section id="{sid}"><h2>{title}</h2>{body}</section>')
-    parts.append(f"<footer>Сгенерировано runs/tactical/report/build_outlook_report.py (коммит основы {sha}); данные: runs/tactical/outlook/O1..O7 (results, tables, interp, kernels, windows, summary, REPORT). "
+    parts.append(f"<footer>Сгенерировано runs/tactical/report/build_outlook_report.py (коммит основы {sha}); данные: runs/tactical/outlook/O1..O8 (results, tables, interp, kernels, windows, summary, REPORT). "
                  f"Цены - только до {C.CUTOFF}; числа прогнозного года вперёд (2025-10..2026-09) - результаты, не бары. Исследовательская работа, одно зерно, не влияет на умолчания MVP (D-062).</footer></main>")
     parts.append("""<script>(function(){const q=new URLSearchParams(location.search).get('only');
 if(q){document.body.classList.add('only');document.querySelectorAll('main > section').forEach(s=>{if(s.id!==q)s.style.display='none'});}
 addEventListener('load',()=>setTimeout(()=>window.dispatchEvent(new Event('resize')),500));
 const links=[...document.querySelectorAll('nav a')];
 function onscroll(){let cur=null;document.querySelectorAll('main > section').forEach(s=>{if(s.getBoundingClientRect().top<140)cur=s.id});links.forEach(a=>a.classList.toggle('on',a.getAttribute('href')==='#'+cur))}
-addEventListener('scroll',onscroll);})();</script></body></html>""")
+addEventListener('scroll',onscroll);
+document.querySelectorAll('table.sortable').forEach(t=>{t.querySelectorAll('th').forEach((th,i)=>{th.title='сортировать';th.addEventListener('click',()=>{const tb=t.tBodies[0];const rows=[...tb.rows];const asc=th.dataset.asc!=='1';th.dataset.asc=asc?'1':'0';rows.sort((a,b)=>{const x=a.cells[i].dataset.v,y=b.cells[i].dataset.v;const nx=parseFloat(x),ny=parseFloat(y);const c=(isNaN(nx)||isNaN(ny))?x.localeCompare(y):nx-ny;return asc?c:-c});rows.forEach(r=>tb.appendChild(r))})})});})();</script></body></html>""")
     out = HERE / "outlook_report.html"
     out.write_text("".join(parts), encoding="utf-8")
     print(f"wrote {out} {out.stat().st_size / 1e6:.1f} MB, {len(FIGS)} figures, {time.time() - t_start:.0f}s")
