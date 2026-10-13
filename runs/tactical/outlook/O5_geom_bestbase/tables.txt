@@ -1,0 +1,90 @@
+O5 tables. selection months 42, judgement months 30 (2018-07..2020-12)
+
+===== BASE CHOICE on the selection months 2021-01..2024-06, H=60 (mean Spearman; the better of L0 and N0) =====
+  S3  Spearman 0.7305  QLIKE 0.3324
+  L0  Spearman 0.7342  QLIKE 0.3255
+  N0  Spearman 0.7241  QLIKE 0.3430
+  B* = L0 (BANK ridge); candidate = L1; N0 - L0 = -0.0101
+
+===== JUDGEMENT 2018-07..2020-12  H=15: mean Spearman | mean QLIKE =====
+  S3  0.6401 | 0.4097   (n months 30)
+  L0  0.6463 | 0.3975   (n months 30)
+  L1  0.6585 | 0.3770   (n months 30)
+  N0  0.6187 | 0.4233   (n months 30)
+  N1  0.6316 | 0.4091   (n months 30)
+paired (a - b), per month: mean [95% t-CI] +positive/n (min, max)   |  QLIKE diff (negative = better)
+  L1-L0  Spearman +0.0122 [+0.0097,+0.0147] +30/30 (min +0.0017, max +0.0310)  |  QLIKE -0.0205 [-0.0248,-0.0161] +2/30 (min -0.0502, max +0.0066)
+  N1-N0  Spearman +0.0129 [+0.0092,+0.0166] +29/30 (min -0.0147, max +0.0306)  |  QLIKE -0.0142 [-0.0202,-0.0082] +3/30 (min -0.0447, max +0.0469)
+  L0-S3  Spearman +0.0062 [+0.0046,+0.0079] +29/30 (min -0.0006, max +0.0171)  |  QLIKE -0.0123 [-0.0160,-0.0085] +1/30 (min -0.0375, max +0.0067)
+
+===== JUDGEMENT 2018-07..2020-12  H=60: mean Spearman | mean QLIKE =====
+  S3  0.6565 | 0.3267   (n months 30)
+  L0  0.6619 | 0.3195   (n months 30)
+  L1  0.6675 | 0.3079   (n months 30)
+  N0  0.6329 | 0.3547   (n months 30)
+  N1  0.6416 | 0.3434   (n months 30)
+paired (a - b), per month: mean [95% t-CI] +positive/n (min, max)   |  QLIKE diff (negative = better)
+  L1-L0  Spearman +0.0056 [+0.0024,+0.0088] +23/30 (min -0.0138, max +0.0255)  |  QLIKE -0.0116 [-0.0150,-0.0082] +3/30 (min -0.0337, max +0.0034)
+  N1-N0  Spearman +0.0087 [+0.0036,+0.0138] +24/30 (min -0.0315, max +0.0316)  |  QLIKE -0.0113 [-0.0156,-0.0070] +2/30 (min -0.0327, max +0.0298)
+  L0-S3  Spearman +0.0054 [+0.0030,+0.0077] +25/30 (min -0.0055, max +0.0224)  |  QLIKE -0.0072 [-0.0098,-0.0046] +5/30 (min -0.0250, max +0.0016)
+
+===== JUDGEMENT 2018-07..2020-12  H=240: mean Spearman | mean QLIKE =====
+  S3  0.6016 | 0.2713   (n months 30)
+  L0  0.6065 | 0.2676   (n months 30)
+  L1  0.6068 | 0.2659   (n months 30)
+  N0  0.5670 | 0.3080   (n months 30)
+  N1  0.5764 | 0.3054   (n months 30)
+paired (a - b), per month: mean [95% t-CI] +positive/n (min, max)   |  QLIKE diff (negative = better)
+  L1-L0  Spearman +0.0004 [-0.0041,+0.0048] +14/30 (min -0.0277, max +0.0297)  |  QLIKE -0.0017 [-0.0056,+0.0023] +10/30 (min -0.0226, max +0.0362)
+  N1-N0  Spearman +0.0094 [+0.0034,+0.0154] +20/30 (min -0.0364, max +0.0421)  |  QLIKE -0.0026 [-0.0081,+0.0028] +11/30 (min -0.0479, max +0.0426)
+  L0-S3  Spearman +0.0049 [-0.0016,+0.0114] +16/30 (min -0.0368, max +0.0537)  |  QLIKE -0.0037 [-0.0077,+0.0003] +10/30 (min -0.0296, max +0.0208)
+
+===== PRE-REGISTERED CRITERION (H=60, candidate - B*, 30 months) =====
+B*=L0 candidate=L1: Spearman gain +0.0056 [+0.0024,+0.0088] +23/30 (min -0.0138, max +0.0255); QLIKE diff -0.0116 [-0.0150,-0.0082] +3/30 (min -0.0337, max +0.0034)
+  gain>=+0.003 True, lower>0 True, positive months>=20 True (23/30), QLIKE<=0 True -> PASS
+VERDICT: geometry adds over the best base
+
+===== SECONDARY H=15 and 240 (no verdict; Holm over the two horizons within each comparison) =====
+  L1-L0 H= 15: Spearman +0.0122 [+0.0097,+0.0147] +30/30 (min +0.0017, max +0.0310)  p=0.0000 Holm p=0.0000
+  L1-L0 H=240: Spearman +0.0004 [-0.0041,+0.0048] +14/30 (min -0.0277, max +0.0297)  p=0.8701 Holm p=0.8701
+  N1-N0 H= 15: Spearman +0.0129 [+0.0092,+0.0166] +29/30 (min -0.0147, max +0.0306)  p=0.0000 Holm p=0.0000
+  N1-N0 H=240: Spearman +0.0094 [+0.0034,+0.0154] +20/30 (min -0.0364, max +0.0421)  p=0.0033 Holm p=0.0033
+  L0-S3 H= 15: Spearman +0.0062 [+0.0046,+0.0079] +29/30 (min -0.0006, max +0.0171)  p=0.0000 Holm p=0.0000
+  L0-S3 H=240: Spearman +0.0049 [-0.0016,+0.0114] +16/30 (min -0.0368, max +0.0537)  p=0.1343 Holm p=0.1343
+
+===== per-month candidate - B* at H=60 (Spearman / QLIKE), train days =====
+  2018-07 -0.0030 / -0.0051  days 313.7  n_te 6375
+  2018-08 +0.0190 / -0.0221  days 344.7  n_te 6377
+  2018-09 +0.0069 / -0.0115  days 365.0  n_te 6163
+  2018-10 -0.0023 / -0.0254  days 365.0  n_te 6243
+  2018-11 +0.0036 / -0.0231  days 365.0  n_te 6102
+  2018-12 +0.0121 / -0.0081  days 365.0  n_te 6377
+  2019-01 +0.0096 / -0.0206  days 365.0  n_te 6376
+  2019-02 -0.0028 / -0.0172  days 365.0  n_te 5758
+  2019-03 +0.0026 / -0.0099  days 365.0  n_te 6375
+  2019-04 +0.0099 / -0.0085  days 365.0  n_te 6170
+  2019-05 +0.0061 / -0.0337  days 365.0  n_te 6377
+  2019-06 +0.0117 / -0.0242  days 365.0  n_te 6171
+  2019-07 +0.0040 / -0.0111  days 365.0  n_te 6361
+  2019-08 +0.0255 / -0.0162  days 365.0  n_te 6377
+  2019-09 +0.0040 / -0.0044  days 365.0  n_te 6170
+  2019-10 +0.0014 / -0.0089  days 365.0  n_te 6372
+  2019-11 -0.0095 / +0.0034  days 365.0  n_te 6172
+  2019-12 -0.0138 / -0.0022  days 365.0  n_te 6377
+  2020-01 -0.0052 / +0.0009  days 365.0  n_te 6377
+  2020-02 -0.0015 / +0.0008  days 365.0  n_te 5966
+  2020-03 +0.0030 / -0.0121  days 365.0  n_te 6377
+  2020-04 +0.0202 / -0.0138  days 365.0  n_te 6095
+  2020-05 +0.0090 / -0.0233  days 365.0  n_te 6377
+  2020-06 +0.0145 / -0.0002  days 365.0  n_te 6172
+  2020-07 +0.0029 / -0.0077  days 365.0  n_te 6377
+  2020-08 +0.0078 / -0.0122  days 365.0  n_te 6325
+  2020-09 +0.0033 / -0.0084  days 365.0  n_te 6168
+  2020-10 +0.0055 / -0.0023  days 365.0  n_te 6377
+  2020-11 +0.0108 / -0.0084  days 365.0  n_te 6171
+  2020-12 +0.0122 / -0.0121  days 365.0  n_te 6377
+
+===== by year, candidate - B* Spearman at H=60 =====
+  2018: +0.0061 [-0.0029,+0.0150] +4/6 (min -0.0030, max +0.0190)
+  2019: +0.0041 [-0.0024,+0.0105] +9/12 (min -0.0138, max +0.0255)
+  2020: +0.0069 [+0.0024,+0.0113] +10/12 (min -0.0052, max +0.0202)

@@ -1,0 +1,7 @@
+bars 525600 2025-10-01 00:00:00 2026-09-30 23:59:00
+{'spec': 'O5 SPEC.md freeze', 'base': 'L0', 'candidate': 'L1', 'last_bar': '2026-09-30 23:59:00', 'n_bars': 525600, 'file_first_bar': '2025-10-01 00:00:00', 'stride': 7, 'warm_bars': 6144, 'ridge_alpha': 1.0, 'horizons': [15, 60, 240], 'taus': [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048], 'eps_ch': [1e-10, 1e-06, 0.001], 's3_names': ['rv15', 'rv60', 'rv240', 'rv1440', 'tod_sin', 'tod_cos', 'vol15r', 'vol60r', 'vol240r', 'rng15', 'rng60', 'rv5', 'lrv_h2', 'lrv_h3', 'lrv_h4', 'lrv_disp'], 'n_g': 328, 'hgb_kw': {'max_iter': 200, 'learning_rate': 0.05, 'max_leaf_nodes': 15, 'min_samples_leaf': 300, 'early_stopping': False, 'random_state': 0}, 'features': 'XB = S3 (16) + ln(EWMA_tau(channel)+eps_channel) (36, channel-major); G = o1_lib G1 + G15 (328)', 'lib_note': 'o1_lib.py 6cb5617, o3_lib.py 5e4ab42', 'sha256': '79f7f25d725bc5638738bdb6d94ad1a96b3cd9870e7b99c0befb2d89b96fff24'}
+{'15': {'n_tr': 73825, 'first_ta': '2025-10-05 06:24:00', 'last_label_end': '2026-09-30 20:10:00', 'c': {'L0': 1.4375775231079722, 'L1': 1.4358335209640054}}, '60': {'n_tr': 73825, 'first_ta': '2025-10-05 06:24:00', 'last_label_end': '2026-09-30 20:55:00', 'c': {'L0': 1.2896695102456572, 'L1': 1.2921663923190212}}, '240': {'n_tr': 73825, 'first_ta': '2025-10-05 06:24:00', 'last_label_end': '2026-09-30 23:55:00', 'c': {'L0': 1.2717558162724096, 'L1': 1.2729158134031795}}}
+
+real	0m27.269s
+user	0m0.000s
+sys	0m0.015s
