@@ -1,0 +1,22 @@
+{
+ "rows": 542880,
+ "first": "2025-10-01 00:00:00",
+ "last": "2026-10-12 23:59:00",
+ "expected_minutes": 542880,
+ "missing_minutes": 0,
+ "duplicate_timestamps": 0,
+ "nan_cells": 0,
+ "zero_volume_minutes": 0,
+ "zero_volume_runs": 0,
+ "longest_zero_volume_runs": [],
+ "ohlc_inconsistent": 0,
+ "monthly_archives": 12,
+ "daily_archives": 12,
+ "archives_404": [],
+ "checksum_failures": 0,
+ "units": [
+  "us"
+ ],
+ "min_ts_in_protected_span": 0,
+ "file_sha256": "b2b2809957c746d25e73711fe1ae6c03890467e2f048d21833a9803d090a1bba"
+}
