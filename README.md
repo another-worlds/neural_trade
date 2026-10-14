@@ -11,7 +11,7 @@ horizons are configuration; the goal and the yardstick are in [docs/VISION.md](d
 close, volume), one network predicts for 10, 15 and 20 minutes ahead the price change in quote currency
 (`delta`), the probability that the price goes up (`direction`) and the variance of the change (`sigma`).
 It learns 14 indicator families, 3 instances each (54 periods), and six "physics-inspired" regularisers act
-on its heads. The code supports exactly three horizons today.
+on its heads. The number of horizons is configurable (two or more; three is the reference and the only count tested end to end on real runs).
 
 ## What works and what does not
 

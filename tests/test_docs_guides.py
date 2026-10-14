@@ -299,8 +299,10 @@ def test_own_data_wall_clock_lengths_become_bars_and_a_fraction_of_a_bar_is_refu
     assert spec.cost_profile == {"fee_bps": 0.0, "half_spread_bps": 0.0, "slippage_bps": 0.0}
     with pytest.raises(InvalidConfigurationError, match="whole number of 5-minute bars"):
         Config().override(RESAMPLE_MINUTES=5, WINDOW_MINUTES=62)
-    with pytest.raises(InvalidConfigurationError, match="three"):
-        Config().override(HORIZON_STEPS=[5, 10, 15, 20], EXTENDED_TREND_PERIODS=[5, 10, 15, 20])
+    four = Config().override(HORIZON_STEPS=[5, 10, 15, 20], EXTENDED_TREND_PERIODS=[5, 10, 15, 20])
+    assert list(four.HORIZON_STEPS) == [5, 10, 15, 20]
+    with pytest.raises(InvalidConfigurationError, match="at least 2"):
+        Config().override(HORIZON_STEPS=[10], EXTENDED_TREND_PERIODS=[10])
 
 
 def test_own_data_a_bar_size_that_does_not_match_the_file_is_refused(five_minute_csv):

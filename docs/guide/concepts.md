@@ -67,8 +67,8 @@ target 90% coverage), and a shrinkage factor beta for the price change (`beta = 
   `direction_signal`, figures and tables print `n/a` for the calibrated numbers, and strategies that
   read P(up) stay flat on it instead of trading on a degenerate probability.
 
-The code supports **exactly three horizons today**; a variable number of horizons is open work (NT-042,
-D-022). The six "physics-inspired" loss terms (D-003) act on the neighbouring pairs of horizons; whether
+The number of horizons is configurable, two or more (NT-042, D-022): three is the reference; two and four are
+tested end to end on CPU, and at three horizons the numbers equal the earlier fixed-three code bit for bit. The six "physics-inspired" loss terms (D-003) act on the neighbouring pairs of horizons; whether
 they earn their place is decided by pre-registered ablation, not by this page.
 
 ## Costs

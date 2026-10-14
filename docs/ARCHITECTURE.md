@@ -19,7 +19,7 @@ One line per subpackage (`tests/test_docs_guides.py` checks that every subpackag
 | `metrics/` | numpy and graph-safe TensorFlow metrics, the one direction-label rule (deadband), effective-sample statistics (`n_eff`, intervals, bootstraps) |
 | `losses/` | the loss terms of the training objective (direction, CRPS, point, and the six physics terms) and their registry |
 | `data/` | loaders, preprocessors, windowing, the purged four-way split and folds, gap handling, scaling fitted on the training block, `DataProcessor` |
-| `models/` | the architectures (`gru_attention`, `gru_small`, `linear_indicators`), the three horizon heads, and the custom layers (learnable indicators, positional encoding, noise, energy gate) |
+| `models/` | the architectures (`gru_attention`, `gru_small`, `linear_indicators`), the horizon heads (one set per horizon, three at the reference), and the custom layers (learnable indicators, positional encoding, noise, energy gate) |
 | `telemetry/` | append-only per-epoch JSONL logging of a run |
 | `calibration/` | temperature scaling for P(up), conformal intervals scaled by realised volatility, delta shrinkage, the calibration pipeline and the "no usable direction signal" state |
 | `evaluation/` | `PredictionFrame`, the evaluation report with its baselines, walk-forward, applied-period and permutation-importance read-outs |

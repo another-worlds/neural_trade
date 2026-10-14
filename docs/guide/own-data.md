@@ -4,8 +4,8 @@ The instrument, the bar size, the input window and the horizons are configuratio
 setup that has been tested is BTC/USDT one-minute bars (the reference setup); everything below is what the
 code accepts and checks, not a claim that another market works well. Two limits to know first:
 
-- **Exactly three horizons today.** `Config.validate` refuses any other number of entries in
-  `HORIZON_STEPS`. A variable number of horizons is open work (NT-042).
+- **Two or more horizons.** `Config.validate` refuses fewer than two entries in `HORIZON_STEPS` (the pairwise
+  physics terms need a neighbouring pair). Three is the reference; two and four are tested end to end on CPU (NT-042).
 - **A 24/7 market is assumed.** Trading sessions, calendars and overnight gaps are not handled (VISION
   "Not in the MVP").
 
