@@ -74,7 +74,7 @@ changes).
 | [NT-039](#nt-039) | P1 | research | experimenter | todo | Pre-registered A/B: gradient-based loss weighting against today's value calibration |
 | [NT-040](#nt-040) | P1 | bug | implementer | done | Annualisation ignores the bar size (Sharpe and Sortino overstated by sqrt(k) at k-minute bars) |
 | [NT-041](#nt-041) | P1 | feature | implementer | done | Dataset spec and wall-clock configuration (window, horizons, blocks, costs, fingerprint, gaps) |
-| [NT-042](#nt-042) | P1 | feature | implementer | todo | Variable number of horizons |
+| [NT-042](#nt-042) | P1 | feature | implementer | done | Variable number of horizons |
 | [NT-043](#nt-043) | P1 | feature | implementer | done | Learned indicators on price against the textbook defaults (notebook 07) |
 | [NT-044](#nt-044) | P1 | docs | implementer | done | Guides for the owner and reviewers, README landing page, ARCHITECTURE |
 | [NT-045](#nt-045) | P1 | feature | implementer | todo | Notebook overlap: each figure gets one home |
@@ -244,6 +244,9 @@ changes).
 | [NT-209](#nt-209) | P2 | feature | implementer | todo | The stability harness takes no dataset spec: window, horizons and bar size of a new setup cannot be run through it |
 | [NT-210](#nt-210) | P2 | feature | implementer | todo | Indicator periods in wall-clock minutes (NT-046 criterion 2 residue) |
 | [NT-211](#nt-211) | P2 | polish | implementer | todo | Docs tests: Config keys and CLI flags named in the guides exist; notebook 09 title says 'whole test block' while its analytics say 'dev block' |
+| [NT-212](#nt-212) | P2 | polish | implementer | todo | Tests for the N-horizon rules that only run when N is not 3 (7 of 22 QA mutants survive) |
+| [NT-213](#nt-213) | P2 | bug | implementer | todo | `model_analytics.variance_analytics` raises ZeroDivisionError on some configurations (also on the base commit) |
+| [NT-214](#nt-214) | P3 | polish | implementer | todo | N-horizon residues: labels, defaults and unused constants still say h0/h1/h2 |
 
 ## Items
 
@@ -757,7 +760,7 @@ changes).
 
 **Variable number of horizons**
 
-- **status:** todo
+- **status:** done (2026-10-09): merged as ea9fd5e (nt-042 6f82837, code d3b4da0; implementer Opus (loss/training code: escalated); qa-deep PASS). One source of horizon keys (core/horizons.py: h0..h{N-1}, primary index N // 2), pairwise physics terms averaged over every neighbouring pair and scaled 2/(N-1) (exactly 1 and no extra op at N = 3), point-loss weights by role (h0 LAMBDA_SHORT, last LAMBDA_LONG, between LAMBDA_POINT), per-term N rules (vacuum cross-horizon std, HD mean variance, overflow mean residual, sign disagreement mean over pairs, smoothness over interior horizons: 0 at N = 2), lambda calibration for role groups (value mode mean, gradient mode sum), ensure_predictive_outputs checks names, horizon colours extend by theme.HORIZON_EXTENSION (#17becf, #e7298a, #bcbd22), Config.validate requires N >= 2 (the pairwise terms need a pair; D-022 'any number' read as N >= 2: lead's reading, recorded here). qa-deep with its own evidence: N = 3 bit-identical (golden 461/461; three extra variants incl. gradient calibration, student_t NLL, pnl_utility, gru_small, linear_indicators: 697/507/495 arrays bit-equal incl. a sha256 of the weights after each of 38 batches; the traced train_step graph is identical: 15,960 ops, same ordered type+shape hash); 408 numpy recomputations of the N rules for N = 2..5 with 0 failures; N = 2 and N = 4 end to end on CPU (bundle, npz round trip, four strategies, figures looked at); stored three-horizon runs and the legacy bundle load bit-identically; CPU train_step base 0.3617 s vs new 0.3667 s (+1.4%, within the 5% round scatter, tactical shards running, graph identical). Merged head: fast and slow suites run on ea9fd5e (see STATUS). Follow-ups NT-212 (tests for 7 surviving mutants at N >= 4), NT-213, NT-214. Process note: the implementer ran `git stash push -u` once (forbidden by CLAUDE.md) and popped it at once; QA verified nothing was lost, the stash list is empty.
 - **note (2026-10-06, PR #15 review sweep, re-checked on f9b60eb):** Before relaxing validate, one source of horizon keys: three-horizon literals at signals.py:189, report.py:1030, analytics_tables.py:318. Add PRIMARY_HORIZON (index 1 hard-wired, e.g. strategies.py:275); a per-term N rule for coherence, vacuum, HD and overflow; a per-horizon loss wiring test (17 of 24 loss mutants survive); `ensure_predictive_outputs` checks count and shape, not names (models/registry.py:31-38).
 - **priority / type / role:** P1 / feature / implementer
 - **area:** src/neural_trade/core/config.py (validate), src/neural_trade/core/outputs.py (LossComponents, PredictiveOutputs), src/neural_trade/models/gru_attention.py, src/neural_trade/losses/functions.py, src/neural_trade/training/custom_model.py, src/neural_trade/calibration/, src/neural_trade/serving/, src/neural_trade/evaluation/, src/neural_trade/strategy/signals.py, src/neural_trade/visualization/ (theme.py and every figure), tests/
@@ -2794,6 +2797,42 @@ changes).
 - **why:** QA of NT-044 (2026-10-08): mutations `Config.ADAPTIVE_INDICATORZ` and `--n-trial` (argparse accepts a prefix) survive test_docs_guides.py; and the executed 09_candidate_run.ipynb's trading dashboard title says 'whole test block' while its analytics say 'dev block' (not caused by NT-044). NT-044 repair 1 covers the two test mutations; this item is the notebook 09 label.
 - **acceptance:** (1) the title and the analytics name the same block (the dev block when the ranking is on dev folds; the test block only where the test fold is meant); (2) notebook 09 regenerated through build.py and executed by the lead; (3) a test on the title text; (4) fast suite, ruff.
 - **source:** QA of NT-044 (2026-10-08)
+
+### NT-212
+
+**Tests for the N-horizon rules that only run when N is not 3 (7 of 22 QA mutants survive)**
+
+- **status:** todo
+- **priority / type / role:** P2 / polish / implementer
+- **area:** tests/test_horizons_n.py, losses/functions.py (~763-776 smoothness, ~1061 pnl_utility), training/lambda_calibration.py (52-72 `_role_value`, `_horizon_mean`)
+- **depends on:** NT-042 (done)
+- **why:** qa-deep on NT-042 (2026-10-09): the code is correct (408 numpy recomputations, 0 failures) but no test protects: target smoothness at N >= 4 (mutants: interior limited to h1, summed instead of averaged, wrong neighbour index), the calibration role mean/sum swap and the fixed /3 mean at N != 3, the gradient-mode role sum turned into a mean, and pnl_utility ignoring the configured HORIZON_STEPS. NT-052 will depend on them. The QA's numpy recomputation script is D:/nt/nt_qa/nt042_math.py and the mutants D:/nt/nt_qa/nt042_mutate.py (scratch, not in the repo).
+- **acceptance:** (1) A numpy reference test per rule for N = 2, 3, 4, 5 (smoothness, role value/mean/sum in value and gradient modes, pnl_utility with HORIZON_STEPS other than the reference); (2) each of the 7 mutants is killed by a repo test (apply the mutants, show the failures, revert); (3) fast suite, ruff.
+- **source:** qa-deep on NT-042 (2026-10-09)
+
+### NT-213
+
+**`model_analytics.variance_analytics` raises ZeroDivisionError on some configurations (also on the base commit)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** src/neural_trade/visualization/ or evaluation/ (find `variance_analytics`), tests/
+- **depends on:** -
+- **why:** qa-deep on NT-042 (2026-10-09): the function raised ZeroDivisionError on the configurations of variants A (LAMBDA_VAC 0.05, soft-ECE, dir-align, vol, gradient calibration, probe, TRAIN_METRICS_EVERY 1, all physics lambdas 0.5) and C (linear_indicators, focal_dice, DIRECTION_SKIP off) in D:/nt/nt_qa/nt042_exact.py, on the base too. The traceback was not captured.
+- **acceptance:** (1) Reproduce with those two configurations (the script is scratch: rebuild them from the description), capture the traceback; (2) fix the division (a guard that reports n/a, never a made-up number); (3) a test that fails before the change; (4) fast suite, ruff.
+- **source:** qa-deep on NT-042 (2026-10-09)
+
+### NT-214
+
+**N-horizon residues: labels, defaults and unused constants still say h0/h1/h2**
+
+- **status:** todo
+- **priority / type / role:** P3 / polish / implementer
+- **area:** core/config.py (~316, ~408-410 field descriptions: regenerate configs/default.yaml and docs/guide/config-reference.md), visualization/analytics_tables.py (~717, ~720 row labels), visualization/aliases.py (~36), visualization/plotly_training.py (~135), training/callbacks.py (~471), notebook/control_panel.py (~54 DEFAULT_METRICS), experiments/screen.py (~93 HORIZONS), experiments/comparison.py (horizon rows sorted as strings), compare.py docstring, visualization/theme.py (~41), evaluation/leaderboard.py
+- **depends on:** NT-042 (done)
+- **why:** NT-042 author and qa-deep: (1) help text of LAMBDA_SHORT, LAMBDA_POINT, LAMBDA_LONG says h0/h1/h2 and LAMBDA_POINT has no effect at N = 2 without a warning; (2) 'delta shrink beta h0 / h1 / h2' and 'temperature h0 / h1 / h2' rows stay fixed at any N; (3) the live plot aliases h1 at N = 4 because the callback does not pass the primary (h2); (4) the control panel's DEFAULT_METRICS list h0-h2; (5) screen.HORIZONS unused; (6) comparison rows sort h10 before h2; (7) the h4 colour #e7298a is delta E 20.3 from OTHER_SERIES[1] #d55181 (matters at N >= 5); (8) NT-031's note 'each leaderboard row names its traded (primary) horizon' is not implemented.
+- **acceptance:** Each point fixed with a test where it is behaviour (3, 4, 6, 8) and a docs regeneration (1; `scripts/` for config-reference); the golden unchanged; notebooks only if a figure text changes (the lead executes); fast suite, ruff.
+- **source:** qa-deep on NT-042 (2026-10-09)
 
 ## Done log
 
