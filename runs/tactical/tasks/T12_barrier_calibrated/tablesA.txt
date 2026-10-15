@@ -1,0 +1,62 @@
+T12 Look A: cut file 2017-09..2018-12, H3c = H3 + isotonic on the previous month; scored months 2017-10..2018-12 (15); run at HEAD 5eda8f35c9bd57b6593334a8ac723d07a393fef2
+
+Training days and rows per month (H3 refit at each month start; n_train for T = 15 / 60 / 240)
+ 2017-09: train_days=15.0 (from 2017-08-17 00:00:00) n_train=1440 / 360 / 90 scored_anchors(T=60)=720 n_cal=744
+ 2017-10: train_days=45.0 (from 2017-08-17 00:00:00) n_train=4320 / 1080 / 270 scored_anchors(T=60)=744 n_cal=720
+ 2017-11: train_days=76.0 (from 2017-08-17 00:00:00) n_train=7295 / 1824 / 456 scored_anchors(T=60)=647 n_cal=744
+ 2017-12: train_days=106.0 (from 2017-08-17 00:00:00) n_train=9880 / 2471 / 617 scored_anchors(T=60)=743 n_cal=647
+ 2018-01: train_days=137.0 (from 2017-08-17 00:00:00) n_train=12855 / 3214 / 802 scored_anchors(T=60)=744 n_cal=743
+ 2018-02: train_days=168.0 (from 2017-08-17 00:00:00) n_train=15831 / 3958 / 988 scored_anchors(T=60)=672 n_cal=744
+ 2018-03: train_days=196.0 (from 2017-08-17 00:00:00) n_train=18519 / 4630 / 1156 scored_anchors(T=60)=669 n_cal=672
+ 2018-04: train_days=227.0 (from 2017-08-17 00:00:00) n_train=21195 / 5299 / 1323 scored_anchors(T=60)=720 n_cal=669
+ 2018-05: train_days=257.0 (from 2017-08-17 00:00:00) n_train=24075 / 6019 / 1503 scored_anchors(T=60)=744 n_cal=720
+ 2018-06: train_days=288.0 (from 2017-08-17 00:00:00) n_train=27051 / 6763 / 1689 scored_anchors(T=60)=720 n_cal=744
+ 2018-07: train_days=318.0 (from 2017-08-17 00:00:00) n_train=29931 / 7483 / 1869 scored_anchors(T=60)=744 n_cal=720
+ 2018-08: train_days=349.0 (from 2017-08-17 00:00:00) n_train=32907 / 8227 / 2055 scored_anchors(T=60)=744 n_cal=744
+ 2018-09: train_days=365.0 (from 2017-09-01 00:00:00) n_train=34443 / 8611 / 2151 scored_anchors(T=60)=719 n_cal=744
+ 2018-10: train_days=365.0 (from 2017-10-01 00:00:00) n_train=34438 / 8610 / 2151 scored_anchors(T=60)=727 n_cal=719
+ 2018-11: train_days=365.0 (from 2017-11-01 00:00:00) n_train=34381 / 8593 / 2147 scored_anchors(T=60)=639 n_cal=727
+ 2018-12: train_days=365.0 (from 2017-12-01 00:00:00) n_train=34364 / 8585 / 2144 scored_anchors(T=60)=739 n_cal=639
+
+ X=25 bps T=15 min n=42880 base_rate=0.6787
+    B1  brier=0.15903 skill_vs_B1=+0.00% ece=12.20pp CI[11.25,13.21] auc=0.8651 logloss=0.5619
+    H3  brier=0.13027 skill_vs_B1=+18.09% CI[+16.61,+19.53] p=0.0001 holm_p=0.0009 ece=1.29pp CI[1.10,1.84] auc=0.8795 logloss=0.3989
+    H3c brier=0.13339 skill_vs_B1=+16.13% CI[+14.54,+17.62] p=0.0001 holm_p=0.0009 vsH3=+2.39% CI[+1.61,+3.19] ece=2.65pp CI[2.12,3.35] auc=0.8748 logloss=0.4261
+ X=50 bps T=15 min n=42880 base_rate=0.3604
+    B1  brier=0.16663 skill_vs_B1=+0.00% ece=11.88pp CI[11.18,12.58] auc=0.8519 logloss=0.5354
+    H3  brier=0.13840 skill_vs_B1=+16.94% CI[+15.62,+18.27] p=0.0001 holm_p=0.0009 ece=2.34pp CI[1.89,2.90] auc=0.8666 logloss=0.4350
+    H3c brier=0.13957 skill_vs_B1=+16.24% CI[+15.03,+17.47] p=0.0001 holm_p=0.0009 vsH3=+0.84% CI[+0.24,+1.46] ece=2.06pp CI[1.51,2.67] auc=0.8636 logloss=0.4565
+ X=100 bps T=15 min n=42880 base_rate=0.1276
+    B1  brier=0.08622 skill_vs_B1=+0.00% ece=5.16pp CI[4.73,5.60] auc=0.8578 logloss=0.3165
+    H3  brier=0.07741 skill_vs_B1=+10.22% CI[+8.89,+11.58] p=0.0001 holm_p=0.0009 ece=1.25pp CI[1.09,1.66] auc=0.8673 logloss=0.2660
+    H3c brier=0.08117 skill_vs_B1=+5.86% CI[+3.72,+7.83] p=0.0001 holm_p=0.0009 vsH3=+4.85% CI[+3.21,+6.79] ece=1.33pp CI[1.02,1.92] auc=0.8605 logloss=0.3294
+ X=25 bps T=60 min n=10715 base_rate=0.9037
+    B1  brier=0.06756 skill_vs_B1=+0.00% ece=6.35pp CI[5.34,7.43] auc=0.9137 logloss=0.3461
+    H3  brier=0.05494 skill_vs_B1=+18.69% CI[+15.37,+21.80] p=0.0001 holm_p=0.0009 ece=0.96pp CI[0.64,1.67] auc=0.9206 logloss=0.1857
+    H3c brier=0.06089 skill_vs_B1=+9.88% CI[+5.28,+14.10] p=0.0001 holm_p=0.0009 vsH3=+10.84% CI[+7.49,+14.50] ece=3.06pp CI[2.45,3.99] auc=0.8974 logloss=0.2281
+ X=50 bps T=60 min n=10715 base_rate=0.6806   <-- PRIMARY
+    B1  brier=0.17643 skill_vs_B1=+0.00% ece=15.43pp CI[14.06,16.79] auc=0.8579 logloss=0.6309
+    H3  brier=0.13343 skill_vs_B1=+24.37% CI[+22.18,+26.44] p=0.0001 holm_p=0.0009 ece=1.74pp CI[1.41,2.66] auc=0.8741 logloss=0.4067
+    H3c brier=0.13863 skill_vs_B1=+21.43% CI[+18.99,+23.73] p=0.0001 holm_p=0.0009 vsH3=+3.89% CI[+2.33,+5.51] ece=3.88pp CI[3.17,4.85] auc=0.8634 logloss=0.4969
+ X=100 bps T=60 min n=10715 base_rate=0.3707
+    B1  brier=0.18406 skill_vs_B1=+0.00% ece=14.44pp CI[13.44,15.56] auc=0.8328 logloss=0.5739
+    H3  brier=0.14820 skill_vs_B1=+19.48% CI[+17.45,+21.46] p=0.0001 holm_p=0.0009 ece=3.33pp CI[2.75,4.18] auc=0.8460 logloss=0.4688
+    H3c brier=0.15586 skill_vs_B1=+15.32% CI[+11.97,+18.23] p=0.0001 holm_p=0.0009 vsH3=+5.17% CI[+2.44,+8.39] ece=3.57pp CI[2.69,4.85] auc=0.8299 logloss=0.5055
+ X=25 bps T=240 min n=2675 base_rate=0.9824
+    B1  brier=0.01692 skill_vs_B1=+0.00% ece=1.70pp CI[1.01,2.46] auc=0.9782 logloss=0.1064
+    H3  brier=0.01318 skill_vs_B1=+22.10% CI[+12.22,+30.67] p=0.0001 holm_p=0.0009 ece=0.61pp CI[0.33,1.19] auc=0.9796 logloss=0.0420
+    H3c brier=0.01741 skill_vs_B1=-2.90% CI[-11.79,+5.59] p=0.7696 holm_p=0.7696 vsH3=+32.09% CI[+17.44,+49.85] ece=1.75pp CI[1.11,2.52] auc=0.5968 logloss=0.2065
+ X=50 bps T=240 min n=2675 base_rate=0.9133
+    B1  brier=0.06716 skill_vs_B1=+0.00% ece=6.63pp CI[5.32,8.08] auc=0.9124 logloss=0.3644
+    H3  brier=0.05329 skill_vs_B1=+20.65% CI[+15.40,+25.33] p=0.0001 holm_p=0.0009 ece=2.01pp CI[1.30,3.13] auc=0.9096 logloss=0.1850
+    H3c brier=0.05809 skill_vs_B1=+13.50% CI[+6.94,+19.52] p=0.0002 holm_p=0.0009 vsH3=+9.01% CI[+3.51,+14.72] ece=3.31pp CI[2.35,4.52] auc=0.8721 logloss=0.2868
+ X=100 bps T=240 min n=2675 base_rate=0.7065
+    B1  brier=0.17727 skill_vs_B1=+0.00% ece=15.81pp CI[14.10,17.70] auc=0.8561 logloss=0.6158
+    H3  brier=0.14114 skill_vs_B1=+20.38% CI[+16.64,+23.82] p=0.0001 holm_p=0.0009 ece=2.61pp CI[2.20,4.43] auc=0.8487 logloss=0.4272
+    H3c brier=0.15406 skill_vs_B1=+13.10% CI[+7.60,+17.87] p=0.0001 holm_p=0.0009 vsH3=+9.15% CI[+5.01,+13.85] ece=6.85pp CI[5.48,8.71] auc=0.8234 logloss=0.5999
+
+Criteria, primary cell X=50 bps T=60 min:
+ 1 skill +21.43% CI [+18.99,+23.73] (>=2% and CI>0): PASS
+ 2 ECE 3.88pp CI [3.17,4.85] (<1pp): FAIL
+ 3 Brier H3c 0.13863 vs H3 0.13343 (+3.89%, not worse than +1%): FAIL
+LOOK A FAIL
