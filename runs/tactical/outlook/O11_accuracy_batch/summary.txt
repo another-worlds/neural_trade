@@ -1,0 +1,10 @@
+O11 summary (primary tests; month is the unit; Holm over the four primaries; family-wise 5 %)
+
+part  claim                                              J months  effect (95% t-CI)                    raw p     Holm p     verdict
+a     geometry+bank improve vol-CHANGE skill vs S3        25        +0.0447 [+0.0361, +0.0533]  25/25    1.4e-10   5.4e-10    PASS
+b     monthly refit beats frozen fit (L1, H=15, C only)    11        +0.0046 [+0.0024, +0.0069]  10/11    9.8e-4    2.0e-3     PASS (small)
+c     quantile regression + geometry for tails (pinball)  24        +0.431 bps [+0.339, +0.522] (worse)  1.2e-9    -          FAIL (wrong direction; hit-rate band missed)
+d     direction AUC with G15 (chosen d1 on S)             25        -0.0015 [-0.0072, +0.0042]  12/25    0.597     0.597      FAIL
+
+Caveats: J was read by earlier studies for other claims (second look). a's gain is mostly the EWMA bank (geometry over the bank:
++0.0122 [+0.0072, +0.0172], 20/25, not pre-registered). b is small (half a Spearman point per month).
