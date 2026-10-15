@@ -54,7 +54,7 @@ def part_B():
 
 
 def part_C():
-    s = L.T01.load_bars(L.T01.TRAIN_CSV, L.L11.SEL_LO, L.L11.SEL_HI); assert s.index.max() < pd.Timestamp("2024-07-02 00:00") and s.index.min() >= pd.Timestamp("2017-12-01")
+    s = L.T01.load_bars(L.T01.TRAIN_CSV, L.L11.SEL_LO, L.SEL_HI_BARS); assert s.index.max() <= L.SEL_HI_BARS and s.index.min() >= pd.Timestamp("2017-12-01")
     log("C bars", len(s), s.index.min(), s.index.max()); t0 = time.time(); B = L.build_C(s, 1441, "bitstamp"); log("C frame", f"{time.time() - t0:.0f}s", B["drops"]); out = {}
     for pr in L.PAIRS:
         t0 = time.time(); rows = L.c_walk(B, L.SEL_MONTHS, pr); g = L.c_gain(rows)

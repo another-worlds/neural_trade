@@ -1,0 +1,36 @@
+{
+ "spec": "T13 SPEC.md (1869df6)",
+ "rule": "per part, the (bar minutes x lookback bars) pair among 1x60, 1x240, 15x60, 15x240 with the highest mean over the 66 months 2019-01..2024-06 of the monthly gain (A: 1 - Brier(A1) / Brier(H3), the barrier hit X = 50 bps T = 60 min; B: Spearman(B1) - Spearman(L1), next-60-minute RV; C: skill_ar(C1) - skill_ar(V3), target A)",
+ "period": "2019-01..2024-06",
+ "n_months": 66,
+ "chosen": {
+  "A": "15x240",
+  "B": "15x60",
+  "C": "1x240"
+ },
+ "mean_gain": {
+  "A": {
+   "1x60": 0.001563208649513,
+   "1x240": 0.0009228508782075676,
+   "15x60": 0.0017433344457460196,
+   "15x240": 0.002767079326881839
+  },
+  "B": {
+   "1x60": 0.0001716687557327544,
+   "1x240": 3.686982960911539e-05,
+   "15x60": 0.0007461476585504835,
+   "15x240": 0.00021941751059666718
+  },
+  "C": {
+   "1x60": 0.009984028548555835,
+   "1x240": 0.012518464088863592,
+   "15x60": 0.011319610430597276,
+   "15x240": 0.009307275610241077
+  }
+ },
+ "input_sha256": {
+  "sel_part_A.json": "c1f0d5df6fa87bcd6a6bd0fb293d06fc54d1a24d3553c89db051707c581a1b23",
+  "sel_part_B.json": "ff12b557d4e4c763f59203bc393156c919d4531212eeaad8ea5a37f5c6791b8d",
+  "sel_part_C.json": "b62de71e396d1966f306c77f79940357e7290127374c9f75629088f4f4f7131b"
+ }
+}

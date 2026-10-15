@@ -1,0 +1,20 @@
+T13 selection, 2019-01..2024-06 (cut file, monthly walk-forward, 66 months): mean monthly gain per pair (bar minutes x lookback bars)
+
+Part A: relative Brier gain A1 vs H3
+   1x60    mean monthly gain +0.00156  positive months 33/66 Brier H3 0.16616 A1 0.16589
+   1x240   mean monthly gain +0.00092  positive months 32/66 Brier H3 0.16616 A1 0.16593
+   15x60   mean monthly gain +0.00174  positive months 31/66 Brier H3 0.16616 A1 0.16581
+   15x240  mean monthly gain +0.00277  positive months 33/66 Brier H3 0.16616 A1 0.16574   <-- CHOSEN
+
+Part B: Spearman gain B1 - L1
+   1x60    mean monthly gain +0.00017  positive months 44/66 Spearman L1 0.7185 B1 0.7187
+   1x240   mean monthly gain +0.00004  positive months 37/66 Spearman L1 0.7185 B1 0.7185
+   15x60   mean monthly gain +0.00075  positive months 45/66 Spearman L1 0.7185 B1 0.7192   <-- CHOSEN
+   15x240  mean monthly gain +0.00022  positive months 45/66 Spearman L1 0.7185 B1 0.7187
+
+Part C: skill_ar gain C1 - V3
+   1x60    mean monthly gain +0.00998  positive months 59/66 skill V3 +0.2089 C1 +0.2189
+   1x240   mean monthly gain +0.01252  positive months 60/66 skill V3 +0.2089 C1 +0.2214   <-- CHOSEN
+   15x60   mean monthly gain +0.01132  positive months 57/66 skill V3 +0.2089 C1 +0.2202
+   15x240  mean monthly gain +0.00931  positive months 53/66 skill V3 +0.2089 C1 +0.2182
+
