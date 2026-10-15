@@ -123,7 +123,7 @@ def judge():
     for name, ms in (("J", mJ), ("B", mB), ("C", mC)):
         o = {}
         for v in VARS:
-            o[v] = {"auc": D.mean_t([tab[v][m]["auc"] for m in ms]), "brier": D.mean_t([tab[v][m]["brier"] for m in ms]),
+            o[v] = {"auc": {**D.mean_t([tab[v][m]["auc"] for m in ms]), "t_half": D.mean_t(np.array([tab[v][m]["auc"] for m in ms]) - 0.5)["t"]}, "brier": D.mean_t([tab[v][m]["brier"] for m in ms]),
                     "auc_gated": D.mean_t([tab[v][m]["auc_gated"] for m in ms]), "hit_gated": D.mean_t([tab[v][m]["hit_gated"] for m in ms]), "hit_all": D.mean_t([tab[v][m]["hit_all"] for m in ms])}
         for v in VARS:
             if v == "base":
@@ -158,10 +158,10 @@ def write_tables(tab, out, mB, mC):
     Q(f"  pass rule: mean >= +0.005 and lower bound > 0 (before Holm): {'PASS' if p['pass_before_holm'] else 'NOT passed'}")
     for name in ("J", "B", "C"):
         Q(f"\n== {name}: mean over months ==")
-        Q(f"{'variant':8s} {'AUC':>7s} {'t':>6s} {'vs base':>9s} [{'95% t':>17s}] {'mo+':>6s} {'p':>6s} | {'Brier':>7s} {'dBrier':>8s} | {'AUC gated':>9s} {'d':>8s} | {'hit gated':>9s} {'d':>8s} | {'hit all':>7s}")
+        Q(f"{'variant':8s} {'AUC':>7s} {'t.5':>6s} {'vs base':>9s} [{'95% t':>17s}] {'mo+':>6s} {'p':>6s} | {'Brier':>7s} {'dBrier':>8s} | {'AUC gated':>9s} {'d':>8s} | {'hit gated':>9s} {'d':>8s} | {'hit all':>7s}")
         for v in VARS:
             r = out[name][v]; vb = r.get("vs_base"); a = vb["auc"] if vb else None
-            Q(f"{v:8s} {r['auc']['mean']:7.4f} {r['auc']['t']:6.2f} {fmt(a['mean']) if a else '':>9s} "
+            Q(f"{v:8s} {r['auc']['mean']:7.4f} {r['auc']['t_half']:6.2f} {fmt(a['mean']) if a else '':>9s} "
               f"[{(fmt(a['lo']) + ', ' + fmt(a['hi'])) if a else '':>17s}] {(str(a['pos']) + '/' + str(a['n'])) if a else '':>6s} {fmt(a['p'], 3) if a else '':>6s} | "
               f"{r['brier']['mean']:7.4f} {fmt(vb['brier']['mean'], 5) if vb else '':>8s} | {fmt(r['auc_gated']['mean']):>9s} {fmt(vb['auc_gated']['mean']) if vb else '':>8s} | "
               f"{fmt(r['hit_gated']['mean']):>9s} {fmt(vb['hit_gated']['mean']) if vb else '':>8s} | {r['hit_all']['mean']:7.4f}")
@@ -188,5 +188,17 @@ def freeze():
     log("FROZEN sha256", art["sha256"], {v: (m["n_tr"], m["last_label_end"]) for v, m in art["models"].items()})
 
 
+def retable():
+    """Rewrite tables.txt from results.jsonl (no recomputation); used after a formatting change."""
+    rec = [json.loads(x) for x in open(RES, encoding="utf-8")]; out = rec[-1]; chosen = out["chosen"]
+    tab = {v: {} for v in VARS}
+    for r in rec[:-1]:
+        tab[r["variant"]][r["month"]] = r
+    for name, ms in (("J", out["months_B"] + out["months_C"]), ("B", out["months_B"]), ("C", out["months_C"])):
+        for v in VARS:
+            out[name][v]["auc"]["t_half"] = D.mean_t(np.array([tab[v][m]["auc"] for m in ms]) - 0.5)["t"]
+    write_tables(tab, out, out["months_B"], out["months_C"])
+
+
 if __name__ == "__main__":
-    {"select": select, "judge": judge, "freeze": freeze}[sys.argv[1]]()
+    {"select": select, "judge": judge, "freeze": freeze, "retable": retable}[sys.argv[1]]()

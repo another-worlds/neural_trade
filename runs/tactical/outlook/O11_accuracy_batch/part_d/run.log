@@ -44,3 +44,21 @@
 13:35:06 select done d1 156s
 13:35:25 loaded 277429 decisions 276109 valid 2s
 13:35:25 select done d1 3s
+13:35:38 judge: chosen d1 (choice_d.json committed and unchanged)
+13:35:43 fit 2024-07 rows 2969
+13:35:46 fit 2024-08 rows 2970
+13:35:50 fit 2024-09 rows 2872
+13:35:53 fit 2024-10 rows 2969
+13:35:56 fit 2024-11 rows 2878
+13:36:00 fit 2024-12 rows 2940
+13:36:03 fit 2025-01 rows 2971
+13:36:06 fit 2025-02 rows 2682
+13:36:09 fit 2025-03 rows 2877
+13:36:13 fit 2025-04 rows 2875
+13:36:16 fit 2025-05 rows 2970
+13:36:20 fit 2025-06 rows 2851
+13:36:23 fit 2025-07 rows 1894
+13:36:23 B done 46s
+13:36:36 fit 2025-10..2026-09 rows 34461
+13:36:36 C done 58s
+13:36:36 judge done primary {'mean': -0.00149049336166706, 'lo': -0.007229743845725694, 'hi': 0.004248757122391574, 'p': 0.5968930899686888, 'pass_before_holm': False} 58s
