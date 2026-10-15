@@ -1,0 +1,144 @@
+selection ok: HEAD a042f4ffe23a678885b18b042ea3330765c565c1 chosen H3 sha acaa4dbe30efafd0423f67ddfc2cfc07efe8a020e5b51ed07fb22a44efedc3e0
+cut 4495960 2025-07-20 23:59:00 | fwd 525600 2025-10-01 00:00:00 2026-09-30 23:59:00 7s
+T=15: cut anchors 294585 (valid 293685), fwd anchors 34943 (valid 34778) 10s
+T=15 done 21s
+T=60: cut anchors 73645 (valid 73424), fwd anchors 8735 (valid 8685) 21s
+T=60 done 27s
+T=240: cut anchors 18404 (valid 18350), fwd anchors 2183 (valid 2171) 27s
+T=240 done 30s
+T10 looks. chosen=H3 (selection.json sha256 acaa4dbe30efafd0423f67ddfc2cfc07efe8a020e5b51ed07fb22a44efedc3e0), run at HEAD a042f4ffe23a678885b18b042ea3330765c565c1
+
+Look 1 2024-07..2025-07-20 (cut file, monthly walk-forward)
+ X=25 bps T=15 min n=36165 base_rate=0.3675
+    B0  brier=0.23468 skill_vs_B1=-38.70% CI[-43.78,-33.85] p=1.0000 ece=5.89pp auc=0.5412 logloss=0.6623
+    B1  brier=0.16920 skill_vs_B1=+0.00% ece=8.08pp auc=0.8250 logloss=0.5327
+    B2  brier=0.16495 skill_vs_B1=+2.51% CI[+1.98,+3.05] p=0.0001 ece=7.13pp auc=0.8288 logloss=0.5205
+    H1  brier=0.16156 skill_vs_B1=+4.52% CI[+4.00,+5.02] p=0.0001 ece=6.32pp auc=0.8329 logloss=0.4921
+    H2  brier=0.15706 skill_vs_B1=+7.18% CI[+6.49,+7.85] p=0.0001 ece=0.73pp auc=0.8298 logloss=0.4876
+    H3* brier=0.15418 skill_vs_B1=+8.88% CI[+8.20,+9.57] p=0.0001 holm_p=0.0009 ece=1.60pp auc=0.8356 logloss=0.4723
+ X=50 bps T=15 min n=36165 base_rate=0.1067
+    B0  brier=0.09601 skill_vs_B1=-23.94% CI[-30.40,-18.24] p=1.0000 ece=2.12pp auc=0.5445 logloss=0.3424
+    B1  brier=0.07747 skill_vs_B1=+0.00% ece=3.92pp auc=0.8510 logloss=0.2829
+    B2  brier=0.07398 skill_vs_B1=+4.49% CI[+3.65,+5.33] p=0.0001 ece=3.53pp auc=0.8574 logloss=0.2777
+    H1  brier=0.07155 skill_vs_B1=+7.63% CI[+6.76,+8.50] p=0.0001 ece=1.74pp auc=0.8580 logloss=0.2595
+    H2  brier=0.07224 skill_vs_B1=+6.74% CI[+5.63,+7.83] p=0.0001 ece=0.51pp auc=0.8542 logloss=0.2587
+    H3* brier=0.07021 skill_vs_B1=+9.37% CI[+8.20,+10.54] p=0.0001 holm_p=0.0009 ece=0.65pp auc=0.8618 logloss=0.2417
+ X=100 bps T=15 min n=36165 base_rate=0.0183
+    B0  brier=0.01808 skill_vs_B1=-6.36% CI[-15.12,+0.38] p=0.9644 ece=0.02pp auc=0.5368 logloss=0.0928
+    B1  brier=0.01700 skill_vs_B1=+0.00% ece=1.09pp auc=0.8821 logloss=0.0899
+    B2  brier=0.01640 skill_vs_B1=+3.53% CI[+1.55,+5.36] p=0.0005 ece=1.06pp auc=0.8907 logloss=0.0861
+    H1  brier=0.01589 skill_vs_B1=+6.51% CI[+4.42,+8.63] p=0.0001 ece=0.97pp auc=0.8868 logloss=0.0887
+    H2  brier=0.01610 skill_vs_B1=+5.30% CI[+2.24,+8.17] p=0.0005 ece=0.31pp auc=0.8796 logloss=0.0732
+    H3* brier=0.01546 skill_vs_B1=+9.03% CI[+6.50,+11.51] p=0.0001 holm_p=0.0009 ece=0.15pp auc=0.8948 logloss=0.0654
+ X=25 bps T=60 min n=9035 base_rate=0.7667
+    B0  brier=0.18240 skill_vs_B1=-28.77% CI[-34.78,-23.09] p=1.0000 ece=5.00pp auc=0.5419 logloss=0.5525
+    B1  brier=0.14165 skill_vs_B1=+0.00% ece=7.72pp auc=0.8186 logloss=0.5040
+    B2  brier=0.14143 skill_vs_B1=+0.15% CI[-2.17,+2.32] p=0.4420 ece=6.53pp auc=0.8190 logloss=0.4642
+    H1  brier=0.13845 skill_vs_B1=+2.26% CI[+0.80,+3.64] p=0.0014 ece=7.65pp auc=0.8333 logloss=0.4464
+    H2  brier=0.13327 skill_vs_B1=+5.91% CI[+4.08,+7.63] p=0.0001 ece=2.03pp auc=0.8269 logloss=0.4369
+    H3* brier=0.13006 skill_vs_B1=+8.18% CI[+6.59,+9.67] p=0.0001 holm_p=0.0009 ece=1.59pp auc=0.8370 logloss=0.4006
+ X=50 bps T=60 min n=9035 base_rate=0.3914   <-- PRIMARY
+    B0  brier=0.23928 skill_vs_B1=-19.57% CI[-24.85,-14.64] p=1.0000 ece=3.34pp auc=0.5455 logloss=0.6720
+    B1  brier=0.20012 skill_vs_B1=+0.00% ece=10.56pp auc=0.7767 logloss=0.6190
+    B2  brier=0.18503 skill_vs_B1=+7.54% CI[+5.51,+9.53] p=0.0001 ece=8.78pp auc=0.7949 logloss=0.5922
+    H1  brier=0.17490 skill_vs_B1=+12.60% CI[+11.26,+13.94] p=0.0001 ece=5.83pp auc=0.8058 logloss=0.5272
+    H2  brier=0.17292 skill_vs_B1=+13.59% CI[+12.00,+15.14] p=0.0001 ece=1.36pp auc=0.8005 logloss=0.5475
+    H3* brier=0.16934 skill_vs_B1=+15.38% CI[+13.76,+16.95] p=0.0001 holm_p=0.0009 ece=2.11pp auc=0.8092 logloss=0.5106
+ X=100 bps T=60 min n=9035 base_rate=0.1202
+    B0  brier=0.10608 skill_vs_B1=-8.94% CI[-15.10,-3.67] p=1.0000 ece=2.61pp auc=0.5562 logloss=0.3683
+    B1  brier=0.09738 skill_vs_B1=+0.00% ece=5.91pp auc=0.7842 logloss=0.3629
+    B2  brier=0.08814 skill_vs_B1=+9.48% CI[+6.55,+12.40] p=0.0001 ece=4.64pp auc=0.8196 logloss=0.3609
+    H1  brier=0.08431 skill_vs_B1=+13.42% CI[+11.37,+15.43] p=0.0001 ece=2.94pp auc=0.8237 logloss=0.3163
+    H2  brier=0.08487 skill_vs_B1=+12.85% CI[+10.75,+14.90] p=0.0001 ece=0.86pp auc=0.8163 logloss=0.3040
+    H3* brier=0.08240 skill_vs_B1=+15.38% CI[+13.10,+17.62] p=0.0001 holm_p=0.0009 ece=0.89pp auc=0.8288 logloss=0.2819
+ X=25 bps T=240 min n=2257 base_rate=0.9672
+    B0  brier=0.03227 skill_vs_B1=-8.80% CI[-15.94,-3.26] p=0.9999 ece=1.75pp auc=0.5938 logloss=0.1479
+    B1  brier=0.02966 skill_vs_B1=+0.00% ece=2.42pp auc=0.8479 logloss=0.1952
+    B2  brier=0.03164 skill_vs_B1=-6.67% CI[-23.15,+6.92] p=0.8333 ece=2.33pp auc=0.8861 logloss=0.1220
+    H1  brier=0.02814 skill_vs_B1=+5.14% CI[+1.82,+8.89] p=0.0004 ece=2.48pp auc=0.9165 logloss=0.1361
+    H2  brier=0.02825 skill_vs_B1=+4.76% CI[-6.42,+14.91] p=0.2039 ece=1.26pp auc=0.8621 logloss=0.1474
+    H3* brier=0.02695 skill_vs_B1=+9.14% CI[+0.89,+15.94] p=0.0154 holm_p=0.0154 ece=0.58pp auc=0.9075 logloss=0.1006
+ X=50 bps T=240 min n=2257 base_rate=0.8090
+    B0  brier=0.15853 skill_vs_B1=-7.86% CI[-13.88,-2.46] p=0.9986 ece=5.34pp auc=0.5334 logloss=0.4981
+    B1  brier=0.14697 skill_vs_B1=+0.00% ece=9.39pp auc=0.7276 logloss=0.6139
+    B2  brier=0.14994 skill_vs_B1=-2.02% CI[-10.14,+5.40] p=0.6974 ece=10.60pp auc=0.7858 logloss=0.4954
+    H1  brier=0.13193 skill_vs_B1=+10.24% CI[+6.53,+13.86] p=0.0001 ece=6.77pp auc=0.8007 logloss=0.4379
+    H2  brier=0.12874 skill_vs_B1=+12.41% CI[+8.12,+16.44] p=0.0001 ece=1.74pp auc=0.7920 logloss=0.4442
+    H3* brier=0.12255 skill_vs_B1=+16.61% CI[+12.57,+20.38] p=0.0001 holm_p=0.0009 ece=1.38pp auc=0.8164 logloss=0.3830
+ X=100 bps T=240 min n=2257 base_rate=0.4227
+    B0  brier=0.24789 skill_vs_B1=-0.08% CI[-6.03,+5.35] p=0.5049 ece=7.79pp auc=0.5394 logloss=0.6890
+    B1  brier=0.24768 skill_vs_B1=+0.00% ece=15.40pp auc=0.6862 logloss=0.7624
+    B2  brier=0.23042 skill_vs_B1=+6.97% CI[+1.71,+12.07] p=0.0045 ece=14.80pp auc=0.7269 logloss=0.7840
+    H1  brier=0.20228 skill_vs_B1=+18.33% CI[+14.78,+21.86] p=0.0001 ece=6.81pp auc=0.7539 logloss=0.5997
+    H2  brier=0.20356 skill_vs_B1=+17.82% CI[+14.24,+21.32] p=0.0001 ece=4.51pp auc=0.7385 logloss=0.6761
+    H3* brier=0.18940 skill_vs_B1=+23.53% CI[+20.15,+26.84] p=0.0001 holm_p=0.0009 ece=3.30pp auc=0.7717 logloss=0.5594
+ primary verdict: skill +15.38% CI [+13.76,+16.95] (>=2% and CI>0: True); ECE 2.11pp (<1pp: False); pass=False
+
+Look 2 2025-11..2026-09 (forward file, frozen fit to 2025-07-20)
+ X=25 bps T=15 min n=31899 base_rate=0.3354
+    B0  brier=0.23588 skill_vs_B1=-40.46% CI[-47.42,-34.26] p=1.0000 ece=11.19pp auc=0.5106 logloss=0.6683
+    B1  brier=0.16793 skill_vs_B1=+0.00% ece=7.59pp auc=0.8151 logloss=0.5339
+    B2  brier=0.16574 skill_vs_B1=+1.31% CI[+0.70,+1.91] p=0.0001 ece=6.98pp auc=0.8159 logloss=0.5321
+    H1  brier=0.16173 skill_vs_B1=+3.70% CI[+3.12,+4.26] p=0.0001 ece=5.90pp auc=0.8209 logloss=0.4957
+    H2  brier=0.15780 skill_vs_B1=+6.03% CI[+5.20,+6.83] p=0.0001 ece=0.92pp auc=0.8180 logloss=0.4894
+    H3* brier=0.15498 skill_vs_B1=+7.71% CI[+7.02,+8.37] p=0.0001 holm_p=0.0009 ece=2.16pp auc=0.8253 logloss=0.4739
+ X=50 bps T=15 min n=31899 base_rate=0.0933
+    B0  brier=0.08691 skill_vs_B1=-19.45% CI[-26.11,-13.62] p=1.0000 ece=4.78pp auc=0.5187 logloss=0.3232
+    B1  brier=0.07276 skill_vs_B1=+0.00% ece=3.91pp auc=0.8309 logloss=0.2868
+    B2  brier=0.07085 skill_vs_B1=+2.63% CI[+1.77,+3.48] p=0.0001 ece=3.75pp auc=0.8363 logloss=0.2861
+    H1  brier=0.06820 skill_vs_B1=+6.26% CI[+5.32,+7.22] p=0.0001 ece=2.32pp auc=0.8369 logloss=0.2626
+    H2  brier=0.06843 skill_vs_B1=+5.95% CI[+4.49,+7.36] p=0.0001 ece=0.22pp auc=0.8335 logloss=0.2443
+    H3* brier=0.06700 skill_vs_B1=+7.92% CI[+6.82,+9.02] p=0.0001 holm_p=0.0009 ece=1.42pp auc=0.8442 logloss=0.2347
+ X=100 bps T=15 min n=31899 base_rate=0.0139
+    B0  brier=0.01386 skill_vs_B1=-3.71% CI[-12.61,+3.87] p=0.7872 ece=0.08pp auc=0.4765 logloss=0.0778
+    B1  brier=0.01336 skill_vs_B1=+0.00% ece=0.93pp auc=0.8538 logloss=0.0840
+    B2  brier=0.01329 skill_vs_B1=+0.51% CI[-1.14,+2.20] p=0.2826 ece=0.87pp auc=0.8640 logloss=0.0825
+    H1  brier=0.01266 skill_vs_B1=+5.25% CI[+2.63,+8.14] p=0.0001 ece=0.86pp auc=0.8594 logloss=0.0836
+    H2  brier=0.01323 skill_vs_B1=+0.97% CI[-3.81,+5.28] p=0.3170 ece=0.33pp auc=0.8344 logloss=0.0651
+    H3* brier=0.01249 skill_vs_B1=+6.50% CI[+3.82,+9.33] p=0.0001 holm_p=0.0009 ece=0.38pp auc=0.8698 logloss=0.0569
+ X=25 bps T=60 min n=7966 base_rate=0.7247
+    B0  brier=0.20969 skill_vs_B1=-35.01% CI[-43.25,-27.51] p=1.0000 ece=9.30pp auc=0.5205 logloss=0.6181
+    B1  brier=0.15531 skill_vs_B1=+0.00% ece=8.26pp auc=0.8169 logloss=0.5284
+    B2  brier=0.15039 skill_vs_B1=+3.17% CI[+0.87,+5.45] p=0.0053 ece=6.66pp auc=0.8277 logloss=0.4827
+    H1  brier=0.15118 skill_vs_B1=+2.66% CI[+1.02,+4.20] p=0.0012 ece=9.03pp auc=0.8371 logloss=0.4731
+    H2  brier=0.14308 skill_vs_B1=+7.88% CI[+6.20,+9.56] p=0.0001 ece=1.85pp auc=0.8303 logloss=0.4781
+    H3* brier=0.13880 skill_vs_B1=+10.63% CI[+9.43,+11.83] p=0.0001 holm_p=0.0009 ece=2.19pp auc=0.8447 logloss=0.4217
+ X=50 bps T=60 min n=7966 base_rate=0.3584   <-- PRIMARY
+    B0  brier=0.24303 skill_vs_B1=-22.26% CI[-28.73,-16.45] p=1.0000 ece=11.95pp auc=0.5156 logloss=0.6822
+    B1  brier=0.19878 skill_vs_B1=+0.00% ece=10.69pp auc=0.7657 logloss=0.6221
+    B2  brier=0.18268 skill_vs_B1=+8.10% CI[+6.15,+10.00] p=0.0001 ece=8.70pp auc=0.7908 logloss=0.6036
+    H1  brier=0.17477 skill_vs_B1=+12.08% CI[+10.83,+13.31] p=0.0001 ece=5.22pp auc=0.7966 logloss=0.5281
+    H2  brier=0.17444 skill_vs_B1=+12.24% CI[+10.74,+13.72] p=0.0001 ece=2.32pp auc=0.7884 logloss=0.5572
+    H3* brier=0.16815 skill_vs_B1=+15.41% CI[+13.94,+16.86] p=0.0001 holm_p=0.0009 ece=1.26pp auc=0.8034 logloss=0.5081
+ X=100 bps T=60 min n=7966 base_rate=0.1008
+    B0  brier=0.09348 skill_vs_B1=-6.88% CI[-13.84,-0.96] p=0.9906 ece=5.68pp auc=0.5189 logloss=0.3410
+    B1  brier=0.08746 skill_vs_B1=+0.00% ece=5.57pp auc=0.7683 logloss=0.3483
+    B2  brier=0.08265 skill_vs_B1=+5.50% CI[+2.42,+8.60] p=0.0003 ece=5.13pp auc=0.8010 logloss=0.3590
+    H1  brier=0.07824 skill_vs_B1=+10.54% CI[+8.43,+12.58] p=0.0001 ece=3.43pp auc=0.8048 logloss=0.3025
+    H2  brier=0.07918 skill_vs_B1=+9.47% CI[+6.94,+11.92] p=0.0001 ece=1.35pp auc=0.7899 logloss=0.2963
+    H3* brier=0.07657 skill_vs_B1=+12.45% CI[+10.16,+14.71] p=0.0001 holm_p=0.0009 ece=1.83pp auc=0.8137 logloss=0.2643
+ X=25 bps T=240 min n=1992 base_rate=0.9478
+    B0  brier=0.05010 skill_vs_B1=-6.79% CI[-13.35,-0.63] p=0.9844 ece=1.30pp auc=0.5535 logloss=0.2211
+    B1  brier=0.04691 skill_vs_B1=+0.00% ece=3.94pp auc=0.7991 logloss=0.3133
+    B2  brier=0.04417 skill_vs_B1=+5.85% CI[-9.58,+17.85] p=0.2173 ece=2.27pp auc=0.8903 logloss=0.1762
+    H1  brier=0.04551 skill_vs_B1=+3.00% CI[-0.41,+6.71] p=0.0440 ece=3.96pp auc=0.8938 logloss=0.2105
+    H2  brier=0.04345 skill_vs_B1=+7.38% CI[-1.18,+14.69] p=0.0450 ece=2.29pp auc=0.8508 logloss=0.1881
+    H3* brier=0.03996 skill_vs_B1=+14.82% CI[+7.60,+20.68] p=0.0002 holm_p=0.0009 ece=1.10pp auc=0.9046 logloss=0.1402
+ X=50 bps T=240 min n=1992 base_rate=0.7545
+    B0  brier=0.19471 skill_vs_B1=-10.21% CI[-17.62,-3.78] p=0.9994 ece=10.13pp auc=0.5277 logloss=0.5935
+    B1  brier=0.17666 skill_vs_B1=+0.00% ece=12.04pp auc=0.7234 logloss=0.7024
+    B2  brier=0.17065 skill_vs_B1=+3.40% CI[-4.06,+10.37] p=0.1843 ece=10.94pp auc=0.7749 logloss=0.5699
+    H1  brier=0.15261 skill_vs_B1=+13.61% CI[+9.74,+17.32] p=0.0001 ece=8.78pp auc=0.7934 logloss=0.5214
+    H2  brier=0.15207 skill_vs_B1=+13.92% CI[+8.44,+18.94] p=0.0001 ece=3.91pp auc=0.7785 logloss=0.5691
+    H3* brier=0.14167 skill_vs_B1=+19.81% CI[+16.10,+23.15] p=0.0001 holm_p=0.0009 ece=3.20pp auc=0.8130 logloss=0.4345
+ X=100 bps T=240 min n=1992 base_rate=0.3775
+    B0  brier=0.24456 skill_vs_B1=-0.96% CI[-7.91,+5.43] p=0.6066 ece=10.50pp auc=0.5334 logloss=0.6837
+    B1  brier=0.24223 skill_vs_B1=+0.00% ece=14.74pp auc=0.6813 logloss=0.7296
+    B2  brier=0.22656 skill_vs_B1=+6.47% CI[+1.31,+11.44] p=0.0082 ece=15.08pp auc=0.7183 logloss=0.8011
+    H1  brier=0.20847 skill_vs_B1=+13.94% CI[+9.97,+17.73] p=0.0001 ece=9.09pp auc=0.7415 logloss=0.6305
+    H2  brier=0.20421 skill_vs_B1=+15.70% CI[+11.05,+19.96] p=0.0001 ece=5.68pp auc=0.7153 logloss=0.6749
+    H3* brier=0.18086 skill_vs_B1=+25.34% CI[+21.85,+28.64] p=0.0001 holm_p=0.0009 ece=2.88pp auc=0.7812 logloss=0.5416
+ primary verdict: skill +15.41% CI [+13.94,+16.86] (>=2% and CI>0: True); ECE 1.26pp (<1pp: False); pass=False
+
+SUCCESS (both looks pass both criteria): False
+total 30s
