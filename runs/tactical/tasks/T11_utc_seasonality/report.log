@@ -1,0 +1,59 @@
+selection.json committed in a3ebba2e39d1049bb4b21b6c68830e322aad665c chosen V3
+A bars 722880 2017-08-17 00:00:00 2018-12-31 23:59:00 2s
+A drops {'anchors': 103029, 'kept': 102144, 't01_drops': 225, 'seam_excluded': 660, 'seam_fraction_of_anchors': 0.006493317415484961}
+2017-09 ntr 2868 n_te 6172 {'V0': 0.1291, 'V1': 0.1291, 'V2': 0.077, 'V3': 0.0782} 3s
+2017-10 ntr 9039 n_te 6377 {'V0': 0.2163, 'V1': 0.2163, 'V2': 0.2202, 'V3': 0.2054} 3s
+2017-11 ntr 15416 n_te 5941 {'V0': 0.1873, 'V1': 0.1862, 'V2': 0.1834, 'V3': 0.1858} 3s
+2017-12 ntr 21358 n_te 6377 {'V0': 0.1684, 'V1': 0.1679, 'V2': 0.1751, 'V3': 0.1755} 3s
+2018-01 ntr 27735 n_te 6378 {'V0': 0.1987, 'V1': 0.1986, 'V2': 0.1883, 'V3': 0.1885} 4s
+2018-02 ntr 34112 n_te 5760 {'V0': 0.1793, 'V1': 0.1803, 'V2': 0.1754, 'V3': 0.1703} 4s
+2018-03 ntr 39872 n_te 6154 {'V0': 0.1684, 'V1': 0.1689, 'V2': 0.1601, 'V3': 0.1604} 5s
+2018-04 ntr 46026 n_te 6171 {'V0': 0.1817, 'V1': 0.1819, 'V2': 0.1842, 'V3': 0.1823} 5s
+2018-05 ntr 52198 n_te 6377 {'V0': 0.2267, 'V1': 0.2268, 'V2': 0.2291, 'V3': 0.2243} 6s
+2018-06 ntr 58575 n_te 6172 {'V0': 0.1936, 'V1': 0.1938, 'V2': 0.1954, 'V3': 0.1916} 7s
+2018-07 ntr 64746 n_te 6375 {'V0': 0.1521, 'V1': 0.1526, 'V2': 0.1572, 'V3': 0.1572} 8s
+2018-08 ntr 71121 n_te 6377 {'V0': 0.2072, 'V1': 0.2077, 'V2': 0.2116, 'V3': 0.2155} 9s
+2018-09 ntr 74623 n_te 6163 {'V0': 0.1851, 'V1': 0.1854, 'V2': 0.1945, 'V3': 0.1929} 10s
+2018-10 ntr 74614 n_te 6243 {'V0': 0.1622, 'V1': 0.1621, 'V2': 0.1679, 'V3': 0.1663} 11s
+2018-11 ntr 74479 n_te 5888 {'V0': 0.1586, 'V1': 0.1584, 'V2': 0.169, 'V3': 0.1712} 12s
+2018-12 ntr 74427 n_te 6343 {'V0': 0.2207, 'V1': 0.2202, 'V2': 0.2215, 'V3': 0.2261} 13s
+B bars 525600 2025-10-01 00:00:00 2026-09-30 23:59:00 14s
+B drops {'anchors': 74820, 'kept': 74474, 't01_drops': 346, 'seam_excluded': 0, 'seam_fraction_of_anchors': 0.0}
+2025-11 ntr 6138 n_te 6172 {'V0': 0.1426, 'V1': 0.1426, 'V2': 0.1518, 'V3': 0.1342} 14s
+2025-12 ntr 12309 n_te 6367 {'V0': 0.201, 'V1': 0.201, 'V2': 0.2499, 'V3': 0.2645} 14s
+2026-01 ntr 18676 n_te 6306 {'V0': 0.2031, 'V1': 0.2031, 'V2': 0.2264, 'V3': 0.2754} 14s
+2026-02 ntr 24982 n_te 5760 {'V0': 0.1462, 'V1': 0.1462, 'V2': 0.1904, 'V3': 0.2435} 15s
+2026-03 ntr 30742 n_te 6377 {'V0': 0.1826, 'V1': 0.1826, 'V2': 0.2398, 'V3': 0.236} 15s
+2026-04 ntr 37120 n_te 6170 {'V0': 0.1909, 'V1': 0.1909, 'V2': 0.2146, 'V3': 0.218} 16s
+2026-05 ntr 43290 n_te 6377 {'V0': 0.1807, 'V1': 0.1807, 'V2': 0.2519, 'V3': 0.2258} 16s
+2026-06 ntr 49666 n_te 6171 {'V0': 0.1878, 'V1': 0.1878, 'V2': 0.2415, 'V3': 0.2175} 17s
+2026-07 ntr 55838 n_te 6360 {'V0': 0.1917, 'V1': 0.1917, 'V2': 0.2639, 'V3': 0.2819} 18s
+2026-08 ntr 62198 n_te 6153 {'V0': 0.151, 'V1': 0.151, 'V2': 0.2044, 'V3': 0.2025} 18s
+2026-09 ntr 68351 n_te 6115 {'V0': 0.1815, 'V1': 0.1815, 'V2': 0.2411, 'V3': 0.2783} 19s
+selection.json committed in a3ebba2e39d1049bb4b21b6c68830e322aad665c; chosen V3; selection mean skill diffs {'V1': 0.0003813328377625077, 'V2': 0.009787761841479024, 'V3': 0.01988597746249653}
+== REPORT-ONLY cut file 2017-09..2018-12 (partly seen: T04-A): 16 months 2017-09..2018-12, target A: mean over months of skill vs ar [95% t-CI] / months positive ==
+   rw  mse 0.56111  skill_ar -0.1413
+   ar  mse 0.49205  skill_ar +0.0000
+   V0   mse 0.40191  skill_ar +0.1835 [+0.1692,+0.1977]  positive 16/16
+   V1   mse 0.40190  skill_ar +0.1835 [+0.1693,+0.1977]  positive 16/16
+   V2   mse 0.40113  skill_ar +0.1819 [+0.1629,+0.2009]  positive 16/16
+   V3 * mse 0.40146  skill_ar +0.1807 [+0.1622,+0.1992]  positive 16/16
+-- paired differences, variant minus V0 [95% t-CI] / months positive (target A); secondary (|r_15|): Spearman diff, QLIKE diff
+   V1 -V0 skill_ar diff +0.0000 [-0.0002,+0.0003] pos 9/16   1-mse/mse_V0 +0.0001 | R: spearman -0.0000 [-0.0001,+0.0001] qlike +0.00009 (negative = better)
+   V2 -V0 skill_ar diff -0.0016 [-0.0094,+0.0062] pos 11/16   1-mse/mse_V0 -0.0017 | R: spearman +0.0004 [-0.0032,+0.0041] qlike +0.00484 (negative = better)
+   V3*-V0 skill_ar diff -0.0027 [-0.0106,+0.0051] pos 8/16   1-mse/mse_V0 -0.0032 | R: spearman -0.0047 [-0.0124,+0.0029] qlike +0.02596 (negative = better)
+-- per month: month n_tr n_te | skill_ar V0/V1/V2/V3
+
+== REPORT-ONLY Binance 2025-11..2026-09 (monthly refit on the forward file; seen by H83): 11 months 2025-11..2026-09, target A: mean over months of skill vs ar [95% t-CI] / months positive ==
+   rw  mse 0.53128  skill_ar -0.0650
+   ar  mse 0.49953  skill_ar +0.0000
+   V0   mse 0.40987  skill_ar +0.1781 [+0.1636,+0.1926]  positive 11/11
+   V1   mse 0.40987  skill_ar +0.1781 [+0.1636,+0.1926]  positive 11/11
+   V2   mse 0.38598  skill_ar +0.2251 [+0.2031,+0.2470]  positive 11/11
+   V3 * mse 0.38061  skill_ar +0.2343 [+0.2054,+0.2632]  positive 11/11
+-- paired differences, variant minus V0 [95% t-CI] / months positive (target A); secondary (|r_15|): Spearman diff, QLIKE diff
+   V1 -V0 skill_ar diff +0.0000 [+0.0000,+0.0000] pos 0/11   1-mse/mse_V0 +0.0000 | R: spearman +0.0000 [+0.0000,+0.0000] qlike +0.00000 (negative = better)
+   V2 -V0 skill_ar diff +0.0469 [+0.0333,+0.0606] pos 11/11   1-mse/mse_V0 +0.0573 | R: spearman +0.0079 [+0.0048,+0.0109] qlike -0.01334 (negative = better)
+   V3*-V0 skill_ar diff +0.0562 [+0.0343,+0.0782] pos 10/11   1-mse/mse_V0 +0.0687 | R: spearman +0.0021 [-0.0023,+0.0066] qlike -0.00603 (negative = better)
+-- per month: month n_tr n_te | skill_ar V0/V1/V2/V3
+done 19s
