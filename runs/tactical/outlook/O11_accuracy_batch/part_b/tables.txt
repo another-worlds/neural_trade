@@ -1,0 +1,55 @@
+O11 part b tables. rows 132. scored months 2025-11..2026-09 (11); difference = refit - frozen per month; one-sample t over months
+QLIKE difference: negative = refit better. Spearman difference: positive = refit better.
+
+===== model S3, H=15 =====
+  frozen       mean Spearman 0.7591  mean QLIKE 0.3638  (months 11)
+  refit_cal    mean Spearman 0.7643  mean QLIKE 0.3614  (months 11)
+  refit_avail  mean Spearman 0.7626  mean QLIKE 0.3616  (months 11)
+  refit_cal-frozen Spearman +0.0051 [+0.0023,+0.0080] +10/11 p=0.002641 (min -0.0000, max +0.0120)
+  refit_cal-frozen QLIKE    -0.0024 [-0.0048,-0.0001] +4/11 p=0.04551 (min -0.0080, max +0.0017)
+  refit_avail-frozen Spearman +0.0034 [+0.0009,+0.0059] +9/11 p=0.0118 (min -0.0004, max +0.0108)
+  refit_avail-frozen QLIKE    -0.0022 [-0.0044,-0.0001] +4/11 p=0.04412 (min -0.0067, max +0.0023)
+
+===== model S3, H=60 =====
+  frozen       mean Spearman 0.7778  mean QLIKE 0.2740  (months 11)
+  refit_cal    mean Spearman 0.7848  mean QLIKE 0.2675  (months 11)
+  refit_avail  mean Spearman 0.7830  mean QLIKE 0.2681  (months 11)
+  refit_cal-frozen Spearman +0.0070 [+0.0032,+0.0108] +10/11 p=0.002116 (min -0.0008, max +0.0160)
+  refit_cal-frozen QLIKE    -0.0065 [-0.0100,-0.0030] +1/11 p=0.001931 (min -0.0138, max +0.0040)
+  refit_avail-frozen Spearman +0.0052 [+0.0017,+0.0087] +9/11 p=0.007884 (min -0.0009, max +0.0156)
+  refit_avail-frozen QLIKE    -0.0059 [-0.0092,-0.0026] +2/11 p=0.002616 (min -0.0143, max +0.0005)
+
+===== model L1, H=15 =====
+  frozen       mean Spearman 0.7676  mean QLIKE 0.3502  (months 11)
+  refit_cal    mean Spearman 0.7722  mean QLIKE 0.3480  (months 11)
+  refit_avail  mean Spearman 0.7715  mean QLIKE 0.3468  (months 11)
+  refit_cal-frozen Spearman +0.0046 [+0.0024,+0.0069] +10/11 p=0.0009759 (min -0.0000, max +0.0090)
+  refit_cal-frozen QLIKE    -0.0022 [-0.0062,+0.0017] +3/11 p=0.2379 (min -0.0108, max +0.0084)
+  refit_avail-frozen Spearman +0.0039 [+0.0017,+0.0062] +10/11 p=0.002668 (min -0.0003, max +0.0091)
+  refit_avail-frozen QLIKE    -0.0035 [-0.0065,-0.0004] +3/11 p=0.02876 (min -0.0125, max +0.0029)
+
+===== model L1, H=60 =====
+  frozen       mean Spearman 0.7859  mean QLIKE 0.2600  (months 11)
+  refit_cal    mean Spearman 0.7899  mean QLIKE 0.2567  (months 11)
+  refit_avail  mean Spearman 0.7896  mean QLIKE 0.2559  (months 11)
+  refit_cal-frozen Spearman +0.0040 [+0.0011,+0.0069] +8/11 p=0.01178 (min -0.0021, max +0.0095)
+  refit_cal-frozen QLIKE    -0.0033 [-0.0066,-0.0000] +3/11 p=0.04752 (min -0.0115, max +0.0042)
+  refit_avail-frozen Spearman +0.0037 [+0.0012,+0.0062] +8/11 p=0.008132 (min -0.0021, max +0.0082)
+  refit_avail-frozen QLIKE    -0.0042 [-0.0068,-0.0015] +2/11 p=0.005344 (min -0.0109, max +0.0019)
+
+===== PRIMARY TEST (L1, H=15, refit_cal - frozen, Spearman, 11 months) =====
+  mean +0.0046 [CI +0.0024,+0.0069] positive 10/11 raw p 0.00098
+  mean >= +0.003: True; lower bound > 0: True -> PASS before Holm (the lead applies Holm)
+
+===== monthly series, L1 H=15: Spearman frozen | refit_cal | refit_avail | train days (cal / avail) =====
+  2025-11 0.7963 | 0.7963 | 0.7961   train days 364 / 436   n_tr 58995 / 73789
+  2025-12 0.8320 | 0.8323 | 0.8323   train days 364 / 436   n_tr 58994 / 73795
+  2026-01 0.8279 | 0.8285 | 0.8285   train days 364 / 437   n_tr 59053 / 73795
+  2026-02 0.7880 | 0.7933 | 0.7914   train days 364 / 436   n_tr 58986 / 73727
+  2026-03 0.7038 | 0.7080 | 0.7075   train days 364 / 436   n_tr 58991 / 73797
+  2026-04 0.7227 | 0.7297 | 0.7277   train days 365 / 436   n_tr 59190 / 73797
+  2026-05 0.7052 | 0.7080 | 0.7063   train days 364 / 436   n_tr 59187 / 73794
+  2026-06 0.7701 | 0.7782 | 0.7771   train days 364 / 436   n_tr 59187 / 73963
+  2026-07 0.7253 | 0.7335 | 0.7335   train days 365 / 436   n_tr 59243 / 73997
+  2026-08 0.8339 | 0.8393 | 0.8393   train days 299 / 436   n_tr 61558 / 73981
+  2026-09 0.7383 | 0.7473 | 0.7474   train days 330 / 436   n_tr 67709 / 73760

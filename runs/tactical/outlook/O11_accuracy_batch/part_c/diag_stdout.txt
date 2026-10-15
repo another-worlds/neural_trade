@@ -1,0 +1,2 @@
+sig1-base pinball J (24 months): +0.194 [+0.110,+0.277] +23/24 p=8.198e-05 (min -0.011, max +0.740); pooled hit 0.0530 / 0.9481
+cand-base pinball J (24 months): +0.431 [+0.339,+0.522] +24/24 p=1.219e-09 (min +0.101, max +0.956); pooled hit 0.0629 / 0.9374
