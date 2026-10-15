@@ -317,15 +317,108 @@ function timeline(){
   once(tl,()=>{bars.forEach((b,i)=>setTimeout(()=>{b.style.transition='width 1.1s cubic-bezier(.2,.8,.2,1)';b.style.width=b.style.getPropertyValue('--w')},i*140/SPEED));setTimeout(()=>tl.classList.add('go'),(bars.length*140+900)/SPEED);placeToday()},.25);
 }
 
+// ---------------------------------------------------------------- T13: support and resistance lines on real windows
+let lnWin=0,lnTok=0;const lnOn={s1:true,s2:true,s3:true};let lnG={};
+function lines(){
+  const Dl=D.lines,btn=document.getElementById('lnBtns'),lay=document.getElementById('lnLayers');
+  if(!btn.children.length){
+    Dl.windows.forEach((w,i)=>{const b=document.createElement('button');b.textContent=w.label+' · '+w.anchor.slice(0,16)+' UTC';b.className=i===lnWin?'on':'';b.onclick=()=>{lnWin=i;[...btn.children].forEach((c,k)=>c.classList.toggle('on',k===i));lines()};btn.appendChild(b)});
+    [['s1','S1 оболочка'],['s2','S2 уровни'],['s3','S3 канал']].forEach(([k,t])=>{const b=document.createElement('button');b.textContent=t;b.className='on';
+      b.onclick=()=>{lnOn[k]=!lnOn[k];b.classList.toggle('on',lnOn[k]);if(lnG[k])lnG[k].setAttribute('display',lnOn[k]?'inline':'none')};lay.appendChild(b)})}
+  const tok=++lnTok,ok=()=>tok===lnTok,w=Dl.windows[lnWin],svg=document.getElementById('linesSvg');svg.innerHTML='';
+  const NB=w.bars.c.length,NF=w.fut.c.length,N=NB+NF,W=1200,H=520,L=74,R=98,Tp=26,B=48,s1=w.s1,s2=w.s2,s3=w.s3;
+  const boxLo=w.c0*Math.exp(-.005),boxHi=w.c0*Math.exp(.005),sp=w.sigma_price;
+  const vals=[...w.bars.h,...w.bars.l,...w.fut.h,...w.fut.l,boxLo,boxHi,s1.R_now,s1.S_now,s3.upper[0],s3.upper[1],s3.lower[0],s3.lower[1],w.c0+sp,w.c0-sp];
+  let lo=Math.min(...vals),hi=Math.max(...vals);const pd=(hi-lo)*.05;lo-=pd;hi+=pd;
+  const x=i=>L+(W-L-R)*i/(N-1),y=v=>clamp(Tp+(H-Tp-B)*(1-(v-lo)/(hi-lo)),Tp-6,H-B+6);
+  for(let k=0;k<=5;k++){const v=lo+(hi-lo)*k/5;el('line',{x1:L,x2:W-R,y1:y(v),y2:y(v),stroke:P.grid},svg);el('text',{x:L-8,y:y(v)+4,'text-anchor':'end','font-size':11,fill:P.muted},svg,Math.round(v).toLocaleString('ru-RU'))}
+  for(let m=-NB;m<=0;m+=60){const xx=x(m+NB);el('line',{x1:xx,x2:xx,y1:Tp,y2:H-B,stroke:P.grid,'stroke-dasharray':'2 4'},svg);el('text',{x:xx,y:H-B+18,'text-anchor':'middle','font-size':11,fill:P.muted},svg,m===0?'якорь':'−'+Math.abs(m)+' мин')}
+  el('text',{x:x(N-1),y:H-B+18,'text-anchor':'middle','font-size':11,fill:P.muted},svg,'+60 мин');
+  el('rect',{x:x(NB),y:Tp,width:x(N-1)-x(NB),height:H-B-Tp,fill:P.surface,'fill-opacity':.45},svg);
+  el('text',{x:L,y:H-8,'font-size':11,fill:P.muted},svg,'UTC · 1-минутные бары Binance · 240 баров до якоря · правее якоря — следующий час, он линиям неизвестен');
+  // high-low band and close
+  const up=w.bars.h.map((v,i)=>[x(i),y(v)]),dn=w.bars.l.map((v,i)=>[x(i),y(v)]).reverse();
+  el('path',{d:pathLine(up.concat(dn))+'Z',fill:P.neutral,'fill-opacity':.2,stroke:'none'},svg);
+  const pc=el('path',{d:pathLine(w.bars.c.map((v,i)=>[x(i),y(v)])),fill:'none',stroke:P.ink,'stroke-width':1.5,'stroke-linejoin':'round'},svg);drawable(pc);
+  // ---- S1: hull polylines, the active edges extended to now, the projection
+  const used=[],labs={s1:[],s2:[],s3:[]},lab=(g,k,yy,txt,col)=>{let y0=yy+4;for(let t=0;t<14&&used.some(u=>Math.abs(u-y0)<13);t++)y0+=13;used.push(y0);labs[k].push(el('text',{x:W-R+6,y:y0,'font-size':11,fill:col,opacity:0},g,txt))};
+  const g1=el('g',{display:lnOn.s1?'inline':'none'},svg),pl=(pts,col,wd,op,dash)=>el('path',{d:pathLine(pts.map(p=>[x(p[0]),y(p[1])])),fill:'none',stroke:col,'stroke-width':wd,opacity:op,'stroke-dasharray':dash||'','stroke-linejoin':'round'},g1);
+  const hU=pl(s1.upper,P.violet,1.2,.5),hL=pl(s1.lower,P.violet,1.2,.5);
+  const aU=s1.upper[s1.upper.length-2],lU=s1.upper[s1.upper.length-1],aL=s1.lower[s1.lower.length-2],lL=s1.lower[s1.lower.length-1];
+  const eR=pl([[aU[0],aU[1]],[NB,s1.R_now]],P.violet,3,1),eS=pl([[aL[0],aL[1]],[NB,s1.S_now]],P.violet,3,1);
+  const sR=Math.log(s1.R_now/lU[1]),sS=Math.log(s1.S_now/lL[1]);
+  const proj=(v0,sl)=>{const a=[];for(let j=0;j<NF;j+=3){const v=v0*Math.exp(sl*j);if(v<lo||v>hi)break;a.push([NB+j,v])}return a.length>1?a:[[NB,v0],[NB+1,v0]]};
+  const pR=pl(proj(s1.R_now,sR),P.violet,1.6,.8,'2 5'),pS=pl(proj(s1.S_now,sS),P.violet,1.6,.8,'2 5');
+  [hU,hL,eR,eS,pR,pS].forEach(drawable);
+  {const lp=a=>a[a.length-1];lab(g1,'s1',y(lp(proj(s1.R_now,sR))[1]),'S1 сопр.',P.violet);lab(g1,'s1',y(lp(proj(s1.S_now,sS))[1]),'S1 подд.',P.violet)}
+  // ---- S2: confirmed pivots, the nearest unbroken levels, touches
+  const g2=el('g',{display:lnOn.s2?'inline':'none'},svg),piv=[];
+  s2.pivots_hi.forEach(p=>piv.push(el('polygon',{points:`${x(p[0])-4},${y(p[1])-9} ${x(p[0])+4},${y(p[1])-9} ${x(p[0])},${y(p[1])-2}`,fill:P.gold,opacity:0,'fill-opacity':.7},g2)));
+  s2.pivots_lo.forEach(p=>piv.push(el('polygon',{points:`${x(p[0])-4},${y(p[1])+9} ${x(p[0])+4},${y(p[1])+9} ${x(p[0])},${y(p[1])+2}`,fill:P.gold,opacity:0,'fill-opacity':.7},g2)));
+  const lev=[],touch=[];
+  [['R',s2.R,'S2 сопр.'],['S',s2.S,'S2 подд.']].forEach(([k,q,t])=>{if(!q)return;
+    const a=el('path',{d:pathLine([[x(q.x),y(q.level)],[x(NB),y(q.level)]]),fill:'none',stroke:P.gold,'stroke-width':2.4},g2),b=el('path',{d:pathLine([[x(NB),y(q.level)],[x(N-1),y(q.level)]]),fill:'none',stroke:P.gold,'stroke-width':1.8,'stroke-dasharray':'2 5'},g2);
+    drawable(a);drawable(b);lev.push(a,b);lab(g2,'s2',y(q.level),t,P.gold);
+    q.touches.forEach(tt=>touch.push(el('circle',{cx:x(tt),cy:y(q.level),r:0,fill:'none',stroke:P.gold,'stroke-width':2,class:'arcpulse'},g2)))});
+  // ---- S3: regression channel
+  const g3=el('g',{display:lnOn.s3?'inline':'none'},svg),bl=s3.line[1]/s3.line[0],b3=Math.log(bl)/NB;
+  const line=(arr,wd,dash)=>el('path',{d:pathLine([[x(0),y(arr[0])],[x(NB),y(arr[1])]]),fill:'none',stroke:P.pink,'stroke-width':wd,'stroke-dasharray':dash||''},g3);
+  const band=el('path',{d:pathLine([[x(0),y(s3.upper[0])],[x(NB),y(s3.upper[1])],[x(NB),y(s3.lower[1])],[x(0),y(s3.lower[0])]])+'Z',fill:P.tan,'fill-opacity':0,stroke:'none'},g3);
+  const c3=line(s3.line,2.4),u3=line(s3.upper,1.5),l3=line(s3.lower,1.5);
+  const pj=v0=>{const a=[];for(let j=0;j<NF;j+=3)a.push([x(NB+j),y(v0*Math.exp(b3*j))]);return pathLine(a)};
+  const cp=[s3.line[1],s3.upper[1],s3.lower[1]].map((v0,k)=>el('path',{d:pj(v0),fill:'none',stroke:P.pink,'stroke-width':k?1.2:1.8,'stroke-dasharray':'2 5',opacity:.85},g3));
+  const d3=[c3,u3,l3,...cp];d3.forEach(drawable);
+  lab(g3,'s3',y(s3.upper[1]*Math.exp(b3*(NF-1))),'S3 +2sd',P.pink);lab(g3,'s3',y(s3.lower[1]*Math.exp(b3*(NF-1))),'S3 −2sd',P.pink);
+  lnG={s1:g1,s2:g2,s3:g3};
+  // ---- the next hour: the box, P(hit), sigma, the outcome
+  const g4=el('g',{opacity:0},svg),bx=x(NB),bw=x(N-1)-x(NB),yt=y(boxHi),yb=y(boxLo);
+  el('rect',{x:bx,y:yt,width:bw,height:yb-yt,fill:'none',stroke:P.neutral,'stroke-width':1.2,'stroke-dasharray':'4 3'},g4);
+  const pf=el('rect',{x:bx,y:yb,width:bw,height:0,fill:P.violet,'fill-opacity':.5},g4);
+  el('text',{x:bx+bw/2,y:yt-7,'text-anchor':'middle','font-size':12,fill:P.ink},g4,'±50 б.п. · P(касание) H3 = '+fmt(w.p_hit,2));
+  el('line',{x1:bx,x2:bx,y1:y(w.c0+sp),y2:y(w.c0-sp),stroke:P.gold,'stroke-width':4,'stroke-linecap':'round'},g4);
+  el('text',{x:bx-8,y:y(w.c0+sp)-2,'text-anchor':'end','font-size':11.5,fill:P.gold},g4,'σ 60 мин = '+fmt(w.sigma_bps,0)+' б.п.');
+  const fc=el('path',{d:pathLine(w.fut.c.map((v,i)=>[x(NB+i),y(v)])),fill:'none',stroke:P.ink,'stroke-width':1.8,'stroke-linejoin':'round'},svg);drawable(fc);
+  const mk=w.hit?el('path',{d:`M${x(NB+w.first)},${w.side>0?yt:yb}m0,-8l8,8l-8,8l-8,-8z`,fill:P.gold,stroke:P.paper,'stroke-width':1.5,opacity:0},svg):null;
+  const out=w.hit?'граница ±50 б.п. достигнута на '+(w.first+1)+'-й минуте':'граница ±50 б.п. за час не достигнута';
+  const stats=(full)=>{document.getElementById('lnStats').innerHTML=`<b>${w.label}</b> · якорь ${w.anchor.slice(0,16)} UTC · σ (60 мин, HAR) <b>${fmt(w.sigma_bps,1)} б.п.</b> · H3: P(касание ±50 б.п. за 60 мин) <b>${fmt(w.p_hit,3)}</b>`
+    +(full?` → <b>${out}</b>`:'')+`<br>Признаки в единицах σ: S1 до сопротивления ${fmt(w.features.s1_dR,2)}, до поддержки ${fmt(w.features.s1_dS,2)} · S2 до уровня выше ${fmt(w.features.s2_dR,2)}, ниже ${fmt(w.features.s2_dS,2)} · S3 до верха канала ${fmt(w.features.s3_dU,2)}, до низа ${fmt(w.features.s3_dL,2)}, z ${fmt(w.features.s3_z,2)}`};
+  stats(false);
+  document.getElementById('lnCap').innerHTML='Реальные окна Binance из J2 (2025-11..2026-09), выбранные правилом до просмотра: якоря на 10-м, 50-м и 90-м процентиле P(касание) модели H3 (обучена до 2025-07-20) среди '+Dl.n_anchors.toLocaleString('ru-RU')+' часовых якорей с чистым 240-минутным окном. Серая полоса — high–low, чёрная линия — закрытия. '
+    +'<span class="key"><i style="background:var(--violet)"></i>S1 оболочка: жирно — рёбра, активные на последнем баре; пунктир — их продолжение</span>'
+    +'<span class="key"><i style="background:var(--gold)"></i>S2 ближайшие неразрушенные уровни; треугольники — подтверждённые развороты, кольца — касания в пределах 0,1σ</span>'
+    +'<span class="key"><i style="background:var(--pink)"></i>S3 канал ±2 sd</span>'
+    +' σ — стандартное отклонение 60-минутной доходности по HAR (T03), P(касание) — H3 (T10). Показана пара, выбранная для части C: 1-минутные бары × 240.';
+  const final=()=>{Object.values(labs).flat().forEach(t=>t.setAttribute('opacity',1));setDraw(pc,1);[hU,hL,eR,eS,pR,pS].forEach(q=>setDraw(q,1));piv.forEach(q=>q.setAttribute('opacity',1));lev.forEach(q=>setDraw(q,1));touch.forEach(q=>q.setAttribute('r',6));
+    d3.forEach(q=>setDraw(q,1));band.setAttribute('fill-opacity',.2);g4.setAttribute('opacity',1);pf.setAttribute('y',yb-(yb-yt)*w.p_hit);pf.setAttribute('height',(yb-yt)*w.p_hit);setDraw(fc,1);if(mk)mk.setAttribute('opacity',1);stats(true)};
+  if(REDUCED){final();return}
+  (async()=>{
+    await run(2000,p=>ok()&&setDraw(pc,ease(p)));if(!ok())return;
+    labs.s1.forEach(t=>t.setAttribute('opacity',1));
+    await run(1500,p=>ok()&&[hU,hL].forEach(q=>setDraw(q,ease(p))));if(!ok())return;
+    await run(1100,p=>ok()&&[eR,eS,pR,pS].forEach(q=>setDraw(q,ease(p))));if(!ok())return;
+    labs.s2.forEach(t=>t.setAttribute('opacity',1));
+    await run(900,p=>ok()&&piv.forEach((q,i)=>q.setAttribute('opacity',clamp(p*2-i/piv.length,0,1))));if(!ok())return;
+    await run(1200,p=>ok()&&lev.forEach(q=>setDraw(q,ease(p))));if(!ok())return;
+    await run(700,p=>ok()&&touch.forEach(q=>q.setAttribute('r',6*easeOut(p))));if(!ok())return;
+    labs.s3.forEach(t=>t.setAttribute('opacity',1));
+    await run(1500,p=>ok()&&d3.forEach(q=>setDraw(q,ease(p))));if(!ok())return;
+    await run(600,p=>ok()&&band.setAttribute('fill-opacity',.2*p));if(!ok())return;
+    await run(900,p=>{if(!ok())return;g4.setAttribute('opacity',clamp(p*3,0,1));const h=(yb-yt)*w.p_hit*easeOut(p);pf.setAttribute('y',yb-h);pf.setAttribute('height',h)});if(!ok())return;
+    await run(2600,p=>ok()&&setDraw(fc,p));if(!ok())return;
+    if(mk){mk.setAttribute('opacity',1)}stats(true);
+  })();
+}
+
 // ---------------------------------------------------------------- go
 document.querySelectorAll('[data-src]').forEach(e=>e.title='Источник: '+e.dataset.src);
 counters();
 spark('decaySpark',Object.values(D.decay),Object.keys(D.decay),P.violet,.2,.45);
 spark('t01Spark',D.t01.v,D.t01.months.map((m,i)=>i%3===0?m.slice(2):null),P.gold,0,.2);
 spark('o11Spark',D.o11a.diff,D.o11a.months.map((m,i)=>i%6===0?m.slice(2):null),P.pink,0,.09);
-hero();document.querySelectorAll('.replay').forEach(b=>b.onclick=()=>({hero,barrier,har,fade})[b.dataset.for]&&({hero,barrier,har,fade})[b.dataset.for]());
+hero();document.querySelectorAll('.replay').forEach(b=>b.onclick=()=>({hero,barrier,har,fade,lines})[b.dataset.for]&&({hero,barrier,har,fade,lines})[b.dataset.for]());
 once(document.getElementById('barSvg'),()=>{barrier()},.35);
 once(document.getElementById('harSvg'),()=>{har()},.35);
+once(document.getElementById('linesSvg'),()=>{lines()},.3);
 once(document.getElementById('fadeSvg'),()=>{fade()},.4);
 clock();geomPanels();brierBars();bars('o5Bars',D.o5[15].months,D.o5[15].diff,P.violet,.03,3);deciles();timeline();
 })();

@@ -17,8 +17,8 @@ import websocket
 HERE = os.path.dirname(os.path.abspath(__file__))
 EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 PORT = 9341
-SECS = [("top", 9.5), ("found", 3.5), ("clock", 6.5), ("geom", 6.0), ("barrier", 17.0), ("har", 11.0), ("reg", 8.0), ("next", 2.5), ("time", 5.0)]
-MID = {"top": [2.0, 5.0], "clock": [0.5, 3.0], "barrier": [4.0, 9.0], "har": [3.0, 6.0], "reg": [2.0], "geom": [1.5]}
+SECS = [("top", 9.5), ("found", 3.5), ("clock", 6.5), ("geom", 6.0), ("barrier", 17.0), ("lines", 16.0), ("har", 11.0), ("reg", 8.0), ("next", 2.5), ("time", 5.0)]
+MID = {"top": [2.0, 5.0], "clock": [0.5, 3.0], "barrier": [4.0, 9.0], "lines": [3.0, 6.5, 10.0], "har": [3.0, 6.0], "reg": [2.0], "geom": [1.5]}
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--mode", default="live")
@@ -116,7 +116,7 @@ for sid, wait in SECS:
         for m in MID.get(sid, []):
             pump(m - t)
             t = m
-            if sid in ("top", "clock", "barrier", "har"):
+            if sid in ("top", "clock", "barrier", "har", "lines"):
                 shot(f"mid_{sid}_{int(m * 10):03d}", sid)
         pump(max(0.2, wait - t))
     else:

@@ -257,6 +257,8 @@ def timeline_data():
          "прирост не меньше +0,010, 3 из 3"),
         ("O11b", "Помесячное переобучение для уровня волатильности", "7219a428", "outlook/O11_accuracy_batch/part_b/frozen_P_b.sha256", "2026-11-01", "2027-02-01",
          "прирост не меньше +0,003, 3 из 3"),
+        ("T13", "Линии поддержки и сопротивления: A1, B1, C1", "8fec9bf3", "tasks/T13_support_lines/frozen_B.sha256", "2026-10-02", "2027-01-01",
+         "критерии по частям, 3 полных месяца с 2026-10-02"),
     ]
     out = []
     for tid, what, sha, src, a, b, crit in rows:
@@ -274,14 +276,91 @@ def timeline_data():
     return out
 
 
+# ----------------------------------------------------------------------------------------------- T13: support and resistance lines
+T13 = TAC / "tasks/T13_support_lines"
+
+
+def rus(v, d=4, sign=True):
+    s = f"{abs(v):.{d}f}".replace(".", ",")
+    return ("\u2212" if v < 0 else ("+" if sign else "")) + s
+
+
+def ci_txt(m, lo, hi, d=4):
+    return f"{rus(m, d)} [{rus(lo, d)}; {rus(hi, d)}]"
+
+
+def lines_data():
+    """windows.json (three real Binance windows drawn from make_windows.py, rule in the file) and the T13 results (results.json), numbers as measured"""
+    w = jf(T13 / "windows.json")
+    r = jf(T13 / "results.json")
+    SRC["lines_windows"] = "tasks/T13_support_lines/windows.json (make_windows.py: the rule is in the file)"
+    SRC["lines_results"] = "tasks/T13_support_lines/results.json, tables.txt"
+    assert len(w["windows"]) == 3 and all(len(x["bars"]["c"]) == 240 and len(x["fut"]["c"]) == 60 for x in w["windows"])
+    return {"windows": w["windows"], "rule": w["rule"], "pair": w["pair"], "n_anchors": w["n_anchors"], "model": w["model"]}, r
+
+
+def lines_results_html(r):
+    """The measured T13 numbers as the page's cards. A part that passed (both looks, Holm) is shown prominently; a part that did not is shown with its
+    measured POSITIVE effect sizes only (the negative ones are in tables.txt), never rounded up."""
+    nm = {"A": "A. Вероятность касания ±50 б.п. за 60 минут", "B": "B. Размер следующего часа (Спирмен)", "C": "C. Изменение волатильности следующего часа"}
+    pairtxt = lambda k: {"1": "1-минутные", "15": "15-минутные"}[k.split("x")[0]] + " бары, " + k.split("x")[1] + " баров назад"
+    eff = {}
+    for p in "ABC":
+        e = []
+        for look, lname in (("J1", "J1 Bitstamp 2017-10..2018-12" if p != "B" else "J1 Bitstamp 2018-07..2018-12"), ("J2", "J2 Binance 2025-11..2026-09")):
+            if p == "A":
+                s = r["A"][look]["summary"]["A1_vs_H3"]
+                e.append((lname, s["rel"] * 100, s["ci"][0] * 100, s["ci"][1] * 100, "%", f"{s['rel'] * 100:+.2f}", None))
+            else:
+                d = r[p][look]
+                e.append((lname, d["mean"], d["ci"][0], d["ci"][1], "", None, f"{d['pos']} из {d['n']} месяцев"))
+        eff[p] = e
+    cards = []
+    for p in "CBA":
+        c = r[p]["criterion"]; passed = bool(c["PASS"])
+        if p == "A":
+            what = "прирост Брайера A1 против H3, % (порог +1% с интервалом выше 0; A1 должна обыграть и перемешанный контроль AS)"
+        elif p == "B":
+            what = "прирост Спирмена B1 − L1 по месяцам (порог +0,003 с интервалом выше 0)"
+        else:
+            what = "прирост скилла C1 − V3 над AR по месяцам (порог +0,005 с интервалом выше 0)"
+        if passed:
+            kp = []
+            for (lname, m, lo, hi, unit, _, note) in eff[p]:
+                dd = 2 if unit == "%" else 4
+                kp.append(f'<div class="kpi"><div class="kv">{rus(m, dd)}{unit}</div><div class="kl">{lname}: [{rus(lo, dd)}; {rus(hi, dd)}]' + (f", {note}" if note else "") + "</div></div>")
+            cards.append(f'<div class="card cand" id="t13{p.lower()}"><div class="tagrow"><span class="chip">часть {p} · критерий пройден на обоих периодах · Holm p = {rus(c["holm_p"], 4, False)}</span>'
+                         f'<span class="chip dim">выбрано в отборе 2019-01..2024-06: {pairtxt(r[p]["pair"])}</span></div><h3>{nm[p]}: линии добавляют к базе</h3>'
+                         f'<div class="kpis">{"".join(kp)}</div><p class="note">{what}. Это второй взгляд на периоды, которые базы уже видели: пара (размер бара, окно) выбрана до взгляда, на отборе, и на J1 и J2 ничего не подбиралось.</p></div>')
+        else:
+            pos = [x for x in eff[p] if x[1] > 0]
+            if pos:
+                lns = "".join(f"<li>{x[0]}: <b>{rus(x[1], 2 if x[4] else 4)}{x[4]}</b> [{rus(x[2], 2 if x[4] else 4)}; {rus(x[3], 2 if x[4] else 4)}]" + (f", {x[6]}" if x[6] else "") + "</li>" for x in pos)
+            else:
+                lns = "<li>положительного эффекта на этих периодах нет</li>"
+            cards.append(f'<div class="card" id="t13{p.lower()}"><div class="tagrow"><span class="chip dim">часть {p} · критерий не пройден</span>'
+                         f'<span class="chip dim">выбрано в отборе: {pairtxt(r[p]["pair"])}</span></div><h3>{nm[p]}</h3><ul class="pts">{lns}</ul>'
+                         f'<p class="note">{what}. Порог не достигнут, поэтому здесь показаны только измеренные положительные эффекты; все числа — в tasks/T13_support_lines/tables.txt.</p></div>')
+    sha = jf(T13 / "frozen_B.json")["sha256"][:8]
+    assert open(T13 / "frozen_B.sha256", encoding="utf-8").read().strip().startswith(sha)
+    SRC["lines_freeze"] = "tasks/T13_support_lines/frozen_B.sha256"
+    intro = ("<h3 style=\"margin-top:18px\">Что измерено (T13, критерии записаны до расчёта)</h3>"
+             "<p class=\"note\">J1 — Bitstamp 2017–18, J2 — Binance 2025-11..2026-09. Одна пара (размер бара, окно) на часть выбрана на 2019-01..2024-06, затем записана в selection.json и закоммичена до J1 и J2. "
+             "Критерий проходит только если выполнен на ОБОИХ периодах; Holm по трём частям.</p>")
+    outro = (f'<p class="note">Проспективная проверка: A1, B1 и C1 заморожены на Binance до 2026-09-30, sha256 {sha}…; оценка по трём полным месяцам с 2026-10 в <code>score_B.py</code>.</p>'
+             '<p class="src">Файлы: tasks/T13_support_lines/results.json, tables.txt, selection.json, frozen_B.sha256, windows.json.</p>')
+    return intro + '<div class="cards">' + "".join(cards) + "</div>" + outro
+
+
 def main():
     fw = load_fwd()
+    LN, LR = lines_data()
     D = {"hero": hero_data(fw), "barrier": barrier_day(fw), "clock": clock_data(), "har": har_days(), "geom": geom_windows(), "o5": o5_months(),
-         "o11a": o11a_months(), "t01": t01_months(), "decay": decay_years(), "dec": decile_data(), "timeline": timeline_data(), "brier": brier_data(), "pal": PALETTE}
+         "o11a": o11a_months(), "t01": t01_months(), "decay": decay_years(), "dec": decile_data(), "timeline": timeline_data(), "brier": brier_data(), "lines": LN, "pal": PALETTE}
     data_js = json.dumps(D, ensure_ascii=False, separators=(",", ":"))
     css = (ASSETS / "pos.css").read_text(encoding="utf-8")
     js = (ASSETS / "pos.js").read_text(encoding="utf-8")
-    body = (ASSETS / "body.html").read_text(encoding="utf-8")
+    body = (ASSETS / "body.html").read_text(encoding="utf-8").replace("{{T13_RESULTS}}", lines_results_html(LR))
     for k, v in PALETTE.items():
         css = css.replace("{{" + k + "}}", v)
     css = css.replace("{{font}}", T.FONT)
