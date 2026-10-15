@@ -1,0 +1,273 @@
+<nav id="nav">
+<h1>Позитивный аутлук</h1>
+<div class="sub">neural_trade · 2026-10-15<br>сессия волатильности + сессия аутлука</div>
+<a href="#top">Старт</a>
+<a href="#found">Что мы открыли</a>
+<a href="#clock">Часы волатильности</a>
+<a href="#geom">Геометрия рынка</a>
+<a href="#barrier">Вероятность движения</a>
+<a href="#har">Интервалы риска</a>
+<a href="#reg">Что находит регрессия</a>
+<a href="#next">Прорывные направления</a>
+<a href="#time">Таймлайн проверок</a>
+</nav>
+<main>
+
+<section id="top" class="hero">
+<div class="kick">neural_trade · тактический аутлук · данные Binance BTC/USDT 1 мин</div>
+<h1>Рынок шумит.<br><span class="grad">У размера движения есть форма.</span></h1>
+<p class="lede">Две сессии, один вывод: там, где направление затухло, <b>размер движения стал предсказуемее</b>.
+Волатильность, часы суток, геометрия тренда и вероятность выхода за границу работают на новых данных, на разных биржах и на нетронутой истории 2017–18.</p>
+<div class="stage"><svg id="heroSvg" viewBox="0 0 1200 470" role="img" aria-label="Анимация: цена BTC, EMA и геометрия 15-минутного тренда"></svg>
+<button class="replay" data-for="hero" aria-label="Повторить">&#8635; повторить</button></div>
+<p class="cap">BTC/USDT, 1-минутные бары Binance, 2025-11-15 (UTC). Тонкие линии: цена, EMA 20 (золото) и EMA 60 (розовый) на 1 минуте. Толстые: EMA 20 (фиолет) и EMA 40 (песок) на 15-минутных барах.
+<span class="key"><i style="background:var(--up)"></i>стрелка вверх / <i style="background:var(--down)"></i>вниз: наклон EMA 20 за 3 бара по 15 минут</span>
+<span class="key"><i style="background:var(--pink)"></i>дуга вверх / <i style="background:var(--tan)"></i>вниз: кривизна тренда</span></p>
+<div class="kpis">
+<div class="kpi"><div class="kv"><span class="cnt" data-to="0.286" data-dec="3">0,286</span> → <span class="cnt" data-to="0.411" data-dec="3">0,411</span></div><div class="kl">предсказуемость волатильности, Спирмен HAR, 2018 → 2023</div></div>
+<div class="kpi"><div class="kv"><span class="cnt" data-to="0.142" data-dec="3" data-sign="1">+0,142</span></div><div class="kl">скилл прогноза изменения волатильности на новых месяцах, 12 из 12</div></div>
+<div class="kpi"><div class="kv"><span class="cnt" data-to="15.4" data-dec="1" data-sign="1" data-suf="%">+15,4%</span></div><div class="kl">скилл вероятности касания ±50 б.п. за 60 мин, обе биржи</div></div>
+<div class="kpi"><div class="kv"><span class="cnt" data-to="0.0447" data-dec="4" data-sign="1">+0,0447</span></div><div class="kl">прирост прогноза изменения волатильности: геометрия + банк, 25 из 25</div></div>
+</div>
+</section>
+
+<section id="found">
+<h2>Что мы открыли</h2>
+<p class="lead">Везде, где мы спрашивали про <b>размер</b> движения, рынок отвечал. Каждая плитка ведёт к своему файлу с результатом.</p>
+<div class="tiles">
+
+<div class="tile big2" data-src="lab/decay_vol.json; LOG.md H53"><div class="tag">H53 · рост предсказуемости</div>
+<div class="num"><span class="cnt" data-to="0.286" data-dec="3">0,286</span> → <span class="cnt" data-to="0.411" data-dec="3">0,411</span></div>
+<div class="lab">Спирмен HAR-прогноза размера движения за 15 минут, среднее по годам</div>
+<svg id="decaySpark" viewBox="0 0 320 70" class="spark"></svg>
+<div class="sub">2018 0,286 · 2023 0,411 · 2025 0,399. Пока направление затухало, размер становился предсказуемее (корреляция месяца и HAR +0,41).</div></div>
+
+<div class="tile" data-src="tasks/T01_vol_forward/REPORT.md; LOG.md H83"><div class="tag">T01 · H83 · новые данные</div>
+<div class="num"><span class="cnt" data-to="0.1419" data-dec="3" data-sign="1">+0,142</span></div>
+<div class="lab">скилл прогноза изменения волатильности на следующий час к AR</div>
+<div class="sub">95% ДИ [+0,125; +0,159], 12 из 12 месяцев Binance 2025-10..2026-09. Независимый пересчёт воспроизвёл все числа (qa-deep PASS).</div>
+<svg id="t01Spark" viewBox="0 0 320 60" class="spark"></svg></div>
+
+<div class="tile" data-src="LOG.md H83, H86; tasks/T04_vol_calendar/REPORT.md"><div class="tag">H83 · H86 · сверх HAR</div>
+<div class="num"><span class="cnt" data-to="0.030" data-dec="3" data-sign="1">+0,030</span></div>
+<div class="lab">прирост модели S3 сверх уровней HAR [+0,017; +0,044]</div>
+<div class="sub">Повторился на нетронутой истории 2017–18: <b>+0,019</b> [+0,010; +0,027], 13 из 16 месяцев (H86).</div></div>
+
+<div class="tile" data-src="tasks/T03_vol_intervals/REPORT.md; LOG.md H85"><div class="tag">T03 · H85 · интервалы</div>
+<div class="num"><span class="cnt" data-to="-9.42" data-dec="2">−9,42</span><small> б.п.</small></div>
+<div class="lab">интервальный скор 90%-интервала на 60 мин: HAR против скользящей RV</div>
+<div class="sub">[−11,25; −7,59], 11 из 11 месяцев, покрытие 0,900, ширина 140,5 → 130,4 б.п. (на ~7% уже). QA PASS.</div></div>
+
+<div class="tile" data-src="tasks/T05_interval_models/REPORT.md; LOG.md H87"><div class="tag">T05 · H87 · нетронутая история</div>
+<div class="num"><span class="cnt" data-to="-17.2" data-dec="1">−17,2</span><small> б.п.</small></div>
+<div class="lab">HAR сильнее EWMA 0,94 в 2017–18</div>
+<div class="sub">[−24,8; −9,7], 15 из 16 месяцев. Преимущество HAR подтверждено на двух независимых периодах.</div></div>
+
+<div class="tile big2" data-src="tasks/T10_barrier_hit/REPORT.md; tasks/T12_barrier_calibrated/REPORT.md; LOG.md H93, H95"><div class="tag">T10 · T12 · H93 · H95 · вероятность касания</div>
+<div class="num"><span class="cnt" data-to="15.4" data-dec="1" data-sign="1" data-suf="%">+15,4%</span> · <span class="cnt" data-to="15.4" data-dec="1" data-sign="1" data-suf="%">+15,4%</span> · <span class="cnt" data-to="24.4" data-dec="1" data-sign="1" data-suf="%">+24,4%</span></div>
+<div class="lab">скилл по Бриеру модели H3 над базой B1 (±50 б.п. за 60 мин): Bitstamp 2024–25 · Binance 2025–26 · 2017–18</div>
+<div class="sub">AUC 0,809 · 0,803 · 0,874. Положительный скилл с ДИ выше нуля во всех 18 ячейках двух взглядов и во всех 9 ячейках 2017–18 (Holm).</div></div>
+
+<div class="tile" data-src="tasks/T11_utc_seasonality/REPORT.md; LOG.md H94"><div class="tag">T11 · H94 · часы волатильности</div>
+<div class="num"><span class="cnt" data-to="0.0199" data-dec="4" data-sign="1">+0,0199</span></div>
+<div class="lab">прирост календаря V3 (96 UTC-слотов) в отборе, 61 из 66 месяцев</div>
+<div class="sub">[+0,0165; +0,0233]. На Binance 2025-11..2026-09: <b>+0,056</b> [+0,034; +0,078], 10 из 11.</div></div>
+
+<div class="tile" data-src="outlook/O5_geom_bestbase/REPORT.md; outlook/O1_geom_vol/REPORT.md"><div class="tag">O5 · O1 · геометрия</div>
+<div class="num"><span class="cnt" data-to="0.0122" data-dec="4" data-sign="1">+0,0122</span></div>
+<div class="lab">прирост от геометрии 15-минутного тренда над лучшей базой, H = 15, 30 из 30 месяцев</div>
+<div class="sub">H = 60: <b>+0,0056</b> [+0,0024; +0,0088], 23 из 30; QLIKE лучше в 27 из 30. QA PASS: точный пересчёт, без утечек.</div></div>
+
+<div class="tile" data-src="outlook/O11_accuracy_batch/REPORT.md"><div class="tag">O11a · изменение волатильности</div>
+<div class="num"><span class="cnt" data-to="0.0447" data-dec="4" data-sign="1">+0,0447</span></div>
+<div class="lab">геометрия + банк EWMA: скилл прогноза изменения волатильности</div>
+<div class="sub">[+0,0361; +0,0533], 25 из 25 месяцев (Holm p 5,4e-10). Банк даёт +0,0325, геометрия сверх банка +0,0122 [+0,0072; +0,0172], 20 из 25.</div>
+<svg id="o11Spark" viewBox="0 0 320 60" class="spark"></svg></div>
+
+<div class="tile" data-src="outlook/O3_synth_volind/REPORT.md; LOG_outlook.md O3"><div class="tag">O3 · плотный HAR (BANK)</div>
+<div class="num"><span class="cnt" data-to="0.0073" data-dec="4" data-sign="1">+0,0073</span></div>
+<div class="lab">прирост BANK над S3 на форварде, H = 60, 12 из 12 месяцев</div>
+<div class="sub">[+0,0049; +0,0096]; на взгляде +0,0068 [+0,0047; +0,0089], 13 из 13; QLIKE лучше.</div></div>
+
+<div class="tile" data-src="outlook/O11_accuracy_batch/REPORT.md"><div class="tag">O11b · помесячное переобучение</div>
+<div class="num"><span class="cnt" data-to="0.0046" data-dec="4" data-sign="1">+0,0046</span></div>
+<div class="lab">прирост переобучения над замороженной подгонкой (L1, H = 15)</div>
+<div class="sub">[+0,0024; +0,0069], 10 из 11 месяцев (Holm p 2,0e-3).</div></div>
+
+<div class="tile" data-src="outlook/O7_geom_intervals/REPORT.md; LOG_outlook.md O7"><div class="tag">O7 · интервалы с геометрией</div>
+<div class="num"><span class="cnt" data-to="-1.84" data-dec="2">−1,84</span><small> б.п.</small></div>
+<div class="lab">интервальный скор над S3 на горизонте 15 минут, 23 из 23 месяцев</div>
+<div class="sub">T = 60: −1,75 [−2,64; −0,86] б.п., 18 из 23, покрытие 0,8925.</div></div>
+
+<div class="tile" data-src="phys7b/report_tables.txt; LOG.md H77"><div class="tag">H77 · физика на оси дисперсии</div>
+<div class="num"><span class="cnt" data-to="0.0116" data-dec="4" data-sign="1">+0,0116</span></div>
+<div class="lab">прирост Спирмена головы дисперсии с физическими слагаемыми, 3 зерна</div>
+<div class="sub">[+0,0031; +0,0202], 5 из 6 срезов. Физика ни разу не ухудшила голову дисперсии и закрывает 15–50% разрыва до HAR + время суток.</div></div>
+
+<div class="tile" data-src="tasks/T09_regression_anatomy/REPORT.md; LOG.md H92"><div class="tag">T09 · H92 · понимание регрессии</div>
+<div class="num"><span class="cnt" data-to="1" data-dec="0">1</span><small> фактор</small></div>
+<div class="lab">все признаки регрессии говорят одно: откат растянутой за 20–60 минут цены</div>
+<div class="sub">Простое правило «откат за 30–60 минут» воспроизводит 90–100% её преимущества при следующем открытии.</div></div>
+
+</div>
+</section>
+
+<section id="clock">
+<h2>Часы волатильности</h2>
+<p class="lead">Рынок живёт по часам. До 2021-11 внутридневная кривая почти плоская, сегодня у неё <b>пик на открытии США (UTC 14)</b> и всплески на каждой четверти часа. Смотрите, как кольцо перестраивается.</p>
+<div class="two">
+<div class="stage dial"><svg id="clockSvg" viewBox="0 0 640 640" role="img" aria-label="Радиальные часы волатильности: 24 часа UTC"></svg></div>
+<div class="side">
+<div class="seg" id="clockBtns">
+<button data-prof="before" class="on">до 2021-11</button><button data-prof="after">после 2021-11</button><button data-prof="binance">Binance 2025-10..2026-09</button></div>
+<div class="readout" id="clockStats"></div>
+<div class="mini">
+<div class="kv2"><span class="cnt" data-to="0.0199" data-dec="4" data-sign="1">+0,0199</span><small>прирост календаря V3 в отборе 2019-01..2024-06, [+0,0165; +0,0233], 61 из 66</small></div>
+<div class="kv2"><span class="cnt" data-to="0.056" data-dec="3" data-sign="1">+0,056</span><small>V3 − V0 на Binance 2025-11..2026-09, [+0,034; +0,078], 10 из 11 (V2: +0,047, 11 из 11)</small></div>
+<div class="kv2"><span class="cnt" data-to="0.921" data-dec="3">0,921</span><small>корреляция 1-минутных доходностей файла с Binance при лаге 0 (2025-06): помощник <code>timefix.py</code> ставит часы правильно</small></div>
+</div>
+<p class="note">Радиус столбца — относительная средняя |доходность| 15-минутного слота (UTC) к среднему по дню. Ось начинается в полночь UTC и идёт по часовой стрелке. Вращающаяся стрелка читает слот под собой.
+Помощник <code>common/timefix.py</code> (to_utc, ny_time, seam_mask) воспроизводит часы T09 и показывает пик в UTC 13–15 вместо смазанного 17–20 по времени файла.</p>
+</div>
+</div>
+<p class="src">Файл: tasks/T11_utc_seasonality/seasonality.json, REPORT.md (H94). Дни: 1766 до 2021-11, 1358 после, 365 на Binance.</p>
+</section>
+
+<section id="geom">
+<h2>Геометрия рынка</h2>
+<p class="lead">Геометрия 15-минутного тренда (наклоны и положения EMA 20/40) <b>добавляет к прогнозу размера движения</b> на каждом месяце. Это единственный подтверждённый плюс геометрии, и он держится на взгляде и на форварде.</p>
+<div class="panels3" id="geomPanels"></div>
+<p class="cap">Три реальных 60-барных окна по 15 минут из отбора (O1, interp.json): окно с наибольшим значением признака. Линия: закрытия; фиолет: EMA 20; песок: EMA 40. Стрелка — наклон EMA 20 за 3 бара, скобка — положение закрытия относительно EMA 20, дуга — кривизна.</p>
+<div class="two">
+<div class="card"><h3>Прирост по месяцам, H = 15 минут</h3>
+<svg id="o5Bars" viewBox="0 0 560 220" class="bars"></svg>
+<p class="note">O5: 30 судейских месяцев 2018-07..2020-12, L1 − L0, Спирмен. Все 30 положительны: среднее <b>+0,0122</b> [+0,0097; +0,0147].</p></div>
+<div class="card"><h3>Что именно считает модель</h3>
+<ul class="pts">
+<li><b>Взгляд (2024-07..2025-07):</b> +0,0054 [+0,0032; +0,0076], 12 из 13 · <b>Форвард (Binance 2025-10..2026-09):</b> +0,0052 [+0,0029; +0,0075], 12 из 12 (O1, QA PASS).</li>
+<li><b>Над лучшей базой (BANK):</b> H = 60 +0,0056 [+0,0024; +0,0088], 23 из 30; H = 15 +0,0122, 30 из 30 (O5, QA PASS).</li>
+<li><b>Читаемо:</b> 13 из 15 крупнейших коэффициентов — каналы скользящих средних, 9 из 15 — на 15-минутном масштабе: это «кривизна тренда».</li>
+<li><b>Главные признаки:</b> g15.ema20.slope3 −0,544 · g15.ema20.pos +0,368 · g15.ema40.slope3 +0,331.</li>
+<li><b>Для интервалов:</b> на T = 15 прирост −1,84 б.п., 23 из 23 месяцев (O7).</li>
+</ul></div>
+</div>
+<p class="src">Файлы: outlook/O1_geom_vol/REPORT.md, interp.json · outlook/O5_geom_bestbase/REPORT.md, results.jsonl · outlook/O7_geom_intervals/REPORT.md · outlook/O11_accuracy_batch/REPORT.md.</p>
+</section>
+
+<section id="barrier">
+<h2>Вероятность движения</h2>
+<p class="lead">Не «куда», а «<b>дойдёт ли цена до границы ±50 б.п. за час</b>». Модель H3 даёт вероятность на каждый час, и она устойчиво лучше базовой на трёх периодах и двух биржах.</p>
+<div class="stage"><svg id="barSvg" viewBox="0 0 1200 480" role="img" aria-label="Анимация: часовые коробки ±50 б.п. с вероятностью касания"></svg>
+<button class="replay" data-for="barrier">&#8635; повторить</button></div>
+<div class="readout wide" id="barStats"></div>
+<p class="cap">Реальный день Binance 2025-11-15 (UTC), выбранный правилом до просмотра: день с медианным числом касаний (8 из 24). Каждый час из закрытия строится коробка ±50 б.п. на 60 минут; заливка — P(касание) модели H3; золото — граница была достигнута, затухание — нет.</p>
+<div class="two">
+<div class="card"><h3>Скилл по Бриеру H3 по месяцам, основная ячейка</h3>
+<svg id="brierBars" viewBox="0 0 560 250" class="bars"></svg>
+<p class="note">±50 б.п., 60 минут; скилл над B1 = 1 − Brier(H3) / Brier(B1), % по месяцам: Look 1 (Bitstamp 2024-07..2025-07) и Look 2 (Binance 2025-11..2026-09); 2025-08..10 нет по построению. Все 24 месяца положительны.</p></div>
+<div class="card"><h3>Цифры</h3>
+<table class="rt">
+<thead><tr><th>Период</th><th>скилл над B1</th><th>AUC</th></tr></thead>
+<tbody>
+<tr><td>Bitstamp 2024-07..2025-07</td><td>+15,4% [+13,8; +16,9]</td><td>0,809</td></tr>
+<tr><td>Binance 2025-11..2026-09</td><td>+15,4% [+13,9; +16,9]</td><td>0,803</td></tr>
+<tr><td>2017-10..2018-12 (T12)</td><td>+24,4% [+22,2; +26,4]</td><td>0,874</td></tr>
+</tbody></table>
+<ul class="pts">
+<li>Основная ячейка: ±50 б.п., 60 минут. Против EWMA-базы B2 выигрыш около +8%.</li>
+<li>Во всех 18 ячейках двух взглядов скилл от +6,5% (X = 100, T = 15) до +25% (X = 100, T = 240); Holm-значимо везде.</li>
+<li>На 2017–18, где у модели всего 15–365 дней обучения, значимы все 9 ячеек (Holm p = 0,0009).</li>
+<li>Модель: логистическая регрессия на HAR-вероятности первого прохождения, признаки волатильности T01 и гармоники UTC-часа.</li>
+</ul></div></div>
+<p class="src">Файлы: tasks/T10_barrier_hit/REPORT.md, figs/btc_window.json, figs/brier_skill_by_month.json · tasks/T12_barrier_calibrated/REPORT.md.</p>
+</section>
+
+<section id="har">
+<h2>Интервалы риска</h2>
+<p class="lead">90%-интервал вокруг цены на час вперёд, масштабированный прогнозом HAR, <b>уже скользящей волатильности при том же покрытии</b> на 11 из 11 месяцев. Интервалы «дышат» вместе с рынком.</p>
+<div class="seg" id="harBtns"></div>
+<div class="stage"><svg id="harSvg" viewBox="0 0 1200 430" role="img" aria-label="Анимация: HAR-интервалы вокруг цены"></svg>
+<button class="replay" data-for="har">&#8635; повторить</button></div>
+<div class="readout wide" id="harStats"></div>
+<p class="cap">Реальные дни Binance из выборки T03 (дни выбраны по дневной волатильности, не по качеству интервалов). Фиолетовые полосы — 90%-интервалы HAR (квантили предыдущего месяца), серый пунктир — скользящая RV, окна по 60 минут, начало не чаще раза в час.</p>
+<div class="two">
+<div class="card"><h3>T03, горизонты 15 · 60 · 240 минут</h3>
+<table class="rt"><thead><tr><th>T, мин</th><th>интервальный скор HAR − RV, б.п.</th><th>месяцев лучше</th><th>покрытие</th></tr></thead>
+<tbody><tr><td>15</td><td>−1,68 [−2,02; −1,33]</td><td>11 из 11</td><td>0,899</td></tr>
+<tr><td>60</td><td><b>−9,42 [−11,25; −7,59]</b></td><td>11 из 11</td><td>0,900</td></tr>
+<tr><td>240</td><td>−26,9 [−38,5; −15,3]</td><td>10 из 11</td><td>0,901</td></tr></tbody></table>
+<p class="note">Проходит на всех трёх горизонтах (Holm). Независимый код дал −9,48 [−11,25; −7,70]. T05 на нетронутой истории 2017–18: HAR лучше EWMA 0,94 на −17,2 б.п. [−24,8; −9,7], 15 из 16.</p></div>
+<div class="card accent"><h3>В MVP: опция HAR-масштаба</h3>
+<p>Ветка <code>nt-tactical-harscale</code> (e84fea7): <b>CONFORMAL_SCALE: har</b> — HAR-прогноз абсолютной доходности как масштаб конформных интервалов (D-008).</p>
+<ul class="pts"><li>Поведение по умолчанию не меняется, golden-run 455 из 455.</li>
+<li>Дымовой прогон на 5,7 суток: интервалы на 9–15% уже при покрытии в пределах шума.</li>
+<li>Следующий шаг: парное исследование на реальных фолдах (D-025, D-046).</li></ul></div></div>
+<p class="src">Файлы: tasks/T03_vol_intervals/REPORT.md · tasks/T05_interval_models/REPORT.md · report/vol_windows.json · LOG.md (строки H85, H87 и запись о HAR-масштабе).</p>
+</section>
+
+<section id="reg">
+<h2>Что находит регрессия</h2>
+<p class="lead">Мы разобрали регрессию до винтика. Вся она — <b>один фактор: откат цены, растянутой за 20–60 минут</b>. Простое понятное правило, объяснённый механизм: это знание, на которое можно строить.</p>
+<div class="two">
+<div class="stage soft"><svg id="fadeSvg" viewBox="0 0 560 330" role="img" aria-label="Схема: растяжение цены от EMA и откат"></svg>
+<button class="replay" data-for="fade">&#8635; повторить</button>
+<p class="cap">Схема (не данные): цена растягивается над полосой EMA 20, индикатор растяжения растёт, затем следует откат.</p></div>
+<div class="stage soft"><div class="seg" id="decBtns"></div><svg id="decSvg" viewBox="0 0 560 300" role="img" aria-label="Доля верных предсказаний отката по децилям растяжения"></svg>
+<p class="cap">Доля ходов, где цена пошла против знака признака bb20, по децилям |признака|. Хвост — там, где живёт преимущество; середина — монетка.</p></div>
+</div>
+<ul class="pts wide">
+<li><b>Один фактор.</b> Любая группа ценовых положений, доходностей и RSI даёт почти полный AUC, а признаки волатильности ничего не добавляют.</li>
+<li><b>Устойчивая оценка при дрожащих весах.</b> Веса прыгают между коллинеарными признаками, а замороженная модель 2019 года оценивает так же.</li>
+<li><b>В хвосте.</b> Самый растянутый дециль: 56–61% в 2017–19 и 53–55% в 2024–25 (по признакам); в децили 10 признака bb20 — 0,600 · 0,569 · 0,545 для трёх эпох.</li>
+<li><b>Простое правило.</b> «Откат за последние 30–60 минут» воспроизводит 90–100% преимущества регрессии при следующем открытии.</li>
+<li><b>Механизм объяснён.</b> Часть раннего преимущества — отскок цены внутри спреда на тонком рынке (0,02–0,04 AUC при входе по закрытию в 2017–20); реальный откат за 15–60 минут — то, что остаётся при входе по следующему открытию.</li>
+<li><b>Что даёт понимание.</b> Мы знаем, что измерять дальше: автокорреляция лага 1 (−0,10 → 0), VR(1,15) (0,75 → 0,97), спред Roll — рынок сам подсказывает, где откат живёт.</li>
+</ul>
+<p class="src">Файлы: tasks/T09_regression_anatomy/REPORT.md, figs/fig3b_tail_edge.json · LOG.md H91, H92 · research/2026-10-13-regression-signal.</p>
+</section>
+
+<section id="next">
+<h2>Прорывные направления</h2>
+<p class="lead">Куда это ведёт. Шесть шагов, у каждого уже есть доказательство в репозитории.</p>
+<div class="cards">
+<div class="card nx"><div class="ico">◭</div><h3>Геометрия в голову дисперсии MVP</h3>
+<p>Признаки G1 + G15 как вход головы дисперсии и масштаба конформных интервалов (D-008).</p>
+<div class="ev">Основа: O5 H = 60 +0,0056 [+0,0024; +0,0088], H = 15 +0,0122, 30 из 30; O11a +0,0447, 25 из 25.</div></div>
+<div class="card nx"><div class="ico">◔</div><h3>Продукт «вероятность движения»</h3>
+<p>P(касание ±X б.п. за T минут) для 9 ячеек: готовый риск-сигнал для размера позиции, стопов и лимитов.</p>
+<div class="ev">Основа: H3, +15,4% · +15,4% · +24,4% над базой, положительный скилл во всех ячейках трёх периодов.</div></div>
+<div class="card nx"><div class="ico">◷</div><h3>Признаки «часов волатильности»</h3>
+<p>UTC-слоты по 15 минут и открытие США как входы моделей волатильности; <code>timefix</code> как общий помощник времени.</p>
+<div class="ev">Основа: V3 +0,0199 в отборе, +0,056 на Binance; пик в UTC 14.</div></div>
+<div class="card nx"><div class="ico">◐</div><h3>HAR-масштаб интервалов в MVP</h3>
+<p>Опция <code>CONFORMAL_SCALE: har</code> уже собрана на ветке <code>nt-tactical-harscale</code>; остаётся парный тест на реальных фолдах.</p>
+<div class="ev">Основа: T03 −9,42 б.п., 11 из 11; T05 −17,2 б.п., 15 из 16; golden 455 из 455.</div></div>
+<div class="card nx"><div class="ico">⌛</div><h3>Проспективный конвейер</h3>
+<p>11 замороженных ставок с хэшами лежат в репозитории и ждут чистых месяцев. Оценка один раз, без переобучения.</p>
+<div class="ev">Ниже: таймлайн проверок с sha256-префиксами.</div></div>
+<div class="card nx"><div class="ico">◈</div><h3>Расширение банка HAR + помесячное переобучение</h3>
+<p>Плотный банк EWMA и помесячная подгонка: самый дешёвый способ поднять точность прогноза волатильности.</p>
+<div class="ev">Основа: BANK +0,0073, 12 из 12 (форвард); O11b +0,0046, 10 из 11; O11a банк +0,0325.</div></div>
+</div>
+
+<div class="card cand" id="robust"><div class="tagrow"><span class="chip">кандидат · вердикт проспективный (2026-11..2027-01)</span><span class="chip dim">sha256 9c5259a6…</span></div>
+<h3>ROBUST: пробой + регрессионный гейт</h3>
+<p>Кандидат O9/O10: вход по пробою k = 1,0·σ (σ — прогноз размера с геометрией L1), вход только при согласии регрессионного направления (p_up не меньше 0,52 / не больше 0,48), цель 2σ, стоп 1σ, размер 1×. Описательный расчёт отчёта O9 при пессимистичных заливках и 2 б.п. — это не доход.</p>
+<table class="rt"><thead><tr><th>период</th><th>среднемесячная доходность, %</th><th>hit</th><th>просадка</th><th>та же стратегия с перемешанными сигналами, %</th></tr></thead>
+<tbody>
+<tr><td>B 2024-07..2025-07</td><td><b>+2,12</b> [+0,41; +3,84]</td><td>49%</td><td>9%</td><td>−3,13</td></tr>
+<tr><td>C 2025-10..2026-10-12</td><td><b>+0,68</b> [−0,56; +1,91]</td><td>46%</td><td>6,1%</td><td>−1,61</td></tr>
+</tbody></table>
+<p class="note">Перемешивание сигналов (SHUF) превращает результат в минус на каждом периоде: работает именно регрессионный гейт. Показаны два периода после даты отсечки обучения; все периоды и допущения: outlook/O9_ensemble_strategy/REPORT.md.</p></div>
+<p class="src">Файлы: outlook/OUTLOOK_positive.md · LOG_outlook.md (Handoff, «For the MVP lead») · tasks/*/REPORT.md.</p>
+</section>
+
+<section id="time">
+<h2>Таймлайн проспективных проверок</h2>
+<p class="lead">Одиннадцать ставок заморожены <b>до</b> появления данных: хэш зафиксирован, оценка один раз, без подгонки. Первые вердикты — январь–февраль 2027.</p>
+<div class="tl" id="tl"></div>
+<p class="note">Нижняя шкала — месяцы с 2026-10 по 2027-02; вертикальная линия — сегодня (2026-10-15). Полоса — окно оценки, ромб — момент, когда вердикт становится возможным; префикс — sha256 замороженного файла из отчёта исследования.</p>
+</section>
+
+<footer>Подборка позитивных результатов; полный журнал — runs/tactical/LOG.md и LOG_outlook.md</footer>
+</main>
