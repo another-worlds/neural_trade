@@ -1,0 +1,5 @@
+0a55dac5ac1dbff9f4ada3048f086c3c825aa222
+................s                                                        [100%]
+=========================== short test summary info ===========================
+SKIPPED [1] test_t10.py:243: run_looks.py not written yet
+16 passed, 1 skipped in 7.85s

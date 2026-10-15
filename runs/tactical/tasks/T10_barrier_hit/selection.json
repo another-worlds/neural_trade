@@ -1,0 +1,15 @@
+{
+ "chosen": "H3",
+ "primary": {
+  "X_bps": 50,
+  "T_min": 60
+ },
+ "mean_monthly_brier_primary": {
+  "H1": 0.1710869572298995,
+  "H2": 0.16996734584414416,
+  "H3": 0.16609159176276236
+ },
+ "period": "2019-01..2024-06",
+ "rule": "lowest mean monthly Brier among H1, H2, H3 in the primary cell",
+ "selection_results_sha256": "74579f1e5799e15ef8e68250415803048f2d8e7d1646c4c194145a6a66bac7a2"
+}

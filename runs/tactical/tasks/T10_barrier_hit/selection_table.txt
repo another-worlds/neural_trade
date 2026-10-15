@@ -1,0 +1,67 @@
+T10 selection, 2019-01..2024-06 (cut file, monthly walk-forward): mean monthly Brier (pooled Brier; skill over B1 in %)
+
+X=25 bps T=15 min  n=188897 base_rate=0.4998 months=66
+   B0  mean_monthly_brier=0.22559  pooled=0.22573  skill_vs_B1=-22.99%  ece=5.16pp  auc=0.6925  logloss=0.6479
+   B1  mean_monthly_brier=0.18334  pooled=0.18353  skill_vs_B1=+0.00%  ece=11.42pp  auc=0.8353  logloss=0.5913
+   B2  mean_monthly_brier=0.17769  pooled=0.17789  skill_vs_B1=+3.07%  ece=10.03pp  auc=0.8388  logloss=0.5654
+   H1  mean_monthly_brier=0.16244  pooled=0.16259  skill_vs_B1=+11.41%  ece=4.80pp  auc=0.8470  logloss=0.4962
+   H2  mean_monthly_brier=0.15943  pooled=0.15960  skill_vs_B1=+13.04%  ece=0.90pp  auc=0.8470  logloss=0.5096
+   H3  mean_monthly_brier=0.15680  pooled=0.15695  skill_vs_B1=+14.49%  ece=1.03pp  auc=0.8522  logloss=0.4741
+X=50 bps T=15 min  n=188897 base_rate=0.1910 months=66
+   B0  mean_monthly_brier=0.14965  pooled=0.14970  skill_vs_B1=-21.23%  ece=4.40pp  auc=0.6671  logloss=0.4708
+   B1  mean_monthly_brier=0.12341  pooled=0.12349  skill_vs_B1=+0.00%  ece=7.42pp  auc=0.8318  logloss=0.4201
+   B2  mean_monthly_brier=0.11931  pooled=0.11939  skill_vs_B1=+3.32%  ece=6.67pp  auc=0.8365  logloss=0.4083
+   H1  mean_monthly_brier=0.10913  pooled=0.10918  skill_vs_B1=+11.58%  ece=3.00pp  auc=0.8432  logloss=0.3807
+   H2  mean_monthly_brier=0.10889  pooled=0.10896  skill_vs_B1=+11.76%  ece=0.67pp  auc=0.8407  logloss=0.3733
+   H3  mean_monthly_brier=0.10684  pooled=0.10689  skill_vs_B1=+13.44%  ece=1.12pp  auc=0.8465  logloss=0.3479
+X=100 bps T=15 min  n=188897 base_rate=0.0475 months=66
+   B0  mean_monthly_brier=0.04577  pooled=0.04577  skill_vs_B1=-13.71%  ece=1.90pp  auc=0.6457  logloss=0.1912
+   B1  mean_monthly_brier=0.04022  pooled=0.04025  skill_vs_B1=+0.00%  ece=2.63pp  auc=0.8534  logloss=0.1848
+   B2  mean_monthly_brier=0.03899  pooled=0.03902  skill_vs_B1=+3.07%  ece=2.47pp  auc=0.8609  logloss=0.1810
+   H1  mean_monthly_brier=0.03688  pooled=0.03691  skill_vs_B1=+8.30%  ece=2.16pp  auc=0.8596  logloss=0.1947
+   H2  mean_monthly_brier=0.03792  pooled=0.03791  skill_vs_B1=+5.82%  ece=0.48pp  auc=0.8517  logloss=0.1689
+   H3  mean_monthly_brier=0.03559  pooled=0.03562  skill_vs_B1=+11.51%  ece=0.17pp  auc=0.8654  logloss=0.1375
+X=25 bps T=60 min  n=47238 base_rate=0.8297 months=66
+   B0  mean_monthly_brier=0.12808  pooled=0.12793  skill_vs_B1=-18.86%  ece=4.83pp  auc=0.7511  logloss=0.4104
+   B1  mean_monthly_brier=0.10779  pooled=0.10763  skill_vs_B1=+0.00%  ece=7.95pp  auc=0.8709  logloss=0.4383
+   B2  mean_monthly_brier=0.10069  pooled=0.10053  skill_vs_B1=+6.60%  ece=5.57pp  auc=0.8754  logloss=0.3727
+   H1  mean_monthly_brier=0.09656  pooled=0.09643  skill_vs_B1=+10.40%  ece=4.83pp  auc=0.8892  logloss=0.3201
+   H2  mean_monthly_brier=0.09472  pooled=0.09463  skill_vs_B1=+12.07%  ece=1.25pp  auc=0.8853  logloss=0.3375
+   H3  mean_monthly_brier=0.09061  pooled=0.09047  skill_vs_B1=+15.94%  ece=0.36pp  auc=0.8958  logloss=0.2868
+X=50 bps T=60 min  n=47238 base_rate=0.5163 months=66   <-- PRIMARY
+   B0  mean_monthly_brier=0.22918  pooled=0.22925  skill_vs_B1=-11.34%  ece=5.49pp  auc=0.6817  logloss=0.6564
+   B1  mean_monthly_brier=0.20573  pooled=0.20590  skill_vs_B1=+0.00%  ece=14.38pp  auc=0.8066  logloss=0.6716
+   B2  mean_monthly_brier=0.18938  pooled=0.18946  skill_vs_B1=+7.98%  ece=9.72pp  auc=0.8118  logloss=0.6169
+   H1  mean_monthly_brier=0.17109  pooled=0.17115  skill_vs_B1=+16.87%  ece=5.12pp  auc=0.8302  logloss=0.5198
+   H2  mean_monthly_brier=0.16997  pooled=0.17009  skill_vs_B1=+17.39%  ece=2.31pp  auc=0.8269  logloss=0.5611
+   H3  mean_monthly_brier=0.16609  pooled=0.16614  skill_vs_B1=+19.31%  ece=1.13pp  auc=0.8345  logloss=0.4988
+X=100 bps T=60 min  n=47238 base_rate=0.2021 months=66
+   B0  mean_monthly_brier=0.15719  pooled=0.15717  skill_vs_B1=-10.01%  ece=4.04pp  auc=0.6556  logloss=0.4902
+   B1  mean_monthly_brier=0.14285  pooled=0.14287  skill_vs_B1=+0.00%  ece=9.36pp  auc=0.7892  logloss=0.4845
+   B2  mean_monthly_brier=0.13594  pooled=0.13598  skill_vs_B1=+4.82%  ece=7.94pp  auc=0.7958  logloss=0.4869
+   H1  mean_monthly_brier=0.12281  pooled=0.12280  skill_vs_B1=+14.05%  ece=4.41pp  auc=0.8098  logloss=0.4406
+   H2  mean_monthly_brier=0.12314  pooled=0.12309  skill_vs_B1=+13.84%  ece=1.63pp  auc=0.8044  logloss=0.4505
+   H3  mean_monthly_brier=0.12065  pooled=0.12064  skill_vs_B1=+15.56%  ece=1.58pp  auc=0.8105  logloss=0.3886
+X=25 bps T=240 min  n=11809 base_rate=0.9721 months=66
+   B0  mean_monthly_brier=0.02638  pooled=0.02642  skill_vs_B1=-9.31%  ece=1.16pp  auc=0.7772  logloss=0.1385
+   B1  mean_monthly_brier=0.02415  pooled=0.02417  skill_vs_B1=+0.00%  ece=1.99pp  auc=0.9134  logloss=0.1586
+   B2  mean_monthly_brier=0.02375  pooled=0.02372  skill_vs_B1=+1.85%  ece=1.54pp  auc=0.9357  logloss=0.1008
+   H1  mean_monthly_brier=0.02238  pooled=0.02239  skill_vs_B1=+7.36%  ece=1.75pp  auc=0.9431  logloss=0.1041
+   H2  mean_monthly_brier=0.02392  pooled=0.02390  skill_vs_B1=+1.13%  ece=1.32pp  auc=0.8562  logloss=0.1536
+   H3  mean_monthly_brier=0.02156  pooled=0.02155  skill_vs_B1=+10.84%  ece=0.55pp  auc=0.9367  logloss=0.0800
+X=50 bps T=240 min  n=11809 base_rate=0.8481 months=66
+   B0  mean_monthly_brier=0.11983  pooled=0.11970  skill_vs_B1=-3.98%  ece=4.49pp  auc=0.7525  logloss=0.3966
+   B1  mean_monthly_brier=0.11534  pooled=0.11512  skill_vs_B1=+0.00%  ece=9.41pp  auc=0.8321  logloss=0.5287
+   B2  mean_monthly_brier=0.10455  pooled=0.10429  skill_vs_B1=+9.41%  ece=6.22pp  auc=0.8440  logloss=0.4050
+   H1  mean_monthly_brier=0.09625  pooled=0.09610  skill_vs_B1=+16.52%  ece=5.10pp  auc=0.8697  logloss=0.3322
+   H2  mean_monthly_brier=0.09991  pooled=0.09989  skill_vs_B1=+13.24%  ece=3.43pp  auc=0.8519  logloss=0.4045
+   H3  mean_monthly_brier=0.09126  pooled=0.09112  skill_vs_B1=+20.85%  ece=0.86pp  auc=0.8756  logloss=0.2904
+X=100 bps T=240 min  n=11809 base_rate=0.5476 months=66
+   B0  mean_monthly_brier=0.22752  pooled=0.22752  skill_vs_B1=+0.72%  ece=6.00pp  auc=0.6849  logloss=0.6539
+   B1  mean_monthly_brier=0.22905  pooled=0.22916  skill_vs_B1=+0.00%  ece=16.57pp  auc=0.7664  logloss=0.7340
+   B2  mean_monthly_brier=0.20729  pooled=0.20753  skill_vs_B1=+9.44%  ece=11.25pp  auc=0.7748  logloss=0.6982
+   H1  mean_monthly_brier=0.18389  pooled=0.18407  skill_vs_B1=+19.68%  ece=5.54pp  auc=0.8030  logloss=0.5553
+   H2  mean_monthly_brier=0.18785  pooled=0.18814  skill_vs_B1=+17.90%  ece=4.44pp  auc=0.7911  logloss=0.6901
+   H3  mean_monthly_brier=0.17760  pooled=0.17776  skill_vs_B1=+22.43%  ece=1.11pp  auc=0.8080  logloss=0.5272
+
+chosen = H3 (lowest mean monthly Brier among H1, H2, H3 in the primary cell): H1 0.17109, H2 0.16997, H3 0.16609
