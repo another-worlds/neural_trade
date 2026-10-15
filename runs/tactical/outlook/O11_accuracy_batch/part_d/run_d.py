@@ -66,7 +66,7 @@ def select():
     months = [m for m in D.S_MONTHS if all(m in tab[v] for v in VARS)]
     summ = {}
     for v in VARS:
-        a = np.array([tab[v][m]["auc"] for m in months]); summ[v] = D.mean_t(a)
+        a = np.array([tab[v][m]["auc"] for m in months]); summ[v] = D.mean_t(a); summ[v]["t_half"] = D.mean_t(a - 0.5)["t"]
         if v != "base":
             summ[v]["vs_base"] = D.mean_t(D.paired(tab, v, "base", "auc", months))
         summ[v]["brier"] = float(np.mean([tab[v][m]["brier"] for m in months]))
@@ -76,18 +76,18 @@ def select():
         f.write(json.dumps({"summary": summ, "n_months": len(months), "choice": choice}) + "\n")
     o = []; Q = o.append
     Q("O11 part d SELECTION on S (2021-01..2024-06). Monthly AUC of p_up for the sign of the next-open 60-minute return at 15-minute decisions, all valid decision rows,")
-    Q(f"no dead band in scoring; {len(months)} months; mean over months, t = mean / se. Rule: among d1, d2, d3 the highest mean monthly AUC.")
-    Q(f"{'variant':8s} {'features':12s} {'train days':>10s} {'mean AUC':>9s} {'t':>7s} {'AUC-.5 se':>10s} {'vs base':>9s} {'t(vs)':>7s} {'mo+':>6s} {'Brier':>7s} {'AUC gated':>10s} {'hit gated':>10s}")
+    Q(f"no dead band in scoring; {len(months)} months; mean over months, t = (mean - 0.5) / se. Rule: among d1, d2, d3 the highest mean monthly AUC.")
+    Q(f"{'variant':8s} {'features':12s} {'train days':>10s} {'mean AUC':>9s} {'t(vs .5)':>8s} {'AUC-.5':>7s} {'vs base':>9s} {'t(vs)':>7s} {'mo+':>6s} {'Brier':>7s} {'AUC gated':>10s} {'hit gated':>10s}")
     for v in VARS:
         ug, dy = D.VARIANTS[v]; r = summ[v]; vb = r.get("vs_base")
-        Q(f"{v:8s} {'tb7+G15' if ug else 'tb7':12s} {dy:10d} {r['mean']:9.4f} {r['t']:7.2f} {r['mean'] - 0.5:10.4f} "
+        Q(f"{v:8s} {'tb7+G15' if ug else 'tb7':12s} {dy:10d} {r['mean']:9.4f} {r['t_half']:8.2f} {r['mean'] - 0.5:7.4f} "
           f"{fmt(vb['mean']) if vb else '':>9s} {fmt(vb['t'], 2) if vb else '':>7s} {(str(vb['pos']) + '/' + str(vb['n'])) if vb else '':>6s} {r['brier']:7.4f} {r['auc_gated']:10.4f} {r['hit_gated']:10.4f}")
     Q(f"CHOICE (highest mean AUC among d1, d2, d3): {choice}")
     Q("\nmonthly AUC by year (mean of the months): " + "  ".join(f"{v}:" + ",".join(f"{y}:{np.mean([tab[v][m]['auc'] for m in months if m[:4] == y]):.4f}" for y in sorted({m[:4] for m in months})) for v in VARS))
     open(TABLE_SEL, "w", encoding="utf-8").write("\n".join(o) + "\n"); print("\n".join(o))
     ch = {"part": "O11 d", "rule": "highest mean monthly AUC on S among d1, d2, d3 (SPEC part d)", "variant": choice, "features": "tb7+G15" if D.VARIANTS[choice][0] else "tb7",
           "train_days": D.VARIANTS[choice][1], "selection_span": "2021-01..2024-06", "n_months": len(months),
-          "mean_auc_S": {v: summ[v]["mean"] for v in VARS}, "t_S": {v: summ[v]["t"] for v in VARS}}
+          "mean_auc_S": {v: summ[v]["mean"] for v in VARS}, "t_vs_half_S": {v: summ[v]["t_half"] for v in VARS}}
     json.dump(ch, open(D.CHOICE, "w", encoding="utf-8"), indent=1)
     log("select done", choice, f"{time.time() - t0:.0f}s"); json.dump({"runtime_s": time.time() - t0}, open(os.path.join(HERE, "runtime_select.json"), "w"))
 

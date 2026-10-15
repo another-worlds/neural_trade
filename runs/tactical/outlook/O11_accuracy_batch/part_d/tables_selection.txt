@@ -1,0 +1,10 @@
+O11 part d SELECTION on S (2021-01..2024-06). Monthly AUC of p_up for the sign of the next-open 60-minute return at 15-minute decisions, all valid decision rows,
+no dead band in scoring; 42 months; mean over months, t = (mean - 0.5) / se. Rule: among d1, d2, d3 the highest mean monthly AUC.
+variant  features     train days  mean AUC t(vs .5)  AUC-.5   vs base   t(vs)    mo+   Brier  AUC gated  hit gated
+base     tb7                 365    0.5330    12.28  0.0330                           0.2493     0.5382     0.5359
+d1       tb7+G15             365    0.5484    18.49  0.0484    0.0155    6.56  38/42  0.2494     0.5535     0.5419
+d2       tb7                  90    0.5302    10.35  0.0302   -0.0028   -1.81  15/42  0.2494     0.5336     0.5306
+d3       tb7+G15              90    0.5385    15.73  0.0385    0.0056    1.94  24/42  0.2549     0.5415     0.5314
+CHOICE (highest mean AUC among d1, d2, d3): d1
+
+monthly AUC by year (mean of the months): base:2021:0.5157,2022:0.5422,2023:0.5415,2024:0.5318  d1:2021:0.5293,2022:0.5571,2023:0.5577,2024:0.5508  d2:2021:0.5127,2022:0.5424,2023:0.5379,2024:0.5253  d3:2021:0.5300,2022:0.5473,2023:0.5382,2024:0.5386
