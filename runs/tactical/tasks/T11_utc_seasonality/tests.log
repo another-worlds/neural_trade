@@ -1,0 +1,30 @@
+0a55dac5ac1dbff9f4ada3048f086c3c825aa222
+============================= test session starts =============================
+platform win32 -- Python 3.10.21, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\Step\miniforge3\envs\nt\python.exe
+rootdir: D:\nt\nt_t11
+configfile: pyproject.toml
+plugins: anyio-4.13.0, cov-7.1.0, timeout-2.3.1, xdist-3.8.0
+collecting ... collected 20 items
+
+runs/tactical/common/test_timefix.py::test_reproduces_t09_utc_hour_exactly PASSED [  5%]
+runs/tactical/common/test_timefix.py::test_splice_offset_and_known_pre_splice_offsets PASSED [ 10%]
+runs/tactical/common/test_timefix.py::test_input_types_and_source_validation PASSED [ 15%]
+runs/tactical/common/test_timefix.py::test_ny_time_matches_zoneinfo_and_rule PASSED [ 20%]
+runs/tactical/common/test_timefix.py::test_seam_mask_marks_dst_days_and_the_splice PASSED [ 25%]
+runs/tactical/common/test_timefix.py::test_seam_mask_equals_t09_before_the_splice_day_and_differs_only_after PASSED [ 30%]
+runs/tactical/common/test_timefix.py::test_known_seams_in_the_data PASSED [ 35%]
+runs/tactical/common/test_timefix.py::test_binance_2025_06_cross_check_lag_zero_after_the_splice PASSED [ 40%]
+runs/tactical/common/test_timefix.py::test_pre_splice_volatility_peak_moves_to_the_us_open_in_utc PASSED [ 45%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_calendar_comes_from_the_timestamps_only PASSED [ 50%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_v1_equals_v0_on_a_utc_file_and_differs_on_a_file_time_file PASSED [ 55%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_new_york_terms_on_known_times PASSED [ 60%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_seam_anchors_are_excluded_on_the_file_time_source_only PASSED [ 65%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_secondary_target_uses_only_the_label_bars PASSED [ 70%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_training_labels_end_before_the_scored_month PASSED [ 75%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_freeze_loader_reads_no_bar_after_the_freeze_end PASSED [ 80%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_no_bar_of_the_forbidden_gap_is_read PASSED [ 85%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_selection_script_reads_only_the_selection_span PASSED [ 90%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_verdict_logic_pocock_and_month_counts PASSED [ 95%]
+runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_frozen_artefact_and_score_B_on_synthetic_data PASSED [100%]
+
+============================= 20 passed in 21.30s =============================

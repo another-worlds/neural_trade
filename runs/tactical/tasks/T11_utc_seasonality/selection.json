@@ -1,0 +1,139 @@
+{
+ "spec": "T11 SPEC.md (0a55dac)",
+ "rule": "Among V1, V2, V3 the variant with the highest mean over the 66 months 2019-01..2024-06 of (skill_ar[variant] - skill_ar[V0]) on target A (skill_ar = 1 - mse / mse_ar, the monthly ridge refit on the 365 days before the month). Target 'R' (|r_15|) is printed, not used.",
+ "months": [
+  "2019-01",
+  "2024-06"
+ ],
+ "n_months": 66,
+ "chosen": "V3",
+ "mean_skill_ar_diff_vs_V0": {
+  "V1": 0.0003813328377625077,
+  "V2": 0.009787761841479024,
+  "V3": 0.01988597746249653
+ },
+ "comparisons": {
+  "V1": {
+   "a": "V1",
+   "b": "V0",
+   "n_months": 66,
+   "skill_ar_diff": {
+    "mean": 0.0003813328377625077,
+    "ci": [
+     3.140815264925914e-05,
+     0.0007312575228757563
+    ],
+    "positive": 44
+   },
+   "mse_ratio_skill": {
+    "mean": 0.0004569164996009204,
+    "ci": [
+     2.3984685951130647e-05,
+     0.0008898483132507101
+    ],
+    "positive": 44
+   },
+   "spearman_diff": {
+    "mean": 7.193672340997894e-05,
+    "ci": [
+     8.276882076157436e-06,
+     0.00013559656474380045
+    ],
+    "positive": 44
+   },
+   "qlike_diff": {
+    "mean": -0.00011530138619190873,
+    "ci": [
+     -0.0003911666880735203,
+     0.0001605639156897028
+    ],
+    "positive": 30
+   }
+  },
+  "V2": {
+   "a": "V2",
+   "b": "V0",
+   "n_months": 66,
+   "skill_ar_diff": {
+    "mean": 0.009787761841479024,
+    "ci": [
+     0.00770990066927697,
+     0.01186562301368108
+    ],
+    "positive": 57
+   },
+   "mse_ratio_skill": {
+    "mean": 0.01204789847231015,
+    "ci": [
+     0.009510742907885967,
+     0.014585054036734334
+    ],
+    "positive": 57
+   },
+   "spearman_diff": {
+    "mean": 0.0048312367470192685,
+    "ci": [
+     0.004030674188801284,
+     0.005631799305237253
+    ],
+    "positive": 61
+   },
+   "qlike_diff": {
+    "mean": -0.004326095108289027,
+    "ci": [
+     -0.008205856246093718,
+     -0.00044633397048433757
+    ],
+    "positive": 22
+   }
+  },
+  "V3": {
+   "a": "V3",
+   "b": "V0",
+   "n_months": 66,
+   "skill_ar_diff": {
+    "mean": 0.01988597746249653,
+    "ci": [
+     0.016479291087780772,
+     0.023292663837212287
+    ],
+    "positive": 61
+   },
+   "mse_ratio_skill": {
+    "mean": 0.02440939299810732,
+    "ci": [
+     0.020267658409582258,
+     0.028551127586632384
+    ],
+    "positive": 61
+   },
+   "spearman_diff": {
+    "mean": 0.005589685991871022,
+    "ci": [
+     0.004463056612266397,
+     0.006716315371475646
+    ],
+    "positive": 59
+   },
+   "qlike_diff": {
+    "mean": -0.002039177806152895,
+    "ci": [
+     -0.006931335054318803,
+     0.0028529794420130133
+    ],
+    "positive": 29
+   }
+  }
+ },
+ "drops": {
+  "anchors": 494503,
+  "kept": 489916,
+  "t01_drops": 1697,
+  "seam_excluded": 2890,
+  "seam_fraction_of_anchors": 0.0058624517950346105
+ },
+ "code_sha256": {
+  "t11_lib.py": "4085a6dcb718c88625ddcaf2ed19f06f0b257c487ceb7f4754e6601b8ad7c766",
+  "timefix.py": "cb390f2d3f3a32de2bb9d1fae5a2a396d465e1c2d5a580b226dd83ca10b56a28"
+ }
+}
