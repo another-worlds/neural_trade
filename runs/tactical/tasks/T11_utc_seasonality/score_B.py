@@ -14,11 +14,17 @@ T = L.T
 SCORE_FROM = pd.Timestamp("2026-09-28 00:00"); FIRST_MONTH = pd.Period("2026-10", freq="M"); COMPLETE_AFTER_MIN = 239
 
 
+def sha_lf(path):
+    """sha256 of a text file with CRLF read as LF (the repository stores LF; a Windows checkout may hold CRLF)."""
+    import hashlib
+    return hashlib.sha256(open(path, "rb").read().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def load_frozen(path=os.path.join(HERE, "frozen_B.json"), selection_path=os.path.join(HERE, "selection.json")):
     art = json.load(open(path))
     if L.sha_of(art) != art["sha256"]:
         raise ValueError("frozen_B.json does not match its sha256")
-    if os.path.exists(selection_path) and L.sha_file(selection_path) != art["selection_json_sha256"]:
+    if os.path.exists(selection_path) and sha_lf(selection_path) != art["selection_json_sha256"]:
         raise ValueError("selection.json differs from the file the freeze was made from")
     return art
 

@@ -1,4 +1,5 @@
-0a55dac5ac1dbff9f4ada3048f086c3c825aa222
+a3ebba2e39d1049bb4b21b6c68830e322aad665c
+(working tree: selection stage already committed; sha_lf edit in score_B.py / make_frozen_B.py, run_report.py, make_figs.py uncommitted)
 ============================= test session starts =============================
 platform win32 -- Python 3.10.21, pytest-9.0.3, pluggy-1.6.0 -- C:\Users\Step\miniforge3\envs\nt\python.exe
 rootdir: D:\nt\nt_t11
@@ -27,4 +28,4 @@ runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_selection_script_reads
 runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_verdict_logic_pocock_and_month_counts PASSED [ 95%]
 runs/tactical/tasks/T11_utc_seasonality/test_t11.py::test_frozen_artefact_and_score_B_on_synthetic_data PASSED [100%]
 
-============================= 20 passed in 21.30s =============================
+============================= 20 passed in 21.21s =============================
