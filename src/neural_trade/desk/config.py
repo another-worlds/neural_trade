@@ -35,7 +35,7 @@ def _default_cost_profiles() -> Dict[str, Dict[str, float]]:
 
 
 def _default_accounts() -> List[Dict[str, Any]]:
-    return [{"id": "paper", "kind": "paper", "quote": "USDT", "cash": 10_000.0, "cost_profile": "binance_spot_taker"}]
+    return [{"id": "paper", "kind": "paper", "quote": "USDT", "cash": 10_000.0, "cost_profile": "research_zero"}]  # owner question 3 (desk costs) is open; D-044 default is 0
 
 
 @dataclass
