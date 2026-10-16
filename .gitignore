@@ -65,3 +65,7 @@ runs/stability/*/data/
 
 # Saved candidate models (machine-local copies; configs/candidates/manifest.json holds their sha256)
 saved_models/
+
+# Trading desk (D-067): state and secrets
+var/
+.env

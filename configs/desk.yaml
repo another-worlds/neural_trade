@@ -1,0 +1,5 @@
+# Trading desk settings (D-067). Every key is optional; environment variables (NT_DESK_HOME, NT_DESK_HOST,
+# NT_DESK_PORT, NT_DESK_PLUGIN_DIRS) override this file, and `--home` overrides both. Relative paths are
+# resolved against the project root. Secrets never go here (environment variables only).
+host: 127.0.0.1
+port: 8080

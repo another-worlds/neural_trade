@@ -106,3 +106,34 @@ def test_data_does_not_import_visualization():
     edges, _ = build_import_graph()
     files = edges.get(("data", "visualization"))
     assert not files, f"data/ imports visualization/ from: {sorted(f.name for f in files)}"
+
+
+def test_nothing_imports_desk():
+    """D-067: the trading desk is the top layer. No other subpackage and not ``cli.py`` imports it at module
+    level; ``cli.py`` may import ``neural_trade.desk.cli`` inside a function (lazily, for the ``desk`` command)."""
+    offenders = []
+    for path in SRC.rglob("*.py"):
+        rel = path.relative_to(SRC)
+        if "__pycache__" in rel.parts or rel.parts[0] == "desk":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        in_function = set()
+        for fn in ast.walk(tree):
+            if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                in_function.update(id(n) for n in ast.walk(fn))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                mods = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                base = node.module or ""
+                if node.level:  # relative import: resolve against the file's package
+                    pkg = list(rel.parent.parts)[: max(len(rel.parent.parts) - (node.level - 1), 0)]
+                    base = ".".join(["neural_trade", *pkg, *([base] if base else [])])
+                mods = [base] + ([f"{base}.{a.name}" for a in node.names] if base == "neural_trade" else [])
+            else:
+                continue
+            if any(m == "neural_trade.desk" or m.startswith("neural_trade.desk.") for m in mods):
+                lazy_cli = rel.as_posix() == "cli.py" and id(node) in in_function
+                if not lazy_cli:
+                    offenders.append(f"{rel.as_posix()}:{node.lineno}")
+    assert not offenders, f"only desk/ may import neural_trade.desk (cli.py: inside a function): {offenders}"

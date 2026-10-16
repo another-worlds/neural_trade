@@ -29,6 +29,7 @@ One line per subpackage (`tests/test_docs_guides.py` checks that every subpackag
 | `visualization/` | every figure: training, analytics per head, calibration, trading, indicators, comparison, leaderboard; one theme (`theme.py`) |
 | `experiments/` | the experiment engine: scenario spec, resumable runner, run store and sqlite index, scorer, sweeps, leaderboard, paired comparator, screen mode, stability harness; and the frozen ablation harness |
 | `registries/` | the ten component registries, the plugin loader entry point (`load_all`), the registrations of every built-in component |
+| `desk/` | the trading desk (D-067), the top layer: settings now; the domain model, engine, broker, API and front end land item by item. Nothing else in the package imports it |
 | `notebook/` | the notebook front-ends: widgets and logic (training session, backtest and calibration explorers, control panel, long-run monitor) so the notebooks stay thin |
 
 ## Layering
