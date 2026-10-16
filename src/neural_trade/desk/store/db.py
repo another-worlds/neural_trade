@@ -5,7 +5,10 @@ Standard library only. Schema version 1 is the C4 table list, columns verbatim; 
 ``BEGIN IMMEDIATE`` transaction so concurrent processes queue on the busy timeout instead of failing on a lock
 upgrade. The journal is append-only: triggers make UPDATE and DELETE raise.
 
-Gaps in C4 (minimum implemented, nothing invented): untyped C4 columns are declared TEXT; ``Fill`` has no
+Gaps in C4 (minimum implemented, nothing invented): C4 types only some columns. Columns it types keep that type
+(TEXT, REAL, INTEGER; "TEXT(JSON)" is TEXT holding JSON). Untyped C4 columns are declared TEXT when they are ids,
+names, enums or paths and INTEGER when they are timestamps (``ts``, ``*_ms``) or counters (``pid``, ``gpu``); the
+literal list is in tests/desk/test_db.py. ``Fill`` has no
 ``account_id`` field, so ``FillRepo.save`` takes it as an argument; ``AccountState`` carries no ``cost_profile``
 or ``created_ms``, so accounts and the tables with no model dataclass use plain dict rows.
 """
@@ -75,6 +78,10 @@ _MIGRATIONS: dict[int, list[str]] = {
         "BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END",
         "CREATE TRIGGER journal_no_delete BEFORE DELETE ON journal "
         "BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END",
+        # INSERT OR REPLACE would overwrite a row without firing the DELETE trigger (recursive_triggers is off).
+        "CREATE TRIGGER journal_no_replace BEFORE INSERT ON journal "
+        "WHEN NEW.id IS NOT NULL AND EXISTS (SELECT 1 FROM journal WHERE id = NEW.id) "
+        "BEGIN SELECT RAISE(ABORT, 'journal is append-only'); END",
     ],
 }
 
@@ -124,11 +131,17 @@ class DeskDb:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(str(self.path), timeout=busy_timeout_ms / 1000, isolation_level=None)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.execute("PRAGMA synchronous=NORMAL")
-        self._migrate()
+        try:
+            self.conn.row_factory = sqlite3.Row
+            self.conn.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
+            # The WAL switch and the first migration of a fresh file can race other processes; SQLite does not
+            # always honour the busy timeout there, so retry on "locked" for a bounded time.
+            self._retry(lambda: self.conn.execute("PRAGMA journal_mode=WAL").fetchone(), busy_timeout_ms)
+            self.conn.execute("PRAGMA synchronous=NORMAL")
+            self._retry(self._migrate, busy_timeout_ms)
+        except BaseException:
+            self.conn.close()
+            raise
         self.orders = OrderRepo(self)
         self.fills = FillRepo(self)
         self.positions = PositionRepo(self)
@@ -137,6 +150,17 @@ class DeskDb:
         self.settings = SettingsRepo(self)
         for name in ("accounts", "bots", "alerts", "layouts", "drawings", "models", "jobs", "backtests"):
             setattr(self, name, RowRepo(self, name, "id"))
+
+    @staticmethod
+    def _retry(fn: Any, budget_ms: int) -> Any:
+        deadline = time.monotonic() + max(budget_ms, 1000) / 1000
+        while True:
+            try:
+                return fn()
+            except sqlite3.OperationalError as e:
+                if "locked" not in str(e) and "busy" not in str(e) or time.monotonic() > deadline:
+                    raise
+                time.sleep(0.01)
 
     def close(self) -> None:
         self.conn.close()
@@ -154,7 +178,6 @@ class DeskDb:
     def _migrate(self) -> None:
         if self.version > SCHEMA_VERSION:
             ver = self.version
-            self.conn.close()
             raise SchemaTooNew(f"{self.path} has schema version {ver}; this code knows up to {SCHEMA_VERSION}")
         while self.version < SCHEMA_VERSION:
             nxt = self.version + 1

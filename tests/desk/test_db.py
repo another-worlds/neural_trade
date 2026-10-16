@@ -79,11 +79,54 @@ def test_second_open_is_a_noop(tmp_path):
     a = open_db(p)
     a.orders.save(_order())
     a.close()
-    schema1 = sqlite3.connect(p).execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall()
+    q = "SELECT sql FROM sqlite_master ORDER BY name"
+    raw = sqlite3.connect(p)
+    schema1 = raw.execute(q).fetchall()
+    raw.close()
     b = open_db(p)
     assert b.version == 1 and b.orders.get("c1") == _order()
     b.close()
-    assert sqlite3.connect(p).execute("SELECT sql FROM sqlite_master ORDER BY name").fetchall() == schema1
+    raw = sqlite3.connect(p)
+    assert raw.execute(q).fetchall() == schema1
+    raw.close()
+
+
+# Declared type and primary-key flag per column, literal (C4 types; untyped C4 columns as documented in db.py).
+TYPES = {
+    "accounts": "id TEXT pk, kind TEXT, quote TEXT, cash REAL, cost_profile TEXT, created_ms INTEGER, armed_until_ms INTEGER",
+    "orders": "client_id TEXT pk, account_id TEXT, instrument_id TEXT, strategy_id TEXT, bot_id TEXT, side TEXT, type TEXT, "
+              "qty REAL, size_frac REAL, price REAL, trigger_price REAL, tif TEXT, reduce_only INTEGER, bracket TEXT, "
+              "status TEXT, filled_qty REAL, avg_fill_price REAL, reason TEXT, venue_id TEXT, ts_created INTEGER, "
+              "ts_updated INTEGER, tags TEXT",
+    "fills": "trade_id TEXT pk, client_id TEXT, instrument_id TEXT, account_id TEXT, side TEXT, qty REAL, price REAL, "
+             "mid REAL, fee REAL, fee_currency TEXT, liquidity TEXT, ts INTEGER",
+    "positions": "position_id TEXT pk, account_id TEXT, instrument_id TEXT, strategy_id TEXT, side TEXT, qty REAL, "
+                 "avg_price REAL, realised_pnl REAL, fees REAL, ts_opened INTEGER, ts_closed INTEGER",
+    "journal": "id INTEGER pk, ts INTEGER, account_id TEXT, kind TEXT, payload TEXT",
+    "bots": "id TEXT pk, name TEXT, strategy TEXT, params TEXT, instrument_id TEXT, tf INTEGER, account_id TEXT, "
+            "model_id TEXT, state TEXT, risk TEXT, created_ms INTEGER, last_bar_ms INTEGER, error TEXT",
+    "alerts": "id TEXT pk, name TEXT, condition TEXT, frequency TEXT, state TEXT, created_ms INTEGER, "
+              "last_fired_ms INTEGER, message TEXT",
+    "alert_log": "id INTEGER pk, alert_id TEXT, ts INTEGER, payload TEXT",
+    "layouts": "id TEXT pk, name TEXT, payload TEXT, updated_ms INTEGER",
+    "drawings": "id TEXT pk, layout_id TEXT, instrument_id TEXT, tool TEXT, points TEXT, style TEXT, locked INTEGER, "
+                "updated_ms INTEGER",
+    "models": "id TEXT pk, run_dir TEXT, bundle_dir TEXT, symbol TEXT, tf INTEGER, lookback INTEGER, horizons TEXT, "
+              "fingerprint TEXT, dev_scores TEXT, promoted_ms INTEGER, active_for TEXT",
+    "jobs": "id TEXT pk, kind TEXT, params TEXT, state TEXT, pid INTEGER, gpu INTEGER, log_path TEXT, created_ms INTEGER, "
+            "started_ms INTEGER, finished_ms INTEGER, result TEXT, error TEXT",
+    "backtests": "id TEXT pk, name TEXT, strategy TEXT, params TEXT, instrument_id TEXT, tf INTEGER, start_ms INTEGER, "
+                 "end_ms INTEGER, cost_profile TEXT, job_id TEXT, report_path TEXT, created_ms INTEGER",
+    "settings": "key TEXT pk, value TEXT",
+}
+
+
+def test_declared_types_and_primary_keys(db):
+    assert set(TYPES) == set(C4)
+    for table, spec in TYPES.items():
+        want = [tuple(x.split()) for x in spec.split(", ")]
+        got = [(r[1], r[2], "pk") if r[5] else (r[1], r[2]) for r in db.conn.execute(f"PRAGMA table_info({table})")]
+        assert got == want, table
 
 
 def test_wal_and_busy_timeout(db):
@@ -191,7 +234,11 @@ def test_journal_is_append_only(db):
     raw = sqlite3.connect(db.path)
     with pytest.raises(sqlite3.DatabaseError, match="append-only"):
         raw.execute("DELETE FROM journal")
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):  # REPLACE would skip the DELETE trigger
+        raw.execute("INSERT OR REPLACE INTO journal (id, ts, kind, payload) VALUES (?, 1, 'x', '{}')", (i,))
     raw.close()
+    with pytest.raises(sqlite3.DatabaseError, match="append-only"):
+        db.conn.execute("INSERT OR REPLACE INTO journal (id, ts, kind, payload) VALUES (?, 1, 'x', '{}')", (i,))
     assert not hasattr(db.journal, "update") and not hasattr(db.journal, "delete")
     assert len(db.journal.read()) == 1 and db.journal.read()[0]["kind"] == "order"
 
@@ -256,3 +303,56 @@ def test_two_processes_write_orders_concurrently(tmp_path):
     assert ids == {f"{t}-{i}" for t in ("p1", "p2", "me") for i in range(n)}
     assert len(mine.journal.read()) == 2 * n
     mine.close()
+
+
+RACER = textwrap.dedent("""
+    import sys, time
+    from pathlib import Path
+    from neural_trade.desk.core.model import Order, OrderType, Side
+    from neural_trade.desk.store.db import open_db
+    path, tag, go = sys.argv[1], sys.argv[2], float(sys.argv[3])
+    while time.time() < go:
+        pass
+    db = open_db(path)
+    for i in range(20):
+        db.orders.save(Order(client_id=f"{tag}-{i}", instrument_id="I", account_id="a", side=Side.BUY,
+                             type=OrderType.MARKET, qty=1.0))
+    db.close()
+""")
+
+
+def test_processes_racing_on_the_first_open_of_a_fresh_file(tmp_path):
+    import time
+    p = tmp_path / "fresh.sqlite"  # does not exist: every process creates, switches to WAL and migrates
+    script = tmp_path / "racer.py"
+    script.write_text(RACER)
+    env = {**os.environ, "PYTHONPATH": str(SRC), "CUDA_VISIBLE_DEVICES": "-1"}
+    go = time.time() + 6.0  # start barrier: imports finish first, then all open at the same instant
+    procs = [subprocess.Popen([sys.executable, str(script), str(p), f"r{k}", str(go)], env=env,
+                              stderr=subprocess.PIPE, text=True) for k in range(3)]
+    errs = [pr.communicate(timeout=120)[1] for pr in procs]
+    assert [pr.returncode for pr in procs] == [0, 0, 0], errs
+    with open_db(p) as d:
+        assert {o.client_id for o in d.orders.list()} == {f"r{k}-{i}" for k in range(3) for i in range(20)}
+
+
+def test_open_closes_the_connection_on_failure(tmp_path, monkeypatch):
+    closed = []
+    real = sqlite3.connect
+
+    class Spy:
+        def __init__(self, *a, **k):
+            self.c = real(*a, **k)
+
+        def __getattr__(self, n):
+            return getattr(self.c, n)
+
+        def close(self):
+            closed.append(1)
+            self.c.close()
+
+    monkeypatch.setattr(dbmod.sqlite3, "connect", lambda *a, **k: Spy(*a, **k))
+    monkeypatch.setattr(dbmod.DeskDb, "_migrate", lambda self: (_ for _ in ()).throw(RuntimeError("x")))
+    with pytest.raises(RuntimeError):
+        open_db(tmp_path / "d.sqlite")
+    assert closed == [1]
