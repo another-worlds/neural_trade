@@ -247,6 +247,75 @@ changes).
 | [NT-212](#nt-212) | P2 | polish | implementer | todo | Tests for the N-horizon rules that only run when N is not 3 (7 of 22 QA mutants survive) |
 | [NT-213](#nt-213) | P2 | bug | implementer | todo | `model_analytics.variance_analytics` raises ZeroDivisionError on some configurations (also on the base commit) |
 | [NT-214](#nt-214) | P3 | polish | implementer | todo | N-horizon residues: labels, defaults and unused constants still say h0/h1/h2 |
+| [NT-215](#nt-215) | P1 | infra | implementer | todo | DESK-0.2: Package skeleton and guards |
+| [NT-216](#nt-216) | P1 | infra | implementer | todo | DESK-0.3: Environment and CI (blocked until questions 0 and 4 are answered; lead installs, implementer writes the files) |
+| [NT-217](#nt-217) | P1 | feature | implementer | todo | DESK-0.4: Domain model, bus, clock, params |
+| [NT-218](#nt-218) | P1 | feature | implementer | todo | DESK-0.5: Cost profiles and pure fill functions |
+| [NT-219](#nt-219) | P1 | feature | implementer | todo | DESK-0.6: Desk database |
+| [NT-220](#nt-220) | P1 | feature | implementer | todo | DESK-0.7: Market store |
+| [NT-221](#nt-221) | P1 | feature | implementer | todo | DESK-0.8: Importers and CLI |
+| [NT-222](#nt-222) | P1 | feature | implementer | todo | DESK-1.1: Portfolio |
+| [NT-223](#nt-223) | P1 | feature | implementer | todo | DESK-1.2: Risk guard |
+| [NT-224](#nt-224) | P1 | feature | implementer | todo | DESK-1.3: Execution engine |
+| [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
+| [NT-226](#nt-226) | P1 | feature | implementer | todo | DESK-1.5: Data sources |
+| [NT-227](#nt-227) | P1 | feature | implementer | todo | DESK-1.6: Strategy API and built-ins |
+| [NT-228](#nt-228) | P1 | feature | implementer | todo | DESK-1.7: Engine loop and journal |
+| [NT-229](#nt-229) | P1 | feature | implementer | todo | DESK-1.8: Backtest report |
+| [NT-230](#nt-230) | P1 | feature | implementer | todo | DESK-1.9: Model-signal adapter and the parity test (P1, `qa`) |
+| [NT-231](#nt-231) | P1 | feature | implementer | todo | DESK-1.10: Backtest CLI |
+| [NT-232](#nt-232) | P1 | feature | implementer | todo | DESK-1.11: Causality harness for desk strategies |
+| [NT-233](#nt-233) | P1 | feature | implementer | todo | DESK-1.12: Exposure-strategy adapter (after DESK-1) |
+| [NT-234](#nt-234) | P2 | feature | implementer | todo | DESK-2.1: Exchange client |
+| [NT-235](#nt-235) | P2 | feature | implementer | todo | DESK-2.2: Backfill |
+| [NT-236](#nt-236) | P2 | feature | implementer | todo | DESK-2.3: Collector |
+| [NT-237](#nt-237) | P2 | feature | implementer | todo | DESK-2.4: Live source and bar-close scheduler |
+| [NT-238](#nt-238) | P1 | feature | implementer | todo | DESK-2.5: Bot runner |
+| [NT-239](#nt-239) | P1 | feature | implementer | todo | DESK-2.6: Manual paper trading |
+| [NT-240](#nt-240) | P2 | feature | implementer | todo | DESK-2.7: Alerts |
+| [NT-241](#nt-241) | P2 | infra | implementer | todo | DESK-3.1: App factory |
+| [NT-242](#nt-242) | P2 | infra | implementer | todo | DESK-3.2: Schemas and OpenAPI snapshot |
+| [NT-243](#nt-243) | P2 | feature | implementer | todo | DESK-3.3: Bars and symbols routers |
+| [NT-244](#nt-244) | P2 | feature | implementer | todo | DESK-3.4: Indicators and plugins routers (catalogue from `ChartIndicators`, compute with caching key (id, version, param |
+| [NT-245](#nt-245) | P1 | feature | implementer | todo | DESK-3.5: Accounts, orders, positions, fills routers (paper by default; LIVE requires armed account) |
+| [NT-246](#nt-246) | P2 | feature | implementer | todo | DESK-3.6: Bots and alerts routers |
+| [NT-247](#nt-247) | P2 | feature | implementer | todo | DESK-3.7: Backtests and replay routers (replay session in-process |
+| [NT-248](#nt-248) | P2 | feature | implementer | todo | DESK-3.8: Layouts and drawings routers |
+| [NT-249](#nt-249) | P1 | feature | implementer | todo | DESK-3.9: Job runner and jobs router |
+| [NT-250](#nt-250) | P2 | feature | implementer | todo | DESK-3.10: WebSocket hub |
+| [NT-251](#nt-251) | P2 | research | experimenter | todo | DESK-4.0: Chart spikes (pre-registered, one day each, experimenter or escalated implementer): a throwaway page with (a) |
+| [NT-252](#nt-252) | P2 | feature | implementer | todo | DESK-4.1: App shell, conventions and the dock element |
+| [NT-253](#nt-253) | P2 | feature | implementer | todo | DESK-4.2: Chart element (escalated implementer) |
+| [NT-254](#nt-254) | P2 | feature | implementer | todo | DESK-4.3: Indicator panels (NiceGUI) |
+| [NT-255](#nt-255) | P2 | feature | implementer | todo | DESK-4.4: Trading panels (NiceGUI + chart lines) |
+| [NT-256](#nt-256) | P2 | feature | implementer | todo | DESK-4.5: Drawing tools (escalated implementer) |
+| [NT-257](#nt-257) | P2 | feature | implementer | todo | DESK-4.6: Layouts, watchlist, symbol search (NiceGUI) |
+| [NT-258](#nt-258) | P2 | feature | implementer | todo | DESK-4.7: Bots, alerts and jobs panels (NiceGUI) |
+| [NT-259](#nt-259) | P2 | feature | implementer | todo | DESK-4.8: Backtest page |
+| [NT-260](#nt-260) | P2 | feature | implementer | todo | DESK-4.9: Replay controls (start at bar or date, play/pause, step, speed, manual orders during replay with A5.6 fills, j |
+| [NT-261](#nt-261) | P2 | feature | implementer | todo | DESK-4.10: Lab pages (NiceGUI) |
+| [NT-262](#nt-262) | P2 | feature | implementer | todo | DESK-4.11: Smoke suite and the look routine |
+| [NT-263](#nt-263) | P2 | feature | implementer | todo | DESK-5.1: Datasets |
+| [NT-264](#nt-264) | P2 | feature | implementer | todo | DESK-5.2: Scenarios |
+| [NT-265](#nt-265) | P2 | feature | implementer | todo | DESK-5.3: Runs |
+| [NT-266](#nt-266) | P2 | feature | implementer | todo | DESK-5.4: Figures and theme |
+| [NT-267](#nt-267) | P2 | feature | implementer | todo | DESK-5.5: Leaderboard JSON |
+| [NT-268](#nt-268) | P2 | feature | implementer | todo | DESK-5.6: Model registry and predictions |
+| [NT-269](#nt-269) | P2 | feature | implementer | todo | DESK-5.7: GPU and CLI job kinds |
+| [NT-270](#nt-270) | P2 | feature | implementer | todo | DESK-5.8: Indicator-development chain |
+| [NT-271](#nt-271) | P1 | feature | implementer | todo | DESK-6.1: ccxt broker (P1, `qa`) |
+| [NT-272](#nt-272) | P1 | feature | implementer | todo | DESK-6.2: Live arming and audit (P1) |
+| [NT-273](#nt-273) | P2 | feature | implementer | todo | DESK-6.4: Chart performance at one year of 1-minute bars (windowed loading, data conflation setting, server-side downsam |
+| [NT-274](#nt-274) | P2 | docs | implementer | todo | DESK-6.5: Docs and inventory |
+| [NT-275](#nt-275) | P2 | feature | implementer | todo | DESK-6.6: Security pass (lead + `qa`) |
+| [NT-276](#nt-276) | P2 | feature | implementer | todo | DESK-7.1: Indicator contract and registry |
+| [NT-277](#nt-277) | P2 | feature | implementer | todo | DESK-7.2: Built-in indicators, batch 1 (trend and bands) as thin adapters over `ta` 0.11.0 where it has the indicator (s |
+| [NT-278](#nt-278) | P2 | feature | implementer | todo | DESK-7.3: Built-in indicators, batch 2 (momentum and volume) |
+| [NT-279](#nt-279) | P2 | feature | implementer | todo | DESK-7.4: Strategy plugins |
+| [NT-280](#nt-280) | P2 | feature | implementer | todo | DESK-7.5: Plugin reload |
+| [NT-281](#nt-281) | P3 | feature | implementer | todo | DESK-L.1: Websocket collector (v2) |
+| [NT-282](#nt-282) | P3 | feature | implementer | todo | DESK-L.2: Streaming indicators for bots (`desk-stream` extra) |
+| [NT-283](#nt-283) | P3 | feature | implementer | todo | DESK-L.3: Predictor subprocess over a pipe (about 200 lines) if TensorFlow in the server process costs too much memory o |
 
 ## Items
 
@@ -2833,6 +2902,903 @@ changes).
 - **why:** NT-042 author and qa-deep: (1) help text of LAMBDA_SHORT, LAMBDA_POINT, LAMBDA_LONG says h0/h1/h2 and LAMBDA_POINT has no effect at N = 2 without a warning; (2) 'delta shrink beta h0 / h1 / h2' and 'temperature h0 / h1 / h2' rows stay fixed at any N; (3) the live plot aliases h1 at N = 4 because the callback does not pass the primary (h2); (4) the control panel's DEFAULT_METRICS list h0-h2; (5) screen.HORIZONS unused; (6) comparison rows sort h10 before h2; (7) the h4 colour #e7298a is delta E 20.3 from OTHER_SERIES[1] #d55181 (matters at N >= 5); (8) NT-031's note 'each leaderboard row names its traded (primary) horizon' is not implemented.
 - **acceptance:** Each point fixed with a test where it is behaviour (3, 4, 6, 8) and a docs regeneration (1; `scripts/` for config-reference); the golden unchanged; notebooks only if a figure text changes (the lead executes); fast suite, ruff.
 - **source:** qa-deep on NT-042 (2026-10-09)
+
+### NT-215
+
+**DESK-0.2: Package skeleton and guards** (the full task text: docs/desk/TASKS.md row 0.2)
+
+- **status:** todo
+- **priority / type / role:** P1 / infra / implementer
+- **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `src/neural_trade/desk/__init__.py`, `desk/config.py`, `pyproject.toml`, `.gitignore`, `docs/ARCHITECTURE.md`, `tests/test_layering.py`, `tests/conftest.py`, `tests/desk/conftest.py`, `tests/desk/e2e/conftest.py`, `tests/desk/network/conftest.py`
+- **depends on:** none (the lead's step 0, this landing, is done); first item of lane A
+- **why:** task DESK-0.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `python -c "import neural_trade.desk"` with `sys.modules` checked: no `tensorflow`, `fastapi`, `nicegui`, `ccxt` loaded (test); (2) `DeskSettings.load()` precedence env > yaml > defaults (test); (3) `test_nothing_imports_desk` passes and fails on a planted import (mutation shown in the report); (4) `test_docs_guides` passes with the new ARCHITECTURE row (format `| desk/ | ... |`, naming no path that does not exist yet); (5) the standard fast-suite command and `scripts/test_changed.py --run` stay green with the e2e and network directories skipped; (6) fast suite count unchanged except the new tests. Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-216
+
+**DESK-0.3: Environment and CI (blocked until questions 0 and 4 are answered; lead installs, implementer writes the files): `requirements-desk.txt` = the A11 `desk` extra verbatim with the exact transitive versions the dry run resolves (nicegui==3.17.1, fastapi==0.143.2, starlette==1.7.0, uvicorn[standard]==0.54.0, pydantic==2.14.1, pydantic-core==2.50.1, python-socketio, python-engineio, aiohttp 3.14.x, orjson, ccxt==4.5.88 and its pins, ta==0.11.0, httpx==0.28.1; `desk-test`: playwright==1.64.0, pytest-playwright==0.10.0, pytest-asyncio) and `requirements-desk-ci.txt` (Linux CI pins); `.github/workflows/ci.yml` job `desk` as in A11 (changed-files guard, pytest with `--cov=neural_trade.desk`, `check_coverage.py --only desk`, Playwright step from DESK-4.2 on with `NT_DESK_E2E=1`); `unit` gets `--ignore=tests/desk` and `check_coverage.py coverage.json --skip desk`; `scripts/check_coverage.py` gains `--only`/`--skip` and `GATES["desk"] = 70`; RUNBOOK "Desk" section (install, dry run, run, traps)**
+
+- **status:** todo
+- **priority / type / role:** P1 / infra / implementer
+- **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files named
+- **depends on:** NT-215 (DESK-0.2)
+- **why:** task DESK-0.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `pip install --dry-run -r requirements-desk.txt` output committed to `docs/desk/env_dry_run.txt` shows no change to numpy, protobuf, tensorflow, keras, h5py; (2) `python -c "import neural_trade, nicegui, fastapi, ccxt, ta, tensorflow"` succeeds in `nt` and `scripts/golden_run.py verify` against the current golden record passes (lead's log in the item); (3) CI `desk` and `unit` jobs green on the pushed head; `unit` wall time within noise of the previous run Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-217
+
+**DESK-0.4: Domain model, bus, clock, params: `desk/core/model.py` (A4 dataclasses, enums, the complete status-edge list, `is_closed`, JSON (de)serialisation helpers), `desk/core/params.py` (C1 `ParamSpec`, `params_schema`, `validate_params`), `desk/core/bus.py`, `desk/core/clock.py`**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/{model,params,bus,clock}.py`, `tests/desk/test_core_model.py`, `test_params.py`, `test_bus.py`
+- **depends on:** NT-215 (DESK-0.2)
+- **why:** task DESK-0.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) the A4 status-edge list tested exhaustively (every listed edge accepted, every other edge raises `IllegalTransition`, the `late_fill` exception edge included); (2) `Order/Fill/Position/AccountState` round-trip through `to_json/from_json`; (3) bus delivers in subscription order and unsubscribe works; (4) `SimClock.set` monotonic check raises on going back; (5) `validate_params` fills defaults and names the violated bound in its `ValueError` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-218
+
+**DESK-0.5: Cost profiles and pure fill functions: `desk/core/costs.py` (`CostProfile` with `research_zero` and `binance_spot_taker` presets, per-side maths identical to `BacktestConfig.slip_rate/fee_rate`), `desk/core/fills.py` (C1)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/{costs,fills}.py`, `tests/desk/test_fills.py`
+- **depends on:** NT-217 (DESK-0.4)
+- **why:** task DESK-0.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) market fill price and costs equal `strategy/backtest.py` single-trade arithmetic for long and short at 0 and at 10/1/2 bps (numbers in the test); (2) limit touch/gap cases, stop trigger/gap cases, bracket tie `sl_first`/`tp_first`, all with hand-computed expected prices; (3) property test: fills never outside the bar's [low, high] except gap fills at the open Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-219
+
+**DESK-0.6: Desk database: `desk/store/db.py` (sqlite, WAL, versioned migrations, repositories for every C4 table, read-once helpers)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-0; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/store/db.py`, `tests/desk/test_db.py`
+- **depends on:** NT-217 (DESK-0.4)
+- **why:** task DESK-0.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) schema version 1 creates every C4 table; a second open is a no-op; (2) each repository round-trips its dataclass; (3) two processes (a subprocess in the test) write orders concurrently without error (WAL + busy timeout); (4) journal is append-only (update raises) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-220
+
+**DESK-0.7: Market store: `desk/data/store.py` (A6: `write_bars`, `read_bars(symbol, tf, start, end, limit)`, `last_ts`, `ranges`, `resample`, `export_csv`, `gaps`)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/data/store.py`, `tests/desk/test_market_store.py`
+- **depends on:** NT-219 (DESK-0.6)
+- **why:** task DESK-0.7 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) 5-minute resample of `synthetic_bars` equals `resample_bars(standardize_ohlcv(synthetic_bars, cfg), cfg)` with `cfg = Config(); cfg.RESAMPLE_MINUTES = 5` (same OHLCV values, same timestamps); (2) `export_csv` output passes `run_preprocessors(df, Config())` + `validate_ohlcv_frame(bar_minutes=1)` and `dataset_fingerprint` facts match (rows, first, last); (3) duplicate writes are idempotent; (4) gap detection matches `data.gaps.gap_flags` on a frame with holes Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-221
+
+**DESK-0.8: Importers and CLI: `desk/data/importers.py` (repo CSV import through the neural_trade preprocessors, labelled source), `desk/cli.py` with `init`, `import-csv`, registered as `neural-trade desk` in `cli.py` through a lazy import inside the subparser builder**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/data/importers.py`, `desk/cli.py`, `src/neural_trade/cli.py` (one subparser hook), `tests/desk/test_importers.py`, `tests/desk/test_cli.py`
+- **depends on:** NT-220 (DESK-0.7)
+- **why:** task DESK-0.8 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) importing the bundled CSV yields 43,500 bars with `src='repo:binance_btcusdt_1min_ccxt.csv'` (marker `data`); (2) `neural-trade desk init --home TMP` creates both sqlite files and the token; (3) `cli.build_parser` parses `neural-trade desk import-csv FILE` (docs test contract); (4) the `sources` row of an imported file carries the provenance text given in the item (default: the file name and span); (5) a subprocess test runs `build_parser()` with `sys.modules` guards for fastapi, nicegui and ccxt and asserts none loaded (the CI `unit` job has no desk extra) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-222
+
+**DESK-1.1: Portfolio: `desk/core/portfolio.py` (NETTING positions, cash, fees, realised/unrealised, equity mark per bar, drawdown; spot rule: no negative base balance)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/portfolio.py`, `tests/desk/test_portfolio.py`
+- **depends on:** NT-218 (DESK-0.5)
+- **why:** task DESK-1.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a long round trip at 10/1/2 bps reproduces `Trade.gross_pnl/costs/net_pnl` of the oracle for the same prices; (2) a fill crossing zero closes and opens positions (two `PositionEvent`s); (3) equity series equals the oracle's `equity` on a scripted 20-bar scenario Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-223
+
+**DESK-1.2: Risk guard: `desk/core/risk.py` (`RiskLimits`, rounding to `price_increment`/`size_increment`, min/max notional, max position, max orders per minute, daily loss limit, trading state ACTIVE/REDUCING/HALTED, spot no-short)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/risk.py`, `tests/desk/test_risk.py`
+- **depends on:** NT-222 (DESK-1.1)
+- **why:** task DESK-1.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) each limit has a passing and a denying test with the `reason` string; (2) REDUCING allows only position-reducing orders; (3) HALTED denies everything and `halt` is idempotent Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-224
+
+**DESK-1.3: Execution engine: `desk/core/execution.py` (commands -> RiskGuard -> Broker; events -> state machine -> Portfolio -> bus; idempotent client ids; overfill check)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/execution.py`, `tests/desk/test_execution.py`
+- **depends on:** NT-223 (DESK-1.2)
+- **why:** task DESK-1.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) scripted event sequences (accept, partial, fill, cancel, reject, late fill after cancel) end in the states of the A4 machine; (2) a duplicate `trade_id` is ignored; (3) every state change is journalled with `ts_event` and `ts_init` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-225
+
+**DESK-1.4: Simulated broker: `desk/broker/sim.py` (A5 rules on closed bars: next-open market, limit/stop in bar, brackets with tiebreak, `max_hold` TIME, EOW on breaks)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/broker/{base,sim}.py`, `tests/desk/test_sim_broker.py`
+- **depends on:** NT-224 (DESK-1.3)
+- **why:** task DESK-1.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) each A5 rule has a scripted test with expected fill bar and price; (2) same-bar entry-fill then bracket check on that bar (oracle order of operations) tested; (3) no fill ever precedes the order's bar Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-226
+
+**DESK-1.5: Data sources: `desk/data/sources.py` (`HistoricalSource`, `ReplaySource` with step and seek, `history(n)` as a DataFrame; `seek(ts)` rebuilds the source position and the replay session (3.7) creates a new Engine and SimClock on a backward seek)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/data/sources.py`, `tests/desk/test_sources.py`
+- **depends on:** NT-220 (DESK-0.7)
+- **why:** task DESK-1.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) iteration yields closed bars in order with `is_closed=True`; (2) `history(n)` never includes a bar after the current one (causality) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-227
+
+**DESK-1.6: Strategy API and built-ins: `desk/core/strategy.py` (C1 `DeskStrategy`, `StrategyContext`, `DeskStrategies` registry; `ParamSpec` imported from `core/params.py`; `ctx.indicator(name, **params)` raises `IndicatorsUnavailable` until 7.1 wires it to `ChartIndicators`), built-ins `desk/strategies/{ma_cross,rsi_threshold,bollinger_breakout,buy_and_hold,always_flat,random_entries}.py`; the three TA built-ins compute their arrays with `neural_trade.strategy.ta_rules.sma`, `rolling_std` and `wilder_rsi` on `ctx.bars(n)["close"]` (reuse, not re-implementation) and copy the entry and exit rules of `ta_rules.py` (enter while flat on the sign, exit on CROSS / RSI_MID / BB_MID, `allow_short`, `max_hold` 1440, warm-up = slow or period)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files named, `tests/desk/test_strategy_api.py`
+- **depends on:** NT-225 (DESK-1.4), NT-226 (DESK-1.5)
+- **why:** task DESK-1.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `params_schema()` lists every `ParamSpec` with bounds; constructing with an out-of-range param raises; (2) each built-in runs on `synthetic_bars` and the three TA rules place the same entry bars as neural_trade's `ta_ma_cross/ta_rsi/ta_bollinger` with the same parameters (bar indices compared); (3) `ctx.indicator` raises `IndicatorsUnavailable` with a message naming 7.1 Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-228
+
+**DESK-1.7: Engine loop and journal: `desk/core/engine.py` (backtest `run`, `step`, halt; exactly the A5.9 order per bar: fill_exits, fill_entries on the post-exit cash, intrabar, close-of-bar precedence EOW > TIME > strategy, mark and journal; the Engine schedules TIME and EOW); `desk/core/journal.py` (C1 `Journal` with `ts_init` from the engine's Clock, atomic finalisation; `EngineRun` summary)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/engine.py`, `desk/core/journal.py`, `tests/desk/test_engine.py`, `test_journal.py`
+- **depends on:** NT-227 (DESK-1.6)
+- **why:** task DESK-1.7 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) two runs of the same backtest produce byte-identical journals (SimClock timestamps); (2) a strategy exception halts the run with reason and leaves the journal readable; (3) events per bar appear in the A5.9 order (test reads the journal); (4) a `size_frac` entry at an open where an exit also fills is sized on the post-exit cash (scripted test) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-229
+
+**DESK-1.8: Backtest report: `desk/core/report.py` (Strategy-Tester fields: net/gross profit and loss, commissions, buy-and-hold return, max run-up/drawdown with durations, total/winning/losing trades, percent profitable, avg trade, avg win/loss and ratio, largest win/loss, avg bars, max consecutive wins/losses, profit factor, Sharpe/Sortino via `strategy/performance.py`, exposure, turnover; gross on `Fill.mid`, costs = qty x |price - mid| + fee; baselines buy-and-hold, always-flat, matched random entries (engine re-run with `random_entries` at the strategy's rate/hold/size; seeds default 100 up to 100k bars, 20 above, configurable; the report records `n_seeds` and the null's wall time); n_eff bands via `metrics.statistics`)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/core/report.py`, `tests/desk/test_report.py`
+- **depends on:** NT-228 (DESK-1.7)
+- **why:** task DESK-1.8 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) on a scripted journal every field equals a hand-computed value; (2) Sharpe equals `performance.sharpe(returns, periods_per_year(tf))`; (3) the random-null percentile fields follow `random_same_frequency`'s key names; (4) report JSON schema committed and snapshot-tested; (5) the null on the bundled 43,500 bars with 100 seeds finishes under 60 s on CPU Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-230
+
+**DESK-1.9: Model-signal adapter and the parity test (P1, `qa`): `desk/strategies/model_signal.py` (C2, settings A5.13)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/strategies/model_signal.py`, `tests/desk/test_parity.py`
+- **depends on:** NT-229 (DESK-1.8)
+- **why:** task DESK-1.9 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) parity within 1e-9 on `synthetic_bars` for `ta_ma_cross`, `ta_rsi`, `ta_bollinger`, `random_signal` (trades, reasons, equity) against `strategy.backtest.run_backtest` at zero cost and at 10/1/2 bps; (2) parity for `calibrated_quantile` on a stored engine cell's `predictions_cal/oos.npz` (marker `data`, skipped when absent); (3) `assert_no_lookahead`-style perturbation test passes for the adapter; (4) an `ExposureStrategy` raises `UnsupportedStrategy` naming DESK-1.12 Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-231
+
+**DESK-1.10: Backtest CLI: `neural-trade desk backtest --strategy --symbol --tf --start --end --cost` runs the engine in-process and writes `var/desk/backtests/<id>/{journal.jsonl,report.json,trades.csv,equity.csv}`; the subprocess job kind `backtest` is added in 3.9's kinds list**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/cli.py`, `desk/core/backtest_run.py`, `tests/desk/test_backtest_cli.py`
+- **depends on:** NT-229 (DESK-1.8)
+- **why:** task DESK-1.10 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) the CLI run on the bundled CSV produces the four files and exit 0; (2) the four files are written atomically (no half-written report after an injected failure); (3) the DESK-1 milestone command in 'Verification' works as written Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-232
+
+**DESK-1.11: Causality harness for desk strategies: `desk/testing/causality.py` (perturb bars after probe t, re-run, compare decisions up to t) applied to every registered built-in (1.6)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/testing/causality.py`, `tests/desk/test_causality.py`
+- **depends on:** NT-228 (DESK-1.7)
+- **why:** task DESK-1.11 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a planted look-ahead strategy (reads `bars(n+1)`) is caught; (2) every built-in passes with 12 probes Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-233
+
+**DESK-1.12: Exposure-strategy adapter (after DESK-1): `target(s, t, current)` -> `ctx.rebalance_to(exposure)` with the band and `decide_every` rules of `run_exposure_backtest`; parity test against `run_exposure_backtest` on `synthetic_bars` for `vol_target` with an EWMA sigma**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/strategies/model_signal.py`, `desk/core/engine.py` (rebalance path), tests
+- **depends on:** NT-230 (DESK-1.9)
+- **why:** task DESK-1.12 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) rebalances, costs and equity equal the oracle within 1e-9; (2) the discrete parity test (1.9) is unchanged Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-234
+
+**DESK-2.1: Exchange client: `desk/data/exchange.py` (`ExchangeClient` protocol; `FakeExchange` for tests: scripted bars, orders, fills, balances; `CcxtBinanceSpot`: `load_markets` -> `Instrument`, `fetch_ohlcv` paging, balances, create/cancel/fetch orders, `set_sandbox_mode` first, rate limiter on)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-2; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/data/exchange.py`, `tests/desk/test_exchange.py` (+ `tests/desk/network/test_binance_sandbox.py` marked `network`)
+- **depends on:** NT-217 (DESK-0.4)
+- **why:** task DESK-2.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `Instrument` fields from a recorded `load_markets` fixture (precision, min notional); (2) paging stops at `since` and never duplicates; (3) the network test (sandbox keys from env, skipped otherwise) places and cancels one limit order far from the market Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-235
+
+**DESK-2.2: Backfill: `desk/data/backfill.py` with `backfill(exchange, store, symbol, since, progress: Callable[[int, int], None]) -> int` (paginated REST into the store, a resumable cursor in `sources`); the 10-line job kind wrapper comes with 3.9**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-2; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the file, `tests/desk/test_backfill.py`
+- **depends on:** NT-234 (DESK-2.1)
+- **why:** task DESK-2.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) 3,500 fake bars arrive in 4 pages, store has 3,500, `sources` updated; (2) resumable after an interruption (cursor test) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-236
+
+**DESK-2.3: Collector: `desk/data/collector.py` + `neural-trade desk collector` (REST polling every N s; closed-bar rule A3; reconcile the last two candles after errors; heartbeat file)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-2; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/data/collector.py`, `desk/cli.py`, `tests/desk/test_collector.py`
+- **depends on:** NT-234 (DESK-2.1)
+- **why:** task DESK-2.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) with `FakeExchange` and a fake clock the forming candle is never written as closed; (2) a candle is written exactly once when the next open time appears; (3) after a simulated outage the gap is backfilled; (4) heartbeat file updated each loop Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-237
+
+**DESK-2.4: Live source and bar-close scheduler: `desk/data/sources.py::LiveSource` (store watcher by `last_ts`), `desk/bots/scheduler.py` (ticks on each new closed bar per (symbol, tf))**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-2; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files, `tests/desk/test_live_source.py`
+- **depends on:** NT-236 (DESK-2.3)
+- **why:** task DESK-2.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a bar inserted into the store surfaces exactly once; (2) 5-minute consumers tick only when a 5-minute bar completes Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-238
+
+**DESK-2.5: Bot runner: `desk/bots/runner.py` (one `Engine` per bot in paper or live mode; start/stop/kill; status, heartbeat, last bar, error; persisted in `bots`; restart recovery re-creates running bots)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-2; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/bots/runner.py`, `tests/desk/test_bot_runner.py`
+- **depends on:** NT-237 (DESK-2.4), NT-228 (DESK-1.7)
+- **why:** task DESK-2.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a bot on `FakeExchange` bars trades on paper and its orders/fills appear in the DB; (2) `kill_all` cancels open orders and halts every bot within one tick; (3) after a simulated restart the bot resumes from its last bar without duplicate orders (client ids) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-239
+
+**DESK-2.6: Manual paper trading: `desk/trading/manual.py` (manual orders through the ExecutionEngine with the paper account's SimBroker on live closed bars; modify/cancel; account summary)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-2; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/trading/manual.py`, `tests/desk/test_manual_trading.py`
+- **depends on:** NT-238 (DESK-2.5)
+- **why:** task DESK-2.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a market order placed between bars fills at the next closed bar's open (A5.6) and the position/P&L update; (2) modify of a resting limit changes price without a new client id; (3) summary fields equal the Portfolio's Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-240
+
+**DESK-2.7: Alerts: `desk/bots/alerts.py` (conditions price/indicator/prediction/strategy-event with operators crossing up/down, above, below; frequency once, every bar close, once per bar; log; WS event)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-2; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/bots/alerts.py`, `tests/desk/test_alerts.py`
+- **depends on:** NT-237 (DESK-2.4)
+- **why:** task DESK-2.7 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) each operator and frequency has a scripted test; (2) alerts evaluate only on closed bars; (3) the log row carries the triggering values Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-241
+
+**DESK-3.1: App factory: `desk/api/app.py` (FastAPI, lifespan starting/stopping the store watcher, bot runner, job runner; token middleware; static mount; `/system/health`, `/system/theme` from `visualization/theme.py` tokens) + `neural-trade desk serve`**
+
+- **status:** todo
+- **priority / type / role:** P2 / infra / implementer
+- **milestone:** DESK-3; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/api/{app,auth,system}.py`, `desk/cli.py`, `tests/desk/test_app.py`
+- **depends on:** NT-219 (DESK-0.6)
+- **why:** task DESK-3.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `TestClient(app).get('/api/v1/system/health')` 200 with the documented keys; (2) a mutating call without the token is 401; (3) `serve` binds 127.0.0.1 only (config test); (4) the server process has `CUDA_VISIBLE_DEVICES=-1` set before any import (test on the env of the CLI entry) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-242
+
+**DESK-3.2: Schemas and OpenAPI snapshot: `desk/api/schemas.py` (every C5 request/response), `docs/desk/openapi.json`, drift test**
+
+- **status:** todo
+- **priority / type / role:** P2 / infra / implementer
+- **milestone:** DESK-3; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files, `tests/desk/test_openapi.py`
+- **depends on:** NT-241 (DESK-3.1)
+- **why:** task DESK-3.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `app.openapi()` equals the committed file (test prints the diff); (2) every schema round-trips the matching `core/model.py` dataclass Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-243
+
+**DESK-3.3: Bars and symbols routers**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-3; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/api/routers/bars.py`, tests
+- **depends on:** NT-242 (DESK-3.2), NT-220 (DESK-0.7)
+- **why:** task DESK-3.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) typed arrays with UTC ms; `limit` and ranges honoured; (2) `tf` not in the allowed list is 422 Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-244
+
+**DESK-3.4: Indicators and plugins routers (catalogue from `ChartIndicators`, compute with caching key (id, version, params, symbol, tf, range), lens endpoint, plugin list/reload/new/test)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-3; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/api/routers/{indicators,plugins}.py`, tests
+- **depends on:** NT-242 (DESK-3.2); also: 7.x (plugins milestone
+- **why:** task DESK-3.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) compute output keys equal the DRAW figure keys; (2) bad params 422 with the bound in the message; (3) reload picks up a newly written plugin file in the tmp plugin dir; (4) `new` writes from the template and `test` returns `check_indicator` results Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-245
+
+**DESK-3.5: Accounts, orders, positions, fills routers (paper by default; LIVE requires armed account)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-3; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/api/routers/{accounts,orders,positions}.py`, tests
+- **depends on:** NT-242 (DESK-3.2), NT-239 (DESK-2.6)
+- **why:** task DESK-3.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) full manual cycle through the API on `FakeExchange` bars (place, modify, cancel, fill, close); (2) LIVE account order without arming is 403 with reason; (3) `/system/kill` cancels and halts (DB state asserted) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-246
+
+**DESK-3.6: Bots and alerts routers**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-3; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** routers, tests
+- **depends on:** NT-242 (DESK-3.2), NT-238 (DESK-2.5), NT-240 (DESK-2.7)
+- **why:** task DESK-3.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) create/start/stop/log cycle; (2) alert create/fire/log cycle with a scripted bar Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-247
+
+**DESK-3.7: Backtests and replay routers (replay session in-process: start, step n, manual order inside replay, state)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-3; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** routers, `desk/trading/replay.py`, tests
+- **depends on:** NT-242 (DESK-3.2), NT-231 (DESK-1.10)
+- **why:** task DESK-3.7 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a backtest job through the API ends DONE and the report endpoint returns the C-report schema; (2) replay step returns the next closed bar and applies A5 fills to replay orders Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-248
+
+**DESK-3.8: Layouts and drawings routers**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-3; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** routers, tests
+- **depends on:** NT-242 (DESK-3.2)
+- **why:** task DESK-3.8 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) CRUD round-trips; (2) drawings are per layout and instrument; points carry `{time_ms, price}` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-249
+
+**DESK-3.9: Job runner and jobs router: `desk/jobs/{model,runner,gpu_gate,__main__}.py` (subprocess launcher with the `longrun.launch` pattern and `longrun.pid_alive`, log files, cancel via taskkill/`terminate`, a `gpu` queue of size 1 gated by the desk's own gate: `nvidia-smi dmon -s um -c 10` run by `subprocess.run` and judged by `experiments.sweep.gpu_status_from_dmon`, never `nvidia_smi_gpu_check()`), kinds registry including `backtest` (1.10's runner as a subprocess) and `backfill` (2.2)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-3; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files, `desk/api/routers/jobs.py`, `tests/desk/test_jobs.py`
+- **depends on:** NT-219 (DESK-0.6), NT-231 (DESK-1.10), NT-235 (DESK-2.2)
+- **why:** task DESK-3.9 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a `sleep` test kind runs, logs, finishes DONE; cancel ends CANCELLED and the pid is dead; (2) two GPU kinds queue (second waits); the gate test feeds a recorded busy `dmon` text while the test process has `CUDA_VISIBLE_DEVICES=-1` and asserts PENDING with reason (so the short-circuit cannot hide behind a mock); (3) the server restart re-attaches to a running job by pid; (4) the `backtest` kind produces 1.10's four files and the job row's `result.report_path` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-250
+
+**DESK-3.10: WebSocket hub: `desk/api/ws.py` (topics C5; fan-out from the bus and the store watcher; forming-candle updates from the collector's heartbeat)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-3; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the file, `tests/desk/test_ws.py`
+- **depends on:** NT-241 (DESK-3.1), NT-237 (DESK-2.4)
+- **why:** task DESK-3.10 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `websocket_connect` subscribe/receive for each topic with a scripted event; (2) unsubscribed topics are not delivered; (3) a slow client is dropped, not blocking others (queue bound test) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-251
+
+**DESK-4.0: Chart spikes (pre-registered, one day each, experimenter or escalated implementer): a throwaway page with (a) lightweight-charts 5.2.1 + the ported rectangle/trend-line/user-price-line primitives and (b) KLineCharts 10.1.0 built-ins, each loading 525,600 bars in 20k windows**
+
+- **status:** todo
+- **priority / type / role:** P2 / research / experimenter
+- **milestone:** DESK-4; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `D:/nt/scratch` only; a report in `docs/desk/spikes/chart_spike.md`
+- **depends on:** NT-243 (DESK-3.3)
+- **why:** task DESK-4.0 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) criteria fixed before the spike: a draggable order line whose drop price reaches Python, a trend line persisted and restored, a one-year scroll with no freeze over 200 ms per window; (2) the report states the winner and the measured numbers; (3) the default (lightweight-charts) stands unless KLineCharts wins all three Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-252
+
+**DESK-4.1: App shell, conventions and the dock element: `desk/ui/conventions.md`, `desk/ui/theme.py` (CSS variables from theme tokens plus candle up/down and order side tokens), `pages/desk.py` skeleton, `elements/dock.js` + `dock.py` (dockview-core 8.5.1 vendored from `https://unpkg.com/dockview-core@8.5.1/dist/dockview-core.min.js` and `dist/styles/dockview.css`, sha256 recorded and tested, `toJSON`/`fromJSON`), the `user`-fixture test skeleton (`async def test_...(user: User)`), `THIRD_PARTY_NOTICES.md`**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files, `tests/desk/test_ui_shell.py`
+- **depends on:** NT-241 (DESK-3.1)
+- **why:** task DESK-4.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `user` fixture opens `/` and sees the account-context banner and an empty dock; (2) a dock layout round-trips through `layouts`; (3) the test proves or disproves that `run_method` calls on a custom element are observable in the `user` simulation and records the answer in conventions.md (the panels' acceptance relies on the Python-side call log of 4.2, not on this) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-253
+
+**DESK-4.2: Chart element (escalated implementer): `elements/lwc_chart.js` + `chart.py` (`ChartElement`: every outgoing call recorded as `(method, args)` in `self.calls` when `settings.testing` is true, with `last_call(method)`, so panel tests assert the call log without a browser): candles and volume, v5 panes, timeframe switch keeping the visible range, windowed history fetched from `/api/v1/bars` on scroll-left, forming candle `series.update`, last-price line, crosshair legend, UTC axis, markers API, `createPriceLine` API, click/crosshair events to Python; v5 cheat sheet in the header; vendored from `https://unpkg.com/lightweight-charts@5.2.1/dist/lightweight-charts.standalone.production.js` with LICENSE and NOTICE, sha256 recorded in `THIRD_PARTY_NOTICES.md` and checked by a test, `attributionLogo` on**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files, `tests/desk/e2e/test_chart.py`
+- **depends on:** NT-252 (DESK-4.1), NT-243 (DESK-3.3), NT-250 (DESK-3.10), NT-251 (DESK-4.0)
+- **why:** task DESK-4.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) Playwright: one year of 1-minute bars scrolls in windows with no single window blocking longer than 200 ms (measured); (2) the forming candle updates in place; (3) the element's documented props/methods/events all have a Playwright assertion; evidence = the CI run id of the `desk` job with the e2e step green and the uploaded trace and screenshot (a local Windows 10 run is additional, never the only evidence) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-254
+
+**DESK-4.3: Indicator panels (NiceGUI): catalogue with search, parameter dialog generated from `PARAMS` with bounds and the server's refusal text, style tab from `DRAW`, overlay vs new pane via the element's pane API, remove and move, indicator set in the layout**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/ui/panels/indicators.py`, tests
+- **depends on:** NT-253 (DESK-4.2), NT-244 (DESK-3.4)
+- **why:** task DESK-4.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `user` fixture: adding `my_rsi` leaves `(add_pane, {... levels (30, 70) ...})` in the ChartElement call log; (2) an out-of-bound value shows the server's message and sends nothing; (3) the indicator set persists in the layout Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-255
+
+**DESK-4.4: Trading panels (NiceGUI + chart lines): order ticket (market/limit/stop, qty or size fraction presets, TP/SL), orders/positions/fills/account tables, account-context banner, arming dialog (typed account id), kill-switch button; order and position lines through the element's price-line API with drag-to-modify confirm**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/ui/panels/{ticket,orders,positions,account,arming}.py`, tests
+- **depends on:** NT-253 (DESK-4.2), NT-245 (DESK-3.5)
+- **why:** task DESK-4.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `user` fixture on paper: place, see the order row, modify, cancel, fill after a scripted bar, close the position; (2) kill switch empties open orders and halts bots; (3) LIVE requires the typed id and shows a red banner; (4) Playwright: dragging an order line lands the new price in sqlite (evidence = CI run id as in 4.2) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-256
+
+**DESK-4.5: Drawing tools (escalated implementer): horizontal line, trend line, ray, rectangle, text as series primitives in `lwc_chart.js`; select, drag handles, delete, lock; persistence through `/layouts/{id}/drawings` with `{time_ms, price}` points**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `elements/lwc_chart.js`, `desk/ui/panels/drawings.py`, e2e tests
+- **depends on:** NT-253 (DESK-4.2), NT-248 (DESK-3.8)
+- **why:** task DESK-4.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) each tool creates, moves and persists (Playwright); (2) drawings survive a timeframe switch; (3) Esc cancels, Delete removes; evidence = CI run id as in 4.2 Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-257
+
+**DESK-4.6: Layouts, watchlist, symbol search (NiceGUI)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** panels, tests
+- **depends on:** NT-254 (DESK-4.3)
+- **why:** task DESK-4.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) save/load/apply restores symbol, tf, dock layout, indicators, drawings; (2) the watchlist shows last prices pushed by the store watcher Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-258
+
+**DESK-4.7: Bots, alerts and jobs panels (NiceGUI)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** panels, tests
+- **depends on:** NT-252 (DESK-4.1), NT-246 (DESK-3.6), NT-249 (DESK-3.9)
+- **why:** task DESK-4.7 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) create/start/stop a bot, see its log and its trade markers on the chart; (2) an alert fires as `ui.notify` and a log row; (3) the job list shows a live log tail and cancels Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-259
+
+**DESK-4.8: Backtest page: form from the strategy's `params_schema()`, cost profile, range; run as a job; report with every C-report field; equity and drawdown panes; trades on the chart; trades table; baselines and n_eff band; the existing plotly figures through `ui.plotly`**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/ui/pages/backtests.py`, tests
+- **depends on:** NT-253 (DESK-4.2), NT-247 (DESK-3.7)
+- **why:** task DESK-4.8 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `user` fixture runs `ma_cross` on the bundled data (job in-process for the test) and the report fields equal `report.json`; (2) selecting a trade leaves `(center_on, trade.ts)` in the ChartElement call log Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-260
+
+**DESK-4.9: Replay controls (start at bar or date, play/pause, step, speed, manual orders during replay with A5.6 fills, jump to live)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** panel, tests
+- **depends on:** NT-255 (DESK-4.4), NT-247 (DESK-3.7)
+- **why:** task DESK-4.9 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) stepping advances one bar and the ChartElement call log shows the indicator recompute; (2) a replay order fills at the next stepped bar's open by A5.6 Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-261
+
+**DESK-4.10: Lab pages (NiceGUI): datasets, scenarios (spec, plan table, copy with edits), runs (list, progress, log tail, figures via `ui.plotly`), sweeps (estimate, confirm above one GPU-hour, launch), leaderboard (test columns labelled, never sortable), compare (stored verdicts), models (promote, activate), predictions overlay toggle, TensorBoard and optuna-dashboard links; plugin page (list, reload, new from template, test)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/ui/pages/{lab,plugins}.py`, tests
+- **depends on:** NT-252 (DESK-4.1), NT-244 (DESK-3.4); also: 5.x
+- **why:** task DESK-4.10 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) every page opens in the `user` fixture against fixture runs; (2) a figure renders (element present with the figure JSON); (3) the leaderboard table has no sortable test columns (test on the column definitions) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-262
+
+**DESK-4.11: Smoke suite and the look routine: `tests/desk/e2e/` (5-10 Playwright tests: chart window and scroll, order-line drag, drawing persistence, dock round-trip, Lab progress), the "open it and look" checklist in `docs/desk/GUIDE.md`, the CI step enabled, screenshots as artifacts**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-4; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** tests, CI
+- **depends on:** NT-252 (DESK-4.1), NT-261 (DESK-4.10); also: -
+- **why:** task DESK-4.11 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) CI `desk` job green with the suite; (2) a screenshot per page uploaded; (3) the local run on Windows 10 is recorded as working or not (Playwright lists Windows 11+) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-263
+
+**DESK-5.1: Datasets: `desk/lab/datasets.py` (list repo CSVs; fingerprints computed on demand per file through `dataset_fingerprint(Config(CSV_PATH=path))`, cached in `settings` by (path, size, mtime), the list returning the cached value or `fingerprint_pending`; export from the store; specs with `DatasetSpec` facts)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests
+- **depends on:** NT-220 (DESK-0.7)
+- **why:** task DESK-5.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) an export passes `Runner.from_spec(...).plan()` on a copied tiny scenario pointing at it (CPU, marker `slow` if needed); (2) the list endpoint never computes a fingerprint synchronously for a file over 50 MB Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-264
+
+**DESK-5.2: Scenarios: `desk/lab/scenarios.py` (discover, read, validate, plan table, copy-with-edits into `configs/scenarios/desk/`)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests
+- **depends on:** NT-263 (DESK-5.1)
+- **why:** task DESK-5.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `discover_scenarios` parity; (2) an invalid edit returns the `ScenarioError` text, nothing written; (3) a copy is a valid spec with a new name Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-265
+
+**DESK-5.3: Runs: `desk/lab/runs.py` (index rows, scores, run detail from the light files, progress via `longrun`-style readers, servable run list)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests on `tests/fixtures` run dirs
+- **depends on:** NT-215 (DESK-0.2)
+- **why:** task DESK-5.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) detail of a fixture run equals its files; (2) progress states not started/running/stalled/done/failed reproduced with mtimes Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-266
+
+**DESK-5.4: Figures and theme: `desk/lab/figures.py` (`Visualizations.build(key, ...)` -> `pio.to_json(validate=False)` dict with `config.responsive`; inputs from `run_report.load_saved_blocks`/`scorer.load_block`; plotly.js served from `plotly.offline.get_plotlyjs()`), `/system/theme` CSS**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, router, tests
+- **depends on:** NT-265 (DESK-5.3)
+- **why:** task DESK-5.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) each listed key returns JSON for the fixture run or a documented "needs artifacts/npz" 409; (2) the served plotly.js version string equals the python package's Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-267
+
+**DESK-5.5: Leaderboard JSON: `desk/lab/leaderboard.py` (serialiser for `LeaderboardRow` trees; `build_board` read-only path; ETag from `store_fingerprint`)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests
+- **depends on:** NT-265 (DESK-5.3)
+- **why:** task DESK-5.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) every `LeaderboardRow` field present; int-keyed `fold_values` become lists; (2) test columns flagged `rank_eligible=false` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-268
+
+**DESK-5.6: Model registry and predictions: `desk/lab/models.py` (promote `runs/<id>/artifacts`, config facts, dev scores from the index, activate per (symbol, tf)); `desk/indicators/predictions.py` (overlay arrays from `Predictor.predict_frame` over the last n bars: per-horizon price path, lo90/hi90, P(up) with `direction_signal`); Predictor cache**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests (a tiny bundle built once in a `slow` test with `tiny_config`)
+- **depends on:** NT-265 (DESK-5.3), NT-220 (DESK-0.7)
+- **why:** task DESK-5.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) promote refuses a dir whose `artifacts/meta.json` lacks `format_version == 1`; (2) overlay arrays have one row per bar and `direction_signal` per horizon; (3) with `direction_signal == 'none'` the P(up) series is flagged and not drawn as a forecast (test on the payload) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-269
+
+**DESK-5.7: GPU and CLI job kinds: `desk/jobs/kinds/{train,scenario,sweep,compare,screen,stability,indicator_report,export_dataset}.py` (`scenario`: `longrun.launch(spec, store)` verbatim with `longrun.progress`; `train` and the others: the launch pattern of A3 with `launch_env(root)`, the run dir from the last stdout line; progress for a bare run through `longrun.read_jsonl`, `tail`, `pid_alive` and the stall rule; the desk's GPU gate (3.9); budget announce for sweeps with the 1-GPU-hour confirm rule)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests with a fake `neural-trade` executable
+- **depends on:** NT-249 (DESK-3.9), NT-264 (DESK-5.2)
+- **why:** task DESK-5.7 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) each kind builds the documented command line (snapshot test); (2) `train` returns the run dir from the last stdout line; (3) a sweep over 1 GPU-hour stays PENDING until confirmed; (4) GPU kinds refuse when the gate reads a recorded busy `dmon` text Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-270
+
+**DESK-5.8: Indicator-development chain: `docs/desk/GUIDE.md` section plus `desk/lab/indicator_dev.py` (learned periods table from `metrics.jsonl` and `period_init.json` vs textbook; lens inputs) and the `/indicators/learned` endpoint**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests
+- **depends on:** NT-268 (DESK-5.6), NT-278 (DESK-7.3)
+- **why:** task DESK-5.8 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) the lens output for a fixture run reproduces `discovered_table` numbers for ma/rsi/bb/macd; (2) a plugin family listed in `INDICATOR_FAMILIES` appears in the table Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-271
+
+**DESK-6.1: ccxt broker (P1, `qa`): `desk/broker/ccxt_broker.py` (submit/modify/cancel with idempotent client ids, poll fills by trade id, `sync` reconciliation at start and periodically, sandbox first)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-6; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests on `FakeExchange`, `network` test on the sandbox
+- **depends on:** NT-234 (DESK-2.1), NT-224 (DESK-1.3)
+- **why:** task DESK-6.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) scripted venue sequences (partial fills, late fill, reject) produce the A4 states; (2) restart reconciliation adopts open venue orders and positions without duplicates; (3) sandbox round trip (skipped without keys) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-272
+
+**DESK-6.2: Live arming and audit (P1): `NT_DESK_LIVE=1` + arm request with typed id + session expiry; risk limits enforced in LIVE; every live command journalled with the token's session id; kill switch covers live orders**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **milestone:** DESK-6; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests
+- **depends on:** NT-271 (DESK-6.1), NT-245 (DESK-3.5)
+- **why:** task DESK-6.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) without the env var the LIVE account cannot be armed (403); (2) an expired arming denies orders; (3) audit rows for every live command Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-273
+
+**DESK-6.4: Chart performance at one year of 1-minute bars (windowed loading, data conflation setting, server-side downsampling for the overview)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-6; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** js, router
+- **depends on:** NT-253 (DESK-4.2)
+- **why:** task DESK-6.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) the DESK-4.2 timing test passes with the long file; memory of the tab stays under 1 GB (measured in the E2E log); evidence = CI run id as in 4.2 Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-274
+
+**DESK-6.5: Docs and inventory: `docs/desk/GUIDE.md` (open it and look routine, pages, plugins, live safety), README pointer, RUNBOOK "Desk", `TESTING_DOCUMENTATION.md` regenerated; desk environment variables named in README or a guide are added to `_NOT_CONFIG_KEYS` in `tests/test_docs_guides.py` in the same item**
+
+- **status:** todo
+- **priority / type / role:** P2 / docs / implementer
+- **milestone:** DESK-6; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** docs
+- **depends on:** none; also: all
+- **why:** task DESK-6.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `test_docs_guides` passes; (2) the inventory lists `tests/desk` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-275
+
+**DESK-6.6: Security pass (lead + `qa`): token handling, secrets never logged, arming, CORS/origin check on the WebSocket, static path traversal**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-6; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** review
+- **depends on:** NT-272 (DESK-6.2)
+- **why:** task DESK-6.6 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) a checklist in the item with evidence per line Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-276
+
+**DESK-7.1: Indicator contract and registry: `desk/indicators/api.py` (C1/C3: `IndicatorMeta`, `Figure`, `DrawSpec`, `ChartIndicators`, `register_indicator`, `check_indicator` with the golden-fixture convention; `ParamSpec` from `core/params.py`), `desk/plugins_api.py` (re-exports, `DeskParamSpec`), discovery through `load_plugins(d)` for `settings.plugin_dirs` (default `plugins_desk/`), the indicator template `plugins/templates/desk_indicator_template.py`, and the wiring of `StrategyContext.indicator` to `ChartIndicators.get(name).compute` (replacing 1.6's `IndicatorsUnavailable`)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-7; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** the files, `tests/desk/test_indicator_api.py`
+- **depends on:** NT-217 (DESK-0.4), NT-227 (DESK-1.6)
+- **why:** task DESK-7.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) `check_indicator` catches a planted non-causal indicator, a wrong warm-up and an output key mismatch (three mutation tests); (2) the template is skipped by the loader and loads when copied to `plugins_desk/indicators/`; (3) duplicate id raises `DuplicateRegistrationError`; (4) `ctx.indicator` is cached per bar (call count test) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-277
+
+**DESK-7.2: Built-in indicators, batch 1 (trend and bands) as thin adapters over `ta` 0.11.0 where it has the indicator (sma, ema, wma, bollinger, keltner, donchian, ichimoku, psar) plus hand-written vwma, supertrend, heikin_ashi; one file per indicator with META/PARAMS/DRAW**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-7; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** `desk/indicators/builtin/*.py`, `tests/desk/test_builtin_indicators.py`, `tests/desk/fixtures/indicators/*.npz`
+- **depends on:** NT-276 (DESK-7.1)
+- **why:** task DESK-7.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) every indicator passes `check_indicator`; (2) regression fixtures (values on `synthetic_bars`, committed by `scripts/desk/make_indicator_fixtures.py`) match within 1e-8; (3) each DRAW spec renders in the chart (DESK-4.3 smoke) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-278
+
+**DESK-7.3: Built-in indicators, batch 2 (momentum and volume): `rsi` equals `neural_trade.strategy.ta_rules.wilder_rsi` within 1e-12 (SMA-seeded Wilder; `ta`'s EWM-seeded RSI is registered as `rsi_ewm` if kept), macd, stochastic, willr, cci, adx, atr, obv, mfi, vwap (ta's volume-weighted plus a rolling variant), volume over `ta` where it matches; and `learned_bridge.py` (the lens: `compute_reference`/`indicator_lines` on one LOOKBACK window at textbook vs learned periods)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-7; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests
+- **depends on:** NT-276 (DESK-7.1)
+- **why:** task DESK-7.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) as 7.2; (2) the lens reproduces `discovered_indicators.indicator_lines` values for ma/rsi/bb/macd on a fixture window; (3) the documented difference "classic RSI (Wilder) vs learnable RSI (EWMA span)" is shown in the lens legend text; (4) the `rsi` equality test against `wilder_rsi` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-279
+
+**DESK-7.4: Strategy plugins: `DeskStrategies` discovery from `plugins_desk/strategies/`, the strategy template `plugins/templates/desk_strategy_template.py` (subclasses `DeskStrategy` from 1.6), `check_strategy` (causality harness + params schema) and the plugin page's test action**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-7; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests
+- **depends on:** NT-276 (DESK-7.1), NT-232 (DESK-1.11)
+- **why:** task DESK-7.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) the template strategy loads, passes `check_strategy` and runs a backtest; (2) a planted look-ahead strategy fails `check_strategy` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-280
+
+**DESK-7.5: Plugin reload: `desk/plugins_api.reload()` (remove every plugin-registered name from `ChartIndicators`/`DeskStrategies`, drop `neural_trade_plugins.*` modules from `sys.modules`, re-run `load_plugins`; errors reported per file)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **milestone:** DESK-7; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests
+- **depends on:** NT-279 (DESK-7.4)
+- **why:** task DESK-7.5 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) editing a plugin file and reloading changes the computed output; (2) a broken file reports its error and the others load Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-281
+
+**DESK-L.1: Websocket collector (v2): ccxt.pro `watch_ohlcv` with the closed-bar rule and REST reconciliation; falls back to polling**
+
+- **status:** todo
+- **priority / type / role:** P3 / feature / implementer
+- **milestone:** Later (not required by R1-R6); size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests with a fake stream
+- **depends on:** NT-236 (DESK-2.3)
+- **why:** task DESK-L.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) identical store contents from the stream and from polling on a recorded session Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-282
+
+**DESK-L.2: Streaming indicators for bots (`desk-stream` extra): `talipp` adapters behind the same contract with `update(state, bar)`; batch-vs-stream equality test**
+
+- **status:** todo
+- **priority / type / role:** P3 / feature / implementer
+- **milestone:** Later (not required by R1-R6); size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** files, tests
+- **depends on:** NT-278 (DESK-7.3), NT-238 (DESK-2.5)
+- **why:** task DESK-L.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) streaming output equals batch output on `synthetic_bars` for every adapted indicator; (2) a bot using a streaming indicator ticks under 5 ms per bar (measured) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-283
+
+**DESK-L.3: Predictor subprocess over a pipe (about 200 lines) if TensorFlow in the server process costs too much memory or latency**
+
+- **status:** todo
+- **priority / type / role:** P3 / feature / implementer
+- **milestone:** Later (not required by R1-R6); size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
+- **area:** file, tests
+- **depends on:** NT-268 (DESK-5.6)
+- **why:** task DESK-L.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
+- **acceptance:** (1) same outputs as the in-process path on a fixture bundle Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
+- **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
 
 ## Done log
 

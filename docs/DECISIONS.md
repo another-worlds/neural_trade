@@ -80,6 +80,7 @@ that extend or partly replace an entry.
 | D-064 | Stability thresholds are pre-registered files: v1 frozen, v2 for NT-051 on the reference profile | lead | |
 | D-065 | Engine concurrency and identity: the run id carries a scenario hash; the index refuses a duplicate id; a claim takeover goes through a sentinel; atomic writes retry | lead | |
 | D-066 | The temperature fit at its bound becomes an explicit "no direction signal" state; coding only until the GPU is free; the `timed` layout stays opt-in | owner (NT-195 reading: lead's) | |
+| D-067 | The trading desk track: a TradingView-like desk as `neural_trade/desk/`, built on stable libraries in the `nt` env, planned by the lead for Sonnet implementers | owner (the request, the subpackage, Binance spot paper + guarded live); lead (the plan; stack B pending the owner's answer) | |
 
 ## D-001 Stay on TensorFlow 2.10 / Keras 2 (owner, 2026-09-22)
 - **Context:** TF 2.10 is the last release with native Windows GPU support; the owner trains on a
@@ -830,3 +831,37 @@ that extend or partly replace an entry.
   NT-195 is dropped, and a later owner request reopens it).
 - **Consequence:** NT-124 (criterion 7 added), NT-174 (decided), NT-195 (dropped); STATUS "Waiting for the owner" loses questions 1, 2, 7 and NT-195.
 
+
+## D-067 The trading desk track: a TradingView-like desk as `neural_trade/desk/`, built on stable libraries, planned for Sonnet implementers (owner request 2026-10-15; plan by the lead 2026-10-15/16)
+- **Owner (verbatim, 2026-10-15):** "создай трейдинг-систему с интерфейсом которая будет иметь HTML фронт. типа трейдингвью. То есть
+  полный мануальный контроль + автоматизации + бектекст + plug-in разработка и применение индикаторов. + полный пайплайн
+  разработки нейросетей и индикаотров. сделай подробный план архитектуры на Fable чтобы потом выполниь его простыми моделями";
+  then: "Повзволяют ли сущестувующие оконные менеджеры, специальные фреймворки для трейдинга, бекстест платформы и
+  платформы визуализации достичь максимальной экономии ресурсов в ращработке. Хочу от тебя такое исследование. Цель -
+  создать наше приложение максимально основанным на стабильных фреймворках для простоты модификации, разработки и
+  тестирования"; answers to the lead's four questions: research scale "Средний (~1M)", placement "Подпакет внутри
+  neural_trade", stack "FastAPI + uvicorn + pydantic v2 + ccxt", trading scope "Binance spot: paper + live с защитой";
+  then "pause this session" and "Приготовь документы, планы и прочее для реализации в другой сессии с помощью sonnet 5.5 medium".
+- **Decision (owner):** a new track, the trading desk, is added to the project as the subpackage `src/neural_trade/desk/`
+  (the top layer; nothing in neural_trade imports it), with Binance spot through ccxt, a paper account by default and live
+  trading only behind an explicit arming step with risk limits. It is built to be executed by Sonnet 5.5 medium implementers
+  from the plan in [desk/PLAN.md](desk/PLAN.md), its contracts [desk/CONTRACTS.md](desk/CONTRACTS.md) and its task tables
+  [desk/TASKS.md](desk/TASKS.md); items NT-215 to NT-283; ROADMAP "Track DESK".
+- **Research finding (lead, two read-only workflows, 2026-10-15):** no whole-product trading framework or backtest engine can be
+  imported next to TensorFlow 2.10 (Python 3.11+/numpy 2 requirements, or GPL/AGPL/Commons-Clause licences); the stable
+  frameworks are at the library layer: NiceGUI 3.17.1 on the FastAPI app (panels in Python, a browser-free test fixture),
+  lightweight-charts 5.2.1 and dockview-core 8.5.1 vendored as two JS elements, ccxt 4.5.88, sqlite3 + SQLAlchemy, `ta`
+  0.11.0, TensorBoard and optuna-dashboard as viewers. The event-driven engine, the ccxt broker, the plugin contract and the
+  Model Lab pages stay custom in every option (about 14-20k lines including tests, estimate).
+- **Lead's readings (the owner may correct each):** (1) the plan adopts the research's approach B (NiceGUI on FastAPI) as the
+  working assumption; the owner's earlier pick (FastAPI + vanilla JS) is the control and the choice is STATUS question 0;
+  (2) the desk's live OHLCV feed is the same Binance source as the training data, not a "new data source" in the D-050 sense;
+  (3) the desk's paper and live accounts carry an explicit cost profile (Binance spot taker 10 bps per side recommended) while
+  the research yardstick keeps D-044's zero; (4) the desk track sits after MVP-5 in ROADMAP "Order" unless the owner interleaves
+  its CPU-only milestones; (5) VISION "Not in the MVP" ("a web application", "exchange APIs") is amended by the owner, not by
+  the lead; (6) desk plugins live in `plugins_desk/` so a training run that sets `PLUGINS_DIR: plugins` never executes them.
+- **Consequence:** NT-215 to NT-283 (todo); the eight owner questions in STATUS "Waiting for the owner"; DESK-0.3 (the
+  environment install after a dry run) waits for questions 0 and 4. The research spend (about 4.3M subagent tokens against the
+  owner's "about 1M") is recorded in STATUS.
+- **Evidence:** the plan's two-lens verification (2026-10-15, findings applied), the workflow journals of the session of
+  2026-10-15 (repository map wf_e3bbb2ba-d15, framework study wf_27eb9e1c-91c, verification wf_5ba0ce96-881).

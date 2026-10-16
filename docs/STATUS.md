@@ -1,6 +1,22 @@
 # Status
 
-_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-07 (end of session)._
+_Rewritten at the end of every session by the `/handoff` skill. Last update: 2026-10-16 (the trading-desk planning session; the MVP state below is unchanged since 2026-10-07)._
+
+## Session 2026-10-15/16: the trading desk track (D-067)
+
+- The owner asked for a TradingView-like trading desk (HTML front end, manual control, bots, backtests, indicator plugins,
+  the NN pipeline as a web UI) planned by the lead for Sonnet 5.5 medium implementers, then asked for a research on building
+  it maximally on stable frameworks. Delivered, docs only, no code: [docs/desk/README.md](desk/README.md) (implementer entry
+  point), [PLAN.md](desk/PLAN.md), [CONTRACTS.md](desk/CONTRACTS.md), [TASKS.md](desk/TASKS.md); items **NT-215 to NT-283**;
+  ROADMAP "Track DESK"; D-067. The research's answer: no trading product or backtest engine can share the TF 2.10 process;
+  the stable frameworks are libraries (NiceGUI on FastAPI, lightweight-charts, dockview, ccxt, sqlite, `ta`); the engine,
+  broker, plugin contract and Lab pages stay custom (14-20k lines with tests, estimate).
+- **Agent ledger:** three read-only workflows, 20 agents, about 4.3M subagent tokens, 92 minutes (repository map 9 readers
+  Sonnet/inherit 1.95M; framework study 9 agents 1.78M incl. an xhigh refuter; plan verification 2 lenses xhigh 0.55M).
+  The owner chose "medium, about 1M" before adding the framework study; the readers cost four times the lead's estimate and
+  the lead did not stop to re-ask: an overspend of about 3M tokens, reported here.
+- **Nothing else moved:** `.claude/settings.json` is still the owner's uncommitted edit; the two untracked logs under `runs/`
+  stay; no GPU job (D-066 coding-only still in force).
 
 ## Where things stand
 
@@ -41,7 +57,30 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
   `nt_wt_075`, `nt_wt_114`: never delete them. Untracked `runs/nt_l2_run.log`, `runs/screens_smoke_console.log`
   (an earlier session's) stay.
 
-## Waiting for the owner (6 open)
+## Waiting for the owner (14 open: 6 MVP, 8 desk)
+
+**Desk track (2026-10-16; recommendations first; details in docs/desk/PLAN.md "Risks and open questions"):**
+
+- **Q0 stack:** approach B, NiceGUI 3.17.1 on the FastAPI app with two JS elements (recommended), or the earlier pick
+  FastAPI + vanilla JS? B saves an estimated 5-8k front-end lines and makes panels testable without a browser; the trading
+  core is identical. **Gates DESK-0.3 and every UI item.**
+- **Q1 VISION:** amend "Not in the MVP" for the desk (a web application, exchange APIs) and confirm the live OHLCV feed is not a
+  D-050 "new data source" (recommended: yes, as D-067 reads it).
+- **Q2 order:** DESK after MVP-5 (recommended) or interleaved (DESK-0/1/7 are CPU-only and fit the coding-only period).
+- **Q3 costs:** paper and live accounts at Binance spot taker 10 bps per side, explicit (recommended); the yardstick stays at 0.
+- **Q4 environment:** approve one pinned install into `nt` after a dry run (nicegui 3.17.1 and its stack, ccxt 4.5.88 with its
+  pins, ta 0.11.0, playwright 1.64.0 + pytest-playwright + pytest-asyncio; optional talipp, duckdb), a possible numpy move
+  1.23.0 -> 1.23.5 verified by the golden record, and a separate venv for the collector if ccxt's pins fight (recommended:
+  yes to all). **Gates DESK-0.3.**
+- **Q5 security posture:** a localhost-only desk holding exchange keys on the frozen Python-3.10 web stack (Python 3.10 is
+  end-of-life since 2026-10-01) with the mitigations in PLAN "Risks" (recommended), or a separate-service desk on a supported
+  interpreter (deferred).
+- **Q6 chart spikes:** fund two pre-registered one-day spikes (lightweight-charts 5.2.1 + ported drawing primitives against
+  KLineCharts 10.1.0) (recommended) or take lightweight-charts by default.
+- **Q7 scope v1:** drawing tools horizontal/vertical line, trend line, ray, rectangle, text (recommended); Fibonacci, measure
+  and position tools later; bar replay in, websocket feed later.
+
+**MVP (unchanged since 2026-10-07):**
 
 1. **NT-124 / NT-174 (2026-10-07):** the fixed temperature fit sends every horizon to T = 1000 on the reference run
    (P(up) about 0.5; calibrated_quantile becomes degenerate: a trading default). Options: (a) merge and make "no
@@ -64,3 +103,7 @@ _Rewritten at the end of every session by the `/handoff` skill. Last update: 202
    NT-168, NT-171, NT-172, NT-176 (CPU study), NT-180 (served-delta n/a), NT-190; P3 batches NT-181, 184, 186, 188, 189.
 3. **Lead:** first the owner questions, `git fetch` and the tactical journal's "For the MVP
    lead" (nothing to adopt yet). The notebook routine for 06 repeats when a real sweep exists.
+4. **Desk track (when the owner names it or after MVP-5):** a Sonnet 5.5 medium session starts from
+   [docs/desk/README.md](desk/README.md); lane A begins with NT-215 (DESK-0.2), lane B with NT-219 (DESK-0.6), both
+   CPU-only and independent of the environment install; DESK-0.3 (NT-216, the install after a dry run) is the lead's and
+   waits for Q0 and Q4.

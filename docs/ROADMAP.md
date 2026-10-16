@@ -108,6 +108,26 @@ engine); NT-070 (A/B-1b, removing the clip; after an ADOPT); NT-071 (probe), NT-
 (A/B-2) only if the probe says epoch-bound. GPU ceilings of D-037. **Exit:** each study's verdict recorded; an
 ADOPT changes the default and the owner edits VISION's window wording.
 
+## Track DESK: the trading desk (owner request 2026-10-15; D-067; after the MVP unless the owner interleaves it)
+
+A TradingView-like trading desk on top of neural_trade as the subpackage `neural_trade/desk/`: plan
+[desk/PLAN.md](desk/PLAN.md), contracts [desk/CONTRACTS.md](desk/CONTRACTS.md), tasks [desk/TASKS.md](desk/TASKS.md),
+implementer entry point [desk/README.md](desk/README.md). Items NT-215 to NT-283.
+
+- **DESK-0 foundations** (package skeleton, environment and CI, domain model, fills, store, importers, CLI);
+  **DESK-1 engine and backtest** (portfolio, risk, execution, simulated broker, strategy API, engine loop, report,
+  the model-signal adapter with its parity test against `strategy/backtest.py`); **DESK-7 plugin SDK and
+  built-in indicators** (parallel to DESK-1); **DESK-2 market data and paper trading** (ccxt, collector, bots,
+  manual paper trading, alerts); **DESK-3 web API**; **DESK-5 Model Lab backend**; **DESK-4 front end** (NiceGUI
+  panels, chart and dock elements, drawing tools, backtest and replay pages, Lab pages); **DESK-6 live trading
+  (guarded) and hardening**.
+- **Exit per milestone:** the "Verification" section of [desk/TASKS.md](desk/TASKS.md) (a runnable increment the
+  owner can open after each milestone).
+- **Placement in the order:** after MVP-5 by default; the owner may interleave DESK-0, DESK-1 and DESK-7 (CPU-only)
+  while the MVP waits for GPU time (STATUS question).
+- **Gates before the first implementer item:** the owner's answers to questions 0 (stack) and 4 (environment
+  install) in STATUS; DESK-0.3 is the lead's.
+
 ## R5: merge and publish
 
 - Items: NT-008 (owner: merge `remediation/plan` into `master`, after NT-001), NT-017 (licence: left

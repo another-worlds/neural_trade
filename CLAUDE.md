@@ -55,6 +55,7 @@ horizons) is the reference setup, the only one tested in the MVP (D-022). Packag
 | Skills | `/next` (one backlog item end to end), `/handoff` (end of session) |
 | Notebook workflow | [scripts/notebooks/README.md](scripts/notebooks/README.md) |
 | Evidence | `runs/gates/REPORT.md`, `runs/experiments/*/REPORT.md`, `runs/ablations/*/report.md` |
+| The trading desk track (D-067): plan, contracts, tasks, implementer entry point | [docs/desk/README.md](docs/desk/README.md) |
 
 ## Project rules (beyond OPERATING_MODEL)
 
