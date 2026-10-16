@@ -1,0 +1,7 @@
+base sha: 75c70cfd6f19e42d64253fa91cb8ff5274951818
+cmd: PYTHONPATH=D:/nt/nt_218/src CUDA_VISIBLE_DEVICES=-1 python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+289 passed, 101 warnings in 132.86s (0:02:12)
+All checks passed!
