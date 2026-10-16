@@ -249,8 +249,8 @@ changes).
 | [NT-214](#nt-214) | P3 | polish | implementer | todo | N-horizon residues: labels, defaults and unused constants still say h0/h1/h2 |
 | [NT-215](#nt-215) | P1 | infra | implementer | done | DESK-0.2: Package skeleton and guards |
 | [NT-216](#nt-216) | P1 | infra | implementer | todo | DESK-0.3: Environment and CI (blocked until questions 0 and 4 are answered; lead installs, implementer writes the files) |
-| [NT-217](#nt-217) | P1 | feature | implementer | todo | DESK-0.4: Domain model, bus, clock, params |
-| [NT-218](#nt-218) | P1 | feature | implementer | todo | DESK-0.5: Cost profiles and pure fill functions |
+| [NT-217](#nt-217) | P1 | feature | implementer | done | DESK-0.4: Domain model, bus, clock, params |
+| [NT-218](#nt-218) | P1 | feature | implementer | done | DESK-0.5: Cost profiles and pure fill functions |
 | [NT-219](#nt-219) | P1 | feature | implementer | todo | DESK-0.6: Desk database |
 | [NT-220](#nt-220) | P1 | feature | implementer | todo | DESK-0.7: Market store |
 | [NT-221](#nt-221) | P1 | feature | implementer | todo | DESK-0.8: Importers and CLI |
@@ -317,6 +317,7 @@ changes).
 | [NT-282](#nt-282) | P3 | feature | implementer | todo | DESK-L.2: Streaming indicators for bots (`desk-stream` extra) |
 | [NT-283](#nt-283) | P3 | feature | implementer | todo | DESK-L.3: Predictor subprocess over a pipe (about 200 lines) if TensorFlow in the server process costs too much memory o |
 | [NT-284](#nt-284) | P3 | infra | implementer | todo | DESK-0.2 follow-ups from QA: loopback-only host guard, error names, hygiene subprocess PYTHONPATH |
+| [NT-285](#nt-285) | P3 | infra | implementer | todo | DESK-0.4/0.5 follow-ups from QA: bracket boundary tests, Alert dataclass, bus exception policy, contract wording |
 
 ## Items
 
@@ -2934,7 +2935,7 @@ changes).
 
 **DESK-0.4: Domain model, bus, clock, params: `desk/core/model.py` (A4 dataclasses, enums, the complete status-edge list, `is_closed`, JSON (de)serialisation helpers), `desk/core/params.py` (C1 `ParamSpec`, `params_schema`, `validate_params`), `desk/core/bus.py`, `desk/core/clock.py`**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged 75c70cfd; implementer Sonnet 5.5 medium 591db3c then repair 02ba438; QA Opus 5.5 medium: FAIL round 1 on tests that did not pin the contract (a swapped status edge and dropped JSON fields survived); repair lead-verified by re-running the swap mutation, 5 tests fail now; fast suite on the merged head 2818 passed, 1 skipped, 7 min 54 s. Follow-ups: NT-285.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/core/{model,params,bus,clock}.py`, `tests/desk/test_core_model.py`, `test_params.py`, `test_bus.py`
@@ -2947,7 +2948,7 @@ changes).
 
 **DESK-0.5: Cost profiles and pure fill functions: `desk/core/costs.py` (`CostProfile` with `research_zero` and `binance_spot_taker` presets, per-side maths identical to `BacktestConfig.slip_rate/fee_rate`), `desk/core/fills.py` (C1)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS on 6518c47: 24 own oracle cases against run_backtest bit-identical on prices, costs within 3.6e-15; 98,354 property fills inside the bar; 14 of 16 own mutants killed. Follow-ups: NT-285. Fast suite on the merged head: see STATUS.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/core/{costs,fills}.py`, `tests/desk/test_fills.py`
@@ -3812,6 +3813,18 @@ changes).
 - **why:** QA of NT-215: (1) `NT_DESK_HOST` accepts a non-loopback host while PLAN says bind 127.0.0.1 only (DESK-3.1 must enforce; add a refusing check in `DeskSettings.load` unless an explicit override); (2) a YAML `home:` with an empty value raises a bare TypeError; (3) `PROJECT_ROOT = parents[3]` assumes a source or editable install; (4) `tests/test_hygiene.py:60` runs a subprocess without the checkout's `src` on PYTHONPATH (tests the main checkout from a worktree); (5) `tests/desk/conftest.py` marks any path with a directory named `desk`; (6) `asyncio_mode` warns until pytest-asyncio is installed (DESK-0.3); (7) account `kind` is lowercase `paper` and the key `quote`, while CONTRACTS has `PAPER` and `quote_currency` (align in DESK-0.4); `exchange` and `risk limits` settings of PLAN A2 are absent (add when DESK-2/6 need them).
 - **acceptance:** each point fixed with a test where it is behaviour; ruff; fast suite unchanged.
 - **source:** QA of NT-215 (2026-10-16)
+
+### NT-285
+
+**DESK-0.4/0.5 follow-ups from QA of NT-217 and NT-218**
+
+- **status:** todo
+- **priority / type / role:** P3 / infra / implementer
+- **area:** `tests/desk/test_fills.py`, `src/neural_trade/desk/core/{model,bus,costs,fills}.py`, `docs/desk/CONTRACTS.md` (lead edits the contract wording)
+- **depends on:** NT-217, NT-218 (done)
+- **why:** (1) no bracket test puts a stop or target exactly on the bar's low or high (two `<=` to `<` mutants survive); (2) `Alert` is listed in PLAN A2 but has no field list in A4; (3) the bus lets one handler's exception stop delivery to the rest, the policy is undefined (decide in DESK-1.3); (4) `position_id` defaults to `i-None` when `strategy_id` is None; (5) CONTRACTS A5.1 says bit for bit but `size_frac` entry costs differ by about 1 ulp (oracle charges on notional, desk on qty*mid): state the 1e-9 tolerance; (6) A5.3 should say a gap through the take-profit fills at the open, as the oracle does; (7) `bracket_exit` returns the mid, C1's 'price' is ambiguous; (8) NaN bps values and NaN prices or qty <= 0 are not rejected in costs.py and fills.py; (9) no STOP_LIMIT second-stage function in C1 (build it in the SimBroker, DESK-1.x).
+- **acceptance:** each code point fixed with a test that fails on its mutant; contract wording edits made by the lead.
+- **source:** QA of NT-217 and NT-218 (2026-10-16)
 
 ## Done log
 
