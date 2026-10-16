@@ -221,6 +221,10 @@ class Fill(_Json):
 
     _ENUMS: ClassVar[dict[str, type[Enum]]] = {"side": Side, "liquidity": Liquidity}
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "side", Side(self.side))
+        object.__setattr__(self, "liquidity", Liquidity(self.liquidity))
+
 
 @dataclass(kw_only=True)
 class Position(_Json):

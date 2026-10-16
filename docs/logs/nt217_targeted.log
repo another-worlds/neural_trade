@@ -8,3 +8,10 @@ tests/test_docs_guides.py: 96 warnings
 265 passed, 101 warnings in 135.66s (0:02:15)
 $ ruff check src tests scripts
 All checks passed!
+
+== repair round 1 on 591db3c5edfb1c36e78287685bd01c1023996185 + working tree
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+273 passed, 101 warnings in 110.91s (0:01:50)
+$ ruff check src tests scripts
+All checks passed!
