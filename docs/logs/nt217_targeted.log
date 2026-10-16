@@ -1,0 +1,10 @@
+git rev-parse HEAD (base): 160e70016a45cdc24b222762be17768ba8ab4263
+$ CUDA_VISIBLE_DEVICES=-1 python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+tests/test_docs_guides.py: 96 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+265 passed, 101 warnings in 135.66s (0:02:15)
+$ ruff check src tests scripts
+All checks passed!
