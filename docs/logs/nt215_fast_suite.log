@@ -1,0 +1,2 @@
+git rev-parse HEAD (base): 43b0e7d424a55c3a87f845e43663c7fbe8789413 + the nt-215 working tree
+Full fast suite NOT completed: four attempts (-n 3/4/6) were killed after 40-60 min at 5-16% progress (about 6-25 tests/min, workers mostly idle, other sessions on the machine); the same TF test alone runs in 6 s in both checkouts. Collected counts: base 2581/2623 not-slow, nt-215 2590/2632 (+9 = 6 test_config + 2 test_import_guard + 1 test_nothing_imports_desk). Evidence run instead: nt215_targeted.log.

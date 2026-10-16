@@ -34,6 +34,10 @@ if os.environ.get("NEURAL_TRADE_FORCE_CPU") == "1":  # set by CI; opt-in locally
 _TF_IMPORT_RE = re.compile(r"^\s*(?:import tensorflow\b|from tensorflow\b)", re.MULTILINE)
 _TF_AVAILABLE = importlib.util.find_spec("tensorflow") is not None
 
+# D-067: the desk's NiceGUI tests use its `user` fixture; the plugin exists only where the desk extra is installed.
+if importlib.util.find_spec("nicegui"):
+    pytest_plugins = ["nicegui.testing.user_plugin"]
+
 
 @functools.lru_cache(maxsize=None)
 def _module_imports_tensorflow(path: str) -> bool:

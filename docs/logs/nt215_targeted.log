@@ -1,0 +1,4 @@
+git rev-parse HEAD (base): 43b0e7d424a55c3a87f845e43663c7fbe8789413 + working tree of nt-215
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+261 passed, 629 warnings in 161.37s (0:02:41)
