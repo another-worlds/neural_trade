@@ -247,7 +247,7 @@ changes).
 | [NT-212](#nt-212) | P2 | polish | implementer | todo | Tests for the N-horizon rules that only run when N is not 3 (7 of 22 QA mutants survive) |
 | [NT-213](#nt-213) | P2 | bug | implementer | todo | `model_analytics.variance_analytics` raises ZeroDivisionError on some configurations (also on the base commit) |
 | [NT-214](#nt-214) | P3 | polish | implementer | todo | N-horizon residues: labels, defaults and unused constants still say h0/h1/h2 |
-| [NT-215](#nt-215) | P1 | infra | implementer | todo | DESK-0.2: Package skeleton and guards |
+| [NT-215](#nt-215) | P1 | infra | implementer | done | DESK-0.2: Package skeleton and guards |
 | [NT-216](#nt-216) | P1 | infra | implementer | todo | DESK-0.3: Environment and CI (blocked until questions 0 and 4 are answered; lead installs, implementer writes the files) |
 | [NT-217](#nt-217) | P1 | feature | implementer | todo | DESK-0.4: Domain model, bus, clock, params |
 | [NT-218](#nt-218) | P1 | feature | implementer | todo | DESK-0.5: Cost profiles and pure fill functions |
@@ -316,6 +316,7 @@ changes).
 | [NT-281](#nt-281) | P3 | feature | implementer | todo | DESK-L.1: Websocket collector (v2) |
 | [NT-282](#nt-282) | P3 | feature | implementer | todo | DESK-L.2: Streaming indicators for bots (`desk-stream` extra) |
 | [NT-283](#nt-283) | P3 | feature | implementer | todo | DESK-L.3: Predictor subprocess over a pipe (about 200 lines) if TensorFlow in the server process costs too much memory o |
+| [NT-284](#nt-284) | P3 | infra | implementer | todo | DESK-0.2 follow-ups from QA: loopback-only host guard, error names, hygiene subprocess PYTHONPATH |
 
 ## Items
 
@@ -2907,7 +2908,7 @@ changes).
 
 **DESK-0.2: Package skeleton and guards** (the full task text: docs/desk/TASKS.md row 0.2)
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged c716c289; implementer Sonnet 5.5 medium, 1 session, 82fa004; QA Opus 5.5 medium: FAIL round 1 on one test-harness defect (the import guard's subprocess imported the editable install, not the worktree; fixed in b0f77cc8 with PYTHONPATH), all behavioural criteria met by QA's own evidence (10 planted-import mutations, precedence script, collect-id diff = exactly +9 tests); the repair is lead-verified (44 desk/layering/docs tests passed, ruff clean). Also changed by the lead after QA: the default paper account uses `research_zero` (QA: `binance_spot_taker` pre-decided open owner question 3; D-044). Full fast suite on the merged head: see STATUS. Follow-ups: NT-284.)
 - **priority / type / role:** P1 / infra / implementer
 - **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `src/neural_trade/desk/__init__.py`, `desk/config.py`, `pyproject.toml`, `.gitignore`, `docs/ARCHITECTURE.md`, `tests/test_layering.py`, `tests/conftest.py`, `tests/desk/conftest.py`, `tests/desk/e2e/conftest.py`, `tests/desk/network/conftest.py`
@@ -3799,6 +3800,18 @@ changes).
 - **why:** task DESK-L.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) same outputs as the in-process path on a fixture bundle Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+
+### NT-284
+
+**DESK-0.2 follow-ups from QA of NT-215**
+
+- **status:** todo
+- **priority / type / role:** P3 / infra / implementer
+- **area:** `src/neural_trade/desk/config.py`, `tests/test_hygiene.py`, `tests/desk/conftest.py`, `pyproject.toml`
+- **depends on:** NT-215 (done)
+- **why:** QA of NT-215: (1) `NT_DESK_HOST` accepts a non-loopback host while PLAN says bind 127.0.0.1 only (DESK-3.1 must enforce; add a refusing check in `DeskSettings.load` unless an explicit override); (2) a YAML `home:` with an empty value raises a bare TypeError; (3) `PROJECT_ROOT = parents[3]` assumes a source or editable install; (4) `tests/test_hygiene.py:60` runs a subprocess without the checkout's `src` on PYTHONPATH (tests the main checkout from a worktree); (5) `tests/desk/conftest.py` marks any path with a directory named `desk`; (6) `asyncio_mode` warns until pytest-asyncio is installed (DESK-0.3); (7) account `kind` is lowercase `paper` and the key `quote`, while CONTRACTS has `PAPER` and `quote_currency` (align in DESK-0.4); `exchange` and `risk limits` settings of PLAN A2 are absent (add when DESK-2/6 need them).
+- **acceptance:** each point fixed with a test where it is behaviour; ruff; fast suite unchanged.
+- **source:** QA of NT-215 (2026-10-16)
 
 ## Done log
 
