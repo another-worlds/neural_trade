@@ -1,0 +1,73 @@
+{
+ "n_anchors": 26666,
+ "n_ok_rows": 25867,
+ "views": {
+  "M9h3_prof_str": {
+   "cut": {
+    "n_rows": 17521,
+    "n_ok_anchors_covered": 17521,
+    "sha256": "f47d865d251eb113f171b2795e3fed1fed23a4d9b6ed31ec50da0611c7ccb958",
+    "first_row": "2023-07-04 20:00:00",
+    "last_row": "2025-07-20 19:00:00"
+   },
+   "fwd": {
+    "n_rows": 8346,
+    "n_ok_anchors_covered": 8346,
+    "sha256": "26c960965a02017015eea3a56e39e7f8684d293d866386cec8fb79a135b3ffa8",
+    "first_row": "2025-10-16 00:00:00",
+    "last_row": "2026-09-30 19:00:00"
+   }
+  },
+  "M9h3_prof_str_vp": {
+   "cut": {
+    "n_rows": 17521,
+    "n_ok_anchors_covered": 17521,
+    "sha256": "6af7a1533e3947880691ea16fc7f9afaaa795093851ff6ca9daef20582a9d8e0",
+    "first_row": "2023-07-04 20:00:00",
+    "last_row": "2025-07-20 19:00:00"
+   },
+   "fwd": {
+    "n_rows": 8346,
+    "n_ok_anchors_covered": 8346,
+    "sha256": "2ae03fa63a102d6d3efb1c62d38836054e421061af7edabaf8f0d52b34c4926a",
+    "first_row": "2025-10-16 00:00:00",
+    "last_row": "2026-09-30 19:00:00"
+   }
+  },
+  "M9h6_prof_str": {
+   "cut": {
+    "n_rows": 17521,
+    "n_ok_anchors_covered": 17521,
+    "sha256": "e4346f0ba567f733e68930a334e25977a1524bba24c31fbcc7ed106f046162d5",
+    "first_row": "2023-07-04 20:00:00",
+    "last_row": "2025-07-20 19:00:00"
+   },
+   "fwd": {
+    "n_rows": 8346,
+    "n_ok_anchors_covered": 8346,
+    "sha256": "c34c753a1198da9574d8c0b6260f97bfa9e5b03f2c940cea1affe559b93bc58a",
+    "first_row": "2025-10-16 00:00:00",
+    "last_row": "2026-09-30 19:00:00"
+   }
+  },
+  "M9h6_prof_str_vp": {
+   "cut": {
+    "n_rows": 17521,
+    "n_ok_anchors_covered": 17521,
+    "sha256": "4d0d77706c618ba95dfd3063d685ff9fe3d1cdf396169b1a9f543718f18e9691",
+    "first_row": "2023-07-04 20:00:00",
+    "last_row": "2025-07-20 19:00:00"
+   },
+   "fwd": {
+    "n_rows": 8346,
+    "n_ok_anchors_covered": 8346,
+    "sha256": "baf393f1a47a1acb27c0cbfc71f353074ba8661db8e25f9f18a43e2bd77a90d5",
+    "first_row": "2025-10-16 00:00:00",
+    "last_row": "2026-09-30 19:00:00"
+   }
+  }
+ },
+ "seconds": {},
+ "recipe_sha256": "e065e6b7c51d2fd9e4a18d3e8533bd039245c257f20b547cea3de5e5b2d97a58",
+ "total_seconds": 0.4
+}

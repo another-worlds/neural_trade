@@ -1,0 +1,103 @@
+{
+ "recipe_sha256": "e065e6b7c51d2fd9e4a18d3e8533bd039245c257f20b547cea3de5e5b2d97a58",
+ "m9_lib_sha256": "e15799351ec061191aa8977f0bc15ddb55186f68e2b07ea4d7db7918fe80ec9b",
+ "harness": {
+  "A": "ridge alpha 1, standardised, on V3 + view columns (T11 _ridge), monthly refit on the 365 days before the month",
+  "B": "logistic C 1, standardised, on H3 + view columns, same refit"
+ },
+ "criterion": {
+  "A_inc_min": 0.005,
+  "B_rel_min": 0.01,
+  "pocock_alpha": 0.0294,
+  "looks_months": [
+   3,
+   6
+  ],
+  "min_complete_months": 3,
+  "controls": "C1 permuted within month, C2a harness S3 duplicate (no C2b for the linear views)"
+ },
+ "status": "post hoc candidate",
+ "label": "chosen by the lead / on the looks, NOT by the pre-registered freeze rule (no view passed the rule); only the prospective test is a valid judge",
+ "view": "M9h6_prof_str",
+ "columns": [
+  "sin1",
+  "sin2",
+  "sin3",
+  "sin4",
+  "sin5",
+  "sin6",
+  "cos1",
+  "cos2",
+  "cos3",
+  "cos4",
+  "cos5",
+  "cos6",
+  "wkend",
+  "wk_sin1",
+  "wk_sin2",
+  "wk_sin3",
+  "wk_sin4",
+  "wk_sin5",
+  "wk_sin6",
+  "wk_cos1",
+  "wk_cos2",
+  "wk_cos3",
+  "wk_cos4",
+  "wk_cos5",
+  "wk_cos6",
+  "abs_str20",
+  "abs_str60",
+  "sq_str20",
+  "sq_str60"
+ ],
+ "n_cols": 29,
+ "keys": [
+  "vp_h",
+  "vp_d",
+  "hsin",
+  "hcos",
+  "wkend",
+  "str20",
+  "str60",
+  "sr_near",
+  "sr_asym",
+  "lrv0",
+  "lrv1",
+  "lrv2"
+ ],
+ "freeze_choice": {
+  "view": null,
+  "kind": null,
+  "eligible_pre": {
+   "M9_prof": {
+    "pass": false,
+    "R_A": 0.9862092048262738,
+    "R_B": 0.6725390708770382,
+    "n_cols": 47
+   },
+   "M9_prof_str": {
+    "pass": false,
+    "R_A": 1.4863819546154073,
+    "R_B": 0.7310222058210811,
+    "n_cols": 51
+   },
+   "M9_prof_str_vp": {
+    "pass": false,
+    "R_A": 1.1835612685326033,
+    "R_B": 0.5939301350561986,
+    "n_cols": 57
+   }
+  }
+ },
+ "profile_file": "profile_M9h6_prof_str.json",
+ "profile_sha256": "fcc2606665606920fed14aa28b120b6fc6c2bfe73f673ecf9e9ca8a084ca54b4",
+ "seconds": 0.2,
+ "pool": {
+  "cut": "2026-10-01 00:00:00",
+  "n_pool": 8346,
+  "first_pool_ta": "2025-10-16 00:00:00",
+  "last_pool_ta": "2026-09-30 19:00:00",
+  "pool_ta_sha256": "bb0fe5fa6619cc96283f02e8ccc58ab2ad8f42620f7abb49fb22ba9bc1bcde55",
+  "rule": "ta >= max(cut - 365 d, 2025-10-02), ta + 60 min <= cut, harness ok, all 12 M6 keys finite (the harness train_mask)"
+ }
+}
