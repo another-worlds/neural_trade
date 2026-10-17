@@ -1,0 +1,11 @@
+look1: 17937 anchors, 17846 ok, view rows 17521
+  A done 3s
+  B done 6s
+look2: 8729 anchors, 8679 ok, view rows 8346
+  A done 1s
+  B done 2s
+done M9_prof in 8s -> D:\nt\nt_t14_m9\runs\tactical\tasks\T14_multimodal\M9_prof
+
+real	0m10.022s
+user	0m0.000s
+sys	0m0.000s

@@ -1,0 +1,46 @@
+{
+ "recipe_sha256": "e065e6b7c51d2fd9e4a18d3e8533bd039245c257f20b547cea3de5e5b2d97a58",
+ "m9_lib_sha256": "e15799351ec061191aa8977f0bc15ddb55186f68e2b07ea4d7db7918fe80ec9b",
+ "harness": {
+  "A": "ridge alpha 1, standardised, on V3 + view columns (T11 _ridge), monthly refit on the 365 days before the month",
+  "B": "logistic C 1, standardised, on H3 + view columns, same refit"
+ },
+ "criterion": {
+  "A_inc_min": 0.005,
+  "B_rel_min": 0.01,
+  "pocock_alpha": 0.0294,
+  "looks_months": [
+   3,
+   6
+  ],
+  "min_complete_months": 3,
+  "controls": "C1 permuted within month, C2a harness S3 duplicate (no C2b for the linear views)"
+ },
+ "status": "none",
+ "label": "no pre-registered and no post hoc view passed the criterion on both looks; nothing is frozen",
+ "freeze_choice": {
+  "view": null,
+  "kind": null,
+  "eligible_pre": {
+   "M9_prof": {
+    "pass": false,
+    "R_A": 0.9862092048262738,
+    "R_B": 0.6725390708770382,
+    "n_cols": 47
+   },
+   "M9_prof_str": {
+    "pass": false,
+    "R_A": 1.4863819546154073,
+    "R_B": 0.7310222058210811,
+    "n_cols": 51
+   },
+   "M9_prof_str_vp": {
+    "pass": false,
+    "R_A": 1.1835612685326033,
+    "R_B": 0.5939301350561986,
+    "n_cols": 57
+   }
+  }
+ },
+ "seconds": 0.0
+}
