@@ -1,0 +1,75 @@
+T14 harness: view M8_lin  (harness commit 0c073f944a518c204d4398741fbbb8c77261a001, view sha256 {'cut': 'fcc4a537c03d0e58509114c70a94bba5a739bac9be9dea565e2a1d4f540f8603', 'fwd': '4968d26b68e1f985564521d245ad9f1f742fef7f992f64934f7a272b803587be'})
+columns: ['abs_str20', 'abs_str60', 'sq_str20', 'sq_str60', 'vph_x_hsin', 'vph_x_hcos', 'vpd_x_hsin', 'vpd_x_hcos']
+
+=== look1: months 2024-07..2025-07, train start 2023-07-01 00:00:00 ===
+anchors 17937, base ok 17846, view rows finite 17521, used 17521, dropped for the view 325
+-- target A: skill vs AR(1) (T01), monthly; increment over V3
+month      n_te        V3   V3+view       inc        C1       C2a
+2024-07     744   +0.2143   +0.2322   +0.0179   -0.0001   +0.0052
+2024-08     744   +0.2564   +0.2733   +0.0170   -0.0005   +0.0084
+2024-09     660   +0.1613   +0.1895   +0.0282   +0.0002   +0.0268
+2024-10     742   +0.2741   +0.2921   +0.0180   -0.0001   +0.0172
+2024-11     646   +0.2173   +0.2189   +0.0016   +0.0006   +0.0011
+2024-12     735   +0.2170   +0.2516   +0.0346   +0.0005   +0.0195
+2025-01     744   +0.1897   +0.2220   +0.0324   -0.0019   +0.0086
+2025-02     671   +0.1927   +0.1837   -0.0090   -0.0012   +0.0087
+2025-03     689   +0.2558   +0.2720   +0.0162   -0.0031   +0.0266
+2025-04     720   +0.2592   +0.2698   +0.0105   -0.0025   -0.0045
+2025-05     744   +0.2364   +0.2414   +0.0050   -0.0013   +0.0025
+2025-06     713   +0.2298   +0.2349   +0.0050   -0.0009   -0.0027
+2025-07     470   +0.2837   +0.3018   +0.0182   -0.0006   +0.0009
+  increment view     mean +0.0150  95% t-CI [+0.0075, +0.0226]  months positive 12/13  p1 0.0005
+  increment c2a      mean +0.0091  95% t-CI [+0.0028, +0.0154]  months positive 11/13  p1 0.0042
+  increment c1       mean -0.0008  95% t-CI [-0.0015, -0.0002]  months positive 3/13  p1 0.9895
+  skill V3 +0.2298  skill V3+view +0.2449  skill AR 0 by definition; skill 'avg' n/a
+  candidate minus c1: mean +0.0159 CI [+0.0084, +0.0233]
+  candidate minus c2a: mean +0.0059 CI [-0.0010, +0.0129]
+  FLAGS A: {'inc_ge_0.005': True, 'ci_lo_gt_0': True, 'above_c1': True, 'above_c2a': True, 'pass': True}
+
+-- target B: P(max |move| >= 50 bps within 60 min); n 9022, base rate 0.3915
+  Brier: H3 0.16930, view 0.16936, c2a 0.16828, H1 0.17485
+  AUC: H3 0.8093, view 0.8087, c2a 0.8108
+  rel. Brier improvement over H3, view  : -0.03%  95% day-block CI [-0.40%, +0.34%]  p1 0.5697
+  rel. Brier improvement over H3, c2a   : +0.60%  95% day-block CI [+0.19%, +1.00%]  p1 0.0027
+  rel. Brier improvement over H3, c1    : mean -0.10% (max over seeds -0.03%)
+  candidate minus c1: +0.07% CI [-0.31%, +0.45%]
+  candidate minus c2a: -0.64% CI [-1.17%, -0.10%]
+  monthly rel. improvement: 2024-07 +0.41%, 2024-08 -0.80%, 2024-09 +0.28%, 2024-10 -2.31%, 2024-11 +0.32%, 2024-12 +0.65%, 2025-01 +0.85%, 2025-02 -0.59%, 2025-03 -0.49%, 2025-04 +0.06%, 2025-05 +1.03%, 2025-06 -0.53%, 2025-07 +0.51%
+  FLAGS B: {'rel_ge_1pct': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+=== look2: months 2025-11..2026-09, train start 2025-10-02 00:00:00 ===
+anchors 8729, base ok 8679, view rows finite 8346, used 8346, dropped for the view 333
+-- target A: skill vs AR(1) (T01), monthly; increment over V3
+month      n_te        V3   V3+view       inc        C1       C2a
+2025-11     720   +0.1341   +0.0996   -0.0345   -0.0328   +0.0010
+2025-12     742   +0.2321   +0.2412   +0.0091   -0.0030   +0.0258
+2026-01     729   +0.2909   +0.2967   +0.0058   +0.0012   +0.0009
+2026-02     672   +0.2247   +0.2371   +0.0124   -0.0061   +0.0268
+2026-03     744   +0.2624   +0.2660   +0.0035   -0.0017   +0.0024
+2026-04     720   +0.2066   +0.2230   +0.0164   -0.0010   +0.0128
+2026-05     744   +0.2166   +0.2294   +0.0128   -0.0003   +0.0207
+2026-06     720   +0.2161   +0.2160   -0.0001   -0.0012   +0.0087
+2026-07     739   +0.2872   +0.2974   +0.0102   -0.0021   +0.0125
+2026-08     720   +0.2125   +0.2194   +0.0069   -0.0004   -0.0093
+2026-09     712   +0.2804   +0.2946   +0.0141   -0.0009   +0.0188
+  increment view     mean +0.0051  95% t-CI [-0.0043, +0.0146]  months positive 9/11  p1 0.1254
+  increment c2a      mean +0.0110  95% t-CI [+0.0033, +0.0187]  months positive 10/11  p1 0.0050
+  increment c1       mean -0.0044  95% t-CI [-0.0108, +0.0021]  months positive 1/11  p1 0.9192
+  skill V3 +0.2331  skill V3+view +0.2382  skill AR 0 by definition; skill 'avg' n/a
+  candidate minus c1: mean +0.0095 CI [+0.0051, +0.0140]
+  candidate minus c2a: mean -0.0058 CI [-0.0149, +0.0033]
+  FLAGS A: {'inc_ge_0.005': True, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+-- target B: P(max |move| >= 50 bps within 60 min); n 7962, base rate 0.3586
+  Brier: H3 0.16708, view 0.16802, c2a 0.16618, H1 0.17698
+  AUC: H3 0.8062, view 0.8035, c2a 0.8079
+  rel. Brier improvement over H3, view  : -0.57%  95% day-block CI [-1.00%, -0.14%]  p1 0.9955
+  rel. Brier improvement over H3, c2a   : +0.53%  95% day-block CI [+0.09%, +0.97%]  p1 0.0085
+  rel. Brier improvement over H3, c1    : mean -0.61% (max over seeds -0.41%)
+  candidate minus c1: +0.04% CI [-0.39%, +0.46%]
+  candidate minus c2a: -1.10% CI [-1.69%, -0.51%]
+  monthly rel. improvement: 2025-11 -1.81%, 2025-12 -2.05%, 2026-01 -0.75%, 2026-02 +0.20%, 2026-03 -1.36%, 2026-04 -0.37%, 2026-05 +0.19%, 2026-06 -0.11%, 2026-07 -0.56%, 2026-08 +0.59%, 2026-09 +0.37%
+  FLAGS B: {'rel_ge_1pct': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+PRE-REGISTERED PASS: A both looks False, B both looks False, candidate False
+one-sided p (max over the two looks): A 0.1253728826651752, B 0.9955004499550045  (Holm over 6 x 2 is the lead's)

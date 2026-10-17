@@ -1,0 +1,7 @@
+sanity: refit with nothing removed vs stored M7_gbm: {'cut': 0.0, 'fwd': 0.0}
+  stretch: removed ['str20', 'str60'] (5s)
+  volpct: removed ['vp_h', 'vp_d'] (5s)
+  hourwk: removed ['hsin', 'hcos', 'wkend'] (5s)
+  sr: removed ['sr_near', 'sr_asym'] (5s)
+  lrv: removed ['lrv0', 'lrv1', 'lrv2'] (5s)
+done 29.0s
