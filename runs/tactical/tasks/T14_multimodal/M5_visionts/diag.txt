@@ -1,0 +1,4 @@
+cut vts point - target: mean 0.021 sd 1.179 rmse 1.179 | persistence rmse 0.752 | corr(vts,target) 0.529 corr(LV0,target) 0.814 | n 17579
+cut seasonal resid: sd 0.841 corr with (target - LV0) -0.015
+fwd vts point - target: mean 0.004 sd 1.138 rmse 1.138 | persistence rmse 0.739 | corr(vts,target) 0.501 corr(LV0,target) 0.795 | n 8538
+fwd seasonal resid: sd 0.834 corr with (target - LV0) -0.007

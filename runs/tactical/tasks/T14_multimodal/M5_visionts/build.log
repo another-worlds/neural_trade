@@ -1,0 +1,20 @@
+cut anchors 17937 with input 17670
+  0/17670 1s
+  3200/17670 16s
+  6400/17670 31s
+  9600/17670 46s
+  12800/17670 61s
+  16000/17670 76s
+cut 83.5s 211.6 anchors/s
+cut debias 0.3976 from 8559 training anchors ('2023-06-26 20:00:00', '2024-06-25 20:00:00')
+{"name": "M5_visionts", "source": "cut", "columns": ["vts_logrv_mean12", "vts_logrv_logsum", "vts_vol_mean12", "vts_logrv_minus_last", "point_log_rv"], "n_rows": 17670, "n_rows_with_nan": 0, "n_ok_anchors": 17846, "n_ok_anchors_covered": 17579, "sha256": "290d949036e35fb864f85671949f25ba1a13771107bc7a5e85f3bbcf7a487c28", "note": "VisionTS MAE-base zero-shot, 2 series (ln rv5, ln(1+vol)), 5-min bars, period 288, ctx 2016, pred 12; thin 1; point_log_rv = implied hourly log RV + constant 0.3976 (training anchors only)"}
+{"name": "M5b_visionts_seasonal", "source": "cut", "columns": ["vts_seasonal_resid"], "n_rows": 17670, "n_rows_with_nan": 0, "n_ok_anchors": 17846, "n_ok_anchors_covered": 17579, "sha256": "55c7f4fd095a96522c45801147e3731802515562e451f1bfb42de98b7ea06cca", "note": "post hoc: VisionTS hourly log RV forecast (debiased) minus the 7-day same-hour-of-day mean of hourly log RV; one feature column, no point_log_rv (so no 50/50 average)"}
+fwd anchors 8729 with input 8588
+  0/8588 0s
+  3200/8588 15s
+  6400/8588 30s
+fwd 40.3s 212.9 anchors/s
+fwd debias 0.3683 from 576 training anchors ('2025-10-08 00:00:00', '2025-11-01 00:00:00')
+{"name": "M5_visionts", "source": "fwd", "columns": ["vts_logrv_mean12", "vts_logrv_logsum", "vts_vol_mean12", "vts_logrv_minus_last", "point_log_rv"], "n_rows": 8588, "n_rows_with_nan": 0, "n_ok_anchors": 8679, "n_ok_anchors_covered": 8538, "sha256": "7ef5a20328e60b8f4e93ba4b98036456f5749cc4442cc813b25996576a2aacaf", "note": "VisionTS MAE-base zero-shot, 2 series (ln rv5, ln(1+vol)), 5-min bars, period 288, ctx 2016, pred 12; thin 1; point_log_rv = implied hourly log RV + constant 0.3683 (training anchors only)"}
+{"name": "M5b_visionts_seasonal", "source": "fwd", "columns": ["vts_seasonal_resid"], "n_rows": 8588, "n_rows_with_nan": 0, "n_ok_anchors": 8679, "n_ok_anchors_covered": 8538, "sha256": "efbef4e80ca4cbad11a3f4f4cfc8faa3e049cc2ad54c1792cf679831fb3d97ff", "note": "post hoc: VisionTS hourly log RV forecast (debiased) minus the 7-day same-hour-of-day mean of hourly log RV; one feature column, no point_log_rv (so no 50/50 average)"}
+{"thin": 1, "sources": {"cut": {"n_anchors_grid": 17937, "n_requested": 17937, "n": 17670, "seconds": 83.51375460624695, "anchors_per_s": 211.58191346217188, "debias": 0.3976307800214704, "debias_n": 8559, "debias_span": ["2023-06-26 20:00:00", "2024-06-25 20:00:00"], "seasonal_nan": 0}, "fwd": {"n_anchors_grid": 8729, "n_requested": 8729, "n": 8588, "seconds": 40.33274483680725, "anchors_per_s": 212.9287266400644, "debias": 0.36825369836888744, "debias_n": 576, "debias_span": ["2025-10-08 00:00:00", "2025-11-01 00:00:00"], "seasonal_nan": 0}}, "total_seconds": 143.29510831832886, "gpu_hours": 0.03980419675509135}
