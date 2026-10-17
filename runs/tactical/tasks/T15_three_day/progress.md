@@ -1,6 +1,6 @@
 # T15 progress (rewritten after every job)
 
-wall clock since start: 0.26 h of 72 h; CPU only, below-normal priority, threads <= 6 (BLAS 4, GBM 4); GPU not used.
+wall clock since start: 0.28 h of 72 h; CPU only, below-normal priority, threads <= 6 (BLAS 4, GBM 4); GPU not used.
 stop condition: none hit
 
 | # | day | job | result file | wall s | cpu s | free RAM GB | free D: GB | status |
@@ -30,5 +30,6 @@ stop condition: none hit
 | 23 | day2 | M7_gbm pool sensitivity | day2/raw/M7_gbm__CP.json | 11.4 | 38.8 | 44.7 | 38.2 | ok |
 | 24 | day2 | M7_gbm start-date sensitivity | day2/raw/M7_gbm__CS.json | 6.4 | 16.1 | 44.7 | 38.2 | ok |
 | 25 | day2 | analyse: survival rules | day2/results_day2.json, day2/tables_day2.txt | 0.1 | 0.0 | 44.7 | 38.2 | ok |
+| 26 | day3 | summary table and recommendation | day3/summary_table.txt, day3/recommendation.md, day3/prospective_bets_update.md | 0.0 | 0.0 | 44.8 | 38.2 | ok |
 
 total job wall 628 s, total job CPU (process time, all threads) 1297 s

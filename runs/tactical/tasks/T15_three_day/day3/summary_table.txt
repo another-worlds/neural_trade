@@ -1,0 +1,25 @@
+T15 SUMMARY TABLE (pooled 24 months; Look 1 = Bitstamp 13 months, Look 2 = Binance 11 months). R = pooled gain / M7_gbm pooled gain (M7_gbm: A +0.0204, B +2.18%).
+
+variant                cols |                A pooled [t-CI]   R_A |                B pooled [t-CI]   R_B |  minR minR t x l | A-stable (windows) | Day 2 module pass | eligible
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+M7_gbm                    4 |     +0.0204 [+0.0124, +0.0285]  1.00 |        +2.18% [+1.58%, +2.78%]  1.00 |  1.00       1.00 | no     (1/4)    | PASS              | no (not a frozen artefact)
+M7c                       2 |     +0.0263 [+0.0200, +0.0325]  1.28 |        +1.62% [+1.02%, +2.22%]  0.74 |  0.74       0.71 | no     (1/4)    | PASS              | frozen artefact
+M9h6                     29 |     +0.0335 [+0.0195, +0.0474]  1.64 |        +1.94% [+0.96%, +2.93%]  0.89 |  0.89       0.54 | no     (2/4)    | FAIL              | frozen artefact
+T15_h4                   21 |     +0.0326 [+0.0198, +0.0455]  1.60 |        +1.85% [+1.14%, +2.55%]  0.85 |  0.85       0.58 | STABLE (3/4)    | controls not run  | no (not a frozen artefact)
+T15_h8                   37 |     +0.0326 [+0.0183, +0.0470]  1.60 |        +2.01% [+0.97%, +3.04%]  0.92 |  0.92       0.62 | no     (2/4)    | controls not run  | no (not a frozen artefact)
+T15_h12                  51 |     +0.0304 [+0.0115, +0.0493]  1.49 |        +1.56% [-0.12%, +3.23%]  0.71 |  0.71       0.12 | no     (2/4)    | controls not run  | no (not a frozen artefact)
+M9_prof_str (24 slots)   51 |     +0.0304 [+0.0115, +0.0493]  1.49 |        +1.59% [-0.03%, +3.21%]  0.73 |  0.73       0.16 | no     (2/4)    | controls not run  | no (not a frozen artefact)
+
+Per-look ratios R (look1 / look2): M7_gbm: A 1.00/1.00, B 1.00/1.00; M7c: A 1.09/1.75, B 0.71/0.78; M9h6: A 1.59/1.77, B 1.16/0.54; T15_h4: A 1.55/1.72, B 1.05/0.58; T15_h8: A 1.57/1.66, B 1.16/0.62; T15_h12: A 1.58/1.25, B 1.18/0.12; M9_prof_str (24 slots): A 1.58/1.24, B 1.18/0.16
+
+DAY 2 CONTROLS (a target survives a control iff the CI lower bound is above 0; 'untestable' = fewer than 5 scored months):
+  M7_gbm   target A: pass True; testable controls passed 5/5; failed none; untestable ['C-P cut', 'C-P fwd', 'C-S +18']
+  M7_gbm   target B: pass True; testable controls passed 5/5; failed none; untestable ['C-P cut', 'C-P fwd', 'C-S +18']
+  M7c      target A: pass True; testable controls passed 5/5; failed none; untestable ['C-P cut', 'C-P fwd', 'C-S +18']
+  M7c      target B: pass True; testable controls passed 5/5; failed none; untestable ['C-P cut', 'C-P fwd', 'C-S +18']
+  M9h6     target A: pass False; testable controls passed 7/8; failed ['C-P fwd']; untestable none
+  M9h6     target B: pass False; testable controls passed 5/8; failed ['C-P fwd', 'C-S +12', 'C-S +18']; untestable none
+
+RECOMMENDATION (M9 freeze rule over eligible frozen artefacts that pass Day 2): M7c
+alternative reading (min over target x look): M7c
+eligible rows: {"M7c": {"pass": true, "R_A": 1.2848787449960202, "R_B": 0.7423812720626377, "n_cols": 2}, "M9h6": {"pass": false, "R_A": 1.638339066943562, "R_B": 0.8908112879298736, "n_cols": 29}}

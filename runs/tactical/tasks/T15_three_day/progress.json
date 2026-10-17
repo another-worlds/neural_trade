@@ -249,6 +249,16 @@
    "free_ram_gb": 44.7,
    "free_disk_D_gb": 38.2,
    "status": "ok"
+  },
+  {
+   "day": "day3",
+   "job": "summary table and recommendation",
+   "result": "day3/summary_table.txt, day3/recommendation.md, day3/prospective_bets_update.md",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
   }
  ],
  "stop": null,
