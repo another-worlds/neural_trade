@@ -1,0 +1,116 @@
+{
+ "jobs": [
+  {
+   "day": "day1",
+   "job": "build harmonic views K=4,6,8,12",
+   "result": "day1/build_views.json",
+   "wall_s": 0.4,
+   "cpu_s": 0.4,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h4",
+   "result": "day1/T15_h4/results.json",
+   "wall_s": 6.3,
+   "cpu_s": 6.3,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h6",
+   "result": "day1/T15_h6/results.json",
+   "wall_s": 7.2,
+   "cpu_s": 7.1,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h8",
+   "result": "day1/T15_h8/results.json",
+   "wall_s": 7.1,
+   "cpu_s": 7.0,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h12",
+   "result": "day1/T15_h12/results.json",
+   "wall_s": 8.2,
+   "cpu_s": 9.7,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "analyse: gains, sub-samples, windows, stability rule",
+   "result": "day1/results_day1.json, day1/tables_day1.txt",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "FAILED: IndexError: list index out of range"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h4",
+   "result": "day1/T15_h4/results.json",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.9,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h6",
+   "result": "day1/T15_h6/results.json",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.9,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h8",
+   "result": "day1/T15_h8/results.json",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.9,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "harness evaluate T15_h12",
+   "result": "day1/T15_h12/results.json",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.9,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day1",
+   "job": "analyse: gains, sub-samples, windows, stability rule",
+   "result": "day1/results_day1.json, day1/tables_day1.txt",
+   "wall_s": 0.0,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.9,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  }
+ ],
+ "stop": null,
+ "notes": []
+}
