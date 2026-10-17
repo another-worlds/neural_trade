@@ -1,0 +1,11 @@
+  M7_gbm:A: 20218 rows served, months ['2024-03']..['2026-09'] (3s)
+  M7_gbm:B: 20218 rows served, months ['2024-03']..['2026-09'] (3s)
+  M7s_gbm:A: 14763 rows served, months ['2024-03']..['2026-09'] (2s)
+  M7s_gbm:B: 14763 rows served, months ['2024-03']..['2026-09'] (2s)
+  M7_kernel:A: 20218 rows served, months ['2024-03']..['2026-09'] (66s)
+  M7_kernel:B: 20218 rows served, months ['2024-03']..['2026-09'] (62s)
+  M7s_kernel:A: 14763 rows served, months ['2024-03']..['2026-09'] (45s)
+  M7s_kernel:B: 14763 rows served, months ['2024-03']..['2026-09'] (43s)
+  M7b:A: 20218 rows served, months ['2024-03']..['2026-09'] (3s)
+  M7b:B: 20218 rows served, months ['2024-03']..['2026-09'] (3s)
+done 239.3s
