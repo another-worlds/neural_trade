@@ -88,6 +88,15 @@ for the MVP".
   - rich interactive figures in `visualization/theme.py`.
 - It is sent to the owner as a file and opened in the browser (it lives outside the VS Code workspace).
 
+## Multimodal research night (owner, 2026-10-17: "Устанавливай, тестируй и синтезируй")
+
+- The owner authorised installing and testing external research code and models for the multimodal sprint
+  ([research/2026-10-17-multimodal/PLAN.md](../runs/tactical/research/2026-10-17-multimodal/PLAN.md)). Installs go only into
+  the isolated venv `D:/nt/nt_mm_env` (weights and caches in `D:/nt/nt_mm_cache`), never into the `nt` conda env. This
+  covers this sprint only.
+- New DATA sources (news, sentiment, order book, on-chain, funding) still need the owner (D-050).
+- Course correction (owner, same day): build on what works; visual, short conclusions; keep a map of alternative pipelines.
+
 ## Rigour and budget (exploratory)
 
 - **Data: the static excerpt by default (owner, 2026-10-08: "the whole file only for giant runs"):** tactical runs and
