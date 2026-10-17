@@ -1,0 +1,26 @@
+[
+ {
+  "q": 0.05,
+  "anchor": "2026-03-30 10:00:00",
+  "caption": "volatility very low (p13), normal bands, price near EMA20, 10:00 UTC Europe session, weekday, 0.4 sigma below nearest resistance, 0.1 sigma above nearest support",
+  "real_bps": 21.572108752901396,
+  "V3_bps": 27.807328459129526,
+  "V3_image_bps": 27.599255537796815
+ },
+ {
+  "q": 0.5,
+  "anchor": "2026-03-01 21:00:00",
+  "caption": "volatility elevated (p71), wide bands, price near EMA20, 21:00 UTC late US, weekend, 0.2 sigma below nearest resistance, 0.0 sigma above nearest support",
+  "real_bps": 45.538069337305515,
+  "V3_bps": 55.65665546720657,
+  "V3_image_bps": 55.0578649752447
+ },
+ {
+  "q": 0.95,
+  "anchor": "2026-03-31 14:00:00",
+  "caption": "volatility high (p85), normal bands, price near EMA20, 14:00 UTC US open, weekday, 0.2 sigma below nearest resistance, 0.4 sigma above nearest support",
+  "real_bps": 95.76313582057792,
+  "V3_bps": 100.43675426175832,
+  "V3_image_bps": 97.59267268721644
+ }
+]
