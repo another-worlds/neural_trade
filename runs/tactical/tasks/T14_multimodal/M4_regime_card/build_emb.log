@@ -1,0 +1,4 @@
+cut: 17846 images embedded in 21s (869/s), gpu part 10s, peak 0.78 GB
+cut: 17704 captions (17142 unique) in 14s
+fwd: 8679 images embedded in 10s (840/s), gpu part 5s, peak 0.78 GB
+fwd: 8537 captions (8387 unique) in 7s

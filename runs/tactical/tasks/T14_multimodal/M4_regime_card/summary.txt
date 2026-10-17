@@ -1,0 +1,25 @@
+== M4_img  pass={'A': False, 'B': False, 'candidate': False}
+ look1 A: view +0.0057 [+0.0004,+0.0110]  c1 -0.0012 [-0.0028,+0.0004]  c2a +0.0091 [+0.0028,+0.0154]  c2b(M4_num) +0.0017 [-0.0042,+0.0077]  flags False ['above_c2a', 'pass']  n_months 13
+ look1 B: view +0.02% [-0.31,+0.36]  c1 -0.19%  c2a +0.60% [+0.19,+1.00]  c2b -0.43% [-0.71,-0.14]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'above_c2a', 'pass']  n 9022
+ look2 A: view -0.0020 [-0.0081,+0.0040]  c1 -0.0052 [-0.0104,-0.0001]  c2a +0.0093 [+0.0026,+0.0160]  c2b(M4_num) -0.0048 [-0.0116,+0.0019]  flags False ['inc_ge_0.005', 'ci_lo_gt_0', 'above_c2a', 'pass']  n_months 11
+ look2 B: view -0.18% [-0.59,+0.20]  c1 -0.74%  c2a +0.65% [+0.23,+1.06]  c2b -0.18% [-0.65,+0.28]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'above_c2a', 'above_c2b', 'pass']  n 7962
+== M4_cap  pass={'A': False, 'B': False, 'candidate': False}
+ look1 A: view +0.0147 [+0.0068,+0.0227]  c1 -0.0016 [-0.0023,-0.0008]  c2a +0.0091 [+0.0028,+0.0154]  c2b(M4_num) +0.0017 [-0.0042,+0.0077]  flags True []  n_months 13
+ look1 B: view +1.62% [+1.05,+2.18]  c1 -0.19%  c2a +0.60% [+0.19,+1.00]  c2b -0.43% [-0.71,-0.14]  flags True []  n 9022
+ look2 A: view +0.0026 [-0.0032,+0.0084]  c1 -0.0066 [-0.0153,+0.0020]  c2a +0.0100 [+0.0025,+0.0176]  c2b(M4_num) -0.0064 [-0.0163,+0.0036]  flags False ['inc_ge_0.005', 'ci_lo_gt_0', 'above_c2a', 'pass']  n_months 11
+ look2 B: view +0.79% [-0.01,+1.58]  c1 -0.97%  c2a +0.64% [+0.24,+1.05]  c2b -0.29% [-0.79,+0.19]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'pass']  n 7962
+== M4_both  pass={'A': False, 'B': False, 'candidate': False}
+ look1 A: view +0.0177 [+0.0083,+0.0270]  c1 -0.0033 [-0.0048,-0.0017]  c2a +0.0091 [+0.0028,+0.0154]  c2b(M4_num) +0.0017 [-0.0042,+0.0077]  flags True []  n_months 13
+ look1 B: view +1.51% [+0.82,+2.18]  c1 -0.49%  c2a +0.60% [+0.19,+1.00]  c2b -0.43% [-0.71,-0.14]  flags True []  n 9022
+ look2 A: view -0.0014 [-0.0125,+0.0096]  c1 -0.0123 [-0.0249,+0.0003]  c2a +0.0100 [+0.0025,+0.0176]  c2b(M4_num) -0.0064 [-0.0163,+0.0036]  flags False ['inc_ge_0.005', 'ci_lo_gt_0', 'above_c2a', 'pass']  n_months 11
+ look2 B: view +0.59% [-0.31,+1.48]  c1 -1.50%  c2a +0.64% [+0.24,+1.05]  c2b -0.29% [-0.79,+0.19]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'above_c2a', 'pass']  n 7962
+== M4b_img_gbm  pass={'A': False, 'B': False, 'candidate': False}
+ look1 A: view +0.0004 [-0.0004,+0.0012]  c1 -0.0001 [-0.0003,+0.0001]  c2a +0.0014 [-0.0152,+0.0181]  c2b(M4_num) +0.0027 [-0.0031,+0.0085]  flags False ['inc_ge_0.005', 'ci_lo_gt_0', 'above_c2a', 'above_c2b', 'pass']  n_months 13
+ look1 B: view +0.04% [-0.12,+0.20]  c1 -0.01%  c2a +0.47% [-0.02,+0.94]  c2b -0.52% [-0.86,-0.18]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'above_c2a', 'pass']  n 9022
+ look2 A: view +0.0004 [-0.0007,+0.0015]  c1 -0.0003 [-0.0009,+0.0004]  c2a +0.0093 [+0.0026,+0.0160]  c2b(M4_num) -0.0048 [-0.0116,+0.0019]  flags False ['inc_ge_0.005', 'ci_lo_gt_0', 'above_c2a', 'pass']  n_months 11
+ look2 B: view +0.11% [+0.03,+0.19]  c1 -0.06%  c2a +0.65% [+0.23,+1.06]  c2b -0.18% [-0.65,+0.28]  flags False ['rel_ge_1pct', 'above_c2a', 'pass']  n 7962
+== M4c_capnum  pass={'A': False, 'B': False, 'candidate': False}
+ look1 A: view +0.0163 [+0.0068,+0.0258]  c1 -0.0011 [-0.0015,-0.0006]  c2a +0.0091 [+0.0028,+0.0154]  c2b(M4_num) +0.0017 [-0.0042,+0.0077]  flags True []  n_months 13
+ look1 B: view +0.23% [-0.16,+0.62]  c1 -0.14%  c2a +0.60% [+0.19,+1.00]  c2b -0.43% [-0.71,-0.14]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'above_c2a', 'pass']  n 9022
+ look2 A: view +0.0027 [-0.0027,+0.0081]  c1 -0.0034 [-0.0073,+0.0006]  c2a +0.0100 [+0.0025,+0.0176]  c2b(M4_num) -0.0064 [-0.0163,+0.0036]  flags False ['inc_ge_0.005', 'ci_lo_gt_0', 'above_c2a', 'pass']  n_months 11
+ look2 B: view -0.31% [-0.76,+0.12]  c1 -0.52%  c2a +0.64% [+0.24,+1.05]  c2b -0.29% [-0.79,+0.19]  flags False ['rel_ge_1pct', 'ci_lo_gt_0', 'above_c2a', 'above_c2b', 'pass']  n 7962
