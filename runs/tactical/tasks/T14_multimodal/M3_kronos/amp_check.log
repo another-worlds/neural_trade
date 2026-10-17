@@ -1,0 +1,5 @@
+none tokenizer roundtrip mean|err| (normalised) 0.0498 median range, rms 5m ret, mean |close/c0-1| (0.005668186198304845, 0.001451205779328673, 0.0022600989487448356) secs 39.8
+tf32 tokenizer roundtrip mean|err| (normalised) 0.0498 median range, rms 5m ret, mean |close/c0-1| (0.005677734371849126, 0.0014534380316608368, 0.002270112618957238) secs 61.1
+bf16 tokenizer roundtrip mean|err| (normalised) 0.0557 median range, rms 5m ret, mean |close/c0-1| (0.0059115295108188946, 0.0015226897144013265, 0.0022100985067974948) secs 2.5
+tf32 corr of per-anchor median range vs fp32: 0.997
+bf16 corr of per-anchor median range vs fp32: 0.972
