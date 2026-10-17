@@ -1,0 +1,35 @@
+{
+ "thin": 1,
+ "sources": {
+  "cut": {
+   "n_anchors_grid": 17937,
+   "n_requested": 17937,
+   "n": 17670,
+   "seconds": 83.51375460624695,
+   "anchors_per_s": 211.58191346217188,
+   "debias": 0.3976307800214704,
+   "debias_n": 8559,
+   "debias_span": [
+    "2023-06-26 20:00:00",
+    "2024-06-25 20:00:00"
+   ],
+   "seasonal_nan": 0
+  },
+  "fwd": {
+   "n_anchors_grid": 8729,
+   "n_requested": 8729,
+   "n": 8588,
+   "seconds": 40.33274483680725,
+   "anchors_per_s": 212.9287266400644,
+   "debias": 0.36825369836888744,
+   "debias_n": 576,
+   "debias_span": [
+    "2025-10-08 00:00:00",
+    "2025-11-01 00:00:00"
+   ],
+   "seasonal_nan": 0
+  }
+ },
+ "total_seconds": 143.29510831832886,
+ "gpu_hours": 0.03980419675509135
+}
