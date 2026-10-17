@@ -109,6 +109,146 @@
    "free_ram_gb": 44.9,
    "free_disk_D_gb": 38.2,
    "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "reproduction checks (3 modules + concatenated fwd pool)",
+   "result": "day2/raw/repro.json",
+   "wall_s": 29.3,
+   "cpu_s": 57.0,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M9h6 hour shuffle x10",
+   "result": "day2/raw/M9h6__CH.json",
+   "wall_s": 67.2,
+   "cpu_s": 66.6,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M9h6 weekend shuffle x10",
+   "result": "day2/raw/M9h6__CW.json",
+   "wall_s": 67.7,
+   "cpu_s": 66.7,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M9h6 pool sensitivity",
+   "result": "day2/raw/M9h6__CP.json",
+   "wall_s": 8.6,
+   "cpu_s": 8.5,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M9h6 start-date sensitivity",
+   "result": "day2/raw/M9h6__CS.json",
+   "wall_s": 8.9,
+   "cpu_s": 8.8,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7c hour shuffle x10",
+   "result": "day2/raw/M7c__CH.json",
+   "wall_s": 92.3,
+   "cpu_s": 228.8,
+   "free_ram_gb": 44.8,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7c weekend shuffle x10",
+   "result": "day2/raw/M7c__CW.json",
+   "wall_s": 92.4,
+   "cpu_s": 229.4,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7c pool sensitivity",
+   "result": "day2/raw/M7c__CP.json",
+   "wall_s": 10.5,
+   "cpu_s": 36.3,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7c start-date sensitivity",
+   "result": "day2/raw/M7c__CS.json",
+   "wall_s": 6.2,
+   "cpu_s": 16.0,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7_gbm hour shuffle x10",
+   "result": "day2/raw/M7_gbm__CH.json",
+   "wall_s": 98.7,
+   "cpu_s": 245.7,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7_gbm weekend shuffle x10",
+   "result": "day2/raw/M7_gbm__CW.json",
+   "wall_s": 99.2,
+   "cpu_s": 247.4,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7_gbm pool sensitivity",
+   "result": "day2/raw/M7_gbm__CP.json",
+   "wall_s": 11.4,
+   "cpu_s": 38.8,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "M7_gbm start-date sensitivity",
+   "result": "day2/raw/M7_gbm__CS.json",
+   "wall_s": 6.4,
+   "cpu_s": 16.1,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
+  },
+  {
+   "day": "day2",
+   "job": "analyse: survival rules",
+   "result": "day2/results_day2.json, day2/tables_day2.txt",
+   "wall_s": 0.1,
+   "cpu_s": 0.0,
+   "free_ram_gb": 44.7,
+   "free_disk_D_gb": 38.2,
+   "status": "ok"
   }
  ],
  "stop": null,
