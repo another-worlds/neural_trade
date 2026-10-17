@@ -1,0 +1,154 @@
+{
+ "cut": {
+  "K": 0.12228262127475623,
+  "Ksd": 0.4092294125429892,
+  "nK": 8824,
+  "n_paths_anchors": 17839,
+  "meta": {
+   "name": "M3_kronos",
+   "source": "cut",
+   "columns": [
+    "kr_range_med",
+    "kr_vol",
+    "kr_phit50",
+    "kr_ret_sd_across_paths",
+    "point_log_rv"
+   ],
+   "n_rows": 17839,
+   "n_rows_with_nan": 0,
+   "n_ok_anchors": 17846,
+   "n_ok_anchors_covered": 17839,
+   "sha256": "d031cfa1b0f203c33f71165217bd0b4dc4fb1941f35d9a899e9c3c15d85754df",
+   "note": "pre-registered N=4 bf16 K=0.1223 (sd 0.409, n 8824); tag n4; N paths 4; n anchors with paths 17839"
+  },
+  "corr_point_vs_LV0": 0.7787665012314026,
+  "describe": {
+   "kr_range_med": {
+    "count": 17839.0,
+    "mean": 0.00853,
+    "std": 0.0094,
+    "min": 0.00042,
+    "25%": 0.00342,
+    "50%": 0.00543,
+    "75%": 0.00948,
+    "max": 0.12106
+   },
+   "kr_vol": {
+    "count": 17839.0,
+    "mean": 0.00139,
+    "std": 0.00125,
+    "min": 9e-05,
+    "25%": 0.00068,
+    "50%": 0.00103,
+    "75%": 0.00163,
+    "max": 0.02372
+   },
+   "kr_phit50": {
+    "count": 17839.0,
+    "mean": 0.41164,
+    "std": 0.41478,
+    "min": 0.0,
+    "25%": 0.0,
+    "50%": 0.25,
+    "75%": 1.0,
+    "max": 1.0
+   },
+   "kr_ret_sd_across_paths": {
+    "count": 17839.0,
+    "mean": 0.0023,
+    "std": 0.00224,
+    "min": 3e-05,
+    "25%": 0.00096,
+    "50%": 0.00166,
+    "75%": 0.00282,
+    "max": 0.03001
+   },
+   "point_log_rv": {
+    "count": 17839.0,
+    "mean": -11.0989,
+    "std": 1.40895,
+    "min": -16.66511,
+    "25%": -12.02702,
+    "50%": -11.20094,
+    "75%": -10.26948,
+    "max": -4.96562
+   }
+  }
+ },
+ "fwd": {
+  "K": 0.0671569397064975,
+  "Ksd": 0.411996761682428,
+  "nK": 717,
+  "n_paths_anchors": 8672,
+  "meta": {
+   "name": "M3_kronos",
+   "source": "fwd",
+   "columns": [
+    "kr_range_med",
+    "kr_vol",
+    "kr_phit50",
+    "kr_ret_sd_across_paths",
+    "point_log_rv"
+   ],
+   "n_rows": 8672,
+   "n_rows_with_nan": 0,
+   "n_ok_anchors": 8679,
+   "n_ok_anchors_covered": 8672,
+   "sha256": "5f5637e2e6597f9a0f183bc0f3c06e73d58ba7f47f4ff970990b7240c46846c7",
+   "note": "pre-registered N=4 bf16 K=0.0672 (sd 0.412, n 717); tag n4; N paths 4; n anchors with paths 8672"
+  },
+  "corr_point_vs_LV0": 0.7484063697852675,
+  "describe": {
+   "kr_range_med": {
+    "count": 8672.0,
+    "mean": 0.00785,
+    "std": 0.00731,
+    "min": 0.00073,
+    "25%": 0.00383,
+    "50%": 0.00565,
+    "75%": 0.00891,
+    "max": 0.07475
+   },
+   "kr_vol": {
+    "count": 8672.0,
+    "mean": 0.00126,
+    "std": 0.00092,
+    "min": 0.00014,
+    "25%": 0.00072,
+    "50%": 0.00102,
+    "75%": 0.00147,
+    "max": 0.01158
+   },
+   "kr_phit50": {
+    "count": 8672.0,
+    "mean": 0.42055,
+    "std": 0.40164,
+    "min": 0.0,
+    "25%": 0.0,
+    "50%": 0.25,
+    "75%": 0.75,
+    "max": 1.0
+   },
+   "kr_ret_sd_across_paths": {
+    "count": 8672.0,
+    "mean": 0.00222,
+    "std": 0.00182,
+    "min": 5e-05,
+    "25%": 0.00108,
+    "50%": 0.00174,
+    "75%": 0.00278,
+    "max": 0.03009
+   },
+   "point_log_rv": {
+    "count": 8672.0,
+    "mean": -11.19105,
+    "std": 1.2,
+    "min": -15.12845,
+    "25%": -11.96826,
+    "50%": -11.25326,
+    "75%": -10.49634,
+    "max": -6.10513
+   }
+  }
+ }
+}
