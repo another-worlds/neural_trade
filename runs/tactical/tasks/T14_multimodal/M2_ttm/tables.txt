@@ -1,0 +1,77 @@
+T14 harness: view M2_ttm  (harness commit a5eae15874433202fc6446c36baed13a94776bc0, view sha256 {'cut': '703baece373de1abcaf2f1b3fc1131e8bff948ad74b434c2f8a09c1896008116', 'fwd': '5b84852a6cb03a21466d3dfd7d05cd20eb4d97ddd23d3d02c2f0573c94309220'})
+columns: ['ttm_mean12', 'ttm_last', 'ttm_minus_lastbar', 'ttm_logsum_raw', 'ttm_logsum', 'point_log_rv']
+
+=== look1: months 2024-07..2025-07, train start 2023-07-01 00:00:00 ===
+anchors 17937, base ok 17846, view rows finite 17921, used 17830, dropped for the view 16
+-- target A: skill vs AR(1) (T01), monthly; increment over V3
+month      n_te        V3   V3+view       inc        C1       C2a       avg
+2024-07     744   +0.2156   +0.2250   +0.0094   +0.0081   +0.0050   -0.0301
+2024-08     744   +0.2564   +0.2653   +0.0089   +0.0016   +0.0084   -0.0178
+2024-09     660   +0.1613   +0.1672   +0.0059   +0.0061   +0.0268   -0.0188
+2024-10     742   +0.2741   +0.2742   +0.0001   -0.0006   +0.0172   -0.1227
+2024-11     646   +0.2173   +0.2190   +0.0017   -0.0009   +0.0011   -0.0714
+2024-12     735   +0.2170   +0.1586   -0.0584   +0.0027   +0.0195   -0.0822
+2025-01     744   +0.1897   +0.1925   +0.0028   +0.0007   +0.0086   -0.1205
+2025-02     671   +0.1927   +0.1961   +0.0033   -0.0050   +0.0087   -0.1222
+2025-03     689   +0.2558   +0.2529   -0.0029   -0.0041   +0.0266   -0.1115
+2025-04     720   +0.2592   +0.2552   -0.0041   -0.0010   -0.0045   -0.1003
+2025-05     744   +0.2364   +0.2346   -0.0018   +0.0006   +0.0025   -0.0989
+2025-06     713   +0.2298   +0.2346   +0.0048   +0.0075   -0.0027   -0.0674
+2025-07     470   +0.2837   +0.2840   +0.0003   +0.0101   +0.0009   -0.0803
+  increment view     mean -0.0023  95% t-CI [-0.0128, +0.0082]  months positive 9/13  p1 0.6793
+  increment c2a      mean +0.0091  95% t-CI [+0.0028, +0.0154]  months positive 11/13  p1 0.0043
+  increment avg      mean -0.0803  95% t-CI [-0.1033, -0.0573]  months positive 0/13  p1 1.0000
+  increment c1       mean +0.0020  95% t-CI [-0.0009, +0.0048]  months positive 8/13  p1 0.0766
+  skill V3 +0.2299  skill V3+view +0.2276  skill AR 0 by definition; skill 'avg' +0.1496
+  candidate minus c1: mean -0.0043 CI [-0.0150, +0.0064]
+  candidate minus c2a: mean -0.0114 CI [-0.0251, +0.0023]
+  FLAGS A: {'inc_ge_0.005': False, 'ci_lo_gt_0': False, 'above_c1': False, 'above_c2a': False, 'pass': False}
+
+-- target B: P(max |move| >= 50 bps within 60 min); n 9022, base rate 0.3915
+  Brier: H3 0.16930, view 0.16909, c2a 0.16828, H1 0.17484
+  AUC: H3 0.8094, view 0.8099, c2a 0.8108
+  rel. Brier improvement over H3, view  : +0.12%  95% day-block CI [-0.07%, +0.31%]  p1 0.0952
+  rel. Brier improvement over H3, c2a   : +0.60%  95% day-block CI [+0.19%, +1.00%]  p1 0.0024
+  rel. Brier improvement over H3, c1    : mean -0.06% (max over seeds +0.08%)
+  candidate minus c1: +0.19% CI [-0.01%, +0.38%]
+  candidate minus c2a: -0.48% CI [-0.90%, -0.05%]
+  monthly rel. improvement: 2024-07 +0.85%, 2024-08 +0.56%, 2024-09 +0.31%, 2024-10 +0.57%, 2024-11 -0.49%, 2024-12 -0.45%, 2025-01 -0.21%, 2025-02 -0.18%, 2025-03 -0.03%, 2025-04 -0.52%, 2025-05 +0.16%, 2025-06 +0.81%, 2025-07 +0.05%
+  FLAGS B: {'rel_ge_1pct': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+=== look2: months 2025-11..2026-09, train start 2025-10-02 00:00:00 ===
+anchors 8729, base ok 8679, view rows finite 8713, used 8663, dropped for the view 16
+-- target A: skill vs AR(1) (T01), monthly; increment over V3
+month      n_te        V3   V3+view       inc        C1       C2a       avg
+2025-11     720   +0.1709   +0.1710   +0.0000   -0.0030   +0.0103   -0.0178
+2025-12     742   +0.2449   +0.2408   -0.0041   -0.0063   +0.0002   -0.3329
+2026-01     729   +0.2802   +0.2808   +0.0006   -0.0038   -0.0008   -0.2407
+2026-02     672   +0.2205   +0.2227   +0.0022   +0.0034   +0.0237   +0.0180
+2026-03     744   +0.2698   +0.2706   +0.0008   +0.0005   +0.0024   -0.0400
+2026-04     720   +0.2123   +0.2142   +0.0019   +0.0009   +0.0138   -0.0235
+2026-05     744   +0.2184   +0.2167   -0.0017   +0.0054   +0.0197   -0.0620
+2026-06     720   +0.2177   +0.2189   +0.0013   -0.0007   +0.0085   -0.0347
+2026-07     739   +0.2870   +0.2904   +0.0034   +0.0004   +0.0127   -0.0337
+2026-08     720   +0.2144   +0.2166   +0.0022   +0.0012   -0.0093   -0.2646
+2026-09     712   +0.2808   +0.2873   +0.0065   +0.0011   +0.0194   -0.1424
+  increment view     mean +0.0012  95% t-CI [-0.0006, +0.0030]  months positive 9/11  p1 0.0892
+  increment c2a      mean +0.0091  95% t-CI [+0.0023, +0.0159]  months positive 9/11  p1 0.0069
+  increment avg      mean -0.1067  95% t-CI [-0.1870, -0.0265]  months positive 1/11  p1 0.9929
+  increment c1       mean -0.0001  95% t-CI [-0.0023, +0.0021]  months positive 7/11  p1 0.5288
+  skill V3 +0.2379  skill V3+view +0.2391  skill AR 0 by definition; skill 'avg' +0.1312
+  candidate minus c1: mean +0.0013 CI [-0.0010, +0.0035]
+  candidate minus c2a: mean -0.0079 CI [-0.0144, -0.0015]
+  FLAGS A: {'inc_ge_0.005': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+-- target B: P(max |move| >= 50 bps within 60 min); n 7962, base rate 0.3586
+  Brier: H3 0.16660, view 0.16654, c2a 0.16553, H1 0.17559
+  AUC: H3 0.8076, view 0.8076, c2a 0.8096
+  rel. Brier improvement over H3, view  : +0.03%  95% day-block CI [-0.08%, +0.14%]  p1 0.2645
+  rel. Brier improvement over H3, c2a   : +0.64%  95% day-block CI [+0.22%, +1.06%]  p1 0.0018
+  rel. Brier improvement over H3, c1    : mean -0.30% (max over seeds -0.25%)
+  candidate minus c1: +0.34% CI [+0.15%, +0.52%]
+  candidate minus c2a: -0.61% CI [-1.01%, -0.19%]
+  monthly rel. improvement: 2025-11 +0.12%, 2025-12 -0.05%, 2026-01 +0.15%, 2026-02 -0.01%, 2026-03 +0.11%, 2026-04 +0.17%, 2026-05 +0.01%, 2026-06 -0.14%, 2026-07 +0.07%, 2026-08 -0.16%, 2026-09 +0.06%
+  FLAGS B: {'rel_ge_1pct': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+PRE-REGISTERED PASS: A both looks False, B both looks False, candidate False
+one-sided p (max over the two looks): A 0.6793424059768214, B 0.26447355264473554  (Holm over 6 x 2 is the lead's)

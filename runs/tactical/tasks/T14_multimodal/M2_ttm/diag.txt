@@ -1,0 +1,3 @@
+days 31 chosen 2026-03-20 mean hourly vol bps 50.14992495931883
+cut ttm_logsum - target: mean 0.001 sd 0.761 rmse 0.761 | persistence rmse 0.751 | corr(ttm_logsum,target) 0.807 corr(LV0,target) 0.813
+fwd ttm_logsum - target: mean -0.063 sd 0.797 rmse 0.800 | persistence rmse 0.739 | corr(ttm_logsum,target) 0.772 corr(LV0,target) 0.794
