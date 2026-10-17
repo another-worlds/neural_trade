@@ -1,0 +1,38 @@
+=== target A: monthly skill increment over V3 ===
+model                                    look1 (harness CI)                   look2 (harness CI)   pooled 24 mo   drop vs full (paired, 24 months)   share  carries
+M7_gbm (full)                    +0.0273 [+0.0162, +0.0383]           +0.0124 [+0.0006, +0.0241]        +0.0204
+without stretch                  +0.0160 [+0.0057, +0.0264]           +0.0048 [-0.0074, +0.0169]        +0.0109   +0.0096 [+0.0044, +0.0147]     47%  YES
+without volpct                   +0.0232 [+0.0157, +0.0308]           +0.0087 [+0.0000, +0.0174]        +0.0166   +0.0038 [-0.0001, +0.0078]     19%  no
+without hourwk                   +0.0088 [+0.0021, +0.0155]           +0.0065 [-0.0002, +0.0132]        +0.0077   +0.0127 [+0.0061, +0.0192]     62%  YES
+without sr                       +0.0272 [+0.0165, +0.0379]           +0.0154 [+0.0017, +0.0290]        +0.0218   -0.0013 [-0.0036, +0.0009]     -7%  no
+without lrv                      +0.0230 [+0.0132, +0.0328]           +0.0098 [-0.0033, +0.0230]        +0.0170   +0.0035 [-0.0007, +0.0077]     17%  no
+  main carrier on A: hourwk; groups that carry (share >= 25% and drop CI above 0): ['stretch', 'hourwk']
+  per-look paired drops (t-interval over the look's months): stretch: +0.0112/+0.0076; volpct: +0.0040/+0.0036; hourwk: +0.0184/+0.0059; sr: +0.0001/-0.0030; lrv: +0.0043/+0.0025
+
+=== target B: monthly relative Brier improvement over H3 ===
+model                                    look1 (harness CI)                   look2 (harness CI)   pooled 24 mo   drop vs full (paired, 24 months)   share  carries
+M7_gbm (full)                       +2.22% [+1.47%, +2.96%]              +2.04% [+1.29%, +2.77%]         +2.18%
+without stretch                     +2.03% [+1.33%, +2.73%]              +1.74% [+0.95%, +2.49%]         +1.96%   +0.22% [-0.11%, +0.54%]     10%  no
+without volpct                      +1.72% [+1.05%, +2.39%]              +2.10% [+1.40%, +2.77%]         +1.91%   +0.27% [+0.02%, +0.52%]     12%  no
+without hourwk                      +0.17% [-0.20%, +0.52%]              +0.18% [-0.17%, +0.52%]         +0.18%   +2.00% [+1.39%, +2.60%]     92%  YES
+without sr                          +2.22% [+1.41%, +3.00%]              +1.99% [+1.23%, +2.74%]         +2.16%   +0.02% [-0.22%, +0.26%]      1%  no
+without lrv                         +1.53% [+0.78%, +2.28%]              +1.92% [+1.14%, +2.69%]         +1.77%   +0.41% [+0.13%, +0.68%]     19%  no
+  main carrier on B: hourwk; groups that carry (share >= 25% and drop CI above 0): ['hourwk']
+  per-look paired drops (t-interval over the look's months): stretch: +0.12%/+0.34%; volpct: +0.52%/-0.03%; hourwk: +2.11%/+1.87%; sr: +0.02%/+0.02%; lrv: +0.69%/+0.07%
+
+=== (b) cheap linear recovery: M8_lin against M7_gbm ===
+  A: M8_lin pooled +0.0105 (look1 +0.0150, look2 +0.0051) vs M7_gbm +0.0204: R = 0.51 (look1 0.55, look2 0.42); paired full minus lin +0.0099 [+0.0017, +0.0181]
+     look1: M8_lin harness +0.0150 [+0.0075, +0.0226]
+     look2: M8_lin harness +0.0051 [-0.0043, +0.0146]
+  B: M8_lin pooled -0.26% (look1 -0.05%, look2 -0.51%) vs M7_gbm +2.18%: R = -0.12 (look1 -0.02, look2 -0.25); paired full minus lin +2.44% [+1.66%, +3.22%]
+     look1: M8_lin harness -0.03% [-0.40%, +0.34%]
+     look2: M8_lin harness -0.57% [-1.00%, -0.14%]
+  VERDICT (min R = -0.12; yes >= 0.75, partly >= 0.40): no.  M8_lin harness flags: {'look1': {'A_pass': True, 'B_pass': False}, 'look2': {'A_pass': False, 'B_pass': False}}
+
+=== POST HOC (labelled; written after the pre-registered readout) ===
+  M8x_abl_hour    A: look1 +0.0132 [+0.0063, +0.0201]  look2 +0.0074 [-0.0007, +0.0155]  pooled +0.0106 (52% of M7_gbm; full minus view +0.0099 [+0.0050, +0.0147])
+  M8x_abl_hour    B: look1 +0.42% [-0.00%, +0.82%]  look2 +0.23% [-0.14%, +0.60%]  pooled +0.34% (16% of M7_gbm; full minus view +1.84% [+1.28%, +2.40%])
+  M8x_abl_wkend   A: look1 +0.0140 [+0.0082, +0.0198]  look2 +0.0056 [-0.0031, +0.0142]  pooled +0.0101 (50% of M7_gbm; full minus view +0.0103 [+0.0055, +0.0151])
+  M8x_abl_wkend   B: look1 +1.54% [+0.93%, +2.15%]  look2 +1.55% [+0.86%, +2.22%]  pooled +1.61% (74% of M7_gbm; full minus view +0.57% [+0.25%, +0.90%])
+  M8x_lin_wk      A: look1 +0.0243 [+0.0147, +0.0340]  look2 +0.0059 [-0.0177, +0.0294]  pooled +0.0159 (78% of M7_gbm; full minus view +0.0046 [-0.0074, +0.0165])
+  M8x_lin_wk      B: look1 +0.23% [-0.25%, +0.71%]  look2 -0.84% [-1.58%, -0.19%]  pooled -0.22% (-10% of M7_gbm; full minus view +2.41% [+1.50%, +3.31%])

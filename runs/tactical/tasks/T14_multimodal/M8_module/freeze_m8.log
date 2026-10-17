@@ -1,0 +1,46 @@
+module rule: {'M7_gbm': 0.019810447249340876, 'M7c_gbm_resid': 0.025721294851477818} -> M7c_gbm_resid
+{
+ "module": "M7c_gbm_resid",
+ "module_rule": "larger mean over the two looks of the stored target-A increment; ties to M7_gbm",
+ "rule_values": {
+  "M7_gbm": 0.019810447249340876,
+  "M7c_gbm_resid": 0.025721294851477818
+ },
+ "cut": "2026-10-01",
+ "view_columns": [
+  "gbm_resA_hat",
+  "gbm_resB_hat"
+ ],
+ "n_pool_rows_from_cut_file": 0,
+ "history": {
+  "history_gbm_fwd.parquet": {
+   "sha256": "4c1cff4400f21690bac59f351ff0dfe53dcd88752e5129cd7e61e7a909358d9f",
+   "rows": 7962,
+   "columns": [
+    "gbm_resA_hat",
+    "gbm_resB_hat"
+   ]
+  },
+  "history_kern_fwd.parquet": {
+   "sha256": "786afbfcb57254bf2b04173596079df99cee24a781dd50f01c5a8bd882ba46c2",
+   "rows": 7962,
+   "columns": [
+    "kern_A_hat",
+    "kern_B_hat"
+   ]
+  }
+ },
+ "criterion": {
+  "A_inc_min": 0.005,
+  "B_rel_min": 0.01,
+  "pocock_alpha": 0.0294,
+  "looks_months": [
+   3,
+   6
+  ],
+  "min_complete_months": 3,
+  "controls": "C1 permuted, C2a harness S3 duplicate, C2b frozen kernel"
+ },
+ "seconds": 100.0
+}
+{'gbm_A.txt': '6e7fdf5ddb649293c72cbdbf0656b23f46fd9b43fe7964087f156dcd35012031', 'kern_A.npz': '8d755c52e4035dd66aca3fae69853a4150e7de5ad9acc13fa3c38b379ad6518c', 'gbm_B.txt': 'b9414b285cea47a22ec785dc63dbd23808c04c9ff431a50a0a8a319f858c83ae', 'kern_B.npz': '4536d9bc0adf3e5c5d9f7058b210a21f228c189ab29fcf33c793b18ee1b0c667'}
