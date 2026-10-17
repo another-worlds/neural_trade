@@ -1,0 +1,7 @@
+final model: month 2026-09, pool 7634 anchors (2025-10-16..2026-08-31), LightGBM 200 rounds, 15 leaves
+PD surface vol percentile x hour: range -0.484..+0.799 (log RV change units); additive part explains 97.7% of its variance; interaction range -0.164..+0.130, sd 0.041
+str20: PD range gbm -0.053..+0.126 vs linear -0.112..+0.117; PD at the low end +0.045, middle -0.026, high end +0.116; correlation(gbm, linear) 0.56; gbm minus linear sd 0.060
+str60: PD range gbm -0.072..+0.238 vs linear -0.172..+0.191; PD at the low end +0.238, middle -0.056, high end +0.039; correlation(gbm, linear) 0.73; gbm minus linear sd 0.079
+largest interaction cells (vol pct, UTC hour, value): (0.05, 14h, -0.164); (0.10, 14h, -0.152); (0.05, 23h, +0.130); (0.75, 15h, +0.126); (0.15, 14h, -0.117)
+hour profile at vol pct 0.15 / 0.50 / 0.85 (peak hour, trough hour, swing): 0.15: 14h, 03h, 0.793; 0.50: 14h, 03h, 1.014; 0.85: 14h, 03h, 0.974
+vp_h alone (vp_d untouched): +0.326 at 0.05, -0.126 at 0.50, -0.440 at 0.95
