@@ -1,0 +1,62 @@
+checks {
+ "cut": {
+  "lag_vs_LV0_max_abs": 6.403464425375205e-10,
+  "lag5m_vs_LV0_max_abs": 6.399965002401586e-10,
+  "leak_vs_target_max_abs": 0.0,
+  "leak_move_vs_T10_label_max_abs_bps": 0.0
+ },
+ "fwd": {
+  "lag_vs_LV0_max_abs": 9.636771380883147e-10,
+  "lag5m_vs_LV0_max_abs": 9.63776614071321e-10,
+  "leak_vs_target_max_abs": 0.0,
+  "leak_move_vs_T10_label_max_abs_bps": 0.0
+ }
+}
+look1 baselines 1s
+look2 baselines 0s
+T14 harness baselines (V3 for A, H3 for B; no view), harness commit e235c7dd6b3e17360d79394d9a6a4567c34f789f
+look1: ok anchors 17846, months 2024-07..2025-07 (13)
+  A: V3 skill vs AR mean +0.2299 CI [+0.2083, +0.2515] months positive 13/13
+  B: n 9022 base rate 0.3915; Brier H3 0.16930 H1 0.17484 B1 0.20010 B0 0.23937; H3 skill vs B1 +15.39% CI [+13.77%, +16.97%]; vs H1 +3.17%; vs B0 +29.27%; AUC 0.8094
+  equality on 2024-09: V3 max|diff| vs T11 0.00e+00; H3 max|diff| vs T10 0.00e+00
+look2: ok anchors 8679, months 2025-11..2026-09 (11)
+  A: V3 skill vs AR mean +0.2384 CI [+0.2139, +0.2629] months positive 11/11
+  B: n 7962 base rate 0.3586; Brier H3 0.16663 H1 0.17567 B1 0.19886 B0 0.24310; H3 skill vs B1 +16.21% CI [+14.62%, +17.79%]; vs H1 +5.15%; vs B0 +31.46%; AUC 0.8075
+  equality on 2026-01: V3 max|diff| vs T11 0.00e+00; H3 max|diff| vs T10 0.00e+00
+look1: 17937 anchors, 17846 ok, view rows 17937
+  A done 2s
+  B done 4s
+look2: 8729 anchors, 8679 ok, view rows 8729
+  A done 1s
+  B done 2s
+done D0_lag in 6s -> D:\nt\nt_t14_core\runs\tactical\tasks\T14_multimodal\core\dummy_results\D0_lag
+look1: 17937 anchors, 17846 ok, view rows 17937
+  A done 2s
+  B done 4s
+look2: 8729 anchors, 8679 ok, view rows 8729
+  A done 1s
+  B done 2s
+done D1_leak in 6s -> D:\nt\nt_t14_core\runs\tactical\tasks\T14_multimodal\core\dummy_results\D1_leak
+{
+ "D0_lag": {
+  "look1": {
+   "A_inc": -3.7670834775819314e-05,
+   "B_rel": 6.718136219641124e-05
+  },
+  "look2": {
+   "A_inc": -2.1328246502845666e-05,
+   "B_rel": -4.7327364536497996e-05
+  }
+ },
+ "D1_leak": {
+  "look1": {
+   "A_inc": 0.7700770629217746,
+   "B_rel": 0.9317059082059033
+  },
+  "look2": {
+   "A_inc": 0.7615627175832359,
+   "B_rel": 0.907245251959311
+  }
+ }
+}
+total 16s
