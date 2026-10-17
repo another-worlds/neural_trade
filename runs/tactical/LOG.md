@@ -5,29 +5,25 @@ only, with its noise level. Earlier work this continues from: `runs/experiments/
 
 ## Handoff
 
-_Rewritten at the end of every tactical session._ 2026-10-13.
+_Rewritten at the end of every tactical session._ **2026-10-17 (volatility session).**
 
-**State.** Direction is closed as far as this data allows. H5-H82 and the review
-[REVIEW_2026-10-13.md](REVIEW_2026-10-13.md) record what failed, why, and the untested variants U1-U11. The H62 forward test
-failed (H82).
+**State:** nothing is running. Everything is committed and pushed on `nt-tactical`.
 
-**Volatility track (this session, by the owner's split).**
-- T01 / H83 passed: the vol-change forecast, +0.03 beyond HAR levels; it replicates on 2017-18 (H86).
-- T03 / H85 passed: HAR-scaled intervals; a D-008 candidate for the MVP.
-- T02 / H84 failed: vol-timed exposure.
-- T04-A / H86 failed: the 15-minute calendar.
+**This session's line (volatility, risk measurement, multimodal sprint):**
+- Working on unseen data: next-hour vol-change forecast (T01), HAR intervals (T03, T05), barrier-hit probability H3 (T10, T12), UTC clocks (T11), support/resistance lines for the vol change (T13), and the regime-key nonlinear stage (T14 M7/M9).
+- Direction: closed (H82, T06-T08; research H91/H92).
 
-Nothing is running.
+**Frozen prospective bets** (score once, months from 2026-10; need the Binance file extended past 2026-09, which is the owner's forward-data permission): T04-B, T05-B, T11, T12, T13, M7c (T14 M8), M9h6 (T14 M9, post hoc). The outlook session has its own (O4, O5, O7, O9, O10, O11a/b).
 
-**Next.**
-- **The next session:** geometry, physics, regression and synthetic indicators, from [OUTLOOK_positive.md](OUTLOOK_positive.md) (TACTICAL.md "Division of work").
-- **Volatility track:** T04-B, the prospective test. Download the Binance months from 2026-10 into the forward file, then run `runs/tactical/tasks/T04_vol_calendar/score_B.py` once at least 3 complete months exist.
+**Owner questions open:** (1) extend the Binance forward file past 2026-09 so the frozen bets can resolve; (2) delete `/tmp_patch.py` and `/tmp_scan.py` in the Git install folder (agent/lead strays); (3) open the PR for `nt-tactical-harscale` (no gh here); (4) D-050: is a public macro-release calendar a new data source; (5) new-data concepts of the multimodal catalogue (news, order book, funding) need a D-050 decision.
 
-**Open owner items:**
-- delete `/tmp_patch.py` in the Git install folder (asked, no answer);
-- a clean Binance retrain of H62 (U3; not recommended after H82).
+**Reports:** `runs/tactical/report/` has tactical_report.html, regression_report.html, positive_outlook.html, multimodal_report.html; the deck is `runs/tactical/deck/tactical_deck.html`.
 
-**For the MVP lead:** DECISIONS entries listed in "For the MVP lead". The dashboard was updated to H86.
+**Next (build on what works):**
+1. Productise the hour x weekend profile for H3 and V3 (the M9 module) and test the prospective months once the data exists.
+2. Hour x weekend x |stretch| inside the MVP variance head / conformal scale: needs an MVP paired test (D-025).
+3. Fine-tuned TTM / VisionTS only after the profile is in the base.
+4. Kronos path sampling with more paths per anchor (card in the report).
 
 ## Hypotheses
 
@@ -126,6 +122,7 @@ Nothing is running.
 | H94 | 2026-10-15 | T11 (research 2026-10-15 #1.1; SPEC 0a55dac): (1) `runs/tactical/common/timefix.py` (to_utc, ny_time, seam_mask; reproduces T09 exactly; Binance 2025-06 lag-0 corr 0.921); (2) next-hour vol-change seasonality: V0 S3 (file time), V1 UTC hour, V2 S3 + NY basis, V3 S3 + 96 UTC slots; selection 2019-01..2024-06 (a3ebba2); report-only Binance 2025-26 and 2017-18; prospective freeze | runs/tactical/tasks/T11_utc_seasonality/REPORT.md | ~2 min CPU | **Helper done; calendar effect is recent-market only; verdict prospective.** Selection: V1 +0.0004 (harmonics absorb the constant shift), V2 +0.0098, **V3 chosen +0.0199 [+0.017,+0.023]** (61/66). Report-only: Binance V3 +0.056, V2 +0.047 (11/11); 2017-18 ~0. Intraday volatility was flat before 2021-11 and now peaks at the US open (UTC 14) with quarter-hour spikes. Frozen V0/V1/V3 on Binance to 2026-09-30 (sha256 6d62faaf...); `score_B.py` from 2026-10-02 at 3 and 6 months (Pocock). | runs/tactical/tasks/T11_utc_seasonality/ |
 | H95 | 2026-10-15 | T12 (SPEC 26d9006): T10's H3 + a monthly isotonic calibration (H3c), verdict on the untouched 2017-10..2018-12 (Look A); prospective freeze | runs/tactical/tasks/T12_barrier_calibrated/REPORT.md | ~2 min CPU | **FAIL: monthly calibration hurts.** Primary cell H3c: skill over B1 +21.4% [+19.0,+23.7] (pass) but ECE 3.88 pp and Brier +3.9% worse than H3 (fail); H3c worse than H3 in all 9 cells (one month of anchors is too few for an isotonic map). **H3 itself holds on a third period:** +24.4% [+22.2,+26.4] over B1, ECE 1.74 pp, AUC 0.874, all 9 cells Holm-significant (comparator, not the verdict model). Frozen for months from 2026-10. | runs/tactical/tasks/T12_barrier_calibrated/ |
 | H96 | 2026-10-15 | T13 sprint (owner: synthetic geometric indicators = support/resistance lines; SPEC 1869df6): causal hull lines, pivot levels (confirmed k = 3 bars later) and regression channel, in sigma units, added to the working targets: A barrier hit over H3, B size over O5 L1, C next-hour vol change over T11 V3; selection 2019-01..2024-06 (48e0c56); J1 Bitstamp 2017-18, J2 Binance 2025-26 (second looks); Holm over A, B, C; prospective freeze | runs/tactical/tasks/T13_support_lines/REPORT.md | ~25 min CPU | **C PASS: support/resistance lines (1-min bars, 240) add to the vol-change forecast** +0.0195 [+0.0138,+0.0251] 14/15 (2017-18) and +0.0087 [+0.0033,+0.0141] 9/11 (Binance), Holm p 0.0072. B: +0.0004 / +0.0008, below the +0.003 bar. A: no gain over H3 (-0.7% / -0.2%). Frozen sha 8fec9bf3...; page section #lines added to positive_outlook.html. | runs/tactical/tasks/T13_support_lines/ |
+| H97 | 2026-10-17 | **Multimodal night (owner asleep; SPEC T14 dcef1a0 before any model)**: research catalogue (6 agents, 0.94M tokens; runs/tactical/research/2026-10-17-multimodal/), two isolated envs D:/nt/nt_mm_env and nt_mm_legacy (11.5 GB incl. weights, nt env untouched), harness core/ (hourly UTC anchors, V3/H3 bases, C1/C2a controls, leak-detection dummy), six views fused onto V3 (vol change) and H3 (barrier hit): M1 Chronos-2, M2 TTM r2, M3 Kronos, M4 regime card (CLIP image + caption), M5 VisionTS, M6 FAISS retrieval; then M7 (GBM on the 12 regime keys), M8 (ablation, freeze), M9 (compact profile module); looks: cut 2024-07..2025-07 and Binance 2025-11..2026-09 | runs/tactical/tasks/T14_multimodal/ ; report/multimodal_report.html | ~3 GPU-h shared, ~2 CPU-h | **Ready-made foundation/image models add nothing beyond controls:** M1 A +0.0074/+0.0026, M2 -0.0023/+0.0012 (fine-tuned +0.0105/+0.0042), M3 +0.0020/+0.0009, M5 +0.0005/+0.0037, M4 image ~0, caption passes look 1 only; the information-equivalent numeric control C2a (S3 + monotone transform) beat the view in 35 of 36 comparisons. **What worked: nonlinearity on regime keys.** M6 retrieval hinted at it; **M7 (LightGBM on 12 keys, monthly walk-forward) passes both targets on both looks incl. the kernel control: A +0.0273/+0.0124, B +2.22%/+2.04% Brier over H3.** M8 ablation: UTC-hour x weekend carries 62% of A and 92% of B, |stretch| 47% of A; S/R lines and last-3-hours RV add nothing; 8 cheap linear terms recover only 51% of A. M9: a compact hour x weekend profile + |stretch| ridge recovers/exceeds A (post hoc M9h6_prof_str: R_A 1.64, R_B 0.89) but the pre-registered linear views fail look 2 (small-sample overfit in the first Binance months). Frozen for 2026-10+: M7c_gbm_resid (M8, sha in frozen_P.json) and M9h6_prof_str (post hoc candidate, recipe sha e065e6b7...). Scoring them needs the Binance file extended past 2026-09 (owner permission, TACTICAL.md forward data). | runs/tactical/report/multimodal_report.html |
 
 ## For the MVP lead
 
