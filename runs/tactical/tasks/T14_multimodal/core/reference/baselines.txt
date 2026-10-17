@@ -1,0 +1,9 @@
+T14 harness baselines (V3 for A, H3 for B; no view), harness commit e235c7dd6b3e17360d79394d9a6a4567c34f789f
+look1: ok anchors 17846, months 2024-07..2025-07 (13)
+  A: V3 skill vs AR mean +0.2299 CI [+0.2083, +0.2515] months positive 13/13
+  B: n 9022 base rate 0.3915; Brier H3 0.16930 H1 0.17484 B1 0.20010 B0 0.23937; H3 skill vs B1 +15.39% CI [+13.77%, +16.97%]; vs H1 +3.17%; vs B0 +29.27%; AUC 0.8094
+  equality on 2024-09: V3 max|diff| vs T11 0.00e+00; H3 max|diff| vs T10 0.00e+00
+look2: ok anchors 8679, months 2025-11..2026-09 (11)
+  A: V3 skill vs AR mean +0.2384 CI [+0.2139, +0.2629] months positive 11/11
+  B: n 7962 base rate 0.3586; Brier H3 0.16663 H1 0.17567 B1 0.19886 B0 0.24310; H3 skill vs B1 +16.21% CI [+14.62%, +17.79%]; vs H1 +5.15%; vs B0 +31.46%; AUC 0.8075
+  equality on 2026-01: V3 max|diff| vs T11 0.00e+00; H3 max|diff| vs T10 0.00e+00

@@ -1,0 +1,77 @@
+T14 harness: view D0_lag  (harness commit e235c7dd6b3e17360d79394d9a6a4567c34f789f, view sha256 {'cut': 'ecf2f8cbc5771f7fefe8a84c82f25136b92407e773e32fa49e9c47dc13420423', 'fwd': '5dca07d5e3332875c53f79d3e0512d6f9e152b3b190d96f4838138028bd8346c'})
+columns: ['lag_logrv', 'lag_logrv_5m', 'point_log_rv']
+
+=== look1: months 2024-07..2025-07, train start 2023-07-01 00:00:00 ===
+anchors 17937, base ok 17846, view rows finite 17937, used 17846, dropped for the view 0
+-- target A: skill vs AR(1) (T01), monthly; increment over V3
+month      n_te        V3   V3+view       inc        C1       C2a       avg
+2024-07     744   +0.2156   +0.2156   -0.0001   +0.0066   +0.0050   -0.0636
+2024-08     744   +0.2564   +0.2564   -0.0000   +0.0013   +0.0084   -0.0739
+2024-09     660   +0.1613   +0.1610   -0.0003   +0.0084   +0.0268   -0.0393
+2024-10     742   +0.2741   +0.2741   -0.0000   -0.0005   +0.0172   -0.0838
+2024-11     646   +0.2173   +0.2173   +0.0000   -0.0011   +0.0011   -0.0558
+2024-12     735   +0.2170   +0.2169   -0.0001   -0.0009   +0.0195   -0.0519
+2025-01     744   +0.1897   +0.1897   +0.0000   +0.0006   +0.0086   -0.0478
+2025-02     671   +0.1927   +0.1927   -0.0000   -0.0006   +0.0087   -0.0168
+2025-03     689   +0.2558   +0.2558   +0.0000   -0.0027   +0.0266   -0.0642
+2025-04     720   +0.2592   +0.2593   +0.0000   -0.0001   -0.0045   -0.0903
+2025-05     744   +0.2364   +0.2364   +0.0000   +0.0008   +0.0025   -0.0645
+2025-06     713   +0.2298   +0.2298   -0.0000   +0.0046   -0.0027   -0.0704
+2025-07     470   +0.2837   +0.2837   -0.0000   +0.0057   +0.0009   -0.1096
+  increment view     mean -0.0000  95% t-CI [-0.0001, +0.0000]  months positive 5/13  p1 0.9267
+  increment c2a      mean +0.0091  95% t-CI [+0.0028, +0.0154]  months positive 11/13  p1 0.0043
+  increment avg      mean -0.0640  95% t-CI [-0.0782, -0.0498]  months positive 0/13  p1 1.0000
+  increment c1       mean +0.0017  95% t-CI [-0.0004, +0.0038]  months positive 7/13  p1 0.0522
+  skill V3 +0.2299  skill V3+view +0.2299  skill AR 0 by definition; skill 'avg' +0.1659
+  candidate minus c1: mean -0.0017 CI [-0.0039, +0.0004]
+  candidate minus c2a: mean -0.0091 CI [-0.0155, -0.0028]
+  FLAGS A: {'inc_ge_0.005': False, 'ci_lo_gt_0': False, 'above_c1': False, 'above_c2a': False, 'pass': False}
+
+-- target B: P(max |move| >= 50 bps within 60 min); n 9022, base rate 0.3915
+  Brier: H3 0.16930, view 0.16929, c2a 0.16828, H1 0.17484
+  AUC: H3 0.8094, view 0.8094, c2a 0.8108
+  rel. Brier improvement over H3, view  : +0.01%  95% day-block CI [-0.02%, +0.03%]  p1 0.3057
+  rel. Brier improvement over H3, c2a   : +0.60%  95% day-block CI [+0.19%, +1.00%]  p1 0.0024
+  rel. Brier improvement over H3, c1    : mean +0.00% (max over seeds +0.06%)
+  candidate minus c1: +0.01% CI [-0.05%, +0.06%]
+  candidate minus c2a: -0.60% CI [-0.99%, -0.18%]
+  monthly rel. improvement: 2024-07 +0.10%, 2024-08 -0.02%, 2024-09 +0.04%, 2024-10 +0.01%, 2024-11 -0.06%, 2024-12 -0.05%, 2025-01 -0.01%, 2025-02 -0.01%, 2025-03 +0.01%, 2025-04 +0.02%, 2025-05 +0.01%, 2025-06 +0.01%, 2025-07 -0.01%
+  FLAGS B: {'rel_ge_1pct': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+=== look2: months 2025-11..2026-09, train start 2025-10-02 00:00:00 ===
+anchors 8729, base ok 8679, view rows finite 8729, used 8679, dropped for the view 0
+-- target A: skill vs AR(1) (T01), monthly; increment over V3
+month      n_te        V3   V3+view       inc        C1       C2a       avg
+2025-11     720   +0.1749   +0.1748   -0.0002   -0.0047   +0.0103   -0.0186
+2025-12     742   +0.2450   +0.2451   +0.0000   -0.0038   +0.0023   -0.0759
+2026-01     729   +0.2798   +0.2798   +0.0000   -0.0015   -0.0008   -0.0819
+2026-02     672   +0.2205   +0.2199   -0.0006   -0.0019   +0.0237   -0.0430
+2026-03     744   +0.2702   +0.2705   +0.0003   +0.0010   +0.0022   -0.1103
+2026-04     720   +0.2129   +0.2128   -0.0001   -0.0002   +0.0137   -0.0698
+2026-05     744   +0.2187   +0.2186   -0.0001   +0.0031   +0.0197   -0.0673
+2026-06     720   +0.2177   +0.2178   +0.0001   +0.0005   +0.0084   -0.0748
+2026-07     739   +0.2872   +0.2873   +0.0001   +0.0025   +0.0126   -0.1115
+2026-08     720   +0.2146   +0.2146   +0.0001   -0.0003   -0.0094   -0.0817
+2026-09     712   +0.2809   +0.2810   +0.0001   +0.0027   +0.0193   -0.1065
+  increment view     mean -0.0000  95% t-CI [-0.0002, +0.0001]  months positive 7/11  p1 0.6237
+  increment c2a      mean +0.0093  95% t-CI [+0.0026, +0.0160]  months positive 9/11  p1 0.0059
+  increment avg      mean -0.0765  95% t-CI [-0.0954, -0.0575]  months positive 0/11  p1 1.0000
+  increment c1       mean -0.0002  95% t-CI [-0.0020, +0.0015]  months positive 5/11  p1 0.6132
+  skill V3 +0.2384  skill V3+view +0.2384  skill AR 0 by definition; skill 'avg' +0.1619
+  candidate minus c1: mean +0.0002 CI [-0.0015, +0.0019]
+  candidate minus c2a: mean -0.0093 CI [-0.0161, -0.0025]
+  FLAGS A: {'inc_ge_0.005': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+-- target B: P(max |move| >= 50 bps within 60 min); n 7962, base rate 0.3586
+  Brier: H3 0.16663, view 0.16664, c2a 0.16554, H1 0.17567
+  AUC: H3 0.8075, view 0.8076, c2a 0.8096
+  rel. Brier improvement over H3, view  : -0.00%  95% day-block CI [-0.06%, +0.05%]  p1 0.5725
+  rel. Brier improvement over H3, c2a   : +0.65%  95% day-block CI [+0.23%, +1.06%]  p1 0.0017
+  rel. Brier improvement over H3, c1    : mean -0.16% (max over seeds -0.03%)
+  candidate minus c1: +0.15% CI [+0.05%, +0.26%]
+  candidate minus c2a: -0.66% CI [-1.06%, -0.24%]
+  monthly rel. improvement: 2025-11 -0.16%, 2025-12 +0.15%, 2026-01 -0.07%, 2026-02 -0.02%, 2026-03 -0.01%, 2026-04 +0.06%, 2026-05 +0.00%, 2026-06 -0.01%, 2026-07 -0.01%, 2026-08 +0.02%, 2026-09 +0.01%
+  FLAGS B: {'rel_ge_1pct': False, 'ci_lo_gt_0': False, 'above_c1': True, 'above_c2a': False, 'pass': False}
+
+PRE-REGISTERED PASS: A both looks False, B both looks False, candidate False
+one-sided p (max over the two looks): A 0.9267432222120074, B 0.5725427457254274  (Holm over 6 x 2 is the lead's)

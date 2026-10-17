@@ -1,0 +1,14 @@
+{
+ "cut": {
+  "lag_vs_LV0_max_abs": 6.403464425375205e-10,
+  "lag5m_vs_LV0_max_abs": 6.399965002401586e-10,
+  "leak_vs_target_max_abs": 0.0,
+  "leak_move_vs_T10_label_max_abs_bps": 0.0
+ },
+ "fwd": {
+  "lag_vs_LV0_max_abs": 9.636771380883147e-10,
+  "lag5m_vs_LV0_max_abs": 9.63776614071321e-10,
+  "leak_vs_target_max_abs": 0.0,
+  "leak_move_vs_T10_label_max_abs_bps": 0.0
+ }
+}
