@@ -211,8 +211,9 @@ class RiskGuard:
         (the ExecutionEngine passes it). A reducing order is limited to ``|position| - committed``: clipped to it
         (``clipped_to_position``), or denied ``reduce_exceeds_position`` when nothing is left. A flipping order
         in ACTIVE is not a reduction and keeps its meaning (it is clipped only under reduce_only, REDUCING or the
-        loss limit, like before, now to the same capacity). Max position (NT-299) takes the worse of the position after
-        this order alone and after the committed reductions filled first (a flip trades from what they leave).
+        loss limit, like before, now to the same capacity). Max position and the gross cap (NT-299) take the worse of
+        the position after this order alone and after the committed reductions filled first (a flip trades from what
+        they leave).
 
         Closing: when no resting reduce order claims the position (``committed_reduce_qty`` 0) and ``reduce_only`` or the
         order asks for at least the whole position, and flooring to the size step would leave a remainder below
@@ -395,8 +396,10 @@ class RiskGuard:
                     and worst * val_price + pos_commit > lim.max_position_notional):
                 return _deny(MAX_POSITION)
             cap_frac = self.gross_exposure_cap_frac
-            if cap_frac is not None and abs(after) > abs(held):  # the order raises the account's gross exposure
-                gross = self.portfolio.gross_exposure(marks) + open_commit + (abs(after) - abs(held)) * val_price
+            if cap_frac is not None and worst > abs(held):  # the order raises the account's gross exposure
+                # NT-299: like max position, the worse of the position after this order alone and after the
+                # committed reductions filled first (QA C1c: long 2, a resting SELL 2, SELL 11 ends at short 11)
+                gross = self.portfolio.gross_exposure(marks) + open_commit + (worst - abs(held)) * val_price
                 limit = cap_frac * self.portfolio.realised_equity()
                 if limit <= 0 or gross > limit * (1 + 1e-9):
                     return _deny(MAX_GROSS_EXPOSURE)

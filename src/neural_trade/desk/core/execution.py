@@ -35,8 +35,11 @@ way (check ``books_refused``). On a LIVE account the venue fact stands: the fill
 booked as ``venue_fill_on_rejected`` (the order stays REJECTED) and halts too; a LIVE fill the engine cannot book at all
 (no spot balance, a FILLED / EXPIRED / SUBMITTED / DENIED order, an unknown client_id, ...) is journalled
 ``venue_fill_unbooked`` with the fill and an order snapshot, RiskGuard is halted, and only then is the error raised. A
-LIVE ``size_frac`` accept must carry ``resolved_qty``: without it the order is REJECTED (``resolved_qty_missing``) and
-RiskGuard halted.
+LIVE ``size_frac`` accept must carry ``resolved_qty``: without it the order is REJECTED (``resolved_qty_missing``),
+RiskGuard halted and the venue asked to cancel it (a broker error is journalled ``cancel_failed``). A fill above a
+resolved ``size_frac`` order's ``resolved_qty`` has its excess refused on PAPER / BACKTEST (``fill_refused``, check
+``resolved_qty_exceeded``, the applied part booked) and is booked in full on LIVE (``fill_refused`` applied, halt); a
+LIVE fill on a REJECTED order is booked only up to the order's own (or resolved) quantity, else ``venue_fill_unbooked``.
 
 **Handlers (re-entrancy).** A bus handler that calls a mutating method (``submit``, ``apply``, ``cancel``, ...) while the
 engine publishes does not run at once: the call is queued, returns ``None`` and runs, in order, when the outermost
@@ -96,7 +99,12 @@ Gaps CONTRACTS leaves open (minimum choices, listed in the NT-224 report):
   leaves the order unchanged and is journalled; a broker ``modified`` event below the filled quantity is refused;
 * a user's explicit close goes through RiskGuard like any order (the force_reduce path of NT-272 does not exist yet);
 * an offset bracket (``tp_is_offset``) is stored verbatim; resolving it against the fill bar's open is the Engine's /
-  SimBroker's job (they hold the bar).
+  SimBroker's job (they hold the bar);
+* not handled here (NT-299 notes): several strategies' ``size_frac`` entries filled at the same open are each sized on
+  the realised equity before any of them, while the engine bounds each on the equity after the earlier ones were applied
+  (with costs the later ones are clipped by the fee): the Engine's A5.9 loop decides the order (DESK-1.7); a LIVE broker
+  should never send a ``size_frac`` order to the venue but resolve it to a quantity first (DESK-6.1), which makes the
+  ``resolved_qty_missing`` rejection a backstop.
 """
 from __future__ import annotations
 
@@ -129,6 +137,7 @@ HANDLER_QUEUE_LIMIT = 1000  # calls a bus handler may queue (and the calls one d
 FILL_PRICE_TOLERANCE = 1e-6  # relative: a fill reference price above the checked price by more than this is re-checked
 SIZE_FRAC_TOLERANCE = 1e-9  # relative: a size_frac fill above its A5.1 equity sizing by more than this is clipped
 RESOLVED_QTY_MISSING = "resolved_qty_missing"  # reason of a LIVE size_frac accept without resolved_qty (rejected)
+RESOLVED_QTY_EXCEEDED = "resolved_qty_exceeded"  # fill_refused check: a fill above a size_frac order's resolved_qty
 VENUE_FILL_UNBOOKED = "venue_fill_unbooked"  # journal kind and halt reason of a LIVE fill the engine cannot book
 
 JournalSink = Callable[[str, dict], None]
@@ -474,6 +483,9 @@ class FillGate:
         checked = self.checked.get(cid)
         prior = self.notional.get(cid, 0.0)
         above = checked is not None and prior + q * mid > (o.filled_qty + q) * checked * (1 + FILL_PRICE_TOLERANCE)
+        # ``o.reduce_only`` is implied by ``opposite`` today (RiskGuard denies a reduce-only order that does not reduce,
+        # so every accepted one was opposite at submit: QA mutant Q13 is equivalent); it stays for the broker-made
+        # reduce-only exits NT-296 adopts without a submit
         if not (always or sf or o.reduce_only or above or cid in self.opposite
                 or e.risk.state is not TradingState.ACTIVE):
             return RiskDecision(True, "", q)
@@ -507,10 +519,31 @@ class FillGate:
         d = e.risk.check(cand, **kw)
         if not d.allowed and d.reason == INVALID_ORDER and cand.bracket:
             # a gap through an absolute bracket level puts it on the wrong side of the fill price: the bracket was
-            # validated at submit and the gap rule exits at the open (A5.2, A5.3, the oracle); the fill itself is
-            # judged without it (NT-299: nt225_parity seeds 0, 2, 3, ...)
-            d = e.risk.check(dataclasses.replace(cand, bracket=None), **kw)
+            # validated at submit and the gap rule exits at the open (A5.2, A5.3, the oracle); the fill is judged
+            # without that leg only, the valid legs keep valuing it (NT-299: nt225_parity seeds 0, 2, 3; QA B5)
+            # (retrying on any other denial changes nothing: a wrong-side leg is the only bracket-dependent denial,
+            # and the denials RiskGuard returns before it (halted, instrument, marks) do not depend on the legs; QA
+            # mutant K9 is equivalent)
+            kept = self.right_side_legs(cand, mid)
+            if kept != cand.bracket:
+                d = e.risk.check(dataclasses.replace(cand, bracket=kept), **kw)
         return d
+
+    @staticmethod
+    def right_side_legs(o: Order, mid: float) -> dict:
+        """``o.bracket`` without the absolute legs on the wrong side of ``mid`` (RiskGuard's side rule: a BUY's take
+        profit above the entry and its stop below, reversed for a SELL). Offset legs and malformed legs are kept (an
+        invalid one still denies the order)."""
+        br = dict(o.bracket or {})
+        if br.get("tp_is_offset"):
+            return br
+        buy = o.side is Side.BUY
+        for key, up in (("take_profit", buy), ("stop_loss", not buy)):
+            v = br.get(key)
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0 \
+                    and (v <= mid if up else v >= mid):
+                br[key] = None
+        return br
 
     # ------------------------------------------------------------------ refusals
     def write_refused(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool, dead: bool,
@@ -879,6 +912,13 @@ class ExecutionEngine:
             self._reserved.pop(o.client_id, None)
             self._commit(o, _S.REJECTED, "rejected", ev.ts_event, reason=RESOLVED_QTY_MISSING)
             self._halt_risk(RESOLVED_QTY_MISSING)
+            try:  # the venue accepted it: ask it to cancel (the order is REJECTED here, the reply changes nothing)
+                self.broker.cancel(o.client_id)
+            except Exception as exc:  # noqa: BLE001 - journalled; fills that still arrive go to venue_fill_on_rejected
+                log.error("venue cancel of %s (resolved_qty missing) failed: %r", o.client_id, exc, exc_info=exc)
+                self._record_error(exc)
+                self._write("cancel_failed", {"client_id": o.client_id, "reason": f"broker_error:{type(exc).__name__}",
+                                              "error": repr(exc)}, self.clock.now_ms())
             return
         if not (fill_refused and new is _S.REJECTED and o.status in (_S.ACCEPTED, _S.TRIGGERED)):
             check_transition(o.status, new)  # the one exception edge besides late_fill: a refused fill (A5.1)
@@ -945,17 +985,27 @@ class ExecutionEngine:
         if o.status is _S.FILLED:
             raise OverfillError(f"fill {f.trade_id} for the already filled order {o.client_id}")
         cap = o.qty if o.qty is not None else self._resolved.get(o.client_id)  # None: a size_frac nobody resolved
-        if cap is not None and o.filled_qty + f.qty > cap + DUST:
+        over = cap is not None and o.filled_qty + f.qty > cap + DUST
+        # NT-299 (lead, repair 1): a fill above a resolved size_frac order's resolved_qty has its excess refused on
+        # PAPER / BACKTEST (the applied part is booked) and is booked in full on LIVE with fill_refused (applied) + halt
+        resolved_left = max(cap - o.filled_qty, 0.0) if over and o.qty is None else None
+        if over and resolved_left is None:
             raise OverfillError(f"fills of {o.client_id} sum to {o.filled_qty + f.qty}, above its quantity {cap}")
         full = cap is None or o.filled_qty + f.qty >= cap - DUST
         check_transition(o.status, _S.FILLED if full else _S.PARTIALLY_FILLED, late_fill=late)  # before any change
         # the binding check failed for (part of) the fill: (check reason, checked price, fill qty, allowed qty)
         unwanted: Optional[tuple[str, float, float, float]] = None
+        checked_px = self._checked.get(o.client_id, 0.0)
+        if late and live_acct and resolved_left is not None:  # a LIVE late fill gets no re-check, only this record
+            unwanted = (RESOLVED_QTY_EXCEEDED, checked_px, f.qty, resolved_left)
         if not (late and live_acct):  # a LIVE late fill is a venue fact: only the flip / spot rules below apply
             d = self._gate.decision(o, f.mid, f.qty, always=late)
             allowed = d.qty if d.allowed and d.qty is not None else 0.0
             if allowed < f.qty - DUST:  # denied, or clipped (A): only the allowed quantity may be applied
-                unwanted = (d.reason or CLIPPED_TO_POSITION, self._checked.get(o.client_id, 0.0), f.qty, allowed)
+                why = d.reason or CLIPPED_TO_POSITION
+                if resolved_left is not None and allowed >= resolved_left - DUST:
+                    why = RESOLVED_QTY_EXCEEDED  # only the quantity beyond resolved_qty is refused
+                unwanted = (why, checked_px, f.qty, allowed)
                 if not live_acct:  # simulated: apply the allowed part only; nothing at all when it is 0
                     if allowed <= DUST:
                         self._gate.refuse(o, f.mid, unwanted[0], unwanted[1], dead=late)
@@ -1042,8 +1092,9 @@ class ExecutionEngine:
         has no edge out of it); its filled quantity and average price record what the venue did."""
         f = ev.fill
         total = o.filled_qty + f.qty
-        if o.qty is not None and total > o.qty + DUST:
-            raise OverfillError(f"fills of {o.client_id} sum to {total}, above its quantity {o.qty}")
+        cap = o.qty if o.qty is not None else self._resolved.get(o.client_id)
+        if cap is None or total > cap + DUST:  # beyond the order, or no known quantity: venue_fill_unbooked (NT-299)
+            raise OverfillError(f"fills of {o.client_id} sum to {total}, above its quantity {cap} (rejected order)")
         pos_events = self.portfolio.apply_fill(f, strategy_id=o.strategy_id)  # may raise: nothing is changed yet
         self._trades.add(f.trade_id)
         o.avg_fill_price = (o.avg_fill_price * o.filled_qty + f.price * f.qty) / total
