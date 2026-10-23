@@ -963,7 +963,8 @@ def test_295_p3_a_size_frac_order_is_sized_on_the_fill_price():
     assert d.allowed and d.qty == pytest.approx(10_000.0 / 120.0, rel=1e-12) and o.status.value == "ACCEPTED"
     # always re-checked, never qty None: at 100.00005 (inside the tolerance) the cash affords 10000 / 100.00005
     assert r.eng.precheck_fill(o.client_id, 100.00005).qty == pytest.approx(10_000.0 / 100.00005, rel=1e-12)
-    assert r.eng.precheck_fill(o.client_id, 90.0).qty == 100.0  # below the checked price: the reserved quantity
+    # below the checked price: still sized at the fill on equity (NT-299 reverses decision F: not the reserved 100)
+    assert r.eng.precheck_fill(o.client_id, 90.0).qty == pytest.approx(10_000.0 / 90.0, rel=1e-12)
 
 
 def test_295_p3_an_unwanted_simulated_fill_is_refused_without_touching_the_books():
@@ -1506,7 +1507,8 @@ def test_295_r2e_partial_fills_are_checked_on_the_cumulative_notional():
                                                                          "max_order_notional")
 
 
-def test_295_r2f_size_frac_fills_are_capped_at_the_reserved_quantity():
+def test_295_r2f_size_frac_fills_are_bounded_by_the_equity_sizing_at_the_fill():
+    # NT-299: the bound is 0.1 x 10000 / 100 = 10 sized at the fill (equal to the reservation here only by construction)
     r = Rig(is_spot=True)
     s = r.submit(side="BUY", qty=None, size_frac=0.1, type="MARKET")
     assert r.eng._reserved[s.client_id] == 10.0
@@ -1584,3 +1586,329 @@ def test_295_r2_the_live_index_holds_only_the_live_orders():
     r.broker.submit_kind = "rejected"
     r.submit(qty=1.0)
     assert list(r.eng._live) == [c.client_id] == [o.client_id for o in r.eng.open_orders()]
+
+
+# ------------------------------------------------------------------ NT-299 (NT-295 continuation, corrected decision F)
+def _lim(**kw):
+    return dataclasses.replace(RiskLimits.unlimited(), **kw)
+
+
+def test_299_p1_a_size_frac_fill_is_sized_at_the_fill_open_on_realised_equity():
+    """QA probe F1 (decision F reversed): close 100 -> next open 95; A5.1 sizes 0.5 x 10000 / 95, not the 50 reserved."""
+    r = Rig()  # margin, PAPER, cash 10000
+    o = r.submit(side="BUY", qty=None, size_frac=0.5, type="MARKET")
+    assert r.eng._reserved[o.client_id] == 50.0  # the estimate at the last close: commitments only
+    d = r.eng.precheck_fill(o.client_id, 95.0)
+    assert d.allowed and d.qty == 5_000.0 / 95.0
+    n = len(r.journal)
+    r.eng.apply(r.fill(o, 5_000.0 / 95.0, price=95.0))
+    assert (o.status.value, o.filled_qty, r.pf.position(X, "s").qty) == ("FILLED", 5_000.0 / 95.0, 5_000.0 / 95.0)
+    assert r.kinds()[n:] == ["order_filled", "fill", "position", "account"]  # nothing refused
+    s = r.submit(qty=None, size_frac=0.5, type="MARKET")
+    eq = r.pf.realised_equity()
+    assert r.eng.precheck_fill(s.client_id, 105.0).qty == 0.5 * eq / 105.0  # opening higher sizes smaller (probe S1)
+
+
+def test_299_p1_a_size_frac_fill_above_the_equity_sizing_is_clipped_to_it():
+    r = Rig()
+    o = r.submit(side="BUY", qty=None, size_frac=0.5, type="MARKET")
+    q = 5_000.0 / 95.0
+    n = len(r.journal)
+    r.eng.apply(r.fill(o, 5 * q, price=95.0))  # a 5x too large simulated fill
+    assert (o.status.value, o.filled_qty, r.pf.position(X, "s").qty) == ("FILLED", q, q)
+    assert r.kinds()[n:] == ["order_filled", "fill", "position", "account", "fill_refused"]
+    rec = r.journal[-1][1]
+    assert (rec["fill_qty"], rec["allowed_qty"], rec["refused_qty"]) == (5 * q, q, 4 * q)
+    s = r.submit(qty=None, size_frac=0.5, type="MARKET")
+    assert r.eng.precheck_fill(s.client_id, 95.0, qty=5 * q).qty == 0.5 * r.pf.realised_equity() / 95.0
+    # the relative tolerance is 1e-9: inside it the fill is trusted, beyond it the excess is refused
+    for factor, refused in ((1 + 5e-10, False), (1 + 1e-8, True)):
+        r = Rig()
+        o = r.submit(side="BUY", qty=None, size_frac=0.5, type="MARKET")
+        r.eng.apply(r.fill(o, q * factor, price=95.0))
+        assert ("fill_refused" in r.kinds()) is refused, factor
+        assert o.filled_qty == (q if refused else q * factor)
+
+
+def test_299_p1_a_spot_size_frac_fill_is_clipped_to_the_cash_at_the_fill():
+    r = Rig(is_spot=True, costs=PROF)  # taker 10 bp + slip 5 bp
+    o = r.submit(side="BUY", qty=None, size_frac=1.0, type="MARKET")
+    d = r.eng.precheck_fill(o.client_id, 95.0)
+    unit = 95.0 * (1 + 0.0010 + 0.0005)
+    assert d.allowed and d.reason == "clipped_to_cash" and d.qty == pytest.approx(10_000.0 / unit, rel=1e-12)
+    assert d.qty * unit <= 10_000.0 < 10_000.0 / 95.0 * unit
+
+
+def test_299_p1_parity_with_run_backtest_when_entries_open_below_the_previous_close(monkeypatch):
+    """QA nt295c_parity.py: OP[1] = 99.5 < C[0] = 100 and OP[6] = 104.5 < C[5] = 105 (23.6% of the reference CSV's bars
+    open below the previous close); the capped sizing of NT-295 drifted by up to 2.34 of equity at zero costs."""
+    import numpy as np
+
+    from tests.desk import test_sim_broker as sim
+    op, lo = list(sim.OP), list(sim.LO)
+    for k, v in ((1, 99.5), (6, 104.5)):
+        op[k], lo[k] = v, min(lo[k], v)
+    monkeypatch.setattr(sim, "OP", op)
+    monkeypatch.setattr(sim, "LO", lo)
+    for cost, final in ((RESEARCH_ZERO, 10_227.8137), (sim.PRICED, 10_108.6867)):
+        res = sim.oracle(cost, None)
+        pf, log = sim.desk_run(cost, None)
+        assert len(sim.trades_of(log)) == len(res.trades) == 5
+        assert np.allclose([e for _, e in pf.equity_curve], res.equity[1:], rtol=0, atol=1e-9)
+        assert pf.equity_curve[-1][1] == pytest.approx(final, abs=1e-4)
+        assert sim.trades_of(log)[0][3] == pytest.approx(res.trades[0].entry_price, rel=1e-12)
+
+
+def test_299_p1_a_gap_through_an_absolute_bracket_level_does_not_refuse_the_entry():
+    """nt225_parity: a LONG with stop 98 decided at the close 100 opens at 97; the oracle fills it and the gap rule
+    exits at the open. The re-check at the fill judges the entry without the bracket it cannot validate any more."""
+    r = Rig()
+    o = r.submit(side="BUY", qty=None, size_frac=1.0, type="MARKET",
+                 bracket={"take_profit": 104.0, "stop_loss": 98.0, "tp_is_offset": False})
+    assert o.status.value == "ACCEPTED"
+    r.eng.apply(r.fill(o, 10_000.0 / 97.0, price=97.0))
+    assert (o.status.value, r.pf.position(X, "s").qty) == ("FILLED", 10_000.0 / 97.0)
+    assert r.pf.get_bracket("X-s")["stop_loss"] == 98.0 and "fill_refused" not in r.kinds()
+
+
+# ---- point 2: the max_position hole
+def _long_two(**kw):
+    r = Rig(**kw)
+    b = r.submit(side="BUY", qty=2.0, type="MARKET")
+    r.eng.apply(r.fill(b, 2.0))
+    return r
+
+
+def test_299_p2_an_order_beyond_the_committed_reductions_is_denied_at_submit():
+    r = _long_two(limits=_lim(max_position_notional=400.0))  # QA probe C1a / C1b
+    a = r.submit(side="SELL", qty=2.0, type="MARKET")
+    c = r.submit(side="SELL", qty=5.0, type="MARKET")  # after SELL 2 fills: short 5 = 500 > 400
+    assert (a.status.value, c.status.value, c.reason) == ("ACCEPTED", "DENIED", "max_position")
+    assert r.checks[-1][1]["committed_reduce_qty"] == 2.0
+    assert r.submit(side="SELL", qty=4.0, type="MARKET").status.value == "ACCEPTED"  # short 4 = 400
+
+
+def test_299_p2_a_fill_that_no_longer_reduces_is_rechecked_even_in_active():
+    # QA probe C2: the SELL 3 was valued as 2 reducing + 1 opening; a late fill closed the long, so it opens short 3
+    r = _long_two(limits=_lim(max_position_notional=250.0))
+    dead = r.submit(side="SELL", qty=2.0, type="LIMIT", price=110.0)
+    r.eng.cancel(dead.client_id)
+    nw = r.submit(side="SELL", qty=3.0, type="MARKET")
+    assert nw.status.value == "ACCEPTED" and nw.client_id in r.eng._gate.opposite
+    r.eng.apply(r.fill(dead, 2.0, price=110.0))  # late: flat now
+    n = len(r.checks)
+    d = r.eng.precheck_fill(nw.client_id, 100.0)  # ACTIVE, at the checked price: no price shortcut for it
+    assert (d.allowed, d.reason, len(r.checks)) == (False, "max_position", n + 1)
+    assert (nw.status.value, nw.reason, _held(r)) == ("REJECTED", "fill_price_check_failed", 0.0)
+    # without the precheck, apply refuses the fill the same way
+    r = _long_two(limits=_lim(max_position_notional=250.0))
+    dead = r.submit(side="SELL", qty=2.0, type="LIMIT", price=110.0)
+    r.eng.cancel(dead.client_id)
+    nw = r.submit(side="SELL", qty=3.0, type="MARKET")
+    r.eng.apply(r.fill(dead, 2.0, price=110.0))
+    r.eng.apply(r.fill(nw, 3.0))
+    assert (nw.status.value, _held(r)) == ("REJECTED", 0.0) and r.journal[-2][1]["check"] == "max_position"
+
+
+def test_299_p2_spot_a_sell_with_no_balance_left_is_refused_and_journalled_never_raised():
+    # QA probe C3: spot PAPER; the late fill of a cancelled SELL sold the holding; the next SELL fill has nothing to sell
+    for precheck in (True, False):
+        r = _long_two(is_spot=True)
+        dead = r.submit(side="SELL", qty=2.0, type="LIMIT", price=110.0)
+        r.eng.cancel(dead.client_id)
+        nw = r.submit(side="SELL", qty=2.0, type="MARKET")
+        r.eng.apply(r.fill(dead, 2.0, price=110.0))
+        n = len(r.journal)
+        if precheck:
+            assert r.eng.precheck_fill(nw.client_id, 100.0).reason == "spot_sell_exceeds_balance"
+        r.eng.apply(r.fill(nw, 2.0))  # no OverfillError
+        assert (nw.status.value, r.pf.base_balance(X)) == ("REJECTED", 0.0)
+        assert r.kinds()[n:] == ["fill_refused", "order_rejected"] + (["fill_after_refusal"] if precheck else [])
+        assert r.journal[n][1]["check"] == "spot_sell_exceeds_balance"
+
+
+def test_299_p2_a_simulated_fill_the_books_cannot_hold_is_refused_not_raised():
+    from neural_trade.desk.core.risk import RiskDecision
+    r = _long_two(is_spot=True)
+    dead = r.submit(side="SELL", qty=2.0, type="LIMIT", price=110.0)
+    r.eng.cancel(dead.client_id)
+    s = r.submit(side="SELL", qty=2.0, type="LIMIT", price=100.0)
+    r.eng.apply(r.fill(dead, 2.0, price=110.0))  # late: flat
+    r.eng._gate.decision = lambda o, mid, qty, always=False: RiskDecision(True, "", qty)  # a check that let it pass
+    n = len(r.journal)
+    r.eng.apply(r.fill(s, 2.0))
+    assert (s.status.value, s.reason, r.pf.base_balance(X)) == ("REJECTED", "fill_price_check_failed", 0.0)
+    assert r.kinds()[n:] == ["fill_refused", "order_rejected"] and r.journal[n][1]["check"] == "books_refused"
+
+
+# ---- point 3: modify counts the filled notional
+def test_299_p3_modify_counts_the_filled_notional_against_max_order_notional():
+    r = Rig(_lim(max_order_notional=1_000.0), cash=1e5)  # QA probe E1
+    o = r.submit(side="BUY", qty=10.0, type="LIMIT", price=100.0)
+    r.eng.apply(r.fill(o, 9.0))
+    n = len(r.journal)
+    r.eng.modify(o.client_id, qty=18.0)  # 900 filled + 900 more > 1000
+    assert (o.qty, r.kinds()[n:], r.journal[n][1]["reason"]) == (10.0, ["order_modify_denied"], "max_order_notional")
+    assert r.checks[-1][1]["prior_order_notional"] == 900.0
+    r.eng.modify(o.client_id, qty=11.0)  # 900 + 200 > 1000 too
+    assert o.qty == 10.0
+    r.eng.modify(o.client_id, price=99.0)  # 900 + 99 <= 1000
+    assert (o.price, o.qty) == (99.0, 10.0)
+
+
+# ---- point 4: precheck journals once; clipped fees, limits and late fills
+def _flip_halted(**kw):
+    r = _long_one(**kw)
+    s = r.submit(side="SELL", qty=3.0, type="MARKET")
+    r.risk.halt("qa")
+    return r, s
+
+
+def test_299_p4_a_clipped_precheck_journals_the_refused_excess_once():
+    r, s = _flip_halted()  # QA probe A2: four records before
+    n = len(r.journal)
+    for qty in (None, None, 3.0):
+        d = r.eng.precheck_fill(s.client_id, 101.0, qty=qty)
+        assert (d.allowed, d.qty) == (True, 1.0)
+    r.eng.apply(r.fill(s, 0.5, price=101.0))
+    assert r.eng.precheck_fill(s.client_id, 101.0).qty == 0.5
+    r.eng.apply(r.fill(s, 0.5, price=101.0))
+    assert (s.status.value, s.filled_qty, s.reason, _held(r)) == ("CANCELED", 1.0, "fill_price_check_failed", 0.0)
+    recs = [p for k, p in r.journal[n:] if k == "fill_refused"]
+    assert [(p["fill_qty"], p["allowed_qty"], p["refused_qty"]) for p in recs] == [(3.0, 1.0, 2.0)]
+
+
+def test_299_p4_a_clipped_fill_pays_the_fee_of_the_applied_part_only():
+    r, s = _flip_halted()  # QA probe A1 / mutant Q2
+    cash = r.pf.cash
+    r.eng.apply(dataclasses.replace(r.fill(s, 3.0, price=101.0), price=100.9, fee=0.3))
+    fill = [p["fill"] for k, p in r.journal if k == "fill"][-1]
+    assert (fill["qty"], fill["fee"]) == (1.0, pytest.approx(0.1, rel=1e-12))
+    assert r.pf.cash - cash == pytest.approx(100.9 - 0.1, rel=1e-12)
+
+
+def test_299_p4_the_precheck_limit_counts_what_is_already_filled():
+    r = Rig()  # mutant Q3: the limit set to the clipped quantity alone
+    b = r.submit(side="BUY", qty=3.0, type="MARKET")
+    r.eng.apply(r.fill(b, 3.0))
+    s = r.submit(side="SELL", qty=5.0, type="MARKET")
+    r.eng.apply(r.fill(s, 1.0))  # reduces: long 2 left
+    r.risk.halt("qa")
+    n = len(r.journal)
+    d = r.eng.precheck_fill(s.client_id, 100.0)
+    assert (d.allowed, d.qty, r.eng._fill_limit[s.client_id]) == (True, 2.0, 3.0)
+    r.eng.apply(r.fill(s, 2.0))
+    assert (s.status.value, s.filled_qty, _held(r)) == ("CANCELED", 3.0, 0.0)
+    assert r.kinds()[n:].count("fill_refused") == 1
+
+
+def test_299_p4_a_clipped_late_fill_adds_no_order_canceled():
+    r = _long_one()  # mutant Q11: the late (dead) refusal passed dead=False
+    s = r.submit(side="SELL", qty=3.0, type="LIMIT", price=100.0)
+    r.eng.cancel(s.client_id)
+    r.risk.halt("qa")
+    n = len(r.journal)
+    r.eng.apply(r.fill(s, 3.0))  # late: only the reducing 1 is applied
+    assert (s.status.value, s.filled_qty, _held(r)) == ("PARTIALLY_FILLED", 1.0, 0.0)
+    assert r.kinds()[n:] == ["late_fill", "fill", "position", "account", "fill_refused"]
+    assert (r.journal[-1][1]["dead"], r.journal[-1][1]["refused_qty"]) == (True, 2.0)
+
+
+# ---- point 5: LIVE never loses a venue fact
+def _unbooked(r, n):
+    recs = [p for k, p in r.journal[n:] if k == "venue_fill_unbooked"]
+    assert len(recs) == 1 and r.risk.state is TradingState.HALTED
+    return recs[0]
+
+
+def test_299_p5_a_live_sell_with_no_spot_balance_is_journalled_unbooked_and_halts():
+    r = _long_two(is_spot=True, kind=AccountKind.LIVE)  # QA probe L1
+    dead = r.submit(side="SELL", qty=2.0, type="LIMIT", price=110.0)
+    r.eng.cancel(dead.client_id)
+    nw = r.submit(side="SELL", qty=2.0, type="MARKET")
+    r.eng.apply(r.fill(dead, 2.0, price=110.0))  # late, applied: flat
+    n = len(r.journal)
+    with pytest.raises(OverfillError):
+        r.eng.apply(r.fill(nw, 2.0, tid="venue"))
+    rec = _unbooked(r, n)
+    assert r.kinds()[n:n + 2] == ["venue_fill_unbooked", "halt"] and r.risk.state_reason == "venue_fill_unbooked"
+    assert (rec["trade_id"], rec["fill"]["qty"], rec["order"]["client_id"], rec["order"]["status"]) == (
+        "venue", 2.0, nw.client_id, "ACCEPTED")
+    assert "OverfillError" in rec["error"] and r.pf.base_balance(X) == 0.0 and "venue" not in r.eng._trades
+
+
+def test_299_p5_live_fills_on_filled_expired_unaccepted_or_unknown_orders_are_journalled():
+    # a second fill of a FILLED size_frac order (resolved 4)
+    r = Rig(kind=AccountKind.LIVE)
+    r.broker.resolved_qty = 4.0
+    o = r.submit(qty=None, size_frac=0.5, type="MARKET")
+    r.eng.apply(r.fill(o, 4.0))
+    n = len(r.journal)
+    with pytest.raises(OverfillError):
+        r.eng.apply(r.fill(o, 1.0))
+    assert _unbooked(r, n)["order"]["status"] == "FILLED"
+    # a fill on an EXPIRED order (QA probe L3)
+    r = Rig(kind=AccountKind.LIVE)
+    o = r.submit(qty=1.0)
+    r.eng.apply(OrderEvent(1100, 1100, "expired", o))
+    n = len(r.journal)
+    with pytest.raises(IllegalTransition):
+        r.eng.apply(r.fill(o, 1.0))
+    assert _unbooked(r, n)["order"]["status"] == "EXPIRED" and r.pf.positions == {}
+    # an unknown client_id
+    r = Rig(kind=AccountKind.LIVE)
+    ghost = Order(client_id="ghost", instrument_id=X, account_id="acc", strategy_id="s", side="BUY", type="MARKET",
+                  qty=1.0)
+    n = len(r.journal)
+    with pytest.raises(UnknownOrder):
+        r.eng.apply(r.fill(ghost, 1.0))
+    assert _unbooked(r, n)["order"] == {"unknown": "ghost"}
+    # a fill reported while the order is still SUBMITTED (the venue's fill arrives inside broker.submit)
+    r = Rig(kind=AccountKind.LIVE)
+    caught = []
+    real = r.broker.submit
+
+    def submit_and_fill(order):
+        try:
+            r.eng.apply(r.fill(order, 1.0, tid="early"))
+        except IllegalTransition as exc:
+            caught.append(exc)
+        return real(order)
+
+    r.broker.submit = submit_and_fill
+    n = len(r.journal)
+    r.submit(qty=1.0)
+    assert len(caught) == 1 and _unbooked(r, n)["order"]["status"] == "SUBMITTED"
+    # PAPER keeps raising without a record (a simulator bug, not a venue fact)
+    p = Rig()
+    po = p.submit(qty=1.0)
+    p.eng.apply(OrderEvent(1100, 1100, "expired", po))
+    n = len(p.journal)
+    with pytest.raises(IllegalTransition):
+        p.eng.apply(p.fill(po, 1.0))
+    assert len(p.journal) == n and p.risk.state is TradingState.ACTIVE
+
+
+def test_299_p5_a_live_size_frac_accept_without_resolved_qty_is_rejected_and_halts():
+    r = Rig(kind=AccountKind.LIVE)  # QA probe L2
+    o = r.submit(qty=None, size_frac=0.5, type="MARKET")
+    assert (o.status.value, o.reason) == ("REJECTED", "resolved_qty_missing")
+    assert r.kinds() == ["order_submitted", "order_rejected", "halt"]
+    assert r.risk.state is TradingState.HALTED and r.risk.state_reason == "resolved_qty_missing"
+    r.eng.apply(r.fill(o, 20.0, tid="v1"))  # the venue still fills it: booked as venue_fill_on_rejected
+    r.eng.apply(r.fill(o, 30.0, tid="v2"))
+    assert r.pf.position(X, "s").qty == 50.0 and r.kinds().count("venue_fill_on_rejected") == 2
+    p = Rig()  # PAPER: the SimBroker resolves at the fill; no resolved_qty needed
+    assert p.submit(qty=None, size_frac=0.5, type="MARKET").status.value == "ACCEPTED"
+
+
+def test_299_p1_a_smaller_size_frac_fill_is_judged_on_its_own_when_the_full_sizing_breaks_a_limit():
+    r = Rig(_lim(max_order_notional=600.0))
+    b = r.submit(side="BUY", qty=6.0, type="MARKET")
+    r.eng.apply(r.fill(b, 6.0))
+    o = r.submit(side="BUY", qty=None, size_frac=0.05, type="MARKET")  # 0.05 x 10000 / 100 = 5: 500 <= 600
+    assert o.status.value == "ACCEPTED"
+    s = r.submit(side="SELL", qty=6.0, type="MARKET")
+    r.eng.apply(r.fill(s, 6.0, price=500.0))  # +2400 realised: the full sizing is now 6.2 (620 > 600)
+    r.eng.apply(r.fill(o, 5.0))  # a broker that sized it smaller: 500 passes on its own
+    assert (o.status.value, o.filled_qty, _held(r)) == ("FILLED", 5.0, 5.0)

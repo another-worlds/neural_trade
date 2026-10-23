@@ -19,14 +19,24 @@ fill; ``apply`` runs the same check on every fill. A fill that only reduces the 
 than it; ``reduce_only`` alone is not enough) is never re-checked or refused. Every other fill is re-checked by RiskGuard
 as a MARKET order at ``mid`` (``record=False``, no rate slot, own commitments excluded, the order's earlier fills added to
 ``max_order_notional``) when the order's cumulative reference price is above the price it was valued at
-(``FILL_PRICE_TOLERANCE`` relative), and always for a ``size_frac`` or ``reduce_only`` order, a late fill, or while the
-account is HALTED or REDUCING. A ``size_frac`` fill is capped at its reserved / resolved quantity. Denied: a fill opposite
-to the position keeps its reducing part (clipped); otherwise ``fill_refused`` is journalled, the order ends REJECTED
-(CANCELED if part of it was filled) with reason ``fill_price_check_failed`` and the broker must not fill it. Clipped
-(PAPER / BACKTEST): only the allowed quantity is applied (``precheck_fill`` returns it), ``fill_refused`` records the
-quantities and the order ends FILLED or CANCELED with what was applied. On a LIVE account the venue fact stands: the fill
-is applied in full, journalled ``fill_refused`` (``applied`` true) and RiskGuard is halted; a venue fill for an order the
-engine marked REJECTED is booked as ``venue_fill_on_rejected`` (the order stays REJECTED) and halts too.
+(``FILL_PRICE_TOLERANCE`` relative), and always for a ``size_frac`` or ``reduce_only`` order, an order that was opposite
+to its position at submit (RiskGuard valued part of it as a reduction), a late fill, or while the account is HALTED or
+REDUCING. A ``size_frac`` fill (NT-299, A5.1) is sized at the fill on ``Portfolio.realised_equity()`` (equity x frac /
+mid), clipped by cash and the re-check; the quantity reserved at submit serves the commitments only; a fill above that
+sizing (``SIZE_FRAC_TOLERANCE`` relative) has its excess refused. An absolute bracket level a gap put on the wrong side
+of the fill price does not refuse the entry (it was validated at submit; the gap rule exits at the open). Denied: a fill
+opposite to the position keeps its reducing part (clipped); otherwise ``fill_refused`` is journalled, the order ends
+REJECTED (CANCELED if part of it was filled) with reason ``fill_price_check_failed`` and the broker must not fill it.
+Clipped (PAPER / BACKTEST): only the allowed quantity is applied (``precheck_fill`` returns it and journals the refused
+excess once per order), the fee is scaled to the applied part, ``fill_refused`` records the quantities and the order ends
+FILLED or CANCELED with what was applied. A simulated fill the Portfolio cannot hold (spot balance) is refused the same
+way (check ``books_refused``). On a LIVE account the venue fact stands: the fill is applied in full, journalled
+``fill_refused`` (``applied`` true) and RiskGuard is halted; a venue fill for an order the engine marked REJECTED is
+booked as ``venue_fill_on_rejected`` (the order stays REJECTED) and halts too; a LIVE fill the engine cannot book at all
+(no spot balance, a FILLED / EXPIRED / SUBMITTED / DENIED order, an unknown client_id, ...) is journalled
+``venue_fill_unbooked`` with the fill and an order snapshot, RiskGuard is halted, and only then is the error raised. A
+LIVE ``size_frac`` accept must carry ``resolved_qty``: without it the order is REJECTED (``resolved_qty_missing``) and
+RiskGuard halted.
 
 **Handlers (re-entrancy).** A bus handler that calls a mutating method (``submit``, ``apply``, ``cancel``, ...) while the
 engine publishes does not run at once: the call is queued, returns ``None`` and runs, in order, when the outermost
@@ -67,8 +77,8 @@ Gaps CONTRACTS leaves open (minimum choices, listed in the NT-224 report):
 * bus topics ``"order"``, ``"fill"``, ``"position"``, ``"account"``; journal kinds ``order_<status>`` (for example
   ``order_denied``), ``order_modified``, ``order_modify_denied``, ``late_fill``, ``fill``, ``position``, ``account``,
   ``bracket``, ``halt``, ``cancel_failed``, ``halt_cancel_failed``, ``order_modify_failed``, ``fill_refused``,
-  ``fill_after_refusal``, ``venue_fill_on_rejected``, ``handler_queue_overflow``, ``late_fill_refused``,
-  ``late_fill_flip``; the journal payload carries ``ts_event`` and ``ts_init`` itself. Every fill
+  ``fill_after_refusal``, ``venue_fill_on_rejected``, ``venue_fill_unbooked``, ``handler_queue_overflow``,
+  ``late_fill_refused``, ``late_fill_flip``; the journal payload carries ``ts_event`` and ``ts_init`` itself. Every fill
   of a dead order is ``late_fill``. A late fill the books cannot hold (spot balance) is journalled
   ``late_fill_refused`` and raises ``OverfillError``; one that flips a position is applied, journalled
   ``late_fill_flip``; both halt RiskGuard;
@@ -78,8 +88,8 @@ Gaps CONTRACTS leaves open (minimum choices, listed in the NT-224 report):
   is journalled per order and the loop goes on (``last_cancel_failures``); one that raises in a single ``cancel`` is
   journalled ``cancel_failed`` and re-raised as ``BrokerError``, in ``modify`` ``order_modify_failed`` and the same;
 * a ``size_frac`` order has no known total quantity: its first Fill is terminal (FILLED) and the by-quantity overfill
-  check does not apply, unless the broker's ``accepted`` event carries ``OrderEvent.resolved_qty`` (DESK-6.1's live
-  broker should send it): then partial fills are allowed up to it (``order.qty`` stays None);
+  check does not apply, unless the broker's ``accepted`` event carries ``OrderEvent.resolved_qty`` (mandatory on LIVE,
+  NT-299): then partial fills are allowed up to it (``order.qty`` stays None);
 * ``modify`` is allowed on ACCEPTED and PARTIALLY_FILLED orders that are not dead (A4 has no modify edge; TRIGGERED is
   already live at the venue). The modified order is re-checked by RiskGuard (``record=False``: a modify takes no rate
   slot; committed reduce quantity excludes the order itself); price and trigger are rounded to the tick; a denial
@@ -106,7 +116,7 @@ from neural_trade.desk.core.model import (
 )
 from neural_trade.desk.core.portfolio import DUST, Portfolio
 from neural_trade.desk.core.risk import (
-    CLIPPED_TO_POSITION, MISSING_MARKS, RiskDecision, RiskGuard, TradingState, round_nearest,
+    CLIPPED_TO_POSITION, INVALID_ORDER, MISSING_MARKS, RiskDecision, RiskGuard, TradingState, round_nearest,
 )
 
 log = logging.getLogger(__name__)
@@ -117,6 +127,9 @@ JOURNAL_HALT_REASON = "journal_unavailable"
 FILL_REFUSED = "fill_price_check_failed"  # reason of an order whose fill failed the binding check (CONTRACTS A5.1)
 HANDLER_QUEUE_LIMIT = 1000  # calls a bus handler may queue (and the calls one drain may run)
 FILL_PRICE_TOLERANCE = 1e-6  # relative: a fill reference price above the checked price by more than this is re-checked
+SIZE_FRAC_TOLERANCE = 1e-9  # relative: a size_frac fill above its A5.1 equity sizing by more than this is clipped
+RESOLVED_QTY_MISSING = "resolved_qty_missing"  # reason of a LIVE size_frac accept without resolved_qty (rejected)
+VENUE_FILL_UNBOOKED = "venue_fill_unbooked"  # journal kind and halt reason of a LIVE fill the engine cannot book
 
 JournalSink = Callable[[str, dict], None]
 Command = Union[SubmitOrder, ModifyOrder, CancelOrder, CancelAll, ClosePosition, Halt]
@@ -301,6 +314,7 @@ class FillGate:
         self.sized: dict[str, float] = {}  # size_frac orders: the approved / resolved quantity (kept when closed)
         self.limit: dict[str, float] = {}  # filled quantity a clipped precheck allows an order to reach
         self.notional: dict[str, float] = {}  # sum of qty x mid of each order's applied fills (cumulative check)
+        self.opposite: set[str] = set()  # orders opposite to their position at submit / modify: always re-checked
 
     # ------------------------------------------------------------------ reducing and commitments
     def held(self, o: Order) -> float:
@@ -314,6 +328,13 @@ class FillGate:
         opening fill."""
         held = self.held(o)
         return held * (1 if o.side is Side.BUY else -1) < 0 and qty <= abs(held) + DUST
+
+    def note_opposite(self, o: Order) -> None:
+        """Remember an order opposite to its position when RiskGuard valued it (submit, modify): RiskGuard counted part
+        of it as a reduction, so a later fill that no longer reduces (the position went away another way) is always
+        re-checked, the price shortcut of ACTIVE included (NT-299: probes C1a, C2)."""
+        if self.held(o) * (1 if o.side is Side.BUY else -1) < 0:
+            self.opposite.add(o.client_id)
 
     def reducing_part(self, o: Order, qty: float) -> float:
         """The part of a fill of ``qty`` of ``o`` that reduces the held position: ``min(qty, |held|)`` when ``o`` is
@@ -393,14 +414,19 @@ class FillGate:
         d = self.decision(o, fill_price, qty)
         want = qty if qty is not None else max((o.qty or 0.0) - o.filled_qty, 0.0)
         clipped = d.allowed and o.size_frac is None and d.qty is not None and d.qty < want - DUST
+        old = self.limit.get(cid)
+        new = o.filled_qty + d.qty if clipped else None
+        if clipped and old is not None and new >= old - DUST:
+            return d  # the excess beyond this limit was journalled by an earlier precheck: once per order (NT-299)
         if (not d.allowed and d.reason != "order_not_live") or clipped:
             q = e._handlers
             q.ops += 1
             try:
                 if clipped:  # (A) the excess is refused now; the order ends once the allowed part is filled
-                    self.limit[cid] = o.filled_qty + d.qty
+                    self.limit[cid] = new  # the filled quantity counts: the limit is on the order's total
+                    asked = want if old is None else old - o.filled_qty  # a tighter clip refuses only the new part
                     self.write_refused(o, fill_price, d.reason or CLIPPED_TO_POSITION, self.checked.get(cid, 0.0),
-                                       applied=False, dead=False, qty=(want, d.qty))
+                                       applied=False, dead=False, qty=(asked, d.qty))
                 else:
                     self.refuse(o, fill_price, d.reason, self.checked.get(cid, 0.0))
             finally:
@@ -409,24 +435,38 @@ class FillGate:
                     q.drain(e)
         return d
 
+    def equity_sized(self, o: Order, mid: float) -> float:
+        """A5.1: the quantity of a ``size_frac`` fill at the reference price ``mid``, clip(size_frac, 0, 1) x
+        ``Portfolio.realised_equity()`` / mid (the SimBroker's and RiskGuard's arithmetic, so equal in float)."""
+        return min(max(o.size_frac or 0.0, 0.0), 1.0) * self.e.portfolio.realised_equity() / mid
+
     def decision(self, o: Order, mid: float, qty: Optional[float], *, always: bool = False) -> RiskDecision:
         """RiskGuard on the fill itself (see ``precheck_fill``). ``qty`` None: the unfilled quantity (an explicit
-        order) or the reserved / resolved one (``size_frac``); a ``size_frac`` quantity and a quantity above the limit
-        a clipped precheck set are capped first (the decision then carries less than ``qty``). Reducing fills pass. The
-        check runs when the order's cumulative reference price (earlier fills and this one) is above the checked price
-        by more than the tolerance; always for a ``size_frac`` order, a ``reduce_only`` order (a reduce-only fill that
-        does not reduce must be refused), while the account is not ACTIVE (C), or when ``always``. A denied fill that
-        is opposite to the held position keeps its reducing part (a clipped decision): reductions are never refused."""
+        order), the resolved one (a ``size_frac`` order whose accept carried ``resolved_qty``) or, for any other
+        ``size_frac`` order, the A5.1 quantity sized at ``mid`` on realised equity (NT-299: never the quantity reserved
+        at submit, which serves the commitments only). A ``size_frac`` fill above that equity sizing (relative tolerance
+        ``SIZE_FRAC_TOLERANCE``) or above its resolved quantity, and a fill above the limit a clipped precheck set, are
+        capped first (the decision then carries less than ``qty``). Reducing fills pass. The check runs when the order's
+        cumulative reference price (earlier fills and this one) is above the checked price by more than the tolerance;
+        always for a ``size_frac`` order, a ``reduce_only`` order (a reduce-only fill that does not reduce must be
+        refused), an order that was opposite to its position at submit (part of it was valued as a reduction, NT-299),
+        while the account is not ACTIVE (C), or when ``always``. A denied fill that is opposite to the held position
+        keeps its reducing part (a clipped decision): reductions are never refused."""
         e, cid = self.e, o.client_id
         sf = o.size_frac is not None
-        reserved = max(self.sized.get(cid, 0.0) - o.filled_qty, 0.0)
-        rem = reserved if sf else max((o.qty or 0.0) - o.filled_qty, 0.0)
+        resolved = e._resolved.get(cid)
+        by_equity = sf and resolved is None  # sized at the fill on realised equity (A5.1)
+        if by_equity:
+            rem = self.equity_sized(o, mid)
+            cap = rem * (1 + SIZE_FRAC_TOLERANCE)
+        else:
+            rem = max((resolved if sf else (o.qty or 0.0)) - o.filled_qty, 0.0)
+            cap = rem if sf else math.inf  # a resolved size_frac order fills at most what the venue resolved
         limit = self.limit.get(cid)
-        cap = rem if sf else math.inf  # (F) a size_frac order fills at most its reserved / resolved quantity
         if limit is not None:
             cap = min(cap, max(limit - o.filled_qty, 0.0))
             rem = min(rem, cap)
-        q = rem if qty is None else min(qty, cap)
+        q = rem if qty is None or qty > cap else qty  # above the cap: at most the remainder (rem <= cap)
         if q <= DUST:
             return RiskDecision(False, "order_not_live")
         if self.reducing(o, q):
@@ -434,26 +474,42 @@ class FillGate:
         checked = self.checked.get(cid)
         prior = self.notional.get(cid, 0.0)
         above = checked is not None and prior + q * mid > (o.filled_qty + q) * checked * (1 + FILL_PRICE_TOLERANCE)
-        if not (always or sf or o.reduce_only or above or e.risk.state is not TradingState.ACTIVE):
+        if not (always or sf or o.reduce_only or above or cid in self.opposite
+                or e.risk.state is not TradingState.ACTIVE):
             return RiskDecision(True, "", q)
         # a MARKET order at the fill price, the order's own commitments excluded, no rate slot; its earlier fills
-        # count against max_order_notional (E)
-        by_frac = sf and qty is None
-        cand = dataclasses.replace(o, tags=dict(o.tags), type=OrderType.MARKET, price=None, trigger_price=None,
-                                   qty=None if by_frac else q, size_frac=o.size_frac if by_frac else None)
-        marks = {**e.marks}
-        marks[o.instrument_id] = mid
-        acct, posn = self.committed_open(cand, exclude=cid)
-        d = e.risk.check(cand, ref_price=mid, marks=marks, record=False, fill_recheck=True,
-                         committed_reduce_qty=self.committed_reduce(cand, exclude=cid),
-                         committed_open_notional=acct, committed_position_notional=posn,
-                         prior_order_notional=prior)
-        if d.allowed and by_frac:
-            d = dataclasses.replace(d, qty=min(d.qty, rem))
+        # count against max_order_notional (E). An equity-sized fill is checked as the size_frac order RiskGuard sizes
+        # at ``mid`` (cash clip included) and the fill gets at most that; a smaller fill denied that way (a limit the
+        # full sizing breaks) is checked on its own quantity.
+        d = self.check_at(o, mid, None if by_equity else q, prior)
+        if by_equity:
+            if d.allowed:  # RiskGuard's full sizing trusts the fill (up to the tolerance); a cash clip binds
+                d = dataclasses.replace(d, qty=q if d.qty >= rem * (1 - SIZE_FRAC_TOLERANCE) else min(d.qty, q))
+            elif q < rem * (1 - SIZE_FRAC_TOLERANCE):
+                d = self.check_at(o, mid, q, prior)
         if not d.allowed:
             part = self.reducing_part(o, q)
             if part > DUST:
                 d = RiskDecision(True, CLIPPED_TO_POSITION, part, d.price)
+        return d
+
+    def check_at(self, o: Order, mid: float, qty: Optional[float], prior: float) -> RiskDecision:
+        """RiskGuard.check of ``o`` as a MARKET order at ``mid``: ``qty`` None checks it as its ``size_frac``."""
+        e, cid = self.e, o.client_id
+        cand = dataclasses.replace(o, tags=dict(o.tags), type=OrderType.MARKET, price=None, trigger_price=None,
+                                   qty=qty, size_frac=o.size_frac if qty is None else None)
+        marks = {**e.marks}
+        marks[o.instrument_id] = mid
+        acct, posn = self.committed_open(cand, exclude=cid)
+        kw = dict(ref_price=mid, marks=marks, record=False, fill_recheck=True,
+                  committed_reduce_qty=self.committed_reduce(cand, exclude=cid),
+                  committed_open_notional=acct, committed_position_notional=posn, prior_order_notional=prior)
+        d = e.risk.check(cand, **kw)
+        if not d.allowed and d.reason == INVALID_ORDER and cand.bracket:
+            # a gap through an absolute bracket level puts it on the wrong side of the fill price: the bracket was
+            # validated at submit and the gap rule exits at the open (A5.2, A5.3, the oracle); the fill itself is
+            # judged without it (NT-299: nt225_parity seeds 0, 2, 3, ...)
+            d = e.risk.check(dataclasses.replace(cand, bracket=None), **kw)
         return d
 
     # ------------------------------------------------------------------ refusals
@@ -510,6 +566,7 @@ class ExecutionEngine:
         self._fill_limit, self._fill_notional = self._gate.limit, self._gate.notional
         self._live: dict[str, None] = {}  # ids of the live orders (``is_live``), in submission order
         self._cancel_queued = False
+        self._unbooked_journalled = False  # the current LIVE fill's failure is already journalled (late_fill_refused)
 
     # the handler queue's state under the engine's names (tests and probes read them)
     @property
@@ -634,6 +691,7 @@ class ExecutionEngine:
         if o.size_frac is not None:
             self._sized[o.client_id] = qty
         self._checked[o.client_id] = self._gate.valuation_price(o, ref)
+        self._gate.note_opposite(o)
         self.apply(OrderEvent(now, now, "submitted", o))
         try:
             ev = self.broker.submit(dataclasses.replace(o, tags=dict(o.tags)))
@@ -726,7 +784,8 @@ class ExecutionEngine:
             acct, posn = self._committed_open(cand, exclude=client_id)
             d = self.risk.check(cand, ref_price=ref, marks=marks, record=False,
                                 committed_reduce_qty=self._committed_reduce(cand, exclude=client_id),
-                                committed_open_notional=acct, committed_position_notional=posn)
+                                committed_open_notional=acct, committed_position_notional=posn,
+                                prior_order_notional=self._fill_notional.get(client_id, 0.0))
             reason = "" if d.allowed else d.reason
         if reason:
             self._write("order_modify_denied", {"client_id": client_id, "reason": reason,
@@ -746,6 +805,7 @@ class ExecutionEngine:
                                                 "order": dataclasses.replace(o, tags=dict(o.tags)).to_dict()},
                         self.clock.now_ms())
             raise BrokerError(f"broker.modify failed for {client_id}: {exc!r}") from exc
+        self._gate.note_opposite(o)
         self.apply(ev)
         return o
 
@@ -810,6 +870,16 @@ class ExecutionEngine:
         resolved = ev.resolved_qty if new is _S.ACCEPTED and o.qty is None else None
         if resolved is not None and not (math.isfinite(resolved) and resolved > 0):
             raise ValueError(f"resolved_qty {resolved} of {o.client_id} must be finite and > 0")
+        unresolved = (new is _S.ACCEPTED and o.qty is None and resolved is None
+                      and self.portfolio.kind is AccountKind.LIVE)
+        if unresolved:  # NT-299: a LIVE size_frac accept must carry resolved_qty; the engine cannot bound its fills
+            check_transition(o.status, _S.REJECTED)
+            if ev.order.venue_id:
+                o.venue_id = ev.order.venue_id
+            self._reserved.pop(o.client_id, None)
+            self._commit(o, _S.REJECTED, "rejected", ev.ts_event, reason=RESOLVED_QTY_MISSING)
+            self._halt_risk(RESOLVED_QTY_MISSING)
+            return
         if not (fill_refused and new is _S.REJECTED and o.status in (_S.ACCEPTED, _S.TRIGGERED)):
             check_transition(o.status, new)  # the one exception edge besides late_fill: a refused fill (A5.1)
         if ev.order.venue_id:
@@ -823,6 +893,35 @@ class ExecutionEngine:
         self._commit(o, new, kind, ev.ts_event, reason=ev.order.reason)
 
     def _apply_fill(self, ev: FillEvent) -> None:
+        """Simulated accounts: ``_book_fill``. LIVE (NT-299): a venue fact is never lost; a fill the engine cannot book
+        (no spot balance, a fill after the order is FILLED or EXPIRED, before its accept, beyond its quantity, for an
+        unknown client_id, ...) is journalled ``venue_fill_unbooked`` with the fill and an order snapshot and RiskGuard
+        is halted; only then does the error propagate."""
+        if self.portfolio.kind is not AccountKind.LIVE:
+            self._book_fill(ev)
+            return
+        f = ev.fill
+        self._unbooked_journalled = False
+        try:
+            self._book_fill(ev)
+        except Exception as exc:
+            if not self._unbooked_journalled and not (f.trade_id and f.trade_id in self._trades):
+                self._venue_fill_unbooked(f, exc)
+            raise
+
+    def _venue_fill_unbooked(self, f: Fill, exc: BaseException) -> None:
+        o = self._orders.get(f.client_id)
+        snap = {"unknown": f.client_id} if o is None else dataclasses.replace(o, tags=dict(o.tags)).to_dict()
+        try:
+            fill = f.to_dict()
+        except Exception:  # noqa: BLE001 - a malformed venue report is still recorded
+            fill = {"repr": repr(f)}
+        log.error("LIVE fill %s of %s could not be booked: %r", f.trade_id, f.client_id, exc)
+        self._write(VENUE_FILL_UNBOOKED, {"client_id": f.client_id, "trade_id": f.trade_id, "fill": fill,
+                                          "order": snap, "error": f"{type(exc).__name__}: {exc}"}, f.ts)
+        self._halt_risk(VENUE_FILL_UNBOOKED)
+
+    def _book_fill(self, ev: FillEvent) -> None:
         f = ev.fill
         if not f.trade_id:
             raise ValueError("a fill needs a non-empty trade_id (it is the dedup key)")
@@ -874,6 +973,10 @@ class ExecutionEngine:
             if late:  # a venue fact the books cannot hold (spot balance): record it and stop trading (f)
                 self._late_fill_event(o, f, "late_fill_refused", {"error": repr(exc)})
                 self._halt_risk("late_fill_refused")
+                self._unbooked_journalled = True  # LIVE: this record is the venue_fill_unbooked of NT-299
+            elif not live_acct:  # a simulated fill the books cannot hold is refused like the binding check (NT-299)
+                self._gate.refuse(o, f.mid, "books_refused", self._checked.get(o.client_id, 0.0))
+                return
             raise
         self._trades.add(f.trade_id)
         o.avg_fill_price = (o.avg_fill_price * o.filled_qty + f.price * f.qty) / total
@@ -910,10 +1013,11 @@ class ExecutionEngine:
     def precheck_fill(self, client_id: str, fill_price: float, *, qty: Optional[float] = None) -> RiskDecision:
         """The binding check of CONTRACTS A5.1, for a broker about to report a fill of ``client_id`` at the reference
         price ``fill_price`` (the fill's ``mid``: before spread and slippage, which RiskGuard adds). Allowed: the fill
-        may go ahead with the decision's quantity; a ``size_frac`` order's quantity is sized at ``fill_price`` (capped
-        at its reserved / resolved quantity, also when ``qty`` asks for more). Clipped (an explicit-quantity order whose
-        decision carries less than asked, reason ``clipped_to_position``): the broker may fill only ``d.qty``; the
-        excess is refused now (``fill_refused`` with ``fill_qty`` / ``allowed_qty`` / ``refused_qty``) and the order
+        may go ahead with the decision's quantity; a ``size_frac`` order's quantity is sized at ``fill_price`` on
+        realised equity (A5.1; at most that, or its resolved quantity, also when ``qty`` asks for more; never the
+        quantity reserved at submit). Clipped (an explicit-quantity order whose decision carries less than asked, reason
+        ``clipped_to_position``): the broker may fill only ``d.qty``; the excess is refused now, journalled once per
+        order (``fill_refused`` with ``fill_qty`` / ``allowed_qty`` / ``refused_qty``) and the order
         ends (CANCELED, reason ``fill_price_check_failed``) once that quantity is filled. Denied: the engine has already
         journalled ``fill_refused`` and ended the order (REJECTED with reason ``fill_price_check_failed``, CANCELED with
         the same reason when part of it was filled); the broker must not fill it. When the check runs (and what is

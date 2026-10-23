@@ -980,3 +980,22 @@ def test_295_r2e_prior_order_notional_counts_against_max_order_notional_only():
         assert g.check(order(qty=1.0), ref_price=100.0, prior_order_notional=bad).reason == "invalid_order"
     hold(pf, "BUY", 5.0, 100.0)  # a reduction stays exempt
     assert g.check(order(side="SELL", qty=5.0), ref_price=104.0, prior_order_notional=1e9).allowed
+
+
+# ---------------------------------------------------------------- NT-299 point 2: max position after the resting reductions
+def test_299_max_position_counts_the_position_left_after_the_committed_reductions():
+    """QA probe C1a: long 2, a resting SELL 2 commits the whole holding; a new SELL 5 ends at short 5 (500), not at the
+    short 3 (300) of ``held + sign x qty``."""
+    lim = dataclasses.replace(RiskLimits.unlimited(), max_position_notional=400.0)
+    g, pf, _ = make(lim, ins=inst(is_spot=False, max_qty=None, min_notional=0.0))
+    hold(pf, "BUY", 2.0, 100.0)
+    d = g.check(order("SELL", qty=5.0), ref_price=100.0, committed_reduce_qty=2.0)
+    assert (d.allowed, d.reason) == (False, "max_position")
+    assert g.check(order("SELL", qty=5.0), ref_price=100.0).allowed  # nothing committed: short 3 = 300
+    assert g.check(order("SELL", qty=6.0), ref_price=100.0, committed_reduce_qty=2.0).reason == "max_position"
+    assert g.check(order("SELL", qty=4.0), ref_price=100.0, committed_reduce_qty=2.0).allowed  # short 4 = 400
+    d = g.check(order("SELL", qty=5.0), ref_price=100.0, committed_reduce_qty=1.0)  # short 4 = 400 at worst
+    assert d.allowed and d.qty == 5.0
+    # an order on the position's own side is not helped by the reductions: the worse case (they never fill) counts
+    assert g.check(order("BUY", qty=3.0), ref_price=100.0, committed_reduce_qty=2.0).reason == "max_position"
+    assert g.check(order("BUY", qty=2.0), ref_price=100.0, committed_reduce_qty=2.0).allowed  # long 4 = 400
