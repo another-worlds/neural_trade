@@ -369,13 +369,17 @@ def test_f2_halted_and_rounding_still_apply_to_exits():
 
 
 def test_f3_size_frac_uses_realised_cash_not_marked_equity():
-    g, pf, _ = make(cash=15_000.0, ins=inst(max_qty=None))
+    g, pf, _ = make(cash=15_000.0, ins=inst(max_qty=None), kind="PAPER")
     hold(pf, "BUY", 50.0, 200.0)  # cash 5000
     assert pf.cash == 5000.0
     # NT-289 (CONTRACTS A5.1/A5.9, lead's decision 2026-10-16): size_frac resolves on REALISED equity = cash +
-    # signed qty x avg price = 5000 + 50 x 200 = 15000 -> 75 units (15000 / 200); on spot that costs 15000 > cash 5000
+    # signed qty x avg price = 5000 + 50 x 200 = 15000 -> 75 units (15000 / 200); on a PAPER spot account that costs
+    # 15000 > cash 5000, so the size_frac order is clipped to cash: 5000 / 200 = 25 (NT-289 lead decision, clipped_to_cash)
     d = g.check(order(size_frac=1.0), ref_price=200.0)
-    assert (d.allowed, d.reason) == (False, "insufficient_cash")
+    assert (d.allowed, d.qty, d.reason) == (True, 25.0, "clipped_to_cash")
+    gb, pfb, _ = make(cash=15_000.0, ins=inst(max_qty=None))  # BACKTEST: no cash check, the full 75
+    hold(pfb, "BUY", 50.0, 200.0)
+    assert gb.check(order(size_frac=1.0), ref_price=200.0).qty == 75.0
 
 
 def test_f4_stop_orders_valued_at_the_worst_price():
@@ -450,7 +454,7 @@ def test_c_day_start_equity_restores_the_opening_equity_after_a_restart():
 
 
 def test_d_spot_buy_above_available_cash_is_denied():
-    g, _, _ = make(cash=1_000.0, ins=inst(max_qty=None))
+    g, _, _ = make(cash=1_000.0, ins=inst(max_qty=None), kind="PAPER")
     assert g.check(order(qty=10.0), ref_price=100.0).allowed
     d = g.check(order(qty=10.001), ref_price=100.0)
     assert (d.allowed, d.reason) == (False, "insufficient_cash")
@@ -562,7 +566,7 @@ def test_n6_insufficient_cash_includes_the_fee():
     from neural_trade.desk.core.costs import CostProfile
     prof = CostProfile(name="p", fee_bps_taker=10.0, fee_bps_maker=2.0)
     clock = SimClock(T0)
-    pf = Portfolio("acc", initial_cash=1_000.0, allow_short=False, clock=clock)
+    pf = Portfolio("acc", kind="PAPER", initial_cash=1_000.0, allow_short=False, clock=clock)
     g = RiskGuard(RiskLimits.unlimited(), inst(max_qty=None), pf, clock, costs=prof)
     # market BUY 10 at 100: 1000 + 0.1% x 1000 = 1001 > 1000
     assert g.check(order(qty=10.0), ref_price=100.0).reason == "insufficient_cash"
@@ -576,3 +580,70 @@ def test_n6_insufficient_cash_includes_the_fee():
     assert g.check(order(qty=9.995), ref_price=100.0).reason == "insufficient_cash"
     g0, _, _ = make(cash=1_000.0, ins=inst(max_qty=None))  # the zero-cost default is unchanged
     assert g0.check(order(qty=10.0), ref_price=100.0).allowed
+
+
+# ---------------------------------------------------------------- NT-289 round 0: size_frac clipped to cash, dust close
+def _fee10():
+    from neural_trade.desk.core.costs import CostProfile
+    return CostProfile(name="p", fee_bps_taker=10.0, fee_bps_maker=5.0)
+
+
+def _guard(kind, ins=None, cash=10_000.0, costs=None):
+    clock = SimClock(T0)
+    pf = Portfolio("acc", kind=kind, initial_cash=cash, allow_short=False, clock=clock)
+    return RiskGuard(RiskLimits.unlimited(), ins or inst(max_qty=None), pf, clock, costs=costs or _fee10()), pf
+
+
+@pytest.mark.parametrize("kind", ["PAPER", "LIVE"])
+def test_r0_size_frac_buy_is_clipped_to_cash_with_fee(kind):
+    g, _ = _guard(kind)
+    d = g.check(order(size_frac=1.0), ref_price=100.0)  # 10000 / (100 x 1.001) = 99.9000999 -> 99.900
+    assert (d.allowed, d.qty, d.reason) == (True, 99.9, "clipped_to_cash")
+    d = g.check(order(size_frac=0.5), ref_price=100.0)  # 50.0 x 100 x 1.001 = 5005 <= 10000: not clipped
+    assert (d.qty, d.reason) == (50.0, "")
+
+
+def test_r0_backtest_has_no_cash_check():
+    g, _ = _guard("BACKTEST")
+    d = g.check(order(size_frac=1.0), ref_price=100.0)
+    assert (d.allowed, d.qty, d.reason) == (True, 100.0, "")
+    assert g.check(order(qty=100.0), ref_price=100.0).allowed
+
+
+def test_r0_explicit_qty_above_cash_is_denied_not_clipped():
+    g, _ = _guard("PAPER")
+    d = g.check(order(qty=100.0), ref_price=100.0)  # 10000 x 1.001 > 10000
+    assert (d.allowed, d.reason) == (False, "insufficient_cash")
+    assert g.check(order(qty=99.9), ref_price=100.0).allowed
+
+
+def test_r0_limit_uses_the_maker_fee_for_the_clip():
+    g, _ = _guard("PAPER")
+    d = g.check(order(size_frac=1.0, type="LIMIT", price=100.0), ref_price=100.0)  # 10000 / 100.05 = 99.950
+    assert (d.qty, d.reason) == (99.95, "clipped_to_cash")
+
+
+def test_r0_clip_below_min_qty_is_denied():
+    g, _ = _guard("PAPER", ins=inst(min_qty=1.0, max_qty=None), cash=100.0)
+    # cash 100 at price 1000: 100 / 1001 = 0.0999 -> 0.099 < min_qty 1 -> denied; also a tiny cash rounds to zero
+    d = g.check(order(size_frac=1.0), ref_price=1000.0)
+    assert (d.allowed, d.reason) == (False, "insufficient_cash")
+
+
+def test_r0_margin_instrument_has_no_cash_check():
+    g, _ = _guard("PAPER", ins=inst(is_spot=False, max_qty=None))
+    assert g.check(order(size_frac=1.0), ref_price=100.0).qty == 100.0
+
+
+def test_r0_dust_position_is_closable():
+    g, pf = _guard("PAPER", ins=inst(max_qty=None), costs=_fee10())
+    hold(pf, "BUY", 0.0009, 100.0)  # below min_qty 0.001 and min_notional 10
+    for kw in (dict(qty=0.0009), dict(qty=0.0009, reduce_only=True), dict(qty=0.5, reduce_only=True)):
+        d = g.check(order("SELL", **kw), ref_price=100.0)
+        assert (d.allowed, d.qty) == (True, 0.0009), kw
+    # a sell of less than the dust position is still floored away
+    assert g.check(order("SELL", qty=0.0005), ref_price=100.0).reason == "qty_rounds_to_zero"
+    # a non-dust position is unchanged: a partial sell below min_qty is still refused
+    g2, pf2 = _guard("PAPER", ins=inst(max_qty=None))
+    hold(pf2, "BUY", 2.0, 100.0)
+    assert g2.check(order("SELL", qty=0.0009, reduce_only=True), ref_price=100.0).reason == "qty_rounds_to_zero"

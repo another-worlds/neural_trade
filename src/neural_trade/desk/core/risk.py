@@ -21,7 +21,7 @@ from typing import Callable, Mapping, Optional
 
 from neural_trade.desk.core.clock import Clock
 from neural_trade.desk.core.costs import RESEARCH_ZERO, CostProfile
-from neural_trade.desk.core.model import Instrument, Liquidity, Order, OrderType, Side
+from neural_trade.desk.core.model import AccountKind, Instrument, Liquidity, Order, OrderType, Side
 from neural_trade.desk.core.portfolio import DUST, Portfolio
 
 DAY_MS = 86_400_000
@@ -54,6 +54,7 @@ INSUFFICIENT_CASH = "insufficient_cash"
 SPOT_SELL_EXCEEDS_BALANCE = "spot_sell_exceeds_balance"
 SPOT_SHORT_NO_OWN_LONG = "spot_short_no_own_long"
 CLIPPED_TO_POSITION = "clipped_to_position"
+CLIPPED_TO_CASH = "clipped_to_cash"
 REDUCE_EXCEEDS_POSITION = "reduce_exceeds_position"  # the position is already covered by resting reduce orders
 
 
@@ -185,9 +186,13 @@ class RiskGuard:
         ``max_order_notional``, the position and daily-loss limits and the per-minute rate limit and takes no rate
         slot; it is still subject to HALTED, ``invalid_order``, rounding, min/max quantity and min notional.
         Opening orders keep every limit. While the daily loss limit is reached, a flipping order is clipped to the
-        position like in REDUCING. On spot a BUY above available cash
-        plus its fee (the cost profile's taker fee for market and stop orders, maker for LIMIT, at the order's
-        price) is denied ``insufficient_cash``."""
+        position like in REDUCING. Cash check (spot BUY, PAPER and
+        LIVE accounts only; BACKTEST accounts have none, for parity with strategy/backtest.py, which lets costs push
+        cash slightly below zero; margin instruments have none): the fee is the cost profile's taker fee for market
+        and stop orders, the maker fee for LIMIT, at the order's price. An explicit ``qty`` above cash plus fee is
+        denied ``insufficient_cash``; a ``size_frac`` order is CLIPPED to ``cash / (price x (1 + fee))`` floored to
+        the size step (reason ``clipped_to_cash``), denied ``insufficient_cash`` if that is below min_qty.
+        A closing order for a position below ``min_qty`` is allowed unrounded (dust must be closable)."""
         ins, lim = self.instrument, self.limits
         if self.state is TradingState.HALTED:
             return _deny(HALTED)
@@ -242,14 +247,12 @@ class RiskGuard:
             return _deny(INVALID_ORDER)
         raw = qty
         qty = round_down(qty, ins.size_increment)
-        if qty <= 0:
-            return _deny(QTY_ROUNDS_TO_ZERO)
 
         pos = self.portfolio.position(ins.id, order.strategy_id)
         held = self.portfolio.signed_qty(pos)
         reducing = held * sign < 0
         loss_hit = lim.daily_loss_limit is not None and self.day_loss(marks) >= lim.daily_loss_limit
-        clipped = False
+        clipped = clipped_cash = dust_close = False
 
         limited = order.reduce_only or self.state is TradingState.REDUCING or loss_hit
         if limited and not reducing:
@@ -262,12 +265,22 @@ class RiskGuard:
                 return _deny(REDUCE_EXCEEDS_POSITION)
             if qty > cap + DUST:
                 qty, clipped = round_down(cap, ins.size_increment), True
-                if qty <= 0:
-                    return _deny(QTY_ROUNDS_TO_ZERO)
             if (order.reduce_only or raw >= cap - DUST) and DUST < cap - qty < ins.min_qty:
                 qty = cap  # closing: do not leave an unsellable remainder
+                dust_close = cap < ins.min_qty  # the whole position is dust: closable, whatever the minimums
+        if qty <= 0:
+            return _deny(QTY_ROUNDS_TO_ZERO)
         pure_reduce = reducing and qty <= abs(held) + DUST
 
+        cash_checked = ins.is_spot and sign > 0 and not pure_reduce and self.portfolio.kind is not AccountKind.BACKTEST
+        if cash_checked:
+            liq = Liquidity.MAKER if order.type is OrderType.LIMIT else Liquidity.TAKER
+            if order.qty is None and qty * price * (1 + self.costs.fee_rate(liq)) > self.portfolio.cash:
+                # a size_frac order is "this fraction of what the account has": clip to what is affordable with fees
+                qty = round_down(self.portfolio.cash / (price * (1 + self.costs.fee_rate(liq))), ins.size_increment)
+                clipped_cash = True
+                if qty <= 0 or qty < ins.min_qty:
+                    return _deny(INSUFFICIENT_CASH)
         if ins.is_spot and sign < 0:
             balance = self.portfolio.base_balance(ins.id)
             if qty > balance + DUST:
@@ -275,18 +288,16 @@ class RiskGuard:
             if qty > held + DUST:  # covered by another strategy's long, but this one has no long of its own
                 return _deny(SPOT_SHORT_NO_OWN_LONG)
 
-        if qty < ins.min_qty:
+        if qty < ins.min_qty and not dust_close:
             return _deny(MIN_QTY)
         if ins.max_qty is not None and qty > ins.max_qty:
             return _deny(MAX_QTY)
         notional = qty * (price if pure_reduce else val_price)
-        if notional < ins.min_notional:
+        if notional < ins.min_notional and not dust_close:
             return _deny(MIN_NOTIONAL)
         if not pure_reduce:
-            if ins.is_spot and sign > 0:
-                liq = Liquidity.MAKER if order.type is OrderType.LIMIT else Liquidity.TAKER
-                if qty * price * (1 + self.costs.fee_rate(liq)) > self.portfolio.cash:
-                    return _deny(INSUFFICIENT_CASH)
+            if cash_checked and qty * price * (1 + self.costs.fee_rate(liq)) > self.portfolio.cash:
+                return _deny(INSUFFICIENT_CASH)
             if lim.max_order_notional is not None and notional > lim.max_order_notional:
                 return _deny(MAX_ORDER_NOTIONAL)
             after = held + sign * qty
@@ -301,7 +312,7 @@ class RiskGuard:
                 return _deny(MAX_ORDERS_PER_MINUTE)
         if record and not pure_reduce:
             self._sent.append(now)
-        return RiskDecision(True, CLIPPED_TO_POSITION if clipped else "", qty, px)
+        return RiskDecision(True, CLIPPED_TO_CASH if clipped_cash else CLIPPED_TO_POSITION if clipped else "", qty, px)
 
     def _bracket_levels(self, order: Order, sign: int, entry: float) -> Optional[list[float]]:
         """Absolute bracket levels of an order (for valuation), or None when a leg is invalid."""
