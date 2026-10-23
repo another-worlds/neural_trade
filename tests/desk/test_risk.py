@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import math
 
 import pytest
 
@@ -920,8 +921,39 @@ def test_293_p3_committed_open_notional_margin_gross_and_max_position():
     assert g.check(order("BUY", qty=50.0), ref_price=100.0, committed_open_notional=5_000.0).allowed
     hold(pf, "BUY", 10.0, 100.0)
     assert g.check(order("SELL", qty=10.0), ref_price=100.0, committed_open_notional=1e9).allowed  # reduction
-    # max position counts it: 20 x 100 = 2000 against 5000
+    # max position is per position (NT-295): 20 x 100 = 2000 against 5000 counts committed_position_notional only
     lim = dataclasses.replace(RiskLimits.unlimited(), max_position_notional=5_000.0)
     gm = make(lim, ins=inst(max_qty=None))[0]
-    assert gm.check(order("BUY", qty=20.0), ref_price=100.0, committed_open_notional=3_000.0).allowed
-    assert gm.check(order("BUY", qty=20.0), ref_price=100.0, committed_open_notional=3_000.01).reason == "max_position"
+    assert gm.check(order("BUY", qty=20.0), ref_price=100.0, committed_position_notional=3_000.0).allowed
+    assert gm.check(order("BUY", qty=20.0), ref_price=100.0,
+                    committed_position_notional=3_000.01).reason == "max_position"
+    assert gm.check(order("BUY", qty=20.0), ref_price=100.0, committed_open_notional=1e6).allowed  # the account total
+    for bad in (-1.0, float("nan"), float("inf"), True, "1"):
+        assert gm.check(order("BUY", qty=1.0), ref_price=100.0,
+                        committed_position_notional=bad).reason == "invalid_order"
+    # a reduction ignores it
+    hold(gm.portfolio, "BUY", 10.0, 100.0)
+    assert gm.check(order("SELL", qty=10.0), ref_price=100.0, committed_position_notional=1e9).allowed
+
+
+def test_295_p4_size_frac_clip_steps_down_when_cash_over_unit_rounds_up_with_committed_orders():
+    from neural_trade.desk.core.costs import CostProfile
+    prof = CostProfile(name="p", fee_bps_taker=10.0, half_spread_bps=3.0, slippage_bps=2.0)  # unit = price x 1.0015
+    # size_increment 0 (found by search): avail / unit = 2655.069337816401 and its cost exceeds avail by 5.8e-11, so
+    # the old clip kept it and the final cash check then DENIED the order; now it steps down one float step
+    ins0 = inst(max_qty=None, size_increment=0.0, price_increment=0.0, min_qty=0.0, min_notional=0.0)
+    g, pf = _paper(prof, ins=ins0, cash=680_431.93)
+    unit = 157.4165 * (1 + 0.001 + 0.0005)
+    assert 2655.069337816401 * unit > 680_431.93 - 261_853.28
+    d = g.check(order(size_frac=1.0), ref_price=157.4165, committed_open_notional=261_853.28)
+    assert (d.allowed, d.reason) == (True, "clipped_to_cash")
+    assert d.qty == math.nextafter(2655.069337816401, 0.0) and d.qty * unit + 261_853.28 <= pf.cash
+    # a size increment of 1e-8 and a commitment: avail / unit floors to ...095 whose cost exceeds avail by 1.2e-10;
+    # the step-down must compare with cash - committed (a cash-only comparison does not step and the order is denied)
+    ins8 = inst(max_qty=None, size_increment=1e-8, price_increment=1e-8, min_qty=1e-8, min_notional=0.0)
+    g, pf = _paper(prof, ins=ins8, cash=684_970.48)
+    unit = 1.2056 * (1 + 0.001 + 0.0005)
+    assert 545401.53108095 * unit > 684_970.48 - 26_448.09
+    d = g.check(order(size_frac=1.0), ref_price=1.2056, committed_open_notional=26_448.09)
+    assert (d.allowed, d.reason, d.qty) == (True, "clipped_to_cash", 545401.53108094)
+    assert d.qty * unit + 26_448.09 <= pf.cash

@@ -192,7 +192,8 @@ class RiskGuard:
     # ------------------------------------------------------------------ the check
     def check(self, order: Order, *, ref_price: float, marks: Optional[Mapping[str, float]] = None,
               record: bool = True, day_start_equity: Optional[float] = None,
-              committed_reduce_qty: float = 0.0, committed_open_notional: float = 0.0) -> RiskDecision:
+              committed_reduce_qty: float = 0.0, committed_open_notional: float = 0.0,
+              committed_position_notional: float = 0.0) -> RiskDecision:
         """Decide on ``order``. ``ref_price`` is the price a market order would trade at (last close at submit, the
         resolved open at the fill). ``marks`` defaults to ``{instrument.id: ref_price}``; when the portfolio holds
         other instruments the caller must pass marks for all of them (else ``missing_marks``). An allowed decision
@@ -232,14 +233,17 @@ class RiskGuard:
         binds): an order that raises the sum of |position| x mark over the account above the cap x realised equity is
         denied ``max_gross_exposure``; reductions are exempt.
 
-        ``committed_open_notional`` (NT-293) is the quote notional of the account's resting OPENING orders (the engine
-        passes the total over every strategy; fees and slip on it are ignored). It is added to the order's own cost in
-        the spot cash check (a ``size_frac`` clip uses ``cash - committed``), to the gross exposure on a margin
-        instrument and to the position notional of the max-position check, so two resting orders each sized to all the
-        cash cannot both pass. Reducing orders ignore it. Cash tolerance: a ``size_frac`` clip never exceeds the available
-        cash in float (one size step down when ``cash / unit`` rounds up) and an explicit quantity is compared
-        strictly; what remains is the rounding of the fill's own arithmetic, which leaves cash at no less than -1e-9
-        for balances up to 1e6 (a ULP of 1e6 is 1.2e-10; pinned by a fuzz).
+        ``committed_open_notional`` (NT-293, NT-295) is the quote notional of the account's resting OPENING orders, the
+        total over every strategy (the ExecutionEngine passes it times ``1 + fee + slip`` of each order, so the costs
+        of resting orders are reserved too). It is added to the order's own cost in the spot cash check (a
+        ``size_frac`` clip uses ``cash - committed``) and to the gross exposure on a margin instrument, so two resting
+        orders each sized to all the cash cannot both pass. Reducing orders ignore it. Max position is per position, so
+        it does NOT use that total: it uses ``committed_position_notional`` (NT-295), the plain notional of the live
+        opening orders of this order's strategy and instrument. Cash tolerance: a ``size_frac`` clip never exceeds the
+        available cash in float (steps down one size step, or one float step when ``size_increment`` is 0, while
+        ``cash / unit`` rounds up) and an explicit quantity is compared strictly; what remains is the rounding of the
+        fill's own arithmetic, which leaves cash at no less than -1e-9 for balances up to 1e6 (a ULP of 1e6 is
+        1.2e-10; pinned by a fuzz).
 
         Not done here: positions of different strategies on one instrument do not net against each other
         (an engine decision, unchanged); the gross exposure and the cash check see each order as an addition."""
@@ -258,9 +262,10 @@ class RiskGuard:
         committed = committed_reduce_qty
         if not (_num(committed) and math.isfinite(committed) and committed >= 0):
             return _deny(INVALID_ORDER)
-        open_commit = committed_open_notional
-        if not (_num(open_commit) and math.isfinite(open_commit) and open_commit >= 0):
-            return _deny(INVALID_ORDER)
+        open_commit, pos_commit = committed_open_notional, committed_position_notional
+        for c in (open_commit, pos_commit):
+            if not (_num(c) and math.isfinite(c) and c >= 0):
+                return _deny(INVALID_ORDER)
 
         # price: rounded to the tick; a market order trades at ref_price
         px: Optional[float] = None
@@ -344,8 +349,11 @@ class RiskGuard:
             if order.qty is None and qty * unit > avail:
                 # a size_frac order is "this fraction of what the account has": clip to what is affordable with costs
                 qty = round_down(max(avail, 0.0) / unit, ins.size_increment)
-                if qty * unit > avail and ins.size_increment:  # float rounding of avail / unit: one step down (NT-293)
-                    qty = round_down(max(qty - ins.size_increment, 0.0), ins.size_increment)
+                # float rounding of avail / unit: step down (NT-293 one size step; NT-295 one float step when the
+                # size increment is 0, else the final check below denied a clip it had just made)
+                while qty > 0 and (qty * unit > avail or qty * unit + open_commit > self.portfolio.cash):
+                    qty = (round_down(max(qty - ins.size_increment, 0.0), ins.size_increment) if ins.size_increment
+                           else math.nextafter(qty, 0.0))
                 clipped_cash = True
                 if qty <= 0 or qty < ins.min_qty:
                     return _deny(INSUFFICIENT_CASH)
@@ -370,7 +378,7 @@ class RiskGuard:
                 return _deny(MAX_ORDER_NOTIONAL)
             after = held + sign * qty
             if (lim.max_position_notional is not None and abs(after) > abs(held)
-                    and abs(after) * val_price + open_commit > lim.max_position_notional):
+                    and abs(after) * val_price + pos_commit > lim.max_position_notional):
                 return _deny(MAX_POSITION)
             cap_frac = self.gross_exposure_cap_frac
             if cap_frac is not None and abs(after) > abs(held):  # the order raises the account's gross exposure

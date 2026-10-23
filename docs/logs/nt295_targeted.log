@@ -1,0 +1,15 @@
+base sha: b8a4e3f0e1727e597be20c913c16499d87ac459d (branch nt-295)
+$ CUDA_VISIBLE_DEVICES=-1 PYTHONPATH=D:/nt/nt_295/src python -m ruff check src tests scripts
+All checks passed!
+$ CUDA_VISIBLE_DEVICES=-1 python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+689 passed, 101 warnings in 151.91s (0:02:31)
+$ python scripts/test_inventory.py   (TESTING_DOCUMENTATION.md regenerated)
+Fuzz: D:/nt/nt_qa/nt224c_fuzz.py, copy patched for the intended behaviour changes only (cancel failure now journals cancel_failed;
+ 2nd+ late fills are late_fill; late_fill_refused/late_fill_flip are order events; ACCEPTED->REJECTED allowed when reason
+ fill_price_check_failed) -> FUZZ3 OK.
+Mutation (by hand, per mutant the targeted desk tests run with -x): 27 mutants of execution.py/risk.py (fees not reserved, reduce
+ orders counted, account total as position, risk max-position on total, precheck never re-checks / no tolerance, refusal leaves
+ order, live fill refused / no halt, trigger unrounded, halt hook escapes, halt not re-asserted / not journalled, no queueing,
+ identity fields, cancel raw, late refusal / flip, late only when CANCELED, p4 original step / ignores committed (inc 0 and inc>0),
+ submit/modify pass no commitment, modify counts itself): all KILLED except M3 (is_closed instead of is_live in _committed_open),
+ equivalent: a dead order's reservation is popped at CANCELED so it commits 0 either way.
