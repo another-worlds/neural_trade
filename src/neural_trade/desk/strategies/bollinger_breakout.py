@@ -2,8 +2,11 @@
 
 Entry (flat): BUY when the close is above SMA + k sd, SELL when below SMA - k sd (population sd, ``allow_short`` for
 the SELL). Exit: the close back through the middle band ("BB_MID"); the engine's TIME exit after ``max_hold`` bars.
-Warm-up = ``period`` bars. The bands come from ``ta_rules.sma`` and ``rolling_std`` on the last ``period`` closes.
-Bounds are the oracle's search ranges.
+Warm-up = ``period`` bars. The bands come from ``ta_rules.sma`` and ``rolling_std`` run on ALL history the context
+offers and read at the last bar: pandas' rolling mean and std are online (running sums), so their last value depends on
+the whole series, and only the same call on the same series (the block from its start) reproduces the oracle exactly
+(on flat stretches a fresh window gives sd 0 where the running value is a tiny positive number). The price is O(history)
+per bar. Bounds are the oracle's search ranges.
 """
 from __future__ import annotations
 
@@ -33,7 +36,7 @@ class BollingerBreakout(DeskStrategy):
         from neural_trade.strategy.ta_rules import rolling_std, sma   # lazy: the strategy package imports TensorFlow
 
         p = self.params
-        close = ctx.bars(p["period"])["close"].to_numpy(dtype=float)
+        close = ctx.bars(10 ** 9)["close"].to_numpy(dtype=float)
         if len(close) < p["period"]:
             return
         mid, sd = float(sma(close, p["period"])[-1]), float(rolling_std(close, p["period"])[-1])

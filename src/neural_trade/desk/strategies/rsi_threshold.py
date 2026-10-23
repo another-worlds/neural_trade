@@ -3,20 +3,31 @@
 Entry (flat): BUY when RSI < ``lower``, SELL when RSI > ``upper`` (SELL only with ``allow_short``). Exit: RSI back
 through ``exit_level`` ("RSI_MID"); the engine's TIME exit after ``max_hold`` bars. Warm-up = ``period`` bars.
 
-Wilder's RSI is recursive (seeded on the first ``period`` changes of the series it is given), so ``wilder_rsi`` is run
-on the last ``(RSI_DECAY + 1) x period`` closes: the seed's weight there is below e^-30 (1e-13), so the values equal
-the full-history ones of the oracle to rounding, and are exactly equal while the whole history is shorter than that.
+Wilder's RSI is recursive, so it is kept as a state per strategy instance (avg gain, avg loss): seeded on the first
+call from ALL history the context offers (``ctx.bars`` of the whole source, which the Engine limits to the block start),
+with the arithmetic of ``ta_rules.wilder_rsi`` (mean of the first ``period`` changes, then ``(g (n-1) + up) / n``), and
+updated bar by bar with the same recursion over the closes that arrived since the last call (bars the engine did not
+ask about, and holes in the data, are caught up in order; the oracle runs the recursion over the whole close array and
+ignores breaks, and so does this). The values equal ``wilder_rsi``'s bit for bit; ``on_start`` resets the state (a
+restart seeds again from history).
 Bounds are the oracle's search ranges; ``lower < exit_level < upper`` is checked on construction.
 """
 from __future__ import annotations
 
 import math
 
+import numpy as np
+
 from neural_trade.desk.core.model import PositionSide
 from neural_trade.desk.core.params import ParamSpec
 from neural_trade.desk.core.strategy import DeskStrategies, DeskStrategy
 
-RSI_DECAY = 30   # periods of history beyond the first: (1 - 1/period) ** (30 * period) < e**-30
+
+
+def _rsi(gain: float, loss: float) -> float:
+    if loss == 0.0:
+        return 50.0 if gain == 0.0 else 100.0
+    return 100.0 - 100.0 / (1.0 + gain / loss)
 
 
 @DeskStrategies.register(name="rsi_threshold", tags=["baseline", "ta"])
@@ -38,16 +49,43 @@ class RSIThreshold(DeskStrategy):
         if not p["lower"] < p["exit_level"] < p["upper"]:
             raise ValueError(f"need lower < exit_level < upper, got {p['lower']}, {p['exit_level']}, {p['upper']}")
         self.warmup_bars = p["period"]
+        self._state = None
+
+    def on_start(self, ctx) -> None:
+        self._state = None   # (gain, loss, last close, last ts)
+
+    def _update(self, ctx) -> "float | None":
+        """The RSI at the current bar, or None while there are not ``period`` + 1 closes."""
+        n, cur = self.params["period"], ctx.bar.ts_open_ms
+        st = getattr(self, "_state", None)
+        if st is None:
+            h = ctx.bars(10 ** 9)
+            c = h["close"].to_numpy(dtype=float)
+            if len(c) <= n:
+                return None
+            d = np.diff(c)
+            up, dn = np.maximum(d, 0.0), np.maximum(-d, 0.0)
+            gain, loss = float(up[:n].mean()), float(dn[:n].mean())
+            for t in range(n + 1, len(c)):
+                gain = (gain * (n - 1) + up[t - 1]) / n
+                loss = (loss * (n - 1) + dn[t - 1]) / n
+            self._state = (gain, loss, float(c[-1]), cur)
+            return _rsi(gain, loss)
+        gain, loss, last_c, last_ts = st
+        if cur > last_ts:
+            gap = max(2, int((cur - last_ts) // (ctx.bar.tf_minutes * 60_000)) + 1)
+            h = ctx.bars(gap)
+            h = h[h["ts"] > last_ts]
+            for c in h["close"].to_numpy(dtype=float):
+                up, dn = max(c - last_c, 0.0), max(last_c - c, 0.0)
+                gain, loss, last_c = (gain * (n - 1) + up) / n, (loss * (n - 1) + dn) / n, c
+            self._state = (gain, loss, last_c, cur)
+        return _rsi(gain, loss)
 
     def on_bar(self, ctx) -> None:
-        from neural_trade.strategy.ta_rules import wilder_rsi   # lazy: the strategy package imports TensorFlow
-
         p = self.params
-        close = ctx.bars((RSI_DECAY + 1) * p["period"])["close"].to_numpy(dtype=float)
-        if len(close) <= p["period"]:
-            return
-        r = float(wilder_rsi(close, p["period"])[-1])
-        if not math.isfinite(r):
+        r = self._update(ctx)
+        if r is None or not math.isfinite(r):
             return
         side = ctx.position.side
         if side is PositionSide.FLAT:

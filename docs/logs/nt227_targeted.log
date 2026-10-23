@@ -13,3 +13,11 @@ mutation checks (each applied to a9422551, tests/desk/test_strategy_api.py -n 4 
 4 future bar leaks (ctx.bars filter removed) -> FAILED test_ctx_bars_has_the_contract_columns_and_never_shows_a_later_bar
 5 seed ignored (random_entries)              -> FAILED test_random_entries_are_seeded_reproducible_and_distinct_per_seed
 6 bounds not enforced (validate_params off)  -> FAILED test_out_of_range_param_raises_naming_the_bound[...] (several)
+
+=== repair round 1 (base c19bfdac) ===
+cmd: pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+result: 792 passed, 101 warnings in 165.46s (0:02:45)
+cmd: ruff check src tests scripts -> All checks passed!
+parity tests (oracle/flat/restarted/incremental), serial: 18 passed in 42.39s
+QA driver D:/nt/nt_qa/nt227/parity.py 4 workers 240 series seed 227, costs 0 and 10/1/2 bps: 1488 records, 0 errors, 0 mismatches, max equity rel diff 3.2e-14
+mutants (each failed a test): A rsi truncated window/no state -> flat_stretches[ta_rsi], incremental_rsi; B bollinger fresh window -> flat_stretches[ta_bollinger]; C stale latest-row check removed -> stale_or_out_of_order; D no session in ids -> client_ids_carry_a_session; E reason CLOSE -> close_position_orders_carry_the_exit_tag; F ts not strictly increasing -> stale_or_out_of_order

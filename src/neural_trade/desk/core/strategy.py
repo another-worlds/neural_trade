@@ -19,7 +19,13 @@ Gaps CONTRACTS leaves open (minimum implemented; the NT-227 report lists them):
   ``ts, open, high, low, close, volume`` (the source is unchanged);
 * a bracket dict is built whenever any of ``tp``, ``sl``, ``max_hold`` is given (``max_hold`` travels in
   ``Order.bracket["max_hold"]``, which is how the Engine reads it, A5.4); the order tags carry ``tag`` and ``reason``;
-* client ids are ``<strategy_id>:<n>`` with a per-context counter (deterministic, so journals are byte-identical);
+* client ids are ``<strategy_id>:<session>:<n>``: ``session`` is the constructor argument or a random 6-hex string
+  (DESK-2.5 persists it), ``n`` a per-context counter; two contexts of one strategy id never collide;
+* ``close_position`` builds its own reduce-only market order (not ``ExecutionEngine.close_position``) so that
+  ``tags["reason"]`` is the exit tag (CROSS, RSI_MID, BB_MID, TIME ...), ``"CLOSE"`` when no tag is given;
+* the Engine (DESK-1.7) must give a backtest source only the bars from the block start, so desk indicators see what the
+  oracle sees (pre-block history is not exposed); the context fails loudly (RuntimeError) on a stale or out-of-order bar;
+* the first ``ma_cross`` ``on_bar`` imports ``neural_trade.strategy``, which loads TensorFlow (CPU in the server, PLAN A3);
 * ``warmup_bars`` is a ClassVar default of 0; strategies whose warm-up depends on parameters set it on the instance;
 * A7 mentions ``clock.now``; C1's ``Clock`` has ``now_ms()``, which is what the read-only view offers.
 """
@@ -28,14 +34,15 @@ from __future__ import annotations
 import dataclasses
 import inspect
 import logging
+import secrets
 from typing import Any, Callable, ClassVar, Optional
 
 import pandas as pd
 
 from neural_trade.core.registry import BaseRegistry
 from neural_trade.desk.core.clock import Clock
-from neural_trade.desk.core.model import (AccountState, Bar, DeskError, Order, OrderEvent, OrderType, Position, Side,
-                                          TimeInForce)
+from neural_trade.desk.core.model import (AccountState, Bar, DeskError, Order, OrderEvent, OrderType, Position,
+                                          PositionSide, Side, TimeInForce)
 from neural_trade.desk.core.params import ParamSpec, params_schema, validate_params
 
 BAR_COLUMNS = ("ts", "open", "high", "low", "close", "volume")
@@ -90,7 +97,8 @@ class StrategyContext:
 
     def __init__(self, *, execution: Any, source: Any, strategy_id: str, clock: Clock,
                  predictions: Optional[Callable[[], Optional[dict]]] = None,
-                 log_sink: Optional[Callable[[str], None]] = None) -> None:
+                 log_sink: Optional[Callable[[str], None]] = None, session: Optional[str] = None) -> None:
+        self.session = session if session is not None else secrets.token_hex(3)
         self._exec, self._source, self._strategy_id = execution, source, strategy_id
         self._predictions, self._log_sink = predictions, log_sink
         self._clock = _ReadOnlyClock(clock)
@@ -104,6 +112,11 @@ class StrategyContext:
         """The Engine calls this once per closed bar, before ``on_bar``."""
         if not bar.is_closed:
             raise ValueError("a strategy sees closed bars only")
+        if self._bar is not None and bar.ts_open_ms <= self._bar.ts_open_ms:
+            raise RuntimeError(f"stale context: bar {bar.ts_open_ms} does not come after {self._bar.ts_open_ms}")
+        latest = self._source.history(1)
+        if latest.empty or int(latest["ts"].iloc[-1]) != bar.ts_open_ms:
+            raise RuntimeError(f"stale context: the source's latest bar is not {bar.ts_open_ms}")
         self._bar = bar
 
     def _need_bar(self) -> Bar:
@@ -137,7 +150,9 @@ class StrategyContext:
         """The last ``n`` closed bars up to and including the current one, columns ``ts, open, high, low, close,
         volume`` (a fresh frame; fewer rows early in the run). A row after the current bar is dropped even if the
         source returns it."""
-        cur = self._need_bar().ts_open_ms
+        return self._cut(n, self._need_bar().ts_open_ms)
+
+    def _cut(self, n: int, cur: int) -> pd.DataFrame:
         n = int(n)
         if n <= 0:
             return pd.DataFrame({c: [] for c in BAR_COLUMNS})
@@ -184,7 +199,17 @@ class StrategyContext:
     def close_position(self, tag: str = "") -> None:
         """A reduce-only market order for the whole position (fills at the next open); nothing when flat."""
         bar = self._need_bar()
-        self._exec.close_position(f"{bar.instrument_id}-{self._strategy_id}", tag)
+        pos = self._exec.portfolio.positions.get(f"{bar.instrument_id}-{self._strategy_id}")
+        if pos is None or pos.qty <= 0 or pos.side is PositionSide.FLAT:
+            return
+        self._seq += 1
+        cid = f"{self._strategy_id}:{self.session}:{self._seq}"
+        self._mine.add(cid)
+        self._exec.submit(Order(
+            client_id=cid, instrument_id=bar.instrument_id, account_id=self._exec.portfolio.account_id,
+            strategy_id=self._strategy_id, side=Side.SELL if pos.side is PositionSide.LONG else Side.BUY,
+            type=OrderType.MARKET, qty=pos.qty, reduce_only=True, ts_created=self._clock.now_ms(),
+            tags={"tag": tag, "reason": tag or "CLOSE"}))
 
     def log(self, msg: str) -> None:
         self._logger.info("%s", msg)
@@ -201,7 +226,7 @@ class StrategyContext:
             bracket = {"take_profit": tp, "stop_loss": sl, "tp_is_offset": bool(tp_is_offset),
                        "max_hold": None if max_hold is None else int(max_hold)}
         self._seq += 1
-        cid = f"{self._strategy_id}:{self._seq}"
+        cid = f"{self._strategy_id}:{self.session}:{self._seq}"
         order = Order(client_id=cid, instrument_id=bar.instrument_id, account_id=self._exec.portfolio.account_id,
                       strategy_id=self._strategy_id, side=Side(str(getattr(side, "value", side)).upper()), type=typ,
                       qty=qty, size_frac=size_frac, price=price, trigger_price=trigger_price,
