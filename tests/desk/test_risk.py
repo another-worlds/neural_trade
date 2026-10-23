@@ -810,3 +810,118 @@ def test_292_p7_a_bool_is_never_a_quantity_price_offset_or_claim():
     br = dict(take_profit=True, stop_loss=-5.0, tp_is_offset=True)  # True would be an offset of +1
     assert g.check(order(bracket=br), ref_price=100.0).reason == "invalid_order"
     assert g.check(order(bracket=dict(take_profit=1.0, stop_loss=-5.0, tp_is_offset=True)), ref_price=100.0).allowed
+
+
+# ---------------------------------------------------------------- NT-293: follow-ups of the QA of NT-292
+def _prof():
+    from neural_trade.desk.core.costs import CostProfile
+    return CostProfile(name="p", fee_bps_taker=10.0, slippage_bps=5.0)  # unit cost x 1.0015
+
+
+def test_293_p1_spot_is_judged_by_cash_not_by_the_gross_cap_after_a_rally():
+    # long 50 at average price 100; cash 10000 - 5000 = 5000; realised equity 10000; mark 200 -> gross 10000 + order
+    g, pf = _paper(_prof(), limits=_gross_limits(), cash=10_000.0)
+    hold(pf, "BUY", 50.0, 100.0)
+    assert pf.cash == 5_000.0 and pf.realised_equity() == 10_000.0
+    assert g.gross_exposure_cap_frac is None  # spot: the cash check binds
+    marks = {X: 200.0}
+    d = g.check(order("BUY", qty=10.0), ref_price=200.0, marks=marks)  # needs 10 x 200 x 1.0015 = 2003 of 5000
+    assert (d.allowed, d.qty, d.reason) == (True, 10.0, "")  # was max_gross_exposure (gross 12000 > 10000)
+    assert g.check(order("BUY", qty=24.9), ref_price=200.0, marks=marks).allowed  # 4987.5 of 5000
+    assert g.check(order("BUY", qty=25.0), ref_price=200.0, marks=marks).reason == "insufficient_cash"  # 5007.5
+    # size_frac is clipped by cash (not denied by the cap): cash 150 -> 150 / 200.3 = 0.74888 -> 0.748
+    g2, pf2 = _paper(_prof(), limits=_gross_limits(), cash=5_150.0)
+    hold(pf2, "BUY", 50.0, 100.0)
+    assert pf2.cash == 150.0
+    d = g2.check(order(size_frac=0.1), ref_price=200.0, marks=marks)  # asks 0.1 x 5150 / 200 = 2.575
+    assert (d.allowed, d.qty, d.reason) == (True, 0.748, "clipped_to_cash")
+
+
+def test_293_p1_margin_keeps_the_gross_cap_and_the_field_still_validates():
+    ins = inst(is_spot=False, max_qty=None)
+    g, pf = _paper(RESEARCH_ZERO, ins=ins, limits=_gross_limits(), allow_short=True)
+    hold(pf, "BUY", 100.0, 100.0, strategy="a")
+    hold(pf, "BUY", 100.0, 100.0, strategy="b")
+    assert g.gross_exposure_cap_frac == 1.0
+    assert g.check(order("BUY", qty=1.0, strategy="c"), ref_price=100.0).reason == "max_gross_exposure"
+    with pytest.raises(ValueError, match="max_gross_exposure_frac"):  # validated for a spot instrument too
+        _paper(RESEARCH_ZERO, limits=_gross_limits(-1.0))
+
+
+def test_293_p2_cash_never_ends_below_minus_1e9_fuzz():
+    import random
+    from neural_trade.desk.core.costs import CostProfile
+    # the exact case of the QA: cash 1e6, price 0.0123, step 1e-8 (qty about 8.1e7)
+    ins = inst(price_increment=1e-8, size_increment=1e-8, min_qty=1e-8, min_notional=0.0, max_qty=None)
+    prof = _prof()
+    g, pf = _paper(prof, ins=ins, cash=1e6)
+    d = g.check(order(size_frac=1.0), ref_price=0.0123)
+    assert d.allowed and d.reason == "clipped_to_cash"
+    pf.apply_fill(dataclasses.replace(market_fill(0.0123, 1, prof, d.qty), instrument_id=X, trade_id="t293"),
+                  strategy_id="s")
+    assert pf.cash >= -1e-9, pf.cash  # tolerance: the fill's own float arithmetic (a ULP of 1e6 is 1.2e-10)
+    # cash / unit rounds UP here (found by search): 958680.08 / (2.5563 x 1.0015) floors to 374464.73953741, whose
+    # cost exceeds the cash by one float step, so the clip steps one size increment down to ...39
+    g, pf = _paper(prof, ins=ins, cash=958_680.08)
+    d = g.check(order(size_frac=1.0), ref_price=2.5563)
+    assert d.qty == 374464.73953739, d.qty
+    rng = random.Random(293)
+    worst, n_ok = 0.0, 0
+    for i in range(5000):
+        cash = 10 ** rng.uniform(2, 6)  # up to 1e6: the tolerance below is absolute for that scale
+        price = 10 ** rng.uniform(-3, 5)
+        step = 10 ** rng.uniform(-8, -2)
+        p = CostProfile(name="f", fee_bps_taker=rng.uniform(0, 30), half_spread_bps=rng.uniform(0, 10),
+                        slippage_bps=rng.uniform(0, 10))
+        ins = inst(price_increment=1e-8, size_increment=step, min_qty=step, min_notional=0.0, max_qty=None)
+        g, pf = _paper(p, ins=ins, cash=cash)
+        unit = price * (1 + p.fee_rate(__import__("neural_trade.desk.core.model", fromlist=["Liquidity"]).Liquidity.TAKER)
+                        + p.slip_rate)
+        o = order(size_frac=1.0) if i % 2 else order(qty=round_down(cash / unit, step))
+        d = g.check(o, ref_price=price)
+        if not d.allowed:
+            continue
+        n_ok += 1
+        pf.apply_fill(dataclasses.replace(market_fill(price, 1, p, d.qty), instrument_id=X, trade_id=f"f{i}"),
+                      strategy_id="s")
+        worst = min(worst, pf.cash)
+    assert n_ok > 4000
+    assert worst >= -1e-9, worst  # ULP noise of the fill's own arithmetic at cash <= 1e6 is about 1e-10
+
+
+def test_293_p3_committed_open_notional_spot_cash_check():
+    g, pf = _paper(RESEARCH_ZERO, cash=10_000.0)
+    first = order("BUY", qty=100.0, type="LIMIT", price=100.0)
+    assert g.check(first, ref_price=100.0, record=False).allowed  # notional 10000 = all the cash
+    second = order("BUY", qty=100.0, type="LIMIT", price=100.0)
+    d = g.check(second, ref_price=100.0, committed_open_notional=10_000.0)
+    assert (d.allowed, d.reason) == (False, "insufficient_cash")
+    assert g.check(order("BUY", qty=50.0, type="LIMIT", price=100.0), ref_price=100.0,
+                   committed_open_notional=5_000.0).allowed  # 5000 + 5000 = cash
+    assert g.check(order("BUY", qty=50.001, type="LIMIT", price=100.0), ref_price=100.0,
+                   committed_open_notional=5_000.0).reason == "insufficient_cash"
+    # size_frac: the clip sees cash - committed
+    d = g.check(order(size_frac=1.0), ref_price=100.0, committed_open_notional=4_000.0)
+    assert (d.allowed, d.qty, d.reason) == (True, 60.0, "clipped_to_cash")  # (10000 - 4000) / 100
+    assert g.check(order(size_frac=1.0), ref_price=100.0, committed_open_notional=10_000.0).reason == "insufficient_cash"
+    # a reducing order ignores it
+    hold(pf, "BUY", 10.0, 100.0)
+    assert g.check(order("SELL", qty=10.0), ref_price=100.0, committed_open_notional=1e9).allowed
+    for bad in (-1.0, float("nan"), float("inf"), True, "1"):
+        assert g.check(order("BUY", qty=1.0), ref_price=100.0, committed_open_notional=bad).reason == "invalid_order"
+
+
+def test_293_p3_committed_open_notional_margin_gross_and_max_position():
+    ins = inst(is_spot=False, max_qty=None)
+    g, pf = _paper(RESEARCH_ZERO, ins=ins, limits=_gross_limits(), allow_short=True)
+    assert g.check(order("BUY", qty=100.0, type="LIMIT", price=100.0), ref_price=100.0, record=False).allowed
+    d = g.check(order("BUY", qty=100.0, type="LIMIT", price=100.0), ref_price=100.0, committed_open_notional=10_000.0)
+    assert (d.allowed, d.reason) == (False, "max_gross_exposure")
+    assert g.check(order("BUY", qty=50.0), ref_price=100.0, committed_open_notional=5_000.0).allowed
+    hold(pf, "BUY", 10.0, 100.0)
+    assert g.check(order("SELL", qty=10.0), ref_price=100.0, committed_open_notional=1e9).allowed  # reduction
+    # max position counts it: 20 x 100 = 2000 against 5000
+    lim = dataclasses.replace(RiskLimits.unlimited(), max_position_notional=5_000.0)
+    gm = make(lim, ins=inst(max_qty=None))[0]
+    assert gm.check(order("BUY", qty=20.0), ref_price=100.0, committed_open_notional=3_000.0).allowed
+    assert gm.check(order("BUY", qty=20.0), ref_price=100.0, committed_open_notional=3_000.01).reason == "max_position"
