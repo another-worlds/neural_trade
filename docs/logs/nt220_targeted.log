@@ -1,0 +1,12 @@
+base sha: 374fcb7972fa59d98804fbbc6a0a4670c377b090
+cmd: CUDA_VISIBLE_DEVICES=-1 PYTHONPATH=D:/nt/nt_220/src C:/Users/Step/miniforge3/envs/nt/python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+tests/test_docs_guides.py: 96 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+333 passed, 101 warnings in 186.53s (0:03:06)
+cmd: C:/Users/Step/miniforge3/envs/nt/python -m ruff check src tests scripts
+All checks passed!

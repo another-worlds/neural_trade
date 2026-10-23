@@ -252,7 +252,7 @@ changes).
 | [NT-217](#nt-217) | P1 | feature | implementer | done | DESK-0.4: Domain model, bus, clock, params |
 | [NT-218](#nt-218) | P1 | feature | implementer | done | DESK-0.5: Cost profiles and pure fill functions |
 | [NT-219](#nt-219) | P1 | feature | implementer | done | DESK-0.6: Desk database |
-| [NT-220](#nt-220) | P1 | feature | implementer | todo | DESK-0.7: Market store |
+| [NT-220](#nt-220) | P1 | feature | implementer | done | DESK-0.7: Market store |
 | [NT-221](#nt-221) | P1 | feature | implementer | todo | DESK-0.8: Importers and CLI |
 | [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
 | [NT-223](#nt-223) | P1 | feature | implementer | todo | DESK-1.2: Risk guard |
@@ -319,6 +319,7 @@ changes).
 | [NT-284](#nt-284) | P3 | infra | implementer | todo | DESK-0.2 follow-ups from QA: loopback-only host guard, error names, hygiene subprocess PYTHONPATH |
 | [NT-285](#nt-285) | P3 | infra | implementer | todo | DESK-0.4/0.5 follow-ups from QA: bracket boundary tests, Alert dataclass, bus exception policy, contract wording |
 | [NT-286](#nt-286) | P2 | feature | implementer | todo | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
+| [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
 
 ## Items
 
@@ -2975,7 +2976,7 @@ changes).
 
 **DESK-0.7: Market store: `desk/data/store.py` (A6: `write_bars`, `read_bars(symbol, tf, start, end, limit)`, `last_ts`, `ranges`, `resample`, `export_csv`, `gaps`)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS on c237e5b: resample equal to resample_bars at 5/15/60 min on the bundled 43,500 bars with holes and a partial last bin; export fingerprint sha256 equal; 6 and 16 processes racing on a fresh file, 30 rounds, 0 failures; 7 of 8 own mutants killed. Follow-ups: NT-287; the provenance point is added to NT-221.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/data/store.py`, `tests/desk/test_market_store.py`
@@ -2991,7 +2992,7 @@ changes).
 - **status:** todo
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
-- **area:** `desk/data/importers.py`, `desk/cli.py`, `src/neural_trade/cli.py` (one subparser hook), `tests/desk/test_importers.py`, `tests/desk/test_cli.py`
+- **area:** `desk/data/importers.py`, `desk/cli.py`, `src/neural_trade/cli.py` (one subparser hook), `tests/desk/test_importers.py`, `tests/desk/test_cli.py` (lead 2026-10-16, QA of NT-220: also `desk/data/store.py` for provenance only: `sources` is deleted and re-derived on every write, so the provenance text of criterion 4 needs its own column or table that writes do not rebuild; keep the 569-line store otherwise unchanged and its 333 tests green)
 - **depends on:** NT-220 (DESK-0.7)
 - **why:** task DESK-0.8 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) importing the bundled CSV yields 43,500 bars with `src='repo:binance_btcusdt_1min_ccxt.csv'` (marker `data`); (2) `neural-trade desk init --home TMP` creates both sqlite files and the token; (3) `cli.build_parser` parses `neural-trade desk import-csv FILE` (docs test contract); (4) the `sources` row of an imported file carries the provenance text given in the item (default: the file name and span); (5) a subprocess test runs `build_parser()` with `sys.modules` guards for fastapi, nicegui and ccxt and asserts none loaded (the CI `unit` job has no desk extra) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
@@ -3838,6 +3839,18 @@ changes).
 - **why:** QA of NT-222: (1) `mark()` is the only way to get an `AccountState` and it mutates (equity curve, drawdown): add a read-only `account_state(marks)` that changes nothing, for RiskGuard and the strategy context; (2) positions restored from sqlite raise KeyError on close because `_entry_costs` has no entry: add a restore path (`Portfolio.restore(positions, cash, ...)`) with a test that a restored position closes with correct P&L; (3) A5.3 says the Portfolio stores the active bracket per position, it has none: add `set_bracket/get_bracket` cleared on close, per CONTRACTS A5.3; (4) NaN/inf price or qty accepted silently (cash NaN): refuse with ValueError; a NaN mark must not leave the drawdown at 0; (5) dust: a sell 1e-14 above the held quantity opens a 1e-14 SHORT: apply the close tolerance consistently; (6) `allow_short` should derive from `Instrument.is_spot` or be documented; one strategy's position can go SHORT on a spot account while the netted base balance stays >= 0: decide against RiskGuard's per-strategy rule (report the decision); `AccountEvent` is built by the ExecutionEngine (note only).
 - **acceptance:** each point with a test that fails on its mutant; the existing 23 portfolio tests unchanged; ruff; `import neural_trade.desk` imports stay light.
 - **source:** QA of NT-222 (2026-10-16)
+
+### NT-287
+
+**Market store scaling and shared retry helper (QA of NT-220)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** `src/neural_trade/desk/data/store.py`, `src/neural_trade/desk/store/db.py` (or a new `desk/store/sqlite_util.py`), `tests/desk/test_market_store.py`, `tests/desk/test_db.py`
+- **depends on:** NT-220 (done), NT-221
+- **why:** (1) `store.py:164-168` rebuilds `sources` with a GROUP BY over every bar on each write: a 1-bar write on a 1M-bar store takes 0.25 s, and the resample cache re-reads the whole base series after any write (1.43 s at 1M bars); the live collector (DESK-2.3) and LiveSource (2.4) write every few seconds on the long file (about 4M bars): make the `sources` update incremental and invalidate the cache by range; (2) `store.py` calls the private `DeskDb._retry`: move it to a shared helper; (3) the store loads sklearn on first write or export through the preprocessors' imports (note).
+- **acceptance:** a 1-bar write on a 1M-bar store under 50 ms and a cached read after it under 100 ms (numbers in a test with a smaller store and a ratio check); outputs byte-identical to today on the existing tests; the race tests unchanged and green.
+- **source:** QA of NT-220 (2026-10-16)
 
 ## Done log
 
