@@ -1,0 +1,131 @@
+=== NT-299 targeted verification, HEAD 8c2513eee9647505403cdf0d882f12c25b78116f, 2026-10-23T16:25:08Z
+--- pytest tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+826 passed, 101 warnings in 161.40s (0:02:41)
+--- ruff check src tests scripts
+All checks passed!
+--- QA probes nt295c_probe.py (rig of nt295_probe.py)
+[C1a margin ACTIVE: SELL2 (pure reduce at submit) + SELL5 (checked as 3 opening), max_position 400; both fill at 100] RAISED IllegalTransition: illegal order transition DENIED -> FILLED
+[C1b same, fills in the other order (SELL5 first, crossing zero, then SELL2 opens)] RAISED IllegalTransition: illegal order transition DENIED -> FILLED
+[C2 margin: dead SELL2 late-fills, then the pure-reduce SELL2 opens a short past max_position 100 (no re-check)] RAISED IllegalTransition: illegal order transition DENIED -> FILLED
+[C3 spot PAPER: dead SELL2 late-fills, then SELL2 fill: what is journalled?] precheck False spot_sell_exceeds_balance; apply applied; journal added ['fill_refused', 'order_rejected', 'fill_after_refusal']; nw REJECTED; state ACTIVE
+[L1 LIVE spot, non-late venue SELL fill with no balance (books diverged)] RAISED OverfillError; journal added ['venue_fill_unbooked', 'halt', 'order_canceled']; state HALTED; nw CANCELED
+[L2 LIVE size_frac without resolved_qty: second partial venue fill] first fill -> REJECTED filled 50.0; second: applied; journal added ['venue_fill_on_rejected', 'position', 'account']; pos 50.0
+[L3 LIVE fill on an EXPIRED order] RAISED IllegalTransition; journal added ['venue_fill_unbooked', 'halt']; pos 0.0
+[L4 LIVE venue_fill_on_rejected on spot SELL with no balance] buy on rejected: ('REJECTED', 1.0, 1.0, ['venue_fill_on_rejected', 'position', 'account', 'halt'], 'HALTED'); sell submit while halted: DENIED
+[L5 LIVE fill on an order still SUBMITTED (fill before the accept event)] submit RAISED IllegalTransition: illegal order transition SUBMITTED -> SUBMITTED
+[L6 LIVE modify qty down after a fill, then the venue's in-flight fill at the old qty] RAISED OverfillError; journal added ['venue_fill_unbooked', 'halt', 'order_canceled']; filled 2.0 qty 3.0
+[A1 PAPER HALTED flip SELL3 vs long1 at mid 101, fee 0.3: applied part, fee, cash, journal] status CANCELED filled 1.0 avg 100.9 reason fill_price_check_failed; pos 0.0; cash delta 100.8000 (expect 100.9-0.1=100.8000); fill qty [1.0] fee [0.09999999999999999]; fill_refused [(3.0, 1.0, 2.0)]; kinds ['order_partially_filled', 'fill', 'position', 'account', 'fill_refused', 'order_canceled', 'fill_after_refusal']
+[A2 PAPER precheck clipped twice then filled at the allowed qty: records] d [(True, 1.0, 'clipped_to_position'), (True, 1.0, ''), (True, 1.0, ''), (True, 0.5, '')]; after 0.5 ('PARTIALLY_FILLED', 0.5); final CANCELED filled 1.0 reason fill_price_check_failed; pos 0.0; fill_refused [(3.0, 1.0, 2.0)]; kinds ['fill_refused', 'order_partially_filled', 'fill', 'position', 'account', 'order_partially_filled', 'fill', 'position', 'account', 'order_canceled']
+[A3 PAPER precheck clipped, then state back to ACTIVE before the fill: is the order still capped?] precheck 1.0; after resume fill 3 -> CANCELED filled 1.0 pos 0.0 kinds ['order_partially_filled', 'fill', 'position', 'account', 'fill_refused', 'order_canceled']
+[A4 PAPER precheck clipped then the position shrinks (late fill) before the clipped fill] precheck qty 2.0; fill 2.0 -> CANCELED filled 1.0 pos 0.0 kinds ['order_partially_filled', 'fill', 'position', 'account', 'fill_refused', 'order_canceled']
+[E1 max_order 1000: BUY10 LIMIT100, fill 9@100, modify qty 18 (remainder 900 checked), fill 9@100] RAISED OverfillError: fills of o57 sum to 18.0, above its quantity 10.0
+[E2 max_order 1000: BUY10 LIMIT100, fills 5@90 then 5@109 (cum avg 99.5): re-checked?] precheck True ; final FILLED filled 10.0
+[E3 max_order 1000: BUY10 LIMIT100, fill 5@100, then 5@100.5 -> refused (cum 1002.5)] CANCELED filled 5.0 reason fill_price_check_failed kinds ['fill_refused', 'order_canceled']
+[E4 costs PROF, max_order 1000: BUY 9.97 MARKET at 100; fill 9.97@100 with slip: re-check notional incl. slip?] submit PARTIALLY_FILLED; second-half precheck at 100.00001 (within tol) True; at 100.01: False
+[F1 size_frac 0.5 margin unlimited, close 100 -> next open 95: precheck qty vs A5.1 equity x frac / open] reserved 50.000000; precheck 52.631579; A5.1 qty 52.631579; apply A5.1 fill -> FILLED filled 52.631579; kinds ['order_filled', 'fill', 'position', 'account']
+--- QA probes nt295c_probe2.py
+[C2 margin: dead SELL2 late-fills, then SELL3 (checked as 1 opening) fills: short 3 vs max_position 250] b FILLED; nw submit ok; precheck False; final pos 0.0 notional 0.0 (limit 250)
+[C1c margin gross cap 1.0 x equity 1000: long 2 @100; SELL2 then SELL 11 (checked as 9 opening)] RAISED AttributeError: can't set attribute 'gross_exposure_cap_frac'
+[C1d same in REDUCING: SELL2 (reduce) + SELL5 resting before REDUCING; fills while REDUCING] final pos 0.0; c REJECTED filled 0.0 reason fill_price_check_failed
+[X1 crossing zero while HALTED: SELL3 vs long 2, fill 1 then 2] CANCELED filled 2.0 pos 0.0
+[X2 spot HALTED SELL3 vs long1 (submitted when long 3, position cut by a late fill)] s submit ACCEPTED; applied; CANCELED filled 1.0 pos 0.0 kinds ['order_partially_filled', 'fill', 'position', 'account', 'fill_refused', 'order_canceled']
+[X3 RO after position flipped by another order: long2, RO SELL2 rests, SELL5 (non-RO) fills -> short 3, RO fills] c FILLED; RO -> REJECTED reason fill_price_check_failed; pos -3.0 kinds ['fill_refused', 'order_rejected']
+[T1 thread owner guard: precheck_fill / apply / set_marks from another thread] [('precheck_fill', 'RuntimeError'), ('apply', 'RuntimeError'), ('set_marks', 'RuntimeError'), ('halt', 'RuntimeError')]; order ACCEPTED
+[H1 handler calls apply(fill) and precheck_fill during a publish] [('apply returned', None), ('precheck', 'precheck_fill cannot run inside a bus handler')]; order of records [('order_filled', 'o32'), ('fill', 'o32'), ('position', None), ('account', None), ('order_filled', 'o33'), ('fill', 'o33'), ('position', None), ('account', None)]
+[L7 LIVE venue fill on REJECTED spot SELL with no balance] order DENIED reason spot_sell_exceeds_balance; RAISED IllegalTransition; journal ['venue_fill_unbooked', 'halt']; state HALTED
+[L8 LIVE fill on a DENIED order (never sent)] DENIED: RAISED IllegalTransition; journal ['venue_fill_unbooked']
+[L9 LIVE HALTED flip SELL3 vs long1 at mid 101 (applied in full, journalled, halted once)] FILLED filled 3.0 pos -2.0; fill_refused [(True, 3.0, 1.0, 2.0)]; kinds ['order_filled', 'fill', 'position', 'position', 'account', 'fill_refused']
+[S1 size_frac margin: price RISES close 100 -> open 105: A5.1 qty vs precheck and apply] reserved 50.000000; precheck 47.619048; A5.1 47.619048; filled 47.619048 FILLED
+[S2 size_frac with resolved_qty (accept event) and a fill above it on PAPER] after 30: ok; fill 20 more (cap 40): RAISED OverfillError; PARTIALLY_FILLED filled 30.0 kinds []
+--- QA oracle parity nt295c_parity.py (OP[1]=99.5, OP[6]=104.5)
+original OP cost=research_zero: trades 5 vs 5; equity parity True (max |diff| 0.000000); final equity desk 10152.8571 oracle 10152.8571
+original OP cost=priced: trades 5 vs 5; equity parity True (max |diff| 0.000000); final equity desk 10034.5403 oracle 10034.5403
+OP[1]=99.5 (< C[0]=100), OP[6]=104.5 (< C[5]=105) cost=research_zero: trades 5 vs 5; equity parity True (max |diff| 0.000000); final equity desk 10227.8137 oracle 10227.8137
+OP[1]=99.5 (< C[0]=100), OP[6]=104.5 (< C[5]=105) cost=priced: trades 5 vs 5; equity parity True (max |diff| 0.000000); final equity desk 10108.6867 oracle 10108.6867
+--- QA 800-series parity nt225_parity.py 400
+series 800, divergent 0, oracle trades 10168, reasons {'TIME': 640, 'SL': 746, 'TP': 730, 'EOW': 688, 'SIG': 652}
+--- QA fuzzer six-patch nt224c variant nt295c_224c.py 200 400
+('submit', 'ok') 71426
+FUZZ3 OK
+--- QA fuzzer nt295c_qfuzz.py 200 400 UNCHANGED (expected to stop at its decision-F / unjournalled-LIVE assertions)
+    assert "late_fill_refused" in new_kinds and set(new_kinds) <= {"late_fill_refused", "halt", "order_canceled", "halt_cancel_failed"}, new_kinds
+AssertionError: ['venue_fill_unbooked']
+--- QA fuzzer with the NT-299 assertions nt299_qfuzz.py 200 400 (made by make_nt299_qfuzz.py)
+('accept_rq', 'IllegalTransition') 12691
+('accept_rq', 'ValueError') 1738
+('cancel', 'BrokerError') 318
+('cancel', 'ok') 28189
+('cancel_all', 'ok') 8596
+('cancel_failed_rec', '') 318
+('close', 'ok') 28782
+('dupfill', 'IllegalTransition') 12416
+('dupfill', 'OverfillError') 2302
+('dupfill', 'ok') 14164
+('fill', 'IllegalTransition') 67624
+('fill', 'OverfillError') 10544
+('fill', 'ok') 37140
+('fill_refused', '') 6082
+('halt', 'ok') 5654
+('late', 'IllegalTransition') 1447
+('late', 'OverfillError') 6886
+('late', 'ok') 20167
+('late_fill_flip', '') 1594
+('live_unbooked', 'IllegalTransition') 30137
+('live_unbooked', 'OverfillError') 13347
+('modify', 'BrokerError') 1183
+('modify', 'ValueError') 68802
+('modify', 'ok') 15845
+('oev', 'IllegalTransition') 26997
+('oev', 'ok') 1717
+('outages', '') 12244
+('overfill', 'IllegalTransition') 2463
+('overfill', 'OverfillError') 23021
+('overfill', 'ok') 3002
+('precheck', 'ok') 42606
+('precheck_refused', 'halted') 16
+('precheck_refused', 'insufficient_cash') 1
+('precheck_refused', 'max_position') 45
+('precheck_refused', 'reduce_only_violation') 24
+('precheck_refused', 'spot_sell_exceeds_balance') 1
+('precheck_refused', 'spot_short_no_own_long') 2
+('qa_nonactive_or_ro_fill', 'ACTIVE') 9339
+('qa_nonactive_or_ro_fill', 'HALTED') 8352
+('reducing_applied', '') 3963
+('sf_precheck_bounded', '') 348
+('submit', 'ok') 115706
+QFUZZ295c OK
+--- implementer mutants nt299_mut.py
+M1 decision F back: size_frac capped at the reserved quantity: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p1_a_size_frac_fill_is_sized_at_the_fill_open_on_realised_equity', 'FAILED tests/desk/test_execution.py::test_295_p3_a_size_frac_order_is_si
+M2 no upper bound on a size_frac fill: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p1_a_size_frac_fill_above_the_equity_sizing_is_clipped_to_it', 'FAILED tests/desk/test_execution.py::test_295_r2f_size_frac_fills_are_bounded_by_the_equity_sizing_a
+M3 size_frac tolerance 0: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p1_a_size_frac_fill_above_the_equity_sizing_is_clipped_to_it'] ['1 failed, 276 passed, 5 warnings in 8.43s']
+M4 the gap-through-bracket fallback removed: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p1_a_gap_through_an_absolute_bracket_level_does_not_refuse_the_entry'] ['1 failed, 275 passed, 5 warnings in 8.51s']
+M5 max_position ignores the committed reductions: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p2_an_order_beyond_the_committed_reductions_is_denied_at_submit', 'FAILED tests/desk/test_risk.py::test_299_max_position_counts_the_position_left_after_t
+M6 an order opposite at submit keeps the ACTIVE price shortcut: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p2_a_fill_that_no_longer_reduces_is_rechecked_even_in_active'] ['1 failed, 277 passed, 5 warnings in 8.41s']
+M7 modify passes no prior_order_notional: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p3_modify_counts_the_filled_notional_against_max_order_notional'] ['1 failed, 280 passed, 5 warnings in 8.44s']
+M8 precheck journals the excess on every call: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_precheck_journals_the_refused_excess_once'] ['1 failed, 281 passed, 5 warnings in 8.47s']
+M9 (Q2) a clipped fill keeps the full fee: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_fill_pays_the_fee_of_the_applied_part_only'] ['1 failed, 282 passed, 5 warnings in 8.36s']
+M10 (Q3) the precheck limit ignores the filled quantity: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_the_precheck_limit_counts_what_is_already_filled', 'FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_precheck_journals_the_refused_ex
+M11 (Q11) a late clipped refusal passes dead=False: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_late_fill_adds_no_order_canceled'] ['1 failed, 283 passed, 5 warnings in 8.43s']
+M12 LIVE: an unbookable fill is not journalled: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p5_a_live_sell_with_no_spot_balance_is_journalled_unbooked_and_halts'] ['1 failed, 284 passed, 5 warnings in 8.39s']
+M13 LIVE: a size_frac accept without resolved_qty is accepted: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p5_a_live_size_frac_accept_without_resolved_qty_is_rejected_and_halts'] ['1 failed, 276 passed, 5 warnings in 8.40s']
+M14 PAPER: a fill the books cannot hold raises: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p2_a_simulated_fill_the_books_cannot_hold_is_refused_not_raised'] ['1 failed, 279 passed, 5 warnings in 8.38s']
+M15 a smaller size_frac fill is not judged on its own: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p1_a_smaller_size_frac_fill_is_judged_on_its_own_when_the_full_sizing_breaks_a_limit'] ['1 failed, 277 passed, 5 warnings in 8.42s']
+M16 LIVE unbooked: no halt: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p5_a_live_sell_with_no_spot_balance_is_journalled_unbooked_and_halts'] ['1 failed, 284 passed, 5 warnings in 8.44s']
+M17 note_opposite never records: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p2_a_fill_that_no_longer_reduces_is_rechecked_even_in_active'] ['1 failed, 277 passed, 5 warnings in 8.44s']
+--- QA round-3 mutants on this tree nt299_qa_mut.py (nt295c_mut.py pointed at D:/nt/nt_299)
+Q1 reducing_part keeps the whole fill (flip allowed while HALTED): KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_the_precheck_limit_counts_what_is_already_filled', 'FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_precheck_journals_the_
+Q2 clipped fill keeps the full fee: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_fill_pays_the_fee_of_the_applied_part_only'] ['1 failed, 282 passed, 5 warnings in 8.37s']
+Q3 precheck limit ignores the filled quantity: PATTERN COUNT 0
+Q4 clipped precheck never ends the order: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_the_precheck_limit_counts_what_is_already_filled', 'FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_precheck_journals_the_refused_excess_once'] ['3
+Q5 venue_fill_on_rejected does not halt: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2d_a_live_fill_on_a_rejected_order_is_booked_and_halts'] ['1 failed, 287 passed, 5 warnings in 6.99s']
+Q6 REDUCING does not force the re-check: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2c_opening_fills_are_rechecked_while_halted_or_reducing'] ['1 failed, 286 passed, 5 warnings in 7.02s']
+Q7 refused_qty arithmetic wrong: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p1_a_size_frac_fill_above_the_equity_sizing_is_clipped_to_it', 'FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_late_fill_adds_no_order_canceled'] ['3 failed, 
+Q8 LIVE clipped fill journals no quantities: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2a_a_clipped_fill_applies_only_the_allowed_quantity'] ['1 failed, 284 passed, 5 warnings in 7.04s']
+Q9 cumulative check uses only this fill: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2e_partial_fills_are_checked_on_the_cumulative_notional'] ['1 failed, 288 passed, 5 warnings in 7.04s']
+Q10 drain does not reopen the closed queue: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r6_a_handler_that_always_submits_hits_the_queue_cap'] ['1 failed, 281 passed, 5 warnings in 6.27s']
+Q11 non-LIVE clipped refusal passes dead=False for a late fill: KILLED | ['FAILED tests/desk/test_execution.py::test_299_p4_a_clipped_late_fill_adds_no_order_canceled'] ['1 failed, 283 passed, 5 warnings in 8.48s']
+Q12 risk ignores invalid prior_order_notional: KILLED | ['FAILED tests/desk/test_risk.py::test_295_r2e_prior_order_notional_counts_against_max_order_notional_only'] ['1 failed, 287 passed, 5 warnings in 8.44s']
+Q13 reduce_only fills not forced through the check (only above price): SURVIVED | [] ['294 passed, 5 warnings in 8.37s']
+Q14 size_frac apply resized at the fill instead of capped (A5.1 sizing): PATTERN COUNT 0
+--- git status after the mutants
+?? docs/logs/nt299_targeted.log
