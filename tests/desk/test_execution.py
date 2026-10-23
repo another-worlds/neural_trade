@@ -1566,7 +1566,10 @@ def test_295_r2_a_reducing_fill_makes_no_riskguard_call_in_any_state():
     for state in ("ACTIVE", "REDUCING", "HALTED"):
         r = _long_one()
         tp = r.submit(side="SELL", qty=1.0, type="LIMIT", price=101.0)
-        {"REDUCING": lambda: r.risk.reduce_only("qa"), "HALTED": lambda: r.risk.halt("qa")}.get(state, lambda: 0)()
+        if state == "REDUCING":
+            r.risk.reduce_only("qa")
+        elif state == "HALTED":
+            r.risk.halt("qa")
         n = len(r.checks)
         assert r.eng.precheck_fill(tp.client_id, 130.0).allowed
         r.eng.apply(r.fill(tp, 1.0, price=130.0))

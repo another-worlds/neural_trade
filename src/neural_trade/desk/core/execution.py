@@ -156,21 +156,79 @@ def _mutating(fn: Callable) -> Callable:
     @functools.wraps(fn)
     def wrapper(self: "ExecutionEngine", *args: Any, **kwargs: Any) -> Any:
         self.assert_owner()
-        if self._publishing:
-            if self._queue_closed or len(self._deferred) >= HANDLER_QUEUE_LIMIT:
-                self._queue_overflow(fn.__name__)
-                raise RuntimeError("handler call queue overflow")
-            self._deferred.append((fn, args, kwargs))
+        q = self._handlers
+        if q.publishing:
+            q.defer(fn, args, kwargs)
             return None
-        self._ops += 1
-        try:
-            return fn(self, *args, **kwargs)
-        finally:
-            self._ops -= 1
-            if self._ops == 0:
-                self._drain()
+        return q.run(self, fn, args, kwargs)
 
     return wrapper
+
+
+class HandlerQueue:
+    """The calls bus handlers make while the engine publishes (module docstring "Handlers"). ``publishing`` is the depth
+    of ``bus.publish`` calls and ``ops`` the depth of the engine's public mutating calls. A call made while publishing is
+    queued (``defer``); ``drain`` runs the queue, in call order, when the outermost mutating call returns. At most
+    ``limit`` calls may wait and one drain runs at most ``limit``: beyond either the queue is dropped and closed until
+    the drain ends and ``on_overflow(name)`` runs (the engine journals ``handler_queue_overflow`` and halts); a refused
+    ``defer`` raises ``RuntimeError`` in the handler. A queued call's exception goes to ``on_error``."""
+
+    def __init__(self, *, on_overflow: Callable[[str], None], on_error: Callable[[BaseException], None],
+                 limit: int = HANDLER_QUEUE_LIMIT) -> None:
+        self._on_overflow, self._on_error, self.limit = on_overflow, on_error, limit
+        self.calls: deque[tuple[Callable, tuple, dict]] = deque()
+        self.publishing = 0  # depth of bus.publish calls: a mutation requested then is queued (``_mutating``)
+        self.ops = 0  # depth of public mutating calls
+        self.draining = False
+        self.closed = False  # a drain overflowed: handlers may queue nothing more until it ends
+
+    def defer(self, fn: Callable, args: tuple, kwargs: dict) -> None:
+        if self.closed or len(self.calls) >= self.limit:
+            self.overflow(fn.__name__)
+            raise RuntimeError("handler call queue overflow")
+        self.calls.append((fn, args, kwargs))
+
+    def run(self, target: Any, fn: Callable, args: tuple, kwargs: dict) -> Any:
+        """Run ``fn`` as a mutating call now; the queue drains when the outermost one returns."""
+        self.ops += 1
+        try:
+            return fn(target, *args, **kwargs)
+        finally:
+            self.ops -= 1
+            if self.ops == 0:
+                self.drain(target)
+
+    def overflow(self, name: str) -> None:
+        if self.closed:
+            return
+        self.closed = True
+        self.calls.clear()
+        self._on_overflow(name)
+
+    def drain(self, target: Any) -> None:
+        """Run the queued calls, in order, once the outermost mutating call has returned."""
+        if self.draining:
+            return
+        self.draining = True
+        try:
+            n = 0
+            while self.calls:
+                n += 1
+                if n > self.limit and not self.closed:  # handlers keep feeding the queue
+                    self.overflow("drain")
+                    continue
+                fn, args, kwargs = self.calls.popleft()
+                self.ops += 1
+                try:
+                    fn(target, *args, **kwargs)
+                except Exception as exc:  # noqa: BLE001 - the caller returned long ago
+                    log.error("queued %s failed: %r", fn.__name__, exc, exc_info=exc)
+                    self._on_error(exc)
+                finally:
+                    self.ops -= 1
+        finally:
+            self.draining = False
+            self.closed = False
 
 
 class JournalWriter:
@@ -229,6 +287,206 @@ class Broker(Protocol):
                qty: Optional[float] = None) -> OrderEvent: ...  # returns kind "modified" with the new values
 
 
+class FillGate:
+    """The binding check at the fill (module docstring; CONTRACTS A5.1) and the commitments RiskGuard sees, for one
+    ``ExecutionEngine``. It owns the per-order state the check needs (the checked price, the refused orders, a
+    ``size_frac`` order's sized quantity, the fill limit a clipped precheck set, the cumulative fill notional) and reads
+    the engine's orders, Portfolio, RiskGuard and marks; it writes only through the engine's journal and order-event
+    path."""
+
+    def __init__(self, engine: "ExecutionEngine") -> None:
+        self.e = engine
+        self.checked: dict[str, float] = {}  # the price RiskGuard valued each order at (submit / last modify)
+        self.refused: set[str] = set()  # orders whose fill the binding check refused
+        self.sized: dict[str, float] = {}  # size_frac orders: the approved / resolved quantity (kept when closed)
+        self.limit: dict[str, float] = {}  # filled quantity a clipped precheck allows an order to reach
+        self.notional: dict[str, float] = {}  # sum of qty x mid of each order's applied fills (cumulative check)
+
+    # ------------------------------------------------------------------ reducing and commitments
+    def held(self, o: Order) -> float:
+        p = self.e.portfolio
+        return p.signed_qty(p.position(o.instrument_id, o.strategy_id))
+
+    def reducing(self, o: Order, qty: float) -> bool:
+        """True when filling ``qty`` of ``o`` can only reduce its position (opposite to the holding and not larger than
+        it): such a fill opens no exposure, so the binding check and a halt never refuse it. ``reduce_only`` alone is
+        not enough (B): a reduce-only order whose position is gone, or a fill beyond the holding, is checked like an
+        opening fill."""
+        held = self.held(o)
+        return held * (1 if o.side is Side.BUY else -1) < 0 and qty <= abs(held) + DUST
+
+    def reducing_part(self, o: Order, qty: float) -> float:
+        """The part of a fill of ``qty`` of ``o`` that reduces the held position: ``min(qty, |held|)`` when ``o`` is
+        opposite to the holding, else 0."""
+        held = self.held(o)
+        return min(qty, abs(held)) if held * (1 if o.side is Side.BUY else -1) < 0 else 0.0
+
+    @staticmethod
+    def valuation_price(o: Order, ref: float) -> float:
+        """The price RiskGuard values the order at (its notional rule): a market order ``ref``, a limit its price,
+        a stop buy ``max(trigger, limit, ref)``, a stop sell its trigger. Brackets are not included."""
+        px, trig = o.price, o.trigger_price
+        if trig is None:
+            return px if px is not None else ref
+        return max(trig, px or 0.0, ref) if o.side is Side.BUY else trig
+
+    def committed_reduce(self, new: Order, exclude: Optional[str] = None) -> float:
+        """Quantity of the new order's position claimed by resting reduce orders (A5, RiskGuard): of each live (not
+        dead) opposite-side order of the same instrument and strategy only the part that can reduce the position counts,
+        min(its remaining quantity, the position), and the sum is capped at the position."""
+        e = self.e
+        held = self.held(new)
+        cap = abs(held)
+        if cap == 0:
+            return 0.0
+        opposite = Side.SELL if held > 0 else Side.BUY
+        total = sum(min(max(e._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0), cap)
+                    for o in e._live_orders()
+                    if e.is_live(o) and o.side is opposite and o.instrument_id == new.instrument_id
+                    and o.strategy_id == new.strategy_id and o.client_id != exclude)
+        return min(total, cap)
+
+    def committed_open(self, new: Order, exclude: Optional[str] = None) -> tuple[float, float]:
+        """The notional of the live OPENING orders for the next RiskGuard check, as ``(account, position)``:
+
+        * account: every live opening order's quote notional x ``(1 + fee + slip)`` with the account's cost profile
+          (the maker fee for LIMIT, the taker fee for market and stop orders), so the fees and slip of resting orders
+          are reserved too (``committed_open_notional``: cash and gross cap);
+        * position: the plain notional of those of the same strategy and instrument as ``new``
+          (``committed_position_notional``: max position).
+
+        Opening part of an order = its unfilled reserved quantity minus what can still reduce the held position
+        (orders in submission order take the position's quantity first), valued at ``valuation_price`` with the current
+        mark. Dead orders (cancel acknowledged), closed orders, ``new`` itself and ``exclude`` count for nothing."""
+        e = self.e
+        costs = e.risk.costs
+        left: dict[tuple[str, Optional[str]], float] = {}
+        acct = posn = 0.0
+        for o in e._live_orders():
+            if o is new or o.client_id == exclude or o.reduce_only or not e.is_live(o):
+                continue
+            rem = max(e._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)
+            key = (o.instrument_id, o.strategy_id)
+            held = e.portfolio.signed_qty(e.portfolio.position(*key))
+            if key not in left:
+                left[key] = abs(held)
+            if (held > 0 and o.side is Side.SELL) or (held < 0 and o.side is Side.BUY):
+                take = min(rem, left[key])
+                left[key] -= take
+                rem -= take
+            ref = e._ref_price(o)
+            if rem <= DUST or ref is None:
+                continue
+            notional = rem * self.valuation_price(o, ref)
+            liq = Liquidity.MAKER if o.type is OrderType.LIMIT else Liquidity.TAKER
+            acct += notional * (1 + costs.fee_rate(liq) + costs.slip_rate)
+            if key == (new.instrument_id, new.strategy_id):
+                posn += notional
+        return acct, posn
+
+    # ------------------------------------------------------------------ the check
+    def precheck(self, o: Order, fill_price: float, qty: Optional[float]) -> RiskDecision:
+        """``ExecutionEngine.precheck_fill`` after its owner / handler / LIVE guards."""
+        e, cid = self.e, o.client_id
+        if cid in self.refused or not e.is_live(o):
+            return RiskDecision(False, "order_not_live")
+        d = self.decision(o, fill_price, qty)
+        want = qty if qty is not None else max((o.qty or 0.0) - o.filled_qty, 0.0)
+        clipped = d.allowed and o.size_frac is None and d.qty is not None and d.qty < want - DUST
+        if (not d.allowed and d.reason != "order_not_live") or clipped:
+            q = e._handlers
+            q.ops += 1
+            try:
+                if clipped:  # (A) the excess is refused now; the order ends once the allowed part is filled
+                    self.limit[cid] = o.filled_qty + d.qty
+                    self.write_refused(o, fill_price, d.reason or CLIPPED_TO_POSITION, self.checked.get(cid, 0.0),
+                                       applied=False, dead=False, qty=(want, d.qty))
+                else:
+                    self.refuse(o, fill_price, d.reason, self.checked.get(cid, 0.0))
+            finally:
+                q.ops -= 1
+                if q.ops == 0:
+                    q.drain(e)
+        return d
+
+    def decision(self, o: Order, mid: float, qty: Optional[float], *, always: bool = False) -> RiskDecision:
+        """RiskGuard on the fill itself (see ``precheck_fill``). ``qty`` None: the unfilled quantity (an explicit
+        order) or the reserved / resolved one (``size_frac``); a ``size_frac`` quantity and a quantity above the limit
+        a clipped precheck set are capped first (the decision then carries less than ``qty``). Reducing fills pass. The
+        check runs when the order's cumulative reference price (earlier fills and this one) is above the checked price
+        by more than the tolerance; always for a ``size_frac`` order, a ``reduce_only`` order (a reduce-only fill that
+        does not reduce must be refused), while the account is not ACTIVE (C), or when ``always``. A denied fill that
+        is opposite to the held position keeps its reducing part (a clipped decision): reductions are never refused."""
+        e, cid = self.e, o.client_id
+        sf = o.size_frac is not None
+        reserved = max(self.sized.get(cid, 0.0) - o.filled_qty, 0.0)
+        rem = reserved if sf else max((o.qty or 0.0) - o.filled_qty, 0.0)
+        limit = self.limit.get(cid)
+        cap = rem if sf else math.inf  # (F) a size_frac order fills at most its reserved / resolved quantity
+        if limit is not None:
+            cap = min(cap, max(limit - o.filled_qty, 0.0))
+            rem = min(rem, cap)
+        q = rem if qty is None else min(qty, cap)
+        if q <= DUST:
+            return RiskDecision(False, "order_not_live")
+        if self.reducing(o, q):
+            return RiskDecision(True, "", q)
+        checked = self.checked.get(cid)
+        prior = self.notional.get(cid, 0.0)
+        above = checked is not None and prior + q * mid > (o.filled_qty + q) * checked * (1 + FILL_PRICE_TOLERANCE)
+        if not (always or sf or o.reduce_only or above or e.risk.state is not TradingState.ACTIVE):
+            return RiskDecision(True, "", q)
+        # a MARKET order at the fill price, the order's own commitments excluded, no rate slot; its earlier fills
+        # count against max_order_notional (E)
+        by_frac = sf and qty is None
+        cand = dataclasses.replace(o, tags=dict(o.tags), type=OrderType.MARKET, price=None, trigger_price=None,
+                                   qty=None if by_frac else q, size_frac=o.size_frac if by_frac else None)
+        marks = {**e.marks}
+        marks[o.instrument_id] = mid
+        acct, posn = self.committed_open(cand, exclude=cid)
+        d = e.risk.check(cand, ref_price=mid, marks=marks, record=False, fill_recheck=True,
+                         committed_reduce_qty=self.committed_reduce(cand, exclude=cid),
+                         committed_open_notional=acct, committed_position_notional=posn,
+                         prior_order_notional=prior)
+        if d.allowed and by_frac:
+            d = dataclasses.replace(d, qty=min(d.qty, rem))
+        if not d.allowed:
+            part = self.reducing_part(o, q)
+            if part > DUST:
+                d = RiskDecision(True, CLIPPED_TO_POSITION, part, d.price)
+        return d
+
+    # ------------------------------------------------------------------ refusals
+    def write_refused(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool, dead: bool,
+                      qty: Optional[tuple[float, float]]) -> None:
+        rec = {"client_id": o.client_id, "reason": FILL_REFUSED, "check": check_reason, "fill_price": mid,
+               "checked_price": checked, "applied": applied, "dead": dead, "filled_qty": o.filled_qty}
+        if qty is not None:  # a clipped fill: the quantity asked, the part allowed, the part refused
+            rec.update(fill_qty=qty[0], allowed_qty=qty[1], refused_qty=qty[0] - qty[1])
+        self.e._write("fill_refused", rec, self.e.clock.now_ms())
+
+    def refuse(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool = False,
+               dead: bool = False, qty: Optional[tuple[float, float]] = None) -> None:
+        """Journal ``fill_refused``; unless ``applied`` (a LIVE venue fact) the order is refused for good: ended
+        REJECTED (nothing filled) or CANCELED (part filled), with reason ``fill_price_check_failed``. ``qty`` is
+        (asked, allowed) for a clipped fill; a FILLED or dead order only records it."""
+        self.write_refused(o, mid, check_reason, checked, applied=applied, dead=dead, qty=qty)
+        if applied:
+            return
+        self.refused.add(o.client_id)
+        if dead or o.status is _S.FILLED:  # a late fill of a cancelled order, or nothing left: the order is over
+            return
+        self.end_refused(o)
+
+    def end_refused(self, o: Order) -> None:
+        e = self.e
+        now = e.clock.now_ms()
+        self.refused.add(o.client_id)
+        self.limit.pop(o.client_id, None)
+        kind = "rejected" if o.filled_qty <= DUST else "canceled"  # PARTIALLY_FILLED -> REJECTED is no edge
+        e._apply_order_event(OrderEvent(now, now, kind, e._with_reason(o, FILL_REFUSED)), fill_refused=True)
+
+
 class ExecutionEngine:
     def __init__(self, broker: Broker, portfolio: Portfolio, risk: RiskGuard, bus: EventBus, clock: Clock,
                  journal: JournalSink, *, check_owner: bool = True) -> None:
@@ -243,20 +501,40 @@ class ExecutionEngine:
         self._originals: dict[str, Order] = {}  # as submitted, for the duplicate-client-id comparison
         self._reserved: dict[str, float] = {}  # quantity the risk check approved per order (reduce-order accounting)
         self._resolved: dict[str, float] = {}  # size_frac orders whose accept event carried resolved_qty
-        self._checked: dict[str, float] = {}  # the price RiskGuard valued each order at (submit / last modify)
         self._trades: set[str] = set()
         self._seq = 0
-        self._publishing = 0  # depth of bus.publish calls: a mutation requested then is queued (``_mutating``)
-        self._ops = 0  # depth of public mutating calls
-        self._deferred: deque[tuple[Callable, tuple, dict]] = deque()
-        self._draining = False
-        self._queue_closed = False  # a drain overflowed: handlers may queue nothing more until it ends
+        self._handlers = HandlerQueue(on_overflow=self._on_queue_overflow, on_error=self._record_error)
+        self._gate = FillGate(self)
+        # the gate's state under the engine's names (the same objects; never reassigned)
+        self._checked, self._refused, self._sized = self._gate.checked, self._gate.refused, self._gate.sized
+        self._fill_limit, self._fill_notional = self._gate.limit, self._gate.notional
         self._live: dict[str, None] = {}  # ids of the live orders (``is_live``), in submission order
-        self._refused: set[str] = set()  # orders whose fill the binding check refused
-        self._sized: dict[str, float] = {}  # size_frac orders: the approved / resolved quantity (kept when closed)
-        self._fill_limit: dict[str, float] = {}  # filled quantity a clipped precheck allows an order to reach
-        self._fill_notional: dict[str, float] = {}  # sum of qty x mid of each order's applied fills (cumulative check)
         self._cancel_queued = False
+
+    # the handler queue's state under the engine's names (tests and probes read them)
+    @property
+    def _deferred(self) -> deque:
+        return self._handlers.calls
+
+    @property
+    def _publishing(self) -> int:
+        return self._handlers.publishing
+
+    @property
+    def _draining(self) -> bool:
+        return self._handlers.draining
+
+    @property
+    def _queue_closed(self) -> bool:
+        return self._handlers.closed
+
+    @property
+    def _ops(self) -> int:
+        return self._handlers.ops
+
+    @_ops.setter
+    def _ops(self, value: int) -> None:
+        self._handlers.ops = value
 
     def assert_owner(self) -> None:
         if not self._check_owner:
@@ -355,7 +633,7 @@ class ExecutionEngine:
         self._reserved[o.client_id] = qty
         if o.size_frac is not None:
             self._sized[o.client_id] = qty
-        self._checked[o.client_id] = self._valuation_price(o, ref)
+        self._checked[o.client_id] = self._gate.valuation_price(o, ref)
         self.apply(OrderEvent(now, now, "submitted", o))
         try:
             ev = self.broker.submit(dataclasses.replace(o, tags=dict(o.tags)))
@@ -523,7 +801,7 @@ class ExecutionEngine:
                 o.qty = self._reserved[o.client_id] = new_qty
             ref = self._ref_price(o)
             if ref is not None:
-                self._checked[o.client_id] = self._valuation_price(o, ref)
+                self._checked[o.client_id] = self._gate.valuation_price(o, ref)
             self._commit(o, o.status, kind, ev.ts_event)
             return
         new = _S(kind.upper()) if kind in ("denied", "submitted") else _KIND_STATUS.get(kind)
@@ -575,13 +853,13 @@ class ExecutionEngine:
         # the binding check failed for (part of) the fill: (check reason, checked price, fill qty, allowed qty)
         unwanted: Optional[tuple[str, float, float, float]] = None
         if not (late and live_acct):  # a LIVE late fill is a venue fact: only the flip / spot rules below apply
-            d = self._fill_decision(o, f.mid, f.qty, always=late)
+            d = self._gate.decision(o, f.mid, f.qty, always=late)
             allowed = d.qty if d.allowed and d.qty is not None else 0.0
             if allowed < f.qty - DUST:  # denied, or clipped (A): only the allowed quantity may be applied
                 unwanted = (d.reason or CLIPPED_TO_POSITION, self._checked.get(o.client_id, 0.0), f.qty, allowed)
                 if not live_acct:  # simulated: apply the allowed part only; nothing at all when it is 0
                     if allowed <= DUST:
-                        self._refuse_fill(o, f.mid, unwanted[0], unwanted[1], dead=late)
+                        self._gate.refuse(o, f.mid, unwanted[0], unwanted[1], dead=late)
                         return
                     f = dataclasses.replace(f, qty=allowed, fee=f.fee * allowed / f.qty)
                     ev = FillEvent(ev.ts_event, ev.ts_init, f)
@@ -615,13 +893,13 @@ class ExecutionEngine:
         if unwanted is not None:
             reason, checked, asked, allowed = unwanted
             if live_acct:  # the venue fact was applied in full: journal what the check refused, halt
-                self._refuse_fill(o, f.mid, reason, checked, applied=True,
+                self._gate.refuse(o, f.mid, reason, checked, applied=True,
                                   qty=(asked, allowed) if allowed > DUST else None)
                 self._halt_risk(FILL_REFUSED)
             else:  # the allowed part is applied: the excess is refused and the order ends (A)
-                self._refuse_fill(o, f.mid, reason, checked, dead=late, qty=(asked, allowed))
+                self._gate.refuse(o, f.mid, reason, checked, dead=late, qty=(asked, allowed))
         elif not late and o.client_id in self._fill_limit and o.filled_qty >= self._fill_limit[o.client_id] - DUST:
-            self._end_refused(o)  # a clipped precheck already journalled the refused excess
+            self._gate.end_refused(o)  # a clipped precheck already journalled the refused excess
         sign = 1 if f.side is Side.BUY else -1
         after = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
         if late and sign * before < 0 and sign * after > DUST:  # the late fill flipped the position (margin)
@@ -639,111 +917,19 @@ class ExecutionEngine:
         ends (CANCELED, reason ``fill_price_check_failed``) once that quantity is filled. Denied: the engine has already
         journalled ``fill_refused`` and ended the order (REJECTED with reason ``fill_price_check_failed``, CANCELED with
         the same reason when part of it was filled); the broker must not fill it. When the check runs (and what is
-        never refused) is ``_fill_decision``'s rule, the module docstring's "binding check". ``qty`` defaults to the
+        never refused) is ``FillGate.decision``'s rule, the module docstring's "binding check". ``qty`` defaults to the
         unfilled quantity. Not allowed from a bus handler (it would reorder the journal).
 
         The per-minute rate limit is ignored (``fill_recheck``). On a LIVE account this is a no-op (the venue fills by
         itself; ``apply`` journals and halts). The SimBroker must drop an order this method (or ``apply``) refused: a
         later simulated fill for it is journalled ``fill_after_refusal`` and ignored."""
         self.assert_owner()
-        if self._publishing:
+        if self._handlers.publishing:
             raise RuntimeError("precheck_fill cannot run inside a bus handler")
         o = self._get(client_id)
         if self.portfolio.kind is AccountKind.LIVE:
             return RiskDecision(True, "", qty)
-        if client_id in self._refused or not self.is_live(o):
-            return RiskDecision(False, "order_not_live")
-        d = self._fill_decision(o, fill_price, qty)
-        want = qty if qty is not None else max((o.qty or 0.0) - o.filled_qty, 0.0)
-        clipped = d.allowed and o.size_frac is None and d.qty is not None and d.qty < want - DUST
-        if (not d.allowed and d.reason != "order_not_live") or clipped:
-            self._ops += 1
-            try:
-                if clipped:  # (A) the excess is refused now; the order ends once the allowed part is filled
-                    self._fill_limit[client_id] = o.filled_qty + d.qty
-                    self._write_refused(o, fill_price, d.reason or CLIPPED_TO_POSITION,
-                                        self._checked.get(client_id, 0.0), applied=False, dead=False, qty=(want, d.qty))
-                else:
-                    self._refuse_fill(o, fill_price, d.reason, self._checked.get(client_id, 0.0))
-            finally:
-                self._ops -= 1
-                if self._ops == 0:
-                    self._drain()
-        return d
-
-    def _fill_decision(self, o: Order, mid: float, qty: Optional[float], *, always: bool = False) -> RiskDecision:
-        """RiskGuard on the fill itself (see ``precheck_fill``). ``qty`` None: the unfilled quantity (an explicit
-        order) or the reserved / resolved one (``size_frac``); a ``size_frac`` quantity and a quantity above the limit
-        a clipped precheck set are capped first (the decision then carries less than ``qty``). Reducing fills pass. The
-        check runs when the order's cumulative reference price (earlier fills and this one) is above the checked price
-        by more than the tolerance; always for a ``size_frac`` order, a ``reduce_only`` order (a reduce-only fill that
-        does not reduce must be refused), while the account is not ACTIVE (C), or when ``always``. A denied fill that
-        is opposite to the held position keeps its reducing part (a clipped decision): reductions are never refused."""
-        sf = o.size_frac is not None
-        reserved = max(self._sized.get(o.client_id, 0.0) - o.filled_qty, 0.0)
-        rem = reserved if sf else max((o.qty or 0.0) - o.filled_qty, 0.0)
-        limit = self._fill_limit.get(o.client_id)
-        cap = rem if sf else math.inf  # (F) a size_frac order fills at most its reserved / resolved quantity
-        if limit is not None:
-            cap = min(cap, max(limit - o.filled_qty, 0.0))
-            rem = min(rem, cap)
-        q = rem if qty is None else min(qty, cap)
-        if q <= DUST:
-            return RiskDecision(False, "order_not_live")
-        if self._reducing(o, q):
-            return RiskDecision(True, "", q)
-        checked = self._checked.get(o.client_id)
-        prior = self._fill_notional.get(o.client_id, 0.0)
-        above = checked is not None and prior + q * mid > (o.filled_qty + q) * checked * (1 + FILL_PRICE_TOLERANCE)
-        if not (always or sf or o.reduce_only or above or self.risk.state is not TradingState.ACTIVE):
-            return RiskDecision(True, "", q)
-        # a MARKET order at the fill price, the order's own commitments excluded, no rate slot; its earlier fills
-        # count against max_order_notional (E)
-        by_frac = sf and qty is None
-        cand = dataclasses.replace(o, tags=dict(o.tags), type=OrderType.MARKET, price=None, trigger_price=None,
-                                   qty=None if by_frac else q, size_frac=o.size_frac if by_frac else None)
-        marks = {**self.marks}
-        marks[o.instrument_id] = mid
-        acct, posn = self._committed_open(cand, exclude=o.client_id)
-        d = self.risk.check(cand, ref_price=mid, marks=marks, record=False, fill_recheck=True,
-                            committed_reduce_qty=self._committed_reduce(cand, exclude=o.client_id),
-                            committed_open_notional=acct, committed_position_notional=posn,
-                            prior_order_notional=prior)
-        if d.allowed and by_frac:
-            d = dataclasses.replace(d, qty=min(d.qty, rem))
-        if not d.allowed:
-            part = self._reducing_part(o, q)
-            if part > DUST:
-                d = RiskDecision(True, CLIPPED_TO_POSITION, part, d.price)
-        return d
-
-    def _write_refused(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool, dead: bool,
-                       qty: Optional[tuple[float, float]]) -> None:
-        rec = {"client_id": o.client_id, "reason": FILL_REFUSED, "check": check_reason, "fill_price": mid,
-               "checked_price": checked, "applied": applied, "dead": dead, "filled_qty": o.filled_qty}
-        if qty is not None:  # a clipped fill: the quantity asked, the part allowed, the part refused
-            rec.update(fill_qty=qty[0], allowed_qty=qty[1], refused_qty=qty[0] - qty[1])
-        self._write("fill_refused", rec, self.clock.now_ms())
-
-    def _refuse_fill(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool = False,
-                     dead: bool = False, qty: Optional[tuple[float, float]] = None) -> None:
-        """Journal ``fill_refused``; unless ``applied`` (a LIVE venue fact) the order is refused for good: ended
-        REJECTED (nothing filled) or CANCELED (part filled), with reason ``fill_price_check_failed``. ``qty`` is
-        (asked, allowed) for a clipped fill; a FILLED or dead order only records it."""
-        self._write_refused(o, mid, check_reason, checked, applied=applied, dead=dead, qty=qty)
-        if applied:
-            return
-        self._refused.add(o.client_id)
-        if dead or o.status is _S.FILLED:  # a late fill of a cancelled order, or nothing left: the order is over
-            return
-        self._end_refused(o)
-
-    def _end_refused(self, o: Order) -> None:
-        now = self.clock.now_ms()
-        self._refused.add(o.client_id)
-        self._fill_limit.pop(o.client_id, None)
-        kind = "rejected" if o.filled_qty <= DUST else "canceled"  # PARTIALLY_FILLED -> REJECTED is no edge
-        self._apply_order_event(OrderEvent(now, now, kind, self._with_reason(o, FILL_REFUSED)), fill_refused=True)
+        return self._gate.precheck(o, fill_price, qty)
 
     def _venue_fill_on_rejected(self, o: Order, ev: FillEvent) -> None:
         """(D) LIVE: the venue filled an order the engine marked REJECTED (a submit that timed out but reached it). A
@@ -798,16 +984,11 @@ class ExecutionEngine:
     def _cancel_opening(self) -> None:
         self._cancel_queued = False
         left = lambda o: max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)  # noqa: E731
-        self._cancel_each([o for o in self._resting() if not self._reducing(o, left(o))],
+        self._cancel_each([o for o in self._resting() if not self._gate.reducing(o, left(o))],
                           "halt_cancel_failed", reset=False)  # adds to the failures of the call that halted
 
-    def _queue_overflow(self, name: str) -> None:
-        """Handlers queued more than ``HANDLER_QUEUE_LIMIT`` calls (or one drain ran that many): drop the queue,
-        refuse more until the drain ends, journal it and halt."""
-        if self._queue_closed:
-            return
-        self._queue_closed = True
-        self._deferred.clear()
+    def _on_queue_overflow(self, name: str) -> None:
+        """The handler queue overflowed (``HandlerQueue``; it already dropped the queue): journal it and halt."""
         log.error("handler call queue overflow at %s: halting", name)
         self._write("handler_queue_overflow", {"method": name, "limit": HANDLER_QUEUE_LIMIT}, self.clock.now_ms())
         self._halt_risk("handler_queue_overflow")
@@ -823,29 +1004,8 @@ class ExecutionEngine:
                 self._queue_cancel_opening()
 
     def _drain(self) -> None:
-        """Run the calls queued by bus handlers, in order, once the outermost mutating call has returned."""
-        if self._draining:
-            return
-        self._draining = True
-        try:
-            n = 0
-            while self._deferred:
-                n += 1
-                if n > HANDLER_QUEUE_LIMIT and not self._queue_closed:  # handlers keep feeding the queue
-                    self._queue_overflow("drain")
-                    continue
-                fn, args, kwargs = self._deferred.popleft()
-                self._ops += 1
-                try:
-                    fn(self, *args, **kwargs)
-                except Exception as exc:  # noqa: BLE001 - the caller returned long ago
-                    log.error("queued %s failed: %r", fn.__name__, exc, exc_info=exc)
-                    self._record_error(exc)
-                finally:
-                    self._ops -= 1
-        finally:
-            self._draining = False
-            self._queue_closed = False
+        """Run the calls queued by bus handlers (``HandlerQueue.drain``)."""
+        self._handlers.drain(self)
 
     # ------------------------------------------------------------------ internals
     def _get(self, client_id: str) -> Order:
@@ -865,82 +1025,14 @@ class ExecutionEngine:
         return dataclasses.replace(o, reason=reason, tags=dict(o.tags))
 
     def _committed_reduce(self, new: Order, exclude: Optional[str] = None) -> float:
-        """Quantity of the new order's position claimed by resting reduce orders (A5, RiskGuard): of each live (not
-        dead) opposite-side order of the same instrument and strategy only the part that can reduce the position counts,
-        min(its remaining quantity, the position), and the sum is capped at the position."""
-        held = self.portfolio.signed_qty(self.portfolio.position(new.instrument_id, new.strategy_id))
-        cap = abs(held)
-        if cap == 0:
-            return 0.0
-        opposite = Side.SELL if held > 0 else Side.BUY
-        total = sum(min(max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0), cap)
-                    for o in self._live_orders()
-                    if self.is_live(o) and o.side is opposite and o.instrument_id == new.instrument_id
-                    and o.strategy_id == new.strategy_id and o.client_id != exclude)
-        return min(total, cap)
+        return self._gate.committed_reduce(new, exclude)
 
     def _live_orders(self) -> list[Order]:
         """The live orders in submission order, from the index (cost: the live orders, not every order ever sent)."""
         return [self._orders[cid] for cid in list(self._live)]
 
-    def _reducing(self, o: Order, qty: float) -> bool:
-        """True when filling ``qty`` of ``o`` can only reduce its position (opposite to the holding and not larger than
-        it): such a fill opens no exposure, so the binding check and a halt never refuse it. ``reduce_only`` alone is
-        not enough (B): a reduce-only order whose position is gone, or a fill beyond the holding, is checked like an
-        opening fill."""
-        held = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
-        return held * (1 if o.side is Side.BUY else -1) < 0 and qty <= abs(held) + DUST
-
-    def _reducing_part(self, o: Order, qty: float) -> float:
-        """The part of a fill of ``qty`` of ``o`` that reduces the held position: ``min(qty, |held|)`` when ``o`` is
-        opposite to the holding, else 0."""
-        held = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
-        return min(qty, abs(held)) if held * (1 if o.side is Side.BUY else -1) < 0 else 0.0
-
-    def _valuation_price(self, o: Order, ref: float) -> float:
-        """The price RiskGuard values the order at (its notional rule): a market order ``ref``, a limit its price,
-        a stop buy ``max(trigger, limit, ref)``, a stop sell its trigger. Brackets are not included."""
-        px, trig = o.price, o.trigger_price
-        if trig is None:
-            return px if px is not None else ref
-        return max(trig, px or 0.0, ref) if o.side is Side.BUY else trig
-
     def _committed_open(self, new: Order, exclude: Optional[str] = None) -> tuple[float, float]:
-        """The notional of the live OPENING orders for the next RiskGuard check, as ``(account, position)``:
-
-        * account: every live opening order's quote notional x ``(1 + fee + slip)`` with the account's cost profile
-          (the maker fee for LIMIT, the taker fee for market and stop orders), so the fees and slip of resting orders
-          are reserved too (``committed_open_notional``: cash and gross cap);
-        * position: the plain notional of those of the same strategy and instrument as ``new``
-          (``committed_position_notional``: max position).
-
-        Opening part of an order = its unfilled reserved quantity minus what can still reduce the held position
-        (orders in submission order take the position's quantity first), valued at ``_valuation_price`` with the current
-        mark. Dead orders (cancel acknowledged), closed orders, ``new`` itself and ``exclude`` count for nothing."""
-        costs = self.risk.costs
-        left: dict[tuple[str, Optional[str]], float] = {}
-        acct = posn = 0.0
-        for o in self._live_orders():
-            if o is new or o.client_id == exclude or o.reduce_only or not self.is_live(o):
-                continue
-            rem = max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)
-            key = (o.instrument_id, o.strategy_id)
-            held = self.portfolio.signed_qty(self.portfolio.position(*key))
-            if key not in left:
-                left[key] = abs(held)
-            if (held > 0 and o.side is Side.SELL) or (held < 0 and o.side is Side.BUY):
-                take = min(rem, left[key])
-                left[key] -= take
-                rem -= take
-            ref = self._ref_price(o)
-            if rem <= DUST or ref is None:
-                continue
-            notional = rem * self._valuation_price(o, ref)
-            liq = Liquidity.MAKER if o.type is OrderType.LIMIT else Liquidity.TAKER
-            acct += notional * (1 + costs.fee_rate(liq) + costs.slip_rate)
-            if key == (new.instrument_id, new.strategy_id):
-                posn += notional
-        return acct, posn
+        return self._gate.committed_open(new, exclude)
 
     def _commit(self, o: Order, new: OrderStatus, kind: str, ts_event: int, *, late: bool = False,
                 reason: Optional[str] = None, extra: Optional[dict] = None) -> None:
@@ -972,14 +1064,14 @@ class ExecutionEngine:
 
     def _emit(self, topic: str, event: Any, kind: str, payload: dict, ts_event: int) -> None:
         self._write(kind, payload, ts_event)  # journal first: a crash in a handler loses no record
-        self._publishing += 1  # mutations asked for by handlers wait for the outermost call (``_mutating``)
+        self._handlers.publishing += 1  # mutations asked for by handlers wait for the outermost call (``_mutating``)
         try:
             self.bus.publish(topic, event)
         except Exception as exc:  # noqa: BLE001 - a subscriber must not break the engine
             log.exception("subscriber of %r raised", topic)
             self._record_error(exc)
         finally:
-            self._publishing -= 1
+            self._handlers.publishing -= 1
 
     def _write(self, kind: str, payload: dict, ts_event: int) -> None:
         self._journal.write(kind, {"ts_event": ts_event, "ts_init": self.clock.now_ms(), **payload})
