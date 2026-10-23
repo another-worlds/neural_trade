@@ -1,6 +1,7 @@
 """NT-222 (DESK-1.1): the Portfolio pinned by hand-computed numbers, and against strategy/backtest.py (CONTRACTS A5)."""
 from __future__ import annotations
 
+import copy
 import dataclasses
 import itertools
 
@@ -298,3 +299,120 @@ def test_scripted_20_bar_equity_equals_run_backtest(bps):
     assert np.allclose(eq, res.equity, rtol=0, atol=1e-9)
     assert [t.net_pnl for t in p.trades] == pytest.approx([t.net_pnl for t in res.trades], abs=1e-9)
     assert p.max_drawdown == pytest.approx(float(np.max((np.maximum.accumulate(eq) - eq) / np.maximum.accumulate(eq))))
+
+
+# ---------------------------------------------------------------- NT-286: completion
+def test_account_state_is_read_only():
+    p = pf()
+    p.apply_fill(fill(1, 10, 100.0, ts=1))
+    p.mark({X: 100.0}, 2)
+    p.mark({X: 90.0}, 3)  # equity 9900, drawdown 0.01
+    before = copy.deepcopy(p.__dict__)
+    st = p.account_state({X: 80.0}, 4)  # equity 9800
+    assert (st.cash, st.equity, st.unrealised_pnl, st.realised_pnl, st.ts) == (9000.0, 9800.0, -200.0, 0.0, 4)
+    assert p.__dict__ == before
+    assert (p.drawdown, p.max_drawdown, len(p.equity_curve)) == (0.01, 0.01, 2)
+    assert p.mark({X: 80.0}, 4).equity == 9800.0 and p.drawdown == 0.02  # mark still records
+
+
+def test_restore_long_and_short_close_like_an_uninterrupted_run():
+    def run(restart):
+        p = pf(cash=100_000.0)
+        p.apply_fill(fill(1, 10, 100.0, C10, ts=1))  # long A
+        p.apply_fill(dataclasses.replace(fill(-1, 4, 200.0, C10, ts=2), instrument_id="Y"))  # short Y
+        if restart:
+            q = Portfolio("acc", initial_cash=100_000.0)
+            q.restore([dataclasses.replace(v) for v in p.positions.values()], p.cash,
+                      entry_costs=dict(p._entry_costs))
+            p = q
+        p.apply_fill(fill(-1, 10, 110.0, C10, ts=3))
+        p.apply_fill(dataclasses.replace(fill(1, 4, 190.0, C10, ts=3), instrument_id="Y"))
+        return p
+    a, b = run(False), run(True)
+    assert b.cash == a.cash and [t.gross_pnl for t in b.trades] == [100.0, 40.0]
+    assert [round(t.net_pnl, 9) for t in b.trades] == [round(t.net_pnl, 9) for t in a.trades]
+    assert b.trades[0].costs == pytest.approx(10 * 100 * 0.0013 + 10 * 110 * 0.0013)  # entry leg carried over
+    assert all(p_.qty == 0 for p_ in b.positions.values())
+    with pytest.raises(ValueError):
+        b.restore([], 1.0)  # not fresh
+
+
+def test_restore_validates():
+    from neural_trade.desk.core.model import Position
+    pos = Position(instrument_id=X, account_id="acc", strategy_id=None, side=PositionSide.LONG, qty=2.0,
+                   avg_price=5.0)
+    with pytest.raises(ValueError):
+        pf().restore([dataclasses.replace(pos, account_id="other")], 1.0)
+    with pytest.raises(ValueError):
+        pf().restore([pos], float("nan"))
+    with pytest.raises(ValueError):
+        pf().restore([pos], 1.0, entry_costs={"nope": 1.0})
+    p = pf()
+    p.restore([pos], 990.0)
+    assert (p.cash, p.position(X).qty, p.base_balance(X)) == (990.0, 2.0, 2.0)
+
+
+def test_bracket_set_get_cleared_on_close_and_flip():
+    p = pf()
+    with pytest.raises(ValueError):
+        p.set_bracket("X-None", {"take_profit": 1.0})  # no open position
+    p.apply_fill(fill(1, 10, 100.0))
+    br = {"take_profit": 110.0, "stop_loss": 95.0, "tp_is_offset": False, "max_hold": None}
+    p.set_bracket("X-None", br)
+    br["take_profit"] = 0.0  # stored copy is independent
+    assert p.get_bracket("X-None") == {"take_profit": 110.0, "stop_loss": 95.0, "tp_is_offset": False,
+                                       "max_hold": None}
+    p.apply_fill(fill(-1, 4, 105.0))  # reduce keeps it
+    assert p.get_bracket("X-None")["stop_loss"] == 95.0
+    p.apply_fill(fill(-1, 6, 105.0))  # close clears
+    assert p.get_bracket("X-None") is None
+    p.apply_fill(fill(1, 5, 100.0))
+    p.set_bracket("X-None", {"take_profit": 120.0})
+    p.apply_fill(fill(-1, 8, 100.0))  # flip to short 3: the long's bracket is gone
+    assert p.position(X).side is PositionSide.SHORT and p.get_bracket("X-None") is None
+    p.set_bracket("X-None", {"stop_loss": 105.0})
+    p.set_bracket("X-None", None)
+    assert p.get_bracket("X-None") is None
+    q = pf()
+    q.restore([p.position(X)], 1.0, brackets={"X-None": {"stop_loss": 1.0}})
+    assert q.get_bracket("X-None") == {"stop_loss": 1.0}
+
+
+@pytest.mark.parametrize("field", ["qty", "price", "mid", "fee"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf")])
+def test_non_finite_fill_refused_state_unchanged(field, bad):
+    p = pf()
+    p.apply_fill(fill(1, 10, 100.0))
+    before = copy.deepcopy(p.__dict__)
+    with pytest.raises(ValueError):
+        p.apply_fill(dataclasses.replace(fill(1, 1, 100.0), **{field: bad}))
+    assert p.__dict__ == before
+
+
+def test_non_finite_mark_and_cash_refused():
+    p = pf()
+    p.apply_fill(fill(1, 10, 100.0))
+    p.mark({X: 100.0}, 1)
+    before = copy.deepcopy(p.__dict__)
+    for bad in (float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            p.mark({X: bad}, 2)
+        with pytest.raises(ValueError):
+            p.account_state({X: bad}, 2)
+    assert p.__dict__ == before and p.drawdown == 0.0
+    for bad in (float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            Portfolio("acc", initial_cash=bad)
+
+
+@pytest.mark.parametrize("held_side", [1, -1])
+def test_dust_overshoot_closes_without_flipping(held_side):
+    p = pf()
+    p.apply_fill(fill(held_side, 0.5, 100.0, ts=1))
+    evs = p.apply_fill(fill(-held_side, 0.5 + 1e-14, 100.0, ts=2))
+    assert len(evs) == 1 and evs[0].position.side is PositionSide.FLAT
+    assert p.position(X).qty == 0.0 and p.base_balance(X) == 0.0
+    evs = p.apply_fill(fill(-held_side, 0.5, 100.0, ts=3))  # a real flip beyond dust still flips
+    p.apply_fill(fill(held_side, 0.5 + 1e-9, 100.0, ts=4))
+    assert p.position(X).side is (PositionSide.LONG if held_side == 1 else PositionSide.SHORT)
+    assert p.position(X).qty == pytest.approx(1e-9, abs=1e-15)
