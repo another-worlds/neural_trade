@@ -147,9 +147,15 @@ def test_reject_ends_rejected_with_the_venue_reason():
     o = r.submit()
     assert o.status.value == "REJECTED" and o.reason == "insufficient balance" and o.is_closed
     assert r.kinds() == ["order_submitted", "order_rejected"]
-    with pytest.raises(IllegalTransition):  # a closed order takes no fill and nothing changes
-        r.eng.apply(r.fill(o, 1.0))
+    n = len(r.journal)  # a simulated fill for a rejected order is journalled and ignored (NT-295)
+    r.eng.apply(r.fill(o, 1.0, tid="stray"))
+    assert r.kinds()[n:] == ["fill_after_refusal"] and r.journal[n][1]["trade_id"] == "stray"
     assert r.pf.positions == {} and o.status.value == "REJECTED"
+    live = Rig(kind=AccountKind.LIVE)  # on a LIVE account the old rule stands: a closed order takes no fill
+    live.broker.submit_kind = "rejected"
+    lo = live.submit()
+    with pytest.raises(IllegalTransition):
+        live.eng.apply(live.fill(lo, 1.0))
 
 
 def test_cancel_from_accepted_and_from_partially_filled():
@@ -731,19 +737,21 @@ def test_a_journal_outage_halts_new_orders_once_above_the_limit_and_drops_nothin
     r.eng._journal.limit = 5
     r.down = True
     orders = [r.submit(qty=1.0) for _ in range(3)]  # 2 records each
-    assert r.eng.journal_pending == 7 and r.risk.state is TradingState.HALTED  # 6 records + the halt itself
-    assert r.risk.state_reason == "journal_unavailable"
-    assert r.eng.journal_failures == 6
-    d = r.submit(qty=1.0)  # an 8th pending record: still one halt record, one log line
-    assert d.status.value == "DENIED" and d.reason == "halted" and r.eng.journal_pending == 8
+    # 6 records + the halt itself + the cancels of the 3 resting opening orders (order_canceled each)
+    assert r.eng.journal_pending == 10 and r.risk.state is TradingState.HALTED
+    assert r.risk.state_reason == "journal_unavailable" and r.eng.open_orders() == []
+    assert r.eng.journal_failures == 9
+    d = r.submit(qty=1.0)  # an 11th pending record: still one halt record, one log line
+    assert d.status.value == "DENIED" and d.reason == "halted" and r.eng.journal_pending == 11
     assert sum("halting new orders" in m for m in caplog.messages) == 1
     assert sum("journal sink failed" in m for m in caplog.messages) == 1  # first failure only (then every 1000th)
     r.down = False
     r.eng.apply(r.fill(orders[0], 1.0))
     assert r.eng.journal_pending == 0
-    assert r.kinds()[:8] == ["order_submitted", "order_accepted"] * 3 + ["halt", "order_denied"]
+    assert r.kinds()[:11] == ["order_submitted", "order_accepted"] * 3 + ["halt"] + ["order_canceled"] * 3 + ["order_denied"]
     assert r.journal[6][1]["reason"] == "journal_unavailable"
-    assert r.kinds()[-4:] == ["order_filled", "fill", "position", "account"] and not r.eng._journal.overflowed
+    # the cancelled order's late fill opens exposure while HALTED: refused by the binding check (journal only)
+    assert r.kinds()[-1] == "fill_refused" and not r.eng._journal.overflowed
 
 
 def test_journal_failure_logging_is_rate_limited(errlog):
@@ -941,7 +949,7 @@ def test_295_p3_a_stop_gap_that_breaks_the_check_refuses_the_fill_and_rejects_th
     assert r.kinds()[n:] == ["fill_refused", "order_rejected"]
     assert r.journal[n][1] == {"ts_event": 1000, "ts_init": 1000, "client_id": o.client_id,
                                "reason": "fill_price_check_failed", "check": "insufficient_cash", "fill_price": 120.0,
-                               "checked_price": 100.0, "applied": False, "filled_qty": 0.0}
+                               "checked_price": 100.0, "applied": False, "dead": False, "filled_qty": 0.0}
     assert (r.journal[n + 1][1]["from"], r.journal[n + 1][1]["to"]) == ("ACCEPTED", "REJECTED")
     assert r.seen[-1][0] == "order" and r.seen[-1][1].kind == "rejected" and r.pf.positions == {}
     assert r.eng.precheck_fill(o.client_id, 120.0).reason == "order_not_live"
@@ -953,7 +961,9 @@ def test_295_p3_a_size_frac_order_is_sized_on_the_fill_price():
     assert o.status.value == "ACCEPTED" and r.eng._reserved[o.client_id] == 100.0  # the estimate: 10000 / 100
     d = r.eng.precheck_fill(o.client_id, 120.0)
     assert d.allowed and d.qty == pytest.approx(10_000.0 / 120.0, rel=1e-12) and o.status.value == "ACCEPTED"
-    assert r.eng.precheck_fill(o.client_id, 100.00005).qty is None  # inside the tolerance: the broker resolves it
+    # always re-checked, never qty None: at 100.00005 (inside the tolerance) the cash affords 10000 / 100.00005
+    assert r.eng.precheck_fill(o.client_id, 100.00005).qty == pytest.approx(10_000.0 / 100.00005, rel=1e-12)
+    assert r.eng.precheck_fill(o.client_id, 90.0).qty == 100.0  # below the checked price: the reserved quantity
 
 
 def test_295_p3_an_unwanted_simulated_fill_is_refused_without_touching_the_books():
@@ -1114,7 +1124,7 @@ def test_295_e_a_single_cancel_failure_is_journalled_and_raised_as_broker_error(
 
 
 def test_295_f_a_late_fill_that_breaks_the_spot_balance_is_journalled_and_halts():
-    r = Rig(is_spot=True)
+    r = Rig(is_spot=True, kind=AccountKind.LIVE)
     b = r.submit(side="BUY", qty=2.0, type="MARKET")
     r.eng.apply(r.fill(b, 2.0))
     s = r.submit(side="SELL", qty=2.0, type="LIMIT", price=100.0)
@@ -1173,3 +1183,163 @@ def test_295_p1_modify_is_checked_against_the_other_orders_but_not_against_itsel
     r.eng.modify(b.client_id, qty=51.0)  # 51 x 99.5 = 5074.5 + 5000 > 10000
     assert b.qty == 50.0 and r.kinds()[n:] == ["order_modify_denied"]
     assert r.journal[n][1]["reason"] == "insufficient_cash"
+
+
+# ------------------------------------------------------------------ NT-295 repair round 1
+def test_295_r1_reducing_fills_are_never_refused_not_even_while_halted():
+    r = Rig()  # margin, PAPER, cash 10000
+    s = r.submit(side="SELL", qty=10.0, type="MARKET")
+    r.eng.apply(r.fill(s, 10.0))  # short 10 at 100
+    cover = r.submit(side="BUY", qty=10.0, type="STOP_MARKET", price=None, trigger_price=105.0, reduce_only=True)
+    assert cover.status.value == "ACCEPTED" and r.eng._checked[cover.client_id] == 105.0
+    r.risk.halt("kill switch")
+    d = r.eng.precheck_fill(cover.client_id, 108.0)  # QA: refused `halted` before
+    assert (d.allowed, d.qty) == (True, 10.0) and cover.status.value == "ACCEPTED"
+    r.eng.apply(r.fill(cover, 10.0, price=108.0))
+    assert cover.status.value == "FILLED" and r.pf.cash == 10_000.0 + 1_000.0 - 1_080.0 and "fill_refused" not in r.kinds()
+    # a take-profit limit sell above its level, and a plain (not reduce_only) sell that only reduces
+    r2 = Rig(is_spot=True)
+    b = r2.submit(side="BUY", qty=10.0, type="MARKET")
+    r2.eng.apply(r2.fill(b, 10.0))
+    tp = r2.submit(side="SELL", qty=4.0, type="LIMIT", price=110.0, reduce_only=True)
+    plain = r2.submit(side="SELL", qty=5.0, type="LIMIT", price=120.0)
+    r2.risk.halt("kill switch")
+    assert r2.eng.precheck_fill(tp.client_id, 115.0).allowed and r2.eng.precheck_fill(plain.client_id, 125.0).allowed
+    r2.eng.apply(r2.fill(tp, 4.0, price=115.0))
+    r2.eng.apply(r2.fill(plain, 5.0, price=125.0))
+    assert (tp.status.value, plain.status.value) == ("FILLED", "FILLED") and r2.pf.position(X, "s").qty == 1.0
+    # an opening fill is still refused while halted
+    r3, o = _stop_rig()
+    r3.risk.halt("kill switch")
+    assert r3.eng.precheck_fill(o.client_id, 110.0).reason == "halted" and o.status.value == "REJECTED"
+
+
+def test_295_r1_a_venue_fact_halt_cancels_the_opening_orders_and_keeps_the_protective_ones():
+    r = Rig(is_spot=True)
+    b = r.submit(side="BUY", qty=10.0, type="MARKET")
+    r.eng.apply(r.fill(b, 10.0))
+    protect = r.submit(side="SELL", qty=7.0, type="LIMIT", price=120.0)  # reduces 7 of the 10 held
+    opening = r.submit(side="BUY", qty=1.0, type="LIMIT", price=90.0)
+    stop = r.submit(side="SELL", qty=3.0, type="STOP_MARKET", price=None, trigger_price=80.0, reduce_only=True)
+    n = len(r.journal)
+    r.eng._ops += 1
+    r.eng._halt_risk("late_fill_flip")  # inside an operation, as in apply
+    r.eng._ops -= 1
+    r.eng._drain()
+    assert r.risk.state is TradingState.HALTED and r.broker.canceled == [opening.client_id]
+    assert (opening.status.value, protect.status.value, stop.status.value) == ("CANCELED", "ACCEPTED", "ACCEPTED")
+    assert r.kinds()[n:] == ["halt", "order_canceled"]
+
+
+def test_295_r2_the_fill_recheck_ignores_the_order_rate_limit():
+    lim = dataclasses.replace(RiskLimits.unlimited(), max_orders_per_minute=1)
+    r = Rig(lim, is_spot=True)
+    o = r.submit(side="BUY", qty=90.0, type="STOP_MARKET", price=None, trigger_price=100.0)  # takes the only slot
+    assert o.status.value == "ACCEPTED" and r.submit(qty=1.0).reason == "max_orders_per_minute"
+    d = r.eng.precheck_fill(o.client_id, 105.0)  # QA: refused max_orders_per_minute before
+    assert (d.allowed, d.qty) == (True, 90.0) and r.checks[-1][1]["fill_recheck"] is True
+    assert len(r.risk._sent) == 1  # and it took no slot
+
+
+def test_295_r3_a_size_frac_fill_is_always_rechecked_against_the_cash_left():
+    r = Rig(is_spot=True)
+    a = r.submit(side="BUY", qty=89.0, type="LIMIT", price=100.0)  # commits 8900
+    s = r.submit(side="BUY", qty=None, size_frac=1.0, type="MARKET")  # clipped to the 1100 left: 11
+    assert r.eng._reserved[s.client_id] == 11.0
+    r.eng.apply(dataclasses.replace(r.fill(a, 89.0), fee=50.0))  # the fee leaves 10000 - 8900 - 50 = 1050 of cash
+    d = r.eng.precheck_fill(s.client_id, 99.0)  # below the checked price: QA's probe returned qty None here
+    assert d.allowed and d.qty == pytest.approx(1050.0 / 99.0, rel=1e-12) and d.qty < 11.0
+    r.eng.apply(r.fill(s, d.qty, price=99.0))
+    assert r.pf.cash >= -1e-9 and s.status.value == "FILLED"
+
+
+def test_295_r4_live_precheck_is_a_noop_and_simulated_fills_after_a_refusal_are_ignored():
+    r, o = _stop_rig(kind=AccountKind.LIVE)
+    n = len(r.journal)
+    d = r.eng.precheck_fill(o.client_id, 120.0)
+    assert (d.allowed, d.qty) == (True, None) and o.status.value == "ACCEPTED" and len(r.journal) == n
+    r, o = _stop_rig()
+    r.eng.apply(r.fill(o, 30.0, price=100.0))
+    assert not r.eng.precheck_fill(o.client_id, 120.0).allowed and o.status.value == "CANCELED"
+    n = len(r.journal)
+    r.eng.apply(r.fill(o, 60.0, price=120.0, tid="after"))  # the simulator reports it anyway
+    assert r.kinds()[n:] == ["fill_after_refusal"] and r.journal[n][1]["trade_id"] == "after"
+    assert r.pf.position(X, "s").qty == 30.0 and o.filled_qty == 30.0
+
+
+def test_295_r4_a_late_fill_of_a_cancelled_order_is_rechecked_on_paper_but_not_on_live():
+    for kind, applied in ((AccountKind.PAPER, False), (AccountKind.LIVE, True)):
+        r = Rig(is_spot=True, kind=kind)
+        a = r.submit(side="BUY", qty=50.0, type="LIMIT", price=100.0)
+        r.eng.cancel(a.client_id)  # the user cancelled it: not a refusal
+        b = r.submit(side="BUY", qty=60.0, type="MARKET")
+        r.eng.apply(r.fill(b, 60.0))  # cash 4000
+        n = len(r.journal)
+        r.eng.apply(r.fill(a, 50.0, tid="late"))  # 5000 > 4000
+        if applied:  # the venue filled it: the books follow
+            assert r.kinds()[n:] == ["late_fill", "fill", "position", "account"] and r.pf.cash == -1_000.0
+        else:
+            assert r.kinds()[n:] == ["fill_refused"] and r.journal[n][1]["check"] == "insufficient_cash"
+            assert a.status.value == "CANCELED" and r.pf.cash == 4_000.0 and r.pf.position(X, "s").qty == 60.0
+            r.eng.apply(r.fill(a, 50.0, tid="late2"))
+            assert r.kinds()[n + 1:] == ["fill_after_refusal"]
+
+
+def test_295_r6_a_handler_that_always_submits_hits_the_queue_cap():
+    r = Rig(cash=1e12)
+    count = itertools.count()
+
+    def spin(e):
+        if len(r.eng.orders) < 2000:
+            r.eng.submit(Order(client_id=f"spin{next(count)}", instrument_id=X, account_id="acc", strategy_id="s",
+                               side="BUY", type="LIMIT", qty=1.0, price=100.0))
+
+    r.bus.subscribe("order", spin)
+    r.submit(qty=1.0)
+    assert len(r.eng.orders) < 2000  # QA c2: without the cap the handler ran to its own limit
+    assert r.risk.state is TradingState.HALTED and r.risk.state_reason == "handler_queue_overflow"
+    assert r.kinds().count("handler_queue_overflow") == 1
+    assert any(isinstance(e.exc, RuntimeError) and "queue overflow" in str(e.exc) for e in r.bus.errors)
+    assert not r.eng._deferred and not r.eng._queue_closed and r.eng.open_orders() == []  # opening orders cancelled
+
+
+def test_295_r7_commitments_scan_only_the_live_orders():
+    r = Rig(cash=1e12)
+    for i in range(5000):
+        o = r.submit(qty=1.0, price=100.0, client_id=f"old{i}")
+        r.eng.cancel(o.client_id)
+    assert r.eng.open_orders() == []
+
+    class Counting(dict):
+        scans = 0
+
+        def values(self):
+            Counting.scans += 1
+            return super().values()
+
+        def items(self):
+            Counting.scans += 1
+            return super().items()
+
+        def __iter__(self):
+            Counting.scans += 1
+            return super().__iter__()
+
+    r.eng._orders = Counting(r.eng._orders)
+    live = [r.submit(qty=1.0, price=100.0) for _ in range(3)]
+    r.eng.modify(live[0].client_id, price=99.0)
+    assert [o.client_id for o in r.eng.open_orders()] == [o.client_id for o in live]
+    r.eng.cancel_all("acc")
+    assert Counting.scans == 0
+
+
+def test_295_r8_a_venue_fact_halt_journals_the_halt_once():
+    r = Rig()
+    r.eng._ops += 1
+    r.eng._halt_risk("late_fill_flip")
+    r.eng._halt_risk("fill_price_check_failed")  # already HALTED: no second record, the first reason stays
+    r.eng._ops -= 1
+    assert r.risk.state_reason == "late_fill_flip" and r.kinds() == ["halt"]
+    r2, o = _stop_rig(kind=AccountKind.LIVE)
+    r2.eng.apply(r2.fill(o, 90.0, price=120.0))
+    assert r2.kinds().count("halt") == 1 and r2.kinds().count("fill_refused") == 1

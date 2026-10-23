@@ -13,3 +13,24 @@ Mutation (by hand, per mutant the targeted desk tests run with -x): 27 mutants o
  identity fields, cancel raw, late refusal / flip, late only when CANCELED, p4 original step / ignores committed (inc 0 and inc>0),
  submit/modify pass no commitment, modify counts itself): all KILLED except M3 (is_closed instead of is_live in _committed_open),
  equivalent: a dead order's reservation is popped at CANCELED so it commits 0 either way.
+
+=== repair round 1 (base c8d1152a; origin/remediation/plan had nothing new to merge: "Already up to date", no SimBroker yet) ===
+$ python -m ruff check src tests scripts
+All checks passed!
+$ python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+699 passed, 101 warnings in 152.27s (0:02:32)
+Mutation (15 mutants of the round-1 decisions, targeted desk tests): all KILLED: reducing fills rechecked, halt cancels
+ reduce orders / nothing (venue halt and journal-overflow halt), rate slot taken by the recheck, risk ignores fill_recheck,
+ size_frac gated by the tolerance, size_frac qty not capped at reserved, LIVE precheck checks, fills after refusal applied,
+ late fills not rechecked / skip the check, no queue cap, full scan of every order, duplicate halt record.
+QA fuzzer D:/nt/nt_qa/nt295_fuzz.py: unmodified it fails (replay: an unapplied fill_refused of a dead order has no order record);
+ patched copy (scratchpad nt295r_fuzz.py) prints FUZZ4 OK. Assertions changed only for the decisions:
+  - fill_refused of a dead order (late fill on PAPER/BACKTEST) is not followed by an order record (payload now has dead: true);
+  - a late_fill_refused / journal-overflow halt now cancels the resting opening orders, so the state-unchanged check
+    is skipped for those and the added-record count lists cancels (late_fill_refused in kinds; kinds subset of
+    cancel_failed/halt/order_canceled/halt_cancel_failed);
+  - a close denied reduce_exceeds_position with no live opposite order is accepted when RiskGuard is HALTED (the halt
+    cancelled the opening order that had been the claim);
+  - a broker cancel failure may change state when the journal-overflow halt it triggers cancels opening orders.
+QA scripts: nt295_f2.py (margin flip: late_fill_flip + halt; spot PAPER late sell now fill_refused, books unchanged),
+ nt295_c2.py (cap 2000: 1001 orders, halted, loop ends; before: handler ran to its own limit), nt295_probe.py 4b (precheck qty 10.9513 not None).

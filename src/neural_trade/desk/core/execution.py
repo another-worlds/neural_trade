@@ -103,6 +103,7 @@ JOURNAL_PENDING_LIMIT = 1000  # pending journal records above which new orders a
 JOURNAL_LOG_EVERY = 1000  # sink failures are logged on the first and then every 1000th
 JOURNAL_HALT_REASON = "journal_unavailable"
 FILL_REFUSED = "fill_price_check_failed"  # reason of an order whose fill failed the binding check (CONTRACTS A5.1)
+HANDLER_QUEUE_LIMIT = 1000  # calls a bus handler may queue (and the calls one drain may run)
 FILL_PRICE_TOLERANCE = 1e-6  # relative: a fill reference price above the checked price by more than this is re-checked
 
 JournalSink = Callable[[str, dict], None]
@@ -144,6 +145,9 @@ def _mutating(fn: Callable) -> Callable:
     def wrapper(self: "ExecutionEngine", *args: Any, **kwargs: Any) -> Any:
         self.assert_owner()
         if self._publishing:
+            if self._queue_closed or len(self._deferred) >= HANDLER_QUEUE_LIMIT:
+                self._queue_overflow(fn.__name__)
+                raise RuntimeError("handler call queue overflow")
             self._deferred.append((fn, args, kwargs))
             return None
         self._ops += 1
@@ -234,6 +238,10 @@ class ExecutionEngine:
         self._ops = 0  # depth of public mutating calls
         self._deferred: deque[tuple[Callable, tuple, dict]] = deque()
         self._draining = False
+        self._queue_closed = False  # a drain overflowed: handlers may queue nothing more until it ends
+        self._live: dict[str, None] = {}  # ids of the live orders (``is_live``), in submission order
+        self._refused: set[str] = set()  # orders whose fill the binding check refused
+        self._cancel_queued = False
 
     def assert_owner(self) -> None:
         if not self._check_owner:
@@ -267,7 +275,7 @@ class ExecutionEngine:
 
     def open_orders(self, instrument_id: Optional[str] = None) -> list[Order]:
         """A snapshot list of the live orders (safe to read from another thread)."""
-        return [o for o in list(self._orders.values()) if self.is_live(o)
+        return [o for o in self._live_orders() if self.is_live(o)
                 and (instrument_id is None or o.instrument_id == instrument_id)]
 
     def set_marks(self, marks: Mapping[str, float]) -> None:
@@ -376,9 +384,10 @@ class ExecutionEngine:
             raise UnknownAccount(account_id)
         return self._cancel_each(self._resting(instrument_id), "cancel_failed")
 
-    def _cancel_each(self, orders: list[Order], fail_kind: str) -> list[Order]:
+    def _cancel_each(self, orders: list[Order], fail_kind: str, *, reset: bool = True) -> list[Order]:
         done: list[Order] = []
-        self.last_cancel_failures = []
+        if reset:
+            self.last_cancel_failures = []
         for o in orders:
             try:
                 done.append(self._cancel(o.client_id, fail_kind))  # a broker failure is journalled by _cancel
@@ -393,7 +402,7 @@ class ExecutionEngine:
         return done
 
     def _resting(self, instrument_id: Optional[str] = None) -> list[Order]:
-        return [o for o in list(self._orders.values()) if o.status in RESTING and o.client_id not in self.cancel_acked
+        return [o for o in self._live_orders() if o.status in RESTING and o.client_id not in self.cancel_acked
                 and (instrument_id is None or o.instrument_id == instrument_id)]
 
     @_mutating
@@ -528,6 +537,13 @@ class ExecutionEngine:
             return
         if f.instrument_id != o.instrument_id or f.side is not o.side:
             raise ValueError(f"fill {f.trade_id} does not match order {o.client_id}")
+        live_acct = self.portfolio.kind is AccountKind.LIVE
+        if not live_acct and (o.client_id in self._refused or o.status is _S.REJECTED):
+            # a simulated fill for an order that was refused or never lived: nothing is applied (the SimBroker must
+            # drop the order when precheck_fill or the engine refuses it)
+            self._write("fill_after_refusal", {"client_id": o.client_id, "trade_id": f.trade_id, "qty": f.qty,
+                                               "price": f.price, "status": o.status.value}, f.ts)
+            return
         late = o.client_id in self.cancel_acked  # dead: every fill after the venue's cancel ack is a late fill (g)
         if o.status is _S.FILLED:
             raise OverfillError(f"fill {f.trade_id} for the already filled order {o.client_id}")
@@ -539,14 +555,14 @@ class ExecutionEngine:
         new = _S.FILLED if done else _S.PARTIALLY_FILLED
         check_transition(o.status, new, late_fill=late)  # before anything changes
         unwanted: Optional[tuple[str, float]] = None  # the binding check failed: (check reason, checked price)
-        if not late:
-            d = self._fill_decision(o, f.mid, f.qty)
+        if not (late and live_acct):  # a LIVE late fill is a venue fact: only the flip / spot rules below apply
+            d = self._fill_decision(o, f.mid, f.qty, always=late)
             if not d.allowed:
                 checked = self._checked.get(o.client_id, 0.0)
-                if self.portfolio.kind is AccountKind.LIVE:  # the venue fact stands: apply, journal, halt below
+                if live_acct:  # the venue fact stands: apply, journal, halt below
                     unwanted = (d.reason, checked)
                 else:  # a simulated fill nobody asked precheck_fill about: refused, nothing is applied
-                    self._refuse_fill(o, f.mid, d.reason, checked)
+                    self._refuse_fill(o, f.mid, d.reason, checked, dead=late)
                     return
         before = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
         try:
@@ -589,12 +605,21 @@ class ExecutionEngine:
         fill it. The check runs only when ``fill_price`` is above the price the order was valued at by more than
         ``FILL_PRICE_TOLERANCE`` (a stop gapping over its trigger, a market order opening above the last close);
         otherwise the decision is allowed without a RiskGuard call. ``qty`` defaults to the unfilled quantity (None
-        for a ``size_frac`` order). Not allowed from a bus handler (it would reorder the journal)."""
+        for a ``size_frac`` order). Not allowed from a bus handler (it would reorder the journal).
+
+        A fill that only REDUCES the position (reduce-only, or opposite and not larger than the holding) is never
+        refused, not even while HALTED; the per-minute rate limit is ignored (``fill_recheck``). A ``size_frac`` order is
+        ALWAYS re-checked and the decision's quantity is its reserved / resolved quantity clipped to what the cash and
+        the other orders' commitments afford at ``fill_price``. On a LIVE account this is a no-op (the venue fills by
+        itself; ``apply`` journals and halts). The SimBroker must drop an order this method (or ``apply``) refused: a
+        later simulated fill for it is journalled ``fill_after_refusal`` and ignored."""
         self.assert_owner()
         if self._publishing:
             raise RuntimeError("precheck_fill cannot run inside a bus handler")
         o = self._get(client_id)
-        if not self.is_live(o):
+        if self.portfolio.kind is AccountKind.LIVE:
+            return RiskDecision(True, "", qty)
+        if client_id in self._refused or not self.is_live(o):
             return RiskDecision(False, "order_not_live")
         d = self._fill_decision(o, fill_price, qty)
         if not d.allowed:
@@ -607,28 +632,43 @@ class ExecutionEngine:
                     self._drain()
         return d
 
-    def _fill_decision(self, o: Order, mid: float, qty: Optional[float]) -> RiskDecision:
-        rem = None if o.qty is None else max(o.qty - o.filled_qty, 0.0)
+    def _fill_decision(self, o: Order, mid: float, qty: Optional[float], *, always: bool = False) -> RiskDecision:
+        """RiskGuard on the fill itself (see ``precheck_fill``). ``qty`` None: the unfilled quantity (an explicit
+        order) or the reserved / resolved one (``size_frac``). Reducing fills pass. The check runs when ``mid`` is above
+        the checked price by more than the tolerance, and always for a ``size_frac`` order or when ``always``."""
+        sf = o.size_frac is not None
+        reserved = max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)
+        rem = reserved if sf else max((o.qty or 0.0) - o.filled_qty, 0.0)
         q = rem if qty is None else qty
-        checked = self._checked.get(o.client_id)
-        if checked is None or not mid > checked * (1 + FILL_PRICE_TOLERANCE):
+        if self._reducing(o, q):
             return RiskDecision(True, "", q)
-        # re-run RiskGuard on the fill itself: a MARKET order at the fill price, the order's own commitments excluded
+        checked = self._checked.get(o.client_id)
+        if not (always or sf) and (checked is None or not mid > checked * (1 + FILL_PRICE_TOLERANCE)):
+            return RiskDecision(True, "", q)
+        # a MARKET order at the fill price, the order's own commitments excluded, no rate slot
+        by_frac = sf and qty is None
         cand = dataclasses.replace(o, tags=dict(o.tags), type=OrderType.MARKET, price=None, trigger_price=None,
-                                   qty=q, size_frac=None if q is not None else o.size_frac)
+                                   qty=None if by_frac else q, size_frac=o.size_frac if by_frac else None)
         marks = {**self.marks}
         marks[o.instrument_id] = mid
         acct, posn = self._committed_open(cand, exclude=o.client_id)
-        return self.risk.check(cand, ref_price=mid, marks=marks, record=False,
-                               committed_reduce_qty=self._committed_reduce(cand, exclude=o.client_id),
-                               committed_open_notional=acct, committed_position_notional=posn)
+        d = self.risk.check(cand, ref_price=mid, marks=marks, record=False, fill_recheck=True,
+                            committed_reduce_qty=self._committed_reduce(cand, exclude=o.client_id),
+                            committed_open_notional=acct, committed_position_notional=posn)
+        if d.allowed and by_frac:
+            d = dataclasses.replace(d, qty=min(d.qty, rem))
+        return d
 
-    def _refuse_fill(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool = False) -> None:
+    def _refuse_fill(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool = False,
+                     dead: bool = False) -> None:
         now = self.clock.now_ms()
         self._write("fill_refused", {"client_id": o.client_id, "reason": FILL_REFUSED, "check": check_reason,
                                      "fill_price": mid, "checked_price": checked, "applied": applied,
-                                     "filled_qty": o.filled_qty}, now)
+                                     "dead": dead, "filled_qty": o.filled_qty}, now)
         if applied:
+            return
+        self._refused.add(o.client_id)
+        if dead:  # a late fill of a cancelled order: the order is already over
             return
         kind = "rejected" if o.filled_qty <= DUST else "canceled"  # PARTIALLY_FILLED -> REJECTED is no edge
         self._apply_order_event(OrderEvent(now, now, kind, self._with_reason(o, FILL_REFUSED)), fill_refused=True)
@@ -640,7 +680,8 @@ class ExecutionEngine:
                     **extra}, f.ts)
 
     def _halt_risk(self, reason: str) -> None:
-        """RiskGuard to HALTED because of a venue fact (no cancels: the caller decides); journalled once."""
+        """RiskGuard to HALTED because of a venue fact; journalled once per state change, and the resting OPENING
+        orders are cancelled once the current operation ends (protective reduce orders stay)."""
         was = self.risk.state is TradingState.HALTED
         try:
             self.risk.halt(reason)
@@ -649,6 +690,29 @@ class ExecutionEngine:
             self._record_error(exc)
         if not was:
             self._write("halt", {"reason": reason}, self.clock.now_ms())
+            self._queue_cancel_opening()
+
+    def _queue_cancel_opening(self) -> None:
+        if not self._cancel_queued:
+            self._cancel_queued = True
+            self._deferred.append((ExecutionEngine._cancel_opening, (), {}))
+
+    def _cancel_opening(self) -> None:
+        self._cancel_queued = False
+        left = lambda o: max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)  # noqa: E731
+        self._cancel_each([o for o in self._resting() if not self._reducing(o, left(o))],
+                          "halt_cancel_failed", reset=False)  # adds to the failures of the call that halted
+
+    def _queue_overflow(self, name: str) -> None:
+        """Handlers queued more than ``HANDLER_QUEUE_LIMIT`` calls (or one drain ran that many): drop the queue,
+        refuse more until the drain ends, journal it and halt."""
+        if self._queue_closed:
+            return
+        self._queue_closed = True
+        self._deferred.clear()
+        log.error("handler call queue overflow at %s: halting", name)
+        self._write("handler_queue_overflow", {"method": name, "limit": HANDLER_QUEUE_LIMIT}, self.clock.now_ms())
+        self._halt_risk("handler_queue_overflow")
 
     def _journal_overflow(self) -> None:
         was = self.risk.state is TradingState.HALTED
@@ -658,6 +722,7 @@ class ExecutionEngine:
             if not was and self.risk.state is TradingState.HALTED:
                 now = self.clock.now_ms()
                 self._journal.enqueue("halt", {"ts_event": now, "ts_init": now, "reason": JOURNAL_HALT_REASON})
+                self._queue_cancel_opening()
 
     def _drain(self) -> None:
         """Run the calls queued by bus handlers, in order, once the outermost mutating call has returned."""
@@ -665,7 +730,12 @@ class ExecutionEngine:
             return
         self._draining = True
         try:
+            n = 0
             while self._deferred:
+                n += 1
+                if n > HANDLER_QUEUE_LIMIT and not self._queue_closed:  # handlers keep feeding the queue
+                    self._queue_overflow("drain")
+                    continue
                 fn, args, kwargs = self._deferred.popleft()
                 self._ops += 1
                 try:
@@ -677,6 +747,7 @@ class ExecutionEngine:
                     self._ops -= 1
         finally:
             self._draining = False
+            self._queue_closed = False
 
     # ------------------------------------------------------------------ internals
     def _get(self, client_id: str) -> Order:
@@ -705,10 +776,22 @@ class ExecutionEngine:
             return 0.0
         opposite = Side.SELL if held > 0 else Side.BUY
         total = sum(min(max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0), cap)
-                    for o in self._orders.values()
+                    for o in self._live_orders()
                     if self.is_live(o) and o.side is opposite and o.instrument_id == new.instrument_id
                     and o.strategy_id == new.strategy_id and o.client_id != exclude)
         return min(total, cap)
+
+    def _live_orders(self) -> list[Order]:
+        """The live orders in submission order, from the index (cost: the live orders, not every order ever sent)."""
+        return [self._orders[cid] for cid in list(self._live)]
+
+    def _reducing(self, o: Order, qty: float) -> bool:
+        """True when filling ``qty`` of ``o`` can only reduce its position (reduce-only, or opposite to the holding
+        and not larger than it): such a fill opens no exposure, so the binding check and a halt never refuse it."""
+        if o.reduce_only:
+            return True
+        held = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
+        return held * (1 if o.side is Side.BUY else -1) < 0 and qty <= abs(held) + DUST
 
     def _valuation_price(self, o: Order, ref: float) -> float:
         """The price RiskGuard values the order at (its notional rule): a market order ``ref``, a limit its price,
@@ -733,8 +816,8 @@ class ExecutionEngine:
         costs = self.risk.costs
         left: dict[tuple[str, Optional[str]], float] = {}
         acct = posn = 0.0
-        for o in list(self._orders.values()):
-            if o is new or o.client_id == exclude or not self.is_live(o):
+        for o in self._live_orders():
+            if o is new or o.client_id == exclude or o.reduce_only or not self.is_live(o):
                 continue
             rem = max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)
             key = (o.instrument_id, o.strategy_id)
@@ -759,6 +842,10 @@ class ExecutionEngine:
                 reason: Optional[str] = None, extra: Optional[dict] = None) -> None:
         old = o.status
         o.status, o.ts_updated = new, ts_event
+        if self.is_live(o):
+            self._live[o.client_id] = None
+        else:
+            self._live.pop(o.client_id, None)
         if reason:
             o.reason = reason
         snap = dataclasses.replace(o, tags=dict(o.tags))

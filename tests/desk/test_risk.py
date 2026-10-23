@@ -957,3 +957,12 @@ def test_295_p4_size_frac_clip_steps_down_when_cash_over_unit_rounds_up_with_com
     d = g.check(order(size_frac=1.0), ref_price=1.2056, committed_open_notional=26_448.09)
     assert (d.allowed, d.reason, d.qty) == (True, "clipped_to_cash", 545401.53108094)
     assert d.qty * unit + 26_448.09 <= pf.cash
+
+
+def test_295_r2_fill_recheck_skips_the_rate_window_and_takes_no_slot():
+    lim = dataclasses.replace(RiskLimits.unlimited(), max_orders_per_minute=1)
+    g = make(lim, ins=inst(max_qty=None))[0]
+    assert g.check(order(qty=1.0), ref_price=100.0).allowed  # takes the only slot
+    assert g.check(order(qty=1.0), ref_price=100.0).reason == "max_orders_per_minute"
+    assert g.check(order(qty=1.0), ref_price=100.0, fill_recheck=True).allowed
+    assert len(g._sent) == 1

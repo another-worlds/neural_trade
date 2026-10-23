@@ -193,7 +193,7 @@ class RiskGuard:
     def check(self, order: Order, *, ref_price: float, marks: Optional[Mapping[str, float]] = None,
               record: bool = True, day_start_equity: Optional[float] = None,
               committed_reduce_qty: float = 0.0, committed_open_notional: float = 0.0,
-              committed_position_notional: float = 0.0) -> RiskDecision:
+              committed_position_notional: float = 0.0, fill_recheck: bool = False) -> RiskDecision:
         """Decide on ``order``. ``ref_price`` is the price a market order would trade at (last close at submit, the
         resolved open at the fill). ``marks`` defaults to ``{instrument.id: ref_price}``; when the portfolio holds
         other instruments the caller must pass marks for all of them (else ``missing_marks``). An allowed decision
@@ -244,6 +244,10 @@ class RiskGuard:
         ``cash / unit`` rounds up) and an explicit quantity is compared strictly; what remains is the rounding of the
         fill's own arithmetic, which leaves cash at no less than -1e-9 for balances up to 1e6 (a ULP of 1e6 is
         1.2e-10; pinned by a fuzz).
+
+        ``fill_recheck=True`` (NT-295, internal: the ExecutionEngine's binding check at a fill) skips the per-minute rate
+        window and takes no slot: the order already took its slot at submit, and a fill the venue or the simulator
+        produces must not be refused for how many orders were sent in the last minute.
 
         Not done here: positions of different strategies on one instrument do not net against each other
         (an engine decision, unchanged); the gross exposure and the cash check see each order as an addition."""
@@ -387,12 +391,12 @@ class RiskGuard:
                 if limit <= 0 or gross > limit * (1 + 1e-9):
                     return _deny(MAX_GROSS_EXPOSURE)
         now = self._clock.now_ms()
-        if lim.max_orders_per_minute is not None and not pure_reduce:
+        if lim.max_orders_per_minute is not None and not pure_reduce and not fill_recheck:
             while self._sent and self._sent[0] <= now - WINDOW_MS:  # 60 s old or older leaves the window
                 self._sent.popleft()
             if len(self._sent) >= lim.max_orders_per_minute:
                 return _deny(MAX_ORDERS_PER_MINUTE)
-        if record and not pure_reduce:
+        if record and not pure_reduce and not fill_recheck:
             self._sent.append(now)
         return RiskDecision(True, CLIPPED_TO_CASH if clipped_cash else CLIPPED_TO_POSITION if clipped else "", qty, px)
 

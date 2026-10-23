@@ -10,6 +10,7 @@ _Extracted from [PLAN.md](PLAN.md); an implementer writes these signatures, fiel
 - `Fill(trade_id, client_id, instrument_id, side, qty, price, mid, fee, fee_currency, liquidity MAKER|TAKER, ts)`; `price` is the slipped fill price, `mid` the reference price before spread and slippage (equal to `price` for venue fills), so the report computes gross P&L on mids and costs = qty x |price - mid| + fee, as the oracle does; partial fills are several Fill events.
 - `Position(position_id='{instrument}-{strategy}', instrument_id, account_id, strategy_id, side LONG|SHORT|FLAT, qty, avg_price, realised_pnl, fees, ts_opened, ts_closed|None)` (NETTING; Binance spot cannot short: `RiskGuard` denies SELL beyond the held base balance on spot accounts).
 - `AccountState(account_id, kind BACKTEST|PAPER|LIVE, quote_currency, cash, equity, locked, realised_pnl, unrealised_pnl, ts)`.
+- **Engine journal kinds (lead 2026-10-16, NT-295):** besides `order_<status>`, `order_modified`, `late_fill`, `fill`, `position`, `account`, `bracket`, `halt`: `fill_refused` (the binding check of A5.1 refused a fill, or a LIVE fill failed it and was applied), `fill_after_refusal` (a simulated fill reported for an order that ended REJECTED or was refused: ignored), `late_fill_refused` (a late fill the books cannot hold; raises `OverfillError`), `late_fill_flip` (a late fill flipped a position; applied), `cancel_failed`, `halt_cancel_failed`, `order_modify_failed`, `handler_queue_overflow`, and `order_adopted` (reserved for NT-296). Venue-fact halts (`late_fill_*`, a LIVE `fill_refused`, `journal_unavailable`, `handler_queue_overflow`) cancel the resting OPENING orders and leave protective reduce orders alone.
 - Events (all with `ts_event`, `ts_init`; `ts_init` is `clock.now_ms()` of the engine's Clock, never `time.time()`, so backtests are deterministic): `BarClosed`, `BarForming`, `OrderEvent(kind, order)`, `FillEvent`, `PositionEvent`, `AccountEvent`, `BotEvent(status|log)`, `AlertFired`, `JobEvent`, `TimeEvent`. Commands: `SubmitOrder`, `ModifyOrder`, `CancelOrder`, `CancelAll`, `ClosePosition`, `Halt`.
 
 ### A5. Fill rules (written before coding; the parity test pins them)
@@ -138,6 +139,8 @@ def check_indicator(component, df: pd.DataFrame) -> None: ...   # the contract t
 @dataclass
 class Job: id: str; kind: str; params: dict; state: str; pid: Optional[int]; log_path: str; created_ms: int; started_ms: Optional[int]; finished_ms: Optional[int]; result: Optional[dict]; error: Optional[str]; gpu: bool
 ```
+
+**Engine calls from handlers (lead 2026-10-16, NT-295):** an `ExecutionEngine` mutating method (`submit`, `apply`, `cancel`, ...) called from a bus handler while the engine publishes is queued (at most 1000; beyond that `RuntimeError('handler call queue overflow')`, a `handler_queue_overflow` record and a RiskGuard halt), returns `None` instead of its usual value and runs, in call order, when the outermost mutating call returns; its errors go to `handler_errors`. Callers that need the result look the order up by `client_id`.
 
 ### C2. Model-signal adapter (parity with the existing engine)
 
