@@ -327,8 +327,9 @@ changes).
 | [NT-292](#nt-292) | P1 | feature | implementer | done | RiskGuard hardening from the QA of NT-289: slippage in the cash clip, no silent BACKTEST/zero-cost defaults, gross exposure cap, dust and closing rules |
 | [NT-293](#nt-293) | P1 | feature | implementer | done | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
 | [NT-294](#nt-294) | P1 | bug | implementer | done | EventBus.publish must deliver to every subscriber even when one raises |
-| [NT-295](#nt-295) | P1 | feature | implementer | todo | ExecutionEngine passes committed_open_notional (with fees and slip) and re-checks stop fills; RiskGuard per-position commitment |
+| [NT-295](#nt-295) | P1 | feature | implementer | blocked | ExecutionEngine passes committed_open_notional (with fees and slip) and re-checks stop fills; RiskGuard per-position commitment |
 | [NT-296](#nt-296) | P1 | feature | implementer | todo | ExecutionEngine.adopt, BarBroker.fill_at_close protocol, tags no longer honoured (CONTRACTS A5 items 15-16) |
+| [NT-299](#nt-299) | P1 | feature | implementer | todo | NT-295 continuation (Opus, new approach): size_frac fill sizing per A5.1, max_position hole, modify cumulative notional, unbooked LIVE venue fills, precheck excess journalled once |
 
 ## Items
 
@@ -3955,7 +3956,7 @@ changes).
 
 **ExecutionEngine integration of the RiskGuard commitments (from the QA of NT-293)**
 
-- **status:** todo
+- **status:** blocked 2026-10-16 after two repair rounds (QA Opus FAIL on c8d1152a; FAIL on 917f752e; escalated Opus repair 537071b; qa-deep FAIL on 537071b: decisions A-E, G, H built as written; two blockers). Evidence: the lead's own repair decision F of round 2 ('size_frac fills capped at the reserved quantity') was WRONG: A5.1 sizes a size_frac fill at the fill bar's open on realised equity, and the cap broke the parity with run_backtest (equity difference up to 2.34 at zero costs in D:/nt/nt_qa/nt295c_parity.py; 23.6% of bars of the reference CSV open below the previous close); and an opening fill can still pass max_position (probes C1a, C1b, C2: RiskGuard computes `after` without the committed reduce quantity and rule (b) skips the re-check in ACTIVE). The work is on branch nt-295 (537071b4, not merged). Continued in NT-299 with corrected decisions.
 - **priority / type / role:** P1 / feature / implementer
 - **area:** `src/neural_trade/desk/core/execution.py`, `src/neural_trade/desk/core/risk.py`, `tests/desk/test_execution.py`, `tests/desk/test_risk.py`
 - **depends on:** NT-224, NT-293, NT-294
@@ -3975,6 +3976,18 @@ changes).
 - **why:** CONTRACTS A5 items 14-17 (lead 2026-10-16): (1) `ExecutionEngine.adopt(order)` as item 16 defines it, so the SimBroker's synthetic bracket exits stop raising UnknownOrder and the test harness stops writing into `eng._orders`; (2) `BarBroker` protocol (fill_exits, fill_entries, on_bar_intrabar, sync, fill_at_close) typed in `broker/base.py`, EOW fills requested by the engine through `fill_at_close(order)`; the free-form tag `fill_at='close'` is removed from sim.py (a manual or bot order must not be able to request a close fill) and the tests change accordingly; (3) QA P3s: `_bases` pruned when the position closes; a reducing fill with an equal bracket dict must not overwrite the remainder's offset base; a size_frac resting order filled in the same intrabar call as a bracket exit is sized on equity after that exit.
 - **acceptance:** the 12-bar parity harness in test_sim_broker.py runs through `adopt` with no private access (a test greps the test file for `_orders` to make sure); adopt: tests for each rule of item 16 (HALTED still works, idempotent, refuses non-reduce-only and non-SUBMITTED orders, journals order_adopted, replay of the journal equals the live engine); tags['fill_at'] ignored (test); the 800-series parity fuzz of the QA (D:/nt/nt_qa/nt225_parity.py) still 0 divergences; mutation per point; ruff.
 - **source:** QA of NT-225 (2026-10-16)
+
+### NT-299
+
+**NT-295 continuation with corrected decisions (branch nt-299 from nt-295 537071b4)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer (Opus 5.5 medium, escalated)
+- **area:** `src/neural_trade/desk/core/execution.py`, `src/neural_trade/desk/core/risk.py`, `tests/desk/test_execution.py`, `tests/desk/test_risk.py`, `docs/desk/CONTRACTS.md` (A5.1 rules (a)-(f) wording), `TESTING_DOCUMENTATION.md`
+- **depends on:** NT-295 (blocked; its branch is the base), NT-225
+- **why (new approach):** (1) CORRECTED decision F: a size_frac fill is NOT capped at the quantity reserved at submit; it is sized at the fill bar's open on `Portfolio.realised_equity()` as A5.1 says (equity x frac / mid), clipped by cash (PAPER/LIVE) and by the RiskGuard re-check; the reserved quantity serves commitments only; the parity probe D:/nt/nt_qa/nt295c_parity.py (OP[1]=99.5, OP[6]=104.5) must match the oracle exactly again and the existing parity test gets those entries (opens below the previous close) as a regression; (2) the max_position hole: RiskGuard's `after` position must subtract the committed reduce quantity, and a non-reducing fill of an order that was opposite the position at submit is re-checked even in ACTIVE; probes C1a, C1b, C2, C3 (spot variant must not raise OverfillError unjournalled) become tests; (3) `modify` passes `prior_order_notional` (probe E1: BUY 10 at 100 with max_order 1000, 9 filled, modify to 18, must be denied); (4) `precheck_fill` journals the refused excess once per order (probe A2 showed four records); the fee of a clipped fill is scaled to the applied part (QA mutant Q2), the precheck limit counts the filled quantity (Q3), a clipped late fill flagged not-dead adds no spurious `order_canceled` (Q11); (5) LIVE must never lose a venue fact: every LIVE fill the engine cannot apply (spot with no balance, a second fill of an unresolved size_frac order, a fill on an EXPIRED order, a fill before the accept event, an unknown client_id) is journalled as `venue_fill_unbooked` with the fill and an order snapshot, RiskGuard is halted, and only then may the call raise; `resolved_qty` is mandatory on LIVE size_frac accepts (REJECT the accept otherwise and halt); (6) CONTRACTS A5.1 rules (a)-(f): fix (a) vs (d) conflict (a reducing size_frac fill is sized at the fill, never refused for exceeding the submit reservation), (b) says late fills are always re-checked but LIVE skips the check (state it), (f) journals once.
+- **acceptance:** each point a test with literal numbers that fails on its mutant (the implementer does the mutation); the QA fuzzers D:/nt/nt_qa/nt295c_qfuzz.py and the six-patch nt224c variant stay green; the parity harness of NT-225 (D:/nt/nt_qa/nt225_parity.py, 800 series, 0 divergences) is re-run on the merged tree; qa-deep verifies.
+- **source:** qa-deep of NT-295 (2026-10-16)
 
 ## Done log
 
