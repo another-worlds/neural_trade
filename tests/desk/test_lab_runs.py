@@ -119,12 +119,36 @@ def test_state_done_and_failed(store):
     assert p["state"] == "failed" and "boom" in p["reason"]
 
 
-def test_state_not_started(store):
+def _meta_only(store, name, age_s):
+    d = make_run(store, name, result=False, age_s=age_s)
+    for n in ("status.json", "metrics.jsonl", "training_log.csv", "eval_report_dev.json", "eval_report_test.json"):
+        (d / n).unlink(missing_ok=True)
+    _touch_all(d, NOW - age_s)
+    return d
+
+
+def test_state_not_started_only_without_any_file(store):
     d = make_run(store, "r_new", result=False)
-    for name in ("status.json", "metrics.jsonl"):
-        (d / name).unlink()
-    p = _state(store, "r_new")
-    assert p["state"] == "not started" and p["epochs_done"] == 0
+    for f in list(d.iterdir()):
+        f.unlink()
+    assert lab(store)._progress_of(d, {"run_id": "r_new"})["state"] == "not started"
+
+
+def test_meta_only_cell_follows_longrun_rules(store, monkeypatch):
+    stall = longrun.STALL_MIN_S
+    alive = {"v": False}
+    monkeypatch.setattr(longrun, "pid_alive", lambda pid: alive["v"])
+    _meta_only(store, "m_fresh", 60)                      # fresh, no launch record: running
+    assert _state(store, "m_fresh")["state"] == "running"
+    _meta_only(store, "m_old", stall + 600)               # old, no launch record: stalled
+    assert _state(store, "m_old")["state"] == "stalled"
+    _launch(store, 4242, longrun._created(store / "scenarios" / SCEN / "m_old"))
+    assert lab(store).progress("m_old")["state"] == "failed"     # old, launched, dead pid
+    alive["v"] = True
+    assert lab(store).progress("m_old")["state"] == "stalled"    # old, live pid
+    _meta_only(store, "m_live", 30)
+    _launch(store, 4242, longrun._created(store / "scenarios" / SCEN / "m_live"))
+    assert _state(store, "m_live")["state"] == "running"         # fresh, live pid
 
 
 def test_state_running_stalled_by_mtime(store):
@@ -212,6 +236,43 @@ def test_half_written_json_is_tolerated(store):
     assert det["metrics_tail"][-1]["epoch"] == 19
     assert lab(store).list_runs(SCEN)["total"] == 3
     assert lab(store).progress("r_a")["state"] in lab_runs.STATES
+
+
+@pytest.mark.parametrize("name", ["meta.json", "status.json", "result.json", "eval_report_dev.json"])
+@pytest.mark.parametrize("indexed", [True, False])
+def test_half_written_file_keeps_the_run_listed(store, name, indexed):
+    if not indexed:
+        (store / "index.sqlite").unlink()
+    d = store / "scenarios" / SCEN / "r_b"
+    (d / name).write_text('{"half', encoding="utf-8")
+    lr = lab(store)
+    assert "r_b" in {i["run_id"] for i in lr.list_runs(SCEN)["items"]}
+    det = lr.detail("r_b")
+    assert any(e.startswith(name) for e in det["errors"])
+    if name == "meta.json":
+        assert det["state"] == "unreadable" and det["meta"] is None
+        assert det["status"] == _json(d / "status.json")        # the readable parts are still served
+    else:
+        assert det["state"] != "unreadable"
+
+
+def test_limit_is_capped_and_descending_none(store):
+    assert lab(store).list_runs(SCEN, limit=10_000)["limit"] == lab_runs.MAX_LIMIT == 500
+    assert lab(store).list_runs(SCEN, limit=0)["limit"] == 1
+    assert lab(store).list_runs(SCEN, descending=None) == lab(store).list_runs(SCEN, descending=True)
+
+
+def test_unindexed_runs_are_listed_and_flagged(store):
+    from neural_trade.experiments.store import RunStore
+
+    make_run(store, "r_late", created="20260104T000000Z")          # never synced into the index
+    out = {i["run_id"]: i for i in lab(store).list_runs(SCEN)["items"]}
+    assert out["r_late"]["indexed"] is False and out["r_a"]["indexed"] is True and len(out) == 4
+    assert lab(store).detail("r_late")["indexed"] is False
+    only = lab(store).list_runs(SCEN, include_unindexed=False)
+    assert only["total"] == 3 and "r_late" not in {i["run_id"] for i in only["items"]}
+    RunStore(store).sync(SCEN)
+    assert lab(store).list_runs(SCEN)["items"][0]["indexed"] is True
 
 
 def test_missing_index_falls_back_to_files(store):
