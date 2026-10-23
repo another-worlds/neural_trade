@@ -4,6 +4,8 @@ from __future__ import annotations
 import dataclasses
 import itertools
 
+import pytest
+
 
 from neural_trade.desk.core.clock import SimClock
 from neural_trade.desk.core.costs import RESEARCH_ZERO
@@ -315,3 +317,140 @@ def test_unlimited_and_defaults():
                                max_qty=None))
     for _ in range(100):
         assert g.check(order("SELL", qty=1e6), ref_price=100.0).allowed
+
+
+# ---------------------------------------------------------------- repair round 1 (QA FAIL on 235aa232)
+def only(**kw):
+    base = dict(max_order_notional=None, max_position_notional=None, max_orders_per_minute=None, daily_loss_limit=None)
+    base.update(kw)
+    return RiskLimits(**base)
+
+
+def test_f1_flip_under_breached_daily_loss_is_clipped_to_the_position():
+    g, pf, _ = make(only(daily_loss_limit=500.0), ins=inst(is_spot=False, max_qty=None))
+    hold(pf, "BUY", 10.0, 100.0)  # cash 9000
+    g.update({X: 100.0})  # day starts at equity 10000
+    assert g.day_loss({X: 40.0}) == 600.0  # equity 9000 + 10 x 40 = 9400
+    assert g.check(order("BUY", qty=1.0), ref_price=40.0).reason == "daily_loss_limit"
+    d = g.check(order("SELL", qty=30.0), ref_price=40.0)
+    assert (d.allowed, d.qty, d.reason) == (True, 10.0, "clipped_to_position")
+    assert g.check(order("SELL", qty=4.0), ref_price=40.0).qty == 4.0
+
+
+def test_f2_exit_of_a_large_position_is_exempt_from_order_notional_and_rate_limit():
+    ins = inst(max_qty=None)
+    g, pf, _ = make(RiskLimits(), ins=ins)
+    hold(pf, "BUY", 50.0, 100.0)  # a 5000 position, the default max_position_notional
+    for state in ("ACTIVE", "REDUCING"):
+        if state == "REDUCING":
+            g.reduce_only()
+        d = g.check(order("SELL", qty=50.0, reduce_only=True), ref_price=100.0, record=False)
+        assert (d.allowed, d.qty) == (True, 50.0), state
+    # opening orders keep every limit
+    assert g.resume() is None
+    assert g.check(order("BUY", qty=11.0), ref_price=100.0).reason == "max_order_notional"
+
+
+def test_f2_exit_is_exempt_from_the_rate_limit_and_takes_no_slot():
+    g, pf, _ = make(only(max_orders_per_minute=1))
+    hold(pf, "BUY", 2.0, 100.0)
+    assert g.check(order("BUY", qty=1.0), ref_price=100.0).allowed  # takes the only slot
+    assert g.check(order("BUY", qty=1.0), ref_price=100.0).reason == "max_orders_per_minute"
+    assert g.check(order("SELL", qty=2.0, reduce_only=True), ref_price=100.0).allowed
+    assert len(g._sent) == 1
+
+
+def test_f2_halted_and_rounding_still_apply_to_exits():
+    g, pf, _ = make()
+    hold(pf, "BUY", 2.0, 100.0)
+    assert g.check(order("SELL", qty=0.0001, reduce_only=True), ref_price=100.0).reason == "qty_rounds_to_zero"
+    g.halt("x")
+    assert g.check(order("SELL", qty=2.0, reduce_only=True), ref_price=100.0).reason == "halted"
+
+
+def test_f3_size_frac_uses_realised_cash_not_marked_equity():
+    g, pf, _ = make(cash=15_000.0, ins=inst(max_qty=None))
+    hold(pf, "BUY", 50.0, 200.0)  # cash 5000
+    assert pf.cash == 5000.0
+    d = g.check(order(size_frac=1.0), ref_price=200.0)  # equity 5000 + 50 x 200 = 15000 would give 75
+    assert (d.allowed, d.qty) == (True, 25.0)
+
+
+def test_f4_stop_orders_valued_at_the_worst_price():
+    g, _, _ = make(only(max_order_notional=105.0), ins=inst(is_spot=False))
+    assert g.check(order("BUY", type="STOP_MARKET", trigger_price=105.0), ref_price=100.0).allowed
+    d = g.check(order("BUY", type="STOP_MARKET", trigger_price=105.01), ref_price=100.0)
+    assert (d.allowed, d.reason) == (False, "max_order_notional")
+    # a buy stop below the market is valued at the market
+    assert g.check(order("BUY", type="STOP_MARKET", trigger_price=90.0), ref_price=106.0).reason == \
+        "max_order_notional"
+    # a sell stop is valued at its trigger
+    assert g.check(order("SELL", type="STOP_MARKET", trigger_price=105.0), ref_price=200.0).allowed
+    assert g.check(order("SELL", type="STOP_MARKET", trigger_price=105.02), ref_price=1.0).reason == \
+        "max_order_notional"
+    # stop-limit buy: the highest of trigger, limit and market
+    assert g.check(order("BUY", type="STOP_LIMIT", trigger_price=100.0, price=106.0),
+                   ref_price=100.0).reason == "max_order_notional"
+
+
+@pytest.mark.parametrize("trig", [float("nan"), float("inf"), 0.0, -5.0])
+def test_f4_bad_trigger_is_invalid(trig):
+    g, _, _ = make()
+    assert g.check(order("BUY", type="STOP_MARKET", trigger_price=trig), ref_price=100.0).reason == "invalid_order"
+
+
+@pytest.mark.parametrize("side,br", [
+    ("BUY", dict(take_profit=99.0, stop_loss=90.0)), ("BUY", dict(take_profit=110.0, stop_loss=101.0)),
+    ("BUY", dict(take_profit=float("nan"), stop_loss=90.0)), ("BUY", dict(take_profit=110.0, stop_loss=-1.0)),
+    ("SELL", dict(take_profit=101.0, stop_loss=110.0)), ("SELL", dict(take_profit=90.0, stop_loss=99.0)),
+    ("BUY", dict(take_profit=110.0, stop_loss=float("inf"), tp_is_offset=True)),
+])
+def test_f4_invalid_bracket_legs(side, br):
+    g, _, _ = make(ins=inst(is_spot=False))
+    assert g.check(order(side, bracket=br), ref_price=100.0).reason == "invalid_order"
+
+
+def test_f4_bracket_levels_count_in_the_notional_and_valid_brackets_pass():
+    g, _, _ = make(only(max_order_notional=120.0), ins=inst(is_spot=False))
+    ok = dict(take_profit=110.0, stop_loss=95.0, tp_is_offset=False, max_hold=None)
+    assert g.check(order("BUY", qty=1.0, bracket=ok), ref_price=100.0).allowed
+    assert g.check(order("BUY", qty=1.0, bracket=dict(ok, take_profit=121.0)), ref_price=100.0).reason == \
+        "max_order_notional"
+    off = dict(take_profit=21.0, stop_loss=-5.0, tp_is_offset=True)  # levels 121 and 95 around entry 100
+    assert g.check(order("BUY", qty=1.0, bracket=off), ref_price=100.0).reason == "max_order_notional"
+    # a short's stop-loss above the entry is its worst case
+    assert g.check(order("SELL", qty=1.0, bracket=dict(take_profit=90.0, stop_loss=121.0)),
+                   ref_price=100.0).reason == "max_order_notional"
+
+
+def test_a_ref_price_none_is_a_denial_not_a_crash():
+    g, _, _ = make()
+    assert g.check(order(), ref_price=None).reason == "invalid_order"
+
+
+def test_b_missing_marks_for_another_held_instrument():
+    g, pf, _ = make(ins=inst(is_spot=False))
+    f = dataclasses.replace(market_fill(10.0, 1, RESEARCH_ZERO, 1.0), instrument_id="Y", trade_id="ty")
+    pf.apply_fill(f, strategy_id="s")
+    assert g.check(order(), ref_price=100.0).reason == "missing_marks"
+    assert g.check(order(), ref_price=100.0, marks={X: 100.0, "Y": 10.0}).allowed
+
+
+def test_c_day_start_equity_restores_the_opening_equity_after_a_restart():
+    g, pf, _ = make(only(daily_loss_limit=500.0), ins=inst(is_spot=False))
+    hold(pf, "BUY", 10.0, 100.0)
+    marks = {X: 40.0}  # equity 9400 now
+    assert g.check(order("BUY", qty=1.0), ref_price=40.0, marks=marks, day_start_equity=10_000.0).reason == \
+        "daily_loss_limit"
+    g2, pf2, _ = make(only(daily_loss_limit=500.0), ins=inst(is_spot=False))
+    hold(pf2, "BUY", 10.0, 100.0)
+    assert g2.check(order("BUY", qty=1.0), ref_price=40.0, marks=marks).allowed  # without it: baseline = 9400
+
+
+def test_d_spot_buy_above_available_cash_is_denied():
+    g, _, _ = make(cash=1_000.0, ins=inst(max_qty=None))
+    assert g.check(order(qty=10.0), ref_price=100.0).allowed
+    d = g.check(order(qty=10.001), ref_price=100.0)
+    assert (d.allowed, d.reason) == (False, "insufficient_cash")
+    g2, _, _ = make(cash=1_000.0, ins=inst(is_spot=False, max_qty=None))
+    assert g2.check(order(qty=11.0), ref_price=100.0).allowed  # margin: no cash check

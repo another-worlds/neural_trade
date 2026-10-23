@@ -7,7 +7,8 @@ defaults, transitions) are the minimum choices listed in the NT-223 report. Pure
 
 ``check`` is called by the ExecutionEngine before ``Broker.submit`` and by the manual-order path; a ``size_frac``
 order is checked twice (at submit on the last close, at the fill on the resolved quantity), so a rate-limit slot is
-taken only by ``check(..., record=True)`` (the default); pass ``record=False`` for the estimate.
+taken only by ``check(..., record=True)`` (the default); pass ``record=False`` for the estimate. Orders that only
+reduce a position are exempt from the notional and rate limits (see ``RiskGuard.check``).
 """
 from __future__ import annotations
 
@@ -47,6 +48,8 @@ MAX_ORDER_NOTIONAL = "max_order_notional"
 MAX_POSITION = "max_position"
 MAX_ORDERS_PER_MINUTE = "max_orders_per_minute"
 DAILY_LOSS_LIMIT = "daily_loss_limit"
+MISSING_MARKS = "missing_marks"
+INSUFFICIENT_CASH = "insufficient_cash"
 SPOT_SELL_EXCEEDS_BALANCE = "spot_sell_exceeds_balance"
 SPOT_SHORT_NO_OWN_LONG = "spot_short_no_own_long"
 CLIPPED_TO_POSITION = "clipped_to_position"
@@ -131,12 +134,17 @@ class RiskGuard:
         self._set(TradingState.ACTIVE, reason)
 
     # ------------------------------------------------------------------ daily loss
-    def update(self, marks: Mapping[str, float]) -> None:
-        """Roll the UTC day: the first call of a day records its starting equity. The engine calls it on every bar."""
+    def update(self, marks: Mapping[str, float], *, day_start_equity: Optional[float] = None) -> None:
+        """Roll the UTC day. THE DAY'S BASELINE IS THE FIRST OBSERVATION OF THE DAY (the equity at the first
+        ``update`` or ``check`` after UTC midnight), not midnight itself: the engine MUST call ``update(marks)`` on
+        every bar, and after a restart pass ``day_start_equity`` (the stored opening equity of the current day) so
+        the loss already taken today is not forgotten. ``marks`` must cover every held instrument."""
         now = self._clock.now_ms()
         day = now // DAY_MS
         if day != self._day:
-            self._day, self._day_start_equity = day, self.portfolio.account_state(marks, now).equity
+            self._day = day
+            self._day_start_equity = (float(day_start_equity) if day_start_equity is not None
+                                      else self.portfolio.account_state(marks, now).equity)
 
     def day_loss(self, marks: Mapping[str, float]) -> float:
         """Equity fall since the day's start (positive = loss)."""
@@ -145,58 +153,92 @@ class RiskGuard:
 
     # ------------------------------------------------------------------ the check
     def check(self, order: Order, *, ref_price: float, marks: Optional[Mapping[str, float]] = None,
-              record: bool = True) -> RiskDecision:
+              record: bool = True, day_start_equity: Optional[float] = None) -> RiskDecision:
         """Decide on ``order``. ``ref_price`` is the price a market order would trade at (last close at submit, the
-        resolved open at the fill); a priced order uses its own (rounded) price. ``marks`` defaults to
-        ``{instrument.id: ref_price}``. An allowed decision carries the quantity and price to submit."""
+        resolved open at the fill). ``marks`` defaults to ``{instrument.id: ref_price}``; when the portfolio holds
+        other instruments the caller must pass marks for all of them (else ``missing_marks``). An allowed decision
+        carries the quantity and price to submit.
+
+        Valuation price of an order (notional, max position): MARKET ``ref_price``; LIMIT its rounded price;
+        STOP_MARKET / STOP_LIMIT buys ``max(trigger, limit price, ref_price)`` (the worst case), sells the trigger;
+        for an opening order also the highest bracket level (a non-offset leg; an offset leg is ``entry + offset``).
+        Bracket legs are validated: finite and > 0, take-profit above and stop-loss below the entry for a BUY,
+        reversed for a SELL (offset legs: finite only).
+
+        Risk reduction stays possible: an order that only reduces its position (after clipping to it) is exempt from
+        ``max_order_notional``, the position and daily-loss limits and the per-minute rate limit and takes no rate
+        slot; it is still subject to HALTED, ``invalid_order``, rounding, min/max quantity and min notional.
+        Opening orders keep every limit. While the daily loss limit is reached, a flipping order is clipped to the
+        position like in REDUCING. On spot a BUY above available cash is denied ``insufficient_cash``."""
         ins, lim = self.instrument, self.limits
         if self.state is TradingState.HALTED:
             return _deny(HALTED)
         if order.instrument_id != ins.id:
             return _deny(WRONG_INSTRUMENT)
-        if not (math.isfinite(ref_price) and ref_price > 0):
+        if not _pos(ref_price):
             return _deny(INVALID_ORDER)
         marks = dict(marks) if marks is not None else {ins.id: ref_price}
-        self.update(marks)
+        if any(p.qty > 0 and p.instrument_id not in marks for p in self.portfolio.positions.values()):
+            return _deny(MISSING_MARKS)
+        self.update(marks, day_start_equity=day_start_equity)
+        sign = 1 if order.side is Side.BUY else -1
 
         # price: rounded to the tick; a market order trades at ref_price
         px: Optional[float] = None
         if order.price is not None:
-            if not (math.isfinite(order.price) and order.price > 0):
+            if not _pos(order.price):
                 return _deny(INVALID_ORDER)
             px = round_nearest(order.price, ins.price_increment)
             if px <= 0:
                 return _deny(PRICE_ROUNDS_TO_ZERO)
-        price = px if px is not None else ref_price
+        trig: Optional[float] = None
+        if order.trigger_price is not None:
+            if not _pos(order.trigger_price):
+                return _deny(INVALID_ORDER)
+            trig = round_nearest(order.trigger_price, ins.price_increment)
+            if trig <= 0:
+                return _deny(PRICE_ROUNDS_TO_ZERO)
+        if trig is None:
+            price = px if px is not None else ref_price
+        elif sign > 0:
+            price = max(trig, px or 0.0, ref_price)
+        else:
+            price = trig
+        legs = self._bracket_levels(order, sign, price)
+        if legs is None:
+            return _deny(INVALID_ORDER)
+        val_price = max([price, *legs])
 
-        # quantity: a size_frac order resolves on realised equity (A5.1), then floors to the lot size
+        # quantity: a size_frac order resolves on REALISED CASH equity (A5.1: net of costs paid), the broker's rule
         if order.qty is not None:
             qty = order.qty
         else:
             frac = order.size_frac
             if frac is None or not math.isfinite(frac):
                 return _deny(INVALID_ORDER)
-            equity = self.portfolio.account_state(marks, self._clock.now_ms()).equity
-            qty = min(max(frac, 0.0), 1.0) * equity / price
+            qty = min(max(frac, 0.0), 1.0) * self.portfolio.cash / price
         if not (math.isfinite(qty) and qty > 0):
             return _deny(INVALID_ORDER)
         qty = round_down(qty, ins.size_increment)
         if qty <= 0:
             return _deny(QTY_ROUNDS_TO_ZERO)
 
-        sign = 1 if order.side is Side.BUY else -1
         pos = self.portfolio.position(ins.id, order.strategy_id)
         held = self.portfolio.signed_qty(pos)
         reducing = held * sign < 0
+        loss_hit = lim.daily_loss_limit is not None and self.day_loss(marks) >= lim.daily_loss_limit
         clipped = False
 
-        if order.reduce_only or self.state is TradingState.REDUCING:
+        if order.reduce_only or self.state is TradingState.REDUCING or loss_hit:
             if not reducing:
-                return _deny(REDUCE_ONLY_VIOLATION if order.reduce_only else REDUCING_ONLY)
+                if order.reduce_only:
+                    return _deny(REDUCE_ONLY_VIOLATION)
+                return _deny(REDUCING_ONLY if self.state is TradingState.REDUCING else DAILY_LOSS_LIMIT)
             if qty > abs(held) + DUST:  # would flip: clip to the position
                 qty, clipped = round_down(abs(held), ins.size_increment), True
                 if qty <= 0:
                     return _deny(QTY_ROUNDS_TO_ZERO)
+        pure_reduce = reducing and qty <= abs(held) + DUST
 
         if ins.is_spot and sign < 0:
             balance = self.portfolio.base_balance(ins.id)
@@ -209,27 +251,52 @@ class RiskGuard:
             return _deny(MIN_QTY)
         if ins.max_qty is not None and qty > ins.max_qty:
             return _deny(MAX_QTY)
-        notional = qty * price
+        notional = qty * (price if pure_reduce else val_price)
         if notional < ins.min_notional:
             return _deny(MIN_NOTIONAL)
-        if lim.max_order_notional is not None and notional > lim.max_order_notional:
-            return _deny(MAX_ORDER_NOTIONAL)
-        after = held + sign * qty
-        if (lim.max_position_notional is not None and abs(after) > abs(held)
-                and abs(after) * price > lim.max_position_notional):
-            return _deny(MAX_POSITION)
-        if (lim.daily_loss_limit is not None and not reducing
-                and self.day_loss(marks) >= lim.daily_loss_limit):
-            return _deny(DAILY_LOSS_LIMIT)
+        if not pure_reduce:
+            if ins.is_spot and sign > 0 and qty * price > self.portfolio.cash:
+                return _deny(INSUFFICIENT_CASH)
+            if lim.max_order_notional is not None and notional > lim.max_order_notional:
+                return _deny(MAX_ORDER_NOTIONAL)
+            after = held + sign * qty
+            if (lim.max_position_notional is not None and abs(after) > abs(held)
+                    and abs(after) * val_price > lim.max_position_notional):
+                return _deny(MAX_POSITION)
         now = self._clock.now_ms()
-        if lim.max_orders_per_minute is not None:
+        if lim.max_orders_per_minute is not None and not pure_reduce:
             while self._sent and self._sent[0] <= now - WINDOW_MS:  # 60 s old or older leaves the window
                 self._sent.popleft()
             if len(self._sent) >= lim.max_orders_per_minute:
                 return _deny(MAX_ORDERS_PER_MINUTE)
-        if record:
+        if record and not pure_reduce:
             self._sent.append(now)
         return RiskDecision(True, CLIPPED_TO_POSITION if clipped else "", qty, px)
+
+    def _bracket_levels(self, order: Order, sign: int, entry: float) -> Optional[list[float]]:
+        """Absolute bracket levels of an order (for valuation), or None when a leg is invalid."""
+        br = order.bracket
+        if not br:
+            return []
+        offset = bool(br.get("tp_is_offset"))
+        out: list[float] = []
+        for key, up in (("take_profit", sign > 0), ("stop_loss", sign < 0)):
+            v = br.get(key)
+            if v is None:
+                continue
+            if not isinstance(v, (int, float)) or not math.isfinite(v):
+                return None
+            if offset:
+                out.append(entry + v)
+                continue
+            if v <= 0 or (v <= entry if up else v >= entry):
+                return None
+            out.append(v)
+        return out
+
+
+def _pos(x: object) -> bool:
+    return isinstance(x, (int, float)) and math.isfinite(x) and x > 0
 
 
 __all__ = ["RiskGuard", "RiskLimits", "RiskDecision", "TradingState", "round_down", "round_nearest"]
