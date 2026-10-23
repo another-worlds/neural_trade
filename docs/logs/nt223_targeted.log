@@ -1,0 +1,8 @@
+git HEAD (base of repair): 235aa232006817d2dd4b92a4bcdfca2de5cb4476
+cmd: pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+422 passed, 101 warnings in 151.44s (0:02:31)
+cmd: ruff check src tests scripts
+All checks passed!
+TESTING_DOCUMENTATION.md: 3010 tests, 122 files
