@@ -1,0 +1,15 @@
+base sha: c12d5e0f8cc9000e0fb39cb43cc165d643dde307
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+414 passed, 101 warnings in 160.51s (0:02:40)
+$ ruff check src tests scripts (after fixing E741 in the test)
+All checks passed!
+$ pytest tests/desk/test_lab_runs.py
+13 passed, 1 warning in 4.18s
+repair round 1; base sha: ba6dc76d21483d4b30d59f27ebbb0b898382da9d
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+425 passed, 101 warnings in 164.84s (0:02:44)
+$ ruff check src tests scripts
+All checks passed!
