@@ -20,7 +20,8 @@ from enum import Enum
 from typing import Callable, Mapping, Optional
 
 from neural_trade.desk.core.clock import Clock
-from neural_trade.desk.core.model import Instrument, Order, Side
+from neural_trade.desk.core.costs import RESEARCH_ZERO, CostProfile
+from neural_trade.desk.core.model import Instrument, Liquidity, Order, OrderType, Side
 from neural_trade.desk.core.portfolio import DUST, Portfolio
 
 DAY_MS = 86_400_000
@@ -53,6 +54,7 @@ INSUFFICIENT_CASH = "insufficient_cash"
 SPOT_SELL_EXCEEDS_BALANCE = "spot_sell_exceeds_balance"
 SPOT_SHORT_NO_OWN_LONG = "spot_short_no_own_long"
 CLIPPED_TO_POSITION = "clipped_to_position"
+REDUCE_EXCEEDS_POSITION = "reduce_exceeds_position"  # the position is already covered by resting reduce orders
 
 
 @dataclass(frozen=True)
@@ -102,9 +104,11 @@ def round_nearest(x: float, inc: float) -> float:
 
 class RiskGuard:
     def __init__(self, limits: RiskLimits, instrument: Instrument, portfolio: Portfolio, clock: Clock, *,
+                 costs: CostProfile = RESEARCH_ZERO,
                  on_state_change: Optional[Callable[[TradingState, TradingState, str], None]] = None) -> None:
         self.limits, self.instrument, self.portfolio, self._clock = limits, instrument, portfolio, clock
         self._on_state_change = on_state_change
+        self.costs = costs  # the account's cost profile: its fee enters the spot cash check
         self.state = TradingState.ACTIVE
         self.state_reason = ""
         self._sent: deque[int] = deque()  # ts_ms of recorded orders
@@ -153,7 +157,8 @@ class RiskGuard:
 
     # ------------------------------------------------------------------ the check
     def check(self, order: Order, *, ref_price: float, marks: Optional[Mapping[str, float]] = None,
-              record: bool = True, day_start_equity: Optional[float] = None) -> RiskDecision:
+              record: bool = True, day_start_equity: Optional[float] = None,
+              committed_reduce_qty: float = 0.0) -> RiskDecision:
         """Decide on ``order``. ``ref_price`` is the price a market order would trade at (last close at submit, the
         resolved open at the fill). ``marks`` defaults to ``{instrument.id: ref_price}``; when the portfolio holds
         other instruments the caller must pass marks for all of them (else ``missing_marks``). An allowed decision
@@ -162,14 +167,27 @@ class RiskGuard:
         Valuation price of an order (notional, max position): MARKET ``ref_price``; LIMIT its rounded price;
         STOP_MARKET / STOP_LIMIT buys ``max(trigger, limit price, ref_price)`` (the worst case), sells the trigger;
         for an opening order also the highest bracket level (a non-offset leg; an offset leg is ``entry + offset``).
-        Bracket legs are validated: finite and > 0, take-profit above and stop-loss below the entry for a BUY,
-        reversed for a SELL (offset legs: finite only).
+        Bracket legs are validated as absolute levels (an offset leg is ``entry + offset``): finite, > 0, take-profit
+        above and stop-loss below the entry for a BUY, reversed for a SELL (so a BUY's tp offset must be > 0, its
+        sl offset < 0; CONTRACTS ``tp_is_offset``).
+
+        ``committed_reduce_qty`` is the quantity already committed to resting reduce orders of this order's position
+        (the ExecutionEngine passes it). A reducing order is limited to ``|position| - committed``: clipped to it
+        (``clipped_to_position``), or denied ``reduce_exceeds_position`` when nothing is left. A flipping order
+        in ACTIVE is not a reduction and keeps its meaning (it is clipped only under reduce_only, REDUCING or the
+        loss limit, like before, now to the same capacity).
+
+        Closing: when ``reduce_only`` or the order asks for at least the whole position, and flooring to the size
+        step would leave a remainder below ``min_qty`` (an unsellable dust), the whole position is submitted,
+        unrounded. Opening orders still floor.
 
         Risk reduction stays possible: an order that only reduces its position (after clipping to it) is exempt from
         ``max_order_notional``, the position and daily-loss limits and the per-minute rate limit and takes no rate
         slot; it is still subject to HALTED, ``invalid_order``, rounding, min/max quantity and min notional.
         Opening orders keep every limit. While the daily loss limit is reached, a flipping order is clipped to the
-        position like in REDUCING. On spot a BUY above available cash is denied ``insufficient_cash``."""
+        position like in REDUCING. On spot a BUY above available cash
+        plus its fee (the cost profile's taker fee for market and stop orders, maker for LIMIT, at the order's
+        price) is denied ``insufficient_cash``."""
         ins, lim = self.instrument, self.limits
         if self.state is TradingState.HALTED:
             return _deny(HALTED)
@@ -182,6 +200,9 @@ class RiskGuard:
             return _deny(MISSING_MARKS)
         self.update(marks, day_start_equity=day_start_equity)
         sign = 1 if order.side is Side.BUY else -1
+        committed = committed_reduce_qty
+        if not (isinstance(committed, (int, float)) and math.isfinite(committed) and committed >= 0):
+            return _deny(INVALID_ORDER)
 
         # price: rounded to the tick; a market order trades at ref_price
         px: Optional[float] = None
@@ -209,16 +230,17 @@ class RiskGuard:
             return _deny(INVALID_ORDER)
         val_price = max([price, *legs])
 
-        # quantity: a size_frac order resolves on REALISED CASH equity (A5.1: net of costs paid), the broker's rule
+        # quantity: a size_frac order resolves on REALISED equity (A5.1/A5.9: cash + signed qty x avg price)
         if order.qty is not None:
             qty = order.qty
         else:
             frac = order.size_frac
             if frac is None or not math.isfinite(frac):
                 return _deny(INVALID_ORDER)
-            qty = min(max(frac, 0.0), 1.0) * self.portfolio.cash / price
+            qty = min(max(frac, 0.0), 1.0) * self.portfolio.realised_equity() / price
         if not (math.isfinite(qty) and qty > 0):
             return _deny(INVALID_ORDER)
+        raw = qty
         qty = round_down(qty, ins.size_increment)
         if qty <= 0:
             return _deny(QTY_ROUNDS_TO_ZERO)
@@ -229,15 +251,21 @@ class RiskGuard:
         loss_hit = lim.daily_loss_limit is not None and self.day_loss(marks) >= lim.daily_loss_limit
         clipped = False
 
-        if order.reduce_only or self.state is TradingState.REDUCING or loss_hit:
-            if not reducing:
-                if order.reduce_only:
-                    return _deny(REDUCE_ONLY_VIOLATION)
-                return _deny(REDUCING_ONLY if self.state is TradingState.REDUCING else DAILY_LOSS_LIMIT)
-            if qty > abs(held) + DUST:  # would flip: clip to the position
-                qty, clipped = round_down(abs(held), ins.size_increment), True
+        limited = order.reduce_only or self.state is TradingState.REDUCING or loss_hit
+        if limited and not reducing:
+            if order.reduce_only:
+                return _deny(REDUCE_ONLY_VIOLATION)
+            return _deny(REDUCING_ONLY if self.state is TradingState.REDUCING else DAILY_LOSS_LIMIT)
+        if reducing and (limited or qty <= abs(held) + DUST):  # a reduction, or a flip that must be clipped
+            cap = abs(held) - committed  # what no resting reduce order has claimed yet
+            if cap <= DUST:
+                return _deny(REDUCE_EXCEEDS_POSITION)
+            if qty > cap + DUST:
+                qty, clipped = round_down(cap, ins.size_increment), True
                 if qty <= 0:
                     return _deny(QTY_ROUNDS_TO_ZERO)
+            if (order.reduce_only or raw >= cap - DUST) and DUST < cap - qty < ins.min_qty:
+                qty = cap  # closing: do not leave an unsellable remainder
         pure_reduce = reducing and qty <= abs(held) + DUST
 
         if ins.is_spot and sign < 0:
@@ -255,8 +283,10 @@ class RiskGuard:
         if notional < ins.min_notional:
             return _deny(MIN_NOTIONAL)
         if not pure_reduce:
-            if ins.is_spot and sign > 0 and qty * price > self.portfolio.cash:
-                return _deny(INSUFFICIENT_CASH)
+            if ins.is_spot and sign > 0:
+                liq = Liquidity.MAKER if order.type is OrderType.LIMIT else Liquidity.TAKER
+                if qty * price * (1 + self.costs.fee_rate(liq)) > self.portfolio.cash:
+                    return _deny(INSUFFICIENT_CASH)
             if lim.max_order_notional is not None and notional > lim.max_order_notional:
                 return _deny(MAX_ORDER_NOTIONAL)
             after = held + sign * qty
@@ -286,12 +316,10 @@ class RiskGuard:
                 continue
             if not isinstance(v, (int, float)) or not math.isfinite(v):
                 return None
-            if offset:
-                out.append(entry + v)
-                continue
-            if v <= 0 or (v <= entry if up else v >= entry):
+            lv = entry + v if offset else v
+            if not math.isfinite(lv) or lv <= 0 or (lv <= entry if up else lv >= entry):
                 return None
-            out.append(v)
+            out.append(lv)
         return out
 
 

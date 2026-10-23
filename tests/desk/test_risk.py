@@ -372,8 +372,10 @@ def test_f3_size_frac_uses_realised_cash_not_marked_equity():
     g, pf, _ = make(cash=15_000.0, ins=inst(max_qty=None))
     hold(pf, "BUY", 50.0, 200.0)  # cash 5000
     assert pf.cash == 5000.0
-    d = g.check(order(size_frac=1.0), ref_price=200.0)  # equity 5000 + 50 x 200 = 15000 would give 75
-    assert (d.allowed, d.qty) == (True, 25.0)
+    # NT-289 (CONTRACTS A5.1/A5.9, lead's decision 2026-10-16): size_frac resolves on REALISED equity = cash +
+    # signed qty x avg price = 5000 + 50 x 200 = 15000 -> 75 units (15000 / 200); on spot that costs 15000 > cash 5000
+    d = g.check(order(size_frac=1.0), ref_price=200.0)
+    assert (d.allowed, d.reason) == (False, "insufficient_cash")
 
 
 def test_f4_stop_orders_valued_at_the_worst_price():
@@ -454,3 +456,123 @@ def test_d_spot_buy_above_available_cash_is_denied():
     assert (d.allowed, d.reason) == (False, "insufficient_cash")
     g2, _, _ = make(cash=1_000.0, ins=inst(is_spot=False, max_qty=None))
     assert g2.check(order(qty=11.0), ref_price=100.0).allowed  # margin: no cash check
+
+
+# ---------------------------------------------------------------- NT-289 (DESK-1.2 completion)
+def test_n1_size_frac_on_realised_equity_other_strategy_long():
+    g, pf, _ = make(cash=10_000.0, ins=inst(max_qty=None))
+    hold(pf, "BUY", 25.0, 200.0, strategy="other")  # cash 5000, realised equity 5000 + 25 x 200 = 10000
+    assert pf.realised_equity() == 10_000.0
+    d = g.check(order(size_frac=0.5), ref_price=200.0)  # 0.5 x 10000 / 200 = 25 (cash alone gave 12.5)
+    assert (d.allowed, d.qty) == (True, 25.0)
+
+
+def test_n1_size_frac_margin_short_is_not_levered():
+    g, pf, _ = make(cash=10_000.0, ins=inst(is_spot=False, max_qty=None))
+    hold(pf, "SELL", 25.0, 200.0, strategy="other")  # cash 15000, realised equity 15000 - 25 x 200 = 10000
+    assert pf.cash == 15_000.0 and pf.realised_equity() == 10_000.0
+    for side in ("BUY", "SELL"):  # cash alone gave 15000 / 200 = 75
+        assert g.check(order(side, size_frac=1.0), ref_price=200.0, record=False).qty == 50.0
+
+
+def test_n1_size_frac_flat_account_equals_cash():
+    g, pf, _ = make(cash=1_000.0)
+    assert pf.realised_equity() == pf.cash == 1_000.0
+    assert g.check(order(size_frac=0.5), ref_price=250.0).qty == 2.0
+
+
+def test_n2_flip_in_active_keeps_notional_and_rate_limits():
+    ins = inst(is_spot=False, max_qty=None)
+    g, pf, _ = make(only(max_order_notional=500.0), ins=ins)
+    hold(pf, "BUY", 2.0, 100.0)
+    d = g.check(order("SELL", qty=8.0), ref_price=100.0)  # closes 2, opens 6: notional 800 > 500
+    assert (d.allowed, d.reason) == (False, "max_order_notional")
+    assert g.check(order("SELL", qty=5.0), ref_price=100.0).allowed  # flip with notional 500 == limit passes
+    g2, pf2, _ = make(only(max_orders_per_minute=1), ins=ins)
+    hold(pf2, "BUY", 2.0, 100.0)
+    assert g2.check(order("SELL", qty=3.0), ref_price=100.0).allowed and len(g2._sent) == 1  # the flip takes a slot
+    assert g2.check(order("SELL", qty=3.0), ref_price=100.0).reason == "max_orders_per_minute"
+
+
+def test_n3_committed_reduce_orders_limit_further_reductions():
+    g, pf, _ = make(ins=inst(max_qty=None))
+    hold(pf, "BUY", 10.0, 100.0)
+    committed, allowed = 0.0, 0
+    for _ in range(50):
+        d = g.check(order("SELL", qty=10.0), ref_price=100.0, committed_reduce_qty=committed)
+        if d.allowed:
+            allowed += 1
+            committed += d.qty
+        else:
+            assert d.reason == "reduce_exceeds_position"
+    assert allowed == 1 and committed == 10.0
+
+
+def test_n3_committed_clips_the_remainder_and_a_flip_stays_a_flip():
+    g, pf, _ = make(ins=inst(is_spot=False, max_qty=None))
+    hold(pf, "BUY", 10.0, 100.0)
+    d = g.check(order("SELL", qty=8.0), ref_price=100.0, committed_reduce_qty=4.0)  # capacity 6
+    assert (d.allowed, d.qty, d.reason) == (True, 6.0, "clipped_to_position")
+    assert g.check(order("SELL", qty=6.0), ref_price=100.0, committed_reduce_qty=4.0).reason == ""
+    assert g.check(order("SELL", qty=15.0), ref_price=100.0, committed_reduce_qty=4.0).qty == 15.0  # a flip
+    d = g.check(order("SELL", qty=15.0, reduce_only=True), ref_price=100.0, committed_reduce_qty=4.0)
+    assert (d.qty, d.reason) == (6.0, "clipped_to_position")
+    assert g.check(order("SELL", qty=15.0, reduce_only=True), ref_price=100.0,
+                   committed_reduce_qty=10.0).reason == "reduce_exceeds_position"
+    assert g.check(order("SELL", qty=1.0), ref_price=100.0, committed_reduce_qty=-1.0).reason == "invalid_order"
+    assert g.check(order("BUY", qty=1.0), ref_price=100.0, committed_reduce_qty=10.0).allowed  # opens: ignored
+
+
+def test_n4_offset_bracket_legs_get_the_side_check():
+    g, _, _ = make(ins=inst(is_spot=False))
+    bad = [("BUY", dict(take_profit=-50.0, stop_loss=-5.0)), ("BUY", dict(take_profit=5.0, stop_loss=5.0)),
+           ("SELL", dict(take_profit=50.0, stop_loss=5.0)), ("SELL", dict(take_profit=-5.0, stop_loss=-5.0)),
+           ("BUY", dict(take_profit=0.0)), ("BUY", dict(stop_loss=-100.0))]  # last: level 0
+    for side, br in bad:
+        assert g.check(order(side, bracket=dict(br, tp_is_offset=True)), ref_price=100.0).reason == \
+            "invalid_order", (side, br)
+    assert g.check(order("BUY", bracket=dict(take_profit=5.0, stop_loss=-5.0, tp_is_offset=True)),
+                   ref_price=100.0).allowed
+    assert g.check(order("SELL", bracket=dict(take_profit=-5.0, stop_loss=5.0, tp_is_offset=True)),
+                   ref_price=100.0).allowed
+
+
+def test_n5_closing_a_position_with_a_sub_min_qty_remainder_closes_it_whole():
+    g, pf, _ = make(ins=inst(min_notional=0))
+    hold(pf, "BUY", 0.0015, 100.0)
+    d = g.check(order("SELL", qty=0.0015, reduce_only=True), ref_price=100.0)  # floor 0.001 leaves 0.0005 < 0.001
+    assert (d.allowed, d.qty) == (True, 0.0015)
+    assert g.check(order("SELL", qty=0.0015), ref_price=100.0).qty == 0.0015  # an order asking for the whole position
+    assert g.check(order("SELL", qty=0.001, reduce_only=True), ref_price=100.0).qty == 0.0015  # reduce_only closes
+    assert g.check(order("SELL", qty=0.001), ref_price=100.0).qty == 0.001  # a plain partial sell is not touched
+    g.reduce_only()
+    assert g.check(order("SELL", qty=0.002), ref_price=100.0).qty == 0.0015  # a clipped flip closes whole too
+    g2, _, _ = make(ins=inst(min_notional=0))  # an opening order still floors
+    assert g2.check(order("BUY", qty=0.0015), ref_price=100.0).qty == 0.001
+
+
+def test_n5_remainder_at_or_above_min_qty_is_left_alone():
+    g, pf, _ = make(ins=inst(min_notional=0))
+    hold(pf, "BUY", 0.0025, 100.0)
+    assert g.check(order("SELL", qty=0.001, reduce_only=True), ref_price=100.0).qty == 0.001  # remainder 0.0015
+    assert g.check(order("SELL", qty=0.0015, reduce_only=True), ref_price=100.0).qty == 0.001  # floors; remainder 0.0015
+
+
+def test_n6_insufficient_cash_includes_the_fee():
+    from neural_trade.desk.core.costs import CostProfile
+    prof = CostProfile(name="p", fee_bps_taker=10.0, fee_bps_maker=2.0)
+    clock = SimClock(T0)
+    pf = Portfolio("acc", initial_cash=1_000.0, allow_short=False, clock=clock)
+    g = RiskGuard(RiskLimits.unlimited(), inst(max_qty=None), pf, clock, costs=prof)
+    # market BUY 10 at 100: 1000 + 0.1% x 1000 = 1001 > 1000
+    assert g.check(order(qty=10.0), ref_price=100.0).reason == "insufficient_cash"
+    assert g.check(order(qty=9.99), ref_price=100.0).allowed  # 999 + 0.999 = 999.999
+    assert g.check(order("BUY", type="STOP_MARKET", trigger_price=100.0, qty=10.0), ref_price=100.0).reason == \
+        "insufficient_cash"
+    # LIMIT pays the maker fee, 2 bps: 1000 + 0.2 = 1000.2 > 1000
+    assert g.check(order(qty=10.0, type="LIMIT", price=100.0), ref_price=100.0).reason == "insufficient_cash"
+    # 9.995 x 100 = 999.5: limit 999.5 + 0.1999 passes, market 999.5 + 0.9995 = 1000.4995 does not
+    assert g.check(order(qty=9.995, type="LIMIT", price=100.0), ref_price=100.0).allowed
+    assert g.check(order(qty=9.995), ref_price=100.0).reason == "insufficient_cash"
+    g0, _, _ = make(cash=1_000.0, ins=inst(max_qty=None))  # the zero-cost default is unchanged
+    assert g0.check(order(qty=10.0), ref_price=100.0).allowed
