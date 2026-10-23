@@ -8,21 +8,35 @@ the database is not imported; the journal is an injected sink, any callable ``(k
 Order status changes happen ONLY in ``apply`` (``submit`` and ``cancel`` build their own events and apply them).
 The legal edges are ``model.STATUS_EDGES`` plus the ``late_fill`` exception (A4).
 
-Per fill, in this order, after the Portfolio is updated: ``OrderEvent`` (the status change), ``FillEvent``,
-``PositionEvent`` (one or two), ``AccountEvent``; the journal gets the same records in the same order.
+**Journal first, then the bus.** Every record is written to the journal before its event is published. A subscriber
+that raises never propagates and never loses a later record: the exception is logged and appended to
+``handler_errors`` (the last 100). A journal sink that raises does not undo the state change (the venue fact is true):
+the failure is counted in ``journal_failures`` and recorded in ``handler_errors``, the record stays in a pending queue
+and is written, in order, before the next record. (``EventBus.publish`` stops at the first raising handler, so the
+handlers after it miss that one event.)
+
+Per fill, in this order, after the Portfolio is updated: the order record (status change), ``fill``, ``position``
+(one or two), ``account``.
+
+**Thread model.** The engine is single-owner: one event-loop task or one thread owns it and every mutation comes from
+there; other threads hand work over (``loop.call_soon_threadsafe``). The first mutation records the owner thread id;
+a mutation from another thread raises ``RuntimeError`` (``check_owner=False`` switches the guard off).
 
 Gaps CONTRACTS leaves open (minimum choices, listed in the NT-224 report):
 
 * bus topics ``"order"``, ``"fill"``, ``"position"``, ``"account"``; journal kinds ``order_<status>`` (for example
-  ``order_denied``), ``late_fill``, ``fill``, ``position``, ``account``, ``bracket``, ``halt``; the journal payload
-  carries ``ts_event`` and ``ts_init`` itself (``Journal.append`` takes no ts_event);
-* ``OrderEvent.kind`` from a broker is the lower-case status it reports: accepted, rejected, triggered, canceled,
-  expired; the engine emits submitted, denied, partially_filled, filled and late_fill itself;
-* a ``size_frac`` order has no known total quantity (the broker resolves it at the fill): its first Fill is terminal
-  (FILLED) and the by-quantity overfill check does not apply to it; a later Fill with a new trade_id raises
-  ``OverfillError`` through the FILLED rule;
-* the Broker protocol has no modify, so ``ModifyOrder`` raises ``NotImplementedError``; a user's explicit close goes
-  through RiskGuard like any order (the force_reduce path of NT-272 does not exist yet);
+  ``order_denied``), ``order_modified``, ``order_modify_denied``, ``late_fill``, ``fill``, ``position``, ``account``,
+  ``bracket``, ``halt``; the journal payload carries ``ts_event`` and ``ts_init`` itself;
+* ``OrderEvent.kind`` from a broker: accepted, rejected, triggered, canceled, expired, modified; the engine emits
+  submitted, denied, partially_filled, filled and late_fill itself. A broker that raises in ``submit`` gives a REJECTED
+  order with reason ``broker_error:<ExceptionName>``;
+* a ``size_frac`` order has no known total quantity: its first Fill is terminal (FILLED) and the by-quantity overfill
+  check does not apply, unless the broker's ``accepted`` event carries ``tags["resolved_qty"]`` (in the event's order;
+  DESK-6.1's live broker should send it): then that is the order's ``qty`` and partial fills are allowed up to it;
+* ``modify`` is allowed on ACCEPTED and PARTIALLY_FILLED orders (A4 has no modify edge; TRIGGERED is already live at the
+  venue). The modified order is re-checked by RiskGuard (``record=False``: a modify takes no rate slot; committed
+  reduce quantity excludes the order itself); a denial leaves the order unchanged and is journalled;
+* a user's explicit close goes through RiskGuard like any order (the force_reduce path of NT-272 does not exist yet);
 * an offset bracket (``tp_is_offset``) is stored verbatim; resolving it against the fill bar's open is the Engine's /
   SimBroker's job (they hold the bar).
 """
@@ -30,6 +44,8 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import threading
+from collections import deque
 from typing import Any, Callable, Iterable, Mapping, Optional, Protocol, Union
 
 from neural_trade.desk.core.bus import EventBus
@@ -48,12 +64,22 @@ Command = Union[SubmitOrder, ModifyOrder, CancelOrder, CancelAll, ClosePosition,
 
 _S = OrderStatus
 RESTING = frozenset({_S.ACCEPTED, _S.TRIGGERED, _S.PARTIALLY_FILLED})  # can be cancelled
+MODIFIABLE = frozenset({_S.ACCEPTED, _S.PARTIALLY_FILLED})
 _LIVE = frozenset({_S.SUBMITTED, *RESTING})  # sent to the broker and not closed
 _KIND_STATUS = {"accepted": _S.ACCEPTED, "rejected": _S.REJECTED, "triggered": _S.TRIGGERED,
                 "canceled": _S.CANCELED, "expired": _S.EXPIRED}
+_IDENTITY = ("instrument_id", "strategy_id", "side", "type", "qty", "size_frac", "price", "trigger_price")
 
 
 class UnknownOrder(DeskError):
+    pass
+
+
+class UnknownAccount(DeskError):
+    pass
+
+
+class DuplicateClientId(ValueError):
     pass
 
 
@@ -62,18 +88,36 @@ class Broker(Protocol):
 
     def submit(self, order: Order) -> OrderEvent: ...
     def cancel(self, client_id: str) -> OrderEvent: ...
+    def modify(self, client_id: str, *, price: Optional[float] = None, trigger_price: Optional[float] = None,
+               qty: Optional[float] = None) -> OrderEvent: ...  # returns kind "modified" with the new values
 
 
 class ExecutionEngine:
     def __init__(self, broker: Broker, portfolio: Portfolio, risk: RiskGuard, bus: EventBus, clock: Clock,
-                 journal: JournalSink) -> None:
+                 journal: JournalSink, *, check_owner: bool = True) -> None:
         self.broker, self.portfolio, self.risk, self.bus, self.clock = broker, portfolio, risk, bus, clock
         self._journal = journal
         self.marks: dict[str, float] = {}  # last price per instrument; the Engine sets it at every bar close
+        self.handler_errors: list[BaseException] = []  # the last 100 subscriber / journal failures
+        self.journal_failures = 0
+        self.cancel_acked: set[str] = set()  # orders the venue already cancelled once (never cancelled twice)
+        self._check_owner, self._owner = check_owner, None
+        self._pending: deque[tuple[str, dict]] = deque()  # journal records not yet written
         self._orders: dict[str, Order] = {}
+        self._originals: dict[str, Order] = {}  # as submitted, for the duplicate-client-id comparison
         self._reserved: dict[str, float] = {}  # quantity the risk check approved per order (reduce-order accounting)
+        self._resolved: dict[str, float] = {}  # size_frac orders whose accept event carried resolved_qty
         self._trades: set[str] = set()
         self._seq = 0
+
+    def assert_owner(self) -> None:
+        if not self._check_owner:
+            return
+        me = threading.get_ident()
+        if self._owner is None:
+            self._owner = me
+        elif self._owner != me:
+            raise RuntimeError("ExecutionEngine is single-owner: mutate it from its owning thread/task only")
 
     # ------------------------------------------------------------------ reads
     def order(self, client_id: str) -> Optional[Order]:
@@ -88,6 +132,7 @@ class ExecutionEngine:
                 and (instrument_id is None or o.instrument_id == instrument_id)]
 
     def set_marks(self, marks: Mapping[str, float]) -> None:
+        self.assert_owner()
         self.marks.update({k: float(v) for k, v in marks.items()})
 
     # ------------------------------------------------------------------ commands
@@ -103,19 +148,25 @@ class ExecutionEngine:
         if isinstance(cmd, Halt):
             return self.halt(cmd.reason)
         if isinstance(cmd, ModifyOrder):
-            raise NotImplementedError("the Broker protocol (CONTRACTS C1) has no modify; cancel and resubmit")
+            return self.modify(cmd.client_id, price=cmd.price, trigger_price=cmd.trigger_price, qty=cmd.qty)
         raise TypeError(f"unknown command {type(cmd).__name__}")
 
     def submit(self, order: Order) -> Order:
         """RiskGuard first; a denial is a DENIED order (reason + journal record) and never reaches the broker.
-        Idempotent on ``client_id``: the existing order comes back and nothing else happens."""
+        Idempotent on ``client_id``: the same content returns the existing order, different content raises
+        ``DuplicateClientId`` naming the differing fields."""
+        self.assert_owner()
         existing = self._orders.get(order.client_id)
         if existing is not None:
+            diff = [f for f in _IDENTITY if getattr(order, f) != getattr(self._originals[order.client_id], f)]
+            if diff:
+                raise DuplicateClientId(f"client_id {order.client_id} was used with different {', '.join(diff)}")
             return existing
         if order.account_id != self.portfolio.account_id:
             raise ValueError(f"order {order.client_id} is for account {order.account_id}, "
                              f"this engine trades {self.portfolio.account_id}")
         now = self.clock.now_ms()
+        self._originals[order.client_id] = dataclasses.replace(order, tags=dict(order.tags))
         o = dataclasses.replace(order, tags=dict(order.tags), status=_S.INITIALIZED,
                                 ts_created=order.ts_created or now, ts_updated=now)
         self._orders[o.client_id] = o
@@ -136,13 +187,20 @@ class ExecutionEngine:
             o.price = price
         self._reserved[o.client_id] = qty
         self.apply(OrderEvent(now, now, "submitted", o))
-        self.apply(self.broker.submit(dataclasses.replace(o, tags=dict(o.tags))))
+        try:
+            ev = self.broker.submit(dataclasses.replace(o, tags=dict(o.tags)))
+        except Exception as exc:  # noqa: BLE001 - the venue never saw it: a rejection, not a crash
+            log.exception("broker.submit failed for %s", o.client_id)
+            self._record_error(exc)
+            self._reserved.pop(o.client_id, None)
+            t = self.clock.now_ms()
+            ev = OrderEvent(t, t, "rejected", self._with_reason(o, f"broker_error:{type(exc).__name__}"))
+        self.apply(ev)
         return o
 
     def cancel(self, client_id: str) -> Order:
-        o = self._orders.get(client_id)
-        if o is None:
-            raise UnknownOrder(client_id)
+        self.assert_owner()
+        o = self._get(client_id)
         if o.is_closed:
             return o
         if o.status not in RESTING:  # SUBMITTED has no cancel edge (A4)
@@ -151,14 +209,52 @@ class ExecutionEngine:
         return o
 
     def cancel_all(self, account_id: Optional[str] = None, instrument_id: Optional[str] = None) -> list[Order]:
-        """Cancel every resting order of the account (and instrument), in submission order."""
+        """Cancel every resting order of the account (and instrument), in submission order. An order the venue
+        already cancelled once (and that only came back through a late fill) is not cancelled again."""
+        self.assert_owner()
         if account_id is not None and account_id != self.portfolio.account_id:
-            return []
-        return [self.cancel(o.client_id) for o in list(self._orders.values())
-                if o.status in RESTING and (instrument_id is None or o.instrument_id == instrument_id)]
+            raise UnknownAccount(account_id)
+        return [self.cancel(o.client_id) for o in self._resting(instrument_id)]
+
+    def _resting(self, instrument_id: Optional[str] = None) -> list[Order]:
+        return [o for o in list(self._orders.values()) if o.status in RESTING and o.client_id not in self.cancel_acked
+                and (instrument_id is None or o.instrument_id == instrument_id)]
+
+    def modify(self, client_id: str, *, price: Optional[float] = None, trigger_price: Optional[float] = None,
+               qty: Optional[float] = None) -> Order:
+        """Change price, trigger or total quantity of a resting order. RiskGuard re-checks it; a denial leaves the
+        order unchanged and is journalled as ``order_modify_denied``."""
+        self.assert_owner()
+        o = self._get(client_id)
+        if o.status not in MODIFIABLE:
+            raise ValueError(f"order {client_id} is {o.status.value}; only ACCEPTED or PARTIALLY_FILLED can be modified")
+        if qty is not None and (o.qty is None or qty <= o.filled_qty):
+            raise ValueError(f"qty must exceed the filled {o.filled_qty}; a size_frac order has no qty to change")
+        cand = dataclasses.replace(
+            o, tags=dict(o.tags), price=o.price if price is None else price,
+            trigger_price=o.trigger_price if trigger_price is None else trigger_price,
+            qty=None if o.qty is None else (o.qty if qty is None else qty) - o.filled_qty)
+        ref = self._ref_price(cand)
+        reason, d = MISSING_MARKS, None
+        if ref is not None:
+            marks = {**self.marks}
+            marks.setdefault(o.instrument_id, ref)
+            d = self.risk.check(cand, ref_price=ref, marks=marks, record=False,
+                                committed_reduce_qty=self._committed_reduce(cand, exclude=client_id))
+            reason = "" if d.allowed else d.reason
+        if reason:
+            self._write("order_modify_denied", {"client_id": client_id, "reason": reason,
+                                                "order": dataclasses.replace(o, tags=dict(o.tags)).to_dict()},
+                        self.clock.now_ms())
+            return o
+        new_qty = None if o.qty is None else d.qty + o.filled_qty
+        self.apply(self.broker.modify(client_id, price=d.price if cand.price is not None else None,
+                                      trigger_price=cand.trigger_price, qty=new_qty))
+        return o
 
     def close_position(self, position_id: str, tag: str = "") -> Optional[Order]:
         """A reduce-only market order for the whole position, through RiskGuard like any order (so HALTED denies it)."""
+        self.assert_owner()
         pos = self.portfolio.positions.get(position_id)
         if pos is None or pos.qty <= DUST:
             return None
@@ -172,9 +268,10 @@ class ExecutionEngine:
     def halt(self, reason: str) -> None:
         """RiskGuard to HALTED (denies every new order), then cancel what rests. A failing cancel is logged and
         journalled; it never stops the others."""
+        self.assert_owner()
         self.risk.halt(reason)
         self._write("halt", {"reason": reason}, self.clock.now_ms())
-        for o in [x for x in self._orders.values() if x.status in RESTING]:
+        for o in self._resting():
             try:
                 self.cancel(o.client_id)
             except Exception as exc:  # noqa: BLE001 - a halt must reach every order
@@ -187,6 +284,7 @@ class ExecutionEngine:
             self.apply(ev)
 
     def apply(self, event: Union[Fill, FillEvent, OrderEvent]) -> None:
+        self.assert_owner()
         if isinstance(event, Fill):
             event = FillEvent(event.ts, self.clock.now_ms(), event)
         if isinstance(event, FillEvent):
@@ -199,16 +297,30 @@ class ExecutionEngine:
     def _apply_order_event(self, ev: OrderEvent) -> None:
         o = self._get(ev.order.client_id)
         kind = ev.kind
+        if kind == "modified":
+            if o.status not in MODIFIABLE:
+                raise ValueError(f"order {o.client_id} is {o.status.value}; it cannot be modified")
+            o.price, o.trigger_price = ev.order.price, ev.order.trigger_price
+            if o.qty is not None and ev.order.qty is not None:
+                o.qty = self._reserved[o.client_id] = ev.order.qty
+            self._commit(o, o.status, kind, ev.ts_event)
+            return
         new = _S(kind.upper()) if kind in ("denied", "submitted") else _KIND_STATUS.get(kind)
         if new is None:
             raise ValueError(f"unsupported order event kind {kind!r}")
         check_transition(o.status, new)
         if ev.order.venue_id:
             o.venue_id = ev.order.venue_id
+        if new is _S.ACCEPTED and o.qty is None and ev.order.tags.get("resolved_qty"):
+            self._resolved[o.client_id] = self._reserved[o.client_id] = float(ev.order.tags["resolved_qty"])
+        if new is _S.CANCELED:
+            self.cancel_acked.add(o.client_id)
         self._commit(o, new, kind, ev.ts_event, reason=ev.order.reason)
 
     def _apply_fill(self, ev: FillEvent) -> None:
         f = ev.fill
+        if not f.trade_id:
+            raise ValueError("a fill needs a non-empty trade_id (it is the dedup key)")
         o = self._get(f.client_id)
         if f.trade_id in self._trades:  # a known trade is never applied twice
             log.debug("duplicate fill %s ignored", f.trade_id)
@@ -219,9 +331,10 @@ class ExecutionEngine:
         if o.status is _S.FILLED:
             raise OverfillError(f"fill {f.trade_id} for the already filled order {o.client_id}")
         total = o.filled_qty + f.qty
-        if o.qty is not None and total > o.qty + DUST:
-            raise OverfillError(f"fills of {o.client_id} sum to {total}, above its quantity {o.qty}")
-        done = o.qty is None or total >= o.qty - DUST
+        cap = o.qty if o.qty is not None else self._resolved.get(o.client_id)  # None: a size_frac nobody resolved
+        if cap is not None and total > cap + DUST:
+            raise OverfillError(f"fills of {o.client_id} sum to {total}, above its quantity {cap}")
+        done = cap is None or total >= cap - DUST
         new = _S.FILLED if done else _S.PARTIALLY_FILLED
         check_transition(o.status, new, late_fill=late)  # before anything changes
         before = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
@@ -230,18 +343,14 @@ class ExecutionEngine:
         o.avg_fill_price = (o.avg_fill_price * o.filled_qty + f.price * f.qty) / total
         o.filled_qty = total
         self._commit(o, new, "late_fill" if late else new.value.lower(), f.ts, late=late, extra={"trade_id": f.trade_id})
-        self.bus.publish("fill", ev)
-        self._write("fill", {"fill": f.to_dict()}, f.ts)
+        self._emit("fill", ev, "fill", {"fill": f.to_dict()}, f.ts)
         for pe in pos_events:
-            self.bus.publish("position", pe)
-            self._write("position", {"position": pe.position.to_dict()}, pe.ts_event)
-        pos = self.portfolio.position(o.instrument_id, o.strategy_id)
-        self._replace_bracket(o, pos, before, f)
+            self._emit("position", pe, "position", {"position": pe.position.to_dict()}, pe.ts_event)
+        self._replace_bracket(o, self.portfolio.position(o.instrument_id, o.strategy_id), before, f)
         marks = {**self.marks}
         marks.setdefault(f.instrument_id, f.mid)
         acct = AccountEvent(f.ts, self.clock.now_ms(), self.portfolio.account_state(marks, f.ts))
-        self.bus.publish("account", acct)
-        self._write("account", {"account": acct.account.to_dict()}, f.ts)
+        self._emit("account", acct, "account", {"account": acct.account.to_dict()}, f.ts)
 
     # ------------------------------------------------------------------ internals
     def _get(self, client_id: str) -> Order:
@@ -260,15 +369,20 @@ class ExecutionEngine:
     def _with_reason(o: Order, reason: str) -> Order:
         return dataclasses.replace(o, reason=reason, tags=dict(o.tags))
 
-    def _committed_reduce(self, new: Order) -> float:
-        """Quantity still claimed by the resting reduce orders of the new order's position (A5, RiskGuard)."""
+    def _committed_reduce(self, new: Order, exclude: Optional[str] = None) -> float:
+        """Quantity of the new order's position claimed by resting reduce orders (A5, RiskGuard): of each live
+        opposite-side order of the same instrument and strategy only the part that can reduce the position counts,
+        min(its remaining quantity, the position), and the sum is capped at the position."""
         held = self.portfolio.signed_qty(self.portfolio.position(new.instrument_id, new.strategy_id))
-        if held == 0:
+        cap = abs(held)
+        if cap == 0:
             return 0.0
         opposite = Side.SELL if held > 0 else Side.BUY
-        return sum(max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0) for o in self._orders.values()
-                   if o.status in _LIVE and o.side is opposite and o.instrument_id == new.instrument_id
-                   and o.strategy_id == new.strategy_id)
+        total = sum(min(max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0), cap)
+                    for o in self._orders.values()
+                    if o.status in _LIVE and o.side is opposite and o.instrument_id == new.instrument_id
+                    and o.strategy_id == new.strategy_id and o.client_id != exclude)
+        return min(total, cap)
 
     def _commit(self, o: Order, new: OrderStatus, kind: str, ts_event: int, *, late: bool = False,
                 reason: Optional[str] = None, extra: Optional[dict] = None) -> None:
@@ -277,10 +391,10 @@ class ExecutionEngine:
         if reason:
             o.reason = reason
         snap = dataclasses.replace(o, tags=dict(o.tags))
-        ev = OrderEvent(ts_event, self.clock.now_ms(), kind, snap)
-        self.bus.publish("order", ev)
-        self._write(kind if late else f"order_{kind}", {"from": old.value, "to": new.value, "reason": o.reason,
-                                                       "order": snap.to_dict(), **(extra or {})}, ts_event)
+        self._emit("order", OrderEvent(ts_event, self.clock.now_ms(), kind, snap),
+                   kind if late else f"order_{kind}",
+                   {"from": old.value, "to": new.value, "reason": o.reason, "order": snap.to_dict(), **(extra or {})},
+                   ts_event)
 
     def _replace_bracket(self, o: Order, pos: Any, before: float, f: Fill) -> None:
         """A5.3: a fill that opens or enlarges the position replaces its bracket with the order's (last fill wins; no
@@ -294,5 +408,26 @@ class ExecutionEngine:
         self._write("bracket", {"position_id": pos.position_id, "old": old, "new": dict(o.bracket),
                                 "client_id": o.client_id}, f.ts)
 
+    def _emit(self, topic: str, event: Any, kind: str, payload: dict, ts_event: int) -> None:
+        self._write(kind, payload, ts_event)  # journal first: a crash in a handler loses no record
+        try:
+            self.bus.publish(topic, event)
+        except Exception as exc:  # noqa: BLE001 - a subscriber must not break the engine
+            log.exception("subscriber of %r raised", topic)
+            self._record_error(exc)
+
     def _write(self, kind: str, payload: dict, ts_event: int) -> None:
-        self._journal(kind, {"ts_event": ts_event, "ts_init": self.clock.now_ms(), **payload})
+        self._pending.append((kind, {"ts_event": ts_event, "ts_init": self.clock.now_ms(), **payload}))
+        while self._pending:  # earlier failed records go first, in order
+            try:
+                self._journal(*self._pending[0])
+            except Exception as exc:  # noqa: BLE001 - the state change stands; the record is retried
+                log.exception("journal sink failed on %s", self._pending[0][0])
+                self.journal_failures += 1
+                self._record_error(exc)
+                return
+            self._pending.popleft()
+
+    def _record_error(self, exc: BaseException) -> None:
+        self.handler_errors.append(exc)
+        del self.handler_errors[:-100]

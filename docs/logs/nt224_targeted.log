@@ -12,3 +12,11 @@ $ ruff check src tests scripts
 All checks passed!
 
 mutation checks (each run with -x on tests/desk/test_execution.py, each KILLED): drop edge ACCEPTED->FILLED; apply duplicate trade_id; skip journal; broker call on denial; forget committed_reduce_qty; wrong event order.
+
+== repair round 1; merged origin/remediation/plan; head before commit: 0daf0508d9c07e6066e644d735b3cb3ab9e65532
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+619 passed, 101 warnings in 146.45s (0:02:26)
+$ ruff check src tests scripts
+All checks passed!
+repair mutations (all KILLED except an equivalent one): publish before journal; subscriber exception propagates; failed journal record dropped; broker exception propagates; committed ignores strategy_id; duplicate client id content ignored; cancel_all re-cancels acked; modify does not exclude itself; resolved_qty ignored; owner guard off; empty trade_id accepted. SURVIVED (equivalent): per-order cap in committed, since min(sum(min(x,cap)),cap) == min(sum(x),cap).
