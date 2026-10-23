@@ -134,3 +134,50 @@ def test_export_keeps_an_existing_file_unless_asked(tmp_path, market):
         _export(market, home, "x")
     assert Path(first["path"]).read_bytes() == before
     assert _export(market, home, "x", overwrite=True)["rows"] == 3000
+
+
+_DEVICE_STEMS = ["CON", "PRN", "AUX", "NUL"] + [f"{p}{d}" for p in ("COM", "LPT") for d in "123456789\u00b9\u00b2\u00b3"]
+_SPELLINGS = ["{s}", "{s}.csv", "{l}", "{l}.csv", "{t}.txt", "{s}.", "{s} .csv", "{s}.tar.csv"]
+
+
+@pytest.mark.parametrize("stem", _DEVICE_STEMS)
+def test_reserved_device_names_are_refused_in_every_spelling_before_any_filesystem_access(tmp_path, market, stem,
+                                                                                         monkeypatch):
+    home = tmp_path / "home"
+    touched = []
+    real_exists = Path.exists
+    monkeypatch.setattr(Path, "exists", lambda self, *a, **k: touched.append(self) or real_exists(self, *a, **k))
+    monkeypatch.setattr(market, "export_csv", lambda *a, **k: touched.append("export_csv"))
+    for spelling in _SPELLINGS:
+        name = spelling.format(s=stem, l=stem.lower(), t=stem.title())
+        with pytest.raises(DatasetError):
+            _export(market, home, name)
+        with pytest.raises(DatasetError):
+            _export(market, home, name, overwrite=True)
+    assert touched == [] and not home.exists()
+    assert all(p.name.startswith("market.sqlite") for p in tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("name", ["NUL", "nul.csv", "Aux.txt", "COM1", "lpt9.csv", "con.", "CON .csv"])
+def test_the_named_reserved_spellings_raise_dataset_error(tmp_path, market, name):
+    with pytest.raises(DatasetError, match="reserved"):
+        _export(market, tmp_path / "home", name)
+
+
+@pytest.mark.parametrize("name", ["console", "com10", "com0", "nullable.csv", "lpt", "auxiliary", "my.con", "x.nul.csv"])
+def test_names_that_only_resemble_device_names_are_still_exported(tmp_path, market, name):
+    assert _export(market, tmp_path / "home", name)["rows"] == 3000
+
+
+def test_a_size_only_change_invalidates_the_cache(tmp_path, synthetic_bars):
+    csv = _bars_csv(tmp_path / "bars.csv", synthetic_bars)
+    old = csv.stat()
+    compute_fingerprint(csv)
+    small = old.st_size - 1
+    [row] = list_datasets(root=tmp_path, home=tmp_path / "h", sync_limit_bytes=small)
+    assert row["fingerprint_pending"] is False
+    _bars_csv(csv, synthetic_bars, n=299)
+    os.utime(csv, ns=(old.st_atime_ns, old.st_mtime_ns))                     # the original mtime, a different size
+    assert csv.stat().st_mtime_ns == old.st_mtime_ns and csv.stat().st_size != old.st_size
+    [row] = list_datasets(root=tmp_path, home=tmp_path / "h", sync_limit_bytes=csv.stat().st_size - 1)
+    assert row["fingerprint_pending"] is True
