@@ -1,0 +1,4 @@
+base sha: 04b0f4e109b031d3b950d8cd94b6f96aa33e70f4
+cmd: C:/Users/Step/miniforge3/envs/nt/python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4 ; C:/Users/Step/miniforge3/envs/nt/python -m ruff check src tests scripts
+result: 400 passed in 180.88s (before two unused-import fixes in test_risk.py; test_risk.py 29 passed after)
+ruff: All checks passed (after fix)
