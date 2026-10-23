@@ -256,7 +256,7 @@ changes).
 | [NT-221](#nt-221) | P1 | feature | implementer | done | DESK-0.8: Importers and CLI |
 | [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
 | [NT-223](#nt-223) | P1 | feature | implementer | done | DESK-1.2: Risk guard |
-| [NT-224](#nt-224) | P1 | feature | implementer | todo | DESK-1.3: Execution engine |
+| [NT-224](#nt-224) | P1 | feature | implementer | done | DESK-1.3: Execution engine |
 | [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
 | [NT-226](#nt-226) | P1 | feature | implementer | done | DESK-1.5: Data sources |
 | [NT-227](#nt-227) | P1 | feature | implementer | todo | DESK-1.6: Strategy API and built-ins |
@@ -3036,7 +3036,7 @@ changes).
 
 **DESK-1.3: Execution engine: `desk/core/execution.py` (commands -> RiskGuard -> Broker; events -> state machine -> Portfolio -> bus; idempotent client ids; overfill check)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged bfb3dc84; implementer Sonnet 5.5 medium 23c6be2, repair 1 dd5b05d (Sonnet), repair 2 1fb9059 (escalated: Opus 5.5 medium); QA Opus medium: FAIL x2 (crash ordering and broker/late-fill states; then a cancel-acked order blocked closing the position), qa-deep high: PASS on 34e84eb: 200 seeds x 400 steps x margin/spot x PAPER/BACKTEST with journal replay equal to the live engine, 12 of 14 own mutants killed (2 equivalent). Size 537 + 849 lines exceeds L: process note. Follow-ups merged into NT-295.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/core/execution.py`, `tests/desk/test_execution.py`
@@ -3959,6 +3959,7 @@ changes).
 - **why:** lead's decisions: (1) the engine computes `committed_open_notional` from its live OPENING orders (not reduce orders) as notional x (1 + taker_or_maker_fee + slip), the QA showed that fees and slip of resting orders are otherwise not reserved (cash short by up to committed x (fee + slip)), and passes it to `RiskGuard.check`; (2) `committed_open_notional` is an account total but max-position is per position: add a second optional keyword `committed_position_notional` (the live opening notional of the same strategy and instrument) used by max-position only; the engine passes both; the account total stays for cash and the gross cap (over-strict reading removed); (3) a stop buy can gap above its trigger (`stop_fill` fills at max(trigger, open)): the binding check at the fill (CONTRACTS A5.1: RiskGuard checks at submit on an estimate and at the fill on the resolved quantity) must exist: the engine re-runs RiskGuard.check(record=False) with the fill price for orders whose fill price differs from the checked price by more than the tolerance, and the SimBroker (NT-225) rejects or clips with the reason; define the minimal behaviour (REJECT the fill as `fill_price_check_failed` for an explicit-qty stop; clip size_frac) in CONTRACTS A5.1 first (lead edits), then implement; (4) P3 from QA: with `size_increment` 0 a size_frac order is denied instead of clipped when cash / unit rounds up; add the test that kills the step-down-with-committed mutant.
 - **acceptance:** each point with a test that fails on its mutant; qa checks with its own numbers; existing tests unchanged in meaning.
 - **source:** QA of NT-293 (2026-10-16)
+- **note (lead, 2026-10-16):** also from the qa-deep of NT-224 (the engine is merged): (a) `submit` sends an unrounded trigger_price (STOP_LIMIT at tick 0.01 sends price 100.0 but trigger 100.004): round it in submit as modify does; (b) journal overflow gaps: wrap `on_overflow`/RiskGuard.halt in try/except so a fill is never left half-written, re-assert the halt while pending is above the limit (the engine stayed ACTIVE after outage-halt-resume-outage), journal the `journal_unavailable` halt itself; (c) re-entrancy: a bus subscriber that calls `engine.apply` during a publish reorders the journal (fill b journalled before fill a): the engine must refuse re-entrant mutation with a clear error (a `_publishing` flag) or queue commands issued from handlers until the publish ends (choose queueing; DESK-1.7 relies on it); (d) `_IDENTITY` lacks tif, bot_id, account_id; (e) a single `cancel()` broker failure should be journalled and wrapped in BrokerError like modify; (f) a late fill that flips a position (margin) or breaks the spot balance (the Portfolio raises OverfillError and nothing is journalled): journal a `late_fill_refused` / `late_fill_flip` record and halt via RiskGuard; engine/UI code must use `engine.is_live` / `open_orders()`, never `order.is_closed`; (g) the 2nd and later late fills are journalled `order_partially_filled`, not `late_fill`.
 
 ## Done log
 
