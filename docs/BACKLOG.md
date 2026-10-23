@@ -322,7 +322,7 @@ changes).
 | [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
 | [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
 | [NT-289](#nt-289) | P1 | feature | implementer | todo | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
-| [NT-290](#nt-290) | P2 | bug | implementer | todo | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
+| [NT-290](#nt-290) | P2 | bug | implementer | done | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
 | [NT-291](#nt-291) | P1 | infra | implementer | done | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
 
 ## Items
@@ -3887,7 +3887,7 @@ changes).
 
 **Lab datasets: reserved Windows device names and a size-only cache test (QA of NT-263)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after lead verification of 59d766b: 64 dataset tests pass; the 31 reserved names in 8 spellings, trailing dots and spaces and the superscript variants are refused before any filesystem call, which I re-checked with 8 names; two mutants fail the new tests)
 - **priority / type / role:** P2 / bug / implementer
 - **area:** `src/neural_trade/desk/lab/datasets.py`, `tests/desk/test_lab_datasets.py`
 - **depends on:** NT-263 (done)
