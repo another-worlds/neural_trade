@@ -1,0 +1,9 @@
+base: 15daf7992dacf2217084a6b3dab59cc73f25f111
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+570 passed, 101 warnings in 200.47s (0:03:20)
+$ ruff check src tests scripts
+All checks passed!
+mutants: p1 no slip, p2 silent zero costs, p3 cap off, p3 auto-on-backtest, p4 no exemption, p4 exempt all reductions, p5 snap with claim, p5 no deny, p6 no spot frac clip, p7 bool as number: all 10 KILLED by the test_292_* tests

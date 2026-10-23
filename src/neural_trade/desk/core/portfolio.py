@@ -144,6 +144,10 @@ class Portfolio:
         """Signed quantity of an instrument over all its positions (the spot base balance)."""
         return sum(self.signed_qty(p) for p in self.positions.values() if p.instrument_id == instrument_id)
 
+    def gross_exposure(self, marks: Mapping[str, float]) -> float:
+        """Sum of |quantity| x mark over every open position (positions of different strategies do not net)."""
+        return sum(p.qty * marks[p.instrument_id] for p in self.positions.values() if p.qty > 0)
+
     # ------------------------------------------------------------------ fills
     def apply_fill(self, fill: Fill, *, strategy_id: Optional[str] = None) -> list[PositionEvent]:
         """Apply a fill to cash and to the NETTING position. Returns one ``PositionEvent`` (position snapshot) per

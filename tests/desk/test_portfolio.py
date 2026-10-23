@@ -430,3 +430,13 @@ def test_realised_equity_is_cash_plus_signed_qty_times_avg_price():
     p3 = pf()
     p3.apply_fill(fill(1, 10, 100.0, cost=C10, ts=1))  # costs paid reduce it: slip 3 bps x 1000 + fee 10 bps x 1000
     assert p3.realised_equity() == pytest.approx(10_000.0 - 0.3 - 1.0)
+
+
+def test_nt292_gross_exposure_sums_absolute_positions_without_netting_across_strategies():
+    p = pf(cash=100_000.0)
+    assert p.gross_exposure({X: 100.0}) == 0.0
+    p.apply_fill(fill(1, 10, 100.0, ts=1), strategy_id="a")
+    p.apply_fill(fill(-1, 5, 100.0, ts=2), strategy_id="b")  # a short on a margin account: |-5| counts
+    assert p.gross_exposure({X: 110.0}) == 10 * 110.0 + 5 * 110.0  # 1650: the long and the short do not net
+    p.apply_fill(fill(-1, 10, 100.0, ts=3), strategy_id="a")  # closed: no longer counts
+    assert p.gross_exposure({X: 110.0}) == 550.0

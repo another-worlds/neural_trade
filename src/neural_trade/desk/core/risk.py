@@ -28,6 +28,9 @@ DAY_MS = 86_400_000
 WINDOW_MS = 60_000
 
 
+GROSS_AUTO = "auto"
+
+
 class TradingState(str, Enum):
     ACTIVE = "ACTIVE"
     REDUCING = "REDUCING"  # only orders that reduce an open position
@@ -49,6 +52,7 @@ MAX_ORDER_NOTIONAL = "max_order_notional"
 MAX_POSITION = "max_position"
 MAX_ORDERS_PER_MINUTE = "max_orders_per_minute"
 DAILY_LOSS_LIMIT = "daily_loss_limit"
+MAX_GROSS_EXPOSURE = "max_gross_exposure"
 MISSING_MARKS = "missing_marks"
 INSUFFICIENT_CASH = "insufficient_cash"
 SPOT_SELL_EXCEEDS_BALANCE = "spot_sell_exceeds_balance"
@@ -66,10 +70,13 @@ class RiskLimits:
     max_position_notional: Optional[float] = 5_000.0  # |position after the order| x price, per position_id
     max_orders_per_minute: Optional[int] = 30  # sliding 60 s window on the Clock
     daily_loss_limit: Optional[float] = 500.0  # equity fall since the UTC day's first mark; reached at >=
+    # NT-292: account-level cap on the sum of |position| x mark over every position, as a fraction of REALISED equity.
+    # GROSS_AUTO: 1.0 on PAPER and LIVE accounts, off on BACKTEST (as before); None: off; a number: that cap.
+    max_gross_exposure_frac: Optional[float | str] = GROSS_AUTO
 
     @classmethod
     def unlimited(cls) -> "RiskLimits":
-        return cls(None, None, None, None)
+        return cls(None, None, None, None, None)
 
 
 @dataclass(frozen=True)
@@ -105,16 +112,37 @@ def round_nearest(x: float, inc: float) -> float:
 
 class RiskGuard:
     def __init__(self, limits: RiskLimits, instrument: Instrument, portfolio: Portfolio, clock: Clock, *,
-                 costs: CostProfile = RESEARCH_ZERO,
+                 costs: Optional[CostProfile] = None,
                  on_state_change: Optional[Callable[[TradingState, TradingState, str], None]] = None) -> None:
         self.limits, self.instrument, self.portfolio, self._clock = limits, instrument, portfolio, clock
         self._on_state_change = on_state_change
-        self.costs = costs  # the account's cost profile: its fee enters the spot cash check
+        if costs is None:  # NT-292: the zero-cost profile is implied only on a BACKTEST account, never silently
+            if portfolio.kind is not AccountKind.BACKTEST:
+                raise ValueError(f"costs must be given for a {portfolio.kind.value} account "
+                                 "(the implied RESEARCH_ZERO is for BACKTEST only)")
+            costs = RESEARCH_ZERO
+        g = limits.max_gross_exposure_frac
+        if not (g is None or g == GROSS_AUTO or (not isinstance(g, str) and _pos(g))):
+            raise ValueError(f"max_gross_exposure_frac must be None, {GROSS_AUTO!r} or a number > 0, got {g!r}")
+        self.costs = costs  # the account's cost profile: fee and slip enter the spot cash check
         self.state = TradingState.ACTIVE
         self.state_reason = ""
         self._sent: deque[int] = deque()  # ts_ms of recorded orders
         self._day: Optional[int] = None
         self._day_start_equity = 0.0
+
+    @property
+    def cash_check_active(self) -> bool:
+        """True when a spot BUY is checked against cash (PAPER and LIVE accounts, spot instruments)."""
+        return self.instrument.is_spot and self.portfolio.kind is not AccountKind.BACKTEST
+
+    @property
+    def gross_exposure_cap_frac(self) -> Optional[float]:
+        """The effective cap (fraction of realised equity) on the account's gross exposure, or None when off."""
+        g = self.limits.max_gross_exposure_frac
+        if g == GROSS_AUTO:
+            return None if self.portfolio.kind is AccountKind.BACKTEST else 1.0
+        return g  # type: ignore[return-value]
 
     # ------------------------------------------------------------------ state
     def _set(self, new: TradingState, reason: str) -> None:
@@ -178,21 +206,25 @@ class RiskGuard:
         in ACTIVE is not a reduction and keeps its meaning (it is clipped only under reduce_only, REDUCING or the
         loss limit, like before, now to the same capacity).
 
-        Closing: when ``reduce_only`` or the order asks for at least the whole position, and flooring to the size
-        step would leave a remainder below ``min_qty`` (an unsellable dust), the whole position is submitted,
-        unrounded. Opening orders still floor.
+        Closing: when no resting reduce order claims the position (``committed_reduce_qty`` 0) and ``reduce_only`` or the
+        order asks for at least the whole position, and flooring to the size step would leave a remainder below
+        ``min_qty`` (an unsellable dust), the whole position is submitted, unrounded. With a claim the quantity
+        stays on the size step; when the capacity is below one step the order is denied ``reduce_exceeds_position``.
+        A closing order of the WHOLE position is exempt from ``min_qty`` and ``min_notional`` (NT-292). A spot
+        ``size_frac`` SELL of a long is clipped to the holding. Opening orders still floor.
 
         Risk reduction stays possible: an order that only reduces its position (after clipping to it) is exempt from
         ``max_order_notional``, the position and daily-loss limits and the per-minute rate limit and takes no rate
         slot; it is still subject to HALTED, ``invalid_order``, rounding, min/max quantity and min notional.
         Opening orders keep every limit. While the daily loss limit is reached, a flipping order is clipped to the
         position like in REDUCING. Cash check (spot BUY, PAPER and
-        LIVE accounts only; BACKTEST accounts have none, for parity with strategy/backtest.py, which lets costs push
-        cash slightly below zero; margin instruments have none): the fee is the cost profile's taker fee for market
-        and stop orders, the maker fee for LIMIT, at the order's price. An explicit ``qty`` above cash plus fee is
-        denied ``insufficient_cash``; a ``size_frac`` order is CLIPPED to ``cash / (price x (1 + fee))`` floored to
+        LIVE accounts only, ``cash_check_active``; BACKTEST accounts have none, for parity with strategy/backtest.py, which lets costs push
+        cash slightly below zero; margin instruments have none): the cost is the profile's taker fee for market
+        and stop orders, the maker fee for LIMIT, plus its slip rate (half spread + slippage), at the order's price. An explicit ``qty`` above cash plus costs is
+        denied ``insufficient_cash``; a ``size_frac`` order is CLIPPED to ``cash / (price x (1 + fee + slip))`` floored to
         the size step (reason ``clipped_to_cash``), denied ``insufficient_cash`` if that is below min_qty.
-        A closing order for a position below ``min_qty`` is allowed unrounded (dust must be closable)."""
+        Gross exposure (``RiskLimits.max_gross_exposure_frac``): an order that raises the sum of |position| x mark over
+        the account above the cap x realised equity is denied ``max_gross_exposure``; reductions are exempt."""
         ins, lim = self.instrument, self.limits
         if self.state is TradingState.HALTED:
             return _deny(HALTED)
@@ -206,7 +238,7 @@ class RiskGuard:
         self.update(marks, day_start_equity=day_start_equity)
         sign = 1 if order.side is Side.BUY else -1
         committed = committed_reduce_qty
-        if not (isinstance(committed, (int, float)) and math.isfinite(committed) and committed >= 0):
+        if not (_num(committed) and math.isfinite(committed) and committed >= 0):
             return _deny(INVALID_ORDER)
 
         # price: rounded to the tick; a market order trades at ref_price
@@ -238,9 +270,11 @@ class RiskGuard:
         # quantity: a size_frac order resolves on REALISED equity (A5.1/A5.9: cash + signed qty x avg price)
         if order.qty is not None:
             qty = order.qty
+            if not _num(qty):
+                return _deny(INVALID_ORDER)
         else:
             frac = order.size_frac
-            if frac is None or not math.isfinite(frac):
+            if frac is None or not _num(frac) or not math.isfinite(frac):
                 return _deny(INVALID_ORDER)
             qty = min(max(frac, 0.0), 1.0) * self.portfolio.realised_equity() / price
         if not (math.isfinite(qty) and qty > 0):
@@ -252,32 +286,42 @@ class RiskGuard:
         held = self.portfolio.signed_qty(pos)
         reducing = held * sign < 0
         loss_hit = lim.daily_loss_limit is not None and self.day_loss(marks) >= lim.daily_loss_limit
-        clipped = clipped_cash = dust_close = False
+        clipped = clipped_cash = False
 
         limited = order.reduce_only or self.state is TradingState.REDUCING or loss_hit
         if limited and not reducing:
             if order.reduce_only:
                 return _deny(REDUCE_ONLY_VIOLATION)
             return _deny(REDUCING_ONLY if self.state is TradingState.REDUCING else DAILY_LOSS_LIMIT)
-        if reducing and (limited or qty <= abs(held) + DUST):  # a reduction, or a flip that must be clipped
+        # NT-292: a spot size_frac SELL of a long is "this fraction of the account", so it is clipped to the holding
+        spot_frac_exit = reducing and order.qty is None and ins.is_spot
+        if reducing and (limited or spot_frac_exit or qty <= abs(held) + DUST):  # a reduction, or a flip to clip
             cap = abs(held) - committed  # what no resting reduce order has claimed yet
             if cap <= DUST:
                 return _deny(REDUCE_EXCEEDS_POSITION)
             if qty > cap + DUST:
                 qty, clipped = round_down(cap, ins.size_increment), True
-            if (order.reduce_only or raw >= cap - DUST) and DUST < cap - qty < ins.min_qty:
-                qty = cap  # closing: do not leave an unsellable remainder
-                dust_close = cap < ins.min_qty  # the whole position is dust: closable, whatever the minimums
+                if qty <= 0 and committed > DUST:  # nothing sellable is left at the size step (committed 9.9995 of 10)
+                    return _deny(REDUCE_EXCEEDS_POSITION)
+            # closing the WHOLE position (no resting reduce order claims any of it): do not leave an unsellable
+            # remainder. With a claim (committed > 0) the quantity stays on the size step (NT-292).
+            if (committed <= DUST and (order.reduce_only or raw >= cap - DUST)
+                    and DUST < cap - qty < ins.min_qty):
+                qty = cap
         if qty <= 0:
             return _deny(QTY_ROUNDS_TO_ZERO)
         pure_reduce = reducing and qty <= abs(held) + DUST
+        # a closing order of the whole position is exempt from min_qty and min_notional (NT-292: a 5 USDT
+        # position under min_notional 10 must be closable)
+        closes_whole = pure_reduce and committed <= DUST and qty >= abs(held) - DUST
 
-        cash_checked = ins.is_spot and sign > 0 and not pure_reduce and self.portfolio.kind is not AccountKind.BACKTEST
+        cash_checked = self.cash_check_active and sign > 0 and not pure_reduce
         if cash_checked:
             liq = Liquidity.MAKER if order.type is OrderType.LIMIT else Liquidity.TAKER
-            if order.qty is None and qty * price * (1 + self.costs.fee_rate(liq)) > self.portfolio.cash:
-                # a size_frac order is "this fraction of what the account has": clip to what is affordable with fees
-                qty = round_down(self.portfolio.cash / (price * (1 + self.costs.fee_rate(liq))), ins.size_increment)
+            unit = price * (1 + self.costs.fee_rate(liq) + self.costs.slip_rate)  # NT-292: slip is paid too
+            if order.qty is None and qty * unit > self.portfolio.cash:
+                # a size_frac order is "this fraction of what the account has": clip to what is affordable with costs
+                qty = round_down(self.portfolio.cash / unit, ins.size_increment)
                 clipped_cash = True
                 if qty <= 0 or qty < ins.min_qty:
                     return _deny(INSUFFICIENT_CASH)
@@ -288,15 +332,15 @@ class RiskGuard:
             if qty > held + DUST:  # covered by another strategy's long, but this one has no long of its own
                 return _deny(SPOT_SHORT_NO_OWN_LONG)
 
-        if qty < ins.min_qty and not dust_close:
+        if qty < ins.min_qty and not closes_whole:
             return _deny(MIN_QTY)
         if ins.max_qty is not None and qty > ins.max_qty:
             return _deny(MAX_QTY)
         notional = qty * (price if pure_reduce else val_price)
-        if notional < ins.min_notional and not dust_close:
+        if notional < ins.min_notional and not closes_whole:
             return _deny(MIN_NOTIONAL)
         if not pure_reduce:
-            if cash_checked and qty * price * (1 + self.costs.fee_rate(liq)) > self.portfolio.cash:
+            if cash_checked and qty * unit > self.portfolio.cash:
                 return _deny(INSUFFICIENT_CASH)
             if lim.max_order_notional is not None and notional > lim.max_order_notional:
                 return _deny(MAX_ORDER_NOTIONAL)
@@ -304,6 +348,12 @@ class RiskGuard:
             if (lim.max_position_notional is not None and abs(after) > abs(held)
                     and abs(after) * val_price > lim.max_position_notional):
                 return _deny(MAX_POSITION)
+            cap_frac = self.gross_exposure_cap_frac
+            if cap_frac is not None and abs(after) > abs(held):  # the order raises the account's gross exposure
+                gross = self.portfolio.gross_exposure(marks) + (abs(after) - abs(held)) * val_price
+                limit = cap_frac * self.portfolio.realised_equity()
+                if limit <= 0 or gross > limit * (1 + 1e-9):
+                    return _deny(MAX_GROSS_EXPOSURE)
         now = self._clock.now_ms()
         if lim.max_orders_per_minute is not None and not pure_reduce:
             while self._sent and self._sent[0] <= now - WINDOW_MS:  # 60 s old or older leaves the window
@@ -325,7 +375,7 @@ class RiskGuard:
             v = br.get(key)
             if v is None:
                 continue
-            if not isinstance(v, (int, float)) or not math.isfinite(v):
+            if not _num(v) or not math.isfinite(v):
                 return None
             lv = entry + v if offset else v
             if not math.isfinite(lv) or lv <= 0 or (lv <= entry if up else lv >= entry):
@@ -334,8 +384,13 @@ class RiskGuard:
         return out
 
 
+def _num(x: object) -> bool:
+    """A real number; True / False are ints in Python but never a quantity, price or offset (NT-292)."""
+    return isinstance(x, (int, float)) and not isinstance(x, bool)
+
+
 def _pos(x: object) -> bool:
-    return isinstance(x, (int, float)) and math.isfinite(x) and x > 0
+    return _num(x) and math.isfinite(x) and x > 0  # type: ignore[arg-type]
 
 
-__all__ = ["RiskGuard", "RiskLimits", "RiskDecision", "TradingState", "round_down", "round_nearest"]
+__all__ = ["RiskGuard", "RiskLimits", "RiskDecision", "TradingState", "GROSS_AUTO", "round_down", "round_nearest"]

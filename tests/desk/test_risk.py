@@ -33,11 +33,11 @@ def order(side="BUY", qty=1.0, type="MARKET", price=None, strategy="s", **kw):
                  type=type, qty=qty, price=price, **kw)
 
 
-def make(limits=None, ins=None, cash=10_000.0, **pkw):
+def make(limits=None, ins=None, cash=10_000.0, costs=None, **pkw):
     clock = SimClock(T0)
     ins = ins or inst()
     pf = Portfolio("acc", initial_cash=cash, allow_short=not ins.is_spot, clock=clock, **pkw)
-    return RiskGuard(limits or RiskLimits.unlimited(), ins, pf, clock), pf, clock
+    return RiskGuard(limits or RiskLimits.unlimited(), ins, pf, clock, costs=costs), pf, clock
 
 
 def hold(pf, side, qty, price, strategy="s"):
@@ -369,7 +369,7 @@ def test_f2_halted_and_rounding_still_apply_to_exits():
 
 
 def test_f3_size_frac_uses_realised_cash_not_marked_equity():
-    g, pf, _ = make(cash=15_000.0, ins=inst(max_qty=None), kind="PAPER")
+    g, pf, _ = make(cash=15_000.0, ins=inst(max_qty=None), kind="PAPER", costs=RESEARCH_ZERO)  # NT-292: explicit costs
     hold(pf, "BUY", 50.0, 200.0)  # cash 5000
     assert pf.cash == 5000.0
     # NT-289 (CONTRACTS A5.1/A5.9, lead's decision 2026-10-16): size_frac resolves on REALISED equity = cash +
@@ -454,7 +454,7 @@ def test_c_day_start_equity_restores_the_opening_equity_after_a_restart():
 
 
 def test_d_spot_buy_above_available_cash_is_denied():
-    g, _, _ = make(cash=1_000.0, ins=inst(max_qty=None), kind="PAPER")
+    g, _, _ = make(cash=1_000.0, ins=inst(max_qty=None), kind="PAPER", costs=RESEARCH_ZERO)  # NT-292: explicit costs
     assert g.check(order(qty=10.0), ref_price=100.0).allowed
     d = g.check(order(qty=10.001), ref_price=100.0)
     assert (d.allowed, d.reason) == (False, "insufficient_cash")
@@ -647,3 +647,166 @@ def test_r0_dust_position_is_closable():
     g2, pf2 = _guard("PAPER", ins=inst(max_qty=None))
     hold(pf2, "BUY", 2.0, 100.0)
     assert g2.check(order("SELL", qty=0.0009, reduce_only=True), ref_price=100.0).reason == "qty_rounds_to_zero"
+
+
+# ---------------------------------------------------------------- NT-292: RiskGuard hardening (QA of NT-289)
+def _paper(costs, ins=None, cash=10_000.0, kind="PAPER", limits=None, allow_short=False):
+    clock = SimClock(T0)
+    pf = Portfolio("acc", kind=kind, initial_cash=cash, allow_short=allow_short, clock=clock)
+    return RiskGuard(limits or RiskLimits.unlimited(), ins or inst(max_qty=None), pf, clock, costs=costs), pf
+
+
+def _gross_limits(frac="auto"):
+    return dataclasses.replace(RiskLimits.unlimited(), max_gross_exposure_frac=frac)
+
+
+def test_292_p1_cash_clip_includes_slippage_and_the_account_never_overdrafts():
+    from neural_trade.desk.core.costs import CostProfile
+    prof = CostProfile(name="p", fee_bps_taker=10.0, slippage_bps=5.0)
+    g, pf = _paper(prof)
+    d = g.check(order(size_frac=1.0), ref_price=100.0)  # 10000 / (100 x 1.0015) = 99.85022 -> 99.850
+    assert (d.allowed, d.qty, d.reason) == (True, 99.85, "clipped_to_cash")  # fee only would give 99.9
+    f = dataclasses.replace(market_fill(100.0, 1, prof, d.qty), instrument_id=X, trade_id="t292")
+    pf.apply_fill(f, strategy_id="s")
+    assert 0.0 <= pf.cash < 0.2  # 10000 - 99.85 x 100.05 - 0.001 x 9985 = 0.1 (a fee-only clip gave -4.985)
+    # an explicit quantity pays the same unit cost: 99.9 x 100 x 1.0015 = 10004.985 > 10000, 99.85 fits
+    g2, _ = _paper(prof)
+    assert g2.check(order(qty=99.9), ref_price=100.0).reason == "insufficient_cash"
+    assert g2.check(order(qty=99.85), ref_price=100.0).allowed
+    # a LIMIT order pays the maker fee and the same slip
+    prof2 = CostProfile(name="p", fee_bps_taker=10.0, fee_bps_maker=2.0, half_spread_bps=1.0, slippage_bps=4.0)
+    g3, _ = _paper(prof2)
+    d = g3.check(order(size_frac=1.0, type="LIMIT", price=100.0), ref_price=100.0)  # 10000 / 100.07 = 99.930
+    assert (d.qty, d.reason) == (99.93, "clipped_to_cash")
+
+
+def test_292_p2_costs_are_implied_only_on_a_backtest_account():
+    from neural_trade.desk.core.costs import BINANCE_SPOT_TAKER
+    clock = SimClock(T0)
+    for kind in ("PAPER", "LIVE"):
+        with pytest.raises(ValueError, match="costs must be given"):
+            RiskGuard(RiskLimits.unlimited(), inst(), Portfolio("acc", kind=kind, clock=clock), clock)
+    bt = RiskGuard(RiskLimits.unlimited(), inst(), Portfolio("acc", clock=clock), clock)
+    assert bt.costs is RESEARCH_ZERO and bt.cash_check_active is False
+    explicit = RiskGuard(RiskLimits.unlimited(), inst(), Portfolio("acc", kind="PAPER", clock=clock), clock,
+                         costs=RESEARCH_ZERO)  # an explicit zero profile on PAPER is a choice, and is allowed
+    assert explicit.cash_check_active is True
+    live = RiskGuard(RiskLimits.unlimited(), inst(), Portfolio("acc", kind="LIVE", clock=clock), clock,
+                     costs=BINANCE_SPOT_TAKER)
+    assert live.cash_check_active is True
+    margin = RiskGuard(RiskLimits.unlimited(), inst(is_spot=False), Portfolio("acc", kind="PAPER", clock=clock),
+                       clock, costs=RESEARCH_ZERO)
+    assert margin.cash_check_active is False
+
+
+def test_292_p3_gross_exposure_cap_denies_a_third_strategy_but_not_reductions():
+    ins = inst(is_spot=False, max_qty=None)
+    g, pf = _paper(RESEARCH_ZERO, ins=ins, limits=_gross_limits(), allow_short=True)
+    hold(pf, "BUY", 100.0, 100.0, strategy="a")
+    hold(pf, "BUY", 100.0, 100.0, strategy="b")  # cash -10000, realised equity 10000, gross 20000
+    assert pf.realised_equity() == 10_000.0
+    d = g.check(order("BUY", qty=1.0, strategy="c"), ref_price=100.0)
+    assert (d.allowed, d.reason) == (False, "max_gross_exposure")
+    assert g.check(order("SELL", qty=1.0, strategy="a"), ref_price=100.0).allowed  # reducing orders pass
+    assert g.check(order("SELL", qty=100.0, strategy="a", reduce_only=True), ref_price=100.0).allowed
+    # BACKTEST: unlimited by default, as before; an explicit cap applies there too
+    gb, pfb = _paper(RESEARCH_ZERO, ins=ins, kind="BACKTEST", limits=_gross_limits(), allow_short=True)
+    hold(pfb, "BUY", 100.0, 100.0, strategy="a")
+    hold(pfb, "BUY", 100.0, 100.0, strategy="b")
+    assert gb.gross_exposure_cap_frac is None
+    assert gb.check(order("BUY", qty=1.0, strategy="c"), ref_price=100.0).allowed
+    gc, pfc = _paper(RESEARCH_ZERO, ins=ins, kind="BACKTEST", limits=_gross_limits(1.0), allow_short=True)
+    hold(pfc, "BUY", 100.0, 100.0)
+    assert gc.check(order("BUY", qty=1.0, strategy="c"), ref_price=100.0).reason == "max_gross_exposure"
+
+
+def test_292_p3_gross_exposure_cap_boundary_and_off_switch():
+    ins = inst(is_spot=False, max_qty=None)
+    g, _ = _paper(RESEARCH_ZERO, ins=ins, limits=_gross_limits(), allow_short=True)
+    assert g.gross_exposure_cap_frac == 1.0
+    assert g.check(order("BUY", qty=100.0), ref_price=100.0).allowed  # exactly 10000 = 1.0 x realised equity
+    assert g.check(order("BUY", qty=100.001), ref_price=100.0).reason == "max_gross_exposure"
+    assert g.check(order("SELL", qty=100.001), ref_price=100.0).reason == "max_gross_exposure"  # a short counts
+    gh, _ = _paper(RESEARCH_ZERO, ins=ins, limits=_gross_limits(0.5), allow_short=True)
+    assert gh.check(order("BUY", qty=50.0), ref_price=100.0).allowed
+    assert gh.check(order("BUY", qty=50.001), ref_price=100.0).reason == "max_gross_exposure"
+    goff, _ = _paper(RESEARCH_ZERO, ins=ins, limits=_gross_limits(None), allow_short=True)
+    assert goff.gross_exposure_cap_frac is None and goff.check(order("BUY", qty=500.0), ref_price=100.0).allowed
+    for bad in (0, -1.0, "x", True, float("nan")):
+        with pytest.raises(ValueError, match="max_gross_exposure_frac"):
+            _paper(RESEARCH_ZERO, limits=_gross_limits(bad))
+    assert RiskLimits.unlimited().max_gross_exposure_frac is None and RiskLimits().max_gross_exposure_frac == "auto"
+
+
+def test_292_p4_the_whole_position_closes_under_min_notional_a_partial_reduce_does_not():
+    g, pf = _paper(RESEARCH_ZERO, kind="BACKTEST")
+    hold(pf, "BUY", 0.05, 100.0)  # notional 5 < min_notional 10, quantity above min_qty 0.001
+    for kw in (dict(qty=0.05, reduce_only=True), dict(qty=0.05), dict(qty=1.0, reduce_only=True)):
+        d = g.check(order("SELL", **kw), ref_price=100.0)
+        assert (d.allowed, d.qty) == (True, 0.05), kw
+    d = g.check(order("SELL", qty=0.04, reduce_only=True), ref_price=100.0)  # a partial reduce keeps min_notional
+    assert (d.allowed, d.reason) == (False, "min_notional")
+    # with a resting reduce order claiming part of it, closing the rest is not closing the whole position
+    d = g.check(order("SELL", qty=0.04, reduce_only=True), ref_price=100.0, committed_reduce_qty=0.01)
+    assert (d.allowed, d.reason) == (False, "min_notional")
+    assert g.check(order("BUY", qty=0.05), ref_price=100.0).reason == "min_notional"  # opening orders keep it
+
+
+def test_292_p5_committed_capacity_is_clipped_to_a_clean_step_or_denied():
+    g, pf = _paper(RESEARCH_ZERO, ins=inst(max_qty=None, min_notional=0), kind="BACKTEST")
+    hold(pf, "BUY", 10.0, 100.0)
+    # committed 9.9995: capacity 0.0005000000000006111 is below one step: denied, not submitted as float noise
+    d = g.check(order("SELL", qty=1.0), ref_price=100.0, committed_reduce_qty=9.9995)
+    assert (d.allowed, d.reason, d.qty) == (False, "reduce_exceeds_position", None)
+    # committed 9.9985: capacity 0.0015000000000000568 -> the clean step value 0.001, no snap to the noisy capacity
+    d = g.check(order("SELL", qty=1.0), ref_price=100.0, committed_reduce_qty=9.9985)
+    assert (d.allowed, d.qty, d.reason) == (True, 0.001, "clipped_to_position")
+    d = g.check(order("SELL", qty=1.0, reduce_only=True), ref_price=100.0, committed_reduce_qty=9.5)
+    assert (d.allowed, d.qty, d.reason) == (True, 0.5, "clipped_to_position")
+    # nothing committed: the sub-min_qty remainder of a whole close is still swept (NT-289 behaviour kept)
+    g2, pf2 = _paper(RESEARCH_ZERO, ins=inst(max_qty=None, min_notional=0), kind="BACKTEST")
+    hold(pf2, "BUY", 0.0015, 100.0)
+    assert g2.check(order("SELL", qty=0.001, reduce_only=True), ref_price=100.0).qty == 0.0015
+
+
+def test_292_p5_a_snapped_close_with_a_claim_is_not_a_whole_position_close():
+    """Kills 'dust close for every snapped close': with 0.0015 committed of 0.0030 the capacity is 0.0015, a
+    reduce_only SELL 0.001 floors to 0.001 and must stay 0.001 (notional 0.1 < min_notional 10: denied), not be
+    widened to the capacity and waved through as a closing order."""
+    g, pf = _paper(RESEARCH_ZERO, kind="BACKTEST")
+    hold(pf, "BUY", 0.003, 100.0)
+    d = g.check(order("SELL", qty=0.001, reduce_only=True), ref_price=100.0, committed_reduce_qty=0.0015)
+    assert (d.allowed, d.reason) == (False, "min_notional")
+    # committed 0.0021: capacity 0.0009 is below one step -> reduce_exceeds_position
+    d = g.check(order("SELL", qty=0.001, reduce_only=True), ref_price=100.0, committed_reduce_qty=0.0021)
+    assert (d.allowed, d.reason) == (False, "reduce_exceeds_position")
+
+
+def test_292_p6_spot_size_frac_exit_is_clipped_to_the_holding():
+    g, pf = _paper(RESEARCH_ZERO, ins=inst(max_qty=None, min_notional=0), kind="BACKTEST")
+    hold(pf, "BUY", 2.0, 100.0)  # realised equity 10000: size_frac 1.0 would be 100 units
+    for fr, want in ((1.0, 2.0), (0.01, 1.0)):  # 1.0 -> clipped to the 2.0 held; 0.01 x 10000 / 100 = 1.0 as asked
+        d = g.check(order("SELL", size_frac=fr), ref_price=100.0)
+        assert (d.allowed, d.qty) == (True, want), fr
+    assert g.check(order("SELL", size_frac=1.0), ref_price=100.0).reason == "clipped_to_position"
+    assert g.check(order("SELL", qty=100.0), ref_price=100.0).reason == "spot_sell_exceeds_balance"  # explicit qty
+    d = g.check(order("SELL", size_frac=1.0, strategy="t"), ref_price=100.0)  # no long of its own
+    assert (d.allowed, d.reason) == (False, "spot_sell_exceeds_balance")
+    hold(pf, "BUY", 5.0, 100.0, strategy="other")
+    assert g.check(order("SELL", size_frac=0.001, strategy="t"), ref_price=100.0).reason == "spot_short_no_own_long"
+    gm, pfm = _paper(RESEARCH_ZERO, ins=inst(is_spot=False, max_qty=None, min_notional=0), kind="BACKTEST",
+                     allow_short=True)
+    hold(pfm, "BUY", 2.0, 100.0)  # margin: a size_frac SELL larger than the long is a flip, not clipped
+    assert gm.check(order("SELL", size_frac=1.0), ref_price=100.0).qty == 100.0
+
+
+def test_292_p7_a_bool_is_never_a_quantity_price_offset_or_claim():
+    g, pf = _paper(RESEARCH_ZERO, kind="BACKTEST")
+    assert g.check(order(qty=True), ref_price=100.0).reason == "invalid_order"
+    assert g.check(order(size_frac=True), ref_price=100.0).reason == "invalid_order"
+    assert g.check(order(), ref_price=True).reason == "invalid_order"
+    assert g.check(order(type="LIMIT", price=True), ref_price=100.0).reason == "invalid_order"
+    assert g.check(order(), ref_price=100.0, committed_reduce_qty=True).reason == "invalid_order"
+    br = dict(take_profit=True, stop_loss=-5.0, tp_is_offset=True)  # True would be an offset of +1
+    assert g.check(order(bracket=br), ref_price=100.0).reason == "invalid_order"
+    assert g.check(order(bracket=dict(take_profit=1.0, stop_loss=-5.0, tp_is_offset=True)), ref_price=100.0).allowed
