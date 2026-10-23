@@ -325,8 +325,9 @@ changes).
 | [NT-290](#nt-290) | P2 | bug | implementer | done | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
 | [NT-291](#nt-291) | P1 | infra | implementer | done | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
 | [NT-292](#nt-292) | P1 | feature | implementer | done | RiskGuard hardening from the QA of NT-289: slippage in the cash clip, no silent BACKTEST/zero-cost defaults, gross exposure cap, dust and closing rules |
-| [NT-293](#nt-293) | P1 | feature | implementer | todo | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
+| [NT-293](#nt-293) | P1 | feature | implementer | done | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
 | [NT-294](#nt-294) | P1 | bug | implementer | todo | EventBus.publish must deliver to every subscriber even when one raises |
+| [NT-295](#nt-295) | P1 | feature | implementer | todo | ExecutionEngine passes committed_open_notional (with fees and slip) and re-checks stop fills; RiskGuard per-position commitment |
 
 ## Items
 
@@ -3057,6 +3058,7 @@ changes).
 - **why:** task DESK-1.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) each A5 rule has a scripted test with expected fill bar and price; (2) same-bar entry-fill then bracket check on that bar (oracle order of operations) tested; (3) no fill ever precedes the order's bar Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** the binding check at the fill for stop fills that gap above the trigger is specified in NT-295 point 3; SimBroker must fill stops at max(trigger, open) per A5.2 and report the fill price so the engine can re-check.
 
 ### NT-226
 
@@ -3926,7 +3928,7 @@ changes).
 
 **RiskGuard follow-ups from the QA of NT-292**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS on 57f26a4: 24,000-case fuzz against exact Fraction arithmetic, worst final cash -4.7e-11 up to 1e6 (about one ULP), 8 of 9 own mutants killed; the survivor (step-down with committed > 0) is safe and noted as P3)
 - **priority / type / role:** P1 / feature / implementer
 - **area:** `src/neural_trade/desk/core/risk.py`, `tests/desk/test_risk.py`
 - **depends on:** NT-292 (done)
@@ -3945,6 +3947,18 @@ changes).
 - **why:** `EventBus.publish` stops at the first raising handler, so a crashing bot or panel handler makes every later subscriber (journal mirrors, UI, alerts) miss that event. NT-224 isolates its own publishes but the bus is shared (alerts, bots, UI, websocket hub). Lead's decision: publish delivers to EVERY subscriber in subscription order; handler exceptions are caught, logged (logging module) and kept in `bus.errors` (bounded, last 100, each with topic, handler repr, exception) and reported to an optional `on_error(topic, handler, exc)` callback given to the constructor; `publish` returns normally. A `strict=True` constructor flag keeps the old fail-fast behaviour for tests. Subscription order, unsubscribe-during-publish snapshot semantics and idempotent unsubscribe stay as they are (tests unchanged in meaning).
 - **acceptance:** tests with literal sequences: handler 2 of 3 raises, handlers 1 and 3 receive the event, errors recorded with topic and exception, on_error called once; the old fail-fast test becomes the `strict=True` test; a handler that unsubscribes itself while raising; a subscriber added during publish does not get the current event; mutation (catch removed) fails; ruff; existing desk tests green (the engine tests in tests/desk/test_execution.py must pass unchanged).
 - **source:** QA of NT-224 (2026-10-16)
+
+### NT-295
+
+**ExecutionEngine integration of the RiskGuard commitments (from the QA of NT-293)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** `src/neural_trade/desk/core/execution.py`, `src/neural_trade/desk/core/risk.py`, `tests/desk/test_execution.py`, `tests/desk/test_risk.py`
+- **depends on:** NT-224, NT-293, NT-294
+- **why:** lead's decisions: (1) the engine computes `committed_open_notional` from its live OPENING orders (not reduce orders) as notional x (1 + taker_or_maker_fee + slip), the QA showed that fees and slip of resting orders are otherwise not reserved (cash short by up to committed x (fee + slip)), and passes it to `RiskGuard.check`; (2) `committed_open_notional` is an account total but max-position is per position: add a second optional keyword `committed_position_notional` (the live opening notional of the same strategy and instrument) used by max-position only; the engine passes both; the account total stays for cash and the gross cap (over-strict reading removed); (3) a stop buy can gap above its trigger (`stop_fill` fills at max(trigger, open)): the binding check at the fill (CONTRACTS A5.1: RiskGuard checks at submit on an estimate and at the fill on the resolved quantity) must exist: the engine re-runs RiskGuard.check(record=False) with the fill price for orders whose fill price differs from the checked price by more than the tolerance, and the SimBroker (NT-225) rejects or clips with the reason; define the minimal behaviour (REJECT the fill as `fill_price_check_failed` for an explicit-qty stop; clip size_frac) in CONTRACTS A5.1 first (lead edits), then implement; (4) P3 from QA: with `size_increment` 0 a size_frac order is denied instead of clipped when cash / unit rounds up; add the test that kills the step-down-with-committed mutant.
+- **acceptance:** each point with a test that fails on its mutant; qa checks with its own numbers; existing tests unchanged in meaning.
+- **source:** QA of NT-293 (2026-10-16)
 
 ## Done log
 
