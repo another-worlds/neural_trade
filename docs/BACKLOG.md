@@ -255,7 +255,7 @@ changes).
 | [NT-220](#nt-220) | P1 | feature | implementer | done | DESK-0.7: Market store |
 | [NT-221](#nt-221) | P1 | feature | implementer | done | DESK-0.8: Importers and CLI |
 | [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
-| [NT-223](#nt-223) | P1 | feature | implementer | todo | DESK-1.2: Risk guard |
+| [NT-223](#nt-223) | P1 | feature | implementer | done | DESK-1.2: Risk guard |
 | [NT-224](#nt-224) | P1 | feature | implementer | todo | DESK-1.3: Execution engine |
 | [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
 | [NT-226](#nt-226) | P1 | feature | implementer | done | DESK-1.5: Data sources |
@@ -321,6 +321,7 @@ changes).
 | [NT-286](#nt-286) | P2 | feature | implementer | done | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
 | [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
 | [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
+| [NT-289](#nt-289) | P1 | feature | implementer | todo | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
 
 ## Items
 
@@ -3016,7 +3017,7 @@ changes).
 
 **DESK-1.2: Risk guard: `desk/core/risk.py` (`RiskLimits`, rounding to `price_increment`/`size_increment`, min/max notional, max position, max orders per minute, daily loss limit, trading state ACTIVE/REDUCING/HALTED, spot no-short)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged 43d64ea6; implementer Sonnet 5.5 medium 235aa23, repair 06ed288; QA Opus 5.5 medium: FAIL round 1 on bypasses (a flip evaded the daily-loss limit; exits blocked by the notional and rate limits; stop and bracket orders not valued at the trigger; size_frac on the wrong equity), repair re-QA'd: PASS on F1, F2, F4; F3 settled by the lead (see CONTRACTS A5.1) and implemented in NT-289. Open items in NT-289.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/core/risk.py`, `tests/desk/test_risk.py`
@@ -3037,6 +3038,7 @@ changes).
 - **why:** task DESK-1.3 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) scripted event sequences (accept, partial, fill, cancel, reject, late fill after cancel) end in the states of the A4 machine; (2) a duplicate `trade_id` is ignored; (3) every state change is journalled with `ts_event` and `ts_init` Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** depends also on NT-289. From the QA of NT-223: the engine passes `committed_reduce_qty` to RiskGuard.check; RiskGuard denies the engine's own TIME/EOW exits when HALTED, which is intended (HALTED denies everything); a user's explicit close goes through the force_reduce path of NT-272.
 
 ### NT-225
 
@@ -3662,6 +3664,7 @@ changes).
 - **why:** task DESK-6.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) without the env var the LIVE account cannot be armed (403); (2) an expired arming denies orders; (3) audit rows for every live command Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** from QA of NT-223 (NT-289 point 7): the kill switch and HALTED deny all orders including bot exits; a manual explicit `force_reduce` close-position command, journalled, may bypass HALTED for reducing orders only; specify it in CONTRACTS before building it.
 
 ### NT-273
 
@@ -3865,6 +3868,18 @@ changes).
 - **why:** (1) the importer lets through what `validate_ohlcv_frame` does not check: an inf high, high below low, off-grid timestamps (00:00:30 at tf=1), conflicting duplicate rows (the last wins silently): refuse or warn with a count; (2) the bar-size check is skipped below 3 bars; (3) two concurrent `desk init` runs can both create a token (use exclusive create); (4) a relative `--home` resolves against the project root, not the cwd (decide and document); (5) `HistoricalSource.history()` returns columns ts,o,h,l,c,v while CONTRACTS `StrategyContext.bars` promises ts,open,high,low,close,volume: decide with DESK-1.6 (rename in the source, or adapt in the context); (6) no test pins the ms-exact close boundary on the causality side (mutation 'close + 2' survives): add the test; (7) the default `--symbol BTC/USDT` would mislabel the long Bitstamp file: the import docs must say to pass `--symbol` and `--provenance`.
 - **acceptance:** each point fixed or decided with a test that fails on its mutant; ruff; existing tests unchanged.
 - **source:** QA of NT-221 and NT-226 (2026-10-16)
+
+### NT-289
+
+**DESK-1.2 completion from the re-QA of NT-223 (must land before DESK-1.3 relies on RiskGuard)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** `src/neural_trade/desk/core/portfolio.py`, `src/neural_trade/desk/core/risk.py`, `tests/desk/test_portfolio.py`, `tests/desk/test_risk.py`
+- **depends on:** NT-223, NT-286 (done)
+- **why:** (1) lead's decision (CONTRACTS A5.1/A5.9 now say so): size_frac resolves on realised equity = `Portfolio.realised_equity()` = cash + sum of signed_qty x avg_price over open positions (equals the oracle's equity_cash when flat; a margin short must not size at 1.5x leverage): add the method to Portfolio, use it in RiskGuard (the binding check) and document it for the SimBroker; the QA cases: another strategy long 25 at 200, cash 5000: BUY size_frac 0.5 = 25 (not 12.5); margin short 25 at 200: size_frac 1.0 = 50 (not 75); (2) mutation M6 survived: add a test that a flip order in ACTIVE keeps the notional and rate limits (only the closing part is exempt); (3) orders waiting to fill are unknown to the guard: 50 separate SELL 10 against a long of 10 are all allowed: add a `committed_reduce_qty` argument to `check` (the ExecutionEngine passes the quantity already committed to open reduce orders of that position) and a test; (4) offset bracket legs get no side check (a BUY with take-profit offset -50 passes): check the sign per CONTRACTS tp_is_offset; (5) clipping to the size step leaves an unsellable remainder below min_qty (0.0015 -> 0.001): report in the decision, clip UP to the whole position when the remainder is below min_qty and the position is being closed (reduce_only or exit), tested; (6) `insufficient_cash` ignores fees: include the fee of the account's cost profile at the order price; (7) NOT decided here, owner-facing for DESK-6.2: HALTED denies the engine's own TIME and EOW exits and bot exits; the kill switch must keep a manual explicit close-position path (a `force_reduce` command that bypasses HALTED for reducing orders only, journalled): note it in NT-272.
+- **acceptance:** each point with a test that fails on its mutant (do the mutation); existing tests for NT-222, NT-286 and NT-223 unchanged in meaning; ruff; qa checks the five QA cases of point 1 with its own numbers.
+- **source:** re-QA of NT-223 (2026-10-16)
 
 ## Done log
 
