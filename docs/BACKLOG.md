@@ -253,12 +253,12 @@ changes).
 | [NT-218](#nt-218) | P1 | feature | implementer | done | DESK-0.5: Cost profiles and pure fill functions |
 | [NT-219](#nt-219) | P1 | feature | implementer | done | DESK-0.6: Desk database |
 | [NT-220](#nt-220) | P1 | feature | implementer | done | DESK-0.7: Market store |
-| [NT-221](#nt-221) | P1 | feature | implementer | todo | DESK-0.8: Importers and CLI |
+| [NT-221](#nt-221) | P1 | feature | implementer | done | DESK-0.8: Importers and CLI |
 | [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
 | [NT-223](#nt-223) | P1 | feature | implementer | todo | DESK-1.2: Risk guard |
 | [NT-224](#nt-224) | P1 | feature | implementer | todo | DESK-1.3: Execution engine |
 | [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
-| [NT-226](#nt-226) | P1 | feature | implementer | todo | DESK-1.5: Data sources |
+| [NT-226](#nt-226) | P1 | feature | implementer | done | DESK-1.5: Data sources |
 | [NT-227](#nt-227) | P1 | feature | implementer | todo | DESK-1.6: Strategy API and built-ins |
 | [NT-228](#nt-228) | P1 | feature | implementer | todo | DESK-1.7: Engine loop and journal |
 | [NT-229](#nt-229) | P1 | feature | implementer | todo | DESK-1.8: Backtest report |
@@ -320,6 +320,7 @@ changes).
 | [NT-285](#nt-285) | P3 | infra | implementer | todo | DESK-0.4/0.5 follow-ups from QA: bracket boundary tests, Alert dataclass, bus exception policy, contract wording |
 | [NT-286](#nt-286) | P2 | feature | implementer | done | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
 | [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
+| [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
 
 ## Items
 
@@ -2989,7 +2990,7 @@ changes).
 
 **DESK-0.8: Importers and CLI: `desk/data/importers.py` (repo CSV import through the neural_trade preprocessors, labelled source), `desk/cli.py` with `init`, `import-csv`, registered as `neural-trade desk` in `cli.py` through a lazy import inside the subparser builder**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged 1624bebe after qa PASS on 72e39de: real CLI import of the bundled CSV 43,500 bars, idempotent; token 256 bits, never overwritten; bad CSV cases exit 2 with nothing written; the long file (4.6M bars) imports in 26 s; 3 of 4 own mutants killed. Follow-ups: NT-288.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-0; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/data/importers.py`, `desk/cli.py`, `src/neural_trade/cli.py` (one subparser hook), `tests/desk/test_importers.py`, `tests/desk/test_cli.py` (lead 2026-10-16, QA of NT-220: also `desk/data/store.py` for provenance only: `sources` is deleted and re-derived on every write, so the provenance text of criterion 4 needs its own column or table that writes do not rebuild; keep the 569-line store otherwise unchanged and its 333 tests green)
@@ -3054,7 +3055,7 @@ changes).
 
 **DESK-1.5: Data sources: `desk/data/sources.py` (`HistoricalSource`, `ReplaySource` with step and seek, `history(n)` as a DataFrame; `seek(ts)` rebuilds the source position and the replay session (3.7) creates a new Engine and SimClock on a backward seek)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged 90929c35 after qa PASS on 40b7a19: own causality checker, 0 mismatches over every position, step 1/2/3/7, seeks, and a trap value never seen early; 900 random ranges equal to read_bars; LiveSource close boundary swept at ms level. Follow-ups: NT-288; LiveSource findings noted in NT-237.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-1; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/data/sources.py`, `tests/desk/test_sources.py`
@@ -3205,6 +3206,7 @@ changes).
 - **why:** task DESK-2.4 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) a bar inserted into the store surfaces exactly once; (2) 5-minute consumers tick only when a 5-minute bar completes Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** QA of NT-226 on the LiveSource written there ahead of this item: (a) at resampled tf it delivers an incomplete bin (minute 9 missing: the 5-minute bin is emitted with the partial close and never re-emitted), contradicting criterion 2 (tick only when a 5-minute bar completes): add the completeness check used by HistoricalSource; (b) a late or out-of-order bin is never delivered; (c) `next_closed_bar` reads without a limit, so a catch-up of 2,000 bars took 202 s (O(N^2)): add a limit; (d) a restart without `after_ts` silently skips bars closed while stopped, and a rewrite of a delivered bar is not surfaced: decide for the bots and the journal; (e) the existing tests do not pin the ms-exact boundary (NT-288 point 6).
 
 ### NT-238
 
@@ -3851,6 +3853,18 @@ changes).
 - **why:** (1) `store.py:164-168` rebuilds `sources` with a GROUP BY over every bar on each write: a 1-bar write on a 1M-bar store takes 0.25 s, and the resample cache re-reads the whole base series after any write (1.43 s at 1M bars); the live collector (DESK-2.3) and LiveSource (2.4) write every few seconds on the long file (about 4M bars): make the `sources` update incremental and invalidate the cache by range; (2) `store.py` calls the private `DeskDb._retry`: move it to a shared helper; (3) the store loads sklearn on first write or export through the preprocessors' imports (note).
 - **acceptance:** a 1-bar write on a 1M-bar store under 50 ms and a cached read after it under 100 ms (numbers in a test with a smaller store and a ratio check); outputs byte-identical to today on the existing tests; the race tests unchanged and green.
 - **source:** QA of NT-220 (2026-10-16)
+
+### NT-288
+
+**DESK-0.8/1.5 follow-ups from QA of NT-221 and NT-226**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** `src/neural_trade/desk/data/{importers,sources}.py`, `src/neural_trade/desk/cli.py`, `tests/desk/test_importers.py`, `tests/desk/test_sources.py`
+- **depends on:** NT-221, NT-226 (done)
+- **why:** (1) the importer lets through what `validate_ohlcv_frame` does not check: an inf high, high below low, off-grid timestamps (00:00:30 at tf=1), conflicting duplicate rows (the last wins silently): refuse or warn with a count; (2) the bar-size check is skipped below 3 bars; (3) two concurrent `desk init` runs can both create a token (use exclusive create); (4) a relative `--home` resolves against the project root, not the cwd (decide and document); (5) `HistoricalSource.history()` returns columns ts,o,h,l,c,v while CONTRACTS `StrategyContext.bars` promises ts,open,high,low,close,volume: decide with DESK-1.6 (rename in the source, or adapt in the context); (6) no test pins the ms-exact close boundary on the causality side (mutation 'close + 2' survives): add the test; (7) the default `--symbol BTC/USDT` would mislabel the long Bitstamp file: the import docs must say to pass `--symbol` and `--provenance`.
+- **acceptance:** each point fixed or decided with a test that fails on its mutant; ruff; existing tests unchanged.
+- **source:** QA of NT-221 and NT-226 (2026-10-16)
 
 ## Done log
 
