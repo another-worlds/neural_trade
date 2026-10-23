@@ -24,6 +24,9 @@ __all__ = ["SYNC_LIMIT_BYTES", "DatasetError", "list_datasets", "compute_fingerp
 SYNC_LIMIT_BYTES = 50 * 1024 * 1024
 _KEY = "lab.fingerprint:"
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
+# Windows device names, refused on every OS so a dataset exported anywhere opens everywhere (NT-290).
+_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL"}
+                      | {f"{p}{d}" for p in ("COM", "LPT") for d in "123456789¹²³"})
 _TIME_COLS = {"timestamp", "datetime", "date", "time", "open_time"}
 _OHLC = {"open", "high", "low", "close"}
 _MEMORY: Dict[str, Any] = {}     # the cache when no desk settings repo is given
@@ -128,6 +131,9 @@ def list_datasets(settings: Any = None, *, root: Optional[Union[str, Path]] = No
 def _target(name: str, home: Optional[Union[str, Path]]) -> Path:
     if not isinstance(name, str) or not name:
         raise DatasetError("a dataset needs a name")
+    # Windows resolves "NUL.csv", "con." and "CON .txt" to the device: the part before the first dot, spaces trimmed
+    if name.split(".", 1)[0].rstrip(" ").upper() in _RESERVED:
+        raise DatasetError(f"bad dataset name {name!r}: a reserved device name")
     base = name[:-4] if name.lower().endswith(".csv") else name
     if not _NAME.match(base) or ".." in base:
         raise DatasetError(f"bad dataset name {name!r}: letters, digits, '.', '_' and '-' only, no path parts")

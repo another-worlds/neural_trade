@@ -1,0 +1,8 @@
+base sha: f690ed0d28a1fb261eccede315a22e48b0b2ee88
+mutations: COM/LPT list cut to COM only -> 10 failed; size removed from cache key -> test_a_size_only_change_invalidates_the_cache failed
+$ pytest -q -p no:cacheprovider tests/desk/test_lab_datasets.py tests/desk/test_import_guard.py tests/test_layering.py tests/test_docs_guides.py -n 4
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+103 passed, 101 warnings in 153.41s (0:02:33)
+$ ruff check src tests scripts
+All checks passed!
