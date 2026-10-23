@@ -287,6 +287,7 @@ class BarForming(_Event):
 class OrderEvent(_Event):
     kind: str
     order: Order
+    resolved_qty: float | None = None  # an "accepted" size_frac order: the quantity the venue resolved it to
 
 
 @dataclass(frozen=True)
