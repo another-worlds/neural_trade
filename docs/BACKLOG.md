@@ -318,7 +318,7 @@ changes).
 | [NT-283](#nt-283) | P3 | feature | implementer | todo | DESK-L.3: Predictor subprocess over a pipe (about 200 lines) if TensorFlow in the server process costs too much memory o |
 | [NT-284](#nt-284) | P3 | infra | implementer | todo | DESK-0.2 follow-ups from QA: loopback-only host guard, error names, hygiene subprocess PYTHONPATH |
 | [NT-285](#nt-285) | P3 | infra | implementer | todo | DESK-0.4/0.5 follow-ups from QA: bracket boundary tests, Alert dataclass, bus exception policy, contract wording |
-| [NT-286](#nt-286) | P2 | feature | implementer | todo | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
+| [NT-286](#nt-286) | P2 | feature | implementer | done | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
 | [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
 
 ## Items
@@ -3832,7 +3832,7 @@ changes).
 
 **DESK-1.1 completion from QA of NT-222 (needed before DESK-1.2 RiskGuard and DESK-1.3 ExecutionEngine)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged a836464d; implementer Sonnet 5.5 medium b0c0d86, 10 own mutants each killed by exactly one new test; lead-verified: 38 portfolio tests pass and the mutation 'account_state calls mark' fails one; no QA agent, P2 completion of a QA-passed module. Open question for DESK-1.2: should RiskGuard refuse a SHORT for a strategy with no long of its own on spot?)
 - **priority / type / role:** P2 / feature / implementer
 - **area:** `src/neural_trade/desk/core/portfolio.py`, `tests/desk/test_portfolio.py`
 - **depends on:** NT-222 (done)
