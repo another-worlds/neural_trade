@@ -224,6 +224,12 @@ class Portfolio:
         return self.cash + sum(self.signed_qty(p) * marks[p.instrument_id] for p in self.positions.values()
                                if p.qty > 0)
 
+    def realised_equity(self) -> float:
+        """cash + signed quantity x avg_price over all open positions (A5.1, A5.9): the base of ``size_frac`` sizing.
+        Equals the oracle's ``equity_cash`` when the account is flat; needs no marks (positions at their average
+        mid), so unrealised P&L does not size orders and a margin short is not sized at 1.5x leverage."""
+        return self.cash + sum(self.signed_qty(p) * p.avg_price for p in self.positions.values() if p.qty > 0)
+
     def _check_marks(self, marks: Mapping[str, float]) -> None:
         for p in self.positions.values():
             if p.qty > 0:

@@ -416,3 +416,17 @@ def test_dust_overshoot_closes_without_flipping(held_side):
     p.apply_fill(fill(held_side, 0.5 + 1e-9, 100.0, ts=4))
     assert p.position(X).side is (PositionSide.LONG if held_side == 1 else PositionSide.SHORT)
     assert p.position(X).qty == pytest.approx(1e-9, abs=1e-15)
+
+
+def test_realised_equity_is_cash_plus_signed_qty_times_avg_price():
+    p = pf()
+    assert p.realised_equity() == 10_000.0  # flat: equals cash
+    p.apply_fill(fill(1, 25, 200.0, ts=1))  # cash 5000, long 25 at 200
+    assert p.cash == 5000.0 and p.realised_equity() == 10_000.0
+    assert p.realised_equity() != p.equity({X: 250.0})  # marks do not size orders
+    p2 = pf()
+    p2.apply_fill(fill(-1, 25, 200.0, ts=1))  # margin short: cash 15000, realised equity 15000 - 25 x 200
+    assert p2.cash == 15_000.0 and p2.realised_equity() == 10_000.0
+    p3 = pf()
+    p3.apply_fill(fill(1, 10, 100.0, cost=C10, ts=1))  # costs paid reduce it: slip 3 bps x 1000 + fee 10 bps x 1000
+    assert p3.realised_equity() == pytest.approx(10_000.0 - 0.3 - 1.0)
