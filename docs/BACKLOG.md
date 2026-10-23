@@ -257,7 +257,7 @@ changes).
 | [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
 | [NT-223](#nt-223) | P1 | feature | implementer | done | DESK-1.2: Risk guard |
 | [NT-224](#nt-224) | P1 | feature | implementer | done | DESK-1.3: Execution engine |
-| [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
+| [NT-225](#nt-225) | P1 | feature | implementer | done | DESK-1.4: Simulated broker |
 | [NT-226](#nt-226) | P1 | feature | implementer | done | DESK-1.5: Data sources |
 | [NT-227](#nt-227) | P1 | feature | implementer | todo | DESK-1.6: Strategy API and built-ins |
 | [NT-228](#nt-228) | P1 | feature | implementer | todo | DESK-1.7: Engine loop and journal |
@@ -328,6 +328,7 @@ changes).
 | [NT-293](#nt-293) | P1 | feature | implementer | done | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
 | [NT-294](#nt-294) | P1 | bug | implementer | done | EventBus.publish must deliver to every subscriber even when one raises |
 | [NT-295](#nt-295) | P1 | feature | implementer | todo | ExecutionEngine passes committed_open_notional (with fees and slip) and re-checks stop fills; RiskGuard per-position commitment |
+| [NT-296](#nt-296) | P1 | feature | implementer | todo | ExecutionEngine.adopt, BarBroker.fill_at_close protocol, tags no longer honoured (CONTRACTS A5 items 15-16) |
 
 ## Items
 
@@ -3050,7 +3051,7 @@ changes).
 
 **DESK-1.4: Simulated broker: `desk/broker/sim.py` (A5 rules on closed bars: next-open market, limit/stop in bar, brackets with tiebreak, `max_hold` TIME, EOW on breaks)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS on b7837b6: own parity fuzz of 800 random series (0 and 10/1/2 bps, gaps, ties, breaks, brackets, size_frac, TIME and EOW) against run_backtest: 0 divergences on 10,168 trades; 10 of 10 own mutants killed; size about 864 lines, one coherent class. Follow-ups: NT-296 and the CONTRACTS A5 items 14-17 written by the lead.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/broker/{base,sim}.py`, `tests/desk/test_sim_broker.py`
@@ -3960,6 +3961,18 @@ changes).
 - **acceptance:** each point with a test that fails on its mutant; qa checks with its own numbers; existing tests unchanged in meaning.
 - **source:** QA of NT-293 (2026-10-16)
 - **note (lead, 2026-10-16):** also from the qa-deep of NT-224 (the engine is merged): (a) `submit` sends an unrounded trigger_price (STOP_LIMIT at tick 0.01 sends price 100.0 but trigger 100.004): round it in submit as modify does; (b) journal overflow gaps: wrap `on_overflow`/RiskGuard.halt in try/except so a fill is never left half-written, re-assert the halt while pending is above the limit (the engine stayed ACTIVE after outage-halt-resume-outage), journal the `journal_unavailable` halt itself; (c) re-entrancy: a bus subscriber that calls `engine.apply` during a publish reorders the journal (fill b journalled before fill a): the engine must refuse re-entrant mutation with a clear error (a `_publishing` flag) or queue commands issued from handlers until the publish ends (choose queueing; DESK-1.7 relies on it); (d) `_IDENTITY` lacks tif, bot_id, account_id; (e) a single `cancel()` broker failure should be journalled and wrapped in BrokerError like modify; (f) a late fill that flips a position (margin) or breaks the spot balance (the Portfolio raises OverfillError and nothing is journalled): journal a `late_fill_refused` / `late_fill_flip` record and halt via RiskGuard; engine/UI code must use `engine.is_live` / `open_orders()`, never `order.is_closed`; (g) the 2nd and later late fills are journalled `order_partially_filled`, not `late_fill`.
+
+### NT-296
+
+**Engine adoption of broker-originated exits and the BarBroker protocol (from the QA of NT-225)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** `src/neural_trade/desk/core/execution.py`, `src/neural_trade/desk/broker/base.py`, `src/neural_trade/desk/broker/sim.py`, `tests/desk/test_execution.py`, `tests/desk/test_sim_broker.py`
+- **depends on:** NT-225, NT-295
+- **why:** CONTRACTS A5 items 14-17 (lead 2026-10-16): (1) `ExecutionEngine.adopt(order)` as item 16 defines it, so the SimBroker's synthetic bracket exits stop raising UnknownOrder and the test harness stops writing into `eng._orders`; (2) `BarBroker` protocol (fill_exits, fill_entries, on_bar_intrabar, sync, fill_at_close) typed in `broker/base.py`, EOW fills requested by the engine through `fill_at_close(order)`; the free-form tag `fill_at='close'` is removed from sim.py (a manual or bot order must not be able to request a close fill) and the tests change accordingly; (3) QA P3s: `_bases` pruned when the position closes; a reducing fill with an equal bracket dict must not overwrite the remainder's offset base; a size_frac resting order filled in the same intrabar call as a bracket exit is sized on equity after that exit.
+- **acceptance:** the 12-bar parity harness in test_sim_broker.py runs through `adopt` with no private access (a test greps the test file for `_orders` to make sure); adopt: tests for each rule of item 16 (HALTED still works, idempotent, refuses non-reduce-only and non-SUBMITTED orders, journals order_adopted, replay of the journal equals the live engine); tags['fill_at'] ignored (test); the 800-series parity fuzz of the QA (D:/nt/nt_qa/nt225_parity.py) still 0 divergences; mutation per point; ruff.
+- **source:** QA of NT-225 (2026-10-16)
 
 ## Done log
 
