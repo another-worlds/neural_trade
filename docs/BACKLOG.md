@@ -297,7 +297,7 @@ changes).
 | [NT-262](#nt-262) | P2 | feature | implementer | todo | DESK-4.11: Smoke suite and the look routine |
 | [NT-263](#nt-263) | P2 | feature | implementer | done | DESK-5.1: Datasets |
 | [NT-264](#nt-264) | P2 | feature | implementer | todo | DESK-5.2: Scenarios |
-| [NT-265](#nt-265) | P2 | feature | implementer | todo | DESK-5.3: Runs |
+| [NT-265](#nt-265) | P2 | feature | implementer | done | DESK-5.3: Runs |
 | [NT-266](#nt-266) | P2 | feature | implementer | todo | DESK-5.4: Figures and theme |
 | [NT-267](#nt-267) | P2 | feature | implementer | todo | DESK-5.5: Leaderboard JSON |
 | [NT-268](#nt-268) | P2 | feature | implementer | todo | DESK-5.6: Model registry and predictions |
@@ -323,7 +323,7 @@ changes).
 | [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
 | [NT-289](#nt-289) | P1 | feature | implementer | todo | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
 | [NT-290](#nt-290) | P2 | bug | implementer | todo | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
-| [NT-291](#nt-291) | P1 | infra | implementer | todo | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
+| [NT-291](#nt-291) | P1 | infra | implementer | done | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
 
 ## Items
 
@@ -3567,7 +3567,7 @@ changes).
 
 **DESK-5.3: Runs: `desk/lab/runs.py` (index rows, scores, run detail from the light files, progress via `longrun`-style readers, servable run list)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged c12ca9bf; implementer Sonnet 5.5 medium ba6dc76 then repair da6adfa; QA Sonnet 5.5 medium: FAIL round 1 (meta-only cells disagreed with longrun's states; a half-written meta.json made a run vanish; `import neural_trade.notebook.longrun` loaded TensorFlow, fixed by NT-291); repair lead-verified; the guard test tests/desk/test_import_guard.py now imports every desk module outside api/ui/exchange in one interpreter. Private longrun helpers used: coupling noted in the module docstring.)
 - **priority / type / role:** P2 / feature / implementer
 - **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** file, tests on `tests/fixtures` run dirs
@@ -3899,7 +3899,7 @@ changes).
 
 **Lazy `neural_trade.notebook` package: importing a submodule such as `longrun` must not load TensorFlow or pandas**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged a0b74dc0; implementer Sonnet 5.5 medium 26d529c; lead-verified: PEP 562 lazy exports, 553 targeted tests passed incl. the notebook and control-panel suites, the eager-import mutant fails the new tests; pandas, TensorFlow and ipywidgets no longer load for `import neural_trade.notebook.longrun`).
 - **priority / type / role:** P1 / infra / implementer
 - **area:** `src/neural_trade/notebook/__init__.py`, `tests/test_notebook_lazy_import.py` (new), `TESTING_DOCUMENTATION.md`
 - **depends on:** none
