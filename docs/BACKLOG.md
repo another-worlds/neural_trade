@@ -298,7 +298,7 @@ changes).
 | [NT-263](#nt-263) | P2 | feature | implementer | done | DESK-5.1: Datasets |
 | [NT-264](#nt-264) | P2 | feature | implementer | todo | DESK-5.2: Scenarios |
 | [NT-265](#nt-265) | P2 | feature | implementer | done | DESK-5.3: Runs |
-| [NT-266](#nt-266) | P2 | feature | implementer | todo | DESK-5.4: Figures and theme |
+| [NT-266](#nt-266) | P2 | feature | implementer | done | DESK-5.4: Figures and theme |
 | [NT-267](#nt-267) | P2 | feature | implementer | done | DESK-5.5: Leaderboard JSON |
 | [NT-268](#nt-268) | P2 | feature | implementer | todo | DESK-5.6: Model registry and predictions |
 | [NT-269](#nt-269) | P2 | feature | implementer | todo | DESK-5.7: GPU and CLI job kinds |
@@ -3269,6 +3269,7 @@ changes).
 - **why:** task DESK-3.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) `TestClient(app).get('/api/v1/system/health')` 200 with the documented keys; (2) a mutating call without the token is 401; (3) `serve` binds 127.0.0.1 only (config test); (4) the server process has `CUDA_VISIBLE_DEVICES=-1` set before any import (test on the env of the CLI entry) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** from QA of NT-266: the server entry point sets CUDA_VISIBLE_DEVICES=-1 before the first TensorFlow import (nothing in neural_trade/__init__ or desk does it); figure builders load TensorFlow at call time; the two backtest figures (trading_dashboard 8.6 s, trade_analytics 10.1 s) must run in a worker, not on the event loop.
 
 ### NT-242
 
@@ -3425,6 +3426,7 @@ changes).
 - **why:** task DESK-4.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) Playwright: one year of 1-minute bars scrolls in windows with no single window blocking longer than 200 ms (measured); (2) the forming candle updates in place; (3) the element's documented props/methods/events all have a Playwright assertion; evidence = the CI run id of the `desk` job with the e2e step green and the uploaded trace and screenshot (a local Windows 10 run is additional, never the only evidence) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** from QA of NT-266: the candle up/down colours (#5ab4ac / #c26a8a, deuteranopia delta E 12.1) need a non-colour cue: hollow versus solid candle bodies (or a border pattern); the desk theme_css tokens are in desk/lab/theme_css.py.
 
 ### NT-254
 
@@ -3586,7 +3588,7 @@ changes).
 
 **DESK-5.4: Figures and theme: `desk/lab/figures.py` (`Visualizations.build(key, ...)` -> `pio.to_json(validate=False)` dict with `config.responsive`; inputs from `run_report.load_saved_blocks`/`scorer.load_block`; plotly.js served from `plotly.offline.get_plotlyjs()`), `/system/theme` CSS**
 
-- **status:** todo
+- **status:** done 2026-10-16 (code merged without the router (fastapi is owner-gated): `figure_json`, `NeedsArtifacts`, `plotlyjs_bundle`, `theme_css`; qa PASS (Sonnet medium) on 5f627ca: all 13 keys on a real dev run, plotly.js 3.5.0 equal, theme tokens equal theme.py; the router, which maps NeedsArtifacts to 409, stays in NT-266's scope and is built with the API items. Findings: M2 mutant (meta strategy ignored) survives: add a test; the dev-run dashboard title says 'whole test block' (P3); candle up/down needs a non-colour cue (hollow vs solid bodies) in NT-253; the server must set CUDA_VISIBLE_DEVICES=-1 before the first TF import (NT-241) and build the two backtest figures (8.6 s and 10.1 s) off the event loop.)
 - **priority / type / role:** P2 / feature / implementer
 - **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** file, router, tests
