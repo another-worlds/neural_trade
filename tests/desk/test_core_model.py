@@ -9,7 +9,7 @@ import pytest
 from neural_trade.desk.core.clock import LiveClock, SimClock
 from neural_trade.desk.core.model import (
     STATUS_EDGES, AccountKind, AccountState, Bar, Fill, IllegalTransition, Instrument, Liquidity,
-    Order, OrderStatus, OrderType, Position, PositionSide, Side, TimeInForce, check_transition,
+    Order, OrderEvent, OrderStatus, OrderType, Position, PositionSide, Side, TimeInForce, check_transition,
 )
 
 S = OrderStatus
@@ -135,3 +135,10 @@ def test_simclock_monotonic():
 
 def test_liveclock_is_epoch_ms():
     assert LiveClock().now_ms() > 1_700_000_000_000
+
+
+def test_order_event_resolved_qty_is_optional_and_additive():
+    o = Order(client_id="c", instrument_id="X", account_id="a", side="BUY", type="MARKET", size_frac=0.5)
+    assert OrderEvent(1, 2, "accepted", o).resolved_qty is None
+    ev = OrderEvent(1, 2, "accepted", o, resolved_qty=4.0)
+    assert (ev.ts_event, ev.ts_init, ev.kind, ev.order, ev.resolved_qty) == (1, 2, "accepted", o, 4.0)
