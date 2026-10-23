@@ -271,3 +271,28 @@ def test_concurrent_processes_race_on_a_fresh_file(tmp_path, round_):
         assert len(bars) == s.conn.execute("SELECT COUNT(*) FROM bars").fetchone()[0] > 0
         assert sum(r["n_bars"] for r in s.ranges("BTC/USDT", 1)) == len(bars)
         assert s.conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+# ---- provenance (NT-221): text per source that writes never rebuild ---------------------------------------------
+def test_provenance_is_kept_across_writes_and_replaced_by_set(tmp_path):
+    with MarketStore(tmp_path / "m.sqlite") as s:
+        assert s.provenance("X", 1) == {}
+        s.set_provenance("X", 1, "a", "first")
+        s.write_bars("X", 1, pd.DataFrame({"ts": [60_000, 120_000], "o": 1.0, "h": 2.0, "l": 0.5, "c": 1.5, "v": 1.0}), "a")
+        assert s.provenance("X", 1) == {"a": "first"}
+        s.set_provenance("X", 1, "a", "second")
+        assert s.provenance("X", 1) == {"a": "second"} and s.provenance("X", 5) == {}
+
+
+def test_a_store_made_before_the_provenance_table_gains_it_on_open(tmp_path):
+    import sqlite3
+    p = tmp_path / "old.sqlite"
+    with MarketStore(p):
+        pass
+    c = sqlite3.connect(p)
+    c.execute("DROP TABLE provenance")
+    c.commit()
+    c.close()
+    with MarketStore(p) as s:
+        s.set_provenance("X", 1, "a", "t")
+        assert s.provenance("X", 1) == {"a": "t"} and s.version == 1

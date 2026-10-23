@@ -698,6 +698,9 @@ def build_parser() -> argparse.ArgumentParser:
     e = sub.add_parser("env", help="versions, CUDA build, devices, git state")
     e.add_argument("--no-devices", action="store_true")
     e.set_defaults(func=cmd_env)
+
+    from neural_trade.desk.cli import add_subparser as add_desk  # lazy: the desk is the top layer (D-067)
+    add_desk(sub)
     return ap
 
 

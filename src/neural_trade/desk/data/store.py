@@ -35,6 +35,10 @@ _SCHEMA = [
     "CREATE TABLE IF NOT EXISTS sources (symbol TEXT, tf INTEGER, src TEXT, first_ts INTEGER, last_ts INTEGER, "
     "n_bars INTEGER, updated INTEGER, PRIMARY KEY (symbol, tf, src))",
 ]
+# Provenance text per (symbol, tf, src): NOT derived from bars, so a write never rebuilds it (NT-221). It is created
+# with IF NOT EXISTS outside the schema version, so stores made before it gain it on open.
+_PROVENANCE = ("CREATE TABLE IF NOT EXISTS provenance (symbol TEXT, tf INTEGER, src TEXT, text TEXT, "
+               "ts_written_ms INTEGER, PRIMARY KEY (symbol, tf, src))")
 
 TimeLike = Union[int, float, str, pd.Timestamp, None]
 
@@ -75,6 +79,7 @@ class MarketStore:
             DeskDb._retry(lambda: self.conn.execute("PRAGMA journal_mode=WAL").fetchone(), busy_timeout_ms)
             self.conn.execute("PRAGMA synchronous=NORMAL")
             DeskDb._retry(self._migrate, busy_timeout_ms)
+            DeskDb._retry(self._ensure_provenance, busy_timeout_ms)
         except BaseException:
             self.conn.close()
             raise
@@ -110,6 +115,30 @@ class MarketStore:
         except BaseException:
             self.conn.execute("ROLLBACK")
             raise
+
+    def _ensure_provenance(self) -> None:
+        if self.conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='provenance'").fetchone():
+            return
+        self.conn.execute("BEGIN IMMEDIATE")
+        try:
+            self.conn.execute(_PROVENANCE)
+            self.conn.execute("COMMIT")
+        except BaseException:
+            self.conn.execute("ROLLBACK")
+            raise
+
+    def set_provenance(self, symbol: str, tf: int, src: str, text: str) -> None:
+        """Where the bars labelled ``src`` came from (free text); replaces an earlier text. Bar writes never touch it."""
+        sql = ("INSERT INTO provenance (symbol, tf, src, text, ts_written_ms) VALUES (?,?,?,?,?) "
+               "ON CONFLICT(symbol, tf, src) DO UPDATE SET text=excluded.text, ts_written_ms=excluded.ts_written_ms")
+        args = (symbol, int(tf), src, str(text), _now_ms())
+        DeskDb._retry(lambda: self.conn.execute(sql, args), BUSY_TIMEOUT_MS)
+
+    def provenance(self, symbol: str, tf: int = BASE_TF) -> Dict[str, str]:
+        """``{src: text}`` of the provenance texts set for (symbol, tf)."""
+        cur = self.conn.execute("SELECT src, text FROM provenance WHERE symbol=? AND tf=? ORDER BY src",
+                                (symbol, int(tf)))
+        return {src: text for src, text in cur.fetchall()}
 
     def _stamp(self) -> tuple:
         # data_version changes when ANOTHER connection commits; _gen covers this connection's own writes.
