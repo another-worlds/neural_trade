@@ -321,9 +321,10 @@ changes).
 | [NT-286](#nt-286) | P2 | feature | implementer | done | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
 | [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
 | [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
-| [NT-289](#nt-289) | P1 | feature | implementer | todo | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
+| [NT-289](#nt-289) | P1 | feature | implementer | done | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
 | [NT-290](#nt-290) | P2 | bug | implementer | done | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
 | [NT-291](#nt-291) | P1 | infra | implementer | done | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
+| [NT-292](#nt-292) | P1 | feature | implementer | todo | RiskGuard hardening from the QA of NT-289: slippage in the cash clip, no silent BACKTEST/zero-cost defaults, gross exposure cap, dust and closing rules |
 
 ## Items
 
@@ -3875,7 +3876,7 @@ changes).
 
 **DESK-1.2 completion from the re-QA of NT-223 (must land before DESK-1.3 relies on RiskGuard)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged abe61fee; implementer Sonnet 5.5 medium 001075f + lead decision efa9001 (size_frac clipped to cash on PAPER/LIVE, cash check off on BACKTEST, dust close); QA Opus 5.5 medium: PASS: realised_equity equals the oracle's equity_cash within 2e-12 over a 6-fill sequence with fees and slippage; 49 of 50 duplicate reduce orders denied; 7 of 8 own mutants killed; fast suite on the merged head: see STATUS. Follow-ups: NT-292.)
 - **priority / type / role:** P1 / feature / implementer
 - **area:** `src/neural_trade/desk/core/portfolio.py`, `src/neural_trade/desk/core/risk.py`, `tests/desk/test_portfolio.py`, `tests/desk/test_risk.py`
 - **depends on:** NT-223, NT-286 (done)
@@ -3906,6 +3907,18 @@ changes).
 - **why:** QA of NT-265 found that `import neural_trade.notebook.longrun` loads tensorflow and pandas because `notebook/__init__.py` eagerly imports `session`, `backtest_ui`, `calibration_ui` and `runs`; the package docstring claims 'Nothing here imports TensorFlow at import time'. The desk server must never hold TensorFlow (PLAN A1.4, A3) and every desk module that reuses `longrun` (NT-265 runs, NT-249 job runner, NT-269) imports it. Fix without changing behaviour: PEP 562 module `__getattr__` (and `__dir__`) in `__init__.py` that resolves the exported names `BacktestExplorer`, `CalibrationExplorer`, `TrainingSession`, `load_run_blocks`, `pick_run`, `servable_runs` lazily on first access; `__all__` unchanged; `from neural_trade.notebook import TrainingSession` still works (the notebooks and `tests/test_control_panel.py` use it).
 - **acceptance:** (1) a subprocess test: `python -I`-style fresh interpreter with this checkout's PYTHONPATH, `import neural_trade.notebook.longrun` and `import neural_trade.notebook.run_report`... loads none of tensorflow, keras, pandas? (pandas only if the submodule itself needs it: state which), ipywidgets; (2) `from neural_trade.notebook import TrainingSession, BacktestExplorer, CalibrationExplorer, load_run_blocks, pick_run, servable_runs` still works and returns the same objects as before (identity with the submodule attributes); `dir(neural_trade.notebook)` lists `__all__`; (3) the existing tests that touch the notebook package pass (tests/test_control_panel.py, tests/test_atomic_write.py, tests/test_notebooks_thin.py, tests/test_notebook_tooling.py) and `scripts/notebooks/check.py` is not needed; (4) ruff; fast suite by the lead; a mutation (restore the eager import) fails the new test.
 - **source:** QA of NT-265 (2026-10-16)
+
+### NT-292
+
+**RiskGuard hardening from the QA of NT-289 (runs in parallel with DESK-1.3; additive: no signature may break)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** `src/neural_trade/desk/core/risk.py`, `src/neural_trade/desk/core/portfolio.py`, `tests/desk/test_risk.py`, `tests/desk/test_portfolio.py`
+- **depends on:** NT-289 (done)
+- **why:** (1) lead's decision: the cash clip must include the slip rate (half_spread + slippage) as well as the fee, so a PAPER account never overdrafts (QA: fee 10 bps + slippage 5 bps, size_frac 1 -> cash -4.985); (2) `Portfolio(kind=BACKTEST)` and `RiskGuard(costs=RESEARCH_ZERO)` are silent defaults that switch the cash check and the fee off for a mis-built PAPER/LIVE account: `costs` default becomes None, allowed (meaning research_zero) only when `portfolio.kind` is BACKTEST, otherwise `RiskGuard` raises ValueError at construction; `Portfolio` keeps its default (DESK-1.3's factory passes the kind explicitly, tested there) but `RiskGuard` logs nothing silently: add a read-only property `cash_check_active`; (3) account-level gross exposure: new `RiskLimits.max_gross_exposure_frac` (default 1.0 for non-margin... use `None` = off for BACKTEST; for PAPER/LIVE default 1.0 of realised equity, margin instruments included) so that N strategies cannot lever the account (QA: two strategies each long 100 at 100 leave cash -10000 and a third still sizes 100): deny `max_gross_exposure` for orders that raise gross exposure above the cap, reducing orders exempt; (4) a position at or above min_qty but below min_notional cannot be closed (reduce_only denied `min_notional`): a closing order of the whole position is exempt from min_notional (and min_qty for the dust case); (5) `dust_close` compares the uncommitted capacity, not the position: with committed 9.9995 on a long of 10, SELL 1 is allowed at qty 0.0005000000000006111 (below min_qty, float noise): the snap applies only when the order closes the WHOLE position (committed = 0) and the result is rounded to the size step otherwise or denied `reduce_exceeds_position`; add the test that kills QA mutant C (dust close only when the whole position is dust); (6) a spot size_frac SELL exit of a long smaller than equity is denied `spot_sell_exceeds_balance` instead of clipped to the holding: clip reducing size_frac SELLs on spot to the holding; (7) `True` accepted as an offset (bool is an int): reject bools.
+- **acceptance:** each point with a test that fails on its mutant (do the mutation); NT-223/NT-289 tests unchanged in meaning except where a point changes a documented behaviour (comment citing this item); ruff; qa re-checks the QA cases with its own numbers.
+- **source:** QA of NT-289 (2026-10-16)
 
 ## Done log
 
