@@ -21,3 +21,96 @@ cmd: ruff check src tests scripts -> All checks passed!
 parity tests (oracle/flat/restarted/incremental), serial: 18 passed in 42.39s
 QA driver D:/nt/nt_qa/nt227/parity.py 4 workers 240 series seed 227, costs 0 and 10/1/2 bps: 1488 records, 0 errors, 0 mismatches, max equity rel diff 3.2e-14
 mutants (each failed a test): A rsi truncated window/no state -> flat_stretches[ta_rsi], incremental_rsi; B bollinger fresh window -> flat_stretches[ta_bollinger]; C stale latest-row check removed -> stale_or_out_of_order; D no session in ids -> client_ids_carry_a_session; E reason CLOSE -> close_position_orders_carry_the_exit_tag; F ts not strictly increasing -> stale_or_out_of_order
+
+=== NT-227 repair 2 (Opus), 2026-10-23: online kernels; suites ran on the working tree over HEAD below (the commit that follows adds exactly that tree)
+8cd61480aa39146cdcb66fb80375b6e167860f77
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+834 passed, 101 warnings in 175.25s (0:02:55)
+All checks passed!
+--- QA drivers
+MISMATCH 160 rsi_threshold 10/1/2 {'period': 26, 'lower': 18.0, 'upper': 89.0, 'exit_level': 57.0, 'max_hold': 30} n trades 15 vs 17
+MISMATCH 160 bollinger_breakout zero {'period': 83, 'k': 1.572, 'max_hold': 1, 'size': 0.1} n trades 90 vs 114
+MISMATCH 160 bollinger_breakout 10/1/2 {'period': 83, 'k': 1.572, 'max_hold': 1, 'size': 0.1} n trades 88 vs 114
+bp series 240 {('bollinger_breakout', 'mismatch'): 2, ('bollinger_breakout', 'runs'): 480, ('bollinger_breakout', 'trades'): 9686, ('ma_cross', 'runs'): 480, ('ma_cross', 'trades'): 23564, ('rsi_threshold', 'mismatch'): 2, ('rsi_threshold', 'runs'): 480, ('rsi_threshold', 'trades'): 7857}
+
+(series 160 of b_parity is the Portfolio DUST 1e-12 problem, NT-300, not the strategy)
+--- kernels vs ta_rules (r3_kernels.py 1 1000)
+kernels: 1000 series, 3184690 values; mean not bit-equal 0; std not bit-equal 0
+--- strategy decision values vs oracle full arrays (r3_sign.py, 2000 series, seed 2027, asked every 1/2/3/7th bar)
+worker 0: ma_cross bars 283582 values not bit-equal 0 sign differences 0; bollinger bars 285079 (close, mid, sd) not bit-equal 0 band-decision differences 0
+worker 1: ma_cross bars 288581 values not bit-equal 0 sign differences 0; bollinger bars 284266 (close, mid, sd) not bit-equal 0 band-decision differences 0
+worker 2: ma_cross bars 291678 values not bit-equal 0 sign differences 0; bollinger bars 287713 (close, mid, sd) not bit-equal 0 band-decision differences 0
+worker 3: ma_cross bars 293391 values not bit-equal 0 sign differences 0; bollinger bars 292903 (close, mid, sd) not bit-equal 0 band-decision differences 0
+--- bundled CSV 43,500 bars (r3_real.py), zero cost
+ma_cross {'fast': 10, 'slow': 30}: bars 43500 desk trades 1705 oracle 1705 mismatch None desk run 66.6s
+ma_cross {'fast': 10, 'slow': 30, 'max_hold': 1}: bars 43500 desk trades 21735 oracle 21735 mismatch None desk run 136.7s
+ma_cross {'fast': 2, 'slow': 30}: bars 43500 desk trades 2781 oracle 2781 mismatch None desk run 75.2s
+ma_cross {'fast': 5, 'slow': 60, 'allow_short': False}: bars 43500 desk trades 710 oracle 710 mismatch None desk run 63.2s
+ma_cross {'fast': 20, 'slow': 120, 'max_hold': 200}: bars 43500 desk trades 581 oracle 581 mismatch None desk run 64.4s
+ma_cross {'fast': 30, 'slow': 240}: bars 43500 desk trades 318 oracle 318 mismatch None desk run 62.7s
+bollinger_breakout {'period': 20, 'k': 2.0}: bars 43500 desk trades 1566 oracle 1566 mismatch None desk run 66.7s
+bollinger_breakout {'period': 5, 'k': 1.0, 'max_hold': 1}: bars 43500 desk trades 14521 oracle 14521 mismatch None desk run 95.9s
+bollinger_breakout {'period': 120, 'k': 3.0}: bars 43500 desk trades 168 oracle 168 mismatch None desk run 62.0s
+bollinger_breakout {'period': 50, 'k': 1.5, 'allow_short': False}: bars 43500 desk trades 508 oracle 508 mismatch None desk run 65.0s
+bollinger_breakout {'period': 10, 'k': 2.5, 'max_hold': 30}: bars 43500 desk trades 555 oracle 555 mismatch None desk run 63.0s
+rsi_threshold {'period': 14}: bars 43500 desk trades 645 oracle 645 mismatch None desk run 60.1s
+rsi_threshold {'period': 2, 'lower': 10.0, 'upper': 90.0, 'max_hold': 5}: bars 43500 desk trades 5202 oracle 5202 mismatch None desk run 77.7s
+--- timing (r3_bench.py, on_bar every bar, kept flat)
+ma_cross: total 79.5s; s/1000 bars first3 [0.833, 0.851, 0.858] mid [1.723, 1.772, 2.187] last3 [2.531, 2.529, 2.583]; traced peak MB 78.3
+bollinger_breakout: total 57.8s; s/1000 bars first3 [1.307, 1.323, 1.306] mid [1.329, 1.337, 1.339] last3 [1.375, 1.382, 1.364]; traced peak MB 9.7
+rsi_threshold: total 56.8s; s/1000 bars first3 [1.292, 1.297, 1.298] mid [1.315, 1.319, 1.32] last3 [1.332, 1.341, 1.342]; traced peak MB 7.0
+ma_cross, submit stubbed: total 50.1s; s/1000 first3 [0.759, 0.748, 0.746] mid [1.304, 1.3, 1.288] last3 [1.298, 1.289, 1.29]; traced peak MB 0.4
+--- seed cap on the CSV (r3_seedcap2.py): sma max abs diff 2.9e-11; sd max abs diff 9.7e-4 (w 5), <=5.8e-7 (w>=20); not bit-equal
+--- mutations (r3_mutate.py)
+== M1 rsi catch-up reads only the last bar: 3 failed, 68 passed, 5 warnings in 20.81s
+    test_incremental_rsi_state_equals_wilder_rsi_bit_for_bit_and_catches_up_skipped_bars
+    test_rsi_ignores_the_seed_cap_and_seeds_from_all_history
+    test_ta_rules_agree_with_the_oracle_across_data_breaks[ta_rsi]
+== M2 sma window off by one: 16 failed, 55 passed, 5 warnings in 21.29s
+    test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_ma_cross]
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params2]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params0]
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params0]
+== M3 Kahan compensation dropped (mean add): 8 failed, 63 passed, 5 warnings in 19.71s
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params0]
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params2]
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params1]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params0]
+== M4 Kahan compensation dropped (var remove): 3 failed, 68 passed, 5 warnings in 22.51s
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params0]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params2]
+    test_online_kernels_equal_ta_rules_bit_for_bit_on_600_hard_series
+== M5 ddof 1 instead of 0: 10 failed, 61 passed, 5 warnings in 20.46s
+    test_ta_rules_agree_with_the_oracle_across_data_breaks[ta_bollinger]
+    test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_bollinger]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params0]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params1]
+== M6 NaN added to the running sum: 2 failed, 69 passed, 5 warnings in 21.75s
+    test_nan_and_inf_blank_the_window_like_pandas
+    test_online_kernels_equal_ta_rules_bit_for_bit_on_600_hard_series
+== M7 inf not treated as NaN: 2 failed, 69 passed, 5 warnings in 21.57s
+    test_nan_and_inf_blank_the_window_like_pandas
+    test_online_kernels_equal_ta_rules_bit_for_bit_on_600_hard_series
+== M8 equal-value snap dropped (sd): 5 failed, 66 passed, 5 warnings in 20.45s
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params0]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params1]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params2]
+    test_online_kernels_equal_ta_rules_bit_for_bit_on_600_hard_series
+== M9 catch-up skips bars (online feed): 10 failed, 61 passed, 5 warnings in 18.72s
+    test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_ma_cross]
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params2]
+    test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit[params0]
+    test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit[params0]
+== M10 ma_cross state not reset on_start: 1 failed, 70 passed, 5 warnings in 20.46s
+    test_a_restarted_strategy_seeds_again_from_history[MACross-params1]
+== M11 bollinger state not reset on_start: 1 failed, 70 passed, 5 warnings in 21.06s
+    test_a_restarted_strategy_seeds_again_from_history[BollingerBreakout-params2]
+== M12 seed cap ignored: 3 failed, 68 passed, 5 warnings in 22.33s
+    test_a_seed_cap_limits_what_a_live_strategy_reads_and_stays_close_to_full_history[MACross-
+    test_a_seed_cap_limits_what_a_live_strategy_reads_and_stays_close_to_full_history[Bollinge
+    test_close_feed_seeds_once_then_catches_up_in_order_and_honours_the_seed_cap
+== M13 rsi exit at the level not taken (>=): 1 failed, 70 passed, 5 warnings in 22.40s
+    test_rsi_exactly_at_the_exit_level_exits_both_sides_like_the_oracle
+== M14 bollinger enters on the band (>=): 2 failed, 69 passed, 5 warnings in 22.79s
+    test_bollinger_close_exactly_on_a_band_does_not_enter
+    test_ta_rules_agree_with_the_oracle_on_flat_stretches_and_ties[ta_bollinger]

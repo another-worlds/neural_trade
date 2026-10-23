@@ -62,7 +62,7 @@ def to_store(df: pd.DataFrame, path) -> MarketStore:
 
 
 def drive(strategy: DeskStrategy, df, tmp_path, *, breaks=None, max_hold_default=30, warmup=None, source=None,
-          setup=None) -> Run:
+          setup=None, ctx_kwargs=None) -> Run:
     """A5.9 in miniature (see the module docstring); ``warmup`` overrides ``strategy.warmup_bars`` (to ask early);
     ``setup(run)`` runs before the first bar (a test's hook to the Portfolio)."""
     store = to_store(df, tmp_path / "m.sqlite")
@@ -73,7 +73,7 @@ def drive(strategy: DeskStrategy, df, tmp_path, *, breaks=None, max_hold_default
     eng = ExecutionEngine(broker, pf, RiskGuard(RiskLimits.unlimited(), INS, pf, clock), EventBus(), clock,
                           lambda k, p: None)
     sid = strategy.name
-    ctx = StrategyContext(execution=eng, source=src, strategy_id=sid, clock=clock)
+    ctx = StrategyContext(execution=eng, source=src, strategy_id=sid, clock=clock, **(ctx_kwargs or {}))
     run = Run(pf=pf, eng=eng, ctx=ctx)
     pid, n = f"{INS_ID}-{sid}", len(df)
     warm = strategy.warmup_bars if warmup is None else warmup
@@ -279,32 +279,164 @@ def test_rsi_flat_after_a_fall_period_5_matches_the_oracle_trade_for_trade(tmp_p
     assert len(run.trades) >= 20
 
 
+def probe_values(cls, params, c, tmp_path, *, every=3, ctx_kwargs=None):
+    """Drive ``cls`` over ``c`` asking for its decision value only on every ``every``-th bar (the bars in between are
+    caught up by the strategy's state); returns {bar index: value}."""
+    df = frame_from_close(c)
+    index = {int(t): i for i, t in enumerate(pd.DatetimeIndex(df["datetime"]).asi8 // 10 ** 6)}
+    seen = {}
+    read = {"rsi_threshold": "_update", "ma_cross": "_diff", "bollinger_breakout": "_bands"}[cls.name]
+
+    class Probe(cls):
+        def on_bar(self, ctx):
+            t = index[ctx.bar.ts_open_ms]
+            if t % every == 0:
+                seen[t] = getattr(self, read)(ctx)
+
+    drive(Probe(**params), df, tmp_path, warmup=0, ctx_kwargs=ctx_kwargs)
+    return seen
+
+
 def test_incremental_rsi_state_equals_wilder_rsi_bit_for_bit_and_catches_up_skipped_bars(tmp_path):
     from neural_trade.strategy.ta_rules import wilder_rsi
     c = flat_series(4)
-    seen = {}
-
-    class Probe(RSIThreshold):
-        def on_bar(self, ctx):
-            r = self._update(ctx)
-            if r is not None:
-                seen[ctx.bar.ts_open_ms] = r
-
-    drive(Probe(period=7), frame_from_close(c), tmp_path, warmup=0)
+    seen = probe_values(RSIThreshold, dict(period=7), c, tmp_path)
     ref = wilder_rsi(c, 7)
-    ts0 = pd.DatetimeIndex(frame_from_close(c)["datetime"]).asi8 // 10 ** 6
-    got = np.array([seen.get(t, np.nan) for t in ts0])
-    ok = ~np.isnan(got)
-    assert ok.sum() > 1400 and np.array_equal(got[ok], ref[ok])
+    ts = np.array(sorted(t for t, r in seen.items() if r is not None))
+    assert len(ts) > 450 and set(seen) == set(range(0, len(c) - 1, 3))     # two of every three bars skipped
+    assert np.array_equal([seen[t] for t in ts], ref[ts])
 
 
-def test_a_restarted_strategy_seeds_again_from_history(tmp_path):
+def hard_close(seed, n=1500):
+    """flat_series scaled, with a 1000x jump and a tick-rounded stretch."""
+    c = flat_series(seed, n) * 37.13
+    c[800:] *= 1e3
+    c[1300:1450] = np.round(c[1300:1450] / 1e-3) * 1e-3
+    return c
+
+
+@pytest.mark.parametrize("params", [dict(fast=2, slow=30), dict(fast=7, slow=45), dict(fast=30, slow=240)])
+def test_ma_cross_decision_value_is_the_oracles_full_array_value_bit_for_bit(params, tmp_path):
+    from neural_trade.strategy.ta_rules import sma
+    for seed in (4, 6):
+        c = hard_close(seed)
+        sub = tmp_path / str(seed)
+        sub.mkdir()
+        seen = probe_values(MACross, params, c, sub)
+        ts = sorted(seen)
+        full = sma(c, params["fast"]) - sma(c, params["slow"])
+        got = np.array([seen[t] for t in ts])
+        assert np.array_equal(got, full[ts], equal_nan=True)
+        assert np.isfinite(got).sum() > 350
+
+
+@pytest.mark.parametrize("params", [dict(period=5, k=1.0), dict(period=20, k=2.0), dict(period=120, k=3.0)])
+def test_bollinger_bands_are_the_oracles_full_array_values_bit_for_bit(params, tmp_path):
+    from neural_trade.strategy.ta_rules import rolling_std, sma
+    for seed in (4, 6):
+        c = hard_close(seed)
+        sub = tmp_path / str(seed)
+        sub.mkdir()
+        seen = probe_values(BollingerBreakout, params, c, sub)
+        ts = sorted(seen)
+        got = np.array([seen[t] for t in ts])
+        ref = np.c_[c[ts], sma(c, params["period"])[ts], rolling_std(c, params["period"])[ts]]
+        assert np.array_equal(got, ref, equal_nan=True)
+        assert np.isfinite(got[:, 2]).sum() > 350
+
+
+def test_rsi_exactly_at_the_exit_level_exits_both_sides_like_the_oracle(tmp_path):
+    """period 2: 100 flat, 96 (RSI 0, BUY), 98 (avg gain 1 = avg loss 1: RSI exactly 50, the LONG exits), flat, 102
+    (RSI above 70, SELL), 100 (RSI exactly 50 again, the SHORT exits): ``>=`` / ``<=`` as the oracle."""
+    from neural_trade.strategy.ta_rules import wilder_rsi
+    rng = np.random.default_rng(11)
+    c = np.r_[np.full(10, 100.0), 96.0, 98.0, np.full(6, 98.0), 102.0, 100.0, np.full(6, 100.0),
+              np.round(100 + np.cumsum(rng.normal(0, 1, 300)))]
+    r = wilder_rsi(c, 2)
+    assert r[11] == 50.0 and r[19] == 50.0 and r[10] < 30 and r[18] > 70
+    run = compare("ta_rsi", RSIThreshold, dict(period=2), frame_from_close(c), tmp_path)
+    assert [t[:3] for t in run.trades[:2]] == [(11, 12, "LONG"), (19, 20, "SHORT")], run.trades[:2]
+    assert [t[4] for t in run.trades[:2]] == ["RSI_MID", "RSI_MID"], run.trades[:2]
+
+
+def test_bollinger_close_exactly_on_a_band_does_not_enter(tmp_path):
+    """period 5, k 2: four 100s and a 105 put the upper band at exactly 105 (mean 101, sd 2), four 100s and a 95 the
+    lower band at exactly 95 (with a population sd the last of 5 values is at most 2 sd from their mean): the
+    oracle's strict ``>`` / ``<`` enters on neither. With k 1.9 the same bars are real breakouts."""
+    from neural_trade.strategy.ta_rules import rolling_std, sma
+    c = np.r_[np.full(30, 100.0), 105.0, np.full(30, 100.0), 95.0, np.full(60, 100.0)]
+    mid, sd = sma(c, 5), rolling_std(c, 5)
+    assert mid[30] + 2.0 * sd[30] == 105.0 and mid[61] - 2.0 * sd[61] == 95.0
+    df = frame_from_close(c)
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    assert compare("ta_bollinger", BollingerBreakout, dict(period=5, k=2.0), df, tmp_path / "a").trades == []
+    near = compare("ta_bollinger", BollingerBreakout, dict(period=5, k=1.9), df, tmp_path / "b")
+    assert [(t[0], t[2]) for t in near.trades] == [(31, "LONG"), (62, "SHORT")]
+
+
+class _CountingSource:
+    """A HistoricalSource that records every ``history(n)`` asked for."""
+
+    def __init__(self, store):
+        self.inner, self.asked = HistoricalSource(store, SYM, 1), []
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def history(self, n):
+        self.asked.append(int(n))
+        return self.inner.history(n)
+
+
+@pytest.mark.parametrize("cls,params,window", [(MACross, dict(fast=5, slow=40), 40),
+                                               (BollingerBreakout, dict(period=20, k=2.0), 20)])
+def test_a_seed_cap_limits_what_a_live_strategy_reads_and_stays_close_to_full_history(cls, params, window,
+                                                                                     synthetic_bars, tmp_path):
+    """``max_seed_bars``: the first call reads at most the cap, later calls only the new bars; the decisions equal the
+    full-history ones here (the values are equal up to rounding, ``test_online_kernels``), not bit for bit in general."""
+    df = synthetic_bars.iloc[:900]
+    cap = 3 * window
+    start_ts = int(pd.Timestamp(df["datetime"].iloc[500]).value // 10 ** 6)
+    sources = []
+
+    def counting(store):
+        sources.append(_CountingSource(store))
+        return sources[-1]
+
+    class Late(cls):          # a bot started at bar 500: its first on_bar is there
+        def on_bar(self, ctx):
+            if ctx.bar.ts_open_ms >= start_ts:
+                super().on_bar(ctx)
+
+    capped = drive(Late(**params), df, tmp_path / "a" if (tmp_path / "a").mkdir() is None else tmp_path,
+                   source=counting, ctx_kwargs={"max_seed_bars": cap})
+    full = drive(Late(**params), df, tmp_path / "b" if (tmp_path / "b").mkdir() is None else tmp_path,
+                 source=counting)
+    assert max(sources[0].asked) <= cap and sources[0].asked.count(cap) == 1
+    assert max(sources[1].asked) > 500                 # without a cap the seed reads the whole history
+    assert capped.trades == full.trades and capped.trades
+    with pytest.raises(ValueError, match="max_seed_bars"):
+        StrategyContext(execution=None, source=None, strategy_id="z", clock=SimClock(0), max_seed_bars=0)
+
+
+def test_rsi_ignores_the_seed_cap_and_seeds_from_all_history(synthetic_bars, tmp_path):
+    from neural_trade.strategy.ta_rules import wilder_rsi
+    c = synthetic_bars["close"].to_numpy(float)[:400]
+    seen = probe_values(RSIThreshold, dict(period=5), c, tmp_path, ctx_kwargs={"max_seed_bars": 10})
+    ts = sorted(t for t, r in seen.items() if r is not None)
+    assert len(ts) > 120 and np.array_equal([seen[t] for t in ts], wilder_rsi(c, 5)[ts])
+
+
+@pytest.mark.parametrize("cls,params", [(RSIThreshold, dict(period=5)), (MACross, dict(fast=3, slow=30)),
+                                        (BollingerBreakout, dict(period=10, k=1.0))])
+def test_a_restarted_strategy_seeds_again_from_history(cls, params, tmp_path):
     df = frame_from_close(flat_series(5)[:600])
-    first = drive(RSIThreshold(period=5), df, tmp_path / "a" if (tmp_path / "a").mkdir() is None else tmp_path)
-    strat = RSIThreshold(period=5)
+    first = drive(cls(**params), df, tmp_path / "a" if (tmp_path / "a").mkdir() is None else tmp_path)
+    strat = cls(**params)
     second = drive(strat, df, tmp_path / "b" if (tmp_path / "b").mkdir() is None else tmp_path)
     again = drive(strat, df, tmp_path / "c" if (tmp_path / "c").mkdir() is None else tmp_path)   # same instance, on_start
-    assert first.trades == second.trades == again.trades
+    assert first.trades == second.trades == again.trades and first.trades
 
 
 # ------------------------------------------------------------------ the baselines

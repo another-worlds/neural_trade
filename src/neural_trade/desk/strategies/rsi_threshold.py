@@ -9,7 +9,8 @@ with the arithmetic of ``ta_rules.wilder_rsi`` (mean of the first ``period`` cha
 updated bar by bar with the same recursion over the closes that arrived since the last call (bars the engine did not
 ask about, and holes in the data, are caught up in order; the oracle runs the recursion over the whole close array and
 ignores breaks, and so does this). The values equal ``wilder_rsi``'s bit for bit; ``on_start`` resets the state (a
-restart seeds again from history).
+restart seeds again from history). ``ctx.max_seed_bars`` is ignored: the recursion depends on its start, so the
+seed is always all history.
 Bounds are the oracle's search ranges; ``lower < exit_level < upper`` is checked on construction.
 """
 from __future__ import annotations

@@ -2,8 +2,13 @@
 
 Entry (flat, at the close of bar t): BUY while SMA(fast) > SMA(slow), SELL while below (a state, so a reversal re-enters
 on the next flat bar; SELL only with ``allow_short``); nothing when the two are equal. Exit: the SMAs cross back
-("CROSS"); the engine's TIME exit after ``max_hold`` bars. Warm-up = ``slow`` bars. The averages come from
-``ta_rules.sma`` on the last ``slow`` closes of ``ctx.bars``. Bounds are the oracle's search ranges.
+("CROSS"); the engine's TIME exit after ``max_hold`` bars. Warm-up = ``slow`` bars. Bounds are the oracle's search
+ranges.
+
+The averages are the online kernels of ``_online`` (a port of pandas' rolling mean, bit-equal to ``ta_rules.sma``):
+seeded on the first call from the history the context offers (all of it, or the last ``ctx.max_seed_bars``), then
+updated by the closes that arrived since the last call, O(1) per bar. The decision value ``SMA(fast) - SMA(slow)`` is
+the oracle's full-array value bit for bit when the seed is the whole block (a backtest); ``on_start`` resets the state.
 """
 from __future__ import annotations
 
@@ -12,6 +17,7 @@ import math
 from neural_trade.desk.core.model import PositionSide
 from neural_trade.desk.core.params import ParamSpec
 from neural_trade.desk.core.strategy import DeskStrategies, DeskStrategy
+from neural_trade.desk.strategies._online import CloseFeed, OnlineSMA
 
 
 @DeskStrategies.register(name="ma_cross", tags=["baseline", "ta"])
@@ -29,14 +35,23 @@ class MACross(DeskStrategy):
         super().__init__(**params)           # fast <= 30 <= slow holds over the whole bounded range
         self.warmup_bars = self.params["slow"]
 
-    def on_bar(self, ctx) -> None:
-        from neural_trade.strategy.ta_rules import sma   # lazy: the strategy package imports TensorFlow
+    def on_start(self, ctx) -> None:
+        self._state = None   # (CloseFeed, OnlineSMA fast, OnlineSMA slow, last diff)
 
+    def _diff(self, ctx) -> float:
+        """SMA(fast) - SMA(slow) at the current bar (NaN before ``slow`` closes)."""
+        st = getattr(self, "_state", None)
+        if st is None:
+            st = self._state = [CloseFeed(), OnlineSMA(self.params["fast"]), OnlineSMA(self.params["slow"]),
+                                float("nan")]
+        feed, fast, slow, _ = st
+        for c in feed.new_closes(ctx, ctx.max_seed_bars):
+            st[3] = fast.update(c) - slow.update(c)
+        return st[3]
+
+    def on_bar(self, ctx) -> None:
         p = self.params
-        close = ctx.bars(p["slow"])["close"].to_numpy(dtype=float)
-        if len(close) < p["slow"]:
-            return
-        diff = float(sma(close, p["fast"])[-1] - sma(close, p["slow"])[-1])
+        diff = self._diff(ctx)
         if not math.isfinite(diff):
             return
         side = ctx.position.side

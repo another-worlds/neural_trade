@@ -25,7 +25,12 @@ Gaps CONTRACTS leaves open (minimum implemented; the NT-227 report lists them):
   ``tags["reason"]`` is the exit tag (CROSS, RSI_MID, BB_MID, TIME ...), ``"CLOSE"`` when no tag is given;
 * the Engine (DESK-1.7) must give a backtest source only the bars from the block start, so desk indicators see what the
   oracle sees (pre-block history is not exposed); the context fails loudly (RuntimeError) on a stale or out-of-order bar;
-* the first ``ma_cross`` ``on_bar`` imports ``neural_trade.strategy``, which loads TensorFlow (CPU in the server, PLAN A3);
+* ``max_seed_bars`` (keyword, default None = all history): how many most-recent bars a strategy with an online state
+  reads when it seeds on its first ``on_bar``. A backtest leaves it None (the block from its start: ``ma_cross`` and
+  ``bollinger_breakout`` are then the oracle's bit for bit). A live bot sets it (a few times the longest window) so that
+  a start does not read the whole store; the SMA / sd values are then right up to floating-point rounding (the window's
+  contents are exact after ``window`` bars, the running sums carry rounding from the seed start), not bit for bit.
+  ``rsi_threshold`` ignores it and seeds from all history (Wilder's recursion never forgets its start);
 * ``warmup_bars`` is a ClassVar default of 0; strategies whose warm-up depends on parameters set it on the instance;
 * A7 mentions ``clock.now``; C1's ``Clock`` has ``now_ms()``, which is what the read-only view offers.
 """
@@ -97,8 +102,12 @@ class StrategyContext:
 
     def __init__(self, *, execution: Any, source: Any, strategy_id: str, clock: Clock,
                  predictions: Optional[Callable[[], Optional[dict]]] = None,
-                 log_sink: Optional[Callable[[str], None]] = None, session: Optional[str] = None) -> None:
+                 log_sink: Optional[Callable[[str], None]] = None, session: Optional[str] = None,
+                 max_seed_bars: Optional[int] = None) -> None:
+        if max_seed_bars is not None and int(max_seed_bars) < 1:
+            raise ValueError(f"max_seed_bars must be positive or None, got {max_seed_bars}")
         self.session = session if session is not None else secrets.token_hex(3)
+        self._max_seed_bars = None if max_seed_bars is None else int(max_seed_bars)
         self._exec, self._source, self._strategy_id = execution, source, strategy_id
         self._predictions, self._log_sink = predictions, log_sink
         self._clock = _ReadOnlyClock(clock)
@@ -128,6 +137,11 @@ class StrategyContext:
     @property
     def bar(self) -> Bar:
         return self._need_bar()
+
+    @property
+    def max_seed_bars(self) -> Optional[int]:
+        """The most bars a strategy reads to seed its online state (None: all history; module docstring)."""
+        return self._max_seed_bars
 
     @property
     def clock(self) -> _ReadOnlyClock:
