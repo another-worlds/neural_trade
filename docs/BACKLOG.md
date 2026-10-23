@@ -295,7 +295,7 @@ changes).
 | [NT-260](#nt-260) | P2 | feature | implementer | todo | DESK-4.9: Replay controls (start at bar or date, play/pause, step, speed, manual orders during replay with A5.6 fills, j |
 | [NT-261](#nt-261) | P2 | feature | implementer | todo | DESK-4.10: Lab pages (NiceGUI) |
 | [NT-262](#nt-262) | P2 | feature | implementer | todo | DESK-4.11: Smoke suite and the look routine |
-| [NT-263](#nt-263) | P2 | feature | implementer | todo | DESK-5.1: Datasets |
+| [NT-263](#nt-263) | P2 | feature | implementer | done | DESK-5.1: Datasets |
 | [NT-264](#nt-264) | P2 | feature | implementer | todo | DESK-5.2: Scenarios |
 | [NT-265](#nt-265) | P2 | feature | implementer | todo | DESK-5.3: Runs |
 | [NT-266](#nt-266) | P2 | feature | implementer | todo | DESK-5.4: Figures and theme |
@@ -322,6 +322,7 @@ changes).
 | [NT-287](#nt-287) | P2 | feature | implementer | todo | Market store scaling: incremental `sources` update, resample cache invalidation by range, a shared sqlite retry helper |
 | [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
 | [NT-289](#nt-289) | P1 | feature | implementer | todo | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
+| [NT-290](#nt-290) | P2 | bug | implementer | todo | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
 
 ## Items
 
@@ -3539,7 +3540,7 @@ changes).
 
 **DESK-5.1: Datasets: `desk/lab/datasets.py` (list repo CSVs; fingerprints computed on demand per file through `dataset_fingerprint(Config(CSV_PATH=path))`, cached in `settings` by (path, size, mtime), the list returning the cached value or `fingerprint_pending`; export from the store; specs with `DatasetSpec` facts)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS (Sonnet medium) on 5632874: bundled CSV exported through the store and planned by the engine; a 300 MB sparse file lists in 0.0 s as fingerprint_pending; cache invalidates on mtime and append; hostile names refused. Defect found: Windows reserved device names (NUL, AUX, COM1, CON) are not refused cleanly: NT-290.)
 - **priority / type / role:** P2 / feature / implementer
 - **milestone:** DESK-5; size S (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** file, tests
@@ -3880,6 +3881,18 @@ changes).
 - **why:** (1) lead's decision (CONTRACTS A5.1/A5.9 now say so): size_frac resolves on realised equity = `Portfolio.realised_equity()` = cash + sum of signed_qty x avg_price over open positions (equals the oracle's equity_cash when flat; a margin short must not size at 1.5x leverage): add the method to Portfolio, use it in RiskGuard (the binding check) and document it for the SimBroker; the QA cases: another strategy long 25 at 200, cash 5000: BUY size_frac 0.5 = 25 (not 12.5); margin short 25 at 200: size_frac 1.0 = 50 (not 75); (2) mutation M6 survived: add a test that a flip order in ACTIVE keeps the notional and rate limits (only the closing part is exempt); (3) orders waiting to fill are unknown to the guard: 50 separate SELL 10 against a long of 10 are all allowed: add a `committed_reduce_qty` argument to `check` (the ExecutionEngine passes the quantity already committed to open reduce orders of that position) and a test; (4) offset bracket legs get no side check (a BUY with take-profit offset -50 passes): check the sign per CONTRACTS tp_is_offset; (5) clipping to the size step leaves an unsellable remainder below min_qty (0.0015 -> 0.001): report in the decision, clip UP to the whole position when the remainder is below min_qty and the position is being closed (reduce_only or exit), tested; (6) `insufficient_cash` ignores fees: include the fee of the account's cost profile at the order price; (7) NOT decided here, owner-facing for DESK-6.2: HALTED denies the engine's own TIME and EOW exits and bot exits; the kill switch must keep a manual explicit close-position path (a `force_reduce` command that bypasses HALTED for reducing orders only, journalled): note it in NT-272.
 - **acceptance:** each point with a test that fails on its mutant (do the mutation); existing tests for NT-222, NT-286 and NT-223 unchanged in meaning; ruff; qa checks the five QA cases of point 1 with its own numbers.
 - **source:** re-QA of NT-223 (2026-10-16)
+
+### NT-290
+
+**Lab datasets: reserved Windows device names and a size-only cache test (QA of NT-263)**
+
+- **status:** todo
+- **priority / type / role:** P2 / bug / implementer
+- **area:** `src/neural_trade/desk/lab/datasets.py`, `tests/desk/test_lab_datasets.py`
+- **depends on:** NT-263 (done)
+- **why:** `export_dataset` accepts `NUL`/`NUL.csv` (fabricated path and sha, writes nothing), fails with a raw FileNotFoundError for `aux`, `COM1`, `LPT1.csv`, and refuses `CON` only by the exists() accident (with overwrite it would write to the device). Add the reserved names CON, PRN, AUX, NUL, COM1-9, LPT1-9 (with or without an extension, any case) to the refusal in `_target` (`datasets.py` about line 128) and a test for each; add a test that a size-only change invalidates the cache (the mutant without size survives).
+- **acceptance:** the listed names raise DatasetError (tested, parametrized); the size-only mutant fails a test; existing tests unchanged; ruff.
+- **source:** QA of NT-263 (2026-10-16)
 
 ## Done log
 
