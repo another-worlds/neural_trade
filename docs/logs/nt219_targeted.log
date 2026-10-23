@@ -1,0 +1,13 @@
+base sha: 75c70cfd6f19e42d64253fa91cb8ff5274951818
+cmd: C:/Users/Step/miniforge3/envs/nt/python -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4; ruff check src tests scripts
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+294 passed, 101 warnings in 134.16s (0:02:14)
+All checks passed!
+heavy: []
+
+--- repair 1: base sha 572a6cf6fb73d5baa25a67ad00092201399014a0
+cmd: same pytest command; racing test 10/10 passed standalone
+297 passed, 101 warnings in 181.97s (0:03:01)
+All checks passed!
