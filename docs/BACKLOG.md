@@ -257,7 +257,7 @@ changes).
 | [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
 | [NT-223](#nt-223) | P1 | feature | implementer | done | DESK-1.2: Risk guard |
 | [NT-224](#nt-224) | P1 | feature | implementer | done | DESK-1.3: Execution engine |
-| [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
+| [NT-225](#nt-225) | P1 | feature | implementer | done | DESK-1.4: Simulated broker |
 | [NT-226](#nt-226) | P1 | feature | implementer | done | DESK-1.5: Data sources |
 | [NT-227](#nt-227) | P1 | feature | implementer | todo | DESK-1.6: Strategy API and built-ins |
 | [NT-228](#nt-228) | P1 | feature | implementer | todo | DESK-1.7: Engine loop and journal |
@@ -298,7 +298,7 @@ changes).
 | [NT-263](#nt-263) | P2 | feature | implementer | done | DESK-5.1: Datasets |
 | [NT-264](#nt-264) | P2 | feature | implementer | todo | DESK-5.2: Scenarios |
 | [NT-265](#nt-265) | P2 | feature | implementer | done | DESK-5.3: Runs |
-| [NT-266](#nt-266) | P2 | feature | implementer | todo | DESK-5.4: Figures and theme |
+| [NT-266](#nt-266) | P2 | feature | implementer | done | DESK-5.4: Figures and theme |
 | [NT-267](#nt-267) | P2 | feature | implementer | done | DESK-5.5: Leaderboard JSON |
 | [NT-268](#nt-268) | P2 | feature | implementer | todo | DESK-5.6: Model registry and predictions |
 | [NT-269](#nt-269) | P2 | feature | implementer | todo | DESK-5.7: GPU and CLI job kinds |
@@ -328,6 +328,7 @@ changes).
 | [NT-293](#nt-293) | P1 | feature | implementer | done | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
 | [NT-294](#nt-294) | P1 | bug | implementer | done | EventBus.publish must deliver to every subscriber even when one raises |
 | [NT-295](#nt-295) | P1 | feature | implementer | todo | ExecutionEngine passes committed_open_notional (with fees and slip) and re-checks stop fills; RiskGuard per-position commitment |
+| [NT-296](#nt-296) | P1 | feature | implementer | todo | ExecutionEngine.adopt, BarBroker.fill_at_close protocol, tags no longer honoured (CONTRACTS A5 items 15-16) |
 
 ## Items
 
@@ -3050,7 +3051,7 @@ changes).
 
 **DESK-1.4: Simulated broker: `desk/broker/sim.py` (A5 rules on closed bars: next-open market, limit/stop in bar, brackets with tiebreak, `max_hold` TIME, EOW on breaks)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS on b7837b6: own parity fuzz of 800 random series (0 and 10/1/2 bps, gaps, ties, breaks, brackets, size_frac, TIME and EOW) against run_backtest: 0 divergences on 10,168 trades; 10 of 10 own mutants killed; size about 864 lines, one coherent class. Follow-ups: NT-296 and the CONTRACTS A5 items 14-17 written by the lead.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-1; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/broker/{base,sim}.py`, `tests/desk/test_sim_broker.py`
@@ -3268,6 +3269,7 @@ changes).
 - **why:** task DESK-3.1 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) `TestClient(app).get('/api/v1/system/health')` 200 with the documented keys; (2) a mutating call without the token is 401; (3) `serve` binds 127.0.0.1 only (config test); (4) the server process has `CUDA_VISIBLE_DEVICES=-1` set before any import (test on the env of the CLI entry) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** from QA of NT-266: the server entry point sets CUDA_VISIBLE_DEVICES=-1 before the first TensorFlow import (nothing in neural_trade/__init__ or desk does it); figure builders load TensorFlow at call time; the two backtest figures (trading_dashboard 8.6 s, trade_analytics 10.1 s) must run in a worker, not on the event loop.
 
 ### NT-242
 
@@ -3424,6 +3426,7 @@ changes).
 - **why:** task DESK-4.2 of the trading-desk plan ([docs/desk/PLAN.md](desk/PLAN.md)); the interfaces, fields, fill rules and API it implements are in [docs/desk/CONTRACTS.md](desk/CONTRACTS.md) and must be written verbatim; the implementer session starts from [docs/desk/README.md](desk/README.md).
 - **acceptance:** (1) Playwright: one year of 1-minute bars scrolls in windows with no single window blocking longer than 200 ms (measured); (2) the forming candle updates in place; (3) the element's documented props/methods/events all have a Playwright assertion; evidence = the CI run id of the `desk` job with the e2e step green and the uploaded trace and screenshot (a local Windows 10 run is additional, never the only evidence) Standing checks for every desk item: tests under `tests/desk/` pass with `-n 8`, ruff clean, `import neural_trade.desk` loads no TensorFlow/fastapi/nicegui/ccxt, the fast suite is unchanged, CI `desk` and `unit` green; UI items cite `desk/ui/conventions.md`.
 - **source:** owner request 2026-10-15 (trading desk), D-067; the plan's two-lens verification of 2026-10-15.
+- **note (lead, 2026-10-16):** from QA of NT-266: the candle up/down colours (#5ab4ac / #c26a8a, deuteranopia delta E 12.1) need a non-colour cue: hollow versus solid candle bodies (or a border pattern); the desk theme_css tokens are in desk/lab/theme_css.py.
 
 ### NT-254
 
@@ -3585,7 +3588,7 @@ changes).
 
 **DESK-5.4: Figures and theme: `desk/lab/figures.py` (`Visualizations.build(key, ...)` -> `pio.to_json(validate=False)` dict with `config.responsive`; inputs from `run_report.load_saved_blocks`/`scorer.load_block`; plotly.js served from `plotly.offline.get_plotlyjs()`), `/system/theme` CSS**
 
-- **status:** todo
+- **status:** done 2026-10-16 (code merged without the router (fastapi is owner-gated): `figure_json`, `NeedsArtifacts`, `plotlyjs_bundle`, `theme_css`; qa PASS (Sonnet medium) on 5f627ca: all 13 keys on a real dev run, plotly.js 3.5.0 equal, theme tokens equal theme.py; the router, which maps NeedsArtifacts to 409, stays in NT-266's scope and is built with the API items. Findings: M2 mutant (meta strategy ignored) survives: add a test; the dev-run dashboard title says 'whole test block' (P3); candle up/down needs a non-colour cue (hollow vs solid bodies) in NT-253; the server must set CUDA_VISIBLE_DEVICES=-1 before the first TF import (NT-241) and build the two backtest figures (8.6 s and 10.1 s) off the event loop.)
 - **priority / type / role:** P2 / feature / implementer
 - **milestone:** DESK-5; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** file, router, tests
@@ -3960,6 +3963,18 @@ changes).
 - **acceptance:** each point with a test that fails on its mutant; qa checks with its own numbers; existing tests unchanged in meaning.
 - **source:** QA of NT-293 (2026-10-16)
 - **note (lead, 2026-10-16):** also from the qa-deep of NT-224 (the engine is merged): (a) `submit` sends an unrounded trigger_price (STOP_LIMIT at tick 0.01 sends price 100.0 but trigger 100.004): round it in submit as modify does; (b) journal overflow gaps: wrap `on_overflow`/RiskGuard.halt in try/except so a fill is never left half-written, re-assert the halt while pending is above the limit (the engine stayed ACTIVE after outage-halt-resume-outage), journal the `journal_unavailable` halt itself; (c) re-entrancy: a bus subscriber that calls `engine.apply` during a publish reorders the journal (fill b journalled before fill a): the engine must refuse re-entrant mutation with a clear error (a `_publishing` flag) or queue commands issued from handlers until the publish ends (choose queueing; DESK-1.7 relies on it); (d) `_IDENTITY` lacks tif, bot_id, account_id; (e) a single `cancel()` broker failure should be journalled and wrapped in BrokerError like modify; (f) a late fill that flips a position (margin) or breaks the spot balance (the Portfolio raises OverfillError and nothing is journalled): journal a `late_fill_refused` / `late_fill_flip` record and halt via RiskGuard; engine/UI code must use `engine.is_live` / `open_orders()`, never `order.is_closed`; (g) the 2nd and later late fills are journalled `order_partially_filled`, not `late_fill`.
+
+### NT-296
+
+**Engine adoption of broker-originated exits and the BarBroker protocol (from the QA of NT-225)**
+
+- **status:** todo
+- **priority / type / role:** P1 / feature / implementer
+- **area:** `src/neural_trade/desk/core/execution.py`, `src/neural_trade/desk/broker/base.py`, `src/neural_trade/desk/broker/sim.py`, `tests/desk/test_execution.py`, `tests/desk/test_sim_broker.py`
+- **depends on:** NT-225, NT-295
+- **why:** CONTRACTS A5 items 14-17 (lead 2026-10-16): (1) `ExecutionEngine.adopt(order)` as item 16 defines it, so the SimBroker's synthetic bracket exits stop raising UnknownOrder and the test harness stops writing into `eng._orders`; (2) `BarBroker` protocol (fill_exits, fill_entries, on_bar_intrabar, sync, fill_at_close) typed in `broker/base.py`, EOW fills requested by the engine through `fill_at_close(order)`; the free-form tag `fill_at='close'` is removed from sim.py (a manual or bot order must not be able to request a close fill) and the tests change accordingly; (3) QA P3s: `_bases` pruned when the position closes; a reducing fill with an equal bracket dict must not overwrite the remainder's offset base; a size_frac resting order filled in the same intrabar call as a bracket exit is sized on equity after that exit.
+- **acceptance:** the 12-bar parity harness in test_sim_broker.py runs through `adopt` with no private access (a test greps the test file for `_orders` to make sure); adopt: tests for each rule of item 16 (HALTED still works, idempotent, refuses non-reduce-only and non-SUBMITTED orders, journals order_adopted, replay of the journal equals the live engine); tags['fill_at'] ignored (test); the 800-series parity fuzz of the QA (D:/nt/nt_qa/nt225_parity.py) still 0 divergences; mutation per point; ruff.
+- **source:** QA of NT-225 (2026-10-16)
 
 ## Done log
 

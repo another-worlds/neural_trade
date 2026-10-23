@@ -1,0 +1,17 @@
+base sha: b8a4e3f0e1727e597be20c913c16499d87ac459d (nt-225 from remediation/plan b8a4e3f0)
+$ CUDA_VISIBLE_DEVICES=-1 PYTHONPATH=D:/nt/nt_225/src $PY -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+741 passed, 101 warnings in 146.98s (0:02:26)
+$ $PY -m ruff check src tests scripts
+All checks passed!
+$ $PY /d/nt/nt_225_scratch/mutate.py   (8 mutations; each KILLED = a test failed)
+1 stop gap price (fills.py stop_fill: trigger instead of max(trigger, open)) -> KILLED by ['tests/desk/test_sim_broker.py::test_stop_buy_trigger_and_gap_reports_the_open_as_the_fill_price'] 1 failed, 9 passed, 1 warning in 2.45s
+2 tie order (bracket_exit always tp_first) -> KILLED by ['tests/desk/test_sim_broker.py::test_long_bracket_both_hit_in_the_fill_bar_follows_the_tiebreak[sl_first-SL-95.0]'] 1 failed, 12 passed, 1 warning in 2.38s
+3 same-bar order of operations (no bracket check on the fill bar) -> KILLED by ['tests/desk/test_sim_broker.py::test_long_bracket_both_hit_in_the_fill_bar_follows_the_tiebreak[sl_first-SL-95.0]'] 1 failed, 12 passed, 1 warning in 
+4 TIME exit off by one (eligible a bar late) -> KILLED by ['tests/desk/test_sim_broker.py::test_market_fills_at_the_next_bars_open_not_the_submit_bar'] 1 failed, 1 warning in 2.38s
+5 sizing on cash instead of realised equity -> KILLED by ['tests/desk/test_sim_broker.py::test_size_frac_above_one_is_clipped_and_equity_argument_is_used'] 1 failed, 3 passed, 1 warning in 2.37s
+6 OCO not cancelling -> KILLED by ['tests/desk/test_sim_broker.py::test_oco_one_fills_the_sibling_is_cancelled_and_a_same_bar_tie_follows_the_tiebreak[sl_first-sl-95.0]'] 1 failed, 20 passed, 1 warning in 2.40s
+7 fill before the submit bar (same-bar eligibility) -> KILLED by ['tests/desk/test_sim_broker.py::test_an_order_submitted_during_a_bars_cycle_waits_for_the_next_bar'] 1 failed, 6 passed, 1 warning in 2.39s
+8 EOW ignored (fill_at_close reports nothing) -> KILLED by ['tests/desk/test_sim_broker.py::test_eow_exit_on_a_data_break_fills_at_the_close_and_not_at_the_next_open'] 1 failed, 25 passed, 1 warning in 2.39s
