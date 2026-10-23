@@ -1,0 +1,15 @@
+base sha: f4e0e843fde37a842d7082a5ddfdd98cd5e94faf (nt-227 working tree = code commit a9422551, run before the commit)
+cmd: PYTHONPATH=D:/nt/nt_227/src CUDA_VISIBLE_DEVICES=-1 pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+result: 784 passed, 101 warnings in 156.86s (0:02:36)
+cmd: ruff check src tests scripts
+result: All checks passed!
+cmd: scripts/test_inventory.py -> TESTING_DOCUMENTATION.md: 3377 tests, 132 files
+
+mutation checks (each applied to a9422551, tests/desk/test_strategy_api.py -n 4 -x, then reverted with git checkout):
+1 rule sign flipped (ma_cross BUY/SELL)      -> FAILED test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_ma_cross] (+ the breaks variant)
+2 warm-up off by one (ma_cross slow-1)       -> FAILED test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_ma_cross] (+ breaks)
+2b warm-up off by one (rsi period+1)         -> FAILED test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_rsi]
+3 entry while not flat (rsi `if True:`)      -> FAILED test_ta_rules_place_the_same_entry_bars_as_the_oracle[ta_rsi] (+ breaks)
+4 future bar leaks (ctx.bars filter removed) -> FAILED test_ctx_bars_has_the_contract_columns_and_never_shows_a_later_bar
+5 seed ignored (random_entries)              -> FAILED test_random_entries_are_seeded_reproducible_and_distinct_per_seed
+6 bounds not enforced (validate_params off)  -> FAILED test_out_of_range_param_raises_naming_the_bound[...] (several)
