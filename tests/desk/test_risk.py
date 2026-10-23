@@ -966,3 +966,17 @@ def test_295_r2_fill_recheck_skips_the_rate_window_and_takes_no_slot():
     assert g.check(order(qty=1.0), ref_price=100.0).reason == "max_orders_per_minute"
     assert g.check(order(qty=1.0), ref_price=100.0, fill_recheck=True).allowed
     assert len(g._sent) == 1
+
+
+def test_295_r2e_prior_order_notional_counts_against_max_order_notional_only():
+    lim = RiskLimits(max_order_notional=1000.0, max_position_notional=None, max_orders_per_minute=None,
+                     daily_loss_limit=None)
+    g, pf, _ = make(lim, ins=inst(max_qty=None), cash=1e5)
+    assert g.check(order(qty=4.9), ref_price=104.0, record=False).allowed  # 509.6 alone
+    d = g.check(order(qty=4.9), ref_price=104.0, record=False, prior_order_notional=515.0)  # 1024.6
+    assert (d.allowed, d.reason) == (False, "max_order_notional")
+    assert g.check(order(qty=4.9), ref_price=104.0, record=False, prior_order_notional=490.4).allowed  # 1000.0
+    for bad in (-1.0, float("nan"), float("inf")):
+        assert g.check(order(qty=1.0), ref_price=100.0, prior_order_notional=bad).reason == "invalid_order"
+    hold(pf, "BUY", 5.0, 100.0)  # a reduction stays exempt
+    assert g.check(order(side="SELL", qty=5.0), ref_price=104.0, prior_order_notional=1e9).allowed

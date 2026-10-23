@@ -151,11 +151,11 @@ def test_reject_ends_rejected_with_the_venue_reason():
     r.eng.apply(r.fill(o, 1.0, tid="stray"))
     assert r.kinds()[n:] == ["fill_after_refusal"] and r.journal[n][1]["trade_id"] == "stray"
     assert r.pf.positions == {} and o.status.value == "REJECTED"
-    live = Rig(kind=AccountKind.LIVE)  # on a LIVE account the old rule stands: a closed order takes no fill
+    live = Rig(kind=AccountKind.LIVE)  # LIVE: the venue fact is booked (NT-295 repair 2, point D; see test_295_d2_*)
     live.broker.submit_kind = "rejected"
     lo = live.submit()
-    with pytest.raises(IllegalTransition):
-        live.eng.apply(live.fill(lo, 1.0))
+    live.eng.apply(live.fill(lo, 1.0))
+    assert lo.status.value == "REJECTED" and live.pf.position(X, "s").qty == 1.0 and "venue_fill_on_rejected" in live.kinds()
 
 
 def test_cancel_from_accepted_and_from_partially_filled():
@@ -1343,3 +1343,241 @@ def test_295_r8_a_venue_fact_halt_journals_the_halt_once():
     r2, o = _stop_rig(kind=AccountKind.LIVE)
     r2.eng.apply(r2.fill(o, 90.0, price=120.0))
     assert r2.kinds().count("halt") == 1 and r2.kinds().count("fill_refused") == 1
+
+
+# ------------------------------------------------------------------ NT-295 repair round 2 (lead decisions A-F, M8, M14)
+def _long_one(**kw):
+    r = Rig(**kw)
+    b = r.submit(side="BUY", qty=1.0, type="MARKET")
+    r.eng.apply(r.fill(b, 1.0))
+    return r
+
+
+def _held(r, sid="s"):
+    return r.pf.signed_qty(r.pf.position(X, sid))
+
+
+def test_295_r2a_a_clipped_fill_applies_only_the_allowed_quantity():
+    # QA probe R1e: margin, long 1, SELL 3 MARKET, account REDUCING, fill at 101: the position became -2
+    r = _long_one()
+    s = r.submit(side="SELL", qty=3.0, type="MARKET")
+    r.risk.reduce_only("qa")
+    n = len(r.journal)
+    r.eng.apply(r.fill(s, 3.0, price=101.0))
+    assert (s.status.value, s.filled_qty, s.reason, _held(r)) == ("CANCELED", 1.0, "fill_price_check_failed", 0.0)
+    assert r.kinds()[n:] == ["order_partially_filled", "fill", "position", "account", "fill_refused",
+                             "order_canceled"]
+    assert r.journal[n + 1][1]["fill"]["qty"] == 1.0
+    rec = r.journal[n + 4][1]
+    assert (rec["check"], rec["applied"], rec["fill_qty"], rec["allowed_qty"], rec["refused_qty"]) == (
+        "clipped_to_position", False, 3.0, 1.0, 2.0)
+    r.eng.apply(r.fill(s, 2.0, price=101.0, tid="rest"))  # the simulator must have dropped it
+    assert r.kinds()[-1] == "fill_after_refusal" and _held(r) == 0.0
+    # precheck_fill returns the clipped quantity, refuses the excess at once, and the order ends with the allowed fill
+    r = _long_one()
+    s = r.submit(side="SELL", qty=3.0, type="MARKET")
+    r.risk.reduce_only("qa")
+    n = len(r.journal)
+    d = r.eng.precheck_fill(s.client_id, 101.0)
+    assert (d.allowed, d.qty, d.reason) == (True, 1.0, "clipped_to_position") and s.status.value == "ACCEPTED"
+    assert r.kinds()[n:] == ["fill_refused"] and r.journal[n][1]["refused_qty"] == 2.0
+    r.eng.apply(r.fill(s, 1.0, price=101.0))
+    assert (s.status.value, s.filled_qty, _held(r)) == ("CANCELED", 1.0, 0.0)
+    assert r.kinds()[n + 1:] == ["order_partially_filled", "fill", "position", "account", "order_canceled"]
+    # LIVE: the venue fact is applied in full, the excess journalled (applied) and RiskGuard halted
+    r = _long_one(kind=AccountKind.LIVE)
+    s = r.submit(side="SELL", qty=3.0, type="MARKET")
+    r.risk.reduce_only("qa")
+    r.eng.apply(r.fill(s, 3.0, price=101.0))
+    assert (s.status.value, _held(r), r.risk.state) == ("FILLED", -2.0, TradingState.HALTED)
+    assert r.kinds()[-2:] == ["fill_refused", "halt"]
+    rec = r.journal[-2][1]
+    assert (rec["applied"], rec["refused_qty"], rec["check"]) == (True, 2.0, "clipped_to_position")
+
+
+def _ro_outlives_its_position(**kw):
+    """Long 1; a cancelled SELL and a resting reduce-only SELL; the cancelled one fills late and closes the long."""
+    r = _long_one(**kw)
+    old = r.submit(side="SELL", qty=1.0, type="LIMIT", price=120.0)
+    r.eng.cancel(old.client_id)
+    ro = r.submit(side="SELL", qty=1.0, type="LIMIT", price=110.0, reduce_only=True)
+    r.eng.apply(r.fill(old, 1.0, price=120.0))
+    assert _held(r) == 0.0 and ro.status.value == "ACCEPTED"
+    return r, ro
+
+
+def test_295_r2b_reduce_only_reduces_only_against_the_held_position():
+    for spot in (False, True):  # QA probe nt295b_probe3: HALTED; margin opened -1, spot raised OverfillError
+        r, ro = _ro_outlives_its_position(is_spot=spot)
+        r.risk.halt("qa")
+        n = len(r.journal)
+        r.eng.apply(r.fill(ro, 1.0, price=110.0))
+        assert (ro.status.value, ro.reason, _held(r)) == ("REJECTED", "fill_price_check_failed", 0.0)
+        assert r.kinds()[n:] == ["fill_refused", "order_rejected"] and r.journal[n][1]["check"] == "halted"
+    # ACTIVE, at a price below the checked one: a reduce-only fill that does not reduce is still re-checked
+    r, ro = _ro_outlives_its_position()
+    r.eng.apply(r.fill(ro, 1.0, price=100.0))
+    assert (ro.status.value, _held(r)) == ("REJECTED", 0.0)
+    assert r.journal[-2][1]["check"] == "reduce_only_violation"
+    # the part of a reduce-only fill beyond the holding is the excess of point A
+    r = _long_one()
+    ro = r.submit(side="SELL", qty=3.0, type="LIMIT", price=100.0, reduce_only=True)
+    assert ro.qty == 1.0  # RiskGuard clipped it at submit; a venue may still report more
+    ro.qty = 3.0
+    r.eng.apply(r.fill(ro, 3.0, price=100.0))
+    assert (ro.filled_qty, _held(r), r.journal[-2][1]["refused_qty"]) == (1.0, 0.0, 2.0)
+    # LIVE: the venue fact is applied, journalled and halts
+    r, ro = _ro_outlives_its_position(kind=AccountKind.LIVE)
+    r.eng.apply(r.fill(ro, 1.0, price=100.0))
+    assert (_held(r), r.risk.state, r.journal[-2][1]["applied"]) == (-1.0, TradingState.HALTED, True)
+
+
+def test_295_r2c_opening_fills_are_rechecked_while_halted_or_reducing():
+    # QA probe R1f: HALTED with the cancels failing, fills at the checked price
+    r = _long_one()
+    flip = r.submit(side="SELL", qty=3.0, type="LIMIT", price=100.0)
+    buy = r.submit(side="BUY", qty=3.0, type="LIMIT", price=100.0)
+    r.broker.raise_on_cancel = {flip.client_id: ConnectionError("down"), buy.client_id: ConnectionError("down")}
+    r.eng.halt("qa")
+    assert (flip.status.value, buy.status.value) == ("ACCEPTED", "ACCEPTED")
+    r.eng.apply(r.fill(flip, 3.0, price=100.0))  # only the reducing part: the long is closed, no short opens
+    assert (flip.status.value, flip.filled_qty, _held(r)) == ("CANCELED", 1.0, 0.0)
+    assert r.journal[-2][1]["check"] == "clipped_to_position" and r.journal[-2][1]["refused_qty"] == 2.0
+    r.eng.apply(r.fill(buy, 3.0, price=99.0))
+    assert (buy.status.value, _held(r)) == ("REJECTED", 0.0) and r.journal[-2][1]["check"] == "halted"
+    # REDUCING: an opening fill below the checked price is refused
+    r = Rig()
+    o = r.submit(side="BUY", qty=2.0, type="LIMIT", price=100.0)
+    r.risk.reduce_only("qa")
+    r.eng.apply(r.fill(o, 2.0, price=99.0))
+    assert (o.status.value, r.pf.positions) == ("REJECTED", {}) and r.journal[-2][1]["check"] == "reducing_only"
+    # ACTIVE keeps the price shortcut: no RiskGuard call at or below the checked price
+    r = Rig()
+    o = r.submit(side="BUY", qty=2.0, type="LIMIT", price=100.0)
+    n = len(r.checks)
+    r.eng.apply(r.fill(o, 2.0, price=99.0))
+    assert o.status.value == "FILLED" and len(r.checks) == n
+
+
+def test_295_r2d_a_live_fill_on_a_rejected_order_is_booked_and_halts():
+    r = Rig(kind=AccountKind.LIVE)
+    r.broker.raise_on_submit = TimeoutError("submit timed out")  # but it reached the venue
+    o = r.submit(qty=1.0)
+    assert (o.status.value, o.reason) == ("REJECTED", "broker_error:TimeoutError")
+    n, ns = len(r.journal), len(r.seen)
+    r.eng.apply(r.fill(o, 1.0, tid="venue"))
+    assert (o.status.value, o.filled_qty, r.pf.position(X, "s").qty) == ("REJECTED", 1.0, 1.0)
+    assert r.kinds()[n:] == ["venue_fill_on_rejected", "position", "account", "halt"]
+    rec = r.journal[n][1]
+    assert (rec["trade_id"], rec["fill"]["qty"], rec["order"]["status"], rec["order"]["filled_qty"]) == (
+        "venue", 1.0, "REJECTED", 1.0)
+    assert [t for t, _ in r.seen[ns:]] == ["fill", "position", "account"]
+    assert r.risk.state is TradingState.HALTED and r.risk.state_reason == "venue_fill_on_rejected"
+    n = len(r.journal)
+    r.eng.apply(r.fill(o, 1.0, tid="venue"))  # the dedup key holds
+    assert len(r.journal) == n and r.pf.position(X, "s").qty == 1.0
+    # PAPER / BACKTEST: a simulated fill for a rejected order is still ignored
+    for kind in (AccountKind.PAPER, AccountKind.BACKTEST):
+        p = Rig(kind=kind)
+        p.broker.raise_on_submit = TimeoutError("x")
+        po = p.submit(qty=1.0)
+        p.eng.apply(p.fill(po, 1.0))
+        assert p.kinds()[-1] == "fill_after_refusal" and p.pf.positions == {}
+
+
+def test_295_r2e_partial_fills_are_checked_on_the_cumulative_notional():
+    lim = dataclasses.replace(RiskLimits.unlimited(), max_order_notional=1000.0)
+    for second in (104.0, 100.5):  # QA probe R4a'': 5 x 103 + 4.9 x 104 = 1024.6; at 100.5 still 1007.45
+        r = Rig(lim, cash=1e5)
+        o = r.submit(side="BUY", qty=9.9, type="STOP_MARKET", price=None, trigger_price=101.0)  # 9.9 x 101 = 999.9
+        assert o.status.value == "ACCEPTED"
+        r.eng.apply(r.fill(o, 5.0, price=103.0))  # 515: passes
+        assert o.status.value == "PARTIALLY_FILLED"
+        r.eng.apply(r.fill(o, 4.9, price=second))
+        assert (o.status.value, o.filled_qty, r.pf.position(X, "s").qty) == ("CANCELED", 5.0, 5.0)
+        assert r.journal[-2][1]["check"] == "max_order_notional"
+        assert r.checks[-1][1]["prior_order_notional"] == 515.0
+    r = Rig(lim, cash=1e5, kind=AccountKind.LIVE)  # LIVE: applied, journalled, halted
+    o = r.submit(side="BUY", qty=9.9, type="STOP_MARKET", price=None, trigger_price=101.0)
+    r.eng.apply(r.fill(o, 5.0, price=103.0))
+    assert r.risk.state is TradingState.ACTIVE
+    r.eng.apply(r.fill(o, 4.9, price=104.0))
+    assert (o.status.value, r.risk.state, r.journal[-2][1]["check"]) == ("FILLED", TradingState.HALTED,
+                                                                         "max_order_notional")
+
+
+def test_295_r2f_size_frac_fills_are_capped_at_the_reserved_quantity():
+    r = Rig(is_spot=True)
+    s = r.submit(side="BUY", qty=None, size_frac=0.1, type="MARKET")
+    assert r.eng._reserved[s.client_id] == 10.0
+    n = len(r.journal)
+    d = r.eng.precheck_fill(s.client_id, 100.0, qty=50.0)  # QA probe R3a returned 50
+    assert (d.allowed, d.qty, s.status.value, len(r.journal)) == (True, 10.0, "ACCEPTED", n)
+    r.eng.apply(r.fill(s, 50.0, price=100.0))  # QA probe R3b applied 50
+    assert (s.status.value, s.filled_qty, r.pf.cash, r.pf.position(X, "s").qty) == ("FILLED", 10.0, 9000.0, 10.0)
+    assert r.kinds()[n:] == ["order_filled", "fill", "position", "account", "fill_refused"]
+    assert (r.journal[-1][1]["allowed_qty"], r.journal[-1][1]["refused_qty"]) == (10.0, 40.0)
+
+
+def _limit_order(cid):
+    return Order(client_id=cid, instrument_id=X, account_id="acc", strategy_id="s", side="BUY", type="LIMIT",
+                 qty=1.0, price=100.0)
+
+
+def test_295_r2_m8_one_publish_cannot_queue_more_than_the_cap():
+    from neural_trade.desk.core.execution import HANDLER_QUEUE_LIMIT
+    r = Rig(cash=1e12)
+    refused_at = []
+
+    def burst(e):
+        if e.kind == "submitted" and e.order.client_id == "first":
+            for i in range(HANDLER_QUEUE_LIMIT + 5):
+                try:
+                    r.eng.submit(_limit_order(f"b{i}"))
+                except RuntimeError:
+                    refused_at.append(i)
+                    break
+
+    r.bus.subscribe("order", burst)
+    r.submit(qty=1.0, client_id="first")
+    assert refused_at == [HANDLER_QUEUE_LIMIT]  # the call beyond the cap is refused at once
+    assert list(r.eng.orders) == ["first"]  # and the dropped queue ran nothing
+    assert r.kinds().count("handler_queue_overflow") == 1 and r.risk.state_reason == "handler_queue_overflow"
+
+
+def test_295_r2_m14_one_drain_runs_at_most_the_cap():
+    from neural_trade.desk.core.execution import HANDLER_QUEUE_LIMIT
+    r = Rig(cash=1e12)
+    count = itertools.count()
+
+    def chain(e):  # one queued call per drained call: the queue never grows, the drain never ends by itself
+        if e.kind == "submitted":
+            i = next(count)
+            if i < HANDLER_QUEUE_LIMIT + 200:
+                r.eng.submit(_limit_order(f"ch{i}"))
+
+    r.bus.subscribe("order", chain)
+    r.submit(qty=1.0, client_id="first")
+    assert r.kinds().count("handler_queue_overflow") == 1 and r.risk.state_reason == "handler_queue_overflow"
+    assert len(r.eng.orders) == HANDLER_QUEUE_LIMIT + 1
+
+
+def test_295_r2_a_reducing_fill_makes_no_riskguard_call_in_any_state():
+    for state in ("ACTIVE", "REDUCING", "HALTED"):
+        r = _long_one()
+        tp = r.submit(side="SELL", qty=1.0, type="LIMIT", price=101.0)
+        {"REDUCING": lambda: r.risk.reduce_only("qa"), "HALTED": lambda: r.risk.halt("qa")}.get(state, lambda: 0)()
+        n = len(r.checks)
+        assert r.eng.precheck_fill(tp.client_id, 130.0).allowed
+        r.eng.apply(r.fill(tp, 1.0, price=130.0))
+        assert (tp.status.value, _held(r), len(r.checks)) == ("FILLED", 0.0, n), state
+
+
+def test_295_r2_the_live_index_holds_only_the_live_orders():
+    r = Rig()
+    a, b, c = r.submit(qty=1.0), r.submit(qty=1.0), r.submit(qty=1.0)
+    r.eng.cancel(a.client_id)
+    r.eng.apply(r.fill(b, 1.0))
+    r.broker.submit_kind = "rejected"
+    r.submit(qty=1.0)
+    assert list(r.eng._live) == [c.client_id] == [o.client_id for o in r.eng.open_orders()]

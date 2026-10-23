@@ -15,16 +15,25 @@ The part of a resting order that can still reduce the held position is not commi
 (modify) count for nothing.
 
 **The binding check at the fill (CONTRACTS A5.1).** A broker calls ``precheck_fill(client_id, mid)`` before it reports a
-fill. When ``mid`` is above the price the order was valued at (``FILL_PRICE_TOLERANCE`` relative), RiskGuard re-checks the
-fill as a MARKET order at ``mid`` (``record=False``, own commitments excluded). Denied: ``fill_refused`` is journalled,
-the order ends REJECTED (CANCELED if part of it was filled) with reason ``fill_price_check_failed`` and the broker must
-not fill it. A fill that reaches ``apply`` and fails the same check is refused the same way, except on a LIVE account,
-where the venue fact stands: it is applied, journalled ``fill_refused`` (``applied`` true) and RiskGuard is halted.
+fill; ``apply`` runs the same check on every fill. A fill that only reduces the held position (opposite side, not larger
+than it; ``reduce_only`` alone is not enough) is never re-checked or refused. Every other fill is re-checked by RiskGuard
+as a MARKET order at ``mid`` (``record=False``, no rate slot, own commitments excluded, the order's earlier fills added to
+``max_order_notional``) when the order's cumulative reference price is above the price it was valued at
+(``FILL_PRICE_TOLERANCE`` relative), and always for a ``size_frac`` or ``reduce_only`` order, a late fill, or while the
+account is HALTED or REDUCING. A ``size_frac`` fill is capped at its reserved / resolved quantity. Denied: a fill opposite
+to the position keeps its reducing part (clipped); otherwise ``fill_refused`` is journalled, the order ends REJECTED
+(CANCELED if part of it was filled) with reason ``fill_price_check_failed`` and the broker must not fill it. Clipped
+(PAPER / BACKTEST): only the allowed quantity is applied (``precheck_fill`` returns it), ``fill_refused`` records the
+quantities and the order ends FILLED or CANCELED with what was applied. On a LIVE account the venue fact stands: the fill
+is applied in full, journalled ``fill_refused`` (``applied`` true) and RiskGuard is halted; a venue fill for an order the
+engine marked REJECTED is booked as ``venue_fill_on_rejected`` (the order stays REJECTED) and halts too.
 
 **Handlers (re-entrancy).** A bus handler that calls a mutating method (``submit``, ``apply``, ``cancel``, ...) while the
 engine publishes does not run at once: the call is queued, returns ``None`` and runs, in order, when the outermost
 mutating call returns, so the journal order of a fill is never interleaved with another's. Its errors go to
-``handler_errors``. ``precheck_fill`` is refused inside a handler (it returns a decision).
+``handler_errors``. ``precheck_fill`` is refused inside a handler (it returns a decision). At most
+``HANDLER_QUEUE_LIMIT`` (1000) calls may wait, and one drain runs at most that many: beyond either the queue is dropped,
+``handler_queue_overflow`` is journalled and RiskGuard halted.
 
 **Journal first, then the bus.** Every record is written to the journal before its event is published. A subscriber
 that raises never propagates and never loses a later record: the bus isolates it (``bus.errors``, ``on_error``; NT-294);
@@ -58,7 +67,8 @@ Gaps CONTRACTS leaves open (minimum choices, listed in the NT-224 report):
 * bus topics ``"order"``, ``"fill"``, ``"position"``, ``"account"``; journal kinds ``order_<status>`` (for example
   ``order_denied``), ``order_modified``, ``order_modify_denied``, ``late_fill``, ``fill``, ``position``, ``account``,
   ``bracket``, ``halt``, ``cancel_failed``, ``halt_cancel_failed``, ``order_modify_failed``, ``fill_refused``,
-  ``late_fill_refused``, ``late_fill_flip``; the journal payload carries ``ts_event`` and ``ts_init`` itself. Every fill
+  ``fill_after_refusal``, ``venue_fill_on_rejected``, ``handler_queue_overflow``, ``late_fill_refused``,
+  ``late_fill_flip``; the journal payload carries ``ts_event`` and ``ts_init`` itself. Every fill
   of a dead order is ``late_fill``. A late fill the books cannot hold (spot balance) is journalled
   ``late_fill_refused`` and raises ``OverfillError``; one that flips a position is applied, journalled
   ``late_fill_flip``; both halt RiskGuard;
@@ -95,7 +105,9 @@ from neural_trade.desk.core.model import (
     Liquidity, ModifyOrder, Order, OrderEvent, OrderStatus, OrderType, OverfillError, Side, SubmitOrder, check_transition,
 )
 from neural_trade.desk.core.portfolio import DUST, Portfolio
-from neural_trade.desk.core.risk import MISSING_MARKS, RiskDecision, RiskGuard, TradingState, round_nearest
+from neural_trade.desk.core.risk import (
+    CLIPPED_TO_POSITION, MISSING_MARKS, RiskDecision, RiskGuard, TradingState, round_nearest,
+)
 
 log = logging.getLogger(__name__)
 
@@ -241,6 +253,9 @@ class ExecutionEngine:
         self._queue_closed = False  # a drain overflowed: handlers may queue nothing more until it ends
         self._live: dict[str, None] = {}  # ids of the live orders (``is_live``), in submission order
         self._refused: set[str] = set()  # orders whose fill the binding check refused
+        self._sized: dict[str, float] = {}  # size_frac orders: the approved / resolved quantity (kept when closed)
+        self._fill_limit: dict[str, float] = {}  # filled quantity a clipped precheck allows an order to reach
+        self._fill_notional: dict[str, float] = {}  # sum of qty x mid of each order's applied fills (cumulative check)
         self._cancel_queued = False
 
     def assert_owner(self) -> None:
@@ -338,6 +353,8 @@ class ExecutionEngine:
         if o.trigger_price is not None:  # the tick, as modify does (the venue would reject or round it otherwise)
             o.trigger_price = round_nearest(o.trigger_price, self.risk.instrument.price_increment)
         self._reserved[o.client_id] = qty
+        if o.size_frac is not None:
+            self._sized[o.client_id] = qty
         self._checked[o.client_id] = self._valuation_price(o, ref)
         self.apply(OrderEvent(now, now, "submitted", o))
         try:
@@ -520,7 +537,7 @@ class ExecutionEngine:
         if ev.order.venue_id:
             o.venue_id = ev.order.venue_id
         if resolved is not None:
-            self._resolved[o.client_id] = self._reserved[o.client_id] = float(resolved)
+            self._resolved[o.client_id] = self._reserved[o.client_id] = self._sized[o.client_id] = float(resolved)
         if new is _S.CANCELED:
             self.cancel_acked.add(o.client_id)
         if new in CLOSED_STATUSES:
@@ -538,6 +555,9 @@ class ExecutionEngine:
         if f.instrument_id != o.instrument_id or f.side is not o.side:
             raise ValueError(f"fill {f.trade_id} does not match order {o.client_id}")
         live_acct = self.portfolio.kind is AccountKind.LIVE
+        if live_acct and o.status is _S.REJECTED:  # the venue filled an order the engine thought rejected (D)
+            self._venue_fill_on_rejected(o, ev)
+            return
         if not live_acct and (o.client_id in self._refused or o.status is _S.REJECTED):
             # a simulated fill for an order that was refused or never lived: nothing is applied (the SimBroker must
             # drop the order when precheck_fill or the engine refuses it)
@@ -547,23 +567,28 @@ class ExecutionEngine:
         late = o.client_id in self.cancel_acked  # dead: every fill after the venue's cancel ack is a late fill (g)
         if o.status is _S.FILLED:
             raise OverfillError(f"fill {f.trade_id} for the already filled order {o.client_id}")
-        total = o.filled_qty + f.qty
         cap = o.qty if o.qty is not None else self._resolved.get(o.client_id)  # None: a size_frac nobody resolved
-        if cap is not None and total > cap + DUST:
-            raise OverfillError(f"fills of {o.client_id} sum to {total}, above its quantity {cap}")
+        if cap is not None and o.filled_qty + f.qty > cap + DUST:
+            raise OverfillError(f"fills of {o.client_id} sum to {o.filled_qty + f.qty}, above its quantity {cap}")
+        full = cap is None or o.filled_qty + f.qty >= cap - DUST
+        check_transition(o.status, _S.FILLED if full else _S.PARTIALLY_FILLED, late_fill=late)  # before any change
+        # the binding check failed for (part of) the fill: (check reason, checked price, fill qty, allowed qty)
+        unwanted: Optional[tuple[str, float, float, float]] = None
+        if not (late and live_acct):  # a LIVE late fill is a venue fact: only the flip / spot rules below apply
+            d = self._fill_decision(o, f.mid, f.qty, always=late)
+            allowed = d.qty if d.allowed and d.qty is not None else 0.0
+            if allowed < f.qty - DUST:  # denied, or clipped (A): only the allowed quantity may be applied
+                unwanted = (d.reason or CLIPPED_TO_POSITION, self._checked.get(o.client_id, 0.0), f.qty, allowed)
+                if not live_acct:  # simulated: apply the allowed part only; nothing at all when it is 0
+                    if allowed <= DUST:
+                        self._refuse_fill(o, f.mid, unwanted[0], unwanted[1], dead=late)
+                        return
+                    f = dataclasses.replace(f, qty=allowed, fee=f.fee * allowed / f.qty)
+                    ev = FillEvent(ev.ts_event, ev.ts_init, f)
+        total = o.filled_qty + f.qty
         done = cap is None or total >= cap - DUST
         new = _S.FILLED if done else _S.PARTIALLY_FILLED
         check_transition(o.status, new, late_fill=late)  # before anything changes
-        unwanted: Optional[tuple[str, float]] = None  # the binding check failed: (check reason, checked price)
-        if not (late and live_acct):  # a LIVE late fill is a venue fact: only the flip / spot rules below apply
-            d = self._fill_decision(o, f.mid, f.qty, always=late)
-            if not d.allowed:
-                checked = self._checked.get(o.client_id, 0.0)
-                if live_acct:  # the venue fact stands: apply, journal, halt below
-                    unwanted = (d.reason, checked)
-                else:  # a simulated fill nobody asked precheck_fill about: refused, nothing is applied
-                    self._refuse_fill(o, f.mid, d.reason, checked, dead=late)
-                    return
         before = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
         try:
             pos_events = self.portfolio.apply_fill(f, strategy_id=o.strategy_id)  # may raise: nothing is changed yet
@@ -575,6 +600,7 @@ class ExecutionEngine:
         self._trades.add(f.trade_id)
         o.avg_fill_price = (o.avg_fill_price * o.filled_qty + f.price * f.qty) / total
         o.filled_qty = total
+        self._fill_notional[o.client_id] = self._fill_notional.get(o.client_id, 0.0) + f.qty * f.mid
         if new is _S.FILLED:
             self._reserved.pop(o.client_id, None)
         self._commit(o, new, "late_fill" if late else new.value.lower(), f.ts, late=late, extra={"trade_id": f.trade_id})
@@ -587,8 +613,15 @@ class ExecutionEngine:
         acct = AccountEvent(f.ts, self.clock.now_ms(), self.portfolio.account_state(marks, f.ts))
         self._emit("account", acct, "account", {"account": acct.account.to_dict()}, f.ts)
         if unwanted is not None:
-            self._refuse_fill(o, f.mid, unwanted[0], unwanted[1], applied=True)
-            self._halt_risk(FILL_REFUSED)
+            reason, checked, asked, allowed = unwanted
+            if live_acct:  # the venue fact was applied in full: journal what the check refused, halt
+                self._refuse_fill(o, f.mid, reason, checked, applied=True,
+                                  qty=(asked, allowed) if allowed > DUST else None)
+                self._halt_risk(FILL_REFUSED)
+            else:  # the allowed part is applied: the excess is refused and the order ends (A)
+                self._refuse_fill(o, f.mid, reason, checked, dead=late, qty=(asked, allowed))
+        elif not late and o.client_id in self._fill_limit and o.filled_qty >= self._fill_limit[o.client_id] - DUST:
+            self._end_refused(o)  # a clipped precheck already journalled the refused excess
         sign = 1 if f.side is Side.BUY else -1
         after = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
         if late and sign * before < 0 and sign * after > DUST:  # the late fill flipped the position (margin)
@@ -599,18 +632,17 @@ class ExecutionEngine:
     def precheck_fill(self, client_id: str, fill_price: float, *, qty: Optional[float] = None) -> RiskDecision:
         """The binding check of CONTRACTS A5.1, for a broker about to report a fill of ``client_id`` at the reference
         price ``fill_price`` (the fill's ``mid``: before spread and slippage, which RiskGuard adds). Allowed: the fill
-        may go ahead; a ``size_frac`` order's decision carries the quantity to fill (clipped to cash and limits).
-        Denied: the engine has already journalled ``fill_refused`` and ended the order (REJECTED with reason
-        ``fill_price_check_failed``, CANCELED with the same reason when part of it was filled); the broker must not
-        fill it. The check runs only when ``fill_price`` is above the price the order was valued at by more than
-        ``FILL_PRICE_TOLERANCE`` (a stop gapping over its trigger, a market order opening above the last close);
-        otherwise the decision is allowed without a RiskGuard call. ``qty`` defaults to the unfilled quantity (None
-        for a ``size_frac`` order). Not allowed from a bus handler (it would reorder the journal).
+        may go ahead with the decision's quantity; a ``size_frac`` order's quantity is sized at ``fill_price`` (capped
+        at its reserved / resolved quantity, also when ``qty`` asks for more). Clipped (an explicit-quantity order whose
+        decision carries less than asked, reason ``clipped_to_position``): the broker may fill only ``d.qty``; the
+        excess is refused now (``fill_refused`` with ``fill_qty`` / ``allowed_qty`` / ``refused_qty``) and the order
+        ends (CANCELED, reason ``fill_price_check_failed``) once that quantity is filled. Denied: the engine has already
+        journalled ``fill_refused`` and ended the order (REJECTED with reason ``fill_price_check_failed``, CANCELED with
+        the same reason when part of it was filled); the broker must not fill it. When the check runs (and what is
+        never refused) is ``_fill_decision``'s rule, the module docstring's "binding check". ``qty`` defaults to the
+        unfilled quantity. Not allowed from a bus handler (it would reorder the journal).
 
-        A fill that only REDUCES the position (reduce-only, or opposite and not larger than the holding) is never
-        refused, not even while HALTED; the per-minute rate limit is ignored (``fill_recheck``). A ``size_frac`` order is
-        ALWAYS re-checked and the decision's quantity is its reserved / resolved quantity clipped to what the cash and
-        the other orders' commitments afford at ``fill_price``. On a LIVE account this is a no-op (the venue fills by
+        The per-minute rate limit is ignored (``fill_recheck``). On a LIVE account this is a no-op (the venue fills by
         itself; ``apply`` journals and halts). The SimBroker must drop an order this method (or ``apply``) refused: a
         later simulated fill for it is journalled ``fill_after_refusal`` and ignored."""
         self.assert_owner()
@@ -622,10 +654,17 @@ class ExecutionEngine:
         if client_id in self._refused or not self.is_live(o):
             return RiskDecision(False, "order_not_live")
         d = self._fill_decision(o, fill_price, qty)
-        if not d.allowed:
+        want = qty if qty is not None else max((o.qty or 0.0) - o.filled_qty, 0.0)
+        clipped = d.allowed and o.size_frac is None and d.qty is not None and d.qty < want - DUST
+        if (not d.allowed and d.reason != "order_not_live") or clipped:
             self._ops += 1
             try:
-                self._refuse_fill(o, fill_price, d.reason, self._checked.get(client_id, 0.0))
+                if clipped:  # (A) the excess is refused now; the order ends once the allowed part is filled
+                    self._fill_limit[client_id] = o.filled_qty + d.qty
+                    self._write_refused(o, fill_price, d.reason or CLIPPED_TO_POSITION,
+                                        self._checked.get(client_id, 0.0), applied=False, dead=False, qty=(want, d.qty))
+                else:
+                    self._refuse_fill(o, fill_price, d.reason, self._checked.get(client_id, 0.0))
             finally:
                 self._ops -= 1
                 if self._ops == 0:
@@ -634,18 +673,32 @@ class ExecutionEngine:
 
     def _fill_decision(self, o: Order, mid: float, qty: Optional[float], *, always: bool = False) -> RiskDecision:
         """RiskGuard on the fill itself (see ``precheck_fill``). ``qty`` None: the unfilled quantity (an explicit
-        order) or the reserved / resolved one (``size_frac``). Reducing fills pass. The check runs when ``mid`` is above
-        the checked price by more than the tolerance, and always for a ``size_frac`` order or when ``always``."""
+        order) or the reserved / resolved one (``size_frac``); a ``size_frac`` quantity and a quantity above the limit
+        a clipped precheck set are capped first (the decision then carries less than ``qty``). Reducing fills pass. The
+        check runs when the order's cumulative reference price (earlier fills and this one) is above the checked price
+        by more than the tolerance; always for a ``size_frac`` order, a ``reduce_only`` order (a reduce-only fill that
+        does not reduce must be refused), while the account is not ACTIVE (C), or when ``always``. A denied fill that
+        is opposite to the held position keeps its reducing part (a clipped decision): reductions are never refused."""
         sf = o.size_frac is not None
-        reserved = max(self._reserved.get(o.client_id, 0.0) - o.filled_qty, 0.0)
+        reserved = max(self._sized.get(o.client_id, 0.0) - o.filled_qty, 0.0)
         rem = reserved if sf else max((o.qty or 0.0) - o.filled_qty, 0.0)
-        q = rem if qty is None else qty
+        limit = self._fill_limit.get(o.client_id)
+        cap = rem if sf else math.inf  # (F) a size_frac order fills at most its reserved / resolved quantity
+        if limit is not None:
+            cap = min(cap, max(limit - o.filled_qty, 0.0))
+            rem = min(rem, cap)
+        q = rem if qty is None else min(qty, cap)
+        if q <= DUST:
+            return RiskDecision(False, "order_not_live")
         if self._reducing(o, q):
             return RiskDecision(True, "", q)
         checked = self._checked.get(o.client_id)
-        if not (always or sf) and (checked is None or not mid > checked * (1 + FILL_PRICE_TOLERANCE)):
+        prior = self._fill_notional.get(o.client_id, 0.0)
+        above = checked is not None and prior + q * mid > (o.filled_qty + q) * checked * (1 + FILL_PRICE_TOLERANCE)
+        if not (always or sf or o.reduce_only or above or self.risk.state is not TradingState.ACTIVE):
             return RiskDecision(True, "", q)
-        # a MARKET order at the fill price, the order's own commitments excluded, no rate slot
+        # a MARKET order at the fill price, the order's own commitments excluded, no rate slot; its earlier fills
+        # count against max_order_notional (E)
         by_frac = sf and qty is None
         cand = dataclasses.replace(o, tags=dict(o.tags), type=OrderType.MARKET, price=None, trigger_price=None,
                                    qty=None if by_frac else q, size_frac=o.size_frac if by_frac else None)
@@ -654,24 +707,69 @@ class ExecutionEngine:
         acct, posn = self._committed_open(cand, exclude=o.client_id)
         d = self.risk.check(cand, ref_price=mid, marks=marks, record=False, fill_recheck=True,
                             committed_reduce_qty=self._committed_reduce(cand, exclude=o.client_id),
-                            committed_open_notional=acct, committed_position_notional=posn)
+                            committed_open_notional=acct, committed_position_notional=posn,
+                            prior_order_notional=prior)
         if d.allowed and by_frac:
             d = dataclasses.replace(d, qty=min(d.qty, rem))
+        if not d.allowed:
+            part = self._reducing_part(o, q)
+            if part > DUST:
+                d = RiskDecision(True, CLIPPED_TO_POSITION, part, d.price)
         return d
 
+    def _write_refused(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool, dead: bool,
+                       qty: Optional[tuple[float, float]]) -> None:
+        rec = {"client_id": o.client_id, "reason": FILL_REFUSED, "check": check_reason, "fill_price": mid,
+               "checked_price": checked, "applied": applied, "dead": dead, "filled_qty": o.filled_qty}
+        if qty is not None:  # a clipped fill: the quantity asked, the part allowed, the part refused
+            rec.update(fill_qty=qty[0], allowed_qty=qty[1], refused_qty=qty[0] - qty[1])
+        self._write("fill_refused", rec, self.clock.now_ms())
+
     def _refuse_fill(self, o: Order, mid: float, check_reason: str, checked: float, *, applied: bool = False,
-                     dead: bool = False) -> None:
-        now = self.clock.now_ms()
-        self._write("fill_refused", {"client_id": o.client_id, "reason": FILL_REFUSED, "check": check_reason,
-                                     "fill_price": mid, "checked_price": checked, "applied": applied,
-                                     "dead": dead, "filled_qty": o.filled_qty}, now)
+                     dead: bool = False, qty: Optional[tuple[float, float]] = None) -> None:
+        """Journal ``fill_refused``; unless ``applied`` (a LIVE venue fact) the order is refused for good: ended
+        REJECTED (nothing filled) or CANCELED (part filled), with reason ``fill_price_check_failed``. ``qty`` is
+        (asked, allowed) for a clipped fill; a FILLED or dead order only records it."""
+        self._write_refused(o, mid, check_reason, checked, applied=applied, dead=dead, qty=qty)
         if applied:
             return
         self._refused.add(o.client_id)
-        if dead:  # a late fill of a cancelled order: the order is already over
+        if dead or o.status is _S.FILLED:  # a late fill of a cancelled order, or nothing left: the order is over
             return
+        self._end_refused(o)
+
+    def _end_refused(self, o: Order) -> None:
+        now = self.clock.now_ms()
+        self._refused.add(o.client_id)
+        self._fill_limit.pop(o.client_id, None)
         kind = "rejected" if o.filled_qty <= DUST else "canceled"  # PARTIALLY_FILLED -> REJECTED is no edge
         self._apply_order_event(OrderEvent(now, now, kind, self._with_reason(o, FILL_REFUSED)), fill_refused=True)
+
+    def _venue_fill_on_rejected(self, o: Order, ev: FillEvent) -> None:
+        """(D) LIVE: the venue filled an order the engine marked REJECTED (a submit that timed out but reached it). A
+        real fill is never lost: it is applied to the Portfolio, journalled ``venue_fill_on_rejected`` (on the fill
+        topic) with the order, the position and account follow, and RiskGuard is halted. The order stays REJECTED (A4
+        has no edge out of it); its filled quantity and average price record what the venue did."""
+        f = ev.fill
+        total = o.filled_qty + f.qty
+        if o.qty is not None and total > o.qty + DUST:
+            raise OverfillError(f"fills of {o.client_id} sum to {total}, above its quantity {o.qty}")
+        pos_events = self.portfolio.apply_fill(f, strategy_id=o.strategy_id)  # may raise: nothing is changed yet
+        self._trades.add(f.trade_id)
+        o.avg_fill_price = (o.avg_fill_price * o.filled_qty + f.price * f.qty) / total
+        o.filled_qty = total
+        self._fill_notional[o.client_id] = self._fill_notional.get(o.client_id, 0.0) + f.qty * f.mid
+        snap = dataclasses.replace(o, tags=dict(o.tags))
+        self._emit("fill", ev, "venue_fill_on_rejected",
+                   {"client_id": o.client_id, "trade_id": f.trade_id, "fill": f.to_dict(), "order": snap.to_dict()},
+                   f.ts)
+        for pe in pos_events:
+            self._emit("position", pe, "position", {"position": pe.position.to_dict()}, pe.ts_event)
+        marks = {**self.marks}
+        marks.setdefault(f.instrument_id, f.mid)
+        acct = AccountEvent(f.ts, self.clock.now_ms(), self.portfolio.account_state(marks, f.ts))
+        self._emit("account", acct, "account", {"account": acct.account.to_dict()}, f.ts)
+        self._halt_risk("venue_fill_on_rejected")
 
     def _late_fill_event(self, o: Order, f: Fill, kind: str, extra: dict) -> None:
         snap = dataclasses.replace(o, tags=dict(o.tags))
@@ -786,12 +884,18 @@ class ExecutionEngine:
         return [self._orders[cid] for cid in list(self._live)]
 
     def _reducing(self, o: Order, qty: float) -> bool:
-        """True when filling ``qty`` of ``o`` can only reduce its position (reduce-only, or opposite to the holding
-        and not larger than it): such a fill opens no exposure, so the binding check and a halt never refuse it."""
-        if o.reduce_only:
-            return True
+        """True when filling ``qty`` of ``o`` can only reduce its position (opposite to the holding and not larger than
+        it): such a fill opens no exposure, so the binding check and a halt never refuse it. ``reduce_only`` alone is
+        not enough (B): a reduce-only order whose position is gone, or a fill beyond the holding, is checked like an
+        opening fill."""
         held = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
         return held * (1 if o.side is Side.BUY else -1) < 0 and qty <= abs(held) + DUST
+
+    def _reducing_part(self, o: Order, qty: float) -> float:
+        """The part of a fill of ``qty`` of ``o`` that reduces the held position: ``min(qty, |held|)`` when ``o`` is
+        opposite to the holding, else 0."""
+        held = self.portfolio.signed_qty(self.portfolio.position(o.instrument_id, o.strategy_id))
+        return min(qty, abs(held)) if held * (1 if o.side is Side.BUY else -1) < 0 else 0.0
 
     def _valuation_price(self, o: Order, ref: float) -> float:
         """The price RiskGuard values the order at (its notional rule): a market order ``ref``, a limit its price,

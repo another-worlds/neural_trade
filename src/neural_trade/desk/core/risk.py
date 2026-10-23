@@ -193,7 +193,8 @@ class RiskGuard:
     def check(self, order: Order, *, ref_price: float, marks: Optional[Mapping[str, float]] = None,
               record: bool = True, day_start_equity: Optional[float] = None,
               committed_reduce_qty: float = 0.0, committed_open_notional: float = 0.0,
-              committed_position_notional: float = 0.0, fill_recheck: bool = False) -> RiskDecision:
+              committed_position_notional: float = 0.0, fill_recheck: bool = False,
+              prior_order_notional: float = 0.0) -> RiskDecision:
         """Decide on ``order``. ``ref_price`` is the price a market order would trade at (last close at submit, the
         resolved open at the fill). ``marks`` defaults to ``{instrument.id: ref_price}``; when the portfolio holds
         other instruments the caller must pass marks for all of them (else ``missing_marks``). An allowed decision
@@ -249,6 +250,10 @@ class RiskGuard:
         window and takes no slot: the order already took its slot at submit, and a fill the venue or the simulator
         produces must not be refused for how many orders were sent in the last minute.
 
+        ``prior_order_notional`` (NT-295 repair 2, internal: the binding check of a PARTIAL fill) is the notional the
+        order's earlier fills already traded (sum of qty x reference price); it is added to this order's notional in the
+        ``max_order_notional`` test only, so an order cannot pass the limit by being filled in several parts.
+
         Not done here: positions of different strategies on one instrument do not net against each other
         (an engine decision, unchanged); the gross exposure and the cash check see each order as an addition."""
         ins, lim = self.instrument, self.limits
@@ -267,7 +272,7 @@ class RiskGuard:
         if not (_num(committed) and math.isfinite(committed) and committed >= 0):
             return _deny(INVALID_ORDER)
         open_commit, pos_commit = committed_open_notional, committed_position_notional
-        for c in (open_commit, pos_commit):
+        for c in (open_commit, pos_commit, prior_order_notional):
             if not (_num(c) and math.isfinite(c) and c >= 0):
                 return _deny(INVALID_ORDER)
 
@@ -378,7 +383,7 @@ class RiskGuard:
         if not pure_reduce:
             if cash_checked and qty * unit + open_commit > self.portfolio.cash:
                 return _deny(INSUFFICIENT_CASH)
-            if lim.max_order_notional is not None and notional > lim.max_order_notional:
+            if lim.max_order_notional is not None and notional + prior_order_notional > lim.max_order_notional:
                 return _deny(MAX_ORDER_NOTIONAL)
             after = held + sign * qty
             if (lim.max_position_notional is not None and abs(after) > abs(held)
