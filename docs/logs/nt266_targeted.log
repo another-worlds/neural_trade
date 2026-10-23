@@ -1,0 +1,18 @@
+base sha: f4e0e843fde37a842d7082a5ddfdd98cd5e94faf
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+tests/test_docs_guides.py: 96 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+763 passed, 101 warnings in 150.65s (0:02:30)
+$ ruff check src tests scripts
+   |
+help: Remove assignment to unused variable `rng`
+
+Found 1 error.
+No fixes available (1 hidden fix can be enabled with the `--unsafe-fixes` option).
+$ pytest tests/desk/test_lab_figures.py (after removing an unused variable)
+22 passed; full targeted run above: 763 passed in 150.65s
+$ ruff check src tests scripts (rerun)
+All checks passed!
