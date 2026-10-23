@@ -251,10 +251,10 @@ changes).
 | [NT-216](#nt-216) | P1 | infra | implementer | todo | DESK-0.3: Environment and CI (blocked until questions 0 and 4 are answered; lead installs, implementer writes the files) |
 | [NT-217](#nt-217) | P1 | feature | implementer | done | DESK-0.4: Domain model, bus, clock, params |
 | [NT-218](#nt-218) | P1 | feature | implementer | done | DESK-0.5: Cost profiles and pure fill functions |
-| [NT-219](#nt-219) | P1 | feature | implementer | todo | DESK-0.6: Desk database |
+| [NT-219](#nt-219) | P1 | feature | implementer | done | DESK-0.6: Desk database |
 | [NT-220](#nt-220) | P1 | feature | implementer | todo | DESK-0.7: Market store |
 | [NT-221](#nt-221) | P1 | feature | implementer | todo | DESK-0.8: Importers and CLI |
-| [NT-222](#nt-222) | P1 | feature | implementer | todo | DESK-1.1: Portfolio |
+| [NT-222](#nt-222) | P1 | feature | implementer | done | DESK-1.1: Portfolio |
 | [NT-223](#nt-223) | P1 | feature | implementer | todo | DESK-1.2: Risk guard |
 | [NT-224](#nt-224) | P1 | feature | implementer | todo | DESK-1.3: Execution engine |
 | [NT-225](#nt-225) | P1 | feature | implementer | todo | DESK-1.4: Simulated broker |
@@ -318,6 +318,7 @@ changes).
 | [NT-283](#nt-283) | P3 | feature | implementer | todo | DESK-L.3: Predictor subprocess over a pipe (about 200 lines) if TensorFlow in the server process costs too much memory o |
 | [NT-284](#nt-284) | P3 | infra | implementer | todo | DESK-0.2 follow-ups from QA: loopback-only host guard, error names, hygiene subprocess PYTHONPATH |
 | [NT-285](#nt-285) | P3 | infra | implementer | todo | DESK-0.4/0.5 follow-ups from QA: bracket boundary tests, Alert dataclass, bus exception policy, contract wording |
+| [NT-286](#nt-286) | P2 | feature | implementer | todo | DESK-1.1 completion before DESK-1.2/1.3: read-only account state, restart from stored positions, bracket storage, NaN/dust guards |
 
 ## Items
 
@@ -2961,7 +2962,7 @@ changes).
 
 **DESK-0.6: Desk database: `desk/store/db.py` (sqlite, WAL, versioned migrations, repositories for every C4 table, read-once helpers)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged 374fcb79; implementer Sonnet 5.5 medium 572a6cf then repair fccd2ec; QA Opus 5.5 medium: FAIL round 1 on a 'database is locked' race when processes open a fresh file together (10/10 trials) and a journal INSERT OR REPLACE bypass; repair lead-verified: racing test 5/5, the mutation without the retry fails it; fast suite on the merged head 2858 passed, 1 skipped, 11 min 31 s.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-0; size L (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/store/db.py`, `tests/desk/test_db.py`
@@ -3000,7 +3001,7 @@ changes).
 
 **DESK-1.1: Portfolio: `desk/core/portfolio.py` (NETTING positions, cash, fees, realised/unrealised, equity mark per bar, drawdown; spot rule: no negative base balance)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after qa PASS on 580e559: own 36-bar scenario with 12 trades equal to run_backtest equity within 1.3e-11 at three cost settings; 6 own mutants killed. Follow-ups: NT-286.)
 - **priority / type / role:** P1 / feature / implementer
 - **milestone:** DESK-1; size M (S under 150 lines incl. tests, M 150-400, L 400-800; larger stops and reports)
 - **area:** `desk/core/portfolio.py`, `tests/desk/test_portfolio.py`
@@ -3825,6 +3826,18 @@ changes).
 - **why:** (1) no bracket test puts a stop or target exactly on the bar's low or high (two `<=` to `<` mutants survive); (2) `Alert` is listed in PLAN A2 but has no field list in A4; (3) the bus lets one handler's exception stop delivery to the rest, the policy is undefined (decide in DESK-1.3); (4) `position_id` defaults to `i-None` when `strategy_id` is None; (5) CONTRACTS A5.1 says bit for bit but `size_frac` entry costs differ by about 1 ulp (oracle charges on notional, desk on qty*mid): state the 1e-9 tolerance; (6) A5.3 should say a gap through the take-profit fills at the open, as the oracle does; (7) `bracket_exit` returns the mid, C1's 'price' is ambiguous; (8) NaN bps values and NaN prices or qty <= 0 are not rejected in costs.py and fills.py; (9) no STOP_LIMIT second-stage function in C1 (build it in the SimBroker, DESK-1.x).
 - **acceptance:** each code point fixed with a test that fails on its mutant; contract wording edits made by the lead.
 - **source:** QA of NT-217 and NT-218 (2026-10-16)
+
+### NT-286
+
+**DESK-1.1 completion from QA of NT-222 (needed before DESK-1.2 RiskGuard and DESK-1.3 ExecutionEngine)**
+
+- **status:** todo
+- **priority / type / role:** P2 / feature / implementer
+- **area:** `src/neural_trade/desk/core/portfolio.py`, `tests/desk/test_portfolio.py`
+- **depends on:** NT-222 (done)
+- **why:** QA of NT-222: (1) `mark()` is the only way to get an `AccountState` and it mutates (equity curve, drawdown): add a read-only `account_state(marks)` that changes nothing, for RiskGuard and the strategy context; (2) positions restored from sqlite raise KeyError on close because `_entry_costs` has no entry: add a restore path (`Portfolio.restore(positions, cash, ...)`) with a test that a restored position closes with correct P&L; (3) A5.3 says the Portfolio stores the active bracket per position, it has none: add `set_bracket/get_bracket` cleared on close, per CONTRACTS A5.3; (4) NaN/inf price or qty accepted silently (cash NaN): refuse with ValueError; a NaN mark must not leave the drawdown at 0; (5) dust: a sell 1e-14 above the held quantity opens a 1e-14 SHORT: apply the close tolerance consistently; (6) `allow_short` should derive from `Instrument.is_spot` or be documented; one strategy's position can go SHORT on a spot account while the netted base balance stays >= 0: decide against RiskGuard's per-strategy rule (report the decision); `AccountEvent` is built by the ExecutionEngine (note only).
+- **acceptance:** each point with a test that fails on its mutant; the existing 23 portfolio tests unchanged; ruff; `import neural_trade.desk` imports stay light.
+- **source:** QA of NT-222 (2026-10-16)
 
 ## Done log
 
