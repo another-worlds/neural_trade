@@ -34,3 +34,89 @@ QA fuzzer D:/nt/nt_qa/nt295_fuzz.py: unmodified it fails (replay: an unapplied f
   - a broker cancel failure may change state when the journal-overflow halt it triggers cancels opening orders.
 QA scripts: nt295_f2.py (margin flip: late_fill_flip + halt; spot PAPER late sell now fill_refused, books unchanged),
  nt295_c2.py (cap 2000: 1001 orders, halted, loop ends; before: handler ran to its own limit), nt295_probe.py 4b (precheck qty 10.9513 not None).
+
+===== NT-295 repair round 2 (Opus), 2026-10-23T15:42Z
+--- suites and ruff
+HEAD ba8c8f536b344c802cae432f3e7bc76bc1d2a24d
+== pytest tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+============================== warnings summary ===============================
+tests/test_docs_guides.py: 96 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+807 passed, 101 warnings in 164.39s (0:02:44)
+== ruff check src tests scripts
+All checks passed!
+--- fuzz: nt295c_fuzz.py 200 400 = QA's nt295b_fuzz.py with two replay changes (A: a clipped fill_refused record carrying refused_qty is not a pending refusal; D: venue_fill_on_rejected is replayed as a fill and updates the order snapshot); every other assertion unchanged. Ran on HEAD ba8c8f536b344c802cae432f3e7bc76bc1d2a24d
+('precheck_refused', 'halted') 13
+('precheck_refused', 'insufficient_cash') 1
+('precheck_refused', 'reduce_only_violation') 16
+('precheck_refused', 'spot_sell_exceeds_balance') 3
+('reducing_applied', '') 3481
+('sf_precheck_capped', '') 345
+('submit', 'ok') 99541
+FUZZ295b OK
+
+real	2m8.526s
+user	0m0.000s
+sys	0m0.015s
+--- mutants (nt295c_mut.py: own A1-F1, QA's M2-M14 with post-H text) on HEAD ba8c8f536b344c802cae432f3e7bc76bc1d2a24d
+A1 apply ignores a clipped decision: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2a_a_clipped_fill_applies_only_the_allowed_quantity']
+A2 precheck clip neither refused nor limited: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2a_a_clipped_fill_applies_only_the_allowed_quantity']
+B1 (old M1 bug) reduce_only short-circuits _reducing again: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2b_reduce_only_reduces_only_against_the_held_position']
+B2 reduce_only fills not always re-checked: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2b_reduce_only_reduces_only_against_the_held_position']
+C1 no re-check while HALTED/REDUCING: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2c_opening_fills_are_rechecked_while_halted_or_reducing']
+C2 denied flip keeps no reducing part: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2c_opening_fills_are_rechecked_while_halted_or_reducing']
+D1 LIVE fill on REJECTED not booked: KILLED | ['FAILED tests/desk/test_execution.py::test_reject_ends_rejected_with_the_venue_reason', 'FAILED tests/desk/test_execution.py::test_295_r2d_a_live_fill_on_a_rejected_order_is_booked_and_halts']
+E1 no cumulative notional in the engine: KILLED | ['FAILED tests/desk/test_execution.py::test_295_p3_a_partly_filled_order_whose_rest_is_refused_ends_canceled', 'FAILED tests/desk/test_execution.py::test_295_r2e_partial_fills_are_checked_on_the_cumulative_notional']
+E2 risk ignores prior_order_notional: KILLED | ['FAILED tests/desk/test_risk.py::test_295_r2e_prior_order_notional_counts_against_max_order_notional_only', 'FAILED tests/desk/test_execution.py::test_295_r2e_partial_fills_are_checked_on_the_cumulative_notional']
+F1 size_frac fills not capped: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2f_size_frac_fills_are_capped_at_the_reserved_quantity']
+M2 reducing fills re-checked: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2_a_reducing_fill_makes_no_riskguard_call_in_any_state']
+M3 rate window applies at the fill: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2_the_fill_recheck_ignores_the_order_rate_limit']
+M4 fill re-check takes a slot: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2_the_fill_recheck_ignores_the_order_rate_limit', 'FAILED tests/desk/test_risk.py::test_denied_and_estimate_checks_take_no_rate_slot']
+M5 size_frac not capped at reserved: KILLED | ['FAILED tests/desk/test_execution.py::test_295_p3_a_size_frac_order_is_sized_on_the_fill_price']
+M6 LIVE ignores a fill after refusal: SURVIVED | []
+M7 late fills not always re-checked: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r4_a_late_fill_of_a_cancelled_order_is_rechecked_on_paper_but_not_on_live']
+M8 no handler queue cap: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2_m8_one_publish_cannot_queue_more_than_the_cap']
+M9 queue never reopens after overflow: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r6_a_handler_that_always_submits_hits_the_queue_cap']
+M10 live index never shrinks: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2_the_live_index_holds_only_the_live_orders']
+M11 venue halt cancels reduce orders too: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r1_a_venue_fact_halt_cancels_the_opening_orders_and_keeps_the_protective_ones']
+M12 halt journalled on every venue fact: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r8_a_venue_fact_halt_journals_the_halt_once']
+M13 LIVE precheck not a no-op: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r4_live_precheck_is_a_noop_and_simulated_fills_after_a_refusal_are_ignored']
+M14 drain per-drain cap removed: KILLED | ['FAILED tests/desk/test_execution.py::test_295_r2_m14_one_drain_runs_at_most_the_cap']
+M6 is equivalent now: a LIVE REJECTED order takes the venue_fill_on_rejected branch first, and a LIVE account never puts an order into _refused (precheck is a no-op, apply journals applied:true).
+M1 as written no longer applies (the short-circuit was the bug B removes); B1 re-inserts it and is killed.
+--- QA probes nt295b_probe*.py on HEAD ba8c8f536b344c802cae432f3e7bc76bc1d2a24d (probe.py R4b/R4c raise because they inject an illegal ACCEPTED->REJECTED event by hand; probe2's R4b/R4c use a rejecting broker)
+== nt295b_probe.py
+[R1a reduce-only stop BUY covering a short, apply at 108 while HALTED (margin PAPER)] precheck True; stop FILLED; short 0.0; refused recs 0
+[R1b non-reduce_only opposite LIMIT SELL (TP-like) above level while HALTED, spot] manual halt -> tp CANCELED; venue halt -> tp2 FILLED long 0.0
+[R1c close submitted, then HALTED, close fills] close FILLED pos 0.0; close while HALTED submit -> None
+[R1d venue-fact halt (journal overflow) cancels OPENING, keeps reduce orders; cancels journalled] before drain ('ACCEPTED', 'ACCEPTED', 'DENIED', 'ACCEPTED', 'HALTED'); after ('CANCELED', 'ACCEPTED', 'DENIED', 'CANCELED', 'HALTED'); journal tail ['noise', 'noise', 'halt', 'noise', 'order_denied', 'order_canceled', 'order_canceled', 'flush']
+[R1e ABUSE flip fill while REDUCING: SELL 3 vs long 1 (margin), apply at 101 > checked 100] precheck allowed True qty 1.0 reason clipped_to_position; order CANCELED filled 1.0; pos 0.0 (REDUCING: should be >= 0)
+[R1f ABUSE flip fill while HALTED with cancel failing, mid <= checked (no re-check)] cancel failed; HALTED flip at checked price: order CANCELED pos 0.0; HALTED plain opening BUY at checked price: REJECTED pos 1.0
+[R1g ABUSE reduce_only order outlives its position (margin): position closed elsewhere, then RO fills] spot=False: mk DENIED reduce_exceeds_position; RO fill applied; ro FILLED; pos 0.0; kinds ['fill', 'position', 'account']
+   spot=True: mk DENIED reduce_exceeds_position; RO fill applied; ro FILLED; pos 0.0; kinds ['fill', 'position', 'account']
+[R1h ABUSE late fill (user-cancelled) opening, mid <= checked, HALTED (PAPER)] halted: CANCELED filled 0.0 pos 0.0 kinds ['order_canceled', 'fill_refused']; active: FILLED filled 2.0 pos 2.0
+[R1i two strategies: s2 SELL against s1's long is not 'reducing' (margin, HALTED, mid above)] precheck False halted; s2 order REJECTED
+[R2 rate limit: fill re-check takes no slot and is not denied by it] allowed True; slots before 1 after 1
+[R3a size_frac precheck with an explicit qty above the reserved quantity] reserved 10.0000; precheck(qty=5x) allowed True qty 10.0
+[R3b size_frac fill in apply larger than reserved (unresolved), no precheck] reserved 10.0000; fill 5x -> applied; filled 10.0000 status FILLED cash 9000.00
+[R3c size_frac 4b recompute: two orders, precheck qty, fill at slipped price + fee; cash >= -1e-9] qty None 0; cash < -1e-9: 0; worst cash 0.000e+00
+[R4a LIVE: precheck no-op; apply above checked applies, journals applied:true, halts once] precheck True; FILLED filled 9.9; fill_refused applied [True]; halts 1; risk HALTED
+[R4b LIVE: fill for a REJECTED order and for a refused order is APPLIED (never ignored)] RAISED IllegalTransition: illegal order transition ACCEPTED -> REJECTED
+[R4c PAPER: fill for REJECTED order -> fill_after_refusal, not applied; user-cancelled late fill re-checked] RAISED IllegalTransition: illegal order transition ACCEPTED -> REJECTED
+[R6 handler queue overflow: engine usable afterwards? resume + submit works; queue reset] overflow recs 1, halts 1, state HALTED; after resume submit CANCELED; queue state (0, False, False, 0, 0, False); handler cancel after -> r CANCELED, r2 ACCEPTED, handler_errors 0
+[R8 venue-fact halt journals `halt` once (two late flips + journal overflow)] halts 1 flips 1 state HALTED
+== nt295b_probe2.py
+  live after overflow 0 deferred 0 False
+   [('order_submitted', 'o3002', ''), ('order_accepted', 'o3002', '')]
+[R6 debug] ACCEPTED
+[R4a' LIVE full fill above checked] precheck True None; FILLED filled 9.9; fill_refused [(True, 'max_order_notional')]; halts 1; risk HALTED fill_price_check_failed
+[R4a'' PAPER split fills evade max_order_notional (5 + 4.9 at 103/104)] CANCELED filled 5.0 notional 1024.6
+[R4b LIVE fill for a REJECTED order] REJECTED: no raise: filled 1.0 pos 1.0
+[R4b2 LIVE fill for a refused order (precheck refused on LIVE is a no-op, so: apply-refused LIVE then 2nd fill)] FILLED filled 9.9 refused set False journal ['position', 'account', 'order_filled', 'fill', 'position', 'account', 'fill_refused', 'halt']
+[R4c PAPER fill for REJECTED order] REJECTED filled 0.0 journal ['fill_after_refusal'] {'ts_event': 2000, 'ts_init': 1000, 'client_id': 'o3013', 'trade_id': 't3014', 'qty': 1.0, 'price': 100.0, 'status': 'REJECTED'}
+[R4d PAPER user-cancelled late fill re-checked like an opening fill (max_order_notional 150, mid 99)] FILLED filled 1.4; REDUCING: s2 CANCELED filled 0.0 rec ['reducing_only']
+== nt295b_probe3.py
+spot=False: ro status before? RO fill applied; ro REJECTED; pos 0.0; state HALTED; kinds ['position', 'account', 'fill_refused', 'order_rejected']
+spot=True: ro status before? RO fill applied; ro REJECTED; pos 0.0; state HALTED; kinds ['position', 'account', 'fill_refused', 'order_rejected']
