@@ -326,7 +326,7 @@ changes).
 | [NT-291](#nt-291) | P1 | infra | implementer | done | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
 | [NT-292](#nt-292) | P1 | feature | implementer | done | RiskGuard hardening from the QA of NT-289: slippage in the cash clip, no silent BACKTEST/zero-cost defaults, gross exposure cap, dust and closing rules |
 | [NT-293](#nt-293) | P1 | feature | implementer | done | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
-| [NT-294](#nt-294) | P1 | bug | implementer | todo | EventBus.publish must deliver to every subscriber even when one raises |
+| [NT-294](#nt-294) | P1 | bug | implementer | done | EventBus.publish must deliver to every subscriber even when one raises |
 | [NT-295](#nt-295) | P1 | feature | implementer | todo | ExecutionEngine passes committed_open_notional (with fees and slip) and re-checks stop fills; RiskGuard per-position commitment |
 
 ## Items
@@ -3940,7 +3940,7 @@ changes).
 
 **EventBus: isolate handler exceptions (found by QA of NT-224)**
 
-- **status:** todo
+- **status:** done 2026-10-16 (merged after lead verification of 5a37446: 11 bus tests pass, ruff clean, three mutants fail tests as reported by the implementer; no QA agent: a small module with literal-sequence tests)
 - **priority / type / role:** P1 / bug / implementer
 - **area:** `src/neural_trade/desk/core/bus.py`, `tests/desk/test_bus.py`, `TESTING_DOCUMENTATION.md`
 - **depends on:** NT-217 (done)
