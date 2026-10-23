@@ -326,6 +326,7 @@ changes).
 | [NT-291](#nt-291) | P1 | infra | implementer | done | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
 | [NT-292](#nt-292) | P1 | feature | implementer | done | RiskGuard hardening from the QA of NT-289: slippage in the cash clip, no silent BACKTEST/zero-cost defaults, gross exposure cap, dust and closing rules |
 | [NT-293](#nt-293) | P1 | feature | implementer | todo | RiskGuard: gross cap on margin only, relative epsilon in the cash check, committed opening notional of resting orders |
+| [NT-294](#nt-294) | P1 | bug | implementer | todo | EventBus.publish must deliver to every subscriber even when one raises |
 
 ## Items
 
@@ -3932,6 +3933,18 @@ changes).
 - **why:** (1) lead's decision: the gross exposure cap applies to MARGIN instruments only; on spot the cash check binds (QA: spot long 50 at average price 100, mark 200, cash 5000: a BUY of 10 was denied `max_gross_exposure` because gross is valued at marks while equity is at average prices; and the cap stopped spending cash after a rally); keep `max_gross_exposure_frac` semantics for margin and document it; (2) the cash comparison has no relative epsilon: cash can end one ULP negative (-1.16e-10 at cash 1e6 with a 1e-8 step): compare with a relative epsilon of 1e-12 of the order cost in the clip and the explicit-qty check; (3) resting opening orders are counted by neither the cash check nor the gross cap (two resting LIMIT BUYs each sized to all the cash both pass): add an optional `committed_open_notional=0.0` argument to `check` (additive; the ExecutionEngine passes the notional of its live opening orders, per strategy-agnostic account total) used by the cash check (spot) and the gross cap (margin) and the max-position check; test; (4) record in the docstring that cross-strategy hedges do not net (an engine decision, unchanged).
 - **acceptance:** each point with a test that fails on its mutant; existing tests unchanged in meaning; ruff; qa re-checks with its own numbers.
 - **source:** QA of NT-292 (2026-10-16)
+
+### NT-294
+
+**EventBus: isolate handler exceptions (found by QA of NT-224)**
+
+- **status:** todo
+- **priority / type / role:** P1 / bug / implementer
+- **area:** `src/neural_trade/desk/core/bus.py`, `tests/desk/test_bus.py`, `TESTING_DOCUMENTATION.md`
+- **depends on:** NT-217 (done)
+- **why:** `EventBus.publish` stops at the first raising handler, so a crashing bot or panel handler makes every later subscriber (journal mirrors, UI, alerts) miss that event. NT-224 isolates its own publishes but the bus is shared (alerts, bots, UI, websocket hub). Lead's decision: publish delivers to EVERY subscriber in subscription order; handler exceptions are caught, logged (logging module) and kept in `bus.errors` (bounded, last 100, each with topic, handler repr, exception) and reported to an optional `on_error(topic, handler, exc)` callback given to the constructor; `publish` returns normally. A `strict=True` constructor flag keeps the old fail-fast behaviour for tests. Subscription order, unsubscribe-during-publish snapshot semantics and idempotent unsubscribe stay as they are (tests unchanged in meaning).
+- **acceptance:** tests with literal sequences: handler 2 of 3 raises, handlers 1 and 3 receive the event, errors recorded with topic and exception, on_error called once; the old fail-fast test becomes the `strict=True` test; a handler that unsubscribes itself while raising; a subscriber added during publish does not get the current event; mutation (catch removed) fails; ruff; existing desk tests green (the engine tests in tests/desk/test_execution.py must pass unchanged).
+- **source:** QA of NT-224 (2026-10-16)
 
 ## Done log
 
