@@ -1,0 +1,9 @@
+base sha: c12d5e0f8cc9000e0fb39cb43cc165d643dde307
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+421 passed, 101 warnings in 155.00s (0:02:34)
+$ ruff check src tests scripts
+All checks passed!
+mutations: no-mtime key -> 1 failed; sync fingerprint -> 3 failed; traversal accepted -> 11 failed (restored; base 20 passed)
