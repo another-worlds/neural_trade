@@ -323,6 +323,7 @@ changes).
 | [NT-288](#nt-288) | P2 | feature | implementer | todo | DESK-0.8/1.5 follow-ups from QA: importer validation, history column names, ms-exact live test |
 | [NT-289](#nt-289) | P1 | feature | implementer | todo | DESK-1.2 completion before DESK-1.3: Portfolio.realised_equity and size_frac sizing, flip limits test, pending reduce orders, bracket offsets, fees in the cash check |
 | [NT-290](#nt-290) | P2 | bug | implementer | todo | Lab datasets: refuse Windows reserved device names in export; size-only cache test |
+| [NT-291](#nt-291) | P1 | infra | implementer | todo | `import neural_trade.notebook.<module>` must not load TensorFlow: lazy package `__init__` (blocks every desk module that calls longrun) |
 
 ## Items
 
@@ -3893,6 +3894,18 @@ changes).
 - **why:** `export_dataset` accepts `NUL`/`NUL.csv` (fabricated path and sha, writes nothing), fails with a raw FileNotFoundError for `aux`, `COM1`, `LPT1.csv`, and refuses `CON` only by the exists() accident (with overwrite it would write to the device). Add the reserved names CON, PRN, AUX, NUL, COM1-9, LPT1-9 (with or without an extension, any case) to the refusal in `_target` (`datasets.py` about line 128) and a test for each; add a test that a size-only change invalidates the cache (the mutant without size survives).
 - **acceptance:** the listed names raise DatasetError (tested, parametrized); the size-only mutant fails a test; existing tests unchanged; ruff.
 - **source:** QA of NT-263 (2026-10-16)
+
+### NT-291
+
+**Lazy `neural_trade.notebook` package: importing a submodule such as `longrun` must not load TensorFlow or pandas**
+
+- **status:** todo
+- **priority / type / role:** P1 / infra / implementer
+- **area:** `src/neural_trade/notebook/__init__.py`, `tests/test_notebook_lazy_import.py` (new), `TESTING_DOCUMENTATION.md`
+- **depends on:** none
+- **why:** QA of NT-265 found that `import neural_trade.notebook.longrun` loads tensorflow and pandas because `notebook/__init__.py` eagerly imports `session`, `backtest_ui`, `calibration_ui` and `runs`; the package docstring claims 'Nothing here imports TensorFlow at import time'. The desk server must never hold TensorFlow (PLAN A1.4, A3) and every desk module that reuses `longrun` (NT-265 runs, NT-249 job runner, NT-269) imports it. Fix without changing behaviour: PEP 562 module `__getattr__` (and `__dir__`) in `__init__.py` that resolves the exported names `BacktestExplorer`, `CalibrationExplorer`, `TrainingSession`, `load_run_blocks`, `pick_run`, `servable_runs` lazily on first access; `__all__` unchanged; `from neural_trade.notebook import TrainingSession` still works (the notebooks and `tests/test_control_panel.py` use it).
+- **acceptance:** (1) a subprocess test: `python -I`-style fresh interpreter with this checkout's PYTHONPATH, `import neural_trade.notebook.longrun` and `import neural_trade.notebook.run_report`... loads none of tensorflow, keras, pandas? (pandas only if the submodule itself needs it: state which), ipywidgets; (2) `from neural_trade.notebook import TrainingSession, BacktestExplorer, CalibrationExplorer, load_run_blocks, pick_run, servable_runs` still works and returns the same objects as before (identity with the submodule attributes); `dir(neural_trade.notebook)` lists `__all__`; (3) the existing tests that touch the notebook package pass (tests/test_control_panel.py, tests/test_atomic_write.py, tests/test_notebooks_thin.py, tests/test_notebook_tooling.py) and `scripts/notebooks/check.py` is not needed; (4) ruff; fast suite by the lead; a mutation (restore the eager import) fails the new test.
+- **source:** QA of NT-265 (2026-10-16)
 
 ## Done log
 
