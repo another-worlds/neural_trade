@@ -20,3 +20,35 @@ $ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_doc
 $ ruff check src tests scripts
 All checks passed!
 repair mutations (all KILLED except an equivalent one): publish before journal; subscriber exception propagates; failed journal record dropped; broker exception propagates; committed ignores strategy_id; duplicate client id content ignored; cancel_all re-cancels acked; modify does not exclude itself; resolved_qty ignored; owner guard off; empty trade_id accepted. SURVIVED (equivalent): per-order cap in committed, since min(sum(min(x,cap)),cap) == min(sum(x),cap).
+
+== NT-224 repair round 2 (Opus) 2026-10-23T13:46:31Z
+git rev-parse HEAD: 1fb9059fa4360c20ac7389b083db7e1af39f8158
+$ CUDA_VISIBLE_DEVICES=-1 $PY -m pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+666 passed, 101 warnings in 143.22s (0:02:23)
+$ $PY -m ruff check src tests scripts
+All checks passed!
+$ PYTHONPATH=D:/nt/nt_224/src $PY nt224b_fuzz.py 200 close   # QA fuzzer, all 200 seeds x {margin,spot} x {PAPER,BACKTEST}, close invariant on
+FUZZ OK
+$ same fuzzer on the pre-repair execution.py/model.py (94cfef40): expected to fail
+AssertionError: close of X-s2 denied with no truly live opposite order
+$ PYTHONPATH=D:/nt/nt_224/src $PY nt224b_late.py   # the P1 repro
+close_position -> ACCEPTED  1.0
+$ $PY mut224.py   # 16 source mutants against the named tests
+KILLED  P1 is_live ignores cancel_acked (fuzz alone)
+KILLED  P1 is_live ignores cancel_acked
+KILLED  P1 cancel() of a dead order calls the broker
+KILLED  P1 modify of a dead order allowed
+KILLED  1 overflow never halts
+KILLED  1 overflow halts every time
+KILLED  1 failure log not rate-limited
+KILLED  2 cancel_all not isolated
+KILLED  2 modify not wrapped
+KILLED  2 modify failure not journalled
+KILLED  3 resolved_qty ignored
+KILLED  3 resolved_qty not validated
+KILLED  4 identity without reduce_only/bracket
+KILLED  5 trigger not rounded
+KILLED  5 venue qty below filled accepted
+KILLED  6 side filter removed
+MUTANTS OK
+(scripts: D:/nt/nt_qa/nt224b_fuzz.py unchanged, D:/nt/nt_qa/nt224r2_mut.py)
