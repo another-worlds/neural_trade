@@ -1,0 +1,14 @@
+base sha: 15daf7992dacf2217084a6b3dab59cc73f25f111
+$ pytest -q -p no:cacheprovider tests/desk tests/test_layering.py tests/test_docs_guides.py -n 4
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+tests/test_docs_guides.py: 96 warnings
+  C:\Users\Step\miniforge3\envs\nt\lib\random.py:370: DeprecationWarning: non-integer arguments to randrange() have been deprecated since Python 3.10 and will be removed in a subsequent version
+    return self.randrange(a, b+1)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+584 passed, 101 warnings in 200.81s (0:03:20)
+$ ruff check src tests scripts
+All checks passed!
+
+mutation checks (each run with -x on tests/desk/test_execution.py, each KILLED): drop edge ACCEPTED->FILLED; apply duplicate trade_id; skip journal; broker call on denial; forget committed_reduce_qty; wrong event order.
