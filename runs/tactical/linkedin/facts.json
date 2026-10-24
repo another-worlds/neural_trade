@@ -1,0 +1,184 @@
+[
+ {
+  "id": "h25_logreg_vs_frozen",
+  "value": -0.0006,
+  "shown_as": "-0.0006 [-0.006, +0.005]",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H25: logreg vs logreg_frozen AUC -0.0006 [-0.006,+0.005]"
+ },
+ {
+  "id": "h25_logreg_dir",
+  "value": 0.0007,
+  "shown_as": "+0.0007 [-0.006, +0.008]",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H25: logreg_dir +0.0007 [-0.006,+0.008]"
+ },
+ {
+  "id": "h26_thin",
+  "value": -0.002,
+  "shown_as": "-0.002 [-0.005, +0.001]",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H26 A: learned periods do not beat textbook on direction (-0.002 [-0.005,+0.001])"
+ },
+ {
+  "id": "h26_none",
+  "value": -0.002,
+  "shown_as": "-0.002 (n.s.)",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H26 D: no indicators at all = the base on direction (AUC -0.002 n.s.)"
+ },
+ {
+  "id": "h23_net",
+  "value": 0.521,
+  "shown_as": "0.521",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H23: no-price network 0.521 (0.532 / 0.519 / 0.511) on the same val blocks"
+ },
+ {
+  "id": "h23_logreg",
+  "value": 0.57,
+  "shown_as": "0.570",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H23: check slices 0.570 (0.623 / 0.551 / 0.538)"
+ },
+ {
+  "id": "nt104_net",
+  "value": 0.535,
+  "shown_as": "0.535",
+  "source_file": "D:/nt/neural_trade/docs/STATUS.md",
+  "quote_or_key": "capacity_v1 (NT-104, 5 judgement folds): h1 AUC gru_attention 0.535"
+ },
+ {
+  "id": "nt104_logreg",
+  "value": 0.552,
+  "shown_as": "0.552",
+  "source_file": "D:/nt/neural_trade/docs/STATUS.md",
+  "quote_or_key": "against logreg_lags 0.552 on the same blocks"
+ },
+ {
+  "id": "h82_hit",
+  "value": 0.503,
+  "shown_as": "50.3%",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H82: 2 bps: hit 0.503 (11 months 2025-11..2026-09, 437 trades)"
+ },
+ {
+  "id": "h82_months",
+  "value": 11,
+  "shown_as": "11 unseen months",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H82: scored 2025-11..2026-09 (11 months, 437 trades)"
+ },
+ {
+  "id": "h82_trades",
+  "value": 437,
+  "shown_as": "437 trades",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H82: 437 trades"
+ },
+ {
+  "id": "h53_2018",
+  "value": 0.286,
+  "shown_as": "0.286",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H53: HAR Spearman 0.286 (2018)"
+ },
+ {
+  "id": "h53_2023",
+  "value": 0.411,
+  "shown_as": "0.411",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H53: 0.411 (2023)"
+ },
+ {
+  "id": "h53_2025",
+  "value": 0.399,
+  "shown_as": "0.399",
+  "source_file": "runs/tactical/LOG.md",
+  "quote_or_key": "H53: 0.399 (2025)"
+ },
+ {
+  "id": "t09_nopen_auc",
+  "value": "yearly 2017-2025",
+  "shown_as": "0.527 0.562 0.561 0.567 0.553 0.540 0.551 0.533 0.518",
+  "source_file": "runs/tactical/tasks/T09_regression_anatomy/results_minute.json",
+  "quote_or_key": "q1.nopen.auc[year].mean"
+ },
+ {
+  "id": "t09_close_auc",
+  "value": "yearly 2017-2025",
+  "shown_as": "0.568 0.590 0.599 0.590 0.549 0.543 0.554 0.531 0.521",
+  "source_file": "runs/tactical/tasks/T09_regression_anatomy/results_minute.json",
+  "quote_or_key": "q1.close.auc[year].mean"
+ },
+ {
+  "id": "periods_54",
+  "value": 54,
+  "shown_as": "54 learnable periods",
+  "source_file": "docs/BACKLOG.md",
+  "quote_or_key": "NT-047 QA note: 'the default 54 periods' (14 families, D-031/D-047)"
+ },
+ {
+  "id": "families_14",
+  "value": 14,
+  "shown_as": "14 families",
+  "source_file": "docs/DECISIONS.md",
+  "quote_or_key": "D-047: OHLCV input with all 14 indicator families"
+ },
+ {
+  "id": "heads_8",
+  "value": 8,
+  "shown_as": "8 heads",
+  "source_file": "src/neural_trade/models/gru_attention.py",
+  "quote_or_key": "layers.MultiHeadAttention(num_heads=8, key_dim=att_key_dim)(memory, memory)"
+ },
+ {
+  "id": "horizons",
+  "value": "10/15/20 min",
+  "shown_as": "10 / 15 / 20 min",
+  "source_file": "CLAUDE.md",
+  "quote_or_key": "BTC/USDT 1-minute (60-minute window, 10/15/20-minute horizons)"
+ },
+ {
+  "id": "hyper_dim",
+  "value": 80,
+  "shown_as": "80-dimensional",
+  "source_file": "D:/nt/nt_hyperspace_ro/hyperspace/config.py",
+  "quote_or_key": "UKT_FEATURE_DIM: int = 80"
+ },
+ {
+  "id": "hyper_nodes",
+  "value": 6,
+  "shown_as": "6 nodes",
+  "source_file": "D:/nt/nt_hyperspace_ro/hyperspace/config.py",
+  "quote_or_key": "GEOPOLITICAL_NODES (USA, Russia, China, Britain, India, Brazil)"
+ },
+ {
+  "id": "hyper_edges",
+  "value": 15,
+  "shown_as": "15 edges",
+  "source_file": "D:/nt/nt_hyperspace_ro/hyperspace/config.py",
+  "quote_or_key": "GEOPOLITICAL_EDGES (15 tuples)"
+ },
+ {
+  "id": "hyper_apis",
+  "value": "32+ keyless APIs",
+  "shown_as": "32+ keyless public APIs",
+  "source_file": "D:/nt/nt_hyperspace_ro/docs/ARCHITECTURE.md",
+  "quote_or_key": "Data Sources (32+ keyless APIs)"
+ },
+ {
+  "id": "hyper_layers",
+  "value": 10,
+  "shown_as": "10 raster layers",
+  "source_file": "D:/nt/nt_hyperspace_ro/hyperspace/config.py",
+  "quote_or_key": "REGION_DESCRIPTIONS['geospatial-kernel']: 10 data layers"
+ },
+ {
+  "id": "recurrent_block",
+  "value": "GRU",
+  "shown_as": "Bi-GRU",
+  "source_file": "src/neural_trade/models/gru_attention.py",
+  "quote_or_key": "layers.Bidirectional(layers.GRU(64, return_sequences=True, ...)) ; the post says LSTM"
+ }
+]
