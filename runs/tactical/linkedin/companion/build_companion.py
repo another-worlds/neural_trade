@@ -105,7 +105,7 @@ def image2(H):
     c2 = (f'<div style="flex:1;background:#0b1525;border:1px solid #1a2e50;border-top:4px solid {RED};border-radius:12px;padding:{16 if not sq else 12}px 20px;display:flex;align-items:center">'
           f'<div style="font-size:{31 if not sq else 27}px;font-weight:600;color:{TXT};line-height:1.3">The neural network scored lower than this simple model</div></div>')
     cap = f'<div style="margin-top:{16 if not sq else 10}px;font-size:22px;color:{MUTED2};text-align:right">BTC/USD, 1-minute data, 2017-2025</div>'
-    inner = (topbar()
+    inner = (f'<div style="height:44px"></div>'
              + f'<div class="c-h1" style="margin-top:{14 if sq else 26}px;font-size:{50 if sq else 60}px">Even the best simple model drifted to a <em class="a">coin flip</em></div>'
              + f'<div style="margin-top:{18 if sq else 24}px">{"".join(o)}</div>'
              + f'<div style="display:flex;gap:16px;margin-top:{10 if sq else 24}px">{c1}{c2}</div>' + cap)
