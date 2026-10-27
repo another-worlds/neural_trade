@@ -1,0 +1,7 @@
+9cf45ce39e21ee7f2a668d1c6594555ca96244b7
+tests/desk + test_layering + test_docs_guides, -m 'not slow' -n 3:
+3 failed, 787 passed, 4 warnings in 33.37s
+3 failures are test_market_store.py::test_concurrent_processes_race_on_a_fresh_file[0-2] under load; alone: 3 passed
+slow tiny-bundle test (tests/desk/test_predictions.py -m slow): 1 passed in 77s
+ruff check src tests scripts: All checks passed
+mutation checks: 6 of 6 killed
