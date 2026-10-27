@@ -1,0 +1,5 @@
+HEAD 9cf45ce39e21ee7f2a668d1c6594555ca96244b7 (+ uncommitted NT-264 files)
+tests/desk/test_lab_scenarios.py -n 4: 41 passed
+desk+layering+docs_guides -n 4: 803 passed, 1 failed (tests/test_docs_guides.py::test_the_worked_example_trains_ranks_and_sizes_sweeps_on_a_tiny_cpu_scenario: CPU ResourceExhaustedError OOM / DLL load failed under memory pressure, unrelated; fails alone for the same reason)
+mutations: write-on-invalid 6 failed; traversal accepted 1 failed; overwrite allowed 1 failed; name not set 1 failed
+All checks passed!
