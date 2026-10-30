@@ -5,3 +5,4 @@ cache repo 9600/22039 229s
 cache repo 12800/22039 348s
 cache repo 16000/22039 411s
 cache repo 19200/22039 466s
+T0 repo: max |diff| vs stored zero-shot npz on all 2895 Test origins = 0.000737 bps

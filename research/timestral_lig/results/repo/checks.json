@@ -1,0 +1,61 @@
+{
+ "set": "repo",
+ "T4_splits": {
+  "dataset": "repo",
+  "train": [
+   2047,
+   28814,
+   26768
+  ],
+  "v1": [
+   28890,
+   30329,
+   1440
+  ],
+  "v2": [
+   30405,
+   34724,
+   4320
+  ],
+  "test": [
+   34800,
+   43482,
+   2895
+  ]
+ },
+ "T3_parity_max": 0.0,
+ "T3b_seq_vs_last_max": 3.4113822877657185e-12,
+ "T2_T8_feature_rel_change_max": 0.0,
+ "T2_E_token_change_max": 0.0,
+ "T2_future_closes_untouched_context": true,
+ "T1_step0_nonzero": [
+  "gate_logit",
+  "mlp_D.2.bias",
+  "mlp_D.2.weight",
+  "mlp_E.2.bias",
+  "mlp_E.2.weight",
+  "mlp_H.2.bias",
+  "mlp_H.2.weight",
+  "recal.rho",
+  "recal.side",
+  "ts.transformer.layers.10.attns.0.wO.B",
+  "ts.transformer.layers.10.attns.0.wQKV.B",
+  "ts.transformer.layers.11.attns.0.wO.B",
+  "ts.transformer.layers.11.attns.0.wQKV.B",
+  "ts.transformer.layers.8.attns.0.wO.B",
+  "ts.transformer.layers.8.attns.0.wQKV.B",
+  "ts.transformer.layers.9.attns.0.wO.B",
+  "ts.transformer.layers.9.attns.0.wQKV.B"
+ ],
+ "T1_step0_only_allowed": true,
+ "T1_after2_zero_grad_params": [],
+ "T1_after2_periods_nonzero": 40,
+ "T1_after2_gates_nonzero": 11,
+ "T1_synthetic_periods_moved": 40,
+ "T0c_cached_vs_full_max_bps": 0.0,
+ "T0c_adapter_effect_bps": 22.988681601034955,
+ "T6_equivariance_max_bps": 0.0,
+ "T7_constants_source": "Train origins only (train.constants: D.train, D.train[::2])",
+ "T5_group_ids": "arange(2B), asserted shapes in model.backbone",
+ "all_pass": true
+}

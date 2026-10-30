@@ -1,0 +1,10 @@
+cache post 0/27179 1s
+cache post 3200/27179 372s
+cache post 6400/27179 1284s
+cache post 9600/27179 1773s
+cache post 12800/27179 1828s
+cache post 16000/27179 1882s
+cache post 19200/27179 1938s
+cache post 22400/27179 1991s
+cache post 25600/27179 2054s
+T0 post: max |diff| vs stored zero-shot npz on all 6715 Test origins = 0.000508 bps
