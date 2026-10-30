@@ -1,0 +1,437 @@
+{
+ "dataset": "repo",
+ "rows": [
+  {
+   "variant": "timestral-209M_ctx8192_price_sub6",
+   "base": "timestral-209M_ctx2048_price",
+   "n": 483,
+   "stride_min": 18,
+   "pinball9_h1": [
+    -0.986,
+    [
+     -2.171,
+     0.032
+    ]
+   ],
+   "qlike_h1": [
+    -0.648,
+    [
+     -1.106,
+     -0.181
+    ]
+   ],
+   "pinball9_h5": [
+    -0.112,
+    [
+     -0.668,
+     0.445
+    ]
+   ],
+   "qlike_h5": [
+    -0.165,
+    [
+     -0.426,
+     0.101
+    ]
+   ],
+   "pinball9_h15": [
+    -0.428,
+    [
+     -1.011,
+     0.157
+    ]
+   ],
+   "qlike_h15": [
+    -0.132,
+    [
+     -0.368,
+     0.089
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-209M_ctx2048_price_cov_sub6",
+   "base": "timestral-209M_ctx2048_price",
+   "n": 483,
+   "stride_min": 18,
+   "pinball9_h1": [
+    -0.762,
+    [
+     -2.827,
+     1.12
+    ]
+   ],
+   "qlike_h1": [
+    -1.159,
+    [
+     -2.581,
+     0.156
+    ]
+   ],
+   "pinball9_h5": [
+    0.753,
+    [
+     -0.892,
+     2.209
+    ]
+   ],
+   "qlike_h5": [
+    0.051,
+    [
+     -0.334,
+     0.413
+    ]
+   ],
+   "pinball9_h15": [
+    1.007,
+    [
+     -0.886,
+     2.765
+    ]
+   ],
+   "qlike_h15": [
+    0.137,
+    [
+     -0.302,
+     0.519
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-28M_ctx8192_price_sub6",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 483,
+   "stride_min": 18,
+   "pinball9_h1": [
+    0.379,
+    [
+     -0.598,
+     1.426
+    ]
+   ],
+   "qlike_h1": [
+    -0.053,
+    [
+     -0.581,
+     0.451
+    ]
+   ],
+   "pinball9_h5": [
+    0.226,
+    [
+     -0.52,
+     0.937
+    ]
+   ],
+   "qlike_h5": [
+    0.022,
+    [
+     -0.236,
+     0.265
+    ]
+   ],
+   "pinball9_h15": [
+    -0.549,
+    [
+     -1.327,
+     0.211
+    ]
+   ],
+   "qlike_h15": [
+    0.081,
+    [
+     -0.122,
+     0.31
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-28M_ctx32768_price_sub6",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 483,
+   "stride_min": 18,
+   "pinball9_h1": [
+    3.622,
+    [
+     2.126,
+     5.28
+    ]
+   ],
+   "qlike_h1": [
+    3.21,
+    [
+     1.887,
+     4.674
+    ]
+   ],
+   "pinball9_h5": [
+    0.602,
+    [
+     -0.615,
+     1.795
+    ]
+   ],
+   "qlike_h5": [
+    0.33,
+    [
+     -0.066,
+     0.725
+    ]
+   ],
+   "pinball9_h15": [
+    -0.493,
+    [
+     -1.463,
+     0.464
+    ]
+   ],
+   "qlike_h15": [
+    0.19,
+    [
+     -0.065,
+     0.504
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-28M_ctx2048_price_cov",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    0.106,
+    [
+     -0.363,
+     0.584
+    ]
+   ],
+   "qlike_h1": [
+    -0.368,
+    [
+     -0.627,
+     -0.087
+    ]
+   ],
+   "pinball9_h5": [
+    0.297,
+    [
+     -0.188,
+     0.717
+    ]
+   ],
+   "qlike_h5": [
+    -0.059,
+    [
+     -0.204,
+     0.086
+    ]
+   ],
+   "pinball9_h15": [
+    0.424,
+    [
+     -0.484,
+     1.284
+    ]
+   ],
+   "qlike_h15": [
+    0.009,
+    [
+     -0.214,
+     0.233
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-28M_ctx2048_price_nosym",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    0.259,
+    [
+     -0.006,
+     0.53
+    ]
+   ],
+   "qlike_h1": [
+    0.066,
+    [
+     -0.053,
+     0.208
+    ]
+   ],
+   "pinball9_h5": [
+    0.023,
+    [
+     -0.19,
+     0.238
+    ]
+   ],
+   "qlike_h5": [
+    0.051,
+    [
+     -0.045,
+     0.157
+    ]
+   ],
+   "pinball9_h15": [
+    -0.243,
+    [
+     -0.606,
+     0.102
+    ]
+   ],
+   "qlike_h15": [
+    0.03,
+    [
+     -0.053,
+     0.134
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-28M_ctx2048_logret",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    -0.365,
+    [
+     -0.74,
+     0.026
+    ]
+   ],
+   "qlike_h1": [
+    0.059,
+    [
+     -0.228,
+     0.387
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-209M_ctx2048_logret",
+   "base": "timestral-209M_ctx2048_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    -0.102,
+    [
+     -0.37,
+     0.189
+    ]
+   ],
+   "qlike_h1": [
+    -0.045,
+    [
+     -0.248,
+     0.19
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-209M_ctx2048_price",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    -0.374,
+    [
+     -0.686,
+     -0.035
+    ]
+   ],
+   "qlike_h1": [
+    -0.018,
+    [
+     -0.21,
+     0.197
+    ]
+   ],
+   "pinball9_h5": [
+    -0.331,
+    [
+     -0.579,
+     -0.078
+    ]
+   ],
+   "qlike_h5": [
+    -0.008,
+    [
+     -0.144,
+     0.138
+    ]
+   ],
+   "pinball9_h15": [
+    -0.367,
+    [
+     -0.857,
+     0.047
+    ]
+   ],
+   "qlike_h15": [
+    -0.011,
+    [
+     -0.128,
+     0.147
+    ]
+   ]
+  },
+  {
+   "variant": "timestral-28M_ctx2048_price",
+   "base": "timestral-28M_ctx512_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    0.115,
+    [
+     -0.325,
+     0.5
+    ]
+   ],
+   "qlike_h1": [
+    -0.048,
+    [
+     -0.273,
+     0.132
+    ]
+   ],
+   "pinball9_h5": [
+    -0.338,
+    [
+     -0.743,
+     0.061
+    ]
+   ],
+   "qlike_h5": [
+    -0.107,
+    [
+     -0.284,
+     0.081
+    ]
+   ],
+   "pinball9_h15": [
+    -0.806,
+    [
+     -1.804,
+     0.088
+    ]
+   ],
+   "qlike_h15": [
+    -0.179,
+    [
+     -0.43,
+     0.074
+    ]
+   ]
+  }
+ ],
+ "agree_h15_with_15min_reversal": {
+  "timestral-5M_ctx512_price": 0.5565,
+  "timestral-28M_ctx512_price": 0.5478,
+  "timestral-209M_ctx512_price": 0.5907,
+  "timestral-28M_ctx2048_price": 0.5547,
+  "timestral-209M_ctx2048_price": 0.5713,
+  "samay-timesfm25_ctx512_price": 0.5478
+ }
+}

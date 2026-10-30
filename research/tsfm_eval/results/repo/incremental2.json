@@ -1,0 +1,80 @@
+[
+ {
+  "tag": "timestral-209M_ctx2048_price",
+  "h": 1,
+  "n_test": 2299,
+  "auc_base": 0.5228,
+  "auc_tsfm_only": 0.5048,
+  "auc_base+tsfm": 0.5144,
+  "delta_auc_base+tsfm_minus_base": -0.0084,
+  "delta_auc_ci95": [
+   -0.022,
+   0.0041
+  ]
+ },
+ {
+  "tag": "timestral-209M_ctx2048_price",
+  "h": 5,
+  "n_test": 2315,
+  "auc_base": 0.5107,
+  "auc_tsfm_only": 0.5083,
+  "auc_base+tsfm": 0.5001,
+  "delta_auc_base+tsfm_minus_base": -0.0106,
+  "delta_auc_ci95": [
+   -0.029,
+   0.0085
+  ]
+ },
+ {
+  "tag": "timestral-209M_ctx2048_price",
+  "h": 15,
+  "n_test": 2316,
+  "auc_base": 0.5161,
+  "auc_tsfm_only": 0.5192,
+  "auc_base+tsfm": 0.5072,
+  "delta_auc_base+tsfm_minus_base": -0.0089,
+  "delta_auc_ci95": [
+   -0.0448,
+   0.0227
+  ]
+ },
+ {
+  "tag": "official-chronos2_ctx512_price",
+  "h": 1,
+  "n_test": 2299,
+  "auc_base": 0.5228,
+  "auc_tsfm_only": 0.4908,
+  "auc_base+tsfm": 0.5122,
+  "delta_auc_base+tsfm_minus_base": -0.0106,
+  "delta_auc_ci95": [
+   -0.0239,
+   0.0025
+  ]
+ },
+ {
+  "tag": "official-chronos2_ctx512_price",
+  "h": 5,
+  "n_test": 2315,
+  "auc_base": 0.5107,
+  "auc_tsfm_only": 0.5254,
+  "auc_base+tsfm": 0.516,
+  "delta_auc_base+tsfm_minus_base": 0.0053,
+  "delta_auc_ci95": [
+   -0.015,
+   0.0257
+  ]
+ },
+ {
+  "tag": "official-chronos2_ctx512_price",
+  "h": 15,
+  "n_test": 2316,
+  "auc_base": 0.5161,
+  "auc_tsfm_only": 0.5363,
+  "auc_base+tsfm": 0.5278,
+  "delta_auc_base+tsfm_minus_base": 0.0117,
+  "delta_auc_ci95": [
+   -0.0151,
+   0.0386
+  ]
+ }
+]

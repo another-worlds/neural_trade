@@ -1,0 +1,14 @@
+{
+ "samay-chronos2_ctx512_price_sub6": {
+  "n": 483,
+  "max_abs_diff_bps_all": 0.0007886046626250677,
+  "max_abs_diff_bps_deciles": 0.0007886046626250677,
+  "mean_abs_diff_bps": 1.927978906644475e-06
+ },
+ "samay-bolt_small_ctx512_price_sub6": {
+  "n": 483,
+  "max_abs_diff_bps_all": 0.0007895169206503125,
+  "max_abs_diff_bps_deciles": 0.0007895169206503125,
+  "mean_abs_diff_bps": 5.85801867837804e-05
+ }
+}

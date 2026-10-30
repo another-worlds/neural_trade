@@ -40,3 +40,6 @@ indicator_params_history.csv
 .DS_Store
 Thumbs.db
 inference.ipynb.backup
+
+# tsfm_eval working files (forecast arrays, data, weights)
+research/tsfm_eval/work/
