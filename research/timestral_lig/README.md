@@ -9,7 +9,7 @@ This folder holds the code and the small result files of the experiment. The wri
 - **Selected candidate (A1, recalibration only).** QLIKE is +0.43% worse than zero-shot on the repo Test set (significant) and −0.37% on the clean set (not significant).
 - **Indicator rung (A2, descriptive).** Pinball improves by 0.28–0.47% (significant), but QLIKE does not improve significantly, and tails get worse.
 - **Deeper sites (encoder tokens, forecast query, LoRA).** They never beat A2 on validation.
-- **Licence-free control.** FHS plus the same features matches A2.
+- **Licence-free control.** FHS plus the same features is not significantly different from A2 (the CIs are wide).
 
 Details: [`plans/timestral_lig.md`](../../plans/timestral_lig.md).
 

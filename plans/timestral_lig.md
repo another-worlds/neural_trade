@@ -18,34 +18,37 @@
   - On the repo set, the indicator rung A2 was best, but it was not significantly better than A1. The Occam rule picked A1.
   - On the clean set, A2 was selected.
   - The common candidate is the lower rung, A1.
-- **On Test, A1 fails P1, P2 and P4.**
+- **On Test, A1 fails P1, P2, P4, P5 and P6. It passes P3 and P7.**
   - Its QLIKE is 0.43% **worse** than zero-shot on the repo set (95% CI +0.10 to +0.77) and 0.37% better on the clean set (not significant).
   - Its pinball loss is 0.34% better on the repo set (significant) and 0.15% better on the clean set (not significant).
-- **A2 also fails (descriptive).** A2 is the full indicator and geometry rung at the quantile head.
+- **A2 would also fail (descriptive).** A2 is the full indicator and geometry rung at the quantile head. It would fail P1 and P3 and pass P2.
   - Pinball improves on both sets: −0.47% and −0.28%, both significant.
   - QLIKE does not improve significantly: −0.18% and −0.43%, both CIs include 0.
   - Tails get worse: 2 and 3 of 6 tail tests fail, against 1 for zero-shot.
-- **Deeper injection did nothing.** Features in the encoder tokens and the forecast query (A3), and LoRA on attention (A4), never beat A2 on V2. On both sets the best checkpoint was step 0.
-- **A licence-free control is as good.** C-FHS-hi uses FHS quantiles, the same 62 features and a small recalibration, with no Timestral.
-  - It is not significantly different from A2 on either set.
-  - Its QLIKE is lower on the clean set (−1.27% vs zero-shot, against −0.43% for A2).
+- **Deeper injection showed no gain within the budget.** We fed features into the encoder tokens and the forecast query (A3), and added LoRA on attention (A4). With one seed each, both were worse than their start (A2 seed 0) at every V2 check from step 150 to 450, and early stopping ended them after 450 of 1,200 steps. On both sets the best checkpoint was step 0.
+- **We could not tell a licence-free control apart from A2.** C-FHS-hi uses FHS quantiles, the same 62 features and a small recalibration, with no Timestral.
+  - It is not significantly different from A2 on either set. The CIs are wide (A2 minus C-FHS-hi, QLIKE: repo −0.14 [−0.97, +0.67], clean +0.85 [−0.36, +2.20]), so this does not show that the two are equal.
+  - Its QLIKE is lower on the clean set (−1.27% vs zero-shot, against −0.43% for A2). A2 is better on clean pinball at h = 1 (−0.44%, significant).
   - It fails 4 of 6 tail tests on the clean set.
+- **The geometry losses showed no consistent benefit.** Without them (A2-g0), the clean V2 score was better (−1.33 vs −0.99). On Test the difference was mixed and mostly not significant (repo pinball 0.09% better with them).
 - **What the model learned.**
-  - It kept the volatility, calendar, path-shape and Bollinger-width groups mostly open (gates 0.75–0.94).
-  - It half-closed the oscillator and momentum groups (gates about 0.5).
+  - The gates start at 0.88. The volatility, calendar, path-shape and Bollinger gates stayed near that value (0.75–0.94).
+  - The EMA-distance, MACD, MACD-pairs, RSI and momentum gates fell to 0.49–0.57. The range and trend-geometry gates fell to 0.58–0.71.
   - It did not move the indicator periods much.
-  - Its largest single change was to shrink Timestral's median to the last price, which is a random walk.
+  - Its largest single change was to shrink Timestral's median toward the last price: 76–82% at h = 1 and 100% from h = 3–4 (A2). Part of this comes from our random-walk penalty on the median. Without the geometry losses (A2-g0), the shrink at h = 1 is only 49–74%.
 
-**Why.** The indicators are functions of the closes that the backbone already reads, and the backbone already uses
-that information. Only two groups add new information, the high-low range and the clock. Those two help a little on
-the repo set (QLIKE −0.38% vs A2 without them, significant) and not on the clean set. The measurable gains are mostly
-recalibration, and they do not transfer reliably from the 3-day validation window to Test.
+**Why (our reading; not tested by a dedicated experiment).**
+- Most indicators (51 of 62) are functions of the closes that the backbone already reads, and we could not detect what they add. A2-close (without range and clock) against A1 was not tested; its point estimates favour A2-close slightly.
+- Only two groups carry information that is not in the closes: the high-low range and the clock. They helped repo QLIKE (−0.38% vs A2 without them, descriptive) and not clean QLIKE.
+- Recalibration alone (A1) helped pinball (repo −0.34%, significant) but made repo QLIKE worse (+0.43%, significant).
+- The V2 gains shrank on Test.
+- None of the descriptive gains reaches the pre-registered bar.
 
 **What to keep.**
 - The indicator bank (`research/timestral_lig/indicators.py`) is a correct, causal, tested replacement for
   neural_trade's `LearnableIndicators`. It fixes defects D1 and D7 by design.
-- The lesson for neural_trade's risk path: put the high-low range and the time of day into the variance model.
-  Shrink any learned median to the last price.
+- An idea to test in neural_trade's risk path: add the high-low range and the time of day to the variance model. They helped repo QLIKE by 0.38% (descriptive); on the clean set the point estimate went the other way.
+- Shrinking the median toward the last price removed most of Timestral's small negative price skill (MAE skill −0.006 → −0.001 at h = 1). We did not isolate its effect on pinball and QLIKE.
 
 **Licence.** The trained adapters are derivatives of Timestral-28M under its Modified MIT licence. Clause 2 (the $20M
 revenue condition) applies to them as to the model. We did not commit any weights. Use, including benchmark use,
@@ -58,12 +61,20 @@ needs written legal clearance first (see the zero-shot report, Section 1).
 | Term | Meaning |
 |---|---|
 | A0 | Zero-shot Timestral-28M, context 2048, with symmetric averaging (the reference) |
-| A1-A4 | The ladder: A1 = recalibration G only; A2 = A1 + indicators at the quantile head (H); A3 = A2 + encoder tokens (E) and forecast query (D); A4 = A3 + LoRA |
+| A1-A4 | The ladder: A1 = recalibration G only; A2 = A1 + indicators at the quantile head (H); A3 = A2 + encoder tokens (E) and forecast query (D); A4 = A3 + LoRA (rank-4 low-rank adapters on attention weights) |
 | A2-plc, A2-g0, A2-close | Controls: placebo features from another time; no geometry losses; no range and calendar groups |
-| C-FHS, C-FHS-hi | Licence-free controls: FHS quantiles plus a conditional recalibration on the same features; two learning rates |
+| C-FHS, C-FHS-hi | Licence-free controls: FHS quantiles plus a conditional recalibration on the same 62 features, no Timestral. C-FHS uses offset learning rate 3e-4, C-FHS-hi 1e-2 |
 | Train / V1 / V2 / Test | Data blocks per set; V1 (1 day) sets loss weights; V2 (3 days) does early stopping and selection; Test is scored once |
 | V2 score | Mean over h = 1, 5, 15 of 0.5 x (QLIKE % change + pinball21 % change) against A0; negative = better |
 | QLIKE, pinball21, FHS | As in the zero-shot report: variance score, 21-quantile pinball loss, filtered historical simulation |
+| Seed ensemble | The mean of the seeds' quantile forecasts (it stays monotone) |
+| Beats, promoted | Rung a beats (is promoted over) rung b if its V2 score improves by at least max(0.1%, 2 x a's seed SD) and the paired CI excludes 0 |
+| Occam rule | The candidate is the lowest ladder rung (A0-A4) that the best ladder rung does not beat. Controls do not take part |
+| Abort rule | From the design: if A3 and A4 seed 0 both stop at step 0 on both sets, train no more T2 seeds |
+| Tail tests | 6 Newey-West (overlap-robust) exceedance tests: the 1% and 99% quantiles at h = 1, 5, 15. A test fails when p < 0.05 |
+| Spec, design | The judged design from three independent design agents (fields: injection, indicators, geometry, losses, governance, protocol) |
+| SD, pp, RMS, AUC, DST | Standard deviation (here: across seeds); percentage points; root mean square; area under the ROC curve for the return sign (0.5 = no skill); daylight-saving time |
+| D1-D8, EWMA-t, metrics2.py | As in the zero-shot report; metrics2.py is the benchmark scorer in `research/tsfm_eval/bench/` |
 | bps | Basis points; 1 bps = 0.01% |
 
 ---
@@ -122,11 +133,15 @@ h = 1, 5, 15 and 1/24 at the other steps).
 | Pinball | 21-level pinball / (σ_t √k), divided by its zero-shot Train mean | 1 (fixed) | anchor; strictly consistent for the true quantiles |
 | QLIKE | y²/v + ln v of the quantile-implied variance | governed, 0.025-1 | the headline variance score |
 | Fan | soft hinge: widths must not shrink as k grows | governed | geometry |
-| Term | log-log term structure of widths stays straight | governed | neural_trade's cross-horizon coherence, on widths |
+| Term structure | log-log term structure of widths stays straight | governed | neural_trade's cross-horizon coherence, on widths |
 | Tail | tail ratio W98/W50 must not rise with k | governed | aggregational Gaussianity |
 | Median curvature | median path must not bend | governed | neural_trade's coherence penalty, on the median |
 | Median random walk | (median / σ√k)² | governed | random-walk prior (no model has price skill) |
 | Gates | 1e-3 x sum of gates (ramped in) | fixed | feature selection |
+
+Governed means that the model sets the weight during training (Section 2.4).
+- **Start values.** QLIKE 0.25 (range 0.025–1), fan 1.0, tail 0.2. Term structure, median curvature and median random walk start at 3% of the pinball loss on Train, so their start differs per set.
+- **Limits.** Each geometry weight stays within 0.1x to 10x of its start.
 
 neural_trade's trend and coherence losses used only the targets, so they had no gradient. Here every geometry term
 acts on the predictions and has a gradient.
@@ -157,19 +172,26 @@ acts on the predictions and has a gradient.
   - A2-close: no range and no calendar groups.
   - C-FHS / C-FHS-hi: licence-free; FHS quantiles with a conditional recalibration on the same features, no Timestral.
 - **Seeds.** A1 and A2: 5 seeds. Controls: 3 seeds. T2: seed 0; more seeds only for a promoted T2 rung.
-- **Selection (V2 only).** Rung a beats rung b if its V2 score improves by at least max(0.1%, 2 x a's seed SD) and the
-  paired 60-minute block-bootstrap CI excludes 0. The candidate is the lowest rung that the best rung does not beat.
-  The common candidate is the lower of the two sets' candidates. `candidate.json` (with the SHA-256 of every
+- **Selection (V2 only).**
+  - Rung a beats rung b if its V2 score improves by at least max(0.1%, 2 x a's seed SD) and the paired 60-minute block-bootstrap CI excludes 0.
+  - The best rung is the ladder rung (A0–A4) with the lowest V2 score. Controls do not take part.
+  - The candidate is the lowest ladder rung that the best rung does not beat (Occam rule).
+  - The common candidate is the lower of the two sets' candidates. `candidate.json` (with the SHA-256 of every
   checkpoint) and `preregistration.json` were committed to git (commit 46ce1ed) before any Test inference.
 - **V2 score.** The mean over h = 1, 5, 15 of 0.5 x (QLIKE % change + pinball21 % change) against zero-shot.
-- **Pass rule (P1-P7, both sets).**
-  - P1, QLIKE: aggregate at most −0.5%, with the CI below 0.
-  - P2, pinball: does not get worse by more than +0.10% (CI upper bound).
-  - P3, tails: the overlap-robust tail tests fail no more often than for zero-shot.
-  - P4, seeds: every seed meets P2 and has a QLIKE gain.
-  - P5, attribution: the candidate beats A1, and A2 beats the placebo on V2.
-  - P6, licence: the candidate beats the licence-free control.
-  - P7, price: the median's price skill does not fall by more than 0.2 pp.
+- **Pass rule (P1-P7, Test, both sets; aggregate = mean over h = 1, 5, 15).**
+  - P1, QLIKE: aggregate at most −0.5% with the CI below 0, and no h cell significantly worse.
+  - P2, pinball: CI upper bound at most +0.10%, and no h cell point estimate above +0.30%.
+  - P3, tails: the tail tests fail no more often than for zero-shot.
+  - P4, seeds: every seed has a QLIKE gain (point estimate) and meets P2.
+  - P5, attribution: on Test, the candidate's QLIKE is lower than A1's on both sets, with the CI below 0 on at least one set. On V2, A2 beats the placebo on both sets (CI below 0).
+  - P6, licence: on Test, the candidate's QLIKE is lower than the licence-free control's, with the CI below 0 on both sets.
+  - P7, price: the median's MAE skill against a random walk does not fall by more than 0.2 pp at any h.
+- **Verdicts.**
+  - PASS if P1–P7 all pass.
+  - PASS-licence-free if P1–P5 pass and P6 fails.
+  - PASS-recal if A1 meets P1–P4 and P5 fails.
+  - Otherwise FAIL.
 
 ---
 
@@ -177,7 +199,8 @@ acts on the predictions and has a gradient.
 
 ### 4.1 Selection on V2 (both sets, before Test)
 
-V2 score against A0 (negative = better), seed ensemble, with the 95% block-bootstrap CI and the per-seed values.
+V2 score against A0 (negative = better) for the seed ensemble, with the 95% block-bootstrap CI and the range of
+per-seed values. **Bold** = CI excludes 0.
 
 | Rung | Repo V2 | Repo seeds | Clean V2 | Clean seeds |
 |---|---|---|---|---|
@@ -186,7 +209,7 @@ V2 score against A0 (negative = better), seed ensemble, with the 95% block-boots
 | A3 (+ encoder, query) | −0.64 (= A2 seed 0, step 0) | 1 seed | −1.01 (= A2 seed 0, step 0) | 1 seed |
 | A4 (+ LoRA) | −0.64 (step 0) | 1 seed | −1.01 (step 0) | 1 seed |
 | A2-plc placebo | −0.54 [−1.20, +0.07] | | −0.28 [−0.99, +0.35] | |
-| A2-g0 no geometry losses | −0.62 [−1.45, +0.07] | | −1.33 [−3.38, −0.12] | |
+| A2-g0 no geometry losses | −0.62 [−1.45, +0.07] | | **−1.33 [−3.38, −0.12]** | |
 | A2-close no range, no calendar | −0.59 [−1.25, +0.02] | | −0.46 [−1.12, +0.08] | |
 | C-FHS (licence-free) | +0.04 | | +0.47 | |
 | C-FHS-hi (licence-free) | −0.86 [−2.64, +0.58] | −0.50 to −0.92 | −0.78 [−1.86, +0.20] | −0.44 to −0.90 |
@@ -196,8 +219,10 @@ The selection by the rule:
 | Set | Best rung | Best vs A1 | Candidate |
 |---|---|---|---|
 | Repo | A2 | −0.17, CI [−0.51, +0.07]: not beaten | **A1** (Occam) |
-| Clean | A3 (= A2 seed 0) | −0.72, CI [−1.65, −0.18]: beaten; vs A2 −0.03: not beaten | **A2** |
+| Clean | A3 (= A2 seed 0) | −0.72, CI [−1.65, −0.18]: beaten; vs A2 −0.02, CI [−0.09, +0.02]: not beaten | **A2** |
 
+- **Why A3 is "best" on the clean set.** Its best checkpoint is step 0, which is A2 seed 0. That seed scores −1.01, against −0.99 for the A2 seed ensemble. The difference (−0.02) does not meet the rule.
+- **Controls.** C-FHS-hi on repo and A2-g0 on clean have better V2 scores than the best ladder rung. Controls do not take part in the selection.
 - **Common candidate:** A1, the lower of the two.
 - **Licence-free control:** C-FHS-hi on both sets (stronger than C-FHS on V2).
 - **A3 and A4:** never beat their A2 start on either set. So, under the spec's abort rule, we trained no further T2 seeds and no LoRA-only control (A4L).
@@ -207,13 +232,13 @@ The selection by the rule:
 
 | Check | Result | Detail |
 |---|---|---|
-| P1 QLIKE ≤ −0.5%, CI < 0, both sets | **fail** | A1: repo +0.43 [+0.10, +0.77] (worse), clean −0.37 [−0.91, +0.09] |
+| P1 QLIKE ≤ −0.5%, CI < 0, both sets | **fail** | A1: repo +0.43 [+0.10, +0.77] (worse), clean −0.37 [−0.91, +0.09]; repo h = 1 cell +0.26 [+0.13, +0.39] is also significantly worse |
 | P2 pinball CI upper ≤ +0.10% | **fail** | repo −0.34 [−0.66, −0.05]; clean −0.15 [−0.39, **+0.1006**], fails by 0.0006 |
 | P3 tails no worse than A0 | pass | A1 fails 1 of 6 on each set, as A0 |
 | P4 every seed | **fail** | QLIKE is worse than A0 for all 5 repo seeds |
-| P5 attribution | **fail** | by definition: the candidate is A1 itself |
+| P5 attribution | **fail** | the candidate is A1 itself (A1 vs A1 = 0). Separately, A2 did not beat the placebo on repo V2 (−0.15, CI [−0.44, +0.07]); on clean V2 it did (−0.71, CI [−1.48, −0.26]) |
 | P6 beats the licence-free control | **fail** | A1 vs C-FHS-hi QLIKE: repo +0.47, clean +0.92 (both CIs include 0) |
-| P7 price skill not lower | pass | the median is now a random walk (MAE skill 0.000 vs A0's −0.006 at h = 1) |
+| P7 price skill not lower | pass | A1's MAE skill vs a random walk is −0.1 pp at h = 1 (A0: −0.6 pp) and 0.0 pp at h = 5 and 15 |
 | PASS-recal (A1 meets P1-P4) | **fail** | |
 | **Verdict** | **FAIL** | |
 
@@ -226,7 +251,7 @@ over h = 1, 5, 15. Tails = overlap-robust tail tests failed, of 6 (A0 fails 1 on
 |---|---|---|---|---|---|---|
 | A1 | **+0.43** | **−0.34** | 1 | −0.37 | −0.15 | 1 |
 | A2 | −0.18 | **−0.47** | 2 | −0.43 | **−0.28** | 3 |
-| A3 = A4 (step 0) | +0.00 | **−0.45** | 2 | −0.35 | **−0.28** | 3 |
+| A3 = A4 = A2 seed 0 (step 0) | +0.00 | **−0.45** | 2 | −0.35 | **−0.28** | 3 |
 | A2-plc | **+0.43** | **−0.36** | 2 | −0.41 | −0.15 | 2 |
 | A2-g0 | −0.10 | **−0.37** | 3 | −0.36 | **−0.38** | 2 |
 | A2-close | +0.20 | **−0.41** | 3 | −0.64 | **−0.24** | 2 |
@@ -234,7 +259,8 @@ over h = 1, 5, 15. Tails = overlap-robust tail tests failed, of 6 (A0 fails 1 on
 | C-FHS (no Timestral) | +0.48 | −0.30 | 0 | −0.05 | −0.01 | 4 |
 
 Per horizon, A2's QLIKE gain sits at h = 1 on the repo set (−0.60%) and at h = 5 and 15 on the clean set (−0.65% and
-−1.12%). At h = 1 on the clean set it is worse (+0.47%). No cell is significant.
+−1.12%). At h = 1 on the clean set it is worse (+0.47%). Only the repo h = 1 cell is significant (95% CI −1.14 to
+−0.04).
 
 ### 4.4 What the indicators and the geometry add (descriptive, Test)
 
@@ -242,11 +268,11 @@ Paired on identical origins; negative = the first model is better.
 
 | Comparison | Repo QLIKE | Repo pinball21 | Clean QLIKE | Clean pinball21 | Reading |
 |---|---|---|---|---|---|
-| A2 vs A1 (indicators vs recalibration only) | **−0.60** [−0.95, −0.21] | −0.12 | −0.07 | **−0.13** [−0.19, −0.07] | small real gain, on a different metric per set |
-| A2 vs A2-plc (real vs placebo features) | **−0.60** [−0.95, −0.21] | −0.11 | −0.03 | **−0.13** [−0.19, −0.08] | the features carry some information |
+| A2 vs A1 (indicators vs recalibration only) | **−0.60** [−0.95, −0.21] | −0.12 | −0.07 | **−0.13** [−0.19, −0.07] | favours A2 on repo QLIKE and clean pinball (descriptive; P5 failed, so the indicators stay unproven) |
+| A2 vs A2-plc (real vs placebo features) | **−0.60** [−0.95, −0.21] | −0.11 | −0.03 | **−0.13** [−0.19, −0.08] | real features beat placebo features on Test (descriptive); the pre-registered V2 placebo check failed on the repo set |
 | A2 vs A2-close (with vs without range and clock) | **−0.38** [−0.67, −0.06] | −0.06 | +0.20 | −0.04 | range and clock help on repo only |
 | A2 vs A2-g0 (with vs without geometry losses) | −0.07 | **−0.09** [−0.18, −0.02] | −0.07 | +0.10 | no consistent effect |
-| A2 vs C-FHS-hi (Timestral + LIG vs licence-free) | −0.14 | −0.10 | +0.85 | −0.18 | no significant difference |
+| A2 vs C-FHS-hi (Timestral + LIG vs licence-free) | −0.14 | −0.10 | +0.85 | −0.18 | no significant difference; wide CIs, so not shown to be equal |
 
 ### 4.5 Against the free baselines
 
@@ -259,10 +285,10 @@ QLIKE % change against FHS (metrics2.py), h = 1 / 5 / 15; **bold** = CI excludes
 | A2 | −1.12 / −1.22 / −1.53 | **−2.31** / **−2.61** / −3.15 |
 | C-FHS-hi (no Timestral) | −0.25 / −1.27 / −1.93 | **−2.44** / **−3.69** / **−4.39** |
 
-All rungs stay 0.25–4.4% better than FHS on QLIKE (point estimates), as zero-shot Timestral was. LIG does not widen the gap in a way
-we can detect, and the licence-free control reaches the same level.
+A1 and A2 stay 0.26–3.15% better than FHS on QLIKE (point estimates), as zero-shot Timestral was (0.52–2.77%). The
+licence-free control C-FHS-hi is 0.25–4.39% better. LIG does not widen the gap in a way we can detect.
 
-- **Price.** The median of A1 and A2 equals the last price: MAE skill against a random walk is 0.000 to −0.001, against −0.006 for A0 at h = 1.
+- **Price.** The medians of A1 and A2 move 54–82% of the way to the last price at h = 1, and all the way from h = 3–4 (A2). Their MAE skill against a random walk is −0.0004 to −0.001 at h = 1 and 0.000 at h = 5 and 15, against −0.006 for A0 at h = 1.
 - **Direction.** AUC stays at 0.49–0.53. LIG has no price or direction skill.
 
 ### 4.6 What the model learned
@@ -271,44 +297,54 @@ we can detect, and the licence-free control reaches the same level.
 |---|---|---|
 | Gates kept open | volatility 0.89, calendar 0.89, path shape 0.84, Bollinger 0.75 | calendar 0.94, volatility 0.93, path shape 0.89, Bollinger 0.82 |
 | Gates half closed | MACD, RSI, momentum, MACD pairs, EMA distance: 0.49–0.54; range 0.58; trend geometry 0.66 | the same groups 0.54–0.57; range 0.71; trend geometry 0.67 |
-| Periods | almost unchanged; largest moves 240 → 249 (vol), 240 → 245 (moments), 50 → 52 (Bollinger) | 240 → 252, 240 → 257 |
-| Loss weights | near their start; fan 1.0 → 0.59, median random walk 6.6 → 5.0 | near their start; QLIKE 0.25 → 0.33 |
+| Periods | almost unchanged; largest moves 240 → 249 (volatility geometry), 240 → 245 (path shape: skew and kurtosis span), 50 → 52 (Bollinger) | 240 → 252 (volatility geometry), 240 → 257 (path shape) |
+| Loss weights | fan 1.0 → 0.59, median random walk 6.6 → 5.0; others within 12% of start | QLIKE 0.25 → 0.33, fan 1.0 → 1.15; others within 8% of start |
 | Mean cosine with held-out pinball | −0.17 (fan) to +0.03 (tail) | −0.02 to +0.08 |
-| Recalibration G | median shrink 82% at h = 1, 100% from h = 3 | 78% at h = 1, 100% from h = 4 |
+| Recalibration G | median shrink 80–82% at h = 1, 100% from h = 3 (A1: 54–80%) | 76–80% at h = 1, 100% from h = 4 (A1: 71–79%) |
 | Site H | increments change by 0.06–0.10 raw units RMS; the median by 0.001 | 0.04–0.07; 0.001 |
-| Sites E, D, LoRA (A3, A4) | best checkpoint = step 0 (no use) | step 0 (no use) |
+| Sites E, D, LoRA (A3, A4) | best checkpoint = step 0 (worse at steps 150–450) | step 0 (A3 at step 300 within 0.01 of it) |
 
-- No gate closed below 0.1, so no group is fully switched off.
-- Gradient alignment found no term that clearly agrees or conflicts with held-out pinball (mean cosines near 0). The model therefore kept the loss weights close to our starting values.
+- The gates start at 0.88. No gate closed below 0.1, so no group is fully switched off.
+- Gradient alignment found one consistent conflict: on the repo set the fan term disagreed with held-out pinball in all five A2 seeds (mean cosine −0.16 to −0.18), and its weight fell by about 40%. The other cosines were near 0, and those weights moved less.
+- The median shrink comes partly from our random-walk penalty: without the geometry losses (A2-g0) it is 49–51% (repo) and 69–74% (clean) at h = 1, and it does not reach 100%.
 
 ### 4.7 Cost
 
 | Item | Value |
 |---|---|
 | Trainable parameters | A1 10; A2 24,568; A3 86,520; A4 123,384 (0.44% of the backbone) |
-| Training time, 2 CPU threads | T1 run 3–9 s (A1) to 1.2–2.6 min (A2); T2 run about 8 min |
+| Training time, 2 CPU threads | T1 run 3–9 s (A1) to 1.2–2.6 min (A2); T2 run 7.5–8 min (repo A4: 14.6 min, partly while paused) |
 | Single-origin latency, 4 threads, ctx 2048 (p50 / p99) | A0 29.8 / 34.0 ms; A2 35.2 / 50.2 ms; A3 39.3 / 45.0 ms |
 
 ---
 
-## 5. Why it did not work
+## 5. Why it did not work (our reading)
 
-1. **The features repeat what the backbone reads.**
+These points explain the results. No dedicated experiment tested them, and the comparisons behind them are descriptive.
+
+1. **Most features repeat what the backbone reads.**
    - 51 of the 62 features are functions of the 2,048 closes in the context.
-   - The model half-closed most of those groups.
-   - Feeding all of them deeper (encoder tokens, query, LoRA) never helped on V2.
+   - We could not detect what they add.
+   - Feeding all features deeper (encoder tokens, query, LoRA) never improved V2 within the budget.
+   - The gates do not separate redundant from new information. Three close-derived groups stayed near their start (volatility, path shape, Bollinger), and the range group fell to 0.58–0.71.
 2. **New information helps only a little.**
-   - The two groups with new information are the high-low range and the clock, and the clock gate stays open.
-   - Removing both costs 0.38% QLIKE on the repo Test, which is significant. On the clean Test it does not matter.
-3. **Most of the gain is recalibration, and it does not transfer.**
-   - The largest learned effect is to replace Timestral's median with the last price. This is consistent with Timestral having no price skill.
-   - The second effect is to widen the outer quantiles: coverage of the 98% band rises from 0.973–0.985 (A0) to 0.978–0.988 (A2).
-   - On V2 this gave 0.3–0.5% for A1. On Test it improved pinball a little, but cost QLIKE on the repo set, and the tails became too wide.
+   - The two groups with information that is not in the closes are the high-low range and the clock.
+   - Removing both cost 0.38% QLIKE on the repo Test. On the clean Test, the point estimate went the other way (+0.20%, not significant).
+3. **Recalibration alone helps pinball, not QLIKE.**
+   - On V2, A1 scored −0.52% and −0.29%, and neither CI excludes 0.
+   - On Test it improved pinball (repo −0.34%, significant) but made repo QLIKE worse (+0.43%, significant).
+   - A1's tail tests stayed at A0's level.
+   - A2's outer bands became too wide: 98% coverage rose from 0.973–0.985 (A0) to 0.978–0.988, and 2 and 3 of 6 tail tests failed.
 4. **The sample is small for the effect size.**
    - V2 is 3 days per set and Test is 6 or 14 days.
    - Effects of 0.1–0.5% are near the detection limit (CIs about ±0.3–1.0%).
-   - The V2 gains of A2 (−0.68% and −0.99%) shrank to −0.18% and −0.43% QLIKE on Test.
-5. **The backbone is not needed for what remains.** The licence-free control with the same features matches A2 on Test.
+   - A2's V2 score (−0.68% and −0.99%) fell to −0.32% and −0.36% for the same score on Test. Its QLIKE alone went from −0.55% and −1.55% on V2 to −0.18% and −0.43% on Test.
+5. **We could not show that the backbone adds anything beyond the features.**
+   - The licence-free control with the same features is not significantly different from A2 on Test.
+   - The CIs span about ±1–1.5% QLIKE.
+6. **The geometry losses showed no consistent benefit.**
+   - Without them (A2-g0), the clean V2 score was better (−1.33 vs −0.99).
+   - On Test, A2 with them is 0.09% better on repo pinball, and its clean h = 1 QLIKE is 0.26% worse (descriptive).
 
 ---
 
@@ -319,20 +355,28 @@ we can detect, and the licence-free control reaches the same level.
 | Before training | The `seq`-mode EMA used a zero-padded FFT. A check found that later bars changed earlier features by about 1e-8, and by 0.06 for realised skew at step 0. We replaced it with an exact blocked triangular scan. | Exact causality (change 0.0) |
 | Before training | Parity signs of odd and even features were swapped; `sqrt` of tiny negative FFT values gave NaN | Fixed; parity check 0.0 |
 | After an 8-agent review (4 lenses, each verified by a skeptic): 14 confirmed findings (10 distinct issues), none in the trained A1-A4 models | `select` compared each rung with the last promoted rung, not as the spec says. We implemented the spec rule: the candidate is the lowest rung the best rung does not beat. | Changed the repo candidate from A2 to A1, by the spec's own rule |
-| same | The T2 threshold used the largest seed SD of any rung (0.24 from C-FHS) | Now A2's SD |
+| same | The T2 threshold used the largest seed SD of any rung (0.24, from the C-FHS control at its original learning rate, now C-FHS-hi) | Now A2's SD |
 | same | The pre-registration was not enforced | Final select hashes every checkpoint; prereg freezes both sets; export verifies hashes and refuses extra checkpoints; re-registration fails once Test files exist |
 | same | Verdict logic: different candidates per set forced FAIL; PASS-licence-free could fire on a P7 failure; thresholds compared rounded values; one set's seed lists could be used for the other | Fixed |
 | same | The placebo could take features from 1–60 bars after the origin, which contain the label path, for 0.05–1% of rows | Sampler fixed; A2-plc retrained on both sets |
-| same | C-FHS's conditional offsets learned about 20x faster than its shared parameters | We lowered the lr, which made C-FHS weak on V2 (+0.04 and +0.47). A weak control would favour LIG, so we kept both lrs (C-FHS and C-FHS-hi) and registered the one that was stronger on V2. This is the conservative choice for LIG. |
+| same | C-FHS's conditional offsets could move up to about 20x more per step than its shared parameters (about 3–4x more V2-score volatility, as measured by the verifier) | We lowered the lr, which made C-FHS weak on V2 (+0.04 and +0.47). A weak control would favour LIG, so we kept both lrs (C-FHS and C-FHS-hi) and registered the one that was stronger on V2. This is the conservative choice for LIG. |
 | Not changed | The 1440-bar volatility span starts at its upper clamp and cannot move (judged not a defect by the verifier) | Measured effect < 0.003 pp |
 
 ---
 
 ## 7. Limits and risks
 
-- **Validation reuse.** V2 did early stopping for every run and the selection, so its scores are optimistic. Only Test, scored once, is confirmatory.
-- **Many comparisons.** Only P1–P7 are confirmatory. The tables in 4.3–4.5 are descriptive.
-- **One market, short windows.** BTC/USDT 1-minute data, 18–20 days of training per set. The repo Test window spans the 2025-11-02 DST change, and the clean set covers one 14-day regime.
+- **Validation reuse.**
+  - V2 did early stopping for every run and chose the candidate, so V2 scores are optimistic.
+  - V2 also chose between the two C-FHS learning rates.
+  - Only Test, scored once, is confirmatory.
+- **Possible under-training.** On the repo set, 4 of 5 A2 seeds were still improving at the 20-epoch cap.
+- **Thin T2 evidence.** A3 and A4 used one seed each and stopped after 450 of 1,200 steps. V2 checks used a 720-origin subsample.
+- **Many comparisons.** Only P1–P7 are confirmatory. The tables in 4.3–4.6 are descriptive.
+- **One market, short windows.**
+  - BTC/USDT 1-minute data, with 18–20 days of training per set.
+  - The repo Test window spans the 2025-11-02 DST change.
+  - The clean Test window covers one 14-day regime.
 - **Not run.**
   - The LoRA-only control (A4L), because A4 was not promoted.
   - The transfer check (repo-trained model on the clean set).
@@ -350,11 +394,15 @@ we can detect, and the licence-free control reaches the same level.
    - use zero-shot Timestral only as an optional benchmark, after legal clears the licence.
 2. **Reuse the indicator bank** (`research/timestral_lig/indicators.py`) in neural_trade in place of `LearnableIndicators`.
    - It is causal, tested for parity and gradient flow, and free of D1 and D7.
-   - Expect no forecast gain from the close-derived groups.
-3. **For a licence-free risk input,** test C-FHS-hi (FHS plus range, clock and volatility features with a small recalibration) against FHS in the risk path.
-   - It beat FHS by 2.4–4.4% QLIKE on the clean set (significant).
-   - It fails 4 of 6 tail tests there, so fix its tails before use.
-4. **For any learned median,** shrink it to the last price. Every model here gains from that.
+   - We could not detect a forecast gain from its close-derived groups.
+3. **Optional, licence-free.** Test C-FHS-hi (FHS quantiles plus a small recalibration that uses the same 62 features) against FHS in the risk path.
+   - It beat FHS by 2.4–4.4% QLIKE on the clean set (significant), but only by 0.25–1.9% on the repo set (not significant).
+   - Its seeds vary the most of any model.
+   - It fails 4 of 6 tail tests on the clean set.
+   - Fix the seed spread and the tails before any use.
+4. **For any learned median, shrink it toward the last price.**
+   - Here the shrink removed most of Timestral's small negative price skill.
+   - Its effect on pinball and QLIKE was not isolated.
 
 ---
 
