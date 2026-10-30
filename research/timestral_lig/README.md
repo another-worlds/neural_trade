@@ -3,6 +3,16 @@
 This folder holds the code and the small result files of the experiment. The write-up is in
 [`plans/timestral_lig.md`](../../plans/timestral_lig.md).
 
+## Result in one paragraph
+
+**FAIL** on the pre-registered pass rule (`results/score.json`).
+- **Selected candidate (A1, recalibration only).** QLIKE is +0.43% worse than zero-shot on the repo Test set (significant) and −0.37% on the clean set (not significant).
+- **Indicator rung (A2, descriptive).** Pinball improves by 0.28–0.47% (significant), but QLIKE does not improve significantly, and tails get worse.
+- **Deeper sites (encoder tokens, forecast query, LoRA).** They never beat A2 on validation.
+- **Licence-free control.** FHS plus the same features matches A2.
+
+Details: [`plans/timestral_lig.md`](../../plans/timestral_lig.md).
+
 ## What it is
 
 Zero-init adapters that feed 62 learnable indicator and geometry features into a frozen Timestral-28M:
