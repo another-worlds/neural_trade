@@ -49,9 +49,9 @@ def pair(D, qa, qb):
         cells = []
         for h in range(3):
             d = 100 * (a[:, h] - b[:, h]) / den[h]
-            cells.append([round(float(d.mean()), 3), [round(v, 3) for v in block_ci(d, 20)]])
+            cells.append([float(d.mean()), list(block_ci(d, 20))])
         agg = 100 * ((a - b) / den).mean(1)
-        out[name] = {"cells": cells, "agg": round(float(agg.mean()), 3), "agg_ci": [round(v, 3) for v in block_ci(agg, 20)]}
+        out[name] = {"cells": cells, "agg": float(agg.mean()), "agg_ci": list(block_ci(agg, 20))}
     return out
 
 
@@ -70,24 +70,33 @@ def run_metrics2(ds, D, tags):
     subprocess.run([sys.executable, os.path.join(BENCH, "metrics2.py")], env=env, check=True,
                    stdout=subprocess.DEVNULL, cwd=BENCH)
     rows = json.load(open(os.path.join(mdir, "metrics2.json")))["rows"]
-    return {(r["model"], r["h"]): r for r in rows if r.get("set") == "full"}
+    return {(r["model"], r["h"]): r for r in rows if r["model"] in tags}     # all files share D.test
 
 
 def tails_failed(m, tag):
     return sum(int(m[(tag, h)][k] < 0.05) for h in (1, 5, 15) for k in ("nw_p_q01", "nw_p_q99"))
 
 
+def make_tag_of(rungs):
+    return lambda r: f"{TAG}_{r}_ens" if len(rungs.get(r, [])) > 1 else f"{TAG}_{r}_s0"
+
+
 def main():
-    out = {"sets": {}}
+    pr = json.load(open(os.path.join(train.WORK, "preregistration.json")))
+    out = {"preregistration": pr, "sets": {}}
     per = {}
+    cand = pr["common_candidate"]
     for ds in ("repo", "post"):
         D = Data(ds)
         cj = json.load(open(train.wdir(ds, "candidate.json")))
-        cand = cj["candidate"]
-        rungs = {r: v["seeds"] for r, v in cj["rungs"].items()}
-        tag_of = lambda r: f"{TAG}_{r}_ens" if len(rungs.get(r, [])) > 1 else f"{TAG}_{r}_s0"
+        assert train.sha256(train.wdir(ds, "candidate.json")) == pr["candidate_json_sha256"][ds]
+        rungs = {}
+        for name in cj["checkpoints"]:
+            r, sd = name.rsplit("_s", 1)
+            rungs.setdefault(r, []).append(int(sd))
+        tag_of = make_tag_of(rungs)
         q0 = load_q(D, A0)
-        s = {"candidate": cand, "vs_A0": {}, "pairs": {}}
+        s = {"candidate_set": cj["candidate"], "candidate": cand, "vs_A0": {}, "pairs": {}}
         for r in rungs:
             q = load_q(D, tag_of(r))
             if q is not None:
@@ -144,27 +153,29 @@ def main():
                     and not any(c[0] > 0.30 for c in v["pin21"]["cells"])
         return ok
 
-    cands = {ds: per[ds][0]["candidate"] for ds in per}
-    rule = {"candidates": cands}
-    same = len(set(cands.values())) == 1 and cands["repo"] != "A0"
-    if same:
-        c = cands["repo"]
+    rule = {"candidates_per_set": pr["candidates"], "common_candidate": cand}
+    c = cand
+    if c != "A0":
         rule.update(P1=p1(c), P2=p2(c), P3=p3(c), P4=p4(c))
-        p5a = all((v := per[ds][0]["pairs"].get("cand_vs_A1")) is not None and v["qlike"]["agg"] < 0 for ds in per) \
-            and any(per[ds][0]["pairs"]["cand_vs_A1"]["qlike"]["agg_ci"][1] < 0 for ds in per) if c != "A1" else False
+        if c == "A1":
+            p5a = False                                   # the candidate is the recalibration itself
+        else:
+            p5a = all((v := per[ds][0]["pairs"].get("cand_vs_A1")) is not None and v["qlike"]["agg"] < 0 for ds in per) \
+                and any(per[ds][0]["pairs"]["cand_vs_A1"]["qlike"]["agg_ci"][1] < 0 for ds in per)
         p5b = all(per[ds][0].get("v2_A2_vs_plc", {}).get("ci", [0, 0])[1] < 0 for ds in per)
         rule["P5"] = bool(p5a and p5b)
         rule["P6"] = all((v := per[ds][0]["pairs"].get("cand_vs_C-FHS")) is not None and v["qlike"]["agg_ci"][1] < 0 for ds in per)
         mae = lambda ds, t, h: per[ds][3][(t, h)]["mae_skill_vs_rw"]
         rule["P7"] = all(mae(ds, per[ds][2](c), h) >= mae(ds, A0, h) - 0.002 for ds in per for h in (1, 5, 15))
-    rule["A1_P1-P4"] = all(f("A1") for f in (p1, p2, p3, p4)) if all("A1" in per[ds][1] for ds in per) else False
-    if not same:
-        verdict = "FAIL: no common candidate rung promoted on V2 for both sets"
+    has_a1 = all("A1" in per[ds][1] for ds in per)
+    rule["A1_P1-P4"] = bool(has_a1 and all(f("A1") for f in (p1, p2, p3, p4)))
+    if c == "A0":
+        verdict = "FAIL: on at least one set no rung beat zero-shot on V2 (common candidate A0)"
     elif all(rule[k] for k in ("P1", "P2", "P3", "P4", "P5", "P6", "P7")):
         verdict = "PASS"
-    elif all(rule[k] for k in ("P1", "P2", "P3", "P4", "P5")):
+    elif all(rule[k] for k in ("P1", "P2", "P3", "P4", "P5")) and not rule["P6"]:
         verdict = "PASS-licence-free (recommend C-FHS)"
-    elif rule["A1_P1-P4"] and not rule.get("P5", False):
+    elif rule["A1_P1-P4"] and not rule["P5"]:
         verdict = "PASS-recal (ship A1; indicators unproven)"
     else:
         verdict = "FAIL"

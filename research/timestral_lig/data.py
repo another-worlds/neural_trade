@@ -69,7 +69,8 @@ class Data:
             assert a[-1] + PRED_LEN <= b[0] - 60, "label of a block reaches into the next block's embargo"
         if os.environ.get("LIG_SMOKE"):                       # pipeline test only: few origins, other dirs
             self.train, self.v1, self.v2, self.test = self.train[::40], self.v1[::12], self.v2[::12], self.test[::12]
-        self.results = os.environ.get("LIG_RESULTS", self.results)
+        if os.environ.get("LIG_RESULTS"):
+            self.results = os.environ["LIG_RESULTS"] + ("" if dataset == "repo" else f"_{dataset}")
 
     def windows(self, origins, arr):
         return arr[origins[:, None] + np.arange(-CTX + 1, 1)[None, :]]

@@ -3,8 +3,9 @@
   python train.py cache  --set repo          zero-shot pass with every module attached; constants; T0 on Test
   python train.py t1     --set repo --rungs A1,A2 --seeds 0,1,2,3,4
   python train.py t2     --set repo --rung A3 --seed 0
-  python train.py select --set repo          V2 ladder, promotion, candidate.json (before any Test scoring)
-  python train.py export --set repo          Test npz for every trained run and seed ensemble (after select)
+  python train.py select --set repo [--final] V2 ladder and Occam candidate; --final hashes every checkpoint
+  python train.py prereg                       freezes both sets' candidates and the pass rule (before any Test inference)
+  python train.py export --set repo            Test npz for exactly the hashed checkpoints, plus seed ensembles
 Work files (cache, checkpoints, logs) go to $LIG_WORK/<set>/; Test npz files go to the bench results dir.
 """
 import argparse
@@ -18,7 +19,7 @@ import time
 import numpy as np
 import torch
 
-from data import CTX, Data
+from data import CTX, PRED_LEN as PRED, Data
 from indicators import GROUPS, PERIODS, Bank
 from losses import TERMS, W_MEAN, Objective, agg_vs_base, block_ci, pinball_s, to_logbps
 from model import CFHS, LIG
@@ -137,11 +138,21 @@ class Ctx:
         return Bank(self.k["sigma_ref"], self.k["frame_ref"])
 
 
-def placebo_origins(org, rs=None):
-    """Feature origins for the placebo: a derangement (random roll in training, a fixed half-length roll otherwise)."""
-    n = len(org)
-    shift = int(rs.integers(1, n)) if rs is not None else n // 2
-    return np.roll(org, shift)
+def placebo_origins(org, rs=None, pool=None):
+    """Feature origins for the placebo control.
+
+    Training (rs given): a random Train origin per row, never one whose context window could hold the row's
+    label bars (fo < o - 15 or fo > o + CTX + 15). Evaluation (rs None): a fixed half-length roll, which puts
+    feature origins >= 2,160 bars away on V2 and >= 4,341 bars away on Test."""
+    if rs is None:
+        return np.roll(org, len(org) // 2)
+    ok = lambda f: (f < org - PRED) | (f > org + CTX + PRED)
+    fo = rs.choice(pool, len(org))
+    bad = ~ok(fo)
+    while bad.any():
+        fo[bad] = rs.choice(pool, int(bad.sum()))
+        bad = ~ok(fo)
+    return fo
 
 
 def make_model(X, rung, seed, ts=None):
@@ -180,7 +191,8 @@ def trainable(model):
 
 
 def param_groups(model, tier):
-    lr = {"T1": dict(recal=1e-2, H=3e-4, theta=3e-3, gate=3e-3, cond=1e-2),
+    # cond: 62 inputs feed each per-row offset, so its lr is ~1/30 of G's to keep offset steps comparable
+    lr = {"T1": dict(recal=1e-2, H=3e-4, theta=3e-3, gate=3e-3, cond=3e-4),
           "T2": dict(recal=1e-3, H=1e-4, theta=1e-3, gate=1e-3, E=2e-4, D=2e-4, lora=1e-4)}[tier]
     groups = []
     add = lambda params, l, wd: groups.append({"params": [p for p in params if p.requires_grad], "lr": l,
@@ -269,7 +281,7 @@ def run_t1(X, rung, seed, ts, max_epochs=20, patience=3, batch=256):
     yv2 = y2.numpy()
 
     def fwd(org, rsp=None):
-        fo = placebo_origins(org, rsp) if cfg.get("placebo") else org
+        fo = placebo_origins(org, rsp, D.train) if cfg.get("placebo") else org
         y, s = D.target(org)
         if isinstance(model, CFHS):
             q = model(s, D.raw(fo))
@@ -412,11 +424,23 @@ def v2q(ds, rung, seeds):
     return np.mean([np.load(wdir(ds, "v2", f"{rung}_s{s}.npy")).astype(np.float64) for s in seeds], 0)
 
 
-def select(ds):
+LADDER = ["A0", "A1", "A2", "A3", "A4"]
+PARENT = {"A1": "A0", "A2": "A1", "A3": "A2", "A4": "A3"}
+
+
+def sha256(path):
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()
+
+
+def select(ds, final=False, force=False):
+    """V2 ladder. Rule (spec 'governance'): rung a beats rung b if its V2 S improves by >= max(0.1%, 2 x a's seed SD)
+    and the paired 60-min block-bootstrap CI excludes 0 (a one-seed T2 rung borrows A2's seed SD). The candidate is
+    the lowest ladder rung that the best rung does not beat (Occam). Without --final it only reports
+    (candidate_provisional.json); with --final it hashes every checkpoint into candidate.json, before Test is touched."""
     X = Ctx(ds)
     y = X.D.target(X.D.v2)[0].numpy()
     q0 = X.q0(X.D.v2)
-    rep = {"set": ds, "rungs": {}}
+    rep = {"set": ds, "final": final, "rungs": {}}
     for rung in ["A1", "A2", "A2-plc", "A2-g0", "A2-close", "C-FHS", "A3", "A4", "A4L"]:
         seeds = runs_of(ds, rung)
         if not seeds:
@@ -425,32 +449,70 @@ def select(ds):
         S, d, cells = agg_vs_base(v2q(ds, rung, seeds), q0, y)
         rep["rungs"][rung] = {"seeds": seeds, "S_ens": S, "S_seeds": per, "sd": float(np.std(per, ddof=1)) if len(per) > 1 else None,
                               "ci": block_ci(d, 60), "cells": cells}
-    sd_ref = max([v["sd"] for v in rep["rungs"].values() if v["sd"]] or [0.0])
-    cand, ladder = "A0", []
-    for child in ["A1", "A2", "A3", "A4"]:
-        if child not in rep["rungs"]:
-            continue
-        qa = v2q(ds, child, rep["rungs"][child]["seeds"])
-        qb = q0 if cand == "A0" else v2q(ds, cand, rep["rungs"][cand]["seeds"])
-        S, d, _ = agg_vs_base(qa, qb, y)
-        sd = rep["rungs"][child]["sd"] or sd_ref
-        thr = max(0.1, 2 * sd)
+    seeds = {r: v["seeds"] for r, v in rep["rungs"].items()}
+    q_of = lambda r: q0 if r == "A0" else v2q(ds, r, seeds[r])
+
+    def sd_of(r):
+        if r == "A0":
+            return 0.0
+        v = rep["rungs"][r]["sd"]
+        return v if v is not None else (rep["rungs"].get("A2", {}).get("sd") or 0.0)
+
+    def beats(a, b):
+        S, d, _ = agg_vs_base(q_of(a), q_of(b), y)
         lo, hi = block_ci(d, 60)
-        ok = (-S >= thr) and hi < 0
-        ladder.append({"child": child, "vs": cand, "S_diff": S, "ci": [lo, hi], "threshold": thr, "promoted": bool(ok)})
-        if ok:
-            cand = child
-    rep["ladder"], rep["candidate"] = ladder, cand
-    if cand != "A0":
-        seeds = rep["rungs"][cand]["seeds"]
-        rep["checkpoints"] = {f"{cand}_s{s}": hashlib.sha256(open(wdir(ds, "ckpt", f"{cand}_s{s}.pt"), "rb").read()).hexdigest()
-                              for s in seeds}
-    rep["pass_rule"] = "P1-P7 as pre-registered in plans/timestral_lig.md (spec field 'protocol'); Test scored once."
-    json.dump(rep, open(wdir(ds, "candidate.json"), "w"), indent=1)
-    print(json.dumps({k: rep[k] for k in ("ladder", "candidate")}, indent=1))
+        thr = max(0.1, 2 * sd_of(a))
+        return {"a": a, "b": b, "S_diff": S, "ci": [lo, hi], "threshold": thr, "beats": bool(-S >= thr and hi < 0)}
+
+    present = [r for r in LADDER if r == "A0" or r in rep["rungs"]]
+    rep["chain"] = [beats(r, PARENT[r]) for r in present if r != "A0" and PARENT[r] in present]
+    S_of = {r: 0.0 if r == "A0" else rep["rungs"][r]["S_ens"] for r in present}
+    best = min(present, key=lambda r: S_of[r])
+    occam, cand = [], best
+    for r in present:
+        if r == best:
+            break
+        c = beats(best, r)
+        occam.append(c)
+        if not c["beats"]:
+            cand = r
+            break
+    rep.update(best=best, occam=occam, candidate=cand)
+    ck = wdir(ds, "ckpt", "x")[:-1]
+    rep["checkpoints"] = {f[:-3]: sha256(os.path.join(ck, f)) for f in sorted(os.listdir(ck))}
+    out = "candidate.json" if final else "candidate_provisional.json"
+    if final:
+        done = [f for f in os.listdir(X.D.results) if f.startswith(TAG)] if os.path.isdir(X.D.results) else []
+        assert force or not done, f"Test npz already exist in {X.D.results}: refusing to re-register"
+    json.dump(rep, open(wdir(ds, out), "w"), indent=1)
+    print(f"{ds}: best {best}, candidate {cand} -> {out}")
+    for c in rep["chain"] + occam:
+        print(f"  {c['a']} vs {c['b']}: S_diff {c['S_diff']:+.3f} ci [{c['ci'][0]:+.3f}, {c['ci'][1]:+.3f}] thr {c['threshold']:.3f} beats={c['beats']}")
     for r, v in rep["rungs"].items():
-        print(f"{r:9s} S_ens {v['S_ens']:+.3f} seeds {np.round(v['S_seeds'], 3).tolist()} ci {np.round(v['ci'], 3).tolist()}")
+        print(f"  {r:9s} S_ens {v['S_ens']:+.3f} seeds {np.round(v['S_seeds'], 3).tolist()} ci {np.round(v['ci'], 3).tolist()}")
     return rep
+
+
+PASS_RULE = ("Candidate (seed ensemble) vs A0 on Test, aggregate = mean over h = 1, 5, 15, both sets required. "
+             "P1 QLIKE agg <= -0.5% and CI upper < 0, no h cell significantly worse. P2 pinball21 agg CI upper <= +0.10%, "
+             "no h cell point > +0.30%. P3 overlap-robust tail fails <= A0's. P4 every seed: QLIKE agg < 0 and P2. "
+             "P5 candidate vs A1 QLIKE agg < 0 on both sets, CI < 0 on one; and A2 beats A2-plc on V2 (CI < 0). "
+             "P6 candidate vs C-FHS QLIKE agg CI upper < 0 on both sets. P7 median MAE skill vs RW not lower than A0's by "
+             "> 0.2 pp at any h. PASS = P1-P7; PASS-licence-free = P1-P5 and not P6; PASS-recal = A1 meets P1-P4 and "
+             "P5 fails (common candidate A1 or higher); else FAIL. Common candidate = the lower of the two sets' candidates.")
+
+
+def prereg(force=False):
+    """Freeze the decision for both sets before any Test inference."""
+    path = os.path.join(WORK, "preregistration.json")
+    assert force or not os.path.exists(path), "already pre-registered"
+    c = {ds: json.load(open(wdir(ds, "candidate.json"))) for ds in ("repo", "post")}
+    assert all(v["final"] for v in c.values())
+    common = min((v["candidate"] for v in c.values()), key=LADDER.index)
+    rec = {"candidates": {ds: v["candidate"] for ds, v in c.items()}, "common_candidate": common,
+           "candidate_json_sha256": {ds: sha256(wdir(ds, "candidate.json")) for ds in c}, "pass_rule": PASS_RULE}
+    json.dump(rec, open(path, "w"), indent=1)
+    print(json.dumps(rec, indent=1))
 
 
 # ------------------------------------------------------------------------------------------------ export
@@ -463,17 +525,26 @@ def write_npz(X, tag, qlb, org, elapsed=0.0):
 
 
 def export(ds):
+    """Test inference, once, for exactly the checkpoints hashed in candidate.json (verified)."""
     X = Ctx(ds)
-    assert os.path.exists(wdir(ds, "candidate.json")), "select (pre-registration) must run before Test scoring"
+    pr = json.load(open(os.path.join(WORK, "preregistration.json")))
+    assert sha256(wdir(ds, "candidate.json")) == pr["candidate_json_sha256"][ds], "candidate.json changed after prereg"
+    cj = json.load(open(wdir(ds, "candidate.json")))
+    os.makedirs(X.D.results, exist_ok=True)
     org = X.D.test
     by_rung = {}
     ts = load_ts()
-    for f in sorted(os.listdir(wdir(ds, "ckpt", "x")[:-1])):
-        rung, seed = f[:-3].rsplit("_s", 1)
-        ck = torch.load(wdir(ds, "ckpt", f))
+    on_disk = sorted(f[:-3] for f in os.listdir(wdir(ds, "ckpt", "x")[:-1]))
+    extra = sorted(set(on_disk) - set(cj["checkpoints"]))
+    if extra:
+        print(f"export {ds}: ignoring checkpoints not in candidate.json: {extra}")
+    for name, h in cj["checkpoints"].items():
+        path = wdir(ds, "ckpt", f"{name}.pt")
+        assert sha256(path) == h, f"{name}: checkpoint changed after pre-registration"
+        rung, seed = name.rsplit("_s", 1)
         full = rung in T2_RUNGS
         model = make_model(X, rung, int(seed), None if full else ts)
-        load_state(model, ck["state"])
+        load_state(model, torch.load(path)["state"])
         t = time.time()
         q = predict(X, model, org, placebo=T1_RUNGS.get(rung, {}).get("placebo", False), full=full, export=True)
         write_npz(X, f"{TAG}_{rung}_s{seed}", q, org, time.time() - t)
@@ -482,7 +553,7 @@ def export(ds):
     for rung, qs in by_rung.items():
         if len(qs) > 1:
             write_npz(X, f"{TAG}_{rung}_ens", np.mean(qs, 0), org)
-    cand = json.load(open(wdir(ds, "candidate.json")))["candidate"]
+    cand = pr["common_candidate"]
     if cand != "A0":
         src = f"{TAG}_{cand}_ens" if len(by_rung[cand]) > 1 else f"{TAG}_{cand}_s0"
         z = dict(np.load(os.path.join(X.D.results, f"{src}.npz"), allow_pickle=True))
@@ -498,6 +569,8 @@ def main():
     ap.add_argument("--seeds", default="0")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--threads", type=int, default=4)
+    ap.add_argument("--final", action="store_true")
+    ap.add_argument("--force", action="store_true")
     a = ap.parse_args()
     torch.set_num_threads(a.threads)
     torch.set_flush_denormal(True)
@@ -511,9 +584,11 @@ def main():
         k = constants(D, C)
         json.dump(k, open(wdir(a.set, "const.json"), "w"), indent=1)
         z = np.load(os.path.join(D.bench_results, "timestral-28M_ctx2048_price.npz"), allow_pickle=True)
-        i = np.searchsorted(C["origins"], z["origins"])
-        assert np.array_equal(C["origins"][i], z["origins"])
-        ref = (np.log(z["q"].astype(np.float64)) - D.lc[z["origins"]][:, None, None]) * 1e4
+        k = np.searchsorted(z["origins"], D.test)
+        assert np.array_equal(z["origins"][k], D.test)
+        i = np.searchsorted(C["origins"], D.test)
+        assert np.array_equal(C["origins"][i], D.test)
+        ref = (np.log(z["q"][k].astype(np.float64)) - D.lc[D.test][:, None, None]) * 1e4
         dmax = float(np.abs(C["q0"][i][:, [0, 4, 14]] - ref).max())
         print(f"T0 {a.set}: max |diff| vs stored zero-shot npz on all {len(i)} Test origins = {dmax:.6f} bps")
         json.dump({"T0_max_diff_bps": dmax, "n": int(len(i)), "cache_s": float(C["elapsed"])}, open(wdir(a.set, "T0.json"), "w"))
@@ -531,7 +606,9 @@ def main():
         if not os.path.exists(wdir(a.set, "logs", f"{a.rung}_s{a.seed}.json")):
             run_t2(X, a.rung, a.seed)
     elif a.cmd == "select":
-        select(a.set)
+        select(a.set, a.final, a.force)
+    elif a.cmd == "prereg":
+        prereg(a.force)
     elif a.cmd == "export":
         export(a.set)
 
