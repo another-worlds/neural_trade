@@ -3,7 +3,8 @@
 Answers "does X help?" directly (ctx 8192 vs 2048, covariates vs none, symmetric averaging off vs on, size),
 instead of comparing two numbers that are each measured against EWMA-t on different origin sets.
 Values: % change of mean loss (variant vs base); negative = variant better. CI: paired moving-block bootstrap.
-QLIKE is the unit-free form y^2/v - ln(y^2/v) - 1, on origins with y != 0 (as in metrics2.py).
+QLIKE: per-origin difference of y^2/v + ln v (all origins), as % of the base's unit-free mean on y != 0 (as in
+metrics2.py).
 Writes RESULTS/matched.json and prints a markdown table. Set BENCH_DATA=post for the post-release set.
 """
 import json
@@ -62,6 +63,7 @@ PAIRS = {
         ("official-chronos2_ctx2048_logret", "official-chronos2_ctx2048_price"),
         ("official-chronos2_ctx512_logret", "official-chronos2_ctx512_price"),
         ("official-chronos2_ctx2048_logret", "timestral-28M_ctx2048_price"),
+        ("official-chronos2_ctx2048_logret", "timestral-28M_ctx2048_aggret"),
         ("samay-timesfm25_ctx512_logret", "samay-timesfm25_ctx512_price"),
         ("neural_trade-rolling1440m-seed0_ctx60_price", "neural_trade-asis-seed0_ctx60_price"),
         ("neural_trade-rolling1440m-seed1_ctx60_price", "neural_trade-asis-seed1_ctx60_price"),
@@ -94,16 +96,14 @@ def qlike(q, y):
     nz = y != 0
     r = y[nz] ** 2 / v[nz]
     out[nz] = r - np.log(r) - 1
-    return out
+    return out, y ** 2 / v + np.log(v)
 
 
-def pct_ci(d, base, block):
-    keep = ~(np.isnan(d) | np.isnan(base))
-    d, base = d[keep], base[keep]
+def pct_ci(d, base, block, den=None):
     n = len(d)
     st = rs.integers(0, n - block + 1, size=(NBOOT, int(np.ceil(n / block))))
     idx = (st[:, :, None] + np.arange(block)).reshape(NBOOT, -1)[:, :n]
-    den = abs(float(base.mean()))
+    den = abs(float(base.mean())) if den is None else den
     lo, hi = np.percentile(d[idx].mean(axis=1), [2.5, 97.5])
     return round(100 * float(d.mean()) / den, 3), [round(100 * lo / den, 3), round(100 * hi / den, 3)]
 
@@ -141,9 +141,9 @@ for var, base in PAIRS:
             continue
         y = (lc[org + h] - lc[org]) * 1e4
         pv, pb = pinball(qv[h], y, DEC), pinball(qb[h], y, DEC)
-        lv_, lb_ = qlike(qv[h], y), qlike(qb[h], y)
+        (_, sv), (ub, sb) = qlike(qv[h], y), qlike(qb[h], y)
         r[f"pinball9_h{h}"] = pct_ci(pv - pb, pb, block)
-        r[f"qlike_h{h}"] = pct_ci(lv_ - lb_, lb_, block)
+        r[f"qlike_h{h}"] = pct_ci(sv - sb, None, block, den=abs(float(np.nanmean(ub))))
     rows.append(r)
 
 # Share of h=15 median-sign calls that equal the 15-min reversal sign (-sign of the last 15-min return), full origin set.

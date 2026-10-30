@@ -5,9 +5,11 @@ Reference baseline for paired tests: EWMA-Student-t (lambda and nu chosen by 21-
 Two stronger cheap baselines, also fitted on pre-holdout origins only, are compared too: the same EWMA-t with its
 variance scale refit (c_h = mean(y^2 / implied variance)), and FHS (EWMA sigma x empirical quantiles of standardised
 pre-holdout returns).
-QLIKE is the unit-free form y^2/v - ln(y^2/v) - 1 (v = variance implied by the 21 quantiles). Origins with y = 0 are
-left out of QLIKE, because the loss is undefined there. Tail tests: Kupiec (iid) and a Newey-West z-test on the hit
-series with 60 min of lags (robust to overlapping h-step targets).
+QLIKE (v = variance implied by the 21 quantiles): the reported level is the unit-free form y^2/v - ln(y^2/v) - 1 on
+origins with y != 0 (it is undefined at y = 0). Paired comparisons use the per-origin difference of y^2/v + ln v, which
+equals the unit-free difference and is defined at y = 0, so no origin is dropped; the % is relative to the unit-free
+mean of the reference. Tail tests: Kupiec (iid) and a z-test of the hit rate whose variance is p(1-p) at the target
+rate p, times a Newey-West (Bartlett, 60 min of lags) autocorrelation factor estimated from the hit series.
 Writes RESULTS/metrics2.json and RESULTS/metrics2.md. Set BENCH_DATA=post for the post-release set.
 """
 import glob
@@ -85,26 +87,29 @@ def var_from_q(q):
 
 
 def qlike_rows(q, y):
-    """Unit-free QLIKE per origin; NaN where y == 0."""
+    """(unit-free QLIKE per origin, NaN where y == 0;  y^2/v + ln v per origin, defined everywhere)."""
     v = var_from_q(q)
     out = np.full(len(y), np.nan)
     nz = y != 0
     r = y[nz] ** 2 / v[nz]
     out[nz] = r - np.log(r) - 1
-    return out
+    return out, y ** 2 / v + np.log(v)
 
 
 def cov_test_nw(hits, p, lags):
-    """Two-sided z-test of hit rate == p with a Newey-West (Bartlett) long-run variance."""
+    """Two-sided z-test of hit rate == p. Variance p(1-p) at the target rate, times a Newey-West (Bartlett)
+    autocorrelation factor estimated from the hit series (1 if there are no hits)."""
     x = hits.astype(np.float64)
     n, ph = len(x), x.mean()
-    if ph in (0.0, 1.0):
-        return 0.0
-    e = x - ph
-    lrv = e @ e / n
-    for lag in range(1, lags + 1):
-        lrv += 2 * (1 - lag / (lags + 1)) * (e[lag:] @ e[:-lag]) / n
-    z = (ph - p) / np.sqrt(max(lrv, 1e-12) / n)
+    factor = 1.0
+    if 0.0 < ph < 1.0:
+        e = x - ph
+        g0 = e @ e / n
+        lrv = g0
+        for lag in range(1, lags + 1):
+            lrv += 2 * (1 - lag / (lags + 1)) * (e[lag:] @ e[:-lag]) / n
+        factor = max(lrv / g0, 1e-3)
+    z = (ph - p) / np.sqrt(p * (1 - p) * factor / n)
     return round(float(2 * norm.sf(abs(z))), 4)
 
 
@@ -240,15 +245,15 @@ def score(name, h, org, y, q=None, point=None, dir_prob=None, ref=None, block=20
         r["kupiec_p_q99"] = kupiec(y > q[:, 20], 0.01)
         r["nw_p_q01"] = cov_test_nw(y < q[:, 0], 0.01, block)
         r["nw_p_q99"] = cov_test_nw(y > q[:, 20], 0.01, block)
-        ql = qlike_rows(q, y)
+        ql, ql_std = qlike_rows(q, y)
         r["qlike"] = round(float(np.nanmean(ql)), 4)
         spread = q[:, 18] - q[:, 2]
         r["vol_spearman"] = round(float(spearmanr(spread, rw).statistic), 4)
         for rname, rr in (ref or {}).items():
-            for key, mine, theirs in [("pinball9", pb9, rr["pb9"]), ("pinball21", pb21, rr["pb21"]), ("qlike", ql, rr["ql"])]:
-                m = ~(np.isnan(mine) | np.isnan(theirs))
-                d = (mine - theirs)[m]
-                den = abs(float(theirs[m].mean()))
+            for key, mine, theirs, den in [("pinball9", pb9, rr["pb9"], abs(float(rr["pb9"].mean()))),
+                                           ("pinball21", pb21, rr["pb21"], abs(float(rr["pb21"].mean()))),
+                                           ("qlike", ql_std, rr["ql_std"], abs(float(np.nanmean(rr["ql"]))))]:
+                d = mine - theirs
                 r[f"{key}_vs_{rname}_pct"] = round(float(100 * d.mean() / den), 3)
                 lo, hi = ci_mean(d, block)
                 r[f"{key}_vs_{rname}_ci95_pct"] = [round(100 * lo / den, 3), round(100 * hi / den, 3)]
@@ -277,7 +282,8 @@ def baselines(org, label, block):
         qfhs = sig[:, None] * np.array(FIT[h]["fhs_z"])[None, :]
 
         def losses(qq):
-            return {"pb9": pinball_rows(qq, y, DEC), "pb21": pinball_rows(qq, y), "ql": qlike_rows(qq, y)}
+            ql, ql_std = qlike_rows(qq, y)
+            return {"pb9": pinball_rows(qq, y, DEC), "pb21": pinball_rows(qq, y), "ql": ql, "ql_std": ql_std}
 
         ref = {"ref": losses(qref), "scl": losses(qscl), "fhs": losses(qfhs)}
         refs[(label, h)] = ref

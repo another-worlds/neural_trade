@@ -150,7 +150,7 @@ def table_tails(ds):
     if not d:
         return ""
     R = rows_by(d)
-    lines = ["| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Newey-West p (q0.01 / q0.99) |",
+    lines = ["| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Overlap-robust p (q0.01 / q0.99) |",
              "|---|---|---|---|---|---|---|---|"]
     for m in ["REF", "ewma_t_scaled", "fhs_ewma", "timestral-28M_ctx2048_price", "timestral-209M_ctx2048_price",
               "timestral-28M_ctx2048_aggret", "official-chronos2_ctx512_price", "official-chronos2_ctx512_aggret",
@@ -278,8 +278,11 @@ def table_matched(ds):
 
 
 LEGEND = ("Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does not mean better: in loss tables "
-          "a positive value is worse and a negative value is better. QLIKE is the unit-free form y²/v − ln(y²/v) − 1 on origins "
-          "with y ≠ 0; v is the variance implied by the 21 quantiles. Chronos-2 and Chronos-Bolt rows come from the "
+          "a positive value is worse and a negative value is better. QLIKE levels are the unit-free form y²/v − ln(y²/v) − 1 on "
+          "origins with y ≠ 0 (v = variance implied by the 21 quantiles); paired % changes use every origin (the per-origin "
+          "difference of y²/v + ln v) relative to the baseline's unit-free mean. Tail test p-values: Kupiec (iid), and a z-test "
+          "with variance at the 1% target rate times a Newey-West autocorrelation factor (60 min of lags); we use the latter. "
+          "In table titles, 'post' is the clean set, 'full' is all origins, and 'sub6'/'step18' is every 6th origin. Chronos-2 and Chronos-Bolt rows come from the "
           "official `chronos-forecasting` package; for these two models Samay gives the same numbers to 0.0008 bp (T-I). "
           "‡ Log-return input: only h = 1 has a forecast distribution; h = 5 and 15 use the summed per-step medians as a "
           "point forecast. § h-min return input: for each h, the input is the series of non-overlapping h-minute returns "
@@ -287,7 +290,8 @@ LEGEND = ("Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC).
           "† Decile-only model (q0.1 … q0.9): its q0.01, q0.05, q0.95 and q0.99 are clamped to q0.1 / q0.9, so its 98% coverage, "
           "tail rates and QLIKE are biased against it. Compare it on 9-decile pinball only. "
           "neural_trade quantiles come from its Student-t head (ν = 3) centred on its price head; the 21-level grid keeps "
-          "about 79% of a t(3) variance (97% for the t(6) EWMA-t), so its QLIKE here is slightly flattering to it. "
+          "about 79% of a t(3) variance (97% for the t(6) EWMA-t). For the frozen runs this flatters its QLIKE slightly; for "
+          "the clean-set daily-retrained runs, whose variance is mostly too low, it penalises it slightly. "
           "Trades fill at the forecast bar's close with no slippage and no delay.\n")
 
 

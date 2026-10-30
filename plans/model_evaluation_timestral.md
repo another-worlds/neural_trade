@@ -13,39 +13,47 @@
 
 | Term | Meaning |
 |---|---|
+| Foundation model, zero-shot | A forecaster pretrained on many time series. "Zero-shot" means we used it as released, with no training on our data. |
 | bps | Basis points. 1 bps = 0.01%. All returns are log returns in bps. |
 | Origin | A time t at which a model makes a forecast. It uses only bars up to and including t. We forecast every 3 minutes. |
 | h | Forecast horizon in minutes: 1, 5 or 15 (the neural_trade horizons). |
 | ctx | Context: the number of past 1-minute bars a model reads. ctx 2048 is about 34 hours. |
 | Repo set / clean set | Repo set: the last 20% of the repo CSV (6 days, 2025-11). Clean set: 14 days after Timestral's release (2026-10-16 to 10-29), which no model can have seen in training. |
+| Pre-test data | Data before the first scored origin. All baselines are fitted only on it. |
+| Walk-forward, purge | Walk-forward: fit on the past, test on the next block, then move forward. Purge: a gap (here 15 minutes) between the fit data and the test data, so that no target overlaps. |
 | Random walk (RW) | The forecast "the price does not change". |
 | EWMA-t | Our reference baseline. Its variance is an exponentially weighted moving average (EWMA) of past squared returns. Its tails follow a Student-t distribution. It has 2 parameters. |
 | FHS | Filtered historical simulation: the same EWMA variance, with tail shapes taken from past data instead of a formula. |
+| Scale-refit EWMA-t | EWMA-t with its variance multiplied by one factor per horizon, fitted on pre-test data. |
 | HAR | A linear regression that forecasts volatility from its averages over short, medium and long past windows. |
-| Quantile, q0.01 … q0.99 | q0.4 is the value the return falls below with probability 40%. q0.01 and q0.99 mark the 1% tails. |
+| Quantile, q0.01 … q0.99 | q0.4 is the value the return falls below with probability 40%. q0.01 and q0.99 mark the 1% tails. Deciles are q0.1 … q0.9. |
+| Covariate | An extra input series, for example volume, that a model reads next to the series it forecasts. |
+| NLL, focal BCE | Loss functions in neural_trade. NLL: negative log-likelihood (here of a Student-t distribution). Focal BCE: a binary cross-entropy that gives more weight to hard cases and, with α ≠ 0.5, to one class. |
 | Pinball loss | The error of a quantile forecast. Lower is better. Averaged over many quantile levels, it scores the whole forecast distribution. |
 | QLIKE | A loss for a variance forecast. Lower is better. It penalises a forecast that is too low more than one that is too high. |
 | MAE skill vs RW | 1 − (mean absolute error of the model) / (mean absolute error of RW). Above 0 means better than RW. |
 | AUC | The probability that the model gives a higher P(up) to a real up-move than to a real down-move. 0.5 is chance. |
 | MCC | The correlation between the forecast sign and the real sign. 0 is chance. |
-| Brier skill | 1 − (Brier score of P(up)) / (Brier score of a constant forecast equal to the share of up-moves). 0 or less means no skill. |
+| Brier skill | 1 − (Brier score of P(up)) / (Brier score of a constant forecast equal to the share of up-moves). Above 0 means better than that constant forecast. Values near 0 mean no useful skill. |
 | Spearman | Rank correlation. Here: between the forecast interval width and the size of the real move. |
-| Tail test | Checks whether a tail quantile is hit at its target rate (for example 1% for q0.01). "Pass" means p ≥ 0.05. "Too wide" means it is hit less often than the target, so the forecast is too cautious. |
+| Tail test | Checks whether a tail quantile is hit at its target rate (for example 1% for q0.01). The Kupiec test assumes independent hits; the overlap-robust test allows for overlapping windows (Section 6.2). "Pass" means p ≥ 0.05. "Too wide" means it is hit less often than the target, so the forecast is too cautious. |
 | 95% CI, significant | 95% confidence interval from a block bootstrap. "Significant" means the CI excludes 0 (0.5 for AUC). |
-| T-A … T-K | The result tables in Appendix A. |
+| p50, p99 | The median and the 99th percentile of the measured call times. |
+| PnL, drawdown, A/B test | PnL: profit and loss. Drawdown: the largest fall from a peak of cumulative PnL. A/B test: run two options side by side on the same data and compare them. |
+| T-A … T-J, T-B2 | The result tables in Appendix A. In table titles, "post" means the clean set, "full" means all origins, and "sub6" or "step18" means every 6th origin. |
 
 ---
 
 ## 1. Verdict
 
-**Mistral Timestral: do not adopt it now.** Its only measured value is a small gain in variance forecasts. Free EWMA baselines get most of that value, and the licence blocks any use until legal clears it. First fix neural_trade and wire a cheap risk input. Later, if legal clears the licence, test Timestral-28M in the risk path only. Do not use it for price or direction.
+**Mistral Timestral: do not adopt it now.** Its only measured value is in variance and volatility forecasts, and that value is small. Free alternatives get much of it: FHS (an EWMA baseline) for return variance, and Chronos-2 (Apache-2.0 weights) for the high-low range. The licence blocks any use until legal clears it. First fix neural_trade and wire a cheap risk input. Later, if legal clears the licence, test Timestral-28M in the risk path and add it as a benchmark baseline. Do not use it for price or direction.
 - **No price or direction skill.** It does not beat a random walk on price at 1, 5 or 15 minutes. Its direction calls have no stable skill. Every other model we tested has the same result, and that includes our own model.
-- **A small variance gain.** We compared it with three cheap EWMA baselines, all fitted only on data before the test. The strongest is FHS (an EWMA with tail shapes taken from past data). Against FHS, Timestral's QLIKE is 0.6–3.0% lower. The gain is significant in 7 of 12 cells (two model sizes × two data sets × three horizons). Its pinball loss equals that of FHS.
-- **No clear tail advantage.** Timestral-28M fails 1 of 6 tail tests on each data set. FHS fails 2 of 6 on the repo set and 1 of 6 on the clean set. The plain EWMA-t baseline fails 5 of 6 on the clean set, because its tails were already too thin before the test.
-- **Volatility forecaster.** As a direct forecaster of the mean 1-minute high-low range over the next h minutes, Timestral-28M has 5–17% lower QLIKE than an EWMA of that range. Against a bias-corrected HAR regression it is equal at 5–15 minutes on the repo set and 4–14% better on the clean set. At 1 minute it beats both.
-- **The free alternative did not match it on returns.** We gave Chronos-2 (Apache-2.0 weights) the same return input as Timestral. Its pinball loss was equal or up to 1.2% higher, its QLIKE was 2–9% higher than Timestral's best setting, and it did not beat FHS on QLIKE. On the volatility (range) series it matched Timestral (Sections 7.3 and 7.5).
+- **A small variance gain.** We compared it with three cheap EWMA baselines, all fitted only on data before the test. No baseline is best on every metric. On QLIKE, FHS (an EWMA with tail shapes taken from past data) is best on the repo set, and the scale-refit EWMA-t is about as good on the clean set. Against the better of these two in each cell, Timestral's QLIKE is 0.5–2.5% lower (0.5–2.8% against FHS alone). The gain is significant in 7 of 12 cells (two model sizes × two data sets × three horizons). Its pinball loss is within about 0.6% of the baselines; 28M is 0.3–0.6% worse than the plain EWMA-t at h = 1 on both sets (significant).
+- **No clear tail advantage.** Timestral-28M fails 1 of 6 tail tests on each data set. FHS and the scale-refit EWMA-t also fail 1 of 6 on each set. The plain EWMA-t fails 0 of 6 on the repo set and 5 of 6 on the clean set, because its tails were already too thin before the clean test.
+- **Volatility forecaster.** As a direct forecaster of the mean 1-minute high-low range over the next h minutes, Timestral-28M has 5–17% lower QLIKE than an EWMA of that range. Against a bias-corrected HAR regression it is equal at 5–15 minutes on the repo set and 4–14% better on the clean set. At 1 minute it beats both the range EWMA and HAR. Chronos-2 (Apache-2.0 weights) is about as good on this task (Section 7.5).
+- **The free alternative did not match it on returns.** We gave Chronos-2 (Apache-2.0 weights) the same return input as Timestral. On equal input its pinball loss was about the same, and its QLIKE was 0–5.5% higher (significant in 5 of 14 cells). Against Timestral's best setting (price-level input), its QLIKE was 1–9% higher; the gap was not significant at 1 minute on the repo set. No Chronos-2 setting beat FHS on QLIKE. On the volatility (range) series it matched Timestral (Sections 7.3 and 7.5).
 - **Before any use:**
-  - **Licence (blocking).** The weights give no rights at all if the global consolidated monthly revenue of the user's company, or of the user's employer, exceeded $20M in the preceding month. This also covers derivatives, combined works and benchmarks. Legal must confirm that it does not apply. If it applies, we must get a commercial licence from Mistral or not use Timestral.
+  - **Licence (blocking).** Clause 2 of the weights licence removes all rights if the licensee's company, or the licensee's employer, had global consolidated monthly revenue above $20M in the preceding month. It applies to the model and to any derivatives, modifications or combined works. Because it removes all rights, it also blocks benchmark use. Legal must confirm in writing that it does not apply. If it applies, the options are a commercial licence from Mistral, Mistral's hosted services if Mistral offers Timestral there (we found no such offer), or no use of Timestral.
   - **Training data (known risk, not blocking).** Mistral does not name the real post-training data. Our clean post-release test controls for this risk (Section 10.2).
   - **Adaptation (known limit, not blocking).** The released code is inference-only. To fine-tune it, we would have to write our own training loop or use Mistral Forge.
 
@@ -55,14 +63,14 @@
   - a normal install gave silently wrong Chronos-2 forecasts, and Chronos-Bolt failed to load with a misleading error;
   - it worked for us only in its exact lock file (Python 3.11, torch 2.5.1, transformers 4.47.1), which conflicts with our stack;
   - it has no tests, and `pip install samay` installs an unrelated package.
-- We tested three of the models it wraps: Chronos-2, Chronos-Bolt and TimesFM-2.5. With price-level input, their pinball loss was 1.5–11% worse than EWMA-t. With return input, Chronos-2 improved a lot (pinball loss 3–8% lower at 1 minute), but its QLIKE stayed above Timestral's and FHS's (Section 7.3). If one of these models is wanted, use its official package, not Samay.
+- We tested three of the models it wraps: Chronos-2, Chronos-Bolt and TimesFM-2.5. With price-level input, their pinball loss was 1.5–13% worse than EWMA-t. With return input, Chronos-2's pinball loss at 1 minute fell by 3–8%, but its QLIKE stayed above Timestral's and FHS's in most cells (Section 7.3). If one of these models is wanted, use its official package, not Samay.
 
 **neural_trade itself is the larger problem.**
 - Retrained as-is on the same data and then frozen for the test window:
   - its direction head says DOWN at every origin in 13 of 18 seed-horizon runs;
-  - its pinball loss is 1.6–10.7% worse than the EWMA-t baseline, and its QLIKE is 10–21% worse;
+  - its pinball loss is 1.6–10.7% worse than the EWMA-t baseline, and its QLIKE is 11–22% worse;
   - its volatility ranking is weak (Spearman 0.05–0.16 against 0.31–0.40 for the EWMA baselines).
-- Retraining it every day did not help. It was worse than the frozen model on the repo set and mixed on the clean set. So stale weights do not explain its poor scores. Its inputs are raw price levels, so they often leave the training range even with daily retraining (D8).
+- Retraining it every day did not close the gap. On the repo set it was worse than the frozen model. On the clean set it lowered pinball loss by 1.1–3.1% in 4 of 9 cells, but raised QLIKE at h = 1 for all seeds (significant for two). It stayed 2.6–8.2% worse than EWMA-t on pinball loss. So stale weights do not explain its poor scores. Its inputs are raw price levels, so they often leave the training range even with daily retraining (D8).
 - Defects D1–D3, D7 and D8 (Section 3.3) are plausible causes. Short training (40 optimizer steps) may also contribute. We did not test a fixed model. Fix D1–D3, D7, D8 and the evaluation set-up (D4–D6) before any model swap. Then measure again.
 
 ### Where each candidate fits
@@ -70,11 +78,11 @@
 | Role in neural_trade | Timestral | Samay | Evidence |
 |---|---|---|---|
 | Replace the whole model | **No** | No | Price and direction outputs carry no information (T-A). |
-| Price head (pinball τ = 0.4) | **No** | No | MAE is worse than random walk on both sets. A point forecast has no trading value here. |
-| Direction head (focal BCE) | **No** | No | AUC 0.45–0.53 across the candidate models. Brier skill is at most +0.0024, which is no skill. |
-| Variance input to a risk path (not yet wired) | **Optional, after the licence check** | No | QLIKE 0.6–3.0% lower than FHS, a free baseline. Tails about as good as FHS. 5–17% lower QLIKE than an EWMA of the range. |
+| Price head (pinball τ = 0.4) | **No** | No | MAE is not significantly better than random walk in any cell on either set (best +0.2%, CI includes 0). A point forecast has no trading value here. |
+| Direction head (focal BCE) | **No** | No | AUC 0.45–0.53 across the candidate models (Timestral alone: 0.48–0.53 on the full origin sets). Brier skill is at most +0.0024 (Timestral-28M, ctx 32768, clean subset), which is negligible. |
+| Variance input to a risk path (not yet wired) | **Optional, after the licence check** | No | QLIKE 0.5–2.5% lower than the better of two free baselines (FHS, scale-refit EWMA-t). Tails about as good as theirs. 5–17% lower QLIKE than an EWMA of the range; Chronos-2 (Apache-2.0) gives about the same, 4.9–15.0%. |
 | Extra input feature for the Keras model | No | No | ΔAUC is between −0.012 and +0.012. No value is significantly positive; two are significantly negative. |
-| Standing benchmark baseline | **Yes, after the licence check** | No | Cheap. Gives an honest bar for any new model. The licence covers benchmarks too. |
+| Standing benchmark baseline | **Yes, after the licence check** | No | Cheap. Gives an honest bar for any new model. The licence clause also blocks benchmark use. |
 
 ---
 
@@ -108,7 +116,7 @@ The requester also asked us to decide *where* Timestral fits, from the loss math
 
 ## 3. neural_trade today: what a forecaster must plug into
 
-All facts below were checked in the code. `M:` = `model.py`, `MH:` = `math_helpers.py`, `HF:` = `helper_functions.py`.
+We checked all facts below in the code. `M:` = `model.py`, `MH:` = `math_helpers.py`, `HF:` = `helper_functions.py`.
 
 ### 3.1 Inputs, targets, outputs
 
@@ -125,7 +133,7 @@ All facts below were checked in the code. `M:` = `model.py`, `MH:` = `math_helpe
 
 | Term | Formula (scaled units unless stated) | What the head learns |
 |---|---|---|
-| Point | Pinball loss, τ = 0.4 (`MH:141-162`). The code calls it "Huber"; it is not. Weights: `lambda_point` for the 5-min head; `lambda_short` and `lambda_long` (fixed at 1) for the 1- and 15-min heads (`M:1633-1635`, `M:74-75`). | 5-min head: a mix of the **40th percentile** (pinball × 1000) and the Student-t location (NLL × 1000). 1- and 15-min heads: the pinball weight stays at 1, so the NLL (× 1000) sets them; they estimate the Student-t location, not q0.4. |
+| Point | Pinball loss, τ = 0.4 (`MH:141-162`). The code calls it "Huber"; it is not. Weights: `lambda_point` for the 5-min head; `lambda_short` and `lambda_long` (fixed at 1) for the 1- and 15-min heads (`M:1633-1635`, `M:74-75`). | 5-min head: a mix of the **40th percentile** (pinball × 1000) and the Student-t location (NLL × 1000). 1- and 15-min heads: their pinball weight stays at 1. So the NLL (× 1000) sets them, and they estimate the Student-t location, not q0.4. |
 | Direction | Focal BCE with α = 0.7 on DOWN and 0.3 on UP, γ = 1 (`MH:96-138`; values from `M:113-114`). | With ~50/50 labels, the best constant output is P(up) ≈ 0.38. **The head almost always outputs DOWN.** |
 | Variance | Student-t NLL, ν = 3, centred on the price head (`M:1700-1733`). | v is the squared *scale*, in scaled units. The predictive variance is 3·v·s² USD². |
 | Trend | Squared error, in raw USD², between *true* deltas and past trends (`M:1644-1676`). | **No prediction enters this term, so its gradient is zero.** |
@@ -137,16 +145,16 @@ All facts below were checked in the code. `M:` = `model.py`, `MH:` = `math_helpe
 
 | # | Defect | Evidence | Effect |
 |---|---|---|---|
-| D1 | The same multiplier (× 20) is used twice. In `LearnableIndicators.call` it multiplies the forward logit by 20: `logit + stop_gradient(logit)*(m−1)`. In `train_step` it also multiplies the indicator gradients by 20. The forward use is the defect. | Forward: `M:1073`, `M:1085-1087`, `M:1110-1112`, `M:1135`, `M:1147`. Gradient: `M:1903-1905`. α = sigmoid(logit). Our check: for period 5, α goes from 0.33 to 9.5e-7; for period ≥ 9, below 1e-12. | The EMA-based indicators (MA, MACD, RSI, Bollinger) stay at the first window value, so they do not learn from data. The momentum indicators fail for a different reason (D7). |
+| D1 | The code uses the same multiplier (× 20) twice. In `LearnableIndicators.call` it multiplies the forward logit by 20: `logit + stop_gradient(logit)*(m−1)`. In `train_step` it also multiplies the indicator gradients by 20. The forward use is the defect. | Forward: `M:1073`, `M:1085-1087`, `M:1110-1112`, `M:1135`, `M:1147`. Gradient: `M:1903-1905`. The EMA weight w = sigmoid(logit). Our check: for period 5, w goes from 0.33 to 9.5e-7; for period ≥ 9, below 1e-12. | The EMA-based indicators (MA, MACD, RSI, Bollinger) stay at the first window value, so they do not learn from data. The momentum indicators fail for a different reason (D7). |
 | D2 | The trend term has zero gradient but sets the loss-weight calibration. | `M:1644-1676`, `M:734-813`. | The loss weights clamp to 1000. The 5-min price head is pulled toward q0.4, but the 1- and 15-min heads are not (Section 3.2). |
 | D3 | Focal α = 0.7 favours DOWN. | `MH:130-134`, `M:113`. | The direction head almost always outputs DOWN. Head-to-head: P(up) < 0.5 at every origin in 13 of 18 seed-horizon runs; the worst run says UP at 14% of origins (repo, seed 0, h = 5). |
 | D4 | Validation = test (480 samples, 8 h). | `M:728-731`. | All logged metrics carry selection bias. |
 | D5 | The backtest has no fees and uses a centred rolling mean (look-ahead) for its spike entries and exits. | `inference.ipynb`, the cell headed "TRADE DATACLASS AND COMPLETE MULTI-HEAD STRATEGY PIPELINE" (execution count 5): centred mean at line 196, profit without fees at lines 310-315. | The logged backtest result is not usable. |
 | D6 | The loader needs a `timestamp` column; the repo CSV has `datetime`. | `M:201`, `dw_ccxt.py:114-116`. | The current code cannot read the repo CSV without a rename. |
 | D7 | The learnable momentum period is written back with `asinh((p−1)/2)` after each step, but the forward pass reads `softplus(raw)+1`. These are not inverses. | `M:1160-1162`, `M:1928-1932`. | All three momentum periods go to about 1.95 min within the first epoch, whatever the data (configured: 1, 2, 3). |
-| D8 | The inputs are raw close-price levels, scaled per lag with a `StandardScaler` fitted on the 2,400 training windows (about 40 hours). | `M:386-390`. | When the price drifts, the inputs leave the training range. Frozen for the test window: 88% of repo origins were more than 3 training standard deviations out. Even with daily retraining, 51–71% were out on 3 of 14 clean-set days. |
+| D8 | The inputs are raw close-price levels, scaled per lag with a `StandardScaler` fitted on the 2,400 training windows (about 40 hours). | `M:386-390`. | When the price drifts, the inputs leave the training range. Frozen for the test window: 88% of repo origins were more than 3 training standard deviations out. Even with daily retraining, inputs were out for 84% of origins on the first repo-set day and for 51–71% of origins on 3 of 14 clean-set days. |
 
-These defects are outside the scope of the request. They matter here because they set the bar a new model must beat. Section 7.8 measures that bar.
+These defects are outside the scope of the request. They matter here because they set the bar a new model must beat. Section 7.9 measures that bar.
 
 ---
 
@@ -158,14 +166,14 @@ Sources: the source code (`github.com/mistralai/timestral`, commit a534bdb), the
 |---|---|---|
 | Model | Causal patch transformer, patch 32, "Decoupled Horizon Forecasting". 21 non-crossing quantiles (0.01 … 0.99) per step. | One call gives all three horizons (steps 1, 5, 15). Each step has its own output. |
 | Inputs | Univariate or multivariate targets. Past-only and known-future covariates. Context up to 32,768 steps. | Close, plus volume and range as covariates, is possible. |
-| Normalisation | Expanding (cumulative) mean and standard deviation over the context, then asinh (`scaler.py:14-101`). | On price levels, a typical 1-min move is about 0.04 × the standard deviation of the price over a 2k context, and 0.013 × over a 32k context (median over our origins). Context length matters (Section 7.3). |
+| Normalisation | Expanding (cumulative) mean and standard deviation over the context, then asinh (`scaler.py:14-101`). | On price levels, a typical 1-min move is about 0.04 × the standard deviation of the price over a 2k context, and 0.013 × over a 32k context (median over our origins). Context length matters (Section 7.4). |
 | Default test-time augmentation | `symmetric_averaging=True`: it forecasts x and −x and averages the mirrored results (`forecaster.py:221-228`). That is 2 forward passes. | The forecast for −x is the mirror image of the forecast for x. This removes any fixed up/down bias of the network. Skew that comes from the price history still shows: on the repo set, the ratio of upper to lower tail width of Timestral-28M was 0.82–1.19 at h = 1 (1st–99th percentile). |
 | Training data | Pretraining is synthetic only. Post-training uses "real and synthetic" data; **the real datasets are not named**. | Our Oct–Nov 2025 CSV may be in post-training. That is why we added a clean post-release test. |
 | Fine-tuning | The released package is **inference-only**: no loss and no training code. Mistral offers fine-tuning only through "Mistral Forge". | We cannot adapt it to our data without re-building the training pipeline. |
 | Benchmarks | #1 zero-shot on GIFT-Eval, TIME and fev-bench (vendor-run, reproduced from public CSVs). **No benchmark has 1-step-ahead minute-level finance.** The only crypto task (TIME, daily) is at random-walk level. | Leaderboard rank does not transfer to our task. Finance rank correlates only r = 0.43 with GIFT-Eval rank (FinVerse, arXiv 2608.03259). |
-| Latency (vendor) | 17 ms (5M) to 113 ms (209M) on 8 server threads, with bf16 and `torch.compile`. | The package default is fp32 without compile. We measured it on 4 CPUs (Section 7.7). |
-| **Licence (weights)** | "Modified MIT". Clause 2: **no rights at all if the global consolidated monthly revenue of your company, or of your employer, exceeded $20M** in the preceding month. It covers derivatives and "combined works". A commercial licence is at Mistral's discretion. The code is Apache-2.0. | Legal must confirm eligibility before any use, including benchmarks. |
-| Support | The repo accepts no PRs. `CONTRIBUTING.md` promises best-effort maintenance only. Open issues had no maintainer reply as of 2026-10-30: #3 asks which real data sets were used in post-training; #7 reports that upper quantiles blow up with sign-fixed, piecewise-constant known-future covariates such as prices, and symmetric averaging is one trigger. | Treat it as a research artefact, not a supported product. |
+| Latency (vendor) | 17 ms (5M) to 113 ms (209M) on 8 server threads, with bf16 and `torch.compile`. | The package default is fp32 without compile. We measured it on 4 CPU threads (Section 7.8). |
+| **Licence (weights)** | "Modified MIT". Clause 2: **no rights at all if the global consolidated monthly revenue of your company, or of your employer, exceeded $20M** in the preceding month. It applies to the model and to any derivatives, modifications or "combined works". A commercial licence is at Mistral's discretion. The code is Apache-2.0. | Legal must confirm eligibility before any use. The clause removes all rights, so it also blocks benchmark use. |
+| Support | The repo accepts no PRs. `CONTRIBUTING.md` promises best-effort maintenance only. Two open issues had no maintainer reply as of 2026-10-30. Issue #3 asks which real data sets were used in post-training. Issue #7 reports that upper quantiles blow up with sign-fixed, piecewise-constant known-future covariates such as prices; symmetric averaging is one trigger. | Treat it as a research artefact, not a supported product. |
 
 ---
 
@@ -195,31 +203,31 @@ Sources: `github.com/AdityaLab/Samay` (HEAD d23c90f, 2026-09-19), and our own in
 | Set | Source | Forecast origins | Purpose |
 |---|---|---|---|
 | **Repo holdout** | `binance_btcusdt_1min_ccxt.csv` (43,500 bars, 2025-10-11 → 2025-11-10, no gaps) | Last 20% of rows, every 3 min: **2,895 origins** (2025-11-04 → 11-10) | Model and config selection |
-| **Post-release (clean)** | Binance public market-data mirror, BTCUSDT 1-min, 2026-09-20 → 2026-10-29 (57,600 bars, no gaps) | Every 3 min from 2026-10-16 00:00 UTC: **6,715 origins** | Out-of-sample check. Targets are after Timestral's release, so they cannot be in any model's training data. |
+| **Post-release (clean)** | Binance public market-data mirror, BTCUSDT 1-min, 2026-09-20 → 2026-10-29 (57,600 bars, no gaps) | Every 3 min from 2026-10-16 00:00 UTC: **6,715 origins** | Out-of-sample check. Targets are after Timestral's release, so they cannot be in any model's training data. We also used it to choose context length and model size (Section 10.1). |
 
 ### 6.2 Target and scoring
 
 - Target: log return y_h = ln c[t+h] − ln c[t], in basis points, for h = 1, 5, 15 (the neural_trade horizons).
 - Every model forecasts from the bars up to and including t. No model sees data after t.
 - Baselines are fitted only on data before the first scored origin.
-- **Reference baseline: EWMA-Student-t (EWMA-t).** The variance is an exponentially weighted moving average of past squared 1-min returns: σ²ₜ = λσ²ₜ₋₁ + (1−λ)r²ₜ. The quantiles are σ·√h·t_ν (Student-t, unit variance). We chose λ and ν on pre-holdout data by 21-level pinball loss, from {0.90 … 0.995} × {2.5 … ∞}. The choice was λ = 0.90–0.97 and ν = 6 (Appendix A, window facts). It has 2 parameters and runs in microseconds.
-- **Two stronger cheap baselines** (added after our internal review). Both use only pre-holdout data and have no extra free parameters:
-  - **EWMA-t, scale refit:** the same EWMA-t with its variance multiplied by c_h = mean(y² / forecast variance) on pre-holdout data. On pre-holdout data the realized squared returns were 20–45% above the variance of the pinball-tuned EWMA-t (c_h = 1.20–1.45), because pinball loss does not penalise a too-low variance strongly.
-  - **FHS (filtered historical simulation):** the same EWMA σ, with quantiles taken from the empirical distribution of pre-holdout returns divided by σ. It needs no assumption about the tail shape.
+- **Reference baseline: EWMA-Student-t (EWMA-t).** The variance is an exponentially weighted moving average of past squared 1-min returns: σ²ₜ = λσ²ₜ₋₁ + (1−λ)r²ₜ. The quantiles are σ·√h·t_ν (Student-t, unit variance). We chose λ and ν on pre-test data by 21-level pinball loss, from {0.90 … 0.995} × {2.5 … ∞}. The choice was λ = 0.90–0.97 and ν = 6 (Appendix A, window facts). It has 2 parameters and runs in microseconds.
+- **Two further cheap baselines** (added after our internal review). Both are fitted once on pre-test data. Neither is tuned on the test window:
+  - **EWMA-t, scale refit:** the same EWMA-t with its variance multiplied by one factor per horizon, c_h = mean(y² / v) on pre-test data, where v is the variance implied by its 21 quantiles. c_h was 1.19–1.45, because pinball loss does not penalise a too-low variance strongly.
+  - **FHS (filtered historical simulation):** the same EWMA σ, with 21 quantiles per horizon taken from the empirical distribution of pre-test returns divided by σ. It needs no assumed tail shape.
 - Other baselines:
   - random walk (zero return);
   - EWMA-Gaussian (λ = 0.94);
   - trailing 1-day empirical quantiles;
   - momentum and reversal signs;
   - "revert to the context mean" sign;
-  - logistic regression on past returns (fitted pre-holdout).
+  - logistic regression on past returns (fitted on pre-test data).
 
 | Question | Metric |
 |---|---|
 | Point forecast | MAE skill vs random walk = 1 − MAE / MAE_rw (> 0 is better) |
 | Direction | MCC of sign(median), and AUC of P(up) from the quantiles. For neural_trade, also AUC of its direction head. |
-| Distribution | Pinball loss on the 9 deciles (fair to decile-only models) and on 21 levels. Coverage of the 80% and 98% intervals. Tail hit rates, with a Kupiec test and a Newey-West test (60 min of lags) that stays valid when the h-step windows of nearby origins overlap. We use the Newey-West result for pass/fail (p < 0.05 = fail). |
-| Variance | QLIKE of the quantile-implied variance v against y², in the unit-free form y²/v − ln(y²/v) − 1. It is lowest when v is right, and it penalises a v that is too low more than one that is too high. Origins with y = 0 (2–4%) are left out of QLIKE, because the loss is undefined there. Spearman rank correlation of interval width with \|y\|. |
+| Distribution | Pinball loss on the 9 deciles (fair to decile-only models) and on 21 levels. Coverage of the 80% and 98% intervals. Tail hit rates, with two tests. The Kupiec test assumes independent hits. The overlap-robust test is a z-test whose variance is p(1−p) at the 1% target rate, times a Newey-West autocorrelation factor (60 min of lags); it allows for the overlap of the h-step windows of nearby origins. We use the overlap-robust result for pass/fail (p < 0.05 = fail). Both tests are approximate: each cell has only about 17–120 tail hits. |
+| Variance | QLIKE of the quantile-implied variance v against y², in the unit-free form y²/v − ln(y²/v) − 1. It is lowest when v is right, and it penalises a v that is too low more than one that is too high. This form is undefined at y = 0 (0.6% of repo and 3.6% of clean origins at h = 1; 0.2% or less at h = 5 and 15). So the reported QLIKE level leaves those origins out. Paired comparisons use every origin: the per-origin difference of y²/v + ln v equals the unit-free difference and is defined at y = 0. Spearman rank correlation of interval width with \|y\|. |
 | Economics | Non-overlapping trades when \|forecast\| > cost, at round-trip costs of 4, 10 and 20 bps (futures maker, futures taker, spot). Trades fill at the forecast bar's close, with no slippage and no delay, so real results would be worse. |
 
 - **Uncertainty.** 95% moving-block bootstrap CIs with 1,000 resamples. Blocks are 60 min of origins on the full sets, 90 min on the every-6th-origin subsets and 63 min on the every-3rd subset. CIs barely change with 1-day blocks. For model-vs-baseline comparisons the CI is on the *paired* per-origin loss difference. "Significant" means the 95% CI excludes 0 (0.5 for AUC).
@@ -234,46 +242,51 @@ The full tables are in Appendix A. They are generated from `research/tsfm_eval/r
 
 ### 7.1 Price and direction: no model has usable skill
 
-| Model (best config) | MAE skill vs RW, repo (1/5/15) | MAE skill vs RW, clean (1/5/15) | AUC of P(up), clean (1/5/15) |
+| Model (main config) | MAE skill vs RW, repo (1/5/15) | MAE skill vs RW, clean (1/5/15) | AUC of P(up), clean (1/5/15) |
 |---|---|---|---|
 | Timestral-209M, ctx 2048 | −0.30 / +0.06 / −0.04 % | −0.35 / −0.12 / −0.11 % | 0.513 / 0.500 / 0.509 |
 | Timestral-28M, ctx 2048 | −0.61 / −0.17 / −0.29 % | −0.64 / −0.15 / −0.06 % | 0.502 / 0.504 / 0.515 |
 | Chronos-2, ctx 512 | −3.42 / −2.49 / −3.50 % | −6.17 / −2.52 / −3.67 % | 0.493 / 0.499 / 0.497 |
+| Chronos-2, ctx 2048, 1-min log-return input ‡ | −0.11 / −0.18 / −0.51 % | −0.13 / −0.29 / −0.63 % | 0.501 / – / – |
 | TimesFM-2.5 via Samay, ctx 512 | −0.83 / −2.52 / −4.51 % | −3.07 / −2.01 / −3.35 % | 0.491 / 0.511 / **0.534** |
 | neural_trade as-is (3 seeds) | −4.4 … +0.2 % | −9.6 … −0.6 % | 0.487 … 0.509 (head 0.490 … 0.513) |
 | Logistic regression, 5 features (1/5/15/60-min returns, 60-min volatility), fitted once before the test | 0 (no point forecast) | 0 | 0.500 / **0.516** / 0.512 |
 
-- No model beats a random walk on price at any horizon on either set. The best MAE skill is +0.2% (neural_trade seed 1, repo, h = 15), and its CI includes 0.
+‡ h = 5 and 15 use the summed per-step medians as the point forecast, so only h = 1 has an AUC.
+
+- No model beats a random walk on price at any horizon on either set. The best MAE skill is +0.2% (neural_trade seed 1, repo, h = 15), and its CI includes 0. The same is true for every other configuration in Appendix A.
 - **Direction is at chance.** One pattern needs care. On the clean set at h = 15, Timestral-5M, -28M and -209M at ctx 512 and TimesFM-2.5 show MCC 0.04–0.06 and AUC 0.52–0.53. Their AUC CIs exclude 0.5. We did not run 123M on this set. The same configurations show nothing on the repo set. In that clean window a plain 15-minute reversal rule scores MCC 0.09. On both sets, Timestral's h = 15 calls agree with that rule 55–65% of the time, so its median has a built-in mild reversal tilt. **We treat the clean-set result as a window effect, not a signal.** The trades it implies lose money after costs (7.7).
 - **Chronos-2 with price input is anti-predictive at 15 minutes on the repo set** (AUC 0.452), and close to chance on the clean set.
 
 ### 7.2 Distribution and variance: a small gain over strong cheap baselines
 
-We compare each model with three cheap baselines (Section 6.2). EWMA-t is the reference in Appendix A. FHS is the strongest of the three on pinball loss and tails. Values are % change in loss; negative is better. The CI is paired, per origin.
+We compare each model with three cheap baselines (Section 6.2). EWMA-t is the reference in Appendix A. No baseline is best on every metric. The plain EWMA-t has the lowest pinball loss (FHS is 0.02–0.10% higher, significant in 3 of 6 cells). On QLIKE, FHS is best on the repo set, and the scale-refit EWMA-t is slightly better than FHS on the clean set (not significant). Values are % change in loss; negative is better. The CI is paired, per origin.
 
-| Model | Set | Pinball vs FHS, h = 1 / 5 / 15 | QLIKE vs EWMA-t | QLIKE vs FHS |
-|---|---|---|---|---|
-| Timestral-28M, ctx 2048 | repo | **+0.54** / +0.31 / +0.19 | −0.68 / −1.26 / −1.65 | −0.56 / **−1.23 / −1.59** |
-| Timestral-28M, ctx 2048 | clean | +0.21 / −0.07 / −0.03 | **−5.56 / −3.41 / −4.49** | **−3.01 / −1.98** / −2.05 |
-| Timestral-209M, ctx 2048 | repo | +0.17 / −0.02 / −0.17 | −0.71 / **−1.29** / −1.70 | −0.59 / **−1.27** / −1.65 |
-| Timestral-209M, ctx 2048 | clean | −0.05 / −0.13 / −0.03 | **−5.39 / −3.98 / −4.12** | **−2.84 / −2.56** / −1.67 |
-| Chronos-2, ctx 512, price input | clean | **+5.30 / +2.56 / +3.61** | −1.95 / +3.22 / **+5.75** | +0.69 / **+4.75 / +8.45** |
-| neural_trade as-is, seed 0 | clean | **+10.59 / +5.83 / +6.83** | **+10.30 / +17.38 / +17.15** | **+13.28 / +19.12 / +20.14** |
+| Model | Set | Pinball vs EWMA-t, h = 1 / 5 / 15 | QLIKE vs EWMA-t | QLIKE vs FHS | QLIKE vs scale-refit EWMA-t |
+|---|---|---|---|---|---|
+| Timestral-28M, ctx 2048 | repo | **+0.57** / +0.33 / +0.21 | −0.61 / −1.26 / −1.65 | −0.52 / **−1.23 / −1.59** | **−1.26 / −1.67 / −2.23** |
+| Timestral-28M, ctx 2048 | clean | **+0.32** / −0.01 / +0.05 | **−4.90 / −3.38 / −4.49** | **−2.77 / −1.97** / −2.05 | **−2.49 / −1.86** / −1.42 |
+| Timestral-209M, ctx 2048 | repo | +0.19 / +0.00 / −0.16 | −0.66 / −1.29 / −1.70 | −0.58 / **−1.27** / −1.65 | **−1.31 / −1.70 / −2.28** |
+| Timestral-209M, ctx 2048 | clean | +0.05 / −0.08 / +0.06 | **−4.75 / −3.94 / −4.12** | **−2.61 / −2.54** / −1.68 | **−2.33 / −2.43** / −1.04 |
+| Chronos-2, ctx 512, price input | clean | **+5.41 / +2.62 / +3.70** | −1.27 / +3.22 / **+5.75** | +0.96 / **+4.73 / +8.44** | +1.26 / **+4.85 / +9.14** |
+| neural_trade as-is, seed 0 | clean | **+10.71 / +5.89 / +6.92** | **+13.09 / +17.57 / +17.17** | **+15.71 / +19.29 / +20.15** | **+16.11 / +19.43 / +20.93** |
 
-- **Against EWMA-t the clean-set gain looks large (3–6%).** Most of that comes from a known flaw of EWMA-t: we tuned it on pinball loss, and before the test the realized squared returns were already 20–45% above its variance. FHS and the scale-refit EWMA-t fix that for free.
-- **Against FHS the gain is 0.6–3.0%.** It is significant at h = 5 on both sets, at h = 1 on the clean set and at h = 15 on the repo set (28M). It is not significant at h = 1 on the repo set or at h = 15 on the clean set. Against the scale-refit EWMA-t the gain is 1.0–2.4% (T-B2).
-- **Pinball loss equals FHS.** The only significant cell is 28M at h = 1 on the repo set (+0.54%). 209M has 0–0.4% lower pinball loss than 28M.
-- QLIKE here is the unit-free form (Section 6.2). Its percentages are larger than in a bps-based QLIKE, but the paired tests are the same.
+- **Against EWMA-t the clean-set gain looks large (3–5%).** About half of that comes from a known flaw of EWMA-t: we tuned it on pinball loss, and before the test the realized squared returns were already 19–45% above its variance (mean of y²/v). FHS and the scale-refit EWMA-t fix that for free.
+- **Against the better of FHS and the scale-refit EWMA-t the gain is 0.5–2.5%** (0.5–2.8% against FHS alone). It is significant at h = 5 on both sets, at h = 1 on the clean set and, for 28M, at h = 15 on the repo set. It is not significant at h = 1 on the repo set or at h = 15 on the clean set.
+- **Pinball loss is close to the baselines.** Against the plain EWMA-t, which has the lowest pinball loss of the three baselines, 28M is significantly worse at h = 1 on both sets (+0.57% repo, +0.32% clean); 209M is not. 209M has 0–0.4% lower pinball loss than 28M.
+- QLIKE percentages are relative to the unit-free mean (Section 6.2). They are larger than in a bps-based QLIKE, but the per-origin paired differences are the same, and every origin is used.
 
-Tail calibration. Each cell shows how often the real return fell below q0.01 and above q0.99. The target is 1% for each. The test is the Newey-West test (Section 6.2). "Pass" means p ≥ 0.05. "Too wide" means the tail was hit less often than 1%, so the forecast was too cautious.
+Tail calibration. Each cell shows how often the real return fell below q0.01 and above q0.99. The target is 1% for each. The test is the overlap-robust test (Section 6.2). "Pass" means p ≥ 0.05. "Too wide" means the tail was hit less often than 1%, so the forecast was too cautious.
 
 | Model | Set | h = 1 | h = 5 | h = 15 | Fails |
 |---|---|---|---|---|---|
 | EWMA-t (reference) | repo | 1.14% / 0.97% | 0.93% / 1.04% | 0.83% / 1.07% | 0 of 6 |
-| FHS | repo | **0.59% (too wide)** / 0.86% | **0.66% (too wide)** / 0.83% | 0.59% / 0.66% | 2 of 6 |
+| Scale-refit EWMA-t | repo | **0.59% (too wide)** / 0.73% | 0.69% / 0.76% | 0.59% / 0.69% | 1 of 6 |
+| FHS | repo | **0.59% (too wide)** / 0.86% | 0.66% / 0.83% | 0.59% / 0.66% | 1 of 6 |
 | Timestral-28M, ctx 2048 | repo | **0.59% (too wide)** / 0.90% | 0.86% / 1.17% | 0.73% / 1.42% | 1 of 6 |
 | Timestral-209M, ctx 2048 | repo | 0.73% / 0.93% | 0.90% / 1.11% | 0.69% / 1.38% | 0 of 6 |
 | EWMA-t (reference) | clean | **1.59% / 1.56%** | **1.49% / 1.38%** | **1.82%** / 1.36% | 5 of 6 |
+| Scale-refit EWMA-t | clean | 0.86% / **0.70% (too wide)** | 0.92% / 0.91% | 1.25% / 0.85% | 1 of 6 |
 | FHS | clean | 0.98% / **0.73% (too wide)** | 0.94% / 0.83% | 1.38% / 0.82% | 1 of 6 |
 | Timestral-28M, ctx 2048 | clean | 0.88% / 0.95% | 1.16% / 1.13% | **1.59%** / 1.07% | 1 of 6 |
 | Timestral-209M, ctx 2048 | clean | 0.91% / 0.88% | 1.12% / 1.15% | **1.55%** / 1.16% | 1 of 6 |
@@ -281,40 +294,42 @@ Tail calibration. Each cell shows how often the real return fell below q0.01 and
 **Bold** = fail (p < 0.05).
 
 What this means:
-- Timestral's quantiles are about as good as those of a well-built cheap baseline. Their variance scaling is slightly better: QLIKE is 0.6–3.0% lower than FHS.
-- Its tails are about as well calibrated as FHS. The plain EWMA-t looked bad on the clean set only because its tails were too thin from the start.
+- Timestral's quantiles are about as good as those of a well-built cheap baseline. Their variance scaling is slightly better: QLIKE is 0.5–2.5% lower than the better of FHS and the scale-refit EWMA-t.
+- Its tails are about as well calibrated as FHS and the scale-refit EWMA-t (1 fail of 6 per set for each). The plain EWMA-t looked bad on the clean set only because its tails were too thin from the start.
 - The gain is real but small. It is larger on the clean set, which was quieter and falling.
 
-### 7.3 Input framing, and a fair test of the free alternatives (T-B2, T-J)
+### 7.3 Input framing, and a test of the free alternatives with return input (T-B2, T-J)
 
 Timestral reads raw price levels by default. Price-level input may be unfair to other models (Section 4), so we also gave Timestral and Chronos-2 return series:
 - **1-minute log returns.** The model forecasts per-minute returns, so only h = 1 has a forecast distribution.
 - **h-minute returns.** For each horizon h, the input is the series of non-overlapping h-minute returns that end at the origin, and the model forecasts one step. This gives a distribution for every horizon.
 
+At h = 5 and 15 this second input shows the model only every 5th or 15th close. 512 bars then cover 2,560 or 7,680 minutes, and 2,048 bars cover 10,240 or 30,720 minutes. The price input at ctx 2048 covers 2,048 minutes at 1-minute detail, and FHS uses 1-minute returns. So at 5–15 minutes this test mixes the input type with the sampling rate and the history length. No return input we tested gave a model 1-minute detail together with a 5- or 15-minute forecast distribution.
+
 | Comparison on the same origins (QLIKE, % change; negative = first model better) | Repo, h = 1 / 5 / 15 | Clean, h = 1 / 5 / 15 |
 |---|---|---|
-| Chronos-2 with 1-min log returns vs with price levels (ctx 2048) | **−4.5** / – / – | +4.1 / – / – |
-| Chronos-2 vs Timestral-28M, both with 1-min log returns (ctx 2048) ¹ | +1.0 / – / – | **+6.6** / – / – |
-| Chronos-2 vs Timestral-28M, both with h-min returns (512 bars) | +0.4 / +0.4 / **+2.4** | **+3.5 / +3.5** / −0.0 |
-| Chronos-2 vs Timestral-28M, both with h-min returns (2048 bars, every 6th origin) | +3.4 / +0.0 / +2.1 | **+2.4** / +3.0 / +4.8 |
-| Timestral-28M: h-min returns (2048 bars) vs price levels (ctx 2048) | +0.2 / **+2.4 / +3.6** | +0.7 / +1.1 / +3.0 |
-| Chronos-2, h-min returns (512 bars) vs Timestral-28M, price levels (ctx 2048) | **+2.4 / +4.7 / +9.1** | **+5.8 / +6.0** / +4.0 |
+| Chronos-2 with 1-min log returns vs with price levels (ctx 2048) | **−4.5** / – / – | +3.3 / – / – |
+| Chronos-2 vs Timestral-28M, both with 1-min log returns (ctx 2048) ¹ | +0.9 / – / – | **+5.5** / – / – |
+| Chronos-2 vs Timestral-28M, both with h-min returns (512 bars) | +0.4 / +0.4 / **+2.4** | **+3.2 / +3.4** / −0.1 |
+| Chronos-2 vs Timestral-28M, both with h-min returns (2048 bars, every 6th origin) | +3.4 / +0.0 / +2.1 | **+2.3** / +3.0 / +4.7 |
+| Timestral-28M: h-min returns (2048 bars) vs price levels (ctx 2048) | +0.2 / **+2.4 / +3.6** | +0.7 / +1.2 / +3.0 |
+| Chronos-2, h-min returns (512 bars) vs Timestral-28M, price levels (ctx 2048) | **+2.4 / +4.7 / +9.1** | **+5.5 / +6.0** / +4.0 |
 
-¹ On the clean set the comparison is with Timestral-28M on price levels, because its log-return run there used every 6th origin only. At h = 1 the two Timestral inputs give the same result (T-J).
+¹ At h = 1 the h-minute return input is the 1-minute log-return input. On the clean set the Timestral side is therefore its 2048-bar h-minute run, which covers all origins.
 
-- **Return input helps Chronos-2 a lot.** At h = 1 its pinball loss is 3–8% lower than with price levels, on both sets. Price levels are a poor input for it.
-- **On equal input, Timestral still has a small edge.** Pinball loss is equal (no significant cell; T-J). QLIKE is 0–7% higher for Chronos-2, significant in 5 of 14 cells.
-- **For Timestral, price levels are the best input at 5–15 minutes.** Its h-minute return input gives about the same pinball loss but 0–4% higher QLIKE, and with it Timestral no longer beats FHS at 5–15 minutes (T-B2).
-- **Chronos-2 with its best input does not beat FHS on QLIKE** (+0.6% to +7.4% on the repo set, +1.9% to +3.9% on the clean set; T-B2). So it is not a substitute for Timestral in the variance role. On the volatility series (7.5) it is.
+- **Return input helps Chronos-2 on pinball loss.** At h = 1 its pinball loss is 3–8% lower than with price levels, on both sets (T-J). At ctx 2048 its QLIKE is 4.5% lower on the repo set, but 3.3% higher on the clean set (not significant).
+- **On equal input, Timestral still has a small edge.** Pinball loss is about the same (one significant cell of 14: +0.2% for Chronos-2, clean set, h = 1; T-J). QLIKE is 0–5.5% higher for Chronos-2, significant in 5 of 14 cells.
+- **For Timestral, price levels gave lower QLIKE than h-minute returns at 5–15 minutes** (significant on the repo set only). Its h-minute return input gives about the same pinball loss but 0.2–3.6% higher QLIKE, and with it Timestral no longer beats FHS at 5–15 minutes (T-B2).
+- **Chronos-2 does not beat FHS on QLIKE with any input we tested.** No cell is a significant gain (T-B2). Its best cells are within about ±1% of FHS (for example clean set, h = 1, price input at ctx 2048: −0.0%). With 512-bar h-minute returns it is 1.8–7.4% worse on the repo set and 1.9–3.9% worse on the clean set. So, with the inputs we tested, it is not a substitute for Timestral in the variance role. On the volatility series (7.5) it is.
 - **TimesFM-2.5** (through Samay): log-return input lowers its pinball loss by about 2% at h = 1. It gives only deciles, so we cannot score its tails or QLIKE fairly.
 
 ### 7.4 Context length, size and options (T-G, T-J)
 
-T-J compares each variant with its base configuration on identical origins. T-J holds about 50 paired cells per set, so about 2–3 cells would be significant by chance alone. We therefore treat a single significant cell as weak evidence.
+T-J compares each variant with its base configuration on identical origins. The ablation rows that this section uses hold 48 paired cells per set (T-J holds about 120 per set in all). If no option had any effect, about 2–3 of these 48 cells would be significant by chance alone. We therefore treat a single significant cell as weak evidence.
 - **Context of at least 512 is needed; 2048 is the best trade-off.** At ctx 64 (our 60-bar lookback), pinball loss is 1.4–2.5% worse than EWMA-t. At ctx 512 it is 0.1–1.5% worse. Going from 512 to 2048 (28M) lowers pinball loss by up to 0.8% and QLIKE by up to 2.3%. Two of the twelve cells are significant, both on the clean set.
 - **Context 8192 adds little.** Against ctx 2048 on the same origins, 209M lowers QLIKE by 1.6% at h = 1 on the repo set (significant). No other cell is significant, on either set or for 28M. Latency is 2.6× higher.
-- **Context 32768 hurts or does nothing.** For 28M on the repo set, pinball loss is 3.6% worse and QLIKE 8.0% worse at h = 1 than at ctx 2048 (significant). On the clean set no cell is significant. Latency is about 11× higher.
-- **Size.** 209M has 0–0.4% lower pinball loss than 28M (significant at h = 1 on both sets and at h = 5 on the repo set). QLIKE is the same. 5M is 0.1–0.6 points worse than 28M (unpaired).
+- **Context 32768 hurts or does nothing.** For 28M on the repo set, pinball loss is 3.6% worse and QLIKE 8.1% worse at h = 1 than at ctx 2048 (significant). On the clean set no cell is significant. Latency is about 11× higher.
+- **Size.** 209M has 0–0.4% lower pinball loss than 28M (significant at h = 1 on both sets and at h = 5 on the repo set). QLIKE is the same. 5M's pinball loss is 0.1–0.6 percentage points higher than 28M's, both measured against EWMA-t (not paired).
 - **Covariates** (log volume, high-low range and return as past covariates) give no reliable gain:
   - 28M, repo: QLIKE −1.1% at h = 1 (significant); no other cell is significant.
   - 209M, repo (every 6th origin): no cell is significant.
@@ -344,8 +359,8 @@ We used walk-forward logistic regression with a 15-minute purge. The base model 
 ### 7.7 Economics (T-D)
 
 - We traded only when |forecast| > round-trip cost, with one position at a time. Trades fill at the forecast bar's close, with no slippage and no delay, so real results would be worse.
-- Timestral at ctx 2048 almost never forecasts a move above 4 bps, so it makes 0–73 trades per window (6 days on the repo set, 14 days on the clean set).
-- Configurations that trade more lose money: Chronos-2, Chronos-Bolt, TimesFM-2.5, Timestral at ctx 512 or with h-minute return input, and neural_trade. With 100 or more trades on the full origin sets, the net result at 4 bps cost is −1.1 to −7.9 bps per trade, with t down to −8.2 (Chronos-Bolt, clean set, h = 1). At 10–20 bps costs almost every configuration loses money.
+- Timestral at ctx 2048 with default price-level input almost never forecasts a move above 4 bps, so it makes 0–73 trades per window (6 days on the repo set, 14 days on the clean set). With 1-minute log-return input or with covariates it trades more (149–175 trades at h = 15 on the repo set) and loses 4.5–5.0 bps per trade.
+- Configurations that trade more lose money: Chronos-2, Chronos-Bolt, TimesFM-2.5, Timestral at ctx 512 or with return input or covariates, and neural_trade. With 100 or more trades on the full origin sets, the net result at 4 bps cost is −1.1 to −7.9 bps per trade, with t down to −8.2 (Chronos-Bolt, clean set, h = 1). At 10–20 bps costs almost every configuration loses money.
 - A few small samples are positive (n ≤ 47). One is nominally significant: Timestral-28M, ctx 2048, symmetric averaging off, repo set, h = 5 (n = 16, +11.9 bps per trade, t = 2.8). We ran about 300 trade tests, so one such result is weak evidence. With default settings the same model loses on the same origins (n = 11, −3.0 bps).
 - At the spot fee (20 bps round trip) almost no forecast clears the cost.
 - These results agree with published BTC results: accuracy peaks at 51–54% at 1–15 minutes, and naive sign trading loses after costs (Jaquart et al. 2021).
@@ -371,17 +386,17 @@ Single-series calls on 4 CPU threads, fp32, package defaults (no `torch.compile`
 ### 7.9 Head-to-head: neural_trade
 
 - **Setup:**
-  - We retrained it with its own pipeline on the same data, with 3 seeds. Only the IO paths and the seed were changed; `model.py` was imported unmodified.
-  - It uses its own 2,880-sequence window, loss-weight calibration and early stopping. Each training run takes about 2–3 minutes on 1 CPU thread, with 40 optimizer steps (8 epochs × 5 batches).
+  - We retrained it with its own pipeline on the same data, with 3 seeds. We changed only the IO paths and the seed. We imported `model.py` unmodified.
+  - It uses its own 2,880-sequence window and loss-weight calibration. Its early-stopping callback never fires (Section 3.1), so every run trains for all 8 epochs. Each training run takes about 2–3 minutes on 1 CPU thread, with 40 optimizer steps (8 epochs × 5 batches).
   - **As-is:** trained once on data up to the first origin, then frozen for the whole test window (6 days repo, 14 days clean). Its inputs are price levels, scaled with a fit on about 40 hours of training windows. On the repo set, 88% of origins had inputs more than 3 training standard deviations from the mean. On the clean set only 0.5% did.
-  - **Retrained daily:** a new model every 1,440 minutes, trained on all data up to the start of its day, as a fairer test. Its inputs are still raw price levels, so they still left the training range on some days: on 3 of 14 clean-set days, 51–71% of origins were more than 3 training standard deviations out.
-- **Direction head:** it says DOWN at every origin in 13 of 18 seed-horizon runs. The worst run says UP at 14% of origins (repo, seed 0, h = 5). The loss-weight calibration clamped to 1000 on every run.
-- **Point forecasts** are about 2.5–17× smaller than real moves (mean absolute size, by seed and horizon). Their correlation with realized deltas is −0.02 to +0.09.
-- **Distribution (as-is):** pinball loss 1.6–10.7% worse and QLIKE 10–21% worse than EWMA-t (17 of 18 QLIKE cells significant). Volatility ranking is 0.05–0.16 against 0.31–0.40 for the EWMA baselines. The 21-level grid keeps only about 79% of its t(3) variance, so its QLIKE here is, if anything, slightly flattering.
+  - **Retrained daily:** a new model every 1,440 minutes, as a fairer test. Each one is trained with its own pipeline on the 2,880 most recent sequences (about 2 days) before the start of its day (`M:48`). Its inputs are still raw price levels, so they still left the training range on some days: 84% of origins on the first repo-set day, and 51–71% of origins on 3 of 14 clean-set days, were more than 3 training standard deviations out.
+- **Direction head (frozen):** it says DOWN at every origin in 13 of 18 seed-horizon runs. The worst run says UP at 14% of origins (repo, seed 0, h = 5). Retrained daily, it says UP at no more than 12% of origins in any run. The loss-weight calibration clamped to 1000 on every run.
+- **Point forecasts (frozen)** are about 2.5–17× smaller than real moves (mean absolute size, by seed and horizon). Their correlation with realized deltas is −0.02 to +0.09 (frozen) and −0.05 to +0.05 (retrained daily).
+- **Distribution (as-is):** pinball loss 1.6–10.7% worse and QLIKE 11–22% worse than EWMA-t (17 of 18 QLIKE cells significant). Volatility ranking is 0.05–0.16 against 0.31–0.40 for the EWMA baselines. The 21-level grid keeps only about 79% of its t(3) variance, so for the frozen runs its QLIKE here is, if anything, slightly flattering.
 - **Tails (as-is):** mixed. On the clean set at h = 1, its 98% coverage (0.985–0.991) is closer to nominal than EWMA-t's (0.968), and seed 0's 99% tail passes where EWMA-t fails. At 5 and 15 minutes on the clean set, its intervals are far too wide.
-- **Retrained daily: no better.** Against the frozen model on the same origins, pinball loss changed by −0.4% to +3.0% and QLIKE was 3–8% worse on the repo set. On the clean set the result was mixed (pinball −3% to +0.3%, QLIKE −8% to +8%). Against EWMA-t it is still 2.6–8.2% worse on pinball loss and 7.5–27% worse on QLIKE (16 of 18 QLIKE cells significant). Its volatility ranking is even weaker (Spearman −0.10 to 0.12). Stale weights do not explain its poor scores.
+- **Retrained daily: still far behind.** Against the frozen model on the same origins, pinball loss changed by −0.4% to +3.0% and QLIKE was 3–8% worse on the repo set. On the clean set the result was mixed (pinball −3% to +0.3%, QLIKE −8% to +8%). Against EWMA-t it is still 2.6–8.2% worse on pinball loss and 7.5–28% worse on QLIKE (16 of 18 QLIKE cells significant). Its volatility ranking is even weaker (Spearman −0.10 to 0.12). Stale weights do not explain its poor scores.
 - **The only cell with an apparent direction signal** is repo h = 15: MCC 0.073 and 0.065 for seeds 0 and 1, but 0.024 for seed 2. It is absent on the clean set. **It is not robust.**
-- **Bottom line:** in its present state, frozen or retrained daily, neural_trade loses to a 2-parameter EWMA-t on pinball loss and volatility ranking in every cell, and on QLIKE in every cell by point estimate. Its tail calibration is mixed. In the variance and risk role, FHS, EWMA-t, HAR and Timestral are all upgrades over the current head.
+- **Bottom line:** in its present state, frozen or retrained daily, neural_trade loses to a 2-parameter EWMA-t on pinball loss and volatility ranking in every cell, and on QLIKE in every cell by point estimate. Its tail calibration is mixed. In the variance and risk role, FHS, EWMA-t and Timestral all score better than the current head on pinball loss, QLIKE and volatility ranking.
 
 ---
 
@@ -393,7 +408,7 @@ Timestral emits 21 quantiles per step, trained with pinball loss on all levels. 
 |---|---|---|---|---|
 | **Price**: pinball τ = 0.4. The 5-min head is pulled toward q0.4; the 1- and 15-min heads are set mainly by the Student-t NLL (Section 3.2). | q0.4 and the median are among its 21 levels | Exact. It also removes the pooled-scaler mismatch across horizons. | None. No model beats random walk. The 5-min head is biased low by design: q0.4 sits about 0.15–0.20 standard deviations below the median on our data (0.25 for a Gaussian), so it loses to random walk by construction. | Do not replace. **Drop the point head**, or set its loss weight to 0 (Section 9, step 2). |
 | **Direction**: focal BCE, α = 0.7 | P(up) = 1 − F(last close), interpolated from the quantiles | Good. It is a proper probability without the α bias, and the Gaussian "align" term becomes redundant. | None. AUC 0.48–0.53 on the full origin sets. Brier skill at most +0.0024. The current head is no better: it almost always outputs DOWN. | Do not replace. **Fix α** (or use plain BCE) and treat direction as unproven. |
-| **Variance**: Student-t NLL, ν = 3, centred on the price head | Full predictive distribution in bps; variance by quantile integration; tail quantiles directly | **Best fit.** The pinball loss over 21 levels scores each of these quantiles properly. Together they approximate CRPS, a score for the whole forecast distribution. It needs no assumed distribution shape between q0.01 and q0.99. Beyond q0.01 and q0.99 the model gives no information. Its units are bps, not scaled units² that depend on the scaler. | Real but small. QLIKE 0.6–3.0% lower than FHS, a free baseline. Tails about as well calibrated as FHS. As a range forecaster, 5–17% lower QLIKE than an EWMA of the range. The current head is 10–21% *worse* than EWMA-t on QLIKE. | **This is the slot.** But a free FHS gives most of the gain, so start there. |
+| **Variance**: Student-t NLL, ν = 3, centred on the price head | Full predictive distribution in bps; variance by quantile integration; tail quantiles directly | **Best fit.** The pinball loss over 21 levels scores each of these quantiles properly. Together they approximate CRPS, a score for the whole forecast distribution. It needs no assumed distribution shape between q0.01 and q0.99. Beyond q0.01 and q0.99 the model gives no information. Its units are bps, not scaled units² that depend on the scaler. | Real but small. QLIKE 0.5–2.5% lower than the better of two free baselines (FHS, scale-refit EWMA-t). Tails about as well calibrated as theirs. As a range forecaster, 5–17% lower QLIKE than an EWMA of the range; Chronos-2 (Apache-2.0) gives about the same, 4.9–15.0%. The current head is 11–22% *worse* than EWMA-t on QLIKE. | **This is the slot.** For return variance, a free FHS gives about half of the clean-set gain at no cost and no licence risk, so start there. For the range series, the free Chronos-2 is about as good (Section 7.5). |
 | **`helper_functions`** risk helpers: confidence = 1/(1+v), 2–6% stop, size multipliers. **Not wired today** (Section 3.1). | Interval width in bps; q0.05/q0.01 for stops | Good. It removes the unit dependence of `1/(1+v)` and the 0.7/0.5 thresholds. | If the stop were wired, it would sit 2–6% away (200–600 bps). The standard deviation of 15-minute returns is about 17 bps (clean set) to 26 bps (repo set), so that is 8–35 standard deviations away. It would almost never trigger. Quantile stops scale with the market. | **Use quantile-based, bps-denominated risk inputs.** Start with FHS. Then, after the licence check, A/B test Timestral. |
 | **Trend, align, vol, L2 terms** | – | – | The trend term has zero gradient and distorts the loss-weight calibration. | Remove the trend term from the loss and from the calibration. |
 
@@ -407,11 +422,12 @@ Ordered by value per effort. Steps 1–3 are needed whatever the model choice. E
 
 | # | Action | Why | Effort |
 |---|---|---|---|
-| 1 | **Fix the evaluation set-up** (ML engineer). Do these five tasks. (a) Split the data into walk-forward folds, with a gap of at least 15 minutes between training and test data (a "purge"). (b) Keep a test set that early stopping and checkpoints never see. (c) Add fees: 20 bps round trip for spot, 4–10 bps for futures. Add a slippage estimate. (d) In the backtest, replace the centred rolling mean with a trailing one. (e) Make the column names match: read `datetime` in the loader (`model.py:201`), or write `timestamp` in the CSV writer (`dw_ccxt.py:114-116`). | Without this, no model change can be judged (D4–D6). | Small–medium |
-| 2 | **Fix the model defects** (ML engineer). (a) Remove the × 20 forward scaling in `LearnableIndicators.call` (`M:1073`, `M:1085-1087`, `M:1110-1112`, `M:1135`, `M:1147`). Keep or retune the gradient scaling in `train_step` (`M:1903-1905`). (b) Drop the zero-gradient trend term from the loss and from the loss-weight calibration. (c) Set focal α = 0.5, or use plain BCE. (d) For the momentum periods (D7), write back and initialise with `log(expm1(max(p − 1, 1e-3)))`, the inverse of `softplus(raw) + 1`. (e) Drop the price (point) head, or set its loss weight to 0, and centre the Student-t head on zero. (f) Feed returns, or prices normalised within each window, instead of raw price levels with a fixed scaler (D8). Then retrain and measure again with the harness in `research/tsfm_eval/`. | The current model is worse than a 2-parameter baseline on pinball loss, QLIKE and volatility ranking. | Small |
-| 3 | **Wire a risk module into the backtest** (ML engineer). None is wired today. Use **FHS** as its default variance input: an EWMA variance with tail shapes from past data, refitted daily. Use quantile stops and width-based confidence in bps. Add EWMA-t, FHS and random walk as **standing baselines** in the harness. Add Timestral-28M (ctx 2048) as a further baseline only after the licence check in step 4. | FHS gets most of the measured variance and tail benefit. It costs nothing and has no licence risk. | Small |
-| 4 | **Optional model trial in the risk path.** **Precondition:** legal confirms that the $20M revenue clause does not apply. If it applies, the owner gets a commercial licence from Mistral first. Use Timestral-28M at ctx 2048 with price-level input. It has the same QLIKE as 209M at about 30 ms per call, but 0.3–0.4% higher pinball loss (Section 7.4). Chronos-2 is not a substitute here: it did not beat FHS on QLIKE (Section 7.3). Run an A/B test against FHS in the fixed backtest from step 1. Use at least 3 months of post-release data (Section 10.4, question 1). Write the pass rule down before the test starts. Suggested rule: adopt the model only if net PnL after fees is higher, the block-bootstrap 95% CI of the per-trade PnL difference excludes 0, and maximum drawdown is not worse. Otherwise keep FHS. | Expected gain: 0.6–3.0% QLIKE against FHS. No clear tail gain. | Medium |
-| 5 | **Treat direction as a research question, not a model swap** (researcher). The only direction signal seen (a 15-min reversal, MCC 0.04–0.09) depends on the window and does not survive costs. Explore it with the walk-forward logistic model from Section 7.6, and with selective, cost-aware entry, before building more deep models. | Published accuracy at 1–15 min peaks at 51–54% (Jaquart et al. 2021). Our best measured direction AUC is 0.54. | Medium |
+| 1 | **Fix the evaluation set-up** (ML engineer). Do these five tasks. (a) Split the data into walk-forward folds, with a gap of at least 15 minutes between training and test data (a "purge"). (b) Keep a test set that early stopping and checkpoints never see. (c) Add fees: 20 bps round trip for spot, 4–10 bps for futures. Add a slippage estimate. (d) In the backtest, replace the centred rolling mean with a trailing one. (e) Make the column names match: read `datetime` in the loader (`model.py:201`), or write `timestamp` in the CSV writer (`dw_ccxt.py:114-116`). | Without this, we cannot judge any model change (D4–D6). | Small–medium |
+| 2 | **Fix the model defects** (ML engineer). (a) Remove the × 20 forward scaling in `LearnableIndicators.call` (`M:1073`, `M:1085-1087`, `M:1110-1112`, `M:1135`, `M:1147`). Keep or retune the gradient scaling in `train_step` (`M:1903-1905`). (b) Drop the zero-gradient trend term from the loss and from the loss-weight calibration. (c) Set focal α = 0.5, or use plain BCE. (d) For the momentum periods (D7), write back and initialise with `log(expm1(max(p − 1, 1e-3)))`, the inverse of `softplus(raw) + 1`. (e) Drop the price (point) head, or set its loss weight to 0, and centre the Student-t head on zero. (f) Feed returns, or prices normalised within each window, instead of raw price levels with a fixed scaler (D8). Then retrain and measure again with the harness in `research/tsfm_eval/`. **Pass rule:** on both data sets, the retrained model is not significantly worse than FHS on pinball loss or QLIKE. If it fails, do not use its variance head; use FHS (step 3). | The current model is worse than a 2-parameter baseline on pinball loss, QLIKE and volatility ranking. | Small |
+| 3 | **Wire a risk module into the backtest** (ML engineer). None is wired today. Use **FHS** as its default variance input: an EWMA variance with tail shapes from past data. We tested it with one fit before the test window. We did not test a daily refit, so compare both in the backtest. Use quantile stops and width-based confidence in bps. Add EWMA-t, FHS and random walk as **standing baselines** in the harness. Add Timestral-28M (ctx 2048) as a further baseline only after the licence check in step 4. | FHS gets about half of the measured variance gain on the clean set, and its tails are about as well calibrated as Timestral's. It costs nothing and has no licence risk. Timestral adds only 0.5–2.8% QLIKE on top of it. | Small |
+| 4 | **Optional model trial in the risk path** (ML engineer; the licence check is done by the system owner with legal counsel). **Precondition:** legal confirms in writing that clause 2 of the weights licence does not apply to the licensee or its group (Section 10.4, question 4). If it applies, the system owner gets a commercial licence from Mistral, or the trial does not start. Use Timestral-28M at ctx 2048 with price-level input. Its QLIKE is about the same as that of 209M, and its pinball loss is up to 0.4% higher (Section 7.4). It takes about 30 ms per call, against about 160 ms for 209M (Section 7.8). Chronos-2 is not a substitute for the return-distribution input: it did not beat FHS on QLIKE (Section 7.3). Run an A/B test against FHS in the backtest from steps 1 and 3. Use at least 3 months of post-release data (Section 10.4, question 1). Write the pass rule down before the test starts. Suggested rule: adopt the model only if net PnL after fees is higher, the block-bootstrap 95% CI of the per-trade PnL difference excludes 0, and maximum drawdown is not worse. Otherwise keep FHS. | Expected gain: 0.5–2.8% QLIKE against FHS. No clear tail gain. | Medium |
+| 5 | **Treat direction as a research question, not a model swap** (researcher). The only direction signal seen (a 15-min reversal, MCC 0.04–0.09) depends on the window and does not survive costs. Explore it with the walk-forward logistic model from Section 7.6, and with selective, cost-aware entry, before building more deep models. **Stop rule:** stop this work if, on at least 3 months of post-release data, the walk-forward AUC CI includes 0.5, or net PnL after a 4 bps round-trip cost is not positive. | Published accuracy at 1–15 min peaks at 51–54% (Jaquart et al. 2021). Our best measured direction AUC is 0.54. | Medium |
+| — | **Not in this plan: a range (volatility) forecaster.** No part of neural_trade uses a range forecast today. If a range input is added later, compare Timestral-28M with Chronos-2 (about equal on both sets) and with HAR (equal at 5–15 minutes on the repo set, worse at 1 minute) (Section 7.5). | Chronos-2 has Apache-2.0 weights, so it needs no licence check. | — |
 | — | **Do not** adopt Samay. **Do not** use Timestral for price or direction. **Do not** feed a foundation model a 60-bar context. **Do not** use a 32k context. | Sections 5, 7.1, 7.4 and 7.8. | — |
 
 ---
@@ -422,17 +438,17 @@ Ordered by value per effort. Steps 1–3 are needed whatever the model choice. E
 - **Two windows only.** Repo set: 6 days, 2025-11. Clean set: 14 days, 2026-10, quieter and falling (mean |1-min return| 3.0 bps against 5.0). More windows are needed before any production decision.
 - **The clean set is not fully untouched.** It also informed the choice of context length and model size, so it is not a pure test for the recommended configuration.
 - **Zero-shot only.** We did not fine-tune any foundation model. Timestral cannot be fine-tuned with the released code, and Samay's loops are not fit for use.
-- **Subsampled runs.** The 8k/32k runs use every 6th origin (483 on repo, 1,120 on clean). Two covariate runs use every 6th (repo, 209M) or every 3rd origin (clean). Their CIs are wider.
+- **Subsampled runs.** These runs use every 6th origin (483 on repo, 1,120 on clean): the 8k/32k runs, the Chronos-2 runs with 2048 bars of h-minute returns (both sets), the clean-set runs of Timestral-28M with 1-minute log returns and with symmetric averaging off, Chronos-2 at ctx 8192 (clean) and the Samay equivalence runs (repo). Two covariate runs use every 6th (repo, 209M) or every 3rd origin (clean). Their CIs are wider.
 - **neural_trade head-to-head** uses seeds 0/1/2, not the repo default seed 42. The system today scores only the 480 bars right after its training window. We tested it frozen for the whole window and retrained daily.
-- **Baselines added after review.** FHS and the scale-refit EWMA-t were added after an internal review showed that the pinball-tuned EWMA-t was a weak variance reference. Both use only pre-test data and have no extra free parameters.
-- **Batched timing.** Throughput figures in T-G were measured while other jobs ran. Only the latency in 7.8 was measured on an idle machine.
+- **Baselines added after review.** We added FHS and the scale-refit EWMA-t after an internal review showed that the pinball-tuned EWMA-t was a weak variance reference. Both are fitted once on pre-test data and are not tuned on the test window.
+- **Batched timing.** We measured the throughput figures in T-G while other jobs ran. We measured only the latency in 7.8 on an idle machine.
 - **Costs.** We checked spot fees (10 bps per side) against Binance's fee page. We assumed futures fees of 2 bps (maker) and 5 bps (taker) per side. We did not model slippage or delay, so real trading results would be worse.
 
 ### 10.2 Risks
 | Risk | Severity | Note |
 |---|---|---|
-| Timestral licence: $20M global consolidated monthly revenue of the user's company **or employer**; covers derivatives, combined works and benchmarks | High (legal) | A commercial licence is at Mistral's discretion. No hosted-API price was found. |
-| Undisclosed Timestral post-training data | Medium | The repo-window results may be contaminated. The clean set avoids this. Its gains over FHS are similar to or larger than those on the repo set, so contamination does not explain the gain. |
+| Timestral licence: $20M global consolidated monthly revenue of the licensee's company **or employer**; applies to derivatives, modifications and combined works; removes all rights, so benchmark use is also blocked | High (legal) | A commercial licence is at Mistral's discretion. The licence also allows use through Mistral's hosted services, but we found no hosted offer or price for Timestral. |
+| Undisclosed Timestral post-training data | Medium | Timestral may have seen the repo window in post-training. The clean set avoids this. Its gains over FHS are similar to or larger than those on the repo set, so contamination does not explain the gain. |
 | Two ML stacks (TensorFlow + PyTorch) in one process | Medium | Thread over-subscription and a larger image. Run any PyTorch forecaster in a separate process or service. |
 | Vendor support | Medium | The Timestral repo accepts no PRs and promises best-effort maintenance only. Open issues had no maintainer reply as of 2026-10-30. |
 | Samay dependency confusion (`pip install samay` installs another package) | High if adopted | Avoided by not adopting it. |
@@ -475,9 +491,9 @@ Everything is in `research/tsfm_eval/`. See its `README.md` for environments and
 
 ## Appendix A. Full result tables
 
-Generated by `research/tsfm_eval/bench/make_tables.py` from the committed result files. Do not edit by hand. Per data set: T-A point and direction, T-B distribution vs EWMA-t, T-B2 vs the two stronger baselines, T-C tails, T-D trades, T-E volatility role, T-F feature role. Then T-G ablations, T-J paired ablations, T-H latency and T-I Samay equivalence.
+Generated by `research/tsfm_eval/bench/make_tables.py` from the committed result files. Do not edit by hand. Per data set: T-A point and direction, T-B distribution vs EWMA-t, T-B2 vs the two further baselines, T-C tails, T-D trades, T-E volatility role, T-F feature role. Then T-G ablations, T-J paired ablations, T-H latency and T-I Samay equivalence.
 
-Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does not mean better: in loss tables a positive value is worse and a negative value is better. QLIKE is the unit-free form y²/v − ln(y²/v) − 1 on origins with y ≠ 0; v is the variance implied by the 21 quantiles. Chronos-2 and Chronos-Bolt rows come from the official `chronos-forecasting` package; for these two models Samay gives the same numbers to 0.0008 bp (T-I). ‡ Log-return input: only h = 1 has a forecast distribution; h = 5 and 15 use the summed per-step medians as a point forecast. § h-min return input: for each h, the input is the series of non-overlapping h-minute returns ending at the origin (512 or 2048 bars), and the model forecasts one step. † Decile-only model (q0.1 … q0.9): its q0.01, q0.05, q0.95 and q0.99 are clamped to q0.1 / q0.9, so its 98% coverage, tail rates and QLIKE are biased against it. Compare it on 9-decile pinball only. neural_trade quantiles come from its Student-t head (ν = 3) centred on its price head; the 21-level grid keeps about 79% of a t(3) variance (97% for the t(6) EWMA-t), so its QLIKE here is slightly flattering to it. Trades fill at the forecast bar's close with no slippage and no delay.
+Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does not mean better: in loss tables a positive value is worse and a negative value is better. QLIKE levels are the unit-free form y²/v − ln(y²/v) − 1 on origins with y ≠ 0 (v = variance implied by the 21 quantiles); paired % changes use every origin (the per-origin difference of y²/v + ln v) relative to the baseline's unit-free mean. Tail test p-values: Kupiec (iid), and a z-test with variance at the 1% target rate times a Newey-West autocorrelation factor (60 min of lags); we use the latter. In table titles, 'post' is the clean set, 'full' is all origins, and 'sub6'/'step18' is every 6th origin. Chronos-2 and Chronos-Bolt rows come from the official `chronos-forecasting` package; for these two models Samay gives the same numbers to 0.0008 bp (T-I). ‡ Log-return input: only h = 1 has a forecast distribution; h = 5 and 15 use the summed per-step medians as a point forecast. § h-min return input: for each h, the input is the series of non-overlapping h-minute returns ending at the origin (512 or 2048 bars), and the model forecasts one step. † Decile-only model (q0.1 … q0.9): its q0.01, q0.05, q0.95 and q0.99 are clamped to q0.1 / q0.9, so its 98% coverage, tail rates and QLIKE are biased against it. Compare it on 9-decile pinball only. neural_trade quantiles come from its Student-t head (ν = 3) centred on its price head; the 21-level grid keeps about 79% of a t(3) variance (97% for the t(6) EWMA-t). For the frozen runs this flatters its QLIKE slightly; for the clean-set daily-retrained runs, whose variance is mostly too low, it penalises it slightly. Trades fill at the forecast bar's close with no slippage and no delay.
 
 
 ### T-A (repo). Point and direction — Repo holdout (2,895 origins, 2025-11-04 → 11-10)
@@ -519,77 +535,77 @@ Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does 
 | REF: EWMA-Student-t (λ 0.94, ν 6) | 1 | 0 (reference) | 0 (reference) | 0.795 | 0.979 | 0.395 |
 | REF: EWMA-Student-t (λ 0.97, ν 6) | 5 | 0 (reference) | 0 (reference) | 0.796 | 0.980 | 0.359 |
 | REF: EWMA-Student-t (λ 0.97, ν 6) | 15 | 0 (reference) | 0 (reference) | 0.785 | 0.981 | 0.310 |
-| Timestral-5M, ctx 512 | 1 | **+1.08** [+0.53, +1.54] | -0.23 [-1.85, +1.30] | 0.828 | 0.982 | 0.390 |
-| Timestral-5M, ctx 512 | 5 | **+1.12** [+0.57, +1.64] | -0.29 [-1.70, +1.11] | 0.819 | 0.977 | 0.355 |
+| Timestral-5M, ctx 512 | 1 | **+1.08** [+0.53, +1.54] | -0.17 [-1.78, +1.44] | 0.828 | 0.982 | 0.390 |
+| Timestral-5M, ctx 512 | 5 | **+1.12** [+0.57, +1.64] | -0.29 [-1.69, +1.10] | 0.819 | 0.977 | 0.355 |
 | Timestral-5M, ctx 512 | 15 | **+1.45** [+0.46, +2.56] | +0.49 [-1.50, +2.48] | 0.803 | 0.978 | 0.293 |
-| Timestral-28M, ctx 512 | 1 | **+0.45** [+0.00, +0.89] | -0.56 [-2.25, +0.98] | 0.835 | 0.986 | 0.399 |
-| Timestral-28M, ctx 512 | 5 | **+0.67** [+0.22, +1.14] | -0.79 [-2.23, +0.58] | 0.825 | 0.980 | 0.356 |
+| Timestral-28M, ctx 512 | 1 | **+0.45** [+0.00, +0.89] | -0.46 [-2.12, +1.08] | 0.835 | 0.986 | 0.399 |
+| Timestral-28M, ctx 512 | 5 | **+0.67** [+0.22, +1.14] | -0.79 [-2.15, +0.64] | 0.825 | 0.980 | 0.356 |
 | Timestral-28M, ctx 512 | 15 | **+1.02** [+0.19, +1.89] | -0.77 [-3.34, +1.59] | 0.820 | 0.979 | 0.300 |
-| Timestral-28M, ctx 2048 | 1 | **+0.57** [+0.21, +0.92] | -0.68 [-2.26, +0.71] | 0.832 | 0.985 | 0.399 |
-| Timestral-28M, ctx 2048 | 5 | +0.33 [-0.02, +0.68] | -1.26 [-2.76, +0.02] | 0.814 | 0.980 | 0.360 |
+| Timestral-28M, ctx 2048 | 1 | **+0.57** [+0.21, +0.92] | -0.61 [-2.08, +0.84] | 0.832 | 0.985 | 0.399 |
+| Timestral-28M, ctx 2048 | 5 | +0.33 [-0.02, +0.68] | -1.26 [-2.61, +0.10] | 0.814 | 0.980 | 0.360 |
 | Timestral-28M, ctx 2048 | 15 | +0.21 [-0.41, +0.87] | -1.65 [-4.03, +0.53] | 0.815 | 0.979 | 0.316 |
-| Timestral-209M, ctx 512 | 1 | **+0.47** [+0.07, +0.88] | -0.19 [-1.76, +1.38] | 0.824 | 0.984 | 0.390 |
-| Timestral-209M, ctx 512 | 5 | **+0.53** [+0.08, +0.99] | -1.00 [-2.42, +0.34] | 0.820 | 0.980 | 0.355 |
+| Timestral-209M, ctx 512 | 1 | **+0.47** [+0.07, +0.88] | -0.09 [-1.64, +1.41] | 0.824 | 0.984 | 0.390 |
+| Timestral-209M, ctx 512 | 5 | **+0.53** [+0.08, +0.99] | -1.00 [-2.29, +0.35] | 0.820 | 0.980 | 0.355 |
 | Timestral-209M, ctx 512 | 15 | +0.56 [-0.33, +1.52] | -1.41 [-3.43, +0.47] | 0.815 | 0.979 | 0.304 |
-| Timestral-209M, ctx 2048 | 1 | +0.19 [-0.16, +0.48] | -0.71 [-1.98, +0.53] | 0.822 | 0.983 | 0.399 |
-| Timestral-209M, ctx 2048 | 5 | +0.00 [-0.30, +0.25] | **-1.29** [-2.70, -0.03] | 0.815 | 0.980 | 0.359 |
+| Timestral-209M, ctx 2048 | 1 | +0.19 [-0.16, +0.48] | -0.66 [-1.91, +0.58] | 0.822 | 0.983 | 0.399 |
+| Timestral-209M, ctx 2048 | 5 | +0.00 [-0.30, +0.25] | -1.29 [-2.61, +0.04] | 0.815 | 0.980 | 0.359 |
 | Timestral-209M, ctx 2048 | 15 | -0.16 [-0.57, +0.28] | -1.70 [-3.82, +0.36] | 0.819 | 0.979 | 0.310 |
-| Chronos-2 (Samay family), ctx 512 | 1 | **+4.63** [+3.17, +5.99] | +2.44 [-0.48, +4.88] | 0.823 | 0.989 | 0.385 |
-| Chronos-2 (Samay family), ctx 512 | 5 | **+2.91** [+2.14, +3.80] | +0.61 [-1.22, +2.34] | 0.787 | 0.974 | 0.342 |
+| Chronos-2 (Samay family), ctx 512 | 1 | **+4.63** [+3.17, +5.99] | +2.51 [-0.32, +5.14] | 0.823 | 0.989 | 0.385 |
+| Chronos-2 (Samay family), ctx 512 | 5 | **+2.91** [+2.14, +3.80] | +0.61 [-1.27, +2.43] | 0.787 | 0.974 | 0.342 |
 | Chronos-2 (Samay family), ctx 512 | 15 | **+3.17** [+2.02, +4.49] | +1.36 [-1.17, +3.90] | 0.773 | 0.965 | 0.294 |
-| Chronos-2 (Samay family), ctx 2048 | 1 | **+9.38** [+7.35, +11.30] | **+5.19** [+2.10, +7.72] | 0.834 | 0.985 | 0.377 |
-| Chronos-2 (Samay family), ctx 2048 | 5 | **+3.17** [+2.11, +4.15] | +0.76 [-1.55, +2.63] | 0.768 | 0.965 | 0.358 |
+| Chronos-2 (Samay family), ctx 2048 | 1 | **+9.38** [+7.35, +11.30] | **+5.22** [+2.15, +7.74] | 0.834 | 0.985 | 0.377 |
+| Chronos-2 (Samay family), ctx 2048 | 5 | **+3.17** [+2.11, +4.15] | +0.75 [-1.25, +2.73] | 0.768 | 0.965 | 0.358 |
 | Chronos-2 (Samay family), ctx 2048 | 15 | **+2.08** [+0.98, +3.08] | +0.99 [-2.00, +3.65] | 0.745 | 0.970 | 0.313 |
-| Chronos-Bolt-S (Samay family), ctx 512 † | 1 | **+8.91** [+7.12, +10.64] | **+3.33** [+0.93, +6.14] | 0.840 | 0.840 | 0.380 |
-| Chronos-Bolt-S (Samay family), ctx 512 † | 5 | **+4.96** [+3.63, +6.18] | **+13.30** [+9.07, +18.20] | 0.785 | 0.785 | 0.335 |
+| Chronos-Bolt-S (Samay family), ctx 512 † | 1 | **+8.91** [+7.12, +10.64] | **+3.28** [+0.71, +5.64] | 0.840 | 0.840 | 0.380 |
+| Chronos-Bolt-S (Samay family), ctx 512 † | 5 | **+4.96** [+3.63, +6.18] | **+13.29** [+9.11, +17.71] | 0.785 | 0.785 | 0.335 |
 | Chronos-Bolt-S (Samay family), ctx 512 † | 15 | **+4.85** [+2.81, +7.04] | **+19.02** [+12.22, +26.55] | 0.773 | 0.773 | 0.271 |
-| TimesFM-2.5 via Samay, ctx 512 † | 1 | **+3.72** [+2.80, +4.64] | +1.27 [-1.08, +3.30] | 0.904 | 0.904 | 0.378 |
-| TimesFM-2.5 via Samay, ctx 512 † | 5 | **+2.79** [+1.76, +3.79] | **+4.15** [+1.78, +6.94] | 0.829 | 0.829 | 0.355 |
+| TimesFM-2.5 via Samay, ctx 512 † | 1 | **+3.72** [+2.80, +4.64] | +1.33 [-0.96, +3.33] | 0.904 | 0.904 | 0.378 |
+| TimesFM-2.5 via Samay, ctx 512 † | 5 | **+2.79** [+1.76, +3.79] | **+4.14** [+1.58, +6.94] | 0.829 | 0.829 | 0.355 |
 | TimesFM-2.5 via Samay, ctx 512 † | 15 | **+4.75** [+2.37, +7.51] | **+12.30** [+6.62, +18.14] | 0.792 | 0.792 | 0.283 |
-| TimesFM-2.5 via Samay, ctx 2048 † | 1 | **+2.47** [+1.72, +3.12] | **+3.29** [+1.04, +5.81] | 0.867 | 0.867 | 0.387 |
-| TimesFM-2.5 via Samay, ctx 2048 † | 5 | **+1.66** [+0.93, +2.24] | **+7.78** [+4.63, +11.33] | 0.820 | 0.820 | 0.350 |
+| TimesFM-2.5 via Samay, ctx 2048 † | 1 | **+2.47** [+1.72, +3.12] | **+3.15** [+0.98, +5.51] | 0.867 | 0.867 | 0.387 |
+| TimesFM-2.5 via Samay, ctx 2048 † | 5 | **+1.66** [+0.93, +2.24] | **+7.76** [+4.44, +11.10] | 0.820 | 0.820 | 0.350 |
 | TimesFM-2.5 via Samay, ctx 2048 † | 15 | **+1.55** [+0.37, +2.62] | **+12.98** [+5.94, +19.56] | 0.799 | 0.799 | 0.301 |
-| neural_trade as-is, seed 0 | 1 | **+5.03** [+4.02, +6.10] | **+19.68** [+15.22, +25.05] | 0.778 | 0.980 | 0.157 |
-| neural_trade as-is, seed 0 | 5 | **+4.57** [+3.34, +5.92] | **+12.82** [+8.12, +18.26] | 0.758 | 0.986 | 0.093 |
+| neural_trade as-is, seed 0 | 1 | **+5.03** [+4.02, +6.10] | **+20.04** [+15.48, +25.29] | 0.778 | 0.980 | 0.157 |
+| neural_trade as-is, seed 0 | 5 | **+4.57** [+3.34, +5.92] | **+12.84** [+8.17, +18.62] | 0.758 | 0.986 | 0.093 |
 | neural_trade as-is, seed 0 | 15 | **+1.77** [+0.43, +3.30] | **+11.36** [+4.42, +18.85] | 0.801 | 0.992 | 0.095 |
-| neural_trade as-is, seed 1 | 1 | **+3.52** [+2.55, +4.60] | **+20.00** [+15.44, +25.17] | 0.794 | 0.982 | 0.157 |
-| neural_trade as-is, seed 1 | 5 | **+4.49** [+3.24, +5.74] | **+12.97** [+8.06, +18.50] | 0.760 | 0.985 | 0.108 |
+| neural_trade as-is, seed 1 | 1 | **+3.52** [+2.55, +4.60] | **+20.40** [+15.81, +25.57] | 0.794 | 0.982 | 0.157 |
+| neural_trade as-is, seed 1 | 5 | **+4.49** [+3.24, +5.74] | **+12.99** [+8.09, +18.83] | 0.760 | 0.985 | 0.108 |
 | neural_trade as-is, seed 1 | 15 | **+1.62** [+0.58, +2.98] | **+11.19** [+3.71, +20.63] | 0.775 | 0.986 | 0.140 |
-| neural_trade as-is, seed 2 | 1 | **+6.83** [+5.30, +8.46] | **+21.24** [+16.69, +26.38] | 0.796 | 0.985 | 0.115 |
-| neural_trade as-is, seed 2 | 5 | **+2.60** [+1.85, +3.50] | **+14.63** [+9.91, +19.67] | 0.811 | 0.993 | 0.092 |
+| neural_trade as-is, seed 2 | 1 | **+6.83** [+5.30, +8.46] | **+21.67** [+17.15, +27.14] | 0.796 | 0.985 | 0.115 |
+| neural_trade as-is, seed 2 | 5 | **+2.60** [+1.85, +3.50] | **+14.66** [+10.13, +19.80] | 0.811 | 0.993 | 0.092 |
 | neural_trade as-is, seed 2 | 15 | **+3.05** [+1.78, +4.61] | **+19.11** [+7.50, +35.62] | 0.696 | 0.971 | 0.062 |
-| neural_trade retrained daily, seed 0 | 1 | **+8.21** [+6.81, +9.62] | **+25.44** [+19.77, +31.64] | 0.789 | 0.982 | 0.034 |
-| neural_trade retrained daily, seed 0 | 5 | **+4.85** [+3.71, +6.00] | **+21.49** [+15.96, +27.55] | 0.811 | 0.989 | 0.035 |
+| neural_trade retrained daily, seed 0 | 1 | **+8.21** [+6.81, +9.62] | **+25.94** [+20.35, +31.91] | 0.789 | 0.982 | 0.034 |
+| neural_trade retrained daily, seed 0 | 5 | **+4.85** [+3.71, +6.00] | **+21.50** [+16.22, +26.93] | 0.811 | 0.989 | 0.035 |
 | neural_trade retrained daily, seed 0 | 15 | **+3.75** [+2.38, +5.34] | **+18.70** [+11.26, +25.97] | 0.819 | 0.989 | 0.090 |
-| neural_trade retrained daily, seed 1 | 1 | **+5.93** [+4.90, +7.15] | **+27.28** [+21.91, +33.49] | 0.803 | 0.981 | 0.104 |
-| neural_trade retrained daily, seed 1 | 5 | **+6.01** [+4.70, +7.37] | **+22.14** [+16.74, +28.76] | 0.805 | 0.990 | -0.035 |
+| neural_trade retrained daily, seed 1 | 1 | **+5.93** [+4.90, +7.15] | **+27.67** [+22.35, +34.06] | 0.803 | 0.981 | 0.104 |
+| neural_trade retrained daily, seed 1 | 5 | **+6.01** [+4.70, +7.37] | **+22.16** [+16.96, +28.20] | 0.805 | 0.990 | -0.035 |
 | neural_trade retrained daily, seed 1 | 15 | **+3.12** [+1.78, +4.70] | **+18.71** [+10.46, +28.36] | 0.822 | 0.988 | 0.026 |
-| neural_trade retrained daily, seed 2 | 1 | **+7.27** [+5.96, +8.69] | **+25.52** [+20.59, +30.95] | 0.814 | 0.986 | 0.121 |
-| neural_trade retrained daily, seed 2 | 5 | **+4.24** [+3.22, +5.35] | **+17.66** [+12.99, +22.85] | 0.810 | 0.990 | 0.109 |
+| neural_trade retrained daily, seed 2 | 1 | **+7.27** [+5.96, +8.69] | **+25.97** [+21.11, +31.46] | 0.814 | 0.986 | 0.121 |
+| neural_trade retrained daily, seed 2 | 5 | **+4.24** [+3.22, +5.35] | **+17.67** [+13.25, +22.91] | 0.810 | 0.990 | 0.109 |
 | neural_trade retrained daily, seed 2 | 15 | **+2.63** [+1.37, +4.27] | **+22.40** [+11.16, +38.08] | 0.783 | 0.981 | -0.012 |
-| Chronos-2, ctx 512, log-return input ‡ | 1 | **+1.02** [+0.59, +1.54] | **+1.69** [+0.50, +2.96] | 0.810 | 0.975 | 0.380 |
-| Chronos-2, ctx 2048, log-return input ‡ | 1 | **+0.27** [+0.05, +0.49] | +0.45 [-0.72, +1.64] | 0.816 | 0.976 | 0.391 |
-| TimesFM-2.5 via Samay, ctx 512, log-return input † ‡ | 1 | **+1.69** [+1.07, +2.30] | **+14.84** [+10.46, +20.50] | 0.803 | 0.803 | 0.365 |
-| Timestral-28M, h-min return input, 512 bars § | 1 | **+1.05** [+0.51, +1.59] | +1.27 [-0.28, +2.86] | 0.823 | 0.980 | 0.379 |
-| Timestral-28M, h-min return input, 512 bars § | 5 | **+1.10** [+0.56, +1.70] | **+2.98** [+0.60, +5.86] | 0.815 | 0.978 | 0.329 |
+| Chronos-2, ctx 512, log-return input ‡ | 1 | **+1.02** [+0.59, +1.54] | **+1.73** [+0.49, +2.98] | 0.810 | 0.975 | 0.380 |
+| Chronos-2, ctx 2048, log-return input ‡ | 1 | **+0.27** [+0.05, +0.49] | +0.48 [-0.66, +1.66] | 0.816 | 0.976 | 0.391 |
+| TimesFM-2.5 via Samay, ctx 512, log-return input † ‡ | 1 | **+1.69** [+1.07, +2.30] | **+14.64** [+9.91, +20.17] | 0.803 | 0.803 | 0.365 |
+| Timestral-28M, h-min return input, 512 bars § | 1 | **+1.05** [+0.51, +1.59] | +1.36 [-0.04, +2.86] | 0.823 | 0.980 | 0.379 |
+| Timestral-28M, h-min return input, 512 bars § | 5 | **+1.10** [+0.56, +1.70] | **+2.98** [+0.66, +5.59] | 0.815 | 0.978 | 0.329 |
 | Timestral-28M, h-min return input, 512 bars § | 15 | **+1.38** [+0.54, +2.34] | **+4.77** [+0.47, +8.72] | 0.817 | 0.984 | 0.238 |
-| Timestral-28M, h-min return input, 2048 bars § | 1 | +0.20 [-0.08, +0.47] | -0.51 [-1.69, +0.60] | 0.824 | 0.979 | 0.398 |
-| Timestral-28M, h-min return input, 2048 bars § | 5 | **+0.55** [+0.15, +0.98] | +1.10 [-0.88, +3.23] | 0.813 | 0.977 | 0.344 |
+| Timestral-28M, h-min return input, 2048 bars § | 1 | +0.20 [-0.08, +0.47] | -0.43 [-1.59, +0.74] | 0.824 | 0.979 | 0.398 |
+| Timestral-28M, h-min return input, 2048 bars § | 5 | **+0.55** [+0.15, +0.98] | +1.09 [-0.80, +3.20] | 0.813 | 0.977 | 0.344 |
 | Timestral-28M, h-min return input, 2048 bars § | 15 | +0.45 [-0.03, +1.04] | +1.86 [-1.23, +5.02] | 0.799 | 0.981 | 0.269 |
-| Chronos-2, h-min return input, 512 bars § | 1 | **+1.02** [+0.59, +1.54] | **+1.69** [+0.50, +2.96] | 0.810 | 0.975 | 0.380 |
-| Chronos-2, h-min return input, 512 bars § | 5 | **+0.86** [+0.43, +1.30] | **+3.39** [+0.91, +6.64] | 0.799 | 0.976 | 0.334 |
+| Chronos-2, h-min return input, 512 bars § | 1 | **+1.02** [+0.59, +1.54] | **+1.73** [+0.49, +2.98] | 0.810 | 0.975 | 0.380 |
+| Chronos-2, h-min return input, 512 bars § | 5 | **+0.86** [+0.43, +1.30] | **+3.38** [+0.77, +6.33] | 0.799 | 0.976 | 0.334 |
 | Chronos-2, h-min return input, 512 bars § | 15 | **+1.38** [+0.79, +2.06] | **+7.29** [+3.77, +11.23] | 0.807 | 0.979 | 0.218 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | +0.09 [-0.06, +0.23] | +0.58 [-0.46, +1.49] | 0.836 | 0.987 | 0.395 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | **+0.16** [+0.00, +0.30] | +0.42 [-0.61, +1.33] | 0.835 | 0.986 | 0.359 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | +0.09 [-0.06, +0.23] | +0.66 [-0.34, +1.61] | 0.836 | 0.987 | 0.395 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | **+0.16** [+0.00, +0.30] | +0.42 [-0.55, +1.48] | 0.835 | 0.986 | 0.359 |
 | EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | +0.25 [-0.05, +0.53] | +0.59 [-1.28, +2.39] | 0.830 | 0.987 | 0.310 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | **+0.02** [+0.01, +0.04] | -0.12 [-0.56, +0.26] | 0.800 | 0.986 | 0.395 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | +0.02 [-0.05, +0.09] | -0.02 [-0.63, +0.51] | 0.805 | 0.985 | 0.359 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | **+0.02** [+0.01, +0.04] | -0.09 [-0.51, +0.31] | 0.800 | 0.986 | 0.395 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | +0.02 [-0.05, +0.09] | -0.02 [-0.59, +0.60] | 0.805 | 0.985 | 0.359 |
 | FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | +0.02 [-0.13, +0.15] | -0.06 [-1.18, +1.02] | 0.796 | 0.988 | 0.310 |
-| EWMA-Gaussian (λ 0.94) | 1 | +0.10 [-0.06, +0.27] | -0.11 [-0.30, +0.06] | 0.828 | 0.969 | 0.395 |
-| EWMA-Gaussian (λ 0.94) | 5 | **+0.31** [+0.09, +0.52] | +0.75 [-0.46, +1.82] | 0.823 | 0.966 | 0.356 |
+| EWMA-Gaussian (λ 0.94) | 1 | +0.10 [-0.06, +0.27] | -0.10 [-0.27, +0.08] | 0.828 | 0.969 | 0.395 |
+| EWMA-Gaussian (λ 0.94) | 5 | **+0.31** [+0.09, +0.52] | +0.75 [-0.30, +1.85] | 0.823 | 0.966 | 0.356 |
 | EWMA-Gaussian (λ 0.94) | 15 | **+0.37** [+0.07, +0.68] | +0.92 [-0.41, +2.24] | 0.809 | 0.970 | 0.306 |
-| Trailing 1-day empirical quantiles | 1 | **+2.63** [+1.98, +3.36] | **+19.08** [+13.78, +24.97] | 0.811 | 0.976 | 0.217 |
-| Trailing 1-day empirical quantiles | 5 | **+2.22** [+1.49, +2.93] | **+12.97** [+8.35, +18.80] | 0.802 | 0.977 | 0.217 |
+| Trailing 1-day empirical quantiles | 1 | **+2.63** [+1.98, +3.36] | **+19.30** [+13.89, +25.05] | 0.811 | 0.976 | 0.217 |
+| Trailing 1-day empirical quantiles | 5 | **+2.22** [+1.49, +2.93] | **+12.96** [+8.39, +18.22] | 0.802 | 0.977 | 0.217 |
 | Trailing 1-day empirical quantiles | 15 | **+1.86** [+0.81, +3.16] | **+10.99** [+4.25, +17.21] | 0.800 | 0.970 | 0.196 |
 
 
@@ -597,73 +613,73 @@ Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does 
 
 | Model | h | Pinball (9) vs EWMA-t scale-refit, % | QLIKE vs EWMA-t scale-refit, % | Pinball (9) vs FHS, % | QLIKE vs FHS, % |
 |---|---|---|---|---|---|
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | -0.07 [-0.21, +0.07] | **-0.69** [-1.22, -0.10] | – | – |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | -0.13 [-0.29, +0.03] | **-0.44** [-0.81, -0.02] | – | – |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | -0.07 [-0.21, +0.07] | **-0.74** [-1.29, -0.17] | – | – |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | -0.13 [-0.29, +0.03] | **-0.44** [-0.87, -0.04] | – | – |
 | FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | -0.23 [-0.50, +0.03] | -0.64 [-1.36, +0.10] | – | – |
-| Timestral-28M, ctx 512 | 1 | +0.36 [-0.09, +0.80] | **-1.13** [-2.14, -0.12] | +0.43 [-0.02, +0.86] | -0.44 [-1.83, +0.88] |
-| Timestral-28M, ctx 512 | 5 | **+0.52** [+0.11, +0.97] | **-1.20** [-2.27, -0.12] | **+0.65** [+0.19, +1.12] | -0.77 [-1.88, +0.33] |
+| Timestral-28M, ctx 512 | 1 | +0.36 [-0.09, +0.80] | **-1.11** [-2.09, -0.16] | +0.43 [-0.02, +0.86] | -0.38 [-1.72, +0.88] |
+| Timestral-28M, ctx 512 | 5 | **+0.52** [+0.11, +0.97] | **-1.21** [-2.24, -0.07] | **+0.65** [+0.19, +1.12] | -0.77 [-1.88, +0.37] |
 | Timestral-28M, ctx 512 | 15 | +0.78 [-0.04, +1.67] | -1.34 [-2.88, +0.36] | **+1.01** [+0.15, +1.92] | -0.71 [-2.50, +0.98] |
-| Timestral-28M, ctx 2048 | 1 | **+0.47** [+0.11, +0.85] | **-1.25** [-2.17, -0.39] | **+0.54** [+0.19, +0.89] | -0.56 [-1.81, +0.55] |
-| Timestral-28M, ctx 2048 | 5 | +0.18 [-0.18, +0.56] | **-1.67** [-2.92, -0.52] | +0.31 [-0.05, +0.66] | **-1.23** [-2.44, -0.12] |
+| Timestral-28M, ctx 2048 | 1 | **+0.47** [+0.11, +0.85] | **-1.26** [-2.13, -0.36] | **+0.54** [+0.19, +0.89] | -0.52 [-1.71, +0.64] |
+| Timestral-28M, ctx 2048 | 5 | +0.18 [-0.18, +0.56] | **-1.67** [-2.79, -0.53] | +0.31 [-0.05, +0.66] | **-1.23** [-2.36, -0.08] |
 | Timestral-28M, ctx 2048 | 15 | -0.04 [-0.73, +0.68] | **-2.23** [-3.76, -0.70] | +0.19 [-0.44, +0.86] | **-1.59** [-3.26, -0.03] |
-| Timestral-209M, ctx 2048 | 1 | +0.10 [-0.22, +0.40] | **-1.28** [-2.15, -0.41] | +0.17 [-0.18, +0.46] | -0.59 [-1.63, +0.40] |
-| Timestral-209M, ctx 2048 | 5 | -0.16 [-0.42, +0.12] | **-1.70** [-2.88, -0.39] | -0.02 [-0.34, +0.24] | **-1.27** [-2.43, -0.13] |
+| Timestral-209M, ctx 2048 | 1 | +0.10 [-0.22, +0.40] | **-1.31** [-2.16, -0.44] | +0.17 [-0.18, +0.46] | -0.58 [-1.57, +0.44] |
+| Timestral-209M, ctx 2048 | 5 | -0.16 [-0.42, +0.12] | **-1.70** [-2.81, -0.45] | -0.02 [-0.34, +0.24] | **-1.27** [-2.39, -0.11] |
 | Timestral-209M, ctx 2048 | 15 | -0.40 [-0.89, +0.12] | **-2.28** [-3.87, -0.60] | -0.17 [-0.61, +0.28] | -1.65 [-3.18, +0.01] |
-| Timestral-28M, h-min return input, 512 bars § | 1 | **+0.95** [+0.45, +1.48] | +0.69 [-0.51, +2.02] | **+1.02** [+0.49, +1.56] | **+1.39** [+0.08, +2.77] |
-| Timestral-28M, h-min return input, 512 bars § | 5 | **+0.94** [+0.43, +1.54] | **+2.55** [+0.41, +5.71] | **+1.08** [+0.56, +1.65] | **+3.01** [+0.75, +5.98] |
+| Timestral-28M, h-min return input, 512 bars § | 1 | **+0.95** [+0.45, +1.48] | +0.70 [-0.48, +2.08] | **+1.02** [+0.49, +1.56] | **+1.45** [+0.20, +2.88] |
+| Timestral-28M, h-min return input, 512 bars § | 5 | **+0.94** [+0.43, +1.54] | **+2.54** [+0.32, +5.36] | **+1.08** [+0.56, +1.65] | **+3.00** [+0.79, +5.71] |
 | Timestral-28M, h-min return input, 512 bars § | 15 | **+1.13** [+0.27, +2.10] | **+4.16** [+0.77, +7.45] | **+1.37** [+0.56, +2.28] | **+4.83** [+1.11, +8.33] |
-| Timestral-28M, h-min return input, 2048 bars § | 1 | +0.11 [-0.16, +0.37] | **-1.08** [-1.93, -0.11] | +0.18 [-0.10, +0.45] | -0.39 [-1.34, +0.55] |
-| Timestral-28M, h-min return input, 2048 bars § | 5 | **+0.40** [+0.01, +0.84] | +0.68 [-1.12, +2.93] | **+0.53** [+0.15, +0.93] | +1.12 [-0.65, +3.28] |
+| Timestral-28M, h-min return input, 2048 bars § | 1 | +0.11 [-0.16, +0.37] | **-1.08** [-2.03, -0.14] | +0.18 [-0.10, +0.45] | -0.34 [-1.31, +0.63] |
+| Timestral-28M, h-min return input, 2048 bars § | 5 | **+0.40** [+0.01, +0.84] | +0.67 [-1.17, +2.84] | **+0.53** [+0.15, +0.93] | +1.12 [-0.67, +3.21] |
 | Timestral-28M, h-min return input, 2048 bars § | 15 | +0.21 [-0.41, +0.90] | +1.26 [-1.53, +4.43] | +0.43 [-0.06, +1.03] | +1.92 [-0.90, +4.83] |
-| Chronos-2 (Samay family), ctx 512 | 1 | **+4.53** [+3.05, +5.95] | +1.85 [-0.31, +3.62] | **+4.61** [+3.15, +5.96] | +2.56 [-0.04, +4.67] |
-| Chronos-2 (Samay family), ctx 512 | 5 | **+2.75** [+1.94, +3.65] | +0.19 [-1.59, +2.10] | **+2.89** [+2.12, +3.76] | +0.63 [-1.15, +2.43] |
+| Chronos-2 (Samay family), ctx 512 | 1 | **+4.53** [+3.05, +5.95] | +1.84 [-0.23, +3.88] | **+4.61** [+3.15, +5.96] | **+2.60** [+0.09, +4.98] |
+| Chronos-2 (Samay family), ctx 512 | 5 | **+2.75** [+1.94, +3.65] | +0.18 [-1.58, +2.19] | **+2.89** [+2.12, +3.76] | +0.63 [-1.10, +2.46] |
 | Chronos-2 (Samay family), ctx 512 | 15 | **+2.92** [+1.74, +4.27] | +0.77 [-2.23, +3.90] | **+3.15** [+1.97, +4.50] | +1.42 [-1.17, +4.33] |
-| Chronos-2, ctx 2048, log-return input ‡ | 1 | +0.17 [-0.04, +0.42] | -0.13 [-1.36, +1.42] | **+0.24** [+0.04, +0.46] | +0.57 [-0.53, +1.83] |
-| Chronos-2, h-min return input, 512 bars § | 1 | **+0.93** [+0.50, +1.42] | +1.11 [-0.12, +2.60] | **+1.00** [+0.57, +1.52] | **+1.81** [+0.70, +3.13] |
-| Chronos-2, h-min return input, 512 bars § | 5 | **+0.70** [+0.29, +1.14] | **+2.96** [+0.46, +6.56] | **+0.83** [+0.42, +1.28] | **+3.41** [+0.97, +6.86] |
+| Chronos-2, ctx 2048, log-return input ‡ | 1 | +0.17 [-0.04, +0.42] | -0.18 [-1.55, +1.36] | **+0.24** [+0.04, +0.46] | +0.56 [-0.64, +1.84] |
+| Chronos-2, h-min return input, 512 bars § | 1 | **+0.93** [+0.50, +1.42] | +1.07 [-0.13, +2.47] | **+1.00** [+0.57, +1.52] | **+1.82** [+0.69, +3.08] |
+| Chronos-2, h-min return input, 512 bars § | 5 | **+0.70** [+0.29, +1.14] | **+2.95** [+0.32, +6.21] | **+0.83** [+0.42, +1.28] | **+3.40** [+0.79, +6.46] |
 | Chronos-2, h-min return input, 512 bars § | 15 | **+1.13** [+0.47, +1.90] | **+6.67** [+3.26, +10.66] | **+1.36** [+0.78, +2.04] | **+7.36** [+4.01, +11.37] |
-| neural_trade as-is, seed 0 | 1 | **+4.93** [+3.84, +6.06] | **+18.99** [+14.69, +24.25] | **+5.00** [+4.00, +6.07] | **+19.82** [+15.43, +25.04] |
-| neural_trade as-is, seed 0 | 5 | **+4.41** [+3.17, +5.82] | **+12.36** [+7.94, +17.66] | **+4.55** [+3.35, +5.84] | **+12.85** [+8.34, +18.21] |
+| neural_trade as-is, seed 0 | 1 | **+4.93** [+3.84, +6.06] | **+19.27** [+14.86, +24.22] | **+5.00** [+4.00, +6.07] | **+20.15** [+15.77, +25.24] |
+| neural_trade as-is, seed 0 | 5 | **+4.41** [+3.17, +5.82] | **+12.37** [+7.84, +17.87] | **+4.55** [+3.35, +5.84] | **+12.87** [+8.28, +18.42] |
 | neural_trade as-is, seed 0 | 15 | **+1.52** [+0.19, +3.12] | **+10.71** [+4.77, +17.53] | **+1.76** [+0.40, +3.34] | **+11.42** [+5.12, +18.41] |
-| neural_trade retrained daily, seed 0 | 1 | **+8.11** [+6.67, +9.56] | **+24.72** [+19.31, +30.73] | **+8.19** [+6.78, +9.59] | **+25.59** [+19.97, +31.71] |
-| neural_trade retrained daily, seed 0 | 5 | **+4.69** [+3.56, +5.86] | **+20.99** [+15.80, +27.18] | **+4.83** [+3.71, +5.99] | **+21.52** [+16.23, +27.75] |
+| neural_trade retrained daily, seed 0 | 1 | **+8.11** [+6.67, +9.56] | **+25.14** [+20.01, +30.99] | **+8.19** [+6.78, +9.59] | **+26.06** [+20.67, +31.94] |
+| neural_trade retrained daily, seed 0 | 5 | **+4.69** [+3.56, +5.86] | **+21.00** [+16.16, +26.41] | **+4.83** [+3.71, +5.99] | **+21.53** [+16.54, +27.04] |
 | neural_trade retrained daily, seed 0 | 15 | **+3.50** [+2.04, +5.21] | **+18.00** [+11.22, +24.69] | **+3.73** [+2.30, +5.38] | **+18.77** [+11.70, +25.54] |
 
 
 ### T-C (repo). Tail calibration (target 1% / 5% / 5% / 1%; p < 0.05 = fail)
 
-| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Newey-West p (q0.01 / q0.99) |
+| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Overlap-robust p (q0.01 / q0.99) |
 |---|---|---|---|---|---|---|---|
-| REF: EWMA-Student-t | 1 | 0.0114 | 0.0549 | 0.0542 | 0.0097 | 0.459 / 0.858 | 0.479 / 0.855 |
-| REF: EWMA-Student-t | 5 | 0.0093 | 0.0522 | 0.0511 | 0.0104 | 0.713 / 0.845 | 0.722 / 0.865 |
-| REF: EWMA-Student-t | 15 | 0.0083 | 0.0525 | 0.0546 | 0.0107 | 0.341 / 0.705 | 0.552 / 0.809 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | 0.0059 | 0.0390 | 0.0383 | 0.0073 | 0.016 / 0.118 | 0.003 / 0.085 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | 0.0069 | 0.0401 | 0.0425 | 0.0076 | 0.077 / 0.175 | 0.062 / 0.162 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | 0.0059 | 0.0363 | 0.0421 | 0.0069 | 0.016 / 0.077 | 0.090 / 0.189 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | 0.0059 | 0.0473 | 0.0542 | 0.0086 | 0.016 / 0.450 | 0.003 / 0.421 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | 0.0066 | 0.0453 | 0.0459 | 0.0083 | 0.047 / 0.341 | 0.035 / 0.367 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | 0.0059 | 0.0453 | 0.0535 | 0.0066 | 0.016 / 0.047 | 0.090 / 0.118 |
-| Timestral-28M, ctx 2048 | 1 | 0.0059 | 0.0349 | 0.0428 | 0.0090 | 0.016 / 0.575 | 0.003 / 0.586 |
-| Timestral-28M, ctx 2048 | 5 | 0.0086 | 0.0453 | 0.0491 | 0.0117 | 0.450 / 0.359 | 0.450 / 0.412 |
-| Timestral-28M, ctx 2048 | 15 | 0.0073 | 0.0401 | 0.0477 | 0.0142 | 0.118 / 0.034 | 0.274 / 0.265 |
-| Timestral-209M, ctx 2048 | 1 | 0.0073 | 0.0425 | 0.0487 | 0.0093 | 0.118 / 0.713 | 0.076 / 0.734 |
-| Timestral-209M, ctx 2048 | 5 | 0.0090 | 0.0428 | 0.0480 | 0.0111 | 0.575 / 0.575 | 0.591 / 0.620 |
-| Timestral-209M, ctx 2048 | 15 | 0.0069 | 0.0428 | 0.0487 | 0.0138 | 0.077 / 0.051 | 0.215 / 0.288 |
-| Timestral-28M, h-min return input, 2048 bars § | 1 | 0.0097 | 0.0435 | 0.0463 | 0.0111 | 0.858 / 0.575 | 0.850 / 0.595 |
-| Timestral-28M, h-min return input, 2048 bars § | 5 | 0.0114 | 0.0449 | 0.0459 | 0.0117 | 0.459 / 0.359 | 0.524 / 0.438 |
-| Timestral-28M, h-min return input, 2048 bars § | 15 | 0.0073 | 0.0497 | 0.0504 | 0.0114 | 0.118 / 0.459 | 0.225 / 0.655 |
-| Chronos-2 (Samay family), ctx 512 | 1 | 0.0041 | 0.0377 | 0.0491 | 0.0073 | 0.000 / 0.118 | 0.000 / 0.123 |
-| Chronos-2 (Samay family), ctx 512 | 5 | 0.0128 | 0.0560 | 0.0584 | 0.0135 | 0.149 / 0.075 | 0.196 / 0.129 |
-| Chronos-2 (Samay family), ctx 512 | 15 | 0.0152 | 0.0601 | 0.0591 | 0.0197 | 0.009 / 0.000 | 0.170 / 0.011 |
-| Chronos-2, h-min return input, 512 bars § | 1 | 0.0111 | 0.0470 | 0.0508 | 0.0142 | 0.575 / 0.034 | 0.602 / 0.077 |
-| Chronos-2, h-min return input, 512 bars § | 5 | 0.0117 | 0.0487 | 0.0480 | 0.0128 | 0.359 / 0.149 | 0.414 / 0.250 |
-| Chronos-2, h-min return input, 512 bars § | 15 | 0.0066 | 0.0432 | 0.0463 | 0.0149 | 0.047 / 0.014 | 0.126 / 0.205 |
-| neural_trade as-is, seed 0 | 1 | 0.0114 | 0.0604 | 0.0446 | 0.0083 | 0.459 / 0.341 | 0.573 / 0.448 |
-| neural_trade as-is, seed 0 | 5 | 0.0038 | 0.0477 | 0.0794 | 0.0107 | 0.000 / 0.705 | 0.000 / 0.776 |
-| neural_trade as-is, seed 0 | 15 | 0.0017 | 0.0466 | 0.0435 | 0.0066 | 0.000 / 0.047 | 0.000 / 0.163 |
-| neural_trade retrained daily, seed 0 | 1 | 0.0079 | 0.0421 | 0.0563 | 0.0100 | 0.249 / 0.993 | 0.361 / 0.994 |
-| neural_trade retrained daily, seed 0 | 5 | 0.0031 | 0.0383 | 0.0487 | 0.0076 | 0.000 / 0.175 | 0.000 / 0.250 |
-| neural_trade retrained daily, seed 0 | 15 | 0.0017 | 0.0366 | 0.0522 | 0.0097 | 0.000 / 0.858 | 0.000 / 0.921 |
+| REF: EWMA-Student-t | 1 | 0.0114 | 0.0549 | 0.0542 | 0.0097 | 0.459 / 0.858 | 0.450 / 0.857 |
+| REF: EWMA-Student-t | 5 | 0.0093 | 0.0522 | 0.0511 | 0.0104 | 0.713 / 0.845 | 0.731 / 0.863 |
+| REF: EWMA-Student-t | 15 | 0.0083 | 0.0525 | 0.0546 | 0.0107 | 0.341 / 0.705 | 0.588 / 0.803 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | 0.0059 | 0.0390 | 0.0383 | 0.0073 | 0.016 / 0.118 | 0.022 / 0.142 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | 0.0069 | 0.0401 | 0.0425 | 0.0076 | 0.077 / 0.175 | 0.120 / 0.222 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | 0.0059 | 0.0363 | 0.0421 | 0.0069 | 0.016 / 0.077 | 0.193 / 0.275 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | 0.0059 | 0.0473 | 0.0542 | 0.0086 | 0.016 / 0.450 | 0.022 / 0.454 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | 0.0066 | 0.0453 | 0.0459 | 0.0083 | 0.047 / 0.341 | 0.087 / 0.411 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | 0.0059 | 0.0453 | 0.0535 | 0.0066 | 0.016 / 0.047 | 0.193 / 0.204 |
+| Timestral-28M, ctx 2048 | 1 | 0.0059 | 0.0349 | 0.0428 | 0.0090 | 0.016 / 0.575 | 0.022 / 0.605 |
+| Timestral-28M, ctx 2048 | 5 | 0.0086 | 0.0453 | 0.0491 | 0.0117 | 0.450 / 0.359 | 0.482 / 0.375 |
+| Timestral-28M, ctx 2048 | 15 | 0.0073 | 0.0401 | 0.0477 | 0.0142 | 0.118 / 0.034 | 0.350 / 0.186 |
+| Timestral-209M, ctx 2048 | 1 | 0.0073 | 0.0425 | 0.0487 | 0.0093 | 0.118 / 0.713 | 0.130 / 0.743 |
+| Timestral-209M, ctx 2048 | 5 | 0.0090 | 0.0428 | 0.0480 | 0.0111 | 0.575 / 0.575 | 0.610 / 0.602 |
+| Timestral-209M, ctx 2048 | 15 | 0.0069 | 0.0428 | 0.0487 | 0.0138 | 0.077 / 0.051 | 0.302 / 0.212 |
+| Timestral-28M, h-min return input, 2048 bars § | 1 | 0.0097 | 0.0435 | 0.0463 | 0.0111 | 0.858 / 0.575 | 0.852 / 0.576 |
+| Timestral-28M, h-min return input, 2048 bars § | 5 | 0.0114 | 0.0449 | 0.0459 | 0.0117 | 0.459 / 0.359 | 0.496 / 0.401 |
+| Timestral-28M, h-min return input, 2048 bars § | 15 | 0.0073 | 0.0497 | 0.0504 | 0.0114 | 0.118 / 0.459 | 0.300 / 0.633 |
+| Chronos-2 (Samay family), ctx 512 | 1 | 0.0041 | 0.0377 | 0.0491 | 0.0073 | 0.000 / 0.118 | 0.002 / 0.188 |
+| Chronos-2 (Samay family), ctx 512 | 5 | 0.0128 | 0.0560 | 0.0584 | 0.0135 | 0.149 / 0.075 | 0.144 / 0.078 |
+| Chronos-2 (Samay family), ctx 512 | 15 | 0.0152 | 0.0601 | 0.0591 | 0.0197 | 0.009 / 0.000 | 0.092 / 0.000 |
+| Chronos-2, h-min return input, 512 bars § | 1 | 0.0111 | 0.0470 | 0.0508 | 0.0142 | 0.575 / 0.034 | 0.584 / 0.036 |
+| Chronos-2, h-min return input, 512 bars § | 5 | 0.0117 | 0.0487 | 0.0480 | 0.0128 | 0.359 / 0.149 | 0.376 / 0.194 |
+| Chronos-2, h-min return input, 512 bars § | 15 | 0.0066 | 0.0432 | 0.0463 | 0.0149 | 0.047 / 0.014 | 0.214 / 0.124 |
+| neural_trade as-is, seed 0 | 1 | 0.0114 | 0.0604 | 0.0446 | 0.0083 | 0.459 / 0.341 | 0.548 / 0.489 |
+| neural_trade as-is, seed 0 | 5 | 0.0038 | 0.0477 | 0.0794 | 0.0107 | 0.000 / 0.705 | 0.004 / 0.768 |
+| neural_trade as-is, seed 0 | 15 | 0.0017 | 0.0466 | 0.0435 | 0.0066 | 0.000 / 0.047 | 0.000 / 0.258 |
+| neural_trade retrained daily, seed 0 | 1 | 0.0079 | 0.0421 | 0.0563 | 0.0100 | 0.249 / 0.993 | 0.415 / 0.994 |
+| neural_trade retrained daily, seed 0 | 5 | 0.0031 | 0.0383 | 0.0487 | 0.0076 | 0.000 / 0.175 | 0.001 / 0.315 |
+| neural_trade retrained daily, seed 0 | 15 | 0.0017 | 0.0366 | 0.0522 | 0.0097 | 0.000 / 0.858 | 0.000 / 0.923 |
 
 
 ### T-D (repo). Non-overlapping trades when |forecast| > cost
@@ -818,148 +834,148 @@ Window facts (repo): `{"full": {"n_origins": 2895, "stride_min": 3, "first": "20
 | REF: EWMA-Student-t (λ 0.9, ν 6) | 1 | 0 (reference) | 0 (reference) | 0.776 | 0.968 | 0.395 |
 | REF: EWMA-Student-t (λ 0.97, ν 6) | 5 | 0 (reference) | 0 (reference) | 0.797 | 0.971 | 0.353 |
 | REF: EWMA-Student-t (λ 0.97, ν 6) | 15 | 0 (reference) | 0 (reference) | 0.797 | 0.968 | 0.317 |
-| Timestral-5M, ctx 512 | 1 | **+0.97** [+0.52, +1.35] | **-5.28** [-9.29, -2.29] | 0.814 | 0.980 | 0.401 |
-| Timestral-5M, ctx 512 | 5 | **+0.47** [+0.07, +0.90] | **-2.55** [-6.09, -0.18] | 0.809 | 0.974 | 0.354 |
-| Timestral-5M, ctx 512 | 15 | **+0.98** [+0.23, +1.90] | -1.81 [-5.87, +1.79] | 0.813 | 0.973 | 0.298 |
-| Timestral-28M, ctx 512 | 1 | **+0.62** [+0.31, +0.94] | **-5.10** [-8.50, -2.52] | 0.811 | 0.982 | 0.403 |
-| Timestral-28M, ctx 512 | 5 | +0.13 [-0.21, +0.52] | **-2.70** [-5.93, -0.55] | 0.810 | 0.977 | 0.353 |
-| Timestral-28M, ctx 512 | 15 | +0.45 [-0.16, +1.16] | -2.27 [-6.54, +1.25] | 0.814 | 0.972 | 0.303 |
-| Timestral-28M, ctx 2048 | 1 | **+0.32** [+0.04, +0.57] | **-5.56** [-9.35, -2.70] | 0.809 | 0.982 | 0.403 |
-| Timestral-28M, ctx 2048 | 5 | -0.01 [-0.30, +0.27] | **-3.41** [-6.86, -0.89] | 0.807 | 0.977 | 0.360 |
-| Timestral-28M, ctx 2048 | 15 | +0.05 [-0.43, +0.55] | **-4.49** [-9.44, -0.71] | 0.814 | 0.973 | 0.318 |
-| Timestral-209M, ctx 512 | 1 | **+0.54** [+0.21, +0.89] | **-4.45** [-7.18, -2.52] | 0.797 | 0.984 | 0.399 |
-| Timestral-209M, ctx 512 | 5 | +0.13 [-0.19, +0.46] | **-2.98** [-6.08, -0.84] | 0.804 | 0.978 | 0.355 |
-| Timestral-209M, ctx 512 | 15 | +0.41 [-0.20, +1.09] | -2.87 [-6.79, +0.43] | 0.813 | 0.973 | 0.308 |
-| Timestral-209M, ctx 2048 | 1 | +0.05 [-0.20, +0.29] | **-5.39** [-8.70, -2.90] | 0.789 | 0.982 | 0.403 |
-| Timestral-209M, ctx 2048 | 5 | -0.08 [-0.31, +0.17] | **-3.98** [-7.61, -1.39] | 0.802 | 0.977 | 0.363 |
-| Timestral-209M, ctx 2048 | 15 | +0.06 [-0.28, +0.43] | **-4.12** [-8.55, -0.51] | 0.813 | 0.973 | 0.322 |
-| Chronos-2 (Samay family), ctx 512 | 1 | **+5.41** [+4.27, +6.49] | -1.95 [-6.22, +1.00] | 0.792 | 0.984 | 0.387 |
-| Chronos-2 (Samay family), ctx 512 | 5 | **+2.62** [+2.00, +3.28] | +3.22 [-0.51, +6.79] | 0.770 | 0.965 | 0.349 |
-| Chronos-2 (Samay family), ctx 512 | 15 | **+3.70** [+2.76, +4.79] | **+5.75** [+1.24, +10.69] | 0.768 | 0.958 | 0.300 |
-| Chronos-2 (Samay family), ctx 2048 | 1 | **+6.80** [+5.68, +7.88] | -3.27 [-9.10, +0.67] | 0.813 | 0.982 | 0.370 |
-| Chronos-2 (Samay family), ctx 2048 | 5 | **+2.60** [+1.95, +3.19] | +2.78 [-0.24, +5.37] | 0.754 | 0.959 | 0.355 |
-| Chronos-2 (Samay family), ctx 2048 | 15 | **+2.50** [+1.69, +3.24] | **+6.16** [+1.67, +10.35] | 0.750 | 0.952 | 0.299 |
-| Chronos-Bolt-S (Samay family), ctx 512 † | 1 | **+11.31** [+9.74, +12.62] | +0.99 [-3.13, +3.96] | 0.824 | 0.824 | 0.364 |
-| Chronos-Bolt-S (Samay family), ctx 512 † | 5 | **+4.67** [+3.76, +5.72] | **+16.89** [+12.04, +21.76] | 0.786 | 0.786 | 0.329 |
-| Chronos-Bolt-S (Samay family), ctx 512 † | 15 | **+4.75** [+3.39, +6.42] | **+28.45** [+18.62, +40.86] | 0.763 | 0.763 | 0.285 |
-| TimesFM-2.5 via Samay, ctx 512 † | 1 | **+4.07** [+3.46, +4.70] | -2.05 [-6.08, +0.94] | 0.875 | 0.875 | 0.382 |
-| TimesFM-2.5 via Samay, ctx 512 † | 5 | **+2.31** [+1.54, +3.17] | **+10.76** [+7.61, +14.05] | 0.814 | 0.814 | 0.352 |
-| TimesFM-2.5 via Samay, ctx 512 † | 15 | **+3.87** [+2.24, +5.63] | **+30.75** [+17.87, +46.84] | 0.785 | 0.785 | 0.289 |
-| neural_trade as-is, seed 0 | 1 | **+10.71** [+9.62, +11.89] | **+10.30** [+1.92, +17.56] | 0.807 | 0.985 | 0.048 |
-| neural_trade as-is, seed 0 | 5 | **+5.89** [+5.05, +6.74] | **+17.38** [+9.30, +23.94] | 0.880 | 0.993 | 0.084 |
-| neural_trade as-is, seed 0 | 15 | **+6.92** [+5.86, +7.98] | **+17.15** [+1.98, +28.30] | 0.910 | 0.996 | 0.053 |
-| neural_trade as-is, seed 1 | 1 | **+6.04** [+5.30, +6.91] | **+10.69** [+2.02, +17.55] | 0.845 | 0.987 | 0.073 |
-| neural_trade as-is, seed 1 | 5 | **+4.66** [+3.96, +5.39] | **+16.84** [+8.92, +23.72] | 0.876 | 0.992 | 0.099 |
-| neural_trade as-is, seed 1 | 15 | **+5.68** [+4.65, +6.64] | **+15.29** [+0.27, +26.42] | 0.904 | 0.995 | 0.051 |
-| neural_trade as-is, seed 2 | 1 | **+6.49** [+5.69, +7.34] | **+11.72** [+2.73, +18.28] | 0.864 | 0.991 | 0.102 |
-| neural_trade as-is, seed 2 | 5 | **+4.36** [+3.64, +5.06] | **+14.52** [+6.75, +20.84] | 0.868 | 0.992 | 0.105 |
-| neural_trade as-is, seed 2 | 15 | **+5.53** [+4.55, +6.46] | +11.69 [-3.16, +22.73] | 0.889 | 0.994 | 0.086 |
-| neural_trade retrained daily, seed 0 | 1 | **+7.65** [+6.73, +8.57] | **+14.21** [+6.25, +22.26] | 0.781 | 0.978 | 0.015 |
-| neural_trade retrained daily, seed 0 | 5 | **+4.72** [+3.91, +5.62] | **+11.86** [+3.91, +18.05] | 0.796 | 0.984 | 0.014 |
-| neural_trade retrained daily, seed 0 | 15 | **+3.58** [+2.58, +4.62] | +7.54 [-6.78, +18.72] | 0.795 | 0.980 | -0.015 |
-| neural_trade retrained daily, seed 1 | 1 | **+5.65** [+4.68, +6.68] | **+20.08** [+10.99, +29.36] | 0.759 | 0.969 | -0.050 |
-| neural_trade retrained daily, seed 1 | 5 | **+4.92** [+3.98, +5.88] | **+16.51** [+7.71, +25.10] | 0.781 | 0.976 | -0.059 |
-| neural_trade retrained daily, seed 1 | 15 | **+4.44** [+3.31, +5.54] | +14.33 [-1.05, +26.92] | 0.790 | 0.973 | -0.101 |
-| neural_trade retrained daily, seed 2 | 1 | **+6.83** [+5.83, +7.94] | **+18.06** [+9.52, +27.54] | 0.773 | 0.973 | -0.011 |
-| neural_trade retrained daily, seed 2 | 5 | **+4.07** [+3.25, +4.99] | **+15.75** [+7.20, +24.70] | 0.779 | 0.977 | -0.018 |
-| neural_trade retrained daily, seed 2 | 15 | **+4.54** [+3.46, +5.67] | **+16.72** [+0.42, +30.72] | 0.761 | 0.967 | -0.081 |
-| Chronos-2, ctx 512, log-return input ‡ | 1 | **+0.57** [+0.30, +0.84] | -0.13 [-2.65, +1.88] | 0.781 | 0.976 | 0.380 |
-| Chronos-2, ctx 2048, log-return input ‡ | 1 | **+0.29** [+0.07, +0.50] | +0.68 [-1.05, +2.96] | 0.780 | 0.974 | 0.388 |
-| TimesFM-2.5 via Samay, ctx 512, log-return input † ‡ | 1 | **+1.79** [+1.17, +2.35] | **+28.65** [+21.96, +35.80] | 0.759 | 0.759 | 0.368 |
-| Timestral-28M, h-min return input, 512 bars § | 1 | **+0.79** [+0.45, +1.10] | **-3.48** [-7.05, -0.92] | 0.792 | 0.978 | 0.388 |
-| Timestral-28M, h-min return input, 512 bars § | 5 | **+0.97** [+0.61, +1.40] | -1.05 [-5.63, +2.73] | 0.810 | 0.976 | 0.332 |
-| Timestral-28M, h-min return input, 512 bars § | 15 | **+1.29** [+0.75, +1.92] | -0.60 [-9.26, +6.49] | 0.803 | 0.975 | 0.217 |
-| Timestral-28M, h-min return input, 2048 bars § | 1 | +0.07 [-0.15, +0.28] | **-4.90** [-8.50, -2.10] | 0.795 | 0.979 | 0.399 |
-| Timestral-28M, h-min return input, 2048 bars § | 5 | **+0.32** [+0.07, +0.59] | -2.33 [-6.31, +1.25] | 0.805 | 0.974 | 0.341 |
-| Timestral-28M, h-min return input, 2048 bars § | 15 | **+0.48** [+0.03, +0.92] | -1.58 [-8.57, +4.46] | 0.801 | 0.974 | 0.267 |
-| Chronos-2, h-min return input, 512 bars § | 1 | **+0.57** [+0.30, +0.84] | -0.13 [-2.65, +1.88] | 0.781 | 0.976 | 0.380 |
-| Chronos-2, h-min return input, 512 bars § | 5 | **+0.89** [+0.54, +1.27] | +2.38 [-0.92, +5.39] | 0.797 | 0.974 | 0.317 |
-| Chronos-2, h-min return input, 512 bars § | 15 | **+1.18** [+0.69, +1.73] | -0.65 [-8.01, +5.88] | 0.795 | 0.976 | 0.228 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | **+0.65** [+0.48, +0.83] | **-3.24** [-6.25, -0.93] | 0.837 | 0.984 | 0.395 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | **+0.40** [+0.27, +0.55] | -1.58 [-3.57, +0.09] | 0.838 | 0.982 | 0.353 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | **+0.57** [+0.36, +0.79] | **-3.12** [-6.80, -0.16] | 0.846 | 0.979 | 0.317 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | **+0.10** [+0.04, +0.16] | **-2.63** [-4.33, -1.33] | 0.794 | 0.983 | 0.395 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | **+0.05** [+0.02, +0.09] | **-1.46** [-2.89, -0.26] | 0.809 | 0.982 | 0.353 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | +0.08 [-0.01, +0.17] | **-2.49** [-4.86, -0.59] | 0.808 | 0.978 | 0.317 |
-| EWMA-Gaussian (λ 0.94) | 1 | **+0.44** [+0.28, +0.61] | **-2.27** [-5.09, -0.43] | 0.814 | 0.960 | 0.396 |
-| EWMA-Gaussian (λ 0.94) | 5 | **+0.33** [+0.16, +0.51] | -0.15 [-1.83, +1.06] | 0.813 | 0.958 | 0.355 |
-| EWMA-Gaussian (λ 0.94) | 15 | **+0.52** [+0.32, +0.75] | +0.97 [-0.55, +2.44] | 0.811 | 0.953 | 0.320 |
-| Trailing 1-day empirical quantiles | 1 | **+2.69** [+2.03, +3.42] | **+12.72** [+4.00, +20.56] | 0.791 | 0.976 | 0.150 |
-| Trailing 1-day empirical quantiles | 5 | **+2.68** [+2.01, +3.40] | **+13.84** [+8.12, +20.08] | 0.791 | 0.973 | 0.126 |
-| Trailing 1-day empirical quantiles | 15 | **+2.46** [+1.75, +3.26] | +7.90 [-0.99, +16.08] | 0.786 | 0.969 | 0.094 |
+| Timestral-5M, ctx 512 | 1 | **+0.97** [+0.52, +1.35] | **-4.47** [-8.79, -1.53] | 0.814 | 0.980 | 0.401 |
+| Timestral-5M, ctx 512 | 5 | **+0.47** [+0.07, +0.90] | **-2.51** [-5.43, -0.04] | 0.809 | 0.974 | 0.354 |
+| Timestral-5M, ctx 512 | 15 | **+0.98** [+0.23, +1.90] | -1.80 [-6.03, +2.10] | 0.813 | 0.973 | 0.298 |
+| Timestral-28M, ctx 512 | 1 | **+0.62** [+0.31, +0.94] | **-4.30** [-7.91, -1.75] | 0.811 | 0.982 | 0.403 |
+| Timestral-28M, ctx 512 | 5 | +0.13 [-0.21, +0.52] | **-2.66** [-5.51, -0.44] | 0.810 | 0.977 | 0.353 |
+| Timestral-28M, ctx 512 | 15 | +0.45 [-0.16, +1.16] | -2.27 [-6.33, +1.22] | 0.814 | 0.972 | 0.303 |
+| Timestral-28M, ctx 2048 | 1 | **+0.32** [+0.04, +0.57] | **-4.90** [-8.94, -2.08] | 0.809 | 0.982 | 0.403 |
+| Timestral-28M, ctx 2048 | 5 | -0.01 [-0.30, +0.27] | **-3.38** [-6.48, -1.00] | 0.807 | 0.977 | 0.360 |
+| Timestral-28M, ctx 2048 | 15 | +0.05 [-0.43, +0.55] | **-4.49** [-9.26, -0.76] | 0.814 | 0.973 | 0.318 |
+| Timestral-209M, ctx 512 | 1 | **+0.54** [+0.21, +0.89] | **-3.76** [-6.56, -1.78] | 0.797 | 0.984 | 0.399 |
+| Timestral-209M, ctx 512 | 5 | +0.13 [-0.19, +0.46] | **-2.95** [-5.73, -0.78] | 0.804 | 0.978 | 0.355 |
+| Timestral-209M, ctx 512 | 15 | +0.41 [-0.20, +1.09] | -2.86 [-6.54, +0.43] | 0.813 | 0.973 | 0.308 |
+| Timestral-209M, ctx 2048 | 1 | +0.05 [-0.20, +0.29] | **-4.75** [-8.26, -2.26] | 0.789 | 0.982 | 0.403 |
+| Timestral-209M, ctx 2048 | 5 | -0.08 [-0.31, +0.17] | **-3.94** [-7.18, -1.41] | 0.802 | 0.977 | 0.363 |
+| Timestral-209M, ctx 2048 | 15 | +0.06 [-0.28, +0.43] | **-4.12** [-8.46, -0.39] | 0.813 | 0.973 | 0.322 |
+| Chronos-2 (Samay family), ctx 512 | 1 | **+5.41** [+4.27, +6.49] | -1.27 [-5.53, +1.48] | 0.792 | 0.984 | 0.387 |
+| Chronos-2 (Samay family), ctx 512 | 5 | **+2.62** [+2.00, +3.28] | +3.22 [-0.19, +7.10] | 0.770 | 0.965 | 0.349 |
+| Chronos-2 (Samay family), ctx 512 | 15 | **+3.70** [+2.76, +4.79] | **+5.75** [+1.44, +10.84] | 0.768 | 0.958 | 0.300 |
+| Chronos-2 (Samay family), ctx 2048 | 1 | **+6.80** [+5.68, +7.88] | -2.22 [-8.08, +1.55] | 0.813 | 0.982 | 0.370 |
+| Chronos-2 (Samay family), ctx 2048 | 5 | **+2.60** [+1.95, +3.19] | **+2.74** [+0.01, +5.64] | 0.754 | 0.959 | 0.355 |
+| Chronos-2 (Samay family), ctx 2048 | 15 | **+2.50** [+1.69, +3.24] | **+6.16** [+1.65, +10.67] | 0.750 | 0.952 | 0.299 |
+| Chronos-Bolt-S (Samay family), ctx 512 † | 1 | **+11.31** [+9.74, +12.62] | +1.25 [-3.00, +4.16] | 0.824 | 0.824 | 0.364 |
+| Chronos-Bolt-S (Samay family), ctx 512 † | 5 | **+4.67** [+3.76, +5.72] | **+16.80** [+12.36, +22.30] | 0.786 | 0.786 | 0.329 |
+| Chronos-Bolt-S (Samay family), ctx 512 † | 15 | **+4.75** [+3.39, +6.42] | **+28.42** [+17.95, +40.64] | 0.763 | 0.763 | 0.285 |
+| TimesFM-2.5 via Samay, ctx 512 † | 1 | **+4.07** [+3.46, +4.70] | -1.54 [-5.63, +1.27] | 0.875 | 0.875 | 0.382 |
+| TimesFM-2.5 via Samay, ctx 512 † | 5 | **+2.31** [+1.54, +3.17] | **+10.71** [+7.81, +14.25] | 0.814 | 0.814 | 0.352 |
+| TimesFM-2.5 via Samay, ctx 512 † | 15 | **+3.87** [+2.24, +5.63] | **+30.73** [+17.77, +46.17] | 0.785 | 0.785 | 0.289 |
+| neural_trade as-is, seed 0 | 1 | **+10.71** [+9.62, +11.89] | **+13.09** [+4.80, +19.91] | 0.807 | 0.985 | 0.048 |
+| neural_trade as-is, seed 0 | 5 | **+5.89** [+5.05, +6.74] | **+17.57** [+10.19, +24.23] | 0.880 | 0.993 | 0.084 |
+| neural_trade as-is, seed 0 | 15 | **+6.92** [+5.86, +7.98] | **+17.17** [+4.41, +29.05] | 0.910 | 0.996 | 0.053 |
+| neural_trade as-is, seed 1 | 1 | **+6.04** [+5.30, +6.91] | **+13.71** [+5.05, +20.50] | 0.845 | 0.987 | 0.073 |
+| neural_trade as-is, seed 1 | 5 | **+4.66** [+3.96, +5.39] | **+17.03** [+9.57, +23.89] | 0.876 | 0.992 | 0.099 |
+| neural_trade as-is, seed 1 | 15 | **+5.68** [+4.65, +6.64] | **+15.31** [+2.50, +27.21] | 0.904 | 0.995 | 0.051 |
+| neural_trade as-is, seed 2 | 1 | **+6.49** [+5.69, +7.34] | **+14.93** [+6.07, +21.88] | 0.864 | 0.991 | 0.102 |
+| neural_trade as-is, seed 2 | 5 | **+4.36** [+3.64, +5.06] | **+14.69** [+7.31, +21.30] | 0.868 | 0.992 | 0.105 |
+| neural_trade as-is, seed 2 | 15 | **+5.53** [+4.55, +6.46] | +11.71 [-0.94, +23.30] | 0.889 | 0.994 | 0.086 |
+| neural_trade retrained daily, seed 0 | 1 | **+7.65** [+6.73, +8.57] | **+16.69** [+8.14, +24.44] | 0.781 | 0.978 | 0.015 |
+| neural_trade retrained daily, seed 0 | 5 | **+4.72** [+3.91, +5.62] | **+11.99** [+4.46, +18.42] | 0.796 | 0.984 | 0.014 |
+| neural_trade retrained daily, seed 0 | 15 | **+3.58** [+2.58, +4.62] | +7.54 [-5.40, +18.85] | 0.795 | 0.980 | -0.015 |
+| neural_trade retrained daily, seed 1 | 1 | **+5.65** [+4.68, +6.68] | **+22.17** [+12.62, +31.40] | 0.759 | 0.969 | -0.050 |
+| neural_trade retrained daily, seed 1 | 5 | **+4.92** [+3.98, +5.88] | **+16.63** [+7.61, +25.37] | 0.781 | 0.976 | -0.059 |
+| neural_trade retrained daily, seed 1 | 15 | **+4.44** [+3.31, +5.54] | +14.33 [-0.35, +27.34] | 0.790 | 0.973 | -0.101 |
+| neural_trade retrained daily, seed 2 | 1 | **+6.83** [+5.83, +7.94] | **+20.36** [+11.51, +29.12] | 0.773 | 0.973 | -0.011 |
+| neural_trade retrained daily, seed 2 | 5 | **+4.07** [+3.25, +4.99] | **+15.85** [+6.97, +25.30] | 0.779 | 0.977 | -0.018 |
+| neural_trade retrained daily, seed 2 | 15 | **+4.54** [+3.46, +5.67] | **+16.72** [+0.33, +30.52] | 0.761 | 0.967 | -0.081 |
+| Chronos-2, ctx 512, log-return input ‡ | 1 | **+0.57** [+0.30, +0.84] | +0.27 [-2.15, +2.20] | 0.781 | 0.976 | 0.380 |
+| Chronos-2, ctx 2048, log-return input ‡ | 1 | **+0.29** [+0.07, +0.50] | +0.97 [-0.67, +3.06] | 0.780 | 0.974 | 0.388 |
+| TimesFM-2.5 via Samay, ctx 512, log-return input † ‡ | 1 | **+1.79** [+1.17, +2.35] | **+27.04** [+20.62, +34.24] | 0.759 | 0.759 | 0.368 |
+| Timestral-28M, h-min return input, 512 bars § | 1 | **+0.79** [+0.45, +1.10] | **-2.81** [-6.29, -0.20] | 0.792 | 0.978 | 0.388 |
+| Timestral-28M, h-min return input, 512 bars § | 5 | **+0.97** [+0.61, +1.40] | -0.99 [-5.18, +2.49] | 0.810 | 0.976 | 0.332 |
+| Timestral-28M, h-min return input, 512 bars § | 15 | **+1.29** [+0.75, +1.92] | -0.60 [-9.17, +6.38] | 0.803 | 0.975 | 0.217 |
+| Timestral-28M, h-min return input, 2048 bars § | 1 | +0.07 [-0.15, +0.28] | **-4.25** [-8.07, -1.53] | 0.795 | 0.979 | 0.399 |
+| Timestral-28M, h-min return input, 2048 bars § | 5 | **+0.32** [+0.07, +0.59] | -2.27 [-6.23, +1.19] | 0.805 | 0.974 | 0.341 |
+| Timestral-28M, h-min return input, 2048 bars § | 15 | **+0.48** [+0.03, +0.92] | -1.59 [-8.75, +4.21] | 0.801 | 0.974 | 0.267 |
+| Chronos-2, h-min return input, 512 bars § | 1 | **+0.57** [+0.30, +0.84] | +0.27 [-2.15, +2.20] | 0.781 | 0.976 | 0.380 |
+| Chronos-2, h-min return input, 512 bars § | 5 | **+0.89** [+0.54, +1.27] | +2.42 [-0.90, +5.27] | 0.797 | 0.974 | 0.317 |
+| Chronos-2, h-min return input, 512 bars § | 15 | **+1.18** [+0.69, +1.73] | -0.65 [-7.67, +5.97] | 0.795 | 0.976 | 0.228 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | **+0.65** [+0.48, +0.83] | **-2.49** [-5.76, -0.20] | 0.837 | 0.984 | 0.395 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | **+0.40** [+0.27, +0.55] | -1.55 [-3.31, +0.03] | 0.838 | 0.982 | 0.353 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | **+0.57** [+0.36, +0.79] | -3.11 [-6.72, +0.05] | 0.846 | 0.979 | 0.317 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | **+0.10** [+0.04, +0.16] | **-2.21** [-4.05, -0.92] | 0.794 | 0.983 | 0.395 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | **+0.05** [+0.02, +0.09] | **-1.44** [-2.71, -0.30] | 0.809 | 0.982 | 0.353 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | +0.08 [-0.01, +0.17] | **-2.48** [-4.80, -0.45] | 0.808 | 0.978 | 0.317 |
+| EWMA-Gaussian (λ 0.94) | 1 | **+0.44** [+0.28, +0.61] | **-1.90** [-4.75, -0.16] | 0.814 | 0.960 | 0.396 |
+| EWMA-Gaussian (λ 0.94) | 5 | **+0.33** [+0.16, +0.51] | -0.15 [-1.65, +1.17] | 0.813 | 0.958 | 0.355 |
+| EWMA-Gaussian (λ 0.94) | 15 | **+0.52** [+0.32, +0.75] | +0.97 [-0.61, +2.51] | 0.811 | 0.953 | 0.320 |
+| Trailing 1-day empirical quantiles | 1 | **+2.69** [+2.03, +3.42] | **+14.62** [+6.13, +22.51] | 0.791 | 0.976 | 0.150 |
+| Trailing 1-day empirical quantiles | 5 | **+2.68** [+2.01, +3.40] | **+13.96** [+7.89, +20.53] | 0.791 | 0.973 | 0.126 |
+| Trailing 1-day empirical quantiles | 15 | **+2.46** [+1.75, +3.26] | +7.89 [-0.40, +16.33] | 0.786 | 0.969 | 0.094 |
 
 
 ### T-B2 (post). Against two stronger cheap baselines (% change of loss; negative = model better)
 
 | Model | h | Pinball (9) vs EWMA-t scale-refit, % | QLIKE vs EWMA-t scale-refit, % | Pinball (9) vs FHS, % | QLIKE vs FHS, % |
 |---|---|---|---|---|---|
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | **-0.55** [-0.73, -0.37] | +0.63 [-0.41, +1.99] | – | – |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | **-0.35** [-0.48, -0.24] | +0.12 [-0.35, +0.69] | – | – |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | **-0.48** [-0.70, -0.30] | +0.65 [-0.44, +2.01] | – | – |
-| Timestral-28M, ctx 512 | 1 | -0.03 [-0.38, +0.30] | **-1.92** [-3.50, -0.38] | **+0.52** [+0.21, +0.83] | **-2.54** [-4.74, -1.02] |
-| Timestral-28M, ctx 512 | 5 | -0.27 [-0.64, +0.13] | -1.13 [-3.02, +0.37] | +0.07 [-0.26, +0.47] | -1.26 [-3.45, +0.25] |
-| Timestral-28M, ctx 512 | 15 | -0.11 [-0.74, +0.63] | +0.87 [-1.77, +3.69] | +0.37 [-0.23, +1.08] | +0.22 [-2.65, +3.10] |
-| Timestral-28M, ctx 2048 | 1 | **-0.33** [-0.67, -0.04] | **-2.40** [-3.89, -1.30] | +0.21 [-0.06, +0.46] | **-3.01** [-5.30, -1.27] |
-| Timestral-28M, ctx 2048 | 5 | **-0.41** [-0.72, -0.12] | **-1.86** [-3.99, -0.11] | -0.07 [-0.34, +0.21] | **-1.98** [-4.42, -0.14] |
-| Timestral-28M, ctx 2048 | 15 | -0.51 [-1.07, +0.03] | -1.42 [-3.79, +1.19] | -0.03 [-0.51, +0.47] | -2.05 [-5.00, +0.73] |
-| Timestral-209M, ctx 2048 | 1 | **-0.59** [-0.95, -0.28] | **-2.23** [-3.72, -0.88] | -0.05 [-0.30, +0.18] | **-2.84** [-4.90, -1.33] |
-| Timestral-209M, ctx 2048 | 5 | **-0.48** [-0.77, -0.20] | **-2.44** [-4.56, -0.65] | -0.13 [-0.36, +0.12] | **-2.56** [-5.08, -0.65] |
-| Timestral-209M, ctx 2048 | 15 | **-0.51** [-0.94, -0.06] | -1.04 [-3.94, +1.82] | -0.03 [-0.38, +0.37] | -1.67 [-4.86, +1.33] |
-| Timestral-28M, h-min return input, 512 bars § | 1 | +0.13 [-0.28, +0.53] | -0.24 [-2.44, +2.09] | **+0.68** [+0.36, +1.00] | -0.87 [-3.49, +1.09] |
-| Timestral-28M, h-min return input, 512 bars § | 5 | **+0.57** [+0.15, +1.00] | +0.54 [-2.86, +3.27] | **+0.92** [+0.56, +1.35] | +0.42 [-3.37, +3.29] |
-| Timestral-28M, h-min return input, 512 bars § | 15 | **+0.72** [+0.06, +1.42] | +2.59 [-3.35, +8.44] | **+1.21** [+0.62, +1.87] | +1.93 [-4.98, +8.21] |
-| Timestral-28M, h-min return input, 2048 bars § | 1 | **-0.58** [-0.88, -0.28] | **-1.72** [-3.19, -0.32] | -0.03 [-0.24, +0.17] | **-2.34** [-4.59, -0.52] |
-| Timestral-28M, h-min return input, 2048 bars § | 5 | -0.08 [-0.39, +0.22] | -0.76 [-3.73, +1.86] | +0.27 [-0.00, +0.54] | -0.88 [-4.08, +1.88] |
-| Timestral-28M, h-min return input, 2048 bars § | 15 | -0.09 [-0.63, +0.45] | +1.58 [-3.29, +6.85] | +0.39 [-0.08, +0.87] | +0.93 [-4.80, +6.35] |
-| Chronos-2 (Samay family), ctx 512 | 1 | **+4.73** [+3.61, +5.82] | +1.33 [-1.40, +3.78] | **+5.30** [+4.19, +6.38] | +0.69 [-2.63, +2.97] |
-| Chronos-2 (Samay family), ctx 512 | 5 | **+2.21** [+1.56, +2.91] | **+4.88** [+1.09, +9.04] | **+2.56** [+1.95, +3.22] | **+4.75** [+0.91, +8.87] |
-| Chronos-2 (Samay family), ctx 512 | 15 | **+3.11** [+2.13, +4.24] | **+9.15** [+4.02, +15.12] | **+3.61** [+2.66, +4.72] | **+8.45** [+3.77, +13.73] |
-| Chronos-2, ctx 2048, log-return input ‡ | 1 | **-0.36** [-0.68, -0.07] | **+4.05** [+0.53, +8.70] | +0.18 [-0.02, +0.40] | **+3.39** [+0.79, +6.87] |
-| Chronos-2, h-min return input, 512 bars § | 1 | -0.08 [-0.42, +0.27] | **+3.21** [+0.50, +7.08] | **+0.47** [+0.21, +0.74] | **+2.56** [+0.27, +5.35] |
-| Chronos-2, h-min return input, 512 bars § | 5 | **+0.49** [+0.09, +0.89] | **+4.03** [+1.40, +6.72] | **+0.84** [+0.47, +1.22] | **+3.90** [+1.19, +6.53] |
-| Chronos-2, h-min return input, 512 bars § | 15 | **+0.61** [+0.02, +1.18] | +2.55 [-3.25, +7.93] | **+1.09** [+0.59, +1.66] | +1.89 [-4.33, +7.58] |
-| neural_trade as-is, seed 0 | 1 | **+9.99** [+8.85, +11.21] | **+13.99** [+7.95, +19.82] | **+10.59** [+9.50, +11.80] | **+13.28** [+6.09, +19.63] |
-| neural_trade as-is, seed 0 | 5 | **+5.47** [+4.66, +6.31] | **+19.27** [+12.94, +24.90] | **+5.83** [+5.01, +6.69] | **+19.12** [+12.44, +25.08] |
-| neural_trade as-is, seed 0 | 15 | **+6.32** [+5.26, +7.35] | **+20.92** [+8.88, +29.83] | **+6.83** [+5.78, +7.87] | **+20.14** [+6.90, +29.97] |
-| neural_trade retrained daily, seed 0 | 1 | **+6.95** [+5.97, +7.93] | **+18.03** [+11.84, +24.56] | **+7.54** [+6.63, +8.46] | **+17.29** [+10.39, +24.45] |
-| neural_trade retrained daily, seed 0 | 5 | **+4.30** [+3.47, +5.21] | **+13.66** [+6.90, +19.13] | **+4.67** [+3.87, +5.54] | **+13.52** [+6.46, +19.27] |
-| neural_trade retrained daily, seed 0 | 15 | **+3.00** [+1.92, +4.04] | +11.00 [-0.11, +20.80] | **+3.50** [+2.46, +4.58] | +10.28 [-2.18, +20.68] |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | **-0.55** [-0.73, -0.37] | +0.29 [-0.74, +1.77] | – | – |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | **-0.35** [-0.48, -0.24] | +0.11 [-0.34, +0.62] | – | – |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | **-0.48** [-0.70, -0.30] | +0.65 [-0.52, +1.98] | – | – |
+| Timestral-28M, ctx 512 | 1 | -0.03 [-0.38, +0.30] | **-1.87** [-3.56, -0.50] | **+0.52** [+0.21, +0.83] | **-2.15** [-4.43, -0.61] |
+| Timestral-28M, ctx 512 | 5 | -0.27 [-0.64, +0.13] | -1.13 [-2.68, +0.25] | +0.07 [-0.26, +0.47] | -1.24 [-3.14, +0.24] |
+| Timestral-28M, ctx 512 | 15 | -0.11 [-0.74, +0.63] | +0.87 [-1.82, +3.82] | +0.37 [-0.23, +1.08] | +0.22 [-2.53, +2.97] |
+| Timestral-28M, ctx 2048 | 1 | **-0.33** [-0.67, -0.04] | **-2.49** [-4.08, -1.41] | +0.21 [-0.06, +0.46] | **-2.77** [-5.27, -1.08] |
+| Timestral-28M, ctx 2048 | 5 | **-0.41** [-0.72, -0.12] | **-1.86** [-3.71, -0.20] | -0.07 [-0.34, +0.21] | **-1.97** [-4.27, -0.21] |
+| Timestral-28M, ctx 2048 | 15 | -0.51 [-1.07, +0.03] | -1.42 [-3.77, +1.18] | -0.03 [-0.51, +0.47] | -2.05 [-5.02, +0.71] |
+| Timestral-209M, ctx 2048 | 1 | **-0.59** [-0.95, -0.28] | **-2.33** [-3.90, -1.02] | -0.05 [-0.30, +0.18] | **-2.61** [-4.77, -1.10] |
+| Timestral-209M, ctx 2048 | 5 | **-0.48** [-0.77, -0.20] | **-2.43** [-4.45, -0.69] | -0.13 [-0.36, +0.12] | **-2.54** [-4.80, -0.71] |
+| Timestral-209M, ctx 2048 | 15 | **-0.51** [-0.94, -0.06] | -1.04 [-3.88, +1.89] | -0.03 [-0.38, +0.37] | -1.68 [-4.63, +1.06] |
+| Timestral-28M, h-min return input, 512 bars § | 1 | +0.13 [-0.28, +0.53] | -0.33 [-2.71, +1.87] | **+0.68** [+0.36, +1.00] | -0.62 [-3.28, +1.31] |
+| Timestral-28M, h-min return input, 512 bars § | 5 | **+0.57** [+0.15, +1.00] | +0.57 [-2.55, +3.30] | **+0.92** [+0.56, +1.35] | +0.45 [-3.00, +3.30] |
+| Timestral-28M, h-min return input, 512 bars § | 15 | **+0.72** [+0.06, +1.42] | +2.59 [-3.28, +8.29] | **+1.21** [+0.62, +1.87] | +1.93 [-4.94, +8.03] |
+| Timestral-28M, h-min return input, 2048 bars § | 1 | **-0.58** [-0.88, -0.28] | **-1.82** [-3.25, -0.47] | -0.03 [-0.24, +0.17] | **-2.10** [-4.33, -0.33] |
+| Timestral-28M, h-min return input, 2048 bars § | 5 | -0.08 [-0.39, +0.22] | -0.73 [-3.64, +1.72] | +0.27 [-0.00, +0.54] | -0.84 [-3.97, +1.84] |
+| Timestral-28M, h-min return input, 2048 bars § | 15 | -0.09 [-0.63, +0.45] | +1.57 [-3.42, +6.31] | +0.39 [-0.08, +0.87] | +0.92 [-4.76, +5.92] |
+| Chronos-2 (Samay family), ctx 512 | 1 | **+4.73** [+3.61, +5.82] | +1.26 [-1.60, +3.62] | **+5.30** [+4.19, +6.38] | +0.96 [-2.29, +3.03] |
+| Chronos-2 (Samay family), ctx 512 | 5 | **+2.21** [+1.56, +2.91] | **+4.85** [+1.25, +9.12] | **+2.56** [+1.95, +3.22] | **+4.73** [+1.24, +8.83] |
+| Chronos-2 (Samay family), ctx 512 | 15 | **+3.11** [+2.13, +4.24] | **+9.14** [+3.64, +15.69] | **+3.61** [+2.66, +4.72] | **+8.44** [+3.60, +14.19] |
+| Chronos-2, ctx 2048, log-return input ‡ | 1 | **-0.36** [-0.68, -0.07] | **+3.57** [+0.29, +8.09] | +0.18 [-0.02, +0.40] | **+3.26** [+0.92, +6.57] |
+| Chronos-2, h-min return input, 512 bars § | 1 | -0.08 [-0.42, +0.27] | **+2.85** [+0.26, +6.53] | **+0.47** [+0.21, +0.74] | **+2.54** [+0.22, +5.17] |
+| Chronos-2, h-min return input, 512 bars § | 5 | **+0.49** [+0.09, +0.89] | **+4.03** [+1.53, +6.73] | **+0.84** [+0.47, +1.22] | **+3.91** [+1.31, +6.52] |
+| Chronos-2, h-min return input, 512 bars § | 15 | **+0.61** [+0.02, +1.18] | +2.54 [-3.09, +8.16] | **+1.09** [+0.59, +1.66] | +1.88 [-4.10, +7.78] |
+| neural_trade as-is, seed 0 | 1 | **+9.99** [+8.85, +11.21] | **+16.11** [+10.18, +21.80] | **+10.59** [+9.50, +11.80] | **+15.71** [+8.62, +22.14] |
+| neural_trade as-is, seed 0 | 5 | **+5.47** [+4.66, +6.31] | **+19.43** [+13.28, +25.05] | **+5.83** [+5.01, +6.69] | **+19.29** [+12.63, +25.19] |
+| neural_trade as-is, seed 0 | 15 | **+6.32** [+5.26, +7.35] | **+20.93** [+10.80, +30.07] | **+6.83** [+5.78, +7.87] | **+20.15** [+9.05, +30.38] |
+| neural_trade retrained daily, seed 0 | 1 | **+6.95** [+5.97, +7.93] | **+19.83** [+13.45, +26.77] | **+7.54** [+6.63, +8.46] | **+19.41** [+12.10, +26.74] |
+| neural_trade retrained daily, seed 0 | 5 | **+4.30** [+3.47, +5.21] | **+13.76** [+7.82, +19.50] | **+4.67** [+3.87, +5.54] | **+13.63** [+7.22, +19.65] |
+| neural_trade retrained daily, seed 0 | 15 | **+3.00** [+1.92, +4.04] | **+10.99** [+0.51, +20.55] | **+3.50** [+2.46, +4.58] | +10.28 [-0.92, +20.51] |
 
 
 ### T-C (post). Tail calibration (target 1% / 5% / 5% / 1%; p < 0.05 = fail)
 
-| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Newey-West p (q0.01 / q0.99) |
+| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Overlap-robust p (q0.01 / q0.99) |
 |---|---|---|---|---|---|---|---|
 | REF: EWMA-Student-t | 1 | 0.0159 | 0.0625 | 0.0645 | 0.0156 | 0.000 / 0.000 | 0.000 / 0.000 |
-| REF: EWMA-Student-t | 5 | 0.0149 | 0.0561 | 0.0542 | 0.0138 | 0.000 / 0.003 | 0.012 / 0.019 |
-| REF: EWMA-Student-t | 15 | 0.0182 | 0.0560 | 0.0512 | 0.0136 | 0.000 / 0.005 | 0.007 / 0.155 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | 0.0086 | 0.0420 | 0.0413 | 0.0070 | 0.251 / 0.009 | 0.217 / 0.004 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | 0.0092 | 0.0413 | 0.0424 | 0.0091 | 0.522 / 0.444 | 0.634 / 0.509 |
-| EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | 0.0125 | 0.0429 | 0.0371 | 0.0085 | 0.047 / 0.201 | 0.307 / 0.462 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | 0.0098 | 0.0509 | 0.0527 | 0.0073 | 0.887 / 0.019 | 0.883 / 0.011 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | 0.0094 | 0.0517 | 0.0463 | 0.0083 | 0.607 / 0.159 | 0.708 / 0.210 |
-| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | 0.0138 | 0.0523 | 0.0423 | 0.0082 | 0.003 / 0.124 | 0.130 / 0.376 |
-| Timestral-28M, ctx 2048 | 1 | 0.0088 | 0.0441 | 0.0500 | 0.0095 | 0.307 / 0.697 | 0.280 / 0.693 |
-| Timestral-28M, ctx 2048 | 5 | 0.0116 | 0.0496 | 0.0508 | 0.0113 | 0.195 / 0.288 | 0.331 / 0.376 |
-| Timestral-28M, ctx 2048 | 15 | 0.0159 | 0.0506 | 0.0462 | 0.0107 | 0.000 / 0.557 | 0.029 / 0.755 |
-| Timestral-209M, ctx 2048 | 1 | 0.0091 | 0.0557 | 0.0576 | 0.0088 | 0.444 / 0.307 | 0.418 / 0.301 |
-| Timestral-209M, ctx 2048 | 5 | 0.0112 | 0.0496 | 0.0511 | 0.0115 | 0.345 / 0.238 | 0.476 / 0.345 |
-| Timestral-209M, ctx 2048 | 15 | 0.0155 | 0.0514 | 0.0505 | 0.0116 | 0.000 / 0.195 | 0.042 / 0.491 |
-| Timestral-28M, h-min return input, 2048 bars § | 1 | 0.0112 | 0.0527 | 0.0541 | 0.0095 | 0.345 / 0.697 | 0.359 / 0.696 |
-| Timestral-28M, h-min return input, 2048 bars § | 5 | 0.0141 | 0.0500 | 0.0509 | 0.0122 | 0.001 / 0.078 | 0.028 / 0.174 |
-| Timestral-28M, h-min return input, 2048 bars § | 15 | 0.0150 | 0.0535 | 0.0487 | 0.0115 | 0.000 / 0.238 | 0.058 / 0.518 |
-| Chronos-2 (Samay family), ctx 512 | 1 | 0.0074 | 0.0490 | 0.0561 | 0.0091 | 0.028 / 0.444 | 0.016 / 0.455 |
-| Chronos-2 (Samay family), ctx 512 | 5 | 0.0158 | 0.0654 | 0.0649 | 0.0189 | 0.000 / 0.000 | 0.003 / 0.000 |
-| Chronos-2 (Samay family), ctx 512 | 15 | 0.0231 | 0.0706 | 0.0624 | 0.0192 | 0.000 / 0.000 | 0.000 / 0.002 |
-| Chronos-2, h-min return input, 512 bars § | 1 | 0.0113 | 0.0558 | 0.0575 | 0.0127 | 0.288 / 0.035 | 0.320 / 0.054 |
-| Chronos-2, h-min return input, 512 bars § | 5 | 0.0125 | 0.0491 | 0.0520 | 0.0137 | 0.047 / 0.004 | 0.165 / 0.030 |
-| Chronos-2, h-min return input, 512 bars § | 15 | 0.0113 | 0.0484 | 0.0466 | 0.0125 | 0.288 / 0.047 | 0.565 / 0.269 |
-| neural_trade as-is, seed 0 | 1 | 0.0061 | 0.0341 | 0.0605 | 0.0092 | 0.001 / 0.522 | 0.001 / 0.579 |
+| REF: EWMA-Student-t | 5 | 0.0149 | 0.0561 | 0.0542 | 0.0138 | 0.000 / 0.003 | 0.002 / 0.006 |
+| REF: EWMA-Student-t | 15 | 0.0182 | 0.0560 | 0.0512 | 0.0136 | 0.000 / 0.005 | 0.000 / 0.099 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 1 | 0.0086 | 0.0420 | 0.0413 | 0.0070 | 0.251 / 0.009 | 0.251 / 0.016 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 5 | 0.0092 | 0.0413 | 0.0424 | 0.0091 | 0.522 / 0.444 | 0.647 / 0.529 |
+| EWMA-t, variance scale refit for QLIKE (pre-test) | 15 | 0.0125 | 0.0429 | 0.0371 | 0.0085 | 0.047 / 0.201 | 0.254 / 0.497 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 1 | 0.0098 | 0.0509 | 0.0527 | 0.0073 | 0.887 / 0.019 | 0.884 / 0.029 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 5 | 0.0094 | 0.0517 | 0.0463 | 0.0083 | 0.607 / 0.159 | 0.717 / 0.252 |
+| FHS: EWMA σ × empirical residual quantiles (pre-test) | 15 | 0.0138 | 0.0523 | 0.0423 | 0.0082 | 0.003 / 0.124 | 0.075 / 0.423 |
+| Timestral-28M, ctx 2048 | 1 | 0.0088 | 0.0441 | 0.0500 | 0.0095 | 0.307 / 0.697 | 0.311 / 0.700 |
+| Timestral-28M, ctx 2048 | 5 | 0.0116 | 0.0496 | 0.0508 | 0.0113 | 0.195 / 0.288 | 0.295 / 0.346 |
+| Timestral-28M, ctx 2048 | 15 | 0.0159 | 0.0506 | 0.0462 | 0.0107 | 0.000 / 0.557 | 0.006 / 0.746 |
+| Timestral-209M, ctx 2048 | 1 | 0.0091 | 0.0557 | 0.0576 | 0.0088 | 0.444 / 0.307 | 0.440 / 0.332 |
+| Timestral-209M, ctx 2048 | 5 | 0.0112 | 0.0496 | 0.0511 | 0.0115 | 0.345 / 0.238 | 0.452 / 0.312 |
+| Timestral-209M, ctx 2048 | 15 | 0.0155 | 0.0514 | 0.0505 | 0.0116 | 0.000 / 0.195 | 0.012 / 0.458 |
+| Timestral-28M, h-min return input, 2048 bars § | 1 | 0.0112 | 0.0527 | 0.0541 | 0.0095 | 0.345 / 0.697 | 0.333 / 0.703 |
+| Timestral-28M, h-min return input, 2048 bars § | 5 | 0.0141 | 0.0500 | 0.0509 | 0.0122 | 0.001 / 0.078 | 0.009 / 0.133 |
+| Timestral-28M, h-min return input, 2048 bars § | 15 | 0.0150 | 0.0535 | 0.0487 | 0.0115 | 0.000 / 0.238 | 0.021 / 0.489 |
+| Chronos-2 (Samay family), ctx 512 | 1 | 0.0074 | 0.0490 | 0.0561 | 0.0091 | 0.028 / 0.444 | 0.037 / 0.476 |
+| Chronos-2 (Samay family), ctx 512 | 5 | 0.0158 | 0.0654 | 0.0649 | 0.0189 | 0.000 / 0.000 | 0.000 / 0.000 |
+| Chronos-2 (Samay family), ctx 512 | 15 | 0.0231 | 0.0706 | 0.0624 | 0.0192 | 0.000 / 0.000 | 0.000 / 0.000 |
+| Chronos-2, h-min return input, 512 bars § | 1 | 0.0113 | 0.0558 | 0.0575 | 0.0127 | 0.288 / 0.035 | 0.291 / 0.030 |
+| Chronos-2, h-min return input, 512 bars § | 5 | 0.0125 | 0.0491 | 0.0520 | 0.0137 | 0.047 / 0.004 | 0.121 / 0.011 |
+| Chronos-2, h-min return input, 512 bars § | 15 | 0.0113 | 0.0484 | 0.0466 | 0.0125 | 0.288 / 0.047 | 0.541 / 0.217 |
+| neural_trade as-is, seed 0 | 1 | 0.0061 | 0.0341 | 0.0605 | 0.0092 | 0.001 / 0.522 | 0.012 / 0.593 |
 | neural_trade as-is, seed 0 | 5 | 0.0036 | 0.0256 | 0.0256 | 0.0034 | 0.000 / 0.000 | 0.000 / 0.000 |
 | neural_trade as-is, seed 0 | 15 | 0.0025 | 0.0220 | 0.0156 | 0.0015 | 0.000 / 0.000 | 0.000 / 0.000 |
-| neural_trade retrained daily, seed 0 | 1 | 0.0095 | 0.0560 | 0.0558 | 0.0128 | 0.697 / 0.027 | 0.744 / 0.115 |
-| neural_trade retrained daily, seed 0 | 5 | 0.0070 | 0.0468 | 0.0527 | 0.0094 | 0.009 / 0.607 | 0.037 / 0.712 |
-| neural_trade retrained daily, seed 0 | 15 | 0.0112 | 0.0497 | 0.0557 | 0.0086 | 0.345 / 0.251 | 0.625 / 0.481 |
+| neural_trade retrained daily, seed 0 | 1 | 0.0095 | 0.0560 | 0.0558 | 0.0128 | 0.697 / 0.027 | 0.749 / 0.075 |
+| neural_trade retrained daily, seed 0 | 5 | 0.0070 | 0.0468 | 0.0527 | 0.0094 | 0.009 / 0.607 | 0.080 / 0.720 |
+| neural_trade retrained daily, seed 0 | 15 | 0.0112 | 0.0497 | 0.0557 | 0.0086 | 0.345 / 0.251 | 0.606 / 0.512 |
 
 
 ### T-D (post). Non-overlapping trades when |forecast| > cost
@@ -1083,111 +1099,112 @@ Window facts (post): `{"full": {"n_origins": 6715, "stride_min": 3, "first": "20
 
 | Set | Config | h=1 pinball / QLIKE vs REF, % | h=5 pinball / QLIKE | h=15 pinball / QLIKE | ms/series (batched) |
 |---|---|---|---|---|---|
-| repo/full | official-chronos2_ctx2048_logret | **+0.27** [+0.05, +0.49] / +0.45 [-0.72, +1.64] | MAE skill -0.18% | MAE skill -0.51% | 225.23 |
-| repo/full | official-chronos2_ctx2048_price | **+9.38** [+7.35, +11.30] / **+5.19** [+2.10, +7.72] | **+3.17** [+2.11, +4.15] / +0.76 [-1.55, +2.63] | **+2.08** [+0.98, +3.08] / +0.99 [-2.00, +3.65] | 76.87 |
-| repo/full | official-chronos2_ctx512_aggret | **+1.02** [+0.59, +1.54] / **+1.69** [+0.50, +2.96] | **+0.86** [+0.43, +1.30] / **+3.39** [+0.91, +6.64] | **+1.38** [+0.79, +2.06] / **+7.29** [+3.77, +11.23] | 155.03 |
-| repo/full | official-chronos2_ctx512_logret | **+1.02** [+0.59, +1.54] / **+1.69** [+0.50, +2.96] | MAE skill -1.02% | MAE skill -2.87% | 50.17 |
-| repo/full | official-chronos2_ctx512_price | **+4.63** [+3.17, +5.99] / +2.44 [-0.48, +4.88] | **+2.91** [+2.14, +3.80] / +0.61 [-1.22, +2.34] | **+3.17** [+2.02, +4.49] / +1.36 [-1.17, +3.90] | 22.71 |
-| repo/full | timestral-123M_ctx2048_price | +0.30 [-0.06, +0.67] / -0.85 [-2.00, +0.37] | +0.11 [-0.18, +0.36] / -1.03 [-2.20, +0.12] | -0.07 [-0.49, +0.38] / -1.68 [-3.52, +0.17] | 82.34 |
-| repo/full | timestral-123M_ctx512_price | +0.34 [-0.11, +0.76] / -0.60 [-1.93, +0.82] | **+0.59** [+0.11, +1.07] / -0.89 [-2.17, +0.33] | +0.84 [-0.15, +1.92] / -1.24 [-3.21, +0.64] | 20.95 |
-| repo/full | timestral-209M_ctx2048_logret | +0.09 [-0.10, +0.27] / -0.88 [-1.95, +0.22] | MAE skill -0.14% | MAE skill -0.43% | 507.44 |
-| repo/full | timestral-209M_ctx2048_price | +0.19 [-0.16, +0.48] / -0.71 [-1.98, +0.53] | +0.00 [-0.30, +0.25] / **-1.29** [-2.70, -0.03] | -0.16 [-0.57, +0.28] / -1.70 [-3.82, +0.36] | 128.43 |
-| repo/full | timestral-209M_ctx512_price | **+0.47** [+0.07, +0.88] / -0.19 [-1.76, +1.38] | **+0.53** [+0.08, +0.99] / -1.00 [-2.42, +0.34] | +0.56 [-0.33, +1.52] / -1.41 [-3.43, +0.47] | 64.25 |
-| repo/full | timestral-209M_ctx64_price | **+1.41** [+0.88, +2.00] / +0.50 [-1.66, +2.29] | **+1.77** [+1.06, +2.54] / +1.69 [-0.25, +3.41] | **+1.88** [+0.75, +3.13] / **+8.73** [+4.93, +12.80] | 7.74 |
-| repo/full | timestral-28M_ctx2048_aggret | +0.20 [-0.08, +0.47] / -0.51 [-1.69, +0.60] | **+0.55** [+0.15, +0.98] / +1.10 [-0.88, +3.23] | +0.45 [-0.03, +1.04] / +1.86 [-1.23, +5.02] | 198.73 |
-| repo/full | timestral-28M_ctx2048_logret | +0.20 [-0.08, +0.47] / -0.51 [-1.69, +0.60] | MAE skill -0.12% | MAE skill -1.01% | 21.87 |
-| repo/full | timestral-28M_ctx2048_price | **+0.57** [+0.21, +0.92] / -0.68 [-2.26, +0.71] | +0.33 [-0.02, +0.68] / -1.26 [-2.76, +0.02] | +0.21 [-0.41, +0.87] / -1.65 [-4.03, +0.53] | 22.93 |
-| repo/full | timestral-28M_ctx2048_price_cov | **+0.67** [+0.04, +1.24] / **-1.75** [-3.09, -0.48] | +0.63 [-0.01, +1.20] / **-1.51** [-3.06, -0.11] | +0.64 [-0.56, +1.64] / -1.60 [-4.38, +0.70] | 238.25 |
-| repo/full | timestral-28M_ctx2048_price_nosym | **+0.83** [+0.40, +1.20] / -0.46 [-1.99, +0.88] | +0.36 [-0.01, +0.69] / -1.04 [-2.50, +0.28] | -0.03 [-0.67, +0.56] / -1.50 [-3.95, +0.68] | 10.31 |
-| repo/full | timestral-28M_ctx512_aggret | **+1.05** [+0.51, +1.59] / +1.27 [-0.28, +2.86] | **+1.10** [+0.56, +1.70] / **+2.98** [+0.60, +5.86] | **+1.38** [+0.54, +2.34] / **+4.77** [+0.47, +8.72] | 45.55 |
-| repo/full | timestral-28M_ctx512_price | **+0.45** [+0.00, +0.89] / -0.56 [-2.25, +0.98] | **+0.67** [+0.22, +1.14] / -0.79 [-2.23, +0.58] | **+1.02** [+0.19, +1.89] / -0.77 [-3.34, +1.59] | 18.36 |
-| repo/full | timestral-28M_ctx64_price | **+1.56** [+0.95, +2.15] / -0.66 [-2.80, +1.08] | **+2.52** [+1.67, +3.36] / **+2.46** [+0.50, +4.29] | **+2.51** [+1.24, +3.87] / **+11.25** [+6.75, +16.20] | 1.34 |
-| repo/full | timestral-5M_ctx2048_price | **+0.71** [+0.25, +1.15] / +0.50 [-1.07, +2.02] | **+0.53** [+0.12, +0.95] / -0.37 [-1.84, +1.08] | +0.33 [-0.25, +1.00] / -0.79 [-3.17, +1.46] | 33.28 |
-| repo/full | timestral-5M_ctx512_price | **+1.08** [+0.53, +1.54] / -0.23 [-1.85, +1.30] | **+1.12** [+0.57, +1.64] / -0.29 [-1.70, +1.11] | **+1.45** [+0.46, +2.56] / +0.49 [-1.50, +2.48] | 1.61 |
-| repo/n483_step18 | official-chronos2_ctx2048_aggret_sub6 | +0.34 [-0.22, +0.85] / +1.42 [-1.24, +4.22] | +0.58 [-0.20, +1.52] / +1.59 [-3.00, +7.34] | +0.61 [-0.28, +1.52] / +4.50 [-3.34, +12.42] | 672.57 |
-| repo/n483_step18 | timestral-209M_ctx2048_price_cov_sub6 | +0.18 [-1.68, +1.98] / **-5.62** [-10.83, -1.06] | +0.75 [-1.03, +2.44] / -1.45 [-5.13, +1.63] | +1.11 [-1.30, +3.17] / -1.33 [-6.68, +2.24] | 998.25 |
-| repo/n483_step18 | timestral-209M_ctx8192_price_sub6 | -0.04 [-1.33, +1.05] / **-4.38** [-8.44, -1.26] | -0.11 [-0.71, +0.51] / **-2.36** [-4.78, -0.11] | -0.32 [-0.95, +0.27] / -2.66 [-6.00, +0.05] | 602.41 |
-| repo/n483_step18 | timestral-28M_ctx32768_price_sub6 | **+4.60** [+3.05, +6.33] / +5.05 [-2.51, +11.60] | **+1.31** [+0.08, +2.59] / +0.08 [-3.40, +3.28] | +0.13 [-0.71, +0.99] / -1.43 [-5.86, +2.27] | 516.88 |
-| repo/n483_step18 | timestral-28M_ctx8192_price_sub6 | **+1.32** [+0.18, +2.37] / -2.84 [-8.55, +1.53] | **+0.94** [+0.05, +1.82] / -1.22 [-4.28, +1.78] | +0.07 [-0.74, +0.86] / -1.97 [-6.62, +1.72] | 92.92 |
-| post/full | official-chronos2_ctx2048_logret | **+0.29** [+0.07, +0.50] / +0.68 [-1.05, +2.96] | MAE skill -0.29% | MAE skill -0.63% | 220.77 |
-| post/full | official-chronos2_ctx2048_price | **+6.80** [+5.68, +7.88] / -3.27 [-9.10, +0.67] | **+2.60** [+1.95, +3.19] / +2.78 [-0.24, +5.37] | **+2.50** [+1.69, +3.24] / **+6.16** [+1.67, +10.35] | 69.5 |
-| post/full | official-chronos2_ctx512_aggret | **+0.57** [+0.30, +0.84] / -0.13 [-2.65, +1.88] | **+0.89** [+0.54, +1.27] / +2.38 [-0.92, +5.39] | **+1.18** [+0.69, +1.73] / -0.65 [-8.01, +5.88] | 155.69 |
-| post/full | official-chronos2_ctx512_logret | **+0.57** [+0.30, +0.84] / -0.13 [-2.65, +1.88] | MAE skill -0.79% | MAE skill -1.71% | 51.74 |
-| post/full | official-chronos2_ctx512_price | **+5.41** [+4.27, +6.49] / -1.95 [-6.22, +1.00] | **+2.62** [+2.00, +3.28] / +3.22 [-0.51, +6.79] | **+3.70** [+2.76, +4.79] / **+5.75** [+1.24, +10.69] | 14.38 |
-| post/full | timestral-209M_ctx2048_price | +0.05 [-0.20, +0.29] / **-5.39** [-8.70, -2.90] | -0.08 [-0.31, +0.17] / **-3.98** [-7.61, -1.39] | +0.06 [-0.28, +0.43] / **-4.12** [-8.55, -0.51] | 131.4 |
-| post/full | timestral-209M_ctx512_price | **+0.54** [+0.21, +0.89] / **-4.45** [-7.18, -2.52] | +0.13 [-0.19, +0.46] / **-2.98** [-6.08, -0.84] | +0.41 [-0.20, +1.09] / -2.87 [-6.79, +0.43] | 28.74 |
-| post/full | timestral-28M_ctx2048_aggret | +0.07 [-0.15, +0.28] / **-4.90** [-8.50, -2.10] | **+0.32** [+0.07, +0.59] / -2.33 [-6.31, +1.25] | **+0.48** [+0.03, +0.92] / -1.58 [-8.57, +4.46] | 221.99 |
-| post/full | timestral-28M_ctx2048_price | **+0.32** [+0.04, +0.57] / **-5.56** [-9.35, -2.70] | -0.01 [-0.30, +0.27] / **-3.41** [-6.86, -0.89] | +0.05 [-0.43, +0.55] / **-4.49** [-9.44, -0.71] | 19.45 |
-| post/full | timestral-28M_ctx512_aggret | **+0.79** [+0.45, +1.10] / **-3.48** [-7.05, -0.92] | **+0.97** [+0.61, +1.40] / -1.05 [-5.63, +2.73] | **+1.29** [+0.75, +1.92] / -0.60 [-9.26, +6.49] | 46.83 |
-| post/full | timestral-28M_ctx512_price | **+0.62** [+0.31, +0.94] / **-5.10** [-8.50, -2.52] | +0.13 [-0.21, +0.52] / **-2.70** [-5.93, -0.55] | +0.45 [-0.16, +1.16] / -2.27 [-6.54, +1.25] | 5.27 |
-| post/full | timestral-5M_ctx512_price | **+0.97** [+0.52, +1.35] / **-5.28** [-9.29, -2.29] | **+0.47** [+0.07, +0.90] / **-2.55** [-6.09, -0.18] | **+0.98** [+0.23, +1.90] / -1.81 [-5.87, +1.79] | 1.63 |
-| post/n1120_step18 | official-chronos2_ctx2048_aggret_sub6 | +0.45 [-0.18, +1.12] / -3.24 [-6.98, +0.20] | +0.06 [-0.49, +0.69] / +1.17 [-1.93, +4.46] | +0.62 [-0.27, +1.63] / -0.23 [-9.80, +9.25] | 791.97 |
-| post/n1120_step18 | official-chronos2_ctx8192_price_sub6 | **+12.64** [+9.16, +15.85] / +0.15 [-6.04, +5.97] | **+3.73** [+1.93, +5.76] / -0.17 [-4.05, +3.73] | **+3.39** [+2.07, +4.86] / +3.91 [-1.73, +9.96] | 333.77 |
-| post/n1120_step18 | timestral-209M_ctx8192_price_sub6 | -0.10 [-0.73, +0.47] / **-5.29** [-8.15, -2.79] | -0.37 [-0.90, +0.13] / **-2.92** [-5.76, -0.50] | -0.12 [-0.66, +0.39] / **-5.87** [-11.52, -1.27] | 592.49 |
-| post/n1120_step18 | timestral-28M_ctx2048_logret_sub6 | +0.14 [-0.47, +0.78] / **-5.55** [-9.35, -2.42] | MAE skill -0.83% | MAE skill -1.31% | 20.07 |
-| post/n1120_step18 | timestral-28M_ctx32768_price_sub6 | **+1.26** [+0.29, +2.06] / **-5.03** [-9.23, -1.40] | +0.00 [-0.69, +0.65] / -2.31 [-5.70, +0.70] | -0.06 [-0.74, +0.56] / **-7.94** [-17.60, -0.82] | 514.63 |
-| post/n1120_step18 | timestral-28M_ctx512_price_nosym_sub6 | +0.97 [-0.14, +2.00] / **-4.53** [-8.14, -1.33] | +0.12 [-0.72, +1.00] / -1.40 [-4.34, +1.19] | +0.46 [-0.40, +1.45] / -3.93 [-10.09, +1.17] | 2.17 |
-| post/n1120_step18 | timestral-28M_ctx8192_price_sub6 | **+0.88** [+0.10, +1.62] / **-4.78** [-8.27, -1.97] | -0.05 [-0.63, +0.54] / -1.88 [-5.22, +1.09] | +0.35 [-0.28, +0.98] / **-7.97** [-17.52, -0.94] | 95.08 |
-| post/n2239_step9 | timestral-28M_ctx2048_price_cov_sub3 | **+0.91** [+0.15, +1.67] / **-2.02** [-4.08, -0.12] | +0.73 [-0.04, +1.56] / -1.68 [-4.57, +0.86] | +0.96 [-0.07, +2.05] / -2.02 [-5.02, +0.75] | 186.52 |
+| repo/full | official-chronos2_ctx2048_logret | **+0.27** [+0.05, +0.49] / +0.48 [-0.66, +1.66] | MAE skill -0.18% | MAE skill -0.51% | 225.23 |
+| repo/full | official-chronos2_ctx2048_price | **+9.38** [+7.35, +11.30] / **+5.22** [+2.15, +7.74] | **+3.17** [+2.11, +4.15] / +0.75 [-1.25, +2.73] | **+2.08** [+0.98, +3.08] / +0.99 [-2.00, +3.65] | 76.87 |
+| repo/full | official-chronos2_ctx512_aggret | **+1.02** [+0.59, +1.54] / **+1.73** [+0.49, +2.98] | **+0.86** [+0.43, +1.30] / **+3.38** [+0.77, +6.33] | **+1.38** [+0.79, +2.06] / **+7.29** [+3.77, +11.23] | 155.03 |
+| repo/full | official-chronos2_ctx512_logret | **+1.02** [+0.59, +1.54] / **+1.73** [+0.49, +2.98] | MAE skill -1.02% | MAE skill -2.87% | 50.17 |
+| repo/full | official-chronos2_ctx512_price | **+4.63** [+3.17, +5.99] / +2.51 [-0.32, +5.14] | **+2.91** [+2.14, +3.80] / +0.61 [-1.27, +2.43] | **+3.17** [+2.02, +4.49] / +1.36 [-1.17, +3.90] | 22.71 |
+| repo/full | timestral-123M_ctx2048_price | +0.30 [-0.06, +0.67] / -0.76 [-1.92, +0.47] | +0.11 [-0.18, +0.36] / -1.03 [-2.13, +0.14] | -0.07 [-0.49, +0.38] / -1.68 [-3.52, +0.17] | 82.34 |
+| repo/full | timestral-123M_ctx512_price | +0.34 [-0.11, +0.76] / -0.50 [-1.88, +0.89] | **+0.59** [+0.11, +1.07] / -0.89 [-2.09, +0.38] | +0.84 [-0.15, +1.92] / -1.24 [-3.21, +0.64] | 20.95 |
+| repo/full | timestral-209M_ctx2048_logret | +0.09 [-0.10, +0.27] / -0.80 [-1.92, +0.33] | MAE skill -0.14% | MAE skill -0.43% | 507.44 |
+| repo/full | timestral-209M_ctx2048_price | +0.19 [-0.16, +0.48] / -0.66 [-1.91, +0.58] | +0.00 [-0.30, +0.25] / -1.29 [-2.61, +0.04] | -0.16 [-0.57, +0.28] / -1.70 [-3.82, +0.36] | 128.43 |
+| repo/full | timestral-209M_ctx512_price | **+0.47** [+0.07, +0.88] / -0.09 [-1.64, +1.41] | **+0.53** [+0.08, +0.99] / -1.00 [-2.29, +0.35] | +0.56 [-0.33, +1.52] / -1.41 [-3.43, +0.47] | 64.25 |
+| repo/full | timestral-209M_ctx64_price | **+1.41** [+0.88, +2.00] / +0.58 [-1.50, +2.33] | **+1.77** [+1.06, +2.54] / +1.69 [-0.29, +3.43] | **+1.88** [+0.75, +3.13] / **+8.73** [+4.93, +12.80] | 7.74 |
+| repo/full | timestral-28M_ctx2048_aggret | +0.20 [-0.08, +0.47] / -0.43 [-1.59, +0.74] | **+0.55** [+0.15, +0.98] / +1.09 [-0.80, +3.20] | +0.45 [-0.03, +1.04] / +1.86 [-1.23, +5.02] | 198.73 |
+| repo/full | timestral-28M_ctx2048_logret | +0.20 [-0.08, +0.47] / -0.43 [-1.59, +0.74] | MAE skill -0.12% | MAE skill -1.01% | 21.87 |
+| repo/full | timestral-28M_ctx2048_price | **+0.57** [+0.21, +0.92] / -0.61 [-2.08, +0.84] | +0.33 [-0.02, +0.68] / -1.26 [-2.61, +0.10] | +0.21 [-0.41, +0.87] / -1.65 [-4.03, +0.53] | 22.93 |
+| repo/full | timestral-28M_ctx2048_price_cov | **+0.67** [+0.04, +1.24] / **-1.73** [-3.09, -0.47] | +0.63 [-0.01, +1.20] / **-1.51** [-3.17, -0.08] | +0.64 [-0.56, +1.64] / -1.60 [-4.38, +0.70] | 238.25 |
+| repo/full | timestral-28M_ctx2048_price_nosym | **+0.83** [+0.40, +1.20] / -0.41 [-1.75, +0.97] | +0.36 [-0.01, +0.69] / -1.04 [-2.56, +0.27] | -0.03 [-0.67, +0.56] / -1.50 [-3.95, +0.68] | 10.31 |
+| repo/full | timestral-28M_ctx512_aggret | **+1.05** [+0.51, +1.59] / +1.36 [-0.04, +2.86] | **+1.10** [+0.56, +1.70] / **+2.98** [+0.66, +5.59] | **+1.38** [+0.54, +2.34] / **+4.77** [+0.47, +8.72] | 45.55 |
+| repo/full | timestral-28M_ctx512_price | **+0.45** [+0.00, +0.89] / -0.46 [-2.12, +1.08] | **+0.67** [+0.22, +1.14] / -0.79 [-2.15, +0.64] | **+1.02** [+0.19, +1.89] / -0.77 [-3.34, +1.59] | 18.36 |
+| repo/full | timestral-28M_ctx64_price | **+1.56** [+0.95, +2.15] / -0.60 [-2.59, +1.17] | **+2.52** [+1.67, +3.36] / **+2.45** [+0.39, +4.30] | **+2.51** [+1.24, +3.87] / **+11.25** [+6.75, +16.20] | 1.34 |
+| repo/full | timestral-5M_ctx2048_price | **+0.71** [+0.25, +1.15] / +0.60 [-0.93, +2.15] | **+0.53** [+0.12, +0.95] / -0.37 [-1.64, +1.07] | +0.33 [-0.25, +1.00] / -0.79 [-3.17, +1.46] | 33.28 |
+| repo/full | timestral-5M_ctx512_price | **+1.08** [+0.53, +1.54] / -0.17 [-1.78, +1.44] | **+1.12** [+0.57, +1.64] / -0.29 [-1.69, +1.10] | **+1.45** [+0.46, +2.56] / +0.49 [-1.50, +2.48] | 1.61 |
+| repo/n483_step18 | official-chronos2_ctx2048_aggret_sub6 | +0.34 [-0.21, +0.84] / +1.45 [-1.11, +3.97] | +0.58 [-0.29, +1.51] / +1.59 [-3.16, +7.08] | +0.61 [-0.18, +1.53] / +4.50 [-2.83, +11.91] | 672.57 |
+| repo/n483_step18 | timestral-209M_ctx2048_price_cov_sub6 | +0.18 [-1.70, +2.04] / **-5.63** [-11.16, -1.40] | +0.75 [-0.96, +2.47] / -1.45 [-5.46, +1.58] | +1.11 [-1.19, +3.19] / -1.33 [-5.95, +2.47] | 998.25 |
+| repo/n483_step18 | timestral-209M_ctx8192_price_sub6 | -0.04 [-1.28, +0.99] / **-4.38** [-8.36, -1.56] | -0.11 [-0.72, +0.49] / **-2.36** [-5.03, -0.23] | -0.32 [-0.93, +0.28] / -2.66 [-5.83, +0.09] | 602.41 |
+| repo/n483_step18 | timestral-28M_ctx32768_price_sub6 | **+4.60** [+2.88, +6.29] / +5.15 [-2.22, +11.37] | **+1.31** [+0.10, +2.68] / +0.08 [-3.81, +3.32] | +0.13 [-0.69, +1.00] / -1.43 [-5.52, +2.07] | 516.88 |
+| repo/n483_step18 | timestral-28M_ctx8192_price_sub6 | **+1.32** [+0.10, +2.46] / -2.82 [-8.48, +1.36] | **+0.94** [+0.02, +1.80] / -1.22 [-4.51, +1.58] | +0.07 [-0.72, +0.87] / -1.97 [-6.12, +1.83] | 92.92 |
+| post/full | official-chronos2_ctx2048_logret | **+0.29** [+0.07, +0.50] / +0.97 [-0.67, +3.06] | MAE skill -0.29% | MAE skill -0.63% | 220.77 |
+| post/full | official-chronos2_ctx2048_price | **+6.80** [+5.68, +7.88] / -2.22 [-8.08, +1.55] | **+2.60** [+1.95, +3.19] / **+2.74** [+0.01, +5.64] | **+2.50** [+1.69, +3.24] / **+6.16** [+1.65, +10.67] | 69.5 |
+| post/full | official-chronos2_ctx512_aggret | **+0.57** [+0.30, +0.84] / +0.27 [-2.15, +2.20] | **+0.89** [+0.54, +1.27] / +2.42 [-0.90, +5.27] | **+1.18** [+0.69, +1.73] / -0.65 [-7.67, +5.97] | 155.69 |
+| post/full | official-chronos2_ctx512_logret | **+0.57** [+0.30, +0.84] / +0.27 [-2.15, +2.20] | MAE skill -0.79% | MAE skill -1.71% | 51.74 |
+| post/full | official-chronos2_ctx512_price | **+5.41** [+4.27, +6.49] / -1.27 [-5.53, +1.48] | **+2.62** [+2.00, +3.28] / +3.22 [-0.19, +7.10] | **+3.70** [+2.76, +4.79] / **+5.75** [+1.44, +10.84] | 14.38 |
+| post/full | timestral-209M_ctx2048_price | +0.05 [-0.20, +0.29] / **-4.75** [-8.26, -2.26] | -0.08 [-0.31, +0.17] / **-3.94** [-7.18, -1.41] | +0.06 [-0.28, +0.43] / **-4.12** [-8.46, -0.39] | 131.4 |
+| post/full | timestral-209M_ctx512_price | **+0.54** [+0.21, +0.89] / **-3.76** [-6.56, -1.78] | +0.13 [-0.19, +0.46] / **-2.95** [-5.73, -0.78] | +0.41 [-0.20, +1.09] / -2.86 [-6.54, +0.43] | 28.74 |
+| post/full | timestral-28M_ctx2048_aggret | +0.07 [-0.15, +0.28] / **-4.25** [-8.07, -1.53] | **+0.32** [+0.07, +0.59] / -2.27 [-6.23, +1.19] | **+0.48** [+0.03, +0.92] / -1.59 [-8.75, +4.21] | 221.99 |
+| post/full | timestral-28M_ctx2048_price | **+0.32** [+0.04, +0.57] / **-4.90** [-8.94, -2.08] | -0.01 [-0.30, +0.27] / **-3.38** [-6.48, -1.00] | +0.05 [-0.43, +0.55] / **-4.49** [-9.26, -0.76] | 19.45 |
+| post/full | timestral-28M_ctx512_aggret | **+0.79** [+0.45, +1.10] / **-2.81** [-6.29, -0.20] | **+0.97** [+0.61, +1.40] / -0.99 [-5.18, +2.49] | **+1.29** [+0.75, +1.92] / -0.60 [-9.17, +6.38] | 46.83 |
+| post/full | timestral-28M_ctx512_price | **+0.62** [+0.31, +0.94] / **-4.30** [-7.91, -1.75] | +0.13 [-0.21, +0.52] / **-2.66** [-5.51, -0.44] | +0.45 [-0.16, +1.16] / -2.27 [-6.33, +1.22] | 5.27 |
+| post/full | timestral-5M_ctx512_price | **+0.97** [+0.52, +1.35] / **-4.47** [-8.79, -1.53] | **+0.47** [+0.07, +0.90] / **-2.51** [-5.43, -0.04] | **+0.98** [+0.23, +1.90] / -1.80 [-6.03, +2.10] | 1.63 |
+| post/n1120_step18 | official-chronos2_ctx2048_aggret_sub6 | +0.45 [-0.16, +1.16] / -2.81 [-6.22, +0.32] | +0.06 [-0.50, +0.70] / +1.34 [-1.54, +4.86] | +0.62 [-0.30, +1.73] / -0.26 [-8.82, +10.00] | 791.97 |
+| post/n1120_step18 | official-chronos2_ctx8192_price_sub6 | **+12.64** [+9.38, +15.72] / +2.32 [-3.76, +7.12] | **+3.73** [+1.88, +5.75] / -0.08 [-3.98, +3.65] | **+3.39** [+2.11, +4.96] / +3.87 [-1.45, +10.20] | 333.77 |
+| post/n1120_step18 | timestral-209M_ctx8192_price_sub6 | -0.10 [-0.72, +0.48] / **-4.78** [-7.58, -2.55] | -0.37 [-0.90, +0.16] / **-2.88** [-5.46, -0.14] | -0.12 [-0.59, +0.37] / **-5.86** [-11.20, -1.02] | 592.49 |
+| post/n1120_step18 | timestral-28M_ctx2048_logret_sub6 | +0.14 [-0.47, +0.76] / **-4.95** [-8.64, -2.18] | MAE skill -0.83% | MAE skill -1.31% | 20.07 |
+| post/n1120_step18 | timestral-28M_ctx32768_price_sub6 | **+1.26** [+0.35, +2.01] / **-3.49** [-7.28, -0.16] | +0.00 [-0.69, +0.67] / -2.25 [-5.34, +0.92] | -0.06 [-0.63, +0.55] / **-7.92** [-18.08, -0.52] | 514.63 |
+| post/n1120_step18 | timestral-28M_ctx512_price_nosym_sub6 | +0.97 [-0.18, +1.92] / **-3.81** [-7.20, -0.92] | +0.12 [-0.62, +0.96] / -1.35 [-3.99, +1.33] | +0.46 [-0.42, +1.41] / -3.92 [-11.05, +1.17] | 2.17 |
+| post/n1120_step18 | timestral-28M_ctx8192_price_sub6 | **+0.88** [+0.12, +1.56] / **-4.02** [-7.26, -1.39] | -0.05 [-0.71, +0.58] / -1.85 [-4.81, +1.33] | +0.35 [-0.24, +0.97] / **-7.96** [-18.57, -0.58] | 95.08 |
+| post/n2239_step9 | timestral-28M_ctx2048_price_cov_sub3 | **+0.91** [+0.12, +1.68] / -1.74 [-3.92, +0.15] | +0.73 [-0.02, +1.60] / -1.64 [-4.66, +0.91] | +0.96 [-0.02, +2.11] / -2.02 [-4.89, +0.73] | 186.52 |
 
 
 ### T-J (repo). Paired ablations on identical origins (variant vs base, % change of loss; negative = variant better)
 
 | Variant | Base | n | Pinball (9 deciles) h=1 / 5 / 15 | QLIKE h=1 / 5 / 15 |
 |---|---|---|---|---|
-| timestral-209M_ctx8192_price_sub6 | timestral-209M_ctx2048_price | 483 | -0.99 [-2.17, +0.03] / -0.11 [-0.67, +0.45] / -0.43 [-1.01, +0.16] | **-1.61 [-2.78, -0.40]** / -0.71 [-1.82, +0.43] / -0.67 [-1.86, +0.45] |
-| timestral-209M_ctx2048_price_cov_sub6 | timestral-209M_ctx2048_price | 483 | -0.76 [-2.83, +1.12] / +0.75 [-0.89, +2.21] / +1.01 [-0.89, +2.77] | -2.89 [-6.62, +0.36] / +0.22 [-1.43, +1.77] / +0.69 [-1.53, +2.63] |
-| timestral-28M_ctx8192_price_sub6 | timestral-28M_ctx2048_price | 483 | +0.38 [-0.60, +1.43] / +0.23 [-0.52, +0.94] / -0.55 [-1.33, +0.21] | -0.12 [-1.44, +1.11] / +0.10 [-1.01, +1.13] / +0.41 [-0.62, +1.57] |
-| timestral-28M_ctx32768_price_sub6 | timestral-28M_ctx2048_price | 483 | **+3.62 [+2.13, +5.28]** / +0.60 [-0.61, +1.79] / -0.49 [-1.46, +0.46] | **+8.00 [+4.63, +11.67]** / +1.41 [-0.28, +3.09] / +0.96 [-0.33, +2.56] |
-| timestral-28M_ctx2048_price_cov | timestral-28M_ctx2048_price | 2895 | +0.11 [-0.36, +0.58] / +0.30 [-0.19, +0.74] / +0.42 [-0.52, +1.27] | **-1.08 [-1.81, -0.20]** / -0.26 [-0.87, +0.37] / +0.05 [-1.05, +1.21] |
-| timestral-28M_ctx2048_price_nosym | timestral-28M_ctx2048_price | 2895 | +0.26 [-0.01, +0.52] / +0.02 [-0.20, +0.24] / -0.24 [-0.63, +0.12] | +0.23 [-0.12, +0.66] / +0.22 [-0.20, +0.67] / +0.15 [-0.27, +0.66] |
-| timestral-28M_ctx2048_logret | timestral-28M_ctx2048_price | 2895 | **-0.36 [-0.73, -0.01]** / – / – | +0.17 [-0.67, +1.19] / – / – |
-| timestral-209M_ctx2048_logret | timestral-209M_ctx2048_price | 2895 | -0.10 [-0.36, +0.20] / – / – | -0.17 [-0.85, +0.56] / – / – |
-| timestral-209M_ctx2048_price | timestral-28M_ctx2048_price | 2895 | **-0.37 [-0.69, -0.05]** / **-0.33 [-0.58, -0.08]** / -0.37 [-0.89, +0.07] | -0.03 [-0.65, +0.68] / -0.03 [-0.66, +0.59] / -0.05 [-0.66, +0.69] |
-| timestral-28M_ctx2048_price | timestral-28M_ctx512_price | 2895 | +0.12 [-0.32, +0.47] / -0.34 [-0.73, +0.02] / -0.81 [-1.87, +0.07] | -0.12 [-0.81, +0.44] / -0.47 [-1.26, +0.28] / -0.89 [-2.12, +0.42] |
-| official-chronos2_ctx2048_logret | official-chronos2_ctx2048_price | 2895 | **-8.33 [-9.94, -6.47]** / – / – | **-4.51 [-6.95, -1.50]** / – / – |
-| official-chronos2_ctx512_logret | official-chronos2_ctx512_price | 2895 | **-3.45 [-4.74, -2.02]** / – / – | -0.73 [-3.01, +2.21] / – / – |
-| official-chronos2_ctx2048_logret | timestral-28M_ctx2048_logret | 2895 | +0.07 [-0.24, +0.38] / – / – | +0.96 [-0.37, +2.53] / – / – |
-| samay-timesfm25_ctx512_logret | samay-timesfm25_ctx512_price | 2895 | **-1.96 [-2.99, -0.79]** / – / – | **+13.40 [+7.90, +19.98]** / – / – |
-| neural_trade-rolling1440m-seed0_ctx60_price | neural_trade-asis-seed0_ctx60_price | 2895 | **+3.03 [+1.75, +4.39]** / +0.27 [-0.81, +1.39] / **+1.94 [+0.69, +3.18]** | **+4.81 [+2.66, +6.83]** / **+7.68 [+4.58, +10.76]** / **+6.59 [+3.06, +10.63]** |
-| neural_trade-rolling1440m-seed1_ctx60_price | neural_trade-asis-seed1_ctx60_price | 2895 | **+2.33 [+1.50, +3.11]** / **+1.46 [+0.49, +2.55]** / **+1.48 [+0.50, +2.64]** | **+6.06 [+3.15, +9.47]** / **+8.12 [+5.45, +10.99]** / **+6.76 [+4.15, +9.16]** |
-| neural_trade-rolling1440m-seed2_ctx60_price | neural_trade-asis-seed2_ctx60_price | 2895 | +0.41 [-0.74, +1.68] / **+1.60 [+0.86, +2.44]** / -0.41 [-1.39, +0.51] | **+3.53 [+1.34, +6.12]** / **+2.63 [+0.23, +5.50]** / +2.76 [-1.42, +6.72] |
-| official-chronos2_ctx512_aggret | timestral-28M_ctx512_aggret | 2895 | -0.02 [-0.50, +0.53] / -0.24 [-0.69, +0.15] / -0.00 [-0.73, +0.74] | +0.42 [-0.67, +1.68] / +0.39 [-1.13, +1.98] / **+2.40 [+0.20, +4.93]** |
-| official-chronos2_ctx512_aggret | timestral-28M_ctx2048_price | 2895 | +0.46 [-0.08, +1.13] / **+0.52 [+0.08, +1.03]** / **+1.17 [+0.37, +1.98]** | **+2.39 [+0.91, +4.32]** / **+4.70 [+2.18, +7.76]** / **+9.09 [+6.38, +12.39]** |
-| timestral-28M_ctx512_aggret | timestral-28M_ctx2048_price | 2895 | +0.48 [-0.08, +1.10] / **+0.77 [+0.18, +1.40]** / **+1.17 [+0.15, +2.14]** | **+1.96 [+0.82, +3.53]** / **+4.29 [+2.09, +7.04]** / **+6.53 [+3.85, +9.33]** |
-| timestral-28M_ctx2048_aggret | timestral-28M_ctx2048_price | 2895 | -0.36 [-0.72, +0.03] / +0.22 [-0.20, +0.68] / +0.24 [-0.43, +0.90] | +0.17 [-0.70, +1.17] / **+2.39 [+0.67, +4.26]** / **+3.56 [+1.71, +5.86]** |
-| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_aggret | 483 | +0.48 [-0.51, +1.81] / +0.16 [-0.62, +0.93] / -0.40 [-1.26, +0.44] | +3.38 [-0.43, +8.46] / +0.01 [-4.23, +3.82] / +2.06 [-2.80, +7.63] |
-| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_price | 483 | -0.59 [-1.54, +0.42] / -0.13 [-0.98, +0.66] / -0.01 [-1.16, +1.20] | +4.26 [-0.88, +11.87] / +2.94 [-1.47, +8.36] / **+7.04 [+0.96, +15.11]** |
-| official-chronos2_ctx2048_aggret_sub6 | official-chronos2_ctx512_aggret | 483 | -0.50 [-2.46, +0.91] / +0.09 [-0.57, +0.77] / **-0.97 [-1.93, -0.01]** | +0.45 [-3.81, +4.53] / -1.01 [-5.33, +3.15] / -3.15 [-8.91, +4.26] |
+| timestral-209M_ctx8192_price_sub6 | timestral-209M_ctx2048_price | 483 | -0.99 [-2.17, +0.03] / -0.11 [-0.67, +0.45] / -0.43 [-1.01, +0.16] | **-1.63 [-2.78, -0.46]** / -0.71 [-1.82, +0.43] / -0.67 [-1.86, +0.45] |
+| timestral-209M_ctx2048_price_cov_sub6 | timestral-209M_ctx2048_price | 483 | -0.76 [-2.83, +1.12] / +0.75 [-0.89, +2.21] / +1.01 [-0.89, +2.77] | -2.91 [-6.48, +0.39] / +0.22 [-1.43, +1.77] / +0.69 [-1.53, +2.63] |
+| timestral-28M_ctx8192_price_sub6 | timestral-28M_ctx2048_price | 483 | +0.38 [-0.60, +1.43] / +0.23 [-0.52, +0.94] / -0.55 [-1.33, +0.21] | -0.13 [-1.46, +1.13] / +0.10 [-1.01, +1.13] / +0.41 [-0.62, +1.57] |
+| timestral-28M_ctx32768_price_sub6 | timestral-28M_ctx2048_price | 483 | **+3.62 [+2.13, +5.28]** / +0.60 [-0.61, +1.79] / -0.49 [-1.46, +0.46] | **+8.06 [+4.74, +11.74]** / +1.41 [-0.28, +3.09] / +0.96 [-0.33, +2.56] |
+| timestral-28M_ctx2048_price_cov | timestral-28M_ctx2048_price | 2895 | +0.11 [-0.36, +0.58] / +0.30 [-0.19, +0.72] / +0.42 [-0.48, +1.28] | **-1.12 [-1.91, -0.27]** / -0.26 [-0.89, +0.38] / +0.05 [-1.07, +1.17] |
+| timestral-28M_ctx2048_price_nosym | timestral-28M_ctx2048_price | 2895 | +0.26 [-0.01, +0.53] / +0.02 [-0.19, +0.24] / -0.24 [-0.61, +0.10] | +0.20 [-0.16, +0.64] / +0.22 [-0.20, +0.69] / +0.15 [-0.27, +0.67] |
+| timestral-28M_ctx2048_logret | timestral-28M_ctx2048_price | 2895 | -0.36 [-0.74, +0.03] / – / – | +0.18 [-0.70, +1.18] / – / – |
+| timestral-209M_ctx2048_logret | timestral-209M_ctx2048_price | 2895 | -0.10 [-0.37, +0.19] / – / – | -0.14 [-0.76, +0.58] / – / – |
+| timestral-209M_ctx2048_price | timestral-28M_ctx2048_price | 2895 | **-0.37 [-0.69, -0.04]** / **-0.33 [-0.58, -0.08]** / -0.37 [-0.86, +0.05] | -0.05 [-0.64, +0.60] / -0.03 [-0.63, +0.60] / -0.05 [-0.64, +0.74] |
+| timestral-28M_ctx2048_price | timestral-28M_ctx512_price | 2895 | +0.12 [-0.33, +0.50] / -0.34 [-0.74, +0.06] / -0.81 [-1.80, +0.09] | -0.15 [-0.83, +0.40] / -0.47 [-1.23, +0.35] / -0.89 [-2.14, +0.37] |
+| official-chronos2_ctx2048_logret | official-chronos2_ctx2048_price | 2895 | **-8.33 [-10.02, -6.46]** / – / – | **-4.51 [-6.96, -1.40]** / – / – |
+| official-chronos2_ctx512_logret | official-chronos2_ctx512_price | 2895 | **-3.45 [-4.81, -1.94]** / – / – | -0.76 [-3.00, +1.92] / – / – |
+| official-chronos2_ctx2048_logret | timestral-28M_ctx2048_logret | 2895 | +0.07 [-0.26, +0.37] / – / – | +0.91 [-0.47, +2.45] / – / – |
+| samay-timesfm25_ctx512_logret | samay-timesfm25_ctx512_price | 2895 | **-1.96 [-2.94, -0.79]** / – / – | **+13.13 [+7.85, +19.46]** / – / – |
+| neural_trade-rolling1440m-seed0_ctx60_price | neural_trade-asis-seed0_ctx60_price | 2895 | **+3.03 [+1.68, +4.35]** / +0.27 [-0.85, +1.42] / **+1.94 [+0.79, +3.17]** | **+4.93 [+2.91, +6.95]** / **+7.68 [+4.67, +10.60]** / **+6.59 [+3.17, +10.42]** |
+| neural_trade-rolling1440m-seed1_ctx60_price | neural_trade-asis-seed1_ctx60_price | 2895 | **+2.33 [+1.48, +3.08]** / **+1.46 [+0.41, +2.50]** / **+1.48 [+0.49, +2.56]** | **+6.06 [+3.14, +9.52]** / **+8.12 [+5.44, +11.07]** / **+6.76 [+4.32, +9.09]** |
+| neural_trade-rolling1440m-seed2_ctx60_price | neural_trade-asis-seed2_ctx60_price | 2895 | +0.41 [-0.77, +1.69] / **+1.60 [+0.88, +2.46]** / -0.41 [-1.30, +0.63] | **+3.54 [+1.34, +6.05]** / **+2.62 [+0.24, +5.49]** / +2.76 [-1.29, +6.69] |
+| official-chronos2_ctx512_aggret | timestral-28M_ctx512_aggret | 2895 | -0.02 [-0.51, +0.54] / -0.24 [-0.65, +0.16] / -0.00 [-0.74, +0.73] | +0.36 [-0.76, +1.64] / +0.39 [-1.19, +2.05] / **+2.40 [+0.22, +4.70]** |
+| official-chronos2_ctx512_aggret | timestral-28M_ctx2048_price | 2895 | +0.46 [-0.13, +1.11] / **+0.52 [+0.04, +1.05]** / **+1.17 [+0.32, +1.97]** | **+2.35 [+0.88, +4.38]** / **+4.70 [+2.07, +8.05]** / **+9.09 [+6.41, +12.05]** |
+| timestral-28M_ctx512_aggret | timestral-28M_ctx2048_price | 2895 | +0.48 [-0.08, +1.09] / **+0.77 [+0.18, +1.41]** / **+1.17 [+0.27, +2.20]** | **+1.98 [+0.75, +3.53]** / **+4.29 [+1.98, +6.98]** / **+6.53 [+3.96, +9.46]** |
+| timestral-28M_ctx2048_aggret | timestral-28M_ctx2048_price | 2895 | -0.36 [-0.71, +0.01] / +0.22 [-0.22, +0.71] / +0.24 [-0.41, +0.89] | +0.18 [-0.68, +1.11] / **+2.38 [+0.58, +4.31]** / **+3.56 [+1.62, +5.75]** |
+| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_aggret | 483 | +0.48 [-0.53, +1.77] / +0.16 [-0.61, +0.84] / -0.40 [-1.27, +0.43] | +3.39 [-0.39, +8.45] / +0.01 [-4.26, +3.81] / +2.06 [-3.08, +8.43] |
+| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_price | 483 | -0.59 [-1.51, +0.35] / -0.13 [-1.03, +0.67] / -0.01 [-1.19, +1.12] | +4.26 [-0.76, +11.27] / +2.94 [-1.28, +8.09] / **+7.04 [+0.70, +15.08]** |
+| official-chronos2_ctx2048_aggret_sub6 | official-chronos2_ctx512_aggret | 483 | -0.50 [-2.46, +0.88] / +0.09 [-0.56, +0.74] / **-0.97 [-1.93, -0.02]** | +0.48 [-3.76, +4.57] / -1.01 [-5.14, +3.19] / -3.15 [-8.49, +3.90] |
 
 
 ### T-J (post). Paired ablations on identical origins (variant vs base, % change of loss; negative = variant better)
 
 | Variant | Base | n | Pinball (9 deciles) h=1 / 5 / 15 | QLIKE h=1 / 5 / 15 |
 |---|---|---|---|---|
-| timestral-209M_ctx8192_price_sub6 | timestral-209M_ctx2048_price | 1120 | +0.05 [-0.46, +0.56] / -0.24 [-0.65, +0.15] / -0.22 [-0.61, +0.15] | +0.52 [-0.54, +1.67] / -0.16 [-1.17, +0.98] / -0.59 [-2.22, +0.89] |
-| timestral-28M_ctx8192_price_sub6 | timestral-28M_ctx2048_price | 1120 | +0.35 [-0.18, +0.84] / -0.29 [-0.74, +0.07] / +0.15 [-0.35, +0.63] | +0.13 [-0.84, +1.10] / -0.12 [-1.47, +1.36] / -2.60 [-6.72, +0.33] |
-| timestral-28M_ctx32768_price_sub6 | timestral-28M_ctx2048_price | 1120 | +0.72 [-0.05, +1.49] / -0.24 [-0.77, +0.22] / -0.26 [-0.81, +0.24] | -0.13 [-2.03, +1.68] / -0.56 [-1.94, +0.80] / -2.57 [-7.09, +0.29] |
-| timestral-28M_ctx2048_price_cov_sub3 | timestral-28M_ctx2048_price | 2239 | +0.48 [-0.12, +1.09] / **+0.88 [+0.23, +1.64]** / **+0.88 [+0.16, +1.59]** | +0.99 [-0.26, +2.38] / -0.00 [-0.79, +0.97] / +1.66 [-0.31, +4.53] |
-| timestral-28M_ctx512_price_nosym_sub6 | timestral-28M_ctx512_price | 1120 | +0.23 [-0.19, +0.64] / -0.10 [-0.40, +0.17] / -0.06 [-0.44, +0.26] | **+0.79 [+0.19, +1.44]** / +0.13 [-0.32, +0.61] / -0.21 [-1.08, +0.52] |
-| timestral-28M_ctx2048_logret_sub6 | timestral-28M_ctx2048_price | 1120 | -0.39 [-0.95, +0.23] / – / – | -0.67 [-2.05, +0.78] / – / – |
-| official-chronos2_ctx8192_price_sub6 | official-chronos2_ctx2048_price | 1120 | **+6.09 [+2.93, +9.18]** / **+2.08 [+0.35, +3.83]** / +1.00 [-0.25, +2.51] | **+4.23 [+1.16, +7.18]** / -0.36 [-3.71, +2.69] / -1.72 [-5.39, +2.15] |
-| timestral-209M_ctx2048_price | timestral-28M_ctx2048_price | 6715 | **-0.26 [-0.49, -0.00]** / -0.07 [-0.25, +0.13] / +0.01 [-0.32, +0.35] | +0.18 [-0.51, +0.94] / -0.59 [-1.61, +0.29] / +0.39 [-0.93, +1.79] |
-| timestral-28M_ctx2048_price | timestral-28M_ctx512_price | 6715 | **-0.31 [-0.61, -0.04]** / -0.14 [-0.47, +0.14] / -0.40 [-0.99, +0.19] | -0.49 [-1.48, +0.26] / -0.73 [-1.62, +0.17] / **-2.27 [-4.24, -0.67]** |
-| official-chronos2_ctx2048_logret | official-chronos2_ctx2048_price | 6715 | **-6.10 [-7.11, -5.01]** / – / – | +4.08 [-0.79, +10.54] / – / – |
-| official-chronos2_ctx512_logret | official-chronos2_ctx512_price | 6715 | **-4.59 [-5.50, -3.60]** / – / – | +1.85 [-0.36, +4.76] / – / – |
-| official-chronos2_ctx2048_logret | timestral-28M_ctx2048_price | 6715 | -0.03 [-0.29, +0.28] / – / – | **+6.61 [+2.64, +12.00]** / – / – |
-| samay-timesfm25_ctx512_logret | samay-timesfm25_ctx512_price | 6715 | **-2.19 [-3.06, -1.31]** / – / – | **+31.34 [+23.63, +41.17]** / – / – |
-| neural_trade-rolling1440m-seed0_ctx60_price | neural_trade-asis-seed0_ctx60_price | 6715 | **-2.76 [-3.85, -1.71]** / **-1.10 [-1.89, -0.34]** / **-3.13 [-4.13, -2.06]** | **+3.54 [+0.30, +6.87]** / **-4.70 [-7.62, -1.74]** / **-8.20 [-13.51, -1.94]** |
-| neural_trade-rolling1440m-seed1_ctx60_price | neural_trade-asis-seed1_ctx60_price | 6715 | -0.37 [-1.02, +0.30] / +0.24 [-0.48, +0.93] / **-1.17 [-2.14, -0.24]** | **+8.49 [+3.46, +13.96]** / -0.28 [-4.40, +4.05] / -0.84 [-7.17, +6.28] |
-| neural_trade-rolling1440m-seed2_ctx60_price | neural_trade-asis-seed2_ctx60_price | 6715 | +0.32 [-0.66, +1.21] / -0.28 [-0.99, +0.41] / -0.94 [-2.04, +0.06] | **+5.67 [+0.51, +11.07]** / +1.08 [-3.83, +6.65] / +4.51 [-4.05, +13.13] |
-| official-chronos2_ctx512_aggret | timestral-28M_ctx512_aggret | 6715 | -0.21 [-0.48, +0.04] / -0.08 [-0.44, +0.24] / -0.11 [-0.68, +0.38] | **+3.46 [+1.45, +6.08]** / **+3.47 [+0.96, +6.40]** / -0.04 [-4.40, +4.78] |
-| official-chronos2_ctx512_aggret | timestral-28M_ctx2048_price | 6715 | +0.26 [-0.05, +0.61] / **+0.90 [+0.52, +1.33]** / **+1.13 [+0.47, +1.82]** | **+5.75 [+3.16, +9.94]** / **+6.00 [+3.54, +8.41]** / +4.02 [-1.01, +8.63] |
-| timestral-28M_ctx512_aggret | timestral-28M_ctx2048_price | 6715 | **+0.47 [+0.17, +0.84]** / **+0.98 [+0.60, +1.41]** / **+1.24 [+0.62, +1.90]** | **+2.21 [+0.77, +4.11]** / **+2.44 [+0.03, +4.47]** / +4.07 [-0.14, +7.91] |
-| timestral-28M_ctx2048_aggret | timestral-28M_ctx2048_price | 6715 | -0.24 [-0.46, +0.01] / **+0.33 [+0.03, +0.65]** / +0.43 [-0.06, +0.94] | +0.70 [-0.15, +1.72] / +1.12 [-0.88, +3.05] / +3.04 [-0.31, +6.11] |
-| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_aggret | 1120 | +0.31 [-0.15, +0.81] / -0.24 [-0.84, +0.39] / +0.18 [-0.47, +0.94] | **+2.44 [+0.32, +4.63]** / +2.98 [-0.46, +6.29] / +4.75 [-3.80, +16.39] |
-| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_price | 1120 | -0.08 [-0.73, +0.68] / -0.18 [-0.93, +0.61] / +0.42 [-0.49, +1.33] | +1.75 [-0.88, +4.47] / +2.99 [-0.47, +7.18] / +5.59 [-4.21, +18.64] |
-| official-chronos2_ctx2048_aggret_sub6 | official-chronos2_ctx512_aggret | 1120 | -0.33 [-1.01, +0.33] / -0.52 [-1.11, +0.06] / **-0.62 [-1.19, -0.01]** | -1.82 [-5.01, +1.09] / -2.99 [-6.63, +0.28] / +4.20 [-3.71, +14.45] |
+| timestral-209M_ctx8192_price_sub6 | timestral-209M_ctx2048_price | 1120 | +0.05 [-0.46, +0.56] / -0.24 [-0.66, +0.13] / -0.22 [-0.59, +0.13] | +0.42 [-0.55, +1.54] / -0.20 [-1.30, +0.93] / -0.58 [-2.12, +0.81] |
+| timestral-28M_ctx8192_price_sub6 | timestral-28M_ctx2048_price | 1120 | +0.35 [-0.19, +0.83] / -0.29 [-0.76, +0.05] / +0.15 [-0.40, +0.59] | +0.30 [-0.63, +1.26] / -0.14 [-1.49, +1.18] / -2.58 [-6.92, +0.48] |
+| timestral-28M_ctx32768_price_sub6 | timestral-28M_ctx2048_price | 1120 | +0.72 [-0.09, +1.53] / -0.24 [-0.75, +0.21] / -0.26 [-0.82, +0.17] | +0.86 [-0.88, +2.52] / -0.55 [-2.13, +0.78] / -2.54 [-7.23, +0.31] |
+| timestral-28M_ctx2048_price_cov_sub3 | timestral-28M_ctx2048_price | 2239 | +0.48 [-0.12, +1.09] / **+0.88 [+0.18, +1.58]** / **+0.88 [+0.06, +1.63]** | +0.69 [-0.55, +1.91] / +0.00 [-0.79, +1.06] / +1.67 [-0.24, +4.48] |
+| timestral-28M_ctx512_price_nosym_sub6 | timestral-28M_ctx512_price | 1120 | +0.23 [-0.17, +0.67] / -0.10 [-0.40, +0.15] / -0.06 [-0.43, +0.26] | **+0.76 [+0.16, +1.36]** / +0.12 [-0.32, +0.62] / -0.22 [-1.10, +0.50] |
+| timestral-28M_ctx2048_logret_sub6 | timestral-28M_ctx2048_price | 1120 | -0.39 [-0.96, +0.21] / – / – | -0.68 [-1.96, +0.77] / – / – |
+| official-chronos2_ctx8192_price_sub6 | official-chronos2_ctx2048_price | 1120 | **+6.09 [+2.96, +8.97]** / **+2.08 [+0.33, +3.91]** / +1.00 [-0.23, +2.41] | **+5.48 [+2.21, +8.55]** / -0.24 [-3.59, +3.04] / -1.74 [-5.47, +1.94] |
+| timestral-209M_ctx2048_price | timestral-28M_ctx2048_price | 6715 | -0.26 [-0.49, +0.01] / -0.07 [-0.25, +0.13] / +0.01 [-0.30, +0.35] | +0.16 [-0.55, +0.95] / -0.58 [-1.56, +0.29] / +0.38 [-0.85, +1.90] |
+| timestral-28M_ctx2048_price | timestral-28M_ctx512_price | 6715 | **-0.31 [-0.63, -0.06]** / -0.14 [-0.47, +0.14] / -0.40 [-1.04, +0.20] | -0.64 [-1.58, +0.08] / -0.74 [-1.69, +0.19] / **-2.27 [-4.30, -0.59]** |
+| official-chronos2_ctx2048_logret | official-chronos2_ctx2048_price | 6715 | **-6.10 [-7.13, -5.01]** / – / – | +3.29 [-1.41, +9.97] / – / – |
+| official-chronos2_ctx512_logret | official-chronos2_ctx512_price | 6715 | **-4.59 [-5.51, -3.66]** / – / – | +1.57 [-0.69, +4.34] / – / – |
+| official-chronos2_ctx2048_logret | timestral-28M_ctx2048_price | 6715 | -0.03 [-0.31, +0.28] / – / – | **+6.21 [+2.43, +11.47]** / – / – |
+| official-chronos2_ctx2048_logret | timestral-28M_ctx2048_aggret | 6715 | **+0.21 [+0.01, +0.42]** / – / – | **+5.49 [+1.95, +10.77]** / – / – |
+| samay-timesfm25_ctx512_logret | samay-timesfm25_ctx512_price | 6715 | **-2.19 [-3.06, -1.34]** / – / – | **+29.18 [+21.45, +38.05]** / – / – |
+| neural_trade-rolling1440m-seed0_ctx60_price | neural_trade-asis-seed0_ctx60_price | 6715 | **-2.76 [-3.76, -1.72]** / **-1.10 [-1.93, -0.26]** / **-3.13 [-4.11, -2.03]** | **+3.26 [+0.26, +6.44]** / **-4.75 [-7.77, -1.72]** / **-8.22 [-13.03, -2.96]** |
+| neural_trade-rolling1440m-seed1_ctx60_price | neural_trade-asis-seed1_ctx60_price | 6715 | -0.37 [-1.02, +0.30] / +0.24 [-0.49, +0.92] / **-1.17 [-2.16, -0.12]** | **+7.65 [+3.19, +13.01]** / -0.34 [-4.50, +3.98] / -0.85 [-7.74, +6.26] |
+| neural_trade-rolling1440m-seed2_ctx60_price | neural_trade-asis-seed2_ctx60_price | 6715 | +0.32 [-0.60, +1.17] / -0.28 [-1.00, +0.36] / -0.94 [-1.98, +0.12] | +4.86 [-0.19, +10.98] / +1.02 [-3.87, +6.42] / +4.49 [-3.53, +13.27] |
+| official-chronos2_ctx512_aggret | timestral-28M_ctx512_aggret | 6715 | -0.21 [-0.46, +0.04] / -0.08 [-0.41, +0.26] / -0.11 [-0.64, +0.40] | **+3.19 [+1.31, +5.74]** / **+3.44 [+0.95, +6.01]** / -0.05 [-4.21, +4.64] |
+| official-chronos2_ctx512_aggret | timestral-28M_ctx2048_price | 6715 | +0.26 [-0.04, +0.60] / **+0.90 [+0.53, +1.33]** / **+1.13 [+0.40, +1.82]** | **+5.48 [+2.98, +9.45]** / **+6.00 [+3.53, +8.46]** / +4.01 [-0.45, +8.69] |
+| timestral-28M_ctx512_aggret | timestral-28M_ctx2048_price | 6715 | **+0.47 [+0.15, +0.82]** / **+0.98 [+0.58, +1.43]** / **+1.24 [+0.56, +1.96]** | **+2.21 [+0.88, +3.83]** / **+2.47 [+0.35, +4.52]** / +4.07 [-0.03, +7.62] |
+| timestral-28M_ctx2048_aggret | timestral-28M_ctx2048_price | 6715 | -0.24 [-0.46, +0.02] / **+0.33 [+0.03, +0.67]** / +0.43 [-0.08, +0.97] | +0.68 [-0.13, +1.65] / +1.15 [-0.78, +2.89] / +3.03 [-0.40, +6.10] |
+| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_aggret | 1120 | +0.31 [-0.16, +0.77] / -0.24 [-0.83, +0.38] / +0.18 [-0.55, +0.96] | **+2.27 [+0.07, +4.39]** / +3.04 [-0.21, +6.48] / +4.71 [-3.74, +16.88] |
+| official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_price | 1120 | -0.08 [-0.76, +0.64] / -0.18 [-0.99, +0.63] / +0.42 [-0.51, +1.37] | +1.58 [-0.95, +4.55] / +3.10 [-0.39, +7.12] / +5.57 [-3.61, +18.25] |
+| official-chronos2_ctx2048_aggret_sub6 | official-chronos2_ctx512_aggret | 1120 | -0.33 [-1.10, +0.34] / -0.52 [-1.09, +0.04] / -0.62 [-1.19, +0.01] | -1.85 [-4.91, +0.84] / -2.91 [-6.34, +0.46] / +4.19 [-3.88, +15.59] |
 
 
 ### T-H. Single-series CPU latency (4 threads unless stated, fp32, package defaults)
