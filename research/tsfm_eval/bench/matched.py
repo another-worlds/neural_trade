@@ -3,6 +3,7 @@
 Answers "does X help?" directly (ctx 8192 vs 2048, covariates vs none, symmetric averaging off vs on, size),
 instead of comparing two numbers that are each measured against EWMA-t on different origin sets.
 Values: % change of mean loss (variant vs base); negative = variant better. CI: paired moving-block bootstrap.
+QLIKE is the unit-free form y^2/v - ln(y^2/v) - 1, on origins with y != 0 (as in metrics2.py).
 Writes RESULTS/matched.json and prints a markdown table. Set BENCH_DATA=post for the post-release set.
 """
 import json
@@ -33,6 +34,20 @@ PAIRS = {
         ("timestral-209M_ctx2048_logret", "timestral-209M_ctx2048_price"),
         ("timestral-209M_ctx2048_price", "timestral-28M_ctx2048_price"),
         ("timestral-28M_ctx2048_price", "timestral-28M_ctx512_price"),
+        ("official-chronos2_ctx2048_logret", "official-chronos2_ctx2048_price"),
+        ("official-chronos2_ctx512_logret", "official-chronos2_ctx512_price"),
+        ("official-chronos2_ctx2048_logret", "timestral-28M_ctx2048_logret"),
+        ("samay-timesfm25_ctx512_logret", "samay-timesfm25_ctx512_price"),
+        ("neural_trade-rolling1440m-seed0_ctx60_price", "neural_trade-asis-seed0_ctx60_price"),
+        ("neural_trade-rolling1440m-seed1_ctx60_price", "neural_trade-asis-seed1_ctx60_price"),
+        ("neural_trade-rolling1440m-seed2_ctx60_price", "neural_trade-asis-seed2_ctx60_price"),
+        ("official-chronos2_ctx512_aggret", "timestral-28M_ctx512_aggret"),
+        ("official-chronos2_ctx512_aggret", "timestral-28M_ctx2048_price"),
+        ("timestral-28M_ctx512_aggret", "timestral-28M_ctx2048_price"),
+        ("timestral-28M_ctx2048_aggret", "timestral-28M_ctx2048_price"),
+        ("official-chronos2_ctx2048_aggret_sub6", "timestral-28M_ctx2048_aggret"),
+        ("official-chronos2_ctx2048_aggret_sub6", "timestral-28M_ctx2048_price"),
+        ("official-chronos2_ctx2048_aggret_sub6", "official-chronos2_ctx512_aggret"),
     ],
     "post": [
         ("timestral-209M_ctx8192_price_sub6", "timestral-209M_ctx2048_price"),
@@ -44,6 +59,20 @@ PAIRS = {
         ("official-chronos2_ctx8192_price_sub6", "official-chronos2_ctx2048_price"),
         ("timestral-209M_ctx2048_price", "timestral-28M_ctx2048_price"),
         ("timestral-28M_ctx2048_price", "timestral-28M_ctx512_price"),
+        ("official-chronos2_ctx2048_logret", "official-chronos2_ctx2048_price"),
+        ("official-chronos2_ctx512_logret", "official-chronos2_ctx512_price"),
+        ("official-chronos2_ctx2048_logret", "timestral-28M_ctx2048_price"),
+        ("samay-timesfm25_ctx512_logret", "samay-timesfm25_ctx512_price"),
+        ("neural_trade-rolling1440m-seed0_ctx60_price", "neural_trade-asis-seed0_ctx60_price"),
+        ("neural_trade-rolling1440m-seed1_ctx60_price", "neural_trade-asis-seed1_ctx60_price"),
+        ("neural_trade-rolling1440m-seed2_ctx60_price", "neural_trade-asis-seed2_ctx60_price"),
+        ("official-chronos2_ctx512_aggret", "timestral-28M_ctx512_aggret"),
+        ("official-chronos2_ctx512_aggret", "timestral-28M_ctx2048_price"),
+        ("timestral-28M_ctx512_aggret", "timestral-28M_ctx2048_price"),
+        ("timestral-28M_ctx2048_aggret", "timestral-28M_ctx2048_price"),
+        ("official-chronos2_ctx2048_aggret_sub6", "timestral-28M_ctx2048_aggret"),
+        ("official-chronos2_ctx2048_aggret_sub6", "timestral-28M_ctx2048_price"),
+        ("official-chronos2_ctx2048_aggret_sub6", "official-chronos2_ctx512_aggret"),
     ],
 }[DATA]
 
@@ -61,10 +90,16 @@ def pinball(q, y, idx):
 def qlike(q, y):
     m = q @ W_MEAN
     v = np.maximum((q ** 2) @ W_MEAN - m ** 2, 1e-6)
-    return np.log(v) + y ** 2 / v
+    out = np.full(len(y), np.nan)
+    nz = y != 0
+    r = y[nz] ** 2 / v[nz]
+    out[nz] = r - np.log(r) - 1
+    return out
 
 
 def pct_ci(d, base, block):
+    keep = ~(np.isnan(d) | np.isnan(base))
+    d, base = d[keep], base[keep]
     n = len(d)
     st = rs.integers(0, n - block + 1, size=(NBOOT, int(np.ceil(n / block))))
     idx = (st[:, :, None] + np.arange(block)).reshape(NBOOT, -1)[:, :n]
@@ -84,6 +119,8 @@ def load_q(tag, org):
     for hi, h in enumerate(HORIZONS):
         if framing in ("price", "price_cov"):
             out[h] = (np.log(np.maximum(q[:, hi, :], 1e-9)) - lc[org][:, None]) * 1e4
+        elif framing == "aggret":
+            out[h] = q[:, hi, :]
         elif framing == "logret" and h == 1:
             out[h] = q[:, hi, :]          # multi-step log-return quantiles cannot be summed; h=1 only
     return out

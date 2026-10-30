@@ -1,7 +1,13 @@
 """Score every forecast file in RESULTS against causal baselines on identical origins.
 
 All quantities are log returns in bps relative to the last observed close t; target y_h = lc[t+h] - lc[t].
-Reference baseline for paired tests: EWMA-Student-t (lambda and nu fitted on pre-holdout origins only).
+Reference baseline for paired tests: EWMA-Student-t (lambda and nu chosen by 21-level pinball on pre-holdout origins).
+Two stronger cheap baselines, also fitted on pre-holdout origins only, are compared too: the same EWMA-t with its
+variance scale refit (c_h = mean(y^2 / implied variance)), and FHS (EWMA sigma x empirical quantiles of standardised
+pre-holdout returns).
+QLIKE is the unit-free form y^2/v - ln(y^2/v) - 1 (v = variance implied by the 21 quantiles). Origins with y = 0 are
+left out of QLIKE, because the loss is undefined there. Tail tests: Kupiec (iid) and a Newey-West z-test on the hit
+series with 60 min of lags (robust to overlapping h-step targets).
 Writes RESULTS/metrics2.json and RESULTS/metrics2.md. Set BENCH_DATA=post for the post-release set.
 """
 import glob
@@ -78,6 +84,30 @@ def var_from_q(q):
     return np.maximum((q ** 2) @ W_MEAN - m ** 2, 1e-6)
 
 
+def qlike_rows(q, y):
+    """Unit-free QLIKE per origin; NaN where y == 0."""
+    v = var_from_q(q)
+    out = np.full(len(y), np.nan)
+    nz = y != 0
+    r = y[nz] ** 2 / v[nz]
+    out[nz] = r - np.log(r) - 1
+    return out
+
+
+def cov_test_nw(hits, p, lags):
+    """Two-sided z-test of hit rate == p with a Newey-West (Bartlett) long-run variance."""
+    x = hits.astype(np.float64)
+    n, ph = len(x), x.mean()
+    if ph in (0.0, 1.0):
+        return 0.0
+    e = x - ph
+    lrv = e @ e / n
+    for lag in range(1, lags + 1):
+        lrv += 2 * (1 - lag / (lags + 1)) * (e[lag:] @ e[:-lag]) / n
+    z = (ph - p) / np.sqrt(max(lrv, 1e-12) / n)
+    return round(float(2 * norm.sf(abs(z))), 4)
+
+
 def kupiec(hits, p):
     n, x = len(hits), int(hits.sum())
     if x in (0, n):
@@ -134,6 +164,12 @@ for h in HORIZONS:
             if best is None or loss < best[0]:
                 best = (loss, lam, nu)
     FIT[h] = {"lambda": best[1], "nu": best[2], "pre_pinball": round(float(best[0]), 4), "n_pre": int(len(PRE))}
+    sig = np.sqrt(np.maximum(EW[best[1]][PRE] * h, 1e-6))
+    qp = t_quantiles(sig, best[2])
+    FIT[h]["var_scale_c"] = round(float(np.mean(yp ** 2 / var_from_q(qp))), 4)      # for "ewma_t_scaled"
+    FIT[h]["fhs_z"] = [round(float(v), 5) for v in np.quantile(yp / sig, LV)]         # for "fhs_ewma"
+    FIT[h]["pre_hit_q01"] = round(float((yp < qp[:, 0]).mean()), 4)
+    FIT[h]["pre_hit_q99"] = round(float((yp > qp[:, 20]).mean()), 4)
 
 # logistic direction baseline on past returns, fitted pre-holdout with a 15-min purge
 LR = {}
@@ -162,7 +198,8 @@ def ctx_mean(org, c):
 
 # ---------------------------------------------------------------- scoring
 def score(name, h, org, y, q=None, point=None, dir_prob=None, ref=None, block=20):
-    """q: (n,21) quantiles of the h-step return in bps (or None); point: predicted return bps."""
+    """q: (n,21) quantiles of the h-step return in bps (or None); point: predicted return bps.
+    ref: {"ref": EWMA-t, "scl": scale-refit EWMA-t, "fhs": FHS} per-origin losses; keys missing = no comparison."""
     r = {"model": name, "h": h, "n": int(len(y))}
     if point is None and q is not None:
         point = q[:, 10]
@@ -201,18 +238,22 @@ def score(name, h, org, y, q=None, point=None, dir_prob=None, ref=None, block=20
             r[lab] = round(float((y < q[:, j]).mean()), 4)
         r["kupiec_p_q01"] = kupiec(y < q[:, 0], 0.01)
         r["kupiec_p_q99"] = kupiec(y > q[:, 20], 0.01)
-        var = var_from_q(q)
-        ql = np.log(var) + y ** 2 / var
-        r["qlike"] = round(float(ql.mean()), 4)
+        r["nw_p_q01"] = cov_test_nw(y < q[:, 0], 0.01, block)
+        r["nw_p_q99"] = cov_test_nw(y > q[:, 20], 0.01, block)
+        ql = qlike_rows(q, y)
+        r["qlike"] = round(float(np.nanmean(ql)), 4)
         spread = q[:, 18] - q[:, 2]
         r["vol_spearman"] = round(float(spearmanr(spread, rw).statistic), 4)
-        if ref is not None:
-            for key, mine, theirs in [("pinball9", pb9, ref["pb9"]), ("pinball21", pb21, ref["pb21"]), ("qlike", ql, ref["ql"])]:
-                d = mine - theirs
-                r[f"{key}_vs_ref_pct"] = round(float(100 * d.mean() / abs(theirs.mean())), 3)
+        for rname, rr in (ref or {}).items():
+            for key, mine, theirs in [("pinball9", pb9, rr["pb9"]), ("pinball21", pb21, rr["pb21"]), ("qlike", ql, rr["ql"])]:
+                m = ~(np.isnan(mine) | np.isnan(theirs))
+                d = (mine - theirs)[m]
+                den = abs(float(theirs[m].mean()))
+                r[f"{key}_vs_{rname}_pct"] = round(float(100 * d.mean() / den), 3)
                 lo, hi = ci_mean(d, block)
-                den = abs(float(theirs.mean()))
-                r[f"{key}_vs_ref_ci95_pct"] = [round(100 * lo / den, 3), round(100 * hi / den, 3)]
+                r[f"{key}_vs_{rname}_ci95_pct"] = [round(100 * lo / den, 3), round(100 * hi / den, 3)]
+                if rname == "ref" and key == "qlike":
+                    r["qlike_vs_ref_abs"] = round(float(d.mean()), 5)
         r["max_q99_minus_q50_bps"] = round(float(np.max(q[:, 20] - q[:, 10])), 2)
     if dir_prob is not None:
         r["auc_dirhead"] = round(float(roc_auc_score(yb, dir_prob[mz])), 4)
@@ -232,14 +273,23 @@ def baselines(org, label, block):
         lam, nu = FIT[h]["lambda"], FIT[h]["nu"]
         sig = np.sqrt(np.maximum(EW[lam][org] * h, 1e-6))
         qref = t_quantiles(sig, nu)
-        ref = {"pb9": pinball_rows(qref, y, DEC), "pb21": pinball_rows(qref, y),
-               "ql": np.log(var_from_q(qref)) + y ** 2 / var_from_q(qref)}
+        qscl = qref * np.sqrt(FIT[h]["var_scale_c"])
+        qfhs = sig[:, None] * np.array(FIT[h]["fhs_z"])[None, :]
+
+        def losses(qq):
+            return {"pb9": pinball_rows(qq, y, DEC), "pb21": pinball_rows(qq, y), "ql": qlike_rows(qq, y)}
+
+        ref = {"ref": losses(qref), "scl": losses(qscl), "fhs": losses(qfhs)}
         refs[(label, h)] = ref
         out.append(score(f"REF_ewma_t(lam={lam},nu={nu:g})", h, org, y, qref, point=np.zeros_like(y), block=block))
+        out.append(score("ewma_t_scaled", h, org, y, qscl, point=np.zeros_like(y), ref={"ref": ref["ref"]}, block=block))
+        out.append(score("fhs_ewma", h, org, y, qfhs, point=np.zeros_like(y),
+                         ref={"ref": ref["ref"], "scl": ref["scl"]}, block=block))
         sig94 = np.sqrt(np.maximum(EW[0.94][org] * h, 1e-6))
-        out.append(score("ewma_gauss_0.94", h, org, y, t_quantiles(sig94, 1e6), point=np.zeros_like(y), ref=ref, block=block))
+        out.append(score("ewma_gauss_0.94", h, org, y, t_quantiles(sig94, 1e6), point=np.zeros_like(y),
+                         ref={"ref": ref["ref"]}, block=block))
         hq = np.stack([np.quantile((lc[t - W + h:t + 1] - lc[t - W:t + 1 - h]) * 1e4, LV) for t in org])
-        out.append(score("hist_quantiles_1d", h, org, y, hq, ref=ref, block=block))
+        out.append(score("hist_quantiles_1d", h, org, y, hq, ref={"ref": ref["ref"]}, block=block))
         mom = (lc[org] - lc[org - h]) * 1e4
         out.append(score("momentum_sign", h, org, y, point=np.sign(mom) * 1e-6, block=block))
         out.append(score("reversal_sign", h, org, y, point=-np.sign(mom) * 1e-6, block=block))
@@ -289,9 +339,11 @@ for path in files:
         if framing in ("price", "price_cov"):
             qb = (np.log(np.maximum(q[:, hi, :], 1e-9)) - lc[org][:, None]) * 1e4
             r = score(tag, h, org, y, qb, dir_prob=dp, ref=refs[(label, h)], block=block)
+        elif framing == "aggret":
+            r = score(tag, h, org, y, q[:, hi, :].copy(), dir_prob=dp, ref=refs[(label, h)], block=block)
         elif framing == "logret":
             point = z["med_path"][:, :h].sum(axis=1).astype(np.float64)
-            r = score(tag, h, org, y, q[:, hi, :] if h == 1 else None, point=point,
+            r = score(tag, h, org, y, q[:, hi, :] if h == 1 else None, point=point, dir_prob=dp,
                       ref=refs[(label, h)] if h == 1 else None, block=block)
         else:
             continue
@@ -303,8 +355,8 @@ json.dump({"data": info, "dataset": DATA, "baseline_fit": FIT, "sets": set_info,
           open(f"{RESULTS}/metrics2.json", "w"), indent=1)
 
 cols = ["set", "model", "h", "mae_skill_vs_rw", "dir_mcc", "dir_mcc_ci95", "auc_up", "auc_up_ci95", "pinball9_vs_ref_pct",
-        "pinball9_vs_ref_ci95_pct", "qlike_vs_ref_pct", "qlike_vs_ref_ci95_pct", "cov80", "cov98", "hit_q01", "hit_q99",
-        "vol_spearman"]
+        "pinball9_vs_ref_ci95_pct", "qlike_vs_ref_pct", "qlike_vs_ref_ci95_pct", "qlike_vs_fhs_pct", "qlike_vs_fhs_ci95_pct",
+        "cov80", "cov98", "hit_q01", "hit_q99", "nw_p_q01", "nw_p_q99", "vol_spearman"]
 lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
 for r in sorted(rows, key=lambda r: (r["set"], r["h"], r["model"])):
     lines.append("| " + " | ".join(str(r.get(c, "")) for c in cols) + " |")

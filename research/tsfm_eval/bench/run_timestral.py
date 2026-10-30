@@ -3,6 +3,7 @@
 Usage: python run_timestral.py <size> <context> <framing> [--no-sym]
   size:    5M | 28M | 123M | 209M
   framing: price      close price level, univariate
+           aggret     per horizon h: non-overlapping h-min log returns (bps) ending at t, forecast 1 step
            logret     1-min log returns in bps, univariate (point/direction from summed medians)
            price_cov  close price level + past covariates (log volume, high-low range bps, log return bps)
 Saves results/<tag>.npz with quantiles at HORIZONS: q (N, 3, 21), plus origins and timing.
@@ -39,8 +40,17 @@ hidx = [h - 1 for h in HORIZONS]
 out_q = np.zeros((len(org), len(HORIZONS), 21), np.float32)
 out_med_path = np.zeros((len(org), PRED_LEN), np.float32)
 t0 = time.perf_counter()
+lc = np.log(close)
+if framing == "aggret":
+    assert org[0] - max(HORIZONS) * ctx >= 0, "context reaches before data start"
 for i in range(0, len(org), batch):
     ob = org[i:i + batch]
+    if framing == "aggret":       # per horizon: non-overlapping h-min log returns (bps) ending at t; forecast 1 step
+        for hi, h in enumerate(HORIZONS):
+            ends = ob[:, None] - h * np.arange(ctx - 1, -1, -1)[None, :]
+            f = fc.forecast((lc[ends] - lc[ends - h]) * 1e4, 1, symmetric_averaging=sym)
+            out_q[i:i + len(ob), hi] = f.quantiles[:, 0].numpy()[:, 0, :]
+        continue
     sl = np.stack([np.arange(t - ctx + 1, t + 1) for t in ob])
     if framing == "price":
         f = fc.forecast(close[sl], PRED_LEN, symmetric_averaging=sym)

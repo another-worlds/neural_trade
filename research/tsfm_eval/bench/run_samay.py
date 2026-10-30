@@ -1,6 +1,6 @@
 """Zero-shot forecasts through the AdityaLab Samay wrappers, same origins/horizons as run_timestral.py.
 
-Usage: python run_samay.py <model> <context>
+Usage: python run_samay.py <model> <context> [price|logret]
   model: chronos2 | bolt_small | bolt_base | timesfm2 | moirai2_small
 Samay's wrapper classes expose no raw-array forecast() for Chronos models, so this calls
 the wrapped object exactly as Samay's own evaluate() does (model(...) / pipeline.predict_quantiles).
@@ -18,13 +18,18 @@ sys.path.insert(0, os.path.dirname(__file__))
 from common import HORIZONS, PRED_LEN, QLEVELS, RESULTS, load, origins  # noqa: E402
 
 name, ctx = sys.argv[1], int(sys.argv[2])
+framing = sys.argv[3] if len(sys.argv) > 3 else "price"
+assert framing in ("price", "logret"), framing
 batch = int(os.environ.get("BENCH_BATCH", "64"))
 limit = int(os.environ.get("BENCH_LIMIT", "0"))
-tag = f"samay-{name}_ctx{ctx}_price"
+tag = f"samay-{name}_ctx{ctx}_{framing}"
 os.makedirs(RESULTS, exist_ok=True)
 
 df, _ = load()
 close = df["close"].to_numpy(np.float64)
+logret = np.zeros_like(close)
+logret[1:] = np.log(close[1:] / close[:-1]) * 1e4
+series = close if framing == "price" else logret
 org = origins(len(df))
 sub = int(os.environ.get("BENCH_SUBSTRIDE", "1"))
 if sub > 1:
@@ -77,7 +82,7 @@ elif name == "timesfm2":
 elif name == "timesfm25":
     from samay.model import TimesFM_2p5_Model
     cfg = {"max_context": ctx, "max_horizon": 128, "normalize_inputs": True, "per_core_batch_size": batch,
-           "use_continuous_quantile_head": True, "force_flip_invariance": True, "infer_is_positive": True,
+           "use_continuous_quantile_head": True, "force_flip_invariance": True, "infer_is_positive": framing == "price",
            "fix_quantile_crossing": True}
     m = TimesFM_2p5_Model(config=cfg, repo="google/timesfm-2.5-200m-pytorch")
     m.model.model.eval()
@@ -96,7 +101,7 @@ t0 = time.perf_counter()
 with torch.inference_mode():
     for i in range(0, len(org), batch):
         ob = org[i:i + batch]
-        x = close[np.stack([np.arange(t - ctx + 1, t + 1) for t in ob])]
+        x = series[np.stack([np.arange(t - ctx + 1, t + 1) for t in ob])]
         q = predict(x)
         out_q[i:i + len(ob)] = q[:, hidx, :]
         out_med[i:i + len(ob)] = q[:, :, 10]
@@ -104,6 +109,6 @@ with torch.inference_mode():
             print(f"{tag}: first batch {time.perf_counter() - t0:.1f}s; sample median h1 {q[0, 0, 10]:.2f} "
                   f"last {x[0, -1]:.2f}", flush=True)
 elapsed = time.perf_counter() - t0
-np.savez_compressed(f"{RESULTS}/{tag}.npz", q=out_q, med_path=out_med, origins=org, framing="price",
+np.savez_compressed(f"{RESULTS}/{tag}.npz", q=out_q, med_path=out_med, origins=org, framing=framing,
                     elapsed=elapsed, n=len(org), threads=torch.get_num_threads())
 print(f"{tag}: {len(org)} origins in {elapsed:.1f}s ({1000 * elapsed / len(org):.1f} ms/series batched)")

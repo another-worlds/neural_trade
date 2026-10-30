@@ -26,6 +26,17 @@ NAMES = {
     "neural_trade-asis-seed0_ctx60_price": "neural_trade as-is, seed 0",
     "neural_trade-asis-seed1_ctx60_price": "neural_trade as-is, seed 1",
     "neural_trade-asis-seed2_ctx60_price": "neural_trade as-is, seed 2",
+    "neural_trade-rolling1440m-seed0_ctx60_price": "neural_trade retrained daily, seed 0",
+    "neural_trade-rolling1440m-seed1_ctx60_price": "neural_trade retrained daily, seed 1",
+    "neural_trade-rolling1440m-seed2_ctx60_price": "neural_trade retrained daily, seed 2",
+    "official-chronos2_ctx512_logret": "Chronos-2, ctx 512, log-return input ‡",
+    "official-chronos2_ctx2048_logret": "Chronos-2, ctx 2048, log-return input ‡",
+    "samay-timesfm25_ctx512_logret": "TimesFM-2.5 via Samay, ctx 512, log-return input † ‡",
+    "timestral-28M_ctx512_aggret": "Timestral-28M, h-min return input, 512 bars §",
+    "timestral-28M_ctx2048_aggret": "Timestral-28M, h-min return input, 2048 bars §",
+    "official-chronos2_ctx512_aggret": "Chronos-2, h-min return input, 512 bars §",
+    "ewma_t_scaled": "EWMA-t, variance scale refit for QLIKE (pre-test)",
+    "fhs_ewma": "FHS: EWMA σ × empirical residual quantiles (pre-test)",
     "ewma_gauss_0.94": "EWMA-Gaussian (λ 0.94)",
     "hist_quantiles_1d": "Trailing 1-day empirical quantiles",
     "logreg_pastret_prefit": "Logistic regression on past returns",
@@ -68,10 +79,10 @@ def table_point_direction(ds):
     if not d:
         return f"_{ds}: no results_\n"
     R = rows_by(d)
-    lines = ["| Model | MAE skill vs RW (1 / 5 / 15 min) | MCC of sign (1 / 5 / 15) | AUC of P(up) (1 / 5 / 15) |",
-             "|---|---|---|---|"]
+    lines = ["| Model | MAE skill vs RW (1 / 5 / 15 min) | MCC of sign (1 / 5 / 15) | AUC of P(up) (1 / 5 / 15) | Brier skill ×1000 (1 / 5 / 15) |",
+             "|---|---|---|---|---|"]
     for m in MAIN:
-        if (m, 1) not in R:
+        if (m, 1) not in R or m in ("ewma_t_scaled", "fhs_ewma"):
             continue
         mae = " / ".join(f"{R[(m, h)].get('mae_skill_vs_rw', 0) * 100:+.2f}%" for h in H)
         mcc = " / ".join(fmt(R[(m, h)].get("dir_mcc")) for h in H)
@@ -85,7 +96,8 @@ def table_point_direction(ds):
             if "auc_up" in r and "auc_dirhead" in r:
                 cell += f" (head {r['auc_dirhead']:.3f})"
             aucs.append(cell)
-        lines.append(f"| {NAMES[m]} | {mae} | {mcc} | {' / '.join(aucs)} |")
+        bs = " / ".join("–" if R[(m, h)].get("brier_skill") is None else f"{1000 * R[(m, h)]['brier_skill']:+.1f}" for h in H)
+        lines.append(f"| {NAMES[m]} | {mae} | {mcc} | {' / '.join(aucs)} | {bs} |")
     return "\n".join(lines) + "\n"
 
 
@@ -138,16 +150,18 @@ def table_tails(ds):
     if not d:
         return ""
     R = rows_by(d)
-    lines = ["| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01) | Kupiec p (q0.99) |",
+    lines = ["| Model | h | P(y < q0.01) | P(y < q0.05) | P(y > q0.95) | P(y > q0.99) | Kupiec p (q0.01 / q0.99) | Newey-West p (q0.01 / q0.99) |",
              "|---|---|---|---|---|---|---|---|"]
-    for m in ["REF", "timestral-28M_ctx2048_price", "timestral-209M_ctx2048_price", "official-chronos2_ctx512_price",
-              "neural_trade-asis-seed0_ctx60_price"]:
+    for m in ["REF", "ewma_t_scaled", "fhs_ewma", "timestral-28M_ctx2048_price", "timestral-209M_ctx2048_price",
+              "timestral-28M_ctx2048_aggret", "official-chronos2_ctx512_price", "official-chronos2_ctx512_aggret",
+              "neural_trade-asis-seed0_ctx60_price", "neural_trade-rolling1440m-seed0_ctx60_price"]:
         for h in H:
             r = R.get((m, h))
             if not r or "hit_q01" not in r:
                 continue
             lines.append(f"| {NAMES.get(m, 'REF: EWMA-Student-t')} | {h} | {r['hit_q01']:.4f} | {r['hit_q05']:.4f} | "
-                         f"{1 - r['hit_q95']:.4f} | {1 - r['hit_q99']:.4f} | {fmt(r['kupiec_p_q01'])} | {fmt(r['kupiec_p_q99'])} |")
+                         f"{1 - r['hit_q95']:.4f} | {1 - r['hit_q99']:.4f} | {fmt(r['kupiec_p_q01'])} / {fmt(r['kupiec_p_q99'])} | "
+                         f"{fmt(r.get('nw_p_q01'))} / {fmt(r.get('nw_p_q99'))} |")
     return "\n".join(lines) + "\n"
 
 
@@ -157,16 +171,37 @@ def table_trades(ds):
         return ""
     R = rows_by(d)
     lines = ["| Model | h | 4 bps: n / net bps (t) | 10 bps: n / net (t) | 20 bps: n / net (t) |", "|---|---|---|---|---|"]
-    for m in ["timestral-28M_ctx512_price", "timestral-28M_ctx2048_price", "timestral-209M_ctx2048_price",
-              "official-chronos2_ctx512_price", "neural_trade-asis-seed0_ctx60_price", "neural_trade-asis-seed1_ctx60_price"]:
+    for m in MAIN:
         for h in H:
             r = R.get((m, h))
-            if not r or "trades_nonoverlap" not in r:
+            if not r or "trades_nonoverlap" not in r or m in ("ewma_gauss_0.94", "ewma_t_scaled", "fhs_ewma",
+                                                               "logreg_pastret_prefit", "reversal_sign", "hist_quantiles_1d"):
                 continue
             cells = []
             for k in ("cost4", "cost10", "cost20"):
                 t = r["trades_nonoverlap"][k]
                 cells.append(f"{t['n']}" + (f" / {t['net_bps']:+.1f} ({t['t_stat']:+.1f})" if "net_bps" in t else ""))
+            lines.append(f"| {NAMES[m]} | {h} | " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def table_strong_baselines(ds):
+    d = load(ds)
+    if not d:
+        return ""
+    R = rows_by(d)
+    lines = ["| Model | h | Pinball (9) vs EWMA-t scale-refit, % | QLIKE vs EWMA-t scale-refit, % | Pinball (9) vs FHS, % | QLIKE vs FHS, % |",
+             "|---|---|---|---|---|---|"]
+    for m in ["fhs_ewma", "timestral-28M_ctx512_price", "timestral-28M_ctx2048_price", "timestral-209M_ctx2048_price",
+              "timestral-28M_ctx512_aggret", "timestral-28M_ctx2048_aggret", "official-chronos2_ctx512_price",
+              "official-chronos2_ctx2048_logret", "official-chronos2_ctx512_aggret", "neural_trade-asis-seed0_ctx60_price",
+              "neural_trade-rolling1440m-seed0_ctx60_price"]:
+        for h in H:
+            r = R.get((m, h))
+            if not r or "qlike_vs_scl_pct" not in r:
+                continue
+            cells = [sig(r.get(f"{k}_vs_{b}_pct"), r.get(f"{k}_vs_{b}_ci95_pct")) if f"{k}_vs_{b}_pct" in r else "–"
+                     for b in ("scl", "fhs") for k in ("pinball9", "qlike")]
             lines.append(f"| {NAMES[m]} | {h} | " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
 
@@ -242,11 +277,18 @@ def table_matched(ds):
     return "\n".join(lines) + "\n"
 
 
-LEGEND = ("Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Chronos-2 and Chronos-Bolt rows come from the "
-          "official `chronos-forecasting` package; Samay gives the same numbers to 0.0008 bp (T-I). "
+LEGEND = ("Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does not mean better: in loss tables "
+          "a positive value is worse and a negative value is better. QLIKE is the unit-free form y²/v − ln(y²/v) − 1 on origins "
+          "with y ≠ 0; v is the variance implied by the 21 quantiles. Chronos-2 and Chronos-Bolt rows come from the "
+          "official `chronos-forecasting` package; for these two models Samay gives the same numbers to 0.0008 bp (T-I). "
+          "‡ Log-return input: only h = 1 has a forecast distribution; h = 5 and 15 use the summed per-step medians as a "
+          "point forecast. § h-min return input: for each h, the input is the series of non-overlapping h-minute returns "
+          "ending at the origin (512 or 2048 bars), and the model forecasts one step. "
           "† Decile-only model (q0.1 … q0.9): its q0.01, q0.05, q0.95 and q0.99 are clamped to q0.1 / q0.9, so its 98% coverage, "
           "tail rates and QLIKE are biased against it. Compare it on 9-decile pinball only. "
-          "neural_trade quantiles come from its Student-t head (ν = 3) centred on its price head.\n")
+          "neural_trade quantiles come from its Student-t head (ν = 3) centred on its price head; the 21-level grid keeps "
+          "about 79% of a t(3) variance (97% for the t(6) EWMA-t), so its QLIKE here is slightly flattering to it. "
+          "Trades fill at the forecast bar's close with no slippage and no delay.\n")
 
 
 if __name__ == "__main__":
@@ -258,7 +300,9 @@ if __name__ == "__main__":
         out.append(table_point_direction(ds))
         out.append(f"\n#### T-B ({ds}). Distribution and variance vs EWMA-Student-t — {title}\n")
         out.append(table_distribution(ds))
-        out.append(f"\n#### T-C ({ds}). Tail calibration\n")
+        out.append(f"\n#### T-B2 ({ds}). Against two stronger cheap baselines (% change of loss; negative = model better)\n")
+        out.append(table_strong_baselines(ds))
+        out.append(f"\n#### T-C ({ds}). Tail calibration (target 1% / 5% / 5% / 1%; p < 0.05 = fail)\n")
         out.append(table_tails(ds))
         out.append(f"\n#### T-D ({ds}). Non-overlapping trades when |forecast| > cost\n")
         out.append(table_trades(ds))
