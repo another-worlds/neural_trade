@@ -107,9 +107,10 @@ def main():
                     s["vs_A0"][f"{r}_s{sd}"] = pair(D, qs, q0)
         if cand != "A0":
             qc = load_q(D, tag_of(cand))
-            for base in ("A1", "A2-plc", "C-FHS", "A4L"):
+            for base in ("A1", "A2-plc", "C-FHS", "C-FHS-hi", "A4L"):
                 if base in rungs and base != cand:
                     s["pairs"][f"cand_vs_{base}"] = pair(D, qc, load_q(D, tag_of(base)))
+            s["pairs"]["cand_vs_CFHS_choice"] = s["pairs"].get(f"cand_vs_{cj['cfhs_choice']}")
         if "A2" in rungs and "A2-close" in rungs:
             s["pairs"]["A2_vs_A2-close"] = pair(D, load_q(D, tag_of("A2")), load_q(D, tag_of("A2-close")))
         # V2: A2 vs placebo (P5 second half)
@@ -164,7 +165,7 @@ def main():
                 and any(per[ds][0]["pairs"]["cand_vs_A1"]["qlike"]["agg_ci"][1] < 0 for ds in per)
         p5b = all(per[ds][0].get("v2_A2_vs_plc", {}).get("ci", [0, 0])[1] < 0 for ds in per)
         rule["P5"] = bool(p5a and p5b)
-        rule["P6"] = all((v := per[ds][0]["pairs"].get("cand_vs_C-FHS")) is not None and v["qlike"]["agg_ci"][1] < 0 for ds in per)
+        rule["P6"] = all((v := per[ds][0]["pairs"].get("cand_vs_CFHS_choice")) is not None and v["qlike"]["agg_ci"][1] < 0 for ds in per)
         mae = lambda ds, t, h: per[ds][3][(t, h)]["mae_skill_vs_rw"]
         rule["P7"] = all(mae(ds, per[ds][2](c), h) >= mae(ds, A0, h) - 0.002 for ds in per for h in (1, 5, 15))
     has_a1 = all("A1" in per[ds][1] for ds in per)
@@ -196,7 +197,9 @@ def main():
                   + " / ".join(f"{c[0]:+.2f}" for c in q["cells"])
                   + f" | {p['agg']:+.2f} [{p['agg_ci'][0]:+.2f}, {p['agg_ci'][1]:+.2f}] | " + " / ".join(f"{c[0]:+.2f}" for c in p["cells"]) + " |")
         for k, v in s["pairs"].items():
-            print(f"\n{k}: QLIKE agg {v['qlike']['agg']:+.2f} {v['qlike']['agg_ci']}, pinball21 agg {v['pin21']['agg']:+.2f} {v['pin21']['agg_ci']}")
+            q, p = v["qlike"], v["pin21"]
+            print(f"\n{k}: QLIKE agg {q['agg']:+.2f} [{q['agg_ci'][0]:+.2f}, {q['agg_ci'][1]:+.2f}], "
+                  f"pinball21 agg {p['agg']:+.2f} [{p['agg_ci'][0]:+.2f}, {p['agg_ci'][1]:+.2f}]")
         print("tails failed (of 6):", s["tails_failed"])
     print("\nPass rule:", json.dumps(rule, indent=1))
 

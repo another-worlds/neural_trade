@@ -28,7 +28,8 @@ WORK = os.environ.get("LIG_WORK", os.path.join(os.path.dirname(os.path.abspath(_
 TAG = "lig-28M_ctx2048"
 T1_RUNGS = {"A1": dict(sites=("G",)), "A2": dict(sites=("H", "G")),
             "A2-plc": dict(sites=("H", "G"), placebo=True), "A2-g0": dict(sites=("H", "G"), geom_off=True),
-            "A2-close": dict(sites=("H", "G"), groups_off=(9, 10)), "C-FHS": dict(cfhs=True)}
+            "A2-close": dict(sites=("H", "G"), groups_off=(9, 10)), "C-FHS": dict(cfhs=True, cond_lr=3e-4),
+            "C-FHS-hi": dict(cfhs=True, cond_lr=1e-2)}
 T2_RUNGS = {"A3": dict(sites=("E", "D", "H", "G"), lora=False, parent="A2"),
             "A4": dict(sites=("E", "D", "H", "G"), lora=True, parent="A2"),
             "A4L": dict(sites=("G",), lora=True, parent="A1")}
@@ -190,9 +191,9 @@ def trainable(model):
     return [p for p in model.parameters() if p.requires_grad]
 
 
-def param_groups(model, tier):
-    # cond: 62 inputs feed each per-row offset, so its lr is ~1/30 of G's to keep offset steps comparable
-    lr = {"T1": dict(recal=1e-2, H=3e-4, theta=3e-3, gate=3e-3, cond=3e-4),
+def param_groups(model, tier, cond_lr=3e-4):
+    # cond: 62 inputs feed each per-row offset; C-FHS uses lr 3e-4 (offset steps comparable to G's), C-FHS-hi 1e-2
+    lr = {"T1": dict(recal=1e-2, H=3e-4, theta=3e-3, gate=3e-3, cond=cond_lr),
           "T2": dict(recal=1e-3, H=1e-4, theta=1e-3, gate=1e-3, E=2e-4, D=2e-4, lora=1e-4)}[tier]
     groups = []
     add = lambda params, l, wd: groups.append({"params": [p for p in params if p.requires_grad], "lr": l,
@@ -270,7 +271,7 @@ def run_t1(X, rung, seed, ts, max_epochs=20, patience=3, batch=256):
     model = make_model(X, rung, seed, ts)
     freeze_unused(model)
     obj = Objective(X.k["P0"], X.k["lnv0"], X.k["lam0"], geom_off=cfg.get("geom_off", False))
-    opt = torch.optim.AdamW(param_groups(model, "T1"), betas=(0.9, 0.999), eps=1e-8)
+    opt = torch.optim.AdamW(param_groups(model, "T1", cfg.get("cond_lr", 3e-4)), betas=(0.9, 0.999), eps=1e-8)
     tr = D.train[::2]
     steps_ep = int(np.ceil(len(tr) / batch))
     sched = schedule(opt, steps_ep * max_epochs)
@@ -441,7 +442,7 @@ def select(ds, final=False, force=False):
     y = X.D.target(X.D.v2)[0].numpy()
     q0 = X.q0(X.D.v2)
     rep = {"set": ds, "final": final, "rungs": {}}
-    for rung in ["A1", "A2", "A2-plc", "A2-g0", "A2-close", "C-FHS", "A3", "A4", "A4L"]:
+    for rung in ["A1", "A2", "A2-plc", "A2-g0", "A2-close", "C-FHS", "C-FHS-hi", "A3", "A4", "A4L"]:
         seeds = runs_of(ds, rung)
         if not seeds:
             continue
@@ -478,6 +479,8 @@ def select(ds, final=False, force=False):
             cand = r
             break
     rep.update(best=best, occam=occam, candidate=cand)
+    cf = [r for r in ("C-FHS", "C-FHS-hi") if r in rep["rungs"]]
+    rep["cfhs_choice"] = min(cf, key=lambda r: rep["rungs"][r]["S_ens"]) if cf else None   # stronger control on V2
     ck = wdir(ds, "ckpt", "x")[:-1]
     rep["checkpoints"] = {f[:-3]: sha256(os.path.join(ck, f)) for f in sorted(os.listdir(ck))}
     out = "candidate.json" if final else "candidate_provisional.json"

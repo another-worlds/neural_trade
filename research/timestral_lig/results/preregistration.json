@@ -1,0 +1,12 @@
+{
+ "candidates": {
+  "repo": "A1",
+  "post": "A2"
+ },
+ "common_candidate": "A1",
+ "candidate_json_sha256": {
+  "repo": "21d697210be111f4506514cfc5065af0c925ecfbf0fee0f7fd699b86a92c77eb",
+  "post": "19e396967a464d2d0ba1d2bd55fd3fb8b6230ad9db78d9daf57453aa5ab47ee0"
+ },
+ "pass_rule": "Candidate (seed ensemble) vs A0 on Test, aggregate = mean over h = 1, 5, 15, both sets required. P1 QLIKE agg <= -0.5% and CI upper < 0, no h cell significantly worse. P2 pinball21 agg CI upper <= +0.10%, no h cell point > +0.30%. P3 overlap-robust tail fails <= A0's. P4 every seed: QLIKE agg < 0 and P2. P5 candidate vs A1 QLIKE agg < 0 on both sets, CI < 0 on one; and A2 beats A2-plc on V2 (CI < 0). P6 candidate vs C-FHS QLIKE agg CI upper < 0 on both sets. P7 median MAE skill vs RW not lower than A0's by > 0.2 pp at any h. PASS = P1-P7; PASS-licence-free = P1-P5 and not P6; PASS-recal = A1 meets P1-P4 and P5 fails (common candidate A1 or higher); else FAIL. Common candidate = the lower of the two sets' candidates."
+}
