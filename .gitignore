@@ -43,3 +43,4 @@ inference.ipynb.backup
 
 # tsfm_eval working files (forecast arrays, data, weights)
 research/tsfm_eval/work/
+research/timestral_lig/work/

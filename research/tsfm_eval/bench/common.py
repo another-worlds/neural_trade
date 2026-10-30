@@ -14,6 +14,7 @@ _SCRATCH = os.environ.get("TSFM_EVAL_WORK", os.path.join(os.path.dirname(os.path
 CSV = {"repo": os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "binance_btcusdt_1min_ccxt.csv"),
        "post": f"{_SCRATCH}/data/btcusdt_1m_2026-09-20_2026-10-30.csv"}[DATA]
 RESULTS = f"{_SCRATCH}/results" + ("" if DATA == "repo" else f"_{DATA}")
+RESULTS = os.environ.get("BENCH_RESULTS", RESULTS)   # optional override (used by the Timestral-LIG scorer)
 HORIZONS = [1, 5, 15]          # neural_trade Config.HORIZON_STEPS
 PRED_LEN = max(HORIZONS)
 TEST_FRAC = 0.2                # repo data: chronological holdout = last 20% of rows
