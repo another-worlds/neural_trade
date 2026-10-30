@@ -114,7 +114,7 @@ Notes for all tables. **Bold** = the 95% CI excludes 0 (0.5 for AUC). Bold does 
 | Trailing 1-day empirical quantiles | 15 | **+1.86** [+0.81, +3.16] | **+10.99** [+4.25, +17.21] | 0.800 | 0.970 | 0.196 |
 
 
-#### T-B2 (repo). Against two stronger cheap baselines (% change of loss; negative = model better)
+#### T-B2 (repo). Against two further cheap baselines, FHS and scale-refit EWMA-t (% change of loss; negative = model better)
 
 | Model | h | Pinball (9) vs EWMA-t scale-refit, % | QLIKE vs EWMA-t scale-refit, % | Pinball (9) vs FHS, % | QLIKE vs FHS, % |
 |---|---|---|---|---|---|
@@ -410,7 +410,7 @@ Window facts (repo): `{"full": {"n_origins": 2895, "stride_min": 3, "first": "20
 | Trailing 1-day empirical quantiles | 15 | **+2.46** [+1.75, +3.26] | +7.89 [-0.40, +16.33] | 0.786 | 0.969 | 0.094 |
 
 
-#### T-B2 (post). Against two stronger cheap baselines (% change of loss; negative = model better)
+#### T-B2 (post). Against two further cheap baselines, FHS and scale-refit EWMA-t (% change of loss; negative = model better)
 
 | Model | h | Pinball (9) vs EWMA-t scale-refit, % | QLIKE vs EWMA-t scale-refit, % | Pinball (9) vs FHS, % | QLIKE vs FHS, % |
 |---|---|---|---|---|---|
@@ -680,6 +680,7 @@ Window facts (post): `{"full": {"n_origins": 6715, "stride_min": 3, "first": "20
 | official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_aggret | 483 | +0.48 [-0.53, +1.77] / +0.16 [-0.61, +0.84] / -0.40 [-1.27, +0.43] | +3.39 [-0.39, +8.45] / +0.01 [-4.26, +3.81] / +2.06 [-3.08, +8.43] |
 | official-chronos2_ctx2048_aggret_sub6 | timestral-28M_ctx2048_price | 483 | -0.59 [-1.51, +0.35] / -0.13 [-1.03, +0.67] / -0.01 [-1.19, +1.12] | +4.26 [-0.76, +11.27] / +2.94 [-1.28, +8.09] / **+7.04 [+0.70, +15.08]** |
 | official-chronos2_ctx2048_aggret_sub6 | official-chronos2_ctx512_aggret | 483 | -0.50 [-2.46, +0.88] / +0.09 [-0.56, +0.74] / **-0.97 [-1.93, -0.02]** | +0.48 [-3.76, +4.57] / -1.01 [-5.14, +3.19] / -3.15 [-8.49, +3.90] |
+| official-chronos2_ctx2048_logret | timestral-28M_ctx2048_price | 2895 | -0.30 [-0.67, +0.13] / – / – | +1.09 [-0.40, +2.86] / – / – |
 
 
 #### T-J (post). Paired ablations on identical origins (variant vs base, % change of loss; negative = variant better)

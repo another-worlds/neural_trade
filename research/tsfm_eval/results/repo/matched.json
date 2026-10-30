@@ -984,6 +984,26 @@
      3.895
     ]
    ]
+  },
+  {
+   "variant": "official-chronos2_ctx2048_logret",
+   "base": "timestral-28M_ctx2048_price",
+   "n": 2895,
+   "stride_min": 3,
+   "pinball9_h1": [
+    -0.299,
+    [
+     -0.673,
+     0.133
+    ]
+   ],
+   "qlike_h1": [
+    1.094,
+    [
+     -0.403,
+     2.859
+    ]
+   ]
   }
  ],
  "agree_h15_with_15min_reversal": {

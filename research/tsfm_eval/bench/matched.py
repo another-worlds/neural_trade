@@ -49,6 +49,7 @@ PAIRS = {
         ("official-chronos2_ctx2048_aggret_sub6", "timestral-28M_ctx2048_aggret"),
         ("official-chronos2_ctx2048_aggret_sub6", "timestral-28M_ctx2048_price"),
         ("official-chronos2_ctx2048_aggret_sub6", "official-chronos2_ctx512_aggret"),
+        ("official-chronos2_ctx2048_logret", "timestral-28M_ctx2048_price"),   # appended last: keeps earlier draws
     ],
     "post": [
         ("timestral-209M_ctx8192_price_sub6", "timestral-209M_ctx2048_price"),

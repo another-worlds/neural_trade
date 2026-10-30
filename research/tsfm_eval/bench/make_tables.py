@@ -304,7 +304,7 @@ if __name__ == "__main__":
         out.append(table_point_direction(ds))
         out.append(f"\n#### T-B ({ds}). Distribution and variance vs EWMA-Student-t — {title}\n")
         out.append(table_distribution(ds))
-        out.append(f"\n#### T-B2 ({ds}). Against two stronger cheap baselines (% change of loss; negative = model better)\n")
+        out.append(f"\n#### T-B2 ({ds}). Against two further cheap baselines, FHS and scale-refit EWMA-t (% change of loss; negative = model better)\n")
         out.append(table_strong_baselines(ds))
         out.append(f"\n#### T-C ({ds}). Tail calibration (target 1% / 5% / 5% / 1%; p < 0.05 = fail)\n")
         out.append(table_tails(ds))
