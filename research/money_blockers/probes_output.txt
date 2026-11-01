@@ -1,0 +1,52 @@
+
+=== repo: 1. volatility regimes (deciles fixed on pre-Test data)
+ H=5: corr(pred sigma, |move|) pre-Test 0.40, Test 0.40
+   bottom 50% mean|move|   6.0 ->   6.7 bps; break-even accuracy at 4 bps 84% -> 80% (n Test 688)
+   50-80%     mean|move|   9.9 ->   9.4 bps; break-even accuracy at 4 bps 70% -> 71% (n Test 1164)
+   80-90%     mean|move|  12.6 ->  11.9 bps; break-even accuracy at 4 bps 66% -> 67% (n Test 412)
+   90-95%     mean|move|  14.7 ->  15.6 bps; break-even accuracy at 4 bps 64% -> 63% (n Test 247)
+   top 5%     mean|move|  19.3 ->  19.5 bps; break-even accuracy at 4 bps 60% -> 60% (n Test 384)
+ H=15: corr(pred sigma, |move|) pre-Test 0.37, Test 0.38
+   bottom 50% mean|move|  10.7 ->  12.1 bps; break-even accuracy at 4 bps 69% -> 67% (n Test 706)
+   50-80%     mean|move|  17.5 ->  16.7 bps; break-even accuracy at 4 bps 61% -> 62% (n Test 1113)
+   80-90%     mean|move|  21.2 ->  18.6 bps; break-even accuracy at 4 bps 59% -> 61% (n Test 423)
+   90-95%     mean|move|  24.2 ->  23.5 bps; break-even accuracy at 4 bps 58% -> 59% (n Test 245)
+   top 5%     mean|move|  29.8 ->  34.0 bps; break-even accuracy at 4 bps 57% -> 56% (n Test 408)
+=== repo: 2. volatility-gated reversal (threshold fixed on pre-Test data)
+  H= 5 pre-Test time exit: trades 779 (34.3/day), accuracy 52.4%, mean gross +0.40 bps (t +0.49), net at 4 bps -2808 bps, avg win 16.2, avg loss 17.0
+  H= 5 pre-Test bracket +-1 sigma: trades 779 (34.3/day), accuracy 51.1%, mean gross -0.20 bps (t -0.32), net at 4 bps -3270 bps, avg win 14.8, avg loss 15.9
+  H= 5 Test     time exit: trades 347 (57.6/day), accuracy 51.3%, mean gross +1.26 bps (t +1.02), net at 4 bps -951 bps, avg win 18.5, avg loss 16.9
+  H= 5 Test     bracket +-1 sigma: trades 347 (57.6/day), accuracy 51.0%, mean gross +0.56 bps (t +0.59), net at 4 bps -1193 bps, avg win 16.3, avg loss 15.8
+  H=15 pre-Test time exit: trades 355 (15.6/day), accuracy 52.7%, mean gross +2.04 bps (t +1.03), net at 4 bps -696 bps, avg win 28.2, avg loss 27.0
+  H=15 pre-Test bracket +-1 sigma: trades 355 (15.6/day), accuracy 50.1%, mean gross -0.43 bps (t -0.28), net at 4 bps -1572 bps, avg win 24.8, avg loss 25.8
+  H=15 Test     time exit: trades 168 (27.9/day), accuracy 50.0%, mean gross +1.75 bps (t +0.59), net at 4 bps -378 bps, avg win 31.4, avg loss 27.9
+  H=15 Test     bracket +-1 sigma: trades 168 (27.9/day), accuracy 47.6%, mean gross -1.15 bps (t -0.50), net at 4 bps -866 bps, avg win 27.3, avg loss 27.0
+
+=== post: 1. volatility regimes (deciles fixed on pre-Test data)
+ H=5: corr(pred sigma, |move|) pre-Test 0.42, Test 0.40
+   bottom 50% mean|move|   4.7 ->   5.0 bps; break-even accuracy at 4 bps 93% -> 90% (n Test 4056)
+   50-80%     mean|move|   7.7 ->   7.5 bps; break-even accuracy at 4 bps 76% -> 77% (n Test 1592)
+   80-90%     mean|move|   9.9 ->  10.3 bps; break-even accuracy at 4 bps 70% -> 69% (n Test 512)
+   90-95%     mean|move|  13.2 ->  12.2 bps; break-even accuracy at 4 bps 65% -> 66% (n Test 296)
+   top 5%     mean|move|  16.1 ->  16.1 bps; break-even accuracy at 4 bps 62% -> 62% (n Test 259)
+ H=15: corr(pred sigma, |move|) pre-Test 0.38, Test 0.33
+   bottom 50% mean|move|   8.5 ->   9.0 bps; break-even accuracy at 4 bps 74% -> 72% (n Test 4208)
+   50-80%     mean|move|  13.5 ->  13.4 bps; break-even accuracy at 4 bps 65% -> 65% (n Test 1542)
+   80-90%     mean|move|  17.3 ->  18.4 bps; break-even accuracy at 4 bps 62% -> 61% (n Test 473)
+   90-95%     mean|move|  19.4 ->  20.9 bps; break-even accuracy at 4 bps 60% -> 60% (n Test 265)
+   top 5%     mean|move|  26.0 ->  24.6 bps; break-even accuracy at 4 bps 58% -> 58% (n Test 227)
+=== post: 2. volatility-gated reversal (threshold fixed on pre-Test data)
+  H= 5 pre-Test time exit: trades 754 (30.7/day), accuracy 55.6%, mean gross +1.18 bps (t +1.66), net at 4 bps -2129 bps, avg win 13.9, avg loss 14.7
+  H= 5 pre-Test bracket +-1 sigma: trades 754 (30.7/day), accuracy 53.6%, mean gross +0.59 bps (t +1.14), net at 4 bps -2575 bps, avg win 12.1, avg loss 12.7
+  H= 5 Test     time exit: trades 338 (24.2/day), accuracy 53.8%, mean gross +0.92 bps (t +0.92), net at 4 bps -1040 bps, avg win 13.3, avg loss 13.6
+  H= 5 Test     bracket +-1 sigma: trades 338 (24.2/day), accuracy 51.5%, mean gross +0.20 bps (t +0.27), net at 4 bps -1283 bps, avg win 11.9, avg loss 12.2
+  H=15 pre-Test time exit: trades 331 (13.5/day), accuracy 51.7%, mean gross +0.15 bps (t +0.09), net at 4 bps -1273 bps, avg win 20.4, avg loss 21.5
+  H=15 pre-Test bracket +-1 sigma: trades 331 (13.5/day), accuracy 49.2%, mean gross -1.06 bps (t -0.85), net at 4 bps -1675 bps, avg win 19.0, avg loss 20.6
+  H=15 Test     time exit: trades 149 (10.7/day), accuracy 51.7%, mean gross +1.00 bps (t +0.42), net at 4 bps -447 bps, avg win 21.1, avg loss 20.5
+  H=15 Test     bracket +-1 sigma: trades 149 (10.7/day), accuracy 51.0%, mean gross +0.27 bps (t +0.15), net at 4 bps -556 bps, avg win 19.7, avg loss 19.9
+
+=== 3. implied vs forward realised volatility (Deribit DVOL)
+  repo 24h: hours 701, implied 45.4, forward realised 44.2, gap +1.1 vol points, implied > realised in 50% of hours
+  repo 7d: hours 557, implied 45.2, forward realised 45.0, gap +0.2 vol points, implied > realised in 50% of hours
+  post 24h: hours 935, implied 36.9, forward realised 32.0, gap +4.9 vol points, implied > realised in 72% of hours
+  post 7d: hours 791, implied 36.7, forward realised 32.6, gap +4.2 vol points, implied > realised in 96% of hours

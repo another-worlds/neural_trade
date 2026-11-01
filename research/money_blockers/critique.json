@@ -1,0 +1,853 @@
+[
+ {
+  "lens": "information",
+  "blockers": [
+   {
+    "title": "The 1/5/15-minute horizons are hard-coded where the fee per trade is larger than any achievable edge",
+    "category": "restriction",
+    "evidence": "model.py:58 HORIZON_STEPS=[1,5,15]; model.py:41 LOOKBACK=60; SRS FR-3.1 and 2.1 fix the horizons. Measured on non-overlapping returns, repo CSV / clean 2026 set. Mean absolute move: 4.2/3.0 bps (1m), 9.6/6.9 (5m), 16.4/11.6 (15m), 33.2/23.2 (60m), 62.1/47.3 (240m), 155/104 (1d). Break-even accuracy is p* = 0.5 + c/(2E|r|). At 20 bps round trip (spot): above 100% for h<=15 on clean and h<=5 on repo (111% at 15m on repo); 80/93% at 60m; 66/71% at 240m; 56/60% at 1d. At 4 bps: 97.5% / unreachable at 1m; 71/79% at 5m; 62/67% at 15m; 56/59% at 60m; 53-54% at 240m; 51-52% at 1d. Break-even correlation for always-in sign trading is rho* = c/(sigma*sqrt(2/pi)). At 4 bps: 0.79-1.08 (1m), 0.21-0.28 (15m), 0.11-0.14 (60m), 0.06-0.07 (240m), 0.03 (1d). Only 1.3%/0.5% of 1-min moves exceed 20 bps. Script: <scratch>/infoset/hurdle.py",
+    "mechanism": "The fee is fixed in bps, but the typical move grows with about sqrt(h), so the edge needed falls about as 1/sqrt(h). The system works at the horizons with the highest bar. The 1-min tower cannot pay even at perp maker fees. The best direction skill measured anywhere (AUC <= 0.54, Somers' D about 0.08) is 3-4x too small at 15m with 4 bps costs. A skill of that size would cover 4 bps only at h >= 240m, and nobody has tested that.",
+    "impact": "high",
+    "fix_or_test": "Make the horizon a harness parameter and drop the h0 tower. Rerun the existing walk-forward harness (research/tsfm_eval, calibrate.py) at h in {60, 240, 1440} on 1+ year of data, with non-overlapping trades and costs of 4/10/20 bps. Decisive test: keep a horizon only where the lower 95% bound of the out-of-sample IC is above the rho* in this table.",
+    "effort": "small"
+   },
+   {
+    "title": "The venue is Binance spot at retail fees, long-only, while the liquid BTC market and the cheaper fees are on the perp",
+    "category": "restriction",
+    "evidence": "dw_ccxt.py:14 ccxt.binance (spot by default), :48 'BTC/USDT'; SRS 1.4 and 10.3 allow a single spot pair. Spot is 10 bps per side (checked in plans/model_evaluation_timestral.md 10.1), so 20 bps round trip. The USD-M perp is 4 bps with maker fills and 10 bps with taker fills. The perp traded 6.4x (repo) and 8.7x (clean) the BTC volume of spot. The most stable pattern found so far is fading large 15-min moves (my variant: top 2% of |z| by trailing 1,440-min rank, hold 15m, no overlap). It earns +4.0 bps gross per trade (n=287, 59% hit, t=2.2) on repo and +2.3 bps (n=358, 56%, t=1.7) on clean. Net, that is -16/-18 bps on spot and about break-even at 4 bps. inference.ipynb cell 5 lines 277-279 and 312-313 open SHORT trades with no borrow cost, and the direction head says DOWN at every origin in 13 of 18 runs (D3).",
+    "mechanism": "The cost bar is 2-5x higher than it needs to be. On spot, most of the model's own calls (shorts) cannot be executed as modelled without a margin loan, which carries hourly interest and borrow caps. Any marginal edge is cancelled by venue choice alone.",
+    "impact": "high",
+    "fix_or_test": "Make the instrument and fee tier config items: perp with funding, spot with margin interest. Score every rule at 4/10/20 bps. Decisive test: run the pre-registered fade rule (trading_calibration.md 6) on 3+ months of perp data at maker and at taker fees. Model fill probability for maker fills (a limit order at the bar close, filled only if the price trades through it).",
+    "effort": "medium"
+   },
+   {
+    "title": "Training uses 40 hours of weekend data out of a 30-day download, though 8+ years are free",
+    "category": "restriction",
+    "evidence": "model.py:48 MAX_SEQUENCE_COUNT=2880 (fixed in SRS NFR-4.1); dw_ccxt.py:31 days=30. The model uses 2,880 of 43,426 sequences (6.6%). With TimeSeriesSplit last fold (model.py:361-365), train runs Sat 2025-11-08 07:15 to Sun 11-09 23:14 UTC (100% weekend) and validation runs Sun 23:15 to Mon 07:14. 1-min sd is 4.59 bps in train against 6.97 on weekdays, a 2.3x variance gap. Independent outcomes at h=15 are 160 in train and 32 in validation, so the SE of validation accuracy is 8.8 pp (5.1 pp at h=5). To detect 53% against 50% needs about 1,067 independent outcomes: 11 days at h=15, 44 at h=60, 178 at h=240. 52% needs 25/100/400 days. data.binance.vision serves 1m spot klines from at least 2018-01-01 and perp OI metrics from at least 2022-06-01 (both returned HTTP 200). Script: .../scratchpad/infoset/window.py",
+    "mechanism": "An edge of the documented size (51-54%) can be neither learned nor measured. The variance head is fitted to weekend volatility and then used on weekdays. Each longer horizon (blocker 1) cuts the sample further. The logged metrics are noise at this sample size.",
+    "impact": "high",
+    "fix_or_test": "Remove the 2,880 cap and the 30-day fetch. Load multi-year archives from data.binance.vision. Use walk-forward folds that cover several regimes and include weekdays. Decisive test: rerun the harness on 1+ year and report the IC CI per horizon against the rho* table.",
+    "effort": "medium"
+   },
+   {
+    "title": "The entry gate and position sizing favour low predicted variance, which is when fees cost the most relative to the move",
+    "category": "objective",
+    "evidence": "inference.ipynb cell 5 lines 274 and 278 enter only if conf>0.5 and not is_spike, with conf=1/(1+var) (lines 174-175). helper_functions.py:77-82 sizes 1.2x at conf>0.7 and 0.6x at low confidence. Break-even accuracy at 4 bps, h=15, split by ex-ante Parkinson EWMA: bottom 50% 67.7% (repo) / 74.7% (clean); bottom 20% 72.9/85.4%; top 10% 56.9/58.9%. At h=5, bottom 50% is 81/94%. Clock: weekday mean |r_15| runs from 12.5 bps at 10h UTC to 32.8 at 14h (repo) and from 8.8 at 22h to 27.2 at 14h (clean); weekends 11.4/6.8. The highest-variance half-hour bucket is 13:30 UTC on both sets, 5.5x and 13.2x the lowest. The model has no time input (model.py:1219). Scripts: .../infoset/lowvol.py, hurdle_cond.py",
+    "mechanism": "Gross profit per trade scales with move size, but the fee is fixed in bps. The system therefore trades, and sizes up, in the states with the worst cost-to-move ratio. It uses its only measured skill, the variance forecast, the wrong way round.",
+    "impact": "medium",
+    "fix_or_test": "Gate entries on forecast sigma_h divided by cost (trade only when it is high), not on 1/(1+var). Add hour-of-week as an input or a gate. Decisive test: rerun calibrate.py with confidence replaced by the causal rank of sigma_h/cost and compare Test accuracy and net PnL at 4/10 bps. (A crude diurnal multiplier on a fast EWMA did not improve QLIKE, so use the clock for gating, not to rescale the variance forecast.)",
+    "effort": "small"
+   },
+   {
+    "title": "Only close prices reach the model; high/low, volume, trade count and taker-buy volume are dropped",
+    "category": "unrealized",
+    "evidence": "model.py:244 returns only Close; model.py:1219 Input 'close_sequence'. SRS line 387 and 3.2.2 specify 60-min OHLCV input and volume statistics. ccxt fetch_ohlcv (dw_ccxt.py:65, 110) keeps 6 of the 12 Binance kline fields and drops trade count and taker-buy volume; research/tsfm_eval/bench/fetch_post.py:31 drops them too. Out-of-sample test (fit on first half, test on second; target = sum of next-h squared 1-min returns; QLIKE change vs scale-refit EWMA). Adding range terms to a log-HAR improves QLIKE over the returns-only HAR by 4.4/7.1/9.5 points at h=5/15/60 (repo) and 3.3/4.9/4.6 points (clean). Volume adds <=1 point. For scale, Timestral's whole edge over FHS was 0.5-2.8%. Single split, no CI. Spot taker imbalance explains 21% of same-minute return variance and gives next-minute IC +0.018 (NW t 4.4) / +0.027 (t 7.5). Script: .../infoset/vol.py, flow.py",
+    "mechanism": "The variance forecast is the only forecast with measured skill. The high/low data that improves it is already in the CSV and is thrown away. Order-flow fields are lost at download, so no later stage can use them.",
+    "impact": "medium",
+    "fix_or_test": "Keep all 12 kline fields: call the raw /api/v3/klines endpoint or read the data.binance.vision CSVs. Feed returns, range, volume and taker imbalance. Decisive test: add range regressors to the FHS and EWMA baselines in research/tsfm_eval/bench/metrics2.py and score on both sets with block-bootstrap CIs on the benchmark target (y^2).",
+    "effort": "small"
+   },
+   {
+    "title": "With a single spot venue the system cannot see perp basis or perp order flow, but that information decays within one minute and is far smaller than fees",
+    "category": "data",
+    "evidence": "Change in the perp-spot basis over the last minute predicts the next spot minute with IC +0.035 (t 4.9) on repo and +0.060 (t 12.1) on clean, and +0.012/+0.017 at h=15 (t 4.6/5.9). Perp taker imbalance gives IC +0.025 (t 6.0) and +0.034 (t 9.5). Perp signed flow explains 26-28% of same-minute spot variance. Out of sample at h=1, IC rises from 0.004/0.010 (price only) to 0.052/0.059 with perp and ETH features. But gross profit per trade on the top decile is only +0.64-0.76 bps (repo) and +0.27-0.29 bps (clean), and out-of-sample R^2 stays at or below 0.25%. With a one-bar entry delay the IC falls to -0.010 to +0.005. SRS 10.3: no streaming; data is polled 1-min REST bars. Scripts: .../infoset/flow.py, delay.py",
+    "mechanism": "Price discovery happens on the perp, and the system cannot see it. The information that does exist is sub-minute microstructure that a polled 1-min architecture cannot act on, and it is 5-70x smaller than costs. Adding it will not make 1-15 min direction trading profitable. Its value is in execution.",
+    "impact": "medium",
+    "fix_or_test": "Do not build streaming infrastructure to chase alpha. If a slower rule passes (blockers 1-2), use basis and flow only to time entries and to choose maker or taker. Decisive test: on archived aggTrades or bookDepth, compare fill at bar close with fill conditioned on flow/basis over the next N seconds, for the slower rule's trades.",
+    "effort": "large"
+   },
+   {
+    "title": "With one asset and short horizons, the system cannot reach the documented crypto edges (cross-sectional, weekly, carry)",
+    "category": "research-design",
+    "evidence": "SRS 10.3 allows a single pair; multi-pair is a future item (10.4). ETH explains 67%/75% of the same-minute BTC variance (a common factor), but ETH's last minute predicts BTC's next minute with IC +0.001 (t 0.1) on repo and +0.029 (t 2.8) on clean, which is not consistent. Funding carry: mean 0.30 bps/8h = 3.3%/yr on repo (73% of periods positive) and 0.38 bps/8h = 4.1%/yr for 2026-09-20..30 (88% positive), well below a 4-leg spot+perp round trip of about 25-30 bps unless held for weeks. The published predictability is time-series momentum at 1-8 weeks and size/momentum factors in the weekly cross-section (Liu & Tsyvinski 2021 RFS; Liu, Tsyvinski & Wu 2022 JF).",
+    "mechanism": "With one asset, the only source of breadth is slicing time into short horizons, where costs are highest (blocker 1). The universe and horizons where edges are documented are excluded by design.",
+    "impact": "medium",
+    "fix_or_test": "Run a separate cheap study: a weekly cross-sectional momentum/size long-short on the top 30 Binance perps (data.binance.vision klines and funding, 2+ years), with costs and funding. Pre-register the rule, then score it once on held-out years. Carry is not attractive at current funding levels; recheck when funding is above about 1 bps/8h.",
+    "effort": "large"
+   },
+   {
+    "title": "The variance skill has nothing to trade against: no implied volatility and no options venue",
+    "category": "data",
+    "evidence": "No implied-vol input and no options instrument anywhere in the repo. Deribit DVOL (30-day implied) against forward 24h realized vol from 5-min returns: on repo the mean IV is 45.4% against RV 44.1% (gap +1.2 vol points; IV above RV in 56% of hours). On clean it is 36.9% against 32.5% (+4.5 points; 70% of hours). corr(DVOL, forward RV) is 0.27 / 0.18. Script: .../infoset/vrp.py",
+    "mechanism": "A better variance forecast earns money only against a market price for variance (options, variance swaps) or as a sizing input to a return stream that already makes money. The system has neither, so its one real skill cannot be turned into cash.",
+    "impact": "medium",
+    "fix_or_test": "Decisive test: on 6+ months, check whether (HAR-with-range or FHS forecast RV minus DVOL) predicts (realized RV minus DVOL) out of sample. If it does, paper-trade delta-hedged Deribit straddles, net of fees, sized by that spread.",
+    "effort": "medium"
+   },
+   {
+    "title": "No open-interest or liquidation data; it may explain the reversal pattern, but the check here is inconclusive",
+    "category": "data",
+    "evidence": "I split the fade trades (blocker 2) by OI change over the move (5-min Binance metrics). Repo: 62% hit when OI fell (n=175, +4.2 bps) against 54% when OI rose (n=112, +3.7 bps); with OI lagged 5 minutes the split reverses (59% against 60%). Clean: 57% against 54% (lag 0) and 59% against 52% (lag 5). dOI15 and dOI60 IC with forward returns: repo about 0 (t <= 0.6), clean +0.024 to +0.045 (t 1.5-2.1). Script: .../infoset/fade_oi.py",
+    "mechanism": "If large moves come from forced liquidations, they should revert, while moves from new positioning should continue. Without OI or liquidation data the fade cannot tell these apart, so it mixes trades with opposite expected payoffs. One month is too short to tell.",
+    "impact": "low",
+    "fix_or_test": "Test the fade split by OI change and perp taker flow on the multi-year metrics archive (available from 2022). Pre-register the split and accept it only if it holds in every year.",
+    "effort": "medium"
+   }
+  ],
+  "verdicts": [
+   {
+    "title": "The 1/5/15-minute horizons are hard-coded where the fee per trade is larger than any achievable edge",
+    "verdict": "confirmed",
+    "impact_after_check": "high",
+    "corrected_evidence": "The hurdle table reproduces exactly (hurdle.py: E|r| 4.2/3.0, 9.6/6.9, 16.4/11.6, 33.2/23.2, 62.1/47.3, 155/104 bps; p*@4 at 15m 62.2/67.2%; rho*@4 0.21/0.28 at 15m, 0.06/0.07 at 240m). Correction on 'hard-coded': in model.py the horizons are a config list (HORIZON_STEPS, model.py:58, read at :288) and RESAMPLE_MINUTES (model.py:43, implemented at :219-231) already turns [1,5,15] into 1h/5h/15h with one setting. The real hard-coding is in SRS FR-3.1 and in the research harness: research/tsfm_eval/bench/common.py:18 HORIZONS=[1,5,15], research/timestral_lig/data.py:20 and trading_nocost.py:21. So nothing in the research has ever measured h>15. Nothing in the current data shows skill at longer horizons either. Block-bootstrapped variance ratios: VR(60) 0.88 [0.76,1.02] repo, 0.98 [0.85,1.06] clean; VR(240) 0.89 [0.67,1.12] / 0.92 [0.71,1.07]. The non-overlapping lag-1 autocorrelation at 240m is +0.10 / -0.03 (SE 0.07). Caveat on rho*: the formula charges the full round trip every period. Always-in sign trading pays only on flips (about 50%), so its bar is about half as high.",
+    "notes": "The arithmetic and the mechanism are right: a fixed bps fee against moves that scale with sqrt(h) makes 1-15 min the worst place to trade. The 'restriction' is cheap to lift in model.py, and the harness needs only a parameter change. But the tension with blocker 3 is not stated. At h=240 the edge needed falls to about 53-54%. Detecting 53% with 80% power then needs about 2,180 independent outcomes, which is about 360 days of out-of-sample data per test. So longer horizons lower the cost bar but raise the data and stationarity bar about one for one. A known 1-min fact supports the direction of the claim: the 1-min tower (p*@4 = 97.5% / >100%) is worthless even at maker fees and should be dropped.",
+    "would_fixing_it_plausibly_create_profit": "No on its own. It only moves the experiment to where a 51-54% hit rate or an IC of 0.06-0.14 would pay at 4 bps. No such skill has been measured at 60-240 min (VR CIs include 1). It is profitable only together with a skill found at h>=60 on multi-year data (blocker 3) and perp-level fees (blocker 2)."
+   },
+   {
+    "title": "The venue is Binance spot at retail fees, long-only, while the liquid BTC market and the cheaper fees are on the perp",
+    "verdict": "partly",
+    "impact_after_check": "high",
+    "corrected_evidence": "Confirmed: dw_ccxt.py:14 ccxt.binance (spot) and :48 'BTC/USDT'; spot 10 bps per side (20 bps round trip, 15 with the BNB discount), perp 2/5 bps per side; perp/spot BTC volume 6.4-6.6x (repo) and 8.7x (clean); SHORT entries at inference.ipynb cell 5 lines 278-279, PnL at 312-313 with no fee and no borrow. The fade numbers reproduce (spot q=0.98: +3.99 bps, n=287, t 2.21 / +2.20, n=359, t 1.60). Stress test (scratchpad/verif/fade_check.py): on perp prices the fade nets -0.09 (repo) and -1.74 (clean) bps at 4 bps; with a one-bar entry delay, -0.83 / -2.20; at 10 bps (taker), -6 to -9 bps in all 12 variants. The q=0.98 choice is the best of the variants: q=0.95 gives +0.6 to +1.4 bps gross, and q=0.99 gives +4.3 bps on repo but +0.8 to +1.3 on clean. 'About break-even at 4 bps' holds for repo only.",
+    "notes": "The fee half of the blocker is right and important. It cuts the cost bar 2-5x, and no rule tested anywhere survives 20 bps. The short-selling half is overstated as a money loser. The direction head says DOWN at almost every origin because of the focal alpha bias (D3), so its short calls are noise. On spot they could not be executed, which saves fees rather than losing profit. The real defect is that the notebook backtest books those shorts on spot with no borrow cost and no fees, which is a fidelity bug (D5). Also, 4 bps assumes maker fills on both legs at the bar close. For a fade entered right after a large move, a resting limit order is filled mostly when the move continues (adverse selection). The realistic case is maker in, taker out (about 7 bps), and there the fade loses 3-5 bps per trade on both sets.",
+    "would_fixing_it_plausibly_create_profit": "No on its own. It is a necessary condition, because every candidate rule seen so far (gross +1 to +7 bps) is dead at spot fees. But the best pre-existing rule is still at or below zero on perp at maker fees, and it loses at taker fees. It is profitable only together with a selection that raises gross profit per trade above about 7 bps (see blocker 4)."
+   },
+   {
+    "title": "Training uses 40 hours of weekend data out of a 30-day download, though 8+ years are free",
+    "verdict": "confirmed",
+    "impact_after_check": "high",
+    "corrected_evidence": "window.py reproduces it: 2,880 of 43,426 sequences (6.6%); train Sat 2025-11-08 07:15 to Sun 11-09 23:14 (100% weekend); validation Sun 23:15 to Mon 07:14; 1-min sd 4.59 bps in train against 6.97 on weekdays (variance ratio 2.3x); 160/32 independent outcomes at h=15. The cap is model.py:48 MAX_SEQUENCE_COUNT=144*20, applied at :348-357; the split is model.py:361-365. Correction on the SRS: NFR-4.1 says the system 'shall support training on sequences up to 2880' (a capability floor). The binding text is SRS 3.2 line 187 ('Sequence limit: 2880 most recent sequences'). Correction on the power arithmetic: the 1,067-outcome figure uses z=1.96 with 50% power. At 80% power, detecting 53% needs about 2,180 outcomes (about 23 days at h=15, 91 at h=60, 363 at h=240), and 52% needs about 4,900, so the data need is about 2x what is stated.",
+    "notes": "Upgrade: lifting the cap alone would break this model, so the fix depends on D8. Inputs are raw close-price levels scaled per lag with a StandardScaler (model_evaluation_timestral.md D8, M:386-390). Over 2018-2026 BTC spans roughly 3k to 120k+, so a multi-year window turns the inputs into a price-level regime indicator. The input must become returns or normalised windows first. Memory is not a reason for the cap: 43k windows x 60 floats is about 10 MB. The cap prevents both learning and measuring an edge of the documented size (51-54%), and it is the cheapest of the high-impact items to remove.",
+    "would_fixing_it_plausibly_create_profit": "No on its own. It makes learning and measuring an edge possible, and the existing one-month results already show no direction skill. Profit is possible only together with a horizon or rule that has a real edge (blockers 1, 2, 4) and with D8 fixed. On its own it mainly prevents false positives."
+   },
+   {
+    "title": "The entry gate and position sizing favour low predicted variance, which is when fees cost the most relative to the move",
+    "verdict": "confirmed",
+    "impact_after_check": "medium",
+    "corrected_evidence": "The hurdle numbers reproduce (hurdle_cond.py, lowvol.py: p*@4 at h=15 is 67.7/74.7% in the bottom half of ex-ante vol, 72.9/85.4% in the bottom 20%, 56.9/58.9% in the top 10%; weekday E|r_15| 12.5-32.8 / 8.8-27.2 bps by hour). The live gate is inference.ipynb cell 5 lines 174-175 (conf=1/(1+var)) and 274/278 (conf>0.5 and not is_spike). The is_spike test itself uses the centred var_mean (line 196, look-ahead). Correction: helper_functions.calculate_position_size_multiplier (:77-86) is not called anywhere in the notebook or in the code, so the sizing part of the evidence is dead code. New evidence for the mechanism (scratchpad/verif/fade_sig.py): splitting the fade trades by a trailing 7-day rank of a 1-day Parkinson EWMA, gross profit per trade in the high-vol half vs the low-vol half is +6.8 vs +2.2 bps (spot, repo), +4.9 vs +0.4 (spot, clean), +6.1 vs +2.6 (perp, repo), +4.6 vs +0.8 (perp, clean). Splitting by absolute move size: +8.6/+7.8 vs -0.6/+0.1 (repo), +4.3/+4.4 vs +0.1 (clean). Perp high-vol half net: +2.1/+0.6 bps at 4 bps, -0.9/-2.4 at 7 bps; n=105/134, so net t < 1.",
+    "notes": "Upgrade on the mechanism: this is the only lever that raised the one known pattern above the 4-bps line on both sets, because gross profit scales with the move while the fee does not. Caveats: the median split and q=0.98 were chosen after seeing the data, n is about 100-140 per cell, and the result disappears at 7 bps. The gate cannot use neural_trade's own variance head, which loses to a 2-parameter EWMA-t on volatility ranking in every cell (model_evaluation_timestral.md:400). As wired, conf>0.5 filters on a weak signal. It should be replaced by a causal FHS, EWMA or HAR sigma_h/cost rank. The clock gate (weekday 13-15 UTC) is the same idea with zero model risk.",
+    "would_fixing_it_plausibly_create_profit": "Only in combination: a vol-gated fade on the perp at maker fees comes out at roughly +0.6 to +2 bps per trade in-sample on both sets, which is not significant and negative at 7 bps. It is the most promising combination found here (blockers 2 + 4 + the pre-registered fade), but it needs a pre-registered out-of-sample test on months of perp data with a realistic fill model before anyone calls it profit."
+   },
+   {
+    "title": "Only close prices reach the model; high/low, volume, trade count and taker-buy volume are dropped",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "The code facts are right: model.py:244 returns only Close; model.py:1219 has a single 'close_sequence' input; dw_ccxt.py:110 keeps 6 kline fields. The vol.py table reproduces: HAR+range against HAR is -4.4/-7.1/-9.5 points (repo) and -3.3/-4.9/-4.6 (clean) at h=5/15/60. But the stated framing is too favourable. (a) A plain Parkinson EWMA is worse than the returns EWMA by +1.0 to +10.1% QLIKE (repo) and +1.0 to +8.5% (clean), so the range helps only inside a fitted HAR. (b) Against the plain EWMA baseline, HAR+range is worse at h=1 (+0.3/+4.9%) and at h=5 on clean (+1.4%). The gain over the best simple baseline is -2.6%/+1.4% at h=5 and -5.0/-8.4% at h=15. (c) The target is the sum of squared 1-min returns, not the benchmark's y^2; it uses a single 50/50 split with no CI. Taker imbalance's next-minute IC of 0.018-0.027 is worth about 0.1 bps per trade, and it decays to -0.010..+0.005 after one bar (delay.py).",
+    "notes": "This is a real unrealized SRS item: the SRS specifies 60-min OHLCV input (SRS line 387) but the code feeds close only. It is also a cheap gain for the risk path at h>=15. It does not unblock profit, because a better variance forecast earns nothing on its own (blocker 8 has no venue). Its only money path is as a better input to the vol gate in blocker 4, and that gate already works with a crude Parkinson EWMA rank. Keeping all 12 kline fields at download costs nothing and should be done anyway.",
+    "would_fixing_it_plausibly_create_profit": "No. At most it gives a small improvement to the volatility gate in blocker 4, which already works with a crude EWMA rank. Order-flow fields add about 0.1 bps per trade at 1 min and nothing after one bar of delay."
+   },
+   {
+    "title": "With a single spot venue the system cannot see perp basis or perp order flow, but that information decays within one minute and is far smaller than fees",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "flow.py and delay.py reproduce: dbasis1 IC +0.035 (t 4.9) / +0.060 (t 12.1) at h=1; with a one-bar delay -0.006/+0.004; perp imbalance +0.025/+0.034, delayed -0.008/+0.001; top-decile gross +0.64-0.76 / +0.27-0.29 bps. Stronger than stated: out-of-sample on the clean set, the '+perp' model has R^2 -0.81% even at h=1, IC -0.018 (R^2 -4.0%) at h=15 and IC -0.030 (R^2 -5.5%) at h=60. Beyond one minute, the perp features make the forecast worse. Part of the dbasis1 'signal' is probably non-synchronous bar closes (spot's last trade in the minute falls earlier than the perp's), which no order can capture.",
+    "notes": "The critic's own conclusion (do not build streaming to chase alpha) is right. That makes this an information gap rather than a blocker to profit, so the impact should be low, not medium. The only realistic use is execution timing or the maker/taker choice for a slower rule that already works, and no such rule exists yet.",
+    "would_fixing_it_plausibly_create_profit": "No. The gross effect is 0.3-0.8 bps per trade against 4-20 bps of costs, it vanishes with a one-bar delay, and it turns negative out of sample at 15-60 min. It is possibly a small execution saving only after a slower rule passes on its own."
+   },
+   {
+    "title": "With one asset and short horizons, the system cannot reach the documented crypto edges (cross-sectional, weekly, carry)",
+    "verdict": "partly",
+    "impact_after_check": "medium",
+    "corrected_evidence": "SRS 10.3 'Single Trading Pair Support' and 10.4 'Multi-Pair Support' are confirmed. ETH lead-lag reproduces (eth1 IC +0.001, t 0.1 repo; +0.029, t 2.8 clean). Funding reproduces from window.py: 0.30 bps/8h (3.3%/yr, 73% positive, n=92) and 0.38 bps/8h (4.1%/yr, 88% positive, n=33). A 25-30 bps 4-leg round trip at 0.30-0.38 bps per 8h needs 66-100 funding periods (about 22-33 days) just to break even. At 3-4%/yr, carry earns roughly what idle USDT or short-dated dollar instruments earn, so it has no excess return at current levels.",
+    "notes": "The scoping observation is fair. With one asset, breadth can only come from slicing time, which pushes the system to the costliest horizons. But the cited evidence (Liu & Tsyvinski 2021; Liu, Tsyvinski & Wu 2022) comes from 2014-2020 samples over many coins, including small, illiquid ones. How these factors performed after costs and after publication on the top-30 Binance perps in 2024-2026 is unknown, and crowding is plausible. This is a different system, not a fix that unblocks neural_trade. It is the one route with published, cost-aware evidence, so a cheap pre-registered study is reasonable, but it should be treated as a new project.",
+    "would_fixing_it_plausibly_create_profit": "Unknown, and not for neural_trade as built. A weekly cross-sectional momentum/size book on liquid perps is a plausible but untested money route. Carry is not profitable at current funding (it roughly equals a cash yield)."
+   },
+   {
+    "title": "The variance skill has nothing to trade against: no implied volatility and no options venue",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "vrp.py reproduces (DVOL 45.4 vs RV 44.1, +1.2 points, 56% of hours; 36.9 vs 32.5, +4.5 points, 70%; corr 0.27/0.18), and there is no IV input or options instrument in the repo. But the comparison mixes horizons: DVOL is a 30-day implied index and the RV is forward 24h, so the gap is not a tradeable variance-risk-premium estimate. Each set covers about one month (701/935 overlapping hourly points, which amounts to roughly 30-40 independent days).",
+    "notes": "The mechanism is right in principle: a variance forecast pays only against a market price of variance or as a sizing input. But the system's measured variance skill is at 1-15 min, with a 0.5-2.8% QLIKE gain over FHS. Option books price 1-day to 30-day variance, where HAR-type forecasts are public knowledge, and Deribit ATM spreads plus fees and delta-hedging costs are far larger than a few percent of QLIKE. IV>RV is a premium you can earn by plain short volatility, with no forecast needed and with crash risk; it is independent of neural_trade. The more relevant monetization of the variance skill is as the gate in blocker 4.",
+    "would_fixing_it_plausibly_create_profit": "No, not from this model's skill: it is at the wrong horizon and far too small for option spreads. A generic short-vol (VRP) strategy might earn money, but it would not need this system."
+   },
+   {
+    "title": "No open-interest or liquidation data; it may explain the reversal pattern, but the check here is inconclusive",
+    "verdict": "partly",
+    "impact_after_check": "none",
+    "corrected_evidence": "fade_oi.py reproduces: at lag 0, OI fell vs OI rose gives +4.2 vs +3.7 bps (repo) and +2.5 vs +1.9 bps (clean); at lag 5 the repo split reverses (+2.0 vs +6.1 bps), and on clean it is +3.0 vs +1.2. The difference between groups is 0.5-0.6 bps at lag 0, with t of 1.0-2.2 in each half. dOI15 and dOI60 IC are about 0 on repo (t <= 0.6). The clean metrics file has 8 zero-OI rows (log(0) warnings), which are filtered out but show the archive needs cleaning.",
+    "notes": "The data gap is real and the liquidation hypothesis is plausible, but nothing measured here shows that the gap costs money: the split is within noise and changes sign with the lag. It is a hypothesis to test on the multi-year metrics archive under pre-registration, not a blocker.",
+    "would_fixing_it_plausibly_create_profit": "No evidence that it would. At most it is a refinement of the fade, which must first survive costs on its own (blockers 2 and 4)."
+   }
+  ]
+ },
+ {
+  "lens": "execution",
+  "blockers": [
+   {
+    "title": "Horizons are hard-wired to 1/5/15 min, where the round-trip cost eats 24-95% of the average move",
+    "category": "restriction",
+    "evidence": "model.py:58 HORIZON_STEPS=[1,5,15], model.py:41 LOOKBACK=60, model.py:48 MAX_SEQUENCE_COUNT=2880 (about 40 h of training). Measured on the 43,500-bar CSV: mean |log return| is 4.2/9.6/16.5/32.5/65.6/171.5 bps at 1/5/15/60/240/1440 min. Break-even accuracy is p*=0.5+c/(2E|r|). At 4 bps round trip (futures maker): 97.5%/70.9%/62.1%/56.2%/53.0%/51.2%. At 10 bps (futures taker): >100%/>100%/80.3%/65.4%/57.6%/52.9%. At 20 bps (spot): unreachable up to 15 min, 80.8% at 60 min, 55.8% at 1 day. The best published BTC direction accuracy at 1-15 min is 51-54% (report 10.3).",
+    "mechanism": "Costs are a fixed toll on every trade, while the expected move grows with sqrt(h). At the horizons the architecture allows, no realistic accuracy covers the toll. At 4 h to 1 day the required accuracy falls into the range the literature reports. Nothing in the research ever tested h > 15 min, so the setup excludes the only horizons where a weak edge could pay.",
+    "impact": "high",
+    "fix_or_test": "Run the existing harness (research/tsfm_eval/bench/metrics2.py: nonoverlap_trades plus the momentum, reversal and logreg baselines) at h in {60, 240, 1440} on multi-year data (the 2017-2025 file the notebook loaded, 4.6M rows). Score net of 10 bps. Make HORIZON_STEPS, LOOKBACK and the training window scale with h. Stop rule: if no baseline or model is positive net of 10 bps with a block-bootstrap CI excluding 0 on >= 6 months out of sample, drop directional trading.",
+    "effort": "medium"
+   },
+   {
+    "title": "The notebook backtest cannot measure PnL: no fees, look-ahead, fills on the signal's own close, and 11x hidden leverage",
+    "category": "defect",
+    "evidence": "inference.ipynb cell 5 (execution count 5): line 196 np.convolve(mode='same') and line 197 rolling(center=True) use about 10 future bars, and the zero padding halves var_mean at the series edges. These centred values drive both the entry filter and the SPIKE exit (lines 269, 274, 278, 291). Lines 310-315 compute profit with no fees. Entry and exit fill at close=last_close_test (line 226), which is the same close the model just saw (lines 257, 285), so there is no latency. The loop stops 30 bars early and silently drops any open position (line 255). Cell 7 lines 17-24 add a profit per 1 BTC (about $114k notional) to a $10,000 account, which is 10.9x implicit leverage. The logged result is 9 trades, -$174. Fees on those 9 trades: spot 10+10 bps = $2,052, futures taker = $1,026, futures maker = $410. The real result is about -$2,226 (-22% of the stated account), not -1.7%.",
+    "mechanism": "This is the only PnL path the SRS system has (FR-5, SRS 3.4). Its numbers are biased up by look-ahead and by zero costs, and the account-level percentage is mis-scaled by the 11x hidden leverage. Decisions made from it (thresholds, exits) are tuned on fiction.",
+    "impact": "high",
+    "fix_or_test": "Replace it with an event-driven backtest. Decide at the close of t and fill at t+latency (or the open of t+1). Charge fees per venue and tier. Use trailing windows only. Mark open positions to market and close them at the end. Size notional from equity (units = risk budget / price). Re-run the 480-bar test: if it is not positive net of 4 bps, the notebook strategy is dead.",
+    "effort": "small"
+   },
+   {
+    "title": "The entry and exit rules contradict the model's outputs: short-only by construction, a sign-blind unanimity filter, and holding 6x the forecast horizon",
+    "category": "defect",
+    "evidence": "Cell 5 enters at dir_prob>0.65 or <0.35 (lines 274, 278). The direction head is centred at 0.31-0.44 (calibration 6; focal alpha 0.7, D3), so the backtest made 0 LONG and 9 SHORT trades. The reversal exits are asymmetric: a LONG would exit at <0.45, i.e. on almost every bar; a SHORT exits only at >0.55, which almost never happens, so shorts close on the look-ahead SPIKE exit or on TIME (lines 296-306). Agreement: max(up, 3-up)/3 >= 0.67 (line 186; helper_functions.py:88 has the same default). 2/3 = 0.6667 < 0.67, so the filter silently demands 3/3 agreement, and it never checks that the agreed sign matches the trade side, so a SHORT can enter when all three deltas point UP (lines 266-279). The primary signal is the 5-min head (line 84), but max_hold=30 bars (line 253).",
+    "mechanism": "Trades are driven by the head's class bias and by look-ahead exits, not by a forecast. Holding 30 minutes on a 5-minute forecast adds 25 minutes of zero-mean noise per trade. That cuts the t-stat by about sqrt(6) and leaves the cost per trade unchanged.",
+    "impact": "medium",
+    "fix_or_test": "Use centred, causal rank thresholds (as in research/timestral_lig/calibrate.py). Require sign(agreement) == trade side, with an explicit k-of-3 count. Set the hold equal to the forecast horizon, or exit when the forecast for the position's side expires. Re-score on both Test sets net of 4 and 10 bps.",
+    "effort": "small"
+   },
+   {
+    "title": "TP and SL exist only on paper, and their distances are far outside the 1-30 min move scale",
+    "category": "unrealized",
+    "evidence": "Cell 5 lines 24-38: the TP1 +0.5%, TP2 +1.5% and SL -1% levels are 'not executed, just reference'. helper_functions.calculate_dynamic_stop_loss (lines 61-70) gives a stop 2%*(1+min(ratio,2)) = 2-6% away. helper_functions.py is imported by neither model.py, inference.ipynb nor test_model.py. FR-4.3, FR-4.4 and FR-5.3 (partial profit taking) are unimplemented. CSV, random entries, 30-bar window: +0.5% reached 10.9% (long) / 12.2% (short), +1.5% 0.4-0.5%, -1% 1.9%, -2% 0.13%, -4% and -6% never. With the brackets executed, 86-97% of trades still end on the time exit. An executed +0.5/-1% bracket needs 66.7% wins gross, 71.3% with a maker TP and taker SL (2+5 bps), and 80% at spot. Brackets do not create expectancy: every TP/SL variant tested on random entries had a gross E within +/-0.8 bps, the same as the time exit (-0.41).",
+    "mechanism": "There is no working risk control: the stop sits 8-35 sigma away (report 8), so tail losses are unbounded in practice. The reported win rate is just a time-exit coin flip. The bracket design cannot rescue a no-edge signal, and as built it cannot even cap losses for one that has an edge.",
+    "impact": "medium",
+    "fix_or_test": "Express TP and SL in forecast-sigma units, e.g. FHS quantiles of the h-return (roughly 1.5-3 sigma, about 20-70 bps at 15 min). Execute them in the backtest with pessimistic intrabar ordering (same bar = SL first). Charge TP as maker and SL as taker. Compare drawdown and net PnL with and without the stop on any candidate signal.",
+    "effort": "small"
+   },
+   {
+    "title": "No execution layer, and the research fill model is optimistic for the one pattern that depends on the first minute",
+    "category": "unrealized",
+    "evidence": "SRS 10.3: 'No Live Trading Execution'; the system emits signals only. There are no limit orders, OCO, fee-tier or BNB logic. The research fills every trade at the forecast bar's close, with zero latency and certain fills, at 4 bps called 'futures maker' (metrics2.py:32, :126-133). CSV, fading the top 2% of |z15| (causal trailing-480 rank), hold 15 min, non-overlapping: gross per trade +1.62 bps at a 1-minute delay of 0, +1.09 at 1, +0.99 at 2 (1-min grid). On the 3-min grid: +2.73 at delay 0, +0.86 at 1, +0.41 at 2. Gross by hold time: 1 min +0.42, 3 min +1.21 (t = 2.0), 15 min +1.68, 60 min -0.48. Passive entries: a bid posted at the close is traded through within 1 min 85% of the time, then drifts -0.8 bps against the fill. The fade entered with limit orders 2-10 bps away fills 130-275 times and earns only +0.1 to +2.4 bps gross. Every execution variant is negative net of 4 bps.",
+    "mechanism": "Costs are the binding constraint, yet the system has no way to obtain maker fees or to execute stops. The research cost model pairs maker fees with taker-like immediacy. 1-minute OHLC cannot resolve whether a reversal that starts inside the first minute survives real latency and queue position. So the most promising directional pattern is neither confirmed nor ruled out.",
+    "impact": "medium",
+    "fix_or_test": "Download Binance aggTrades and bookTicker (or perp equivalents) for both Test windows. Simulate a 100-1000 ms decision latency and maker fills with queue position and partial fills. Use maker-in/taker-out (about 7 bps on futures VIP0) as the central cost case. If the fade is not positive at 7 bps with real fills, close the short-horizon direction route for good.",
+    "effort": "medium"
+   },
+   {
+    "title": "Position sizing ignores the only measured skill (variance), and confidence is in scaler-dependent units",
+    "category": "defect",
+    "evidence": "helper_functions.py:5 sets confidence = 1/(1+variance). Here the variance is the Student-t scale squared in SCALED units (model.py:120-121, :1700-1717), from a StandardScaler fitted on the 1/5/15-min deltas pooled together (model.py:377-382) and refitted on every run. On the CSV sd (6.4/14.1/23.8 bps, pooled 16.4) a correct head gives typical confidence 0.87/0.58/0.32 (0.95/0.80/0.59 if it learns the t scale with nu=3). The size multiplier steps 1.2/1.0/0.6 (helper_functions.py:77-84) therefore track the horizon, not market risk, and the conf>0.5 gate on the 5-min head (cell 5 line 274) sits on its typical value. The multiplier spans 2x, while hourly realised vol spans 5.4x (p5-p95: 2.1-11.5 bps per minute), 4.3x across days and 1.9x by hour of day. Log-vol hour-to-hour autocorrelation is 0.71. The notebook trades a constant 1 BTC.",
+    "mechanism": "With constant units, PnL variance is concentrated in high-vol hours. Any edge measured in sigma units (like the z-scored reversal) is diluted, and drawdowns are set by the worst regime. The Timestral and FHS variance gain (QLIKE 0.5-2.8%, range 5-17%) has no consumer in the pipeline, so it cannot become money.",
+    "impact": "medium",
+    "fix_or_test": "Size each trade as units = risk budget (bps of equity) / sigma_FHS,h (bps), capped at a leverage limit. For a Kelly-style variant, size proportional to the expected edge / sigma^2. Re-run the deployed calibration rules and the fade with and without vol targeting, and compare Sharpe and max drawdown. This isolates what the variance skill is worth.",
+    "effort": "small"
+   },
+   {
+    "title": "A full round trip is charged per forecast, not per position change",
+    "category": "research-design",
+    "evidence": "metrics2.py:126-133 (nonoverlap_trades), research/timestral_lig/trading_nocost.py and calibrate.py all close the position after h minutes and pay the full cost again, even when the next signal has the same side. Cell 5 does the same. neural_trade says DOWN at every origin in 13 of 18 runs (D3), so its net -1.1 to -4.6 bps per trade at 4 bps (T-D, 47-324 trades) is mostly the churn cost of re-opening a constant short. CSV: for sign signals on non-overlapping 15/60/240-min blocks, the next block has the same side 49-50% of the time.",
+    "mechanism": "Holding the position when the next signal agrees would cut the number of round trips by about half for coin-flip-like signals, and by much more for persistent ones (trend, long-horizon). The research overstates the cost burden of any slow signal, which matters most for the longer horizons in blocker 1.",
+    "impact": "medium",
+    "fix_or_test": "Switch to a target-position backtest with a no-trade band (hysteresis). Charge cost on |change in position| only. Re-score the T-D, calibration and fade results; report the turnover and the net PnL change.",
+    "effort": "small"
+   },
+   {
+    "title": "Test windows and trade counts are too small to detect any realistic edge",
+    "category": "research-design",
+    "evidence": "Deployed calibration rules had 29-107 Test trades (calibration 4.1). The month-long CSV fade has 212-306. Minimum detectable accuracy (one-sided 5%, 80% power): 73.1% at n=29, 62.0% at n=107, 57.1% at n=306. Trades needed: 616 for 55%, 1,715 for 53%, 3,862 for 52%. Test windows were 6 and 14 days on a 3-minute origin grid (2,895 and 6,715 origins). The top-2% fade gives about 10 trades per day, so a 53% edge needs about 170 days.",
+    "mechanism": "The 'no edge' verdicts can only exclude edges of 60% and above. The plausible 52-55% range stays untested, so a real but small edge would be thrown away. Combined with the 1-15 min horizons, such an edge would lose after costs anyway, which reinforces blocker 1.",
+    "impact": "medium",
+    "fix_or_test": "Pre-register one rule. Evaluate on >= 6 months of 1-minute origins, using overlapping trades with a block bootstrap or HAC errors instead of non-overlap thinning. State the target edge and the power before scoring.",
+    "effort": "medium"
+   },
+   {
+    "title": "Venue mismatch: spot data, futures fees, short trades and no funding",
+    "category": "restriction",
+    "evidence": "dw_ccxt.py:14 and :48 use ccxt.binance (spot) and 'BTC/USDT'. The research charges futures fees: 4 bps maker and 10 bps taker per round trip (metrics2.py:32). All 9 notebook trades are SHORT. Shorting on spot needs margin borrowing, which carries interest and 10 bps per side, and perp funding every 8 h is not modelled. At spot costs (20 bps) almost no forecast clears the cost (report 7.7).",
+    "mechanism": "The backtested PnL is not achievable on the venue whose prices it uses. The cheap cost case (4 bps) assumes a perp account, a fee tier and funding that the data and code never model.",
+    "impact": "low",
+    "fix_or_test": "Choose the venue: the USDS-M perp, using its klines, funding history and the account's fee tier, or long-only spot at 15-20 bps. Re-run the cost tables on that venue's own prices.",
+    "effort": "small"
+   }
+  ],
+  "verdicts": [
+   {
+    "title": "Horizons are hard-wired to 1/5/15 min, where the round-trip cost eats 24-95% of the average move",
+    "verdict": "partly",
+    "impact_after_check": "high",
+    "corrected_evidence": "I re-measured the CSV and the numbers match: mean |log r| is 4.2/9.6/16.5/32.5/65.6/171.5 bps at 1/5/15/60/240/1440 min. The 1440-min value rests on only 30 independent days. Two corrections. (a) The horizons are not hard-wired. Config.RESAMPLE_MINUTES (model.py:43, applied at :219-233) already resamples the bars. Setting it to 60 gives 1/5/15-HOUR horizons with a 60 h lookback and 2,880 sequences (about 120 days of hourly training), with no code change. The restriction that is really fixed is in the research harness: research/tsfm_eval/bench/common.py:19 sets HORIZONS=[1,5,15], and calibrate.py uses the same HS. No test anywhere used h>15 min, so that part of the claim holds. (b) The formula p*=0.5+c/(2E|r|) assumes |r| does not depend on whether the call is right, so it overstates the accuracy needed. If signal and return are jointly Gaussian, the break-even IC is c/E|r| and p*=0.5+arcsin(IC)/pi. At 15 min/4 bps that gives 57.8% (not 62.1%); at 60 min/10 bps, 60.0% (not 65.4%); at 240 min/10 bps, 54.9% (IC 0.15); at 1 day/10 bps, 51.9% (IC 0.058). The true value lies between the two models. Either way, at 1-15 min no plausible IC covers even 4 bps (IC 0.24 needed at 15 min).",
+    "notes": "This is the only blocker in the list that addresses the binding constraint: gross edge per trade is far below cost. Every other execution fix leaves a gross edge of 0-3 bps against a 4-10 bps toll. The mechanism is right but needs a caveat. A lower break-even is necessary, not sufficient. What matters is whether the IC decays more slowly than 1/sqrt(h). At 1 day the required IC (about 0.04-0.06) falls in the range reported for crypto trend and time-series momentum signals. At 4 h, 0.15 is still very demanding. Two costs grow with h and are missing from the evidence: funding (about 1 bps per 8 h, about 3 bps/day, borne mainly by longs) and statistical power. The proposed stop rule ('>=6 months OOS') is underpowered at h=1 day: about 180 trades gives a minimum detectable accuracy near 59%. Use a walk-forward over the full 2017-2025 file (about 3,200 daily blocks; that file is gitignored as Bitcoin_BTCUSDT.csv and not in this checkout, so it was not tested here). Pair it with position-change cost accounting.",
+    "would_fixing_it_plausibly_create_profit": "Only together with a signal that has a real IC at 4 h-1 day (e.g. trend/TSMOM, tested over multiple years), cost charged per position change (blocker 7), and funding modelled (blocker 9). It is the necessary precondition, not a profit source by itself."
+   },
+   {
+    "title": "The notebook backtest cannot measure PnL: no fees, look-ahead, fills on the signal's own close, and 11x hidden leverage",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: there are no fees (cell 5 lines 310-315). Cell 7 lines 17-24 add a 1-BTC PnL to a $10k account; mean price is $114,138, so the implicit leverage is 11.4x. The fee arithmetic checks out: entry plus exit notional over the 9 trades is $2,053,666, so fees are $2,054 at spot, $1,027 at futures taker and $411 at maker. The net result is about -$2,228 (-22%), not -$174. The look-ahead is immaterial in the logged run. I decoded the plotly payload in cell 7: all 9 exits are 'TIME', so the SPIKE exit never fired. With variance recovered from confidence (var=1/conf-1), the centred var_mean flags spikes only at bars 0-1 (the zero-padding edge effect). The trailing version flags 3 bars. Both give the same 74 entry-eligible bars, and replays without the agreement filter give gross -$396 (centred) vs -$391 (trailing). var_std (rolling center=True, line 197) is never used in the trading loop, only stored in the DataFrame (line 236). Filling at last_close is the standard close-to-close assumption, not look-ahead. Unconfirmed: whether a position was dropped at the end of the loop.",
+    "notes": "All the biases point in the optimistic direction, and the result is already negative before fees. So this defect hides losses, not money. A larger problem the critic missed: the 480-bar window is also the validation set (D4, model.py:728-731) and covers only 8 h with 9 trades. No fix makes it a valid out-of-sample test. The proposed decision rule ('re-run the 480-bar test, positive net of 4 bps or dead') is uninformative either way at n=9. The research harness (metrics2.py, calibrate.py) has already replaced it.",
+    "would_fixing_it_plausibly_create_profit": "No. It would only make the loss visible (about -22% of the stated account at spot fees instead of -1.7%). It is a measurement fix, not a profit route."
+   },
+   {
+    "title": "The entry and exit rules contradict the model's outputs: short-only by construction, a sign-blind unanimity filter, and holding 6x the forecast horizon",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Decoded outputs: the 5-min direction head ranges 0.140-0.494 (median 0.402). LONG (>0.65) and the SHORT reversal exit (>0.55) can never fire, giving 0 LONG and 9 SHORT. dp<0.35 holds on 123/480 bars. The conf>0.5 gate passes 431/480 bars, so it barely binds. The agreement threshold: 2/3=0.6667<0.67, so the filter demands 3/3 (cell 5 line 186; helper_functions.py:88 has the same default). It accepts unanimous UP deltas for a SHORT; confirmed from the code. Whether this happened cannot be checked, because the delta predictions are not in the saved outputs. Correction: shorts did not close on the look-ahead SPIKE exit. All 9 exits were TIME at exactly 30 bars.",
+    "notes": "The proposed fix (centred, causal rank thresholds; side-consistent agreement) is essentially what research/timestral_lig/calibrate.py already ran. It uses confidence 'dp' = direction head minus its calibration median, causal trailing-480 ranks and 'agree3' sign-consistent alignment. It found no rule above 50% out of sample, and agree3 changed accuracy by at most 4.4 points, more often down. The head's MCC is about 0 (report 7.9). The sqrt(6) t-stat argument holds only if an edge exists at 5 min, and none was measured. With fixed costs, a longer hold actually lowers the cost per unit of risk.",
+    "would_fixing_it_plausibly_create_profit": "No. The corrected rule was already tested in the calibration study and failed; the head has no directional skill to unlock."
+   },
+   {
+    "title": "TP and SL exist only on paper, and their distances are far outside the 1-30 min move scale",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: the levels are reference-only (cell 5 lines 24-38). calculate_dynamic_stop_loss gives 2-6% (helper_functions.py:61-75). helper_functions.py is imported nowhere; the notebook redefines its own helpers. I re-measured on the CSV (30-bar window, random entries): +0.5% is reached 10.95%/12.22% (up/down), 1% 1.9%, 1.5% 0.4-0.6%, 2% 0.08-0.10%, 4% never. Overstated: 'tail losses are unbounded in practice'. The 30-bar time exit already bounds them. The worst 30-min adverse low in the month was -2.47%, and p99.9 was -1.99%. The real tail risk is the 11.4x implicit notional (a 2.5% move is about 28% of the $10k account), which is a sizing problem, not a missing stop.",
+    "notes": "The critic correctly concedes that brackets cannot create expectancy (optional stopping on a near-martingale; random-entry variants within +/-0.8 bps). Executing stops on 1-min bars adds taker fills, which raises costs for a cost-bound strategy. Sigma-scaled brackets are reasonable risk hygiene once an edge exists.",
+    "would_fixing_it_plausibly_create_profit": "No. Brackets reshape the payoff distribution but not its mean; the loss is already capped by the time exit."
+   },
+   {
+    "title": "No execution layer, and the research fill model is optimistic for the one pattern that depends on the first minute",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: there is no execution layer (SRS 10.3), and metrics2.py:32/:126-133 fills at the forecast close with 4 bps labelled 'maker'. I replicated the fade (EWMA-sigma z of the 15-min return, top 2% trailing-480 rank, fade, hold 15, non-overlapping) on the CSV. 1-min grid: gross +1.72/+1.37/+1.04 bps at delay 0/1/2 (n=299, t=1.15/0.90/0.73). 3-min grid: +2.77/+1.20/+0.92 (n=208, t=1.42 at delay 0). By hold time: 1 min +0.38, 3 min +1.21 (t 1.99), 15 min +1.72, 30 min +0.84, 60 min -0.37. This matches the critic within about 0.3-0.5 bps.",
+    "notes": "The conclusion 'neither confirmed nor ruled out' is too generous. The zero-latency, certain-fill, close-price number is already an upper bound for any execution after the signal bar, and it is +1.7 bps gross (+2.8 at best on the 3-min grid). That is below the cheapest retail round trip (4 bps maker/maker) and far below maker-in/taker-out (about 7 bps). Tick data would matter only for a maker-rebate or market-maker tier, where adverse selection (the critic's own -0.8 bps drift after passive fills) eats the edge. Tick-level work is not worth its cost for this pattern. The research cost model is optimistic, which makes the existing negative verdict stronger, not weaker.",
+    "would_fixing_it_plausibly_create_profit": "No at retail fee tiers: the gross upper bound is 1.7-2.8 bps against 4-7 bps of cost. It would matter only with a rebate tier plus a signal with more than about 3 bps of gross edge, and none exists."
+   },
+   {
+    "title": "Position sizing ignores the only measured skill (variance), and confidence is in scaler-dependent units",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: confidence=1/(1+var) uses scaled units (helper_functions.py:5; target scaler pooled over horizons at model.py:377-382). The notebook's 5-min confidence median is 0.593 (critic predicted 0.58), and the conf>0.5 gate passes 90% of bars. Hourly realized vol is p5-p95 2.18-11.67 bps/min (5.4x). The size multiplier lives in unused code (helper_functions.py is never imported); the notebook trades 1 BTC.",
+    "notes": "The proposed fix (units = budget / sigma_h) points the wrong way for a strategy where costs bind. With a fixed bps cost, net per unit under 1/sigma sizing is edge_z - c/sigma, which overweights low-vol trades, where cost/move is worst. I tested this on the CSV fade at 4 bps: constant size -2.28 bps per unit-trade, 1/sigma sizing -2.81, sigma-proportional -1.90. By sigma tercile at entry: low -2.24, mid -3.82, high -0.80 net. So vol-gating (trade only when forecast sigma is large relative to cost) is the right consumer of the variance skill, and it is still negative here. The Timestral gain over FHS (QLIKE 0.5-2.8%) is too small to change any sizing decision. FHS gives almost the same sigma for free, so the incremental money from the 'only measured skill' in this role is about 0. Monetising variance skill would need a volatility instrument (options, straddles, market-making spread setting), which nobody has proposed or tested.",
+    "would_fixing_it_plausibly_create_profit": "No. Vol targeting improves the Sharpe of an existing edge but cannot create one, and with fixed bps costs it lowered net PnL on the only candidate signal (-2.28 to -2.81 bps per unit-trade). It would matter only together with a positive-net signal, using sigma as a gate rather than a divisor."
+   },
+   {
+    "title": "A full round trip is charged per forecast, not per position change",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: nonoverlap_trades (metrics2.py:126-138) and trade_index in calibrate.py charge a full round trip per trade. Mechanism corrected: T-D trades the point forecast (q-median sign with |pred| > cost), not the direction head. Point signs are often one-sided (100% short in several h=5 runs). On the 3-min origin grid, back-to-back trades at h=1 and h=5 are impossible, so the 'constant short churn' explanation fails there. I re-scored all 14 repo-set neural_trade T-D cells (n>=20) with a target-position backtest, charging cost on |change in position|. Round trips fell by 0-60% (most at h=15, e.g. 254 to 130). Net improved in every cell, but 11 of 14 stay negative, and the 3 that turn positive (asis seed 0 h=15 +346 bps; rolling seed 1 h=15 +71; asis seed 1 h=15 +361, which was already positive) are the repo-set h=15 cells that report 4.8 shows reversing on the clean set. On the clean set, 8 of 8 cells stay negative (e.g. -1,450 to -1,294 bps; -706 to -585 bps).",
+    "notes": "The accounting really is conservative, and standard practice charges cost per position change. The saving scales with signal persistence, so it matters for slow (long-horizon or trend) signals and hardly at all for the top-2% fade, whose signals rarely occur back-to-back. It adds drift exposure when the position is held through gaps, which must be benchmarked against always-long or always-short.",
+    "would_fixing_it_plausibly_create_profit": "No on its own (clean set: 8/8 still negative). Only together with a persistent long-horizon signal (blocker 1), where it could cut costs by more than half."
+   },
+   {
+    "title": "Test windows and trade counts are too small to detect any realistic edge",
+    "verdict": "confirmed",
+    "impact_after_check": "medium",
+    "corrected_evidence": "Arithmetic confirmed (one-sided 5%, 80% power): n=616 for 55%, 1,715 for 53%, 3,862 for 52%, 288 for 57.3%. The deployed calibration rules had 29-107 Test trades (trading_calibration.md section 1). The Test windows were 6 and 14 days. Context missing from the critic's evidence: the short windows were imposed by Timestral's 2026-10-15 release date (contamination control, common.py POST_START). They are needed for zero-shot TSFMs but not for price-only baselines or neural_trade, which could have been scored on the 8.75-year 2017-2025 file the notebook loads (4,598,198 rows; not in this checkout).",
+    "notes": "The power gap is real but is not a profit blocker at 1-15 min. Even under the Gaussian break-even, the cheapest case (15 min, 4 bps) needs 57.8%, which these tests could detect, so a hidden 52-55% edge there would lose anyway. Power becomes binding exactly where blocker 1 points (4 h-1 day, break-even about 52-55%). Note on the fix: overlapping trades with HAC errors add little information. Effective sample size is still about T/h, so the answer is more calendar time (multi-year walk-forward), not denser origins.",
+    "would_fixing_it_plausibly_create_profit": "No on its own. It is required together with blocker 1, to detect or reject a 52-55% edge at 4 h-1 day horizons."
+   },
+   {
+    "title": "Venue mismatch: spot data, futures fees, short trades and no funding",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: dw_ccxt.py:14 ccxt.binance (spot) and :48 'BTC/USDT'; metrics2.py:32 COSTS=[4,10,20] are labelled futures maker/taker and spot. Funding at about 0.01%/8 h is about 0.03 bps per 15-min hold, negligible at the tested horizons. Spot-perp return differences at 1-15 min are small next to 4-20 bps of cost.",
+    "notes": "The impact is low at the tested horizons and becomes material only at 4 h-1 day, where funding adds about 1-3 bps per position and taxes longs. Venue and fee tier is the largest lever on the cost side, but even zero fees do not rescue any signal tested: report timestral_lig 4.8 shows no-commission PnL with |t|<2 for all models, and the fade is +1.7 bps gross with t of about 1.2.",
+    "would_fixing_it_plausibly_create_profit": "No on its own. It matters only together with a long-horizon signal (funding) or as a cost reduction for a signal whose gross edge already exceeds about 4 bps, and none does."
+   }
+  ]
+ },
+ {
+  "lens": "objective",
+  "blockers": [
+   {
+    "title": "Every decision rule keys on the median, the output with no skill. The spread/range, the output with skill, never sets expected value.",
+    "category": "unrealized",
+    "evidence": "Rules tested so far: sign of median with a 0.01 bps no-call band (research/timestral_lig/trading_nocost.py:20-33; calibrate.py:39,113); |median| > cost (model_evaluation_timestral.md 7.7, T-D). Calibration confidences are all scale-free: z = median/(IQR/1.349), pm = P(up)-0.5, dp, then a percentile rank over the trailing 480 origins (calibrate.py:6-9, 82-85, 116-118). Bps magnitude never enters. Variance skill measured but unused: QLIKE 0.5-2.8% better than FHS; range forecast 5-17% better than EWMA (eval 7.2, 7.5). On the CSV, a free causal Parkinson-EWMA vol forecast ranks |r| with Spearman 0.36-0.40. Break-even accuracy at 4 bps by predicted-vol decile (cut points over the whole month, descriptive): h=15 78.7% (D1) -> 56.8% (D10), 56.1% in the top 2%; h=5 100% -> 61.6%; h=1 at least 75% in every decile (scratchpad/obj/a1.py). In T-D, better-calibrated models (Timestral ctx2048) make 0-46 trades, while noisy-median models trade most and lose most (Chronos-Bolt: 394-490 trades, -4.2 to -5.2 bps per trade, t down to -8.0).",
+    "mechanism": "Net EV per trade is about (2p-1)*E|r| - c. Only E|r| is predictable. Scale-free ranking divides it out, so rules are selected on the noise dimension (direction) and pay costs equally in quiet regimes, where no hit rate can cover them. A |median|>c gate measures how noisy the median is, not EV. A vol gate alone is not enough: on the CSV, fading every 15-min move goes from -0.31 bps gross per trade (low-vol tercile) to +0.30 (high-vol tercile), and E|r|>=20 bps cuts net loss from -11,317 to -2,067 bps but stays negative (a4.py). The gate is necessary, and it must be paired with a direction signal of at least 57-60%.",
+    "impact": "high",
+    "fix_or_test": "Pre-register one EV rule with no searched parameters: trade iff (2*p_hat - 1)*Ehat|r_h| > c. Ehat|r_h| comes from FHS or Timestral quantiles (mean |q|). p_hat comes from a walk-forward, isotonic-calibrated logistic (6-feature base model, eval 7.6) or a fixed reversal prior estimated only on pre-period data. Ablation: the same rule with a constant Ehat|r| isolates what the variance forecast adds. Also pre-register the combination the research already flagged: fade top-2% |z| moves only when Ehat|r_15| >= 20 bps. On this month, in-sample and overlapping the repo Test window, that is n=50, 64% hit, +8.0 bps net per trade, against -1.05 without the gate. That figure is motivation, not evidence. Score once on months of unseen data (see the power blocker).",
+    "effort": "medium"
+   },
+   {
+    "title": "The research protocol cannot detect a profitable edge: 6-14 day windows, small top-k samples and a max-over-rules gate",
+    "category": "research-design",
+    "evidence": "dw_ccxt.py:31 hard-codes 30 days of data; model.py:48 MAX_SEQUENCE_COUNT=2,880 (2 days); Test windows are 6 and 14 days. The P-B calibration (the only one for neural_trade) uses 3-7 days. Deployed rules had 29-107 trades. One-sided binomial power at alpha 0.05 for a true 60% rule (about break-even at h=15 in high vol): 0.29/0.34/0.62 at n=30/50/100. Trades needed for 80% power: 160 (60%), 245 (58%), 620 (55%). With Holm over 6 rules, power at 60% is 0.09-0.31 for n=30-100. Gate: the null-max median of the R-rule search in calibration.json is 0.54-0.58. A simulation matched to that gives power 0.18-0.31 to deploy a true 60% rule at n=100 and 0.38-0.54 for a 63% rule. Joint gate x Test power is about 5-20%. For a PnL t of 1.96: 14 days needs annualised Sharpe 10.0, 6 days 15.3, 90 days 3.9, one year 2.0.",
+    "mechanism": "'No rule passed' is the expected result even if a cost-covering 58-60% rule existed. Pushing to the top 1-2% to maximise accuracy shrinks n further. The protocol can certify only Sharpe of about 10 or more, so profitable Sharpe 2-5 strategies stay invisible and get labelled 'no edge'.",
+    "impact": "high",
+    "fix_or_test": "Download 2-4 years of 1-min BTCUSDT (free; about 1M bars; parameterise dw_ccxt.py:31). Run walk-forward with monthly refits and a purge. Use every origin with staggered overlapping 1/h positions and Newey-West SEs instead of greedy non-overlapping top-k trades. Pre-register at most 3 rules. State the target before testing, e.g. 80% power for Sharpe 3, which needs about 156 trading days of forward or untouched history.",
+    "effort": "medium"
+   },
+   {
+    "title": "Accuracy is the optimisation target, but money depends on E[d*r] - c",
+    "category": "objective",
+    "evidence": "The task in plans/trading_calibration.md:6 reads 'maximise accuracy at the expense of trading volume'. Scoring uses the Wilson LB of accuracy (W) or raw accuracy (R) and drops zero-return trades (calibrate.py:135-140). The deployed clean P-A price-only rule had 56.1% accuracy and lost -226 bps gross and -658 net (trading_calibration.md:93). For the top-2% 5-min fade the average loss is 14.5 bps against an average win of 7.4, so break-even is 59-85% (lines 137-138). Same pattern on the CSV: the top-2% 15-min fade wins 60.1% of trades, but the average loss is 21.1 bps against an average win of 18.9 bps, so it nets -1.05 bps per trade.",
+    "mechanism": "Accuracy ignores payoff size. Fading after large moves has negative skew: continuations are the big losers. Maximising accuracy therefore selects negatively skewed rules that lose money. Cutting volume does not cut cost per trade, but it does cut statistical power.",
+    "impact": "high",
+    "fix_or_test": "Select and gate on mean net PnL per trade at 4 and 10 bps (its lower CI bound, or HAC t), with the same label-shift null. Report accuracy only as a description. If payoff shaping (vol-scaled stop, horizon) is wanted, pre-register it as part of the rule and do not search it.",
+    "effort": "small"
+   },
+   {
+    "title": "neural_trade's losses build in a short bias, and the decision layer turns it into a bet on market direction",
+    "category": "defect",
+    "evidence": "Focal alpha=0.7 on DOWN, gamma=1 (model.py:113-114; math_helpers.py:132). With P(up)=0.5, the loss-optimal constant output is 0.383. The head exceeds 0.5 only if true P(up) >= 0.70, and exceeds the notebook LONG threshold 0.65 only if P(up) >= 0.875. SHORT (< 0.35) fires once P(up) <= 0.437. The 5-min head uses pinball tau=0.4 (model.py:78, 1460) with lambda_point clamped at 1000: the sign of its median is DOWN in 12 of 12 runs (mean up-share 0.278, min 0.000), against 0.509 and 0.485 at 1 and 15 min (trading_nocost.json). Direction-head PnL equals exactly -(always long) in 18 of 36 cells. The only nominally significant neural_trade result (clean, h=1, +763.9 bps, t=2.04) came in a -528 bps market. The stored notebook run made 9 trades: 0 LONG, 9 SHORT. The alignment loss (model.py:1735-1767) pulls the head toward a Gaussian P(up) built from the biased mu. Labels use ret > 0, so zero returns (1.9% at 1 min) count as DOWN (model.py:1614).",
+    "mechanism": "Decisions measure the window's drift, not a forecast. PnL sign follows the market, there is no gross edge to cover costs, and every backtest of this model is confounded by trend.",
+    "impact": "high",
+    "fix_or_test": "Use alpha=0.5 (plain BCE) and tau=0.5, or drop the point head. Centre decisions on an isotonic-calibrated P(up) fitted on past data. Report every PnL next to always-long and always-short, plus a drift-hedged PnL. Pass check after retraining: head up-share close to the realised up-share, and correlation of strategy PnL with always-long close to 0.",
+    "effort": "small"
+   },
+   {
+    "title": "The decision layer treats high predicted variance as risk to avoid, which inverts the cost logic (sizing, spike filter, stops)",
+    "category": "restriction",
+    "evidence": "inference.ipynb cell 5: entry needs conf=1/(1+v) > 0.5 and no spike (lines 198, 274, 278), and a spike forces an exit (lines 291-293). helper_functions.py:77-86 sizes 1.2x when confidence > 0.7 (low variance) and 0.6x when confidence <= 0.5. SRS FR-4.2, FR-4.6. On the CSV (a3.py), the causal spike flag (v > 2x trailing 20-bar mean; 2.4% of origins) has break-even at 4 bps of 62.9% (h=5) and 59.0% (h=15), against 71.3% and 62.3% without a spike. The low-vol tercile, which gets the larger size, needs 85.7% and 69.8%; the high-vol tercile, which gets the smaller size, needs 64.1% and 58.5%. Stop = 2%*(1+ratio) = 200-600 bps (helper_functions.py:61-75) against a 15-min sigma of 17-26 bps, so it never triggers. TP/SL at +0.5/+1.5/-1% are 'not executed, just reference' (cell 5 lines 24-38).",
+    "mechanism": "The rules trade more and larger where costs cannot be covered, and skip the regimes where they can. Kelly-style sizing f ~ (mu-c)/sigma^2 is zero in low vol. There is no payoff shaping, because the exits are set in percent, not in volatility units.",
+    "impact": "medium",
+    "fix_or_test": "Replace with an EV abstain rule plus size proportional to max(0,(2p_hat-1)*Ehat|r| - c)/sigma_hat^2, capped. Set stops and targets from forecast quantiles (for example q05/q95 of h-min returns, in bps). Test inside the pre-registered walk-forward above, against the same rule with constant size.",
+    "effort": "small"
+   },
+   {
+    "title": "Timestral-LIG was trained to have no direction, then judged on direction. Its variance objective is not weighted by decisions.",
+    "category": "objective",
+    "evidence": "Design choices: a median random-walk penalty (timestral_lig.md:139; governed weight 6.6 -> 5.0, line 301), a recalibration G that shrinks the median 76-82% at h=1 and 100% from h=3-4 (line 38), and symmetric averaging of x and -x (line 98). As a result A1 and A2 make 'no calls' at h=5 and h=15 (lines 330-337), and the calibration grid was effectively 30-60 rules. Pass rule and V2 score: QLIKE plus pinball, unit-free and averaged over all origins. Symmetric averaging forces an even variance and an odd median. On the CSV (in-sample, one month, a2.py), after top-2% 15-min moves, realised/EWMA-predicted variance is 3.05 after DOWN moves and 2.15 after UP moves (leverage term -0.149*min(z,0)), and there is an even drift term of +0.36*|z| bps. The architecture cannot represent either.",
+    "mechanism": "The model's only skill (magnitude) was scored on an average that weights quiet origins, where no trade can clear cost, as heavily as active ones. Its money use (as an E|r| input to a cost gate) was never tested, so a small real edge was judged as an 'adapter FAIL'. Asymmetric volatility information is removed by construction.",
+    "impact": "medium",
+    "fix_or_test": "Re-score A0, A2, C-FHS-hi and FHS on decision-relevant targets: Brier/AUC for the event |r_h| > c (c = 4 and 10 bps), Spearman of the predicted scale with |r| within the top two deciles, and the net PnL of the pre-registered EV-gate rule with each model's Ehat|r|. Run a paired ablation with symmetric averaging off for the variance path, with QLIKE tested conditionally on the sign of the last 15-min move.",
+    "effort": "medium"
+   },
+   {
+    "title": "Labels and losses ignore costs: deadband 0, sub-cost noise dominates the labels, and an anti-shrinkage penalty",
+    "category": "objective",
+    "evidence": "Config.DIR_DEADBAND_BPS = 0.0 (model.py:119), although the masking code exists (model.py:1600-1616). On the CSV, the share of moves with |r| <= 4 bps is 62.8% at 1 min, 33.7% at 5 min and 19.8% at 15 min; with |r| <= 10 bps it is 91.3%, 66.3% and 45.0%. No loss term in model.py mentions cost, fee or PnL. vol_loss = |std(pred_h1) - std(actual)| (model.py:1769-1787, LAMBDA_VOL=1, line 73) pushes forecast dispersion up to the realised dispersion of a near-martingale target. T-D: neural_trade makes 81-324 trades with |forecast| > 4 bps, at -3.5 to -4.7 bps per trade (t down to -6.1).",
+    "mechanism": "Model capacity goes to the sign of moves that cannot be traded profitably. The point forecast's magnitude is not an EV estimate, so cost-gated rules fire on noise.",
+    "impact": "medium",
+    "fix_or_test": "Set the deadband to the round-trip cost (a 3-class target with an abstain class, plain CE), or train directly on a differentiable net utility: mean(tanh(f)*r) - c*mean|delta tanh(f)| on vol-normalised returns. Drop vol_loss. Compare by walk-forward against the FHS-gated price-only baseline, with the same pre-registered scoring.",
+    "effort": "small"
+   },
+   {
+    "title": "Monetisation routes that do not need direction are untested, and the data and scope restrictions rule them out",
+    "category": "unrealized",
+    "evidence": "The measured skill is short-horizon magnitude. At 1 min the range forecast is 5.1-7.5% better than an EWMA of the range and 28-52% better than bias-corrected HAR (eval 7.5). SRS 10.3 states a single pair, no execution module, and OHLCV only (FR-1.1). Every test assumes a fill at the bar close (taker-like) while charging the 4 bps maker round trip (eval 7.7). No limit-order or passive execution was ever simulated, and no implied-vol data was used.",
+    "mechanism": "A quoting or passive-execution engine earns the spread and pays maker fees. Its main input is the expected next-minute range, which is exactly where the model beats the baselines. A variance edge can also time variance-risk-premium trades. None of these routes needs a direction hit rate above 50%, but the research only priced directional taker trades.",
+    "impact": "medium",
+    "fix_or_test": "Record Binance L2 and trades through the free websocket for 4+ weeks. Simulate passive quotes at plus/minus k*sigma_hat_1min with conservative queue and fill rules. Measure spread capture minus adverse selection, using the range forecaster against an EWMA (paired). Separately, backtest a Deribit straddle rule on (implied - forecast) variance with Ehat from FHS or Timestral.",
+    "effort": "large"
+   },
+   {
+    "title": "Model selection and stopping have no link to money, and the validation fold is also the test fold",
+    "category": "defect",
+    "evidence": "In training_log.csv rows 0-8, val_loss is 4589.5-4590.3, of which 4586.72 is the constant, zero-gradient val_trend_loss (99.9%). Checkpoint and restore use val_loss (model.py:819-820). es_mcc has patience 15 > EPOCHS 8 (model.py:45, 821-823), so it never fires. In most epochs val_dir_acc_h1 = 0.4948 with MCC 0.000: a constant classifier, so accuracy is just the base rate. Rows 0-12 show acc 1.0 with MCC 0 (one-class validation). Price-space R2 and MAPE are reported and are trivially high. The 480-sample validation fold also serves as the test fold (D4).",
+    "mechanism": "Weights are picked on noise in a loss that cannot tell a short-beta classifier from a skilled one. Every logged metric is biased by selection and has no relation to PnL.",
+    "impact": "medium",
+    "fix_or_test": "Select checkpoints on purged walk-forward validation blocks, separate from test, using a proper score (log loss of a calibrated P(up), QLIKE of the variance) and the net PnL of the pre-registered rule. Drop price-level R2 and MAPE from reports.",
+    "effort": "small"
+   },
+   {
+    "title": "The notebook strategy's horizon, holding period and exits do not match the forecasts",
+    "category": "defect",
+    "evidence": "In inference.ipynb cell 5, max_hold is 30 bars (line 253), longer than the longest forecast horizon (15). Entry and exit use only the 5-min head (line 84), which is the always-DOWN tau=0.4 head. The REV exit is asymmetric under the focal bias: LONG exits when head < 0.45 (true P(up) <= 0.62, almost at once), SHORT exits only when head > 0.55 (P(up) >= 0.77). weighted_sig weights horizons by config LAMBDA_SHORT/POINT/LONG (1/1/1, not even the calibrated 1000) and is only plotted (cell 7 lines 213-226). The cell 7 summary text says thresholds of 0.25/0.75, but the code uses 0.65/0.35. There are no fees (lines 310-315), and var_mean/var_std use centred windows (lines 196-197).",
+    "mechanism": "Positions are held where no forecast exists, exits follow the bias rather than the information, and the horizon with any hint of structure (15-min reversal) is not the one traded.",
+    "impact": "low",
+    "fix_or_test": "Choose h* = argmax_h[(2p_hat_h - 1)*Ehat|r_h| - c] at each origin and hold exactly h* bars. Allow no head-flip exits unless they are pre-registered. Use trailing windows only, and charge fees.",
+    "effort": "small"
+   },
+   {
+    "title": "The trend and coherence prior points the wrong way for this market",
+    "category": "objective",
+    "evidence": "model.py:1644-1676: the extended trend prior is the squared gap between the future delta and the past pct_change times price (a momentum prior), plus a sign-coherence penalty across horizons. It now has zero gradient (D2). The data reverse: momentum 'follow' trades were right less than 50% of the time in 73 of 80 cells (trading_calibration.md:116). On the CSV, the OLS slope of the future return on past z is -0.17 (H=5) and -0.39 (H=15).",
+    "mechanism": "If someone 'fixes' D2 by making the term act on predictions, it will pull forecasts toward continuation, the opposite of the only stable pattern, and add anti-skill.",
+    "impact": "low",
+    "fix_or_test": "Delete the term; do not repair it. If a trend prior is wanted, make it a learned signed feature, validated walk-forward.",
+    "effort": "small"
+   }
+  ],
+  "verdicts": [
+   {
+    "title": "Every decision rule keys on the median, the output with no skill. The spread/range, the output with skill, never sets expected value.",
+    "verdict": "partly",
+    "impact_after_check": "high",
+    "would_fixing_it_plausibly_create_profit": "Only together with a direction signal that is right at least 57-60% of the time in high volatility (the 15-min reversal is the only candidate), maker-level costs, and a multi-year out-of-sample pass. A volatility gate alone does not help: on the CSV, fading every 15-min move gains only 0.6 bps gross per trade with the E|r|>=20 gate (-0.04 -> +0.58), against a 4 bps cost.",
+    "corrected_evidence": "I reproduced the numbers in a1/a4: decile break-evens, Spearman 0.36-0.40, top-2% fade n=268 at -1.05 net, and n=50 at +8.04 net with the E|r|>=20 gate. Three corrections. (a) The claim that 'bps magnitude never enters' is wrong for T-D. Its |median|>c rule is a bps EV gate. For a coherent distributional model, (2p-1)*E|r| is roughly proportional to |median| (Gaussian: about 0.64*|mu|). So the proposed EV rule with the model's own p_hat roughly reproduces T-D, which abstained correctly (Timestral ctx2048: 0/11/46 trades). Only calibrate.py is scale-free (rank on z/pm/dp, lines 62, 84). (b) (2p-1)*E|r| overstates EV when payoffs are skewed, which is the critic's own blocker 3. For the top-2% 15-min fade it predicts about 4.0 bps (p=0.601, E|r| about 19.8), but realised gross was 2.95. Use E[d*r|x] directly. (c) Rescaling alone does not help: ranking the fade by |past move in bps| instead of |z| gave +2.27 vs +2.95 gross (H=15, top 2%). What is new and untested is combining an independent direction prior with an external volatility level. A 48-cell grid on the CSV (scratchpad/obj/v_combo.py): at H=15, keep top 2-5% |z| and E|r|>=15-30 bps, all 12 of 12 cells are positive net of 4 bps (e.g. top 5%, E|r|>=20: n=99, 60.6% hit, +8.95 net, t=2.82). In the second half only 8 of 12 are positive. At H=5 the results are unstable, and at 10 bps cost the best cells fall to +2 to +4 bps.",
+    "notes": "The core idea is right: combine a direction prior with a volatility level, and score money in bps. The framing overstates it, because the median gate is already an EV gate for calibrated models. The grid evidence is in-sample, covers one month, and overlaps the repo Test window. It is still the only rule family that looks worth pre-registering. Specify it as E[d*r | z-bucket, vol-bucket] estimated on pre-period data, not as (2p-1)*E|r|."
+   },
+   {
+    "title": "The research protocol cannot detect a profitable edge: 6-14 day windows, small top-k samples and a max-over-rules gate",
+    "verdict": "confirmed",
+    "impact_after_check": "high",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. It cannot create an edge, but it is the precondition for finding or killing one. It is also the cheapest decisive step: free Binance 1-min history from 2017 onward is a holdout that none of this research has touched.",
+    "corrected_evidence": "The binomial power figures are confirmed: 0.291/0.336/0.623 at n=30/50/100 for a 60% rule. With alpha/6 (the first Holm step) they are 0.094/0.156/0.307. Trades needed for 80% power: 158 at 60%, 245 at 58%, 620 at 55%. Sharpe needed for t=1.96: 15.3 over 6 days, 10.0 over 14 days, 3.9 over 90 days, 2.0 over a year. One error: '80% power for Sharpe 3 needs about 156 days' is wrong. 156 days is the 50%-power point for a two-sided test. 80% power needs about 251 days one-sided and 318 days two-sided; for Sharpe 5 it needs 90-115 days. The restriction is written into the code and the SRS: dw_ccxt.py:31 (30 days), model.py:48 (2,880 sequences) and SRS NFR-4.1 ('up to 2880 samples'). trading_calibration.md section 6 still proposes scoring the rule on '4 weeks of new data'. That gives about 50-100 trades, so the power is again only 0.3-0.6. Scale check: the vol-gated fade makes about 50-100 trades a month with a per-trade std of about 42 bps. Two years gives about 1,200-2,400 trades, so the SE is about 1 bps per trade. That is decisive for a +4 bps edge.",
+    "notes": "I would rank this first. It is cheap: parameterise the download, about 1M bars. It is decisive in both directions. It also turns the 'motivation' cells of blocker 1 into a real test. Use pre-2025-10 history as the untouched holdout, and pre-register at most 2-3 rules scored on net PnL with HAC SEs."
+   },
+   {
+    "title": "Accuracy is the optimisation target, but money depends on E[d*r] - c",
+    "verdict": "confirmed",
+    "impact_after_check": "medium",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. The deployed rules mostly lost gross because their accuracy itself fell to 45.7-52.1% out of sample (4 of 6). Scoring on PnL would not have produced a winner from that grid. Scoring on PnL is necessary once a candidate exists (blockers 1 and 2).",
+    "corrected_evidence": "Confirmed. trading_calibration.md:6 states the task as 'maximise accuracy at the expense of trading volume'. calibrate.py:135-140 scores on the Wilson lower bound or raw accuracy and drops zero-return trades. The clean P-A price-only rule had 56.1% accuracy but -226 gross and -658 net. The 5-min fade's average loss was 14.5 bps against an average win of 7.4. On the CSV, the top-2% 15-min fade wins 60.1% (n=268) but has avg win 18.9 against avg loss -21.1, so it nets -1.05. Caveats. Per-trade PnL is fat-tailed (std about 40 bps at H=15), so a PnL-gated search has less power than the accuracy gate, which makes blocker 2 worse. Also, pushing to the top 1-2% by |z| raised E|r| as a side effect, which partly helped with cost.",
+    "notes": "The accuracy objective came from the user's own earlier task wording, so changing it is the user's decision. The mechanism (negative-skew fades) is correct and is visible in the data."
+   },
+   {
+    "title": "neural_trade's losses build in a short bias, and the decision layer turns it into a bet on market direction",
+    "verdict": "partly",
+    "impact_after_check": "medium",
+    "would_fixing_it_plausibly_create_profit": "No. Removing the bias removes a short-BTC beta, a confound that loses in rising markets. The unbiased head has AUC 0.487-0.513 (eval 7.1), and the research already re-centred it (dp = head - calibration median) without finding skill.",
+    "corrected_evidence": "I reproduced the focal-loss optimum numerically (alpha 0.7, gamma 1): 0.383 at P(up)=0.5. The head exceeds 0.5 only if P(up)>=0.70, exceeds 0.65 only if P(up)>=0.875, and falls below 0.35 once P(up)<=0.4376. trading_nocost.json: the 5-min median's up-share is below 0.5 in 12 of 12 runs, mean 0.278. But 4 runs are at 0.36-0.43, so 'biased' is accurate and 'always DOWN' is not. The 1-min and 15-min means are 0.509 and 0.485. The direction-head PnL equals -(always long) in exactly 18 of 36 cells. Clean, h=1: +763.9, t=2.04, in a -527.9 bps market. Notebook: 9 SHORT, 0 LONG, -$174 over 480 bars. Corrections. (a) Zero returns are masked, not labelled DOWN: mask = |ret| > deadband at model.py:1610-1612, and the metrics use the same mask (model.py:1947, 2051). (b) The alignment loss is negligible: weight 0.1 against lambda_dir clamped at 1000, under 1e-3 of the total (eval 3.2). (c) tau=0.4 (TAU_PRICE) applies to all three heads. Only the 5-min head is dominated by it, because lambda_point weights only h1 and clamps at 1000. The root cause is the zero-gradient trend term blowing up the loss-weight calibration (blocker 11).",
+    "notes": "This is a correctness fix that makes backtests interpretable and stops a deployed system from being short BTC by construction. It is not a profit source."
+   },
+   {
+    "title": "The decision layer treats high predicted variance as risk to avoid, which inverts the cost logic (sizing, spike filter, stops)",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No. With no direction edge, trading or skipping high-vol regimes gives the same expected gross (about 0). It matters only together with a direction signal, and then it is the same change as blocker 1.",
+    "corrected_evidence": "helper_functions.py is not imported anywhere in the repo (grep finds no import; eval 3.1 says so too). The 1.2x/0.6x sizing (lines 77-86) and the 2-6% stop (lines 61-75) are dead code, specified only in SRS FR-4.2/4.3 and 3.4.2. The notebook does apply conf=1/(1+v)>0.5 and a spike skip/exit (cell 5, lines 198, 269-293). But v is neural_trade's variance head, which ranks realised volatility at Spearman 0.05-0.16 frozen and -0.10 to 0.12 retrained daily, against 0.31-0.40 for EWMA (eval 7.9). So in practice these filters are close to random with respect to realised volatility, and the spike flag also uses a centred window (lines 196-197). a3.py reproduces: spike break-even 62.9%/59.0% vs no spike 71.3%/62.3%; low-vol tercile 85.7%/69.8% vs high-vol 64.1%/58.5%. The TP/SL levels (+0.5/+1.5/-1%) are reference only (lines 24-38).",
+    "notes": "The economic argument is right in principle (Kelly sizing on (mu-c)/sigma^2 is zero in quiet regimes). But it acts on code that is dead or fed by a variance head with almost no skill, so its current cost is small."
+   },
+   {
+    "title": "Timestral-LIG was trained to have no direction, then judged on direction. Its variance objective is not weighted by decisions.",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No. A 1-3% sharper variance forecast barely moves a cost gate: free Parkinson EWMA already ranks |r| at Spearman 0.36-0.40, close to the ceiling that noisy |r| allows. The asymmetries cited are not stable.",
+    "corrected_evidence": "The LIG FAIL verdict rests on pre-registered QLIKE, pinball and tail rules against zero-shot (timestral_lig.md section 1, preregistration.json P1-P7), not on direction. Section 4.8 is labelled descriptive. The mathematics holds: symmetric averaging makes the variance even and the median odd. But the cited data effects do not replicate across horizons (a2.py). At H=5 the leverage coefficient has the opposite sign (+0.055*min(z,0)): realised/predicted variance is 3.76 after top-2% UP moves and 2.98 after DOWN moves. The 'even drift' term is -0.06|z| at H=5 against +0.36|z| at H=15, which is about 1 bps at |z|=3, far below cost. The proposed ablation already exists: symmetric averaging off (T-J; eval line 339) changed quality by -0.2% to +0.8%, with no QLIKE gain. The median random-walk penalty and the G shrink are confirmed (timestral_lig.md:139, 301; A1/A2 make no calls at 5 and 15 min).",
+    "notes": "Re-scoring on decision-relevant targets (Brier/AUC for |r|>c, ranking within the top volatility deciles) is cheap and sensible. It is not a hidden profit source."
+   },
+   {
+    "title": "Labels and losses ignore costs: deadband 0, sub-cost noise dominates the labels, and an anti-shrinkage penalty",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. A cost-aware label cannot create information the inputs lack: a 6-feature walk-forward logistic reaches only AUC 0.517-0.541 (eval 7.6), and neural_trade sees only 60 close prices.",
+    "corrected_evidence": "Confirmed: DIR_DEADBAND_BPS=0.0 (model.py:119), and model.py has no fee, cost or PnL term. On the CSV, |r|<=4 bps for 62.8/33.7/19.8% of moves at 1/5/15 min, and <=10 bps for 91.3/66.3/45.0%. The vol_loss mechanism is refuted in practice. LAMBDA_VOL=1 is not calibrated while the other weights clamp at 1000, so it is under 1e-3 of the total (eval 3.2). Point forecasts are 2.5-17x smaller than real moves (eval 7.9), and the log shows val_vol_loss of 0.4-0.67 in scaled units, so forecast dispersion stays well below the realised level. The T-D evidence is selective. The neural_trade repo cells range from n=7 to 324 and from -4.7 to +8.4 bps per trade (e.g. 47 trades at +8.4, 254 at -1.6). The many 5-min trades come from the tau=0.4 short offset (about -0.25 sigma, about -2.4 bps), not from inflated dispersion.",
+    "notes": "A deadband or abstain class is a reasonable hygiene change. The 'anti-shrinkage penalty' part of the blocker is wrong as stated, because the term is inert."
+   },
+   {
+    "title": "Monetisation routes that do not need direction are untested, and the data and scope restrictions rule them out",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No for an account at base fee tiers. Passive quoting on BTCUSDT is a latency and maker-rebate business, which needs VIP or market-maker fee tiers and colocation, not a better 1-min volatility forecast.",
+    "corrected_evidence": "It is true that these routes are untested, and SRS 10.3 confirms the scope: one pair and no execution module. The mechanism is mostly wrong. The BTCUSDT spot tick is 0.01 USDT (about 0.001 bps at about $110k), and the perp tick 0.1 is about 0.01 bps. The spread is usually one tick, so spread capture is about 0 against a 2 bps per side maker fee. The research's cost model (4 bps maker round trip with fills at the close) is optimistic, not pessimistic: a real taker round trip is about 10 bps. A cheap check on OHLC (scratchpad/obj/v_passive.py) puts passive entry for the top-2% 15-min fade at 0.5 or 1.0 sigma_1min, filled only if price trades through the limit. It fills 63% or 47% of signals, and gross per trade falls from +2.95 to +2.31 or +2.27 bps, which is adverse selection. On variance-risk-premium trades: the BTC option VRP exists without any forecast, and a 0.5-2.8% QLIKE gain at 1-15 min does not matter for options with days-to-weeks tenor and spreads of several vol points.",
+    "notes": "What remains valid is using the range forecast to time or size execution of trades decided on other grounds. That cuts costs but does not create alpha. A wider symbol universe (breadth) would help statistical power more than a quoting engine would."
+   },
+   {
+    "title": "Model selection and stopping have no link to money, and the validation fold is also the test fold",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No. Picking better among checkpoints that have no skill still gives a model with no skill. It matters for honest reporting only.",
+    "corrected_evidence": "Confirmed in code. The checkpoint and restore_best_weights use val_loss (model.py:819-820). es_mcc has patience 15 against EPOCHS 8 (lines 45, 821-823), and es has patience = EPOCHS = 8, so neither fires. The 480-sample validation fold is also the test fold, and the notebook backtest runs on those same 480 bars (cell 5 output: 480 rows). Log: in rows 0-8, val_trend_loss is 4586.72 out of a val_loss of 4589.5-4590.3, which is 99.9%. In rows 13-44, val_dir_acc_h1 is 0.4948 with MCC 0. Corrections. In rows 0-12, accuracy is not uniformly 1.0: rows 2-5 and 10 show 0.598-0.971, all with MCC 0. The latest logged run (rows 61-65) is not dominated by the trend term: val_trend is about 0.001, and val_loss of 4.4-10.6 is mostly NLL. The log therefore mixes code versions.",
+    "notes": "This is a valid defect, and it shares a root cause with blocker 11 (the constant trend term)."
+   },
+   {
+    "title": "The notebook strategy's horizon, holding period and exits do not match the forecasts",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No. The forecasts it would act on have no skill. Fixing it only makes the backtest honest.",
+    "corrected_evidence": "Confirmed in inference.ipynb cell 5. max_hold is 30 (line 253). Entry and exit use only dir_5m (line 84). REV exits fire at <0.45 or >0.55 (lines 296-301), which means true P(up)<=0.62 for LONG and >=0.77 for SHORT under the focal optimum. weighted_sig uses config LAMBDA_* = 1/1/1 and drives no decision (lines 207-212). There are no fees (lines 310-315), and the windows are centred (lines 196-197). The cell with execution count 6 (index 7) prints 'Entry thresholds: 0.25 (buy) and 0.75 (sell)' (line 389) and draws them as horizontal lines (lines 253-254), while the code uses 0.65/0.35. Two more defects. check_multi_horizon_agreement(future_prices, 0) at line 266 tests only that 2 of 3 deltas share a sign, not that they agree with the trade side. And the whole backtest is 480 bars (8 h), the same fold that selected the weights.",
+    "notes": "The critic's low rating is correct."
+   },
+   {
+    "title": "The trend and coherence prior points the wrong way for this market",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "would_fixing_it_plausibly_create_profit": "No. Deleting the term removes the root cause of the loss-weight clamp, and through it the 5-min tau=0.4 short offset (blocker 4) and the constant val_loss (blocker 9). It adds no edge.",
+    "corrected_evidence": "model.py:1644-1676 is confirmed: the trend term compares true deltas with past pct_change*price, has zero gradient, and adds a coherence penalty. The critic understates its real harm, which comes from its size, not its direction. In raw USD^2 its median is about 1.2-1.7e5, so it dominates ref_loss, and lambda_point, lambda_dir and lambda_var all clamp at 1000 (model.py:783-800; eval 3.2). The reversal evidence on the CSV is weak. With non-overlapping origins, the OLS slope of the future return on z is -0.21 (t=-1.3) at H=5 and -0.39 (t=-0.8) at H=15. These are negative but not significant; the critic's -0.17/-0.39 come from overlapping origins. The 73-of-80 descriptive cells (trading_calibration.md 4.2) support the sign.",
+    "notes": "Delete the term, do not repair it. The 'anti-skill if repaired' risk is hypothetical. The clamp side effect is real and current."
+   }
+  ]
+ },
+ {
+  "lens": "model",
+  "blockers": [
+   {
+    "title": "LearnableIndicators do nothing in the forward pass, and the parameter logs hide it (D1/D7 go further than reported)",
+    "category": "defect",
+    "evidence": "model.py:1073, 1085-1087, 1110-1112, 1135, 1147 compute logit + stop_gradient(logit)*(20-1), which equals 20*logit in the forward pass. I rebuilt the layer in numpy and ran it on the last 2,880 repo windows, scaled as in model.py:386-390. Forward alpha: 9.5e-7 at period 5, 9e-13 at period 9, 4e-30 at period 60. Of the 39 EMA-based channels, 34 are constant inside the window (within-window std < 1e-3): MA x3 and BB mid/upper/lower x9 equal the window's first bar, all 21 MACD/pair channels are 0, and RSI-21 and RSI-30 are 0. RSI-9 stays between 0 and 0.03 on a 0-100 scale (model.py:1138-1141), and one MACD-cross channel is float noise. The three BB %B channels equal (x - x0)/4e-4 + 0.5 (corr 1.0000 with x - x0, median |value| 347, range -3692 to +5397) and go unnormalised into the BiGRU (model.py:1239). The three momentum channels are identical at period 1.948 (D7). indicator_params_history.csv: all 27 EMA periods fall monotonically, and every logit rises by 0.00427 +/- 0.00002 per epoch whatever its type or period. That is one identical Adam step per variable, which points to a data-independent gradient: L2 decay toward logit 0 (REG_MOMENTUM_L2, model.py:67). The data gradient carries a factor sigmoid'(20*logit) of 1e-6 to 1e-30. ParamsLogger logs period_from_logit of the raw logit (model.py:1177-1194), so the CSV shows 'learned' periods of 4.9-58.8 while the forward pass uses periods of about 2e6 to 1e30. The tests check shapes only (test_model.py:392-426).",
+    "mechanism": "The part of the architecture meant to supply the edge (data-adapted TA indicators) has never been tested. The network actually sees three things: the scaled level, a x2500-amplified (x - x0), and a ~2-bar momentum. The %B channels are 100-1000x larger than the other channels and saturate the GRU gates, so the recurrent layer sees roughly sign(x - x0). The 30 'learnable parameters' only decay. So nobody can know whether learnable indicators help.",
+    "fix_or_test": "In the forward pass, use the logit itself. If a gradient boost is really wanted, use m*logit - stop_gradient((m-1)*logit). Under Adam the x20 gradient at model.py:1903-1905 only inflates the clip norm, so drop it. Replace the momentum write-back at model.py:1931 with the true inverse, raw = log(expm1(p-1)). Normalise each channel (LayerNorm) before the GRU. Add a unit test: forward alpha == 2/(period+1) at initialisation. Even after the fix, EMA-60 keeps 14% of its weight on the window's first bar after 59 steps (BB-50: 9%), and MACD 45/60/30 never warms up. So use a window of at least 3x the longest period, or seed the EMAs from a longer history. Decisive test: retrain with and without the fix, all else equal. Check that every channel varies inside the window and that the periods move apart. Then compare pinball and QLIKE on a held-out week.",
+    "impact": "high",
+    "effort": "small"
+   },
+   {
+    "title": "The only measurable edge (volatility) is out of the model's reach: no range, volume or time-of-day inputs, and the one volatility channel is zeroed",
+    "category": "unrealized",
+    "evidence": "The neural_trade variance head is 11-26% worse in QLIKE than a 2-parameter EWMA-Student-t. Its Spearman(width,|y|) is 0.03-0.16, against 0.31-0.40 for EWMA (plans/model_evaluation_timestral.md, table T-B, rows 'neural_trade as-is' and 'retrained daily'). The input is close only (model.py:1219). SRS 3.5.1 specifies 60-min OHLCV input, and SRS 3.2.2 lists 'price returns and volatility' and 'volume statistics' as fixed features; none of them is built. The only volatility-type channel, the BB std (model.py:1151-1153), is a constant 1e-4 under D1. There is no time-of-day input. On the repo CSV, mean |1-min return| varies 1.92x by UTC hour (3.23 bps at 23h, 6.20 bps at 14h), and the mean high-low range varies 2.17x. The variance output is a Student-t scale^2 in pooled-scaled units (model.py:1293, 1700-1733). It is centred on a price head pulled to q0.4 and clipped to 1e-4..1e4. The 60-bar context is far shorter than the 512-2048 bars behind Timestral's 0.5-2.8% QLIKE edge.",
+    "mechanism": "Every monetisation route the research leaves open needs a sharp conditional-variance forecast: vol-scaled sizing, stop and target placement, trading only in high-vol regimes, quoting spreads, and options. High-low range, volume and the intraday seasonal pattern are among the strongest known predictors of next-minute variance. The model gets none of them, gets price levels instead of |returns|, and has its one volatility channel zeroed. So it loses to EWMA on the one quantity that is forecastable, and helper_functions' variance-based stops and sizing have nothing usable to consume.",
+    "fix_or_test": "Build a variance-first variant. Inputs: log returns, |r|, Parkinson/Garman-Klass log(H/L), log volume, hour-of-day and minute-of-hour sin/cos, with a context of at least 512 bars. Output: log variance of returns per horizon, in unit-free return space. Loss: QLIKE or a Student-t NLL with zero location. Decisive test: on the repo holdout and the clean set, compare QLIKE with EWMA-t and HAR-RV (1/5/60/1440-min realised vol), with bootstrap CIs. Only if it beats EWMA-t, wire it into sizing and stops.",
+    "impact": "high",
+    "effort": "medium"
+   },
+   {
+    "title": "Training uses 0.06% of the available data and 40 optimizer steps, a cap written into the SRS",
+    "category": "restriction",
+    "evidence": "MAX_SEQUENCE_COUNT = 144*20 = 2,880 (model.py:48, applied at 348-356). SRS 3.2.1 and NFR-4.1 fix the same number. The logged notebook run (inference.ipynb cell 2 output) built 4,598,124 sequences (2017-01-01 to 2025-09-29) and kept 2,880 (0.063%). On the repo CSV the cap keeps 6.6% of 43,426. The last TimeSeriesSplit fold leaves 2,400 training samples, about 40 hours. BATCH_SIZE 576 (model.py:44) gives 5 batches per epoch, so 8 epochs = 40 Adam steps at lr 1e-3. No weight can move more than about 0.04 from its initial value, which matches the 0.004 per epoch drift of the indicator logits. By my count from model.py:1219-1320 the network has about 385k parameters (first MHA 132k, Flatten->Dense 92k, convs 51k, BiGRU 42k). That is 160 parameters per training sample, or about 2,400 per independent 15-min target (2,400/15 = 160 independent targets). The likely cause of the cap is compute: 33 sequential tf.scan EMAs per forward pass (math_helpers.py:249-253, parallel_iterations=1). The logged run took about 18 s per epoch for 2,880 samples (about 6.4 ms per sample), so the full 4.6M set would need about 8 h per epoch.",
+    "mechanism": "After 40 steps on a single 40-hour regime, the model is essentially its initialisation plus a fit to that regime. Patterns that need many examples cannot be learned: conditional reversal after rare large moves, volatility regimes, time-of-day effects. The best val_dir_acc_h1 over 53 valid epochs is 0.522 on 480 overlapping samples, which is within noise.",
+    "fix_or_test": "Replace the scan EMA with a causal convolution whose kernel is alpha*(1-alpha)^k over the window. That is one matmul and still differentiable in alpha. Drop the Flatten->Dense layer (24% of the parameters). Train on weeks to months with walk-forward folds and an early stop that can fire. Decisive test: a learning curve with 2 days, 1 week, 4 weeks and 6 months of training data, scored on a fixed later test window. If pinball and QLIKE improve with more data, the cap is binding. If the curve is flat, stop investing in this architecture.",
+    "impact": "high",
+    "effort": "medium"
+   },
+   {
+    "title": "The training objective cannot express 'no trade' and builds in a short bias",
+    "category": "objective",
+    "evidence": "DIR_DEADBAND_BPS = 0 (model.py:119), so every minute is labelled UP or DOWN. On the repo CSV, 91% of 1-min, 66% of 5-min and 45% of 15-min moves are below 10 bps (mean |move| 4.2 / 9.6 / 16.5 bps). Two settings tilt toward DOWN: focal alpha = 0.7 on the DOWN class (model.py:113; math_helpers.py:130-134), and pinball tau = 0.4 on the 5-min price head (model.py:78, 1634). SRS 3.5.2 fixes alpha at 0.7. In training_log.csv, runs 4-10 (53 epochs with valid labels): the 5-min head predicted DOWN for every validation sample in 40 of 53 epochs and was never all-UP; the 1-min head did so in 29 of 53. In the notebook run the 5-min head called DOWN on all 480 samples (cell 3: TN 239, FN 241, F1 0), and the backtest made 9 trades, all SHORT (cell 5). The model has no cost term, no flat class and no output for expected return net of cost.",
+    "mechanism": "Labels dominated by sub-cost moves teach the network to classify noise. The class weight and the q0.4 target then turn 'no information' into 'always short', so any backtest is a bet on the sign of the drift, not a test of the model. The only directional pattern found so far, reversal after large 5-15 min moves, lives in the 10-30% of minutes with large moves. Training on all minutes dilutes it 3-10x.",
+    "fix_or_test": "Set FOCAL_ALPHA to 0.5 (or the empirical class ratio) and TAU_PRICE to 0.5. Set DIR_DEADBAND_BPS to the round-trip cost (8-10 bps). Then either use a 3-class up/flat/down head, or regress the expected return and trade only when |E[r]| > cost. Optionally add a differentiable PnL loss: position = tanh(f(x)), loss = -(position*r - c*|delta position|). Decisive test: on a held-out week, check that P(up) is centred on the base rate. Then measure the precision of calls with |E[r]| > cost and their net PnL after 4 and 10 bps, restricted to the large-move subset.",
+    "impact": "high",
+    "effort": "small"
+   },
+   {
+    "title": "Price-level inputs and level-keyed layers bury the return signal (beyond the D8 drift)",
+    "category": "defect",
+    "evidence": "The input is 60 raw closes, scaled per lag with a StandardScaler fitted on the training windows (model.py:386-390). On the last repo window the scaled input has std 1.69, the 1-min change has std 0.057 (3.4% of the input scale), and the mean within-window std is 0.15. meta_adjust (model.py:1223-1233) sets every indicator's logit offset from the window's mean and max price level. Flatten->Dense(32) (model.py:1278-1282, 92k parameters) maps each (time position x channel) value straight to the heads. The 1/5/15-min percent-change features are computed (model.py:246-279, listed as 'fixed features' in SRS 3.2.2) but are never model inputs. They feed only the zero-gradient trend loss (model.py:1644-1676).",
+    "mechanism": "The network has to recover returns as tiny differences of large, drifting numbers, and two layers make the price level itself a feature. On 2,400 samples the easiest fit is 'price level of this 40-hour block -> delta', which breaks as soon as price leaves the block (D8: 88% of repo test origins were more than 3 sd out). The return features the code already computes go unused.",
+    "fix_or_test": "Feed per-bar log returns, normalised by trailing volatility. Compute all indicators on returns or on price/last_close - 1. Drop the level-driven meta_adjust. Replace Flatten with pooling or a last-step readout. Pass extended_trends in as inputs. Decisive test: the same model with level inputs vs return inputs on the same split. Compare out-of-sample pinball and QLIKE, and the share of origins outside the training input range.",
+    "impact": "medium",
+    "effort": "small"
+   },
+   {
+    "title": "All training controls are no-ops, and the monitored metrics are degenerate or noise",
+    "category": "research-design",
+    "evidence": "EarlyStopping(val_loss, patience=EPOCHS=8) cannot fire within 8 epochs (model.py:47, 819). The advertised 'MCC early stopping' (model.py:86) monitors val_gauss_dir_mcc_h1 with patience 15 and restore_best_weights=False (model.py:821-826), so it never acts. ReduceLROnPlateau has factor 0.99 (model.py:828), so it cuts the LR by 1% at most. In runs 1-3 of training_log.csv, val_dir_acc_h1 = 1.000 is not skill: sensitivity is 0, specificity is 1, and val_gauss_dir_acc = 1.000 at all three horizons. Those validation sets therefore had no UP labels (a labelling bug in that code version), and every MCC was 0. Runs 4-7 are identical reruns (seed 42 at model.py:693; val_loss 4617.85, 4616.91, 4617.28 ... in each), so seed variance was never measured. CSVLogger(append=True) (model.py:818) mixes 10 runs from at least 3 code versions in one file. In run 2 (lambdas at 1) the zero-gradient trend term is 99.9% of the training loss: train loss goes 3013 -> 6695 -> 3469 -> 6871, tracking that term. In calibrated run 9 the term is 38-55% of the loss. So the epoch-loss plot in the notebook mostly shows batch-composition noise. Leakage check: I found no look-ahead in model.py. Windows end at t-1 and targets start at t, and the BiGRU and centred convs act only inside the past window. The only issues are a 14-sample train/val boundary overlap (no purge gap) and validation = test (D4).",
+    "mechanism": "The developer cannot tell whether the model is learning, cannot stop or select on a meaningful signal, and could read 'accuracy 1.0' as success. Weight selection comes down to ModelCheckpoint on val_loss over the same 480 samples used for reporting, which inflates every reported number.",
+    "fix_or_test": "Use separate train, validation and test sets with a purge gap of at least 15 bars. Monitor proper scores per horizon (pinball, QLIKE, direction log-loss) with the zero-gradient terms excluded. Set patience below the epoch count and restore the best weights. Remove the 0.99 scheduler. Assert that both classes are present in every validation set. Log the git hash and config with each run, and run at least 3 seeds.",
+    "impact": "medium",
+    "effort": "small"
+   },
+   {
+    "title": "Loss-weight calibration switches off regularisation and two point losses; one term rewards noisy forecasts",
+    "category": "objective",
+    "evidence": "The logged calibration (inference.ipynb cell 2): med_ext = 48,295, which is the zero-gradient trend term, so ref_loss = 12,075. That clamps lambda_point, lambda_dir and lambda_var at 1000 and sets lambda_ext to 0.025 (model.py:785-804). All unscaled terms then shrink 1000x in relative weight: the L2 penalty (1e-4, added twice as reg_loss + inter_reg, model.py:1844-1845), the vol penalty (lambda 1, model.py:1775-1782) and the alignment term (0.1, model.py:1756). The 1-min and 15-min point losses keep weight 1 (model.py:1633-1635), so those price heads are set by the x1000 NLL alone. The vol penalty |std(pred_h1) - std(y_h1)| pushes forecast dispersion toward target dispersion. With correlation rho, such a forecast has MSE 2*sigma^2*(1-rho), about twice that of a constant forecast when rho is near 0. In runs 1-7 (lambdas at 1) it was the same order as the point loss (vol 0.0-0.5 vs point 0.7-1.0).",
+    "mechanism": "A 385k-parameter model trains on 2,400 samples with effectively no regularisation. When calibration is off, it is rewarded for adding variance to forecasts that have no skill. Both raise out-of-sample error and produce spurious signals.",
+    "fix_or_test": "Remove the trend term from the loss, or at least from the calibration. Scale each term by its own magnitude, or use uncertainty weighting. Move weight decay into the optimiser (AdamW). Delete the vol-matching penalty. Give each horizon its own point-loss weight. Test: the same seeds with and without these changes, comparing validation pinball and QLIKE and the dispersion of the price forecasts.",
+    "impact": "medium",
+    "effort": "small"
+   },
+   {
+    "title": "No consistent artifact for live inference: scalers, weights and the evaluated model come from different states",
+    "category": "defect",
+    "evidence": "prepare_datasets refits and overwrites scaler_v3.joblib and scaler_v3_input.joblib on every call (model.py:379-393). With force=False, train_and_evaluate then loads the old weights and skips training (model.py:843-848). With force=True it warm-starts from the old checkpoint under the new scalers (model.py:850-854). ModelCheckpoint saves the epoch with the best val_loss (model.py:820). EarlyStopping restores weights only when it fires, which it cannot here (Keras 2, judging by the notebook's progress bar). So the reported metrics and backtest use the last epoch, while the file may hold a different one. Predictions exist only for the 480 X_test rows (model.py:872-899); no function scores the latest bar. Notebook cell 5 computes confidence = 1/(1+v), with v a Student-t scale^2 in pooled-scaled units. conf > 0.5 therefore blocks only when the predicted 5-min sd exceeds sqrt(3)*125 = 217 USD, about twice the typical 106 USD, so the gate rarely binds. The horizon weights come from Config.LAMBDA_SHORT/POINT/LONG (all 1). These are loss weights, not signal weights, and are not the calibrated lambdas.",
+    "mechanism": "Even a model with skill would trade on inputs normalised by a scaler it was not trained with. The reported backtest may not describe the weights on disk, and the 'confidence' filter adds no protection.",
+    "fix_or_test": "Save the weights, both scalers, the config and the lambdas as one versioned bundle (SRS NFR-2.3), and load all of it or nothing. Add predict_latest(df) that applies the saved scalers. Evaluate the checkpointed weights. Express confidence as predicted return sd in bps and gate on sd vs cost. Test: reload the bundle in a fresh process and reproduce the validation predictions exactly.",
+    "impact": "medium",
+    "effort": "small"
+   },
+   {
+    "title": "One target scaler across horizons tilts the Gaussian P(up) and lets the 15-min horizon dominate the shared trunk",
+    "category": "defect",
+    "evidence": "model.py:379-383 fits one StandardScaler on the flattened 1/5/15-min deltas, and pred_mean/pred_scale are the same pooled values (model.py:712-713). The Gaussian P(up) and the alignment target test mu_scaled > 0 (model.py:1746-1754, 1969-1972, 2148-2151), but raw zero sits at -pred_mean/pred_scale. On the last repo window the pooled mean is +7.92 USD, against per-horizon means of 1.1 / 5.7 / 17.0 USD. The 1-min 'up' threshold therefore sits +0.17 sd above zero; over 29 two-day windows the median offset is 0.09 sd and the maximum 0.24 sd. That is a 4-9 pp tilt in P(up), with its sign set by the drift in the training window. The scaled target std is 0.38 / 0.85 / 1.46 for 1 / 5 / 15 min, so the 15-min pinball term is about 4x the 1-min term in the shared layers.",
+    "mechanism": "The Gaussian direction signal, which the MCC monitor watches and the direction head is aligned to, carries a trend-following prior from the last 40 hours rather than a forecast. The shared trunk is fitted mostly to the 15-min horizon, which hurts the 1-min and 5-min towers.",
+    "fix_or_test": "Use per-horizon scalers with the mean fixed at 0 (scale only), or train on unit-free returns divided by trailing volatility. Compute P(up) at the scaled image of raw zero. Test: reliability curves of the Gaussian P(up) before and after the change on a held-out week.",
+    "impact": "low",
+    "effort": "small"
+   }
+  ],
+  "verdicts": [
+   {
+    "title": "LearnableIndicators do nothing in the forward pass, and the parameter logs hide it (D1/D7 go further than reported)",
+    "verdict": "confirmed",
+    "impact_after_check": "medium",
+    "corrected_evidence": "I reproduced every number. Forward logit = logit + stop_gradient(logit)*19 = 20*logit (model.py:1073, 1085-1087, 1110-1112, 1135, 1147). meta_adjust is tanh*0.5 (model.py:957, 1233), only +/-0.5 against forward logits of -14 to -68, so it cannot help. I rebuilt the layer in numpy on the last 2,880 repo windows with the per-lag scaler. All three %B channels have median |value| 346.5, range -3692 to +5398, and corr 1.0000 with x - x0, for meta_adjust 0 or +0.5. With correct alphas %B stays in about -0.7..1.7. The 39-channel count (34 constant) checks out. indicator_params_history.csv: every one of the 27 EMA logits drifts by 0.00427 per epoch (std across variables 6e-6). That fits Adam steps on the L2 gradient alone. The implied forward periods are 1.4e6 to 3e29. The momentum write-back asinh((p-1)/2) (model.py:1928-1932) has a fixed point at p = 1.948, which matches the CSV. The tests check shapes only (test_model.py:397-428). One more point: the GRU kernel limit is sqrt(6/(43+192)) = 0.16, so a %B input of about 350 saturates every gate. Adam's maximum drift of about 0.04 over 40 steps cannot shrink that weight to the roughly 3e-4 it would need.",
+    "notes": "The evaluation report already lists the core defect as D1/D7 (plans/model_evaluation_timestral.md:149, 155). The new content is the channel-level effect: %B x2500 saturates the BiGRU, and ParamsLogger logs raw-logit periods. This matters most for the variance route, not for direction. With the BB std pinned at 1e-4 and the GRU seeing only sign(x - x0), the network cannot see the size of returns. That is a plausible part of why its variance head ranks volatility at Spearman 0.05-0.16, against 0.31-0.40 for EWMA. The critic says nobody can know whether learnable indicators help. The Timestral-LIG study largely answers that. It used a correct, causal indicator bank, and the MACD, RSI, momentum and EMA-distance gates fell to 0.49-0.57. It found no direction skill, and A1/A2 lost money even at zero cost (timestral_lig.md:13-58, 4.8).",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. A correct indicator bank inside a much stronger backbone (LIG) added no direction skill and lost money even at zero cost. Fixing D1 is a precondition for any valid test of neural_trade, and it may let the variance head close part of its 11-22% QLIKE gap to EWMA-t. At best that reproduces a free baseline (FHS/EWMA)."
+   },
+   {
+    "title": "The only measurable edge (volatility) is out of the model's reach: no range, volume or time-of-day inputs, and the one volatility channel is zeroed",
+    "verdict": "partly",
+    "impact_after_check": "medium",
+    "corrected_evidence": "Two figures need correcting from the report. As-is: QLIKE is 11-22% worse than EWMA-t and Spearman is 0.05-0.16. Retrained daily: QLIKE is 7.5-28% worse and Spearman is -0.10 to 0.12 (model_evaluation_timestral.md:71-72, 396-398). The critic gives 11-26% and 0.03-0.16. Close-only input (model.py:1219) and the unbuilt SRS 3.2.2/3.5.1 features (returns, volatility, volume, OHLCV) are confirmed. On the repo CSV, mean |1-min r| by UTC hour runs from 3.23 bps (23h) to 6.20 bps (14h), a 1.92x ratio, and the high-low range varies 2.17x. Both confirmed. But hour-of-day means explain only 2.6% of the variance of |r| and 0.6% of r^2. An EWMA(0.94) of past |r| already has corr 0.42 with the next |r|, and an EWMA of the range 0.43. In LIG, the range plus clock features helped repo QLIKE by only 0.38% and went the other way on the clean set (n.s.). Context: at ctx 64, Timestral itself is 1.4-2.5% worse than EWMA-t on pinball (report 7.3), so the 60-bar window is a real limit.",
+    "notes": "The diagnosis that the head cannot see volatility is right. The money mechanism is overstated. A better variance forecast creates no PnL in the strategy this repo implements (directional spot/perp). Vol-scaled sizing of a zero-mean signal still has zero mean minus costs. Variance-based stops on a near-random walk do not create edge either; they only change the shape of the loss distribution. Variance accuracy pays only through an instrument that prices it: options against implied vol, maker quoting where spread width follows sigma, or as a regime filter for a conditional directional signal. None of these exists in the code or the SRS. The bar is also low and free: FHS/EWMA-t already capture most of the measurable gain, and Timestral adds only 0.5-2.8% QLIKE on top of it.",
+    "would_fixing_it_plausibly_create_profit": "Only together with a route that monetises variance (options vs implied vol, or maker quoting), and only if the forecast beats free FHS/EWMA and, for options, implied vol. Nothing here measures implied vol. On its own, a variance-first neural_trade at best matches a 2-parameter baseline."
+   },
+   {
+    "title": "Training uses 0.06% of the available data and 40 optimizer steps, a cap written into the SRS",
+    "verdict": "partly",
+    "impact_after_check": "medium",
+    "corrected_evidence": "Confirmed from notebook cell 2's output: 4,598,124 sequences cut to 2,880; 2,400 train and 480 test; 5 batches per epoch; 8 epochs at 18.6 s/epoch (the first epoch 60 s). The parameter count of about 385k checks out: BiGRU 41.9k, first MHA 132k, Flatten->Dense 92.2k, convs 51.2k. There are 33 sequential tf.scan EMAs (math_helpers.py:249-253). The repo CSV share is 2,880/43,426 = 6.6%. Corrections: 'essentially its initialisation' is overstated. The Glorot limit of the 92k Flatten->Dense (fan_in 2,880) is about 0.045, so an Adam drift of up to about 0.04 can move those weights by their full initial scale. SRS NFR-4.1 states a capacity ('support up to 2880'); the hard limit is in SRS 3.2.1. The SRS also says 40 epochs and batch 144, while the code uses 8 and 576 (model.py:44-45), so the code is even more restrictive than the spec. The mechanism holds up: a 40-hour training window contains only about 24 non-overlapping 15-min moves above 30 bps and about 55 5-min moves above 20 bps. That is far too few to learn a conditional reversal of a few bps.",
+    "notes": "The cap is real and binding for learning anything conditional. But foundation models trained on vast corpora (Chronos-2, TimesFM, Timestral) show no 1-15 min direction skill on these sets. So more data should mainly improve the variance head, toward EWMA quality, not create directional alpha. The proposed learning curve (2 days, 1 week, 4 weeks, 6 months on a fixed later test) is the right cheap decisive experiment, and it decides whether this architecture deserves more effort. The conv-kernel EMA is also needed for compute. At the current 6.5 ms per sample, the full set takes about 8 h per epoch.",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. It is a precondition for learning any rare-event pattern. The only directional candidate (reversal after large moves) was not significant after correction even on multi-week data, and it loses after 4 bps in one of the two sets. Lifting the cap would at best surface that weak pattern or improve variance."
+   },
+   {
+    "title": "The training objective cannot express 'no trade' and builds in a short bias",
+    "verdict": "confirmed",
+    "impact_after_check": "medium",
+    "corrected_evidence": "The mechanism is stronger than stated; the counts are weaker. Counts from training_log.csv runs 4-10 (53 epochs): the 5-min head was all-DOWN (sensitivity 0, specificity 1) in 33 epochs, not 40 (34 with sensitivity 0). The 1-min head was all-DOWN in 22, not 29 (25 with sensitivity 0). The 5-min head was also nearly all-UP in 2 epochs (runs 8-9, epoch 1: sensitivity 0.971, specificity 0.021), so it flips; it is not purely short. TAU_PRICE = 0.4 goes into point_huber for all three price heads (model.py:1460). After calibration, only the 5-min one keeps a material weight (lambda_point = 1000). The upgrade: with focal alpha 0.7 and gamma 1, the loss-minimising constant P(up) at a 50/50 base rate is 0.383 (0.30 for gamma 0). The notebook's entry thresholds (cell 5: dir_prob < 0.35 short, > 0.65 long) sit 0.03 below and 0.27 above that no-information centre. So shorts are almost mechanical and longs almost impossible, which explains 9 of 9 trades SHORT (-$174, no fees). Move sizes on the repo CSV are confirmed: mean |log move| 4.21 / 9.57 / 16.49 bps; share below 10 bps 91.2% / 66.1% / 44.7%. DIR_DEADBAND_BPS = 0 (model.py:119) is confirmed. The deadband machinery already exists (model.py:1603-1616) and is only switched off.",
+    "notes": "This is already partly known as D3 (P(up) < 0.5 at every origin in 13 of 18 seed-horizon runs). It is the direct cause of what the backtest trades: the backtest measures the sign of the drift over 8 hours, not the model. Fixing alpha, tau and the deadband removes a hidden drift bet and adds a no-trade region, which stops losses. It does not create a signal. Cost-aware labels only concentrate learning on the large-move subset, where the one weak pattern lives.",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. It turns an implicit short-drift bet into honest no-trading, which reduces losses. It could matter only together with a real conditional signal, such as reversal after large moves surviving correction, with maker-fee execution (4 bps or less round trip)."
+   },
+   {
+    "title": "Price-level inputs and level-keyed layers bury the return signal (beyond the D8 drift)",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Numbers confirmed on the last 2,880 repo windows: scaled input std 1.692, 1-min change std 0.0571, mean within-window std 0.150. extended_trends is used only in the zero-gradient trend loss (model.py:1646-1648) and is never a model input. Confirmed. Flatten->Dense(32) with 92k parameters is confirmed (model.py:1278-1282). Two corrections. (1) meta_adjust (model.py:1223-1233) adds at most +/-0.5 to forward logits of -14 to -68, so under D1 it has no effect today; it would only become level-keyed after D1 is fixed. (2) The D1 %B channels equal (x - x0)/4e-4 + 0.5, so the GRU already receives a within-window return. It is saturated to its sign, so the network does not see levels alone. The D8 drift figure (88% of repo origins more than 3 sd out) is from the report (model_evaluation_timestral.md:155), where it was already recorded.",
+    "notes": "The level framing is a real reason the variance head fails out of sample: inputs leave the training range, and retraining daily did not fix it. It is already the documented defect D8, and the report's fix list (step 2f) already prescribes return inputs. In the TSFM study, return inputs did not create direction skill either: Chronos-2 with return input has pinball loss 3-8% lower at 1 min, but no direction skill.",
+    "would_fixing_it_plausibly_create_profit": "No. Return-normalised inputs are needed for a stable variance forecast. Models that already use return inputs (Chronos-2) show no tradable direction skill. This matters only as part of the variance-route package."
+   },
+   {
+    "title": "All training controls are no-ops, and the monitored metrics are degenerate or noise",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: EarlyStopping(val_loss, patience = EPOCHS = 8) cannot fire. The MCC stop has patience 15 and restore_best_weights=False (model.py:819-826). ReduceLROnPlateau has factor 0.99 (model.py:828). Runs 1-3: val_dir_acc_h1 = 1.0 with sensitivity 0, specificity 1 and val_gauss_dir_acc 1.0, so the validation sets had no UP labels. Runs 4-7 are bit-identical (seed 42 plus TF_DETERMINISTIC_OPS, model.py:693-694; epoch-0 val_loss 4617.85). In run 2 the zero-gradient trend term is 99.89-99.97% of the loss; in run 9 it is 38-55%. The best val_dir_acc_h1 over runs 4-10 is 0.522. One overstatement: 'ModelCheckpoint ... inflates every reported number'. The reported metrics and backtest come from the in-memory last-epoch model, not from the checkpoint. With 8 candidates the selection inflation is small. In the logged run 9 the last epoch was also the lowest val_loss (2397.14). The real problem is that validation equals test (D4) and the purge gap is missing (a 14-bar target overlap at the train/val boundary).",
+    "notes": "This is research hygiene. It explains why nobody noticed that nothing works. Without it, no later fix can be judged. It does not cost money directly.",
+    "would_fixing_it_plausibly_create_profit": "No. It is needed to measure whether any other fix helps. It cannot create edge."
+   },
+   {
+    "title": "Loss-weight calibration switches off regularisation and two point losses; one term rewards noisy forecasts",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed from notebook cell 2: med_ext = 48,294.56 and ref_loss = 12,074.72. lambda point/dir/var are clamped at 1000 and ext is 0.025 (model.py:785-804). point_h0 and point_h2 use lambda_short/lambda_long = 1 (model.py:1633-1635). In runs 1-7, vol_loss is 0.005-0.51 against point_loss 0.63-1.04. The report already says that align, vol and L2 fall below 1e-3 of the total after calibration (model_evaluation_timestral.md:140, D2). The overfitting mechanism is overstated. Only the indicator logits, the shared Dense and the towers carry L2 at all (model.py:1281, 1287...); attention, conv and GRU never had any. Dropout 0.1 stays. With 40 Adam steps the model is limited by under-training more than by overfitting. The vol penalty's pull toward target dispersion never showed up in practice: the report finds point forecasts 2.5-17x smaller than real moves.",
+    "notes": "The zero-gradient trend term hijacking the calibration is the real defect (D2), and removing it is a one-line change. The vol-matching penalty is mis-specified for a no-skill regime and should be deleted. At its current weight it is irrelevant.",
+    "would_fixing_it_plausibly_create_profit": "No. These are loss-hygiene fixes with no plausible path to edge."
+   },
+   {
+    "title": "No consistent artifact for live inference: scalers, weights and the evaluated model come from different states",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: prepare_datasets overwrites both scalers on every call (model.py:392-393, again at 864-868). force=False loads old weights and skips training (model.py:843-848). There is no function that scores the latest bar; the only entry points are train_and_evaluate and train_model. Corrections: the scalers are deterministic for the same CSV and cap, so a mismatch arises only when the data changes. That is exactly the live case, so the risk is real but not present in the logged evaluation. In logged run 9 the checkpoint and the evaluated weights coincide, because the last epoch had the lowest val_loss. The LAMBDA_* horizon weights feed only weighted_sig, which the entry and exit logic never reads. Entries use the 5-min dir_prob, conf, agreement and spike, so that sub-claim does not matter. The confidence gate rarely binds, which is plausible: the scaled 5-min target sd is 0.848, giving a typical Student-t scale^2 of about 0.24 and conf of about 0.8. Additional finding: check_multi_horizon_agreement uses thresh 0.67, and 2/3 = 0.667 < 0.67, so 'agreement' actually requires all three horizons to agree.",
+    "notes": "This is a deployment blocker, not a profitability blocker. It must be fixed before any live capital. It does not explain the absence of edge.",
+    "would_fixing_it_plausibly_create_profit": "No. It is necessary for safe live use of any model, but a consistent artifact of a no-skill model still loses after costs."
+   },
+   {
+    "title": "One target scaler across horizons tilts the Gaussian P(up) and lets the 15-min horizon dominate the shared trunk",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Last-window numbers confirmed: pooled mean +7.92 USD; per-horizon means 1.11 / 5.66 / 17.00 USD; scaled sd 0.378 / 0.848 / 1.459; 1-min offset 0.167 sd. Over 29 two-day windows the median 1-min offset is 0.088 sd and the maximum 0.20 sd (not 0.24), a tilt of 3.5-8.0 pp. For the 5-min head, which is the one traded, the last-window offset is only 0.074 sd (about 3 pp). The Gaussian P(up) feeds only metrics and the alignment term (LAMBDA_DIR_ALIGN 0.1, below 1e-3 of the loss after calibration). Focal-loss labels use raw returns (model.py:1606-1616), so they are unaffected. The claim that the 15-min horizon dominates the trunk is refuted for the calibrated run. There lambda_point = 1000 multiplies only the 5-min pinball, and the x1000 Student-t NLL scales each horizon's error by its own predicted variance. The 3.7x pinball ratio applies only to uncalibrated runs (all lambdas 1).",
+    "notes": "The fix is cheap and correct (per-horizon scale-only scalers, or unit-free returns over trailing vol), but its effect on decisions is second-order next to focal alpha 0.7 and tau 0.4.",
+    "would_fixing_it_plausibly_create_profit": "No. It removes a small drift-following prior from a diagnostic and from an auxiliary loss term; it has no path to edge."
+   }
+  ]
+ },
+ {
+  "lens": "strategy",
+  "blockers": [
+   {
+    "title": "Horizon grid is fixed at 1/5/15 minutes, where round-trip cost is 25-100% of the average move",
+    "category": "restriction",
+    "evidence": "model.py:58 HORIZON_STEPS=[1,5,15]; model.py:41 LOOKBACK=60 bars; all research inherits this (trading_nocost.py:21 HORIZONS, calibrate.py HS=(1,5,15)). On the repo CSV, non-overlapping h-minute log returns have mean |r| of 4.2/9.6/16.4/33.2/62.1/155 bps at h=1/5/15/60/240/1440 min. With wins and losses equal to mean |r|, the break-even accuracy is 97.5/70.9/62.2/56.0/53.2/51.3% at 4 bps round trip and -/-/-/80.1/66.1/56.4% at 20 bps (spot). The break-even correlation of forecast and outcome at 4 bps is 0.79/0.36/0.21/0.105/0.057/0.026. The best measured direction AUC is 0.54 (rho about 0.12), and the literature reports 51.9-53.8% accuracy at 1-15 min. Script: <scratch>/blk/q1.py",
+    "mechanism": "Cost is fixed per trade, but the move a signal can capture grows with sqrt(h). The system only searches the horizons where even a strong signal cannot pay for costs. At 1 day, 51-52% accuracy (the level the literature reports at 15 min) would clear 4 bps. A 60-bar lookback also cannot form multi-hour or multi-day features, so the system cannot reach those horizons.",
+    "impact": "high",
+    "fix_or_test": "Add horizons of 60, 240 and 1440 min and a lookback of days to weeks, using returns, not price levels. Data: Binance public klines 2017+ (data.binance.vision, reachable from here) for BTC and at least 5 other liquid pairs. The 4.6M-bar 2017-2025 file the notebook already loads also works. Minimum evidence before building: a walk-forward test over at least 3 years, fitted on past data only, of one pre-registered rule per horizon, with a net Sharpe 95% CI above 0 at 10 bps round trip, pooled over the pairs. Detecting Sharpe 1 on one asset at 80% power needs about 8 years, so a cross-section of pairs is required.",
+    "effort": "medium"
+   },
+   {
+    "title": "Test windows of 6 and 14 days cannot detect an edge smaller than the cost, and the system uses 0.06% of the history it already holds",
+    "category": "research-design",
+    "evidence": "Deployed rules in research/timestral_lig/results/calibration.json: 29-108 trades and 9-25 bps standard deviation per trade, so the minimum detectable gross edge (80% power) is 3.8-9.9 bps per trade against a 4 bps cost. A 60% hit rate on 50 trades has a Wilson 95% CI of [46, 72]%. Confirming a +2 bps/trade net edge at H=15 (sd 23.5 bps) needs about 1,100 trades: 11 days if every slot trades, but about 160 days at the roughly 7 trades/day of the top-2% fade. Meanwhile inference.ipynb (cell 2 output) loaded 4,598,198 bars from 2017-01-01 to 2025-09-29 and cut them to 2,880 (model.py:48 MAX_SEQUENCE_COUNT; SRS NFR-4.1 writes this limit into the spec). dw_ccxt.py:31 hard-codes a 30-day fetch. The selection split V2 is 3 days.",
+    "mechanism": "Any edge that could realistically exist (a few bps per trade, selective) reads as 'not significant' on these windows. The same windows let selection noise look like 60-75% accuracy on calibration data. Without years of out-of-sample data, the research can neither reject nor confirm a money-making rule, and every 'no edge' verdict is underpowered for the selective rules.",
+    "impact": "high",
+    "fix_or_test": "Before any further modelling, rebuild the harness on multi-year data (2019-2026, 1-min, data.binance.vision) with rolling monthly walk-forward refits and a 15-min purge. Do a power calculation for each hypothesis before testing, and require n large enough that the minimum detectable edge is below half the cost. Keep the last 3+ months sealed for one confirmatory run.",
+    "effort": "medium"
+   },
+   {
+    "title": "The one measured skill (variance) has no path to PnL in any simulator or in the code",
+    "category": "unrealized",
+    "evidence": "All economic tests are 1-unit sign trades: trading_nocost.py:24-31, calibrate.py:112-126 and 199, bench/metrics2.py:126-132, and inference.ipynb cell 5 lines 310-315 (profit = 1 BTC x price change). Sizing (helper_functions.py:77-86) and stops (61-75) are imported nowhere. So the QLIKE gains (0.5-2.8% vs FHS; 5-17% vs a range EWMA) cannot show up as money in any test. Vol targeting of a base strategy, measured here: long BTC scaled by EWMA sigma to a 50% vol target, daily 2022-01 to 2026-10 (1,705 days), 2 bps per side on weight changes, gives Sharpe 0.32 against 0.25 for buy-and-hold. The difference of +0.07 has a block-bootstrap 95% CI of [-0.20, +0.32]. Script: q6.py in the same scratchpad folder.",
+    "mechanism": "A variance forecast earns money only when it sizes a position that has a positive mean: an edge, beta drift, carry or a volatility premium. Every research test held size fixed at 1 unit and had no positive-mean base, so the skill had nothing to act on. Even with a base, a commodity EWMA gives an improvement that cannot be told apart from zero over 4.7 years. The model's 0.5-2.8% QLIKE gain over FHS would be a small part of that. The plan's step 4 pass rule (per-day PnL difference CI excludes 0 within 3 months, model_evaluation_timestral.md section 9) will almost certainly fail for a 0.5-2.8% QLIKE gain.",
+    "impact": "high",
+    "fix_or_test": "First decide which premium the variance forecast is meant to time (options VRP, carry or a directional edge), then test the forecast only inside that strategy. Decisive cheap test: in a position-sized backtest on multi-year data, compare weights from FHS, EWMA and the model's sigma. Adopt the model only if the CI of the per-day PnL difference excludes 0. If no base strategy with a positive mean exists, stop investing in variance-model quality.",
+    "effort": "small"
+   },
+   {
+    "title": "Options and volatility-premium route never built: the premium exists, but the system forecasts at horizons no option trades",
+    "category": "unrealized",
+    "evidence": "Deribit DVOL (30-day implied vol, public API, reachable) against forward 30-day realized vol from Binance daily closes, 2022-01 to 2026-10, n=1,736 days: implied above realized on 69% of days, mean +6.8 vol points. By year: 2022 +12.3, 2023 +6.5, 2024 +7.0, 2025 +6.6, 2026 to date -0.05. In 58 non-overlapping 30-day blocks, 71% are positive and the worst is -40 points. corr(DVOL, forward RV30) = 0.47 against 0.23 for trailing RV30, so the market's implied vol already beats a naive historical forecast. The system forecasts only 1-15 min ahead (model.py:58) from 60 bars, while the shortest listed option expiries are daily. The SRS never mentions options. Script: q3.py in the same scratchpad folder.",
+    "mechanism": "The only place a volatility skill is paid for directly is the variance risk premium, which option sellers earn. The system cannot reach it: wrong horizon, no implied-vol input, no options data and no hedging model. In 2026 the premium was about 0, so timing matters, and that is where a better forecast would pay.",
+    "impact": "medium",
+    "fix_or_test": "Minimum evidence before building: (a) a 1-day and 7-day variance forecast (HAR or FHS on 1-min RV over 2+ years) that beats bias-corrected Deribit implied vol of the same tenor on out-of-sample QLIKE; (b) a delta-hedged short-straddle or variance-swap-proxy backtest with real bid/ask, Deribit fees and crash days included, in which the forecast-timed version beats always-short with a CI excluding 0. Data: Deribit option quote history (Tardis.dev or Deribit history), DVOL (free), 1-min perp for hedging.",
+    "effort": "large"
+   },
+   {
+    "title": "Rules were selected on accuracy with scale-free confidence, and a volatility-regime gate was never tested",
+    "category": "objective",
+    "evidence": "calibrate.py:135-141 scores rules by the Wilson lower bound or raw accuracy, not net PnL. All confidence measures are divided by sigma (z = median/IQR, P(up)-0.5, price z = r_H/(sigma*sqrt(H)); calibrate.py:78-101), so no rule depends on the absolute volatility level. At H=15, by causal EWMA-sigma tercile: mean |r15| = 10.1/15.5/23.8 bps, break-even accuracy at 4 bps = 69.9/62.9/58.4% (56.1% in the top decile), and at 10 bps = 99.6/82.2/71.0%. Mean |1-min return| is 3.23 bps at 23 UTC and 6.20 bps at 14 UTC. The only rule that made money net (the top-2% fade) did so on the higher-volatility repo window (mean |r1| 5.0 bps) and lost on the quieter clean window (3.0 bps), where average losses were 14.5 bps against average wins of 7.4 bps (trading_calibration.md section 5). Script: q2.py.",
+    "mechanism": "With cost fixed in bps, profit depends on accuracy times the size of the move. Scale-free filters take low-volatility trades, where costs eat the whole move, as readily as high-volatility ones. An accuracy objective also ignores asymmetric payoffs. This is the cheapest way for the variance forecast to enter the directional strategy, and nobody has tried it.",
+    "impact": "medium",
+    "fix_or_test": "Rerun the existing calibration with two extra rule dimensions, a causal sigma-level gate (tercile or decile of the forecast sigma) and an hour-of-day gate, and an objective of the Wilson lower bound of mean net PnL at 4 bps. Keep the circular-shift selection gate. Minimum evidence: on at least 3 months of new data with at least 300 trades, high-sigma-regime accuracy at or above the regime's break-even accuracy (about 58%) and net PnL CI above 0.",
+    "effort": "small"
+   },
+   {
+    "title": "The trade simulator charges a full round trip on every trade, assumes free fills at the close, and cannot net positions",
+    "category": "research-design",
+    "evidence": "Cost is subtracted per trade: calibrate.py:199 (pnl - c), metrics2.py:132, and fills happen at the forecast bar's close with no delay. For always-in signals, 48-51% of consecutive trades are on the same side, so accounting on position changes charges 2.06 bps/trade instead of 4.00. That moves break-even accuracy from 62.2% to about 56.3% at H=15 and from 56.0% to 53.0% at H=60. Selective rules are unaffected (3.8-4.0). In the other direction, the 4 bps (maker) assumption is optimistic. A passive bid at close minus k*sigma (k=0.5-3), filled only on a trade-through, fills 1.3-42% of minutes and is 1.1-1.5 bps under water at the fill bar's close before fees, so a maker fill is not free. The taker round trip is 10 bps. There is no paper or live loop to measure real costs (SRS 9.3 and 10.3: no order execution, no streaming). Script: q4.py.",
+    "mechanism": "The cost model decides every verdict, yet it is a guess. It overstates costs for persistent signals and for the standard weak-signal design (aim position, no-trade band, partial rebalancing). It understates costs for anything that assumes maker fills. Slow signals could be wrongly rejected, and fast ones wrongly accepted.",
+    "impact": "medium",
+    "fix_or_test": "Replace the 1-unit sequential simulator with a position-based backtester. Charge cost per unit of turnover, with taker and maker modes, model passive fills as trade-through plus markout, include a no-trade band, and allow overlapping staggered positions of size 1/H. Rerun T-D and the calibration on it. Before any capital, run a paper-trading loop on the exchange testnet or live books for 2-4 weeks to measure actual fees, slippage and latency against the assumed 4/10 bps.",
+    "effort": "medium"
+   },
+   {
+    "title": "Single symbol, single venue, close-only input: the extra information outside spot closes is never read",
+    "category": "data",
+    "evidence": "dw_ccxt.py:48-49 fetches only BTC/USDT spot 1-min bars. model.py:244 returns only the Close column, dropping high, low and volume. Timestral-LIG found that 51 of 62 close-derived features added nothing; only non-close inputs (range, clock) helped (timestral_lig.md section 5). Measured here on the repo window with Binance perp 1-min klines: lagged return correlations between perp and spot are -0.007 to -0.02 (no lead-lag at 1 min). The perp-spot basis minus its 60-min mean predicts the next 1-min spot return with corr +0.041 (n of about 43.5k) and the next 5-min return with +0.036. That beats every model's direction skill, but it is worth only about 0.2 bps per 1-min trade against 4 bps cost. It is one in-sample 30-day window, and one of about 10 correlations computed. Script: q6.py.",
+    "mechanism": "A martingale close series has nothing to learn, so any directional information must come from other series: perp, basis, order flow, other venues, other assets. The pipeline can only see one spot close series, so it cannot find that information even if it exists. At taker cost the measured basis signal is too small to trade alone. It is useful as a skew input for passive execution.",
+    "impact": "medium",
+    "fix_or_test": "Ingest BTCUSDT perp klines, aggTrades and funding (free, data.binance.vision), ETH, and a second venue. Minimum evidence: walk-forward over at least 3 months of new data in which cross-venue and flow features reach AUC of at least 0.55 at 5-15 min and maker-cost PnL with a CI above 0. Otherwise use the features only to time execution.",
+    "effort": "medium"
+   },
+   {
+    "title": "Funding and basis carry never evaluated: it is the only route measured positive here, but its return above cash is small",
+    "category": "unrealized",
+    "evidence": "Binance BTCUSDT perp funding, 2022-01 to 2026-09 (5,202 prints, data.binance.vision): mean 0.60 bps per 8 h, or 6.6%/yr gross for long spot / short perp. By year: 4.2/7.9/12.0/5.1% and 2.9% annualized in 2026 to date. 53 of 57 months were positive (2026-02 to 04 negative). AR(1) is 0.77. Switching on the trailing 7-day mean does not help after 30 bps per on/off cycle: 4.9%/yr (threshold 0) and 0.8%/yr (threshold 0.5 bps). The downloader and SRS have no perp, funding or margin data. Script: q5.py.",
+    "mechanism": "This is a market-neutral premium that needs no forecast, and the system's spot-only, directional scope rules it out. The measured excess over a cash yield is roughly 0-3%/yr, it needs capital on both legs, and the short perp carries liquidation risk. It sets a minimum hurdle for any capital-using strategy rather than offering a large opportunity.",
+    "impact": "low",
+    "fix_or_test": "A 1-day study: a carry backtest net of 4-leg fees, margin buffer and a USD cash-rate opportunity cost over 2019-2026. Build it only if net excess Sharpe is at least 1 with a CI above 0. Use the variance forecast only to size the margin buffer.",
+    "effort": "small"
+   },
+   {
+    "title": "Market making with volatility-adaptive quotes cannot be built on 1-min spot OHLCV at a retail fee tier",
+    "category": "unrealized",
+    "evidence": "No L2 book, trade or websocket data (dw_ccxt.py:65 uses only fetch_ohlcv; SRS 10.3 states 'No Real-time Data Streaming'). The bar-level test in q4.py: trade-through fills of a bid at close minus k*sigma (k=0.5, 1, 2, 3) have markout of -1.25/-1.13/-1.28/-1.53 bps at the fill bar's close and -2.41/-1.80/-0.99/-3.40 bps at 60 min, before a 2 bps per side maker fee. The BTCUSDT tick (0.01 USDT, about 0.001 bps) means the quoted spread pays almost nothing.",
+    "mechanism": "1-15 min variance is the natural input for Avellaneda-Stoikov quote width, but the edge in liquidity provision comes from queue position, latency and fee rebates, none of which the system has. At 1-min resolution adverse selection outweighs the offset.",
+    "impact": "low",
+    "fix_or_test": "Pursue this only if a maker-rebate or VIP fee tier is available. Minimum evidence: a queue-aware simulation on tick and L2 data (Binance futures bookTicker and aggTrades, or Tardis) for a pair whose quoted spread exceeds 2x the maker fee, showing positive 1-10 s markout after fees and that sigma-adaptive width beats constant width. Otherwise drop this route.",
+    "effort": "large"
+   },
+   {
+    "title": "SRS exit and sizing layer (three-tier TP, variance stops, confidence sizing, risk limits) is unwired or mis-scaled, and cannot create money without an edge",
+    "category": "unrealized",
+    "evidence": "inference.ipynb cell 5 lines 24-38: TP +0.5%/+1.5% and SL -1% are 'not executed, just reference'. Within the 30-bar max hold (line 253), +0.5% is touched in 10.9% of entries, +1.5% in 0.53% and -1% in 1.95%. The SRS stop of 2% x (1+ratio), i.e. 2-6% (helper_functions.py:61-75), is touched in 0.13% (2%) and 0.000% (4% and above) of 30-bar windows. Cell 7 line 17 starts with $10,000 equity but trades 1 BTC (about $113k), an implicit 11x leverage with no margin, liquidation or exposure limits. FR-4.2/4.3/4.4 and FR-5.3, Backtrader, the predict API (SRS 6.5) and live execution (9.3) are not implemented. Script: q2.py.",
+    "mechanism": "With a near-martingale price (lag-1 autocorrelation -0.011), stops, targets and scale-outs have zero expected gross PnL (optional stopping) and only add turnover and cost. Building these SRS items as specified will not make money. The fixed-percentage levels are also 4-60 standard deviations of the holding-period move, so they would never trigger. Risk limits matter only for survival once an edge exists.",
+    "impact": "low",
+    "fix_or_test": "Defer Backtrader, the API and live execution until a pre-registered edge passes on multi-year data. Then replace fixed-percentage levels with sigma-scaled quantile exits (as risk control, not as a profit source) and add exposure, leverage and drawdown limits. Test: exits must not reduce net PnL relative to time exits in the position-based backtester.",
+    "effort": "small"
+   }
+  ],
+  "verdicts": [
+   {
+    "title": "Horizon grid is fixed at 1/5/15 minutes, where round-trip cost is 25-100% of the average move",
+    "verdict": "confirmed",
+    "impact_after_check": "high",
+    "corrected_evidence": "q1 reproduces exactly: mean |r| = 4.2/9.6/16.4/33.2/62.1/155.3 bps; break-even accuracy at 4 bps = 97.5/70.9/62.2/56.0/53.2/51.3%; break-even rho = 0.787/0.360/0.213/0.105/0.057/0.026. Corrections: (a) The horizon is a config default, not a limit of the architecture. model.py:43 RESAMPLE_MINUTES resamples OHLCV (model.py:219-231) and model.py:288 reads HORIZON_STEPS, so RESAMPLE_MINUTES=60 gives a 60-hour lookback and 1/5/15-hour horizons with no code change. Only the research harness hard-codes (1,5,15) (calibrate.py:37, trading_nocost.py:21). So 'the system cannot reach those horizons' is wrong. (b) AUC 0.54 corresponds to rho of about 0.095, not 0.12 (simulation: rho 0.10 gives AUC 0.544; rho 0.12 gives 0.554). At rho 0.095 the gross edge per trade is about 1.8 bps at H=15, 3.6 at H=60 and 6.7 at H=240, so the best measured skill would clear 4 bps only at 4 h or longer, and only if it carried over. (c) Check of the long-horizon route on daily BTC, 2022-01 to 2026-11 (1,766 days): simple time-series momentum with 5 bps per side on turnover gives net Sharpe +0.67 to +0.82 for 14-56-day lookbacks (buy-and-hold 0.32) at hit rates of 49.7-50.7%. Every 95% block-bootstrap CI includes 0 (e.g. L=28 long/flat: [-0.15, 1.71]). None beats buy-and-hold significantly, and 10 rules were tried. At long horizons, payoff skew, not accuracy, drives the result, so the critic's '51-52% accuracy at 1 day' framing misleads. Script: <scratch>/vchk/v1.py",
+    "notes": "The core cost-versus-sqrt(h) argument holds, and every economic test so far used 1/5/15. The fix is cheaper than claimed: a config change for the model, plus a change to the harness constants. Required IC for net Sharpe 1/yr at 4 bps: about 0.09 at 1 day against about 0.22 at 15 min.",
+    "would_fixing_it_plausibly_create_profit": "Only in combination. A longer horizon creates no edge by itself. It moves the cost bar to where known premia (trend, carry) exceed costs. Daily trend rules show positive but non-significant net Sharpe over 4.8 years, so profit needs one pre-registered rule tested on multi-year, multi-asset data. The neural model is not needed for that route."
+   },
+   {
+    "title": "Test windows of 6 and 14 days cannot detect an edge smaller than the cost, and the system uses 0.06% of the history it already holds",
+    "verdict": "partly",
+    "impact_after_check": "high",
+    "corrected_evidence": "Confirmed: the deployed rules have 29-107 trades, and the sd per trade implied by mean/t in research/timestral_lig/results/calibration.json is about 9-21 bps, so the minimum detectable edge is 3.8-9.9 bps. The Wilson CI for 60% on 50 trades is [46.2, 72.4]. A +2 bps edge at sd 23.5 needs about 1,082 trades. inference.ipynb cell 2 output shows 4,598,198 bars (2017-01-01 to 2025-09-29) cut to 2,880 sequences (0.063%). SRS.md:473 NFR-4.1 writes this limit into the spec, dw_ccxt.py:31 fetches 30 days, and V2 is 3 days (timestral_lig.md section 3). Overstated: dense signals are NOT underpowered. At H=1 over 6 days the minimum detectable edge is 0.19 bps. A2 made 2,558 trades at -0.235 bps each (t -1.62). My dense-fade check gives gross -0.02\u00b10.89 (repo, H=15), +0.39\u00b10.58 (clean, H=15), and +0.07\u00b10.30 / +0.01\u00b10.19 (H=5). Together these rule out even a 1-2 bps gross edge for always-in signals. Upgrade: the production model itself trains on 2,400 sequences (40 hours of 1-min bars, 5 batches per epoch) and is backtested on 480 bars (8 hours). That backtest made 9 trades (cell 2 and cell 5/7 outputs), so the limit applies to what the model can learn, not only to testing.",
+    "notes": "'Every no-edge verdict is underpowered' holds only for selective rules and for H of 15 min or more. The 40-hour training window is the more direct self-imposed limit and deserves its own line.",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. More data only shows whether an edge exists. It is a prerequisite for confirming any selective or long-horizon rule (blockers 1, 4 and 8), so it is needed in combination with any of them."
+   },
+   {
+    "title": "The one measured skill (variance) has no path to PnL in any simulator or in the code",
+    "verdict": "confirmed",
+    "impact_after_check": "medium",
+    "corrected_evidence": "Confirmed: helper_functions sizing and stops are imported nowhere (the only hit is a docstring in research/tsfm_eval/bench/run_vol.py:4). Every simulator trades 1 unit on the forecast sign: trading_nocost.py:24-31, metrics2.py nonoverlap_trades (about lines 126-136), calibrate.py:199, and inference.ipynb cell 5 lines 310-315. q6 reproduces: vol-managed Sharpe 0.32 against 0.25 for buy-and-hold, difference +0.07, CI [-0.20, +0.32]. Correction: variance does enter the notebook strategy, but only as a filter, never as sizing. confidence = 1/(1+var) must exceed 0.5, and a spike gate uses var_mean = np.convolve(mode='same'), a centred mean that looks ahead (cell 5 lines 174-197 and 269-293). Also, the measured QLIKE gains are at 1-15 min, while vol targeting and VRP need forecasts at 1-30 days, so the existing skill would not transfer even if wired.",
+    "notes": "The diagnosis is correct and useful mainly as a stop rule. Further variance-model quality work at 1-15 min cannot earn money without a positive-mean base at a matching horizon.",
+    "would_fixing_it_plausibly_create_profit": "No, not on its own. A variance forecast only scales a positive-mean exposure, and the system has none. Even a plain EWMA vol target over 4.7 years adds a non-significant +0.07 Sharpe. It helps only together with a base premium (trend, carry, VRP) and a forecast at that base's horizon."
+   },
+   {
+    "title": "Options and volatility-premium route never built: the premium exists, but the system forecasts at horizons no option trades",
+    "verdict": "partly",
+    "impact_after_check": "medium",
+    "corrected_evidence": "q3 reproduces: DVOL minus forward RV30 averages +6.8 points and is positive on 69% of days; 2026 is -0.05; corr(DVOL, forward RV30) = 0.47 against 0.23 for trailing RV30. Overstated: (a) As a variance-swap payoff, (IV^2-RV^2)/(2*IV) per 30-day block, the premium is +3.5 to +5.1 vol points (3 block offsets, n=57 each), with annualized Sharpe 0.77-1.13 before any option costs. The worst block loses 55-64 points, and 2026 averages -3.2 with a worst block of -74. (b) Simple timing points the wrong way: corr(IV minus trailing RV, payoff) = -0.14. The high-spread tercile pays +1.6 points against +8.2 for the low-spread tercile, and payoff correlates with the trailing RV level (+0.40). Timing information sits in monthly vol levels, not in 1-15 min forecasts. Script: <scratch>/vchk/v4.py",
+    "notes": "The claim that 'timing is where a better forecast would pay' is only half right. Timing matters, but the useful input is the daily-to-monthly vol level, and the naive IV-rich signal is inversely related to payoff. Option spreads, fees and hedging costs are not yet deducted.",
+    "would_fixing_it_plausibly_create_profit": "Yes, plausibly, but as a separate options business that earns the premium itself, not through neural_trade's forecast. In-sample pre-cost Sharpe is about 0.8-1.1, with crash blocks of -55 to -74 vol points and a negative 2026. It needs Deribit quote history, fees, spreads, delta hedging and tail sizing. The model's 1-15 min skill adds nothing."
+   },
+   {
+    "title": "Rules were selected on accuracy with scale-free confidence, and a volatility-regime gate was never tested",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "Facts confirmed: score() in calibrate.py (about lines 131-138) uses the Wilson lower bound or raw accuracy. z and pm are scale-free (calibrate.py:78-101). No sigma-level or hour-of-day gate exists anywhere in the research. q2 reproduces: terciles 10.1/15.5/23.8 bps, break-even 69.9/62.9/58.4%; hour 23 against hour 14 is 3.23 against 6.20 bps. Mechanism refuted in practice: I gated the price-only fade by a causal sigma tercile (rank among the trailing 480 origins) on both sets. In the high-sigma tercile, the dense fade at H=15 is 50.9% accurate (repo) and 52.1% (clean), with gross -0.28\u00b12.08 and +0.53\u00b11.31 bps. The top-10% |z| fade at H=15 is 49.5% / 52.4%, with gross -1.72\u00b16.01 / +1.09\u00b14.20 bps. At H=5 the high-sigma tercile is 51.0-55.6%, with gross +0.10 to +0.91 bps. Break-even in that tercile is 58.5-66.4% at 4 bps. Accuracy does not rise with sigma, so even the lower bar stays 6-10 points out of reach. The repo high-sigma fade at H=15 is negative, which contradicts the story that the vol level explains why the top-2% fade split between the two windows. Script: <scratch>/vchk/v5.py",
+    "notes": "The test used price-only reversal, not the Timestral confidence signals. The research shows those mostly repeat the same reversal tilt, so the result is likely to carry over. The proposed rerun is cheap, but the evidence predicts a null.",
+    "would_fixing_it_plausibly_create_profit": "No. A sigma gate raises the size of the move but not accuracy, and the measured gross edge in the high-sigma tercile is within about \u00b12 bps of zero on both sets. A PnL objective cannot pick a profitable rule when the gross edge is near zero everywhere."
+   },
+   {
+    "title": "The trade simulator charges a full round trip on every trade, assumes free fills at the close, and cannot net positions",
+    "verdict": "partly",
+    "impact_after_check": "low",
+    "corrected_evidence": "q4 reproduces: for always-in signals, 0.48-0.51 of consecutive trades are on the same side, giving 2.06/1.97 bps per trade under position accounting; selective rules stay at 3.8-4.0. Passive-fill markout is -1.13 to -1.53 bps at the fill bar's close, at fill rates of 1.3-42.1% of minutes. For a driftless random walk, the reflection principle gives zero expected close-minus-level after a touch, so this negative markout is real adverse selection. Impact overstated: the always-in signals that would gain have a measured gross edge of -0.24 to +0.39 bps per trade (A2 repo -0.235; dense fade -0.02 / +0.39 at H=15), below even the halved 2.06 bps cost. The zero-cost table (timestral_lig.md section 4.8) already shows no model makes money before costs (|t| < 2, 48-53%). Upgrade: the system fetches BTC/USDT spot (dw_ccxt.py:48), whose base fee is 10 bps per side (20 bps round trip; model_evaluation_timestral.md section 10.1). So the 4 bps maker assumption silently requires a switch to USDT-M futures and maker fills, neither of which is built.",
+    "notes": "A turnover-based backtester is standard practice and matters for slow signals. For every signal tested so far, the verdict does not change.",
+    "would_fixing_it_plausibly_create_profit": "No for any signal tested so far, because their gross edge is below even the halved cost. It matters only together with a slow, persistent signal (blocker 1), where turnover-based costs decide the result."
+   },
+   {
+    "title": "Single symbol, single venue, close-only input: the extra information outside spot closes is never read",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: dw_ccxt.py:48 fetches BTC/USDT and :65 uses only fetch_ohlcv. model.py:244 returns only Close, and the Keras input is close_sequence with shape (LOOKBACK,) (model.py:1219). q6 reproduces: lead-lag -0.007 to -0.022; basis deviation predicts forward spot return with corr +0.041 (1 min) and +0.036 (5 min). Upgrade on robustness: the basis signal is not a one-window fluke. It is +0.034/+0.049 (1 min) and +0.028/+0.045 (5 min) in the two halves, t of about 7-10 per half. It is basis mean reversion carried mostly by the spot leg: corr with the next basis change is -0.48 to -0.54, and with the forward perp return -0.02 to +0.02. Its value is small: gross +0.23/+0.30 bps per 1-min trade and +0.45/+0.67 per 5-min trade, 5-15 times below cost. Overstated: 'only non-close inputs (range, clock) helped'. Removing them cost 0.38% QLIKE on the repo set but moved +0.20% (not significant) the other way on the clean set (timestral_lig.md section 5.2), and that was for variance, not direction. Script: <scratch>/vchk/v7.py",
+    "notes": "The principle is right: a martingale close series holds no direction, so information must come from other series. But the one stable outside signal found is an order of magnitude too small at retail fees. I downgrade the impact from medium to low.",
+    "would_fixing_it_plausibly_create_profit": "No at retail fees: the stable cross-venue signal is worth at most 0.7 bps per trade. Only together with a maker-rebate or VIP fee tier, or as an execution-timing input for a strategy that must trade anyway."
+   },
+   {
+    "title": "Funding and basis carry never evaluated: it is the only route measured positive here, but its return above cash is small",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "q5 reproduces: mean 0.60 bps per 8 h, 6.59%/yr gross, AR(1) 0.77; gated versions 4.94% and 0.76%/yr net of 30 bps per cycle. By year: 4.2/7.9/12.0/5.1%, and 2.2% for 9 months of 2026; 4 of 57 months negative. Upgrade: with an assumed T-bill path (2.0/5.1/5.0/4.2/3.7%), the funding-only excess is about 2.6%/yr, with an annualized Sharpe of about 1.6 from monthly sd. That is before fees, basis mark-to-market, margin and exchange risk, so it is better than 'small' suggests. It decays, though: excess +7.0% in 2024, +0.9% in 2025, and -0.6% for 2026 to date. Script: <scratch>/vchk/v8.py",
+    "notes": "On the full 2022-2026 sample, the critic's own adoption rule (net excess Sharpe of at least 1) might pass. The last 2 years say the premium has nearly gone. Exchange counterparty risk dominates and is not in the Sharpe.",
+    "would_fixing_it_plausibly_create_profit": "Yes, a small positive return that does not depend on the model: historically about 1-3%/yr above cash, near zero in 2025-26. It does not need neural_trade and sets a minimum hurdle rather than an opportunity."
+   },
+   {
+    "title": "Market making with volatility-adaptive quotes cannot be built on 1-min spot OHLCV at a retail fee tier",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: dw_ccxt.py:65 uses only fetch_ohlcv, and SRS.md section 10.3 states 'No Real-time Data Streaming'. q4 markouts reproduce: -1.25/-1.13/-1.28/-1.53 bps at the fill bar's close and -2.41/-1.80/-0.99/-3.40 bps at 60 min. The tick of 0.01 USDT is about 0.0009 bps at $110k. The trade-through fill rule ignores queue position, so it overstates fill rates, but the sign of the adverse selection is right: a random walk would give about 0 markout conditional on a touch.",
+    "notes": "Correctly classed as a different system: it needs tick and L2 data, low latency and rebates.",
+    "would_fixing_it_plausibly_create_profit": "No. At a retail fee tier with 1-min bars, adverse selection plus the 2 bps maker fee exceeds the captured offset. It would need queue-aware tick and L2 data, low latency and rebates, which amounts to a new system."
+   },
+   {
+    "title": "SRS exit and sizing layer (three-tier TP, variance stops, confidence sizing, risk limits) is unwired or mis-scaled, and cannot create money without an edge",
+    "verdict": "confirmed",
+    "impact_after_check": "low",
+    "corrected_evidence": "Confirmed: cell 5 lines 24-38 mark TP/SL as 'not executed, just reference'; max_hold=30 (line 253). q2 touch rates reproduce: 10.87% / 0.53% / 1.946% / 0.129% / 0.000%. Cell 7 line 17 starts with $10,000 but trades 1 BTC at $113.5-114.5k, about 11x leverage. FR-4.2-4.4 and FR-5.3 are unwired, and Backtrader is not implemented (SRS.md:354). Correction: '4-60 standard deviations' is loose. With the 30-min sd of 33.7 bps, TP1 at +0.5% is 1.5 sd (touched on 10.9% of entries), SL at -1% is 3.0 sd, TP2 at +1.5% is 4.5 sd, and the SRS stops of 2-6% are 5.9-17.8 sd. Extra defects: the notebook backtest (480 bars, 8 h) made 9 trades, all SHORT, for a PnL of -$174, because entry needs dir_prob < 0.35 or > 0.65 while the head sits at 0.31-0.44. Its agreement check needs all 3 horizons, since 2/3 = 0.667 < 0.67 (cell 5 line 186).",
+    "notes": "The optional-stopping argument is right: stops and targets cannot add expected PnL on a near-martingale. The one-sided, short-only entry is a further sign that the backtest measures the head's bias, not skill.",
+    "would_fixing_it_plausibly_create_profit": "No. With a near-martingale price, stops, targets and scale-outs have zero expected gross PnL and only add turnover. Risk limits matter for survival only after an edge exists."
+   }
+  ]
+ }
+]
