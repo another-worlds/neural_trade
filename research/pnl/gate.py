@@ -25,7 +25,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RESULTS = os.path.join(HERE, "results")
 CANDIDATES = {1: ["T1-FADEV", "T1-LIN", "T1-NET", "T1-NT"], 2: ["T2-P", "T2-LIN", "T2-NET"]}
 COMPARATORS = {1: ["plain_fade", "intraday_trend"], 2: ["B&H", "tsmom_unscaled", "voltarget_long"]}
-N_TRIALS = {1: 64, 2: 117}
+N_TRIALS = {1: 64 + 12, 2: 117 + 12}            # + the 12 descriptive NET-W cells per track (CHANGES.log)
+DESCRIPTIVE = {1: ["T1-NET-W"], 2: ["T2-NET-W"]}
 BLOCK = {1: 10, 2: 20}
 B = 10_000
 SCEN6 = ["C7B", "C7S", "C4B", "C4S", "C10B", "C10S"]
@@ -81,14 +82,15 @@ def main():
         n_trials = N_TRIALS[track] + sum(max(0, len(reruns.get(c, ())) - 1) for c in cands)
         srs = [np.mean(dd[f"{c}|C7B"]) / np.std(dd[f"{c}|C7B"]) for c in cands + COMPARATORS[track]
                if np.std(dd[f"{c}|C7B"]) > 0]
-        for c in cands:
+        desc = [c for c in DESCRIPTIVE[track] if f"{c}|C7B" in dd and c in ex]
+        for c in cands + desc:
             d = dd[f"{c}|C7B"]
             T = len(d)
             dist = ST.stationary_bootstrap(d, B=B, mean_block=BLOCK[track], seed=11)
             lb = ST.lower_bound(dist)
             by_year = {int(y): float(d[yrs == y].sum()) for y in np.unique(yrs)}
             half = [float(d[m].sum()) for m in halves]
-            g1 = ps["p_sel"] <= 0.05
+            g1 = ps["p_sel"] <= 0.05 if c in cands else None              # descriptive: not in the K of p_sel
             g2 = lb > 0
             if track == 1:
                 g3 = all(np.mean(d) > np.mean(v) for v in comps.values())
@@ -99,8 +101,10 @@ def main():
             sr_d = float(np.mean(d) / np.std(d)) if np.std(d) > 0 else 0.0
             var_sr = max(1.0 / T, float(np.var(srs)) if len(srs) > 1 else 0.0)
             info = {
-                "gates": {"G1": bool(g1), "G2": bool(g2), "G3": bool(g3), "G4": bool(g4), "G5": bool(g5)},
-                "pass": bool(g1 and g2 and g3 and g4 and g5),
+                "gates": {"G1": None if g1 is None else bool(g1), "G2": bool(g2), "G3": bool(g3), "G4": bool(g4),
+                          "G5": bool(g5)},
+                "pass": bool(g1 and g2 and g3 and g4 and g5) if c in cands else None,
+                "descriptive_only": c not in cands,
                 "mean_daily_bps": float(np.mean(d) * 1e4), "ann_bps": ann(d), "sharpe": sharpe(d),
                 "boot_lb95_daily_bps": lb * 1e4, "boot_ci95_daily_bps": [v * 1e4 for v in ST.percentile_ci(dist)],
                 "boot_p": ST.boot_pvalue(dist), "hac_t": float(ST.newey_west_t(d, BLOCK[track])),
@@ -111,7 +115,7 @@ def main():
                 "scenarios_ann_bps": {sc: ann(dd[f"{c}|{sc}"]) for sc in SCEN6 + ["C10N"] if f"{c}|{sc}" in dd},
                 "sub_2022_on_ann_bps": ann(d[sub22]), "dev_without_seen_ann_bps": ann(d[unseen]),
                 "mean_x": float(np.mean(ex[c])), "mean_abs_x": float(np.mean(np.abs(ex[c]))),
-                "p_single_shift": float(ps["p_single"][cands.index(c)]),
+                "p_single_shift": float(ps["p_single"][cands.index(c)]) if c in cands else None,
             }
             # paired excess over cash (= the series), B&H, static-matched and the comparators
             base = {"B&H": dd.get("B&H|C7B"), f"static[{c}]": dd.get(f"static[{c}]|C7B")}
@@ -148,11 +152,13 @@ def main():
                + (f"; missing: {missing}" if missing else ""), "",
                "| candidate | ann. net C7-B (bps) | Sharpe | 95% LB daily (bps) | HAC t | G1 | G2 | G3 | G4 | G5 | pass |",
                "|---|---:|---:|---:|---:|:-:|:-:|:-:|:-:|:-:|:-:|"]
-        for c in cands:
+        for c in cands + desc:
             i = trk["candidates"][c]
             g = i["gates"]
-            md.append(f"| {c} | {i['ann_bps']:.0f} | {i['sharpe']:.2f} | {i['boot_lb95_daily_bps']:.2f} | "
-                      f"{i['hac_t']:.2f} | " + " | ".join("Y" if g[k] else "n" for k in ("G1", "G2", "G3", "G4", "G5"))
+            md.append(f"| {c}{' (descriptive)' if i['descriptive_only'] else ''} | {i['ann_bps']:.0f} | "
+                      f"{i['sharpe']:.2f} | {i['boot_lb95_daily_bps']:.2f} | {i['hac_t']:.2f} | "
+                      + " | ".join("-" if g[k] is None else ("Y" if g[k] else "n")
+                                   for k in ("G1", "G2", "G3", "G4", "G5"))
                       + f" | {'PASS' if i['pass'] else '-'} |")
         md += ["", f"Deployed: **{trk['deployed']}**; information-only: {trk['information_only']}", ""]
     json.dump(out, open(os.path.join(RESULTS, "gate.json"), "w"), indent=1, default=float)

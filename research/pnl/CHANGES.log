@@ -23,3 +23,13 @@ AFTER THE FIRST RIDGE DEV RUN (T1-LIN, T2-LIN only; no number changed)
   funding alignment now uses realistic fills (nominal fills at the decision close pay the next print by
   construction, as engine F does); the fold manifest checks the purge the code actually applies; the shuffled-label
   check trades sign(mu) every minute so that it is not trivially zero.
+
+DECLARED BEFORE ANY NET DEV-OOS RESULT WAS COMPUTED (2026-11-01, after the inner-validation logs only)
+- Finding: every Track 1 MLP cell (and some Track 2 h = 60 MLP seeds) never left the flat start. After the
+  2-epoch band-off warm-up (2-10 gradient steps on Track 1) |tau| stays inside the initial +-0.05 band around
+  p = 0; a hard band passes no gradient while the position never moves, so training freezes at cash. The SPEC
+  fallback (band collapse with b > 0.9) does not fire on this pattern. The main procedure is NOT changed.
+- Descriptive variant, not gate-eligible, not deployable: T1-NET-W and T2-NET-W. MLP cells are retrained with the
+  band-off warm-up extended to at least 60 gradient steps (otherwise identical; LIN cells unchanged), then the
+  same in-fold cell choice over all cells. Reported next to T1-NET/T2-NET; its 12 cells per track are added to
+  the Deflated-Sharpe N.

@@ -86,7 +86,7 @@ class FoldData:
         return out
 
 
-def train_one(fd, arch, kappa, seed, max_epochs=None, log=None):
+def train_one(fd, arch, kappa, seed, max_epochs=None, log=None, warm_min_steps=0):
     h = fd.h
     W, T, B = GEOM[h]
     L = W + T
@@ -107,11 +107,13 @@ def train_one(fd, arch, kappa, seed, max_epochs=None, log=None):
     best = (-np.inf, -1, None)
     hist = []
     gmask_keys = len(fd.gkeys)
+    steps_done = 0
     for ep in range(E):
         model.train()
-        band_on = ep >= 2
+        band_on = ep >= 2 and steps_done >= warm_min_steps
         lsum = 0.0
         for _ in range(n_batches):
+            steps_done += 1
             X, R, Fd, s2h = fd.sample(rng, B, L)
             X = torch.from_numpy(X)
             X = X + NOISE_SD * torch.randn_like(X)
@@ -146,14 +148,16 @@ def train_one(fd, arch, kappa, seed, max_epochs=None, log=None):
                    "qlike_val": ql_model, "qlike_ewma": ql_ewma, "n_batches": n_batches}
 
 
-def run_job(track, fold, h, quick=False, log=print):
+def run_job(track, fold, h, quick=False, log=print, variant=None):
     torch.set_num_threads(1)
     st = prep.Store()
     t0 = time.time()
     fd = FoldData(st, track, fold, h)
     log(f"T{track} {fold} h={h}: train rows {(fd.tr_end - fd.a):,} val decisions {len(fd.val_rows):,} "
         f"({time.time() - t0:.1f}s)")
-    os.makedirs(OUT, exist_ok=True)
+    out_dir = OUT if variant is None else OUT + "_" + variant
+    archs, warm = (ARCHS, 0) if variant is None else (("MLP",), 60)
+    os.makedirs(out_dir, exist_ok=True)
     tag = f"T{track}_{fold}_h{h}"
     Rv, Fv, sv, dv = fd.val
     if fd.test is not None:
@@ -165,12 +169,13 @@ def run_job(track, fold, h, quick=False, log=print):
            "scaler": fd.scaler.state()}
     arrays = {}
     seeds = SEEDS[:2] if quick else SEEDS
-    for arch in ARCHS:
+    for arch in archs:
         for kappa in KAPPAS:
             cell = f"{arch}_k{kappa:g}"
             taus_v, bs_v, info, taus_t, bs_t, states = [], [], [], [], [], []
             for seed in seeds:
-                model, inf = train_one(fd, arch, kappa, seed, max_epochs=3 if quick else None, log=log)
+                model, inf = train_one(fd, arch, kappa, seed, max_epochs=3 if quick else None, log=log,
+                                       warm_min_steps=warm)
                 tv, bv, _ = NET.infer(model, torch.from_numpy(fd.rows_X(fd.val_rows)))
                 taus_v.append(tv)
                 bs_v.append(bv)
@@ -193,7 +198,7 @@ def run_job(track, fold, h, quick=False, log=print):
                 arrays[f"{cell}_b"] = np.mean(bs_t, 0).astype(np.float32)
                 arrays[f"{cell}_tau_seeds"] = np.array(taus_t, np.float16)
                 arrays[f"{cell}_b_seeds"] = np.array(bs_t, np.float16)
-            wpath = os.path.join(OUT, f"{tag}_{cell}.pt")
+            wpath = os.path.join(out_dir, f"{tag}_{cell}.pt")
             torch.save({"states": states, "arch": arch, "kappa": kappa, "cols": fd.cols, "scaler": fd.scaler.state(),
                         "h": h, "track": track, "fold": fold}, wpath)
             res["cells"][cell]["weights"] = wpath
@@ -201,32 +206,35 @@ def run_job(track, fold, h, quick=False, log=print):
             log(f"  {tag} {cell}: U_ens {U_ens * 1e4:.3f} bps/d (seeds {np.round(np.array(U_seed) * 1e4, 3)})")
     if fd.test is not None:
         arrays["test_rows"] = test_rows
-        np.savez(os.path.join(OUT, f"{tag}_test.npz"), **arrays)
+        np.savez(os.path.join(out_dir, f"{tag}_test.npz"), **arrays)
     res["seconds"] = time.time() - t0
-    json.dump(res, open(os.path.join(OUT, f"{tag}.json"), "w"), indent=1, default=float)
+    res["variant"] = variant
+    json.dump(res, open(os.path.join(out_dir, f"{tag}.json"), "w"), indent=1, default=float)
     log(f"done {tag} in {res['seconds']:.0f}s")
     return res
 
 
 def _worker(args):
-    track, fold, h = args
+    track, fold, h, variant = args
     tag = f"T{track}_{fold}_h{h}"
-    if os.path.exists(os.path.join(OUT, f"{tag}.json")):
+    out_dir = OUT if variant is None else OUT + "_" + variant
+    if os.path.exists(os.path.join(out_dir, f"{tag}.json")):
         return tag + " (cached)"
-    logf = open(os.path.join(OUT, f"{tag}.log"), "w")
+    os.makedirs(out_dir, exist_ok=True)
+    logf = open(os.path.join(out_dir, f"{tag}.log"), "w")
 
     def log(m):
         logf.write(m + "\n")
         logf.flush()
 
-    run_job(track, fold, h, log=log)
+    run_job(track, fold, h, log=log, variant=variant)
     return tag
 
 
-def run_all(n_workers=3):
+def run_all(n_workers=3, variant=None):
     import multiprocessing as mp
     os.makedirs(OUT, exist_ok=True)
-    jobs = [(tr, f[0], h) for tr in (1, 2) for f in FO.FOLDS + [FO.FOLD_S] for h in HS[tr]]
+    jobs = [(tr, f[0], h, variant) for tr in (1, 2) for f in FO.FOLDS + [FO.FOLD_S] for h in HS[tr]]
     jobs.sort(key=lambda j: (-{1: 6, 5: 3, 15: 2, 60: 1, 240: 1, 1440: 1}[j[2]], j[1]))   # long jobs first
     ctx = mp.get_context("spawn")
     with ctx.Pool(n_workers, maxtasksperchild=1) as pool:
@@ -236,6 +244,6 @@ def run_all(n_workers=3):
 
 if __name__ == "__main__":
     if sys.argv[1] == "all":
-        run_all(int(sys.argv[2]) if len(sys.argv) > 2 else 3)
+        run_all(int(sys.argv[2]) if len(sys.argv) > 2 else 3, variant="mlpw" if "--mlpw" in sys.argv else None)
     else:
         run_job(int(sys.argv[1]), sys.argv[2], int(sys.argv[3]), quick="--quick" in sys.argv)

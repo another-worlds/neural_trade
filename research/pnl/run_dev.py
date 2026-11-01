@@ -31,6 +31,7 @@ RESULTS = os.path.join(HERE, "results")
 SCEN = [("C7", "B"), ("C7", "S"), ("C4", "B"), ("C4", "S"), ("C10", "B"), ("C10", "S")]
 TRACK = {"T1-FADEV": 1, "T1-LIN": 1, "T1-NET": 1, "T1-NT": 1, "plain_fade": 1, "intraday_trend": 1,
          "T2-P": 2, "T2-LIN": 2, "T2-NET": 2, "tsmom_unscaled": 2, "voltarget_long": 2, "fade60": 2,
+         "T1-NET-W": 1, "T2-NET-W": 2,
          "B&H": 0, "cash": 0}
 CANDIDATES = {1: ("T1-FADEV", "T1-LIN", "T1-NET", "T1-NT"), 2: ("T2-P", "T2-LIN", "T2-NET")}
 NET_HS = {1: (1, 5, 15), 2: (60, 240, 1440, 1, 5, 15)}
@@ -43,9 +44,14 @@ def k_track1(h):
 
 # ------------------------------------------------------------------------------------------- net selection
 
-def select_net(st, track):
-    """In-fold cell choice per fold from inner-validation ensemble U (SPEC 'IN-FOLD CELL CHOICE')."""
+def select_net(st, track, variant=None):
+    """In-fold cell choice per fold from inner-validation ensemble U (SPEC 'IN-FOLD CELL CHOICE'). variant='mlpw':
+    MLP cells come from the extended-warm-up retraining (descriptive T*-NET-W, CHANGES.log)."""
     nets = os.path.join(prep.WORK, "nets")
+    nets_v = os.path.join(prep.WORK, "nets_" + variant) if variant else None
+
+    def src(cell):
+        return nets_v if (variant and cell.startswith("MLP")) else nets
     n = st.n
     tau = np.zeros(n, np.float32)
     band = np.zeros(n, np.float32)
@@ -62,6 +68,10 @@ def select_net(st, track):
             js = json.load(open(path))
             for cell, v in js["cells"].items():
                 cells[(h, cell)] = v["U_ens"]
+            if variant:
+                jv = json.load(open(os.path.join(nets_v, f"T{tr}_{fold}_h{h}.json")))
+                for cell, v in jv["cells"].items():
+                    cells[(h, cell)] = v["U_ens"]
         best = max(cells, key=lambda c: cells[c])
         h, cell = best
         if cell.startswith("MLP"):
@@ -80,7 +90,7 @@ def select_net(st, track):
             continue
         h, cell = best
         tr = 1 if h <= 15 else 2
-        z = np.load(os.path.join(nets, f"T{tr}_{fold}_h{h}_test.npz"))
+        z = np.load(os.path.join(src(cell), f"T{tr}_{fold}_h{h}_test.npz"))
         rows = z["test_rows"]
         tau[rows] = z[f"{cell}_tau"]
         band[rows] = z[f"{cell}_b"]
@@ -108,10 +118,12 @@ def factories(st, S, which):
             out[name] = ((lambda mu=mu, dec=dec, H=H, thr=thr, Kv=Kv, ch=ch:
                           HysteresisPolicy(mu, dec, H, thr, K=Kv, chase=ch)),
                          {"ridge": f"ridge_T{track}_dev.npz", "sha": hashlib.sha256(mu.tobytes()).hexdigest()})
-    for track, name in ((1, "T1-NET"), (2, "T2-NET")):
+    for track, name, var in ((1, "T1-NET", None), (2, "T2-NET", None), (1, "T1-NET-W", "mlpw"),
+                             (2, "T2-NET-W", "mlpw")):
         if name in which:
-            tau, band, dec, K, table = select_net(st, track)
-            json.dump(table, open(os.path.join(RESULTS, f"net_selection_T{track}.json"), "w"), indent=1)
+            tau, band, dec, K, table = select_net(st, track, var)
+            suffix = f"_{var}" if var else ""
+            json.dump(table, open(os.path.join(RESULTS, f"net_selection_T{track}{suffix}.json"), "w"), indent=1)
             ch = track == 2
             out[name] = ((lambda tau=tau, band=band, dec=dec, K=K, ch=ch: BandPolicy(tau, band, dec, K=K, chase=ch)),
                          {"net_selection": table, "sha": hashlib.sha256(tau.tobytes() + band.tobytes()).hexdigest()})
@@ -178,7 +190,7 @@ def main(which=None):
             print(f"{name:16s} {fee}{fill}: {summ['mean_daily_bps']:8.2f} bps/d  Sharpe {summ['sharpe']:6.2f}  "
                   f"({summ['seconds']:.1f}s)", flush=True)
         # static-exposure-matched baseline for candidates (B5): the candidate's mean C7-B exposure, held constant
-        if name in CANDIDATES[1] + CANDIDATES[2]:
+        if name in CANDIDATES[1] + CANDIDATES[2] + ("T1-NET-W", "T2-NET-W"):
             mx = float(np.mean(expo[name]))
             sname = f"static[{name}]"
             fac_s = (lambda mx=mx: sim.ConstPolicy(mx, K=15, chase=True))
