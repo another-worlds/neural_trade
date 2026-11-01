@@ -53,13 +53,24 @@ class Bars:
         return int(np.searchsorted(self.t, ts))
 
 
+SEAL_LOCK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "work", "seal_lock.json")
+
+
 def _unseal_ok():
-    """The seal opens only when PNL_UNSEAL equals the SHA-256 of the committed research/pnl/prereg.json."""
+    """The seal opens only when (1) PNL_UNSEAL equals the SHA-256 of research/pnl/prereg.json, (2) that file is
+    byte-identical to the copy committed at git HEAD, and (3) run_seal.py's guard has already written the seal lock
+    (so the seal can only be opened through the guarded, run-once path)."""
     import hashlib
-    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prereg.json")
-    if not os.path.exists(p):
+    import subprocess
+    here = os.path.dirname(os.path.abspath(__file__))
+    p = os.path.join(here, "prereg.json")
+    if not os.path.exists(p) or not os.path.exists(SEAL_LOCK):
         return False
-    return os.environ.get("PNL_UNSEAL", "") == hashlib.sha256(open(p, "rb").read()).hexdigest()
+    raw = open(p, "rb").read()
+    head = subprocess.run(["git", "-C", here, "show", "HEAD:research/pnl/prereg.json"], capture_output=True)
+    if head.returncode != 0 or head.stdout != raw:
+        return False
+    return os.environ.get("PNL_UNSEAL", "") == hashlib.sha256(raw).hexdigest()
 
 
 def load(minutes=1, seal=False):
@@ -71,7 +82,8 @@ def load(minutes=1, seal=False):
     v, qv, n, tbb = d["volume"], d["quote_volume"], d["trades"], d["taker_buy_base"]
     if seal:
         if not _unseal_ok():
-            raise PermissionError("seal is closed: PNL_UNSEAL must equal SHA-256 of the committed prereg.json")
+            raise PermissionError("seal is closed: needs the committed prereg.json, PNL_UNSEAL = its SHA-256 and the "
+                                  "run_seal.py lock")
         log = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "seal_access.log")
         os.makedirs(os.path.dirname(log), exist_ok=True)
         with open(log, "a") as fh:

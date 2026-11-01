@@ -1,7 +1,10 @@
 """Sealed test (SPEC 'selection_and_preregistration' ENFORCEMENT and SEAL VERDICTS). Runs ONCE.
 
 Refuses unless: the working tree is clean; HEAD contains research/pnl/prereg.json and PNL_UNSEAL equals its SHA-256;
-$PNL_WORK/seal_lock.json does not exist (it is written first); every pre-registered file hash matches.
+research/pnl and model.py are unchanged since the pre-registered code commit; no seal lock (research/pnl/work/
+seal_lock.json, fixed path) and no results/seal.json exist; every file the run loads matches its pre-registered hash
+by role; the T1-NT inference preflight passes. The lock is written last, before the seal is read; data.load(seal=True)
+itself also requires the lock and the committed prereg.json.
 Then: loads the full data (seal=True), recomputes features on it and asserts every dev row is bit-identical to the
 cached dev features; scores every candidate, baseline and neural_trade in all six scenarios on the full seal and the
 clean seal with the frozen fold-S models; computes the verdicts of the deployed candidates; writes
@@ -48,6 +51,33 @@ def git(*args):
     return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True)
 
 
+def role_files():
+    """Every file the seal run loads, keyed by role (the same keys prereg.py hashes)."""
+    import glob
+    f = {"data_bars": os.path.join(D.DATA, "btcusdt_perp_1m.npz"), "data_funding": os.path.join(D.DATA, "funding_full.npz"),
+         "features_json": os.path.join(prep.WORK, "features_v1.json"),
+         "features_npy": os.path.join(prep.WORK, "features_v1.npy"), "sigma": os.path.join(prep.WORK, "sigma_v1.npy"),
+         "dev_daily": os.path.join(prep.WORK, "dev_daily.npz"),
+         "ridge_T1_S": os.path.join(prep.WORK, "ridge_T1_S.npz"), "ridge_T2_S": os.path.join(prep.WORK, "ridge_T2_S.npz")}
+    for p in sorted(glob.glob(os.path.join(prep.WORK, "nets", "T*_S_h*_*.pt"))):
+        f["net:" + os.path.basename(p)] = p
+    return f
+
+
+def nt_preflight(prereg):
+    """T1-NT is always measured: its seal inference must work BEFORE the lock is written (a 1-hour dev window)."""
+    if not prereg.get("t1_nt"):
+        return
+    if not TF_PY:
+        sys.exit("refused: prereg has t1_nt but NT_PYTHON (the TF venv python) is not set")
+    out = os.path.join(prep.WORK, "nt", "preflight_mu.npz")
+    t1 = FO.SEAL_START - 3600
+    r = subprocess.run([TF_PY, os.path.join(HERE, "nt_adapter.py"), "predict", prereg["t1_nt"]["bundle"], str(t1),
+                        str(FO.SEAL_START), out, "--dev"], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.exists(out):
+        sys.exit(f"refused: T1-NT preflight failed: {r.stderr[-2000:]}")
+
+
 def guard(prereg):
     if git("status", "--porcelain").stdout.strip():
         sys.exit("refused: the working tree is not clean")
@@ -57,14 +87,28 @@ def guard(prereg):
     h = hashlib.sha256(blob.stdout).hexdigest()
     if os.environ.get("PNL_UNSEAL", "") != h or sha(PREREG) != h:
         sys.exit("refused: PNL_UNSEAL must equal the SHA-256 of the committed prereg.json")
-    lock = os.path.join(prep.WORK, "seal_lock.json")
-    if os.path.exists(lock):
-        sys.exit("refused: seal_lock.json exists (the seal was already run)")
-    bad = [p for p, hh in prereg["hashes"].items() if not os.path.exists(p) or sha(p) != hh]
+    if prereg.get("uncommitted_changes_at_write"):
+        sys.exit("refused: prereg.json was written from a dirty tree")
+    diff = subprocess.run(["git", "-C", REPO, "diff", "--quiet", prereg["code_commit"], "HEAD", "--", "research/pnl",
+                           "model.py", ":(exclude)research/pnl/prereg.json", ":(exclude)research/pnl/prereg.md"])
+    if diff.returncode != 0:
+        sys.exit("refused: research/pnl or model.py changed since the pre-registered code commit")
+    if os.path.exists(D.SEAL_LOCK) or os.path.exists(os.path.join(prep.WORK, "seal_lock.json")):
+        sys.exit("refused: a seal lock exists (the seal was already run)")
+    if os.path.exists(os.path.join(RESULTS, "seal.json")) or git("cat-file", "-e", "HEAD:research/pnl/results/seal.json").returncode == 0:
+        sys.exit("refused: results/seal.json already exists")
+    want = prereg["hashes_by_role"]
+    have = role_files()
+    bad = [k for k in set(want) | set(have) if k not in want or k not in have or not os.path.exists(have[k])
+           or sha(have[k]) != want[k]]
     if bad:
-        sys.exit(f"refused: hash mismatch for {bad}")
-    json.dump({"time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "head": git("rev-parse", "HEAD").stdout.strip(),
-               "prereg_sha256": h}, open(lock, "w"))
+        sys.exit(f"refused: the files this run would load do not match the pre-registered hashes: {sorted(bad)}")
+    nt_preflight(prereg)
+    os.makedirs(os.path.dirname(D.SEAL_LOCK), exist_ok=True)
+    rec = {"time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "head": git("rev-parse", "HEAD").stdout.strip(),
+           "prereg_sha256": h}
+    for lock in (D.SEAL_LOCK, os.path.join(prep.WORK, "seal_lock.json")):
+        json.dump(rec, open(lock, "w"))
 
 
 class FrozenScaler(prep.Scaler):

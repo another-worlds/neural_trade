@@ -44,6 +44,10 @@ def main(draft=False):
     head = subprocess.run(["git", "-C", REPO, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     dirty = subprocess.run(["git", "-C", REPO, "status", "--porcelain", "research/pnl", "model.py"],
                            capture_output=True, text=True).stdout.strip()
+    if dirty and not draft:
+        sys.exit(f"refused: commit research/pnl and model.py first:\n{dirty}")
+    import run_seal
+    by_role = {k: sha(p) for k, p in run_seal.role_files().items()}
     tracks = {}
     for t in ("1", "2"):
         g = gate["tracks"][t]
@@ -106,6 +110,7 @@ def main(draft=False):
             "warm-up); LIN cells carry T1-NET. Reported as found, procedure unchanged.",
         ],
         "hashes": {p: sha(p) for p in files},
+        "hashes_by_role": by_role,
     }
     path = os.path.join(prep.WORK, "prereg_draft.json") if draft else os.path.join(HERE, "prereg.json")
     json.dump(out, open(path, "w"), indent=1, default=str)

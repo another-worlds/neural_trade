@@ -1,7 +1,8 @@
 """Dev gates and per-track selection (SPEC 'selection_and_preregistration' DEV GATE, SELECTION PER TRACK, 'objective'
 INFERENCE, KILL CRITERIA K1). Reads $PNL_WORK/dev_daily.npz, dev_expo.npz and results/dev_runs.json.
 
-G1 p_sel <= 0.05 (circular-shift null, max over the track's K candidates, studentised by HAC t)
+G1 selection-adjusted p <= 0.05: the candidate's single-step max-t p over the track's K candidates (circular-shift
+   null of its realised exposure, HAC-studentised; equals the track's p_sel for the best candidate)
 G2 one-sided 95% stationary-bootstrap lower bound of the mean daily net at C7-B > 0
 G3 point estimates beat every comparator (T1: mean daily net > plain fade, intraday trend;
    T2: Sharpe > B&H, TSMOM unscaled, vol-target long)
@@ -93,12 +94,19 @@ def main():
         cands = [c for c in CANDIDATES[track] if f"{c}|C7B" in dd and c in ex]
         missing = [c for c in CANDIDATES[track] if c not in cands]
         X = np.stack([lead(held(ex[c], r1)) for c in cands])
-        cost = np.stack([dd[f"fees|{c}"] for c in cands])          # engine-E fees per day (shift-invariant)
-        ps = ST.p_sel(X, r1, lead(f1, fill=0.0), day, n_shifts=999, seed=track, tstat="hac", lag=BLOCK[track],
-                      daily_cost=cost)
+        fl = lead(f1, fill=0.0)
+        # execution cost per day, shift-invariant: engine-F gross of the held path minus engine E's daily simple return.
+        # It holds fees, fill slippage (stale-limit maker fills, latency) and intraday compounding, so the observed
+        # statistic is exactly engine E's and every shift keeps the strategy's own execution cost.
+        gross = ST.engine_f_daily(X, r1, fl, day, c_in=0.0, c_out=0.0)
+        cost = np.stack([gross[k] - np.expm1(dd[f"{c}|C7B"]) for k, c in enumerate(cands)])
+        ps = ST.p_sel(X, r1, fl, day, n_shifts=999, seed=track, tstat="hac", lag=BLOCK[track], daily_cost=cost)
+        p_maxT = (1 + (ps["null_max"][:, None] >= ps["t_obs"][None, :]).sum(0)) / (len(ps["null_max"]) + 1)
         comps = {c: dd[f"{c}|C7B"] for c in COMPARATORS[track]}
         trk = {"candidates": {}, "missing": missing, "p_sel": ps["p_sel"], "t_obs_engineF": dict(zip(cands, ps["t_obs"].tolist())),
                "p_single": dict(zip(cands, ps["p_single"].tolist())), "best_by_t": cands[ps["best"]],
+               "p_maxT": dict(zip(cands, p_maxT.tolist())),
+               "exec_cost_ann_bps": {c: float(cost[k].mean() * 365 * 1e4) for k, c in enumerate(cands)},
                "comparators": {c: {"mean_daily_bps": float(np.mean(v) * 1e4), "ann_bps": ann(v), "sharpe": sharpe(v)}
                                for c, v in comps.items()}}
         n_trials = N_TRIALS[track] + sum(max(0, len(reruns.get(c, ())) - 1) for c in cands)
@@ -112,7 +120,8 @@ def main():
             lb = ST.lower_bound(dist)
             by_year = {int(y): float(d[yrs == y].sum()) for y in np.unique(yrs)}
             half = [float(d[m].sum()) for m in halves]
-            g1 = ps["p_sel"] <= 0.05 if c in cands else None              # descriptive: not in the K of p_sel
+            # G1: the candidate's own single-step max-t adjusted p (= p_sel for the best candidate)
+            g1 = p_maxT[cands.index(c)] <= 0.05 if c in cands else None   # descriptive: not in the K of p_sel
             g2 = lb > 0
             if track == 1:
                 g3 = all(np.mean(d) > np.mean(v) for v in comps.values())
@@ -138,6 +147,7 @@ def main():
                 "sub_2022_on_ann_bps": ann(d[sub22]), "dev_without_seen_ann_bps": ann(d[unseen]),
                 "mean_x": float(np.mean(ex[c])), "mean_abs_x": float(np.mean(np.abs(ex[c]))),
                 "p_single_shift": float(ps["p_single"][cands.index(c)]) if c in cands else None,
+                "p_maxT": float(p_maxT[cands.index(c)]) if c in cands else None,
             }
             # paired excess over cash (= the series), B&H, static-matched and the comparators
             base = {"B&H": dd.get("B&H|C7B"), f"static[{c}]": dd.get(f"static[{c}]|C7B")}

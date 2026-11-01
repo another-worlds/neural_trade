@@ -64,3 +64,10 @@ Only T1-LIN and T2-LIN had been scored (rows in runs.jsonl dated before this ent
 - Net scaler is fitted on training rows only [a, tr_end) (it included the inner-validation rows); all nets and the
   NET-W variant are retrained from scratch before any net dev-OOS result.
 - New regression tests for each item (56 tests pass).
+- From the statistics/seal reviewer: G1 now uses each candidate's own single-step max-t adjusted p (the track
+  p_sel is the best candidate's); p_sel's daily cost is engine-F gross minus engine E's daily return, so the observed
+  statistic is exactly engine E's and every shift keeps the strategy's own execution cost (fees, stale-limit maker
+  fills, latency, intraday compounding); check 12 compounds the per-bar path within each day (a looser bound for the
+  plain fade, whose late maker fills the path cannot see); the seal guard hashes the files actually loaded (by role),
+  uses a fixed lock path, ties the run to the pre-registered code commit, preflights T1-NT inference before the lock,
+  and data.load(seal=True) now also needs the committed prereg.json and the lock; prereg.py refuses a dirty tree.
