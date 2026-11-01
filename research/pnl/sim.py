@@ -23,7 +23,7 @@ ENGINE E (event-driven, 1-min bars, compounding equity, signed BTC contracts q, 
 ENGINE F (vectorised): net_k = x_k (R_k - F_k) - (c_in inc_k + c_out red_k) on a decision grid, exact inc/red split.
 
 Policy protocol (duck-typed):
-    policy.K              maker window in bars
+    policy.K              maker window in bars (policy.K_at(i), if defined, overrides it per decision)
     policy.chase_entries  True: unfilled INCREASE orders chase to taker after K; False: they are cancelled
     policy.decide(i, x, st) -> target exposure or None (no action), called at every bar close i in [start, end)
     policy.on_fill(i, kind, st) (optional) notified of fills ('increase'/'reduce') and cancellations ('cancel')
@@ -192,6 +192,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
             if tgt is not None:
                 tgt = float(np.clip(tgt, -1.0, 1.0))
                 st.working = None                          # a new decision cancels the working order
+                K = int(policy.K_at(i)) if hasattr(policy, "K_at") else K
                 dq = (tgt - x_eff) * E / c[i]
                 if abs(dq) * c[i] / E > 1e-6:
                     red = 0.0
