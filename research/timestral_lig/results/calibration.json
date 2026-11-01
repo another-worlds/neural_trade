@@ -1657,7 +1657,8 @@
     }
    }
   },
-  "code_sha256": "e3efdd80b9d0543427d636a8a8085e848299771b1801d0a63c5c7948f3c87cbb"
+  "code_sha256": "eeb82fa19bd0a5b6f4fdba3d2c944a48f2bb0aa95a585bf4e2330afae943780d",
+  "holm_note": "Holm re-applied with distinct-rule de-duplication (apply_holm) on the stored calibration results; no recalibration needed."
  },
  "post": {
   "dataset": "post",
@@ -2284,7 +2285,7 @@
       "insufficient": false,
       "net_bps_cost4": -658.5,
       "net_bps_cost10": -1306.5,
-      "p_holm": 0.6147
+      "p_holm": 0.4918
      }
     },
     "R": {
@@ -3290,6 +3291,7 @@
     }
    }
   },
-  "code_sha256": "e3efdd80b9d0543427d636a8a8085e848299771b1801d0a63c5c7948f3c87cbb"
+  "code_sha256": "eeb82fa19bd0a5b6f4fdba3d2c944a48f2bb0aa95a585bf4e2330afae943780d",
+  "holm_note": "Holm re-applied with distinct-rule de-duplication (apply_holm) on the stored calibration results; no recalibration needed."
  }
 }

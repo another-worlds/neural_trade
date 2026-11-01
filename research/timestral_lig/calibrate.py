@@ -238,6 +238,28 @@ def holm(ps):
     return out
 
 
+def apply_holm(res):
+    """Holm within each protocol family over distinct deployed rules (both sets, both selection rules).
+    W and R picking the same rule on the same model and set count once."""
+    for proto in ("P-A", "P-B"):
+        keys, ps = {}, {}
+        for ds, d in res.items():
+            if not isinstance(d, dict) or proto not in d:
+                continue
+            for name, r in d[proto].items():
+                for rule in ("W", "R"):
+                    x = r[rule]
+                    if x.get("decision") != "deploy" or "p_one_sided" not in x["test"]:
+                        continue
+                    p = x["params"]
+                    k = "|".join(str(v) for v in (ds, name, p["H"], p["align"], p["conf"], p["keep"], p["side"]))
+                    keys.setdefault(k, []).append((ds, name, rule))
+                    ps[k] = x["test"]["p_one_sided"]
+        for k, adj in holm(ps).items():
+            for ds, name, rule in keys[k]:
+                res[ds][proto][name][rule]["test"]["p_holm"] = adj
+
+
 # ------------------------------------------------------------------------------------------------ data
 def lig_predictions(X, rung, org):
     """Seed-ensemble log-bps quantiles (N, 15, 21) from the pre-registered checkpoints (hashes verified)."""
@@ -303,14 +325,7 @@ def main(ds):
 if __name__ == "__main__":
     torch.set_num_threads(int(os.environ.get("OMP_NUM_THREADS", 4)))
     res = {ds: main(ds) for ds in (sys.argv[1:] or ["repo", "post"])}
-    # Holm within each protocol family over deployed out-of-sample rules (both sets, both selection rules)
-    for proto in ("P-A", "P-B"):
-        ps = {f"{ds}|{name}|{rule}": r[rule]["test"]["p_one_sided"]
-              for ds, d in res.items() for name, r in d[proto].items() for rule in ("W", "R")
-              if r[rule].get("decision") == "deploy" and "p_one_sided" in r[rule]["test"]}
-        for key, adj in holm(ps).items():
-            ds, name, rule = key.split("|")
-            res[ds][proto][name][rule]["test"]["p_holm"] = adj
+    apply_holm(res)
     src = open(__file__, "rb").read()
     for ds in res:
         res[ds]["code_sha256"] = hashlib.sha256(src).hexdigest()

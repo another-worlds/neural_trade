@@ -64,7 +64,7 @@ Descriptive only, rule picked on the evaluation data itself (p_sel = permutation
 | A1 (calib partly in-sample) | R | H=1, none, pm top 20%, fade | 53.8% (0.500) | **abstain** | (if deployed: 50.2% [47.3%, 53.0%]) | – | 1225 / 1180 | +180 (t 1.09) | -4720 | -12070 |
 | A2 (calib partly in-sample) | W | H=1, none, pm top 50%, fade | 52.0% (0.375) | **abstain** | (if deployed: 49.6% [47.7%, 51.5%]) | – | 2813 / 2696 | +199 (t 0.82) | -11053 | -27931 |
 | A2 (calib partly in-sample) | R | H=1, none, z top 2%, fade | 54.9% (0.500) | **abstain** | (if deployed: 48.5% [40.4%, 56.8%]) | – | 145 / 138 | -15 (t -0.26) | -595 | -1465 |
-| price-only baseline | W | H=5, agree3, z top 2%, fade | 58.9% (0.025) | deploy | 56.1% [46.6%, 65.1%] | 0.123 (0.61) | 108 / 107 (7.7) | -226 (t -1.2) | -658 | -1306 |
+| price-only baseline | W | H=5, agree3, z top 2%, fade | 58.9% (0.025) | deploy | 56.1% [46.6%, 65.1%] | 0.123 (0.49) | 108 / 107 (7.7) | -226 (t -1.2) | -658 | -1306 |
 | price-only baseline | R | H=5, agree3, z top 2%, fade | 58.9% (0.150) | **abstain** | (if deployed: 56.1% [46.6%, 65.1%]) | – | 108 / 107 | -226 (t -1.2) | -658 | -1306 |
 
 Descriptive only, rule picked on the evaluation data itself (p_sel = permutation p of the best of the grid):
