@@ -1,0 +1,637 @@
+{
+ "title": "PnL optimisation, BTCUSDT perp: pre-registration of the sealed test",
+ "code_commit": "49eb0bad717376241e0ce48f51c2ff682d9207aa",
+ "uncommitted_changes_at_write": false,
+ "seal": {
+  "start": "2025-11-01T00:00:00+00:00",
+  "end": "2026-10-30 23:59 UTC (last bar in the store)",
+  "clean_seal_excludes": [
+   "2025-11-01 00:00 .. 2025-11-10 07:30",
+   "2026-09-20 .. 2026-10-30"
+  ]
+ },
+ "tracks": {
+  "1": {
+   "deployed": "CASH",
+   "information_only": "T1-LIN",
+   "p_sel": 0.001,
+   "candidates": {
+    "T1-FADEV": {
+     "gates": {
+      "G1": false,
+      "G2": false,
+      "G3": true,
+      "G4": false,
+      "G5": false
+     },
+     "pass": false,
+     "mean_daily_bps": -20.686979114363574,
+     "ann_bps": -7550.747376742705,
+     "sharpe": -3.1178351572714083,
+     "boot_ci95_daily_bps": [
+      -26.079232495117868,
+      -15.018278127698359
+     ],
+     "boot_lb95_daily_bps": -25.23444383234902,
+     "hac_t": -7.345547351758975,
+     "deflated_sharpe": 2.0326369637676955e-24,
+     "n_trials": 76,
+     "by_year_bps": {
+      "2021": -3458.893572535074,
+      "2022": -9794.2286150245,
+      "2023": -8975.698032678241,
+      "2024": -6959.727084946008,
+      "2025": -7323.970831667884
+     },
+     "halves_bps": [
+      -18280.793177541724,
+      -18231.724959309984
+     ],
+     "scenarios_ann_bps": {
+      "C7B": -7550.747376742705,
+      "C7S": -15775.59969379445,
+      "C4B": -5122.017378977478,
+      "C4S": -17607.83083751547,
+      "C10B": -10508.293430424119,
+      "C10S": -13460.574998168266,
+      "C10N": -10481.640105981953
+     },
+     "mean_x": 0.00037751049967482686
+    },
+    "T1-LIN": {
+     "gates": {
+      "G1": true,
+      "G2": true,
+      "G3": true,
+      "G4": true,
+      "G5": false
+     },
+     "pass": false,
+     "mean_daily_bps": 2.116355732359322,
+     "ann_bps": 772.4698423111525,
+     "sharpe": 1.123274595157457,
+     "boot_ci95_daily_bps": [
+      0.3710659092652699,
+      4.245965514180653
+     ],
+     "boot_lb95_daily_bps": 0.6104387082710234,
+     "hac_t": 2.2158281979869003,
+     "deflated_sharpe": 0.5170833736352323,
+     "n_trials": 76,
+     "by_year_bps": {
+      "2021": 3180.8403436927065,
+      "2022": 0.0,
+      "2023": -214.49205612818125,
+      "2024": 713.5810144673171,
+      "2025": 55.438565582361136
+     },
+     "halves_bps": [
+      3180.8403436927065,
+      554.527523921497
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 772.4698423111525,
+      "C7S": -600.0226934470979,
+      "C4B": 787.6017682823648,
+      "C4S": -1118.489142699043,
+      "C10B": 665.6101901130971,
+      "C10S": 282.83222036009045,
+      "C10N": 942.7394268450814
+     },
+     "mean_x": 0.00011960132542299107
+    },
+    "T1-NET": {
+     "gates": {
+      "G1": true,
+      "G2": false,
+      "G3": true,
+      "G4": true,
+      "G5": false
+     },
+     "pass": false,
+     "mean_daily_bps": 2.237519070482806,
+     "ann_bps": 816.6944607262242,
+     "sharpe": 0.525026622507656,
+     "boot_ci95_daily_bps": [
+      -1.4106677531624596,
+      5.979345078262831
+     ],
+     "boot_lb95_daily_bps": -0.8000325369946404,
+     "hac_t": 1.171930816297188,
+     "deflated_sharpe": 0.09881817043611679,
+     "n_trials": 76,
+     "by_year_bps": {
+      "2021": 3400.7022972328637,
+      "2022": -136.98204937022356,
+      "2023": 588.7047481190397,
+      "2024": 127.75315555512118,
+      "2025": -30.956992134648644
+     },
+     "halves_bps": [
+      3639.5571084659045,
+      309.66405093624803
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 816.6944607262242,
+      "C7S": -863.7423677541418,
+      "C4B": 1085.2498653878513,
+      "C4S": -1359.8551350405205,
+      "C10B": 492.7412348552449,
+      "C10S": -200.2847214785624,
+      "C10N": 495.28248991768146
+     },
+     "mean_x": -0.04822155833244324
+    },
+    "T1-NT": {
+     "gates": {
+      "G1": true,
+      "G2": false,
+      "G3": true,
+      "G4": false,
+      "G5": false
+     },
+     "pass": false,
+     "mean_daily_bps": 1.953633432823135,
+     "ann_bps": 713.0762029804442,
+     "sharpe": 0.34878479764525544,
+     "boot_ci95_daily_bps": [
+      -3.427625578437916,
+      8.94479555247766
+     ],
+     "boot_lb95_daily_bps": -2.7696527314357464,
+     "hac_t": 0.6328179034429738,
+     "deflated_sharpe": 0.04846594979127282,
+     "n_trials": 76,
+     "by_year_bps": {
+      "2021": 4136.05253597894,
+      "2022": 124.68798732559044,
+      "2023": -673.9374358805406,
+      "2024": 0.0,
+      "2025": -138.64007849115546
+     },
+     "halves_bps": [
+      3829.4259217629647,
+      -381.2629128301307
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 713.0762029804442,
+      "C7S": -4540.918758044533,
+      "C4B": 1652.450920915943,
+      "C4S": -6001.293673557649,
+      "C10B": -501.00705330038727,
+      "C10S": -2042.096403689026,
+      "C10N": -391.76613786718946
+     },
+     "mean_x": 0.006556004285812378
+    },
+    "T1-NET-W": {
+     "gates": {
+      "G1": null,
+      "G2": false,
+      "G3": true,
+      "G4": true,
+      "G5": false
+     },
+     "pass": null,
+     "mean_daily_bps": 2.237519070482806,
+     "ann_bps": 816.6944607262242,
+     "sharpe": 0.525026622507656,
+     "boot_ci95_daily_bps": [
+      -1.4106677531624596,
+      5.979345078262831
+     ],
+     "boot_lb95_daily_bps": -0.8000325369946404,
+     "hac_t": 1.171930816297188,
+     "deflated_sharpe": 0.09881817043611679,
+     "n_trials": 76,
+     "by_year_bps": {
+      "2021": 3400.7022972328637,
+      "2022": -136.98204937022356,
+      "2023": 588.7047481190397,
+      "2024": 127.75315555512118,
+      "2025": -30.956992134648644
+     },
+     "halves_bps": [
+      3639.5571084659045,
+      309.66405093624803
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 816.6944607262242,
+      "C7S": -863.7423677541418,
+      "C4B": 1085.2498653878513,
+      "C4S": -1359.8551350405205,
+      "C10B": 492.7412348552449,
+      "C10S": -200.2847214785624,
+      "C10N": 495.28248991768146
+     },
+     "mean_x": -0.04822155833244324
+    }
+   },
+   "comparators": {
+    "plain_fade": {
+     "mean_daily_bps": -58.84597191698327,
+     "ann_bps": -21478.77974969889,
+     "sharpe": -9.212821044679922
+    },
+    "intraday_trend": {
+     "mean_daily_bps": -184.72260863004325,
+     "ann_bps": -67423.75214996579,
+     "sharpe": -11.566303414598318
+    }
+   },
+   "missing": [],
+   "K1_track1_closed": false
+  },
+  "2": {
+   "deployed": "CASH",
+   "information_only": "T2-P",
+   "p_sel": 0.141,
+   "candidates": {
+    "T2-P": {
+     "gates": {
+      "G1": false,
+      "G2": false,
+      "G3": false,
+      "G4": true,
+      "G5": true
+     },
+     "pass": false,
+     "mean_daily_bps": 3.4763686773612283,
+     "ann_bps": 1268.8745672368484,
+     "sharpe": 0.3535562165649538,
+     "boot_ci95_daily_bps": [
+      -4.759515865835832,
+      11.823280169860253
+     ],
+     "boot_lb95_daily_bps": -3.4966549788339947,
+     "hac_t": 0.8169564512029607,
+     "deflated_sharpe": 0.03271807183754447,
+     "n_trials": 129,
+     "by_year_bps": {
+      "2021": 3784.602648328341,
+      "2022": -460.7714352777237,
+      "2023": 5204.242972367514,
+      "2024": 531.1648041653866,
+      "2025": -2923.448274040947
+     },
+     "halves_bps": [
+      4987.353843262948,
+      1148.4368722796196
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 1268.8745672368484,
+      "C7S": 1110.7704703760157,
+      "C4B": 1348.125180237788,
+      "C4S": 1155.3503963514663,
+      "C10B": 1180.1043548365762,
+      "C10S": 1081.4165969053738,
+      "C10N": 1178.026420400916
+     },
+     "mean_x": 0.10553659498691559
+    },
+    "T2-LIN": {
+     "gates": {
+      "G1": false,
+      "G2": false,
+      "G3": false,
+      "G4": true,
+      "G5": false
+     },
+     "pass": false,
+     "mean_daily_bps": 2.53803274976184,
+     "ann_bps": 926.3819536630716,
+     "sharpe": 0.163195596729133,
+     "boot_ci95_daily_bps": [
+      -8.999591875062594,
+      14.06821416935757
+     ],
+     "boot_lb95_daily_bps": -7.174201525609235,
+     "hac_t": 0.42707734025330224,
+     "deflated_sharpe": 0.012293971349748928,
+     "n_trials": 129,
+     "by_year_bps": {
+      "2021": 746.441966730611,
+      "2022": -1616.663561136718,
+      "2023": 3709.6894342000173,
+      "2024": 3162.161033016314,
+      "2025": -1522.0010694805758
+     },
+     "halves_bps": [
+      2029.6361923757438,
+      2449.9916109539054
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 926.3819536630716,
+      "C7S": -980.874862029789,
+      "C4B": 1921.8178174113268,
+      "C4S": -1415.6895352781135,
+      "C10B": 43.1775877672245,
+      "C10S": -614.9297495149393,
+      "C10N": 28.918777758470306
+     },
+     "mean_x": 0.17375005781650543
+    },
+    "T2-NET": {
+     "gates": {
+      "G1": false,
+      "G2": false,
+      "G3": false,
+      "G4": false,
+      "G5": true
+     },
+     "pass": false,
+     "mean_daily_bps": 3.3682590337717833,
+     "ann_bps": 1229.4145473267008,
+     "sharpe": 0.27614025256338603,
+     "boot_ci95_daily_bps": [
+      -7.824992215724443,
+      15.728836347887508
+     ],
+     "boot_lb95_daily_bps": -6.1213933650552335,
+     "hac_t": 0.5775578557903286,
+     "deflated_sharpe": 0.02243881100617249,
+     "n_trials": 129,
+     "by_year_bps": {
+      "2021": 6297.396446829703,
+      "2022": 28.443156051848327,
+      "2023": 71.7718158613176,
+      "2024": -2175.668145524462,
+      "2025": 1723.0339213887887
+     },
+     "halves_bps": [
+      6389.104353811189,
+      -444.1271592039925
+     ],
+     "scenarios_ann_bps": {
+      "C7B": 1229.4145473267008,
+      "C7S": 733.9652630726912,
+      "C4B": 1396.5685982978262,
+      "C4S": 662.7880295148378,
+      "C10B": 1061.4544842070864,
+      "C10S": 754.718201775839,
+      "C10N": 1067.466725462246
+     },
+     "mean_x": -0.33317023515701294
+    },
+    "T2-NET-W": {
+     "gates": {
+      "G1": null,
+      "G2": false,
+      "G3": false,
+      "G4": false,
+      "G5": false
+     },
+     "pass": null,
+     "mean_daily_bps": -0.5350667999460903,
+     "ann_bps": -195.29938198032298,
+     "sharpe": -0.04300917559540081,
+     "boot_ci95_daily_bps": [
+      -9.903330751564718,
+      8.427006925635059
+     ],
+     "boot_lb95_daily_bps": -8.249582756012586,
+     "hac_t": -0.10801529230734658,
+     "deflated_sharpe": 0.0033294813909296736,
+     "n_trials": 129,
+     "by_year_bps": {
+      "2021": -559.3363984864874,
+      "2022": -18.794538836168496,
+      "2023": 86.37225955347957,
+      "2024": -2175.668145524462,
+      "2025": 1723.0339213887887
+     },
+     "halves_bps": [
+      -517.1579326533357,
+      -427.23496925151426
+     ],
+     "scenarios_ann_bps": {
+      "C7B": -195.29938198032298,
+      "C7S": -1410.0932509533607,
+      "C4B": 34.67725641048432,
+      "C4S": -1565.752547934467,
+      "C10B": -493.4947394611706,
+      "C10S": -1169.1903818259518,
+      "C10N": -493.5674100586686
+     },
+     "mean_x": -0.34164971113204956
+    }
+   },
+   "comparators": {
+    "B&H": {
+     "mean_daily_bps": 4.297339375027748,
+     "ann_bps": 1568.5288718851282,
+     "sharpe": 0.25401589493858084
+    },
+    "tsmom_unscaled": {
+     "mean_daily_bps": 4.713171426731632,
+     "ann_bps": 1720.3075707570458,
+     "sharpe": 0.3931923986018591
+    },
+    "voltarget_long": {
+     "mean_daily_bps": 4.183569798456084,
+     "ann_bps": 1527.0029764364706,
+     "sharpe": 0.3300102716106265
+    }
+   },
+   "missing": []
+  }
+ },
+ "net_selection_S": {
+  "1": {
+   "h": 5,
+   "cell": "LIN_k2",
+   "U_best_bps": 3.4457510247175196,
+   "cash": false,
+   "cells_bps": {
+    "h1_LIN_k1": 0.2096056593996475,
+    "h1_LIN_k2": 1.058386346731019,
+    "h1_MLP_k1": 0.0,
+    "h1_MLP_k2": 0.0,
+    "h5_LIN_k1": 2.2073950952314947,
+    "h5_LIN_k2": 3.4457510247175196,
+    "h5_MLP_k1": 0.6498548990462264,
+    "h5_MLP_k2": 0.0,
+    "h15_LIN_k1": 1.7768262574639573,
+    "h15_LIN_k2": 1.8356280416283886,
+    "h15_MLP_k1": 0.0,
+    "h15_MLP_k2": 0.0
+   }
+  },
+  "2": {
+   "h": 1440,
+   "cell": "MLP_k1",
+   "U_best_bps": 20.38344313247169,
+   "cash": false,
+   "cells_bps": {
+    "h60_LIN_k1": 2.107472167206555,
+    "h60_LIN_k2": 3.3605277223920424,
+    "h60_MLP_k1": 0.0,
+    "h60_MLP_k2": 0.0,
+    "h240_LIN_k1": 3.0698009244817075,
+    "h240_LIN_k2": 5.901354370861068,
+    "h240_MLP_k1": 1.9561503626416736,
+    "h240_MLP_k2": 5.205475681314999,
+    "h1440_LIN_k1": 10.757997398830016,
+    "h1440_LIN_k2": 9.713081987362909,
+    "h1440_MLP_k1": 20.38344313247169,
+    "h1440_MLP_k2": 19.762481494624474,
+    "h1_LIN_k1": 0.2096056593996475,
+    "h1_LIN_k2": 1.058386346731019,
+    "h1_MLP_k1": 0.0,
+    "h1_MLP_k2": 0.0,
+    "h5_LIN_k1": 2.2073950952314947,
+    "h5_LIN_k2": 3.4457510247175196,
+    "h5_MLP_k1": 0.6498548990462264,
+    "h5_MLP_k2": 0.0,
+    "h15_LIN_k1": 1.7768262574639573,
+    "h15_LIN_k2": 1.8356280416283886,
+    "h15_MLP_k1": 0.0,
+    "h15_MLP_k2": 0.0
+   }
+  }
+ },
+ "ridge_S": {
+  "1": {
+   "H": 15,
+   "theta": 0.5,
+   "lambda": 1.0,
+   "cash": false
+  },
+  "2": {
+   "H": 1440,
+   "theta": 2.0,
+   "lambda": 10000.0,
+   "cash": false
+  }
+ },
+ "t1_nt": {
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/S/bundle_S_d3ed4f85ec95",
+  "h": 1,
+  "cash": true
+ },
+ "static_mean_x": {
+  "T1-FADEV": 0.00037751049967482686,
+  "T1-LIN": 0.00011960132542299107,
+  "T1-NET": -0.04822155833244324,
+  "T1-NT": 0.006556004285812378,
+  "T1-NET-W": -0.04822155833244324,
+  "T2-P": 0.10553659498691559,
+  "T2-LIN": 0.17375005781650543,
+  "T2-NET": -0.33317023515701294,
+  "T2-NET-W": -0.34164971113204956
+ },
+ "procedure": {
+  "features": "features_v1 (F-CORE 48 + F-DAILY 7; Track 1 uses 42 intraday columns)",
+  "folds": "annual expanding; fold S trained on all dev data to 2025-10-31, frozen for the seal",
+  "fees": "C7 primary (maker 2 bps entry, taker 5 bps exit); C4 and C10 reported",
+  "fills": "B base (1-tick trade-through, next-open taker); S stress (1 bps trade-through, +1 bar latency, +1 bps taker slippage)",
+  "track1_execution": "maker entries K = 1 (h <= 5) or 3 (h = 15) bars then cancel; taker exits",
+  "track2_execution": "maker at the decision close, chase to taker after 15 bars",
+  "nets": "LIN/MLP x kappa {1, 2} x h; 5 seeds; ensemble tau/b; hard band; weights rounded to 0.05",
+  "ridge": "H x theta {0.5, 1, 2} x lambda {1, 10, 1e2, 1e3, 1e4}; purged blocked 5-fold CV on engine F",
+  "positions_start_flat_at_seal_start": true
+ },
+ "verdict_rules": {
+  "track1": "PASS: one-sided stationary-bootstrap p < 0.05 for mean daily net > 0 at C7-B on the full seal, AND mean > 0 on the clean seal, AND mean > 0 in both seal halves. KILL: mean <= 0 on the full or the clean seal. Otherwise INCONCLUSIVE.",
+  "track2": "FALSIFIED: seal Sharpe < SR_dev - 1.645 sqrt(1/T_seal + 1/T_dev) on the full or the clean seal. CONSISTENT: not falsified and seal net PnL at C7-B > 0. WEAK: not falsified, PnL <= 0. CONFIRMED (flag): one-sided 95% lower bound of the pooled dev-OOS-plus-seal mean daily net > 0.",
+  "meaning": "PASS or CONSISTENT means only 'go to at least 12 months of paper trading', never capital. A deployed candidate that is KILLED or FALSIFIED is dropped for this venue and fee tier.",
+  "cash_track": "If a track deploys CASH, its information-only candidate is scored with the same rules, labelled information only."
+ },
+ "secondary_information_only": [
+  {
+   "id": "S1",
+   "candidate": "T1-LIN",
+   "scenario": "C10S",
+   "hypothesis": "With taker entries, T1-LIN's extreme-volatility reversal edge survives one bar of latency and 1 bps slippage: mean daily net at C10-S > 0 on the full seal (one-sided stationary bootstrap p < 0.05, mean block 10) and mean > 0 on the clean seal.",
+   "why": "post-hoc dev diagnostics (results/diag_t1lin.json): C7-S fails through maker entries under latency; C10-S was +0.75 bps/day on dev. Information only: it can never deploy anything.",
+   "power_note": "T1-LIN traded about 34 times a year on dev, 80% of them in 2021 crash days; the seal may hold few or no trades, in which case S1 is untestable, not passed."
+  }
+ ],
+ "power": {
+  "track1": "dev OOS detects about 1 bps per trade; the seal about 2 bps (2,000-4,000 fade trades)",
+  "track2": "minimum detectable Sharpe 2.49 on the seal, 2.68 on the clean seal; the seal can falsify Track 2, it cannot confirm it"
+ },
+ "disclosures": [
+  "Seen windows inside the seal: 2025-10-11..2025-11-10 and 2026-09-20..2026-10-30 were studied in earlier work in this repository (clean seal excludes them).",
+  "Trend contamination: earlier checks computed daily TSMOM and vol-targeted long BTC on 2022-01..2026-11, covering most of dev OOS and the whole seal; trend-family results are not clean on either period.",
+  "Earlier strat_probe and money-blocker critique looked at dev data.",
+  "The designers (language models) may know the 2025-26 BTC price path from training data.",
+  "2026-10 funding prints are estimated from the premium index (MAE 0.02 bps per print).",
+  "The 2026-10-28 kline file was missing (a 1-day gap in the seal).",
+  "MLP band nets stayed at cash on Track 1 (also with the declared extended warm-up); LIN cells carry T1-NET. Reported as found, procedure unchanged.",
+  "T1-NT's fold-S selection abstained (no horizon had positive validation net), so T1-NT is flat on the seal. On dev it is retired from trading use by K2 (T1-LIN beats it on C7-B net), although its OOS IC is small but positive (h = 1/5/15: 0.022/0.042/0.047).",
+  "Two code reviews and one documented full dev rerun (C4 rows only) happened before this file; see CHANGES.log. The C7 gate scenarios did not change in the rerun."
+ ],
+ "hashes": {
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_data/btcusdt_perp_1m.npz": "93393702e4bb02c85869761c61b9889dfcbe359f13fe886fad0ffcab1feba9a4",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_data/funding_full.npz": "86a78f2e5b967e325d26cf15b535ee8cc3a4cb5b4e595ab0d6320a6a5634c1db",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/features_v1.json": "cf518ea37bbb2b36e6401a36a757c8a7c9fb999ee660bb7809db2ecde58f8aa9",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/features_v1.npy": "5894e383e264ff6042d55337bc9e877a0af2307fe0b1af05a70e0043f8b83de4",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/sigma_v1.npy": "fd743256162f676af6fe50f5412284b6a5c43830140990692c230d3f28a7baef",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/dev_daily.npz": "c60c50709a5314af1f3356e5381440cdbfa83720a1774cdf3f3232f05cb8040b",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/ridge_T1_S.npz": "0a1ab638b8ba62f081281806d9cde64bf8068261f07d97c3e05cc62553dd711b",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/ridge_T2_S.npz": "e5cad30153b9fd124a453357aa253fd946cbe4b4d0f29380782be34ab41d0146",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h15_LIN_k1.pt": "0243efa669b259f0d42bc95692bea602512e86ab66300c0d679d68f7ed8e082f",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h15_LIN_k2.pt": "e8f8d0f624b8864d57fcf16dc4ec2f869b60e02a54a0e55eb5b765cfa72e8eb1",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h15_MLP_k1.pt": "6c5aed317073191304fb3628fda5e6c171ced77e90b02626c7a16cbb984b10f2",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h15_MLP_k2.pt": "a058eb8f5d673a8723343de4c05709de4f86317ea78d56169d5c9ad2bec5584f",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h1_LIN_k1.pt": "483461b3526c9ff2667c82bb1a9a06ae98abfe2a9e8042b2978adeaccaa55a6a",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h1_LIN_k2.pt": "d2990f75f983dcd4a893748b33400d884f8cfc3cf38928d44d196ced8077286d",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h1_MLP_k1.pt": "0f0dd8374fe4d7b23bb1dfd9ac1c5ddce799bac29471fca812fe235e503c6cae",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h1_MLP_k2.pt": "93e7944a3636e30d9e8f44d062f1c2c71c538dcf4e4a40a913908f7574b1f092",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h5_LIN_k1.pt": "cce2139d1c8fcc8e45b14947e2444c8b64d756945469bd6d9c1e94ab38e3fa4f",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h5_LIN_k2.pt": "8640272d8716d5d9058b5ae47eb5860832807520a7138f6ee79b9141fbee74aa",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h5_MLP_k1.pt": "c7e3af4dab5ff461e42de32426ae2db6530896ff171e4396f76fe4ab182f242b",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T1_S_h5_MLP_k2.pt": "1eaf91256ade93a693286ac8329395f963c20e59bc12a4396cbd442ebad0c92b",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h1440_LIN_k1.pt": "ab0231bb05dd68ba91b4f9201a7eec65a3e37a2fa12c6d53ce54194b1c131d59",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h1440_LIN_k2.pt": "943b875656df5d20261e7f746db4a1597e35e4e96d8dd72d37cc58cde4fe0ef1",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h1440_MLP_k1.pt": "38a6e57dcfca9c054382cef70cda4ff259e7a3ef2226d792797d1bd657b0aff3",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h1440_MLP_k2.pt": "86bd32a55d6855b393aba43ee7d6e821203a9407f2d1a6e8c830507d40ba866a",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h240_LIN_k1.pt": "338ec04bd208b2707f7f80183bb5fd5ddeebcc281990ec69204aef712f0f4d9b",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h240_LIN_k2.pt": "001b75d7279e00083679ccf8d315257f82ee0fb9a62778e1e4c352cde4021f05",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h240_MLP_k1.pt": "5b3397f2a4f03d2d49aaacb3982f4a70577dce7fdd11de31aac41271e631b39d",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h240_MLP_k2.pt": "b3e3f73414b2499810ff060b5e8c74c19c1f204c107f6ceb46877f0223d20a63",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h60_LIN_k1.pt": "1eeacd204cd1af312bffb70aeb6c7ce649e0922f6f8e2968c2d16a9b1c65c84c",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h60_LIN_k2.pt": "419914190a8669f7ace762d64e42889123541a5159ed0d2bee6b6b6ad864ca6a",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h60_MLP_k1.pt": "7f32c118af78f442e370272f43925e2c012b4aaaa94bd76c0c96fa667aad12a3",
+  "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nets/T2_S_h60_MLP_k2.pt": "5db7232904adf8dc5fb8ca7a612f0f89382f13e0e741e6130e51d0db6e96cc96",
+  "/home/user/neural_trade/research/pnl/work/nt/bundles/S/bundle_S_d3ed4f85ec95/config.json": "18d7e4e18bfdd202e3fa94c7e91f1be37425bd9f766eb1b0db9d3a2baa2a14f1",
+  "/home/user/neural_trade/research/pnl/work/nt/bundles/S/bundle_S_d3ed4f85ec95/input_scaler.joblib": "5b5674d61cc2206d2a8bafa9fee866483d9c543db030f56a0e29305387d14885",
+  "/home/user/neural_trade/research/pnl/work/nt/bundles/S/bundle_S_d3ed4f85ec95/model.weights.h5": "1d817febcfca41681aae1510f32fdd5b9073947e9e8e28fa286ed9855205bae7",
+  "/home/user/neural_trade/research/pnl/work/nt/bundles/S/bundle_S_d3ed4f85ec95/target_scaler.joblib": "569504ae8d654fc7d535d4c87f6a9451124f9de33d91b4810747d35d4dc434fc"
+ },
+ "hashes_by_role": {
+  "data_bars": "93393702e4bb02c85869761c61b9889dfcbe359f13fe886fad0ffcab1feba9a4",
+  "data_funding": "86a78f2e5b967e325d26cf15b535ee8cc3a4cb5b4e595ab0d6320a6a5634c1db",
+  "features_json": "cf518ea37bbb2b36e6401a36a757c8a7c9fb999ee660bb7809db2ecde58f8aa9",
+  "features_npy": "5894e383e264ff6042d55337bc9e877a0af2307fe0b1af05a70e0043f8b83de4",
+  "sigma": "fd743256162f676af6fe50f5412284b6a5c43830140990692c230d3f28a7baef",
+  "dev_daily": "c60c50709a5314af1f3356e5381440cdbfa83720a1774cdf3f3232f05cb8040b",
+  "ridge_T1_S": "0a1ab638b8ba62f081281806d9cde64bf8068261f07d97c3e05cc62553dd711b",
+  "ridge_T2_S": "e5cad30153b9fd124a453357aa253fd946cbe4b4d0f29380782be34ab41d0146",
+  "net:T1_S_h15_LIN_k1.pt": "0243efa669b259f0d42bc95692bea602512e86ab66300c0d679d68f7ed8e082f",
+  "net:T1_S_h15_LIN_k2.pt": "e8f8d0f624b8864d57fcf16dc4ec2f869b60e02a54a0e55eb5b765cfa72e8eb1",
+  "net:T1_S_h15_MLP_k1.pt": "6c5aed317073191304fb3628fda5e6c171ced77e90b02626c7a16cbb984b10f2",
+  "net:T1_S_h15_MLP_k2.pt": "a058eb8f5d673a8723343de4c05709de4f86317ea78d56169d5c9ad2bec5584f",
+  "net:T1_S_h1_LIN_k1.pt": "483461b3526c9ff2667c82bb1a9a06ae98abfe2a9e8042b2978adeaccaa55a6a",
+  "net:T1_S_h1_LIN_k2.pt": "d2990f75f983dcd4a893748b33400d884f8cfc3cf38928d44d196ced8077286d",
+  "net:T1_S_h1_MLP_k1.pt": "0f0dd8374fe4d7b23bb1dfd9ac1c5ddce799bac29471fca812fe235e503c6cae",
+  "net:T1_S_h1_MLP_k2.pt": "93e7944a3636e30d9e8f44d062f1c2c71c538dcf4e4a40a913908f7574b1f092",
+  "net:T1_S_h5_LIN_k1.pt": "cce2139d1c8fcc8e45b14947e2444c8b64d756945469bd6d9c1e94ab38e3fa4f",
+  "net:T1_S_h5_LIN_k2.pt": "8640272d8716d5d9058b5ae47eb5860832807520a7138f6ee79b9141fbee74aa",
+  "net:T1_S_h5_MLP_k1.pt": "c7e3af4dab5ff461e42de32426ae2db6530896ff171e4396f76fe4ab182f242b",
+  "net:T1_S_h5_MLP_k2.pt": "1eaf91256ade93a693286ac8329395f963c20e59bc12a4396cbd442ebad0c92b",
+  "net:T2_S_h1440_LIN_k1.pt": "ab0231bb05dd68ba91b4f9201a7eec65a3e37a2fa12c6d53ce54194b1c131d59",
+  "net:T2_S_h1440_LIN_k2.pt": "943b875656df5d20261e7f746db4a1597e35e4e96d8dd72d37cc58cde4fe0ef1",
+  "net:T2_S_h1440_MLP_k1.pt": "38a6e57dcfca9c054382cef70cda4ff259e7a3ef2226d792797d1bd657b0aff3",
+  "net:T2_S_h1440_MLP_k2.pt": "86bd32a55d6855b393aba43ee7d6e821203a9407f2d1a6e8c830507d40ba866a",
+  "net:T2_S_h240_LIN_k1.pt": "338ec04bd208b2707f7f80183bb5fd5ddeebcc281990ec69204aef712f0f4d9b",
+  "net:T2_S_h240_LIN_k2.pt": "001b75d7279e00083679ccf8d315257f82ee0fb9a62778e1e4c352cde4021f05",
+  "net:T2_S_h240_MLP_k1.pt": "5b3397f2a4f03d2d49aaacb3982f4a70577dce7fdd11de31aac41271e631b39d",
+  "net:T2_S_h240_MLP_k2.pt": "b3e3f73414b2499810ff060b5e8c74c19c1f204c107f6ceb46877f0223d20a63",
+  "net:T2_S_h60_LIN_k1.pt": "1eeacd204cd1af312bffb70aeb6c7ce649e0922f6f8e2968c2d16a9b1c65c84c",
+  "net:T2_S_h60_LIN_k2.pt": "419914190a8669f7ace762d64e42889123541a5159ed0d2bee6b6b6ad864ca6a",
+  "net:T2_S_h60_MLP_k1.pt": "7f32c118af78f442e370272f43925e2c012b4aaaa94bd76c0c96fa667aad12a3",
+  "net:T2_S_h60_MLP_k2.pt": "5db7232904adf8dc5fb8ca7a612f0f89382f13e0e741e6130e51d0db6e96cc96"
+ }
+}
