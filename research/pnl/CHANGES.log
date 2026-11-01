@@ -100,3 +100,10 @@ DOCUMENTATION NOTE (added after the seal; no code or result changed)
 - checks.py runs the causality check on 20 random cuts of one 150k-bar window (noise and permutation), not the
   1,000 cuts the SPEC names. This reduction was not logged before; it is recorded here. Feature causality was
   also confirmed at the seal: the features recomputed on the full data were bit-identical on every dev row.
+
+VIEWER (descriptive, after the seal; no result changed)
+- sim.py records per-bar log equity and the entry/exit prices of each trade (recording only; 61 tests pass).
+- viz_export.py re-simulates the 9 shown strategies at C7-B for dev OOS and for the sealed year with the frozen
+  fold-S models, asserts that every daily PnL series is bit-identical to the scored results (dev_daily, seal_daily),
+  and writes the viewer data. This re-read of the sealed bars is logged in results/seal_access.log; it reproduces
+  the scored numbers and re-scores nothing.

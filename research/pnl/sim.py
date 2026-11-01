@@ -82,6 +82,8 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
     day_log, day_ids = [], []
     day_fees, day_fund, day_acc = [], [], [0.0, 0.0]   # per day, in units of start-of-day equity
     expo = np.zeros(end - start, np.float32) if record_exposure else None
+    eqlog = np.zeros(end - start, np.float64) if record_exposure else None   # log equity at each close (from 1.0)
+    cum_log = 0.0                                    # sum of completed days' log returns (recording only)
     suppress_until = -1
     cur_day = t[start] // DAY
 
@@ -117,6 +119,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
                 trades.append({"entry_bar": tr["entry_bar"], "exit_bar": i, "side": tr["side"], "gross_bps": gross,
                                "fees_bps": fee_bps, "funding_bps": fund_bps, "net_bps": gross - fee_bps - fund_bps,
                                "hold_minutes": int(i - tr["entry_bar"]),
+                               "entry_px": float(tr["entry_px"]), "exit_px": float(px),
                                "price_move_bps": tr["side"] * np.log(px / tr["entry_px"]) * 1e4})
                 open_trade = None
                 if q != 0.0:          # flip: the new leg opens a new trade
@@ -153,6 +156,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         if d != cur_day:
             E_end = E + q * (c[i - 1] - mark)
             day_log.append(np.log(max(E_end, 1e-300)))
+            cum_log += day_log[-1]
             day_ids.append(cur_day)
             day_fees.append(day_acc[0])
             day_fund.append(day_acc[1])
@@ -219,6 +223,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         st.E, st.x = E, x
         if record_exposure:
             expo[i - start] = x
+            eqlog[i - start] = cum_log + np.log(max(E, 1e-300))
         # 5. drift trim, |x| > 1.10 at any close, on the effective exposure (resting orders are adjusted in trim())
         q_eff = q + sum(e_[1] for e_ in taker_queue)
         x_eff = q_eff * c[i] / E if E > 0 else 0.0
@@ -291,7 +296,8 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
     eq = np.exp(np.cumsum(daily))
     return {"daily": daily, "days": np.array(day_ids), "equity": eq, "trades": trades, "fees": fees_total,
             "funding": funding_total, "turnover": turnover, "trims": trims, "n_taker": n_taker, "n_maker": n_maker,
-            "n_cancel": n_cancel, "n_chase": n_chase, "exposure": expo, "fills": fills, "final_E": float(eq[-1]),
+            "n_cancel": n_cancel, "n_chase": n_chase, "exposure": expo, "equity_log": eqlog, "fills": fills,
+            "final_E": float(eq[-1]),
             "daily_fees": np.array(day_fees), "daily_funding": np.array(day_fund),
             "start": int(start), "end": int(end), "fee": fee, "fill": fill}
 

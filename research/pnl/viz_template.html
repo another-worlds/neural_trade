@@ -1,0 +1,507 @@
+<title>BTCUSDT Strategy Replay</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one working column. Controls row, stats strip, one figure with three panels on a shared time axis, trade table, notes. */
+:root {
+  --plane: #f6f7f5;
+  --surface: #fcfcfb;
+  --ink: #111312;
+  --ink-2: #4e524f;
+  --ink-3: #8a8e89;
+  --grid: #e3e5e0;
+  --rule: #c9ccc5;
+  --price: #3d423f;
+  --strat: #2a78d6;          /* categorical slot 1: the selected strategy (PnL line, position) */
+  --short: #eb6834;          /* slot 2: short trades */
+  --long: #1baf7a;           /* slot 3: long trades */
+  --ref: #9a9d97;            /* buy-and-hold reference line */
+  --seal: rgba(98, 80, 214, 0.07);
+  --seal-ink: #6250d6;
+  --chip: #eceee9;
+  --focus: #2a78d6;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --plane: #0e0f0e; --surface: #1a1b1a; --ink: #f0f1ec; --ink-2: #c3c5bc; --ink-3: #8a8e89; --grid: #2b2d2a;
+    --rule: #3a3d39; --price: #d6d9d2; --strat: #3987e5; --short: #d95926; --long: #199e70; --ref: #7c7f79;
+    --seal: rgba(144, 133, 233, 0.09); --seal-ink: #9085e9; --chip: #262825; --focus: #3987e5; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --plane: #0e0f0e; --surface: #1a1b1a; --ink: #f0f1ec; --ink-2: #c3c5bc; --ink-3: #8a8e89; --grid: #2b2d2a;
+  --rule: #3a3d39; --price: #d6d9d2; --strat: #3987e5; --short: #d95926; --long: #199e70; --ref: #7c7f79;
+  --seal: rgba(144, 133, 233, 0.09); --seal-ink: #9085e9; --chip: #262825; --focus: #3987e5; color-scheme: dark;
+}
+html { background: var(--plane); }
+[hidden] { display: none !important; }
+body {
+  background: var(--plane); color: var(--ink); font: 14px/1.45 var(--font);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: grid; gap: 4px; }
+h1 { font-size: 22px; line-height: 1.2; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--ink-2); margin: 0; max-width: 78ch; }
+.sub b { color: var(--ink); font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-end; }
+.group { display: grid; gap: 5px; min-width: 0; }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); font-weight: 600; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button, .btn {
+  font: 13px/1 var(--font); color: var(--ink); background: var(--surface); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 7px 10px; cursor: pointer;
+}
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.seg button:hover:not([aria-pressed="true"]), .btn:hover { background: var(--chip); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.toggle { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-2); cursor: pointer; padding-bottom: 7px; }
+.stats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1px; background: var(--rule);
+  border: 1px solid var(--rule); border-radius: 8px; overflow: hidden;
+}
+.stat { background: var(--surface); padding: 10px 14px; display: grid; gap: 4px; min-width: 0; }
+.stat .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); font-weight: 600; }
+.stat .v { font-size: 15px; font-variant-numeric: tabular-nums; }
+.stat .v span { color: var(--ink-2); font-size: 13px; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink); background: var(--chip); margin: 0 4px 2px 0; }
+.pill.kill::before { content: "\2716\00a0"; }
+.pill.cons::before { content: "\2713\00a0"; }
+.pill.gate-off { color: var(--ink-3); background: transparent; text-decoration: line-through; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; position: relative; min-width: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px 0; font-size: 12px; color: var(--ink-2); }
+.legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 6px; }
+.legend i.tri { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 0; }
+.legend i.up { border-bottom: 9px solid var(--long); }
+.legend i.down { border-top: 9px solid var(--short); border-bottom: 0; }
+.legend i.area { height: 10px; border: 0; background: color-mix(in srgb, var(--strat) 30%, transparent); border-top: 2px solid var(--strat); }
+.legend i.box { height: 10px; border: 0; background: var(--seal); outline: 1px solid var(--seal-ink); }
+#chart { width: 100%; height: 760px; }
+@media (max-width: 700px) { #chart { height: 600px; } }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-2); font-size: 13px; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.chartbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; padding: 10px 14px 0; }
+.chartbar .legend { padding: 0; flex: 1 1 520px; min-width: 0; }
+.res { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tablecard { display: grid; gap: 8px; padding: 12px 14px; }
+.tablehead { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; align-items: baseline; }
+.tablehead h2 { font-size: 15px; margin: 0; }
+.tablehead p { margin: 0; color: var(--ink-2); font-size: 12px; }
+.scroll { overflow: auto; max-height: 420px; border-top: 1px solid var(--grid); }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th { position: sticky; top: 0; background: var(--surface); color: var(--ink-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+th:nth-child(-n+3), td:nth-child(-n+3) { text-align: left; }
+td button { font: inherit; color: var(--strat); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.side-long { color: var(--ink); } .side-long::before { content: "\25B2\00a0"; color: var(--long); }
+.side-short { color: var(--ink); } .side-short::before { content: "\25BC\00a0"; color: var(--short); }
+.notes { color: var(--ink-2); font-size: 12.5px; display: grid; gap: 6px; max-width: 95ch; }
+.notes p { margin: 0; }
+code { font-family: var(--mono); font-size: 0.92em; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>BTCUSDT Strategy Replay</h1>
+    <p class="sub">Every trade, the running net PnL and the position of each strategy from the PnL study, on Binance USD-M BTCUSDT perp 1-minute bars.
+      Fees and fills are the primary scenario <b>C7-B</b> (maker 2 bps in, taker 5 bps out, funding paid).
+      Dev out-of-sample runs <b>2021-01-01 to 2025-10-31</b> (models refit every 1 January); the shaded band is the <b>sealed year</b> (2025-11-01 to 2026-10-30), traded with the frozen final models.</p>
+  </header>
+
+  <div class="controls" role="toolbar" aria-label="Chart controls">
+    <div class="group"><span class="label" id="lbl-s1">Track 1 (1-15 min)</span><div class="seg" id="seg-t1" aria-labelledby="lbl-s1"></div></div>
+    <div class="group"><span class="label" id="lbl-s2">Track 2 (1 min-1 day)</span><div class="seg" id="seg-t2" aria-labelledby="lbl-s2"></div></div>
+    <div class="group"><span class="label" id="lbl-s0">Baselines</span><div class="seg" id="seg-t0" aria-labelledby="lbl-s0"></div></div>
+    <div class="group"><span class="label" id="lbl-r">Range</span><div class="seg" id="seg-range" aria-labelledby="lbl-r"></div></div>
+    <label class="toggle" for="bh-toggle"><input type="checkbox" id="bh-toggle" checked> Buy-and-hold in PnL panel</label>
+  </div>
+
+  <div class="stats" id="stats" aria-live="polite"></div>
+
+  <div class="card">
+    <div class="chartbar">
+    <div class="legend" id="legend">
+      <span><i style="border-color: var(--price)"></i>Price (1-min close; hourly when zoomed out)</span>
+      <span><i class="tri up"></i>Long entry</span>
+      <span><i class="tri down"></i>Short entry</span>
+      <span><i style="border-color: var(--ink-3); width: 8px; border-top-width: 2px"></i>Exit (line from entry)</span>
+      <span><i style="border-color: var(--strat)"></i><span id="leg-strat">Strategy net PnL</span></span>
+      <span id="leg-bh"><i style="border-color: var(--ref)"></i>Buy-and-hold perp net PnL</span>
+      <span><i class="area"></i>Position (x equity)</span>
+      <span><i class="box"></i>Sealed year</span>
+    </div>
+    <div class="res" id="res" aria-live="polite"></div>
+    </div>
+    <div id="chart" role="img" aria-label="Three synced panels: price with trade marks, cumulative net PnL, position"></div>
+    <div class="loading" id="loading">Loading price and trades...</div>
+  </div>
+
+  <div class="card tablecard">
+    <div class="tablehead">
+      <h2 id="tbl-title">Trades in view</h2>
+      <p id="tbl-note"></p>
+    </div>
+    <div class="scroll">
+      <table id="tbl">
+        <thead><tr><th scope="col">Entry (UTC)</th><th scope="col">Period</th><th scope="col">Side</th><th scope="col">Hold</th><th scope="col">Entry price</th><th scope="col">Exit price</th><th scope="col">Gross bps</th><th scope="col">Net bps</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="notes">
+    <p><b>How to read it.</b> The three panels share one time axis: drag to zoom, double-click to reset, and the hover line reads all three panels at once. Zoom below about four days and the price switches from hourly closes to 1-minute closes. Trade marks sit at the bar of the fill: a triangle for the entry (up = long, down = short) and a line to the exit.</p>
+    <p><b>Numbers.</b> PnL is cumulative net of fees and funding, compounded, from 0% on 2021-01-01; the sealed-year run starts flat and is chained onto the dev curve. PnL points are hourly plus every fill; position points are exact at every fill. Gross and net bps per trade are realised PnL over equity at entry (size-weighted).</p>
+    <p><b>Source.</b> Engine E re-simulation (<code>research/pnl/viz_export.py</code>); every run's daily PnL is bit-identical to the scored results in <code>research/pnl/results/</code> (dev gates) and <code>results/seal.json</code>. Verdicts: <code>plans/pnl_optimisation.md</code>.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.34.0/plotly.min.js"></script>
+<script id="meta-json" type="application/json">__META__</script>
+<script id="price-b64" type="application/json">__PRICE__</script>
+<script id="first-json" type="application/json">__FIRST__</script>
+<script>
+(function () {
+  "use strict";
+  var MIN = 60000, DAY = 1440;
+  var meta = JSON.parse(document.getElementById("meta-json").textContent);
+  var NAMES = { "T1-LIN": "T1-LIN ridge", "T1-NET": "T1-NET band net", "T1-FADEV": "T1-FADEV fade", "T1-NT": "T1-NT neural_trade",
+    "T2-P": "T2-P daily trend", "T2-NET": "T2-NET band net", "T2-LIN": "T2-LIN ridge", "B&H": "Buy-and-hold", "tsmom_unscaled": "TSMOM unscaled" };
+  var fileOf = function (id) { return "s/" + id.replace("&", "and") + ".json"; };
+
+  function bytes(b64) { var s = atob(b64), n = s.length, u = new Uint8Array(n); for (var i = 0; i < n; i++) u[i] = s.charCodeAt(i); return u.buffer; }
+  function decode(doc) {
+    return {
+      id: doc.id, nDev: doc.n_trades_dev, n: doc.n_trades,
+      et: new Int32Array(bytes(doc.expo_t)), ex: new Float32Array(bytes(doc.expo_x)), eBreak: doc.seal_break_expo,
+      pt: new Int32Array(bytes(doc.pnl_t)), pL: new Float32Array(bytes(doc.pnl_L)), pBreak: doc.seal_break_pnl,
+      tin: new Int32Array(bytes(doc.tr_tin)), tout: new Int32Array(bytes(doc.tr_tout)), side: new Int8Array(bytes(doc.tr_side)),
+      pin: new Float32Array(bytes(doc.tr_pin)), pout: new Float32Array(bytes(doc.tr_pout)), net: new Float32Array(bytes(doc.tr_net)),
+      gross: new Float32Array(bytes(doc.tr_gross)), hold: new Int32Array(bytes(doc.tr_hold)), period: new Uint8Array(bytes(doc.tr_period))
+    };
+  }
+
+  // ---------------- price: hourly closes embedded; 1-min months fetched on demand
+  var P = meta.price, T0 = P.t0_min;
+  var hourC = new Float32Array(bytes(JSON.parse(document.getElementById("price-b64").textContent)));
+  // plain arrays: Plotly keeps a date axis only for non-typed x data
+  var hourX = new Array(hourC.length), hourY = new Array(hourC.length);
+  for (var k = 0; k < hourC.length; k++) { hourX[k] = (T0 + (k + 1) * 60) * MIN; hourY[k] = isNaN(hourC[k]) ? null : hourC[k]; }
+  var monthCache = {};
+  function loadMonth(m) {
+    if (!monthCache[m.name]) monthCache[m.name] = fetch("m/" + m.name + ".bin").then(function (r) {
+      if (!r.ok) throw new Error("price file " + m.name + " (" + r.status + ")");
+      return r.arrayBuffer();
+    }).then(function (b) { return new Float32Array(b); });
+    return monthCache[m.name];
+  }
+
+  // ---------------- state
+  var cache = {}, cur = null, curId = "T1-LIN", bh = null;
+  cache["T1-LIN"] = decode(JSON.parse(document.getElementById("first-json").textContent));
+  function getStrat(id) {
+    if (cache[id]) return Promise.resolve(cache[id]);
+    return fetch(fileOf(id)).then(function (r) { if (!r.ok) throw new Error(id + " (" + r.status + ")"); return r.json(); })
+      .then(function (d) { cache[id] = decode(d); return cache[id]; });
+  }
+
+  // ---------------- theme
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function themeColors() {
+    return { ink: css("--ink"), ink2: css("--ink-2"), ink3: css("--ink-3"), grid: css("--grid"), rule: css("--rule"), surface: css("--surface"),
+      price: css("--price"), strat: css("--strat"), long: css("--long"), short: css("--short"), ref: css("--ref"), seal: css("--seal"), sealInk: css("--seal-ink") };
+  }
+
+  // ---------------- helpers
+  function lowerBound(arr, v) { var lo = 0, hi = arr.length; while (lo < hi) { var mid = (lo + hi) >> 1; if (arr[mid] < v) lo = mid + 1; else hi = mid; } return lo; }
+  function fmtTime(min) { var d = new Date(min * MIN); return d.toISOString().slice(0, 16).replace("T", " "); }
+  function fmtNum(v, dp) { return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp }); }
+  function signed(v, dp) { return (v > 0 ? "+" : v < 0 ? "−" : "") + fmtNum(Math.abs(v), dp); }
+  function fmtHold(m) { return m < 120 ? m + " min" : m < 2880 ? (m / 60).toFixed(1) + " h" : (m / 1440).toFixed(1) + " d"; }
+
+  function pnlSeries(s) {
+    var n = s.pt.length, x = new Array(n + 1), y = new Array(n + 1), j = 0;
+    for (var i = 0; i < n; i++) {
+      if (i === s.pBreak) { x[j] = (s.pt[i] - 0.5) * MIN; y[j] = null; j++; }
+      x[j] = s.pt[i] * MIN; y[j] = (Math.exp(s.pL[i]) - 1) * 100; j++;
+    }
+    x.length = j; y.length = j; return { x: x, y: y };
+  }
+  function expoSeries(s) {
+    var n = s.et.length, x = new Array(n + 1), y = new Array(n + 1), j = 0;
+    for (var i = 0; i < n; i++) {
+      if (i === s.eBreak) { x[j] = (s.et[i] - 0.5) * MIN; y[j] = null; j++; }
+      x[j] = s.et[i] * MIN; y[j] = s.ex[i]; j++;
+    }
+    x.length = j; y.length = j; return { x: x, y: y };
+  }
+  function tradeTraces(s, C) {
+    var lx = [], ly = [], lt = [], sx = [], sy = [], st = [], px = [], py = [], ex = [], ey = [], et = [];
+    for (var i = 0; i < s.n; i++) {
+      var x0 = s.tin[i] * MIN, x1 = s.tout[i] * MIN, per = s.period[i] ? "Sealed year" : "Dev";
+      var tip = (s.side[i] > 0 ? "Long" : "Short") + " entry " + fmtTime(s.tin[i]) + " UTC @ " + fmtNum(s.pin[i], 1) +
+        "<br>Exit " + fmtTime(s.tout[i]) + " @ " + fmtNum(s.pout[i], 1) + " after " + fmtHold(s.hold[i]) +
+        "<br>Net " + signed(s.net[i], 1) + " bps (gross " + signed(s.gross[i], 1) + ") · " + per;
+      if (s.side[i] > 0) { lx.push(x0); ly.push(s.pin[i]); lt.push(tip); } else { sx.push(x0); sy.push(s.pin[i]); st.push(tip); }
+      px.push(x0, x1, null); py.push(s.pin[i], s.pout[i], null);
+      ex.push(x1); ey.push(s.pout[i]); et.push("Exit " + fmtTime(s.tout[i]) + " UTC @ " + fmtNum(s.pout[i], 1) + "<br>Net " + signed(s.net[i], 1) + " bps");
+    }
+    var ring = { color: C.surface, width: 1.5 };
+    return [
+      { type: "scattergl", mode: "lines", x: px, y: py, yaxis: "y", line: { color: C.ink3, width: 1 }, opacity: 0.8, hoverinfo: "skip", showlegend: false, name: "Hold" },
+      { type: "scattergl", mode: "markers", x: ex, y: ey, yaxis: "y", marker: { symbol: "circle", size: 6, color: C.ink3, line: ring }, text: et, hovertemplate: "%{text}<extra></extra>", showlegend: false, name: "Exit" },
+      { type: "scattergl", mode: "markers", x: lx, y: ly, yaxis: "y", marker: { symbol: "triangle-up", size: 11, color: C.long, line: ring }, text: lt, hovertemplate: "%{text}<extra></extra>", showlegend: false, name: "Long entry" },
+      { type: "scattergl", mode: "markers", x: sx, y: sy, yaxis: "y", marker: { symbol: "triangle-down", size: 11, color: C.short, line: ring }, text: st, hovertemplate: "%{text}<extra></extra>", showlegend: false, name: "Short entry" }
+    ];
+  }
+
+  var gd = document.getElementById("chart"), drawn = false, view = null, priceMode = "hour";
+  // every data change goes through build() -> Plotly.react with the full layout: restyle of x data would clear the
+  // explicit date axis type (Plotly then re-guesses "linear" for millisecond numbers)
+  var FULL = [meta.dev_start_min * MIN, meta.end_min * MIN];
+
+  function layout(C) {
+    var shapes = [{ type: "rect", xref: "x", yref: "paper", x0: meta.seal_start_min * MIN, x1: meta.end_min * MIN, y0: 0, y1: 1, fillcolor: C.seal, line: { width: 0 }, layer: "below" }];
+    var ann = [{ xref: "x", yref: "paper", x: (meta.seal_start_min + meta.end_min) / 2 * MIN, y: 1, yanchor: "bottom", xanchor: "center", text: "Sealed year", showarrow: false, font: { size: 11, color: C.sealInk } }];
+    meta.refits_min.forEach(function (m) {
+      shapes.push({ type: "line", xref: "x", yref: "paper", x0: m * MIN, x1: m * MIN, y0: 0, y1: 1, line: { color: C.rule, width: 1 }, layer: "below" });
+      ann.push({ xref: "x", yref: "paper", x: m * MIN, y: 1, yanchor: "bottom", xanchor: "left", text: "refit", showarrow: false, font: { size: 10, color: C.ink3 } });
+    });
+    var ax = function (title, dom, extra) {
+      var a = { domain: dom, title: { text: title, font: { size: 11, color: C.ink2 }, standoff: 6 }, gridcolor: C.grid, zerolinecolor: C.rule, linecolor: C.rule,
+        tickfont: { size: 11, color: C.ink2 }, fixedrange: false, automargin: true, showspikes: false };
+      for (var k in extra) a[k] = extra[k];
+      return a;
+    };
+    return {
+      paper_bgcolor: C.surface, plot_bgcolor: C.surface, font: { family: css("--font"), color: C.ink, size: 12 },
+      margin: { l: 64, r: 16, t: 28, b: 40 }, showlegend: false, dragmode: "zoom", hovermode: "x unified", hoversubplots: "axis", hoverdistance: 12,
+      hoverlabel: { bgcolor: C.surface, bordercolor: C.rule, font: { color: C.ink, size: 12 } },
+      xaxis: { type: "date", anchor: "y3", domain: [0, 1], range: view || FULL, gridcolor: C.grid, linecolor: C.rule, tickfont: { size: 11, color: C.ink2 },
+        showspikes: true, spikemode: "across", spikesnap: "cursor", spikethickness: 1, spikecolor: C.ink3, spikedash: "solid", hoverformat: "%Y-%m-%d %H:%M UTC" },
+      yaxis: ax("Price (USDT)", [0.47, 1], { tickformat: ",.0f" }),
+      yaxis2: ax("Net PnL (%)", [0.21, 0.43], { ticksuffix: "%", tickformat: ",.0f", zeroline: true }),
+      yaxis3: ax("Position (x)", [0, 0.17], { range: [-1.15, 1.15], fixedrange: true, tickvals: [-1, 0, 1], zeroline: true }),
+      shapes: shapes, annotations: ann
+    };
+  }
+
+  function priceTrace(C, x, y) {
+    return { type: "scattergl", mode: "lines", x: x, y: y, yaxis: "y", line: { color: C.price, width: 1.25 }, name: "Price", hovertemplate: "%{y:,.1f}<extra>Price</extra>", connectgaps: false };
+  }
+
+  function build() {
+    var C = themeColors(), s = cur;
+    var pr = priceData(), p = s._pnl || (s._pnl = pnlSeries(s)), e = s._expo || (s._expo = expoSeries(s));
+    var traces = [priceTrace(C, pr.x, pr.y)].concat(tradeTraces(s, C));
+    traces.push({ type: "scattergl", mode: "lines", x: bh ? bh.x : [], y: bh ? bh.y : [], yaxis: "y2", visible: document.getElementById("bh-toggle").checked,
+      line: { color: C.ref, width: 1.25 }, name: "Buy-and-hold", hovertemplate: "%{y:+.1f}%<extra>Buy-and-hold</extra>" });
+    traces.push({ type: "scattergl", mode: "lines", x: p.x, y: p.y, yaxis: "y2", line: { color: C.strat, width: 2 }, name: curId, hovertemplate: "%{y:+.1f}%<extra>" + curId + " PnL</extra>" });
+    traces.push({ type: "scatter", mode: "lines", x: e.x, y: e.y, yaxis: "y3", line: { color: C.strat, width: 1.25 }, fill: "tozeroy", connectgaps: false,
+      fillcolor: hexA(C.strat, 0.28), name: "Position", hovertemplate: "%{y:+.2f}x<extra>Position</extra>" });
+    var cfg = { responsive: true, displaylogo: false, scrollZoom: false, modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toImage"] };
+    var lay = layout(C);
+    var pr2 = Plotly.react(gd, traces, lay, cfg);
+    return pr2.then(function () {
+      if (!drawn) { drawn = true; gd.on("plotly_relayout", onRelayout); }
+      rescaleY(); updateTable(); updateRes();
+    });
+  }
+  function hexA(c, a) {
+    var m = /^#([0-9a-f]{6})$/i.exec(c); if (!m) return c;
+    var n = parseInt(m[1], 16); return "rgba(" + (n >> 16) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+
+  // price array for the current view: hourly everywhere, 1-min inside a short window
+  var minuteWin = null; // {x0,x1,x:[],y:[]}
+  function priceData() {
+    if (priceMode !== "minute" || !minuteWin) return { x: hourX, y: hourY };
+    var i0 = lowerBound(hourX, minuteWin.x0), i1 = lowerBound(hourX, minuteWin.x1);
+    var x = hourX.slice(0, i0).concat(minuteWin.x, hourX.slice(i1));
+    var y = hourY.slice(0, i0).concat(minuteWin.y, hourY.slice(i1));
+    return { x: x, y: y };
+  }
+  function currentRange() {
+    var r = gd.layout && gd.layout.xaxis && gd.layout.xaxis.range;
+    if (!r) return FULL.slice();
+    return [toMs(r[0]), toMs(r[1])];
+  }
+  function toMs(v) { return typeof v === "number" ? v : Date.parse(String(v).replace(" ", "T") + (String(v).length <= 19 ? "Z" : "")); }
+
+  var relayoutTimer = null, busy = false;
+  function onRelayout(ev) {
+    if (busy) return;
+    if (ev && (ev["xaxis.range[0]"] !== undefined || ev["xaxis.range"] || ev["xaxis.autorange"])) {
+      if (ev["xaxis.autorange"]) { busy = true; Plotly.relayout(gd, { "xaxis.range": FULL }).then(function () { busy = false; afterView(); }); return; }
+      clearTimeout(relayoutTimer); relayoutTimer = setTimeout(afterView, 120);
+    }
+  }
+  function afterView() {
+    view = currentRange();
+    var spanMin = (view[1] - view[0]) / MIN;
+    if (spanMin < 4 * DAY) ensureMinutes(view).then(function () { rescaleY(); updateTable(); updateRes(); });
+    else {
+      if (priceMode === "minute") { priceMode = "hour"; minuteWin = null; build(); }
+      else { rescaleY(); updateTable(); updateRes(); }
+    }
+  }
+  function ensureMinutes(v) {
+    var pad = Math.max(v[1] - v[0], DAY * MIN);
+    var x0 = v[0] - pad, x1 = v[1] + pad;
+    if (priceMode === "minute" && minuteWin && minuteWin.x0 <= v[0] && minuteWin.x1 >= v[1]) return Promise.resolve();
+    var m0 = Math.floor(x0 / MIN) - T0, m1 = Math.ceil(x1 / MIN) - T0;
+    var months = P.months.filter(function (m) { return m.start_min < m1 && m.start_min + m.n > m0; });
+    document.getElementById("res").textContent = "Loading 1-minute bars...";
+    return Promise.all(months.map(loadMonth)).then(function (arrs) {
+      var xs = [], ys = [];
+      months.forEach(function (m, k) {
+        var a = arrs[k], j0 = Math.max(0, m0 - m.start_min), j1 = Math.min(m.n, m1 - m.start_min);
+        for (var j = j0; j < j1; j++) { xs.push((T0 + m.start_min + j + 1) * MIN); ys.push(isNaN(a[j]) ? null : a[j]); }
+      });
+      if (!xs.length) return;
+      minuteWin = { x0: xs[0], x1: xs[xs.length - 1], x: xs, y: ys }; priceMode = "minute";
+      return build();
+    }).catch(function (err) { document.getElementById("res").textContent = "1-minute bars unavailable: " + err.message; });
+  }
+  function updateRes() {
+    var v = currentRange(), d = (v[1] - v[0]) / MIN / DAY;
+    document.getElementById("res").textContent = (priceMode === "minute" ? "Price: 1-min" : "Price: hourly") + " · " + (d >= 2 ? Math.round(d) + " days" : (d * 24).toFixed(1) + " hours") + " in view";
+  }
+  function rescaleY() {
+    var v = currentRange(); var pr = priceData();
+    var lo = Infinity, hi = -Infinity;
+    var i0 = lowerBound(pr.x, v[0]), i1 = lowerBound(pr.x, v[1]);
+    for (var i = i0; i < Math.min(i1 + 1, pr.y.length); i++) { var y = pr.y[i]; if (y != null && !isNaN(y)) { if (y < lo) lo = y; if (y > hi) hi = y; } }
+    var s = cur, k0 = lowerBound(s.tin, Math.floor(v[0] / MIN) - 100000);
+    for (var t = k0; t < s.n && s.tin[t] * MIN <= v[1]; t++) {
+      if (s.tout[t] * MIN < v[0]) continue;
+      if (s.tin[t] * MIN >= v[0]) { lo = Math.min(lo, s.pin[t]); hi = Math.max(hi, s.pin[t]); }
+      if (s.tout[t] * MIN <= v[1]) { lo = Math.min(lo, s.pout[t]); hi = Math.max(hi, s.pout[t]); }
+    }
+    var upd = {};
+    if (isFinite(lo)) { var m = (hi - lo) * 0.06 || hi * 0.002; upd["yaxis.range"] = [lo - m, hi + m]; }
+    var p = s._pnl || (s._pnl = pnlSeries(s)), lo2 = Infinity, hi2 = -Infinity;
+    var scan = function (arrx, arry) {
+      var a0 = Math.max(0, lowerBound(arrx, v[0]) - 1), a1 = Math.min(arry.length, lowerBound(arrx, v[1]) + 1);
+      for (var q = a0; q < a1; q++) { var w = arry[q]; if (w != null) { if (w < lo2) lo2 = w; if (w > hi2) hi2 = w; } }
+    };
+    scan(p.x, p.y);
+    if (bh && document.getElementById("bh-toggle").checked) scan(bh.x, bh.y);
+    if (isFinite(lo2)) { var m2 = (hi2 - lo2) * 0.08 || 0.5; upd["yaxis2.range"] = [lo2 - m2, hi2 + m2]; }
+    busy = true; return Plotly.relayout(gd, upd).then(function () { busy = false; });
+  }
+
+  // ---------------- trade table (the chart's table view; follows the zoom)
+  function updateTable() {
+    var s = cur, v = currentRange(), body = document.querySelector("#tbl tbody");
+    var rows = [], total = 0, cap = 300;
+    for (var i = 0; i < s.n; i++) {
+      var a = s.tin[i] * MIN, b = s.tout[i] * MIN;
+      if (b < v[0] || a > v[1]) continue;
+      total++; if (rows.length < cap) rows.push(i);
+    }
+    var frag = document.createDocumentFragment();
+    rows.forEach(function (i) {
+      var tr = document.createElement("tr");
+      var td0 = document.createElement("td"), btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = fmtTime(s.tin[i]); btn.title = "Zoom to this trade";
+      btn.addEventListener("click", function () { zoomTo(s.tin[i], s.tout[i]); });
+      td0.appendChild(btn); tr.appendChild(td0);
+      var cells = [s.period[i] ? "Sealed year" : "Dev", null, fmtHold(s.hold[i]), fmtNum(s.pin[i], 1), fmtNum(s.pout[i], 1), signed(s.gross[i], 1), signed(s.net[i], 1)];
+      cells.forEach(function (c, k) {
+        var td = document.createElement("td");
+        if (k === 1) { td.className = s.side[i] > 0 ? "side-long" : "side-short"; td.textContent = s.side[i] > 0 ? "Long" : "Short"; }
+        else td.textContent = c;
+        tr.appendChild(td);
+      });
+      frag.appendChild(tr);
+    });
+    body.replaceChildren(frag);
+    document.getElementById("tbl-title").textContent = "Trades in view: " + total.toLocaleString("en-US");
+    document.getElementById("tbl-note").textContent = total === 0 ? (s.n === 0 ? "This strategy made no trades." : "No trade in this range. Zoom out or pick another range.")
+      : total > cap ? "Showing the first " + cap + "; zoom in to list the rest. Click an entry time to zoom to that trade." : "Click an entry time to zoom to that trade.";
+  }
+  function zoomTo(tin, tout) {
+    var hold = Math.max(tout - tin, 1), pad = Math.max(30, hold * 2);
+    setRange([(tin - pad) * MIN, (tout + pad) * MIN]);
+    gd.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+  }
+  function setRange(r) { view = r; busy = true; Plotly.relayout(gd, { "xaxis.range": r }).then(function () { busy = false; afterView(); }); }
+
+  // ---------------- stats strip
+  function stats() {
+    var st = meta.stats[curId], el = document.getElementById("stats");
+    var d = st.dev, s = st.seal;
+    var gates = st.gates ? Object.keys(st.gates).map(function (g) { var ok = st.gates[g]; return '<span class="pill' + (ok ? "" : " gate-off") + '" title="' + g + (ok ? " passed" : " failed") + '">' + g + "</span>"; }).join("") : "";
+    var verdict = st.verdict ? '<span class="pill ' + (st.verdict === "KILL" ? "kill" : "cons") + '">' + st.verdict + "</span> information only" : (st.gates ? "Not scored (not the information-only candidate)" : "Baseline");
+    el.innerHTML =
+      '<div class="stat"><span class="k">Dev 2021-01 to 2025-10, C7-B</span><span class="v">' + signed(d.ann_pct, 1) + '%/yr <span>Sharpe ' + d.sharpe.toFixed(2) + " · max drawdown " + (d.max_dd * 100).toFixed(0) + "%</span></span></div>" +
+      '<div class="stat"><span class="k">Sealed year 2025-11 to 2026-10</span><span class="v">' + signed(s.total_log_pct, 1) + '% log <span>Sharpe ' + s.sharpe.toFixed(2) + " · " + s.trades.toLocaleString("en-US") + " trades</span></span></div>" +
+      '<div class="stat"><span class="k">Trades (dev + sealed)</span><span class="v">' + (d.trades || 0).toLocaleString("en-US") + " + " + s.trades.toLocaleString("en-US") + (st.p_timing != null ? " <span>timing p " + st.p_timing.toFixed(3) + "</span>" : "") + "</span></div>" +
+      '<div class="stat"><span class="k">Dev gates · seal verdict</span><span class="v">' + (gates || "<span>none</span>") + " " + '<span>' + verdict + "</span></span></div>";
+    document.getElementById("leg-strat").textContent = (NAMES[curId] || curId) + " net PnL";
+  }
+
+  // ---------------- controls
+  function makeSeg(id, list, onPick) {
+    var box = document.getElementById(id);
+    list.forEach(function (it) {
+      var b = document.createElement("button"); b.type = "button"; b.textContent = it.label; b.dataset.key = it.key;
+      b.setAttribute("aria-pressed", "false"); b.addEventListener("click", function () { onPick(it.key, b); }); box.appendChild(b);
+    });
+  }
+  function pressStrategy(id) {
+    document.querySelectorAll("#seg-t1 button, #seg-t2 button, #seg-t0 button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.key === id ? "true" : "false"); });
+  }
+  var groups = { 1: [], 2: [], 0: [] };
+  meta.strategies.forEach(function (s) { groups[s.track].push({ key: s.id, label: (NAMES[s.id] || s.id) }); });
+  var pick = function (id) { selectStrategy(id); };
+  makeSeg("seg-t1", groups[1], pick); makeSeg("seg-t2", groups[2], pick); makeSeg("seg-t0", groups[0], pick);
+  var Y = function (y, m, d) { return Date.UTC(y, m - 1, d); };
+  var ranges = [
+    { key: "all", label: "All", r: function () { return FULL.slice(); } },
+    { key: "dev", label: "Dev", r: function () { return [FULL[0], meta.seal_start_min * MIN]; } },
+    { key: "seal", label: "Sealed year", r: function () { return [meta.seal_start_min * MIN - 7 * DAY * MIN, FULL[1]]; } },
+    { key: "crash", label: "May 2021 crash", r: function () { return [Y(2021, 5, 18), Y(2021, 5, 21)]; } },
+    { key: "1m", label: "1 month", r: function () { return around(30 * DAY); } },
+    { key: "1w", label: "1 week", r: function () { return around(7 * DAY); } },
+    { key: "1d", label: "1 day", r: function () { return around(DAY); } }
+  ];
+  function around(spanMin) { var v = currentRange(), c = (v[0] + v[1]) / 2; return [c - spanMin * MIN / 2, c + spanMin * MIN / 2]; }
+  makeSeg("seg-range", ranges, function (key) { var it = ranges.filter(function (q) { return q.key === key; })[0]; setRange(it.r()); });
+
+  function selectStrategy(id) {
+    curId = id; pressStrategy(id); stats();
+    document.getElementById("loading").hidden = false;
+    document.getElementById("loading").textContent = "Loading " + (NAMES[id] || id) + "...";
+    getStrat(id).then(function (s) { cur = s; return build(); }).then(function () { document.getElementById("loading").hidden = true; })
+      .catch(function (err) { document.getElementById("loading").textContent = "Could not load " + id + ": " + err.message; });
+    try { localStorage.setItem("replay-strategy", id); } catch (e) { /* storage unavailable */ }
+  }
+  document.getElementById("bh-toggle").addEventListener("change", function (e) {
+    document.getElementById("leg-bh").style.opacity = e.target.checked ? 1 : 0.4;
+    if (drawn && cur) build();
+  });
+  function loadBH() {
+    getStrat("B&H").then(function (s) {
+      bh = pnlSeries(s);
+      if (drawn && cur) build();
+    }).catch(function () { document.getElementById("leg-bh").textContent = "Buy-and-hold line unavailable"; });
+  }
+
+  // re-theme on OS or toggle change
+  var mq = matchMedia("(prefers-color-scheme: dark)");
+  var retheme = function () { if (drawn && cur) build(); };
+  if (mq.addEventListener) mq.addEventListener("change", retheme);
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+
+  // ---------------- start
+  var start = "T1-LIN";
+  try { var saved = localStorage.getItem("replay-strategy"); if (saved && meta.stats[saved]) start = saved; } catch (e) { /* storage unavailable */ }
+  if (typeof Plotly === "undefined") { document.getElementById("loading").textContent = "The chart library did not load. Check the connection and reload."; return; }
+  selectStrategy(start);
+  loadBH();
+})();
+</script>
