@@ -289,3 +289,21 @@ def test_static_policy_holds_constant_exposure():
     r = sim.simulate(b, rules.StaticPolicy(0.4, dec), 1, len(b), fee="C7", fill="B", record_exposure=True)
     x = r["exposure"][dec[1:]]
     assert np.all(np.abs(x[1:] - 0.4) < 0.15)
+
+
+def test_c4_exit_resting_order_and_trim_leave_no_stray_position():
+    import rules
+    b = make_bars(n=3000, seed=17, rate=0.0)
+    side = np.zeros(len(b), np.int8)
+    side[100::300] = -1                                           # shorts filled at bar k+1, exit decided at k+15
+    for k in range(100, len(b) - 300, 300):
+        b.h[k + 1] = max(b.h[k + 1], b.c[k] + 1.0)                # the sell limit at c[k] fills in bar k+1
+        for arr in (b.o, b.h, b.l, b.c):                          # +3% (1.02 < |x| < 1.10) while the buy-back rests
+            arr[k + 17:] *= 1.03
+        lvl = b.c[k + 15] + 1.0                                   # bar k+16 stays above the buy-back limit c[k+15]
+        for arr in (b.o, b.h, b.l, b.c):
+            arr[k + 16] = lvl
+    r = sim.simulate(b, rules.EventPolicy(side, 15, 3), 1, len(b), fee="C4", fill="B", record_exposure=True)
+    x = r["exposure"]
+    flat = np.array([np.abs(x[k + 60 - 1:k + 250 - 1]).max() for k in range(100, len(b) - 300, 300)])
+    assert np.all(flat < 1e-9), flat

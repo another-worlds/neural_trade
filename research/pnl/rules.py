@@ -165,6 +165,9 @@ class EventPolicy:
             return None
         if self.state != "flat":
             return None
+        if st.q != 0.0:                            # never leave a stray position (e.g. after a cap trim) open
+            self.state = "exiting"
+            return 0.0
         s = self.entry[i]
         if s != 0:
             self.state, self.dec_bar = "entry", i

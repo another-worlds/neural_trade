@@ -199,21 +199,27 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         st.E, st.x = E, x
         if record_exposure:
             expo[i - start] = x
-        # 5. drift trim on the effective exposure (position plus committed taker orders), |x| > 1.10 at any close
+        # 5. drift trim on the committed exposure: position plus committed taker orders plus a resting reduce/flip
+        #    order (C4 exits), |x| > 1.10 at any close. The policy's view x_eff excludes the resting order.
         q_eff = q + sum(e_[1] for e_ in taker_queue)
         x_eff = q_eff * c[i] / E if E > 0 else 0.0
-        if abs(x_eff) > 1.10 and i < end - 1:
-            taker_queue.append((i + 1 + lat, np.sign(q_eff) * E / c[i] - q_eff, "reduce", False))
+        w_ = st.working
+        q_com = q_eff + (w_["qty"] if (w_ is not None and w_["kind"] in ("reduce", "flip")) else 0.0)
+        x_com = q_com * c[i] / E if E > 0 else 0.0
+        if abs(x_com) > 1.10 and i < end - 1:
+            dq_t = np.sign(q_com) * E / c[i] - q_com
+            taker_queue.append((i + 1 + lat, dq_t, "reduce", False))
             trims += 1
-            q_eff = np.sign(q_eff) * E / c[i]
-            x_eff = float(np.sign(x_eff))
+            q_eff += dq_t
+            x_eff = q_eff * c[i] / E
+            x_com = float(np.sign(x_com))
         # 6. decision at the close of bar i; the policy sees the exposure including committed taker orders
         if i < end - 1 and i >= suppress_until:
             tgt = policy.decide(i, x_eff, st)
             if tgt is None:
                 at_dec = bool(policy.dec[i]) if hasattr(policy, "dec") else True
-                if at_dec and abs(x_eff) > 1.02:           # 1x cap at a decision: trim to 1.0 as taker
-                    taker_queue.append((i + 1 + lat, np.sign(q_eff) * E / c[i] - q_eff, "reduce", False))
+                if at_dec and abs(x_com) > 1.02:           # 1x cap at a decision: trim to 1.0 as taker
+                    taker_queue.append((i + 1 + lat, np.sign(q_com) * E / c[i] - q_com, "reduce", False))
                     trims += 1
             if tgt is not None:
                 tgt = float(np.clip(tgt, -1.0, 1.0))

@@ -75,3 +75,13 @@ Only T1-LIN and T2-LIN had been scored (rows in runs.jsonl dated before this ent
   Sharpe). The first version took the variance across the track's candidates and comparators, which mixes very
   different strategies (e.g. the ruinous intraday trend) and drove every DSR to 0.
 - Secondary information-only seal hypothesis S1 declared before pre-registration (prereg.json): T1-LIN at C10-S.
+
+AFTER THE FIRST FULL DEV RESULTS (documented bug; full rerun 1 of at most 2)
+- Bug: under C4 an exit rests as a maker order; the cap trims (1.02 at a decision, 1.10 at a close) ignored it, so
+  a short that drifted past 1.02 while its buy-back rested was trimmed AND then fully bought back by the chase,
+  leaving a small stray long (0.02-0.04x) that merged later trades (FADEV C4-B showed 425 'trades' instead of
+  about 5,900). Fix: trims use the committed exposure including a resting reduce/flip order; EventPolicy flattens
+  any stray position before a new entry. Only C4 rows (C4-B, C4-S) can change; C7 exits are taker orders already
+  counted. Regression test reproduces the old failure. All strategies are rerun once with the fixed code, together
+  with T1-NT; rows of the first full run in runs.jsonl are superseded.
+- Descriptive fee-tier sensitivity (diag_fees.py) is rerun after the fix.
