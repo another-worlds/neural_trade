@@ -1,0 +1,64 @@
+{
+ "planted": {
+  "realised_ic": 0.090319167705061,
+  "LIN": {
+   "heldout": {
+    "net_total": 3.0143136400045636,
+    "gross_total": 3.902518640004563,
+    "cost_total": 0.888205,
+    "mean_abs_p": 0.43290525114155254,
+    "turnover": 2220.75,
+    "n": 35040
+   },
+   "U_val": 0.0066286485008073765,
+   "best_epoch": 29,
+   "epochs_run": 30,
+   "n_batches_per_epoch": 3
+  },
+  "MLP": {
+   "heldout": {
+    "net_total": 2.8956642832678687,
+    "gross_total": 3.868079283267869,
+    "cost_total": 0.9724149999999999,
+    "mean_abs_p": 0.32927654109589044,
+    "turnover": 2431.25,
+    "n": 35040
+   },
+   "U_val": 0.0054929585489939675,
+   "best_epoch": 29,
+   "epochs_run": 30,
+   "n_batches_per_epoch": 3
+  }
+ },
+ "shuffled": {
+  "LIN": {
+   "val_mean_abs_p": 0.012591878491226062,
+   "U_val": -4.304157374309033e-06,
+   "heldout": {
+    "net_total": -0.0025805691624716616,
+    "gross_total": -0.0017405691624716637,
+    "cost_total": 0.0008399999999999999,
+    "mean_abs_p": 0.0048829908675799075,
+    "turnover": 2.1,
+    "n": 35040
+   }
+  },
+  "MLP": {
+   "val_mean_abs_p": 0.0,
+   "U_val": 0.0,
+   "heldout": {
+    "net_total": 0.0,
+    "gross_total": 0.0,
+    "cost_total": 0.0,
+    "mean_abs_p": 0.0,
+    "turnover": 0.0,
+    "n": 35040
+   }
+  }
+ },
+ "pass": {
+  "planted": true,
+  "shuffled": true
+ },
+ "epochs_override": null
+}
