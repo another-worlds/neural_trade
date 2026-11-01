@@ -1,0 +1,97 @@
+{
+ "Y2021": {
+  "h": 1,
+  "cash": false,
+  "val_mean_daily_bps": {
+   "1": 19.03375004062688,
+   "5": -21.797933312193827,
+   "15": -197.29392940377195
+  },
+  "val_turnover": {
+   "1": 280.0,
+   "5": 1806.0,
+   "15": 3111.0
+  },
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/Y2021/bundle_Y2021_d3ed4f85ec95",
+  "test_share_above_thr": 0.005764840182648402
+ },
+ "Y2022": {
+  "h": 1,
+  "cash": false,
+  "val_mean_daily_bps": {
+   "1": 14.312615994450075,
+   "5": -48.59250574077514,
+   "15": -83.07536804229413
+  },
+  "val_turnover": {
+   "1": 174.0,
+   "5": 1204.0,
+   "15": 1634.0
+  },
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/Y2022/bundle_Y2022_d3ed4f85ec95",
+  "test_share_above_thr": 0.010357686453576865
+ },
+ "Y2023": {
+  "h": 15,
+  "cash": false,
+  "val_mean_daily_bps": {
+   "1": -6.1686173602315835,
+   "5": -8.7611870542485,
+   "15": 16.100879384721345
+  },
+  "val_turnover": {
+   "1": 12.0,
+   "5": 48.0,
+   "15": 52.0
+  },
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/Y2023/bundle_Y2023_d3ed4f85ec95",
+  "test_share_above_thr": 0.0006468797564687976
+ },
+ "Y2024": {
+  "h": 1,
+  "cash": true,
+  "val_mean_daily_bps": {
+   "1": 0.0,
+   "5": 0.0,
+   "15": 0.0
+  },
+  "val_turnover": {
+   "1": 0.0,
+   "5": 0.0,
+   "15": 0.0
+  },
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/Y2024/bundle_Y2024_d3ed4f85ec95",
+  "test_share_above_thr": 0.0
+ },
+ "Y2025": {
+  "h": 15,
+  "cash": false,
+  "val_mean_daily_bps": {
+   "1": 0.0,
+   "5": 0.0,
+   "15": 4.6899790514343245
+  },
+  "val_turnover": {
+   "1": 0.0,
+   "5": 0.0,
+   "15": 38.0
+  },
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/Y2025/bundle_Y2025_d3ed4f85ec95",
+  "test_share_above_thr": 0.00045230263157894736
+ },
+ "S": {
+  "h": 1,
+  "cash": true,
+  "val_mean_daily_bps": {
+   "1": 0.0,
+   "5": 0.0,
+   "15": 0.0
+  },
+  "val_turnover": {
+   "1": 0.0,
+   "5": 0.0,
+   "15": 0.0
+  },
+  "bundle": "/home/user/neural_trade/research/pnl/work/nt/bundles/S/bundle_S_d3ed4f85ec95"
+ }
+}

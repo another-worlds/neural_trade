@@ -56,9 +56,9 @@
  "12_reconciliation": {
   "pass": true,
   "B&H": {
-   "gap_per_year": 7.393731779955453e-05,
-   "mean_daily_gap_bps": -0.0020256799397138227,
-   "rms_daily_gap_bps": 1.3978788248542113
+   "gap_per_year": 7.238910740747597e-05,
+   "mean_daily_gap_bps": -0.0019832632166431772,
+   "rms_daily_gap_bps": 1.4344011509118155
   },
   "T2-P": {
    "gap_per_year": 0.0016219796760014486,

@@ -10706,5 +10706,922 @@
    "Y2024": 0.11656267553958477,
    "Y2025": 0.040054725785991334
   }
+ },
+ "T1-NT": {
+  "track": 1,
+  "config": {
+   "nt": "/tmp/claude-0/-home-user-neural-trade/16ae3165-46bc-5ff0-8232-0adbd4b5d525/scratchpad/pnl_work/nt/T1-NT_dev.npz",
+   "sha": "117ff0c992cbebf3842f5c55fd54db21a09d1b9fe3edf2bb380106a41f3f6c38"
+  },
+  "scenarios": {
+   "C7B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 4117.305622033198,
+    "total_additive_bps": 3448.1630089328337,
+    "ann_compound_bps": 739.1153204687171,
+    "ann_additive_bps": 713.0762029804444,
+    "vol": 0.20450383682553228,
+    "sharpe": 0.3486859777544363,
+    "sortino": 0.4919263272873707,
+    "max_dd": 0.3359877057351759,
+    "max_dd_duration_days": 1627,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1627,
+    "calmar": 0.21998284694716916,
+    "pct_positive_months": 0.39655172413793105,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4136.05253597894,
+      "compound_bps": 5122.60049831419,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 124.68798732559044,
+      "compound_bps": 125.46858302440008,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -673.9374358805406,
+      "compound_bps": -651.7295329330985,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -138.64007849115546,
+      "compound_bps": -137.68345092321076,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2149,
+     "trades_per_year": 444.4107648725212,
+     "hit_rate": 0.6161005118659841,
+     "mean_net_bps": 2.0447230638780507,
+     "median_net_bps": 13.188481981341063,
+     "sd_net_bps": 93.1203437141185,
+     "mean_gross_bps": 9.043532794760875,
+     "mean_fees_bps": 7.001604339409043,
+     "mean_funding_bps": -0.0027946085262179924,
+     "mean_hold_minutes": 23.59376454164728,
+     "median_hold_minutes": 11.0
+    },
+    "fees_frac": 1.5080498789728538,
+    "funding_frac": -0.0008130235542212517,
+    "turnover_per_year": 888.9949215722394,
+    "n_taker": 2386,
+    "n_maker": 2149,
+    "n_cancel": 86,
+    "n_chase": 0,
+    "maker_fill_rate": 0.9615212527964205,
+    "trims": 237,
+    "mean_daily_bps": 1.953633432823135,
+    "seconds": 5.347587585449219,
+    "mean_abs_x": 0.01992324855423664,
+    "mean_x": 0.006556003886478143,
+    "pct_in_market": 0.019949244570349387
+   },
+   "C7S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -8887.320629657843,
+    "total_additive_bps": -21958.14139164,
+    "ann_compound_bps": -3649.7561281074677,
+    "ann_additive_bps": -4540.918758044533,
+    "vol": 0.18648452140494384,
+    "sharpe": -2.435011079651005,
+    "sortino": -2.675504602883832,
+    "max_dd": 0.9106916338756138,
+    "max_dd_duration_days": 1753,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1753,
+    "calmar": -0.4007675037680172,
+    "pct_positive_months": 0.1896551724137931,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -13012.484590718936,
+      "compound_bps": -7278.082394528927,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -7160.688702880289,
+      "compound_bps": -5113.304917696382,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -1304.1578449425224,
+      "compound_bps": -1222.6959165346734,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -480.8102530982536,
+      "compound_bps": -469.43437754273015,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1551,
+     "trades_per_year": 320.74504249291783,
+     "hit_rate": 0.4880722114764668,
+     "mean_net_bps": -13.626862648817523,
+     "median_net_bps": -1.1552371212344648,
+     "sd_net_bps": 101.15427817470021,
+     "mean_gross_bps": -6.62353779547003,
+     "mean_fees_bps": 6.997544894887601,
+     "mean_funding_bps": 0.0057799584598944385,
+     "mean_hold_minutes": 26.97807865892972,
+     "median_hold_minutes": 15.0
+    },
+    "fees_frac": 1.0835497748584106,
+    "funding_frac": 0.0008051297365581335,
+    "turnover_per_year": 641.8586308976758,
+    "n_taker": 1763,
+    "n_maker": 1551,
+    "n_cancel": 831,
+    "n_chase": 0,
+    "maker_fill_rate": 0.6511335012594458,
+    "trims": 212,
+    "mean_daily_bps": -12.44087330971105,
+    "seconds": 4.942747592926025
+   },
+   "C4B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 12234.540912183567,
+    "total_additive_bps": 7990.618836757915,
+    "ann_compound_bps": 1796.822140637126,
+    "ann_additive_bps": 1652.4509209159428,
+    "vol": 0.2069860732897229,
+    "sharpe": 0.7983391803384622,
+    "sortino": 1.1774106559750803,
+    "max_dd": 0.22343559341326524,
+    "max_dd_duration_days": 1193,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1193,
+    "calmar": 0.8041790088984317,
+    "pct_positive_months": 0.4482758620689655,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 6785.632695959452,
+      "compound_bps": 9710.438383369003,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 1677.5315102025586,
+      "compound_bps": 1826.446399901825,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -496.53128664612757,
+      "compound_bps": -484.4056404610197,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 23.985917242033068,
+      "compound_bps": 24.014706466593804,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2148,
+     "trades_per_year": 444.2039660056657,
+     "hit_rate": 0.6280260707635009,
+     "mean_net_bps": 4.1623200419022455,
+     "median_net_bps": 15.163718492426746,
+     "sd_net_bps": 93.30494307401237,
+     "mean_gross_bps": 8.32568386823083,
+     "mean_fees_bps": 4.166066228916178,
+     "mean_funding_bps": -0.0027024025875941613,
+     "mean_hold_minutes": 23.665270018621975,
+     "median_hold_minutes": 11.0
+    },
+    "fees_frac": 0.8975285970688638,
+    "funding_frac": -0.0008016310297627002,
+    "turnover_per_year": 888.46648737066,
+    "n_taker": 349,
+    "n_maker": 4181,
+    "n_cancel": 86,
+    "n_chase": 114,
+    "maker_fill_rate": 0.9543483223008445,
+    "trims": 236,
+    "mean_daily_bps": 4.52726279702998,
+    "seconds": 4.908534526824951
+   },
+   "C4S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -9450.864656718944,
+    "total_additive_bps": -29019.95433925822,
+    "ann_compound_bps": -4512.593576239142,
+    "ann_additive_bps": -6001.293673557649,
+    "vol": 0.18777748067403024,
+    "sharpe": -3.1959602674484233,
+    "sortino": -3.3380419696650336,
+    "max_dd": 0.9512537872799235,
+    "max_dd_duration_days": 1753,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1753,
+    "calmar": -0.47438376977638574,
+    "pct_positive_months": 0.1724137931034483,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -17965.863700316077,
+      "compound_bps": -8341.358783398182,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -9255.37547218939,
+      "compound_bps": -6036.816780065497,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -1293.1678004409428,
+      "compound_bps": -1213.044317682953,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -505.5473663118089,
+      "compound_bps": -492.9811097056024,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1539,
+     "trades_per_year": 318.2634560906515,
+     "hit_rate": 0.47173489278752434,
+     "mean_net_bps": -18.320581197619255,
+     "median_net_bps": -2.959641792274753,
+     "sd_net_bps": 100.86014616447204,
+     "mean_gross_bps": -13.4537200377497,
+     "mean_fees_bps": 4.860392170994965,
+     "mean_funding_bps": 0.00646898887458679,
+     "mean_hold_minutes": 27.54320987654321,
+     "median_hold_minutes": 15.0
+    },
+    "fees_frac": 0.7456715798659663,
+    "funding_frac": 0.0009308101551740317,
+    "turnover_per_year": 636.9528422872135,
+    "n_taker": 655,
+    "n_maker": 2647,
+    "n_cancel": 825,
+    "n_chase": 457,
+    "maker_fill_rate": 0.6737083227284296,
+    "trims": 213,
+    "mean_daily_bps": -16.441900475500407,
+    "seconds": 4.800510406494141
+   },
+   "C10B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -2151.540278447718,
+    "total_additive_bps": -2422.6779426717358,
+    "ann_compound_bps": -488.66364549107993,
+    "ann_additive_bps": -501.00705330038727,
+    "vol": 0.20197921192325205,
+    "sharpe": -0.24804882073248194,
+    "sortino": -0.3279937373524907,
+    "max_dd": 0.5588320981378095,
+    "max_dd_duration_days": 1727,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1727,
+    "calmar": -0.0874437325843395,
+    "pct_positive_months": 0.3448275862068966,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 473.07657539465754,
+      "compound_bps": 484.4452132714734,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -1742.2660724937791,
+      "compound_bps": -1598.9349813685924,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -867.6718313884063,
+      "compound_bps": -831.0946163717664,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -285.8166141842085,
+      "compound_bps": -281.7706953325047,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2213,
+     "trades_per_year": 457.64589235127477,
+     "hit_rate": 0.6000903750564844,
+     "mean_net_bps": -0.6654034908428859,
+     "median_net_bps": 10.432894898252085,
+     "sd_net_bps": 91.95759740843678,
+     "mean_gross_bps": 9.333721371696834,
+     "mean_fees_bps": 10.001620347362273,
+     "mean_funding_bps": -0.002495484822551712,
+     "mean_hold_minutes": 23.412562132851335,
+     "median_hold_minutes": 11.0
+    },
+    "fees_frac": 2.2164450920529486,
+    "funding_frac": -0.0007403137442959212,
+    "turnover_per_year": 915.7330556881595,
+    "n_taker": 4666,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 243,
+    "mean_daily_bps": -1.3726220638366775,
+    "seconds": 4.963780879974365
+   },
+   "C10S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -6274.855663422323,
+    "total_additive_bps": -9874.79493838666,
+    "ann_compound_bps": -1847.0856472686914,
+    "ann_additive_bps": -2042.096403689026,
+    "vol": 0.1976418103875582,
+    "sharpe": -1.0332309746023143,
+    "sortino": -1.3172836679754003,
+    "max_dd": 0.7493418514859062,
+    "max_dd_duration_days": 1734,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1734,
+    "calmar": -0.2464943928603502,
+    "pct_positive_months": 0.25862068965517243,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -5010.59987415583,
+      "compound_bps": -3941.1191453335514,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -4004.47571591102,
+      "compound_bps": -3299.7990304456175,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -141.35618373913772,
+      "compound_bps": -140.36179614699017,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -718.3631645806715,
+      "compound_bps": -693.1677912967743,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2208,
+     "trades_per_year": 456.61189801699715,
+     "hit_rate": 0.5375905797101449,
+     "mean_net_bps": -4.065689982849449,
+     "median_net_bps": 3.8450563767799206,
+     "sd_net_bps": 89.53464649227526,
+     "mean_gross_bps": 5.93612650122811,
+     "mean_fees_bps": 10.001811033798896,
+     "mean_funding_bps": 5.450278664717147e-06,
+     "mean_hold_minutes": 23.69429347826087,
+     "median_hold_minutes": 12.0
+    },
+    "fees_frac": 2.20997996890392,
+    "funding_frac": -0.0001593291097805894,
+    "turnover_per_year": 913.8350096853936,
+    "n_taker": 4644,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 232,
+    "mean_daily_bps": -5.594784667641167,
+    "seconds": 4.840319395065308
+   },
+   "C10N": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -1725.801857430374,
+    "total_additive_bps": -1894.430776261889,
+    "ann_compound_bps": -384.19134289467587,
+    "ann_additive_bps": -391.7661378671895,
+    "vol": 0.20267012499507486,
+    "sharpe": -0.1933023615970582,
+    "sortino": -0.2566949522178821,
+    "max_dd": 0.5388753590283322,
+    "max_dd_duration_days": 1727,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1727,
+    "calmar": -0.07129502888894879,
+    "pct_positive_months": 0.3448275862068966,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 473.81120970733326,
+      "compound_bps": 485.21546488409405,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -1314.7243883435128,
+      "compound_bps": -1231.9655947035217,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -849.3124471511824,
+      "compound_bps": -814.2456085367486,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 0.0,
+      "compound_bps": 0.0,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -204.20515047452676,
+      "compound_bps": -202.13428331320634,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2215,
+     "trades_per_year": 458.05949008498584,
+     "hit_rate": 0.6027088036117382,
+     "mean_net_bps": -0.42245123046876487,
+     "median_net_bps": 10.70457737087913,
+     "sd_net_bps": 92.35855697407047,
+     "mean_gross_bps": 9.576217258887226,
+     "mean_fees_bps": 10.001577679028832,
+     "mean_funding_bps": -0.0029091896728407423,
+     "mean_hold_minutes": 23.34627539503386,
+     "median_hold_minutes": 11.0
+    },
+    "fees_frac": 2.218664880879451,
+    "funding_frac": -0.0008195126619422762,
+    "turnover_per_year": 916.5458842025271,
+    "n_taker": 242,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 242,
+    "mean_daily_bps": -1.0733318845676425,
+    "seconds": 5.030498027801514
+   }
+  }
+ },
+ "static[T1-NT]": {
+  "track": 1,
+  "config": {
+   "mean_x": 0.006556004285812378
+  },
+  "scenarios": {
+   "C7B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 129.9674724652535,
+    "total_additive_bps": 129.13014251050797,
+    "ann_compound_bps": 26.739654000084855,
+    "ann_additive_bps": 26.703967148065388,
+    "vol": 0.006581704690010777,
+    "sharpe": 0.4057302538747246,
+    "sortino": 0.592686263350266,
+    "max_dd": 0.012553745752466594,
+    "max_dd_duration_days": 1338,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1338,
+    "calmar": 0.21300139836614881,
+    "pct_positive_months": 0.5344827586206896,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4.230746004632554,
+      "compound_bps": 4.231641091445387,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -70.22362401752527,
+      "compound_bps": -69.97763230015349,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 52.919798555856616,
+      "compound_bps": 53.06007114055469,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 97.02698337045325,
+      "compound_bps": 97.49922123700819,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 45.17623859709084,
+      "compound_bps": 45.27843706390202,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 1.0,
+     "mean_net_bps": 129.96747246596,
+     "median_net_bps": 129.96747246596,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": 198.33925646383182,
+     "mean_fees_bps": 0.14506165823260195,
+     "mean_funding_bps": 68.22672233963921,
+     "mean_hold_minutes": 2541594.0,
+     "median_hold_minutes": 2541594.0
+    },
+    "fees_frac": 1.4330500527345916e-05,
+    "funding_frac": 0.00679827858769379,
+    "turnover_per_year": 0.006740495339584532,
+    "n_taker": 1,
+    "n_maker": 1,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": 0.07316155383031613,
+    "seconds": 3.349092960357666
+   },
+   "C7S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 129.9441451763407,
+    "total_additive_bps": 129.10711448417393,
+    "ann_compound_bps": 26.734879097592856,
+    "ann_additive_bps": 26.699204978313592,
+    "vol": 0.0065817032739316885,
+    "sharpe": 0.40565798649814216,
+    "sortino": 0.5925805571207595,
+    "max_dd": 0.012553745752466594,
+    "max_dd_duration_days": 1338,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1338,
+    "calmar": 0.2129633626867098,
+    "pct_positive_months": 0.5344827586206896,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4.230746004632554,
+      "compound_bps": 4.231641091445387,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -70.22362401752527,
+      "compound_bps": -69.97763230015349,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 52.919798555856616,
+      "compound_bps": 53.06007114055469,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 97.02698337045325,
+      "compound_bps": 97.49922123700819,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 45.15321057075681,
+      "compound_bps": 45.25530479689842,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 1.0,
+     "mean_net_bps": 129.94414517678385,
+     "median_net_bps": 129.94414517678385,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": 198.31591750517615,
+     "mean_fees_bps": 0.14504998875327077,
+     "mean_funding_bps": 68.22672233963902,
+     "mean_hold_minutes": 2541594.0,
+     "median_hold_minutes": 2541594.0
+    },
+    "fees_frac": 1.432935626130478e-05,
+    "funding_frac": 0.006798278860609799,
+    "turnover_per_year": 0.006740034706307124,
+    "n_taker": 1,
+    "n_maker": 1,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": 0.07314850678990024,
+    "seconds": 3.2532618045806885
+   },
+   "C4B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 130.02829341339867,
+    "total_additive_bps": 129.19018294570665,
+    "ann_compound_bps": 26.752103502518743,
+    "ann_additive_bps": 26.716383442029986,
+    "vol": 0.006581709164582578,
+    "sharpe": 0.4059186265141568,
+    "sortino": 0.5929618687522835,
+    "max_dd": 0.012553745752466594,
+    "max_dd_duration_days": 1338,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1338,
+    "calmar": 0.21310056798993574,
+    "pct_positive_months": 0.5344827586206896,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4.230746004632554,
+      "compound_bps": 4.231641091445387,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -70.22362401752527,
+      "compound_bps": -69.97763230015349,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 52.919798555856616,
+      "compound_bps": 53.06007114055469,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 97.02698337045325,
+      "compound_bps": 97.49922123700819,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 45.23627903228952,
+      "compound_bps": 45.338749533866505,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 1.0,
+     "mean_net_bps": 130.02829341431487,
+     "median_net_bps": 130.02829341431487,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": 198.33925646383463,
+     "mean_fees_bps": 0.08424070988059548,
+     "mean_funding_bps": 68.22672233963915,
+     "mean_hold_minutes": 2541594.0,
+     "median_hold_minutes": 2541594.0
+    },
+    "fees_frac": 8.330366658436909e-06,
+    "funding_frac": 0.006798277876129161,
+    "turnover_per_year": 0.006740463025611377,
+    "n_taker": 0,
+    "n_maker": 2,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": 0.07319557107405476,
+    "seconds": 3.290360927581787
+   },
+   "C4S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 130.0282934133964,
+    "total_additive_bps": 129.19018294570444,
+    "ann_compound_bps": 26.752103502518285,
+    "ann_additive_bps": 26.71638344202953,
+    "vol": 0.006581709164582578,
+    "sharpe": 0.40591862651414984,
+    "sortino": 0.5929618687522733,
+    "max_dd": 0.012553745752466594,
+    "max_dd_duration_days": 1338,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1338,
+    "calmar": 0.21310056798993207,
+    "pct_positive_months": 0.5344827586206896,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4.230746004632554,
+      "compound_bps": 4.231641091445387,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -70.22362401752527,
+      "compound_bps": -69.97763230015349,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 52.919798555856616,
+      "compound_bps": 53.06007114055469,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 97.02698337045325,
+      "compound_bps": 97.49922123700819,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 45.23627903228729,
+      "compound_bps": 45.338749533864274,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 1.0,
+     "mean_net_bps": 130.02829341431493,
+     "median_net_bps": 130.02829341431493,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": 198.33925646383466,
+     "mean_fees_bps": 0.0842407098805955,
+     "mean_funding_bps": 68.22672233963914,
+     "mean_hold_minutes": 2541594.0,
+     "median_hold_minutes": 2541594.0
+    },
+    "fees_frac": 8.33036665843691e-06,
+    "funding_frac": 0.006798277876129161,
+    "turnover_per_year": 0.006740463025611377,
+    "n_taker": 0,
+    "n_maker": 2,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": 0.0731955710740535,
+    "seconds": 3.2761847972869873
+   },
+   "C10B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 129.94336276572227,
+    "total_additive_bps": 129.10634211007448,
+    "ann_compound_bps": 26.734718944479813,
+    "ann_additive_bps": 26.699045252225034,
+    "vol": 0.006581715523950768,
+    "sharpe": 0.4056548046640361,
+    "sortino": 0.592575610289412,
+    "max_dd": 0.012553775861209204,
+    "max_dd_duration_days": 1338,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1338,
+    "calmar": 0.21296157618274278,
+    "pct_positive_months": 0.5344827586206896,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4.2066309963849795,
+      "compound_bps": 4.207515907680793,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -70.2237939581167,
+      "compound_bps": -69.97780105153947,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 52.91992673315485,
+      "compound_bps": 53.06019999796341,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 97.0272166231712,
+      "compound_bps": 97.49945676392473,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 45.17636171548012,
+      "compound_bps": 45.27856073975289,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 1.0,
+     "mean_net_bps": 129.9433627660311,
+     "median_net_bps": 129.9433627660311,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": 198.3348141185586,
+     "mean_fees_bps": 0.1647319048599681,
+     "mean_funding_bps": 68.22671944766753,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 1.629755616251479e-05,
+    "funding_frac": 0.006798294635204924,
+    "turnover_per_year": 0.00674060320539556,
+    "n_taker": 2,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": 0.07314806918417817,
+    "seconds": 3.279803514480591
+   },
+   "C10S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 129.81527173598835,
+    "total_additive_bps": 128.97989338771166,
+    "ann_compound_bps": 26.708499616434604,
+    "ann_additive_bps": 26.672895799725072,
+    "vol": 0.006581763308465483,
+    "sharpe": 0.4052545579300658,
+    "sortino": 0.591989086991978,
+    "max_dd": 0.012553906693798522,
+    "max_dd_duration_days": 1338,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1338,
+    "calmar": 0.2127505028345342,
+    "pct_positive_months": 0.5344827586206896,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4.101843615387322,
+      "compound_bps": 4.102684986474732,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -70.22453240877974,
+      "compound_bps": -69.97853433466008,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 52.920483702949255,
+      "compound_bps": 53.060759923066264,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 97.02823018693869,
+      "compound_bps": 97.50048020993574,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 45.153868291216114,
+      "compound_bps": 45.255965493913436,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 1.0,
+     "mean_net_bps": 129.81527173556384,
+     "median_net_bps": 129.81527173556384,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": 198.20675126874298,
+     "mean_fees_bps": 0.16477265196778154,
+     "mean_funding_bps": 68.22670688121137,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 1.6301788126681096e-05,
+    "funding_frac": 0.006798364640114856,
+    "turnover_per_year": 0.006742366184688778,
+    "n_taker": 2,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": 0.07307642684856183,
+    "seconds": 3.3543245792388916
+   }
+  }
  }
 }

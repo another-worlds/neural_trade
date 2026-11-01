@@ -115,8 +115,13 @@ def main(draft=False):
             "The designers (language models) may know the 2025-26 BTC price path from training data.",
             "2026-10 funding prints are estimated from the premium index (MAE 0.02 bps per print).",
             "The 2026-10-28 kline file was missing (a 1-day gap in the seal).",
-            "MLP band nets never left the flat start on Track 1 (hard-band gradient dead zone after the 2-epoch "
-            "warm-up); LIN cells carry T1-NET. Reported as found, procedure unchanged.",
+            "MLP band nets stayed at cash on Track 1 (also with the declared extended warm-up); LIN cells carry "
+            "T1-NET. Reported as found, procedure unchanged.",
+            "T1-NT's fold-S selection abstained (no horizon had positive validation net), so T1-NT is flat on the "
+            "seal. On dev it is retired from trading use by K2 (T1-LIN beats it on C7-B net), although its OOS IC "
+            "is small but positive (h = 1/5/15: 0.022/0.042/0.047).",
+            "Two code reviews and one documented full dev rerun (C4 rows only) happened before this file; see "
+            "CHANGES.log. The C7 gate scenarios did not change in the rerun.",
         ],
         "hashes": {p: sha(p) for p in files},
         "hashes_by_role": by_role,
