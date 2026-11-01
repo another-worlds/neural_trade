@@ -53,11 +53,34 @@ class Bars:
         return int(np.searchsorted(self.t, ts))
 
 
-def load(minutes=1):
+def _unseal_ok():
+    """The seal opens only when PNL_UNSEAL equals the SHA-256 of the committed research/pnl/prereg.json."""
+    import hashlib
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prereg.json")
+    if not os.path.exists(p):
+        return False
+    return os.environ.get("PNL_UNSEAL", "") == hashlib.sha256(open(p, "rb").read()).hexdigest()
+
+
+def load(minutes=1, seal=False):
+    """Bars and funding. seal=False (default) truncates everything at SEAL_START, so no development code can read
+    sealed bars. seal=True needs PNL_UNSEAL == SHA-256(prereg.json) and is logged to results/seal_access.log."""
     d = np.load(os.path.join(DATA, "btcusdt_perp_1m.npz"))
     f = np.load(os.path.join(DATA, "funding_full.npz"))
     t, o, h, l, c = d["t"], d["open"], d["high"], d["low"], d["close"]
     v, qv, n, tbb = d["volume"], d["quote_volume"], d["trades"], d["taker_buy_base"]
+    if seal:
+        if not _unseal_ok():
+            raise PermissionError("seal is closed: PNL_UNSEAL must equal SHA-256 of the committed prereg.json")
+        log = os.path.join(os.path.dirname(os.path.abspath(__file__)), "results", "seal_access.log")
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        with open(log, "a") as fh:
+            fh.write(f"{dt.datetime.now(dt.timezone.utc).isoformat()} load(minutes={minutes}, seal=True)\n")
+    else:
+        k = int(np.searchsorted(t, SEAL_START))
+        t, o, h, l, c, v, qv, n, tbb = (x[:k] for x in (t, o, h, l, c, v, qv, n, tbb))
+        keep = f["t"] < SEAL_START
+        f = {"t": f["t"][keep], "rate": f["rate"][keep], "estimated": f["estimated"][keep]}
     if minutes > 1:
         t, o, h, l, c, v, qv, n, tbb = resample(minutes, t, o, h, l, c, v, qv, n, tbb)
     return Bars(t, o, h, l, c, v, qv, n, tbb, minutes, f["t"], f["rate"], f["estimated"])
