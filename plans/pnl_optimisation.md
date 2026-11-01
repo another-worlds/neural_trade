@@ -13,7 +13,36 @@
 
 ## 1. Answer
 
-__ANSWER__
+**At standard perp fees, no strategy or network passed the pre-registered tests. Both tracks deploy cash. The one skilled lead found on dev failed on the sealed year.**
+
+| | Track 1 (1-15 min) | Track 2 (1 min-1 day) |
+|---|---|---|
+| Dev gates (4.8 years OOS) | Nothing passes all five. T1-LIN passes four: real timing skill (p 0.001), +7.7%/yr, Sharpe 1.1. It fails the stress gate. | Nothing passes. Best: T2-P, +12.7%/yr, Sharpe 0.35, p 0.14; unscaled TSMOM is higher (Sharpe 0.39). |
+| Deployed | **Cash** | **Cash** |
+| Sealed year (2025-11..2026-10, information only) | T1-LIN: **KILL** (-6.8 bps/day; about -25%/yr). Its taker variant (S1) also lost. | T2-P: **CONSISTENT** (+33% log, Sharpe 1.1, while BTC lost 39% log). **Not confirmed**: dev plus seal is not significant. |
+
+1. **Dense short-horizon trading cannot pay for itself here.**
+   - Every 1-15-minute rule that trades often loses after costs. This holds for fades, trend, ridge at 5-minute cadence and the neural nets.
+   - The loss holds at maker/maker fees and even at a 0 bps maker fee.
+   - The gross edge is 0-3 bps per trade; a round trip costs 7-8 bps.
+2. **The only skill found was crash-reversal timing, and it did not survive.**
+   - On dev the ridge forecaster faded extreme 1-minute moves about 34 times a year and earned +24 bps per trade.
+   - But it needed fills inside the first minute, and 80% of its trades came from 2021.
+   - On the seal, its frozen model traded 254 times and lost.
+3. **The daily trend family behaves as expected and is not proven skill.**
+   - It earned about as much as buy-and-hold on dev, with smaller drawdowns (47% against 80%).
+   - In the sealed year BTC fell, the trend went short, and T2-P gained.
+   - That fits trend-following, but 5.8 years cannot show that it beats buy-and-hold or cash with significance. The trend family was also seen earlier in this repository (disclosed).
+4. **The networks.**
+   - The new PnL-trained band net works as a method: it learns a planted signal and refuses to trade noise. On real data it found too little to trade on: +8.2%/yr on dev, not significant, about 0 on the seal.
+   - neural_trade's `model.py` got all 12 specified fixes plus tests. Its forecasts now have a small positive information coefficient (IC 0.02-0.05). That is not enough to trade, and it is retired from trading by the pre-registered rule K2.
+
+**Recommendation.** Do not trade any of these candidates with money.
+- If you continue, do only two cheap things:
+  - Paper-trade the daily trend rule (T2-P) for 12 months, with its pre-registered Sharpe test, as a risk choice against holding BTC.
+  - Re-test crash reversals only on tick or L2 data with real latency.
+- Neither is likely to beat a simple funding-carry hurdle (about 12%/yr on 2021-25, 4% in 2025) by enough to matter.
+
 
 ---
 
@@ -79,7 +108,39 @@ The network is trained on money, not on accuracy.
 
 ## 3. Dev results (OOS 2021-01-01..2025-10-31)
 
-__DEV_TABLES__
+Annualised = mean daily net log return x 365. G1 p = the candidate's selection-adjusted skill p-value. Full statistics: `research/pnl/results/gate.json`, `gate.md`, `dev_runs.json`.
+
+### Track 1: dev OOS 2021-01-01..2025-10-31 (1,765 days), net of fees and funding
+
+| strategy | C7-B %/yr | Sharpe C7-B | C7-S %/yr | C4-B %/yr | C10-B %/yr | trades/yr | mean x | G1 p | gates passed |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| T1-FADEV | -75.5 | -3.12 | -157.8 | -51.2 | -105.1 | 1,211 | 0.00 | 1.000 | G3 |
+| T1-LIN | 7.7 | 1.12 | -6.0 | 7.9 | 6.7 | 34 | 0.00 | 0.001 | G1, G2, G3, G4 |
+| T1-NET | 8.2 | 0.52 | -8.6 | 10.9 | 4.9 | 642 | -0.05 | 0.001 | G1, G3, G4 |
+| T1-NT | 7.1 | 0.35 | -45.4 | 16.5 | -5.0 | 444 | 0.01 | 0.001 | G1, G3 |
+| T1-NET-W | 8.2 | 0.52 | -8.6 | 10.9 | 4.9 | 642 | -0.05 | - | G3, G4 |
+| plain_fade | -214.8 | -9.21 | -328.9 | -147.5 | -303.5 | 3,242 | -0.00 | - | - |
+| intraday_trend | -674.2 | -11.56 | -1,010.0 | -533.0 | -861.3 | 8,131 | 0.02 | - | - |
+| B&H | 15.7 | 0.25 | 15.7 | 15.7 | 15.7 | 0 | 1.04 | - | - |
+| cash | 0.0 | 0.00 | 0.0 | 0.0 | 0.0 | - | 0.00 | - | - |
+
+p_sel (track) = 0.001; deployed: **CASH**; information only: T1-LIN
+
+### Track 2: dev OOS 2021-01-01..2025-10-31 (1,765 days), net of fees and funding
+
+| strategy | C7-B %/yr | Sharpe C7-B | C7-S %/yr | C4-B %/yr | C10-B %/yr | trades/yr | mean x | G1 p | gates passed |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| T2-P | 12.7 | 0.35 | 11.1 | 13.5 | 11.8 | 37 | 0.11 | 0.141 | G4, G5 |
+| T2-LIN | 9.3 | 0.16 | -9.8 | 19.2 | 0.4 | 449 | 0.17 | 0.158 | G4 |
+| T2-NET | 12.3 | 0.28 | 7.3 | 14.0 | 10.6 | 98 | -0.33 | 0.189 | G5 |
+| T2-NET-W | -2.0 | -0.04 | -14.1 | 0.3 | -4.9 | 144 | -0.34 | - | none |
+| tsmom_unscaled | 17.2 | 0.39 | 15.1 | 18.1 | 16.2 | 37 | 0.11 | - | - |
+| voltarget_long | 15.3 | 0.33 | 15.3 | 15.3 | 15.3 | 0 | 0.82 | - | - |
+| fade60 | -56.9 | -2.11 | -103.0 | -45.0 | -70.2 | 588 | 0.00 | - | - |
+| B&H | 15.7 | 0.25 | 15.7 | 15.7 | 15.7 | 0 | 1.04 | - | - |
+| cash | 0.0 | 0.00 | 0.0 | 0.0 | 0.0 | - | 0.00 | - | - |
+
+p_sel (track) = 0.141; deployed: **CASH**; information only: T2-P
 
 ### 3.1 What the numbers say
 
@@ -115,11 +176,82 @@ __DEV_TABLES__
 - **Carry reference.** A delta-neutral funding carry (sum of prints minus 30 bps/yr) earned about 57% log over the 4.8 years, about 12%/yr. It has no price risk, but it shrank to about 4% in 2025. The spot leg is not simulated, so this is a hurdle, not a result.
 
 
+### 3.2 The networks
+
+**PnL band net (new, `research/pnl/net.py`, `train.py`).**
+- **Training.** 36 jobs: 2 tracks x 6 folds x 3 cadences, each with 4 cells x 5 seeds.
+- **Track 1.**
+  - The in-fold choice took LIN cells at h = 5 minutes in four folds and h = 15 in one, from inner-validation utility.
+  - Every MLP cell stayed at cash, also in the declared variant with a longer no-band warm-up.
+  - With trading costs inside the loss, the MLP learned target exposures close to 0. That is the net saying "no edge worth its cost".
+- **Track 2.**
+  - The MLP cells did trade, and the in-fold choice mostly took the daily MLP.
+  - The dev result (+12.3%/yr) was fragile: one changed cell choice in one fold (the variant) turned it into -2.0%/yr.
+- **Pipeline checks.** The planted signal is learned and the shuffled null stays flat, so the method is sound. The market data just held too little signal for it.
+
+**neural_trade (`model.py`, fixed in place).**
+- **Fixes.** All 12 specified fixes landed with tests:
+  - live indicators; exact momentum-period inverse; LayerNorm; unit-free 6-channel input;
+  - unbiased losses (alpha 0.5, median quantile, 7 bps deadband with a deadband-aware alignment term);
+  - no lambda calibration; purged validation with early stopping; no sequence cap; reproducible bundles; a causal `predict_at`.
+- **Tests.** 62 tests pass. One test fails and is kept at its bar (marked as an expected failure): a planted weak 5-minute signal is learned to OOS IC 0.036, below the required 0.05. The model learns only part of a weak signal.
+- **Measured skill.** OOS skill pooled over 2021-2025 (95% CIs from a 5-day-block bootstrap):
+
+| | h = 1 min | h = 5 min | h = 15 min |
+|---|---:|---:|---:|
+| Spearman IC | +0.022 [0.019, 0.024] | +0.042 [0.039, 0.045] | +0.047 [0.043, 0.051] |
+| AUC (\|r\| >= 7 bps) | 0.517 | 0.528 | 0.532 |
+| Share of minutes with \|mu\| > 8 bps | 0.3% | 2.1% | 6.7% |
+
+- **Is the skill real?** The IC is small but its CI excludes 0 in almost every fold. That is better than the "indistinguishable from 0" the design expected.
+- **Is it tradable?** No.
+  - Its forecasts rarely clear the 8 bps cost bar. From 2023 on almost none do.
+  - Through the common hysteresis layer (T1-NT) it made +7.1%/yr at C7-B but -45%/yr under the stress fills.
+  - T1-LIN beat it on net, so the pre-registered rule K2 retires it from trading use.
+  - Its fold-S selection abstained, so it was flat on the seal.
+
 ---
 
 ## 4. The sealed test
 
-__SEAL__
+**Protocol.** These steps ran in this order:
+1. The pre-registration (`research/pnl/prereg.json`, `prereg.md`) was committed and pushed (commit 1630cd3). It held both deployment decisions (cash), the information-only candidates, the verdict rules, one secondary hypothesis and the SHA-256 of 36 data, feature and model files.
+2. `run_seal.py` ran once.
+   - Its guard checked a clean tree, the pre-registered code commit, the hashes of every file it loads, and that no lock or result existed. It then wrote the lock, and only after that did `data.load(seal=True)` open the seal.
+   - The features recomputed on the full data were bit-identical to the cached dev features (a second causality proof).
+3. One access line is in `results/seal_access.log`.
+
+| strategy (frozen fold-S model) | C7-B bps/day (full) | C7-B bps/day (clean) | Sharpe | C7-S | C10-S | trades |
+|---|---:|---:|---:|---:|---:|---:|
+| T1-LIN (information only) | -6.81 | -7.72 | -1.73 | -11.97 | -8.19 | 254 |
+| T1-NET | +0.24 | +0.79 | 0.06 | -1.27 | -0.99 | 372 |
+| T1-FADEV | -19.99 | -19.49 | -4.79 | -35.59 | -35.62 | 1,157 |
+| T1-NT (abstained: cash) | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0 |
+| T2-P (information only) | +9.14 | +8.94 | 1.10 | +8.74 | +8.65 | 44 |
+| TSMOM unscaled | +9.48 | +9.34 | 1.11 | +9.08 | +8.96 | 44 |
+| T2-NET | +5.50 | +5.96 | 0.57 | +3.77 | +3.88 | 100 |
+| T2-LIN | -11.40 | -10.02 | -1.09 | -10.57 | -13.83 | 187 |
+| Vol-target long | -12.25 | -11.32 | -1.13 | -12.22 | -12.25 | 1 |
+| B&H perp | -10.62 | -9.37 | -0.87 | -10.62 | -10.61 | 1 |
+
+Clean seal = the seal without the two windows studied earlier (about 313 days).
+
+**Verdicts (both information only, because both tracks deployed cash):**
+- **T1-LIN: KILL.**
+  - The mean is below 0 on the full and the clean seal; the bootstrap p is 0.92.
+  - The fold-S model chose H = 15 minutes with a low threshold, so it traded 254 times, not about 34.
+  - The edge did not carry over.
+  - The secondary hypothesis S1 (taker entries survive latency) is **not supported**: -8.2 bps/day, p 0.95.
+  - Under the pre-registered kill rule, T1-LIN is dropped for this venue and fee tier.
+- **T2-P: CONSISTENT, not CONFIRMED.**
+  - Its seal Sharpe of 1.10 is far above the falsification bound (-1.46 full, -1.57 clean), and its seal PnL is positive (+33% log).
+  - The pooled dev-plus-seal lower bound is still below 0 (-1.55 bps/day), so it is not confirmed.
+  - Read with care:
+    - BTC fell in the sealed year, which is the regime where trend-following gains.
+    - Unscaled TSMOM did as well (Sharpe 1.11).
+    - The trend family was computed on this period in earlier work, and the designers may know the 2025-26 price path (both disclosed in the pre-registration).
+  - Under the pre-registered rules, CONSISTENT means only "paper-trade for at least 12 months", never capital.
+
 
 ---
 
@@ -131,8 +263,8 @@ __SEAL__
    - Every rule that trades hundreds or thousands of times a year loses: fades, trend and ridge at 5-minute cadence.
    - The gross edge is 0-3 bps per trade; the round trip is 7-8 bps.
    - Lower fees do not rescue the fades. Even a 0 bps maker fee leaves them negative.
-2. **Treat the crash-reversal lead (T1-LIN) as a hypothesis for tick data, not as a strategy.**
-   - It is the only result with selection-adjusted skill (p 0.001) and a positive bootstrap bound.
+2. **The crash-reversal lead (T1-LIN) is killed at this venue and fee tier.** It lost on the seal, and so did its taker version. If anyone revisits it, it must be a new hypothesis on tick data, not a strategy.
+   - On dev it was the only result with selection-adjusted skill (p 0.001) and a positive bootstrap bound.
    - But it is rare (about 34 trades a year), concentrated in one crash regime (2021), and it needs execution within the first minute.
    - The next step is concrete:
      - (a) Download aggTrades/bookTicker for the 2021-2025 crash days.
@@ -141,9 +273,9 @@ __SEAL__
    - Expect few trades and long gaps between them.
 3. **For the daily horizon, choose by risk, not by skill.**
    - Trend-following and vol-targeting gave buy-and-hold-like returns with drawdowns of 47-51% instead of 80%.
-   - None beat buy-and-hold or one another with any significance in 4.8 years, and the seal cannot confirm a Sharpe below about 2.5.
-   - Holding trend or vol-targeted BTC instead of cash is a risk preference, not a found edge.
-4. **The PnL-trained network works as a method, and the data gave it nothing to learn at these horizons.**
+   - None beat buy-and-hold or one another with any significance in 4.8 years. The seal can only falsify, and it did not: T2-P was CONSISTENT in a falling year.
+   - Holding trend-following BTC instead of cash or buy-and-hold is a risk preference with a plausible but unproven edge. The honest next step is 12 months of paper trading with the pre-registered test.
+4. **The PnL-trained network works as a method, but the data gave it nothing to learn at these horizons** (about 0 on the seal for T1-NET; +5.5 bps/day for T2-NET, in line with the trend family).
    - It learns a planted signal and refuses to trade noise. On real data it chose small or flat positions.
    - More capacity (MLP) did not help.
    - More data (other assets, other venues) or more information (order book, cross-venue basis) is the lever, not more architecture.
@@ -158,9 +290,11 @@ __SEAL__
   - Three independent designs went to a judge panel, and the synthesis was frozen in `SPEC.md` before any data was modelled.
   - Every change after that is in `CHANGES.log`, with its reason and with whether results existed at the time.
 - **Two code reviews before the gates were computed.** Each had independent reviewers, and each finding went to an adversarial verifier.
-  - 15 defects were confirmed and fixed with regression tests (61 tests pass).
+  - The first review confirmed 15 defects; the second, focused review confirmed 4 more.
+  - The lead found several others: residue orders, size thresholds under ruin, a stray position under C4, and three mis-specified checks.
+  - All were fixed with regression tests (61 simulator, statistics and net tests pass).
   - The most important was the exposure used by the skill test: it was one bar behind the position that earns each bar.
-  - One bug was found after the first full dev run: under C4 the cap trim ignored a resting maker exit, so it made the fades look break-even at maker/maker. It used the one documented full rerun; the C7 rows did not change.
+  - The C4 stray-position bug was found after the first full dev run. It had made the fades look break-even at maker/maker. It used one documented full rerun (of 2 allowed); the C7 gate rows did not change.
 - **Harness checks (all pass).**
   - Causality: 20 random cuts, noise and permutation.
   - Funding alignment.
