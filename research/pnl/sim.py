@@ -15,8 +15,10 @@ ENGINE E (event-driven, 1-min bars, compounding equity, signed BTC contracts q, 
   (the position held at the end of the previous bar pays; longs pay positive rates).
 - 1x cap: target clipped to [-1, 1]; if the effective |x| (incl. committed taker orders) > 1.10 at a bar close, or
   > 1.02 at a decision bar where the policy does not trade, trim to 1.0 as taker at the next open (logged).
-- A new decision cancels any working order and any chase not yet executed; a chased order replaced in the same
-  direction keeps its price and clock. Positions are closed (taker) at the end of the run.
+- A new decision cancels any working order and any chase not yet executed; an order re-issued in the same direction
+  and of the same kind keeps its price and clock. Positions are closed (taker) at the end of the run.
+- Trims act on the effective exposure (position + committed taker orders); a resting order's REDUCE leg shrinks by
+  the trimmed amount, so a later fill of the resting order cannot over-reduce.
 - Trades: flat-to-flat round trips; gross = realised PnL / entry equity (exposure-weighted), a one-fill flip's fee is
   split pro rata between the closing and the opening trade; price_move_bps is the full-size price move.
 - Gaps: no decisions for 60 bars after a gap; positions carry and are marked at the first bar after it.
@@ -128,6 +130,23 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         if hasattr(policy, "on_fill"):
             policy.on_fill(i, kind, st)
 
+    def trim(i, q_eff):
+        """Taker trim of the effective position (position + committed taker orders) to |x| = 1 at the next open. A
+        resting order's REDUCE leg (C4 exit or flip) shrinks by the same amount, so it cannot over-reduce later."""
+        nonlocal trims, taker_queue
+        dq_t = np.sign(q_eff) * E / c[i] - q_eff
+        taker_queue.append((i + 1 + lat, dq_t, "reduce", False))
+        trims += 1
+        w_ = st.working
+        if w_ is not None and w_.get("red", 0.0) != 0.0 and np.sign(w_["red"]) == np.sign(dq_t):
+            cut = np.sign(dq_t) * min(abs(dq_t), abs(w_["red"]))
+            w_["red"] -= cut
+            w_["qty"] -= cut
+            if abs(w_["qty"]) * c[i] < 1e-9 * E:
+                st.working = None
+        q_new = q_eff + dq_t
+        return q_new, q_new * c[i] / E
+
     for i in range(start, end):
         # new UTC day bookkeeping (equity at the end of the previous day)
         d = t[i] // DAY
@@ -147,6 +166,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
             taker_queue = [(eb, dq_ * f, kd, ch) for (eb, dq_, kd, ch) in taker_queue]
             if st.working is not None:
                 st.working["qty"] *= f
+                st.working["red"] = st.working.get("red", 0.0) * f
             if open_trade is not None:
                 for key in ("fees", "funding", "E0", "pnl"):
                     open_trade[key] *= f
@@ -199,28 +219,21 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         st.E, st.x = E, x
         if record_exposure:
             expo[i - start] = x
-        # 5. drift trim on the committed exposure: position plus committed taker orders plus a resting reduce/flip
-        #    order (C4 exits), |x| > 1.10 at any close. The policy's view x_eff excludes the resting order.
+        # 5. drift trim, |x| > 1.10 at any close, on the effective exposure (resting orders are adjusted in trim())
         q_eff = q + sum(e_[1] for e_ in taker_queue)
         x_eff = q_eff * c[i] / E if E > 0 else 0.0
-        w_ = st.working
-        q_com = q_eff + (w_["qty"] if (w_ is not None and w_["kind"] in ("reduce", "flip")) else 0.0)
-        x_com = q_com * c[i] / E if E > 0 else 0.0
-        if abs(x_com) > 1.10 and i < end - 1:
-            dq_t = np.sign(q_com) * E / c[i] - q_com
-            taker_queue.append((i + 1 + lat, dq_t, "reduce", False))
-            trims += 1
-            q_eff += dq_t
-            x_eff = q_eff * c[i] / E
-            x_com = float(np.sign(x_com))
+        if abs(x_eff) > 1.10 and i < end - 1:
+            q_eff, x_eff = trim(i, q_eff)
         # 6. decision at the close of bar i; the policy sees the exposure including committed taker orders
         if i < end - 1 and i >= suppress_until:
             tgt = policy.decide(i, x_eff, st)
             if tgt is None:
-                at_dec = bool(policy.dec[i]) if hasattr(policy, "dec") else True
-                if at_dec and abs(x_com) > 1.02:           # 1x cap at a decision: trim to 1.0 as taker
-                    taker_queue.append((i + 1 + lat, np.sign(q_com) * E / c[i] - q_com, "reduce", False))
-                    trims += 1
+                if hasattr(policy, "is_decision"):
+                    at_dec = bool(policy.is_decision(i))
+                else:
+                    at_dec = bool(policy.dec[i]) if hasattr(policy, "dec") else True
+                if at_dec and abs(x_eff) > 1.02:           # 1x cap at a decision: trim to 1.0 as taker
+                    q_eff, x_eff = trim(i, q_eff)
             if tgt is not None:
                 tgt = float(np.clip(tgt, -1.0, 1.0))
                 if any(e_[3] for e_ in taker_queue):          # a new decision also cancels a chase not yet executed
@@ -254,17 +267,17 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
                         taker_queue.append((i + 1 + lat, dq, kind, False))
                     elif fee == "C4":
                         st.working = {"qty": dq, "limit": c[i], "start": i + 1 + lat, "end": i + K + lat,
-                                      "kind": kind, "chase": True if red != 0.0 else chase_entries}
+                                      "kind": kind, "chase": True if red != 0.0 else chase_entries, "red": red}
                     else:                                  # C7: reduce taker, increase maker
                         if red != 0.0:
                             taker_queue.append((i + 1 + lat, red, "reduce", False))
                         if inc != 0.0:
                             st.working = {"qty": inc, "limit": c[i], "start": i + 1 + lat, "end": i + K + lat,
-                                          "kind": "increase", "chase": chase_entries}
-                    # a chased order replaced in the same direction keeps its price and clock (resized only), so
-                    # decisions faster than K cannot postpone the chase indefinitely
+                                          "kind": "increase", "chase": chase_entries, "red": 0.0}
+                    # an order re-issued in the same direction and of the same kind keeps its price and clock
+                    # (resized only): decisions faster than K (or latency) cannot postpone its window or chase
                     w2 = st.working
-                    if (w2 is not None and prev_w is not None and w2["chase"] and prev_w["chase"]
+                    if (w2 is not None and prev_w is not None and w2["kind"] == prev_w["kind"]
                             and np.sign(w2["qty"]) == np.sign(prev_w["qty"])):
                         w2["limit"], w2["start"], w2["end"] = prev_w["limit"], prev_w["start"], prev_w["end"]
     # close at the end of the run (taker at the last close)
@@ -295,10 +308,14 @@ def engine_f(x, R, F, c_in=3e-4, c_out=5e-4, x0=0.0):
 
 
 class ConstPolicy:
-    """Hold a constant target from the first decision (B&H, cash, static-exposure baselines)."""
+    """Hold a constant number of contracts from the first decision (B&H, cash). Its only decision is the first one,
+    so only the 1.10 drift trim applies afterwards."""
 
     def __init__(self, x, K=15, chase=True):
         self.x, self.K, self.chase_entries, self.done = x, K, chase, False
+
+    def is_decision(self, i):
+        return not self.done
 
     def decide(self, i, x, st):
         if not self.done:

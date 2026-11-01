@@ -33,8 +33,8 @@ class HysteresisPolicy:
         if kind == "cancel":
             if st.q == 0.0:
                 self.s = 0
-        elif st.q != 0.0 and kind in ("increase", "flip"):
-            self.s, self.since = int(np.sign(st.q)), i
+        elif st.q != 0.0 and kind in ("increase", "flip") and int(np.sign(st.q)) == self.s:
+            self.since = i                         # the hold counts from the fill; a stale fill never resets the state
 
     def decide(self, i, x, st):
         if not self.dec[i]:

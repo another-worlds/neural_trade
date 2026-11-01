@@ -85,3 +85,13 @@ AFTER THE FIRST FULL DEV RESULTS (documented bug; full rerun 1 of at most 2)
   counted. Regression test reproduces the old failure. All strategies are rerun once with the fixed code, together
   with T1-NT; rows of the first full run in runs.jsonl are superseded.
 - Descriptive fee-tier sensitivity (diag_fees.py) is rerun after the fix.
+- Second focused review (before the rerun), four more confirmed defects, fixed with regression tests (61 pass):
+  (a) trims now act on the effective exposure and shrink a resting order's reduce leg by the trimmed amount (the
+      first fix counted a resting C4 FLIP as committed and could trim the wrong way); C4 rows only;
+  (b) HysteresisPolicy ignores a stale fill whose sign disagrees with its decided state (under C10-S with H = 1 and
+      every-bar decisions a stale entry fill re-set the state and blocked later entries); C10-S rows of T1-LIN;
+  (c) an order re-issued in the same direction and of the same kind keeps its price and clock whether or not it
+      chases (under S a target repeated every bar cancelled its maker order before its window); latent: no current
+      selection decides every bar with a resting maker order;
+  (d) the 1.02 decision trim fires only at a policy's decision bars (SignChangePolicy gets its decision mask; B&H's
+      only decision is the first); intraday trend and B&H rows change slightly.

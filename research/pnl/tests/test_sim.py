@@ -307,3 +307,62 @@ def test_c4_exit_resting_order_and_trim_leave_no_stray_position():
     x = r["exposure"]
     flat = np.array([np.abs(x[k + 60 - 1:k + 250 - 1]).max() for k in range(100, len(b) - 300, 300)])
     assert np.all(flat < 1e-9), flat
+
+
+def test_trim_never_increases_exposure_with_resting_c4_flip():
+    b = make_bars(n=300, seed=21, rate=0.0)
+    for arr in (b.o, b.h, b.l, b.c):
+        arr[:] = 30000.0
+    tg = np.full(len(b), np.nan)
+    tg[50] = -1.0
+    tg[100] = 1.0
+    b.h[51] = 30001.0                                             # the short fills in bar 51
+    ramp = 30000.0 * np.cumprod(np.r_[np.ones(101), np.full(len(b) - 101, 1.006)])
+    for arr in (b.o, b.h, b.l, b.c):                              # then prices rise; the buy-back flip rests
+        arr[101:] = ramp[101:]
+    r = sim.simulate(b, sim.TargetPolicy(tg[1:], 1, K=15, chase=True), 1, 200, fee="C4", fill="B",
+                     record_exposure=True)
+    x = r["exposure"]
+    assert np.abs(x[100:115]).max() < 1.11                        # was pushed to -1.06/-1.22 by wrong-way trims
+    for (bar, kind, dq, px, fr) in r["fills"]:
+        if kind == "reduce" and fr == sim.TAKER and bar < 115:
+            assert dq > 0                                         # a trim of a short buys
+
+
+def test_hysteresis_ignores_stale_fill_under_latency():
+    from policy import HysteresisPolicy
+    b = make_bars(n=200, seed=30, rate=0.0)
+    n = len(b)
+    mu = np.full(n, 3.0)
+    mu[50], mu[51], mu[80] = 20.0, -1.0, 20.0
+    pol = HysteresisPolicy(mu, np.ones(n, bool), 1, 8.0, K=1, chase=False)
+    r = sim.simulate(b, pol, 1, n, fee="C10", fill="S", record_exposure=True)
+    x = r["exposure"]
+    assert x[85 - 1] > 0.9                                         # the bar-80 entry happens (it was lost before)
+
+
+def test_reissued_same_target_keeps_order_window_under_latency():
+    from policy import BandPolicy
+    b = make_bars(n=3000, seed=40, rate=0.0)
+    n = len(b)
+    r = sim.simulate(b, BandPolicy(np.full(n, 0.5), np.full(n, 0.1), np.ones(n, bool), K=1), 1, n, fee="C7", fill="S",
+                     record_exposure=True)
+    assert r["n_maker"] > 0 and r["exposure"].mean() > 0.2       # was never filled under S at decision cadence 1
+
+
+def test_decision_trim_only_at_decision_bars():
+    import rules
+    b = make_bars(n=120, seed=22, rate=0.0)
+    for arr in (b.o, b.h, b.l, b.c):
+        arr[:] = 30000.0
+    ramp = 30000.0 * np.cumprod(np.r_[np.ones(31), np.full(len(b) - 31, 1.0015)])
+    for arr in (b.o, b.h, b.l, b.c):
+        arr[31:] = ramp[31:]
+    b.l[15] = 29990.0
+    b.h[15] = 30010.0
+    tg = np.full(len(b), np.nan)
+    tg[[14, 29, 44, 59]] = -1.0
+    pol = rules.SignChangePolicy(tg, 3, False)
+    r = sim.simulate(b, pol, 1, 61, fee="C7", fill="B")
+    trim_bars = [f[0] - 1 for f in r["fills"] if f[1] == "reduce" and f[0] < 60]
+    assert all(t_ in (14, 29, 44, 59) for t_ in trim_bars), trim_bars

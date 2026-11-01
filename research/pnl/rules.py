@@ -197,6 +197,7 @@ class SignChangePolicy:
 
     def __init__(self, targets, K, chase):
         self.tg, self.K, self.chase_entries = targets, int(K), bool(chase)
+        self.dec = ~np.isnan(targets)
 
     def decide(self, i, x, st):
         v = self.tg[i]
