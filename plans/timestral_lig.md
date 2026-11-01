@@ -316,6 +316,29 @@ licence-free control C-FHS-hi is 0.25–4.39% better. LIG does not widen the gap
 | Training time, 2 CPU threads | T1 run 3–9 s (A1) to 1.2–2.6 min (A2); T2 run 7.5–8 min (repo A4: 14.6 min, partly while paused) |
 | Single-origin latency, 4 threads, ctx 2048 (p50 / p99) | A0 29.8 / 34.0 ms; A2 35.2 / 50.2 ms; A3 39.3 / 45.0 ms |
 
+### 4.8 Direction accuracy and PnL without commission (Test, descriptive)
+
+These numbers come from `research/timestral_lig/trading_nocost.py` and `results/trading_nocost.json`.
+- **Signal.** The sign of the median forecast. A median within 0.01 bps of the last price counts as no call.
+- **Accuracy.** Measured over all Test origins (every 3 minutes) that have a call.
+- **PnL.** One 1-unit position at a time, held h minutes and not overlapping. PnL is the sum of log returns in bps, with no commission, slippage or funding.
+- **Market move.** The market moved +138 bps over the repo Test window (6 days) and −528 bps over the clean Test window (14 days).
+
+| Model | Repo h = 1: accuracy, PnL bps (t) | Repo h = 5 | Repo h = 15 | Clean h = 1 | Clean h = 5 | Clean h = 15 |
+|---|---|---|---|---|---|---|
+| A0 zero-shot | 49.5%, −606 (−1.6) | 50.1%, −433 (−0.8) | 49.0%, −171 (−0.3) | 50.3%, −277 (−0.8) | 50.2%, −377 (−0.7) | 51.0%, −373 (−0.6) |
+| A1 (candidate) | 49.4%, −554 (−1.5) | 50.5%, −462 (−0.9) | no calls | 50.3%, −308 (−0.9) | no calls | no calls |
+| A2 | 49.3%, −604 (−1.6) | no calls | no calls | 50.4%, −244 (−0.7) | no calls | no calls |
+| neural_trade, 6 runs | 48.0–51.1%, −436 to −99 | 49.2–50.4%, −442 to +1,068 | 49.3–53.4%, +295 to +951 | 49.4–51.1%, −338 to +269 | 49.3–51.1%, −874 to +124 | 48.6–50.7%, −776 to +472 |
+| Always long | 50.7%, +362 (+0.9) | 50.4%, −248 (−0.4) | 49.6%, +153 (+0.3) | 48.8%, −590 (−1.6) | 48.6%, −703 (−1.2) | 48.1%, −514 (−0.8) |
+
+- **No skill.** No model has significant direction skill. Every model's |t| is below 2, and all accuracies are 48–53%.
+- **LIG at h = 1.** A1 and A2 lose money even without commission.
+- **LIG at longer horizons.** From h = 3–5, A1 and A2 make no calls: the recalibration sets their median to the last price.
+- **neural_trade.** Its gains on the repo set at h = 15 turn into losses on the clean set.
+- **The trend is not skill.** The always-long line shows how much of any total is just the market's drift.
+- **Costs.** With costs the picture is worse. At 4 bps per round trip (futures maker fees), A2's 2,559 repo trades at h = 1 would cost about 10,000 bps, against an average gross result of −0.24 bps per trade.
+
 ---
 
 ## 5. Why it did not work (our reading)
