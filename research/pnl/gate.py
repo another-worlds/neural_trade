@@ -86,7 +86,7 @@ def main():
     reruns = {}
     for line in open(os.path.join(RESULTS, "runs.jsonl")):
         j = json.loads(line)
-        if j["scenario"] == "C7B":
+        if j.get("scenario") == "C7B":
             reruns.setdefault(j["name"], set()).add(j["config_sha"])
     out = {"tracks": {}}
     md = ["# Dev gates (dev OOS 2021-01-01..2025-10-31, engine E)", ""]

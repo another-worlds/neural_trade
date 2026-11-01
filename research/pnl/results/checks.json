@@ -54,7 +54,22 @@
   "turnover": 38329.0
  },
  "12_reconciliation": {
-  "pass": true
+  "pass": true,
+  "B&H": {
+   "gap_per_year": 7.393731779955453e-05,
+   "mean_daily_gap_bps": -0.0020256799397138227,
+   "rms_daily_gap_bps": 1.3978788248542113
+  },
+  "T2-P": {
+   "gap_per_year": 0.0016219796760014486,
+   "mean_daily_gap_bps": -0.04443779934250544,
+   "rms_daily_gap_bps": 1.0961371078344821
+  },
+  "plain_fade": {
+   "gap_per_year": 0.05408033395766109,
+   "mean_daily_gap_bps": -1.4816529851414,
+   "rms_daily_gap_bps": 4.253640106345776
+  }
  },
  "all_pass": true
 }
