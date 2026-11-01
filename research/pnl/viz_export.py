@@ -7,7 +7,7 @@ with the frozen fold-S models, and asserts that the daily net log returns are bi
 Writes to OUT (default $PNL_WORK/viewer):
   meta.json                     strategies, stats (dev and seal), time origin, seal boundary
   price_hour.bin                float32 close at the end of every UTC hour from 2021-01-01 (NaN where missing)
-  m/YYYY-MM.bin                 float32 1-min closes for each month (NaN for missing minutes)
+  m/YYYY-MM.txt                 base64 of float32 1-min closes for each month (NaN for missing minutes)
   s/<id>.json                   per strategy: trades, exposure change points, PnL points (base64 typed arrays)
 
   PNL_UNSEAL=<sha256 of prereg.json> python viz_export.py [OUT]
@@ -44,14 +44,24 @@ def run(b, fac, s, e):
 
 
 def pieces(b, r, s, e, log_offset):
-    """Per-bar close times (minutes), exposure and chained log equity for one run."""
+    """Per-bar close times (minutes), exposure and chained log equity for one run. The run closes any open position
+    as taker after the last recorded close, so the last point takes the scored total and a flat position."""
     tmin = (b.t[s:e] // 60 + 1).astype(np.int64)                   # close time of each bar, in minutes
-    return tmin, r["exposure"].astype(np.float64), r["equity_log"] + log_offset
+    L = r["equity_log"].copy()
+    L[-1] = float(np.sum(r["daily"]))
+    x = r["exposure"].astype(np.float64).copy()
+    x[-1] = 0.0
+    return tmin, x, L + log_offset
 
 
-def exposure_points(tmin, x, tol=0.01):
+def exposure_points(tmin, x, fill_bars, start_bar, tol=0.01):
+    """Kept points: every fill bar and the bar before it (exact), plus drift changes of tol or more."""
     keep = np.zeros(len(x), bool)
     keep[0] = keep[-1] = True
+    fb = np.asarray(fill_bars, np.int64) - start_bar
+    fb = fb[(fb >= 0) & (fb < len(x))]
+    keep[fb] = True
+    keep[np.maximum(fb - 1, 0)] = True
     last = x[0]
     d = np.abs(np.diff(x))
     cand = np.flatnonzero(d > 1e-9) + 1
@@ -80,7 +90,8 @@ def trade_cols(b, trades, period):
     if not trades:
         return np.zeros((0, 9))
     rows = [(b.t[tr["entry_bar"]] // 60, b.t[tr["exit_bar"]] // 60, tr["side"], tr["entry_px"], tr["exit_px"],
-             tr["net_bps"], tr["gross_bps"], tr["hold_minutes"], period) for tr in trades]
+             tr["net_bps"], tr["gross_bps"], (b.t[tr["exit_bar"]] - b.t[tr["entry_bar"]]) // 60, period)
+            for tr in trades]                                      # hold in wall-clock minutes (the seal has a gap day)
     return np.array(rows, np.float64)
 
 
@@ -117,7 +128,8 @@ def export_price(b, out):
             break
         seg = grid[i0:min(i1, len(grid))]
         name = f"{y:04d}-{mo:02d}"
-        seg.astype("<f4").tofile(os.path.join(out, "m", name + ".bin"))
+        with open(os.path.join(out, "m", name + ".txt"), "w") as fh:     # base64 float32 (artifacts serve text)
+            fh.write(base64.b64encode(seg.astype("<f4").tobytes()).decode())
         months.append({"name": name, "start_min": i0, "n": int(len(seg))})
         y, mo = (y + 1, 1) if mo == 12 else (y, mo + 1)
     return {"t0_min": int(T0 // 60), "n_hours": int(nh), "months": months,
@@ -190,11 +202,11 @@ def main(out):
     for name in names:
         rd, rs = dev[name], seal[name]
         t1, x1, L1 = pieces(st.b, rd, s, e, 0.0)
-        t2, x2, L2 = pieces(b, rs, s2, e2, float(rd["equity_log"][-1]))
-        et1, ex1 = exposure_points(t1, x1)
-        et2, ex2 = exposure_points(t2, x2)
+        t2, x2, L2 = pieces(b, rs, s2, e2, float(np.sum(rd["daily"])))
         fb1 = [f[0] for f in rd["fills"]]
         fb2 = [f[0] for f in rs["fills"]]
+        et1, ex1 = exposure_points(t1, x1, fb1, s)
+        et2, ex2 = exposure_points(t2, x2, fb2, s2)
         qt1, qL1 = equity_points(t1, L1, fb1, s)
         qt2, qL2 = equity_points(t2, L2, fb2, s2)
         tr = np.vstack([trade_cols(st.b, rd["trades"], 0), trade_cols(b, rs["trades"], 1)])

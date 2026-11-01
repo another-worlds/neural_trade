@@ -107,3 +107,9 @@ VIEWER (descriptive, after the seal; no result changed)
   fold-S models, asserts that every daily PnL series is bit-identical to the scored results (dev_daily, seal_daily),
   and writes the viewer data. This re-read of the sealed bars is logged in results/seal_access.log; it reproduces
   the scored numbers and re-scores nothing.
+- The viewer export ran a second time after an independent data and interaction check (a second logged seal re-read;
+  bit-identity asserted again). Fixes: the last PnL point of each run includes the final close-out fee and the sealed
+  run is chained from the scored dev total; holds are wall-clock minutes (the seal's missing day); every fill is a
+  position point; the page gives Plotly UTC date strings (it read numeric times in the viewer's local time zone),
+  aligns all panels on the price grid for the shared hover, drops stale loads, and labels the dev return as log.
+  Monthly 1-minute prices ship as base64 text (artifacts do not serve raw binary).

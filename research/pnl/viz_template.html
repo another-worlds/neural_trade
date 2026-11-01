@@ -152,8 +152,8 @@ code { font-family: var(--mono); font-size: 0.92em; }
   </div>
 
   <div class="notes">
-    <p><b>How to read it.</b> The three panels share one time axis: drag to zoom, double-click to reset, and the hover line reads all three panels at once. Zoom below about four days and the price switches from hourly closes to 1-minute closes. Trade marks sit at the bar of the fill: a triangle for the entry (up = long, down = short) and a line to the exit.</p>
-    <p><b>Numbers.</b> PnL is cumulative net of fees and funding, compounded, from 0% on 2021-01-01; the sealed-year run starts flat and is chained onto the dev curve. PnL points are hourly plus every fill; position points are exact at every fill. Gross and net bps per trade are realised PnL over equity at entry (size-weighted).</p>
+    <p><b>How to read it.</b> The three panels share one time axis: drag to zoom, double-click to reset, and the hover line reads all three panels at once (trade details join it below 60 days in view). Zoom below about four days and the price switches from hourly closes to 1-minute closes. Trade marks sit at the bar of the fill: a triangle for the entry (up = long, down = short) and a line to the exit.</p>
+    <p><b>Numbers.</b> PnL is cumulative net of fees and funding, compounded, from 0% on 2021-01-01; the sealed-year run starts flat and is chained onto the dev curve. PnL points are hourly plus every fill; position points are exact at every fill (between fills, drift is drawn in steps of 0.01x). The dev return in the summary is the mean daily log return x 365. Gross and net bps per trade are realised PnL over equity at entry (size-weighted).</p>
     <p><b>Source.</b> Engine E re-simulation (<code>research/pnl/viz_export.py</code>); every run's daily PnL is bit-identical to the scored results in <code>research/pnl/results/</code> (dev gates) and <code>results/seal.json</code>. Verdicts: <code>plans/pnl_optimisation.md</code>.</p>
   </div>
 </div>
@@ -189,12 +189,17 @@ code { font-family: var(--mono); font-size: 0.92em; }
   // plain arrays: Plotly keeps a date axis only for non-typed x data
   var hourX = new Array(hourC.length), hourY = new Array(hourC.length);
   for (var k = 0; k < hourC.length; k++) { hourX[k] = (T0 + (k + 1) * 60) * MIN; hourY[k] = isNaN(hourC[k]) ? null : hourC[k]; }
+  // Plotly reads numeric millisecond x values in the viewer's local time zone; it gets UTC date strings instead,
+  // and the numeric arrays stay for the page's own maths (search, ranges, table).
+  function U(ms) { return new Date(ms).toISOString().slice(0, 23).replace("T", " "); }
+  function Ux(a) { var o = new Array(a.length); for (var i = 0; i < a.length; i++) o[i] = a[i] == null ? null : U(a[i]); return o; }
+  var hourXs = Ux(hourX);
   var monthCache = {};
   function loadMonth(m) {
-    if (!monthCache[m.name]) monthCache[m.name] = fetch("m/" + m.name + ".bin").then(function (r) {
+    if (!monthCache[m.name]) monthCache[m.name] = fetch("m/" + m.name + ".txt").then(function (r) {
       if (!r.ok) throw new Error("price file " + m.name + " (" + r.status + ")");
-      return r.arrayBuffer();
-    }).then(function (b) { return new Float32Array(b); });
+      return r.text();
+    }).then(function (t) { return new Float32Array(bytes(t.trim())); });
     return monthCache[m.name];
   }
 
@@ -221,39 +226,55 @@ code { font-family: var(--mono); font-size: 0.92em; }
   function signed(v, dp) { return (v > 0 ? "+" : v < 0 ? "−" : "") + fmtNum(Math.abs(v), dp); }
   function fmtHold(m) { return m < 120 ? m + " min" : m < 2880 ? (m / 60).toFixed(1) + " h" : (m / 1440).toFixed(1) + " d"; }
 
+  // The dev run ends flat at its scored total and the sealed-year run starts flat, chained onto it: one continuous line.
   function pnlSeries(s) {
-    var n = s.pt.length, x = new Array(n + 1), y = new Array(n + 1), j = 0;
-    for (var i = 0; i < n; i++) {
-      if (i === s.pBreak) { x[j] = (s.pt[i] - 0.5) * MIN; y[j] = null; j++; }
-      x[j] = s.pt[i] * MIN; y[j] = (Math.exp(s.pL[i]) - 1) * 100; j++;
-    }
-    x.length = j; y.length = j; return { x: x, y: y };
+    var n = s.pt.length, x = new Array(n), y = new Array(n);
+    for (var i = 0; i < n; i++) { x[i] = s.pt[i] * MIN; y[i] = (Math.exp(s.pL[i]) - 1) * 100; }
+    return { x: x, y: y };
   }
   function expoSeries(s) {
-    var n = s.et.length, x = new Array(n + 1), y = new Array(n + 1), j = 0;
-    for (var i = 0; i < n; i++) {
-      if (i === s.eBreak) { x[j] = (s.et[i] - 0.5) * MIN; y[j] = null; j++; }
-      x[j] = s.et[i] * MIN; y[j] = s.ex[i]; j++;
-    }
-    x.length = j; y.length = j; return { x: x, y: y };
+    var n = s.et.length, x = new Array(n), y = new Array(n);
+    for (var i = 0; i < n; i++) { x[i] = s.et[i] * MIN; y[i] = s.ex[i]; }
+    return { x: x, y: y };
   }
+  // put a series on the price grid too (linear interpolation, which is what the drawn line shows), so the shared
+  // hover finds a value of every panel at any time
+  function onGrid(gx, sx, sy, step) {
+    var x = [], y = [], i = 0, j = 0, n = sx.length, m = gx.length;
+    while (i < n || j < m) {
+      if (j >= m || (i < n && sx[i] <= gx[j])) {
+        if (j < m && sx[i] === gx[j]) j++;
+        x.push(sx[i]); y.push(sy[i]); i++;
+      } else {
+        var g = gx[j++];
+        if (i === 0 || i >= n) continue;
+        var y0 = sy[i - 1], y1 = sy[i];
+        if (y0 == null || y1 == null) continue;
+        x.push(g); y.push(step ? y0 : y0 + (y1 - y0) * (g - sx[i - 1]) / (sx[i] - sx[i - 1]));
+      }
+    }
+    return { x: x, y: y };
+  }
+  var TRADE_HOVER_DAYS = 60, tradeHoverOn = false;   // trade tooltips only when under 60 days are in view
   function tradeTraces(s, C) {
     var lx = [], ly = [], lt = [], sx = [], sy = [], st = [], px = [], py = [], ex = [], ey = [], et = [];
     for (var i = 0; i < s.n; i++) {
       var x0 = s.tin[i] * MIN, x1 = s.tout[i] * MIN, per = s.period[i] ? "Sealed year" : "Dev";
       var tip = (s.side[i] > 0 ? "Long" : "Short") + " entry " + fmtTime(s.tin[i]) + " UTC @ " + fmtNum(s.pin[i], 1) +
-        "<br>Exit " + fmtTime(s.tout[i]) + " @ " + fmtNum(s.pout[i], 1) + " after " + fmtHold(s.hold[i]) +
+        "<br>Exit " + fmtTime(s.tout[i]) + " UTC @ " + fmtNum(s.pout[i], 1) + " after " + fmtHold(s.hold[i]) +
         "<br>Net " + signed(s.net[i], 1) + " bps (gross " + signed(s.gross[i], 1) + ") · " + per;
-      if (s.side[i] > 0) { lx.push(x0); ly.push(s.pin[i]); lt.push(tip); } else { sx.push(x0); sy.push(s.pin[i]); st.push(tip); }
-      px.push(x0, x1, null); py.push(s.pin[i], s.pout[i], null);
-      ex.push(x1); ey.push(s.pout[i]); et.push("Exit " + fmtTime(s.tout[i]) + " UTC @ " + fmtNum(s.pout[i], 1) + "<br>Net " + signed(s.net[i], 1) + " bps");
+      var u0 = U(x0), u1 = U(x1);
+      if (s.side[i] > 0) { lx.push(u0); ly.push(s.pin[i]); lt.push(tip); } else { sx.push(u0); sy.push(s.pin[i]); st.push(tip); }
+      px.push(u0, u1, null); py.push(s.pin[i], s.pout[i], null);
+      ex.push(u1); ey.push(s.pout[i]); et.push("Exit " + fmtTime(s.tout[i]) + " UTC @ " + fmtNum(s.pout[i], 1) + "<br>Net " + signed(s.net[i], 1) + " bps");
     }
-    var ring = { color: C.surface, width: 1.5 };
+    var ring = { color: C.surface, width: 1.5 }, hov = tradeHoverOn ? "%{text}<extra></extra>" : null;
+    var hi = tradeHoverOn ? "all" : "skip";
     return [
       { type: "scattergl", mode: "lines", x: px, y: py, yaxis: "y", line: { color: C.ink3, width: 1 }, opacity: 0.8, hoverinfo: "skip", showlegend: false, name: "Hold" },
-      { type: "scattergl", mode: "markers", x: ex, y: ey, yaxis: "y", marker: { symbol: "circle", size: 6, color: C.ink3, line: ring }, text: et, hovertemplate: "%{text}<extra></extra>", showlegend: false, name: "Exit" },
-      { type: "scattergl", mode: "markers", x: lx, y: ly, yaxis: "y", marker: { symbol: "triangle-up", size: 11, color: C.long, line: ring }, text: lt, hovertemplate: "%{text}<extra></extra>", showlegend: false, name: "Long entry" },
-      { type: "scattergl", mode: "markers", x: sx, y: sy, yaxis: "y", marker: { symbol: "triangle-down", size: 11, color: C.short, line: ring }, text: st, hovertemplate: "%{text}<extra></extra>", showlegend: false, name: "Short entry" }
+      { type: "scattergl", mode: "markers", x: ex, y: ey, yaxis: "y", marker: { symbol: "circle", size: 6, color: C.ink3, line: ring }, text: et, hovertemplate: hov, hoverinfo: hi, showlegend: false, name: "Exit" },
+      { type: "scattergl", mode: "markers", x: lx, y: ly, yaxis: "y", marker: { symbol: "triangle-up", size: 11, color: C.long, line: ring }, text: lt, hovertemplate: hov, hoverinfo: hi, showlegend: false, name: "Long entry" },
+      { type: "scattergl", mode: "markers", x: sx, y: sy, yaxis: "y", marker: { symbol: "triangle-down", size: 11, color: C.short, line: ring }, text: st, hovertemplate: hov, hoverinfo: hi, showlegend: false, name: "Short entry" }
     ];
   }
 
@@ -263,11 +284,11 @@ code { font-family: var(--mono); font-size: 0.92em; }
   var FULL = [meta.dev_start_min * MIN, meta.end_min * MIN];
 
   function layout(C) {
-    var shapes = [{ type: "rect", xref: "x", yref: "paper", x0: meta.seal_start_min * MIN, x1: meta.end_min * MIN, y0: 0, y1: 1, fillcolor: C.seal, line: { width: 0 }, layer: "below" }];
-    var ann = [{ xref: "x", yref: "paper", x: (meta.seal_start_min + meta.end_min) / 2 * MIN, y: 1, yanchor: "bottom", xanchor: "center", text: "Sealed year", showarrow: false, font: { size: 11, color: C.sealInk } }];
+    var shapes = [{ type: "rect", xref: "x", yref: "paper", x0: U(meta.seal_start_min * MIN), x1: U(meta.end_min * MIN), y0: 0, y1: 1, fillcolor: C.seal, line: { width: 0 }, layer: "below" }];
+    var ann = [{ xref: "x", yref: "paper", x: U((meta.seal_start_min + meta.end_min) / 2 * MIN), y: 1, yanchor: "bottom", xanchor: "center", text: "Sealed year", showarrow: false, font: { size: 11, color: C.sealInk } }];
     meta.refits_min.forEach(function (m) {
-      shapes.push({ type: "line", xref: "x", yref: "paper", x0: m * MIN, x1: m * MIN, y0: 0, y1: 1, line: { color: C.rule, width: 1 }, layer: "below" });
-      ann.push({ xref: "x", yref: "paper", x: m * MIN, y: 1, yanchor: "bottom", xanchor: "left", text: "refit", showarrow: false, font: { size: 10, color: C.ink3 } });
+      shapes.push({ type: "line", xref: "x", yref: "paper", x0: U(m * MIN), x1: U(m * MIN), y0: 0, y1: 1, line: { color: C.rule, width: 1 }, layer: "below" });
+      ann.push({ xref: "x", yref: "paper", x: U(m * MIN), y: 1, yanchor: "bottom", xanchor: "left", text: "refit", showarrow: false, font: { size: 10, color: C.ink3 } });
     });
     var ax = function (title, dom, extra) {
       var a = { domain: dom, title: { text: title, font: { size: 11, color: C.ink2 }, standoff: 6 }, gridcolor: C.grid, zerolinecolor: C.rule, linecolor: C.rule,
@@ -279,7 +300,7 @@ code { font-family: var(--mono); font-size: 0.92em; }
       paper_bgcolor: C.surface, plot_bgcolor: C.surface, font: { family: css("--font"), color: C.ink, size: 12 },
       margin: { l: 64, r: 16, t: 28, b: 40 }, showlegend: false, dragmode: "zoom", hovermode: "x unified", hoversubplots: "axis", hoverdistance: 12,
       hoverlabel: { bgcolor: C.surface, bordercolor: C.rule, font: { color: C.ink, size: 12 } },
-      xaxis: { type: "date", anchor: "y3", domain: [0, 1], range: view || FULL, gridcolor: C.grid, linecolor: C.rule, tickfont: { size: 11, color: C.ink2 },
+      xaxis: { type: "date", anchor: "y3", domain: [0, 1], range: (view || FULL).map(U), gridcolor: C.grid, linecolor: C.rule, tickfont: { size: 11, color: C.ink2 },
         showspikes: true, spikemode: "across", spikesnap: "cursor", spikethickness: 1, spikecolor: C.ink3, spikedash: "solid", hoverformat: "%Y-%m-%d %H:%M UTC" },
       yaxis: ax("Price (USDT)", [0.47, 1], { tickformat: ",.0f" }),
       yaxis2: ax("Net PnL (%)", [0.21, 0.43], { ticksuffix: "%", tickformat: ",.0f", zeroline: true }),
@@ -293,14 +314,16 @@ code { font-family: var(--mono); font-size: 0.92em; }
   }
 
   function build() {
-    var C = themeColors(), s = cur;
+    var C = themeColors(), s = cur, vr = view || FULL;
+    tradeHoverOn = (vr[1] - vr[0]) / MIN / DAY < TRADE_HOVER_DAYS;
     var pr = priceData(), p = s._pnl || (s._pnl = pnlSeries(s)), e = s._expo || (s._expo = expoSeries(s));
-    var traces = [priceTrace(C, pr.x, pr.y)].concat(tradeTraces(s, C));
-    traces.push({ type: "scattergl", mode: "lines", x: bh ? bh.x : [], y: bh ? bh.y : [], yaxis: "y2", visible: document.getElementById("bh-toggle").checked,
-      line: { color: C.ref, width: 1.25 }, name: "Buy-and-hold", hovertemplate: "%{y:+.1f}%<extra>Buy-and-hold</extra>" });
-    traces.push({ type: "scattergl", mode: "lines", x: p.x, y: p.y, yaxis: "y2", line: { color: C.strat, width: 2 }, name: curId, hovertemplate: "%{y:+.1f}%<extra>" + curId + " PnL</extra>" });
-    traces.push({ type: "scatter", mode: "lines", x: e.x, y: e.y, yaxis: "y3", line: { color: C.strat, width: 1.25 }, fill: "tozeroy", connectgaps: false,
-      fillcolor: hexA(C.strat, 0.28), name: "Position", hovertemplate: "%{y:+.2f}x<extra>Position</extra>" });
+    var pG = onGrid(pr.x, p.x, p.y), eG = onGrid(pr.x, e.x, e.y, true), bG = bh ? onGrid(pr.x, bh.x, bh.y) : { x: [], y: [] };
+    var traces = [priceTrace(C, pr.xs, pr.y)].concat(tradeTraces(s, C));
+    traces.push({ type: "scattergl", mode: "lines", x: Ux(bG.x), y: bG.y, yaxis: "y2", visible: document.getElementById("bh-toggle").checked,
+      line: { color: C.ref, width: 1.25 }, name: "Buy-and-hold", hovertemplate: "%{y:.1f}%<extra>Buy-and-hold</extra>" });
+    traces.push({ type: "scattergl", mode: "lines", x: Ux(pG.x), y: pG.y, yaxis: "y2", line: { color: C.strat, width: 2 }, name: curId, hovertemplate: "%{y:.1f}%<extra>" + curId + " PnL</extra>" });
+    traces.push({ type: "scatter", mode: "lines", x: Ux(eG.x), y: eG.y, yaxis: "y3", line: { color: C.strat, width: 1.25, shape: "hv" }, fill: "tozeroy",
+      fillcolor: hexA(C.strat, 0.28), name: "Position", hovertemplate: "%{y:.2f}x<extra>Position</extra>" });
     var cfg = { responsive: true, displaylogo: false, scrollZoom: false, modeBarButtonsToRemove: ["select2d", "lasso2d", "autoScale2d", "toImage"] };
     var lay = layout(C);
     var pr2 = Plotly.react(gd, traces, lay, cfg);
@@ -315,26 +338,30 @@ code { font-family: var(--mono); font-size: 0.92em; }
   }
 
   // price array for the current view: hourly everywhere, 1-min inside a short window
-  var minuteWin = null; // {x0,x1,x:[],y:[]}
+  var minuteWin = null, minuteReq = 0; // {x0,x1,x:[],xs:[],y:[]}; minuteReq drops stale 1-min loads
   function priceData() {
-    if (priceMode !== "minute" || !minuteWin) return { x: hourX, y: hourY };
+    if (priceMode !== "minute" || !minuteWin) return { x: hourX, xs: hourXs, y: hourY };
     var i0 = lowerBound(hourX, minuteWin.x0), i1 = lowerBound(hourX, minuteWin.x1);
-    var x = hourX.slice(0, i0).concat(minuteWin.x, hourX.slice(i1));
-    var y = hourY.slice(0, i0).concat(minuteWin.y, hourY.slice(i1));
-    return { x: x, y: y };
+    return { x: hourX.slice(0, i0).concat(minuteWin.x, hourX.slice(i1)),
+             xs: hourXs.slice(0, i0).concat(minuteWin.xs, hourXs.slice(i1)),
+             y: hourY.slice(0, i0).concat(minuteWin.y, hourY.slice(i1)) };
   }
   function currentRange() {
     var r = gd.layout && gd.layout.xaxis && gd.layout.xaxis.range;
     if (!r) return FULL.slice();
     return [toMs(r[0]), toMs(r[1])];
   }
-  function toMs(v) { return typeof v === "number" ? v : Date.parse(String(v).replace(" ", "T") + (String(v).length <= 19 ? "Z" : "")); }
+  function toMs(v) {                          // Plotly range values are UTC date strings here
+    if (typeof v === "number") return v;
+    var t = String(v);
+    return Date.parse(t.length <= 10 ? t : t.replace(" ", "T") + "Z");
+  }
 
   var relayoutTimer = null, busy = false;
   function onRelayout(ev) {
     if (busy) return;
     if (ev && (ev["xaxis.range[0]"] !== undefined || ev["xaxis.range"] || ev["xaxis.autorange"])) {
-      if (ev["xaxis.autorange"]) { busy = true; Plotly.relayout(gd, { "xaxis.range": FULL }).then(function () { busy = false; afterView(); }); return; }
+      if (ev["xaxis.autorange"]) { busy = true; Plotly.relayout(gd, { "xaxis.range": FULL.map(U) }).then(function () { busy = false; afterView(); }); return; }
       clearTimeout(relayoutTimer); relayoutTimer = setTimeout(afterView, 120);
     }
   }
@@ -343,7 +370,10 @@ code { font-family: var(--mono); font-size: 0.92em; }
     var spanMin = (view[1] - view[0]) / MIN;
     if (spanMin < 4 * DAY) ensureMinutes(view).then(function () { rescaleY(); updateTable(); updateRes(); });
     else {
+      minuteReq++;                                  // a 1-min load still running is now stale
+      var wantHover = spanMin / DAY < TRADE_HOVER_DAYS;
       if (priceMode === "minute") { priceMode = "hour"; minuteWin = null; build(); }
+      else if (wantHover !== tradeHoverOn) build();
       else { rescaleY(); updateTable(); updateRes(); }
     }
   }
@@ -352,16 +382,18 @@ code { font-family: var(--mono); font-size: 0.92em; }
     var x0 = v[0] - pad, x1 = v[1] + pad;
     if (priceMode === "minute" && minuteWin && minuteWin.x0 <= v[0] && minuteWin.x1 >= v[1]) return Promise.resolve();
     var m0 = Math.floor(x0 / MIN) - T0, m1 = Math.ceil(x1 / MIN) - T0;
+    var req = ++minuteReq;
     var months = P.months.filter(function (m) { return m.start_min < m1 && m.start_min + m.n > m0; });
     document.getElementById("res").textContent = "Loading 1-minute bars...";
     return Promise.all(months.map(loadMonth)).then(function (arrs) {
+      if (req !== minuteReq) return;
       var xs = [], ys = [];
       months.forEach(function (m, k) {
         var a = arrs[k], j0 = Math.max(0, m0 - m.start_min), j1 = Math.min(m.n, m1 - m.start_min);
         for (var j = j0; j < j1; j++) { xs.push((T0 + m.start_min + j + 1) * MIN); ys.push(isNaN(a[j]) ? null : a[j]); }
       });
       if (!xs.length) return;
-      minuteWin = { x0: xs[0], x1: xs[xs.length - 1], x: xs, y: ys }; priceMode = "minute";
+      minuteWin = { x0: xs[0], x1: xs[xs.length - 1], x: xs, xs: Ux(xs), y: ys }; priceMode = "minute";
       return build();
     }).catch(function (err) { document.getElementById("res").textContent = "1-minute bars unavailable: " + err.message; });
   }
@@ -428,7 +460,7 @@ code { font-family: var(--mono); font-size: 0.92em; }
     setRange([(tin - pad) * MIN, (tout + pad) * MIN]);
     gd.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
   }
-  function setRange(r) { view = r; busy = true; Plotly.relayout(gd, { "xaxis.range": r }).then(function () { busy = false; afterView(); }); }
+  function setRange(r) { view = r; busy = true; Plotly.relayout(gd, { "xaxis.range": r.map(U) }).then(function () { busy = false; afterView(); }); }
 
   // ---------------- stats strip
   function stats() {
@@ -437,11 +469,11 @@ code { font-family: var(--mono); font-size: 0.92em; }
     var gates = st.gates ? Object.keys(st.gates).map(function (g) { var ok = st.gates[g]; return '<span class="pill' + (ok ? "" : " gate-off") + '" title="' + g + (ok ? " passed" : " failed") + '">' + g + "</span>"; }).join("") : "";
     var verdict = st.verdict ? '<span class="pill ' + (st.verdict === "KILL" ? "kill" : "cons") + '">' + st.verdict + "</span> information only" : (st.gates ? "Not scored (not the information-only candidate)" : "Baseline");
     el.innerHTML =
-      '<div class="stat"><span class="k">Dev 2021-01 to 2025-10, C7-B</span><span class="v">' + signed(d.ann_pct, 1) + '%/yr <span>Sharpe ' + d.sharpe.toFixed(2) + " · max drawdown " + (d.max_dd * 100).toFixed(0) + "%</span></span></div>" +
+      '<div class="stat"><span class="k">Dev 2021-01 to 2025-10, C7-B</span><span class="v">' + signed(d.ann_pct, 1) + '% log/yr <span>Sharpe ' + d.sharpe.toFixed(2) + " · max drawdown " + (d.max_dd * 100).toFixed(0) + "%</span></span></div>" +
       '<div class="stat"><span class="k">Sealed year 2025-11 to 2026-10</span><span class="v">' + signed(s.total_log_pct, 1) + '% log <span>Sharpe ' + s.sharpe.toFixed(2) + " · " + s.trades.toLocaleString("en-US") + " trades</span></span></div>" +
       '<div class="stat"><span class="k">Trades (dev + sealed)</span><span class="v">' + (d.trades || 0).toLocaleString("en-US") + " + " + s.trades.toLocaleString("en-US") + (st.p_timing != null ? " <span>timing p " + st.p_timing.toFixed(3) + "</span>" : "") + "</span></div>" +
       '<div class="stat"><span class="k">Dev gates · seal verdict</span><span class="v">' + (gates || "<span>none</span>") + " " + '<span>' + verdict + "</span></span></div>";
-    document.getElementById("leg-strat").textContent = (NAMES[curId] || curId) + " net PnL";
+    document.getElementById("leg-strat").textContent = (NAMES[curId] || curId) + ": net PnL";
   }
 
   // ---------------- controls
@@ -476,8 +508,11 @@ code { font-family: var(--mono); font-size: 0.92em; }
     curId = id; pressStrategy(id); stats();
     document.getElementById("loading").hidden = false;
     document.getElementById("loading").textContent = "Loading " + (NAMES[id] || id) + "...";
-    getStrat(id).then(function (s) { cur = s; return build(); }).then(function () { document.getElementById("loading").hidden = true; })
-      .catch(function (err) { document.getElementById("loading").textContent = "Could not load " + id + ": " + err.message; });
+    getStrat(id).then(function (s) {
+      if (id !== curId) return;                      // a later pick won while this file loaded
+      cur = s;
+      return build().then(function () { if (id === curId) document.getElementById("loading").hidden = true; });
+    }).catch(function (err) { if (id === curId) document.getElementById("loading").textContent = "Could not load " + id + ": " + err.message; });
     try { localStorage.setItem("replay-strategy", id); } catch (e) { /* storage unavailable */ }
   }
   document.getElementById("bh-toggle").addEventListener("change", function (e) {
