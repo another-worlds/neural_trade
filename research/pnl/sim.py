@@ -16,6 +16,9 @@ ENGINE E (event-driven, 1-min bars, compounding equity, signed BTC contracts q, 
 - 1x cap: target clipped to [-1, 1]; if |x| > 1.10 at a bar close, trim to 1.0 as taker at the next open (logged).
 - A new decision cancels any working order. Positions are closed (taker) at the end of the run.
 - Gaps: no decisions for 60 bars after a gap; positions carry and are marked at the first bar after it.
+- Scale: equity, position and open orders are renormalised to E = 1 at every UTC day start (all PnL terms are linear
+  in size, so this is exact). Daily log returns stay precise even for ruinous rules; fees and funding totals are sums
+  of daily amounts in units of start-of-day equity (fractions of equity).
 
 ENGINE F (vectorised): net_k = x_k (R_k - F_k) - (c_in inc_k + c_out red_k) on a decision grid, exact inc/red split.
 
@@ -65,12 +68,11 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
     taker_queue = []                 # list of (exec_bar, dq, kind)
     trades, open_trade = [], None
     fills = []                       # (bar, kind, dq, price, fee_rate)
-    day_ends_E, day_ids = [], []
+    day_log, day_ids = [], []
     expo = np.zeros(end - start, np.float32) if record_exposure else None
     suppress_until = -1
     trim_pending = -1
     cur_day = t[start] // DAY
-    E_day_start = E
 
     def fill_trade(px, dq, fee_rate, i, kind):
         nonlocal E, q, mark, fees_total, turnover, open_trade
@@ -84,7 +86,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         turnover += notional_x
         q_old = q
         q = q + dq
-        if abs(q) < 1e-12:
+        if abs(q) * px < 1e-12 * max(E, 1e-300):
             q = 0.0
         # trade bookkeeping (round trips: from flat to flat, per side)
         if q_old == 0.0 and q != 0.0:
@@ -115,9 +117,21 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         # new UTC day bookkeeping (equity at the end of the previous day)
         d = t[i] // DAY
         if d != cur_day:
-            day_ends_E.append(E + q * (c[i - 1] - mark))
+            E_end = E + q * (c[i - 1] - mark)
+            day_log.append(np.log(max(E_end, 1e-300)))
             day_ids.append(cur_day)
             cur_day = d
+            # renormalise the scale to E = 1 (exact: every PnL term is linear in size)
+            f = 1.0 / max(E_end, 1e-300)
+            E, q = E_end * f, q * f
+            mark = c[i - 1]
+            st.q, st.E = q, E
+            taker_queue = [(eb, dq_ * f, kd) for (eb, dq_, kd) in taker_queue]
+            if st.working is not None:
+                st.working["qty"] *= f
+            if open_trade is not None:
+                for key in ("fees", "funding", "E0"):
+                    open_trade[key] *= f
         # 1. funding at the open of bar i, paid by the position held at the end of bar i-1
         if fund[i] != 0.0 and q != 0.0:
             amt = fund[i] * q * c[i - 1]
@@ -184,8 +198,16 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
                     if q_eff != 0.0 and np.sign(dq) != np.sign(q_eff):
                         red = np.sign(dq) * min(abs(dq), abs(q_eff))
                     inc = dq - red
+                    tol = 1e-9 * E / c[i]
+                    if abs(inc) < tol:
+                        inc = 0.0
+                    if abs(red) < tol:
+                        red = 0.0
+                    dq = red + inc
                     kind = "reduce" if red != 0.0 and inc == 0.0 else ("flip" if red != 0.0 else "increase")
-                    if fill == "N":
+                    if red == 0.0 and inc == 0.0:
+                        pass                                   # float residue only: no order
+                    elif fill == "N":
                         if red != 0.0:
                             fill_trade(c[i], red, MAKER if fee == "C4" else TAKER, i, "reduce")
                         if inc != 0.0:
@@ -204,11 +226,10 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
     # close at the end of the run (taker at the last close)
     if close_at_end and q != 0.0:
         fill_trade(c[end - 1], -q, TAKER, end - 1, "reduce")
-    day_ends_E.append(E + q * (c[end - 1] - mark))
+    day_log.append(np.log(max(E + q * (c[end - 1] - mark), 1e-300)))
     day_ids.append(cur_day)
-    eq = np.array(day_ends_E)
-    prev = np.r_[1.0, eq[:-1]]
-    daily = np.log(np.maximum(eq, 1e-12) / np.maximum(prev, 1e-12))
+    daily = np.array(day_log)                      # each day starts at E = 1 (renormalised), so log(E_end) is its return
+    eq = np.exp(np.cumsum(daily))
     return {"daily": daily, "days": np.array(day_ids), "equity": eq, "trades": trades, "fees": fees_total,
             "funding": funding_total, "turnover": turnover, "trims": trims, "n_taker": n_taker, "n_maker": n_maker,
             "n_cancel": n_cancel, "n_chase": n_chase, "exposure": expo, "fills": fills, "final_E": float(eq[-1]),

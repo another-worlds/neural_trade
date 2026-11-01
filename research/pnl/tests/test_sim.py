@@ -38,7 +38,7 @@ def test_zero_position_is_exactly_zero():
 
 
 def test_buy_and_hold_nominal_matches_formula():
-    b = make_bars()
+    b = make_bars(n=1400)                     # one UTC day: no renormalisation, absolute amounts compare directly
     r = sim.simulate(b, sim.ConstPolicy(1.0, K=1), 1, len(b), fee="C7", fill="N", close_at_end=False)
     # nominal: buy at c[1] as maker; PnL = (c_end/c_1 - 1) * (1 - fee) less funding paid on q*c_prev
     q = (1.0 - 0.0) * 1.0 / b.c[1]
@@ -156,6 +156,26 @@ def test_perfect_foresight_wins():
     targets[dec] = np.sign(b.c[dec + 15] - b.o[dec + 1])
     r = sim.simulate(b, sim.TargetPolicy(targets[1:], 1, K=1), 1, len(b), fee="C10", fill="B")
     assert r["final_E"] > 1.2
+
+
+def test_no_zero_size_fills_and_ruin_stays_exact():
+    b = make_bars(seed=10, n=60 * 1440, rate=0.0)
+    rs = np.random.default_rng(2)
+    targets = np.full(len(b), np.nan)
+    dec = np.arange(5, len(b) - 5, 1)
+    targets[dec] = rs.choice([-1.0, 0.0, 1.0], len(dec))
+    r = sim.simulate(b, sim.TargetPolicy(targets[1:], 1, K=1), 1, len(b), fee="C10", fill="B")
+    assert all(abs(dq) * px > 0 for (_, _, dq, px, _) in r["fills"])
+    E_rel = []
+    for (_, _, dq, px, _) in r["fills"]:
+        E_rel.append(abs(dq) * px)
+    E_rel = np.array(E_rel)
+    assert E_rel.min() > 1e-8                 # no float-residue legs (drift corrections can be small but real)
+    assert np.median(E_rel[-1000:]) > 0.5     # sizes are in start-of-day equity units: they never collapse with ruin
+    assert np.isfinite(r["daily"]).all() and r["daily"].sum() < -30  # below e^-30: absolute size thresholds broke here
+    n_first = sum(1 for tr in r["trades"] if tr["entry_bar"] < len(b) // 2)
+    n_last = len(r["trades"]) - n_first
+    assert abs(n_first - n_last) < 0.1 * len(r["trades"])
 
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(D.DATA, "btcusdt_perp_1m.npz")), reason="data")
