@@ -1,0 +1,25 @@
+PnL optimisation: code changes after the SPEC froze (SPEC 'walk_forward' DISCIPLINE). Every dev run is in
+results/runs.jsonl. Full reruns after the first full results: at most 2, only for documented bugs.
+
+BEFORE ANY DEV RESULT
+- sim.py: zero-size residue orders after full exits (float residue in the inc/red split) removed with a relative
+  tolerance; absolute size thresholds replaced by relative ones; equity renormalised to 1 at each UTC day start
+  (exact: every PnL term is linear in size). Found when ruinous rules (E < 1e-12) broke the size thresholds.
+- sim.py: per-decision maker window (policy.K_at) so a model can switch cadence at a fold boundary.
+- Spec arithmetic: Track 1 uses 42 intraday columns, not 41 (48 F-CORE minus 6 dropped).
+- sigma60 is floored at 0.5 bps per minute like sigma_t (prep.py), for flat-price minutes.
+- Plain fade on the 1-min grid uses the calibration-study sigma (EWMA lambda 0.94, i.e. span 32.3 minutes).
+- 60-min fade: |z60| ranked among the trailing 30 days of 1-min values (43,200), decisions every minute.
+- Ridge CV purges with the largest H of the grid for every H (slightly more purge than needed); the final fit uses
+  the same Hmax-purged training rows.
+- Net inner validation reuses the Track 1 cells for T2-NET with their own (Track 1) inner-validation windows, which
+  differ from the Track 2 windows by at most a few days.
+- Net feature-group dropout zeroes a group for a whole segment (not per row).
+
+AFTER THE FIRST RIDGE DEV RUN (T1-LIN, T2-LIN only; no number changed)
+- sim.py returns per-day fees and funding; run_dev.py stores them; gate.py passes engine-E fees to p_sel
+  (daily_cost) so the skill test's cost is exact rather than charging exposure drift as trading.
+- checks.py: three checks were mis-specified and were corrected before they could gate anything:
+  funding alignment now uses realistic fills (nominal fills at the decision close pay the next print by
+  construction, as engine F does); the fold manifest checks the purge the code actually applies; the shuffled-label
+  check trades sign(mu) every minute so that it is not trivially zero.
