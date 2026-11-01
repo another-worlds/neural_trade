@@ -69,6 +69,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
     trades, open_trade = [], None
     fills = []                       # (bar, kind, dq, price, fee_rate)
     day_log, day_ids = [], []
+    day_fees, day_fund, day_acc = [], [], [0.0, 0.0]   # per day, in units of start-of-day equity
     expo = np.zeros(end - start, np.float32) if record_exposure else None
     suppress_until = -1
     trim_pending = -1
@@ -81,6 +82,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         fee_amt = fee_rate * abs(dq) * px
         E -= fee_amt
         fees_total += fee_amt
+        day_acc[0] += fee_amt
         fills.append((i, kind, dq, px, fee_rate))
         notional_x = abs(dq) * px / max(E, 1e-12)
         turnover += notional_x
@@ -120,6 +122,9 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
             E_end = E + q * (c[i - 1] - mark)
             day_log.append(np.log(max(E_end, 1e-300)))
             day_ids.append(cur_day)
+            day_fees.append(day_acc[0])
+            day_fund.append(day_acc[1])
+            day_acc[0] = day_acc[1] = 0.0
             cur_day = d
             # renormalise the scale to E = 1 (exact: every PnL term is linear in size)
             f = 1.0 / max(E_end, 1e-300)
@@ -137,6 +142,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
             amt = fund[i] * q * c[i - 1]
             E -= amt
             funding_total += amt
+            day_acc[1] += amt
             if open_trade is not None:
                 open_trade["funding"] += amt
         if gap[i]:
@@ -229,11 +235,14 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         fill_trade(c[end - 1], -q, TAKER, end - 1, "reduce")
     day_log.append(np.log(max(E + q * (c[end - 1] - mark), 1e-300)))
     day_ids.append(cur_day)
+    day_fees.append(day_acc[0])
+    day_fund.append(day_acc[1])
     daily = np.array(day_log)                      # each day starts at E = 1 (renormalised), so log(E_end) is its return
     eq = np.exp(np.cumsum(daily))
     return {"daily": daily, "days": np.array(day_ids), "equity": eq, "trades": trades, "fees": fees_total,
             "funding": funding_total, "turnover": turnover, "trims": trims, "n_taker": n_taker, "n_maker": n_maker,
             "n_cancel": n_cancel, "n_chase": n_chase, "exposure": expo, "fills": fills, "final_E": float(eq[-1]),
+            "daily_fees": np.array(day_fees), "daily_funding": np.array(day_fund),
             "start": int(start), "end": int(end), "fee": fee, "fill": fill}
 
 

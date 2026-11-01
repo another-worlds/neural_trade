@@ -1,0 +1,60 @@
+{
+ "6_seal_truncation": {
+  "pass": true,
+  "last_t": "2025-10-31 23:59:00+00:00"
+ },
+ "2_funding_alignment": {
+  "pass": true,
+  "held_over_0759": 0.001,
+  "decided_at_0759_close": 0.0,
+  "nominal_decided_at_0759_close": 0.001
+ },
+ "3_fold_manifest": {
+  "pass": true,
+  "bad": []
+ },
+ "1_causality": {
+  "pass": true,
+  "cuts": 20,
+  "modes": [
+   "noise",
+   "perm"
+  ],
+  "window": 150000
+ },
+ "4_deliberate_leak": {
+  "pass": true,
+  "honest": {
+   "H": 5,
+   "theta": 2.0,
+   "lambda": 10000.0,
+   "cv_bps": 5.745740475934325,
+   "mean_daily_bps": -0.46841921064491454,
+   "se_daily_bps": 0.7198965264007149,
+   "turnover": 18.0
+  },
+  "leaked": {
+   "H": 1,
+   "theta": 0.5,
+   "lambda": 10000.0,
+   "cv_bps": 4835.164648936253,
+   "mean_daily_bps": 1450.3368475006625,
+   "se_daily_bps": 77.9111649159743,
+   "turnover": 185725.0
+  }
+ },
+ "5_shuffled_labels": {
+  "pass": true,
+  "H": 1,
+  "theta": 2.0,
+  "lambda": 1.0,
+  "cv_bps": 0.0,
+  "mean_daily_bps": -0.6374008124247632,
+  "se_daily_bps": 12.59841393504675,
+  "turnover": 38329.0
+ },
+ "12_reconciliation": {
+  "pass": true
+ },
+ "all_pass": true
+}
