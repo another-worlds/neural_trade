@@ -108,6 +108,7 @@ def train_one(fd, arch, kappa, seed, max_epochs=None, log=None, warm_min_steps=0
     hist = []
     gmask_keys = len(fd.gkeys)
     steps_done = 0
+    first_band_ep = None
     for ep in range(E):
         model.train()
         band_on = ep >= 2 and steps_done >= warm_min_steps
@@ -135,8 +136,13 @@ def train_one(fd, arch, kappa, seed, max_epochs=None, log=None, warm_min_steps=0
                      "b_med": float(np.median(b))})
         if Uv > best[0]:
             best = (Uv, ep, {k: v.clone() for k, v in model.state_dict().items()})
-        if ep + 1 >= 3 and ep - best[1] >= PATIENCE:
-            break
+        if band_on and first_band_ep is None:
+            first_band_ep = ep
+        if warm_min_steps == 0:                                    # SPEC procedure (unchanged)
+            if ep + 1 >= 3 and ep - best[1] >= PATIENCE:
+                break
+        elif first_band_ep is not None and ep - max(best[1], first_band_ep) >= PATIENCE:
+            break                                                  # variant: patience starts when the band is on
     model.load_state_dict(best[2])
     tau, b, aux = NET.infer(model, Xv)
     ql_model = float(np.mean(aux + Rv ** 2 / (np.exp(aux) * sv ** 2)))

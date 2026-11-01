@@ -33,3 +33,7 @@ DECLARED BEFORE ANY NET DEV-OOS RESULT WAS COMPUTED (2026-11-01, after the inner
   band-off warm-up extended to at least 60 gradient steps (otherwise identical; LIN cells unchanged), then the
   same in-fold cell choice over all cells. Reported next to T1-NET/T2-NET; its 12 cells per track are added to
   the Deflated-Sharpe N.
+- Variant implementation note: the first variant launch stopped early because patience counted from epoch 0
+  (U = 0 ties during the band-off warm-up). For the variant only, patience now starts when the band switches on;
+  the SPEC procedure's stopping rule is unchanged. A test run (T1 Y2021 h = 1, seed 0) still stayed at cash after
+  78 band-off steps: with costs in the band-off loss, the MLP learns tau close to 0.
