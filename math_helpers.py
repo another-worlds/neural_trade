@@ -68,6 +68,25 @@ def period_from_logit(logit, epsilon=1e-8):
     return tf.maximum(period, 0.0)
 
 
+def momentum_period_from_raw(raw):
+    """Forward mapping of a learnable momentum period: P = softplus(raw) + 1 (P > 1)."""
+    return tf.nn.softplus(raw) + 1.0
+
+
+def momentum_raw_from_period(period, min_p=1.0, max_p=60.0, floor=1e-3):
+    """Exact inverse of momentum_period_from_raw on the clipped period (M2):
+    raw = log(expm1(max(clip(P, min_p, max_p) - 1, floor))).
+    The floor keeps the log finite at P = 1 (it maps to P = 1 + floor)."""
+    period = tf.convert_to_tensor(period)
+    p = tf.clip_by_value(period, tf.cast(min_p, period.dtype), tf.cast(max_p, period.dtype))
+    return tf.math.log(tf.math.expm1(tf.maximum(p - 1.0, tf.cast(floor, period.dtype))))
+
+
+def momentum_writeback(raw, min_p=1.0, max_p=60.0):
+    """Clip the period implied by `raw` to [min_p, max_p] and map it back to raw space (a fixed point inside)."""
+    return momentum_raw_from_period(momentum_period_from_raw(tf.convert_to_tensor(raw)), min_p, max_p)
+
+
 # -------------------------
 # Loss Functions
 # -------------------------
@@ -179,6 +198,16 @@ def normal_cdf(z):
     """
     z = tf.cast(z, tf.float32)
     return 0.5 * (1.0 + tf.math.erf(z / tf.constant(np.sqrt(2.0), dtype=tf.float32)))
+
+
+def gauss_p_up_beyond_deadband(mu, sigma, deadband, eps=1e-8):
+    """P(r > d | |r| > d) for r ~ N(mu, sigma^2): the quantity the deadband-masked direction head estimates.
+
+    Equals normal_cdf(mu / sigma) when d = 0. The unconditional P(r > d) would be biased DOWN whenever d > 0.
+    """
+    p_up = normal_cdf((mu - deadband) / (sigma + eps))
+    p_down = normal_cdf((-deadband - mu) / (sigma + eps))
+    return p_up / (p_up + p_down + 1e-12)
 
 
 # -------------------------

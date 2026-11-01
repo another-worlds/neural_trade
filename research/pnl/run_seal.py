@@ -66,7 +66,7 @@ def role_files():
 
 def nt_preflight(prereg):
     """T1-NT is always measured: its seal inference must work BEFORE the lock is written (a 1-hour dev window)."""
-    if not prereg.get("t1_nt"):
+    if not prereg.get("t1_nt") or prereg["t1_nt"].get("cash"):
         return
     if not TF_PY:
         sys.exit("refused: prereg has t1_nt but NT_PYTHON (the TF venv python) is not set")
@@ -162,8 +162,12 @@ def net_policy(st, track, sel, s, e):
 
 
 def nt_policy(st, prereg, s, e, dry):
-    """T1-NT: frozen fold-S neural_trade bundle, mu at every seal minute (TF venv subprocess), hysteresis theta = 1."""
+    """T1-NT: frozen fold-S neural_trade bundle, mu at every seal minute (TF venv subprocess), hysteresis theta = 1.
+    If its fold-S selection abstained (cash: no h had positive validation net), T1-NT is flat on the seal and no
+    inference is needed."""
     info = prereg.get("t1_nt")
+    if info and info.get("cash"):
+        return lambda: sim.ConstPolicy(0.0, K=1, chase=False)
     if not info or not TF_PY:
         return None
     out = os.path.join(prep.WORK, "nt", "seal_mu.npz" if not dry else "dryrun_mu.npz")

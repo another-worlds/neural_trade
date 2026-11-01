@@ -20,7 +20,10 @@ Usage (TF venv; PNL_DATA must point at the data store; at most NT_THREADS=2 thre
   python nt_adapter.py fold Y2021   # one fold in this process
   python nt_adapter.py all          # every fold, one child process each, sequentially, then the summary
   python nt_adapter.py summary
-Only load(seal=False) is ever called here. Seal inference: predict_bundle(bundle_dir, bars, start_ts, end_ts).
+  python nt_adapter.py predict <bundle_dir> <start_ts> <end_ts> <out.npz> --dev
+                                    # CLI of predict_bundle on dev bars: writes t, mu, pup, scale
+Only load(seal=False) is ever called here. Seal inference: the seal script passes its own Bars to
+predict_bundle(bundle_dir, bars, start_ts, end_ts); `predict --seal` is refused by this module.
 """
 import datetime as dt
 import json
@@ -147,8 +150,21 @@ def _epoch_logger(tf):
     return EpochLog()
 
 
+def _sidecar_compat():
+    """Sidecars written before the `bundle` key existed get it (nt_select.py reads meta['bundle'])."""
+    for f in ORDER:
+        jp = os.path.join(WORK, f"{f}.json")
+        if os.path.exists(jp):
+            side = json.load(open(jp))
+            if "bundle" not in side and "bundle_dir" in side:
+                side["bundle"] = side["bundle_dir"]
+                with open(jp, "w") as fh:
+                    json.dump(side, fh, indent=1, default=str)
+
+
 def run_fold(fold, window_step=WINDOW_STEP, epochs=EPOCHS, cut=False, bars=None, out_name=None):
     """Train one fold, save its bundle, predict at every test (and validation) minute, write npz + json."""
+    _sidecar_compat()
     tf, M = _tf()
     os.makedirs(WORK, exist_ok=True)
     out_name = out_name or fold
@@ -208,7 +224,7 @@ def run_fold(fold, window_step=WINDOW_STEP, epochs=EPOCHS, cut=False, bars=None,
         "purge": "training labels end before test_start - 1 day; validation = last 15% of training, purged 15 bars",
         "window_step": int(window_step), "epochs": int(epochs), "seed": SEED, "budget_cut_applied": bool(cut),
         "threads": THREADS, "warmup_days": WARMUP_DAYS,
-        "bundle_dir": bundle.path, "config_hash": meta["config_hash"], "config": meta["config"],
+        "bundle": bundle.path, "bundle_dir": bundle.path, "config_hash": meta["config_hash"], "config": meta["config"],
         "split": meta["split"], "best_epoch": meta.get("best_epoch"), "history": meta.get("history"),
         "val_metrics_stride": meta.get("val_metrics"), "timing": timing,
         "outputs": {"test": os.path.join(WORK, f"{out_name}.npz") if te_end is not None else None,
@@ -469,6 +485,15 @@ if __name__ == "__main__":
     elif cmd == "all":
         run_all()
     elif cmd == "summary":
+        _sidecar_compat()
         summary()
+    elif cmd == "predict":
+        if len(sys.argv) < 7 or sys.argv[6] != "--dev":
+            raise SystemExit("nt_adapter.py predict supports --dev only (dev bars from load()). It never loads seal "
+                             "bars; the seal script must pass its own Bars to predict_bundle().")
+        bdir, s_ts, e_ts, out_path = sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
+        pred = predict_bundle(bdir, D.load(1), s_ts, e_ts)
+        np.savez(out_path, **pred)
+        print(f"[nt] predict: {len(pred['t'])} decision bars -> {out_path}", flush=True)
     else:
         raise SystemExit(__doc__)

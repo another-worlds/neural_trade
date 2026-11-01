@@ -42,10 +42,23 @@ class Config:
     WINDOW_STEP = 1  # Generate a training sample every minute for true minute-level modeling
     RESAMPLE_MINUTES = None  # Optionally aggregate to coarser bars (e.g., set to 5 for 5-minute bars)
     BATCH_SIZE = 144 * 4
-    EPOCHS = 8
+    EPOCHS = 10
     LR = 1e-3  # Fixed from critically low 1e-10; reasonable for Adam optimizer
-    PATIENCE = EPOCHS
-    MAX_SEQUENCE_COUNT = 144 * 20  # Limit most recent sequences to bound training size
+    PATIENCE = 3  # EarlyStopping on val_loss (M8); must be < EPOCHS to be able to fire
+    MAX_SEQUENCE_COUNT = None  # M9: no cap; the harness sets WINDOW_STEP (e.g. 20) to bound training size
+    SEED = 42  # M8: replaces the hard-coded set_random_seed(42)
+
+    # M8: validation = the last VAL_FRACTION of the training range, with a purge of VAL_PURGE_BARS bars
+    # between the last training label and the first validation origin. The test fold lives only in the harness.
+    VAL_FRACTION = 0.15
+    VAL_PURGE_BARS = 15
+
+    # M4: unit-free inputs. Channel 0 = 1e4*ln(close/last_close) (bps); EXTRA_CHANNELS adds 5 causal channels:
+    # log range (bps), ln(v / EWMA_1440 v), taker imbalance, UTC hour sin, hour cos. Input shape (LOOKBACK, 6).
+    EXTRA_CHANNELS = True
+    VOLUME_EWMA_SPAN = 1440
+    # Leading bars of a frame used only to warm up causal features (never a sequence origin).
+    FEATURE_WARMUP_BARS = 0
 
 
 
@@ -69,24 +82,29 @@ class Config:
     MOMENTUM_CLIP_MAX = LOOKBACK
     USE_HUBER = True
     LAMBDA_DIR = 1  # New for direction loss
-    LAMBDA_INTER = 1  # New for interconnection reg
-    LAMBDA_VOL = 1  # New for volatility penalty
+    LAMBDA_INTER = 0  # M7: L2 is already in reg_loss; a second copy would count it twice
+    LAMBDA_VOL = 0  # M7: the SD-matching term rewards noisy forecasts
     LAMBDA_SHORT = 1  # For multi-horizon short-term
     LAMBDA_LONG = 1  # For multi-horizon long-term
     LAMBDA_VAR = 1  # For variance NLL
     DF_VAR = 3.0  # Degrees of freedom for Student's t in variance NLL
-    TAU_PRICE = 0.4  # Quantile for pinball loss in price prediction
+    TAU_PRICE = 0.5  # M6: median (was 0.4, a built-in DOWN bias)
 
 # paths
     # MODEL_PATH v2: Major architectural refactor for multi-horizon direction classification
     # - 3 independent output towers (h0_1min, h1_5min, h2_15min) instead of shared heads
     # - 9 outputs (3 price + 3 direction + 3 variance) vs 3 outputs (price, direction, variance)
-    # - Focal loss for direction heads with α=0.7 focusing on minority class (DOWN moves)
     # - Per-horizon direction metrics: accuracy, F1, sensitivity, specificity, MCC
-    # - MCC-based early stopping monitors val_dir_mcc_h1 (primary horizon) for optimal trade-off
     # v3: true multi-horizon supervision (separate targets per tower)
-    MODEL_PATH = "nn_learnable_indicators_v3.weights.h5"
-    SCALER_PATH = "scaler_v3.joblib"
+    # v4: model_py_fixes M1-M11 (unit-free 6-channel input, unbiased losses, purged validation, bundles).
+    # M10: train_and_evaluate() rewrites both paths into a bundle directory keyed by FOLD_ID + config hash:
+    #   <ARTIFACT_DIR>/bundle_<FOLD_ID>_<hash>/{model.weights.h5, target_scaler.joblib, input_scaler.joblib, config.json}
+    MODEL_VERSION = "v4"
+    MODEL_PATH = "nn_learnable_indicators_v4.weights.h5"
+    SCALER_PATH = "scaler_v4.joblib"
+    FOLD_ID = "default"
+    ARTIFACT_DIR = "."
+    LOG_DIR = "."  # training_log.csv and indicator_params_history.csv
 
 # TA initial params
     MA_SPANS = [5, 15, 30] 
@@ -106,17 +124,17 @@ class Config:
     SIGMOID_SCALE = 1.0
 
 # Training stability controls
-    INDICATOR_GRAD_MULT = 20.0
+    INDICATOR_GRAD_MULT = 1.0  # M1: was 20.0; the forward-pass copy of it killed the indicators (D1)
     GRAD_CLIP_NORM = 5.0
 
 # Focal loss hyperparameters for direction classification
-    FOCAL_ALPHA = 0.7  # Class weight: favor minority class (DOWN)
+    FOCAL_ALPHA = 0.5  # M6: symmetric (0.7 put the loss-optimal P(up) at 0.38 on balanced labels)
     FOCAL_GAMMA = 1.0  # Focus parameter: higher = focus more on hard examples
 
     # Trade-aware direction labeling deadband.
     # If > 0, direction loss/metrics treat returns within +/- deadband as neutral.
     # Units: basis points (bps). Example: 10 bps = 0.10%.
-    DIR_DEADBAND_BPS = 0.0
+    DIR_DEADBAND_BPS = 7.0  # M6: the cost level
 
     # Stabilize NLL and prevent variance head from dominating early.
     # Variance is in SCALED units^2.
@@ -178,6 +196,24 @@ class LossComponents:
         )
 
 # -----------------------------
+def build_input_windows(close_array, extra, origins, lookback):
+    """M4 model inputs for decision bars `origins` (row indices): float32 [N, lookback, 1 + n_extra].
+
+    Channel 0 = 1e4*ln(close[o-L+1..o] / close[o]); then the rows o-L+1..o of `extra` ([n_rows, n_extra]).
+    Only bars <= o are read, so the input of an origin cannot change when later bars change.
+    The same function builds training sequences and predict_at() inputs.
+    """
+    origins = np.asarray(origins, dtype=np.int64).reshape(-1)
+    if origins.size and origins.min() < lookback - 1:
+        raise ValueError(f"origin {origins.min()} has fewer than lookback={lookback} bars of history")
+    lc = np.log(np.asarray(close_array, dtype=np.float64).reshape(-1))
+    idx = origins[:, None] + np.arange(-lookback + 1, 1, dtype=np.int64)[None, :]
+    chans = [(1e4 * (lc[idx] - lc[origins][:, None])).astype('float32')[..., None]]
+    if extra is not None:
+        chans.append(np.asarray(extra, dtype='float32')[idx])
+    return np.concatenate(chans, axis=-1)
+
+
 class DataProcessor:
     def __init__(self, config):
         self.config = config
@@ -187,18 +223,32 @@ class DataProcessor:
     def clean_numeric(self, series):
         return series.astype(str).str.replace(r'[\$,]', '', regex=True).replace('', np.nan).astype(float)
 
-    def load_and_prepare_data(self, read_csv_kwargs: Optional[dict] = None):
+    def load_and_prepare_data(self, read_csv_kwargs: Optional[dict] = None, frame: Optional[pd.DataFrame] = None):
         """Load and prep minute-level Bitcoin data with optional resampling.
 
         `read_csv_kwargs` is passed through to `pd.read_csv`.
         This makes ingestion robust in notebooks where the CSV may require
         non-default parsing settings.
-        """
-        read_csv_kwargs = dict(read_csv_kwargs or {})
-        df = pd.read_csv(self.config.CSV_PATH, **read_csv_kwargs)
 
-        # Parse timestamp column (minute-level data format)
-        df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
+        M5: `frame` is an in-memory DataFrame (e.g. built from research/pnl/data.py bars) used instead of the CSV.
+        The time column may be called `timestamp` or `datetime` (datetime-like, or numeric unix seconds).
+        `taker_buy_base` and `trades` are kept when present.
+        """
+        if frame is not None:
+            df = frame.copy()
+        else:
+            read_csv_kwargs = dict(read_csv_kwargs or {})
+            df = pd.read_csv(self.config.CSV_PATH, **read_csv_kwargs)
+
+        # Parse timestamp column (minute-level data format); the repo CSV calls it `datetime` (D6)
+        if 'timestamp' not in df.columns and 'datetime' in df.columns:
+            df = df.rename(columns={'datetime': 'timestamp'})
+        if 'timestamp' not in df.columns:
+            raise ValueError("Expected a 'timestamp' or 'datetime' column")
+        if pd.api.types.is_numeric_dtype(df['timestamp']):
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s', errors='coerce')
+        else:
+            df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
         df = df.dropna(subset=['timestamp']).copy()
         df = df.sort_values('timestamp').drop_duplicates(subset=['timestamp'], keep='last')
 
@@ -211,22 +261,20 @@ class DataProcessor:
         }
         df = df.rename(columns=column_mapping)
 
-        numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        numeric_cols = ['Open', 'High', 'Low', 'Close', 'Volume', 'taker_buy_base', 'trades']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
 
         if self.config.RESAMPLE_MINUTES:
+            agg = {'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}
+            for col in ('taker_buy_base', 'trades'):
+                if col in df.columns:
+                    agg[col] = 'sum'
             df = (
                 df.set_index('timestamp')
                   .resample(f"{self.config.RESAMPLE_MINUTES}min")
-                  .agg({
-                      'Open': 'first',
-                      'High': 'max',
-                      'Low': 'min',
-                      'Close': 'last',
-                      'Volume': 'sum'
-                  })
+                  .agg(agg)
                   .dropna(subset=['Close'])
                   .reset_index()
             )
@@ -278,11 +326,50 @@ class DataProcessor:
 
         return np.array(features, dtype='float32')
 
-    def make_sequences_with_extended_trends(self, close_array, lookback):
+    def compute_extra_channels(self, df):
+        """M4: 5 causal per-bar channels, [N, 5] float32. Row t uses bars <= t only.
+
+        0: log range 1e4*ln(High/Low) (bps); 1: ln(Volume / EWMA_span(Volume)), adjusted EWMA through bar t,
+        clipped to +-10 (zero-volume bars); 2: taker imbalance (2*taker_buy_base - Volume)/max(Volume, 1e-9);
+        3, 4: sin/cos of the UTC time of day. A missing source column gives a zero channel.
+        """
+        n = len(df)
+        out = np.zeros((n, 5), dtype=np.float64)
+        if 'High' in df.columns and 'Low' in df.columns:
+            hi = df['High'].to_numpy(np.float64)
+            lo = df['Low'].to_numpy(np.float64)
+            out[:, 0] = 1e4 * np.log(hi / lo)
+        if 'Volume' in df.columns:
+            v = df['Volume'].to_numpy(np.float64)
+            span = int(getattr(self.config, 'VOLUME_EWMA_SPAN', 1440))
+            ev = pd.Series(v).ewm(span=span, adjust=True).mean().to_numpy()
+            with np.errstate(divide='ignore', invalid='ignore'):
+                out[:, 1] = np.clip(np.log(np.maximum(v, 1e-12) / np.maximum(ev, 1e-12)), -10.0, 10.0)
+            if 'taker_buy_base' in df.columns:
+                tbb = df['taker_buy_base'].to_numpy(np.float64)
+                out[:, 2] = (2.0 * tbb - v) / np.maximum(v, 1e-9)
+        ts = pd.to_datetime(df['timestamp'])
+        if getattr(ts.dt, 'tz', None) is not None:
+            ts = ts.dt.tz_convert('UTC')
+        day_frac = (ts.dt.hour.to_numpy() * 3600 + ts.dt.minute.to_numpy() * 60 + ts.dt.second.to_numpy()) / 86400.0
+        out[:, 3] = np.sin(2.0 * np.pi * day_frac)
+        out[:, 4] = np.cos(2.0 * np.pi * day_frac)
+        out = np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0)
+        return out.astype('float32')
+
+    def make_sequences_with_extended_trends(self, close_array, lookback, extra=None):
+        """Build training sequences. M4: unit-free inputs and targets.
+
+        X[k, :, 0] = 1e4*ln(close[o-L+1..o] / close[o]) (bps relative to the last close o = i-1), plus
+        extra[o-L+1..o] channels when given -> X shape [N, L, 1 + n_extra].
+        y[k, j] = 1e4*ln(close[o+h_j] / close[o]) (bps). last_close is the constant 1e4, so every internal
+        ret = delta / last_close conversion (labels, deadband, alignment) returns the log return.
+        Origins o are kept in self.seq_origin_idx.
+        """
         X, y, last_close, extended_trends = [], [], [], []
         # Ensure start index is an integer even if periods are provided as floats
         max_extended_period = int(max(self.config.EXTENDED_TREND_PERIODS))
-        start_idx = int(max(lookback, max_extended_period))
+        start_idx = int(max(lookback, max_extended_period, int(getattr(self.config, 'FEATURE_WARMUP_BARS', 0) or 0)))
         step = int(max(1, getattr(self.config, 'WINDOW_STEP', 1)))
 
         horizon_steps = [int(h) for h in getattr(self.config, 'HORIZON_STEPS', [1, 5, 15])]
@@ -295,24 +382,23 @@ class DataProcessor:
         # Ensure targets are within bounds for all horizons
         end_idx = int(len(close_array) - (max_h - 1))
 
-        for i in range(start_idx, end_idx, step):
-            window = close_array[i-lookback:i]
-            # Targets (Option A): predict DELTAS relative to last_close at time t.
-            #   delta_h = close[t+h] - last_close[t]
-            # This is more stationary than absolute price and aligns with trading semantics.
-            lc = float(close_array[i - 1])
-            target = np.array([float(close_array[i + (h - 1)]) - lc for h in horizon_steps], dtype='float32')
-            ext_features = self.compute_extended_trend_features(close_array, int(i-1), self.config.EXTENDED_TREND_PERIODS)
-            X.append(window)
+        origins = np.arange(start_idx, end_idx, step, dtype=np.int64) - 1
+        self.seq_origin_idx = origins
+        lc64 = np.log(np.asarray(close_array, dtype=np.float64).reshape(-1))
+        for o in origins:
+            # Targets: log returns in bps relative to the last close (M4). Stationary and unit-free.
+            target = np.array([1e4 * (lc64[o + h] - lc64[o]) for h in horizon_steps], dtype='float32')
+            ext_features = self.compute_extended_trend_features(close_array, int(o), self.config.EXTENDED_TREND_PERIODS)
             y.append(target)
-            last_close.append(close_array[i-1])
             extended_trends.append(ext_features)
+        X = build_input_windows(close_array, extra, origins, lookback)
+        last_close = np.full(len(origins), 1e4, dtype='float32')
 
         return (
-            np.array(X, dtype='float32'),
-            np.array(y, dtype='float32'),
-            np.array(last_close, dtype='float32'),
-            np.array(extended_trends, dtype='float32')
+            X,
+            np.array(y, dtype='float32').reshape(-1, len(horizon_steps)),
+            last_close,
+            np.array(extended_trends, dtype='float32').reshape(-1, len(self.config.EXTENDED_TREND_PERIODS))
         )
 
     def plot_splits(self, df, start_idx, tscv, X_seq_len):
@@ -340,9 +426,11 @@ class DataProcessor:
         plt.show()
 
     def prepare_datasets(self, df, close_values):
+        extra = self.compute_extra_channels(df) if getattr(self.config, 'EXTRA_CHANNELS', False) else None
         X_seq, y_seq, last_close_seq, extended_trends = self.make_sequences_with_extended_trends(
-            close_values, self.config.LOOKBACK
+            close_values, self.config.LOOKBACK, extra=extra
         )
+        origins = self.seq_origin_idx
         print(f"Sequences with extended trends: {X_seq.shape}, {y_seq.shape}, Extended: {extended_trends.shape}")
 
         max_sequences = getattr(self.config, 'MAX_SEQUENCE_COUNT', None)
@@ -353,16 +441,35 @@ class DataProcessor:
             y_seq = y_seq[take_from:]
             last_close_seq = last_close_seq[take_from:]
             extended_trends = extended_trends[take_from:]
+            origins = origins[take_from:]
             print(f"[OK] Limited sequence set from {original_count} to {max_sequences} (most recent window)")
 
         print("[INFO] Dataset Statistics:")
         print(f"   Total sequences: {X_seq.shape[0]}")
 
-        tscv = TimeSeriesSplit(n_splits=5)
-        # self.plot_splits(df, start_idx=max(self.config.LOOKBACK, max(self.config.EXTENDED_TREND_PERIODS)),
-        #                 tscv=tscv, X_seq_len=len(X_seq))
+        # M8: validation = the last VAL_FRACTION of the range. Training rows must have their last label bar
+        # (origin + max horizon) at least VAL_PURGE_BARS bars before the first validation origin.
+        # The test fold is never seen here; it exists only in the harness.
+        n_seq = X_seq.shape[0]
+        n_val = int(math.ceil(float(self.config.VAL_FRACTION) * n_seq))
+        if n_val < 1 or n_val >= n_seq:
+            raise ValueError(f"Cannot split {n_seq} sequences with VAL_FRACTION={self.config.VAL_FRACTION}")
+        test_indices = np.arange(n_seq - n_val, n_seq)
+        first_val_origin = int(origins[test_indices[0]])
+        max_h = int(max(self.config.HORIZON_STEPS))
+        purge = int(getattr(self.config, 'VAL_PURGE_BARS', max_h))
+        train_indices = np.flatnonzero(origins[:n_seq - n_val] + max(purge, max_h) < first_val_origin)
+        if len(train_indices) == 0:
+            raise ValueError("No training sequences left after the validation purge")
+        self.train_indices, self.val_indices, self.seq_origins = train_indices, test_indices, origins
 
-        train_indices, test_indices = list(tscv.split(X_seq))[-1]
+        # Both direction classes (beyond the deadband) must be present in validation at every horizon.
+        deadband_bps = float(getattr(self.config, 'DIR_DEADBAND_BPS', 0.0))
+        for j, h in enumerate(self.config.HORIZON_STEPS):
+            r = y_seq[test_indices, j]
+            n_up, n_down = int((r > deadband_bps).sum()), int((r < -deadband_bps).sum())
+            if n_up == 0 or n_down == 0:
+                raise ValueError(f"Validation block lacks a direction class at h={h}: up={n_up}, down={n_down}")
 
         X_train_seq, X_test_seq = X_seq[train_indices], X_seq[test_indices]
         y_train, y_test = y_seq[train_indices], y_seq[test_indices]
@@ -372,25 +479,25 @@ class DataProcessor:
         train_batches = math.ceil(X_train_seq.shape[0] / self.config.BATCH_SIZE)
         test_batches = math.ceil(X_test_seq.shape[0] / self.config.BATCH_SIZE)
         print(f"   Train sequences: {X_train_seq.shape[0]} (batches/epoch: {train_batches})")
-        print(f"   Test sequences: {X_test_seq.shape[0]} (batches: {test_batches})")
+        print(f"   Validation sequences: {X_test_seq.shape[0]} (batches: {test_batches}), "
+              f"purge {first_val_origin - int(origins[train_indices[-1]])} bars between last train and first val origin")
 
         # Targets are multi-horizon: shape [N, 3].
         # Use a single scaler fit on ALL horizons (flattened) to keep consistent scaling.
-        target_scaler = StandardScaler()
+        # M4: with_mean=False, so a scaled 0 is a raw 0 (P(up) thresholds and pred_mean = 0 stay consistent).
+        target_scaler = StandardScaler(with_mean=False)
         y_train_flat = y_train.reshape(-1, 1)
         y_test_flat = y_test.reshape(-1, 1)
         y_train_scaled = target_scaler.fit_transform(y_train_flat).reshape(y_train.shape)
         y_test_scaled = target_scaler.transform(y_test_flat).reshape(y_test.shape)
 
-        # Scale input sequences for better normalization
-        input_scaler = StandardScaler()
+        # M4: one global input scaler (one scale per channel, shared by every lag), fitted on training rows only.
+        input_scaler = StandardScaler(with_mean=False)
         X_train_seq_reshaped = X_train_seq.reshape(-1, X_train_seq.shape[-1])
         X_train_seq_scaled = input_scaler.fit_transform(X_train_seq_reshaped).reshape(X_train_seq.shape)
         X_test_seq_reshaped = X_test_seq.reshape(-1, X_test_seq.shape[-1])
         X_test_seq_scaled = input_scaler.transform(X_test_seq_reshaped).reshape(X_test_seq.shape)
-
-        joblib.dump(target_scaler, self.config.SCALER_PATH)
-        joblib.dump(input_scaler, self.config.SCALER_PATH.replace('.joblib', '_input.joblib'))
+        # Scalers are written only into the M10 bundle by train_and_evaluate(), not on every call.
 
         # Keep references for programmatic use without changing the return signature.
         self.target_scaler = target_scaler
@@ -403,7 +510,11 @@ class DataProcessor:
 
 @dataclass
 class TrainResult:
-    """Single-source-of-truth training + inference output bundle."""
+    """Single-source-of-truth training + inference output bundle.
+
+    M8: the *_test fields hold the internal VALIDATION block (last VAL_FRACTION of the training range).
+    A real test fold exists only in the calling harness.
+    """
 
     config: 'Config'
     model: 'CustomTrainModel'
@@ -411,7 +522,7 @@ class TrainResult:
     input_scaler: Optional[StandardScaler]
 
     X_test_seq: np.ndarray
-    y_test: np.ndarray  # raw deltas [N,3]
+    y_test: np.ndarray  # raw targets [N,3], bps log returns (M4)
     last_close_test: np.ndarray
     extended_trends_test: np.ndarray
     history: Any
@@ -419,6 +530,7 @@ class TrainResult:
     # Predictions are raw (inverse-scaled) deltas and head outputs.
     predictions: Dict[str, Dict[str, np.ndarray]]
     metrics: Dict[str, Any]
+    bundle_dir: Optional[str] = None  # M10
 
 
 def _apply_config_overrides(config: 'Config', overrides: Optional[dict]) -> 'Config':
@@ -502,6 +614,7 @@ def _compute_all_horizon_metrics(
             }
 
         true_dir = (y_t > thr)
+        p = None
         if dir_probs is not None and h_key in dir_probs and dir_probs[h_key] is not None:
             p = np.asarray(dir_probs[h_key], dtype=float).reshape(-1)[:n]
             pred_dir = (p >= 0.5)
@@ -512,6 +625,14 @@ def _compute_all_horizon_metrics(
             "acc": float(accuracy_score(true_dir.astype(int), pred_dir.astype(int))),
             "f1": float(f1_score(true_dir.astype(int), pred_dir.astype(int), zero_division=0)),
         }
+        # M6: AUC of P(up), masked (|move| > deadband) and unmasked (every non-zero move)
+        if p is not None:
+            from sklearn.metrics import roc_auc_score
+            for name, m in (("auc", np.abs(y_t) > thr), ("auc_unmasked", y_t != 0)):
+                lab = (y_t[m] > 0).astype(int)
+                out["direction"][h_key][name] = (float(roc_auc_score(lab, p[m]))
+                                                 if 0 < lab.sum() < len(lab) else float('nan'))
+            out["direction"][h_key]["mean_p_up"] = float(np.mean(p))
 
     out["meta"] = {
         "horizon_keys": list(horizons),
@@ -681,6 +802,7 @@ def train_and_evaluate(
     force: bool = False,
     calibrate: bool = True,
     extra_callbacks: Optional[List[tf.keras.callbacks.Callback]] = None,
+    frame: Optional[pd.DataFrame] = None,
 ) -> TrainResult:
     """Train (optionally) and evaluate, returning a rich result bundle.
 
@@ -688,19 +810,25 @@ def train_and_evaluate(
     - data prep + scaling
     - model heads and extraction
     - metrics and evaluation semantics
+
+    M8: the data passed in (CSV or `frame`, M5) is the TRAINING RANGE only. Its last VAL_FRACTION is the
+    validation block (purged), used for early stopping and the LR schedule. Test data never enters here.
+    M10: artifacts go to a bundle keyed by FOLD_ID + config hash. force=True always trains (never loads);
+    force=False loads a bundle only if its config hash and data fingerprint match, and raises if they do not.
+    `calibrate` is accepted for backward compatibility and ignored: the loss-weight calibration was removed (M7).
     """
 
-    tf.keras.utils.set_random_seed(42)
     os.environ["TF_DETERMINISTIC_OPS"] = "1"
 
     cfg = config or Config()
     if csv_path is not None:
         cfg.CSV_PATH = csv_path
     cfg = _apply_config_overrides(cfg, config_overrides)
+    tf.keras.utils.set_random_seed(int(cfg.SEED))
 
     print("Starting enhanced model training with extended trend features...")
     data_processor = DataProcessor(cfg)
-    df, close_values = data_processor.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs)
+    df, close_values = data_processor.load_and_prepare_data(read_csv_kwargs=read_csv_kwargs, frame=frame)
 
     (X_train_seq, y_train_scaled, last_close_train, extended_trends_train,
      X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
@@ -709,8 +837,9 @@ def train_and_evaluate(
     input_scaler = getattr(data_processor, 'input_scaler', None)
     predictor = PricePredictor(cfg)
     base_model = predictor.build_model()
-    pred_scale = np.std(y_train) if np.std(y_train) > 0 else 1.0
-    pred_mean = np.mean(y_train)
+    # M4/M7: unit-free targets, target scaler without centring -> pred_mean = 0, pred_scale = the scaler's scale.
+    pred_scale = float(target_scaler.scale_[0])
+    pred_mean = 0.0
     custom_model = CustomTrainModel(
         base_model=base_model,
         pred_scale=pred_scale,
@@ -730,128 +859,50 @@ def train_and_evaluate(
         X_test_seq, y_test_scaled, last_close_test, extended_trends_test,
     )
 
-    # Optional calibration (kept identical to train_model behavior)
-    if calibrate is True:
-        try:
-            orig_lambda_point = custom_model.lambda_point
-            orig_lambda_local = custom_model.lambda_local_trend
-            orig_lambda_global = custom_model.lambda_global_trend
-            orig_lambda_ext = custom_model.lambda_extended_trend
-            orig_lambda_dir = custom_model.lambda_dir
-            orig_lambda_var = custom_model.lambda_var
-
-            custom_model.lambda_point = 1.0
-            custom_model.lambda_local_trend = 1.0
-            custom_model.lambda_global_trend = 1.0
-            custom_model.lambda_extended_trend = 1.0
-            custom_model.lambda_dir = 1.0
-            custom_model.lambda_var = 1.0
-
-            n_calib_batches = 256
-            print("Warming up BatchNorm statistics for accurate calibration...")
-            for batch in train_ds.take(n_calib_batches):
-                x_batch, _, _, _ = batch
-                _ = custom_model(x_batch, training=True)
-
-            point_losses, local_losses, global_losses, ext_losses, dir_losses, var_losses = [], [], [], [], [], []
-            for batch in train_ds.take(n_calib_batches):
-                x_batch, y_batch, last_batch, ext_batch = batch
-                y_pred_batch = custom_model(x_batch, training=False)
-                (total,
-                 point_h0, point_h1, point_h2,
-                 local_h0, global_h0, ext_h0,
-                 local_h1, global_h1, ext_h1,
-                 local_h2, global_h2, ext_h2,
-                 dir_h0, dir_h1, dir_h2,
-                 nll_h0, nll_h1, nll_h2,
-                 reg_val, inter_reg, vol_loss) = custom_model.custom_loss(
-                    x_batch, y_batch, y_pred_batch, last_batch, ext_batch
-                )
-
-                point_losses.append(float(point_h0 + point_h1 + point_h2))
-                local_losses.append(float(local_h0 + local_h1 + local_h2))
-                global_losses.append(float(global_h0 + global_h1 + global_h2))
-                ext_losses.append(float(ext_h0 + ext_h1 + ext_h2))
-                dir_losses.append(float(dir_h0 + dir_h1 + dir_h2))
-                var_losses.append(float(nll_h0 + nll_h1 + nll_h2))
-
-            med_point = float(np.median(np.array(point_losses))) if point_losses else 0.0
-            med_local = float(np.median(np.array(local_losses))) if local_losses else 0.0
-            med_global = float(np.median(np.array(global_losses))) if global_losses else 0.0
-            med_ext = float(np.median(np.array(ext_losses))) if ext_losses else 0.0
-            med_dir = float(np.median(np.array(dir_losses))) if dir_losses else 0.0
-            med_var = float(np.median(np.array(var_losses))) if var_losses else 0.0
-
-            non_zero_medians = [m for m in [med_point, med_local, med_global, med_ext, med_dir, med_var] if m > 1e-8]
-            ref_loss = float(np.mean(non_zero_medians)) if non_zero_medians else 1.0
-
-            eps = 1e-8
-            damping = Config.DAMPING
-            new_point = orig_lambda_point * (ref_loss / (med_point + eps)) ** damping if med_point > eps else orig_lambda_point
-            new_local = orig_lambda_local * (ref_loss / (med_local + eps)) ** damping if med_local > eps else orig_lambda_local
-            new_global = orig_lambda_global * (ref_loss / (med_global + eps)) ** damping if med_global > eps else orig_lambda_global
-            new_ext = orig_lambda_ext * (ref_loss / (med_ext + eps)) ** damping if med_ext > eps else orig_lambda_ext
-            new_dir = orig_lambda_dir * (ref_loss / (med_dir + eps)) ** damping if med_dir > eps else orig_lambda_dir
-            new_var = orig_lambda_var * (ref_loss / (med_var + eps)) ** damping if med_var > eps else orig_lambda_var
-
-            min_lambda = 1e-3
-            max_lambda = 1000.0
-            custom_model.lambda_point = float(np.clip(new_point, min_lambda, max_lambda))
-            custom_model.lambda_local_trend = float(np.clip(new_local, min_lambda, max_lambda))
-            custom_model.lambda_global_trend = float(np.clip(new_global, min_lambda, max_lambda))
-            custom_model.lambda_extended_trend = float(np.clip(new_ext, min_lambda, max_lambda))
-            custom_model.lambda_dir = float(np.clip(new_dir, min_lambda, max_lambda))
-            custom_model.lambda_var = float(np.clip(new_var, min_lambda, max_lambda))
-
-            print(f"Calibration (multi-batch median with actual losses): "
-                  f"med_point={med_point:.6f}, med_local={med_local:.6f}, "
-                  f"med_global={med_global:.6f}, med_ext={med_ext:.6f}, med_dir={med_dir:.6f}, med_var={med_var:.6f}, ref_loss={ref_loss:.6f}")
-            print(f"New lambdas (damped+clamped): "
-                  f"point={custom_model.lambda_point:.6f}, local={custom_model.lambda_local_trend:.6f}, "
-                  f"global={custom_model.lambda_global_trend:.6f}, ext={custom_model.lambda_extended_trend:.6f}, dir={custom_model.lambda_dir:.6f}, var={custom_model.lambda_var:.6f}")
-        except Exception as e:
-            print("Calibration pass failed, proceeding with default lambdas:", e)
+    # M7: no loss-weight calibration. lambda_point = lambda_dir = lambda_var = 1 on unit-free targets.
 
     opt = optimizers.Adam(learning_rate=cfg.LR)
     custom_model.compile(optimizer=opt)
 
-    csv_logger = callbacks.CSVLogger("training_log.csv", append=True)
+    # M10: one bundle per (fold, config hash) holds the weights, both scalers and the config.
+    bundle_dir = bundle_dir_for(cfg)
+    cfg.MODEL_PATH = os.path.join(bundle_dir, "model.weights.h5")
+    cfg.SCALER_PATH = os.path.join(bundle_dir, "target_scaler.joblib")
+    fingerprint = data_fingerprint(df, close_values)
+    log_dir = getattr(cfg, 'LOG_DIR', '.') or '.'
+    os.makedirs(log_dir, exist_ok=True)
+
+    csv_logger = callbacks.CSVLogger(os.path.join(log_dir, "training_log.csv"), append=True)
+    # M8: early stopping on the purged validation block; restore_best_weights restores the best epoch at train end.
     es = callbacks.EarlyStopping(monitor='val_loss', patience=cfg.PATIENCE, restore_best_weights=True)
-    ckpt = callbacks.ModelCheckpoint(cfg.MODEL_PATH, save_best_only=True, monitor='val_loss', save_weights_only=True)
-    es_mcc = callbacks.EarlyStopping(
-        monitor='val_gauss_dir_mcc_h1',
-        patience=15,
-        mode='max',
-        restore_best_weights=False
-    )
     tqdm_callback = TqdmCallback()
-    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.99, patience=Config.EPOCHS//2)
+    lr_scheduler = callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=1)
 
     learnable_layer = None
-    for layer in custom_model.layers:
+    for layer in custom_model.base_model.layers:
         if getattr(layer, 'name', '').startswith('learnable_indicators'):
             learnable_layer = layer
             break
-    params_logger = ParamsLogger(layer=learnable_layer, out_csv='indicator_params_history.csv')
+    params_logger = ParamsLogger(layer=learnable_layer, out_csv=os.path.join(log_dir, 'indicator_params_history.csv'))
 
-    callbacks_list = [csv_logger, es, ckpt, es_mcc, tqdm_callback, params_logger, lr_scheduler]
+    callbacks_list = [csv_logger, es, tqdm_callback, params_logger, lr_scheduler]
     if extra_callbacks:
         callbacks_list += list(extra_callbacks)
 
     actual_epochs = int(epochs) if epochs is not None else int(cfg.EPOCHS)
     history = None
     if os.path.exists(cfg.MODEL_PATH) and not force:
-        print(f"Loading existing model weights from {cfg.MODEL_PATH}...")
-        try:
-            custom_model.load_weights(cfg.MODEL_PATH)
-        except Exception as e:
-            print(f"Warning: failed to load existing weights but continuing: {e}")
+        # Never load silently: the bundle must match this config hash and this exact training data.
+        meta = _read_bundle_meta(bundle_dir)
+        if meta.get('config_hash') != config_hash(cfg) or meta.get('data_fingerprint') != fingerprint:
+            raise ValueError(f"Bundle {bundle_dir} does not match this config/data "
+                             f"(config {meta.get('config_hash')} vs {config_hash(cfg)}, "
+                             f"data {meta.get('data_fingerprint')} vs {fingerprint}); pass force=True to retrain.")
+        print(f"Loading bundle {bundle_dir} (config hash and data fingerprint match)...")
+        custom_model.base_model.load_weights(cfg.MODEL_PATH)
+        target_scaler = joblib.load(cfg.SCALER_PATH)
+        input_scaler = joblib.load(os.path.join(bundle_dir, "input_scaler.joblib"))
     else:
-        if os.path.exists(cfg.MODEL_PATH) and force:
-            try:
-                custom_model.load_weights(cfg.MODEL_PATH)
-            except Exception:
-                pass
         print(f"Training for {actual_epochs} epochs...")
         history = custom_model.fit(
             train_ds,
@@ -860,17 +911,22 @@ def train_and_evaluate(
             callbacks=callbacks_list,
             verbose=0,
         )
-        print(f"Enhanced model weights saved to {cfg.MODEL_PATH}")
-        try:
-            joblib.dump(target_scaler, cfg.SCALER_PATH)
-            if input_scaler is not None:
-                joblib.dump(input_scaler, cfg.SCALER_PATH.replace('.joblib', '_input.joblib'))
-        except Exception:
-            pass
+        org, tr_i, va_i = data_processor.seq_origins, data_processor.train_indices, data_processor.val_indices
+        split = {name: str(df['timestamp'].iloc[int(org[i])]) for name, i in
+                 (('train_first_origin', tr_i[0]), ('train_last_origin', tr_i[-1]),
+                  ('val_first_origin', va_i[0]), ('val_last_origin', va_i[-1]))}
+        split.update({'n_train': int(len(tr_i)), 'n_val': int(len(va_i)), 'n_rows': int(len(df))})
+        save_bundle(bundle_dir, cfg, custom_model.base_model, target_scaler, input_scaler,
+                    extra_meta={'data_fingerprint': fingerprint, 'split': split, 'pred_scale': float(pred_scale),
+                                'pred_mean': float(pred_mean),
+                                'best_epoch': int(getattr(es, 'best_epoch', -1)),
+                                'history': {k: [float(x) for x in v] for k, v in history.history.items()
+                                            if k in ('loss', 'val_loss', 'learning_rate', 'lr')}})
+        print(f"Bundle saved to {bundle_dir}")
 
     print("Evaluating enhanced model...")
     X_test_simple = tf.data.Dataset.from_tensor_slices(X_test_seq).batch(cfg.BATCH_SIZE)
-    y_pred_all = custom_model.predict(X_test_simple)
+    y_pred_all = custom_model.predict(X_test_simple, verbose=0)
 
     # Extract 3 price heads (scaled deltas)
     y_pred_price_all = np.column_stack([
@@ -906,6 +962,9 @@ def train_and_evaluate(
         dir_probs=predictions["direction_prob"],
     )
 
+    if history is not None:
+        _update_bundle_meta(bundle_dir, {'val_metrics': metrics})
+
     # Attach a back-compat attribute
     try:
         custom_model.predictions_dict = predictions
@@ -924,7 +983,165 @@ def train_and_evaluate(
         history=history,
         predictions=predictions,
         metrics=metrics,
+        bundle_dir=bundle_dir,
     )
+
+# -----------------------------
+# M10: artifacts (one bundle per fold id + config hash)
+# -----------------------------
+_NON_HASHED_CONFIG_KEYS = {'CSV_PATH', 'MODEL_PATH', 'SCALER_PATH', 'ARTIFACT_DIR', 'LOG_DIR', 'FOLD_ID'}
+
+
+def config_dict(cfg) -> Dict[str, Any]:
+    """All upper-case Config attributes (class defaults plus instance overrides), JSON-ready."""
+    import json
+    out = {}
+    for k in dir(cfg):
+        if not k.isupper():
+            continue
+        v = getattr(cfg, k)
+        if callable(v):
+            continue
+        out[k] = json.loads(json.dumps(v, default=str))
+    return out
+
+
+def config_hash(cfg) -> str:
+    """Hash of every hyperparameter that changes the model (paths and the fold id excluded)."""
+    import hashlib
+    import json
+    d = {k: v for k, v in config_dict(cfg).items() if k not in _NON_HASHED_CONFIG_KEYS}
+    return hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest()[:12]
+
+
+def bundle_dir_for(cfg) -> str:
+    return os.path.join(getattr(cfg, 'ARTIFACT_DIR', '.') or '.', f"bundle_{cfg.FOLD_ID}_{config_hash(cfg)}")
+
+
+def data_fingerprint(df, close_values) -> str:
+    import hashlib
+    h = hashlib.sha256(np.ascontiguousarray(np.asarray(close_values, dtype=np.float32)).tobytes())
+    h.update(f"{len(df)}|{df['timestamp'].iloc[0]}|{df['timestamp'].iloc[-1]}".encode())
+    return h.hexdigest()[:16]
+
+
+def _read_bundle_meta(bundle_dir) -> Dict[str, Any]:
+    import json
+    p = os.path.join(bundle_dir, "config.json")
+    if not os.path.exists(p):
+        return {}
+    with open(p) as fh:
+        return json.load(fh)
+
+
+def _write_bundle_meta(bundle_dir, meta):
+    import json
+    p = os.path.join(bundle_dir, "config.json")
+    with open(p + ".tmp", "w") as fh:
+        json.dump(meta, fh, indent=1, default=str)
+    os.replace(p + ".tmp", p)
+
+
+def _update_bundle_meta(bundle_dir, extra):
+    meta = _read_bundle_meta(bundle_dir)
+    meta.update(extra)
+    _write_bundle_meta(bundle_dir, meta)
+
+
+def save_bundle(bundle_dir, cfg, base_model, target_scaler, input_scaler, extra_meta=None):
+    """Write <bundle_dir>/{model.weights.h5, target_scaler.joblib, input_scaler.joblib, config.json}."""
+    import datetime
+    os.makedirs(bundle_dir, exist_ok=True)
+    base_model.save_weights(os.path.join(bundle_dir, "model.weights.h5"))
+    joblib.dump(target_scaler, os.path.join(bundle_dir, "target_scaler.joblib"))
+    joblib.dump(input_scaler, os.path.join(bundle_dir, "input_scaler.joblib"))
+    meta = {
+        'model_version': getattr(cfg, 'MODEL_VERSION', None),
+        'fold_id': cfg.FOLD_ID,
+        'config_hash': config_hash(cfg),
+        'config': config_dict(cfg),
+        'created_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'tf_version': tf.__version__,
+    }
+    meta.update(extra_meta or {})
+    _write_bundle_meta(bundle_dir, meta)
+
+
+@dataclass
+class Bundle:
+    """A trained model ready for inference: base Keras model, both scalers and the config (M10)."""
+    config: 'Config'
+    model: Any
+    target_scaler: StandardScaler
+    input_scaler: StandardScaler
+    path: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+    _forward: Any = None
+
+
+def load_bundle(bundle_dir) -> Bundle:
+    """Rebuild the model from config.json and load its weights and scalers (works in a fresh process)."""
+    meta = _read_bundle_meta(bundle_dir)
+    if not meta:
+        raise FileNotFoundError(f"No bundle at {bundle_dir}")
+    cfg = Config()
+    for k, v in meta['config'].items():
+        setattr(cfg, k, v)
+    if config_hash(cfg) != meta['config_hash']:
+        raise ValueError(f"Config hash mismatch in {bundle_dir}: {config_hash(cfg)} vs {meta['config_hash']}")
+    base_model = PricePredictor(cfg).build_model()
+    base_model.load_weights(os.path.join(bundle_dir, "model.weights.h5"))
+    return Bundle(config=cfg, model=base_model,
+                  target_scaler=joblib.load(os.path.join(bundle_dir, "target_scaler.joblib")),
+                  input_scaler=joblib.load(os.path.join(bundle_dir, "input_scaler.joblib")),
+                  path=bundle_dir, meta=meta)
+
+
+def bundle_from_result(result: TrainResult) -> Bundle:
+    return Bundle(config=result.config, model=result.model.base_model, target_scaler=result.target_scaler,
+                  input_scaler=result.input_scaler, path=result.bundle_dir,
+                  meta=_read_bundle_meta(result.bundle_dir) if result.bundle_dir else None)
+
+
+# -----------------------------
+# M11: causal, batched inference at arbitrary decision bars
+# -----------------------------
+def predict_at(bundle, frame, idx, batch_size=4096, chunk=65536) -> Dict[str, np.ndarray]:
+    """Forecasts at decision bars `idx` (row positions of `frame`, a clean M5 frame).
+
+    Each origin o reads bars o-LOOKBACK+1..o only (inputs and causal extra channels), so bars after o
+    cannot change its forecast. Returns float32 arrays [len(idx), 3] for h in HORIZON_STEPS:
+      'mu'    : the tau=0.5 price head, bps of log return;
+      'pup'   : the direction head, P(up) beyond the deadband;
+      'scale' : the Student-t scale (DF_VAR dof), bps. The predictive variance is DF/(DF-2) * scale^2.
+    """
+    if isinstance(bundle, str):
+        bundle = load_bundle(bundle)
+    cfg = bundle.config
+    proc = DataProcessor(cfg)
+    df, close_values = proc.load_and_prepare_data(frame=frame)
+    if len(df) != len(frame):
+        raise ValueError(f"frame must be sorted, unique and NaN-free: {len(frame)} rows -> {len(df)} after cleaning")
+    extra = proc.compute_extra_channels(df) if getattr(cfg, 'EXTRA_CHANNELS', False) else None
+    idx = np.asarray(idx, dtype=np.int64).reshape(-1)
+    n_h = len(cfg.HORIZON_STEPS)
+    out = {k: np.empty((len(idx), n_h), dtype=np.float32) for k in ('mu', 'pup', 'scale')}
+    if bundle._forward is None:
+        model = bundle.model
+        bundle._forward = tf.function(lambda x: model(x, training=False), reduce_retracing=True)
+    t_scale = float(bundle.target_scaler.scale_[0])
+    var_floor, var_cap = float(cfg.VAR_FLOOR), float(cfg.VAR_CAP)
+    for a in range(0, len(idx), chunk):
+        X = build_input_windows(close_values, extra, idx[a:a + chunk], cfg.LOOKBACK)
+        X = bundle.input_scaler.transform(X.reshape(-1, X.shape[-1])).reshape(X.shape).astype(np.float32)
+        for b in range(0, len(X), batch_size):
+            ys = [np.asarray(y) for y in bundle._forward(tf.constant(X[b:b + batch_size]))]
+            sl = slice(a + b, a + b + len(ys[0]))
+            for j in range(n_h):
+                out['mu'][sl, j] = bundle.target_scaler.inverse_transform(ys[3 * j][:, :1]).ravel()
+                out['pup'][sl, j] = ys[3 * j + 1].ravel()
+                out['scale'][sl, j] = np.sqrt(np.clip(ys[3 * j + 2].ravel(), var_floor, var_cap)) * t_scale
+    return out
 
 # -----------------------------
 def differentiable_past_sample(x_seq, fractional_lag, sigma=1.0):
@@ -955,7 +1172,7 @@ class LearnableIndicators(layers.Layer):
         self.momentum_raw = []
         self.all_logit_vars = []  # New: collect all for metacalibration
         self.meta_scale = 0.5  # Increased from 0.1 for stronger adjustments
-        self.grad_multiplier = config.INDICATOR_GRAD_MULT  # Apply gradient boost
+        self.grad_multiplier = config.INDICATOR_GRAD_MULT  # M1: kept for reference; not used in the forward pass
 
     def _logit_from_alpha(self, alpha):
         return mh.logit_from_alpha(alpha, self.epsilon)
@@ -1048,7 +1265,9 @@ class LearnableIndicators(layers.Layer):
             self.all_logit_vars.append(v)
 
         for i, p in enumerate(self.config.MOMENTUM_PERIODS):
-            init_raw = np.log(min(p, 200.0))
+            # M2: exact inverse of the forward period softplus(raw) + 1 (was log(p), read back as softplus+1)
+            init_raw = float(mh.momentum_raw_from_period(
+                float(p), self.config.MOMENTUM_CLIP_MIN, self.config.MOMENTUM_CLIP_MAX))
             v = self.add_weight(shape=(),
                                 initializer=initializers.Constant(init_raw),
                                 trainable=True,
@@ -1069,9 +1288,8 @@ class LearnableIndicators(layers.Layer):
         idx = 0  # Index for slicing meta_adjust
 
         for logit in self.alpha_vars_ma:
-            # Apply gradient multiplier for better learning
-            logit_boosted = logit + tf.stop_gradient(logit) * (self.grad_multiplier - 1.0)
-            adjusted_logit = logit_boosted + meta_adjust[:, idx] * self.meta_scale
+            # M1: the forward pass uses the logit itself (the old `logit + stop_gradient(logit)*(m-1)` was 20*logit)
+            adjusted_logit = logit + meta_adjust[:, idx] * self.meta_scale
             alpha = self._alpha_from_logit(adjusted_logit)
             ema_seq = self.ewma_seq(x, alpha)
             features.append(ema_seq)
@@ -1081,13 +1299,9 @@ class LearnableIndicators(layers.Layer):
             fast_var = self.macd_alpha_vars[f'macd_{i}_fast']
             slow_var = self.macd_alpha_vars[f'macd_{i}_slow']
             sig_var = self.macd_alpha_vars[f'macd_{i}_signal']
-            # Boost gradients
-            fast_boosted = fast_var + tf.stop_gradient(fast_var) * (self.grad_multiplier - 1.0)
-            slow_boosted = slow_var + tf.stop_gradient(slow_var) * (self.grad_multiplier - 1.0)
-            sig_boosted = sig_var + tf.stop_gradient(sig_var) * (self.grad_multiplier - 1.0)
-            fast_logit = fast_boosted + meta_adjust[:, idx] * self.meta_scale
-            slow_logit = slow_boosted + meta_adjust[:, idx+1] * self.meta_scale
-            sig_logit = sig_boosted + meta_adjust[:, idx+2] * self.meta_scale
+            fast_logit = fast_var + meta_adjust[:, idx] * self.meta_scale  # M1
+            slow_logit = slow_var + meta_adjust[:, idx+1] * self.meta_scale
+            sig_logit = sig_var + meta_adjust[:, idx+2] * self.meta_scale
             fast = self._alpha_from_logit(fast_logit)
             slow = self._alpha_from_logit(slow_logit)
             sig = self._alpha_from_logit(sig_logit)
@@ -1106,13 +1320,9 @@ class LearnableIndicators(layers.Layer):
             short_var = self.macd_alpha_vars[f'pair_{i}_short']
             long_var = self.macd_alpha_vars[f'pair_{i}_long']
             sig_var = self.macd_alpha_vars[f'pair_{i}_sig']
-            # Boost gradients
-            short_boosted = short_var + tf.stop_gradient(short_var) * (self.grad_multiplier - 1.0)
-            long_boosted = long_var + tf.stop_gradient(long_var) * (self.grad_multiplier - 1.0)
-            sig_boosted = sig_var + tf.stop_gradient(sig_var) * (self.grad_multiplier - 1.0)
-            short_logit = short_boosted + meta_adjust[:, idx] * self.meta_scale
-            long_logit = long_boosted + meta_adjust[:, idx+1] * self.meta_scale
-            sig_logit = sig_boosted + meta_adjust[:, idx+2] * self.meta_scale
+            short_logit = short_var + meta_adjust[:, idx] * self.meta_scale  # M1
+            long_logit = long_var + meta_adjust[:, idx+1] * self.meta_scale
+            sig_logit = sig_var + meta_adjust[:, idx+2] * self.meta_scale
             a_s = self._alpha_from_logit(short_logit)
             a_l = self._alpha_from_logit(long_logit)
             a_sig = self._alpha_from_logit(sig_logit)
@@ -1131,21 +1341,19 @@ class LearnableIndicators(layers.Layer):
         losses_padded = tf.concat([tf.zeros((tf.shape(losses)[0], 1), dtype=losses.dtype), losses], axis=1)
 
         for logit in self.rsi_alpha_vars:
-            # Boost gradients
-            logit_boosted = logit + tf.stop_gradient(logit) * (self.grad_multiplier - 1.0)
-            adjusted_logit = logit_boosted + meta_adjust[:, idx] * self.meta_scale
+            adjusted_logit = logit + meta_adjust[:, idx] * self.meta_scale  # M1
             rsi_alpha = self._alpha_from_logit(adjusted_logit)
             gains_ema = self.ewma_seq(gains_padded, rsi_alpha)
             losses_ema = self.ewma_seq(losses_padded, rsi_alpha)
             rs = gains_ema / (losses_ema + 1e-8)
-            rsi_seq = 100.0 - (100.0 / (1.0 + rs))
+            # M3: RSI on a centred unit scale, (RSI - 50)/100 in [-0.5, 0.5]. On the 0-100 scale its three channels
+            # set the LayerNorm mean and spread (about 13x every other indicator) and drown the rest.
+            rsi_seq = 0.5 - (1.0 / (1.0 + rs))
             features.append(rsi_seq)
             idx += 1
 
         for logit in self.bb_alpha_vars:
-            # Boost gradients
-            logit_boosted = logit + tf.stop_gradient(logit) * (self.grad_multiplier - 1.0)
-            adjusted_logit = logit_boosted + meta_adjust[:, idx] * self.meta_scale
+            adjusted_logit = logit + meta_adjust[:, idx] * self.meta_scale  # M1
             bb_alpha = self._alpha_from_logit(adjusted_logit)
             ema_mean = self.ewma_seq(x, bb_alpha)
             sq_dev = tf.square(x - ema_mean)
@@ -1159,7 +1367,7 @@ class LearnableIndicators(layers.Layer):
 
         for raw in self.momentum_raw:
             adjusted_raw = raw + meta_adjust[:, idx] * self.meta_scale
-            period = tf.nn.softplus(adjusted_raw) + 1.0
+            period = mh.momentum_period_from_raw(adjusted_raw)
             batch_period = tf.broadcast_to(period, [tf.shape(x)[0]])
             sampled_past = differentiable_past_sample(x, batch_period, sigma=self.gaussian_sigma)
             momentum_val = x - tf.expand_dims(sampled_past, axis=1)  # Full seq approximation by repeating
@@ -1175,6 +1383,8 @@ class LearnableIndicators(layers.Layer):
         return output
 
     def get_learned_parameters(self):
+        # M1: effective periods through the forward mapping (alpha = sigmoid(logit), P = 2/alpha - 1;
+        # momentum P = softplus(raw) + 1), before the per-sample meta_adjust offset.
         learned = {}
         for i, v in enumerate(self.alpha_vars_ma):
             period = self._period_from_logit(v).numpy()
@@ -1189,7 +1399,7 @@ class LearnableIndicators(layers.Layer):
             period = self._period_from_logit(v).numpy()
             learned[f'bb_period_{i}'] = float(period)
         for i, raw in enumerate(self.momentum_raw):
-            p = (tf.nn.softplus(raw) + 1.0).numpy()
+            p = mh.momentum_period_from_raw(raw).numpy()
             learned[f'momentum_period_{i}'] = float(p)
         return learned
 
@@ -1216,10 +1426,13 @@ class PricePredictor:
         self.config = config
 
     def build_model(self):
-        inp = layers.Input(shape=(self.config.LOOKBACK,), name='close_sequence')
+        # M4: [B, LOOKBACK, 1 + 5 extra channels]; channel 0 = bps relative to the last close.
+        n_channels = 1 + (5 if getattr(self.config, 'EXTRA_CHANNELS', False) else 0)
+        inp = layers.Input(shape=(self.config.LOOKBACK, n_channels), name='close_sequence')
+        close_seq = inp[:, :, 0]  # indicators and meta_adjust read channel 0 only
 
         # Compute meta_adjust from raw input stats
-        inp_resh = layers.Reshape((self.config.LOOKBACK, 1))(inp)  # [B, LOOKBACK, 1] for pooling
+        inp_resh = layers.Reshape((self.config.LOOKBACK, 1))(close_seq)  # [B, LOOKBACK, 1] for pooling
         meta_inp = layers.Concatenate()([
             layers.GlobalAveragePooling1D()(inp_resh),
             layers.GlobalMaxPooling1D()(inp_resh)
@@ -1233,7 +1446,12 @@ class PricePredictor:
         meta_adjust = layers.Dense(num_logits, activation='tanh')(meta_inp)
 
         # Enhanced Learnable Indicators: Now takes [inp, meta_adjust], outputs sequences [B, LOOKBACK, num_ind]
-        ind_seq = LearnableIndicators(self.config, name='learnable_indicators')([inp, meta_adjust])
+        ind_seq = LearnableIndicators(self.config, name='learnable_indicators')([close_seq, meta_adjust])
+        # M3: normalise the indicator vector per time step so %B-like channels cannot saturate the GRU gates
+        ind_seq = layers.LayerNormalization(name='indicator_norm')(ind_seq)
+        if n_channels > 1:
+            # M4: the extra causal channels join after the LayerNorm
+            ind_seq = layers.Concatenate(axis=-1, name='indicators_and_extras')([ind_seq, inp[:, :, 1:]])
 
         # Memory-Supplemented Layers: Capture temporal interconnections
         memory = layers.Bidirectional(layers.GRU(64, return_sequences=True))(ind_seq)
@@ -1745,13 +1963,10 @@ class CustomTrainModel(models.Model):
 
         deadband_delta_scaled = (deadband * last_close) / (self.pred_scale + self.eps)
 
-        z_up_h0 = (mu_h0 - deadband_delta_scaled) / (sigma_h0 + self.eps)
-        z_up_h1 = (mu_h1 - deadband_delta_scaled) / (sigma_h1 + self.eps)
-        z_up_h2 = (mu_h2 - deadband_delta_scaled) / (sigma_h2 + self.eps)
-
-        gauss_p_up_h0 = self._normal_cdf(z_up_h0)
-        gauss_p_up_h1 = self._normal_cdf(z_up_h1)
-        gauss_p_up_h2 = self._normal_cdf(z_up_h2)
+        # M6: with a deadband the head estimates P(r > d | |r| > d); align it with the same Gaussian quantity
+        gauss_p_up_h0 = mh.gauss_p_up_beyond_deadband(mu_h0, sigma_h0, deadband_delta_scaled, self.eps)
+        gauss_p_up_h1 = mh.gauss_p_up_beyond_deadband(mu_h1, sigma_h1, deadband_delta_scaled, self.eps)
+        gauss_p_up_h2 = mh.gauss_p_up_beyond_deadband(mu_h2, sigma_h2, deadband_delta_scaled, self.eps)
 
         lambda_dir_align = tf.constant(float(getattr(self.config, 'LAMBDA_DIR_ALIGN', 0.0)), dtype=tf.float32)
 
@@ -1834,10 +2049,11 @@ class CustomTrainModel(models.Model):
             prepared['predictions'], prepared['targets'], y_true
         )
 
-        # Step 8: Sum all losses
+        # Step 8: Sum all losses.
+        # M7: the trend terms compare TRUE targets with past trends; no prediction enters them, so their
+        # gradient is zero. They are still computed and logged, with zero weight in the total.
         total_loss = (
             point_losses['total'] +
-            trend_losses['total'] +
             dir_losses['total'] +
             nll_losses['total'] +
             dir_align_loss +
@@ -1926,10 +2142,8 @@ class CustomTrainModel(models.Model):
                 logit = self._logit_from_period(clipped)
                 var.assign(logit)
             elif 'momentum_raw' in name:
-                p = tf.nn.softplus(var) + 1.0
-                clipped = tf.clip_by_value(p, min_p, max_p)
-                raw = tf.math.asinh((clipped - 1.0) / 2.0)
-                var.assign(raw)
+                # M2: clip the period, then write back through the exact inverse of softplus(raw) + 1
+                var.assign(mh.momentum_writeback(var, min_p, max_p))
 
         # === COMPUTE DIRECTION METRICS FOR ALL 3 HORIZONS ===
         y_true = tf.cast(y_true, tf.float32)
@@ -1967,9 +2181,9 @@ class CustomTrainModel(models.Model):
         mu_h1 = tf.squeeze(price_h1, axis=1)
         mu_h2 = tf.squeeze(price_h2, axis=1)
         deadband_delta_scaled = (deadband * tf.squeeze(last_close, axis=1)) / (self.pred_scale + self.eps)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+        gauss_p_up_h0 = mh.gauss_p_up_beyond_deadband(mu_h0, tf.sqrt(var_h0_c), deadband_delta_scaled, self.eps)
+        gauss_p_up_h1 = mh.gauss_p_up_beyond_deadband(mu_h1, tf.sqrt(var_h1_c), deadband_delta_scaled, self.eps)
+        gauss_p_up_h2 = mh.gauss_p_up_beyond_deadband(mu_h2, tf.sqrt(var_h2_c), deadband_delta_scaled, self.eps)
 
         # Compute per-horizon metrics (masked if deadband is set)
         metrics_head = self._compute_direction_metrics(
@@ -2146,9 +2360,9 @@ class CustomTrainModel(models.Model):
         mu_h2 = tf.squeeze(price_h2, axis=1)
         # Threshold for "UP" in scaled-delta space, consistent with direction labeling
         deadband_delta_scaled = (deadband * last_close_squeeze) / (self.pred_scale + self.eps)
-        gauss_p_up_h0 = self._normal_cdf((mu_h0 - deadband_delta_scaled) / (tf.sqrt(var_h0_c) + self.eps))
-        gauss_p_up_h1 = self._normal_cdf((mu_h1 - deadband_delta_scaled) / (tf.sqrt(var_h1_c) + self.eps))
-        gauss_p_up_h2 = self._normal_cdf((mu_h2 - deadband_delta_scaled) / (tf.sqrt(var_h2_c) + self.eps))
+        gauss_p_up_h0 = mh.gauss_p_up_beyond_deadband(mu_h0, tf.sqrt(var_h0_c), deadband_delta_scaled, self.eps)
+        gauss_p_up_h1 = mh.gauss_p_up_beyond_deadband(mu_h1, tf.sqrt(var_h1_c), deadband_delta_scaled, self.eps)
+        gauss_p_up_h2 = mh.gauss_p_up_beyond_deadband(mu_h2, tf.sqrt(var_h2_c), deadband_delta_scaled, self.eps)
 
         # IMPORTANT: do NOT prefix with "val_" here. Keras automatically prefixes
         # validation metrics with "val_"; adding it ourselves creates "val_val_*" keys.
