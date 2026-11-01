@@ -95,3 +95,8 @@ AFTER THE FIRST FULL DEV RESULTS (documented bug; full rerun 1 of at most 2)
       selection decides every bar with a resting maker order;
   (d) the 1.02 decision trim fires only at a policy's decision bars (SignChangePolicy gets its decision mask; B&H's
       only decision is the first); intraday trend and B&H rows change slightly.
+
+DOCUMENTATION NOTE (added after the seal; no code or result changed)
+- checks.py runs the causality check on 20 random cuts of one 150k-bar window (noise and permutation), not the
+  1,000 cuts the SPEC names. This reduction was not logged before; it is recorded here. Feature causality was
+  also confirmed at the seal: the features recomputed on the full data were bit-identical on every dev row.
