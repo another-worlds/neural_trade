@@ -71,3 +71,7 @@ Only T1-LIN and T2-LIN had been scored (rows in runs.jsonl dated before this ent
   plain fade, whose late maker fills the path cannot see); the seal guard hashes the files actually loaded (by role),
   uses a fixed lock path, ties the run to the pre-registered code commit, preflights T1-NT inference before the lock,
   and data.load(seal=True) now also needs the committed prereg.json and the lock; prereg.py refuses a dirty tree.
+- Deflated Sharpe (reported, not a gate): the trial-Sharpe variance is now 1/T (the null sampling variance of a daily
+  Sharpe). The first version took the variance across the track's candidates and comparators, which mixes very
+  different strategies (e.g. the ruinous intraday trend) and drove every DSR to 0.
+- Secondary information-only seal hypothesis S1 declared before pre-registration (prereg.json): T1-LIN at C10-S.

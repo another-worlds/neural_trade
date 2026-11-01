@@ -130,7 +130,7 @@ def main():
             g4 = sum(v > 0 for v in by_year.values()) >= 3 and all(h > 0 for h in half)
             g5 = float(dd[f"{c}|C7S"].sum()) > 0
             sr_d = float(np.mean(d) / np.std(d)) if np.std(d) > 0 else 0.0
-            var_sr = max(1.0 / T, float(np.var(srs)) if len(srs) > 1 else 0.0)
+            var_sr = 1.0 / T          # sampling variance of a daily Sharpe under the null (trial Sharpes are not all kept)
             info = {
                 "gates": {"G1": None if g1 is None else bool(g1), "G2": bool(g2), "G3": bool(g3), "G4": bool(g4),
                           "G5": bool(g5)},

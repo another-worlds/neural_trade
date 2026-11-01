@@ -94,6 +94,15 @@ def main(draft=False):
             "cash_track": "If a track deploys CASH, its information-only candidate is scored with the same rules, "
                           "labelled information only.",
         },
+        "secondary_information_only": [
+            {"id": "S1", "candidate": "T1-LIN", "scenario": "C10S",
+             "hypothesis": "With taker entries, T1-LIN's extreme-volatility reversal edge survives one bar of latency "
+                           "and 1 bps slippage: mean daily net at C10-S > 0 on the full seal (one-sided stationary "
+                           "bootstrap p < 0.05, mean block 10) and mean > 0 on the clean seal.",
+             "why": "post-hoc dev diagnostics (results/diag_t1lin.json): C7-S fails through maker entries under "
+                    "latency; C10-S was +0.75 bps/day on dev. Information only: it can never deploy anything.",
+             "power_note": "T1-LIN traded about 34 times a year on dev, 80% of them in 2021 crash days; the seal may "
+                           "hold few or no trades, in which case S1 is untestable, not passed."}],
         "power": {"track1": "dev OOS detects about 1 bps per trade; the seal about 2 bps (2,000-4,000 fade trades)",
                   "track2": "minimum detectable Sharpe 2.49 on the seal, 2.68 on the clean seal; the seal can "
                             "falsify Track 2, it cannot confirm it"},

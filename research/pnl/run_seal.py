@@ -290,6 +290,19 @@ def main(dry=False):
                 v = verdict_t2(d, clean, sr_dev, len(dd) / 365.0, dd)
             v["role"] = role
             res["verdicts"][f"T{track}:{c}"] = v
+    res["secondary"] = {}
+    for item in prereg.get("secondary_information_only", []):
+        key = f"{item['candidate']}|{item['scenario']}"
+        if key not in daily:
+            continue
+        d = daily[key]
+        n_tr = res["strategies"][item["candidate"]][item["scenario"]]["trades"]
+        dist = ST.stationary_bootstrap(d, B=10_000, mean_block=10, seed=23)
+        p = ST.boot_pvalue(dist)
+        m_full, m_clean = float(np.mean(d)), float(np.mean(d[clean]))
+        res["secondary"][item["id"]] = {"trades": n_tr, "mean_full_bps": m_full * 1e4, "mean_clean_bps": m_clean * 1e4,
+                                        "boot_p": p, "supported": bool(n_tr > 0 and p < 0.05 and m_clean > 0),
+                                        "testable": bool(n_tr > 0)}
     path = os.path.join(prep.WORK, "seal_dryrun.json") if dry else os.path.join(RESULTS, "seal.json")
     json.dump(res, open(path, "w"), indent=1, default=float)
     np.savez(path.replace(".json", "_daily.npz"), **daily)
