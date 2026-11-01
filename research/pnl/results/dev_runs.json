@@ -72,7 +72,7 @@
     "maker_fill_rate": 0.9625369700953007,
     "trims": 337,
     "mean_daily_bps": -20.686979114363574,
-    "seconds": 3.362551212310791,
+    "seconds": 3.5563342571258545,
     "mean_abs_x": 0.04433010407556687,
     "mean_x": 0.00037751059415188834,
     "pct_in_market": 0.04433073654390935
@@ -144,145 +144,145 @@
     "maker_fill_rate": 0.7228589621139765,
     "trims": 326,
     "mean_daily_bps": -43.2208210788889,
-    "seconds": 2.8918826580047607
+    "seconds": 3.170537233352661
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -107.59833233404746,
-    "total_additive_bps": -108.1813885537182,
-    "ann_compound_bps": -22.346782372832923,
-    "ann_additive_bps": -22.371788567766085,
-    "vol": 0.11545336515311092,
-    "sharpe": -0.019377337800502624,
-    "sortino": -0.024774403818206912,
-    "max_dd": 0.1593277689768383,
-    "max_dd_duration_days": 35,
-    "max_dd_recovered": true,
-    "longest_underwater_days": 1658,
-    "calmar": -0.014025667036159595,
-    "pct_positive_months": 0.5,
+    "total_compound_bps": -9159.893030440637,
+    "total_additive_bps": -24768.11143532945,
+    "ann_compound_bps": -4008.251006325269,
+    "ann_additive_bps": -5122.017378977478,
+    "vol": 0.24315314061195523,
+    "sharpe": -2.106498549057047,
+    "sortino": -2.5492601869848572,
+    "max_dd": 0.9321292110427992,
+    "max_dd_duration_days": 1616,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1616,
+    "calmar": -0.4300102345082744,
+    "pct_positive_months": 0.1724137931034483,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -295.33676200098,
-      "compound_bps": -291.0181907076891,
+      "additive_bps": -1046.5202342136993,
+      "compound_bps": -993.6213105127235,
       "days": 365
      },
      "2022": {
-      "additive_bps": -125.6864322179617,
-      "compound_bps": -124.89987701492164,
+      "additive_bps": -7399.471782471161,
+      "compound_bps": -5228.60881820004,
       "days": 365
      },
      "2023": {
-      "additive_bps": 94.78062172532115,
-      "compound_bps": 95.23121248870478,
+      "additive_bps": -6289.65305679829,
+      "compound_bps": -4668.568440889271,
       "days": 365
      },
      "2024": {
-      "additive_bps": 172.75787366964732,
-      "compound_bps": 174.2587684042262,
+      "additive_bps": -4749.6032511676085,
+      "compound_bps": -3780.9026982851656,
       "days": 366
      },
      "2025": {
-      "additive_bps": 45.30331027025497,
-      "compound_bps": 45.40608490876129,
+      "additive_bps": -5282.863110678691,
+      "compound_bps": -4103.854797189274,
       "days": 304
      }
     },
     "trades": {
-     "count": 425,
-     "trades_per_year": 87.88951841359773,
-     "hit_rate": 0.5247058823529411,
-     "mean_net_bps": 0.44935149851345857,
-     "median_net_bps": 3.94445942676725,
-     "sd_net_bps": 117.77109568771748,
-     "mean_gross_bps": 4.687698231632623,
-     "mean_fees_bps": 4.117246566505276,
-     "mean_funding_bps": 0.12110016661388627,
-     "mean_hold_minutes": 5570.367058823529,
+     "count": 5851,
+     "trades_per_year": 1209.9801699716713,
+     "hit_rate": 0.5175183729277046,
+     "mean_net_bps": -3.980807345294126,
+     "median_net_bps": 1.624154461091992,
+     "sd_net_bps": 70.48010830459626,
+     "mean_gross_bps": 0.15646936129796218,
+     "mean_fees_bps": 4.1437262630023834,
+     "mean_funding_bps": -0.0064495564102953415,
+     "mean_hold_minutes": 19.420782772175695,
      "median_hold_minutes": 18.0
     },
-    "fees_frac": 0.17500306803345708,
-    "funding_frac": 0.005158857117553816,
-    "turnover_per_year": 175.5605441538652,
-    "n_taker": 69,
-    "n_maker": 832,
-    "n_cancel": 11,
-    "n_chase": 16,
-    "maker_fill_rate": 0.9685681024447031,
-    "trims": 53,
-    "mean_daily_bps": -0.06129257141853722,
-    "seconds": 3.124535322189331
+    "fees_frac": 2.422764789044021,
+    "funding_frac": -0.003785948219048392,
+    "turnover_per_year": 2421.0939404619503,
+    "n_taker": 610,
+    "n_maker": 11431,
+    "n_cancel": 226,
+    "n_chase": 271,
+    "maker_fill_rate": 0.9583333333333334,
+    "trims": 339,
+    "mean_daily_bps": -14.032924325965695,
+    "seconds": 3.2894115447998047
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 34.35040032958447,
-    "total_additive_bps": 34.29153758817749,
-    "ann_compound_bps": 7.093966144386792,
-    "ann_additive_bps": 7.091451115968716,
-    "vol": 0.026334687470822595,
-    "sharpe": 0.026928176473807245,
-    "sortino": 0.03558015895603447,
-    "max_dd": 0.056660455745937255,
-    "max_dd_duration_days": 1422,
-    "max_dd_recovered": true,
-    "longest_underwater_days": 1422,
-    "calmar": 0.012520136047256297,
-    "pct_positive_months": 0.5172413793103449,
+    "total_compound_bps": -9997.994549451852,
+    "total_additive_bps": -85144.7162416844,
+    "ann_compound_bps": -8280.898089774235,
+    "ann_additive_bps": -17607.83083751547,
+    "vol": 0.2382897038135903,
+    "sharpe": -7.389253734307275,
+    "sortino": -7.227435224852332,
+    "max_dd": 0.9997994549451852,
+    "max_dd_duration_days": 1765,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1765,
+    "calmar": -0.8282559116046169,
+    "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -329.66025980725664,
-      "compound_bps": -324.28568678906584,
+      "additive_bps": -21229.751558696942,
+      "compound_bps": -8803.249535859726,
       "days": 365
      },
      "2022": {
-      "additive_bps": -248.10567746028363,
-      "compound_bps": -245.05315316313178,
+      "additive_bps": -18385.505678939648,
+      "compound_bps": -8409.522119099845,
       "days": 365
      },
      "2023": {
-      "additive_bps": 187.37816424809776,
-      "compound_bps": 189.14470955333044,
+      "additive_bps": -15410.078529606279,
+      "compound_bps": -7858.348543566799,
       "days": 365
      },
      "2024": {
-      "additive_bps": 337.1677202081238,
-      "compound_bps": 342.9162491293793,
+      "additive_bps": -16749.522225716497,
+      "compound_bps": -8126.828712011324,
       "days": 366
      },
      "2025": {
-      "additive_bps": 87.51159039949611,
-      "compound_bps": 87.89562375042186,
+      "additive_bps": -13369.858248725039,
+      "compound_bps": -7373.638920553056,
       "days": 304
      }
     },
     "trades": {
-     "count": 7,
-     "trades_per_year": 1.4475920679886685,
-     "hit_rate": 0.42857142857142855,
-     "mean_net_bps": 6.198634435163862,
-     "median_net_bps": -18.70621218363167,
-     "sd_net_bps": 175.25474256439014,
-     "mean_gross_bps": 44.813879071316535,
-     "mean_fees_bps": 4.397249401661746,
-     "mean_funding_bps": 34.21799523449092,
-     "mean_hold_minutes": 362757.85714285716,
-     "median_hold_minutes": 20.0
+     "count": 4527,
+     "trades_per_year": 936.1784702549575,
+     "hit_rate": 0.40247404462116193,
+     "mean_net_bps": -18.512971323000077,
+     "median_net_bps": -8.89890703066926,
+     "sd_net_bps": 73.81151006666694,
+     "mean_gross_bps": -13.884120871665361,
+     "mean_fees_bps": 4.6366052816640035,
+     "mean_funding_bps": -0.007754830329291476,
+     "mean_hold_minutes": 20.9706207201237,
+     "median_hold_minutes": 19.0
     },
-    "fees_frac": 0.0030649071277575506,
-    "funding_frac": 0.023678051291902927,
-    "turnover_per_year": 2.520784217657497,
-    "n_taker": 4,
-    "n_maker": 10,
-    "n_cancel": 4,
-    "n_chase": 2,
-    "maker_fill_rate": 0.625,
-    "trims": 2,
-    "mean_daily_bps": 0.019428633194434837,
-    "seconds": 3.1112217903137207
+    "fees_frac": 2.0926259806514285,
+    "funding_frac": -0.003515536987517566,
+    "turnover_per_year": 1874.5428192233217,
+    "n_taker": 1311,
+    "n_maker": 8101,
+    "n_cancel": 1732,
+    "n_chase": 953,
+    "maker_fill_rate": 0.7510661969219359,
+    "trims": 358,
+    "mean_daily_bps": -48.24063243154923,
+    "seconds": 3.102703332901001
    },
    "C10B": {
     "days": 1765,
@@ -351,7 +351,7 @@
     "maker_fill_rate": null,
     "trims": 353,
     "mean_daily_bps": -28.789845014860596,
-    "seconds": 2.9883341789245605
+    "seconds": 3.1634249687194824
    },
    "C10S": {
     "days": 1765,
@@ -420,7 +420,7 @@
     "maker_fill_rate": null,
     "trims": 317,
     "mean_daily_bps": -36.878287666214426,
-    "seconds": 2.9774773120880127
+    "seconds": 3.1625194549560547
    },
    "C10N": {
     "days": 1765,
@@ -489,7 +489,7 @@
     "maker_fill_rate": null,
     "trims": 353,
     "mean_daily_bps": -28.71682220816973,
-    "seconds": 2.936371326446533
+    "seconds": 3.150966167449951
    }
   }
  },
@@ -566,7 +566,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0035915246735973598,
-    "seconds": 3.1995017528533936
+    "seconds": 3.4090850353240967
    },
    "C7S": {
     "days": 1765,
@@ -635,7 +635,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0035915246735973598,
-    "seconds": 3.201793670654297
+    "seconds": 3.441528558731079
    },
    "C4B": {
     "days": 1765,
@@ -704,7 +704,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0035915246735973598,
-    "seconds": 3.137375831604004
+    "seconds": 3.4529647827148438
    },
    "C4S": {
     "days": 1765,
@@ -773,7 +773,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0035915246735973598,
-    "seconds": 3.187682628631592
+    "seconds": 3.326085329055786
    },
    "C10B": {
     "days": 1765,
@@ -842,7 +842,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.003590738097310836,
-    "seconds": 3.2475528717041016
+    "seconds": 3.40030574798584
    },
    "C10S": {
     "days": 1765,
@@ -911,7 +911,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0035873201970726496,
-    "seconds": 3.1980645656585693
+    "seconds": 3.36883807182312
    }
   }
  },
@@ -988,7 +988,7 @@
     "maker_fill_rate": 0.9311675971017935,
     "trims": 285,
     "mean_daily_bps": -58.84597191698327,
-    "seconds": 3.7292988300323486,
+    "seconds": 3.793823480606079,
     "mean_abs_x": 0.0925363786949849,
     "mean_x": -0.0009693184847919154,
     "pct_in_market": 0.09253423040604344
@@ -1060,145 +1060,145 @@
     "maker_fill_rate": 0.684977184977185,
     "trims": 294,
     "mean_daily_bps": -90.11090133308355,
-    "seconds": 3.1442453861236572
+    "seconds": 3.2912518978118896
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -1396.5948617354454,
-    "total_additive_bps": -1504.270217908067,
-    "ann_compound_bps": -306.2925806674592,
-    "ann_additive_bps": -311.08137650790053,
-    "vol": 0.10715735409533894,
-    "sharpe": -0.29030333861279217,
-    "sortino": -0.36971369567774326,
-    "max_dd": 0.290018609028979,
+    "total_compound_bps": -9992.004654903802,
+    "total_additive_bps": -71314.80862619588,
+    "ann_compound_bps": -7711.714306866553,
+    "ann_additive_bps": -14747.821613915861,
+    "vol": 0.23631124033409964,
+    "sharpe": -6.24084643331617,
+    "sortino": -7.077988756580532,
+    "max_dd": 0.9992266682250044,
     "max_dd_duration_days": 1754,
     "max_dd_recovered": false,
     "longest_underwater_days": 1754,
-    "calmar": -0.10561135428273642,
-    "pct_positive_months": 0.5172413793103449,
+    "calmar": -0.7717682636078365,
+    "pct_positive_months": 0.05172413793103448,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -2421.1505293675104,
-      "compound_bps": -2150.341402711474,
+      "additive_bps": -8589.129973676594,
+      "compound_bps": -5763.776892954473,
       "days": 365
      },
      "2022": {
-      "additive_bps": -655.8861381928443,
-      "compound_bps": -634.8394518187292,
+      "additive_bps": -17511.713579135325,
+      "compound_bps": -8264.29488864095,
       "days": 365
      },
      "2023": {
-      "additive_bps": 497.7979525655143,
-      "compound_bps": 510.39626980216457,
+      "additive_bps": -18220.08792322395,
+      "compound_bps": -8382.993984624818,
       "days": 365
      },
      "2024": {
-      "additive_bps": 859.0765189918691,
-      "compound_bps": 897.056914073403,
+      "additive_bps": -14431.813173238805,
+      "compound_bps": -7638.247860246308,
       "days": 366
      },
      "2025": {
-      "additive_bps": 215.8919780949047,
-      "compound_bps": 218.23930728865878,
+      "additive_bps": -12562.06397692121,
+      "compound_bps": -7152.678592552828,
       "days": 304
      }
     },
     "trades": {
-     "count": 243,
-     "trades_per_year": 50.25212464589235,
-     "hit_rate": 0.4279835390946502,
-     "mean_net_bps": -5.3873893736999445,
-     "median_net_bps": -9.188691851852354,
-     "sd_net_bps": 126.22349183552917,
-     "mean_gross_bps": 1.2647050641324484,
-     "mean_fees_bps": 4.2209742314559495,
-     "mean_funding_bps": 2.4311202063764425,
-     "mean_hold_minutes": 10306.300411522634,
+     "count": 15655,
+     "trades_per_year": 3237.4362606232294,
+     "hit_rate": 0.4464388374321303,
+     "mean_net_bps": -4.460829848875814,
+     "median_net_bps": -2.494194093564697,
+     "sd_net_bps": 43.173723091261394,
+     "mean_gross_bps": -0.263185423477692,
+     "mean_fees_bps": 4.196784683140153,
+     "mean_funding_bps": 0.0008597422579685936,
+     "mean_hold_minutes": 15.264771638454167,
      "median_hold_minutes": 15.0
     },
-    "fees_frac": 0.10244968956309809,
-    "funding_frac": 0.057630787098717336,
-    "turnover_per_year": 100.26871864340879,
-    "n_taker": 44,
-    "n_maker": 466,
-    "n_cancel": 12,
-    "n_chase": 18,
-    "maker_fill_rate": 0.9395161290322581,
-    "trims": 26,
-    "mean_daily_bps": -0.8522777438572617,
-    "seconds": 3.1317315101623535
+    "fees_frac": 6.560178576229387,
+    "funding_frac": 0.0013412241055068587,
+    "turnover_per_year": 6477.378784470009,
+    "n_taker": 1308,
+    "n_maker": 30291,
+    "n_cancel": 1155,
+    "n_chase": 1019,
+    "maker_fill_rate": 0.9330355767749885,
+    "trims": 289,
+    "mean_daily_bps": -40.40499072305715,
+    "seconds": 3.3574025630950928
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -131.09629376430485,
-    "total_additive_bps": -131.9631904747138,
-    "ann_compound_bps": -27.25263534295122,
-    "ann_additive_bps": -27.2898382568105,
-    "vol": 0.02607294373974899,
-    "sharpe": -0.10466726937014909,
-    "sortino": -0.12941419081392347,
-    "max_dd": 0.06588798839522891,
+    "total_compound_bps": -9999.999402273037,
+    "total_additive_bps": -166327.16863494212,
+    "ann_compound_bps": -9679.233523168583,
+    "ann_additive_bps": -34396.270000993696,
+    "vol": 0.23991824556869654,
+    "sharpe": -14.336662857575334,
+    "sortino": -11.83155443902928,
+    "max_dd": 0.9999999402273037,
     "max_dd_duration_days": 1765,
     "max_dd_recovered": false,
     "longest_underwater_days": 1765,
-    "calmar": -0.04136206918243787,
-    "pct_positive_months": 0.5172413793103449,
+    "calmar": -0.9679234101722503,
+    "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -456.3202259902799,
-      "compound_bps": -446.06539282428326,
+      "additive_bps": -42754.57813466923,
+      "compound_bps": -9860.943189466057,
       "days": 365
      },
      "2022": {
-      "additive_bps": -220.3695087619451,
-      "compound_bps": -217.95911114783453,
+      "additive_bps": -37097.536728171835,
+      "compound_bps": -9755.164465063242,
       "days": 365
      },
      "2023": {
-      "additive_bps": 166.37443024440088,
-      "compound_bps": 167.76616036030933,
+      "additive_bps": -30386.83517442933,
+      "compound_bps": -9521.020952380139,
       "days": 365
      },
      "2024": {
-      "additive_bps": 300.2440316618875,
-      "compound_bps": 304.79680613586686,
+      "additive_bps": -32129.84042968805,
+      "compound_bps": -9597.636330966547,
       "days": 366
      },
      "2025": {
-      "additive_bps": 78.10808237122266,
-      "compound_bps": 78.41392176351799,
+      "additive_bps": -23958.378167983705,
+      "compound_bps": -9089.036750895526,
       "days": 304
      }
     },
     "trades": {
-     "count": 15,
-     "trades_per_year": 3.101983002832861,
-     "hit_rate": 0.3333333333333333,
-     "mean_net_bps": -8.245293531457083,
-     "median_net_bps": -15.110517767616177,
-     "sd_net_bps": 108.95931910010124,
-     "mean_gross_bps": 10.122605803187138,
-     "mean_fees_bps": 4.382825305454119,
-     "mean_funding_bps": 13.985074029190107,
-     "mean_hold_minutes": 169294.66666666666,
+     "count": 11665,
+     "trades_per_year": 2412.308781869688,
+     "hit_rate": 0.3380197171024432,
+     "mean_net_bps": -14.132155672520728,
+     "median_net_bps": -8.339659509722853,
+     "sd_net_bps": 47.881863062446946,
+     "mean_gross_bps": -9.436634838324524,
+     "mean_fees_bps": 4.694484482601445,
+     "mean_funding_bps": 0.0010363515947567335,
+     "mean_hold_minutes": 16.84869267038148,
      "median_hold_minutes": 16.0
     },
-    "fees_frac": 0.0065477216371769625,
-    "funding_frac": 0.020768768107306598,
-    "turnover_per_year": 5.831417176265279,
-    "n_taker": 5,
-    "n_maker": 25,
-    "n_cancel": 5,
-    "n_chase": 3,
-    "maker_fill_rate": 0.7575757575757576,
-    "trims": 2,
-    "mean_daily_bps": -0.07476668015564521,
-    "seconds": 3.149287700653076
+    "fees_frac": 5.454446892731337,
+    "funding_frac": 0.001226347399908998,
+    "turnover_per_year": 4828.6986886073055,
+    "n_taker": 3047,
+    "n_maker": 20636,
+    "n_cancel": 5357,
+    "n_chase": 2694,
+    "maker_fill_rate": 0.7193502283264196,
+    "trims": 353,
+    "mean_daily_bps": -94.23635616710602,
+    "seconds": 3.299374580383301
    },
    "C10B": {
     "days": 1765,
@@ -1267,7 +1267,7 @@
     "maker_fill_rate": null,
     "trims": 297,
     "mean_daily_bps": -83.13896846306449,
-    "seconds": 3.1099376678466797
+    "seconds": 3.417271137237549
    },
    "C10S": {
     "days": 1765,
@@ -1336,7 +1336,7 @@
     "maker_fill_rate": null,
     "trims": 275,
     "mean_daily_bps": -105.75343684590625,
-    "seconds": 3.1979968547821045
+    "seconds": 3.5452420711517334
    },
    "C10N": {
     "days": 1765,
@@ -1405,7 +1405,7 @@
     "maker_fill_rate": null,
     "trims": 295,
     "mean_daily_bps": -83.08678040581273,
-    "seconds": 3.3011395931243896
+    "seconds": 3.451446533203125
    }
   }
  },
@@ -1419,115 +1419,115 @@
     "days": 1765,
     "years": 4.835616438356165,
     "total_compound_bps": -9999.99999999993,
-    "total_additive_bps": -325969.8547306796,
-    "ann_compound_bps": -9988.185581252974,
-    "ann_additive_bps": -67410.19658736433,
-    "vol": 0.5827125767319061,
-    "sharpe": -11.5683442024589,
-    "sortino": -10.77143952953635,
+    "total_additive_bps": -326035.4042320263,
+    "ann_compound_bps": -9988.201585512477,
+    "ann_additive_bps": -67423.75214996579,
+    "vol": 0.583097797676557,
+    "sharpe": -11.563026377157675,
+    "sortino": -10.768140579546488,
     "max_dd": 0.9999999999999933,
     "max_dd_duration_days": 1761,
     "max_dd_recovered": false,
     "longest_underwater_days": 1761,
-    "calmar": -0.998818558125304,
+    "calmar": -0.9988201585512544,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -83726.27023108311,
-      "compound_bps": -9997.688923695123,
+      "additive_bps": -83786.3896169912,
+      "compound_bps": -9997.702776062433,
       "days": 365
      },
      "2022": {
-      "additive_bps": -57989.36696305001,
-      "compound_bps": -9969.692243323709,
+      "additive_bps": -58010.73780638573,
+      "compound_bps": -9969.756944395238,
       "days": 365
      },
      "2023": {
-      "additive_bps": -67440.14420138125,
-      "compound_bps": -9988.220909691692,
+      "additive_bps": -67436.45094271285,
+      "compound_bps": -9988.216558565513,
       "days": 365
      },
      "2024": {
-      "additive_bps": -60391.04315320215,
-      "compound_bps": -9976.163070049608,
+      "additive_bps": -60389.83956971718,
+      "compound_bps": -9976.160200903427,
       "days": 366
      },
      "2025": {
-      "additive_bps": -56423.03018196305,
-      "compound_bps": -9964.553044995795,
+      "additive_bps": -56411.98629621936,
+      "compound_bps": -9964.513876158866,
       "days": 304
      }
     },
     "trades": {
      "count": 39319,
      "trades_per_year": 8131.124645892351,
-     "hit_rate": 0.23800198377374807,
-     "mean_net_bps": -8.080548283022626,
-     "median_net_bps": -16.459360077870198,
-     "sd_net_bps": 64.73897256169924,
-     "mean_gross_bps": -1.0813253176669693,
-     "mean_fees_bps": 7.00349291746033,
-     "mean_funding_bps": -0.004269952104674199,
+     "hit_rate": 0.23802741677051806,
+     "mean_net_bps": -8.082005688795551,
+     "median_net_bps": -16.456944243341844,
+     "sd_net_bps": 64.77006242757416,
+     "mean_gross_bps": -1.0828124359321414,
+     "mean_fees_bps": 7.00349473324468,
+     "mean_funding_bps": -0.00430148038126996,
      "mean_hold_minutes": 63.328746916249145,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 27.201717645360898,
-    "funding_frac": -0.01728090613915672,
-    "turnover_per_year": 16278.720390417346,
-    "n_taker": 39910,
+    "fees_frac": 27.201672238700212,
+    "funding_frac": -0.017403922444763777,
+    "turnover_per_year": 16278.7286403196,
+    "n_taker": 39347,
     "n_maker": 39319,
     "n_cancel": 3239,
     "n_chase": 0,
     "maker_fill_rate": 0.9238921001926782,
-    "trims": 592,
-    "mean_daily_bps": -184.68547010236801,
-    "seconds": 5.964486598968506,
-    "mean_abs_x": 0.9767737296350514,
-    "mean_x": 0.020440268648971843,
+    "trims": 29,
+    "mean_daily_bps": -184.72260863004325,
+    "seconds": 6.269017934799194,
+    "mean_abs_x": 0.9768241437512831,
+    "mean_x": 0.020390259893010125,
     "pct_in_market": 0.9797072710103871
    },
    "C7S": {
     "days": 1765,
     "years": 4.835616438356165,
     "total_compound_bps": -10000.0,
-    "total_additive_bps": -488282.0884552822,
-    "ann_compound_bps": -9999.5882248734,
-    "ann_additive_bps": -100976.18259840115,
-    "vol": 0.6029163187828376,
-    "sharpe": -16.74795978358174,
-    "sortino": -12.997338207446669,
+    "total_additive_bps": -488379.12590887584,
+    "ann_compound_bps": -9999.5890503637,
+    "ann_additive_bps": -100996.24983384684,
+    "vol": 0.6033091241011708,
+    "sharpe": -16.74038163840374,
+    "sortino": -12.993834826412467,
     "max_dd": 1.0,
     "max_dd_duration_days": 1765,
     "max_dd_recovered": false,
     "longest_underwater_days": 1765,
-    "calmar": -0.99995882248734,
+    "calmar": -0.99995890503637,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -132011.2058366098,
-      "compound_bps": -9999.981514713943,
+      "additive_bps": -132077.70136106253,
+      "compound_bps": -9999.98163722505,
       "days": 365
      },
      "2022": {
-      "additive_bps": -97514.55104150882,
-      "compound_bps": -9999.417900993918,
+      "additive_bps": -97557.18645127473,
+      "compound_bps": -9999.42037751376,
       "days": 365
      },
      "2023": {
-      "additive_bps": -89895.07846148303,
-      "compound_bps": -9998.752885446404,
+      "additive_bps": -89894.24191597842,
+      "compound_bps": -9998.752781115232,
       "days": 365
      },
      "2024": {
-      "additive_bps": -91166.06711294813,
-      "compound_bps": -9998.901732804778,
+      "additive_bps": -91160.9707561643,
+      "compound_bps": -9998.90117294598,
       "days": 366
      },
      "2025": {
-      "additive_bps": -77695.18600273249,
-      "compound_bps": -9995.775834309088,
+      "additive_bps": -77689.02542439588,
+      "compound_bps": -9995.773231176965,
       "days": 304
      }
     },
@@ -1535,68 +1535,68 @@
      "count": 38150,
      "trades_per_year": 7889.376770538243,
      "hit_rate": 0.21014416775884665,
-     "mean_net_bps": -12.587570129786721,
+     "mean_net_bps": -12.589861446852767,
      "median_net_bps": -19.250783386741375,
-     "sd_net_bps": 64.18233512113794,
-     "mean_gross_bps": -5.5863421717565505,
-     "mean_fees_bps": 7.002010214371166,
-     "mean_funding_bps": -0.0007822563409935278,
+     "sd_net_bps": 64.21983137684546,
+     "mean_gross_bps": -5.588653964090265,
+     "mean_fees_bps": 7.002011171741796,
+     "mean_funding_bps": -0.0008036889792921659,
      "mean_hold_minutes": 60.74448230668414,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 26.28961038185451,
-    "funding_frac": -0.003678824773717776,
-    "turnover_per_year": 15794.926419607398,
-    "n_taker": 38763,
+    "fees_frac": 26.289533233865885,
+    "funding_frac": -0.003761492821899385,
+    "turnover_per_year": 15794.933732297504,
+    "n_taker": 38188,
     "n_maker": 38150,
     "n_cancel": 14396,
     "n_chase": 0,
     "maker_fill_rate": 0.726030525634682,
-    "trims": 614,
-    "mean_daily_bps": -276.64707561205796,
-    "seconds": 5.322299957275391
+    "trims": 39,
+    "mean_daily_bps": -276.7020543393064,
+    "seconds": 5.897495985031128
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -9999.999999935524,
-    "total_additive_bps": -257673.20297528728,
-    "ann_compound_bps": -9951.493988799388,
-    "ann_additive_bps": -53286.526394322864,
-    "vol": 0.5876630397213087,
-    "sharpe": -9.0675306753328,
-    "sortino": -9.206202335494304,
-    "max_dd": 0.9999999999938889,
+    "total_compound_bps": -9999.999999935973,
+    "total_additive_bps": -257743.06795461182,
+    "ann_compound_bps": -9951.56401967489,
+    "ann_additive_bps": -53300.97439288007,
+    "vol": 0.5880696902856785,
+    "sharpe": -9.063717323534728,
+    "sortino": -9.203093363758347,
+    "max_dd": 0.999999999993932,
     "max_dd_duration_days": 1761,
     "max_dd_recovered": false,
     "longest_underwater_days": 1761,
-    "calmar": -0.9951493988860203,
+    "calmar": -0.9951564019735276,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -74949.16014324628,
-      "compound_bps": -9994.440965969476,
+      "additive_bps": -75020.2323307218,
+      "compound_bps": -9994.48033517187,
       "days": 365
      },
      "2022": {
-      "additive_bps": -41366.37573494944,
-      "compound_bps": -9840.235189654042,
+      "additive_bps": -41383.33778916608,
+      "compound_bps": -9840.50595389074,
       "days": 365
      },
      "2023": {
-      "additive_bps": -52028.252139014185,
-      "compound_bps": -9944.98999058298,
+      "additive_bps": -52025.602184728756,
+      "compound_bps": -9944.975411250318,
       "days": 365
      },
      "2024": {
-      "additive_bps": -44327.98116814673,
-      "compound_bps": -9881.188018625784,
+      "additive_bps": -44326.35880512267,
+      "compound_bps": -9881.168741445557,
       "days": 366
      },
      "2025": {
-      "additive_bps": -45001.433789930605,
-      "compound_bps": -9888.92596144314,
+      "additive_bps": -44987.53684487253,
+      "compound_bps": -9888.771495156403,
       "days": 304
      }
     },
@@ -1604,68 +1604,68 @@
      "count": 39708,
      "trades_per_year": 8211.56940509915,
      "hit_rate": 0.25503676840938855,
-     "mean_net_bps": -6.278471051223434,
-     "median_net_bps": -14.608872698051016,
-     "sd_net_bps": 65.08740700782069,
-     "mean_gross_bps": -1.839131399911085,
-     "mean_fees_bps": 4.443873571809095,
-     "mean_funding_bps": -0.004533920496745489,
+     "mean_net_bps": -6.280024833049024,
+     "median_net_bps": -14.605019131939986,
+     "sd_net_bps": 65.1177704557765,
+     "mean_gross_bps": -1.8417384654647095,
+     "mean_fees_bps": 4.4428506350383525,
+     "mean_funding_bps": -0.00456426745403781,
      "mean_hold_minutes": 64.00685000503677,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 17.46087470684228,
-    "funding_frac": -0.018468737842694875,
-    "turnover_per_year": 16437.885954225334,
-    "n_taker": 3547,
+    "fees_frac": 17.456851214881652,
+    "funding_frac": -0.01858649057944162,
+    "turnover_per_year": 16437.700154041217,
+    "n_taker": 2952,
     "n_maker": 36790,
     "n_cancel": 0,
     "n_chase": 2918,
     "maker_fill_rate": 0.9265135489070212,
-    "trims": 629,
-    "mean_daily_bps": -145.99048327211744,
-    "seconds": 5.395792484283447
+    "trims": 34,
+    "mean_daily_bps": -146.0300668298084,
+    "seconds": 5.745862007141113
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
     "total_compound_bps": -10000.0,
-    "total_additive_bps": -546584.7172076965,
-    "ann_compound_bps": -9999.87667962609,
-    "ann_additive_bps": -113033.10015909871,
-    "vol": 0.6496169889641673,
-    "sharpe": -17.399960604376002,
-    "sortino": -13.180769686017106,
+    "total_additive_bps": -546669.1755466885,
+    "ann_compound_bps": -9999.876894828094,
+    "ann_additive_bps": -113050.56604789876,
+    "vol": 0.6502166833943903,
+    "sharpe": -17.386598796224316,
+    "sortino": -13.175280704925422,
     "max_dd": 1.0,
     "max_dd_duration_days": 1765,
     "max_dd_recovered": false,
     "longest_underwater_days": 1765,
-    "calmar": -0.999987667962609,
+    "calmar": -0.9999876894828094,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -161029.96789039925,
-      "compound_bps": -9999.998984786575,
+      "additive_bps": -161074.76137879567,
+      "compound_bps": -9999.9989893239,
       "days": 365
      },
      "2022": {
-      "additive_bps": -105686.34298371321,
-      "compound_bps": -9999.742900967127,
+      "additive_bps": -105709.288273458,
+      "compound_bps": -9999.74349021203,
       "days": 365
      },
      "2023": {
-      "additive_bps": -98359.22742031673,
-      "compound_bps": -9999.465050200959,
+      "additive_bps": -98355.87858241897,
+      "compound_bps": -9999.464871024942,
       "days": 365
      },
      "2024": {
-      "additive_bps": -98140.89934349246,
-      "compound_bps": -9999.453242314252,
+      "additive_bps": -98161.37045652159,
+      "compound_bps": -9999.454360443233,
       "days": 366
      },
      "2025": {
-      "additive_bps": -83368.27956977491,
-      "compound_bps": -9997.604690584008,
+      "additive_bps": -83367.87685549425,
+      "compound_bps": -9997.604594119535,
       "days": 304
      }
     },
@@ -1673,137 +1673,137 @@
      "count": 39708,
      "trades_per_year": 8211.56940509915,
      "hit_rate": 0.2114687216681777,
-     "mean_net_bps": -13.546505773823055,
-     "median_net_bps": -19.370877112951636,
-     "sd_net_bps": 65.0700898340947,
-     "mean_gross_bps": -7.951594131070453,
-     "mean_fees_bps": 5.599464346565078,
-     "mean_funding_bps": -0.004552703812475686,
+     "mean_net_bps": -13.548171147652925,
+     "median_net_bps": -19.370267302774806,
+     "sd_net_bps": 65.1399082271335,
+     "mean_gross_bps": -7.955477410565287,
+     "mean_fees_bps": 5.597265261238813,
+     "mean_funding_bps": -0.004571524151177919,
      "mean_hold_minutes": 64.00682482119473,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 21.836729384491022,
-    "funding_frac": -0.018510181297394557,
-    "turnover_per_year": 16453.013335454412,
-    "n_taker": 11691,
+    "fees_frac": 21.828265279319243,
+    "funding_frac": -0.018580345261593696,
+    "turnover_per_year": 16450.7971662154,
+    "n_taker": 10637,
     "n_maker": 29172,
     "n_cancel": 0,
     "n_chase": 10536,
     "maker_fill_rate": 0.7346630401934119,
-    "trims": 1155,
-    "mean_daily_bps": -309.67972646328417,
-    "seconds": 5.279565811157227
+    "trims": 101,
+    "mean_daily_bps": -309.7275782134212,
+    "seconds": 5.566384792327881
    },
    "C10B": {
     "days": 1765,
     "years": 4.835616438356165,
     "total_compound_bps": -10000.0,
-    "total_additive_bps": -416410.52977008256,
-    "ann_compound_bps": -9998.179670003046,
-    "ann_additive_bps": -86113.22570316156,
-    "vol": 0.5967722539360679,
-    "sharpe": -14.429830665751233,
-    "sortino": -12.210081121075723,
+    "total_additive_bps": -416490.7970150222,
+    "ann_compound_bps": -9998.182689094305,
+    "ann_additive_bps": -86129.82487846067,
+    "vol": 0.5970997069596489,
+    "sharpe": -14.424697228042884,
+    "sortino": -12.207544159131817,
     "max_dd": 1.0,
     "max_dd_duration_days": 1761,
     "max_dd_recovered": false,
     "longest_underwater_days": 1761,
-    "calmar": -0.9998179670003047,
+    "calmar": -0.9998182689094305,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -97275.9001166915,
-      "compound_bps": -9999.40384205563,
+      "additive_bps": -97353.91033364802,
+      "compound_bps": -9999.40847460389,
       "days": 365
      },
      "2022": {
-      "additive_bps": -78192.30921929568,
-      "compound_bps": -9995.980693199615,
+      "additive_bps": -78215.55572716385,
+      "compound_bps": -9995.990025832572,
       "days": 365
      },
      "2023": {
-      "additive_bps": -89444.46286149592,
-      "compound_bps": -9998.695403123931,
+      "additive_bps": -89437.0123191863,
+      "compound_bps": -9998.694430766323,
       "days": 365
      },
      "2024": {
-      "additive_bps": -79767.53739090527,
-      "compound_bps": -9996.566477737777,
+      "additive_bps": -79766.69502085849,
+      "compound_bps": -9996.566188495963,
       "days": 366
      },
      "2025": {
-      "additive_bps": -71730.3201816942,
-      "compound_bps": -9992.330063365998,
+      "additive_bps": -71717.62361416552,
+      "compound_bps": -9992.320318994463,
       "days": 304
      }
     },
     "trades": {
      "count": 39708,
      "trades_per_year": 8211.56940509915,
-     "hit_rate": 0.22395990732346127,
-     "mean_net_bps": -10.273694026955164,
-     "median_net_bps": -18.94682195546057,
-     "sd_net_bps": 64.92327980658094,
-     "mean_gross_bps": -0.2729399498683721,
-     "mean_fees_bps": 10.005280828506956,
-     "mean_funding_bps": -0.004526751420163977,
+     "hit_rate": 0.22398509116550822,
+     "mean_net_bps": -10.275509224756417,
+     "median_net_bps": -18.944099698583194,
+     "sd_net_bps": 64.95360572617244,
+     "mean_gross_bps": -0.27478793387244876,
+     "mean_fees_bps": 10.00528337343354,
+     "mean_funding_bps": -0.004562082549572987,
      "mean_hold_minutes": 64.00685000503677,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 39.140978532475,
-    "funding_frac": -0.01855731250354144,
-    "turnover_per_year": 16448.814632931975,
-    "n_taker": 40311,
+    "fees_frac": 39.14090092820988,
+    "funding_frac": -0.018695935428252503,
+    "turnover_per_year": 16448.82534477878,
+    "n_taker": 39737,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
-    "trims": 603,
-    "mean_daily_bps": -235.92664576208645,
-    "seconds": 5.249958038330078
+    "trims": 29,
+    "mean_daily_bps": -235.97212295468677,
+    "seconds": 5.552281618118286
    },
    "C10S": {
     "days": 1765,
     "years": 4.835616438356165,
     "total_compound_bps": -10000.0,
-    "total_additive_bps": -489614.2972072076,
-    "ann_compound_bps": -9999.599414404574,
-    "ann_additive_bps": -101251.68185871432,
-    "vol": 0.6182501732620929,
-    "sharpe": -16.37713764388886,
-    "sortino": -13.035793062913786,
+    "total_additive_bps": -489691.0459466056,
+    "ann_compound_bps": -9999.600049691815,
+    "ann_additive_bps": -101267.55341105442,
+    "vol": 0.6186246410437087,
+    "sharpe": -16.369789803426112,
+    "sortino": -13.032942636373326,
     "max_dd": 1.0,
     "max_dd_duration_days": 1765,
     "max_dd_recovered": false,
     "longest_underwater_days": 1765,
-    "calmar": -0.9999599414404574,
+    "calmar": -0.9999600049691815,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -108612.71815682322,
-      "compound_bps": -9999.808128891775,
+      "additive_bps": -108647.26349963018,
+      "compound_bps": -9999.808790573536,
       "days": 365
      },
      "2022": {
-      "additive_bps": -99885.77272329095,
-      "compound_bps": -9999.540785060317,
+      "additive_bps": -99937.69211088956,
+      "compound_bps": -9999.543163097507,
       "days": 365
      },
      "2023": {
-      "additive_bps": -103257.56406541963,
-      "compound_bps": -9999.672221116816,
+      "additive_bps": -103260.08808270952,
+      "compound_bps": -9999.672303838333,
       "days": 365
      },
      "2024": {
-      "additive_bps": -95183.04197951026,
-      "compound_bps": -9999.265058096664,
+      "additive_bps": -95172.49238403235,
+      "compound_bps": -9999.26428235357,
       "days": 366
      },
      "2025": {
-      "additive_bps": -82675.20028216357,
-      "compound_bps": -9997.432788362994,
+      "additive_bps": -82673.509869344,
+      "compound_bps": -9997.432354361566,
       "days": 304
      }
     },
@@ -1811,95 +1811,95 @@
      "count": 39708,
      "trades_per_year": 8211.56940509915,
      "hit_rate": 0.21456633423995164,
-     "mean_net_bps": -12.11176730527145,
-     "median_net_bps": -20.47349744376603,
-     "sd_net_bps": 65.43680514754995,
-     "mean_gross_bps": -2.1098841626242413,
-     "mean_fees_bps": 10.006414207869154,
-     "mean_funding_bps": -0.00453106522194658,
+     "mean_net_bps": -12.113423147286028,
+     "median_net_bps": -20.472639056741706,
+     "sd_net_bps": 65.47800032227948,
+     "mean_gross_bps": -2.111557414871233,
+     "mean_fees_bps": 10.006419166185978,
+     "mean_funding_bps": -0.004553433771181331,
      "mean_hold_minutes": 64.00682482119473,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 39.07486341269635,
-    "funding_frac": -0.0184467133539564,
-    "turnover_per_year": 16452.19989502868,
-    "n_taker": 40315,
+    "fees_frac": 39.07480704722272,
+    "funding_frac": -0.018535799374146993,
+    "turnover_per_year": 16452.21437857778,
+    "n_taker": 39750,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
-    "trims": 607,
-    "mean_daily_bps": -277.4018681060666,
-    "seconds": 5.1592185497283936
+    "trims": 42,
+    "mean_daily_bps": -277.445351811108,
+    "seconds": 5.671190023422241
    },
    "C10N": {
     "days": 1765,
     "years": 4.835616438356165,
     "total_compound_bps": -10000.0,
-    "total_additive_bps": -416297.5973554869,
-    "ann_compound_bps": -9998.175413782488,
-    "ann_additive_bps": -86089.87140779191,
-    "vol": 0.5969895222557903,
-    "sharpe": -14.42066706338361,
-    "sortino": -12.208050030859944,
+    "total_additive_bps": -416379.4031658537,
+    "ann_compound_bps": -9998.178497889168,
+    "ann_additive_bps": -86106.78875667797,
+    "vol": 0.5973208323657595,
+    "sharpe": -14.415500697613691,
+    "sortino": -12.20546338889031,
     "max_dd": 1.0,
     "max_dd_duration_days": 1761,
     "max_dd_recovered": false,
     "longest_underwater_days": 1761,
-    "calmar": -0.9998175413782487,
+    "calmar": -0.9998178497889169,
     "pct_positive_months": 0.0,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -97297.58511047815,
-      "compound_bps": -9999.405133423092,
+      "additive_bps": -97377.03017824351,
+      "compound_bps": -9999.4098406217,
       "days": 365
      },
      "2022": {
-      "additive_bps": -78155.56357724949,
-      "compound_bps": -9995.965896830263,
+      "additive_bps": -78178.91493927433,
+      "compound_bps": -9995.975306020473,
       "days": 365
      },
      "2023": {
-      "additive_bps": -89413.39894392455,
-      "compound_bps": -9998.691344233961,
+      "additive_bps": -89405.98003793173,
+      "compound_bps": -9998.690372994317,
       "days": 365
      },
      "2024": {
-      "additive_bps": -79723.57327817412,
-      "compound_bps": -9996.551349330815,
+      "additive_bps": -79722.70045166087,
+      "compound_bps": -9996.551048310304,
       "days": 366
      },
      "2025": {
-      "additive_bps": -71707.47644566065,
-      "compound_bps": -9992.31252233771,
+      "additive_bps": -71694.77755874333,
+      "compound_bps": -9992.302753895654,
       "days": 304
      }
     },
     "trades": {
      "count": 39708,
      "trades_per_year": 8211.56940509915,
-     "hit_rate": 0.22401027500755516,
-     "mean_net_bps": -10.270824347498005,
-     "median_net_bps": -18.95188481540318,
-     "sd_net_bps": 64.92803913265459,
-     "mean_gross_bps": -0.27258189859899296,
-     "mean_fees_bps": 10.005278581454204,
-     "mean_funding_bps": -0.007036132555190539,
+     "hit_rate": 0.2240354588496021,
+     "mean_net_bps": -10.272677325801306,
+     "median_net_bps": -18.949292972741844,
+     "sd_net_bps": 64.95850002008132,
+     "mean_gross_bps": -0.27444145806396036,
+     "mean_fees_bps": 10.005281154996945,
+     "mean_funding_bps": -0.007045287259601573,
      "mean_hold_minutes": 64.00687518887881,
      "median_hold_minutes": 45.0
     },
-    "fees_frac": 39.139906037077765,
-    "funding_frac": -0.02776838620035539,
-    "turnover_per_year": 16444.69361490127,
-    "n_taker": 599,
+    "fees_frac": 39.13982059029792,
+    "funding_frac": -0.02780391360748905,
+    "turnover_per_year": 16444.703075355366,
+    "n_taker": 28,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
-    "trims": 599,
-    "mean_daily_bps": -235.8626613912107,
-    "seconds": 5.016327857971191
+    "trims": 28,
+    "mean_daily_bps": -235.90901029226842,
+    "seconds": 5.445584058761597
    }
   }
  },
@@ -1912,44 +1912,44 @@
    "C7B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11214.586663921702,
-    "total_additive_bps": 7521.039022708998,
-    "ann_compound_bps": 1682.8193121925644,
-    "ann_additive_bps": 1555.3423474723993,
-    "vol": 0.5968152442348993,
-    "sharpe": 0.26060700736059533,
-    "sortino": 0.37021689727124263,
-    "max_dd": 0.7917155088540009,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11350.293628821275,
+    "total_additive_bps": 7584.803996923976,
+    "ann_compound_bps": 1698.2350521673154,
+    "ann_additive_bps": 1568.5288718851282,
+    "vol": 0.617667411570597,
+    "sharpe": 0.253943925566138,
+    "sortino": 0.3603638118949832,
+    "max_dd": 0.8035251875230792,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.21255353638688043,
+    "longest_underwater_days": 1343,
+    "calmar": 0.2113480795047931,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1643.0049482970287,
-      "compound_bps": 1785.6841560271116,
+      "additive_bps": 1636.176132401097,
+      "compound_bps": 1777.638676663721,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10794.309280425156,
-      "compound_bps": -6602.111650662983,
+      "additive_bps": -11214.388638809056,
+      "compound_bps": -6741.893399971442,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8690.100462996903,
-      "compound_bps": 13845.490915029262,
+      "additive_bps": 8854.9454982395,
+      "compound_bps": 14241.829743448347,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.1416804942555,
-      "compound_bps": 9780.552559029134,
+      "additive_bps": 7098.271588556608,
+      "compound_bps": 10336.397316500694,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1161.1012113459674,
-      "compound_bps": 1231.1954452218843,
+      "additive_bps": 1209.7994165358277,
+      "compound_bps": 1286.02274244919,
       "days": 304
      }
     },
@@ -1957,71 +1957,71 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11214.586663921327,
-     "median_net_bps": 11214.586663921327,
+     "mean_net_bps": 11350.293628822987,
+     "median_net_bps": 11350.293628822987,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19361.71004256575,
-     "mean_fees_bps": 16.680855021282863,
-     "mean_funding_bps": 8130.44252362314,
+     "mean_gross_bps": 19829.398429886092,
+     "mean_fees_bps": 16.914699214942623,
+     "mean_funding_bps": 8462.190101848162,
      "mean_hold_minutes": 2541594.0,
      "median_hold_minutes": 2541594.0
     },
-    "fees_frac": 0.000994381580263843,
-    "funding_frac": 0.5953376770099778,
-    "turnover_per_year": 0.5342350758523638,
-    "n_taker": 28,
+    "fees_frac": 0.0009918664426846848,
+    "funding_frac": 0.6173510109051481,
+    "turnover_per_year": 0.5375297565696607,
+    "n_taker": 5,
     "n_maker": 1,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": 1.0,
-    "trims": 28,
-    "mean_daily_bps": 4.2612119108832855,
-    "seconds": 3.420274496078491,
-    "mean_abs_x": 1.0103772822384063,
-    "mean_x": 1.0103772822384063,
+    "trims": 5,
+    "mean_daily_bps": 4.297339375027748,
+    "seconds": 3.7306766510009766,
+    "mean_abs_x": 1.0447808353279253,
+    "mean_x": 1.0447808353279253,
     "pct_in_market": 0.9999980327352849
    },
    "C7S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11206.759536170603,
-    "total_additive_bps": 7517.348839091062,
-    "ann_compound_bps": 1681.927800137292,
-    "ann_additive_bps": 1554.5792216817208,
-    "vol": 0.5968539511021783,
-    "sharpe": 0.26046224856364986,
-    "sortino": 0.37000247526076413,
-    "max_dd": 0.7918198946528583,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11363.811278252653,
+    "total_additive_bps": 7591.1333581090275,
+    "ann_compound_bps": 1699.7663398893164,
+    "ann_additive_bps": 1569.8377766061162,
+    "vol": 0.6170131226570398,
+    "sharpe": 0.2544253467164415,
+    "sortino": 0.3610895341008108,
+    "max_dd": 0.8034091490712012,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.2124129251481697,
+    "longest_underwater_days": 1343,
+    "calmar": 0.21156920379290783,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1639.2712871332405,
-      "compound_bps": 1781.2846022781655,
+      "additive_bps": 1640.9917950908493,
+      "compound_bps": 1783.3117560507822,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10795.569170320981,
-      "compound_bps": -6602.5397202162385,
+      "additive_bps": -11210.810134337982,
+      "compound_bps": -6740.7272764314275,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8690.13441941419,
-      "compound_bps": 13845.571885910724,
+      "additive_bps": 8853.087852286797,
+      "compound_bps": 14237.32688800595,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.2474235805075,
-      "compound_bps": 9780.761725802568,
+      "additive_bps": 7098.095093114612,
+      "compound_bps": 10336.038391524835,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1162.2648792841023,
-      "compound_bps": 1232.5024594715915,
+      "additive_bps": 1209.7687519547592,
+      "compound_bps": 1285.9881343863194,
       "days": 304
      }
     },
@@ -2029,68 +2029,68 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11206.759536171736,
-     "median_net_bps": 11206.759536171736,
+     "mean_net_bps": 11363.811278252206,
+     "median_net_bps": 11363.811278252206,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19351.838343578303,
-     "mean_fees_bps": 16.675919171789168,
-     "mean_funding_bps": 8128.402888234777,
+     "mean_gross_bps": 19845.524139292684,
+     "mean_fees_bps": 16.922762069646076,
+     "mean_funding_bps": 8464.79009897083,
      "mean_hold_minutes": 2541594.0,
      "median_hold_minutes": 2541594.0
     },
-    "fees_frac": 0.0009944958928676654,
-    "funding_frac": 0.5953510952772147,
-    "turnover_per_year": 0.5343158331359177,
-    "n_taker": 28,
+    "fees_frac": 0.0009902627032399988,
+    "funding_frac": 0.6169736289632362,
+    "turnover_per_year": 0.5373029102453933,
+    "n_taker": 5,
     "n_maker": 1,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": 1.0,
-    "trims": 28,
-    "mean_daily_bps": 4.2591211552923856,
-    "seconds": 3.064390182495117
+    "trims": 5,
+    "mean_daily_bps": 4.300925415359223,
+    "seconds": 3.2486112117767334
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11214.586663921702,
-    "total_additive_bps": 7521.039022708998,
-    "ann_compound_bps": 1682.8193121925644,
-    "ann_additive_bps": 1555.3423474723993,
-    "vol": 0.5968152442348993,
-    "sharpe": 0.26060700736059533,
-    "sortino": 0.37021689727124263,
-    "max_dd": 0.7917155088540009,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11350.293628821275,
+    "total_additive_bps": 7584.803996923976,
+    "ann_compound_bps": 1698.2350521673154,
+    "ann_additive_bps": 1568.5288718851282,
+    "vol": 0.617667411570597,
+    "sharpe": 0.253943925566138,
+    "sortino": 0.3603638118949832,
+    "max_dd": 0.8035251875230792,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.21255353638688043,
+    "longest_underwater_days": 1343,
+    "calmar": 0.2113480795047931,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1643.0049482970287,
-      "compound_bps": 1785.6841560271116,
+      "additive_bps": 1636.176132401097,
+      "compound_bps": 1777.638676663721,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10794.309280425156,
-      "compound_bps": -6602.111650662983,
+      "additive_bps": -11214.388638809056,
+      "compound_bps": -6741.893399971442,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8690.100462996903,
-      "compound_bps": 13845.490915029262,
+      "additive_bps": 8854.9454982395,
+      "compound_bps": 14241.829743448347,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.1416804942555,
-      "compound_bps": 9780.552559029134,
+      "additive_bps": 7098.271588556608,
+      "compound_bps": 10336.397316500694,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1161.1012113459674,
-      "compound_bps": 1231.1954452218843,
+      "additive_bps": 1209.7994165358277,
+      "compound_bps": 1286.02274244919,
       "days": 304
      }
     },
@@ -2098,68 +2098,68 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11214.586663921327,
-     "median_net_bps": 11214.586663921327,
+     "mean_net_bps": 11350.293628822987,
+     "median_net_bps": 11350.293628822987,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19361.71004256575,
-     "mean_fees_bps": 16.680855021282863,
-     "mean_funding_bps": 8130.44252362314,
+     "mean_gross_bps": 19829.398429886092,
+     "mean_fees_bps": 16.914699214942623,
+     "mean_funding_bps": 8462.190101848162,
      "mean_hold_minutes": 2541594.0,
      "median_hold_minutes": 2541594.0
     },
-    "fees_frac": 0.000994381580263843,
-    "funding_frac": 0.5953376770099778,
-    "turnover_per_year": 0.5342350758523638,
-    "n_taker": 28,
+    "fees_frac": 0.0009918664426846848,
+    "funding_frac": 0.6173510109051481,
+    "turnover_per_year": 0.5375297565696607,
+    "n_taker": 5,
     "n_maker": 1,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": 1.0,
-    "trims": 28,
-    "mean_daily_bps": 4.2612119108832855,
-    "seconds": 3.05607533454895
+    "trims": 5,
+    "mean_daily_bps": 4.297339375027748,
+    "seconds": 3.227874994277954
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11206.759536170603,
-    "total_additive_bps": 7517.348839091062,
-    "ann_compound_bps": 1681.927800137292,
-    "ann_additive_bps": 1554.5792216817208,
-    "vol": 0.5968539511021783,
-    "sharpe": 0.26046224856364986,
-    "sortino": 0.37000247526076413,
-    "max_dd": 0.7918198946528583,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11363.811278252653,
+    "total_additive_bps": 7591.1333581090275,
+    "ann_compound_bps": 1699.7663398893164,
+    "ann_additive_bps": 1569.8377766061162,
+    "vol": 0.6170131226570398,
+    "sharpe": 0.2544253467164415,
+    "sortino": 0.3610895341008108,
+    "max_dd": 0.8034091490712012,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.2124129251481697,
+    "longest_underwater_days": 1343,
+    "calmar": 0.21156920379290783,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1639.2712871332405,
-      "compound_bps": 1781.2846022781655,
+      "additive_bps": 1640.9917950908493,
+      "compound_bps": 1783.3117560507822,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10795.569170320981,
-      "compound_bps": -6602.5397202162385,
+      "additive_bps": -11210.810134337982,
+      "compound_bps": -6740.7272764314275,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8690.13441941419,
-      "compound_bps": 13845.571885910724,
+      "additive_bps": 8853.087852286797,
+      "compound_bps": 14237.32688800595,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.2474235805075,
-      "compound_bps": 9780.761725802568,
+      "additive_bps": 7098.095093114612,
+      "compound_bps": 10336.038391524835,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1162.2648792841023,
-      "compound_bps": 1232.5024594715915,
+      "additive_bps": 1209.7687519547592,
+      "compound_bps": 1285.9881343863194,
       "days": 304
      }
     },
@@ -2167,68 +2167,68 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11206.759536171736,
-     "median_net_bps": 11206.759536171736,
+     "mean_net_bps": 11363.811278252206,
+     "median_net_bps": 11363.811278252206,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19351.838343578303,
-     "mean_fees_bps": 16.675919171789168,
-     "mean_funding_bps": 8128.402888234777,
+     "mean_gross_bps": 19845.524139292684,
+     "mean_fees_bps": 16.922762069646076,
+     "mean_funding_bps": 8464.79009897083,
      "mean_hold_minutes": 2541594.0,
      "median_hold_minutes": 2541594.0
     },
-    "fees_frac": 0.0009944958928676654,
-    "funding_frac": 0.5953510952772147,
-    "turnover_per_year": 0.5343158331359177,
-    "n_taker": 28,
+    "fees_frac": 0.0009902627032399988,
+    "funding_frac": 0.6169736289632362,
+    "turnover_per_year": 0.5373029102453933,
+    "n_taker": 5,
     "n_maker": 1,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": 1.0,
-    "trims": 28,
-    "mean_daily_bps": 4.2591211552923856,
-    "seconds": 3.102450370788574
+    "trims": 5,
+    "mean_daily_bps": 4.300925415359223,
+    "seconds": 3.3048036098480225
    },
    "C10B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11208.744148557322,
-    "total_additive_bps": 7518.2846348335415,
-    "ann_compound_bps": 1682.1538727428685,
-    "ann_additive_bps": 1554.7727431808742,
-    "vol": 0.5968165897595428,
-    "sharpe": 0.2605109793960807,
-    "sortino": 0.37008112459744147,
-    "max_dd": 0.7917155088540009,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11350.665911970053,
+    "total_additive_bps": 7584.978364503905,
+    "ann_compound_bps": 1698.2772349301367,
+    "ann_additive_bps": 1568.564930903074,
+    "vol": 0.6176883472685806,
+    "sharpe": 0.25394115622210967,
+    "sortino": 0.36036560470956375,
+    "max_dd": 0.8035249999322135,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.2124694860629631,
+    "longest_underwater_days": 1343,
+    "calmar": 0.2113533785598962,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1640.2505604215723,
-      "compound_bps": 1782.4383685011906,
+      "additive_bps": 1636.3504999455824,
+      "compound_bps": 1777.8440422477593,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10794.309280425156,
-      "compound_bps": -6602.111650662983,
+      "additive_bps": -11214.388638773597,
+      "compound_bps": -6741.8933999598885,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8690.100462996903,
-      "compound_bps": 13845.490915029262,
+      "additive_bps": 8854.945498239484,
+      "compound_bps": 14241.829743448308,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.1416804942555,
-      "compound_bps": 9780.552559029134,
+      "additive_bps": 7098.271588556608,
+      "compound_bps": 10336.397316500694,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1161.1012113459674,
-      "compound_bps": 1231.1954452218843,
+      "additive_bps": 1209.7994165358277,
+      "compound_bps": 1286.02274244919,
       "days": 304
      }
     },
@@ -2236,68 +2236,68 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11208.74414855656,
-     "median_net_bps": 11208.74414855656,
+     "mean_net_bps": 11350.665911971173,
+     "median_net_bps": 11350.665911971173,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19356.701350125255,
-     "mean_fees_bps": 19.67903019605898,
-     "mean_funding_bps": 8128.278171372638,
+     "mean_gross_bps": 19832.884830539246,
+     "mean_fees_bps": 19.91712193626558,
+     "mean_funding_bps": 8462.301796631808,
      "mean_hold_minutes": 2541598.0,
      "median_hold_minutes": 2541598.0
     },
-    "fees_frac": 0.0012945559941150426,
-    "funding_frac": 0.5953449698137299,
-    "turnover_per_year": 0.5343693598288541,
-    "n_taker": 29,
+    "fees_frac": 0.0012920250240633423,
+    "funding_frac": 0.6173860211920758,
+    "turnover_per_year": 0.5376018325626319,
+    "n_taker": 6,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
-    "trims": 28,
-    "mean_daily_bps": 4.259651351180477,
-    "seconds": 3.1791443824768066
+    "trims": 5,
+    "mean_daily_bps": 4.297438166857736,
+    "seconds": 3.1925973892211914
    },
    "C10S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11231.769598936811,
-    "total_additive_bps": 7529.135329420143,
-    "ann_compound_bps": 1684.77553863219,
-    "ann_additive_bps": 1557.0166545259783,
-    "vol": 0.5972386384649212,
-    "sharpe": 0.26070259930401835,
-    "sortino": 0.3703770545414796,
-    "max_dd": 0.7912530938295926,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11354.159973865126,
+    "total_additive_bps": 7586.6147425152385,
+    "ann_compound_bps": 1698.6731126384439,
+    "ann_additive_bps": 1568.903332021565,
+    "vol": 0.6171235353852723,
+    "sharpe": 0.25422840680384895,
+    "sortino": 0.3608329235906525,
+    "max_dd": 0.8034234551110971,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.21292498592050116,
+    "longest_underwater_days": 1343,
+    "calmar": 0.2114293654027753,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1647.7555566305812,
-      "compound_bps": 1791.2844030876302,
+      "additive_bps": 1636.472580997007,
+      "compound_bps": 1777.9878282838542,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10791.739690918484,
-      "compound_bps": -6601.238420650924,
+      "additive_bps": -11210.80953926489,
+      "compound_bps": -6740.727082480872,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8689.607170668538,
-      "compound_bps": 13844.314664267826,
+      "additive_bps": 8853.087855051617,
+      "compound_bps": 14237.32689470714,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.247413755411,
-      "compound_bps": 9780.761706367777,
+      "additive_bps": 7098.095093777409,
+      "compound_bps": 10336.038392872704,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1162.2648792841023,
-      "compound_bps": 1232.5024594715915,
+      "additive_bps": 1209.7687519540918,
+      "compound_bps": 1285.9881343855661,
       "days": 304
      }
     },
@@ -2305,68 +2305,68 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11231.769598938256,
-     "median_net_bps": 11231.769598938256,
+     "mean_net_bps": 11354.159973866426,
+     "median_net_bps": 11354.159973866426,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19379.273237745794,
-     "mean_fees_bps": 19.70629821189779,
-     "mean_funding_bps": 8127.797340595639,
+     "mean_gross_bps": 19836.490704066462,
+     "mean_fees_bps": 19.934906945058458,
+     "mean_funding_bps": 8462.395823254978,
      "mean_hold_minutes": 2541597.0,
      "median_hold_minutes": 2541597.0
     },
-    "fees_frac": 0.0012925618102252725,
-    "funding_frac": 0.5953831932112773,
-    "turnover_per_year": 0.5344687261779063,
-    "n_taker": 29,
+    "fees_frac": 0.001291766846901308,
+    "funding_frac": 0.6171992164651151,
+    "turnover_per_year": 0.5378218417291827,
+    "n_taker": 6,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
-    "trims": 28,
-    "mean_daily_bps": 4.265799053495831,
-    "seconds": 3.0848519802093506
+    "trims": 5,
+    "mean_daily_bps": 4.298365293209767,
+    "seconds": 3.202864408493042
    },
    "C10N": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 11209.823563562042,
-    "total_additive_bps": 7518.793569983017,
-    "ann_compound_bps": 1682.276824802662,
-    "ann_additive_bps": 1554.8779903930886,
-    "vol": 0.5968163375541174,
-    "sharpe": 0.26052872425800455,
-    "sortino": 0.37010621165430574,
-    "max_dd": 0.7917155088540009,
-    "max_dd_duration_days": 1341,
+    "total_compound_bps": 11348.528928900718,
+    "total_additive_bps": 7583.977416790918,
+    "ann_compound_bps": 1698.0350891188348,
+    "ann_additive_bps": 1568.3579360502465,
+    "vol": 0.6176822451715372,
+    "sharpe": 0.2539101533693422,
+    "sortino": 0.36031909113100585,
+    "max_dd": 0.8035253568926579,
+    "max_dd_duration_days": 1343,
     "max_dd_recovered": true,
-    "longest_underwater_days": 1341,
-    "calmar": 0.21248501589134441,
+    "longest_underwater_days": 1343,
+    "calmar": 0.21132314923891984,
     "pct_positive_months": 0.5344827586206896,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1640.759495571048,
-      "compound_bps": 1783.038033463816,
+      "additive_bps": 1635.3495522980015,
+      "compound_bps": 1776.66520071791,
       "days": 365
      },
      "2022": {
-      "additive_bps": -10794.309280425156,
-      "compound_bps": -6602.111650662983,
+      "additive_bps": -11214.388638839016,
+      "compound_bps": -6741.893399981203,
       "days": 365
      },
      "2023": {
-      "additive_bps": 8690.100462996903,
-      "compound_bps": 13845.490915029262,
+      "additive_bps": 8854.9454982395,
+      "compound_bps": 14241.829743448347,
       "days": 365
      },
      "2024": {
-      "additive_bps": 6821.1416804942555,
-      "compound_bps": 9780.552559029134,
+      "additive_bps": 7098.271588556608,
+      "compound_bps": 10336.397316500694,
       "days": 366
      },
      "2025": {
-      "additive_bps": 1161.1012113459674,
-      "compound_bps": 1231.1954452218843,
+      "additive_bps": 1209.7994165358277,
+      "compound_bps": 1286.02274244919,
       "days": 304
      }
     },
@@ -2374,26 +2374,26 @@
      "count": 1,
      "trades_per_year": 0.20679886685552407,
      "hit_rate": 1.0,
-     "mean_net_bps": 11209.823563561538,
-     "median_net_bps": 11209.823563561538,
+     "mean_net_bps": 11348.5289289022,
+     "median_net_bps": 11348.5289289022,
      "sd_net_bps": NaN,
-     "mean_gross_bps": 19358.180693171384,
-     "mean_fees_bps": 19.67909034658566,
-     "mean_funding_bps": 8128.67803926326,
+     "mean_gross_bps": 19830.073803991992,
+     "mean_fees_bps": 19.915036901995386,
+     "mean_funding_bps": 8461.629838187797,
      "mean_hold_minutes": 2541599.0,
      "median_hold_minutes": 2541599.0
     },
-    "fees_frac": 0.0012944960661153274,
-    "funding_frac": 0.5953436221035329,
-    "turnover_per_year": 0.5343445505065586,
-    "n_taker": 28,
+    "fees_frac": 0.0012919681313370128,
+    "funding_frac": 0.6173800412167908,
+    "turnover_per_year": 0.5376107376554214,
+    "n_taker": 5,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
-    "trims": 28,
-    "mean_daily_bps": 4.2599396997070915,
-    "seconds": 3.041137218475342
+    "trims": 5,
+    "mean_daily_bps": 4.2968710576719085,
+    "seconds": 3.198180675506592
    }
   }
  },
@@ -2457,7 +2457,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 3.0558598041534424,
+    "seconds": 3.0836987495422363,
     "mean_abs_x": 0.0,
     "mean_x": 0.0,
     "pct_in_market": 0.0
@@ -2516,7 +2516,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 2.6258716583251953
+    "seconds": 2.732379198074341
    },
    "C4B": {
     "days": 1765,
@@ -2572,7 +2572,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 2.6987111568450928
+    "seconds": 2.7336649894714355
    },
    "C4S": {
     "days": 1765,
@@ -2628,7 +2628,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 2.654327154159546
+    "seconds": 2.729069232940674
    },
    "C10B": {
     "days": 1765,
@@ -2684,7 +2684,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 2.719252586364746
+    "seconds": 2.7313084602355957
    },
    "C10S": {
     "days": 1765,
@@ -2740,7 +2740,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 2.695434331893921
+    "seconds": 2.7763912677764893
    },
    "C10N": {
     "days": 1765,
@@ -2796,7 +2796,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0,
-    "seconds": 2.704002857208252
+    "seconds": 2.7359957695007324
    }
   }
  },
@@ -2873,7 +2873,7 @@
     "maker_fill_rate": 0.9844236760124611,
     "trims": 12,
     "mean_daily_bps": 3.4763686773612283,
-    "seconds": 3.465113639831543,
+    "seconds": 3.481659173965454,
     "mean_abs_x": 0.5445454570311006,
     "mean_x": 0.10553659087527152,
     "pct_in_market": 0.8367906043437205
@@ -2945,7 +2945,7 @@
     "maker_fill_rate": 0.9096573208722741,
     "trims": 12,
     "mean_daily_bps": 3.043206768153468,
-    "seconds": 3.0533287525177
+    "seconds": 3.1097819805145264
    },
    "C4B": {
     "days": 1765,
@@ -3014,7 +3014,7 @@
     "maker_fill_rate": 0.9833610648918469,
     "trims": 12,
     "mean_daily_bps": 3.6934936444870905,
-    "seconds": 3.0287282466888428
+    "seconds": 3.142505407333374
    },
    "C4S": {
     "days": 1765,
@@ -3083,7 +3083,7 @@
     "maker_fill_rate": 0.913477537437604,
     "trims": 12,
     "mean_daily_bps": 3.1653435516478527,
-    "seconds": 3.070662021636963
+    "seconds": 3.232038974761963
    },
    "C10B": {
     "days": 1765,
@@ -3152,7 +3152,7 @@
     "maker_fill_rate": null,
     "trims": 12,
     "mean_daily_bps": 3.23316261599062,
-    "seconds": 3.130929946899414
+    "seconds": 3.199427366256714
    },
    "C10S": {
     "days": 1765,
@@ -3221,7 +3221,7 @@
     "maker_fill_rate": null,
     "trims": 12,
     "mean_daily_bps": 2.962785197001024,
-    "seconds": 3.1259536743164062
+    "seconds": 3.1769425868988037
    },
    "C10N": {
     "days": 1765,
@@ -3290,7 +3290,7 @@
     "maker_fill_rate": null,
     "trims": 12,
     "mean_daily_bps": 3.2274696449340166,
-    "seconds": 3.267995834350586
+    "seconds": 3.2385551929473877
    }
   }
  },
@@ -3367,7 +3367,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.8649594221210166,
-    "seconds": 3.288266658782959
+    "seconds": 3.369501829147339
    },
    "C7S": {
     "days": 1765,
@@ -3436,7 +3436,7 @@
     "maker_fill_rate": 0.9166666666666666,
     "trims": 0,
     "mean_daily_bps": 0.8647968405196067,
-    "seconds": 3.2410154342651367
+    "seconds": 3.3593332767486572
    },
    "C4B": {
     "days": 1765,
@@ -3505,7 +3505,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.8656977406123276,
-    "seconds": 3.221576690673828
+    "seconds": 3.4379913806915283
    },
    "C4S": {
     "days": 1765,
@@ -3574,7 +3574,7 @@
     "maker_fill_rate": 0.9032258064516129,
     "trims": 0,
     "mean_daily_bps": 0.8633954334154215,
-    "seconds": 3.174713373184204
+    "seconds": 3.2658591270446777
    },
    "C10B": {
     "days": 1765,
@@ -3643,7 +3643,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.8643361760398699,
-    "seconds": 3.358783006668091
+    "seconds": 3.3989198207855225
    },
    "C10S": {
     "days": 1765,
@@ -3712,7 +3712,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.8629556101812835,
-    "seconds": 3.2709317207336426
+    "seconds": 3.351717233657837
    }
   }
  },
@@ -3789,7 +3789,7 @@
     "maker_fill_rate": 0.9845679012345679,
     "trims": 55,
     "mean_daily_bps": 4.713171426731632,
-    "seconds": 3.3614912033081055,
+    "seconds": 3.498955249786377,
     "mean_abs_x": 0.6297968494091833,
     "mean_x": 0.11034601294373121,
     "pct_in_market": 0.8339577431539188
@@ -3861,7 +3861,7 @@
     "maker_fill_rate": 0.904320987654321,
     "trims": 56,
     "mean_daily_bps": 4.124638195552731,
-    "seconds": 3.0429606437683105
+    "seconds": 3.2799923419952393
    },
    "C4B": {
     "days": 1765,
@@ -3930,7 +3930,7 @@
     "maker_fill_rate": 0.9834710743801653,
     "trims": 55,
     "mean_daily_bps": 4.966261054193213,
-    "seconds": 3.0970399379730225
+    "seconds": 3.200716018676758
    },
    "C4S": {
     "days": 1765,
@@ -3999,7 +3999,7 @@
     "maker_fill_rate": 0.9107438016528926,
     "trims": 56,
     "mean_daily_bps": 4.273296463276652,
-    "seconds": 2.9486327171325684
+    "seconds": 3.138673782348633
    },
    "C10B": {
     "days": 1765,
@@ -4068,7 +4068,7 @@
     "maker_fill_rate": null,
     "trims": 55,
     "mean_daily_bps": 4.42750844897072,
-    "seconds": 3.059741973876953
+    "seconds": 3.304753541946411
    },
    "C10S": {
     "days": 1765,
@@ -4137,7 +4137,7 @@
     "maker_fill_rate": null,
     "trims": 54,
     "mean_daily_bps": 4.128500459151699,
-    "seconds": 3.025026559829712
+    "seconds": 3.1714868545532227
    },
    "C10N": {
     "days": 1765,
@@ -4206,7 +4206,7 @@
     "maker_fill_rate": null,
     "trims": 55,
     "mean_daily_bps": 4.421144374951393,
-    "seconds": 3.07138991355896
+    "seconds": 3.139263153076172
    }
   }
  },
@@ -4283,7 +4283,7 @@
     "maker_fill_rate": 1.0,
     "trims": 3,
     "mean_daily_bps": 4.183569798456084,
-    "seconds": 3.5911335945129395,
+    "seconds": 3.6595115661621094,
     "mean_abs_x": 0.8222112501937008,
     "mean_x": 0.8222112501937008,
     "pct_in_market": 0.9994334277620397
@@ -4355,7 +4355,7 @@
     "maker_fill_rate": 0.9166666666666666,
     "trims": 3,
     "mean_daily_bps": 4.189230317746435,
-    "seconds": 3.1093573570251465
+    "seconds": 3.3191401958465576
    },
    "C4B": {
     "days": 1765,
@@ -4424,7 +4424,7 @@
     "maker_fill_rate": 1.0,
     "trims": 3,
     "mean_daily_bps": 4.192716656924448,
-    "seconds": 3.174920082092285
+    "seconds": 3.2730042934417725
    },
    "C4S": {
     "days": 1765,
@@ -4493,7 +4493,7 @@
     "maker_fill_rate": 0.9347826086956522,
     "trims": 3,
     "mean_daily_bps": 4.179116806283228,
-    "seconds": 3.1677932739257812
+    "seconds": 3.5160913467407227
    },
    "C10B": {
     "days": 1765,
@@ -4562,7 +4562,7 @@
     "maker_fill_rate": null,
     "trims": 3,
     "mean_daily_bps": 4.179848323673824,
-    "seconds": 3.184702157974243
+    "seconds": 3.5245914459228516
    },
    "C10S": {
     "days": 1765,
@@ -4631,7 +4631,7 @@
     "maker_fill_rate": null,
     "trims": 3,
     "mean_daily_bps": 4.197619441787735,
-    "seconds": 3.2146835327148438
+    "seconds": 3.251455068588257
    },
    "C10N": {
     "days": 1765,
@@ -4700,7 +4700,7 @@
     "maker_fill_rate": null,
     "trims": 3,
     "mean_daily_bps": 4.176962043481812,
-    "seconds": 3.169062852859497
+    "seconds": 3.30153489112854
    }
   }
  },
@@ -4777,7 +4777,7 @@
     "maker_fill_rate": 0.9742974640164497,
     "trims": 414,
     "mean_daily_bps": -15.600806449704574,
-    "seconds": 3.3378689289093018,
+    "seconds": 3.5503499507904053,
     "mean_abs_x": 0.06701356061846533,
     "mean_x": 0.0017922152864940518,
     "pct_in_market": 0.0671152030217186
@@ -4849,145 +4849,145 @@
     "maker_fill_rate": 0.7685009487666035,
     "trims": 411,
     "mean_daily_bps": -28.214901404910858,
-    "seconds": 2.887263059616089
+    "seconds": 3.105440855026245
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -3034.053837200342,
-    "total_additive_bps": -3615.516496474779,
-    "ann_compound_bps": -720.4168970565461,
-    "ann_additive_bps": -747.6847145684388,
-    "vol": 0.15032091725660038,
-    "sharpe": -0.4973923311631528,
-    "sortino": -0.6143859833889603,
-    "max_dd": 0.44120755531400413,
+    "total_compound_bps": -8864.01638501509,
+    "total_additive_bps": -21750.861962278803,
+    "ann_compound_bps": -3622.477287978,
+    "ann_additive_bps": -4498.053606930178,
+    "vol": 0.26741435470712493,
+    "sharpe": -1.6820539091315776,
+    "sortino": -1.9878746412999935,
+    "max_dd": 0.906839716806585,
     "max_dd_duration_days": 1703,
     "max_dd_recovered": false,
     "longest_underwater_days": 1703,
-    "calmar": -0.16328299195688767,
-    "pct_positive_months": 0.46551724137931033,
+    "calmar": -0.39946169326752357,
+    "pct_positive_months": 0.25862068965517243,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -3771.6975042821036,
-      "compound_bps": -3142.003507693921,
+      "additive_bps": -7276.400188466764,
+      "compound_bps": -5169.523707205258,
       "days": 365
      },
      "2022": {
-      "additive_bps": -104.61237338562984,
-      "compound_bps": -104.06708905841833,
+      "additive_bps": -5938.312241741991,
+      "compound_bps": -4477.92404264537,
       "days": 365
      },
      "2023": {
-      "additive_bps": 78.86816729836008,
-      "compound_bps": 79.17999592835886,
+      "additive_bps": -4486.856582014099,
+      "compound_bps": -3615.3323605570313,
       "days": 365
      },
      "2024": {
-      "additive_bps": 144.0753087208299,
-      "compound_bps": 145.11819590734152,
+      "additive_bps": -1976.6315622353015,
+      "compound_bps": -1793.5376383639823,
       "days": 366
      },
      "2025": {
-      "additive_bps": 37.84990517376396,
-      "compound_bps": 37.921626399351446,
+      "additive_bps": -2072.6613878206526,
+      "compound_bps": -1871.9669728139552,
       "days": 304
      }
     },
     "trades": {
-     "count": 504,
-     "trades_per_year": 104.22662889518413,
-     "hit_rate": 0.503968253968254,
-     "mean_net_bps": -6.194844284126277,
-     "median_net_bps": 2.2274491498660423,
-     "sd_net_bps": 138.7623718743698,
-     "mean_gross_bps": -1.7635368046987796,
-     "mean_fees_bps": 4.139236452558097,
-     "mean_funding_bps": 0.29207102686939923,
-     "mean_hold_minutes": 4244.704365079365,
+     "count": 2842,
+     "trades_per_year": 587.7223796033994,
+     "hit_rate": 0.5070372976776918,
+     "mean_net_bps": -7.07870850534923,
+     "median_net_bps": 1.5976209380605062,
+     "sd_net_bps": 106.332957234949,
+     "mean_gross_bps": -2.9027318870782453,
+     "mean_fees_bps": 4.144747097309224,
+     "mean_funding_bps": 0.031229520961759818,
+     "mean_hold_minutes": 60.30541871921182,
      "median_hold_minutes": 60.0
     },
-    "fees_frac": 0.20846849245217727,
-    "funding_frac": 0.014733276674849973,
-    "turnover_per_year": 208.35184726212015,
-    "n_taker": 137,
-    "n_maker": 985,
-    "n_cancel": 13,
-    "n_chase": 21,
-    "maker_fill_rate": 0.9666339548577036,
-    "trims": 116,
-    "mean_daily_bps": -2.0484512727902433,
-    "seconds": 3.1108171939849854
+    "fees_frac": 1.1763537936499997,
+    "funding_frac": 0.00888522547546872,
+    "turnover_per_year": 1176.3572224687478,
+    "n_taker": 542,
+    "n_maker": 5558,
+    "n_cancel": 76,
+    "n_chase": 126,
+    "maker_fill_rate": 0.9649305555555555,
+    "trims": 416,
+    "mean_daily_bps": -12.323434539534734,
+    "seconds": 3.128725290298462
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -543.1411015822575,
-    "total_additive_bps": -558.4480540424775,
-    "ann_compound_bps": -114.82212875653042,
-    "ann_additive_bps": -115.48642477365682,
-    "vol": 0.08004402308433661,
-    "sharpe": -0.14427863608501673,
-    "sortino": -0.16607380352334594,
-    "max_dd": 0.1987150646196345,
+    "total_compound_bps": -9946.763227565934,
+    "total_additive_bps": -52355.91003238353,
+    "ann_compound_bps": -6613.249841748449,
+    "ann_additive_bps": -10827.142867886678,
+    "vol": 0.24690941021698143,
+    "sharpe": -4.3850669192283505,
+    "sortino": -4.668083092692316,
+    "max_dd": 0.9951151251683638,
     "max_dd_duration_days": 1744,
     "max_dd_recovered": false,
     "longest_underwater_days": 1744,
-    "calmar": -0.057782296966923136,
-    "pct_positive_months": 0.5,
+    "calmar": -0.6645713319481052,
+    "pct_positive_months": 0.06896551724137931,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -758.9953156538486,
-      "compound_bps": -730.9067298941414,
+      "additive_bps": -16033.457966588268,
+      "compound_bps": -7987.778579092567,
       "days": 365
      },
      "2022": {
-      "additive_bps": -134.83192508754325,
-      "compound_bps": -133.92701428087136,
+      "additive_bps": -12210.025123669046,
+      "compound_bps": -7050.6565666123315,
       "days": 365
      },
      "2023": {
-      "additive_bps": 101.68869188967417,
-      "compound_bps": 102.20747839211475,
+      "additive_bps": -9100.964622695525,
+      "compound_bps": -5975.146024938866,
       "days": 365
      },
      "2024": {
-      "additive_bps": 185.17010134495297,
-      "compound_bps": 186.89513067825962,
+      "additive_bps": -8171.54340469036,
+      "compound_bps": -5583.132420069797,
       "days": 366
      },
      "2025": {
-      "additive_bps": 48.52039346428761,
-      "compound_bps": 48.638295504703194,
+      "additive_bps": -6839.918914740326,
+      "compound_bps": -4954.013365316712,
       "days": 304
      }
     },
     "trades": {
-     "count": 103,
-     "trades_per_year": 21.30028328611898,
-     "hit_rate": 0.5242718446601942,
-     "mean_net_bps": -3.901137308538723,
-     "median_net_bps": 5.265080843994043,
-     "sd_net_bps": 172.68970095586963,
-     "mean_gross_bps": 2.243781908031787,
-     "mean_fees_bps": 4.474582563919135,
-     "mean_funding_bps": 1.670336652651375,
-     "mean_hold_minutes": 23814.388349514564,
+     "count": 2421,
+     "trades_per_year": 500.6600566572238,
+     "hit_rate": 0.43205287071458076,
+     "mean_net_bps": -21.03544692466898,
+     "median_net_bps": -9.319969423293221,
+     "sd_net_bps": 105.85851191296618,
+     "mean_gross_bps": -16.466812747011137,
+     "mean_fees_bps": 4.542339295611407,
+     "mean_funding_bps": 0.026294882046435656,
+     "mean_hold_minutes": 62.22180916976456,
      "median_hold_minutes": 61.0
     },
-    "fees_frac": 0.046135761397285854,
-    "funding_frac": 0.01718908341501633,
-    "turnover_per_year": 42.34587228958633,
-    "n_taker": 61,
-    "n_maker": 188,
-    "n_cancel": 29,
-    "n_chase": 16,
-    "maker_fill_rate": 0.8068669527896996,
-    "trims": 45,
-    "mean_daily_bps": -0.31640116376344335,
-    "seconds": 3.0941290855407715
+    "fees_frac": 1.0972580708139361,
+    "funding_frac": 0.006330032238173767,
+    "turnover_per_year": 1002.7677010495257,
+    "n_taker": 854,
+    "n_maker": 4414,
+    "n_cancel": 736,
+    "n_chase": 428,
+    "maker_fill_rate": 0.7913230548583722,
+    "trims": 426,
+    "mean_daily_bps": -29.66340511749775,
+    "seconds": 3.050133228302002
    },
    "C10B": {
     "days": 1765,
@@ -5056,7 +5056,7 @@
     "maker_fill_rate": null,
     "trims": 422,
     "mean_daily_bps": -19.240189795134054,
-    "seconds": 2.9704127311706543
+    "seconds": 3.099278450012207
    },
    "C10S": {
     "days": 1765,
@@ -5125,7 +5125,7 @@
     "maker_fill_rate": null,
     "trims": 415,
     "mean_daily_bps": -23.05438692620153,
-    "seconds": 2.970933198928833
+    "seconds": 3.195192813873291
    },
    "C10N": {
     "days": 1765,
@@ -5194,7 +5194,7 @@
     "maker_fill_rate": null,
     "trims": 421,
     "mean_daily_bps": -19.2398288728671,
-    "seconds": 2.8960464000701904
+    "seconds": 3.1245033740997314
    }
   }
  },
@@ -5272,7 +5272,7 @@
     "maker_fill_rate": 0.9818181818181818,
     "trims": 25,
     "mean_daily_bps": 2.116355732359322,
-    "seconds": 5.2988409996032715,
+    "seconds": 5.550201892852783,
     "mean_abs_x": 0.0004313553316500489,
     "mean_x": 0.00011960132922865814,
     "pct_in_market": 0.0004316178785017312
@@ -5344,7 +5344,7 @@
     "maker_fill_rate": 0.6506024096385542,
     "trims": 29,
     "mean_daily_bps": -1.643897790266022,
-    "seconds": 4.728407382965088
+    "seconds": 5.0855393409729
    },
    "C4B": {
     "days": 1765,
@@ -5413,29 +5413,29 @@
     "maker_fill_rate": 0.9777070063694268,
     "trims": 25,
     "mean_daily_bps": 2.157813063787301,
-    "seconds": 4.90470552444458
+    "seconds": 5.080840110778809
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -4912.296793184642,
-    "total_additive_bps": -6757.586006514387,
-    "ann_compound_bps": -1304.2101772360554,
-    "ann_additive_bps": -1397.4611288259214,
-    "vol": 0.09647170823885728,
-    "sharpe": -1.4485709378815022,
-    "sortino": -1.4741530668276763,
-    "max_dd": 0.49877815936506287,
+    "total_compound_bps": -4177.517923014054,
+    "total_additive_bps": -5408.584484558386,
+    "ann_compound_bps": -1058.2065496561804,
+    "ann_additive_bps": -1118.489142699043,
+    "vol": 0.08796417769800031,
+    "sharpe": -1.271527992382369,
+    "sortino": -1.306431797585926,
+    "max_dd": 0.42639044278733185,
     "max_dd_duration_days": 1762,
     "max_dd_recovered": false,
     "longest_underwater_days": 1762,
-    "calmar": -0.2614810116979251,
+    "calmar": -0.24817783033283783,
     "pct_positive_months": 0.06896551724137931,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -4940.647622150376,
-      "compound_bps": -3898.5873228884093,
+      "additive_bps": -3809.892723666166,
+      "compound_bps": -3168.147814588539,
       "days": 365
      },
      "2022": {
@@ -5444,8 +5444,8 @@
       "days": 365
      },
      "2023": {
-      "additive_bps": -824.8814902217522,
-      "compound_bps": -791.7764956260236,
+      "additive_bps": -802.1760071742631,
+      "compound_bps": -770.845025393782,
       "days": 365
      },
      "2024": {
@@ -5454,35 +5454,35 @@
       "days": 366
      },
      "2025": {
-      "additive_bps": -1086.656967499509,
-      "compound_bps": -1029.6975249449642,
+      "additive_bps": -891.1158270752068,
+      "compound_bps": -852.5650167658839,
       "days": 304
      }
     },
     "trades": {
-     "count": 108,
-     "trades_per_year": 22.3342776203966,
-     "hit_rate": 0.37962962962962965,
-     "mean_net_bps": -60.91538710630948,
-     "median_net_bps": -36.645588379627284,
-     "sd_net_bps": 170.4365860692312,
-     "mean_gross_bps": -56.2839131638783,
-     "mean_fees_bps": 4.620737098925967,
-     "mean_funding_bps": 0.010736843505211017,
-     "mean_hold_minutes": 8.194444444444445,
+     "count": 107,
+     "trades_per_year": 22.127478753541077,
+     "hit_rate": 0.411214953271028,
+     "mean_net_bps": -48.714940571562096,
+     "median_net_bps": -22.365454862930328,
+     "sd_net_bps": 184.19370489990402,
+     "mean_gross_bps": -43.95128584306203,
+     "mean_fees_bps": 4.752817540663013,
+     "mean_funding_bps": 0.010837187837035418,
+     "mean_hold_minutes": 8.149532710280374,
      "median_hold_minutes": 7.0
     },
-    "fees_frac": 0.049161911697929384,
+    "fees_frac": 0.05014367384982409,
     "funding_frac": 0.00011640336541540605,
-    "turnover_per_year": 44.03775771053847,
-    "n_taker": 56,
-    "n_maker": 178,
+    "turnover_per_year": 44.38551842196285,
+    "n_taker": 53,
+    "n_maker": 176,
     "n_cancel": 52,
     "n_chase": 26,
-    "maker_fill_rate": 0.6953125,
-    "trims": 35,
-    "mean_daily_bps": -3.8286606269203327,
-    "seconds": 4.758924245834351
+    "maker_fill_rate": 0.6929133858267716,
+    "trims": 31,
+    "mean_daily_bps": -3.0643538156138166,
+    "seconds": 5.098507881164551
    },
    "C10B": {
     "days": 1765,
@@ -5551,29 +5551,29 @@
     "maker_fill_rate": null,
     "trims": 25,
     "mean_daily_bps": 1.8235895619536908,
-    "seconds": 4.862328052520752
+    "seconds": 5.075475215911865
    },
    "C10S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 1353.1955179555532,
-    "total_additive_bps": 1269.1415473965867,
-    "ann_compound_bps": 265.93154904534043,
-    "ann_additive_bps": 262.45703388088054,
-    "vol": 0.08576179442671632,
-    "sharpe": 0.30603024999103856,
-    "sortino": 0.41413348901487895,
-    "max_dd": 0.11862280082089993,
+    "total_compound_bps": 1465.6075474922413,
+    "total_additive_bps": 1367.6681340700263,
+    "ann_compound_bps": 286.8698999112082,
+    "ann_additive_bps": 282.83222036009045,
+    "vol": 0.08598615582926852,
+    "sharpe": 0.3289276251884936,
+    "sortino": 0.44414265667851205,
+    "max_dd": 0.11935732798362053,
     "max_dd_duration_days": 1559,
     "max_dd_recovered": false,
     "longest_underwater_days": 1559,
-    "calmar": 0.22418249038551316,
+    "calmar": 0.24034544401880004,
     "pct_positive_months": 0.2413793103448276,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 1775.6022171288653,
-      "compound_bps": 1942.9997852725337,
+      "additive_bps": 1874.1288038023051,
+      "compound_bps": 2061.2516767770394,
       "days": 365
      },
      "2022": {
@@ -5598,29 +5598,29 @@
      }
     },
     "trades": {
-     "count": 160,
-     "trades_per_year": 33.08781869688385,
-     "hit_rate": 0.54375,
-     "mean_net_bps": 9.31701351387976,
-     "median_net_bps": 5.66009914956863,
-     "sd_net_bps": 166.7418616422371,
-     "mean_gross_bps": 19.343416339081738,
-     "mean_fees_bps": 10.01915545583596,
-     "mean_funding_bps": 0.007247369366017433,
-     "mean_hold_minutes": 7.18125,
+     "count": 167,
+     "trades_per_year": 34.535410764872516,
+     "hit_rate": 0.5449101796407185,
+     "mean_net_bps": 9.55253218970257,
+     "median_net_bps": 6.2199145872365875,
+     "sd_net_bps": 165.31464585264214,
+     "mean_gross_bps": 19.576305428507702,
+     "mean_fees_bps": 10.016829651388587,
+     "mean_funding_bps": 0.006943587416543649,
+     "mean_hold_minutes": 6.958083832335329,
      "median_hold_minutes": 5.0
     },
-    "fees_frac": 0.15992230475819333,
+    "fees_frac": 0.16669085347187773,
     "funding_frac": 0.00011398603281957074,
-    "turnover_per_year": 66.29541218099986,
-    "n_taker": 334,
+    "turnover_per_year": 69.17960854698457,
+    "n_taker": 348,
     "n_maker": 0,
     "n_cancel": 0,
     "n_chase": 0,
     "maker_fill_rate": null,
     "trims": 30,
-    "mean_daily_bps": 0.719060366796933,
-    "seconds": 4.786034822463989
+    "mean_daily_bps": 0.7748827955070972,
+    "seconds": 5.163604736328125
    },
    "C10N": {
     "days": 1765,
@@ -5689,7 +5689,7 @@
     "maker_fill_rate": null,
     "trims": 24,
     "mean_daily_bps": 2.582847744781045,
-    "seconds": 4.903611660003662
+    "seconds": 5.1799633502960205
    }
   }
  },
@@ -5766,7 +5766,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0011380984952552092,
-    "seconds": 3.2399799823760986
+    "seconds": 3.407951593399048
    },
    "C7S": {
     "days": 1765,
@@ -5835,7 +5835,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0011380984952552092,
-    "seconds": 3.208855152130127
+    "seconds": 3.3702945709228516
    },
    "C4B": {
     "days": 1765,
@@ -5904,7 +5904,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0011380984952552092,
-    "seconds": 3.167896270751953
+    "seconds": 3.3458495140075684
    },
    "C4S": {
     "days": 1765,
@@ -5973,7 +5973,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 0.0011380984952552092,
-    "seconds": 3.169168710708618
+    "seconds": 3.3580355644226074
    },
    "C10B": {
     "days": 1765,
@@ -6042,7 +6042,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.001137849188182442,
-    "seconds": 3.2121286392211914
+    "seconds": 3.3929591178894043
    },
    "C10S": {
     "days": 1765,
@@ -6111,7 +6111,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 0.0011367658741031808,
-    "seconds": 3.2918925285339355
+    "seconds": 3.322477102279663
    }
   }
  },
@@ -6189,7 +6189,7 @@
     "maker_fill_rate": 0.9728110599078341,
     "trims": 775,
     "mean_daily_bps": 2.53803274976184,
-    "seconds": 4.104355335235596,
+    "seconds": 4.228702068328857,
     "mean_abs_x": 0.8039184834022951,
     "mean_x": 0.17375005116616457,
     "pct_in_market": 0.8119420837267862
@@ -6261,29 +6261,29 @@
     "maker_fill_rate": 0.8919667590027701,
     "trims": 788,
     "mean_daily_bps": -2.6873283891227095,
-    "seconds": 3.731374502182007
+    "seconds": 3.758728265762329
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 15141.156380887736,
-    "total_additive_bps": 9219.211067588732,
-    "ann_compound_bps": 2100.3857614003578,
-    "ann_additive_bps": 1906.5224020792562,
-    "vol": 0.5679026024361307,
-    "sharpe": 0.3357129187119148,
-    "sortino": 0.4725021398356617,
-    "max_dd": 0.5123566361885304,
+    "total_compound_bps": 15327.796687777578,
+    "total_additive_bps": 9293.173829399977,
+    "ann_compound_bps": 2118.9079656195136,
+    "ann_additive_bps": 1921.8178174113266,
+    "vol": 0.5676567360229983,
+    "sharpe": 0.33855280761320256,
+    "sortino": 0.4767017426945988,
+    "max_dd": 0.5127772543960536,
     "max_dd_duration_days": 899,
     "max_dd_recovered": true,
     "longest_underwater_days": 899,
-    "calmar": 0.4099460440339616,
+    "calmar": 0.4132219101869392,
     "pct_positive_months": 0.5517241379310345,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 2194.3303132130304,
-      "compound_bps": 2453.7044434989193,
+      "additive_bps": 2254.194408660335,
+      "compound_bps": 2528.4810169286943,
       "days": 365
      },
      "2022": {
@@ -6292,8 +6292,8 @@
       "days": 365
      },
      "2023": {
-      "additive_bps": 4187.285820540765,
-      "compound_bps": 5200.277359908063,
+      "additive_bps": 4227.172181565759,
+      "compound_bps": 5261.026808135337,
       "days": 365
      },
      "2024": {
@@ -6302,104 +6302,104 @@
       "days": 366
      },
      "2025": {
-      "additive_bps": -1106.3447428900865,
-      "compound_bps": -1047.3406815523194,
+      "additive_bps": -1132.1324375511408,
+      "compound_bps": -1070.3977837899868,
       "days": 304
      }
     },
     "trades": {
      "count": 2169,
      "trades_per_year": 448.5467422096317,
-     "hit_rate": 0.46104195481788846,
-     "mean_net_bps": 7.622289430237682,
+     "hit_rate": 0.4605809128630705,
+     "mean_net_bps": 7.656120573969789,
      "median_net_bps": -11.623392156257532,
-     "sd_net_bps": 261.55756822044924,
-     "mean_gross_bps": 11.332500246730346,
-     "mean_fees_bps": 4.207336998790678,
-     "mean_funding_bps": -0.4971261822980143,
-     "mean_hold_minutes": 952.1387736284001,
+     "sd_net_bps": 261.54705201647226,
+     "mean_gross_bps": 11.346951785029756,
+     "mean_fees_bps": 4.187927228893805,
+     "mean_funding_bps": -0.49709601783384005,
+     "mean_hold_minutes": 952.1295527893038,
      "median_hold_minutes": 415.0
     },
-    "fees_frac": 0.9107048825492194,
-    "funding_frac": -0.11535066415904931,
-    "turnover_per_year": 897.6761462386214,
-    "n_taker": 887,
-    "n_maker": 3747,
+    "fees_frac": 0.9065526731048729,
+    "funding_frac": -0.11533759907038917,
+    "turnover_per_year": 897.6727266947507,
+    "n_taker": 880,
+    "n_maker": 3754,
     "n_cancel": 0,
-    "n_chase": 115,
-    "maker_fill_rate": 0.9702226825479027,
+    "n_chase": 108,
+    "maker_fill_rate": 0.972035214914552,
     "trims": 774,
-    "mean_daily_bps": 5.223349046792483,
-    "seconds": 3.7485034465789795
+    "mean_daily_bps": 5.265254294277607,
+    "seconds": 3.808253288269043
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": -4909.3787058647,
-    "total_additive_bps": -6751.852081643706,
-    "ann_compound_bps": -1303.1789961556362,
-    "ann_additive_bps": -1396.2753596600298,
-    "vol": 0.5650600006555583,
-    "sharpe": -0.2471021410186761,
-    "sortino": -0.3361376394863442,
-    "max_dd": 0.7318950399973412,
-    "max_dd_duration_days": 1737,
+    "total_compound_bps": -4956.945580393355,
+    "total_additive_bps": -6845.731588399645,
+    "ann_compound_bps": -1320.0467781822435,
+    "ann_additive_bps": -1415.6895352781135,
+    "vol": 0.5639255473509952,
+    "sharpe": -0.25104192245381074,
+    "sortino": -0.34145322320500154,
+    "max_dd": 0.740138852279765,
+    "max_dd_duration_days": 1544,
     "max_dd_recovered": false,
-    "longest_underwater_days": 1737,
-    "calmar": -0.17805544851900762,
+    "longest_underwater_days": 1544,
+    "calmar": -0.17835123424695984,
     "pct_positive_months": 0.4482758620689655,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": -4034.791087005278,
-      "compound_bps": -3320.080181262424,
+      "additive_bps": -4043.5724736087363,
+      "compound_bps": -3325.9435023220376,
       "days": 365
      },
      "2022": {
-      "additive_bps": -6168.459025230657,
-      "compound_bps": -4603.56154571853,
+      "additive_bps": -6248.441870785452,
+      "compound_bps": -4646.551643363035,
       "days": 365
      },
      "2023": {
-      "additive_bps": 3501.4660340645933,
-      "compound_bps": 4192.756039803185,
+      "additive_bps": 3552.7096513302354,
+      "compound_bps": 4265.67151873504,
       "days": 365
      },
      "2024": {
-      "additive_bps": 1331.9133244713423,
-      "compound_bps": 1424.685687274516,
+      "additive_bps": 1427.7515866882343,
+      "compound_bps": 1534.7042468201162,
       "days": 366
      },
      "2025": {
-      "additive_bps": -1381.9813279437071,
-      "compound_bps": -1290.738843751108,
+      "additive_bps": -1534.1784820239284,
+      "compound_bps": -1422.287712472289,
       "days": 304
      }
     },
     "trades": {
-     "count": 2159,
-     "trades_per_year": 446.47875354107646,
-     "hit_rate": 0.43955534969893467,
-     "mean_net_bps": 0.24672851028912038,
-     "median_net_bps": -16.785476865343007,
-     "sd_net_bps": 261.63537484696155,
-     "mean_gross_bps": 4.491366330919157,
-     "mean_fees_bps": 4.743852908376529,
-     "mean_funding_bps": -0.49921508774649265,
-     "mean_hold_minutes": 957.4377026401112,
-     "median_hold_minutes": 420.0
+     "count": 2158,
+     "trades_per_year": 446.2719546742209,
+     "hit_rate": 0.4392956441149212,
+     "mean_net_bps": 0.20123763811374756,
+     "median_net_bps": -16.58459339805682,
+     "sd_net_bps": 261.61907772613773,
+     "mean_gross_bps": 4.3551897094631595,
+     "mean_fees_bps": 4.653174069573507,
+     "mean_funding_bps": -0.4992219982240944,
+     "mean_hold_minutes": 957.3804448563485,
+     "median_hold_minutes": 417.0
     },
-    "fees_frac": 1.0216966424265421,
-    "funding_frac": -0.11536642993945394,
-    "turnover_per_year": 893.5692910107346,
-    "n_taker": 1231,
-    "n_maker": 3374,
+    "fees_frac": 1.0019193076873645,
+    "funding_frac": -0.11531634892341917,
+    "turnover_per_year": 893.5427809864398,
+    "n_taker": 1198,
+    "n_maker": 3407,
     "n_cancel": 0,
-    "n_chase": 436,
-    "maker_fill_rate": 0.8855643044619422,
-    "trims": 795,
-    "mean_daily_bps": -3.825411944274054,
-    "seconds": 3.6236023902893066
+    "n_chase": 402,
+    "maker_fill_rate": 0.8944604883171436,
+    "trims": 796,
+    "mean_daily_bps": -3.8786014665153794,
+    "seconds": 3.830256462097168
    },
    "C10B": {
     "days": 1765,
@@ -6468,7 +6468,7 @@
     "maker_fill_rate": null,
     "trims": 778,
     "mean_daily_bps": 0.11829476100609453,
-    "seconds": 3.7932028770446777
+    "seconds": 3.9283783435821533
    },
    "C10S": {
     "days": 1765,
@@ -6537,7 +6537,7 @@
     "maker_fill_rate": null,
     "trims": 786,
     "mean_daily_bps": -1.684739039766957,
-    "seconds": 3.6845035552978516
+    "seconds": 3.817678451538086
    },
    "C10N": {
     "days": 1765,
@@ -6606,7 +6606,7 @@
     "maker_fill_rate": null,
     "trims": 781,
     "mean_daily_bps": 0.07922952810539809,
-    "seconds": 3.7433230876922607
+    "seconds": 3.8421478271484375
    }
   }
  },
@@ -6683,7 +6683,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": 1.4304444706815507,
-    "seconds": 3.3557589054107666
+    "seconds": 3.4955506324768066
    },
    "C7S": {
     "days": 1765,
@@ -6752,7 +6752,7 @@
     "maker_fill_rate": 0.9583333333333334,
     "trims": 0,
     "mean_daily_bps": 1.4269434947078072,
-    "seconds": 3.2314867973327637
+    "seconds": 3.3095638751983643
    },
    "C4B": {
     "days": 1765,
@@ -6821,7 +6821,7 @@
     "maker_fill_rate": 0.9833333333333333,
     "trims": 0,
     "mean_daily_bps": 1.4316026268225304,
-    "seconds": 3.217144012451172
+    "seconds": 3.35078763961792
    },
    "C4S": {
     "days": 1765,
@@ -6890,7 +6890,7 @@
     "maker_fill_rate": 0.9333333333333333,
     "trims": 0,
     "mean_daily_bps": 1.423848713819345,
-    "seconds": 3.1182661056518555
+    "seconds": 3.3054816722869873
    },
    "C10B": {
     "days": 1765,
@@ -6959,7 +6959,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 1.4291684684172918,
-    "seconds": 3.3037564754486084
+    "seconds": 3.2953085899353027
    },
    "C10S": {
     "days": 1765,
@@ -7028,19 +7028,8 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 1.4277225739385704,
-    "seconds": 3.164726972579956
+    "seconds": 3.3109641075134277
    }
-  }
- },
- "carry_hurdle": {
-  "track": 2,
-  "log_total": 0.5740141557859914,
-  "by_year": {
-   "Y2021": 0.3030862890919462,
-   "Y2022": 0.038651309091946154,
-   "Y2023": 0.07565917909194615,
-   "Y2024": 0.11656267553958477,
-   "Y2025": 0.040054725785991334
   }
  },
  "T1-NET": {
@@ -7116,7 +7105,7 @@
     "maker_fill_rate": 0.8784452296819788,
     "trims": 0,
     "mean_daily_bps": 2.237519070482806,
-    "seconds": 4.331975936889648,
+    "seconds": 4.3727805614471436,
     "mean_abs_x": 0.14786917529850999,
     "mean_x": -0.048221558586427245,
     "pct_in_market": 0.8175511488825936
@@ -7188,7 +7177,7 @@
     "maker_fill_rate": 0.5878029223093372,
     "trims": 0,
     "mean_daily_bps": -2.366417445901759,
-    "seconds": 3.814680814743042
+    "seconds": 3.968587875366211
    },
    "C4B": {
     "days": 1765,
@@ -7257,7 +7246,7 @@
     "maker_fill_rate": 0.8832114507156698,
     "trims": 0,
     "mean_daily_bps": 2.9732873024324693,
-    "seconds": 3.7956230640411377
+    "seconds": 3.948061943054199
    },
    "C4S": {
     "days": 1765,
@@ -7326,7 +7315,7 @@
     "maker_fill_rate": 0.5945471272058208,
     "trims": 0,
     "mean_daily_bps": -3.7256305069603304,
-    "seconds": 3.918551206588745
+    "seconds": 3.994292974472046
    },
    "C10B": {
     "days": 1765,
@@ -7395,7 +7384,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 1.3499759859047806,
-    "seconds": 3.8816893100738525
+    "seconds": 3.9277000427246094
    },
    "C10S": {
     "days": 1765,
@@ -7464,7 +7453,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": -0.5487252643248285,
-    "seconds": 3.856961250305176
+    "seconds": 3.9119691848754883
    },
    "C10N": {
     "days": 1765,
@@ -7533,7 +7522,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": 1.356938328541593,
-    "seconds": 3.8869290351867676
+    "seconds": 3.9326934814453125
    }
   }
  },
@@ -7610,7 +7599,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": -0.48436141311393693,
-    "seconds": 3.3573293685913086
+    "seconds": 3.315279006958008
    },
    "C7S": {
     "days": 1765,
@@ -7679,7 +7668,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": -0.48460521960883934,
-    "seconds": 3.197053909301758
+    "seconds": 3.401508092880249
    },
    "C4B": {
     "days": 1765,
@@ -7748,7 +7737,7 @@
     "maker_fill_rate": 0.9230769230769231,
     "trims": 0,
     "mean_daily_bps": -0.48466453109238544,
-    "seconds": 3.172366142272949
+    "seconds": 3.3665575981140137
    },
    "C4S": {
     "days": 1765,
@@ -7817,7 +7806,7 @@
     "maker_fill_rate": 0.9230769230769231,
     "trims": 0,
     "mean_daily_bps": -0.48480149197497996,
-    "seconds": 3.280541181564331
+    "seconds": 3.360583782196045
    },
    "C10B": {
     "days": 1765,
@@ -7886,7 +7875,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": -0.48453600062379376,
-    "seconds": 3.1961545944213867
+    "seconds": 3.3300836086273193
    },
    "C10S": {
     "days": 1765,
@@ -7955,7 +7944,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": -0.4835555824208719,
-    "seconds": 3.361666202545166
+    "seconds": 3.2766075134277344
    }
   }
  },
@@ -8032,7 +8021,7 @@
     "maker_fill_rate": 0.9794941900205059,
     "trims": 28,
     "mean_daily_bps": 3.3682590337717833,
-    "seconds": 3.4379374980926514,
+    "seconds": 3.6440558433532715,
     "mean_abs_x": 0.5903973877393802,
     "mean_x": -0.33317022624105036,
     "pct_in_market": 0.7933785804217816
@@ -8104,29 +8093,29 @@
     "maker_fill_rate": 0.898838004101162,
     "trims": 28,
     "mean_daily_bps": 2.010863734445729,
-    "seconds": 3.144746780395508
+    "seconds": 3.1933860778808594
    },
    "C4B": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 9743.964097669226,
-    "total_additive_bps": 6802.627363353226,
-    "ann_compound_bps": 1510.53445967328,
-    "ann_additive_bps": 1406.7756303818287,
-    "vol": 0.4454560104217251,
-    "sharpe": 0.31580573557644814,
-    "sortino": 0.44457145513224916,
-    "max_dd": 0.5440529702754788,
+    "total_compound_bps": 9646.753337630904,
+    "total_additive_bps": 6753.270071220996,
+    "ann_compound_bps": 1498.7916142194138,
+    "ann_additive_bps": 1396.5685982978264,
+    "vol": 0.4456030544981099,
+    "sharpe": 0.31341091229071677,
+    "sortino": 0.4410592237693894,
+    "max_dd": 0.5440529702754789,
     "max_dd_duration_days": 1273,
     "max_dd_recovered": false,
     "longest_underwater_days": 1273,
-    "calmar": 0.27764474089874513,
+    "calmar": 0.2754863397695461,
     "pct_positive_months": 0.4482758620689655,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 6635.151200981022,
-      "compound_bps": 9416.053290544061,
+      "additive_bps": 6585.793908848792,
+      "compound_bps": 9320.457021832188,
       "days": 365
      },
      "2022": {
@@ -8154,48 +8143,48 @@
      "count": 475,
      "trades_per_year": 98.22946175637394,
      "hit_rate": 0.5431578947368421,
-     "mean_net_bps": 22.449831841943915,
+     "mean_net_bps": 22.383860563909778,
      "median_net_bps": 3.9568070396998687,
-     "sd_net_bps": 397.6596410279331,
-     "mean_gross_bps": 19.584888452445263,
-     "mean_fees_bps": 3.8084113501385284,
-     "mean_funding_bps": -6.67335473963718,
+     "sd_net_bps": 398.2698917593118,
+     "mean_gross_bps": 19.52536785779358,
+     "mean_fees_bps": 3.807013461336748,
+     "mean_funding_bps": -6.665506167452944,
      "mean_hold_minutes": 4245.848421052631,
      "median_hold_minutes": 1440.0
     },
-    "fees_frac": 0.18124410870126714,
-    "funding_frac": -0.3627167061889519,
-    "turnover_per_year": 179.07482546423444,
-    "n_taker": 95,
-    "n_maker": 2622,
+    "fees_frac": 0.18119182608864312,
+    "funding_frac": -0.3627243846159288,
+    "turnover_per_year": 179.01940269211252,
+    "n_taker": 96,
+    "n_maker": 2620,
     "n_cancel": 0,
     "n_chase": 65,
-    "maker_fill_rate": 0.9758094529214738,
-    "trims": 30,
-    "mean_daily_bps": 3.854179809265284,
-    "seconds": 3.0995235443115234
+    "maker_fill_rate": 0.9757914338919925,
+    "trims": 31,
+    "mean_daily_bps": 3.826215337802264,
+    "seconds": 3.2608680725097656
    },
    "C4S": {
     "days": 1765,
     "years": 4.835616438356165,
-    "total_compound_bps": 3834.351502191563,
-    "total_additive_bps": 3245.6964543402596,
-    "ann_compound_bps": 694.2448029946617,
-    "ann_additive_bps": 671.2063489145579,
-    "vol": 0.44414915373699027,
-    "sharpe": 0.1511218344709541,
-    "sortino": 0.21097976007041228,
-    "max_dd": 0.5546451110968361,
+    "total_compound_bps": 3778.149421701971,
+    "total_additive_bps": 3204.98869066764,
+    "ann_compound_bps": 685.2458344866295,
+    "ann_additive_bps": 662.7880295148377,
+    "vol": 0.4442680441167114,
+    "sharpe": 0.14918651888019208,
+    "sortino": 0.208225390807097,
+    "max_dd": 0.5546451110968362,
     "max_dd_duration_days": 1273,
     "max_dd_recovered": false,
     "longest_underwater_days": 1273,
-    "calmar": 0.1251691918137998,
+    "calmar": 0.12354671857316553,
     "pct_positive_months": 0.4482758620689655,
     "months": 58,
     "by_year": {
      "2021": {
-      "additive_bps": 3856.964165660003,
-      "compound_bps": 4706.3814166152915,
+      "additive_bps": 3816.2564019873844,
+      "compound_bps": 4646.636712864176,
       "days": 365
      },
      "2022": {
@@ -8223,26 +8212,26 @@
      "count": 475,
      "trades_per_year": 98.22946175637394,
      "hit_rate": 0.52,
-     "mean_net_bps": 14.959481449657149,
+     "mean_net_bps": 14.906593602133395,
      "median_net_bps": 1.137131336525025,
-     "sd_net_bps": 394.8000023456898,
-     "mean_gross_bps": 12.573988411908276,
-     "mean_fees_bps": 4.23764007902776,
-     "mean_funding_bps": -6.623133116776632,
+     "sd_net_bps": 395.3156564856973,
+     "mean_gross_bps": 12.52561858062345,
+     "mean_fees_bps": 4.235878070894797,
+     "mean_funding_bps": -6.616853092404744,
      "mean_hold_minutes": 4245.831578947368,
      "median_hold_minutes": 1440.0
     },
-    "fees_frac": 0.20183525023812482,
-    "funding_frac": -0.3627133044780691,
-    "turnover_per_year": 179.11101966647135,
+    "fees_frac": 0.20176587093398923,
+    "funding_frac": -0.3627199019775473,
+    "turnover_per_year": 179.05611365097695,
     "n_taker": 339,
-    "n_maker": 2380,
+    "n_maker": 2379,
     "n_cancel": 0,
-    "n_chase": 309,
-    "maker_fill_rate": 0.8850873930829305,
-    "trims": 30,
-    "mean_daily_bps": 1.8389215038755011,
-    "seconds": 3.1420743465423584
+    "n_chase": 308,
+    "maker_fill_rate": 0.8853740230740603,
+    "trims": 31,
+    "mean_daily_bps": 1.8158576151091443,
+    "seconds": 3.1428606510162354
    },
    "C10B": {
     "days": 1765,
@@ -8311,7 +8300,7 @@
     "maker_fill_rate": null,
     "trims": 28,
     "mean_daily_bps": 2.9080944772796884,
-    "seconds": 3.2600839138031006
+    "seconds": 3.268496036529541
    },
    "C10S": {
     "days": 1765,
@@ -8380,7 +8369,7 @@
     "maker_fill_rate": null,
     "trims": 28,
     "mean_daily_bps": 2.0677211007557235,
-    "seconds": 3.1767988204956055
+    "seconds": 3.2796711921691895
    },
    "C10N": {
     "days": 1765,
@@ -8449,7 +8438,7 @@
     "maker_fill_rate": null,
     "trims": 28,
     "mean_daily_bps": 2.924566371129441,
-    "seconds": 3.1781444549560547
+    "seconds": 3.2954864501953125
    }
   }
  },
@@ -8526,7 +8515,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": -3.45162226092823,
-    "seconds": 3.221362352371216
+    "seconds": 3.414649486541748
    },
    "C7S": {
     "days": 1765,
@@ -8595,7 +8584,7 @@
     "maker_fill_rate": 0.9407407407407408,
     "trims": 0,
     "mean_daily_bps": -3.4826959357149403,
-    "seconds": 3.211630344390869
+    "seconds": 3.282701015472412
    },
    "C4B": {
     "days": 1765,
@@ -8664,7 +8653,7 @@
     "maker_fill_rate": 1.0,
     "trims": 0,
     "mean_daily_bps": -3.442644220122709,
-    "seconds": 3.2490546703338623
+    "seconds": 3.3679826259613037
    },
    "C4S": {
     "days": 1765,
@@ -8733,7 +8722,7 @@
     "maker_fill_rate": 0.9264214046822743,
     "trims": 0,
     "mean_daily_bps": -3.478510183263683,
-    "seconds": 3.2468767166137695
+    "seconds": 3.285151481628418
    },
    "C10B": {
     "days": 1765,
@@ -8802,7 +8791,7 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": -3.459021369812982,
-    "seconds": 3.1671202182769775
+    "seconds": 3.3802151679992676
    },
    "C10S": {
     "days": 1765,
@@ -8871,8 +8860,1851 @@
     "maker_fill_rate": null,
     "trims": 0,
     "mean_daily_bps": -3.4552664735156364,
-    "seconds": 3.2464888095855713
+    "seconds": 3.4147534370422363
    }
+  }
+ },
+ "T1-NET-W": {
+  "track": 1,
+  "config": {
+   "sha": "913775dfb03e4938f36e2fe0306e392769d5266562c788e7412b60b48e4a138a"
+  },
+  "scenarios": {
+   "C7B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 4842.685855558108,
+    "total_additive_bps": 3949.2211594021524,
+    "ann_compound_bps": 850.9706744373389,
+    "ann_additive_bps": 816.6944607262242,
+    "vol": 0.15559704637182944,
+    "sharpe": 0.524877868680472,
+    "sortino": 0.7986999724473504,
+    "max_dd": 0.20823738424562732,
+    "max_dd_duration_days": 108,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 805,
+    "calmar": 0.4086541316873115,
+    "pct_positive_months": 0.5689655172413793,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 3400.7022972328637,
+      "compound_bps": 4050.4626310894314,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -136.98204937022356,
+      "compound_bps": -136.04811455136897,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 588.7047481190397,
+      "compound_bps": 606.3785252538379,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 127.75315555512118,
+      "compound_bps": 128.57268519084377,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -30.956992134648644,
+      "compound_bps": -30.909124773604585,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 3103,
+     "trades_per_year": 641.6968838526911,
+     "hit_rate": 0.6103770544634225,
+     "mean_net_bps": 1.4178357888680417,
+     "median_net_bps": 1.0775674689461312,
+     "sd_net_bps": 53.173197785843776,
+     "mean_gross_bps": 2.835430131276871,
+     "mean_fees_bps": 1.8931209714350095,
+     "mean_funding_bps": -0.4755266290261806,
+     "mean_hold_minutes": 669.6380921688689,
+     "median_hold_minutes": 180.0
+    },
+    "fees_frac": 0.5892834811804489,
+    "funding_frac": -0.15456908615994108,
+    "turnover_per_year": 347.9849337490351,
+    "n_taker": 15321,
+    "n_maker": 14916,
+    "n_cancel": 2064,
+    "n_chase": 0,
+    "maker_fill_rate": 0.8784452296819788,
+    "trims": 0,
+    "mean_daily_bps": 2.237519070482806,
+    "seconds": 4.313364505767822,
+    "mean_abs_x": 0.14786917529850999,
+    "mean_x": -0.048221558586427245,
+    "pct_in_market": 0.8175511488825936
+   },
+   "C7S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -3414.2224065301575,
+    "total_additive_bps": -4176.726792016604,
+    "ann_compound_bps": -827.4910203810671,
+    "ann_additive_bps": -863.7423677541419,
+    "vol": 0.15293095408681817,
+    "sharpe": -0.5647923750372992,
+    "sortino": -0.7887329175561606,
+    "max_dd": 0.41456742503915645,
+    "max_dd_duration_days": 1737,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1737,
+    "calmar": -0.19960348314943208,
+    "pct_positive_months": 0.4827586206896552,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2630.221687247577,
+      "compound_bps": -2312.7514452747228,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -693.517132536206,
+      "compound_bps": -670.0152556461869,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 498.16767240983717,
+      "compound_bps": 510.78486719299286,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -806.4185491891312,
+      "compound_bps": -774.7597027000668,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -544.7370954535276,
+      "compound_bps": -530.1659484517899,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2851,
+     "trades_per_year": 589.5835694050991,
+     "hit_rate": 0.5513854787793756,
+     "mean_net_bps": -1.3034044752685279,
+     "median_net_bps": 0.5546242008881077,
+     "sd_net_bps": 55.49418475011907,
+     "mean_gross_bps": 0.016361673087723246,
+     "mean_fees_bps": 1.8314193736245108,
+     "mean_funding_bps": -0.5116532252682597,
+     "mean_hold_minutes": 721.1687127323746,
+     "median_hold_minutes": 210.0
+    },
+    "fees_frac": 0.5243663794467754,
+    "funding_frac": -0.15341657787289978,
+    "turnover_per_year": 309.8211295149526,
+    "n_taker": 13715,
+    "n_maker": 13195,
+    "n_cancel": 9253,
+    "n_chase": 0,
+    "maker_fill_rate": 0.5878029223093372,
+    "trims": 0,
+    "mean_daily_bps": -2.366417445901759,
+    "seconds": 3.847097396850586
+   },
+   "C4B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 6900.957918206612,
+    "total_additive_bps": 5247.852088793308,
+    "ann_compound_bps": 1146.3275900506046,
+    "ann_additive_bps": 1085.2498653878513,
+    "vol": 0.1556859271111206,
+    "sharpe": 0.6970764060217567,
+    "sortino": 1.0691528747980263,
+    "max_dd": 0.2069667214023161,
+    "max_dd_duration_days": 105,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 314,
+    "calmar": 0.5538704881072617,
+    "pct_positive_months": 0.5689655172413793,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 4104.090250504172,
+      "compound_bps": 5074.342373969977,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 7.970420929115842,
+      "compound_bps": 7.973598153676375,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 603.8801401399444,
+      "compound_bps": 622.4863394866426,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": 394.6567097581527,
+      "compound_bps": 402.5478734023734,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 137.2545674619223,
+      "compound_bps": 138.20083262724353,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 3108,
+     "trades_per_year": 642.7308781869688,
+     "hit_rate": 0.6193693693693694,
+     "mean_net_bps": 1.8338827533668467,
+     "median_net_bps": 1.2260700590399733,
+     "sd_net_bps": 53.25077159112589,
+     "mean_gross_bps": 2.526684393731209,
+     "mean_fees_bps": 1.167847047354976,
+     "mean_funding_bps": -0.47504540699061404,
+     "mean_hold_minutes": 668.72425997426,
+     "median_hold_minutes": 180.0
+    },
+    "fees_frac": 0.3640839280955096,
+    "funding_frac": -0.15457548356659895,
+    "turnover_per_year": 348.12692151403013,
+    "n_taker": 1691,
+    "n_maker": 28261,
+    "n_cancel": 2046,
+    "n_chase": 1691,
+    "maker_fill_rate": 0.8832114507156698,
+    "trims": 0,
+    "mean_daily_bps": 2.9732873024324693,
+    "seconds": 3.9912796020507812
+   },
+   "C4S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4818.931503189129,
+    "total_additive_bps": -6575.737844784983,
+    "ann_compound_bps": -1271.4472298843473,
+    "ann_additive_bps": -1359.8551350405207,
+    "vol": 0.1521707415578906,
+    "sharpe": -0.8936377132151836,
+    "sortino": -1.2131955429161114,
+    "max_dd": 0.507245002156796,
+    "max_dd_duration_days": 1742,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1742,
+    "calmar": -0.250657418895835,
+    "pct_positive_months": 0.4482758620689655,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -4576.884563319817,
+      "compound_bps": -3672.5542693115785,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -853.457533654938,
+      "compound_bps": -818.0523941649429,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 486.6073198198311,
+      "compound_bps": 498.6410499796207,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -996.6414330907195,
+      "compound_bps": -948.58635224575,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -635.3616345393409,
+      "compound_bps": -615.5981855125899,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 2893,
+     "trades_per_year": 598.2691218130311,
+     "hit_rate": 0.5388869685447633,
+     "mean_net_bps": -2.1094276855664864,
+     "median_net_bps": 0.37886287499643323,
+     "sd_net_bps": 55.564446060710914,
+     "mean_gross_bps": -1.2662657979227085,
+     "mean_fees_bps": 1.3465630534321675,
+     "mean_funding_bps": -0.5034011657883893,
+     "mean_hold_minutes": 711.4987901832009,
+     "median_hold_minutes": 206.0
+    },
+    "fees_frac": 0.39136430086068597,
+    "funding_frac": -0.15339379499956898,
+    "turnover_per_year": 311.27726116311953,
+    "n_taker": 5419,
+    "n_maker": 21327,
+    "n_cancel": 9125,
+    "n_chase": 5419,
+    "maker_fill_rate": 0.5945471272058208,
+    "trims": 0,
+    "mean_daily_bps": -3.7256305069603304,
+    "seconds": 3.9738593101501465
+   },
+   "C10B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 2690.5275695436694,
+    "total_additive_bps": 2382.707615121938,
+    "ann_compound_bps": 505.08280265461303,
+    "ann_additive_bps": 492.7412348552449,
+    "vol": 0.15572263652378357,
+    "sharpe": 0.31642235570548427,
+    "sortino": 0.4760894548795456,
+    "max_dd": 0.2105040721633128,
+    "max_dd_duration_days": 108,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1544,
+    "calmar": 0.23993968262179785,
+    "pct_positive_months": 0.5517241379310345,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 2477.9006159083415,
+      "compound_bps": 2811.909327720899,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -322.1536291829104,
+      "compound_bps": -317.0197586607311,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 570.1322950405674,
+      "compound_bps": 586.6981597948167,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -121.93530696213546,
+      "compound_bps": -121.19490842078781,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -221.23635968192434,
+      "compound_bps": -218.80703151065387,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 3170,
+     "trades_per_year": 655.5524079320113,
+     "hit_rate": 0.601577287066246,
+     "mean_net_bps": 0.8944255565179166,
+     "median_net_bps": 0.9427154664879316,
+     "sd_net_bps": 52.684209799602925,
+     "mean_gross_bps": 3.1364990358472298,
+     "mean_fees_bps": 2.7084021529655464,
+     "mean_funding_bps": -0.46632867363623276,
+     "mean_hold_minutes": 657.5533123028391,
+     "median_hold_minutes": 175.0
+    },
+    "fees_frac": 0.8613463089369326,
+    "funding_frac": -0.1549629237668618,
+    "turnover_per_year": 356.1605355804295,
+    "n_taker": 30697,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": 1.3499759859047806,
+    "seconds": 3.913069725036621
+   },
+   "C10S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -923.0785856369954,
+    "total_additive_bps": -968.5000915333223,
+    "ann_compound_bps": -198.2923465749785,
+    "ann_additive_bps": -200.2847214785624,
+    "vol": 0.1539652481202136,
+    "sharpe": -0.1300843689883728,
+    "sortino": -0.1899353099592778,
+    "max_dd": 0.3036360941089711,
+    "max_dd_duration_days": 1544,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1544,
+    "calmar": -0.06530592061423827,
+    "pct_positive_months": 0.4827586206896552,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -23.72921215642594,
+      "compound_bps": -23.701080636640434,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -466.96929757612844,
+      "compound_bps": -456.2340308914215,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 498.0339806293692,
+      "compound_bps": 510.64434757800973,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -580.7024303074315,
+      "compound_bps": -564.1633506750082,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -395.13313212270515,
+      "compound_bps": -387.4284351516039,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 3170,
+     "trades_per_year": 655.5524079320113,
+     "hit_rate": 0.5649842271293375,
+     "mean_net_bps": -0.15899666768915935,
+     "median_net_bps": 0.5878267783078706,
+     "sd_net_bps": 53.17906396373689,
+     "mean_gross_bps": 2.0824775043482746,
+     "mean_fees_bps": 2.707025756716293,
+     "mean_funding_bps": -0.46555158467885943,
+     "mean_hold_minutes": 657.5529968454259,
+     "median_hold_minutes": 175.0
+    },
+    "fees_frac": 0.8610298480956834,
+    "funding_frac": -0.15494480133164557,
+    "turnover_per_year": 356.11281629185413,
+    "n_taker": 30692,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": -0.5487252643248285,
+    "seconds": 3.919907331466675
+   },
+   "C10N": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 2706.131954239655,
+    "total_additive_bps": 2394.9961498759117,
+    "ann_compound_bps": 507.7527513766357,
+    "ann_additive_bps": 495.28248991768146,
+    "vol": 0.15570135545653802,
+    "sharpe": 0.3180977381124553,
+    "sortino": 0.47861353715617694,
+    "max_dd": 0.2106540525089624,
+    "max_dd_duration_days": 108,
+    "max_dd_recovered": true,
+    "longest_underwater_days": 1544,
+    "calmar": 0.24103630826424904,
+    "pct_positive_months": 0.5517241379310345,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 2480.7758055045897,
+      "compound_bps": 2815.5935241743987,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -316.2940137691163,
+      "compound_bps": -311.3442419785091,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 570.6248518276944,
+      "compound_bps": 587.2196276405249,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -119.50525240239776,
+      "compound_bps": -118.79401318152617,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -220.60524128485824,
+      "compound_bps": -218.1897029477214,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 3170,
+     "trades_per_year": 655.5524079320113,
+     "hit_rate": 0.6025236593059937,
+     "mean_net_bps": 0.8985953434876333,
+     "median_net_bps": 0.9361855468330046,
+     "sd_net_bps": 52.735866485524944,
+     "mean_gross_bps": 3.140521796924324,
+     "mean_fees_bps": 2.7084037295482735,
+     "mean_funding_bps": -0.46647727611158313,
+     "mean_hold_minutes": 657.5536277602523,
+     "median_hold_minutes": 175.0
+    },
+    "fees_frac": 0.861352172537549,
+    "funding_frac": -0.15500830174092992,
+    "turnover_per_year": 356.16034275453086,
+    "n_taker": 0,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": 1.356938328541593,
+    "seconds": 3.8204264640808105
+   }
+  }
+ },
+ "static[T1-NET-W]": {
+  "track": 1,
+  "config": {
+   "mean_x": -0.04822155833244324
+  },
+  "scenarios": {
+   "C7B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -819.3748303797481,
+    "total_additive_bps": -854.8978941460987,
+    "ann_compound_bps": -175.23831564954594,
+    "ann_additive_bps": -176.79191578658697,
+    "vol": 0.029107018777347605,
+    "sharpe": -0.607385858163442,
+    "sortino": -0.8188467525598203,
+    "max_dd": 0.09714801846938337,
+    "max_dd_duration_days": 1075,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1075,
+    "calmar": -0.18038279978378877,
+    "pct_positive_months": 0.46551724137931033,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -301.0243790108582,
+      "compound_bps": -296.5387176354395,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 389.0214655690755,
+      "compound_bps": 396.6874350619963,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -466.4205458316864,
+      "compound_bps": -455.71030069925064,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -389.7255280984804,
+      "compound_bps": -382.22893136770637,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -86.74890677414892,
+      "compound_bps": -86.37372380705287,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -819.3748303815382,
+     "median_net_bps": -819.3748303815382,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -1115.5995398062291,
+     "mean_fees_bps": 1.348243773110641,
+     "mean_funding_bps": -297.5729531978015,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 0.00014093068197167658,
+    "funding_frac": -0.030864758950298672,
+    "turnover_per_year": 0.07239357799043039,
+    "n_taker": 9,
+    "n_maker": 4,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": -0.48436141311393693,
+    "seconds": 3.3249051570892334
+   },
+   "C7S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -819.769881131504,
+    "total_additive_bps": -855.3282126096013,
+    "ann_compound_bps": -175.32574519642753,
+    "ann_additive_bps": -176.88090515722635,
+    "vol": 0.029106683939820143,
+    "sharpe": -0.6076985805835473,
+    "sortino": -0.8192494361727447,
+    "max_dd": 0.09718102880284618,
+    "max_dd_duration_days": 1075,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1075,
+    "calmar": -0.1804114932268475,
+    "pct_positive_months": 0.46551724137931033,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -301.0886724802345,
+      "compound_bps": -296.60110435396655,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 389.0207259240597,
+      "compound_bps": 396.6866660762206,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -466.79996612810726,
+      "compound_bps": -456.0724235520527,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -389.65771763902666,
+      "compound_bps": -382.1637125990724,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -86.80258228629263,
+      "compound_bps": -86.42693556100191,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -819.7698811324872,
+     "median_net_bps": -819.7698811324872,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -1115.988346230568,
+     "mean_fees_bps": 1.3484260248497086,
+     "mean_funding_bps": -297.5668911229304,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 0.0001409529411758994,
+    "funding_frac": -0.03086496002661536,
+    "turnover_per_year": 0.07240332773808594,
+    "n_taker": 9,
+    "n_maker": 4,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": -0.48460521960883934,
+    "seconds": 3.412245750427246
+   },
+   "C4B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -819.865983654919,
+    "total_additive_bps": -855.4328973780604,
+    "ann_compound_bps": -175.3470143076026,
+    "ann_additive_bps": -176.9025538487207,
+    "vol": 0.02910614576737855,
+    "sharpe": -0.6077841953467733,
+    "sortino": -0.8193841405693182,
+    "max_dd": 0.09711883908285912,
+    "max_dd_duration_days": 1075,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1075,
+    "calmar": -0.18054891920402935,
+    "pct_positive_months": 0.46551724137931033,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -301.88170360704305,
+      "compound_bps": -297.3705835785232,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 389.0210299667298,
+      "compound_bps": 396.68698217986287,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -466.2966508185154,
+      "compound_bps": -455.5920509769244,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -389.59516864509794,
+      "compound_bps": -382.1035538125742,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -86.68040427413364,
+      "compound_bps": -86.30581275603565,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -819.8659836540224,
+     "median_net_bps": -819.8659836540224,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -1116.5581911876807,
+     "mean_fees_bps": 0.8609738683853664,
+     "mean_funding_bps": -297.5531814020436,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 8.985103614450327e-05,
+    "funding_frac": -0.03086514586163571,
+    "turnover_per_year": 0.07241717628413159,
+    "n_taker": 1,
+    "n_maker": 12,
+    "n_cancel": 0,
+    "n_chase": 1,
+    "maker_fill_rate": 0.9230769230769231,
+    "trims": 0,
+    "mean_daily_bps": -0.48466453109238544,
+    "seconds": 3.4269614219665527
+   },
+   "C4S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -820.0878978215749,
+    "total_additive_bps": -855.6746333358396,
+    "ann_compound_bps": -175.39612833460006,
+    "ann_additive_bps": -176.95254457086767,
+    "vol": 0.029106078275067004,
+    "sharpe": -0.6079573582486021,
+    "sortino": -0.8196140542051727,
+    "max_dd": 0.09711883908285979,
+    "max_dd_duration_days": 1075,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1075,
+    "calmar": -0.18059949026465988,
+    "pct_positive_months": 0.46551724137931033,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -302.1234395648157,
+      "compound_bps": -297.6051281851077,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 389.0210299667298,
+      "compound_bps": 396.68698217986287,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -466.29665081852204,
+      "compound_bps": -455.5920509769307,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -389.59516864509794,
+      "compound_bps": -382.1035538125742,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -86.68040427413364,
+      "compound_bps": -86.30581275603565,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -820.0878978208009,
+     "median_net_bps": -820.0878978208009,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -1116.7743854157225,
+     "mean_fees_bps": 0.8610779497728954,
+     "mean_funding_bps": -297.54756554469435,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 8.986327087895298e-05,
+    "funding_frac": -0.030865265636600966,
+    "turnover_per_year": 0.0724227868078269,
+    "n_taker": 1,
+    "n_maker": 12,
+    "n_cancel": 0,
+    "n_chase": 1,
+    "maker_fill_rate": 0.9230769230769231,
+    "trims": 0,
+    "mean_daily_bps": -0.48480149197497996,
+    "seconds": 3.2917118072509766
+   },
+   "C10B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -819.6577241900895,
+    "total_additive_bps": -855.206041100996,
+    "ann_compound_bps": -175.30092319478953,
+    "ann_additive_bps": -176.85564022768472,
+    "vol": 0.029107036984148186,
+    "sharpe": -0.6076044096278196,
+    "sortino": -0.8191370904501364,
+    "max_dd": 0.097148189154323,
+    "max_dd_duration_days": 1075,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1075,
+    "calmar": -0.18044692826576358,
+    "pct_positive_months": 0.46551724137931033,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -301.201878501016,
+      "compound_bps": -296.7109520498975,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 388.89260552468346,
+      "compound_bps": 396.5534641647318,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -466.42233325201965,
+      "compound_bps": -455.71200666484566,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -389.72552809849503,
+      "compound_bps": -382.2289313677204,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -86.74890677414892,
+      "compound_bps": -86.37372380705287,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -819.6577241923039,
+     "median_net_bps": -819.6577241923039,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -1115.5376690894432,
+     "mean_fees_bps": 1.6869970616662149,
+     "mean_funding_bps": -297.56694195880556,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 0.00017502497671262302,
+    "funding_frac": -0.030864796597839764,
+    "turnover_per_year": 0.07239486727886536,
+    "n_taker": 13,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": -0.48453600062379376,
+    "seconds": 3.307382583618164
+   },
+   "C10S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -818.0689853029772,
+    "total_additive_bps": -853.4756029728388,
+    "ann_compound_bps": -174.9493374498534,
+    "ann_additive_bps": -176.49778758361822,
+    "vol": 0.029107056669168033,
+    "sharpe": -0.6063745626694554,
+    "sortino": -0.817490283128463,
+    "max_dd": 0.0971823327468262,
+    "max_dd_duration_days": 1075,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1075,
+    "calmar": -0.18002175138728285,
+    "pct_positive_months": 0.46551724137931033,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -298.9698605912813,
+      "compound_bps": -294.5449188338077,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 388.76818068074357,
+      "compound_bps": 396.4241060152727,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -466.8136231369746,
+      "compound_bps": -456.08545769350644,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -389.6577176390316,
+      "compound_bps": -382.16371259907714,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -86.80258228629485,
+      "compound_bps": -86.42693556100411,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -818.0689853030873,
+     "median_net_bps": -818.0689853030873,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -1113.989052450061,
+     "mean_fees_bps": 1.6884473845490533,
+     "mean_funding_bps": -297.6085145315229,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 0.0001751475519044229,
+    "funding_frac": -0.03086493061189725,
+    "turnover_per_year": 0.07244700879234364,
+    "n_taker": 13,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": -0.4835555824208719,
+    "seconds": 3.3779687881469727
+   }
+  }
+ },
+ "T2-NET-W": {
+  "track": 2,
+  "config": {
+   "sha": "ac0c18dbeb7b98d879573e8ceafb21c023af8a254752b1c978b5e025b222b98c"
+  },
+  "scenarios": {
+   "C7B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -901.1702822880804,
+    "total_additive_bps": -944.3929019048494,
+    "ann_compound_bps": -193.404644301968,
+    "ann_additive_bps": -195.29938198032298,
+    "vol": 0.4542164047565294,
+    "sharpe": -0.04299698996671157,
+    "sortino": -0.059989232305524595,
+    "max_dd": 0.5526322822606039,
+    "max_dd_duration_days": 1273,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1273,
+    "calmar": -0.03499698633435325,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -559.3363984864874,
+      "compound_bps": -543.9811590747045,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -18.794538836168496,
+      "compound_bps": -18.776888161273455,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 86.37225955347957,
+      "compound_bps": 86.74634415659624,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2175.668145524462,
+      "compound_bps": -1955.261474362857,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1723.0339213887887,
+      "compound_bps": 1880.38219998518,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.5200573065902578,
+     "mean_net_bps": 4.513333556421703,
+     "median_net_bps": 1.4458410608278065,
+     "sd_net_bps": 341.80406209368766,
+     "mean_gross_bps": 6.514713686549394,
+     "mean_fees_bps": 6.743932298674837,
+     "mean_funding_bps": -4.742552168547146,
+     "mean_hold_minutes": 2880.206303724928,
+     "median_hold_minutes": 480.0
+    },
+    "fees_frac": 0.4726953707836785,
+    "funding_frac": -0.36460545227443003,
+    "turnover_per_year": 275.86759308551905,
+    "n_taker": 3736,
+    "n_maker": 2966,
+    "n_cancel": 0,
+    "n_chase": 87,
+    "maker_fill_rate": 0.9715034392400917,
+    "trims": 16,
+    "mean_daily_bps": -0.5350667999460903,
+    "seconds": 3.7589378356933594,
+    "mean_abs_x": 0.5960055135899561,
+    "mean_x": -0.3416497078220919,
+    "pct_in_market": 0.7909918948693736
+   },
+   "C7S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4943.279844089582,
+    "total_additive_bps": -6818.670103925155,
+    "ann_compound_bps": -1315.1878701020137,
+    "ann_additive_bps": -1410.0932509533607,
+    "vol": 0.45218147788705404,
+    "sharpe": -0.31184232877967943,
+    "sortino": -0.4271626966610129,
+    "max_dd": 0.6938891060413677,
+    "max_dd_duration_days": 1738,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1738,
+    "calmar": -0.18953862492598436,
+    "pct_positive_months": 0.41379310344827586,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -5598.361075194107,
+      "compound_bps": -4286.973116088061,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -344.85795037327125,
+      "compound_bps": -338.97936967234887,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 74.57648734625963,
+      "compound_bps": 74.85526254110324,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2416.6528673725147,
+      "compound_bps": -2146.8100975254742,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1466.6253016684805,
+      "compound_bps": 1579.631194638865,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.4828080229226361,
+     "mean_net_bps": -3.9642748171178774,
+     "median_net_bps": -0.9041088056505865,
+     "sd_net_bps": 338.1683592739628,
+     "mean_gross_bps": -1.6844239533384195,
+     "mean_fees_bps": 7.015094689404017,
+     "mean_funding_bps": -4.73524382562456,
+     "mean_hold_minutes": 2878.0114613180517,
+     "median_hold_minutes": 477.0
+    },
+    "fees_frac": 0.4921118559318174,
+    "funding_frac": -0.3645925115981705,
+    "turnover_per_year": 275.93276228098057,
+    "n_taker": 4024,
+    "n_maker": 2678,
+    "n_cancel": 0,
+    "n_chase": 374,
+    "maker_fill_rate": 0.8774574049803407,
+    "trims": 16,
+    "mean_daily_bps": -3.8632691806941386,
+    "seconds": 3.260794162750244
+   },
+   "C4B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": 169.09973090859197,
+    "total_additive_bps": 167.68591113562965,
+    "ann_compound_bps": 34.73745157608695,
+    "ann_additive_bps": 34.67725641048432,
+    "vol": 0.4544575883877994,
+    "sharpe": 0.007630471422757582,
+    "sortino": 0.010670164258435502,
+    "max_dd": 0.5434139110245029,
+    "max_dd_duration_days": 1273,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1273,
+    "calmar": 0.00639244797958818,
+    "pct_positive_months": 0.4482758620689655,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": 34.7426031921938,
+      "compound_bps": 34.803025570115196,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 234.29566787857402,
+      "compound_bps": 237.0619529172498,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 90.35643292136433,
+      "compound_bps": 90.76587944499782,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2033.260970695007,
+      "compound_bps": -1839.8790112030556,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1841.5521778385018,
+      "compound_bps": 2022.0241180908397,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.5315186246418339,
+     "mean_net_bps": 6.126300925921207,
+     "median_net_bps": 1.6347678123622753,
+     "sd_net_bps": 342.43166620395954,
+     "mean_gross_bps": 5.357409184832422,
+     "mean_fees_bps": 3.97335105434411,
+     "mean_funding_bps": -4.742242795432896,
+     "mean_hold_minutes": 2880.9097421203437,
+     "median_hold_minutes": 480.0
+    },
+    "fees_frac": 0.278483567989581,
+    "funding_frac": -0.36460246063861046,
+    "turnover_per_year": 275.8602886170771,
+    "n_taker": 208,
+    "n_maker": 5879,
+    "n_cancel": 0,
+    "n_chase": 192,
+    "maker_fill_rate": 0.9683742381815187,
+    "trims": 16,
+    "mean_daily_bps": 0.09500618194653238,
+    "seconds": 3.2653439044952393
+   },
+   "C4S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -5309.931363144681,
+    "total_additive_bps": -7571.378759189956,
+    "ann_compound_bps": -1449.3283262145908,
+    "ann_additive_bps": -1565.752547934467,
+    "vol": 0.45218166963265943,
+    "sharpe": -0.3462662582511235,
+    "sortino": -0.47222844936954445,
+    "max_dd": 0.7114014727855333,
+    "max_dd_duration_days": 1738,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1738,
+    "calmar": -0.2037286091831751,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -6932.418582273413,
+      "compound_bps": -5000.4733659280355,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 109.90272463039213,
+      "compound_bps": 110.50887362008018,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 78.49563869176471,
+      "compound_bps": 78.80452463414149,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2358.62288408275,
+      "compound_bps": -2101.1055662424164,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1531.264343844049,
+      "compound_bps": 1654.7232540371542,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.48424068767908307,
+     "mean_net_bps": -5.080017346674155,
+     "median_net_bps": -0.7948211481636223,
+     "sd_net_bps": 336.995654279876,
+     "mean_gross_bps": -5.299846489270625,
+     "mean_fees_bps": 4.512457350921046,
+     "mean_funding_bps": -4.732286493517519,
+     "mean_hold_minutes": 2880.8954154727794,
+     "median_hold_minutes": 478.5
+    },
+    "fees_frac": 0.31655076955826267,
+    "funding_frac": -0.36457128414250456,
+    "turnover_per_year": 275.9678507313247,
+    "n_taker": 797,
+    "n_maker": 5290,
+    "n_cancel": 0,
+    "n_chase": 781,
+    "maker_fill_rate": 0.8713556251029484,
+    "trims": 16,
+    "mean_daily_bps": -4.289733008039636,
+    "seconds": 3.428222417831421
+   },
+   "C10B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -2122.9775912045197,
+    "total_additive_bps": -2386.351274380729,
+    "ann_compound_bps": -481.5157465917054,
+    "ann_additive_bps": -493.4947394611706,
+    "vol": 0.4540873527418571,
+    "sharpe": -0.10867837134889684,
+    "sortino": -0.15115474427827408,
+    "max_dd": 0.5658533353706272,
+    "max_dd_duration_days": 1738,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1738,
+    "calmar": -0.08509550381572255,
+    "pct_positive_months": 0.41379310344827586,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -1457.1199425888656,
+      "compound_bps": -1355.9337859239463,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -261.58659739064007,
+      "compound_bps": -258.1948587955132,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 85.33686168498882,
+      "compound_bps": 85.70201865567444,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2335.693995104906,
+      "compound_bps": -2082.9734994270043,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1582.7123990186938,
+      "compound_bps": 1714.839047972736,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.5171919770773639,
+     "mean_net_bps": 2.4269169040474945,
+     "median_net_bps": 1.1369821026062117,
+     "sd_net_bps": 340.9176058316594,
+     "mean_gross_bps": 7.230290986851966,
+     "mean_fees_bps": 9.5447012513801,
+     "mean_funding_bps": -4.741327168575626,
+     "mean_hold_minutes": 2880.9441260744984,
+     "median_hold_minutes": 480.0
+    },
+    "fees_frac": 0.6690594703648544,
+    "funding_frac": -0.36460426512014515,
+    "turnover_per_year": 275.8967955650279,
+    "n_taker": 6083,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 16,
+    "mean_daily_bps": -1.352040382085399,
+    "seconds": 3.316810369491577
+   },
+   "C10S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4318.533022909355,
+    "total_additive_bps": -5653.756229925493,
+    "ann_compound_bps": -1103.4278148700148,
+    "ann_additive_bps": -1169.1903818259518,
+    "vol": 0.45508678390959084,
+    "sharpe": -0.25691591651631596,
+    "sortino": -0.3544560458512211,
+    "max_dd": 0.6631813558788247,
+    "max_dd_duration_days": 1738,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1738,
+    "calmar": -0.16638402227212662,
+    "pct_positive_months": 0.41379310344827586,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -3958.5170379116053,
+      "compound_bps": -3268.934923204139,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -809.6297123048548,
+      "compound_bps": -777.7216022551227,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 83.50014051692004,
+      "compound_bps": 83.84972652883982,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2428.0424090492556,
+      "compound_bps": -2155.749429183556,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1458.9327888233036,
+      "compound_bps": 1570.7269736989335,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.501432664756447,
+     "mean_net_bps": -2.2140046925586723,
+     "median_net_bps": 0.023377635643484163,
+     "sd_net_bps": 340.68170832029483,
+     "mean_gross_bps": 2.589036726878303,
+     "mean_fees_bps": 9.537913430004647,
+     "mean_funding_bps": -4.734872010567667,
+     "mean_hold_minutes": 2880.9426934097423,
+     "median_hold_minutes": 480.0
+    },
+    "fees_frac": 0.6689317446237245,
+    "funding_frac": -0.3645751226964101,
+    "turnover_per_year": 275.97571757849914,
+    "n_taker": 6083,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 16,
+    "mean_daily_bps": -3.2032613200711006,
+    "seconds": 3.328019142150879
+   },
+   "C10N": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -2123.254390529396,
+    "total_additive_bps": -2386.7026815165755,
+    "ann_compound_bps": -481.58491773416677,
+    "ann_additive_bps": -493.5674100586686,
+    "vol": 0.4540634716930445,
+    "sharpe": -0.10870009168945646,
+    "sortino": -0.15120926562670436,
+    "max_dd": 0.5656456355389594,
+    "max_dd_duration_days": 1738,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1738,
+    "calmar": -0.08513897880168424,
+    "pct_positive_months": 0.41379310344827586,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -1476.8650710032189,
+      "compound_bps": -1372.984766436144,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": -250.20615448977102,
+      "compound_bps": -247.10194216145274,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": 85.38530632378867,
+      "compound_bps": 85.75087859315812,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2332.657972389279,
+      "compound_bps": -2080.5695072871363,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": 1587.6412100419013,
+      "compound_bps": 1720.6144939433793,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 698,
+     "trades_per_year": 144.3456090651558,
+     "hit_rate": 0.5157593123209169,
+     "mean_net_bps": 2.4325265422671882,
+     "median_net_bps": 1.1102092411371203,
+     "sd_net_bps": 341.10008965821015,
+     "mean_gross_bps": 7.231212277541639,
+     "mean_fees_bps": 9.544801647737692,
+     "mean_funding_bps": -4.746115912463243,
+     "mean_hold_minutes": 2880.945558739255,
+     "median_hold_minutes": 480.0
+    },
+    "fees_frac": 0.6693084362002862,
+    "funding_frac": -0.36473358509017856,
+    "turnover_per_year": 275.8874118067904,
+    "n_taker": 16,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 16,
+    "mean_daily_bps": -1.3522394796127908,
+    "seconds": 3.4279510974884033
+   }
+  }
+ },
+ "static[T2-NET-W]": {
+  "track": 2,
+  "config": {
+   "mean_x": -0.34164971113204956
+  },
+  "scenarios": {
+   "C7B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4713.85905914542,
+    "total_additive_bps": -6374.96614122645,
+    "ann_compound_bps": -1235.1314985901815,
+    "ann_additive_bps": -1318.3357742479627,
+    "vol": 0.20224092458901055,
+    "sharpe": -0.6518639968280677,
+    "sortino": -0.8772239687640997,
+    "max_dd": 0.5377004397912686,
+    "max_dd_duration_days": 1087,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1087,
+    "calmar": -0.2297062466732686,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2058.2250339821912,
+      "compound_bps": -1860.2245829094036,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 2780.8033822591665,
+      "compound_bps": 3205.922869890019,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -3407.6638090919923,
+      "compound_bps": -2887.749554523944,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2975.5064975744513,
+      "compound_bps": -2573.6503201280975,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -714.3741828369813,
+      "compound_bps": -689.4545723706756,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -4713.859059145434,
+     "median_net_bps": -4713.859059145434,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -6276.2342253404295,
+     "mean_fees_bps": 31.224288592431037,
+     "mean_funding_bps": -1593.5994547874266,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 0.0039292815279895294,
+    "funding_frac": -0.2028618665513745,
+    "turnover_per_year": 2.2168976695260914,
+    "n_taker": 177,
+    "n_maker": 146,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": 1.0,
+    "trims": 0,
+    "mean_daily_bps": -3.6118788335560623,
+    "seconds": 3.3678531646728516
+   },
+   "C7S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4726.918124605313,
+    "total_additive_bps": -6399.701052772998,
+    "ann_compound_bps": -1239.6137153151749,
+    "ann_additive_bps": -1323.4509259275605,
+    "vol": 0.20225066726146768,
+    "sharpe": -0.6543617105681119,
+    "sortino": -0.8804695597006312,
+    "max_dd": 0.5369544831792346,
+    "max_dd_duration_days": 1087,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1087,
+    "calmar": -0.23086011089349517,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2100.2396006327,
+      "compound_bps": -1894.3517544696188,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 2800.60494337531,
+      "compound_bps": 3232.098566199903,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -3402.0473844629873,
+      "compound_bps": -2883.753890704781,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2980.332285305688,
+      "compound_bps": -2577.233254251887,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -717.6867257469336,
+      "compound_bps": -692.5382197311766,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -4726.918124604135,
+     "median_net_bps": -4726.918124604135,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -6284.518187004523,
+     "mean_fees_bps": 31.65837907254401,
+     "mean_funding_bps": -1589.258441472932,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 0.003999705724728536,
+    "funding_frac": -0.2027926819945099,
+    "turnover_per_year": 2.196912000656031,
+    "n_taker": 186,
+    "n_maker": 134,
+    "n_cancel": 0,
+    "n_chase": 10,
+    "maker_fill_rate": 0.9305555555555556,
+    "trims": 0,
+    "mean_daily_bps": -3.625892947746741,
+    "seconds": 3.303558588027954
+   },
+   "C4B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4705.920767082602,
+    "total_additive_bps": -6359.96022750813,
+    "ann_compound_bps": -1232.4111573118953,
+    "ann_additive_bps": -1315.2325682948824,
+    "vol": 0.2022399373686907,
+    "sharpe": -0.6503327608815295,
+    "sortino": -0.8752165451907177,
+    "max_dd": 0.5374082289010983,
+    "max_dd_duration_days": 1087,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1087,
+    "calmar": -0.22932495094687164,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2051.9682129597213,
+      "compound_bps": -1855.1300775103948,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 2783.498345529113,
+      "compound_bps": 3209.482297202779,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -3406.37521192935,
+      "compound_bps": -2886.833012898161,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2972.4143400813773,
+      "compound_bps": -2571.3536207777115,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -712.7008080667975,
+      "compound_bps": -687.896438825719,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -4705.920767081739,
+     "median_net_bps": -4705.920767081739,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -6282.481996189843,
+     "mean_fees_bps": 17.975957174489785,
+     "mean_funding_bps": -1594.537186282594,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 0.00225965675312568,
+    "funding_frac": -0.20286050484313442,
+    "turnover_per_year": 2.2169076868539785,
+    "n_taker": 2,
+    "n_maker": 321,
+    "n_cancel": 0,
+    "n_chase": 2,
+    "maker_fill_rate": 0.9938080495356038,
+    "trims": 0,
+    "mean_daily_bps": -3.6033768994380337,
+    "seconds": 3.2611753940582275
+   },
+   "C4S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4741.303653456094,
+    "total_additive_bps": -6427.019398249204,
+    "ann_compound_bps": -1244.5614127651818,
+    "ann_additive_bps": -1329.1003288164077,
+    "vol": 0.20225295855283804,
+    "sharpe": -0.6571475336264037,
+    "sortino": -0.884075585399476,
+    "max_dd": 0.5379660478519639,
+    "max_dd_duration_days": 1087,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1087,
+    "calmar": -0.23134571739881568,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2104.189889644032,
+      "compound_bps": -1897.5530874378708,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 2780.7266853447168,
+      "compound_bps": 3205.8215849247727,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -3411.149505509428,
+      "compound_bps": -2890.2282370918697,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2977.1032622230678,
+      "compound_bps": -2574.83603872361,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -715.3034262173956,
+      "compound_bps": -690.3197084446218,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -4741.303653454831,
+     "median_net_bps": -4741.303653454831,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -6309.524644622643,
+     "mean_fees_bps": 19.922574104925125,
+     "mean_funding_bps": -1588.143565272737,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 0.0025137984514454798,
+    "funding_frac": -0.20286399135587946,
+    "turnover_per_year": 2.216693581478231,
+    "n_taker": 27,
+    "n_maker": 296,
+    "n_cancel": 0,
+    "n_chase": 27,
+    "maker_fill_rate": 0.9164086687306502,
+    "trims": 0,
+    "mean_daily_bps": -3.6413707638805692,
+    "seconds": 3.308260202407837
+   },
+   "C10B": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4721.351798415189,
+    "total_additive_bps": -6389.150504823312,
+    "ann_compound_bps": -1237.702129470742,
+    "ann_additive_bps": -1321.2690845668606,
+    "vol": 0.20224383998549303,
+    "sharpe": -0.6533049830648169,
+    "sortino": -0.8791037003605501,
+    "max_dd": 0.5379377016864633,
+    "max_dd_duration_days": 1087,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1087,
+    "calmar": -0.23008280059019476,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2063.8497721215435,
+      "compound_bps": -1864.8017060561995,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 2777.1146540967943,
+      "compound_bps": 3201.052462265705,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -3408.8771644377116,
+      "compound_bps": -2888.6124708814878,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2977.8786816442516,
+      "compound_bps": -2575.4117780354536,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -715.6595407166009,
+      "compound_bps": -690.6512337550171,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -4721.351798414262,
+     "median_net_bps": -4721.351798414262,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -6270.777911183196,
+     "mean_fees_bps": 43.231110330464666,
+     "mean_funding_bps": -1592.6572230993986,
+     "mean_hold_minutes": 2541598.0,
+     "median_hold_minutes": 2541598.0
+    },
+    "fees_frac": 0.005359617923106098,
+    "funding_frac": -0.20286230672215053,
+    "turnover_per_year": 2.2169454054204496,
+    "n_taker": 323,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": -3.6199153001831794,
+    "seconds": 3.362762212753296
+   },
+   "C10S": {
+    "days": 1765,
+    "years": 4.835616438356165,
+    "total_compound_bps": -4700.1751803346715,
+    "total_additive_bps": -6349.113258755627,
+    "ann_compound_bps": -1230.444243050728,
+    "ann_additive_bps": -1312.9894274480475,
+    "vol": 0.20221059792936233,
+    "sharpe": -0.6493178106850316,
+    "sortino": -0.8739975703811599,
+    "max_dd": 0.5368204535456793,
+    "max_dd_duration_days": 1087,
+    "max_dd_recovered": false,
+    "longest_underwater_days": 1087,
+    "calmar": -0.22920964261396695,
+    "pct_positive_months": 0.43103448275862066,
+    "months": 58,
+    "by_year": {
+     "2021": {
+      "additive_bps": -2051.7695481455157,
+      "compound_bps": -1854.9682659960995,
+      "days": 365
+     },
+     "2022": {
+      "additive_bps": 2798.005442805638,
+      "compound_bps": 3228.6593284582136,
+      "days": 365
+     },
+     "2023": {
+      "additive_bps": -3400.2576208843734,
+      "compound_bps": -2882.480136911987,
+      "days": 365
+     },
+     "2024": {
+      "additive_bps": -2977.29957259116,
+      "compound_bps": -2574.981800959911,
+      "days": 366
+     },
+     "2025": {
+      "additive_bps": -717.791959940215,
+      "compound_bps": -692.6361655390077,
+      "days": 304
+     }
+    },
+    "trades": {
+     "count": 1,
+     "trades_per_year": 0.20679886685552407,
+     "hit_rate": 0.0,
+     "mean_net_bps": -4700.175180334777,
+     "median_net_bps": -4700.175180334777,
+     "sd_net_bps": NaN,
+     "mean_gross_bps": -6251.71448187963,
+     "mean_fees_bps": 42.82995831427455,
+     "mean_funding_bps": -1594.3692598591267,
+     "mean_hold_minutes": 2541597.0,
+     "median_hold_minutes": 2541597.0
+    },
+    "fees_frac": 0.005314319814768767,
+    "funding_frac": -0.20279106326274732,
+    "turnover_per_year": 2.1984806034468143,
+    "n_taker": 320,
+    "n_maker": 0,
+    "n_cancel": 0,
+    "n_chase": 0,
+    "maker_fill_rate": null,
+    "trims": 0,
+    "mean_daily_bps": -3.5972313080768425,
+    "seconds": 3.26845121383667
+   }
+  }
+ },
+ "carry_hurdle": {
+  "track": 2,
+  "log_total": 0.5740141557859914,
+  "by_year": {
+   "Y2021": 0.3030862890919462,
+   "Y2022": 0.038651309091946154,
+   "Y2023": 0.07565917909194615,
+   "Y2024": 0.11656267553958477,
+   "Y2025": 0.040054725785991334
   }
  }
 }

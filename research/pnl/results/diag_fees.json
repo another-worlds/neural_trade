@@ -1,0 +1,122 @@
+{
+ "T1-FADEV|C4|maker2": {
+  "ann_pct": -51.22017378977478,
+  "sharpe": -2.1070955445484314,
+  "trades": 5851
+ },
+ "plain_fade|C4|maker2": {
+  "ann_pct": -147.4782161391586,
+  "sharpe": -6.242615130087777,
+  "trades": 15655
+ },
+ "T1-NET|C4|maker2": {
+  "ann_pct": 10.852498653878513,
+  "sharpe": 0.6972739620427335,
+  "trades": 3108
+ },
+ "T1-LIN|C4|maker2": {
+  "ann_pct": 7.876017682823648,
+  "sharpe": 1.1589124584611352,
+  "trades": 162
+ },
+ "T1-FADEV|C7|maker2": {
+  "ann_pct": -75.50747376742704,
+  "sharpe": -3.1178351572714083,
+  "trades": 5858
+ },
+ "plain_fade|C7|maker2": {
+  "ann_pct": -214.7877974969889,
+  "sharpe": -9.212821044679922,
+  "trades": 15679
+ },
+ "T1-NET|C7|maker2": {
+  "ann_pct": 8.166944607262241,
+  "sharpe": 0.525026622507656,
+  "trades": 3103
+ },
+ "T1-LIN|C7|maker2": {
+  "ann_pct": 7.724698423111525,
+  "sharpe": 1.123274595157457,
+  "trades": 162
+ },
+ "T1-FADEV|C4|maker1": {
+  "ann_pct": -27.589975034003682,
+  "sharpe": -1.1333814536501612,
+  "trades": 5851
+ },
+ "plain_fade|C4|maker1": {
+  "ann_pct": -84.83208234356783,
+  "sharpe": -3.57349828914638,
+  "trades": 15655
+ },
+ "T1-NET|C4|maker1": {
+  "ann_pct": 14.14425756782814,
+  "sharpe": 0.9073882324821995,
+  "trades": 3108
+ },
+ "T1-LIN|C4|maker1": {
+  "ann_pct": 8.535169005304752,
+  "sharpe": 1.2406784466755085,
+  "trades": 162
+ },
+ "T1-FADEV|C7|maker1": {
+  "ann_pct": -63.38927232408275,
+  "sharpe": -2.618550822200803,
+  "trades": 5858
+ },
+ "plain_fade|C7|maker1": {
+  "ann_pct": -182.34893605324058,
+  "sharpe": -7.813333464761624,
+  "trades": 15679
+ },
+ "T1-NET|C7|maker1": {
+  "ann_pct": 9.904670016062983,
+  "sharpe": 0.6362625025070882,
+  "trades": 3103
+ },
+ "T1-LIN|C7|maker1": {
+  "ann_pct": 8.059522117457453,
+  "sharpe": 1.1642672246753967,
+  "trades": 162
+ },
+ "T1-FADEV|C4|maker0": {
+  "ann_pct": -3.9580798746446146,
+  "sharpe": -0.1621305735208212,
+  "trades": 5851
+ },
+ "plain_fade|C4|maker0": {
+  "ann_pct": -22.188709603916195,
+  "sharpe": -0.928539522901195,
+  "trades": 15655
+ },
+ "T1-NET|C4|maker0": {
+  "ann_pct": 17.438808264664946,
+  "sharpe": 1.1168414632160686,
+  "trades": 3108
+ },
+ "T1-LIN|C4|maker0": {
+  "ann_pct": 9.19848080885173,
+  "sharpe": 1.319321865587643,
+  "trades": 162
+ },
+ "T1-FADEV|C7|maker0": {
+  "ann_pct": -51.266260701393826,
+  "sharpe": -2.117851818710849,
+  "trades": 5858
+ },
+ "plain_fade|C7|maker0": {
+  "ann_pct": -149.9048221880602,
+  "sharpe": -6.413355190171289,
+  "trades": 15679
+ },
+ "T1-NET|C7|maker0": {
+  "ann_pct": 11.646430607109922,
+  "sharpe": 0.7475559618774129,
+  "trades": 3103
+ },
+ "T1-LIN|C7|maker0": {
+  "ann_pct": 8.398404265919273,
+  "sharpe": 1.2048641342691997,
+  "trades": 162
+ }
+}
