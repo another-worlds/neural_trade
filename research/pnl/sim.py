@@ -54,12 +54,17 @@ class SimState:
         self.last_cancel_bar = -1
 
 
-def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, record_exposure=False):
-    """Run engine E on bars b over bar indices [start, end). Returns a result dict (see bottom)."""
+def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, record_exposure=False, diag=None):
+    """Run engine E on bars b over bar indices [start, end). Returns a result dict (see bottom).
+    diag (descriptive diagnostics only, never a reported scenario): dict overriding 'lat' (bars), 'slip' (fraction)
+    and 'tt' ('tick' or a fraction of the limit) of the chosen fill scenario."""
     o, h, l, c, fund, t = b.o, b.h, b.l, b.c, b.funding, b.t
     gap = b.gap_before
     lat = 1 if fill == "S" else 0
     slip = 1e-4 if fill == "S" else 0.0
+    tt = 1e-4 if fill == "S" else "tick"
+    if diag:
+        lat, slip, tt = diag.get("lat", lat), diag.get("slip", slip), diag.get("tt", tt)
     K = int(policy.K)
     chase_entries = bool(policy.chase_entries)
     st = SimState()
@@ -169,7 +174,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         # 3. working maker order: trade-through check in bar i
         w = st.working
         if w is not None and i >= w["start"]:
-            thr = w["limit"] * (1e-4 if fill == "S" else 0.0) + (0.0 if fill == "S" else TICK)
+            thr = TICK if tt == "tick" else w["limit"] * tt
             hit = (l[i] <= w["limit"] - thr) if w["qty"] > 0 else (h[i] >= w["limit"] + thr)
             if hit:
                 fill_trade(w["limit"], w["qty"], MAKER, i, w["kind"])

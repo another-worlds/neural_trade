@@ -1,0 +1,139 @@
+{
+ "stress_decomposition_mean_daily_bps": {
+  "C7-B (base)": {
+   "mean_daily_bps": 2.116355732359322,
+   "trades": 162,
+   "mean_gross_bps_per_trade": 31.18322881381516,
+   "n_cancel": 3
+  },
+  "C7-S (stress)": {
+   "mean_daily_bps": -1.643897790266022,
+   "trades": 108,
+   "mean_gross_bps_per_trade": -18.079814319664735,
+   "n_cancel": 58
+  },
+  "C7-B + 1 bar latency": {
+   "mean_daily_bps": -1.568352161911375,
+   "trades": 109,
+   "mean_gross_bps_per_trade": -16.62860495470468,
+   "n_cancel": 57
+  },
+  "C7-B + 1 bps maker trade-through": {
+   "mean_daily_bps": 1.8999163464925093,
+   "trades": 158,
+   "mean_gross_bps_per_trade": 29.37392928340399,
+   "n_cancel": 8
+  },
+  "C7-B + 1 bps taker slippage": {
+   "mean_daily_bps": 2.02469743780279,
+   "trades": 162,
+   "mean_gross_bps_per_trade": 30.182329426785348,
+   "n_cancel": 3
+  },
+  "C10-B (all taker)": {
+   "mean_daily_bps": 1.8235895619536908,
+   "trades": 164,
+   "mean_gross_bps_per_trade": 30.713567163798245,
+   "n_cancel": 0
+  },
+  "C10-B + 1 bar latency": {
+   "mean_daily_bps": 0.900651115600145,
+   "trades": 160,
+   "mean_gross_bps_per_trade": 21.347993577232565,
+   "n_cancel": 0
+  },
+  "C10-B + 2 bar latency": {
+   "mean_daily_bps": 1.6541646720752947,
+   "trades": 160,
+   "mean_gross_bps_per_trade": 29.743116956097417,
+   "n_cancel": 0
+  }
+ },
+ "trades": 162,
+ "mean_net_bps": 24.171682970633096,
+ "median_net_bps": 39.32740132433764,
+ "hit_rate": 0.6111111111111112,
+ "median_hold_min": 5.0,
+ "long_share": 0.6172839506172839,
+ "follows_last_1m_share": 0.018518518518518517,
+ "follows_last_5m_share": 0.018518518518518517,
+ "follows_last_15m_share": 0.25925925925925924,
+ "top10_share_of_total_net": -0.3467755201553296,
+ "net_without_top10_bps": 5273.720606740267,
+ "trades_per_year": {
+  "2021": 129,
+  "2023": 9,
+  "2024": 3,
+  "2025": 21
+ },
+ "net_per_year_bps": {
+  "2021": 3328.1747143337643,
+  "2023": -210.76490677016517,
+  "2024": 723.6701716987934,
+  "2025": 74.73266198017072
+ },
+ "sigma60_at_entry_bps_per_min_median": 62.392202095741176,
+ "sigma60_dev_median_bps_per_min": 5.742777461786735,
+ "largest_trades": [
+  {
+   "time": "2021-05-19T13:00:00",
+   "side": -1,
+   "net_bps": 439.91546785418035,
+   "hold_min": 3
+  },
+  {
+   "time": "2021-05-19T13:22:00",
+   "side": 1,
+   "net_bps": 435.2449482719349,
+   "hold_min": 4
+  },
+  {
+   "time": "2021-05-19T13:03:00",
+   "side": 1,
+   "net_bps": -418.5384711513488,
+   "hold_min": 11
+  },
+  {
+   "time": "2025-10-10T21:14:00",
+   "side": 1,
+   "net_bps": -416.4774038057689,
+   "hold_min": 9
+  },
+  {
+   "time": "2021-05-21T14:15:00",
+   "side": 1,
+   "net_bps": -378.09325668819133,
+   "hold_min": 8
+  },
+  {
+   "time": "2021-01-04T10:15:00",
+   "side": 1,
+   "net_bps": -359.62832421363635,
+   "hold_min": 8
+  },
+  {
+   "time": "2024-12-05T22:29:00",
+   "side": 1,
+   "net_bps": 346.9231482279897,
+   "hold_min": 3
+  },
+  {
+   "time": "2021-05-12T23:58:00",
+   "side": 1,
+   "net_bps": -343.61943056599796,
+   "hold_min": 9
+  },
+  {
+   "time": "2021-07-26T20:01:00",
+   "side": 1,
+   "net_bps": -340.60057451985443,
+   "hold_min": 59
+  },
+  {
+   "time": "2021-12-04T05:22:00",
+   "side": 1,
+   "net_bps": -323.03406890701143,
+   "hold_min": 8
+  }
+ ]
+}
