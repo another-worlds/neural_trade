@@ -37,3 +37,30 @@ DECLARED BEFORE ANY NET DEV-OOS RESULT WAS COMPUTED (2026-11-01, after the inner
   (U = 0 ties during the band-off warm-up). For the variant only, patience now starts when the band switches on;
   the SPEC procedure's stopping rule is unchanged. A test run (T1 Y2021 h = 1, seed 0) still stayed at cash after
   78 band-off steps: with costs in the band-off loss, the MLP learns tau close to 0.
+
+PRE-RESULTS CODE REVIEW (independent reviewers plus adversarial verifiers; before the first full dev run)
+Only T1-LIN and T2-LIN had been scored (rows in runs.jsonl dated before this entry); they are superseded and rerun.
+- Exposure alignment (gate G1 / p_sel, check 12): engine E records x at the close of bar t BEFORE the decision at t,
+  so the recorded path is one bar behind the position that earns each bar. gate.py now passes the start-of-bar
+  exposure of each bar's own position (lead(held(x))) and funding on the previous bar's position. A test shows the
+  engine-F daily PnL of that path matches engine E to about 2 bps RMS per day (intraday compounding), 13x better
+  than before.
+- BandPolicy rounded the band edge OUTWARD to the 0.05 grid, so x stayed outside its own band and was rebalanced
+  every decision (one fill per minute in a test). Rounding is now toward the band interior (policy.band_target and
+  fast.band_chain).
+- Drift trim used q, not q plus committed taker orders: under S it could over-reduce into a stray opposite position
+  and strand EventPolicy in 'entry'. The trim now uses the effective exposure; EventPolicy exits a stray position
+  on a cancel.
+- A new decision now also cancels a chase that is queued but not yet executed (it was filling after the policy had
+  exited, costing two taker fees and desynchronising HysteresisPolicy). A chased order replaced in the same
+  direction keeps its price and clock, so decisions faster than K cannot postpone the chase.
+- The SPEC's '|x| > 1.02 at a decision' trim was missing; added (taker, logged as a trim).
+- B5 static-exposure-matched held constant contracts; it now holds constant exposure (rebalanced at 23:59 when
+  |x - mean x| > 0.02; rules.StaticPolicy).
+- EventPolicy under nominal fills held H-1 bars; fixed to H.
+- Trade log: gross is now realised PnL / entry equity (exposure-weighted; price_move_bps keeps the full-size move);
+  a one-fill flip's fee is split pro rata.
+- Check 12 now fails if a required strategy is missing (it passed vacuously before).
+- Net scaler is fitted on training rows only [a, tr_end) (it included the inner-validation rows); all nets and the
+  NET-W variant are retrained from scratch before any net dev-OOS result.
+- New regression tests for each item (56 tests pass).

@@ -53,7 +53,7 @@ class FoldData:
         self.cols = st.cols(track)
         self.gid, self.gkeys = st.group_index(self.cols)
         rows = np.arange(self.a, self.b)
-        self.scaler = prep.Scaler(st.X, rows, self.cols)
+        self.scaler = prep.Scaler(st.X, np.arange(self.a, self.tr_end), self.cols)   # training rows only
         self.Xn = np.empty((self.b - self.a, len(self.cols)), np.float32)
         for i in range(0, len(rows), 250_000):
             self.Xn[i:i + 250_000] = self.scaler(st.X, rows[i:i + 250_000])

@@ -209,7 +209,7 @@ def main(dry=False):
     if nt is not None:
         facs["T1-NT"] = nt
     for c, mx in prereg.get("static_mean_x", {}).items():
-        facs[f"static[{c}]"] = (lambda mx=mx: sim.ConstPolicy(mx, K=15, chase=True))
+        facs[f"static[{c}]"] = (lambda mx=mx: rules.StaticPolicy(mx, S["dec"]))
     tsd = None
     res = {"window": [int(s0), int(e0)], "dry_run": dry, "features_bit_identical": ident, "strategies": {}}
     daily = {}

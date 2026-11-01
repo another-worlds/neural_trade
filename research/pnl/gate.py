@@ -33,6 +33,27 @@ SCEN6 = ["C7B", "C7S", "C4B", "C4S", "C10B", "C10S"]
 SEEN_DEV = (FO.ts(2025, 10, 11), FO.SEAL_START)
 
 
+def lead(x, fill=None):
+    """Engine E records x at the close of bar t BEFORE the decision at t; a decision at t fills at the open of (or
+    inside) bar t+1 and earns bar t+1's return, so the position that earns bar t's return is the RECORDED x[t].
+    p_sel / engine_f_daily compute net_t = x_{t-1} (e^{r_t} - 1) - x_{t-1} f_t; passing lead(x) (x shifted one bar
+    earlier) and lead(f) gives net_t = x[t] (e^{r_t} - 1) - x[t] f_{t+1}, i.e. the price leg on the bar's own
+    position and funding on the position held at the end of the previous bar (a 00:00 print lands on the day before)."""
+    x = np.asarray(x)
+    out = np.empty_like(x)
+    out[:-1] = x[1:]
+    out[-1] = x[-1] if fill is None else fill
+    return out
+
+
+def held(x_close, r):
+    """Exposure held over each bar from its open: the recorded close exposure with the bar's own price drift removed,
+    x_open = x_close / (1 + R (1 - x_close)), R = e^r - 1 (exact for a position unchanged inside the bar)."""
+    x_close = np.asarray(x_close, np.float64)
+    R = np.expm1(np.asarray(r, np.float64))
+    return x_close / (1.0 + R * (1.0 - x_close))
+
+
 def year_of(days):
     return (np.asarray(days).astype("datetime64[D]").astype("datetime64[Y]").astype(int) + 1970)
 
@@ -71,9 +92,10 @@ def main():
     for track in (1, 2):
         cands = [c for c in CANDIDATES[track] if f"{c}|C7B" in dd and c in ex]
         missing = [c for c in CANDIDATES[track] if c not in cands]
-        X = np.stack([ex[c] for c in cands])
+        X = np.stack([lead(held(ex[c], r1)) for c in cands])
         cost = np.stack([dd[f"fees|{c}"] for c in cands])          # engine-E fees per day (shift-invariant)
-        ps = ST.p_sel(X, r1, f1, day, n_shifts=999, seed=track, tstat="hac", lag=BLOCK[track], daily_cost=cost)
+        ps = ST.p_sel(X, r1, lead(f1, fill=0.0), day, n_shifts=999, seed=track, tstat="hac", lag=BLOCK[track],
+                      daily_cost=cost)
         comps = {c: dd[f"{c}|C7B"] for c in COMPARATORS[track]}
         trk = {"candidates": {}, "missing": missing, "p_sel": ps["p_sel"], "t_obs_engineF": dict(zip(cands, ps["t_obs"].tolist())),
                "p_single": dict(zip(cands, ps["p_single"].tolist())), "best_by_t": cands[ps["best"]],

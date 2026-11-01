@@ -193,7 +193,7 @@ def main(which=None):
         if name in CANDIDATES[1] + CANDIDATES[2] + ("T1-NET-W", "T2-NET-W"):
             mx = float(np.mean(expo[name]))
             sname = f"static[{name}]"
-            fac_s = (lambda mx=mx: sim.ConstPolicy(mx, K=15, chase=True))
+            fac_s = (lambda mx=mx: rules.StaticPolicy(mx, S["dec"]))
             res[sname] = {"track": TRACK[name], "config": {"mean_x": mx}, "scenarios": {}}
             for fee, fill in SCEN:
                 r, summ = run_one(st, sname, fac_s, fee, fill, s, e, False)

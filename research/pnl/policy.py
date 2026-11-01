@@ -60,7 +60,8 @@ class HysteresisPolicy:
 
 
 class BandPolicy:
-    """Trade the drifted exposure to the nearest edge of [tau - b, tau + b] (clipped to [-1, 1]), rounded to 0.05."""
+    """Trade the drifted exposure to the nearest edge of [tau - b, tau + b] (clipped to [-1, 1]), rounded to the 0.05
+    grid toward the band interior (band_target)."""
 
     def __init__(self, tau, band, dec, K=1, chase=False, step=0.05):
         n = len(tau)
@@ -77,5 +78,14 @@ class BandPolicy:
         hi = min(1.0, self.tau[i] + self.band[i])
         if lo <= x <= hi:
             return None
-        tgt = round((lo if x < lo else hi) / self.step) * self.step
+        tgt = band_target(x, lo, hi, self.step)
         return None if abs(tgt - x) < 1e-9 else float(np.clip(tgt, -1, 1))
+
+
+def band_target(x, lo, hi, step):
+    """Nearest band edge rounded to the step grid TOWARD the band interior (so the new x is inside the band); if no
+    grid point lies in [lo, hi], the unrounded edge."""
+    if step <= 0:
+        return lo if x < lo else hi
+    g = np.ceil(lo / step - 1e-9) * step if x < lo else np.floor(hi / step + 1e-9) * step
+    return g if lo - 1e-12 <= g <= hi + 1e-12 else (lo if x < lo else hi)

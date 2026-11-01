@@ -174,12 +174,15 @@ def check_reconciliation(st):
     s, e = st.idx(FO.DEV_OOS[0]), st.n
     r1 = np.r_[0.0, np.diff(st.lc)][s:e]
     f1 = st.b.funding[s:e]
+    import gate as G
     out, ok = {}, True
     for name in ("B&H", "T2-P", "plain_fade"):
         if name not in ex:
+            out[name] = "missing"
+            ok = False
             continue
-        x = ex[name].astype(np.float64)
-        fdaily = ST.engine_f_daily(x, r1, f1, st.day[s:e], c_in=0.0, c_out=0.0)[0] - dd[f"fees|{name}"]
+        x = G.lead(G.held(ex[name], r1))
+        fdaily = ST.engine_f_daily(x, r1, G.lead(f1, 0.0), st.day[s:e], c_in=0.0, c_out=0.0)[0] - dd[f"fees|{name}"]
         eday = np.expm1(dd[f"{name}|C7B"])
         gap = (fdaily - eday)
         years = len(gap) / 365.0

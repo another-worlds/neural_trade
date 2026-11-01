@@ -187,3 +187,105 @@ def test_real_data_buy_and_hold_2021():
     fund = b.funding[s + 1:e].sum()
     approx = (1 + ret) - 1 - fund * (1 + ret / 2)                  # rough funding drag
     assert abs((r["final_E"] - 1) - approx) < 0.05
+
+
+# ------------------------------------------------------------------ regression tests for the pre-results review
+
+
+def _bars_open_eq_prev_close(n, seed, sigma=5e-4, rate=1e-4):
+    b = make_bars(n=n, seed=seed, sigma=sigma, rate=rate)
+    b.o[1:] = b.c[:-1]
+    b.h[:] = np.maximum.reduce([b.h, b.o, b.c])
+    b.l[:] = np.minimum.reduce([b.l, b.o, b.c])
+    return b
+
+
+def test_recorded_exposure_lead_alignment_reproduces_engine_e():
+    import gate as G
+    import stats as ST
+    b = _bars_open_eq_prev_close(20 * 1440, seed=11)
+    rs = np.random.default_rng(3)
+    tg = np.full(len(b), np.nan)
+    dec = np.arange(30, len(b) - 30, 37)
+    tg[dec] = np.round(rs.uniform(-1, 1, len(dec)), 2)
+    r = sim.simulate(b, sim.TargetPolicy(tg[1:], 1, K=1), 1, len(b), fee="C10", fill="B", record_exposure=True)
+    x = r["exposure"].astype(np.float64)
+    lr = np.r_[0.0, np.diff(np.log(b.c))][1:]
+    f = b.funding[1:]
+    day = (b.t[1:] // 86400)
+    fd = ST.engine_f_daily(G.lead(G.held(x, lr)), lr, G.lead(f, 0.0), day, c_in=0, c_out=0)[0] - r["daily_fees"]
+    gap = fd - np.expm1(r["daily"])                              # left: intraday compounding (about var/2 per day)
+    rms = np.sqrt(np.mean(gap ** 2))
+    assert rms * 1e4 < 3.0 and abs(gap.mean()) * 1e4 < 1.5, (rms * 1e4, gap.mean() * 1e4)
+    lag = ST.engine_f_daily(x, lr, f, day, c_in=0, c_out=0)[0] - r["daily_fees"] - np.expm1(r["daily"])
+    assert np.sqrt(np.mean(lag ** 2)) > 5 * rms                  # the recorded path unshifted is one bar behind
+
+
+def test_trim_with_pending_exit_under_stress_leaves_no_stray_position():
+    import rules
+    b = make_bars(n=600, seed=12, rate=0.0)
+    side = np.zeros(len(b), np.int8)
+    side[[100, 250, 320]] = -1                                    # shorts
+    b.c[114:] *= 1.06                                              # jump while the first short is exiting
+    b.o[114:] *= 1.06
+    b.h[114:] *= 1.06
+    b.l[114:] *= 1.06
+    b.l[101:104] = np.minimum(b.l[101:104], b.c[100] * 0.999)     # make sure the entries fill
+    b.h[251:254] = np.maximum(b.h[251:254], b.c[250] * 1.001)
+    b.h[321:324] = np.maximum(b.h[321:324], b.c[320] * 1.001)
+    b.h[101:104] = np.maximum(b.h[101:104], b.c[100] * 1.001)
+    pol = rules.EventPolicy(side, 15, 3)
+    r = sim.simulate(b, pol, 1, len(b), fee="C7", fill="S", record_exposure=True)
+    x = r["exposure"]
+    flat_between = np.abs(x[140 - 1:249 - 1]).max()
+    assert flat_between < 1e-9, flat_between                      # no stray position after the first exit
+    assert len(r["trades"]) >= 2                                  # later signals still trade
+
+
+def test_band_policy_does_not_churn_on_drift():
+    from policy import BandPolicy
+    b = make_bars(n=3 * 1440, seed=13, rate=0.0)
+    n = len(b)
+    tau, band = np.full(n, 0.37), np.full(n, 0.05)
+    r = sim.simulate(b, BandPolicy(tau, band, np.ones(n, bool), K=1), 1, n, fee="C7", fill="B")
+    assert len(r["fills"]) < 50, len(r["fills"])                   # was one fill per minute with outward rounding
+
+
+def test_reversing_decision_drops_pending_chase():
+    from policy import HysteresisPolicy
+    b = make_bars(n=400, seed=14, rate=0.0)
+    n = len(b)
+    lvl = b.c[100] + 2.0                                           # bars 101..199 trade above the buy limit c[100]
+    for arr in (b.o, b.h, b.l, b.c):
+        arr[101:200] = lvl
+    mu = np.full(n, np.nan)
+    dec = np.zeros(n, bool)
+    dec[100::5] = True
+    mu[100] = 50.0                                                 # enter long
+    mu[115] = -1.0                                                 # exit exactly when the chase is queued (K = 15)
+    mu[120:] = 0.0
+    r = sim.simulate(b, HysteresisPolicy(mu, dec, 1, 8.0, K=15, chase=True), 1, n, fee="C7", fill="B")
+    assert r["n_taker"] == 0 and r["final_E"] == 1.0               # no buy-then-sell pair of taker fills
+
+
+def test_fees_match_independent_maker_taker_notionals():
+    b = make_bars(seed=15, n=3000)
+    tg = np.full(len(b), np.nan)
+    tg[10::200] = 1.0
+    tg[110::200] = -1.0
+    r = sim.simulate(b, sim.TargetPolicy(tg[1:], 1, K=3, chase=True), 1, len(b), fee="C7", fill="B",
+                     close_at_end=False)
+    maker = sum(abs(dq) * px for (_, k, dq, px, fr) in r["fills"] if fr == sim.MAKER)
+    taker = sum(abs(dq) * px for (_, k, dq, px, fr) in r["fills"] if fr == sim.TAKER)
+    n_m = sum(1 for f_ in r["fills"] if f_[4] == sim.MAKER)
+    assert n_m == r["n_maker"] and len(r["fills"]) - n_m == r["n_taker"]
+    assert abs(r["fees"] - (2e-4 * maker + 5e-4 * taker)) < 1e-12
+
+
+def test_static_policy_holds_constant_exposure():
+    import rules
+    b = make_bars(n=20 * 1440, seed=16, sigma=2e-3, rate=0.0)
+    dec = (b.t % 86400) == 86340
+    r = sim.simulate(b, rules.StaticPolicy(0.4, dec), 1, len(b), fee="C7", fill="B", record_exposure=True)
+    x = r["exposure"][dec[1:]]
+    assert np.all(np.abs(x[1:] - 0.4) < 0.15)

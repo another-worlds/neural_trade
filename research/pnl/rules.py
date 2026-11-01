@@ -139,13 +139,18 @@ class EventPolicy:
         self.chase_entries = False
         self.state, self.exit_at, self.pos = "flat", -1, 0
         self.n_ext = 0
+        self.dec_bar = -1
 
     def on_fill(self, i, kind, st):
         if kind == "cancel":
             if st.q == 0.0:
                 self.state = "flat"
+            else:                                  # never strand in 'entry' with a stray position: exit it now
+                self.state, self.exit_at, self.pos = "hold", i, int(np.sign(st.q))
         elif kind == "increase" and st.q != 0.0 and self.state == "entry":
-            self.state, self.exit_at, self.pos = "hold", i + self.H - 1, int(np.sign(st.q))
+            # a fill at the decision bar itself (nominal fills) holds H bars like a next-bar fill
+            hold_end = i + self.H if i == self.dec_bar else i + self.H - 1
+            self.state, self.exit_at, self.pos = "hold", hold_end, int(np.sign(st.q))
         elif st.q == 0.0:
             self.state = "flat"
 
@@ -162,8 +167,25 @@ class EventPolicy:
             return None
         s = self.entry[i]
         if s != 0:
-            self.state = "entry"
+            self.state, self.dec_bar = "entry", i
             return float(s)
+        return None
+
+
+class StaticPolicy:
+    """B5 static-exposure-matched: hold x = mx (constant exposure): trade to mx at the first decision, then at 23:59
+    closes whenever |x - mx| > band (maker, chase after 15 bars)."""
+
+    def __init__(self, mx, dec, band=0.02, K=15, chase=True):
+        self.mx, self.dec, self.band, self.K, self.chase_entries = float(mx), dec, band, K, chase
+        self.started = False
+
+    def decide(self, i, x, st):
+        if not self.started:
+            self.started = True
+            return self.mx
+        if self.dec[i] and abs(x - self.mx) > self.band:
+            return self.mx
         return None
 
 

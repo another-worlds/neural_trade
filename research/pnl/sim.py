@@ -13,8 +13,12 @@ ENGINE E (event-driven, 1-min bars, compounding equity, signed BTC contracts q, 
   +1 bps on every taker fill); N (nominal: every fill at the decision close c_t at its nominal fee; reconciliation only).
 - Fees: maker 2 bps, taker 5 bps of filled notional. Funding: at a bar carrying rate f, E -= f * q * c_{prev}
   (the position held at the end of the previous bar pays; longs pay positive rates).
-- 1x cap: target clipped to [-1, 1]; if |x| > 1.10 at a bar close, trim to 1.0 as taker at the next open (logged).
-- A new decision cancels any working order. Positions are closed (taker) at the end of the run.
+- 1x cap: target clipped to [-1, 1]; if the effective |x| (incl. committed taker orders) > 1.10 at a bar close, or
+  > 1.02 at a decision bar where the policy does not trade, trim to 1.0 as taker at the next open (logged).
+- A new decision cancels any working order and any chase not yet executed; a chased order replaced in the same
+  direction keeps its price and clock. Positions are closed (taker) at the end of the run.
+- Trades: flat-to-flat round trips; gross = realised PnL / entry equity (exposure-weighted), a one-fill flip's fee is
+  split pro rata between the closing and the opening trade; price_move_bps is the full-size price move.
 - Gaps: no decisions for 60 bars after a gap; positions carry and are marked at the first bar after it.
 - Scale: equity, position and open orders are renormalised to E = 1 at every UTC day start (all PnL terms are linear
   in size, so this is exact). Daily log returns stay precise even for ruinous rules; fees and funding totals are sums
@@ -65,19 +69,20 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
     fees_total = funding_total = turnover = 0.0
     trims = 0
     n_taker = n_maker = n_cancel = n_chase = 0
-    taker_queue = []                 # list of (exec_bar, dq, kind)
+    taker_queue = []                 # list of (exec_bar, dq, kind, is_chase)
     trades, open_trade = [], None
     fills = []                       # (bar, kind, dq, price, fee_rate)
     day_log, day_ids = [], []
     day_fees, day_fund, day_acc = [], [], [0.0, 0.0]   # per day, in units of start-of-day equity
     expo = np.zeros(end - start, np.float32) if record_exposure else None
     suppress_until = -1
-    trim_pending = -1
     cur_day = t[start] // DAY
 
     def fill_trade(px, dq, fee_rate, i, kind):
         nonlocal E, q, mark, fees_total, turnover, open_trade
         E += q * (px - mark)
+        if open_trade is not None:
+            open_trade["pnl"] += q * (px - mark)
         mark = px
         fee_amt = fee_rate * abs(dq) * px
         E -= fee_amt
@@ -90,25 +95,28 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         q = q + dq
         if abs(q) * px < 1e-12 * max(E, 1e-300):
             q = 0.0
-        # trade bookkeeping (round trips: from flat to flat, per side)
+        # trade bookkeeping (round trips from flat to flat per side; PnL in equity units, as a fraction of E0)
         if q_old == 0.0 and q != 0.0:
             open_trade = {"entry_bar": i, "side": int(np.sign(q)), "entry_px": px, "fees": fee_amt, "funding": 0.0,
-                          "E0": E + fee_amt}
+                          "E0": E + fee_amt, "pnl": 0.0}
         elif open_trade is not None:
-            open_trade["fees"] += fee_amt
             if q == 0.0 or np.sign(q) != open_trade["side"]:
+                f_close = fee_amt if q == 0.0 else fee_amt * abs(q_old) / abs(dq)   # split a one-fill flip's fee
                 tr = open_trade
-                tr["exit_bar"], tr["exit_px"] = i, px
-                gross = tr["side"] * np.log(px / tr["entry_px"]) * 1e4
+                tr["fees"] += f_close
+                gross = tr["pnl"] / tr["E0"] * 1e4
                 fee_bps = tr["fees"] / tr["E0"] * 1e4
                 fund_bps = tr["funding"] / tr["E0"] * 1e4
                 trades.append({"entry_bar": tr["entry_bar"], "exit_bar": i, "side": tr["side"], "gross_bps": gross,
                                "fees_bps": fee_bps, "funding_bps": fund_bps, "net_bps": gross - fee_bps - fund_bps,
-                               "hold_minutes": int(i - tr["entry_bar"])})
+                               "hold_minutes": int(i - tr["entry_bar"]),
+                               "price_move_bps": tr["side"] * np.log(px / tr["entry_px"]) * 1e4})
                 open_trade = None
                 if q != 0.0:          # flip: the new leg opens a new trade
-                    open_trade = {"entry_bar": i, "side": int(np.sign(q)), "entry_px": px, "fees": 0.0,
-                                  "funding": 0.0, "E0": E}
+                    open_trade = {"entry_bar": i, "side": int(np.sign(q)), "entry_px": px, "fees": fee_amt - f_close,
+                                  "funding": 0.0, "E0": E + (fee_amt - f_close), "pnl": 0.0}
+            else:
+                open_trade["fees"] += fee_amt
         st.q = q
         if q != 0.0 and np.sign(q) != np.sign(q_old):
             st.entry_fill_bar, st.entry_side = i, int(np.sign(q))
@@ -131,11 +139,11 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
             E, q = E_end * f, q * f
             mark = c[i - 1]
             st.q, st.E = q, E
-            taker_queue = [(eb, dq_ * f, kd) for (eb, dq_, kd) in taker_queue]
+            taker_queue = [(eb, dq_ * f, kd, ch) for (eb, dq_, kd, ch) in taker_queue]
             if st.working is not None:
                 st.working["qty"] *= f
             if open_trade is not None:
-                for key in ("fees", "funding", "E0"):
+                for key in ("fees", "funding", "E0", "pnl"):
                     open_trade[key] *= f
         # 1. funding at the open of bar i, paid by the position held at the end of bar i-1
         if fund[i] != 0.0 and q != 0.0:
@@ -150,13 +158,13 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
         # 2. taker orders scheduled for this bar's open
         if taker_queue:
             rest = []
-            for (eb, dq, kind) in taker_queue:
+            for (eb, dq, kind, ch) in taker_queue:
                 if eb == i:
                     px = o[i] * (1 + slip * np.sign(dq))
                     fill_trade(px, dq, TAKER, i, kind)
                     n_taker += 1
                 else:
-                    rest.append((eb, dq, kind))
+                    rest.append((eb, dq, kind, ch))
             taker_queue = rest
         # 3. working maker order: trade-through check in bar i
         w = st.working
@@ -169,7 +177,7 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
                 st.working = None
             elif i >= w["end"]:
                 if w["chase"]:
-                    taker_queue.append((i + 1, w["qty"], w["kind"]))
+                    taker_queue.append((i + 1, w["qty"], w["kind"], True))
                     n_chase += 1
                 else:
                     n_cancel += 1
@@ -179,24 +187,36 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
                 st.working = None
         # 4. mark to the close
         E += q * (c[i] - mark)
+        if open_trade is not None:
+            open_trade["pnl"] += q * (c[i] - mark)
         mark = c[i]
         x = q * c[i] / E if E > 0 else 0.0
         st.E, st.x = E, x
         if record_exposure:
             expo[i - start] = x
-        # 5. drift trim
-        if abs(x) > 1.10 and i >= trim_pending:
-            target_q = np.sign(q) * 1.0 * E / c[i]
-            taker_queue.append((i + 1 + lat, target_q - q, "reduce"))
-            trim_pending = i + 1 + lat + 1
+        # 5. drift trim on the effective exposure (position plus committed taker orders), |x| > 1.10 at any close
+        q_eff = q + sum(e_[1] for e_ in taker_queue)
+        x_eff = q_eff * c[i] / E if E > 0 else 0.0
+        if abs(x_eff) > 1.10 and i < end - 1:
+            taker_queue.append((i + 1 + lat, np.sign(q_eff) * E / c[i] - q_eff, "reduce", False))
             trims += 1
+            q_eff = np.sign(q_eff) * E / c[i]
+            x_eff = float(np.sign(x_eff))
         # 6. decision at the close of bar i; the policy sees the exposure including committed taker orders
         if i < end - 1 and i >= suppress_until:
-            q_eff = q + sum(dq_ for (_, dq_, _) in taker_queue)
-            x_eff = q_eff * c[i] / E if E > 0 else 0.0
             tgt = policy.decide(i, x_eff, st)
+            if tgt is None:
+                at_dec = bool(policy.dec[i]) if hasattr(policy, "dec") else True
+                if at_dec and abs(x_eff) > 1.02:           # 1x cap at a decision: trim to 1.0 as taker
+                    taker_queue.append((i + 1 + lat, np.sign(q_eff) * E / c[i] - q_eff, "reduce", False))
+                    trims += 1
             if tgt is not None:
                 tgt = float(np.clip(tgt, -1.0, 1.0))
+                if any(e_[3] for e_ in taker_queue):          # a new decision also cancels a chase not yet executed
+                    taker_queue = [e_ for e_ in taker_queue if not e_[3]]
+                    q_eff = q + sum(e_[1] for e_ in taker_queue)
+                    x_eff = q_eff * c[i] / E if E > 0 else 0.0
+                prev_w = st.working
                 st.working = None                          # a new decision cancels the working order
                 K = int(policy.K_at(i)) if hasattr(policy, "K_at") else K
                 dq = (tgt - x_eff) * E / c[i]
@@ -220,16 +240,22 @@ def simulate(b, policy, start, end, fee="C7", fill="B", close_at_end=True, recor
                         if inc != 0.0:
                             fill_trade(c[i], inc, TAKER if fee == "C10" else MAKER, i, "increase")
                     elif fee == "C10":
-                        taker_queue.append((i + 1 + lat, dq, kind))
+                        taker_queue.append((i + 1 + lat, dq, kind, False))
                     elif fee == "C4":
                         st.working = {"qty": dq, "limit": c[i], "start": i + 1 + lat, "end": i + K + lat,
                                       "kind": kind, "chase": True if red != 0.0 else chase_entries}
                     else:                                  # C7: reduce taker, increase maker
                         if red != 0.0:
-                            taker_queue.append((i + 1 + lat, red, "reduce"))
+                            taker_queue.append((i + 1 + lat, red, "reduce", False))
                         if inc != 0.0:
                             st.working = {"qty": inc, "limit": c[i], "start": i + 1 + lat, "end": i + K + lat,
                                           "kind": "increase", "chase": chase_entries}
+                    # a chased order replaced in the same direction keeps its price and clock (resized only), so
+                    # decisions faster than K cannot postpone the chase indefinitely
+                    w2 = st.working
+                    if (w2 is not None and prev_w is not None and w2["chase"] and prev_w["chase"]
+                            and np.sign(w2["qty"]) == np.sign(prev_w["qty"])):
+                        w2["limit"], w2["start"], w2["end"] = prev_w["limit"], prev_w["start"], prev_w["end"]
     # close at the end of the run (taker at the last close)
     if close_at_end and q != 0.0:
         fill_trade(c[end - 1], -q, TAKER, end - 1, "reduce")

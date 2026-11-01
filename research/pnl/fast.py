@@ -104,7 +104,8 @@ def band_backward(g, code, gt, gb, gp0):
 
 @njit(cache=True)
 def band_chain(tau, b, p0, step):
-    """Inference band on one chain, weights rounded to `step` after clipping (as in engine E). Returns positions."""
+    """Inference band on one chain; edges rounded to `step` toward the band interior (as policy.band_target).
+    No price drift between steps (engine F)."""
     n = tau.shape[0]
     p = np.empty(n, np.float64)
     prev = p0
@@ -112,9 +113,17 @@ def band_chain(tau, b, p0, step):
         lo = max(-1.0, tau[k] - b[k])
         hi = min(1.0, tau[k] + b[k])
         if prev < lo:
-            v = round(lo / step) * step if step > 0 else lo
+            v = lo
+            if step > 0:
+                g = np.ceil(lo / step - 1e-9) * step              # rounded toward the band interior
+                if g <= hi + 1e-12:
+                    v = g
         elif prev > hi:
-            v = round(hi / step) * step if step > 0 else hi
+            v = hi
+            if step > 0:
+                g = np.floor(hi / step + 1e-9) * step
+                if g >= lo - 1e-12:
+                    v = g
         else:
             v = prev
         p[k] = v
