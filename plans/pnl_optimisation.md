@@ -26,7 +26,7 @@
    - **Fast models.** The models that trade a few hundred times a year made +7 to +9%/yr at C7-B on dev: T1-NET, T1-NT, and the ridge at 5-minute origins (T2-LIN, which chose 4-hour and daily horizons).
      - None of them passes the bootstrap test for net profit.
      - All three lose under the stress fills.
-     - From 2022 on, they made about +1%/yr or less.
+     - From 2022 on, T1-NET made +1.4%/yr and T1-NT -1.8%/yr. T2-LIN made +9.7%/yr, but with very large swings (Sharpe 0.16 over dev; -11.4 bps/day on the seal).
 2. **The only lead with timing skill and a positive profit bound was crash-reversal timing, and it failed on the seal.**
    - On dev, the ridge forecaster (T1-LIN) faded extreme 1-minute moves about 34 times a year and earned +24 bps per trade.
    - But it needed fills inside the first minute, and 80% of its trades came from 2021.
