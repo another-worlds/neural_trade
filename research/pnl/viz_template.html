@@ -97,6 +97,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .readout { margin: 8px 14px 0; padding: 6px 10px; border-radius: 6px; background: var(--chip); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; min-height: calc(2 * 1.45em + 12px); display: grid; align-content: center; gap: 2px; }
 .readout b { color: var(--ink); font-weight: 600; }
 @media (min-width: 701px) and (max-width: 960px) { .readout { min-height: calc(3 * 1.45em + 4px); } }   /* row 1 can wrap here */
+@media (pointer: fine) and (min-width: 701px) and (max-width: 720px) { .readout { min-height: calc(4 * 1.45em + 4px); } }   /* a classic scrollbar: row 2 too */
 .readout .sw { display: inline-block; width: 10px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
 .readout .row { display: flex; flex-wrap: wrap; gap: 2px 12px; }
 .readout .row > span { white-space: nowrap; }
@@ -178,7 +179,10 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
 }
 @media (pointer: coarse) and (max-height: 500px) and (max-width: 700px) {
   #chart { height: max(190px, calc(100svh - 140px)); }
-  .zoombar .hint { flex: 1 1 0; min-width: 0; }
+  .zoombar .hint { flex: 1 1 12em; min-width: 0; }   /* beside the buttons only when it gets 12em, else its own row */
+}
+@media (pointer: coarse) and (max-height: 500px) and (min-width: 701px) and (max-width: 960px) {
+  #chart { height: max(190px, calc(100svh - 122px)); }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
 </style>
@@ -408,7 +412,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     return Promise.resolve(cache[id]);
   }
   var FULL = [meta.dev_start_min * MIN, meta.end_min * MIN], MINSPAN = 20 * MIN;
-  var view = FULL.slice(), cursor = null, pinBeforeDbl = null, dblSkip = false, usedMinute = false, drawn = false, programmatic = 0, C = null;
+  var view = FULL.slice(), cursor = null, pinBeforeDbl = null, dblSkip = false, lastDbl = -1e9, usedMinute = false, drawn = false, programmatic = 0, C = null;
   function clampView(v) {
     var span = Math.max(MINSPAN, Math.min(v[1] - v[0], FULL[1] - FULL[0]));
     var a = Math.max(FULL[0], Math.min(v[0], FULL[1] - span));
@@ -443,6 +447,17 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     if (!nar) return { price: [0.47, 1], pnl: [0.21, 0.43], pos: [0, 0.17] };
     var g = Math.max(0.05, 17 / plotH());
     return { price: [0.38 + 2 * g, 1], pnl: [0.165 + g, 0.38 + g], pos: [0, 0.165] };
+  }
+  // compact y ticks: Plotly's nticks is only a ceiling and rounds the step up, so a short panel often kept one label.
+  // A linear tick0/dtick (tickvals would drop ticksuffix in Plotly 2.34): the smallest round step >= gap px that fits
+  // twice in the range, else one step between the low and high ends of the range, rounded inward.
+  function yTicks(r, px, gap) {
+    if (!r) return {};
+    var span = r[1] - r[0], raw = span * gap / px, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    var s = raw <= p ? p : raw <= 2 * p ? 2 * p : raw <= 5 * p ? 5 * p : 10 * p;
+    if (Math.floor(r[1] / s) > Math.ceil(r[0] / s)) return { tickmode: "linear", tick0: 0, dtick: s };
+    var q = Math.pow(10, Math.floor(Math.log10(span / 8))), lo = Math.ceil((r[0] + 0.12 * span) / q) * q;
+    return { tickmode: "linear", tick0: lo, dtick: Math.floor((r[1] - 0.12 * span) / q) * q - lo };
   }
   function tickFmt(r, base) { if (!r) return base; var d = r[1] - r[0]; return d < 3 ? ",.2f" : d < 30 ? ",.1f" : base; }
   var pending = null, hoverRedraw = null;   // desktop: re-reads the hover after a redraw (set in attachMouse)
@@ -485,7 +500,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     };
     var nar = narrow(), ring = { color: C.surface, width: 1.5 }, msz = nar ? 9 : 11;
     var y1 = yr([pr, { x: [v[0], v[1]], y: [isFinite(tlo) ? tlo : null, isFinite(thi) ? thi : null] }], nar ? 0.1 : 0.06);
-    if (nar && y1) {   // compact: keep >= 24 px above the highest price or trade mark for the in-plot "Price (USDT)" title
+    if (nar && y1 && plotH() >= 200) {   // compact: keep >= 24 px above the highest price or trade mark for the in-plot "Price (USDT)" title
       var h = 24 / ((1 - doms(true).price[0]) * plotH()), h0 = 0.1 / 1.2;
       if (h > h0 && h < 0.6) y1[1] += (h - h0) * (y1[1] - y1[0]) / (1 - h);
     }
@@ -528,6 +543,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     if (!nar) meta.refits_min.forEach(function (m) { ann.push({ xref: "x", yref: "paper", x: U(m * MIN), y: 1, yanchor: "bottom", xanchor: "left", text: "refit", showarrow: false, font: { size: 10, color: C.ink3 } }); });
     var D = doms(nar), pH = plotH(), ph = function (d) { return (d[1] - d[0]) * pH; };
     if (nar) [["Price (USDT)", D.price, "top"], ["Net PnL (%)", D.pnl, "bottom"], ["Position (x)", D.pos, "bottom"]].forEach(function (p) {
+      if (p[2] === "top" && pH < 200) return;                    // short chart: the price axis numbers name the panel
       ann.push({ xref: "paper", yref: "paper", x: 0, y: p[1][1], xanchor: "left", yanchor: p[2], text: p[0], showarrow: false, font: { size: 10, color: C.ink2 }, bgcolor: hexA(C.surface, 0.8), borderpad: 1 });
     });
     var ax = function (title, dom, extra) {
@@ -536,8 +552,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       for (var key in extra) o[key] = extra[key];
       return o;
     };
-    var y1o = { tickformat: tickFmt(y1, ",.0f"), nticks: nar ? Math.max(2, Math.min(5, Math.floor(ph(D.price) / 40))) : 8 }; if (y1) y1o.range = y1;
-    var y2o = { ticksuffix: "%", tickformat: tickFmt(y2, ",.0f"), zeroline: true, nticks: nar ? Math.max(2, Math.min(4, Math.floor(ph(D.pnl) / 22))) : 6 }; if (y2) y2o.range = y2;
+    var y1o = nar ? yTicks(y1, ph(D.price), 32) : { nticks: 8 }; y1o.tickformat = tickFmt(y1, ",.0f"); if (y1) y1o.range = y1;
+    var y2o = nar ? yTicks(y2, ph(D.pnl), 16) : { nticks: 6 }; y2o.ticksuffix = "%"; y2o.tickformat = tickFmt(y2, ",.0f"); y2o.zeroline = true; if (y2) y2o.range = y2;
     return {
       paper_bgcolor: C.surface, plot_bgcolor: C.surface, font: { family: C.font, color: C.ink, size: 12 },
       margin: nar ? { l: 40, r: 8, t: 18, b: 36 } : { l: 64, r: 16, t: 28, b: 40 }, showlegend: false,
@@ -568,7 +584,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   }
   function hookPlot() {
     if (!TOUCH) gd.on("plotly_doubleclick", function () {
-      cursor = pinBeforeDbl; dblSkip = true;                    // undo the first click's pin; Plotly's synthetic 2nd click follows at once
+      cursor = pinBeforeDbl; dblSkip = true; lastDbl = performance.now();   // undo the first click's pin; Plotly's synthetic 2nd click follows at once
       setTimeout(function () { dblSkip = false; setView(FULL, true); }, 0);   // after Plotly's own reset relayout
     });
     gd.on("plotly_relayout", function (ev) {
@@ -595,7 +611,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   }
 
   // ---------------- readout (full-resolution values at one time)
-  var shownAt = null, monthFail = {};                         // shownAt: the time the readout shows (null: the hint)
+  var shownAt = null, monthFail = {}, monthWait = {};                         // shownAt: the time the readout shows (null: the hint)
   function readoutAt(ms) {
     if (!cur || !C) return;
     var nar = narrow(), dt = function (x) { return nar ? fmtTimeMs(x).slice(5) : fmtTimeMs(x); }, pdp = nar ? 0 : 1;
@@ -605,6 +621,11 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     else if (mo && ms === cursor) {                             // a pin loads the exact 1-minute close
       if (!monthFail[mo.name]) {
         pTxt = "\u2026";
+        var mn = mo.name;
+        if (!monthWait[mn]) monthWait[mn] = setTimeout(function () {   // a stalled request: the hourly close after 2 s
+          delete monthWait[mn];
+          if (!monthArr[mn] && !monthFail[mn]) { monthFail[mn] = true; if (cursor != null && shownAt === cursor) readoutAt(cursor); }
+        }, 2000);
         loadMonth(mo).then(refresh, function () { if (!monthFail[mo.name]) { monthFail[mo.name] = true; refresh(); } });
       } else loadMonth(mo).then(refresh, function () {});       // retry quietly; the hourly close stays meanwhile
     }
@@ -654,7 +675,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       readoutAt(msAtClientX(lastX));
     };
     hoverRedraw = function () {                                 // true when the pointer is over the plot and the hover was redrawn
-      if (ptr && inside(ptr)) { lastX = ptr.clientX; draw(); return true; }
+      if (ptr && !gd._dragging && inside(ptr)) { lastX = ptr.clientX; draw(); return true; }
       hl.style.display = "none"; return false;
     };
     document.addEventListener("mousemove", function (e) { ptr = { clientX: e.clientX, clientY: e.clientY }; });
@@ -666,7 +687,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     gd.addEventListener("mouseleave", function () { hl.style.display = "none"; if (cursor != null) readoutAt(cursor); });
     gd.addEventListener("mousedown", function (e) { down = { x: e.clientX, y: e.clientY }; });
     gd.addEventListener("click", function (e) {
-      if (dblSkip || e.detail >= 2) return;        // 2nd+ click of a double-click, by Plotly's count or the browser's
+      if (dblSkip || e.detail >= 2 || performance.now() - lastDbl < 500) return;   // 2nd+ click of a double-click (Plotly's count, the browser's, or a 3rd click within 500 ms)
       pinBeforeDbl = cursor;                       // restored if this click turns out to start a double-click
       if (!down || Math.abs(e.clientX - down.x) > 3 || Math.abs(e.clientY - down.y) > 3 || !inside(e)) return;
       setCursor(msAtClientX(e.clientX));
