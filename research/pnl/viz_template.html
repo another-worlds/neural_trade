@@ -96,6 +96,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .res { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .readout { margin: 8px 14px 0; padding: 6px 10px; border-radius: 6px; background: var(--chip); font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; min-height: calc(2 * 1.45em + 12px); display: grid; align-content: center; gap: 2px; }
 .readout b { color: var(--ink); font-weight: 600; }
+@media (min-width: 701px) and (max-width: 960px) { .readout { min-height: calc(3 * 1.45em + 4px); } }   /* row 1 can wrap here */
 .readout .sw { display: inline-block; width: 10px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
 .readout .row { display: flex; flex-wrap: wrap; gap: 2px 12px; }
 .readout .row > span { white-space: nowrap; }
@@ -165,13 +166,19 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   .side-long, .side-short { text-align: center !important; }
   .side-long .w, .side-short .w { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .readout { min-height: calc(5 * 1.45em + 10px); }
-  #chart { height: clamp(420px, calc(100svh - 272px), 620px); }   /* the whole card fits one screen */
+  #chart { height: clamp(350px, calc(100svh - 272px), 620px); }   /* the whole card fits one screen */
 }
-@media (max-width: 350px) { .readout { min-height: calc(7 * 1.45em + 10px); } #chart { height: clamp(420px, calc(100svh - 307px), 620px); } }
-/* landscape phones: the chart fits the screen and the readout stays in view while you tap (z-index: over the plot) */
+@media (max-width: 350px) { .readout { min-height: calc(7 * 1.45em + 10px); } #chart { height: clamp(350px, calc(100svh - 307px), 620px); } }
+/* landscape phones: readout (sticky, painted over the plot) + chart + zoom bar fit one screen, so with the zoom buttons
+   on screen the stuck readout covers no plot area; the readout keeps a fixed height, so taps never move the chart.
+   These rules must stay after the max-width rules above (same specificity, they win by order). */
 @media (pointer: coarse) and (max-height: 500px) {
-  #chart { height: max(260px, calc(100svh - 110px)); }
+  #chart { height: max(190px, calc(100svh - 110px)); }
   .readout { position: sticky; top: 0; z-index: 4; }
+}
+@media (pointer: coarse) and (max-height: 500px) and (max-width: 700px) {
+  #chart { height: max(190px, calc(100svh - 140px)); }
+  .zoombar .hint { flex: 1 1 0; min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
 </style>
@@ -244,7 +251,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
 
   <div class="notes">
     <p><b>How to read it.</b> The three panels share one time axis. On a computer, drag across the chart to zoom, double-click to reset and click to pin the readout. On a phone, swipe sideways to move in time, pinch to zoom and tap to read values; a vertical swipe scrolls the page. The buttons under the chart zoom and move on any device. Zoom below about four days and the price switches to 1-minute closes. A triangle marks each entry (up = long, down = short) at the minute of its fill, and a thin line runs to its exit. The position panel shows the exposure at each bar close, so a fill shows there at the end of its minute.</p>
-    <p><b>Numbers.</b> PnL is cumulative net of fees and funding, compounded, from 0% on 2021-01-01; the sealed-year run starts flat and is chained onto the dev curve. Long ranges are drawn with the first, last, highest and lowest value of each screen pixel, so no spike is lost. The readout line uses the full data; at long ranges the price is the last hourly close (its time is shown) until a click or tap pins that time and loads the 1-minute close. The dev return in the summary is the mean daily log return x 365. Gross and net bps per trade are realised PnL over equity at entry (size-weighted).</p>
+    <p><b>Numbers.</b> PnL is cumulative net of fees and funding, compounded, from 0% on 2021-01-01; the sealed-year run starts flat and is chained onto the dev curve. Long ranges are drawn with the first, last, highest and lowest value of each screen pixel, so no spike is lost. The readout line uses the full data; when you point at a long range, the price is the last hourly close (its time is shown in brackets), and a click or tap pins that time and loads its 1-minute close. The dev return in the summary is the mean daily log return x 365. Gross and net bps per trade are realised PnL over equity at entry (size-weighted).</p>
     <p><b>Source.</b> Engine E re-simulation (<code>research/pnl/viz_export.py</code>); every run's daily PnL is bit-identical to the scored results in <code>research/pnl/results/</code> (dev gates) and <code>results/seal.json</code>. Verdicts: <code>plans/pnl_optimisation.md</code>.</p>
   </div>
 </div>
@@ -316,7 +323,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     if (!monthCache[m.name]) monthCache[m.name] = fetch("m/" + m.name + ".txt").then(function (r) {
       if (!r.ok) throw new Error("price file " + m.name + " (" + r.status + ")");
       return r.text();
-    }).then(function (t) { var a = new Float32Array(bytes(t.trim())); monthArr[m.name] = a; return a; })
+    }).then(function (t) { var a = new Float32Array(bytes(t.trim())); monthArr[m.name] = a; delete monthFail[m.name]; return a; })
       .catch(function (e) { delete monthCache[m.name]; throw e; });
     return monthCache[m.name];
   }
@@ -401,7 +408,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     return Promise.resolve(cache[id]);
   }
   var FULL = [meta.dev_start_min * MIN, meta.end_min * MIN], MINSPAN = 20 * MIN;
-  var view = FULL.slice(), cursor = null, pinBeforeDbl = null, usedMinute = false, drawn = false, programmatic = 0, C = null;
+  var view = FULL.slice(), cursor = null, pinBeforeDbl = null, dblSkip = false, usedMinute = false, drawn = false, programmatic = 0, C = null;
   function clampView(v) {
     var span = Math.max(MINSPAN, Math.min(v[1] - v[0], FULL[1] - FULL[0]));
     var a = Math.max(FULL[0], Math.min(v[0], FULL[1] - span));
@@ -430,17 +437,26 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
 
   // ---------------- render: data cut to the view plus one screen each side (room to pan), decimated to the pixel width
   function plotWidth() { var fl = gd._fullLayout; return Math.max(200, fl && fl._size ? fl._size.w : gd.clientWidth - 80); }
-  function narrow() { return gd.clientWidth < 600; }
+  function narrow() { return gd.clientWidth < 600 || gd.clientHeight < 380; }
+  function plotH() { return Math.max(1, gd.clientHeight - 54); }      // compact layout: margin t 18 + b 36
+  function doms(nar) {                                                 // compact: each gap holds a 15 px panel title
+    if (!nar) return { price: [0.47, 1], pnl: [0.21, 0.43], pos: [0, 0.17] };
+    var g = Math.max(0.05, 17 / plotH());
+    return { price: [0.38 + 2 * g, 1], pnl: [0.165 + g, 0.38 + g], pos: [0, 0.165] };
+  }
   function tickFmt(r, base) { if (!r) return base; var d = r[1] - r[0]; return d < 3 ? ",.2f" : d < 30 ? ",.1f" : base; }
-  var pending = null;
+  var pending = null, hoverRedraw = null;   // desktop: re-reads the hover after a redraw (set in attachMouse)
   function render() {
     if (!cur) return Promise.resolve();
     if (pending) { pending.again = true; return pending.p; }
     C = colors();
     var v = gesture.active && gesture.live ? gesture.live : view;     // a held pan or pinch owns the axis
     var span = v[1] - v[0], a = v[0] - span, b = v[1] + span, nb = Math.round(plotWidth() * 3);
-    if (cursor != null && (cursor < v[0] || cursor > v[1])) { cursor = null; readoutHint(); }
-    var src = span < 4 * DAYMS && minuteCovers(minute.win, a, b) ? minute.win : null;
+    if (!gesture.active && cursor != null && (cursor < v[0] || cursor > v[1])) { cursor = null; readoutHint(); }   // end() re-checks on release
+    // while a gesture is held, 1-minute bars stay when they cover the screen and the data drawn before the gesture
+    var vs = view[1] - view[0];
+    var cov = minuteCovers(minute.win, a, b) || gesture.active && minuteCovers(minute.win, v[0], v[1]) && minuteCovers(minute.win, view[0] - vs, view[1] + vs);
+    var src = span < 4 * DAYMS && cov ? minute.win : null;
     usedMinute = !!src;
     var pr = decimate(src ? src.X : hourX, src ? src.Y : hourY, a, b, nb);
     var pn = decimate(cur.pX, cur.pY, a, b, nb), po = decimate(cur.eX, cur.eY, a, b, nb);
@@ -468,7 +484,11 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       var m = (hi - lo) * pad || Math.abs(hi) * 0.002 || 0.5; return [lo - m, hi + m];
     };
     var nar = narrow(), ring = { color: C.surface, width: 1.5 }, msz = nar ? 9 : 11;
-    var y1 = yr([pr, { x: [v[0], v[1]], y: [isFinite(tlo) ? tlo : null, isFinite(thi) ? thi : null] }], nar ? 0.1 : 0.06);   // narrow: room for the panel title
+    var y1 = yr([pr, { x: [v[0], v[1]], y: [isFinite(tlo) ? tlo : null, isFinite(thi) ? thi : null] }], nar ? 0.1 : 0.06);
+    if (nar && y1) {   // compact: keep >= 24 px above the highest price or trade mark for the in-plot "Price (USDT)" title
+      var h = 24 / ((1 - doms(true).price[0]) * plotH()), h0 = 0.1 / 1.2;
+      if (h > h0 && h < 0.6) y1[1] += (h - h0) * (y1[1] - y1[0]) / (1 - h);
+    }
     var y2 = yr(showBH ? [pn, bb] : [pn], 0.08);
     var mk = function (o) { if (hov) { o.text = o._t; o.hovertemplate = "%{text}<extra></extra>"; } else o.hoverinfo = "skip"; delete o._t; return o; };
     var traces = [
@@ -489,7 +509,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     job.p = Plotly.react(gd, traces, layout(nar, v, y1, y2, hov), cfg).then(function () {
       programmatic--; pending = null;
       if (!drawn) { drawn = true; hookPlot(); }
-      updateTable(); updateRes(); if (cursor != null) readoutAt(cursor);
+      updateTable(); updateRes();
+      if (!(hoverRedraw && hoverRedraw())) { if (cursor != null) readoutAt(cursor); else readoutHint(); }   // hover first, then the pin
       if (job.again) return render();
     }, function (err) { programmatic--; pending = null; throw err; });
     pending = job;
@@ -505,7 +526,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   function layout(nar, v, y1, y2, hov) {
     var ann = [{ xref: "x", yref: "paper", x: U((meta.seal_start_min + meta.end_min) / 2 * MIN), y: 1, yanchor: "bottom", xanchor: "center", text: "Sealed year", showarrow: false, font: { size: nar ? 10 : 11, color: C.sealInk } }];
     if (!nar) meta.refits_min.forEach(function (m) { ann.push({ xref: "x", yref: "paper", x: U(m * MIN), y: 1, yanchor: "bottom", xanchor: "left", text: "refit", showarrow: false, font: { size: 10, color: C.ink3 } }); });
-    var D = nar ? { price: [0.48, 1], pnl: [0.215, 0.43], pos: [0, 0.165] } : { price: [0.47, 1], pnl: [0.21, 0.43], pos: [0, 0.17] };
+    var D = doms(nar), pH = plotH(), ph = function (d) { return (d[1] - d[0]) * pH; };
     if (nar) [["Price (USDT)", D.price, "top"], ["Net PnL (%)", D.pnl, "bottom"], ["Position (x)", D.pos, "bottom"]].forEach(function (p) {
       ann.push({ xref: "paper", yref: "paper", x: 0, y: p[1][1], xanchor: "left", yanchor: p[2], text: p[0], showarrow: false, font: { size: 10, color: C.ink2 }, bgcolor: hexA(C.surface, 0.8), borderpad: 1 });
     });
@@ -515,8 +536,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       for (var key in extra) o[key] = extra[key];
       return o;
     };
-    var y1o = { tickformat: tickFmt(y1, ",.0f"), nticks: nar ? 5 : 8 }; if (y1) y1o.range = y1;
-    var y2o = { ticksuffix: "%", tickformat: tickFmt(y2, ",.0f"), zeroline: true, nticks: nar ? 4 : 6 }; if (y2) y2o.range = y2;
+    var y1o = { tickformat: tickFmt(y1, ",.0f"), nticks: nar ? Math.max(2, Math.min(5, Math.floor(ph(D.price) / 40))) : 8 }; if (y1) y1o.range = y1;
+    var y2o = { ticksuffix: "%", tickformat: tickFmt(y2, ",.0f"), zeroline: true, nticks: nar ? Math.max(2, Math.min(4, Math.floor(ph(D.pnl) / 22))) : 6 }; if (y2) y2o.range = y2;
     return {
       paper_bgcolor: C.surface, plot_bgcolor: C.surface, font: { family: C.font, color: C.ink, size: 12 },
       margin: nar ? { l: 40, r: 8, t: 18, b: 36 } : { l: 64, r: 16, t: 28, b: 40 }, showlegend: false,
@@ -526,7 +547,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
         tickfont: { size: nar ? 10 : 11, color: C.ink2 }, nticks: nar ? 5 : 10, showspikes: false },
       yaxis: ax("Price (USDT)", D.price, y1o),
       yaxis2: ax("Net PnL (%)", D.pnl, y2o),
-      yaxis3: ax("Position (x)", D.pos, { range: [-1.15, 1.15], tickvals: [-1, 0, 1], zeroline: true }),
+      yaxis3: ax("Position (x)", D.pos, { range: [-1.15, 1.15], tickvals: !nar || ph(D.pos) >= 36 ? [-1, 0, 1] : [-1, 1], zeroline: true }),
       shapes: shapesFor(), annotations: ann
     };
   }
@@ -534,6 +555,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   // ---------------- view changes
   var settle = null;
   function setView(v, now) {
+    resNote = "";
     view = clampView(v);
     clearTimeout(settle);
     var go = function () {
@@ -546,8 +568,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   }
   function hookPlot() {
     if (!TOUCH) gd.on("plotly_doubleclick", function () {
-      cursor = pinBeforeDbl;                                    // undo the pin of the double-click's first click
-      setTimeout(function () { setView(FULL, true); }, 0);      // after Plotly's own reset relayout
+      cursor = pinBeforeDbl; dblSkip = true;                    // undo the first click's pin; Plotly's synthetic 2nd click follows at once
+      setTimeout(function () { dblSkip = false; setView(FULL, true); }, 0);   // after Plotly's own reset relayout
     });
     gd.on("plotly_relayout", function (ev) {
       if (programmatic > 0 || gesture.active) return;
@@ -568,19 +590,27 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   function msAtClientX(clientX) {
     var xa = gd._fullLayout.xaxis, r = gd.getBoundingClientRect();
     var px = Math.max(0, Math.min(xa._length, clientX - r.left - xa._offset));
-    return Math.round(xa.p2c(px) / MIN) * MIN;                // data are 1-minute bars
+    var ms = Math.round(xa.p2c(px) / MIN) * MIN;              // data are 1-minute bars
+    return Math.min(Math.max(ms, Math.ceil(xa.r2l(xa.range[0]) / MIN) * MIN), Math.floor(xa.r2l(xa.range[1]) / MIN) * MIN);   // inside the axis
   }
 
   // ---------------- readout (full-resolution values at one time)
+  var shownAt = null, monthFail = {};                         // shownAt: the time the readout shows (null: the hint)
   function readoutAt(ms) {
     if (!cur || !C) return;
     var nar = narrow(), dt = function (x) { return nar ? fmtTimeMs(x).slice(5) : fmtTimeMs(x); }, pdp = nar ? 0 : 1;
-    var g = Math.floor(ms / MIN) - T0 - 1, mo = monthOf(g), price = null, pLab = "Price";
+    var g = Math.floor(ms / MIN) - T0 - 1, mo = monthOf(g), price = null, pLab = "Price", pTxt = null;
+    var refresh = function () { if (cursor === ms && shownAt === ms) readoutAt(ms); };
     if (mo && monthArr[mo.name]) price = monthArr[mo.name][g - mo.start_min];
-    else {
+    else if (mo && ms === cursor) {                             // a pin loads the exact 1-minute close
+      if (!monthFail[mo.name]) {
+        pTxt = "\u2026";
+        loadMonth(mo).then(refresh, function () { if (!monthFail[mo.name]) { monthFail[mo.name] = true; refresh(); } });
+      } else loadMonth(mo).then(refresh, function () {});       // retry quietly; the hourly close stays meanwhile
+    }
+    if (pTxt == null && price == null) {
       var hi = lowerBound(hourX, ms + 1) - 1;
-      if (hi >= 0) { price = hourY[hi]; if (hourX[hi] !== ms) pLab = "Price (" + fmtTimeMs(hourX[hi]).slice(11) + (nar ? ")" : " close)"); }
-      if (mo && ms === cursor) loadMonth(mo).then(function () { if (cursor === ms) readoutAt(ms); }, function () {});   // a pin loads the exact close
+      if (hi >= 0) { price = hourY[hi]; if (hourX[hi] !== ms) pLab = "Price (" + fmtTimeMs(hourX[hi]).slice(11) + ")"; }
     }
     var pnl = valueAt(cur.pX, cur.pY, ms, true), pos = valueAt(cur.eX, cur.eY, ms, false);
     var bhv = bh && bh !== cur && $("bh-toggle").checked ? valueAt(bh.pX, bh.pY, ms, true) : null;
@@ -592,7 +622,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       var bv = document.createElement("b"); bv.textContent = value; sp.appendChild(bv); row.appendChild(sp);
     };
     var t = document.createElement("b"); t.textContent = fmtTimeMs(ms) + " UTC"; row.appendChild(t);
-    item(pLab, price != null && price === price ? fmtNum(price, 1) : "n/a", C.price);
+    item(pLab, pTxt != null ? pTxt : price != null && price === price ? fmtNum(price, 1) : "n/a", C.price);
     if (pnl != null) item(nar ? cur.id : cur.id + " PnL", signed(pnl, 1) + "%", C.strat);
     if (bhv != null) item("B&H", signed(bhv, 1) + "%", C.ref);
     if (pos != null) item(nar ? "Pos" : "Position", signed(pos, 2) + "x");
@@ -604,6 +634,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       " \u00b7 " + fmtHold(s.hold[hit]) + " \u00b7 net " + signed(s.net[hit], 1) + " bps";
     var nodes = [row, r2];
     el.replaceChildren.apply(el, nodes);
+    shownAt = ms;
   }
   function setCursor(ms) {
     cursor = ms;
@@ -611,17 +642,23 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     Plotly.relayout(gd, { shapes: shapesFor() });
     readoutAt(ms);
   }
-  function readoutHint() { $("readout").textContent = TOUCH ? "Tap the chart to read the values at that time." : "Point at the chart to read the values at that time."; }
+  function readoutHint() { shownAt = null; $("readout").textContent = TOUCH ? "Tap the chart to read the values at that time." : "Point at the chart to read the values at that time."; }
 
   // ---------------- mouse: a hover line and live readout; a click without a drag pins the cursor
   function attachMouse() {
-    var hl = $("hoverline"), raf = 0, lastX = 0, down = null, inside = insidePlot;
+    var hl = $("hoverline"), raf = 0, lastX = 0, ptr = null, down = null, inside = insidePlot;
     var draw = function () {
       raf = 0; var sz = plotBox(); if (!sz) return;
       var r = gd.getBoundingClientRect(), x = lastX - r.left;
       hl.style.left = x + "px"; hl.style.top = sz.t + "px"; hl.style.height = sz.h + "px"; hl.style.display = "block";
       readoutAt(msAtClientX(lastX));
     };
+    hoverRedraw = function () {                                 // true when the pointer is over the plot and the hover was redrawn
+      if (ptr && inside(ptr)) { lastX = ptr.clientX; draw(); return true; }
+      hl.style.display = "none"; return false;
+    };
+    document.addEventListener("mousemove", function (e) { ptr = { clientX: e.clientX, clientY: e.clientY }; });
+    document.addEventListener("mouseout", function (e) { if (!e.relatedTarget) ptr = null; });   // the pointer left the window
     gd.addEventListener("mousemove", function (e) {
       if (!inside(e)) { hl.style.display = "none"; return; }
       lastX = e.clientX; if (!raf) raf = requestAnimationFrame(draw);
@@ -629,8 +666,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     gd.addEventListener("mouseleave", function () { hl.style.display = "none"; if (cursor != null) readoutAt(cursor); });
     gd.addEventListener("mousedown", function (e) { down = { x: e.clientX, y: e.clientY }; });
     gd.addEventListener("click", function (e) {
-      if (e.detail >= 2) return;                   // 2nd click of a double-click: Plotly resets the view instead
-      if (e.detail === 1) pinBeforeDbl = cursor;   // restored if this click turns out to start a double-click
+      if (dblSkip || e.detail >= 2) return;        // 2nd+ click of a double-click, by Plotly's count or the browser's
+      pinBeforeDbl = cursor;                       // restored if this click turns out to start a double-click
       if (!down || Math.abs(e.clientX - down.x) > 3 || Math.abs(e.clientY - down.y) > 3 || !inside(e)) return;
       setCursor(msAtClientX(e.clientX));
     });
@@ -718,7 +755,9 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   $("z-reset").addEventListener("click", function () { setView(FULL, true); });
   $("hint").textContent = TOUCH ? "Swipe sideways to move · pinch to zoom · tap to read values" : "Drag across the chart to zoom · double-click to reset · click to pin the readout";
 
+  var resNote = "";                                // a failed pick's message; kept until the next pick or view change
   function updateRes() {
+    if (resNote) { $("res").textContent = resNote; return; }
     if (minute.loading && minute.loading === minute.req) { $("res").textContent = "Loading 1-minute bars..."; return; }
     var d = (view[1] - view[0]) / DAYMS;
     $("res").textContent = (usedMinute ? "Price: 1-min" : "Price: hourly") + " · " + (d >= 2 ? Math.round(d) + " days" : (d * 24).toFixed(1) + " hours") + " in view";
@@ -726,6 +765,11 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
 
   // ---------------- trade table (the chart's table view; follows the zoom)
   function updateTable() {
+    if (!cur || cur.id !== curId) {                // the picked strategy is still loading
+      document.querySelector("#tbl tbody").replaceChildren();
+      $("tbl-title").textContent = "Trades in view"; $("tbl-note").textContent = "Loading " + (NAMES[curId] || curId) + "...";
+      return;
+    }
     var s = cur, v = view, body = document.querySelector("#tbl tbody"), rows = [], total = 0, cap = 300, pdp = small.matches ? 0 : 1;
     var tr = tradeRange(s, v[0], v[1]);
     for (var i = tr[0]; i < tr[1]; i++) { if (s.toutMs[i] < v[0]) continue; total++; if (rows.length < cap) rows.push(i); }
@@ -807,11 +851,12 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
 
   var pickSeq = 0;
   function showPick(id) {
-    curId = id; sel.value = id; stats();
+    curId = id; sel.value = id; stats(); updateTable();
     document.querySelectorAll("#seg-t1 button, #seg-t2 button, #seg-t0 button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.key === id ? "true" : "false"); });
   }
   function selectStrategy(id) {
     var tok = ++pickSeq;
+    resNote = "";
     showPick(id);
     var ld = $("loading"); ld.hidden = false; ld.textContent = "Loading " + (NAMES[id] || id) + "...";
     getStrat(id).then(function (s) {
@@ -822,8 +867,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     }).catch(function (err) {
       if (tok !== pickSeq) return;
       var msg = "Could not load " + id + ": " + err.message;
-      if (cur && cur.id !== id) { showPick(cur.id); ld.hidden = true; $("res").textContent = msg; }   // keep the strategy on screen
-      else ld.textContent = msg;
+      if (cur && cur.id !== id) { showPick(cur.id); ld.hidden = true; resNote = msg; $("res").textContent = msg; }   // keep the strategy on screen
+      else { ld.textContent = msg; $("tbl-note").textContent = msg; }
     });
   }
   $("bh-toggle").addEventListener("change", function (e) { $("leg-bh").style.opacity = e.target.checked ? 1 : 0.4; render(); });
