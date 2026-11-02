@@ -20,3 +20,6 @@ PLOTLY=<path to plotly-2.34.0.min.js>. PAGE=<page under http://localhost:8765/> 
   renders during a drag zoom; short landscape charts, at least 2 labels per compact axis, distinct PnL labels on a
   flat PnL, the zoom-bar hint, the sealed-year label on landscape phones, height-only resizes). ROBOTO works as above.
   A triple click on a CPU 3-4x slower than the test machine needs real OS input (Xvfb + XTest) and is not scripted.
+- regress_safe_area.js: iPhones with a notch or home indicator (CDP Emulation.setSafeAreaInsetsOverride, Chromium
+  136+). Landscape and portrait cases with and without insets: no overflow, same readout height, the stuck readout
+  does not cover the chart or the 'Sealed year' label, a tap pins. The published page uses viewport-fit=cover.
