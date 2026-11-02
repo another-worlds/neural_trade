@@ -7,6 +7,8 @@
 //   C  the hold shape: type path, layer between, yref y; every subpath is one entry -> exit line (one M, one L); no
 //      drawn vertex at the price panel's bottom-left corner
 //   D  close views of busy strategies draw hold lines (the shape has at least one subpath)
+//   E  no NaN reaches a WebGL buffer (bufferData / bufferSubData are wrapped and count NaN values in float arrays);
+//      with NaN read as 0, the build before this fix drew the fan in headless Chromium too
 // Usage: PLOTLY=/path/plotly-2.34.0.min.js [PAGE=test.html] [BASE=http://localhost:8765/] node regress_gl_gaps.js
 // Prints one JSON line per check and a summary line; exits 1 on any failure.
 const { chromium, devices } = require('playwright');
@@ -28,6 +30,15 @@ async function idle(page) {
     prev = cur;
   }
 }
+const SHIM = () => {   // counts NaN values sent to WebGL buffers
+  let hits = 0; window.__nan = () => hits; window.__nanReset = () => { hits = 0; };
+  const count = d => { if (d && (d instanceof Float32Array || d instanceof Float64Array)) for (let i = 0; i < d.length; i++) if (d[i] !== d[i]) hits++; };
+  for (const P of [window.WebGLRenderingContext, window.WebGL2RenderingContext].filter(Boolean).map(c => c.prototype)) {
+    const bd = P.bufferData, bs = P.bufferSubData;
+    P.bufferData = function (t, d, ...r) { count(d); return bd.call(this, t, d, ...r); };
+    P.bufferSubData = function (t, o, d, ...r) { count(d); return bs.call(this, t, o, d, ...r); };
+  }
+};
 const PROBE = () => {
   const g = document.getElementById('chart'), fl = g._fullLayout, bad = [], many = [];
   g.data.forEach((t, ti) => {
@@ -53,7 +64,7 @@ const PROBE = () => {
     (dd.match(/-?[\d.]+,-?[\d.]+/g) || []).forEach(p => { const [x, y] = p.split(',').map(Number); if (Math.abs(x - xa._offset) < 1.5 && Math.abs(y - (ya._offset + ya._length)) < 1.5) corner.push(p); });
   });
   return { gl: g.data.filter(t => t.type === 'scattergl').map(t => t.name), bad, holdTrace: g.data.some(t => t.name === 'Hold'), many,
-    shape: h ? { n: hs.length, layer: h.layer, subpaths: subs.length, malformed } : null, corner: corner.length, markers: g.data.filter(t => /entry/.test(t.name)).reduce((q, t) => q + t.x.length, 0) };
+    shape: h ? { n: hs.length, layer: h.layer, subpaths: subs.length, malformed } : null, corner: corner.length, nanToGL: window.__nan(), markers: g.data.filter(t => /entry/.test(t.name)).reduce((q, t) => q + t.x.length, 0) };
 };
 
 (async () => {
@@ -61,6 +72,7 @@ const PROBE = () => {
   for (const [dn, opts] of [['Pixel 7', devices['Pixel 7']], ['desktop 1280x800', { viewport: { width: 1280, height: 800 } }]]) {
     const ctx = await browser.newContext(opts), page = await ctx.newPage(), errs = [];
     page.on('pageerror', e => errs.push(e.message));
+    await page.addInitScript(SHIM);
     await page.route('**/plotly.min.js', r => r.fulfill({ body: PL, contentType: 'text/javascript' }));
     await page.goto(BASE + PAGE);
     await page.waitForFunction(() => document.getElementById('loading').hidden === true, null, { timeout: 120000 });
@@ -69,12 +81,13 @@ const PROBE = () => {
       await page.waitForFunction(() => document.getElementById('loading').hidden === true, null, { timeout: 120000 }); await idle(page);
       const views = ['all', 'seal', 'crash', '1d'];
       for (const key of views) {
+        await page.evaluate(() => window.__nanReset());
         await page.evaluate(k => { const b = document.querySelector('#seg-range button[data-key="' + k + '"]'); if (b) b.click(); }, key); await idle(page);
         const p = await page.evaluate(PROBE);
         const shapeOk = !p.shape || (p.shape.n === 1 && p.shape.layer === 'between' && p.shape.malformed === 0);
         const drawn = !(key === 'crash' && ['T1-NET', 'T1-FADEV', 'T1-NT', 'T2-LIN'].includes(sid)) || (p.shape && p.shape.subpaths > 0);
-        check(`${dn} ${sid} ${key}`, !p.bad.length && !p.holdTrace && !p.many.length && shapeOk && p.corner === 0 && drawn && !errs.length,
-          { need: 'A no null/NaN in WebGL traces; B no Hold trace, no SVG trace with > 50 paths; C one hold path shape, layer between, one M and one L per subpath, no corner vertex; D holds drawn in the crash view of busy strategies', ...p, errs: errs.slice() });
+        check(`${dn} ${sid} ${key}`, !p.bad.length && !p.holdTrace && !p.many.length && shapeOk && p.corner === 0 && drawn && p.nanToGL === 0 && !errs.length,
+          { need: 'A no null/NaN in WebGL traces; B no Hold trace, no SVG trace with > 50 paths; C one hold path shape, layer between, one M and one L per subpath, no corner vertex; D holds drawn in the crash view of busy strategies; E no NaN sent to WebGL buffers', ...p, errs: errs.slice() });
       }
     }
     await ctx.close();
