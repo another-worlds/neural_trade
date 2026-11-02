@@ -505,6 +505,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       if (h > h0 && h < 0.6) y1[1] += (h - h0) * (y1[1] - y1[0]) / (1 - h);
     }
     var y2 = yr(showBH ? [pn, bb] : [pn], 0.08);
+    if (y2 && y2[1] - y2[0] < 0.1) { var c2 = (y2[0] + y2[1]) / 2; y2 = [c2 - 0.05, c2 + 0.05]; }   // a flat PnL: >= 0.1 pp, so ticks are never finer than the 2-decimal labels
     var mk = function (o) { if (hov) { o.text = o._t; o.hovertemplate = "%{text}<extra></extra>"; } else o.hoverinfo = "skip"; delete o._t; return o; };
     var traces = [
       { type: "scatter", mode: "lines", x: Ux(pr.x), y: pr.y, yaxis: "y", line: { color: C.price, width: 1.25 }, name: "Price", hoverinfo: "skip", connectgaps: false },
@@ -685,9 +686,10 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       lastX = e.clientX; if (!raf) raf = requestAnimationFrame(draw);
     });
     gd.addEventListener("mouseleave", function () { hl.style.display = "none"; if (cursor != null) readoutAt(cursor); });
-    gd.addEventListener("mousedown", function (e) { down = { x: e.clientX, y: e.clientY }; });
+    gd.addEventListener("mousedown", function (e) { down = { x: e.clientX, y: e.clientY, t: e.timeStamp }; });
     gd.addEventListener("click", function (e) {
-      if (dblSkip || e.detail >= 2 || performance.now() - lastDbl < 500) return;   // 2nd+ click of a double-click (Plotly's count, the browser's, or a 3rd click within 500 ms)
+      var now = performance.now(), t = down && down.t > 0 && down.t <= now ? down.t : now;   // the press's input time: a render that delays this handler must not stretch the gap
+      if (dblSkip || e.detail >= 2 || t - lastDbl < 500) return;   // 2nd+ click of a double-click (Plotly's count, the browser's, or a 3rd click within 500 ms)
       pinBeforeDbl = cursor;                       // restored if this click turns out to start a double-click
       if (!down || Math.abs(e.clientX - down.x) > 3 || Math.abs(e.clientY - down.y) > 3 || !inside(e)) return;
       setCursor(msAtClientX(e.clientX));
@@ -899,10 +901,11 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   var retheme = function () { if (drawn) render(); };
   if (mq.addEventListener) mq.addEventListener("change", retheme);
   new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
-  var rt = null, lastW = 0;
+  var rt = null, lastW = "";
   window.addEventListener("resize", function () {
     clearTimeout(rt);
-    rt = setTimeout(function () { if (drawn && gd.clientWidth !== lastW) { lastW = gd.clientWidth; render(); } else if (drawn) updateTable(); }, 200);
+    // the compact layout (panel titles, gaps, tick steps, price headroom) depends on the chart height too, which Plotly's responsive resize only scales
+    rt = setTimeout(function () { var k = gd.clientWidth + "x" + gd.clientHeight; if (drawn && k !== lastW) { lastW = k; render(); } else if (drawn) updateTable(); }, 200);
   });
 
   // ---------------- start
@@ -912,7 +915,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   var start = "T1-LIN";
   try { var saved = localStorage.getItem("replay-strategy"); if (saved && meta.stats[saved]) start = saved; } catch (e) { /* storage unavailable */ }
   if (TOUCH) attachGestures(); else attachMouse();
-  lastW = gd.clientWidth;
+  lastW = gd.clientWidth + "x" + gd.clientHeight;
   selectStrategy(start);
   loadBH();
 })();

@@ -113,3 +113,17 @@ VIEWER (descriptive, after the seal; no result changed)
   position point; the page gives Plotly UTC date strings (it read numeric times in the viewer's local time zone),
   aligns all panels on the price grid for the shared hover, drops stale loads, and labels the dev return as log.
   Monthly 1-minute prices ship as base64 text (artifacts do not serve raw binary).
+- Phone version (viz_template.html and viz_tests/ only; the data files and viz_export.py are unchanged; no seal
+  re-read). The page draws only the view (plus one screen each side, min/max per pixel) and reads the cursor values
+  from full-resolution data. Measured in Chromium phone emulation with the CPU slowed 4x: first draw about 20-25 s
+  -> about 3.3 s, strategy switch 5-15 s -> about 0.4 s, 1-minute zoom 18-30 s -> about 0.9 s; on a 390 px phone the
+  chart starts at about 500 px from the top instead of about 1000 px. Touch: a horizontal swipe pans, a pinch zooms,
+  a tap pins the readout, a vertical swipe scrolls the page; zoom buttons, one range row, a strategy dropdown.
+- Four independent review rounds checked the phone version and the desktop mouse path. Each finding was reproduced
+  by a separate verifier before it was fixed, and each round re-tested the fixes of the round before. Fixed: double
+  and triple clicks (no stray pins, also on a slow CPU), gestures across finger-count changes, the exact 1-minute
+  readout price with an hourly fallback for failed or stalled loads, landscape phones (readout, chart and zoom bar on
+  one screen), compact axes with at least 2 distinct labels, short charts, height-only resizes, a constant readout
+  height. viz_tests/ holds one regression check per confirmed finding (README). Limits: emulated phones in Chromium
+  only (no real devices, no Safari/WebKit); headless Chromium draws system-ui in the wider Inter font, so text wraps
+  were judged with Roboto.

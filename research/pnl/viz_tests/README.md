@@ -15,3 +15,8 @@ PLOTLY=<path to plotly-2.34.0.min.js>. PAGE=<page under http://localhost:8765/> 
   regress_r2_touch_data.js judges phone readout heights with Roboto when ROBOTO=<Roboto woff2> is set (headless
   Chromium maps system-ui to the wider Inter font, so some wraps it shows do not happen on real phones).
   Checks marked advisory or info document a known residual and do not set the exit code.
+- regress_r3_desktop_data.js, regress_r3_layout.js: the third and final review rounds (triple clicks with small moves,
+  readout height at 701-720 px with a classic scrollbar, stalled 1-minute loads that fall back to the hourly close,
+  renders during a drag zoom; short landscape charts, at least 2 labels per compact axis, distinct PnL labels on a
+  flat PnL, the zoom-bar hint, the sealed-year label on landscape phones, height-only resizes). ROBOTO works as above.
+  A triple click on a CPU 3-4x slower than the test machine needs real OS input (Xvfb + XTest) and is not scripted.
