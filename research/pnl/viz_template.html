@@ -412,7 +412,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     return Promise.resolve(cache[id]);
   }
   var FULL = [meta.dev_start_min * MIN, meta.end_min * MIN], MINSPAN = 20 * MIN;
-  var view = FULL.slice(), cursor = null, pinBeforeDbl = null, dblSkip = false, lastDbl = -1e9, usedMinute = false, drawn = false, programmatic = 0, C = null;
+  var view = FULL.slice(), holdPath = "", cursor = null, pinBeforeDbl = null, dblSkip = false, lastDbl = -1e9, usedMinute = false, drawn = false, programmatic = 0, C = null;
   function clampView(v) {
     var span = Math.max(MINSPAN, Math.min(v[1] - v[0], FULL[1] - FULL[0]));
     var a = Math.max(FULL[0], Math.min(v[0], FULL[1] - span));
@@ -478,12 +478,12 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     var showBH = $("bh-toggle").checked && bh && bh !== cur;
     var bb = showBH ? decimate(bh.pX, bh.pY, a, b, nb) : { x: [], y: [] };
     var s = cur, tr = tradeRange(s, a, b), hov = !TOUCH && span < HOVER_DAYS * DAYMS;
-    var lx = [], ly = [], lt = [], sx = [], sy = [], st = [], hx = [], hy = [], ex = [], ey = [], et = [], tlo = Infinity, thi = -Infinity;
+    var lx = [], ly = [], lt = [], sx = [], sy = [], st = [], hk = [], ex = [], ey = [], et = [], tlo = Infinity, thi = -Infinity;
     for (var i = tr[0]; i < tr[1]; i++) {
       if (s.toutMs[i] < a) continue;
       var u0 = tU0(s, i), u1 = tU1(s, i);
       if (s.side[i] > 0) { lx.push(u0); ly.push(s.pin[i]); if (hov) lt.push(tTip(s, i)); } else { sx.push(u0); sy.push(s.pin[i]); if (hov) st.push(tTip(s, i)); }
-      hx.push(u0, u1, null); hy.push(s.pin[i], s.pout[i], null);
+      hk.push(i);
       ex.push(u1); ey.push(s.pout[i]); if (hov) et.push(tTipX(s, i));
       if (s.tinMs[i] >= v[0] && s.tinMs[i] <= v[1]) { tlo = Math.min(tlo, s.pin[i]); thi = Math.max(thi, s.pin[i]); }
       if (s.toutMs[i] >= v[0] && s.toutMs[i] <= v[1]) { tlo = Math.min(tlo, s.pout[i]); thi = Math.max(thi, s.pout[i]); }
@@ -504,12 +504,23 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
       var h = 24 / ((1 - doms(true).price[0]) * plotH()), h0 = 0.1 / 1.2;
       if (h > h0 && h < 0.6) y1[1] += (h - h0) * (y1[1] - y1[0]) / (1 - h);
     }
+    // hold lines (entry -> exit) as one SVG path shape: a WebGL line with gaps gets NaN on the GPU, and many phone GPUs
+    // draw NaN at the plot's corner (a fan of lines); an SVG trace with gaps makes one element per hold. A hold shorter
+    // than 4 px is hidden under its own entry and exit marks, so it is left out.
+    var hp = [];
+    if (y1) {
+      var kx = plotWidth() / span, ky = (doms(nar).price[1] - doms(nar).price[0]) * plotH() / (y1[1] - y1[0]);
+      for (var j = 0; j < hk.length; j++) {
+        var k = hk[j], dx = (s.toutMs[k] - s.tinMs[k]) * kx, dy = (s.pout[k] - s.pin[k]) * ky;
+        if (dx * dx + dy * dy >= 16) hp.push("M" + tU0(s, k).replace(" ", "_") + "," + s.pin[k] + "L" + tU1(s, k).replace(" ", "_") + "," + s.pout[k]);
+      }
+    }
+    holdPath = hp.join("");
     var y2 = yr(showBH ? [pn, bb] : [pn], 0.08);
     if (y2 && y2[1] - y2[0] < 0.1) { var c2 = (y2[0] + y2[1]) / 2; y2 = [c2 - 0.05, c2 + 0.05]; }   // a flat PnL: >= 0.1 pp, so ticks are never finer than the 2-decimal labels
     var mk = function (o) { if (hov) { o.text = o._t; o.hovertemplate = "%{text}<extra></extra>"; } else o.hoverinfo = "skip"; delete o._t; return o; };
     var traces = [
       { type: "scatter", mode: "lines", x: Ux(pr.x), y: pr.y, yaxis: "y", line: { color: C.price, width: 1.25 }, name: "Price", hoverinfo: "skip", connectgaps: false },
-      { type: "scattergl", mode: "lines", x: hx, y: hy, yaxis: "y", line: { color: C.ink3, width: 1 }, opacity: 0.8, hoverinfo: "skip", name: "Hold" },
       mk({ type: "scattergl", mode: "markers", x: ex, y: ey, yaxis: "y", marker: { symbol: "circle", size: nar ? 5 : 6, color: C.ink3, line: ring }, _t: et, name: "Exit" }),
       mk({ type: "scattergl", mode: "markers", x: lx, y: ly, yaxis: "y", marker: { symbol: "triangle-up", size: msz, color: C.long, line: ring }, _t: lt, name: "Long entry" }),
       mk({ type: "scattergl", mode: "markers", x: sx, y: sy, yaxis: "y", marker: { symbol: "triangle-down", size: msz, color: C.short, line: ring }, _t: st, name: "Short entry" }),
@@ -536,6 +547,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   function shapesFor() {
     var sh = [{ type: "rect", xref: "x", yref: "paper", x0: U(meta.seal_start_min * MIN), x1: U(meta.end_min * MIN), y0: 0, y1: 1, fillcolor: C.seal, line: { width: 0 }, layer: "below" }];
     meta.refits_min.forEach(function (m) { sh.push({ type: "line", xref: "x", yref: "paper", x0: U(m * MIN), x1: U(m * MIN), y0: 0, y1: 1, line: { color: C.rule, width: 1 }, layer: "below" }); });
+    if (holdPath) sh.push({ type: "path", xref: "x", yref: "y", path: holdPath, line: { color: C.ink3, width: 1 }, opacity: 0.8, layer: "between" });   // over the grid, under the price line and the marks
     if (cursor != null) sh.push({ type: "line", xref: "x", yref: "paper", x0: U(cursor), x1: U(cursor), y0: 0, y1: 1, line: { color: C.cursor, width: 1.5 } });
     return sh;
   }

@@ -23,3 +23,7 @@ PLOTLY=<path to plotly-2.34.0.min.js>. PAGE=<page under http://localhost:8765/> 
 - regress_safe_area.js: iPhones with a notch or home indicator (CDP Emulation.setSafeAreaInsetsOverride, Chromium
   136+). Landscape and portrait cases with and without insets: no overflow, same readout height, the stuck readout
   does not cover the chart or the 'Sealed year' label, a tap pins. The published page uses viewport-fit=cover.
+- regress_gl_gaps.js: no WebGL trace carries a null or NaN (many phone GPUs draw NaN at the plot's corner: a fan of
+  lines from the bottom-left, seen on a real Android phone; headless Chromium renders WebGL in software and hides it).
+  The hold lines are one SVG path shape: each subpath one entry -> exit line, no vertex at the corner, drawn in close
+  views. All strategies, 4 views, phone and desktop.

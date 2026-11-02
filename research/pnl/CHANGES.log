@@ -127,3 +127,10 @@ VIEWER (descriptive, after the seal; no result changed)
   height. viz_tests/ holds one regression check per confirmed finding (README). Limits: emulated phones in Chromium
   only (no real devices, no Safari/WebKit); headless Chromium draws system-ui in the wider Inter font, so text wraps
   were judged with Roboto.
+- Real-phone fix (viewer only): on an Android phone the price panel showed a fan of grey lines from its bottom-left
+  corner to the trade marks. The hold lines (entry -> exit) were a WebGL line with a null between trades; the GPU
+  gets NaN there and many phone GPUs draw NaN at the corner. Headless Chromium renders WebGL in software, so the
+  emulated tests did not show it. The hold lines are now one SVG path shape; a hold shorter than 4 px (hidden under
+  its own entry and exit marks) is left out. No WebGL trace carries a null (viz_tests/regress_gl_gaps.js). On a 4x
+  slower CPU the busiest strategy (T1-FADEV, 7015 trades) switches in about 0.46 s instead of 0.8-0.9 s in the
+  "All" view.
