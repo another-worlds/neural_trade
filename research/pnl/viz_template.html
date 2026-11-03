@@ -402,8 +402,9 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   }
 
   // ---------------- state
-  var cache = {}, cur = null, curId = "T1-LIN", bh = null;
-  cache["T1-LIN"] = decode(JSON.parse($("first-json").textContent));
+  var cache = {}, cur = null, bh = null;
+  var first = decode(JSON.parse($("first-json").textContent)), curId = first.id;   // the strategy embedded by viz_build.py opens first
+  cache[first.id] = first;
   function getStrat(id) {                                        // caches the promise: a re-pick during a download waits for it
     if (!cache[id]) cache[id] = fetch(fileOf(id))
       .then(function (r) { if (!r.ok) throw new Error(id + " (" + r.status + ")"); return r.json(); })
@@ -869,8 +870,9 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     groups[t].forEach(function (it) { var o = document.createElement("option"); o.value = it.key; o.textContent = it.label; og.appendChild(o); });
     sel.appendChild(og);
   });
-  sel.addEventListener("change", function () { selectStrategy(sel.value); });
-  makeSeg("seg-t1", groups[1], selectStrategy, true); makeSeg("seg-t2", groups[2], selectStrategy, true); makeSeg("seg-t0", groups[0], selectStrategy, true);
+  var pick = function (id) { selectStrategy(id, true); };   // a user's pick: remembered for the next visit
+  sel.addEventListener("change", function () { pick(sel.value); });
+  makeSeg("seg-t1", groups[1], pick, true); makeSeg("seg-t2", groups[2], pick, true); makeSeg("seg-t0", groups[0], pick, true);
   var Y = function (y, m, d) { return Date.UTC(y, m - 1, d); };
   var around = function (span) { var c = anchor(); return [c - span / 2, c + span / 2]; };
   var ranges = [
@@ -889,7 +891,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     curId = id; sel.value = id; stats(); updateTable();
     document.querySelectorAll("#seg-t1 button, #seg-t2 button, #seg-t0 button").forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.key === id ? "true" : "false"); });
   }
-  function selectStrategy(id) {
+  function selectStrategy(id, byUser) {
     var tok = ++pickSeq;
     resNote = "";
     showPick(id);
@@ -897,7 +899,7 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
     getStrat(id).then(function (s) {
       if (tok !== pickSeq) return;                 // a later pick won while this file loaded
       cur = s;
-      try { localStorage.setItem("replay-strategy", id); } catch (e) { /* storage unavailable */ }
+      if (byUser) try { localStorage.setItem("replay-pick", id); } catch (e) { /* storage unavailable */ }
       return render().then(function () { if (tok === pickSeq) ld.hidden = true; });
     }).catch(function (err) {
       if (tok !== pickSeq) return;
@@ -924,8 +926,8 @@ code { font-family: var(--mono); font-size: 0.92em; overflow-wrap: anywhere; }
   if (window.innerWidth > 700) $("about").open = true;
   readoutHint();
   if (typeof Plotly === "undefined") { $("loading").textContent = "The chart library did not load. Check the connection and reload."; return; }
-  var start = "T1-LIN";
-  try { var saved = localStorage.getItem("replay-strategy"); if (saved && meta.stats[saved]) start = saved; } catch (e) { /* storage unavailable */ }
+  var start = first.id;   // only a strategy the user picked overrides it (the old key "replay-strategy" also stored the default)
+  try { var saved = localStorage.getItem("replay-pick"); if (saved && meta.stats[saved]) start = saved; } catch (e) { /* storage unavailable */ }
   if (TOUCH) attachGestures(); else attachMouse();
   lastW = gd.clientWidth + "x" + gd.clientHeight;
   selectStrategy(start);
