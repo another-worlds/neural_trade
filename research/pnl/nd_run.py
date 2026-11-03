@@ -343,15 +343,18 @@ def _guard():
         got = hashlib.sha256(open(os.path.join(ND, rel), "rb").read()).hexdigest()
         if got != h:
             sys.exit(f"data file {rel} differs from the committed manifest")
-    rescore = os.path.exists(LOCK)
+    # the committed copy counts as well as the ignored lock, so a fresh clone or a deleted lock is not a first run
+    hist = [json.load(open(p)) for p in (LOCK, LOCK_COPY) if os.path.exists(p)]
+    prev = max(hist, key=lambda h: len(h["runs"])) if hist else {"runs": []}
+    rescore = len(prev["runs"]) > 0
     if rescore:
-        log = open(os.path.join(HERE, "CHANGES.log")).read()
-        if os.environ.get("ND_RESCORE") != "1" or "newdata rescore" not in log:
-            sys.exit(f"already scored once (see {LOCK}); a re-run needs ND_RESCORE=1 and a 'newdata rescore' "
-                     "entry in CHANGES.log")
+        n_entries = sum("newdata rescore" in line for line in open(os.path.join(HERE, "CHANGES.log")))
+        n_rescores = sum(r.get("rescore", False) for r in prev["runs"])
+        if os.environ.get("ND_RESCORE") != "1" or n_entries <= n_rescores:
+            sys.exit(f"already scored ({len(prev['runs'])} run(s)); a re-run needs ND_RESCORE=1 and a NEW "
+                     "'newdata rescore' entry in CHANGES.log giving its reason (one entry per re-run)")
     sha = hashlib.sha256(raw).hexdigest()
     commit = _git("rev-parse", "HEAD").stdout.strip()
-    prev = json.load(open(LOCK)) if rescore else {"runs": []}
     prev["runs"].append({"utc": dt.datetime.now(dt.timezone.utc).isoformat(), "prereg_sha256": sha,
                          "head": commit, "manifest_files": len(want), "rescore": rescore})
     os.makedirs(os.path.dirname(LOCK), exist_ok=True)
@@ -424,17 +427,22 @@ def score():
                         comp["wo"][i, dd - d0] = v[0] - (v[1] + v[2] - v[3] - v[4])
                         if day_str(dd)[:7] in miss:
                             fund_missing_days += 1
-        r = np.log1p(mats[("T2-P", "primary")][i])
-        a = r[np.isfinite(r)]
-        bh = np.log1p(mats[("B&H", "primary")][i])
-        per[s] = {"days": int(len(a)), "first": day_str(days[np.isfinite(r)][0]) if len(a) else None,
-                  "last": day_str(days[np.isfinite(r)][-1]) if len(a) else None, "alive_at_end": alive_end[s],
-                  "T2-P_total_log": float(a.sum()), "T2-P_sharpe": float(stats.sharpe_ann(a)) if len(a) > 2 else None,
-                  "B&H_total_log": float(bh[np.isfinite(bh)].sum()),
+        # per-market statistics from SIMPLE daily returns, so a -100% (ruin) day is counted, not dropped as -inf
+        sr = mats[("T2-P", "primary")][i]
+        act_i = np.isfinite(sr)
+        a = sr[act_i]
+        bh = mats[("B&H", "primary")][i]
+        bh = bh[np.isfinite(bh)]
+        per[s] = {"days": int(act_i.sum()), "first": day_str(days[act_i][0]) if act_i.any() else None,
+                  "last": day_str(days[act_i][-1]) if act_i.any() else None, "alive_at_end": alive_end[s],
+                  "T2-P_total_compound": float(np.prod(1.0 + a) - 1.0),
+                  "T2-P_total_log": float(np.log1p(a[a > -1]).sum()),    # over non-ruin days (see ruin_days)
+                  "T2-P_sharpe_simple": float(stats.sharpe_ann(a)) if len(a) > 2 else None,
+                  "B&H_total_compound": float(np.prod(1.0 + bh) - 1.0),
                   "long_pnl": float(np.nansum(comp["lp"][i])), "short_pnl": float(np.nansum(comp["sp"][i])),
                   "funding_paid": float(np.nansum(comp["fu"][i])), "fees": float(np.nansum(comp["fe"][i])),
                   "ruin_days": int(np.nansum(comp["ru"][i])), "ruin_writeoff": float(np.nansum(comp["wo"][i]))}
-        print(s, per[s]["days"], round(per[s]["T2-P_total_log"], 3), flush=True)
+        print(s, per[s]["days"], round(per[s]["T2-P_total_compound"], 3), flush=True)
     out["funding_missing_coin_days_T2P"] = fund_missing_days
     out["markets_ever_active"] = int(sum(per[s]["days"] > 0 for s in panel))
     # primary
@@ -474,8 +482,8 @@ def score():
         if sel.any():
             r, n = portfolio(mats[("T2-P", "primary")], sel)
             sec[lab] = {"markets": int(sel.sum()), "active_days": int((n > 0).sum()), **summary(r[n > 0])}
-    tot = np.array([per[s]["T2-P_total_log"] for s in panel if per[s]["days"] > 0])
-    shp = np.array([per[s]["T2-P_sharpe"] for s in panel if per[s]["T2-P_sharpe"] is not None])
+    tot = np.array([per[s]["T2-P_total_compound"] for s in panel if per[s]["days"] > 0])
+    shp = np.array([per[s]["T2-P_sharpe_simple"] for s in panel if per[s]["T2-P_sharpe_simple"] is not None])
     sec["markets_positive_share"] = float((tot > 0).mean())
     sec["median_market_sharpe"] = float(np.median(shp))
     out["secondary"] = sec

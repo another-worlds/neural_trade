@@ -131,27 +131,36 @@ def fill_days(sym, market="um"):
     d0, d1 = int(day[0]) + 1, int(day[-1]) - 1
     cnt = np.bincount(day - day[0], minlength=int(day[-1] - day[0] + 1))
     short = [d for d in range(d0, d1 + 1) if cnt[d - int(day[0])] < 24]
-    rows, gained = [], []
+    rows = []
     for d in short:
         ds = dt.date(1970, 1, 1) + dt.timedelta(days=d)
         blob = http(f"{root}/daily/klines/{sym}/1h/{sym}-1h-{ds}.zip")
         if blob:
-            r = zip_rows(blob)
-            if r:
-                rows += r
-                gained.append(str(ds))
+            rows += zip_rows(blob)
     if rows:
         k = to_arrays(rows)
-        t = np.r_[z["t"], k["t"]]
+        # keep a daily-archive bar only if no monthly bar lies within an hour of it (the monthly archive can stamp
+        # the same hours off the hour, e.g. spot 2018-02-09 at :28, and the two sets must not interleave)
+        pos = np.searchsorted(z["t"], k["t"])
+        near = np.zeros(len(k["t"]), bool)
+        for off in (-1, 0):
+            j = np.clip(pos + off, 0, len(z["t"]) - 1)
+            near |= np.abs(z["t"][j] - k["t"]) < 3600
+        new = ~near
+        before = np.bincount(z["t"] // 86400 - day[0], minlength=len(cnt))
+        t = np.r_[z["t"], k["t"][new]]
         o = np.argsort(t, kind="stable")
-        _, keep = np.unique(t[o], return_index=True)      # the monthly archive's bar wins on a duplicate
-        idx = o[keep]
         for f in ("open", "high", "low", "close", "volume", "quote_volume"):
-            z[f] = np.r_[z[f], k[f]][idx]
-        z["t"] = t[idx]
+            z[f] = np.r_[z[f], k[f][new]][o]
+        z["t"] = t[o]
+        after = np.bincount(z["t"] // 86400 - day[0], minlength=len(cnt))
+        gained = [str(dt.date(1970, 1, 1) + dt.timedelta(days=int(day[0]) + i))
+                  for i in np.flatnonzero(after[:len(before)] > before)]
+    else:
+        gained = []
     z["filled_days"] = np.array(gained, dtype="U10")
     np.savez(path, **z)
-    return sym, f"{len(short)} short days, {len(gained)} filled from the daily archive"
+    return sym, f"{len(short)} short days, {len(gained)} gained bars from the daily archive"
 
 
 def manifest():

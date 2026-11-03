@@ -5,7 +5,7 @@ Written 2026-11-03, before any PnL on a new market or a new period was computed.
 research/pnl has no uncommitted or untracked file, and every data file matches the SHA-256 manifest committed with
 this file (`results/newdata_manifest.json`). It runs once: the lock (`work/nd/score_lock.json`, copied to
 `results/newdata_lock.json` with the HEAD commit) blocks a second run unless `ND_RESCORE=1` is set AND CHANGES.log has
-a 'newdata rescore' entry that gives the reason.
+a NEW 'newdata rescore' entry that gives the reason (one entry per re-run; the committed copy counts as a run).
 
 Before this file, only one PnL computation was run: `nd_run.py validate`. It runs engine H on BTCUSDT over the
 already-scored dev and sealed windows and compares with engine E. It reads no new market and no new period.
@@ -53,9 +53,10 @@ trade at the 00:00 UTC daily close if |x* - x| >= 0.2. Long or short, at most 1x
 - **Archive holes.** The monthly 1h archives leave out some days that the daily archives contain (2022-02-26..28 and
   2022-04-01..02 for 30 panel markets); `nd_fetch.py` fills every short day from the daily archive. 2026-10-28 is in
   neither archive for any market: on that day there is no decision and no return, the position carries, and the move
-  is booked on 10-29; funding prints inside a hole are paid by the position held across it. BTC (a): after the
-  2018-02-08 exchange outage, 43 spot bars are stamped at :28, so 2018-02-08..10 have no 23:00 decision bar (3
-  decisions skipped).
+  is booked on 10-29; funding prints inside a hole are paid by the position held across it. A daily-archive bar is
+  merged only if no monthly bar lies within an hour of it. BTC (a): after the 2018-02-08 exchange outage, 43 spot bars
+  are stamped at :28 (2018-02-09 09:28 .. 02-11 03:28), so 2018-02-08..10 have no 23:00 decision bar (3 decisions
+  skipped).
 - **Validation against engine E** (BTC, C7-B costs, maker 2 bps in / taker 5 bps out): see section 6.
 - **Costs on the panel.** Primary: 5 bps per unit of |x| increased, 10 bps per unit reduced (engine E's maker 2 and
   taker 5 bps, plus 3 and 5 bps for wider spreads and chased fills on smaller markets). Sensitivity: BTC level (2 / 5)
@@ -85,8 +86,9 @@ cannot rank a market; chosen before the window): ETH LINK YFI LTC SUSHI XRP UNI 
 XTZ WAVES BAND XLM; the panel without the index contract DEFIUSDT. Subset statistics use only days on which at least
 one of the subset's markets is active.
 
-Descriptive: returns by year; long and short PnL, funding and fees; turnover; share of markets with a positive net;
-median market Sharpe; the three cost levels; survivors against delisted markets; tsmom_unscaled, voltarget_long, B&H
+Descriptive: returns by year; long and short PnL, funding and fees (plus a write-off term on a -100% day); turnover;
+share of markets with a positive compound net (a market with a -100% day counts as not positive); median market
+Sharpe (of daily simple returns); the three cost levels; survivors against delisted markets; tsmom_unscaled, voltarget_long, B&H
 and cash on the same panel; the correlation of the panel's T2-P with BTC's T2-P.
 
 What each verdict means for the outlook (fixed now):

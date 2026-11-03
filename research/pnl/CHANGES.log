@@ -139,3 +139,12 @@ VIEWER (descriptive, after the seal; no result changed)
   the default). results/outlook.md: the best result and its outlook, descriptive, from the scored files and an
   independent check; nothing re-scored or re-chosen. The plain trend rule tsmom_unscaled did slightly better than T2-P
   in every period; the evidence for an edge stays weak (not CONFIRMED; pre-registered decision CASH).
+- 2026-11-03, new-data test (prereg_newdata.md, nd_fetch.py, nd_run.py): T2-P, frozen, on markets and periods the
+  study never scored: 80 Binance USD-M USDT perps listed by 2020-12 (delisted ones included), 2021-01..2026-10, and BTC
+  2017-2019 (spot), 2020 and 2026-10-31..11-02. Engine H (hourly) reproduces engine E on BTC (dev gap <= 0.06 %/yr).
+  Before scoring, two independent review rounds (causality, engine accounting with an independent reference engine,
+  scoring and pre-registration consistency; then a fix verification) led to: archive days filled from the daily
+  archives, the 1.10 trim before the rule decides, funding inside data holes paid by the position held across the
+  hole, ruin handling, per-market statistics from simple returns, a stronger run-once guard (clean tree, SHA-256 data
+  manifest, committed lock copy, one change-log entry per re-run), and the liquid-20 list fixed in the
+  pre-registration. The BTC validation did not change.
