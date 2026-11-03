@@ -134,3 +134,8 @@ VIEWER (descriptive, after the seal; no result changed)
   its own entry and exit marks) is left out. No WebGL trace carries a null (viz_tests/regress_gl_gaps.js). On a 4x
   slower CPU the busiest strategy (T1-FADEV, 7015 trades) switches in about 0.46 s instead of 0.8-0.9 s in the
   "All" view.
+- The viewer opens on T2-P (the Track-2 information-only candidate, sealed verdict CONSISTENT) instead of T1-LIN
+  (KILL); viz_build.py embeds its file. It remembers a strategy only when the user picks one (the old key also stored
+  the default). results/outlook.md: the best result and its outlook, descriptive, from the scored files and an
+  independent check; nothing re-scored or re-chosen. The plain trend rule tsmom_unscaled did slightly better than T2-P
+  in every period; the evidence for an edge stays weak (not CONFIRMED; pre-registered decision CASH).

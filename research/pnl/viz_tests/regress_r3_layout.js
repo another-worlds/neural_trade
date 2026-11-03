@@ -144,6 +144,7 @@ const brief = a => ({ ch: a.ch, plotH: a.plotH, price: a.y.map(x => x.s), pnl: a
   // ---------- F4 info: desktop keeps Plotly's own ticks
   {
     const { ctx, page } = await open(browser, { viewport: { width: 1280, height: 800 } });
+    await strat(page, 'T1-LIN');   // the thresholds below were set on T1-LIN (the page now opens on T2-P)
     await chip(page, 'all'); const a = await page.evaluate(AXES);
     check('F4-desktop 1280x800 all', 4, !a.compact && a.y.length >= 5 && a.y2.length >= 4 && !labelProblems(a).length, { need: 'wide layout unchanged: >= 5 price, >= 4 PnL labels', ...brief(a) });
     await ctx.close();

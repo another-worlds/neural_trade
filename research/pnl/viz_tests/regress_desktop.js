@@ -23,6 +23,8 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const ready = (p, t = 60000) => p.waitForFunction(() => document.getElementById('loading').hidden === true, null, { timeout: t });
 async function open(browser, vp, setup) {
   const ctx = await browser.newContext({ viewport: vp });
+  // the page opens on the embedded strategy (T2-P) unless the user picked one; these checks were written for a T1-LIN start
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('replay-pick')) localStorage.setItem('replay-pick', 'T1-LIN'); } catch (e) { /* no storage */ } });
   const page = await ctx.newPage(); const errs = [];
   page.on('pageerror', e => errs.push(e.message));
   await page.route('**/plotly.min.js', r => r.fulfill({ body: PL, contentType: 'text/javascript' }));
@@ -154,25 +156,25 @@ function pnlTruth(doc) {
   {
     let truth = null;
     const { ctx, page, errs } = await open(browser, { width: 1360, height: 1000 }, async p => {
-      await p.route('**/s/T2-P.json', async r => { await wait(4500); r.continue().catch(() => {}); });
+      await p.route('**/s/T2-LIN.json', async r => { await wait(4500); r.continue().catch(() => {}); });
     });
     await check('slow_switch_readout_label_matches_values', [5, 23], async () => {
-      const docLin = await (await ctx.request.get(BASE + 's/T1-LIN.json')).json(), docP = await (await ctx.request.get(BASE + 's/T2-P.json')).json();
-      truth = { 'T1-LIN': pnlTruth(docLin), 'T2-P': pnlTruth(docP) };
+      const docLin = await (await ctx.request.get(BASE + 's/T1-LIN.json')).json(), docP = await (await ctx.request.get(BASE + 's/T2-LIN.json')).json();
+      truth = { 'T1-LIN': pnlTruth(docLin), 'T2-LIN': pnlTruth(docP) };
       const b = await plotBox(page);
       await page.mouse.click(b.l + b.w * 0.6, b.t + b.h * 0.3); await page.waitForTimeout(600);
       await page.mouse.move(b.l + b.w * 0.5, b.t - 120); await page.waitForTimeout(300);
       const pinned = parseReadout(await readoutText(page));
-      await page.click('#seg-t2 button[data-key="T2-P"]'); await page.waitForTimeout(300);
+      await page.click('#seg-t2 button[data-key="T2-LIN"]'); await page.waitForTimeout(300);
       await page.click('#seg-range button[data-key="1m"]'); await page.waitForTimeout(900);   // a render while the file loads
       const stillLoading = await page.$eval('#loading', e => !e.hidden);
       const during = parseReadout(await readoutText(page));
       await ready(page, 20000); await page.waitForTimeout(800);
       const after = parseReadout(await readoutText(page));
       const ms = Date.parse(pinned.time.replace(' ', 'T') + ':00Z');
-      const tv = { 'T1-LIN': +truth['T1-LIN'](ms).toFixed(2), 'T2-P': +truth['T2-P'](ms).toFixed(2) };
+      const tv = { 'T1-LIN': +truth['T1-LIN'](ms).toFixed(2), 'T2-LIN': +truth['T2-LIN'](ms).toFixed(2) };
       const ok = r => r.label != null && tv[r.label] != null && Math.abs(r.value - tv[r.label]) <= 0.06;
-      return { pass: stillLoading && during.time === pinned.time && ok(during) && after.label === 'T2-P' && ok(after) && !errs.length,
+      return { pass: stillLoading && during.time === pinned.time && ok(during) && after.label === 'T2-LIN' && ok(after) && !errs.length,
         measured: { pinnedAt: pinned.time, truthPct: tv, duringLoad: { overlayShown: stillLoading, label: during.label, value: during.value }, afterLoad: { label: after.label, value: after.value }, errs } };
     });
     await ctx.close();
@@ -182,7 +184,7 @@ function pnlTruth(doc) {
   {
     let fail = true;
     const { ctx, page, errs } = await open(browser, { width: 1360, height: 1000 }, async p => {
-      await p.route('**/s/T2-P.json', r => fail ? r.abort() : r.continue());
+      await p.route('**/s/T2-LIN.json', r => fail ? r.abort() : r.continue());
     });
     await check('failed_load_returns_controls_to_strategy_on_screen', [5], async () => {
       const ui = () => page.evaluate(() => ({
@@ -190,25 +192,25 @@ function pnlTruth(doc) {
         pressed: [...document.querySelectorAll('#seg-t1 button, #seg-t2 button, #seg-t0 button')].filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.key),
         legend: document.getElementById('leg-strat').textContent, stats: document.getElementById('stats').innerText.replace(/\s+/g, ' '),
         overlayHidden: document.getElementById('loading').hidden, res: document.getElementById('res').textContent,
-        tbl: document.getElementById('tbl-title').textContent, saved: (() => { try { return localStorage.getItem('replay-strategy'); } catch (e) { return null; } })()
+        tbl: document.getElementById('tbl-title').textContent, saved: (() => { try { return localStorage.getItem('replay-pick'); } catch (e) { return null; } })()
       }));
       const before = await ui(), b = await plotBox(page);
       await page.mouse.click(b.l + b.w * 0.6, b.t + b.h * 0.3); await page.waitForTimeout(600);
-      await page.click('#seg-t2 button[data-key="T2-P"]'); await page.waitForTimeout(1200);
+      await page.click('#seg-t2 button[data-key="T2-LIN"]'); await page.waitForTimeout(1200);
       const after = await ui();
       await page.click('#bh-toggle'); await page.waitForTimeout(900);              // any render after the failure
       await page.mouse.move(b.l + b.w * 0.5, b.t - 120); await page.waitForTimeout(300);
       const ro = parseReadout(await readoutText(page));
       await page.click('#bh-toggle'); await page.waitForTimeout(600);
       return { pass: after.select === 'T1-LIN' && JSON.stringify(after.pressed) === '["T1-LIN"]' && after.legend === before.legend && after.stats === before.stats &&
-          after.overlayHidden && /Could not load T2-P/.test(after.res) && after.saved !== 'T2-P' && after.tbl === before.tbl && ro.label === 'T1-LIN',
+          after.overlayHidden && /Could not load T2-LIN/.test(after.res) && after.saved !== 'T2-LIN' && after.tbl === before.tbl && ro.label === 'T1-LIN',
         measured: { after: { select: after.select, pressed: after.pressed, legend: after.legend, statsUnchanged: after.stats === before.stats, overlayHidden: after.overlayHidden, res: after.res, saved: after.saved, tbl: after.tbl }, readoutLabelAfterRender: ro.label, errs } };
     });
     await check('failed_load_then_repick_loads', [5], async () => {
       fail = false;
-      await page.click('#seg-t2 button[data-key="T2-P"]'); await ready(page, 20000); await page.waitForTimeout(800);
+      await page.click('#seg-t2 button[data-key="T2-LIN"]'); await ready(page, 20000); await page.waitForTimeout(800);
       const s = await page.evaluate(() => ({ select: document.getElementById('strat-select').value, legend: document.getElementById('leg-strat').textContent, tbl: document.getElementById('tbl-title').textContent }));
-      return { pass: s.select === 'T2-P' && /^T2-P/.test(s.legend) && !errs.length, measured: s };
+      return { pass: s.select === 'T2-LIN' && /^T2-LIN/.test(s.legend) && !errs.length, measured: s };
     });
     await ctx.close();
   }

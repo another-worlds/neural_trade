@@ -76,6 +76,8 @@ const fmt1 = v => v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumF
 // ---------- page helpers
 async function open(browser, vp, setup) {
   const ctx = await browser.newContext({ viewport: vp });
+  // the page opens on the embedded strategy (T2-P) unless the user picked one; these checks were written for a T1-LIN start
+  await ctx.addInitScript(() => { try { if (!localStorage.getItem('replay-pick')) localStorage.setItem('replay-pick', 'T1-LIN'); } catch (e) { /* no storage */ } });
   const page = await ctx.newPage(); const errs = [];
   page.on('pageerror', e => errs.push(e.message));
   await page.route('**/plotly.min.js', r => r.fulfill({ body: PL, contentType: 'text/javascript' }));
@@ -159,7 +161,7 @@ const pressDbl = async (page, x, y, counts, offs) => {
     let delay = 0;
     const { ctx, page, errs } = await open(browser, { width: 1360, height: 1000 }, async p => {
       await p.route('**/s/T2-NET.json', async r => { if (delay) await wait(delay); r.continue().catch(() => {}); });
-      await p.route('**/s/T2-P.json', async r => { await wait(800); r.fulfill({ status: 404, body: 'missing' }).catch(() => {}); });
+      await p.route('**/s/T2-LIN.json', async r => { await wait(800); r.fulfill({ status: 404, body: 'missing' }).catch(() => {}); });
     });
     const during = [];
     delay = 2500;
@@ -175,11 +177,11 @@ const pressDbl = async (page, x, y, counts, offs) => {
     await check('table_lists_picked_strategy_after_load', [0], async () => ({
       pass: d1.title === 'Trades in view: ' + truth1.toLocaleString('en-US') && d2.title === 'Trades in view: ' + truth2.toLocaleString('en-US') && d2.rows === Math.min(300, truth2),
       measured: { oneMonthView: { title: d1.title, truth: truth1 }, allView: { title: d2.title, rows: d2.rows, truth: truth2 } } }));
-    await pick(page, 'T2-P'); await page.waitForTimeout(300); const f1 = await tbl(page);
+    await pick(page, 'T2-LIN'); await page.waitForTimeout(300); const f1 = await tbl(page);
     await page.waitForTimeout(1200); const f2 = await tbl(page);
     await check('table_refilled_after_failed_pick', [0, 14], async () => ({
-      pass: f1.rows === 0 && f1.note === 'Loading T2-P daily trend...' && f2.sel === 'T2-NET' && f2.title === 'Trades in view: ' + truth2.toLocaleString('en-US') && f2.rows === Math.min(300, truth2) &&
-        f2.res === 'Could not load T2-P: T2-P (404)' && !errs.length,
+      pass: f1.rows === 0 && f1.note === 'Loading T2-LIN ridge...' && f2.sel === 'T2-NET' && f2.title === 'Trades in view: ' + truth2.toLocaleString('en-US') && f2.rows === Math.min(300, truth2) &&
+        f2.res === 'Could not load T2-LIN: T2-LIN (404)' && !errs.length,
       measured: { duringFailingLoad: f1, afterFailure: f2, truthAll: truth2, errs } }));
     await ctx.close();
   }
