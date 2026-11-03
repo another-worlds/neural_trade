@@ -154,7 +154,7 @@ def fill_days(sym, market="um"):
             z[f] = np.r_[z[f], k[f][new]][o]
         z["t"] = t[o]
         after = np.bincount(z["t"] // 86400 - day[0], minlength=len(cnt))
-        gained = [str(dt.date(1970, 1, 1) + dt.timedelta(days=int(day[0]) + i))
+        gained = [str(dt.date(1970, 1, 1) + dt.timedelta(days=int(day[0]) + int(i)))
                   for i in np.flatnonzero(after[:len(before)] > before)]
     else:
         gained = []
