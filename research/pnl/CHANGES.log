@@ -148,3 +148,8 @@ VIEWER (descriptive, after the seal; no result changed)
   hole, ruin handling, per-market statistics from simple returns, a stronger run-once guard (clean tree, SHA-256 data
   manifest, committed lock copy, one change-log entry per re-run), and the liquid-20 list fixed in the
   pre-registration. The BTC validation did not change.
+- 2026-11-03, new-data test scored once (commit 3c84f4a, pre-registration edcb157): panel verdict REPLICATED at the 5%
+  line (+4.49 bps/day, lower bound +0.12, p 0.047). An independent re-implementation from the pre-registration
+  reproduced it (to 5e-15 once three conventions the pre-registration leaves open were matched; lower bound +0.106
+  under its own first reading). A post-hoc fragility analysis is in results/newdata.md section 5; it does not change
+  the verdict. results/outlook.md has a short update.

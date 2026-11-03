@@ -48,6 +48,19 @@ T2-P by year: 2021 +37.8, 2022 -4.6, 2023 +52.0, 2024 +5.3, 2025 (Jan-Oct) -29.2
 - Evidence for BTC trend following out of sample is mixed: some studies find it kept working on a risk-adjusted
   basis, others find no out-of-sample predictability or losses in 2022-2023.
 
+## Update: the rule on new data (2026-11-03, `newdata.md`)
+
+T2-P, unchanged, was tested on 79 other Binance perpetuals (2021-01..2026-10; delisted markets included) under a
+pre-registration committed before any scoring. Equal capital per market: +16.4 %/yr net, Sharpe 0.67, maximum
+drawdown 30% (buy-and-hold on the same markets: +2.2 %/yr, drawdown 88%). Verdict **REPLICATED**, at the 5% line
+(lower bound +0.12 bps/day, p 0.047). Small changes flip it to CONSISTENT: the 2 best markets out, costs +15%, or 2021
+out. The 20 most liquid markets alone are CONSISTENT (+11.2 %/yr, Sharpe 0.44). The panel correlates 0.58 with
+BTC's own T2-P, and its part independent of BTC is not significant. BTC before the study (2017-2019, spot) was
+CONSISTENT (+39.6 %/yr; 2018 -13% while holding BTC lost 73%).
+
+So the outlook moves a little up: the trend edge is more likely real, and a spread of markets cut the drawdown. It is
+still not proven, and the liquid markets showed the weaker result.
+
 Next step under the study's own rule: at least 12 months of paper trading before any capital. Paper trading checks
 execution, fees and funding; it cannot confirm the edge (at Sharpe 0.4, a t-statistic of 2 needs about 25 years).
 
