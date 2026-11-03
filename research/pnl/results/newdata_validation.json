@@ -1,0 +1,78 @@
+{
+ "dev": {
+  "T2-P": {
+   "H_total_log": 0.6164226277475808,
+   "H_ann_additive_pct": 12.747550092230425,
+   "H_sharpe": 0.3543389226877309,
+   "E_ann_additive_pct": 12.688745672368483,
+   "E_days": 1765,
+   "E_sharpe": 0.35345604480587706,
+   "gap_pct_per_year": 0.05880441986194107
+  },
+  "tsmom_unscaled": {
+   "H_total_log": 0.8296144899046687,
+   "H_ann_additive_pct": 17.15633364392091,
+   "H_sharpe": 0.39115836724815345,
+   "E_ann_additive_pct": 17.20307570757046,
+   "E_days": 1765,
+   "E_sharpe": 0.39308099687172915,
+   "gap_pct_per_year": -0.04674206364954969
+  },
+  "voltarget_long": {
+   "H_total_log": 0.7384004981080459,
+   "H_ann_additive_pct": 15.270038629429845,
+   "H_sharpe": 0.329930340109478,
+   "E_ann_additive_pct": 15.270029764364706,
+   "E_days": 1765,
+   "E_sharpe": 0.3299167710359745,
+   "gap_pct_per_year": 8.865065138863315e-06
+  },
+  "B&H": {
+   "H_total_log": 0.7585922856777516,
+   "H_ann_additive_pct": 15.687602508350103,
+   "H_sharpe": 0.2541354142155527,
+   "E_ann_additive_pct": 15.685288718851282,
+   "E_days": 1765,
+   "E_sharpe": 0.253943925566138,
+   "gap_pct_per_year": 0.002313789498820995
+  }
+ },
+ "seal": {
+  "T2-P": {
+   "H_total_log": 0.33634434925824463,
+   "H_ann_additive_pct": 33.72683721957673,
+   "H_sharpe": 1.106545486318376,
+   "E_total_log": 0.3318650659602478,
+   "E_days": 363,
+   "E_sharpe": 1.0955480892705893,
+   "gap_total_log": 0.00447928329799685
+  },
+  "tsmom_unscaled": {
+   "H_total_log": 0.3486614932477242,
+   "H_ann_additive_pct": 34.961935449291026,
+   "H_sharpe": 1.1230828993725452,
+   "E_total_log": 0.3441820922897013,
+   "E_days": 363,
+   "E_sharpe": 1.11254385092847,
+   "gap_total_log": 0.0044794009580229055
+  },
+  "voltarget_long": {
+   "H_total_log": -0.44448841528084104,
+   "H_ann_additive_pct": -44.57095373008434,
+   "H_sharpe": -1.122336712755096,
+   "E_total_log": -0.44450918315170224,
+   "E_days": 363,
+   "E_sharpe": -1.1241196363420882,
+   "gap_total_log": 2.0767870861193582e-05
+  },
+  "B&H": {
+   "H_total_log": -0.38669925790451753,
+   "H_ann_additive_pct": -38.77616185031563,
+   "H_sharpe": -0.8655391446824056,
+   "E_total_log": -0.38559053773293994,
+   "E_days": 363,
+   "E_sharpe": -0.8639844870186143,
+   "gap_total_log": -0.001108720171577593
+  }
+ }
+}
