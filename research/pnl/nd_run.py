@@ -10,19 +10,23 @@
 ENGINE H (one market, hourly bars; the daily rules decide only at the 23:00 bar close = the 00:00 UTC daily close)
 - State: signed contracts q, equity E, exposure x = q c / E. Equity is renormalised to 1 at each UTC day start (exact:
   every PnL term is linear in size), so a day's net return is E_end - 1 in units of start-of-day equity.
-- Bar j: funding first (a print stamped in (t_{j-1}, t_j] is paid at bar j's open by the position held at the end of
-  bar j-1, at c_{j-1}; longs pay positive rates), then the price move q (c_j - c_{j-1}). The payment is fixed before
-  a trade at bar j-1's close, as in engine E, where a decision fills from the next bar on (the old position pays the
-  00:00 print).
+- Bar j: funding first (a print stamped in (t_{j-1}, t_j] is paid at bar j's open at c_{j-1}; longs pay positive
+  rates), then the price move q (c_j - c_{j-1}). A print at bar j-1's close is paid by the position held BEFORE a trade
+  decided at that close, as in engine E, where a decision fills from the next bar on (the old position pays the 00:00
+  print); prints inside a data hole are paid by the position held across the hole.
 - Trades at bar closes at c_j. The INCREASE leg of |x| costs c_in, the REDUCE leg c_out (fractions of traded notional),
   split exactly as engine F (a flip = full reduce + new increase).
 - Rules (rules.py, SPEC 'track2'): T2-P band 0.2; tsmom_unscaled trades when tau changes; voltarget_long band 0.2;
   B&H x = 1 from its first bar; cash.
 - 1x cap as engine E: trim to |x| = 1 (reduce, c_out) when |x| > 1.10 at any bar close, or > 1.02 at a decision bar
-  where the rule does not trade. Engine E checks every minute; engine H every hour (shorts in a fast squeeze lose more
-  here, so H is the more conservative of the two).
-- A day whose loss exceeds the day's equity (possible only if one hour moves > ~100% against a 1x position) is
-  recorded as -100% and the position is closed; the rule re-enters at its next decision.
+  where the rule does not trade; as in E, the trim acts first and the rule decides on the trimmed exposure. Engine E
+  checks every minute, engine H every hour: H misses wicks inside the hour. That favours a short on a spike that
+  reverts inside the hour and costs it more on a squeeze that persists; the net direction is not known.
+- A day whose loss exceeds the day's equity (possible only if one hour moves > ~100% against a 1x position, or a fee
+  exceeds what is left) is recorded as -100% and the position is closed; every rule re-enters at its next decision
+  (tsmom_unscaled at its next decision, not only at the next change of tau; B&H at the next bar).
+- Days without bars inside a segment (archive holes): no decision, no return; the position carries and the move is
+  booked on the next bar.
 - Positions are closed (c_out) at the last bar of the run or of a data segment. Bars with zero quote volume are
   dropped (the archive keeps flat zero-volume bars after a delisting), so a market ends at its last traded hour; a
   gap > 7 days splits a segment, and a new segment needs 56 days of warm-up again.
@@ -63,9 +67,12 @@ def day_str(d):
 # --------------------------------------------------------------------------------------------------- engine H
 
 @njit(cache=True)
-def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
+def engine_h(c, fund_old, fund_new, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
     """Bars s..e-1 of one segment. dayid[j] in 0..nday-1. Returns per-day arrays (units of start-of-day equity):
-    ret, long price PnL, short price PnL, funding paid, fees, turnover |dx|, end-of-day x, ruin flag."""
+    ret, long price PnL, short price PnL, funding paid, fees, turnover (|dx| x equity), end-of-day x, ruin flag.
+    fund_old[j]: prints at bar j-1's close (t_{j-1} + 1h), paid by the position held at the end of bar j-1 BEFORE a
+    trade decided at that close (engine E: the order fills from the next bar on). fund_new[j]: later prints that fall
+    in a data hole before bar j, paid by the position held across the hole (after that trade)."""
     ret = np.zeros(nday)
     lp = np.zeros(nday)
     sp = np.zeros(nday)
@@ -75,7 +82,7 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
     xe = np.zeros(nday)
     ru = np.zeros(nday)
     q, E = 0.0, 1.0
-    pend = 0.0                                   # funding due at the next bar's open, fixed before this bar's trade
+    pend = 0.0                                   # fund_old due at the next bar's open, fixed before this bar's trade
     last = np.nan
     started = False
     cur = dayid[s]
@@ -83,6 +90,8 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
         d = dayid[j]
         if d != cur:
             ret[cur] = E - 1.0 if E > 0.0 else -1.0
+            for dd in range(cur + 1, d):         # days without bars: the position carries, no return is booked
+                xe[dd] = xe[cur]
             if E > 0.0:
                 q = q / E
                 pend = pend / E
@@ -92,9 +101,10 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
             E = 1.0
             cur = d
         if j > s and E > 0.0:
-            if pend != 0.0:
-                E -= pend
-                fu[d] += pend
+            pay = pend + fund_new[j] * q * c[j - 1]
+            if pay != 0.0:
+                E -= pay
+                fu[d] += pay
             pnl = q * (c[j] - c[j - 1])
             E += pnl
             if q > 0.0:
@@ -105,10 +115,12 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
                 E = 0.0
                 q = 0.0
                 ru[d] = 1.0
+                last = np.nan
+                started = False
         x = q * c[j] / E if E > 0.0 else 0.0
-        # a print at bar j+1's open is paid by the position held at the end of bar j, i.e. BEFORE a trade decided at
-        # bar j's close (engine E: the order fills from the next bar on, so the old position pays the 00:00 print)
-        pend = fund[j + 1] * q * c[j] if (j + 1 < e and E > 0.0) else 0.0
+        pend = fund_old[j + 1] * q * c[j] if (j + 1 < e and E > 0.0) else 0.0
+        # engine E order: the drift trim (|x| > 1.10) acts first, then the rule decides on the trimmed exposure
+        xd = (1.0 if x > 0 else -1.0) if abs(x) > 1.10 else x
         target = np.nan
         if E > 0.0:
             if j == e - 1:
@@ -120,15 +132,15 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
                 tg = tgt[j]
                 if tg == tg:
                     if mode == 0:
-                        if abs(tg - x) >= band - 1e-12:
+                        if abs(tg - xd) >= band - 1e-12:
                             target = tg
                     else:
                         if not (last == last and tg == last):
                             last = tg
-                            if abs(tg - x) >= 1e-9:
+                            if abs(tg - xd) >= 1e-9:
                                 target = tg
             if target != target:
-                if abs(x) > 1.10 or (dec[j] and (mode == 0 or mode == 1) and abs(x) > 1.02):
+                if abs(x) > 1.10 or (dec[j] and (mode == 0 or mode == 1) and abs(xd) > 1.02):
                     target = 1.0 if x > 0 else -1.0
         if target == target:
             t = min(1.0, max(-1.0, target))
@@ -136,11 +148,19 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
             inc = (abs(t) + dx - abs(x)) * 0.5
             red = (abs(x) + dx - abs(t)) * 0.5
             cost = (c_in * inc + c_out * red) * E
+            tu[d] += dx * E
             E -= cost
             fe[d] += cost
-            tu[d] += dx
-            q = t * E / c[j]
-            x = t
+            if E <= 0.0:                         # the trade's fee used up what was left of the equity
+                E = 0.0
+                q = 0.0
+                x = 0.0
+                ru[d] = 1.0
+                last = np.nan
+                started = False
+            else:
+                q = t * E / c[j]
+                x = t
         xe[d] = x
     ret[cur] = E - 1.0 if E > 0.0 else -1.0
     return ret, lp, sp, fu, fe, tu, xe, ru
@@ -151,7 +171,7 @@ def engine_h(c, fund, dayid, dec, tgt, mode, band, c_in, c_out, s, e, nday):
 class Market:
     """Hourly bars of one symbol, split into segments at gaps > 7 days, with funding per bar and daily signals."""
 
-    def __init__(self, path, funding_from=None):
+    def __init__(self, path):
         z = np.load(path)
         t, c = z["t"].astype(np.int64), z["close"].astype(np.float64)
         # zero-volume bars are dropped: the archive keeps flat zero-volume bars after a delisting (and during
@@ -159,14 +179,18 @@ class Market:
         ok = np.isfinite(c) & (c > 0) & (z["quote_volume"] > 0)
         self.t, self.c = t[ok], c[ok]
         self.qv = z["quote_volume"][ok]
-        ft, fr = z["funding_t"], z["funding_rate"]
-        if funding_from is not None:
-            ft, fr = funding_from
-        self.fund = np.zeros(len(self.t))
+        ft, fr = z["funding_t"].astype(np.int64), z["funding_rate"].astype(np.float64)
+        # a print maps to the first bar that opens at or after it; it is 'old' (paid before the previous bar's trade)
+        # when it falls exactly at the previous bar's close, and 'new' when it falls inside a data hole
+        self.fund_old = np.zeros(len(self.t))
+        self.fund_new = np.zeros(len(self.t))
         idx = np.searchsorted(self.t, ft, side="left")
         m = idx < len(self.t)
-        np.add.at(self.fund, idx[m], fr[m])
-        self.funding_t = ft
+        idx, ft, fr = idx[m], ft[m], fr[m]
+        prev_close = np.where(idx > 0, self.t[np.maximum(idx - 1, 0)] + HOUR, -1)
+        old = (idx == 0) | (ft <= prev_close)
+        np.add.at(self.fund_old, idx[old], fr[old])
+        np.add.at(self.fund_new, idx[~old], fr[~old])
         br = np.flatnonzero(np.diff(self.t) > SEG_GAP) + 1
         self.segments = list(zip(np.r_[0, br], np.r_[br, len(self.t)]))
 
@@ -198,8 +222,8 @@ class Market:
         out = {k: {} for k in strats}
         spans = []
         for a, b in self.segments:
-            if b - a < 2:
-                continue
+            if b - a < 2 or self.t[b - 1] // DAY - self.t[a] // DAY + 1 <= 56:
+                continue                             # too short for a first decision (segment day 56)
             d0, nday, di, dec, tg, _ = self.segment_signals(a, b)
             first = max(w0, d0 + 56)                 # first decision day (tau valid from segment day 56)
             lastd = min(w1, d0 + nday - 1)
@@ -213,7 +237,8 @@ class Market:
             spans.append((int(first), int(lastd)))
             for k in strats:
                 arr = tg.get(k, np.full(b - a, np.nan))
-                r = engine_h(self.c[a:b], self.fund[a:b], di, dec, arr, MODE[k], 0.2, c_in, c_out, s, e, nday)
+                r = engine_h(self.c[a:b], self.fund_old[a:b], self.fund_new[a:b], di, dec, arr, MODE[k], 0.2,
+                             c_in, c_out, s, e, nday)
                 for dd in range(first - d0, lastd - d0 + 1):
                     out[k][int(dd + d0)] = tuple(float(v[dd]) for v in r)
         return out, spans
@@ -283,27 +308,56 @@ def validate():
 # --------------------------------------------------------------------------------------------------- scoring
 
 PREREG = os.path.join(HERE, "prereg_newdata.md")
-LOCK = os.path.join(ND, "score_lock.json")
+LOCK = os.path.join(HERE, "work", "nd", "score_lock.json")      # fixed path: ND_DATA cannot move it
+LOCK_COPY = os.path.join(RES, "newdata_lock.json")              # committed with the results
+MANIFEST = os.path.join(RES, "newdata_manifest.json")            # data hashes committed with the pre-registration
 W0, W1 = "2021-01-01", "2026-10-31"
 DEV_END, SEAL0 = "2025-10-31", "2025-11-01"
 COSTS = {"primary": (5e-4, 10e-4), "btc_level": (2e-4, 5e-4), "stress": (25e-4, 25e-4)}
 INDEX_CONTRACTS = ("DEFIUSDT",)
 LIQ_FROM, LIQ_TO, LIQ_N = "2020-07-01", "2020-12-31", 20
+LIQ20_PREREG = ["ETHUSDT", "LINKUSDT", "YFIUSDT", "LTCUSDT", "SUSHIUSDT", "XRPUSDT", "UNIUSDT", "BCHUSDT", "BNBUSDT",
+                "YFIIUSDT", "ADAUSDT", "DOTUSDT", "EOSUSDT", "SXPUSDT", "TRXUSDT", "CRVUSDT", "XTZUSDT", "WAVESUSDT",
+                "BANDUSDT", "XLMUSDT"]
+
+
+def _git(*a):
+    return subprocess.run(["git", "-C", HERE, *a], capture_output=True, text=True)
 
 
 def _guard():
+    """Score only (1) from a clean research/pnl tree at a committed HEAD (code and pre-registration as committed),
+    (2) on data whose hashes equal the manifest committed with the pre-registration, (3) once: a re-run needs
+    ND_RESCORE=1 AND a 'newdata rescore' line in CHANGES.log that names the reason."""
     raw = open(PREREG, "rb").read()
     head = subprocess.run(["git", "-C", HERE, "show", "HEAD:research/pnl/prereg_newdata.md"], capture_output=True)
     if head.returncode != 0 or head.stdout != raw:
         sys.exit("prereg_newdata.md must be committed at HEAD and unchanged before scoring")
-    if os.path.exists(LOCK) and os.environ.get("ND_RESCORE") != "1":
-        sys.exit(f"already scored once (see {LOCK}); a re-run needs ND_RESCORE=1 and a CHANGES.log entry")
+    dirty = _git("status", "--porcelain", "--", ".").stdout.strip()
+    if dirty:
+        sys.exit("research/pnl has uncommitted or untracked files; commit first:\n" + dirty)
+    if not os.path.exists(MANIFEST):
+        sys.exit("results/newdata_manifest.json missing")
+    want = json.load(open(MANIFEST))
+    for rel, h in want.items():
+        got = hashlib.sha256(open(os.path.join(ND, rel), "rb").read()).hexdigest()
+        if got != h:
+            sys.exit(f"data file {rel} differs from the committed manifest")
+    rescore = os.path.exists(LOCK)
+    if rescore:
+        log = open(os.path.join(HERE, "CHANGES.log")).read()
+        if os.environ.get("ND_RESCORE") != "1" or "newdata rescore" not in log:
+            sys.exit(f"already scored once (see {LOCK}); a re-run needs ND_RESCORE=1 and a 'newdata rescore' "
+                     "entry in CHANGES.log")
     sha = hashlib.sha256(raw).hexdigest()
-    prev = json.load(open(LOCK)) if os.path.exists(LOCK) else {"runs": []}
+    commit = _git("rev-parse", "HEAD").stdout.strip()
+    prev = json.load(open(LOCK)) if rescore else {"runs": []}
     prev["runs"].append({"utc": dt.datetime.now(dt.timezone.utc).isoformat(), "prereg_sha256": sha,
-                         "rescore": os.path.exists(LOCK)})
+                         "head": commit, "manifest_files": len(want), "rescore": rescore})
+    os.makedirs(os.path.dirname(LOCK), exist_ok=True)
     json.dump(prev, open(LOCK, "w"), indent=1)
-    return sha
+    json.dump(prev, open(LOCK_COPY, "w"), indent=1)
+    return sha, commit
 
 
 def verdict(r, seed=0):
@@ -332,7 +386,7 @@ def liquid_set(panel):
         z = np.load(os.path.join(ND, "hourly", f"{s}.npz"))
         d = z["t"] // DAY
         k = (d >= a) & (d <= b)
-        if k.sum() < 90 * 24:
+        if k.sum() < 90 * 24:                      # pre-registered: at least 90 days of bars in 2020-07..12
             continue
         u, inv = np.unique(d[k], return_inverse=True)
         med[s] = float(np.median(np.bincount(inv, weights=z["quote_volume"][k])))
@@ -340,15 +394,15 @@ def liquid_set(panel):
 
 
 def score():
-    sha = _guard()
+    sha, commit = _guard()
     uni = json.load(open(os.path.join(ND, "universe.json")))
     panel = uni["panel"]
     d0, d1 = ts(W0) // DAY, ts(W1) // DAY
     days = np.arange(d0, d1 + 1)
     dev_k = days <= ts(DEV_END) // DAY
-    out = {"prereg_sha256": sha, "window": [W0, W1], "panel_size": len(panel), "costs": COSTS}
+    out = {"prereg_sha256": sha, "head": commit, "window": [W0, W1], "panel_size": len(panel), "costs": COSTS}
     mats = {(k, c): np.full((len(panel), len(days)), np.nan) for k in STRATS for c in COSTS}
-    comp = {f: np.full((len(panel), len(days)), np.nan) for f in ("lp", "sp", "fu", "fe", "tu", "ru", "xe")}
+    comp = {f: np.full((len(panel), len(days)), np.nan) for f in ("lp", "sp", "fu", "fe", "tu", "ru", "xe", "wo")}
     per = {}
     alive_end = {}
     fund_missing_days = 0
@@ -366,6 +420,8 @@ def score():
                     for dd, v in res[k].items():
                         for f, idx in (("lp", 1), ("sp", 2), ("fu", 3), ("fe", 4), ("tu", 5), ("xe", 6), ("ru", 7)):
                             comp[f][i, dd - d0] = v[idx]
+                        # a ruin day floors ret at -1: the rest of the loss is a write-off, so the parts still add up
+                        comp["wo"][i, dd - d0] = v[0] - (v[1] + v[2] - v[3] - v[4])
                         if day_str(dd)[:7] in miss:
                             fund_missing_days += 1
         r = np.log1p(mats[("T2-P", "primary")][i])
@@ -377,9 +433,10 @@ def score():
                   "B&H_total_log": float(bh[np.isfinite(bh)].sum()),
                   "long_pnl": float(np.nansum(comp["lp"][i])), "short_pnl": float(np.nansum(comp["sp"][i])),
                   "funding_paid": float(np.nansum(comp["fu"][i])), "fees": float(np.nansum(comp["fe"][i])),
-                  "ruin_days": int(np.nansum(comp["ru"][i]))}
+                  "ruin_days": int(np.nansum(comp["ru"][i])), "ruin_writeoff": float(np.nansum(comp["wo"][i]))}
         print(s, per[s]["days"], round(per[s]["T2-P_total_log"], 3), flush=True)
     out["funding_missing_coin_days_T2P"] = fund_missing_days
+    out["markets_ever_active"] = int(sum(per[s]["days"] > 0 for s in panel))
     # primary
     prim, nact = portfolio(mats[("T2-P", "primary")])
     out["primary"] = {"strategy": "T2-P", "costs": "primary", **verdict(prim), **summary(prim),
@@ -395,25 +452,28 @@ def score():
     # T2-P decomposition (primary costs), in units of start-of-day equity, portfolio-weighted
     act = np.isfinite(comp["lp"])
     n = np.maximum(act.sum(0), 1)
-    out["T2-P_decomposition_sum_simple"] = {f: float((np.nansum(comp[f], 0) / n).sum()) for f in ("lp", "sp", "fu", "fe")}
+    out["T2-P_decomposition_sum_simple"] = {f: float((np.nansum(comp[f], 0) / n).sum())
+                                            for f in ("lp", "sp", "fu", "fe", "wo")}
     out["T2-P_mean_abs_exposure"] = float(np.nanmean(np.abs(comp["xe"])))
     out["T2-P_turnover_per_market_year"] = float(np.nansum(comp["tu"]) / max(act.sum(), 1) * 365)
+    out["T2-P_ruin_days_total"] = int(np.nansum(comp["ru"]))
     # secondary verdicts on subsets (reported, not gates)
     sec = {}
     sec["dev_window"] = {**verdict(prim[dev_k]), **summary(prim[dev_k])}
     sec["sealed_window"] = {**verdict(prim[~dev_k]), **summary(prim[~dev_k])}
     liq, med = liquid_set(panel)
+    sec["liquid20_matches_prereg"] = liq == LIQ20_PREREG
     sel = np.array([s in liq for s in panel])
-    r, _ = portfolio(mats[("T2-P", "primary")], sel)
-    sec["liquid20"] = {"markets": liq, **verdict(r), **summary(r)}
+    r, n = portfolio(mats[("T2-P", "primary")], sel)
+    sec["liquid20"] = {"markets": liq, **verdict(r[n > 0]), **summary(r[n > 0])}
     sel = np.array([s not in INDEX_CONTRACTS for s in panel])
-    r, _ = portfolio(mats[("T2-P", "primary")], sel)
-    sec["no_index_contracts"] = {**verdict(r), **summary(r)}
+    r, n = portfolio(mats[("T2-P", "primary")], sel)
+    sec["no_index_contracts"] = {**verdict(r[n > 0]), **summary(r[n > 0])}
     for lab, want in (("survivors", True), ("delisted", False)):
-        sel = np.array([alive_end[s] == want for s in panel])
+        sel = np.array([alive_end[s] == want and per[s]["days"] > 0 for s in panel])
         if sel.any():
-            r, _ = portfolio(mats[("T2-P", "primary")], sel)
-            sec[lab] = {"markets": int(sel.sum()), **summary(r)}
+            r, n = portfolio(mats[("T2-P", "primary")], sel)
+            sec[lab] = {"markets": int(sel.sum()), "active_days": int((n > 0).sum()), **summary(r[n > 0])}
     tot = np.array([per[s]["T2-P_total_log"] for s in panel if per[s]["days"] > 0])
     shp = np.array([per[s]["T2-P_sharpe"] for s in panel if per[s]["T2-P_sharpe"] is not None])
     sec["markets_positive_share"] = float((tot > 0).mean())
@@ -436,10 +496,17 @@ def score():
         btc[lab] = row
     res, _ = pp.run(ts("2026-01-01") // DAY, ts("2026-11-02") // DAY, 2e-4, 5e-4)
     post = [d for d in sorted(res["T2-P"]) if d >= ts("2026-10-31") // DAY]
+    seg = pp.segments[-1]
+    sd0, _, _, _, _, by_day = pp.segment_signals(*seg)
     btc["after_seal"] = {"days": [day_str(d) for d in post],
                          **{k: {"daily_net_pct": [res[k][d][0] * 100 for d in post],
-                                "exposure_end_of_day": [res[k][d][6] for d in post]} for k in ("T2-P", "tsmom_unscaled", "B&H")},
-                         "note": "no funding archive for 2026-11 yet: funding 0 on 11-01 and 11-02"}
+                                "exposure_held_over_day": [res[k][d - 1][6] for d in post],
+                                "rule_target_at_close": [float(by_day[k][d - sd0]) if k in by_day else 1.0
+                                                         for d in post]}
+                            for k in ("T2-P", "tsmom_unscaled", "B&H")},
+                         "note": "the run ends at the 2026-11-02 close, so that day's net includes the exit fee "
+                                 "(taker 5 bps x |x|); the 11-02 target is the position the rule holds into 11-03. "
+                                 "No funding archive for 2026-11 yet: funding 0 on 11-01 and 11-02."}
     res, _ = pp.run(d0, d1, 2e-4, 5e-4, strats=("T2-P",))
     b = np.log1p(np.nan_to_num(series(res["T2-P"], days)))
     btc["corr_panel_T2P_vs_BTC_T2P"] = float(np.corrcoef(prim, b)[0, 1])

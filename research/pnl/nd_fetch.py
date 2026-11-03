@@ -7,7 +7,12 @@ Sources (data.binance.vision only; the fapi REST endpoints are geo-blocked from 
   survivorship filter) whose first 1d bar is on or before 2020-12-31. BTCUSDT is kept apart (the study's own market).
 - USD-M perps: 1h klines (monthly archives, daily archives for the month in progress) and funding prints (monthly).
   Hourly bars let the engine trim exposure inside the day (engine E trims at every 1-min close).
-- BTC before the study: spot BTCUSDT 1h klines 2017-08 .. 2020-12 (perp funding charged from its first print).
+- BTC before the study: spot BTCUSDT 1h klines 2017-08 .. 2020-12 (no funding: a price-path test only).
+- The monthly 1h archives leave out some days that the daily archives contain (e.g. 2022-02-26..28 and 2022-04-01..02
+  for 30 panel markets). fill_days() fetches every day with fewer than 24 bars between a market's first and last day
+  from the daily archive and merges it. A day missing from both archives (e.g. 2026-10-28) stays missing.
+- manifest.json: SHA-256 of universe.json and of every hourly file; nd_run.py score checks the data against the
+  manifest committed with the pre-registration (results/newdata_manifest.json).
 Nothing here reads a price to choose anything: the universe rule uses listing dates only.
 """
 import concurrent.futures as cf
@@ -97,6 +102,10 @@ def klines(market, sym, first):
         blob = http(u)
         if blob:
             rows += zip_rows(blob)
+    return to_arrays(rows)
+
+
+def to_arrays(rows):
     if not rows:
         return None
     a = np.array([[float(x) for x in r[:11]] for r in rows])
@@ -108,6 +117,51 @@ def klines(market, sym, first):
     _, keep = np.unique(t, return_index=True)
     return {"t": t[keep], "open": a[keep, 1], "high": a[keep, 2], "low": a[keep, 3], "close": a[keep, 4],
             "volume": a[keep, 5], "quote_volume": a[keep, 7]}
+
+
+def fill_days(sym, market="um"):
+    """Fetch every UTC day with fewer than 24 bars (between the first and the last full day of the file) from the
+    daily archive and merge it into the file. Returns the days that gained bars."""
+    path = os.path.join(OUT, "hourly", f"{sym}{'' if market == 'um' else '_spot'}.npz")
+    z = dict(np.load(path))
+    if "filled_days" in z:
+        return sym, "filled before"
+    root = f"{BASE}/futures/um" if market == "um" else f"{BASE}/spot"
+    day = z["t"] // 86400
+    d0, d1 = int(day[0]) + 1, int(day[-1]) - 1
+    cnt = np.bincount(day - day[0], minlength=int(day[-1] - day[0] + 1))
+    short = [d for d in range(d0, d1 + 1) if cnt[d - int(day[0])] < 24]
+    rows, gained = [], []
+    for d in short:
+        ds = dt.date(1970, 1, 1) + dt.timedelta(days=d)
+        blob = http(f"{root}/daily/klines/{sym}/1h/{sym}-1h-{ds}.zip")
+        if blob:
+            r = zip_rows(blob)
+            if r:
+                rows += r
+                gained.append(str(ds))
+    if rows:
+        k = to_arrays(rows)
+        t = np.r_[z["t"], k["t"]]
+        o = np.argsort(t, kind="stable")
+        _, keep = np.unique(t[o], return_index=True)      # the monthly archive's bar wins on a duplicate
+        idx = o[keep]
+        for f in ("open", "high", "low", "close", "volume", "quote_volume"):
+            z[f] = np.r_[z[f], k[f]][idx]
+        z["t"] = t[idx]
+    z["filled_days"] = np.array(gained, dtype="U10")
+    np.savez(path, **z)
+    return sym, f"{len(short)} short days, {len(gained)} filled from the daily archive"
+
+
+def manifest():
+    import hashlib
+    files = sorted(os.listdir(os.path.join(OUT, "hourly")))
+    h = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
+    m = {"universe.json": h(os.path.join(OUT, "universe.json")),
+         **{f"hourly/{f}": h(os.path.join(OUT, "hourly", f)) for f in files if f.endswith(".npz")}}
+    json.dump(m, open(os.path.join(OUT, "manifest.json"), "w"), indent=1)
+    return m
 
 
 def funding(sym, first):
@@ -173,6 +227,10 @@ def main():
     with cf.ThreadPoolExecutor(12) as ex:
         for sym, msg in ex.map(lambda j: fetch_symbol(*j), jobs):
             print(sym, msg, flush=True)
+    with cf.ThreadPoolExecutor(12) as ex:
+        for sym, msg in ex.map(lambda j: fill_days(j[0], j[2]), jobs):
+            print(sym, msg, flush=True)
+    print(f"manifest: {len(manifest())} files", flush=True)
 
 
 if __name__ == "__main__":

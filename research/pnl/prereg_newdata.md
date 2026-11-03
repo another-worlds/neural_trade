@@ -2,7 +2,10 @@
 
 Written 2026-11-03, before any PnL on a new market or a new period was computed. Code: `nd_fetch.py` (data),
 `nd_run.py` (engine H and scoring). `nd_run.py score` refuses to run unless this file is committed unchanged at HEAD,
-and it runs once (`work/nd/score_lock.json`; a re-run for a bug fix needs `ND_RESCORE=1` and a CHANGES.log entry).
+research/pnl has no uncommitted or untracked file, and every data file matches the SHA-256 manifest committed with
+this file (`results/newdata_manifest.json`). It runs once: the lock (`work/nd/score_lock.json`, copied to
+`results/newdata_lock.json` with the HEAD commit) blocks a second run unless `ND_RESCORE=1` is set AND CHANGES.log has
+a 'newdata rescore' entry that gives the reason.
 
 Before this file, only one PnL computation was run: `nd_run.py validate`. It runs engine H on BTCUSDT over the
 already-scored dev and sealed windows and compares with engine E. It reads no new market and no new period.
@@ -23,7 +26,8 @@ trade at the 00:00 UTC daily close if |x* - x| >= 0.2. Long or short, at most 1x
    ENJ EOS ETC ETH FIL FLM FTM GRT HNT ICX IOST IOTA KAVA KNC KSM LEND LINK LRC LTC MATIC MKR NEAR NEO OCEAN OMG ONT
    QTUM REN RLC RSR RUNE SKL SNX SOL SRM STORJ SUSHI SXP THETA TOMO TRB TRX UNI VET WAVES XLM XMR XRP XTZ YFII YFI ZEC
    ZEN ZIL ZRX (each + USDT).
-   Window: 2021-01-01 .. 2026-10-31 UTC (the same span as the study's dev and sealed windows; the study used none of
+   LENDUSDT stopped trading in 2020-10 (it migrated to AAVE), so it never enters the window: 79 markets can be active.
+   Window: 2021-01-01 .. 2026-10-31 UTC (the study's dev and sealed windows plus 2026-10-31; the study used none of
    these markets).
 2. **New periods for BTC (secondary).**
    - (a) BTC before the study: Binance spot BTCUSDT, 2017-08 .. 2019-12-31 (first decision on day 56 of the data). No
@@ -37,14 +41,21 @@ trade at the 00:00 UTC daily close if |x* - x| >= 0.2. Long or short, at most 1x
 
 - **Engine H** (`nd_run.py`): hourly bars; decisions only at the 23:00 bar close (the 00:00 UTC daily close); funding
   per archive print, paid by the position held over the print; the 1x cap and trims of engine E (|x| > 1.10 at any bar
-  close, > 1.02 at a decision bar where the rule does not trade); positions closed at the end of the run or of a data
-  segment. Engine E checks trims every minute, engine H every hour: H is the more conservative one for shorts in a
-  squeeze.
+  close, > 1.02 at a decision bar where the rule does not trade; as in E, the trim acts first and the rule decides on
+  the trimmed exposure); positions closed at the end of the run or of a data segment. Engine E checks trims every
+  minute, engine H every hour, so H does not see wicks inside the hour: that helps a short on a spike that reverts
+  inside the hour and hurts it on a squeeze that persists. The net direction is not known.
 - **Data rule.** Hourly bars with zero quote volume are dropped: the archive keeps flat zero-volume bars after a
   delisting (seen before scoring, e.g. FTM after 2025-01, BLZ after 2024-12). So a market ends at its last traded
   hour, and its position is closed there at the last traded close (the settlement price is not in the data). A gap
   > 7 days splits a segment; a new segment needs 56 days of warm-up again. "Survivor" = last traded bar on or after
-  2026-10-30.
+  2026-10-30. Renamed markets (EOS, MATIC, FTM and others whose ticker changed) count as delisted.
+- **Archive holes.** The monthly 1h archives leave out some days that the daily archives contain (2022-02-26..28 and
+  2022-04-01..02 for 30 panel markets); `nd_fetch.py` fills every short day from the daily archive. 2026-10-28 is in
+  neither archive for any market: on that day there is no decision and no return, the position carries, and the move
+  is booked on 10-29; funding prints inside a hole are paid by the position held across it. BTC (a): after the
+  2018-02-08 exchange outage, 43 spot bars are stamped at :28, so 2018-02-08..10 have no 23:00 decision bar (3
+  decisions skipped).
 - **Validation against engine E** (BTC, C7-B costs, maker 2 bps in / taker 5 bps out): see section 6.
 - **Costs on the panel.** Primary: 5 bps per unit of |x| increased, 10 bps per unit reduced (engine E's maker 2 and
   taker 5 bps, plus 3 and 5 bps for wider spreads and chased fills on smaller markets). Sensitivity: BTC level (2 / 5)
@@ -69,7 +80,10 @@ Stationary bootstrap (`stats.stationary_bootstrap`), B = 10,000, mean block 20 d
 
 Secondary verdicts with the same rule (reported, not gates): BTC (a) and (b); the panel's dev-window part
 (2021-01 .. 2025-10) and sealed-window part (2025-11 .. 2026-10); the 20 most liquid markets (median daily quote volume
-2020-07-01 .. 2020-12-31, chosen before the window); the panel without the index contract DEFIUSDT.
+2020-07-01 .. 2020-12-31, among markets with at least 90 days of bars in that period, so that a few launch days
+cannot rank a market; chosen before the window): ETH LINK YFI LTC SUSHI XRP UNI BCH BNB YFII ADA DOT EOS SXP TRX CRV
+XTZ WAVES BAND XLM; the panel without the index contract DEFIUSDT. Subset statistics use only days on which at least
+one of the subset's markets is active.
 
 Descriptive: returns by year; long and short PnL, funding and fees; turnover; share of markets with a positive net;
 median market Sharpe; the three cost levels; survivors against delisted markets; tsmom_unscaled, voltarget_long, B&H
