@@ -1,7 +1,8 @@
 # New-data test: T2-P on markets and periods the study never scored
 
 Date 2026-11-03. Pre-registration: `prereg_newdata.md`, final at commit edcb157, before any scoring. Scored once at
-commit 3c84f4a (`results/newdata.json`, `newdata_daily.npz`, `newdata_lock.json`). Code: `nd_fetch.py`, `nd_run.py`.
+HEAD edcb157; results committed in 3c84f4a (`results/newdata.json`, `newdata_daily.npz`, `newdata_lock.json`).
+Code: `nd_fetch.py`, `nd_run.py`.
 T2-P is unchanged: daily trend, lookbacks 7/14/28/56 days, 50% volatility target, band 0.2, long or short, at most 1x.
 
 ## 1. Answer
@@ -18,13 +19,18 @@ well inside it.**
 | Sharpe | 0.67 | 0.03 |
 | Maximum drawdown | 30% | 88% |
 
-- **What it shows.** The rule's edge carries over to markets it was not chosen on. It earned in 5 of 6 years
-  (log: 2021 +39%, 2022 +12%, 2023 +22%, 2024 +15%, 2025 -10%, 2026 to October +17%). 58 of 79 markets made money.
-- **Why it is weak.** The independent part is small. The panel's returns correlate 0.58 with BTC's own T2-P. After
-  removing that part, about 2.7 bps/day remain (HAC t 1.15, not significant). 83% of the days overlap the window on
-  which T2-P was chosen for BTC. Small changes flip the verdict to CONSISTENT (section 5).
-- **For the outlook.** The edge is more likely real than before, but it is still not proven. A spread of many markets
-  had a smaller drawdown than BTC alone (30% against 46.5%).
+- **What it shows.** By the pre-registered reading, the rule's edge carries over to markets it was not chosen on,
+  but only at the 5% line. It earned in 5 of 6 years (log: 2021 +39%, 2022 +12%, 2023 +22%, 2024 +15%, 2025 -10%,
+  2026 to October +17%). 58 of 79 markets made money.
+- **Why it is weak.**
+  - **The part independent of BTC is not significant.** The panel's returns correlate 0.58 with BTC's own T2-P.
+    After removing that part, about 2.7 of the 4.5 bps/day remain, but they are not significant (HAC t 1.15,
+    bootstrap p 0.11). In the sealed year that part is about zero (+0.1 bps/day).
+  - **Every panel day was already looked at for this rule family.** The study's trend probe looked at BTC
+    2020-2025 in-sample, and earlier checks covered 2022-01..2026-11, which includes the whole sealed year.
+  - **Small changes flip the verdict** to CONSISTENT (section 5).
+- **For the outlook.** The edge is a little more likely real than before, but it is still not proven. A spread of
+  many markets had a smaller drawdown than BTC alone (30% against 46.5%).
 
 ## 2. Panel results (primary costs: 5 bps per unit of |x| increased, 10 bps reduced)
 
@@ -35,12 +41,14 @@ well inside it.**
 | voltarget_long | +5.7 | 0.14 | 57% | descriptive |
 | buy-and-hold | +2.2 | 0.03 | 88% | descriptive |
 | T2-P at BTC costs (2 / 5 bps) | +18.0 | 0.74 | 30% | descriptive |
-| T2-P at stress costs (25 / 25 bps) | +9.1 | 0.37 | 33% | descriptive |
+| T2-P at stress costs (25 / 25 bps) | +9.1 | 0.37 | 32% | descriptive |
 
 - **Where the profit came from** (sum of daily returns, % of equity): long price moves +122, short price moves +24,
-  funding -15, fees -18. Most profit came from catching rallies (2021, 2023, 2024). Shorts paid in 2022 and 2026.
-  So the result is not mainly from shorting the known alt-coin falls, the risk named before the test.
-- **Activity.** Mean |exposure| 0.36; turnover about 40 units per market per year (about 3% per year in fees).
+  funding -15, fees -18. Most profit came from catching rallies (2021, 2023, 2024). Shorts paid in 2022, 2025 and
+  2026. So the result is not mainly from shorting the known alt-coin falls, but 41% of it came from the 2021 rally,
+  which the designers also knew about.
+- **Activity.** Mean |exposure| 0.36; turnover about 40 units per market per year (about 3% per year in fees). The
+  daily equal-capital rebalancing across markets is not charged (an estimated 0.1 %/yr).
 - **Data.** 79 markets active (LEND stopped in 2020); 57-79 active per day, median 73; no day lost all its equity;
   no funding month missing inside a traded span. Delisted markets are included (22 of them); they did no worse
   (+18.5 %/yr) than the survivors (+15.8 %/yr).
@@ -53,14 +61,15 @@ well inside it.**
 | Sealed window 2025-11..2026-10 | +21.7 | 0.91 | -2.42 | 0.12 | CONSISTENT |
 | 20 most liquid markets (chosen on 2020 volume) | +11.2 | 0.44 | -1.41 | 0.13 | CONSISTENT |
 | Without the index contract DEFI | +16.4 | 0.67 | +0.15 | 0.045 | REPLICATED |
-| BTC 2017-10..2019-12 (spot, no funding) | +39.6 | 0.97 | -3.51 | 0.12 | CONSISTENT |
-| BTC 2020-02..2020-12 (perp) | +81 (log, 10 months) | 2.14 | +5.55 | 0.016 | REPLICATED |
+| BTC 2017-10..2019-12 (spot, no funding) | +39.6 | 0.97 | -3.51 | 0.11 | CONSISTENT |
+| BTC 2020-02..2020-12 (perp; not clean, see below) | +95.7 | 2.14 | +5.55 | 0.016 | REPLICATED |
 
 - **BTC 2017-2019.** T2-P lost 13% in 2018, when holding BTC lost 73%. Over the whole period buy-and-hold made
   +18.0 %/yr with an 83% drawdown; T2-P +39.6 %/yr with a 39% drawdown.
-- **BTC 2020.** T2-P made money, but buy-and-hold made more (+107% log).
+- **BTC 2020.** T2-P made +81% (log) in 10 months, but buy-and-hold made more (+107% log). T2-P was never scored on
+  2020, but the study's trend probe looked at 2020-2025 in-sample, so this row is not clean new evidence.
 - **BTC after the seal (2026-10-31..11-02, descriptive only).** T2-P was fully short: -0.24%, -1.01%, +1.91% (the
-  last day includes the test's exit fee), about +0.7% in total. After the 11-02 close the rule is still fully short.
+  last day includes the test's exit fee), about +0.6% in total. After the 11-02 close the rule is still fully short.
   Three days test nothing.
 
 ## 4. Checks
@@ -73,33 +82,40 @@ well inside it.**
   SHA-256 of every data file.
 - **After scoring.** An agent that did not see `nd_run.py` re-implemented the test from the pre-registration. Its first
   reading gave a lower bound of +0.106 bps/day (REPLICATED). Three conventions that the pre-registration leaves open
-  explain the gap. With them, it reproduces every scored number to 5e-15: the trade sets the exposure exactly to its
-  target after fees (engine E sizes before fees, a 1e-3 difference); the fee of a trade at the daily close is booked
-  on the decision day; a trim and a decision at the same close are one fill. One wording point: the first decision
+  explain the gap: the trade sets the exposure exactly to its target after fees (engine E sizes before fees, a 1e-3
+  difference); the fee of a trade at the daily close is booked on the decision day; a trim and a decision at the same
+  close are one fill. With them, it reproduces the primary result (mean, lower bound, Sharpe, drawdown, yearly sums)
+  and the compound returns of the five markets it checked to about 2e-14 (floating-point rounding). One wording point: the first decision
   day carries the entry fee, so it is not exactly "cash".
 
 ## 5. How fragile the result is (post hoc, descriptive: the verdict stays as scored)
 
 - **What holds.**
-  - **Bootstrap noise:** all 100 bootstrap seeds give a lower bound above 0, and so do block lengths 5 to 100 days.
+  - **Bootstrap noise:** all 100 bootstrap seeds give a lower bound above 0, and so do the block lengths tested from
+    5 to 100 days (5, 10, 20, 40, 60, 100). Block lengths 1 and 2 (close to an i.i.d. bootstrap) do not.
   - **No single market carries it:** the best market gives 3.4% of the profit, and 71 of 79 markets add to it.
-  - **No hidden long bet:** the beta on buy-and-hold is about -0.03.
+  - **No hidden long bet:** the beta on the panel's buy-and-hold is about -0.05 (-0.03 after controlling for BTC's
+    T2-P).
   - **Timing:** the rule's timing beats a placebo that shifts the market returns in time (p 0.015).
 - **What flips it to CONSISTENT** (the lower bound goes below 0):
   - removing the 2 best markets;
   - costs 15% higher (5.75 / 11.5 bps);
   - leaving out 2021, 2022, 2023 or 2026;
   - keeping only the 49 markets with full history;
+  - leaving out the delisted markets' last 30 days (mostly short; they add +2.2% of equity);
   - a plain t-test, or Newey-West at lag 10 or 20 (p 0.051-0.053).
 - **What it leans on.**
   - **The first half of 2021:** 36% of the log profit in 8.5% of the days.
   - **The best 5 days:** without them the mean falls to 2.9 bps/day.
-  - **The thinner markets:** the most liquid third is CONSISTENT (p 0.11) and the least liquid third is REPLICATED
-    (p 0.035). Costs, fills and the no-impact assumption are least reliable in the thinnest markets.
+  - **Liquidity: no clear pattern.** Ranked by 2020 volume (61 markets with enough history), the most liquid third
+    is CONSISTENT (p 0.11) and the least liquid third REPLICATED (p 0.035). Ranked by volume during the test, this
+    reverses: the most liquid third is REPLICATED (p 0.027) and the least liquid CONSISTENT (p 0.12). That ranking
+    uses hindsight, because coins that rallied gained volume. Costs, fills and the no-impact assumption are least
+    reliable in the thinnest markets.
 - **Breadth.** The markets move together: the mean pairwise correlation of their T2-P returns is 0.35, which equals
   about 2.7 independent bets, not 79.
-- **Recent state.** The portfolio peaked on 2024-12-08 and was still 3% below that peak at the end of 2026-10. It is
-  about flat since 2024-08.
+- **Recent state.** The portfolio ended 1.5% below its 2024-08-05 high, so it made no net gain in about 27 months.
+  It has been below its 2024-12-08 peak for 693 days (3% below at the end of 2026-10).
 
 ## 6. Limits
 
@@ -107,7 +123,8 @@ well inside it.**
   designers expected long falls.
 - **Execution.** The engine checks trims hourly, so it misses wicks inside the hour. Costs are assumed: no market
   impact, and equal weights ignore how little the thin markets can take. Delistings settle at the last traded close;
-  this changes almost nothing (the delisted markets' final days sum to -0.04%).
+  the final days themselves sum to -0.04%, but trading limits and settlement around a delisting are not modelled
+  (the delisted markets' last 30 days add +2.2%, see section 5).
 - **Archive.** 2026-10-28 is missing for every market, so no decision is made that day. Days missing from the monthly
   archives were filled from the daily archives.
 
@@ -116,6 +133,7 @@ well inside it.**
 - **Before:** BTC alone showed a positive but unproven edge (sealed verdict CONSISTENT).
 - **Now:** the same rule, unchanged, made money on a broad set of other crypto markets, at the edge of significance.
   That supports the trend edge, but only weakly, because the markets move with BTC and with each other.
-- **Practical reading.** A spread of markets cut the drawdown, but the most liquid markets (the ones a real account
-  can trade) showed the weaker result. The study's rule still applies: 12 months of paper trading before any money.
-  A paper test should run the same rule on BTC and on a liquid basket at the same time.
+- **Practical reading.** A spread of markets cut the drawdown. The 20 markets most liquid in 2020 showed a weaker
+  result (CONSISTENT, +11.2 %/yr), but ranking by later volume reverses this, so the liquidity evidence is mixed. The
+  study's rule still applies: 12 months of paper trading before any money. A paper test should run the same rule on
+  BTC and on a liquid basket at the same time.
